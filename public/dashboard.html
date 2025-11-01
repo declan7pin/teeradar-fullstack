@@ -1,6 +1,8 @@
-<!doctype html><html lang='en'><head>
+<!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><circle cx=%2222%22 cy=%2242%22 r=%228%22 fill=%22%2386efac%22/></svg>"/>
+<title>TeeRadar — Dashboard</title>
 <style>
 :root{--bg:#f6f7f4;--panel:#fff;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--brand:#0ea5e9;--accent:#16a34a;--shadow:0 10px 24px rgba(2,6,23,.08)}
 *{box-sizing:border-box}html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -8,29 +10,18 @@
 .wrap{max-width:1100px;margin:0 auto;padding:0 16px;display:flex;align-items:center;justify-content:space-between}
 .brand{display:flex;gap:10px;align-items:center;font-weight:800}
 .nav a{color:var(--brand);text-decoration:none;margin-left:12px}
-.hero{max-width:1100px;margin:28px auto 0;padding:0 16px}
-.card{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:24px}
-.cta{background:var(--accent);color:#fff;border:none;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer}
-.footer{max-width:1100px;margin:0 auto;padding:24px 16px;color:var(--muted);text-align:center;border-top:1px solid var(--border)}
-.footer a{color:#0369a1;text-decoration:none;margin:0 6px}
 .section{max-width:1100px;margin:20px auto;padding:0 16px}
+.card{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:20px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
-.card2{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:16px}
-.badge{display:inline-block;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800}
-input,select{border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+input,select{border:1px solid var(--border);border-radius:10px;padding:10px 12px;width:100%}
 .btn{background:#0ea5e9;color:#fff;border:none;border-radius:10px;padding:10px 12px;font-weight:800;cursor:pointer}
 .btn.secondary{background:#1118271a;color:#0f172a}
-.map{height:360px;background:linear-gradient(180deg,#c8e6c9,#a5d6a7);border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow)}
-html, body { min-height: 100%; }
-body {
-  background-image: url('/assets/hero_golf_bg.jpg');
-  background-size: cover;
-  background-position: center 40%;
-  background-attachment: fixed;
-  background-repeat: no-repeat;
-}
+.footer{max-width:1100px;margin:0 auto;padding:24px 16px;color:var(--muted);text-align:center;border-top:1px solid var(--border)}
+.footer a{color:#0369a1;text-decoration:none;margin:0 6px}
+.muted{color:var(--muted)}
 </style>
-<title>TeeRadar — Dashboard</title></head><body>
+</head>
+<body>
 <header class="header">
   <div class="wrap">
     <div class="brand">
@@ -41,19 +32,57 @@ body {
   </div>
 </header>
 
-<section class='hero'><div class='card'>
-<h2 style='margin:0 0 6px 0'>Member Dashboard</h2>
-<p class='muted'>Manage your subscription and see recent booking activity.</p>
-<div style='margin-top:12px;display:flex;gap:8px'>
-<button class='btn' onclick="location.href='/?subscribed=1'">Start monthly (A$10)</button>
-<button class='btn' onclick="location.href='/?subscribed=1'">Start annual (A$99)</button>
-<button class='btn secondary' onclick="alert('Billing portal placeholder')">Manage subscription</button>
-</div>
-</div></section>
-<section class='section'><div class='card2'>
-<h3>My bookings (demo)</h3>
-<ul id='activity'><li class='muted'>No activity yet.</li></ul>
-</div></section>
+<section class="section">
+  <div class="grid">
+    <div class="card">
+      <h2 style="margin:0 0 10px 0">Membership</h2>
+      <p class="muted" id="subStatus">Guest — subscribe to unlock direct links.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn" onclick="activateSub('monthly')">Start monthly (A$10)</button>
+        <button class="btn" onclick="activateSub('annual')">Start annual (A$99)</button>
+        <button class="btn secondary" onclick="cancelSub()">Cancel membership</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 10px 0">Profile</h2>
+      <p class="muted">Tell us about your golf to personalize results.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+        <div>
+          <label>Home course<br>
+            <select id="homeCourse"></select>
+          </label>
+        </div>
+        <div>
+          <label>Handicap (or best guess)<br>
+            <input id="handicap" type="number" step="0.1" placeholder="e.g. 18.4">
+          </label>
+        </div>
+        <div>
+          <label>Preference<br>
+            <select id="preference">
+              <option value="">No preference</option>
+              <option>Walking</option>
+              <option>Cart</option>
+            </select>
+          </label>
+        </div>
+        <div>
+          <label>Usual party size<br>
+            <select id="partySize">
+              <option>1</option><option>2</option><option selected>4</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button class="btn" onclick="saveProfile()">Save profile</button>
+        <button class="btn secondary" onclick="resetProfile()">Reset</button>
+      </div>
+      <p class="muted" id="saveMsg" style="margin-top:8px"></p>
+    </div>
+  </div>
+</section>
 
 <footer class="footer">
   © <script>document.write(new Date().getFullYear())</script> TeeRadar
@@ -61,13 +90,104 @@ body {
   • <a href="/terms.html">Terms of Use</a>
   • <a href="/privacy.html">Privacy</a>
   • <a href="/refunds.html">Refunds & Cancellations</a>
+  • Map data © <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap</a> contributors
 </footer>
 
 <script>
-function getActivity(){ try{return JSON.parse(localStorage.getItem('teeradar_activity')||'[]');}catch(e){return[];} }
+/* same keys as book.html so the dropdown is populated */
+const COURSE_COORDS = {
+  'Araluen Estate': { lat: -32.124, lng: 116.099 },
+  'Wembley Golf Course (Old & Tuart)': { lat: -31.934, lng: 115.787 },
+  'Joondalup Resort Golf Course': { lat: -31.746, lng: 115.766 },
+  'Collier Park Golf Course': { lat: -32.007, lng: 115.871 },
+  'Whaleback Golf Course': { lat: -32.043, lng: 115.906 },
+  'The Vines Resort & Country Club': { lat: -31.777, lng: 116.027 },
+  'Maylands Peninsula Golf Course': { lat: -31.942, lng: 115.904 },
+  'Glen Iris Golf Course': { lat: -32.099, lng: 115.839 },
+  'Hamersley Public Golf Course': { lat: -31.863, lng: 115.761 },
+  'Royal Fremantle Golf Club': { lat: -32.048, lng: 115.764 },
+  'Cottesloe Golf Club': { lat: -31.988, lng: 115.754 },
+  'Melville Glades Golf Club': { lat: -32.056, lng: 115.845 },
+  'Sun City Country Club': { lat: -31.646, lng: 115.712 },
+  'Secret Harbour Golf Links': { lat: -32.394, lng: 115.762 },
+  'Mandurah Country Club': { lat: -32.547, lng: 115.736 },
+  'Pinjarra Golf Club': { lat: -32.629, lng: 115.872 },
+  'Harvey Golf Club': { lat: -33.083, lng: 115.881 },
+  'Bunbury Golf Club': { lat: -33.289, lng: 115.682 },
+  'Capel Golf Club': { lat: -33.536, lng: 115.574 },
+  'Moore Park Golf': { lat: -33.896, lng: 151.224 },
+  'The Coast Golf Club': { lat: -33.969, lng: 151.258 },
+  'Long Reef Golf Club': { lat: -33.739, lng: 151.305 },
+  'Bonnie Doon Golf Club': { lat: -33.943, lng: 151.214 },
+  'Royal Melbourne Golf Club': { lat: -37.959, lng: 145.043 },
+  'Sandhurst Club': { lat: -38.069, lng: 145.170 },
+  'Sanctuary Lakes Golf Club': { lat: -37.884, lng: 144.748 },
+  'Albert Park Golf Course': { lat: -37.850, lng: 144.970 },
+  'Brookwater Golf & Country Club': { lat: -27.647, lng: 152.898 },
+  'Victoria Park Golf Complex': { lat: -27.446, lng: 153.031 },
+  'TPC Twin Waters (Sunshine Coast)': { lat: -26.630, lng: 153.072 },
+  'Links Hope Island (Gold Coast)': { lat: -27.877, lng: 153.354 }
+};
+
+function ensureSubUI(){
+  const isMember = localStorage.getItem('teeradar_member')==='1';
+  document.getElementById('subStatus').textContent = isMember ? 'Active member — direct links unlocked.' : 'Guest — subscribe to unlock direct links.';
+}
+
+function activateSub(plan){
+  localStorage.setItem('teeradar_member','1');
+  ensureSubUI();
+  alert('Subscription activated ('+plan+'). Now set your profile.');
+}
+
+function cancelSub(){
+  localStorage.removeItem('teeradar_member');
+  ensureSubUI();
+  alert('Membership cancelled.');
+}
+
+function loadProfile(){
+  try {
+    const p = JSON.parse(localStorage.getItem('teeradar_profile')||'{}');
+    if(p.homeCourse) document.getElementById('homeCourse').value = p.homeCourse;
+    if(p.handicap!==undefined) document.getElementById('handicap').value = p.handicap;
+    if(p.preference) document.getElementById('preference').value = p.preference;
+    if(p.partySize) document.getElementById('partySize').value = p.partySize;
+  } catch(e){}
+}
+
+function saveProfile(){
+  const p = {
+    homeCourse: document.getElementById('homeCourse').value,
+    handicap: parseFloat(document.getElementById('handicap').value || ''),
+    preference: document.getElementById('preference').value || '',
+    partySize: parseInt(document.getElementById('partySize').value||'4',10)
+  };
+  localStorage.setItem('teeradar_profile', JSON.stringify(p));
+  document.getElementById('saveMsg').textContent = 'Profile saved ✔';
+  setTimeout(()=>document.getElementById('saveMsg').textContent='', 2000);
+}
+
+function resetProfile(){
+  localStorage.removeItem('teeradar_profile');
+  document.getElementById('homeCourse').selectedIndex = 0;
+  document.getElementById('handicap').value = '';
+  document.getElementById('preference').value = '';
+  document.getElementById('partySize').value = '4';
+  document.getElementById('saveMsg').textContent = 'Profile cleared';
+  setTimeout(()=>document.getElementById('saveMsg').textContent='', 2000);
+}
+
+function fillCourseSelect(){
+  const sel = document.getElementById('homeCourse');
+  sel.innerHTML = '<option value="">Choose…</option>' + Object.keys(COURSE_COORDS).map(k=>`<option>${k}</option>`).join('');
+}
+
 document.addEventListener('DOMContentLoaded', ()=>{
-  const act=getActivity(), list=document.getElementById('activity');
-  if(act.length===0) list.innerHTML='<li class="muted">No activity yet.</li>';
+  ensureSubUI();
+  fillCourseSelect();
+  loadProfile();
 });
 </script>
-</body></html>
+</body>
+</html>
