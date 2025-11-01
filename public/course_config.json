@@ -1,0 +1,16 @@
+{
+  "Araluen Estate": {
+    "provider": "MiClub",
+    "domain": "araluenestategolfcourse.miclub.com.au",
+    "calendarUrl": "https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicCalendar.msp",
+    "bookingResourceId": "3000000",
+    "feeGroupId": "102808"
+  },
+  "Wembley Golf Course (Old & Tuart)": {
+    "provider": "MiClub",
+    "domain": "www.wembleygolf.com.au",
+    "calendarUrl": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicCalendar.msp",
+    "bookingResourceId": "",
+    "feeGroupId": ""
+  }
+}
