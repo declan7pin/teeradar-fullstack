@@ -1,20 +1,36 @@
 <!doctype html>
-<html lang='en'>
+<html lang="en">
 <head>
   <meta charset="utf-8"/>
+  <title>TeeRadar — WA Realtime</title>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>TeeRadar — Book a Tee Time</title>
-  <link rel="stylesheet" href="/assets/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #f6f7f4; }
+    header { padding: 14px 16px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+    #map { height: 380px; margin: 12px; border-radius: 12px; overflow: hidden; }
+    .search { display:flex; gap:8px; padding:12px; flex-wrap:wrap; }
+    .search input, .search button { padding:6px 8px; }
+    #results { padding: 12px; display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; }
+    .card { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:10px; }
+    .btn { background:#0ea5e9; border:none; color:#fff; padding:6px 10px; border-radius:6px; cursor:pointer; }
+  </style>
 </head>
 <body>
-<h2>TeeRadar Booking (AU status)</h2>
-<div id="map" style="height:420px;border:1px solid #ccc;margin-bottom:12px;"></div>
+<header><strong>TeeRadar — WA Realtime</strong></header>
+<div class="search">
+  <input type="date" id="date">
+  <input type="time" id="start" value="06:00">
+  <input type="time" id="end" value="17:00">
+  <button onclick="runSearch()">Search</button>
+</div>
+<div id="map"></div>
 <div id="results"></div>
-<script src="/assets/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-  let map, markersLayer;
-  let COURSES = [];
-
+  let map = L.map('map').setView([-32.0, 116.0], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+  const markers = L.layerGroup().addTo(map);
   const blueIcon = L.icon({
     iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
     iconSize: [25, 41],
@@ -32,57 +48,60 @@
     shadowSize: [41, 41]
   });
 
-  function initMap(){
-    map = L.map('map').setView([-24.0, 133.0], 4);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap'
-    }).addTo(map);
-    markersLayer = L.layerGroup().addTo(map);
+  async function runSearch() {
+    const date = document.getElementById('date').value || new Date().toISOString().slice(0,10);
+    const earliest = document.getElementById('start').value || '06:00';
+    const latest = document.getElementById('end').value || '17:00';
+
+    const resp = await fetch('/api/search', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ date, earliest, latest })
+    });
+    const data = await resp.json();
+    render(data.slots || [], date);
   }
 
-  async function loadCourses(){
-    const r = await fetch('/assets/courses.json');
-    COURSES = await r.json();
+  function render(slots, date) {
+    markers.clearLayers();
+    const results = document.getElementById('results');
+    results.innerHTML = '';
+
+    const grouped = {};
+    slots.forEach(s => {
+      if (!grouped[s.course]) grouped[s.course] = [];
+      grouped[s.course].push(s);
+    });
+
+    Object.keys(grouped).forEach(courseName => {
+      const items = grouped[courseName];
+      const anyAvail = items.some(i => i.available);
+      const first = items[0];
+      const lat = first.lat ?? first.latitude;
+      const lng = first.lng ?? first.longitude;
+
+      if (lat && lng) {
+        L.marker([lat, lng], { icon: anyAvail ? blueIcon : redIcon })
+          .addTo(markers)
+          .bindPopup(courseName + '<br>' + (anyAvail ? 'Available' : 'Unavailable'));
+      }
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      const bookingUrl = first.bookingUrl || '';
+      card.innerHTML = `
+        <strong>${courseName}</strong><br>
+        ${anyAvail ? '✅ Available in that window' : '❌ No times found'}<br>
+        <button class="btn" onclick="goTo('${bookingUrl.replace(/'/g, "\\'")}')">Proceed to booking</button>
+      `;
+      results.appendChild(card);
+    });
   }
 
-  function openCourse(name){
-    const url = 'https://www.google.com/search?q=' + encodeURIComponent(name + ' golf booking');
+  function goTo(url) {
+    if (!url) { alert('No booking link for this course'); return; }
     window.open(url, '_blank', 'noopener,noreferrer');
   }
-
-  function renderCourses(list){
-    const div = document.getElementById('results');
-    div.innerHTML = '';
-    list.forEach(c => {
-      const d = document.createElement('div');
-      d.textContent = c.name + ' — ' + (c.availability || 'Availability: unknown');
-      div.appendChild(d);
-    });
-  }
-
-  function plotMarkers(list){
-    markersLayer.clearLayers();
-    list.forEach(c => {
-      if (c.lat == null || c.lng == null) return;
-      const icon = c.available === false ? redIcon : blueIcon;
-      const m = L.marker([c.lat, c.lng], { icon }).addTo(markersLayer);
-      m.bindPopup(
-        '<strong>' + c.name + '</strong><br>' +
-        (c.city || '') + ' ' + (c.state || '') + '<br>' +
-        '<span style="color:' + (c.available === false ? '#b91c1c' : '#15803d') + ';">' +
-        (c.availability || 'Availability: unknown') + '</span><br>' +
-        '<button onclick="openCourse(\'' + c.name.replace(/'/g, "\'") + '\')" style="margin-top:4px">Book</button>'
-      );
-    });
-  }
-
-  (async function(){
-    await loadCourses();
-    initMap();
-    plotMarkers(COURSES);
-    renderCourses(COURSES);
-  })();
 </script>
 </body>
 </html>
