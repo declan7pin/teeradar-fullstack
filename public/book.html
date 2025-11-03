@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TeeRadar — WA Realtime</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 0; }
+    header { background: #fff; border-bottom: 1px solid #ddd; padding: 10px 20px; font-weight: bold; }
+    #map { height: 500px; width: 100%; }
+    .controls { display: flex; gap: 10px; padding: 10px; background: #f8f9fa; }
+    .controls input, .controls button { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <header>TeeRadar — WA Realtime</header>
+  <div class="controls">
+    <input type="date" id="date">
+    <input type="time" id="start" value="06:00">
+    <input type="time" id="end" value="17:00">
+    <button onclick="runSearch()">Search</button>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    let map = L.map('map').setView([-31.95, 115.86], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(map);
+
+    const markers = L.layerGroup().addTo(map);
+    const redIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png' });
+    const blueIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/blue-dot.png' });
+
+    async function runSearch() {
+      const date = document.getElementById('date').value || new Date().toISOString().slice(0,10);
+      const earliest = document.getElementById('start').value;
+      const latest = document.getElementById('end').value;
+      const body = { date, earliest, latest };
+
+      const res = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const data = await res.json();
+      render(data.slots || []);
+    }
+
+    function render(slots) {
+      markers.clearLayers();
+      slots.forEach(c => {
+        if (!c.lat || !c.lng) return;
+        L.marker([c.lat, c.lng], { icon: c.available ? blueIcon : redIcon })
+          .addTo(markers)
+          .bindPopup(`<b>${c.course}</b><br>${c.available ? 'Available' : 'Unavailable'}`);
+      });
+    }
+  </script>
+</body>
+</html>
