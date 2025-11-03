@@ -1,0 +1,5 @@
+[
+  {"name": "Araluen Estate", "provider": "MiClub", "city": "Roleystone", "state": "WA", "lat": -32.124, "lng": 116.099},
+  {"name": "Wembley Golf Course", "provider": "MiClub", "city": "Wembley Downs", "state": "WA", "lat": -31.934, "lng": 115.787},
+  {"name": "Royal Melbourne Golf Club", "provider": "Private", "city": "Black Rock", "state": "VIC", "lat": -37.959, "lng": 145.043}
+]
