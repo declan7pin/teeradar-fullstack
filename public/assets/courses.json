@@ -1,9 +1,0 @@
-[
-  { "name": "Araluen Estate", "provider": "MiClub", "city": "Roleystone", "state": "WA", "lat": -32.124, "lng": 116.099 },
-  { "name": "Wembley Golf Course (Old & Tuart)", "provider": "MiClub", "city": "Wembley Downs", "state": "WA", "lat": -31.934, "lng": 115.787 },
-  { "name": "Joondalup Resort Golf Course", "provider": "MiClub", "city": "Joondalup", "state": "WA", "lat": -31.746, "lng": 115.766 },
-  { "name": "Collier Park Golf Course", "provider": "MiClub", "city": "Como", "state": "WA", "lat": -32.007, "lng": 115.871 },
-  { "name": "Moore Park Golf", "provider": "Lightspeed", "city": "Sydney", "state": "NSW", "lat": -33.896, "lng": 151.224 },
-  { "name": "Royal Melbourne Golf Club", "provider": "Private", "city": "Black Rock", "state": "VIC", "lat": -37.959, "lng": 145.043 },
-  { "name": "Victoria Park Golf Complex", "provider": "Lightspeed", "city": "Brisbane", "state": "QLD", "lat": -27.446, "lng": 153.031 }
-]
