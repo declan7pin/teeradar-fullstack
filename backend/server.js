@@ -1,27 +1,24 @@
 // backend/server.js
 import express from 'express';
-import fetch from 'node-fetch';
-import { scrapeMiClubPage } from './scrapers/scrapeMiClubPage.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { scrapeMiClubPage } from './scrapers/scrapeMiClubPage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// load courses.json
+// load WA courses
 const coursesPath = path.join(__dirname, 'data', 'courses.json');
 const courses = JSON.parse(fs.readFileSync(coursesPath, 'utf-8'));
 
-// make a quick lookup by name so we can reattach coords later
-const courseByName = Object.fromEntries(
-  courses.map(c => [c.name, c])
-);
+// lookup so we can reattach coords even if scraping failed
+const courseByName = Object.fromEntries(courses.map(c => [c.name, c]));
 
 const app = express();
 app.use(express.json());
 
-// serve public
+// serve frontend
 const publicDir = path.join(__dirname, '..', 'public');
 app.use(express.static(publicDir));
 
@@ -34,11 +31,15 @@ app.post('/api/search', async (req, res) => {
 
   const tasks = courses.map(async (course) => {
     try {
-      const result = await scrapeMiClubPage(course, { date, earliest, latest, partySize });
+      const result = await scrapeMiClubPage(course, {
+        date,
+        earliest,
+        latest,
+        partySize
+      });
       return result;
-    } catch (e) {
-      console.warn('Scrape failed for', course.name, e.message);
-      // IMPORTANT: still return lat/lng from courses.json
+    } catch (err) {
+      console.error('SCRAPE ERROR for', course.name, err.message);
       return [{
         course: course.name,
         provider: course.provider,
@@ -48,14 +49,14 @@ app.post('/api/search', async (req, res) => {
         lng: course.lng,
         city: course.city,
         state: course.state,
-        error: e.message
+        error: err.message
       }];
     }
   });
 
   let all = (await Promise.all(tasks)).flat();
 
-  // safety pass: make sure EVERY item has lat/lng
+  // safety pass — make sure everything has coords
   all = all.map(slot => {
     const base = courseByName[slot.course];
     return {
