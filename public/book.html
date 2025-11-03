@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang='en'>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>TeeRadar — Book a Tee Time</title>
+  <link rel="stylesheet" href="/assets/leaflet.css">
+</head>
+<body>
+<h2>TeeRadar Booking (AU status)</h2>
+<div id="map" style="height:420px;border:1px solid #ccc;margin-bottom:12px;"></div>
+<div id="results"></div>
+<script src="/assets/leaflet.js"></script>
+<script>
+  let map, markersLayer;
+  let COURSES = [];
+
+  const blueIcon = L.icon({
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    shadowSize: [41, 41]
+  });
+  const redIcon = L.icon({
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x-red.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    shadowSize: [41, 41]
+  });
+
+  function initMap(){
+    map = L.map('map').setView([-24.0, 133.0], 4);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+    markersLayer = L.layerGroup().addTo(map);
+  }
+
+  async function loadCourses(){
+    const r = await fetch('/assets/courses.json');
+    COURSES = await r.json();
+  }
+
+  function openCourse(name){
+    const url = 'https://www.google.com/search?q=' + encodeURIComponent(name + ' golf booking');
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  function renderCourses(list){
+    const div = document.getElementById('results');
+    div.innerHTML = '';
+    list.forEach(c => {
+      const d = document.createElement('div');
+      d.textContent = c.name + ' — ' + (c.availability || 'Availability: unknown');
+      div.appendChild(d);
+    });
+  }
+
+  function plotMarkers(list){
+    markersLayer.clearLayers();
+    list.forEach(c => {
+      if (c.lat == null || c.lng == null) return;
+      const icon = c.available === false ? redIcon : blueIcon;
+      const m = L.marker([c.lat, c.lng], { icon }).addTo(markersLayer);
+      m.bindPopup(
+        '<strong>' + c.name + '</strong><br>' +
+        (c.city || '') + ' ' + (c.state || '') + '<br>' +
+        '<span style="color:' + (c.available === false ? '#b91c1c' : '#15803d') + ';">' +
+        (c.availability || 'Availability: unknown') + '</span><br>' +
+        '<button onclick="openCourse(\'' + c.name.replace(/'/g, "\'") + '\')" style="margin-top:4px">Book</button>'
+      );
+    });
+  }
+
+  (async function(){
+    await loadCourses();
+    initMap();
+    plotMarkers(COURSES);
+    renderCourses(COURSES);
+  })();
+</script>
+</body>
+</html>
