@@ -18,19 +18,19 @@ function baseReturn(course, date, available, bookingUrl, extra = {}) {
 export async function scrapeCourse(course, criteria) {
   const { date, earliest, latest } = criteria;
 
-  // build URL per provider
+  // build URL according to provider
   let url = course.bookingBase || null;
   if (url) {
     if (course.provider === 'Quick18') {
-      // Quick18 uses YYYYMMDD
+      // Quick18 wants YYYYMMDD
       url = url.replace('YYYYMMDD', date.replace(/-/g, ''));
     } else {
-      // MiClub & others use YYYY-MM-DD
+      // MiClub and most others want YYYY-MM-DD
       url = url.replace('YYYY-MM-DD', date);
     }
   }
 
-  // --- MiClub (most WA publics) ---
+  // ----- MiClub -----
   if (course.provider === 'MiClub') {
     if (!url) return baseReturn(course, date, false, null, { reason: 'no url' });
 
@@ -46,7 +46,7 @@ export async function scrapeCourse(course, criteria) {
 
       const foundTimes = [];
 
-      // look everywhere for time-like text
+      // look broadly for time-like text
       $('tr, td, a, button, div').each((i, el) => {
         const text = $(el).text().trim();
         if (!text) return;
@@ -60,7 +60,6 @@ export async function scrapeCourse(course, criteria) {
       });
 
       if (foundTimes.length === 0) {
-        // reached page but no matching times
         return baseReturn(course, date, false, url, { reason: 'no times matched' });
       }
 
@@ -76,18 +75,17 @@ export async function scrapeCourse(course, criteria) {
         state: course.state
       }];
     } catch (e) {
-      // fetch failed, still return course so map can show it
       return baseReturn(course, date, false, url, { error: e.message });
     }
   }
 
-  // --- Quick18 (Hamersley) ---
+  // ----- Quick18 (Hamersley) -----
   if (course.provider === 'Quick18') {
     if (!url) return baseReturn(course, date, false, null, { reason: 'no url' });
     try {
       const resp = await fetch(url, { headers: { 'User-Agent': 'TeeRadar/1.0' } });
       if (resp.ok) {
-        return baseReturn(course, date, false, url, { reachable: true, note: 'Quick18 reached — add JSON parser later' });
+        return baseReturn(course, date, false, url, { reachable: true, note: 'Quick18 reached; add parser later' });
       }
       return baseReturn(course, date, false, url, { reachable: false });
     } catch (e) {
@@ -95,14 +93,21 @@ export async function scrapeCourse(course, criteria) {
     }
   }
 
-  // --- GolfBooking (Altone) ---
+  // ----- GolfBooking (Altone) -----
   if (course.provider === 'GolfBooking') {
     return baseReturn(course, date, false, url, { note: 'link-only provider' });
+  }
+
+  // ----- Phone-only -----
+  if (course.provider === 'Phone') {
+    // we just surface it to the frontend
+    return baseReturn(course, date, false, null, { note: 'phone only' });
   }
 
   // fallback
   return baseReturn(course, date, false, url, { reason: 'unknown provider' });
 }
+
 
 
 
