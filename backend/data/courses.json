@@ -63,6 +63,60 @@
     "bookingBase": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=YYYY-MM-DD&feeGroupId=1980988"
   },
   {
+    "name": "Wembley Golf Course (Old & Tuart)",
+    "provider": "MiClub",
+    "city": "Wembley Downs",
+    "state": "WA",
+    "lat": -31.934,
+    "lng": 115.787,
+    "bookingBase": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102211"
+  },
+  {
+    "name": "Mandurah Country Club",
+    "provider": "MiClub",
+    "city": "Halls Head",
+    "state": "WA",
+    "lat": -32.547,
+    "lng": 115.736,
+    "bookingBase": "https://bookings.mandurahcountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500323994"
+  },
+  {
+    "name": "Meadow Springs Golf and Country Club",
+    "provider": "MiClub",
+    "city": "Meadow Springs",
+    "state": "WA",
+    "lat": -32.523,
+    "lng": 115.754,
+    "bookingBase": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=337072"
+  },
+  {
+    "name": "Secret Harbour Golf Links",
+    "provider": "MiClub",
+    "city": "Secret Harbour",
+    "state": "WA",
+    "lat": -32.394,
+    "lng": 115.762,
+    "bookingBase": "https://secretharbour.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=12445"
+  },
+  {
+    "name": "Kwinana Golf Club",
+    "provider": "MiClub",
+    "city": "Medina",
+    "state": "WA",
+    "lat": -32.238,
+    "lng": 115.802,
+    "bookingBase": "https://www.kwinanagolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1505795368"
+  },
+  {
+    "name": "The Cut Golf Course",
+    "provider": "MiClub",
+    "city": "Dawesville",
+    "state": "WA",
+    "lat": -32.632,
+    "lng": 115.633,
+    "bookingBase": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=247589"
+  },
+  {
     "name": "Hamersley Public Golf Course",
     "provider": "Quick18",
     "city": "Karrinyup",
@@ -81,15 +135,25 @@
     "bookingBase": "https://www.golf-booking.com/en/club/altone-park-golf-course,nc"
   },
   {
-    "name": "Wembley Golf Course (Old & Tuart)",
-    "provider": "MiClub",
-    "city": "Wembley Downs",
+    "name": "Hillview Golf Course",
+    "provider": "Phone",
+    "city": "Maida Vale",
     "state": "WA",
-    "lat": -31.934,
-    "lng": 115.787,
-    "bookingBase": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102211"
+    "lat": -31.953,
+    "lng": 116.008,
+    "contact": "08 9454 5554"
+  },
+  {
+    "name": "Marri Park Golf Course",
+    "provider": "Phone",
+    "city": "Casuarina",
+    "state": "WA",
+    "lat": -32.254,
+    "lng": 115.863,
+    "contact": "08 9419 3037"
   }
 ]
+
 
 
 
