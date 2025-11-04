@@ -1,7 +1,6 @@
 // backend/scrapers/scrapeCourse.js
 import * as cheerio from "cheerio";
 
-// helper to build a standard response
 function baseReturn(course, date, available, bookingUrl, extra = {}) {
   return [
     {
@@ -24,9 +23,8 @@ function toMinutes(t) {
   return h * 60 + m;
 }
 
-// NEW: try to read "4 spots", "2 left", "3 available" from a row
+// try to read "4 spots", "2 left", "3 available"
 function detectSpotsFromText(text) {
-  // grab the first number that looks like a spots count
   const m = text.match(/(\d+)\s*(spots|left|available|avail|players)?/i);
   if (m) {
     const n = parseInt(m[1], 10);
@@ -35,12 +33,12 @@ function detectSpotsFromText(text) {
   return null;
 }
 
-// choose best URL for course based on holes + weekday/weekend
+// pick right URL based on course + holes + weekday/weekend
 function pickCourseUrl(course, { date, holes }) {
   const day = date ? new Date(date + "T00:00:00") : null;
   const isWeekend = day ? (day.getDay() === 0 || day.getDay() === 6) : false;
 
-  // Meadow Springs has weekday/weekend + 9/18
+  // Meadow Springs special
   if (course.name.startsWith("Meadow Springs")) {
     if (holes === "9") {
       if (isWeekend && course.bookingBase9_weekend) return course.bookingBase9_weekend;
@@ -51,7 +49,7 @@ function pickCourseUrl(course, { date, holes }) {
     }
   }
 
-  // general 9/18
+  // generic 9/18
   if (holes === "9" && course.bookingBase9) return course.bookingBase9;
   if (holes === "18" && course.bookingBase18) return course.bookingBase18;
 
@@ -73,15 +71,15 @@ export async function scrapeCourse(course, criteria) {
     holes = ""
   } = criteria;
 
-  // pick right URL from course.json
+  // choose URL
   let url = pickCourseUrl(course, { date, holes });
 
-  // PHONE: show but never "available"
+  // PHONE
   if (course.provider === "Phone") {
     return baseReturn(course, date, false, null, { note: "phone only" });
   }
 
-  // LINK-ONLY: show but user must click through
+  // LINK ONLY
   if (course.provider === "GolfBooking") {
     return baseReturn(course, date, false, url, { note: "link-only provider" });
   }
@@ -104,11 +102,9 @@ export async function scrapeCourse(course, criteria) {
     }
   }
 
-  // MiClub (all those ViewPublicTimesheet.msp URLs)
+  // MiClub and friends
   if (course.provider === "MiClub") {
     if (!url) return baseReturn(course, date, false, null, { reason: "no url" });
-
-    // replace date
     url = url.replace("YYYY-MM-DD", date);
 
     try {
@@ -132,54 +128,53 @@ export async function scrapeCourse(course, criteria) {
       const endMin = toMinutes(latest);
 
       const strictMatches = [];
+      const looseMatches = [];
 
-      // go through rows that look like timesheet rows
-      $("tr, .timesheet-row, .booking-row").each((i, el) => {
+      // go through rows
+      $("tr, .timesheet-row, .booking-row, td, div").each((i, el) => {
         const $row = $(el);
         const rowText = $row.text().trim();
         if (!rowText) return;
 
-        // 1) find a time
+        // find a time
         const m = rowText.match(/(\d{1,2}:\d{2})/);
         if (!m) return;
         let time = m[1];
-        if (time.length === 4) time = "0" + time; // 7:05 -> 07:05
+        if (time.length === 4) time = "0" + time;
         const timeMin = toMinutes(time);
 
-        // 2) within window?
+        // time window
         if (startMin && timeMin < startMin) return;
         if (endMin && timeMin > endMin) return;
 
-        // 3) is this actually bookable-looking?
+        // detect spots
+        const spots = detectSpotsFromText(rowText);
+        if (partySize && spots !== null && spots < partySize) {
+          // course said "2 left" and user wants 4 → discard
+          return;
+        }
+
         const lower = rowText.toLowerCase();
         const hasAction =
           lower.includes("book") ||
           lower.includes("available") ||
           $row.find("a,button").length > 0;
-        if (!hasAction) return;
 
-        // 4) detect spots in this row
-        const spots = detectSpotsFromText(rowText);
-
-        // 5) if user wants, say, 4 players, and we can SEE the row only has 2 → skip it
-        if (partySize && spots !== null && spots < partySize) {
-          return;
-        }
-
-        // 6) holes — only enforce if the course itself has a fixed holes field
-        if (holes && course.holes && String(course.holes) !== String(holes)) {
-          return;
-        }
-
-        // looks good → record it
-        strictMatches.push({
+        const matchEntry = {
           time,
-          spots, // might be null
+          spots,
           snippet: rowText.slice(0, 140) + "..."
-        });
+        };
+
+        if (hasAction) {
+          strictMatches.push(matchEntry);
+        } else {
+          // time matched but no clear button → keep as loose
+          looseMatches.push(matchEntry);
+        }
       });
 
-      // if we found at least one proper row, mark available
+      // 1) best case: strict matches
       if (strictMatches.length > 0) {
         return [
           {
@@ -188,7 +183,7 @@ export async function scrapeCourse(course, criteria) {
             available: true,
             bookingUrl: url,
             times: strictMatches.map(m => m.time),
-            slots: strictMatches,          // <-- frontend can show spots from here
+            slots: strictMatches,
             lat: course.lat,
             lng: course.lng,
             city: course.city,
@@ -198,7 +193,27 @@ export async function scrapeCourse(course, criteria) {
         ];
       }
 
-      // page loaded but we didn't find a row that matched time/players
+      // 2) fallback: we DID see times in the window, but no explicit "book"
+      if (looseMatches.length > 0) {
+        return [
+          {
+            course: course.name,
+            provider: course.provider,
+            available: true,          // ← bring your blue dots back
+            bookingUrl: url,
+            times: looseMatches.map(m => m.time),
+            slots: looseMatches,
+            lat: course.lat,
+            lng: course.lng,
+            city: course.city,
+            state: course.state,
+            confidence: "medium",
+            note: "matched time window but no explicit book button"
+          }
+        ];
+      }
+
+      // 3) nothing matched
       return baseReturn(course, date, false, url, {
         confidence: "unknown",
         reason: "no rows matched time/players"
@@ -211,7 +226,6 @@ export async function scrapeCourse(course, criteria) {
   // fallback
   return baseReturn(course, date, false, url, { reason: "unknown provider" });
 }
-
 
 
 
