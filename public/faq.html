@@ -1,62 +1,82 @@
-<!doctype html><html lang='en'><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><circle cx=%2222%22 cy=%2242%22 r=%228%22 fill=%22%2386efac%22/></svg>"/>
-<style>
-:root{--bg:#f6f7f4;--panel:#fff;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--brand:#0ea5e9;--accent:#16a34a;--shadow:0 10px 24px rgba(2,6,23,.08)}
-*{box-sizing:border-box}html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-.header{position:sticky;top:0;background:rgba(255,255,255,.9);backdrop-filter:saturate(160%) blur(8px);border-bottom:1px solid var(--border);padding:16px}
-.wrap{max-width:1100px;margin:0 auto;padding:0 16px;display:flex;align-items:center;justify-content:space-between}
-.brand{display:flex;gap:10px;align-items:center;font-weight:800}
-.nav a{color:var(--brand);text-decoration:none;margin-left:12px}
-.hero{max-width:1100px;margin:28px auto 0;padding:0 16px}
-.card{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:24px}
-.cta{background:var(--accent);color:#fff;border:none;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer}
-.footer{max-width:1100px;margin:0 auto;padding:24px 16px;color:var(--muted);text-align:center;border-top:1px solid var(--border)}
-.footer a{color:#0369a1;text-decoration:none;margin:0 6px}
-.section{max-width:1100px;margin:20px auto;padding:0 16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
-.card2{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:16px}
-.badge{display:inline-block;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800}
-input,select{border:1px solid var(--border);border-radius:10px;padding:10px 12px}
-.btn{background:#0ea5e9;color:#fff;border:none;border-radius:10px;padding:10px 12px;font-weight:800;cursor:pointer}
-.btn.secondary{background:#1118271a;color:#0f172a}
-.map{height:360px;background:linear-gradient(180deg,#c8e6c9,#a5d6a7);border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow)}
-html, body { min-height: 100%; }
-body {
-  background-image: url('/assets/hero_golf_bg.jpg');
-  background-size: cover;
-  background-position: center 40%;
-  background-attachment: fixed;
-  background-repeat: no-repeat;
-}
-</style>
-</head><body>
-<header class="header">
-  <div class="wrap">
-    <div class="brand">
-      <svg width="28" height="28" viewBox="0 0 64 64"><circle cx="22" cy="42" r="8" fill="#86efac"/><rect x="40" y="24" width="4" height="24" fill="#94a3b8"/><path d="M44 24 L60 18 L44 12 Z" fill="#0ea5e9"/></svg>
-      <span>TeeRadar</span>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>TeeRadar — FAQ</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#f6f7f4; }
+    header { background:#fff; border-bottom:1px solid #e2e8f0; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; }
+    a { text-decoration:none; color:#0ea5e9; }
+    .wrap { max-width: 900px; margin: 26px auto; background:#fff; border-radius:16px; border:1px solid #e2e8f0; padding:20px; }
+    h1 { margin-top:0; }
+    .qa { margin-bottom:18px; }
+    .q { font-weight:700; }
+    .pill { background:#0f172a; color:#fff; padding:6px 12px; border-radius:999px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div><span class="pill">TeeRadar</span></div>
+    <nav>
+      <a href="/">Home</a> •
+      <a href="/book.html">Book</a> •
+      <a href="/login.html">Log in</a>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <h1>Frequently Asked Questions</h1>
+
+    <div class="qa">
+      <div class="q">What does TeeRadar do right now?</div>
+      <div>We show WA golf courses on a map, try to read their public booking pages, and send you straight to the course’s own booking page to finish the booking.</div>
     </div>
-    <nav class="nav"><a href="/">Home</a><a href="/book.html">Book</a><a href="/dashboard.html">Dashboard</a><a href="/faq.html">FAQ</a></nav>
-  </div>
-</header>
 
-<section class='hero'><div class='card'><h1>Frequently Asked Questions</h1><p class='subtitle' style='color:var(--muted)'>Quick answers about searching, subscriptions, and bookings.</p></div></section>
-<main class='section'>
-  <div class='card2'><span class='badge'>What is TeeRadar?</span><p>TeeRadar helps you find and compare tee times across Australia, then sends you to each course’s official booking page to complete your reservation.</p></div>
-  <div class='card2'><span class='badge'>How does booking work?</span><p>Use filters and the map to find a time. Click <strong>Proceed to booking</strong> to open the official course booking page for your date (and time when supported).</p></div>
-  <div class='card2'><span class='badge'>Do I need a membership?</span><p>Guests can browse; members (A$10/mo or A$99/yr) unlock direct links and faster updates.</p></div>
-  <div class='card2'><span class='badge'>Is pricing final?</span><p>We surface prices from provider pages where possible; final pricing is confirmed on the course’s checkout page.</p></div>
-  <div class='card2'><span class='badge'>Can I cancel my membership?</span><p>Yes — cancel anytime from the Dashboard. Access continues until the end of the current period.</p></div>
-  <div class='card2'><span class='badge'>Will you add one‑click bookings?</span><p>We plan to integrate partner APIs where approved. Until then, proceed links take you to the official course page.</p></div>
-  <div class='card2'><span class='badge'>How can courses get listed?</span><p>We’re rolling out state by state. Course operators can contact us to connect their booking system.</p></div>
-</main>
+    <div class="qa">
+      <div class="q">Why are most courses in Western Australia?</div>
+      <div>We started with WA because many public/resort courses use similar booking systems (MiClub, Quick18, etc.). Once we have traffic and course-level approval, we can add other states.</div>
+    </div>
 
-<footer class="footer">
-  © <script>document.write(new Date().getFullYear())</script> TeeRadar
-  • <a href="/faq.html">FAQ</a>
-  • <a href="/terms.html">Terms of Use</a>
-  • <a href="/privacy.html">Privacy</a>
-  • <a href="/refunds.html">Refunds & Cancellations</a>
-</footer>
-</body></html>
+    <div class="qa">
+      <div class="q">Why do I need to subscribe?</div>
+      <div>Guests can browse the map, but subscribers get direct booking links and future features (saved home course, faster lookups). Intro price is <strong>$5/month for 3 months</strong>, then <strong>$10/month</strong>.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Can I get a discount?</div>
+      <div>Yes — the owner can add certain emails to a discount list. If your email is on the list, the login page will show your discounted rate.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Some courses say “phone bookings only”. Why?</div>
+      <div>Those courses don’t expose an online timesheet. We still show them on the map so golfers know they exist, and we give the phone number so you can call.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Why does the availability check take a few seconds?</div>
+      <div>When you click Search, we visit each course URL in your WA list and try to read the times for the date you chose. That’s 15–20 websites sometimes, so we show a loading bar while that runs.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Does TeeRadar actually book for me?</div>
+      <div>No. We send you to the course’s own booking page with the right date and course. This keeps the course in control and makes API approval easier later.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q">Can I set my home course?</div>
+      <div>Yes — that feature is being wired into the booking page so the map can centre on your home course automatically.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q">What happens if a course URL changes?</div>
+      <div>Then it may show as unavailable. You can update the course JSON in the backend to fix it.</div>
+    </div>
+
+    <div class="qa">
+      <div class="q">How do I contact you?</div>
+      <div>You can add a “Contact us” page later — for now, update the footer or FAQ with your preferred email.</div>
+    </div>
+  </main>
+</body>
+</html>
