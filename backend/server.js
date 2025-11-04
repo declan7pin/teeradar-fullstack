@@ -3,7 +3,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { scrapeMiClubPage } from './scrapers/scrapeMiClubPage.js';
+import { scrapeCourse } from './scrapers/scrapeCourse.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,13 +12,10 @@ const __dirname = path.dirname(__filename);
 const coursesPath = path.join(__dirname, 'data', 'courses.json');
 const courses = JSON.parse(fs.readFileSync(coursesPath, 'utf-8'));
 
-// lookup so we can reattach coords even if scraping failed
-const courseByName = Object.fromEntries(courses.map(c => [c.name, c]));
-
+// serve static
 const app = express();
 app.use(express.json());
 
-// serve frontend
 const publicDir = path.join(__dirname, '..', 'public');
 app.use(express.static(publicDir));
 
@@ -27,44 +24,22 @@ app.get('/', (req, res) => {
 });
 
 app.post('/api/search', async (req, res) => {
-  const { date, earliest = '06:00', latest = '18:00', partySize = 1 } = req.body || {};
+  const { date, earliest = '06:00', latest = '17:00', partySize = 1 } = req.body || {};
 
-  const tasks = courses.map(async (course) => {
-    try {
-      const result = await scrapeMiClubPage(course, {
-        date,
-        earliest,
-        latest,
-        partySize
-      });
-      return result;
-    } catch (err) {
-      console.error('SCRAPE ERROR for', course.name, err.message);
-      return [{
-        course: course.name,
-        provider: course.provider,
-        available: false,
-        bookingUrl: course.bookingBase ? course.bookingBase.replace('YYYY-MM-DD', date) : null,
-        lat: course.lat,
-        lng: course.lng,
-        city: course.city,
-        state: course.state,
-        error: err.message
-      }];
-    }
-  });
-
+  // scrape all courses
+  const tasks = courses.map(c => scrapeCourse(c, { date, earliest, latest, partySize }));
   let all = (await Promise.all(tasks)).flat();
 
-  // safety pass — make sure everything has coords
+  // reattach coords to be safe
+  const byName = Object.fromEntries(courses.map(c => [c.name, c]));
   all = all.map(slot => {
-    const base = courseByName[slot.course];
+    const base = byName[slot.course] || {};
     return {
       ...slot,
-      lat: slot.lat ?? base?.lat ?? null,
-      lng: slot.lng ?? base?.lng ?? null,
-      city: slot.city ?? base?.city ?? null,
-      state: slot.state ?? base?.state ?? null
+      lat: slot.lat ?? base.lat ?? null,
+      lng: slot.lng ?? base.lng ?? null,
+      city: slot.city ?? base.city ?? null,
+      state: slot.state ?? base.state ?? null
     };
   });
 
@@ -73,5 +48,6 @@ app.post('/api/search', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log('TeeRadar WA realtime backend running on', PORT);
+  console.log('TeeRadar WA backend running on', PORT);
 });
+
