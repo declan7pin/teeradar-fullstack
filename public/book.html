@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <title>TeeRadar — WA Realtime</title>
+  <title>TeeRadar — Book a tee time</title>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
@@ -145,30 +145,37 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
+    // same WA courses you loaded in the backend
     const WA_COURSES = [
-      { name: "Whaleback Golf Course", lat: -32.043, lng: 115.906, provider: "MiClub", bookingBase: "https://www.whalebackgolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500344725" },
-      { name: "Collier Park Golf Course", lat: -32.007, lng: 115.871, provider: "MiClub", bookingBase: "https://bookings.collierparkgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500323733" },
-      { name: "Araluen Estate", lat: -32.124, lng: 116.099, provider: "MiClub", bookingBase: "https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102808" },
-      { name: "Sun City Country Club", lat: -31.646, lng: 115.712, provider: "MiClub", bookingBase: "https://www.suncitycountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=7301269" },
-      { name: "Marangaroo Golf Course", lat: -31.815, lng: 115.832, provider: "MiClub", bookingBase: "https://marangaroo.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500406571" },
-      { name: "Joondalup Resort Golf Course", lat: -31.746, lng: 115.766, provider: "MiClub", bookingBase: "https://golfbookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=YYYY-MM-DD&feeGroupId=1522096469" },
-      { name: "The Vines Resort & Country Club", lat: -31.777, lng: 116.027, provider: "MiClub", bookingBase: "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=YYYY-MM-DD&feeGroupId=1980988" },
-      { name: "Wembley Golf Course (Old & Tuart)", lat: -31.934, lng: 115.787, provider: "MiClub", bookingBase: "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102211" },
-      { name: "Mandurah Country Club", lat: -32.547, lng: 115.736, provider: "MiClub", bookingBase: "https://bookings.mandurahcountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500323994" },
-      { name: "Meadow Springs Golf and Country Club", lat: -32.523, lng: 115.754, provider: "MiClub", bookingBase: "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=337072" },
-      { name: "Secret Harbour Golf Links", lat: -32.394, lng: 115.762, provider: "MiClub", bookingBase: "https://secretharbour.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=12445" },
-      { name: "Kwinana Golf Club", lat: -32.238, lng: 115.802, provider: "MiClub", bookingBase: "https://www.kwinanagolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1505795368" },
-      { name: "The Cut Golf Course", lat: -32.632, lng: 115.633, provider: "MiClub", bookingBase: "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=247589" },
-      { name: "Hamersley Public Golf Course", lat: -31.863, lng: 115.776, provider: "Quick18", bookingBase: "https://hamersley.quick18.com/teetimes/searchmatrix?teedate=YYYYMMDD" },
-      { name: "Altone Park Golf Course", lat: -31.861, lng: 115.96, provider: "GolfBooking", bookingBase: "https://www.golf-booking.com/en/club/altone-park-golf-course,nc" },
+      // keep IDs/names in sync with backend/data/courses.json
+      { name: "Whaleback Golf Course", lat: -32.043, lng: 115.906 },
+      { name: "Collier Park Golf Course", lat: -32.007, lng: 115.871 },
+      { name: "Araluen Estate", lat: -32.124, lng: 116.099 },
+      { name: "Sun City Country Club", lat: -31.646, lng: 115.712 },
+      { name: "The Cut Golf Course", lat: -32.632, lng: 115.633 },
+      { name: "Secret Harbour Golf Links", lat: -32.394, lng: 115.762 },
+      { name: "Meadow Springs Golf and Country Club", lat: -32.523, lng: 115.754 },
+      { name: "Hamersley Public Golf Course", lat: -31.863, lng: 115.776 },
+      { name: "Joondalup Resort Golf Course", lat: -31.746, lng: 115.766 },
+      { name: "Marangaroo Golf Course", lat: -31.815, lng: 115.832 },
+      { name: "The Vines Resort & Country Club", lat: -31.777, lng: 116.027 },
+      { name: "Wembley Golf Course (Old) 18", lat: -31.934, lng: 115.787 },
+      { name: "Wembley Golf Course (Tuart) 18", lat: -31.934, lng: 115.787 },
+      { name: "Wembley Golf Course (Old) 9", lat: -31.934, lng: 115.787 },
+      { name: "Wembley Golf Course (Tuart) 9", lat: -31.934, lng: 115.787 },
+      { name: "Mandurah Country Club", lat: -32.547, lng: 115.736 },
+      { name: "Kwinana Golf Club", lat: -32.238, lng: 115.802 },
+      { name: "Altone Park Golf Course", lat: -31.861, lng: 115.96 },
       { name: "Hillview Golf Course", lat: -31.953, lng: 116.008, provider: "Phone", contact: "08 9454 5554" },
       { name: "Marri Park Golf Course", lat: -32.254, lng: 115.863, provider: "Phone", contact: "08 9419 3037" }
     ];
 
+    // init map
     const map = L.map('map').setView([-31.95, 115.86], 7);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
     const markers = L.layerGroup().addTo(map);
 
+    // marker icons
     const blueIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/blue-dot.png', iconSize: [32, 32], iconAnchor: [16, 32] });
     const redIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png', iconSize: [32, 32], iconAnchor: [16, 32] });
     const purpleIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/purple-dot.png', iconSize: [32, 32], iconAnchor: [16, 32] });
@@ -177,12 +184,30 @@
     const resultsEl = document.getElementById('results');
     const overlayEl = document.getElementById('loadingOverlay');
 
-    function openBooking(base, date) {
-      if (!base) { alert('No booking link for this course'); return; }
-      const url = base.replace('YYYY-MM-DD', date).replace('YYYYMMDD', date.replace(/-/g, ''));
-      window.open(url, '_blank', 'noopener,noreferrer');
+    // open correct booking sheet for course
+    function openBookingForCourse(course, date) {
+      const holesSel = document.getElementById('holes') ? document.getElementById('holes').value : '';
+      // course may have multiple booking fields in backend, but on frontend
+      // we often only have the name. simplest: just open the backend-generated link
+      // BUT we can still try to honour 9 vs 18 if present
+      let url =
+        (holesSel === '9' && course.bookingBase9) ? course.bookingBase9 :
+        (holesSel === '18' && course.bookingBase18) ? course.bookingBase18 :
+        course.bookingBase || course.bookingBase18 || course.bookingBase9;
+
+      if (!url) {
+        // fallback: google the course
+        window.open('https://www.google.com/search?q=' + encodeURIComponent(course.name + ' golf booking'), '_blank');
+        return;
+      }
+
+      const finalUrl = url
+        .replace('YYYY-MM-DD', date)
+        .replace('YYYYMMDD', date.replace(/-/g, ''));
+      window.open(finalUrl, '_blank', 'noopener,noreferrer');
     }
 
+    // draw initial map
     function drawLocal(dateStr) {
       markers.clearLayers();
       resultsEl.innerHTML = '';
@@ -190,7 +215,7 @@
         const icon = c.provider === 'Phone' ? purpleIcon : redIcon;
         const popup = c.provider === 'Phone'
           ? `<b>${c.name}</b><br>Phone bookings only: ${c.contact || ''}`
-          : `<b>${c.name}</b><br>Waiting for live availability`;
+          : `<b>${c.name}</b><br>Awaiting availability`;
         L.marker([c.lat, c.lng], { icon }).addTo(markers).bindPopup(popup);
 
         const card = document.createElement('div');
@@ -198,12 +223,13 @@
         if (c.provider === 'Phone') {
           card.innerHTML = `<h3>${c.name}</h3><div class="small">Phone bookings only</div><div class="small">${c.contact || ''}</div>`;
         } else {
-          card.innerHTML = `<h3>${c.name}</h3><div class="small">Awaiting live check</div><button class="btn" onclick="openBooking('${(c.bookingBase || '').replace(/'/g, "\\'")}', '${dateStr}')">Proceed to booking</button>`;
+          card.innerHTML = `<h3>${c.name}</h3><div class="small">Awaiting live check</div>`;
         }
         resultsEl.appendChild(card);
       });
     }
 
+    // set default date
     const today = new Date().toISOString().slice(0,10);
     document.getElementById('date').value = today;
     drawLocal(today);
@@ -225,8 +251,12 @@
           body: JSON.stringify({ date, earliest, latest, holes, partySize: players })
         });
         const data = await resp.json();
+
+        // build fast lookup by course name
         const liveByName = {};
-        (data.slots || []).forEach(s => { liveByName[s.course] = s; });
+        (data.slots || []).forEach(s => {
+          liveByName[s.course] = s;
+        });
 
         markers.clearLayers();
         resultsEl.innerHTML = '';
@@ -234,23 +264,56 @@
         WA_COURSES.forEach(c => {
           const live = liveByName[c.name];
           const isAvail = live ? !!live.available : false;
-          let icon = redIcon;
-          if (c.provider === 'Phone') icon = purpleIcon;
-          else if (isAvail) icon = blueIcon;
+          const confidence = live && live.confidence ? live.confidence : null;
+          const icon =
+            c.provider === 'Phone' ? purpleIcon :
+            isAvail ? blueIcon : redIcon;
 
-          const popup = c.provider === 'Phone'
-            ? `<b>${c.name}</b><br>Phone bookings only: ${c.contact || ''}`
-            : `<b>${c.name}</b><br>${isAvail ? 'Available' : 'Unavailable'}`;
+          const popup =
+            c.provider === 'Phone'
+              ? `<b>${c.name}</b><br>Phone bookings only: ${c.contact || ''}`
+              : `<b>${c.name}</b><br>${isAvail ? 'Available' : 'Unavailable / not confirmed'}`;
 
           L.marker([c.lat, c.lng], { icon }).addTo(markers).bindPopup(popup);
 
           const card = document.createElement('div');
           card.className = 'card';
+
           if (c.provider === 'Phone') {
-            card.innerHTML = `<h3>${c.name}</h3><div class="small">Phone bookings only</div><div class="small">${c.contact || ''}</div>`;
+            card.innerHTML = `
+              <h3>${c.name}</h3>
+              <div class="small">Phone bookings only</div>
+              <div class="small">${c.contact || ''}</div>
+            `;
           } else {
-            card.innerHTML = `<h3>${c.name}</h3><div class="small">${isAvail ? '✅ Available in that window' : '❌ No times found / scrape failed'}</div><button class="btn" onclick="openBooking('${(c.bookingBase || '').replace(/'/g, "\\'")}', '${date}')">Proceed to booking</button>`;
+            // spots line — from backend
+            let spotsLine = '';
+            if (live && Array.isArray(live.slots) && live.slots.length > 0) {
+              const firstSlot = live.slots[0];
+              if (firstSlot.spots != null) {
+                spotsLine = `<div class="small">Spots shown by course: ${firstSlot.spots}</div>`;
+              } else {
+                spotsLine = `<div class="small">Spots not shown on course page</div>`;
+              }
+            }
+
+            const statusLine = isAvail
+              ? '✅ Available in that window'
+              : (confidence === 'unknown'
+                  ? '⚪ Could not confirm — open course page'
+                  : '❌ No times found / scrape failed');
+
+            // we'll pass only name & bookingBase-ish info we have; real link is in backend
+            const safeCourse = JSON.stringify(c).replace(/"/g, '&quot;');
+
+            card.innerHTML = `
+              <h3>${c.name}</h3>
+              <div class="small">${statusLine}</div>
+              ${spotsLine}
+              <button class="btn" onclick="openBookingForCourse(JSON.parse('${safeCourse}'), '${date}')">Proceed to booking</button>
+            `;
           }
+
           resultsEl.appendChild(card);
         });
 
@@ -266,6 +329,5 @@
   </script>
 </body>
 </html>
-
 
 
