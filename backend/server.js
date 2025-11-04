@@ -15,7 +15,7 @@ const courses = JSON.parse(fs.readFileSync(coursesPath, 'utf-8'));
 const app = express();
 app.use(express.json());
 
-// serve frontend from /public
+// serve frontend
 const publicDir = path.join(__dirname, '..', 'public');
 app.use(express.static(publicDir));
 
@@ -26,13 +26,12 @@ app.get('/', (req, res) => {
 app.post('/api/search', async (req, res) => {
   const { date, earliest = '06:00', latest = '17:00', partySize = 1 } = req.body || {};
 
-  // run scraper for every course
   const tasks = courses.map(course =>
     scrapeCourse(course, { date, earliest, latest, partySize })
   );
   let all = (await Promise.all(tasks)).flat();
 
-  // safety: reattach coords
+  // reattach coords so the map can always plot them
   const byName = Object.fromEntries(courses.map(c => [c.name, c]));
   all = all.map(slot => {
     const base = byName[slot.course] || {};
