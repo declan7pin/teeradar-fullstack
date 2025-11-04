@@ -18,17 +18,19 @@ function baseReturn(course, date, available, bookingUrl, extra = {}) {
 export async function scrapeCourse(course, criteria) {
   const { date, earliest, latest } = criteria;
 
-  // build URL according to provider
+  // build URL per provider
   let url = course.bookingBase || null;
   if (url) {
     if (course.provider === 'Quick18') {
+      // Quick18 uses YYYYMMDD
       url = url.replace('YYYYMMDD', date.replace(/-/g, ''));
     } else {
+      // MiClub & others use YYYY-MM-DD
       url = url.replace('YYYY-MM-DD', date);
     }
   }
 
-  // -------- MiClub (most of your WA courses) --------
+  // --- MiClub (most WA publics) ---
   if (course.provider === 'MiClub') {
     if (!url) return baseReturn(course, date, false, null, { reason: 'no url' });
 
@@ -44,8 +46,8 @@ export async function scrapeCourse(course, criteria) {
 
       const foundTimes = [];
 
-      // 1) common MiClub time cells (sometimes they use class names)
-      $('.timeslot-time, .timeslot, tr, td').each((i, el) => {
+      // look everywhere for time-like text
+      $('tr, td, a, button, div').each((i, el) => {
         const text = $(el).text().trim();
         if (!text) return;
         const m = text.match(/(\d{1,2}:\d{2})/);
@@ -57,20 +59,8 @@ export async function scrapeCourse(course, criteria) {
         }
       });
 
-      // 2) fallback: sometimes it's inside a link/button
-      $('a, button').each((i, el) => {
-        const text = $(el).text().trim();
-        const m = text.match(/(\d{1,2}:\d{2})/);
-        if (!m) return;
-        let t = m[1];
-        if (t.length === 4) t = '0' + t;
-        if (t >= earliest && t <= latest) {
-          foundTimes.push(t);
-        }
-      });
-
       if (foundTimes.length === 0) {
-        // we reached the page, but didn’t see slot text
+        // reached page but no matching times
         return baseReturn(course, date, false, url, { reason: 'no times matched' });
       }
 
@@ -86,17 +76,18 @@ export async function scrapeCourse(course, criteria) {
         state: course.state
       }];
     } catch (e) {
+      // fetch failed, still return course so map can show it
       return baseReturn(course, date, false, url, { error: e.message });
     }
   }
 
-  // -------- Quick18 (Hamersley) --------
+  // --- Quick18 (Hamersley) ---
   if (course.provider === 'Quick18') {
     if (!url) return baseReturn(course, date, false, null, { reason: 'no url' });
     try {
       const resp = await fetch(url, { headers: { 'User-Agent': 'TeeRadar/1.0' } });
       if (resp.ok) {
-        return baseReturn(course, date, false, url, { reachable: true, note: 'Quick18 reached; add JSON parser later' });
+        return baseReturn(course, date, false, url, { reachable: true, note: 'Quick18 reached — add JSON parser later' });
       }
       return baseReturn(course, date, false, url, { reachable: false });
     } catch (e) {
@@ -104,13 +95,14 @@ export async function scrapeCourse(course, criteria) {
     }
   }
 
-  // -------- GolfBooking (Altone) --------
+  // --- GolfBooking (Altone) ---
   if (course.provider === 'GolfBooking') {
     return baseReturn(course, date, false, url, { note: 'link-only provider' });
   }
 
-  // default
+  // fallback
   return baseReturn(course, date, false, url, { reason: 'unknown provider' });
 }
+
 
 
