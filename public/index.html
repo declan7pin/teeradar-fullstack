@@ -33,6 +33,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 14px;
     }
     .brand {
       display: flex;
@@ -40,16 +41,29 @@
       align-items: center;
       font-weight: 700;
     }
+    .nav-links {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
     .nav-links a {
-      margin-left: 14px;
       text-decoration: none;
       color: #0ea5e9;
       font-weight: 500;
     }
+    .login-btn {
+      background: #0f172a;
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
     .hero {
       max-width: 1100px;
       margin: 26px auto 0;
-      padding: 0 16px 40px;
+      padding: 0 16px 32px;
       display: grid;
       grid-template-columns: 1.1fr .9fr;
       gap: 30px;
@@ -102,20 +116,50 @@
       font-size: 15px;
     }
     .small-muted { color: #9ca3af; font-size: 12px; }
-    .features {
+    /* subscription strip */
+    .sub-strip {
+      max-width: 1100px;
+      margin: 0 auto 30px;
+      padding: 0 16px;
+    }
+    .sub-box {
+      background: #fff;
+      border: 1px solid rgba(0,0,0,.02);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .sub-title { font-weight: 700; }
+    .badge-green {
+      background: rgba(22,101,52,.16);
+      color: #166534;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .about {
       max-width: 1100px;
       margin: 0 auto 50px;
       padding: 0 16px;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(230px,1fr));
-      gap: 16px;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 26px;
     }
-    .feature-card {
+    .about-panel {
       background: #fff;
       border-radius: 14px;
-      padding: 16px 16px 18px;
       border: 1px solid rgba(0,0,0,.02);
+      padding: 18px 18px 20px;
     }
+    .about-panel h2 {
+      margin-top: 0;
+    }
+    .about-list li { margin-bottom: 6px; }
     footer {
       text-align: center;
       padding: 30px 16px 40px;
@@ -123,7 +167,7 @@
       font-size: 13px;
     }
     @media (max-width: 850px) {
-      .hero {
+      .hero, .about {
         grid-template-columns: 1fr;
       }
     }
@@ -141,6 +185,7 @@
         <a href="/book.html">Book</a>
         <a href="/dashboard.html">Dashboard</a>
         <a href="/faq.html">FAQ</a>
+        <button class="login-btn" onclick="window.location.href='/login.html'">Log in</button>
       </div>
     </div>
   </header>
@@ -149,33 +194,51 @@
     <div class="hero-card">
       <div class="tagline">WA public & resort courses — one place</div>
       <h1>Find tee times across Australia</h1>
-      <p>Filter by date, time window and players — then jump straight to the course’s own booking page. Members see direct links; guests can browse the map.</p>
+      <p>Filter by date, time window and players — then jump straight to the course’s own booking page. Subscribers get direct links.</p>
       <a href="/book.html" class="btn-primary">Book a tee time</a>
     </div>
     <div class="hero-preview">
       <h3>What’s live right now?</h3>
-      <p class="small-muted">We scan your WA list and show what’s open. More states coming once APIs are approved.</p>
+      <p class="small-muted">We scan your WA list and show what’s open. More states coming once the course APIs are enabled.</p>
       <ul style="padding-left:18px; margin-bottom:8px;">
         <li>Perth metro public courses</li>
-        <li>MiClub resorts (Joondalup, The Vines, Araluen)</li>
+        <li>Resort/club courses on MiClub</li>
         <li>Phone-only courses still shown on map</li>
       </ul>
       <p style="margin-bottom:0;"><a href="/book.html" style="color:#0ea5e9;">Open booking map →</a></p>
     </div>
   </section>
 
-  <section class="features">
-    <div class="feature-card">
-      <h3>Single login</h3>
-      <p class="small-muted">Your golfers don’t have to make a new account on every course website.</p>
+  <section class="sub-strip">
+    <div class="sub-box">
+      <div>
+        <div class="sub-title">Intro pricing: $5/month for the first 3 months</div>
+        <div style="color:#64748b;font-size:13px;">Then $10/month ongoing. Cancel anytime.</div>
+      </div>
+      <div class="badge-green">Subscriber-only links</div>
     </div>
-    <div class="feature-card">
-      <h3>Course-first booking</h3>
-      <p class="small-muted">We always send the golfer to the official course booking page — you stay compliant.</p>
+  </section>
+
+  <section class="about">
+    <div class="about-panel">
+      <h2>About TeeRadar</h2>
+      <p>We’re building a single doorway into Australian golf tee times. Instead of remembering each course’s website, golfers can browse once, filter once, and go straight to the right place.</p>
+      <p>This first version focuses on WA public and resort courses because many of them already expose dates in a similar format. As we collect usage, we’ll use that to request API access from the booking platforms.</p>
     </div>
-    <div class="feature-card">
-      <h3>Ready to scale</h3>
-      <p class="small-muted">WA today, the rest of Australia when you get API access.</p>
+    <div class="about-panel">
+      <h3>What we do today</h3>
+      <ul class="about-list">
+        <li>Show WA courses on a live map</li>
+        <li>Try to read availability from the course page</li>
+        <li>Send the golfer to the official booking page</li>
+        <li>Let phone-only courses appear with their number</li>
+      </ul>
+      <h3>What’s coming</h3>
+      <ul class="about-list">
+        <li>State-by-state expansion</li>
+        <li>Better member profiles (home course, preferences)</li>
+        <li>Course-side integrations once approved</li>
+      </ul>
     </div>
   </section>
 
@@ -184,3 +247,4 @@
   </footer>
 </body>
 </html>
+
