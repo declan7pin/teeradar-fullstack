@@ -6,154 +6,91 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
-    :root {
-      --bg: #f6f7f4;
-      --panel: #ffffff;
-      --border: #e2e8f0;
-      --text: #0f172a;
-      --muted: #64748b;
-    }
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: var(--bg);
-    }
-    header {
-      background: #fff;
-      border-bottom: 1px solid var(--border);
-      padding: 14px 16px;
-      font-weight: 700;
-    }
-    .controls {
-      display: flex;
-      gap: 10px;
-      padding: 10px 16px;
-      background: #f8fafc;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-    .controls input,
-    .controls button {
-      padding: 6px 8px;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-    .controls button {
-      background: #0ea5e9;
-      color: #fff;
-      cursor: pointer;
-      border: none;
-    }
-    #status {
-      font-size: 13px;
-      color: var(--muted);
-    }
-    #map {
-      height: 440px;
-      margin: 12px 16px 16px;
-      border-radius: 14px;
-      overflow: hidden;
-      background: #ddd;
-    }
-    #results {
-      padding: 0 16px 16px;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 10px;
-    }
-    .card {
-      background: #fff;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 10px;
-    }
-    .card h3 {
-      margin: 0 0 4px 0;
-      font-size: 15px;
-    }
-    .small {
-      font-size: 12px;
-      color: var(--muted);
-    }
-    .btn {
-      background: #0ea5e9;
-      color: #fff;
-      border: none;
-      border-radius: 6px;
-      padding: 5px 9px;
-      font-size: 13px;
-      cursor: pointer;
-      margin-top: 6px;
-    }
+    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#f6f7f4; }
+    header { background:#fff; border-bottom:1px solid #e2e8f0; padding:14px 16px; font-weight:700; }
+    .controls { display:flex; gap:10px; padding:10px 16px; background:#f8fafc; flex-wrap:wrap; }
+    .controls input, .controls button { padding:6px 8px; border-radius:6px; border:1px solid #cbd5e1; }
+    .controls button { background:#0ea5e9; color:#fff; border:none; cursor:pointer; }
+    #map { height:440px; margin:12px 16px 16px; border-radius:14px; overflow:hidden; }
+    #results { padding:0 16px 16px; display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; }
+    .card { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:10px; }
+    .card h3 { margin:0 0 4px 0; font-size:15px; }
+    .small { font-size:12px; color:#64748b; }
+    .btn { background:#0ea5e9; color:#fff; border:none; border-radius:6px; padding:5px 9px; font-size:13px; cursor:pointer; margin-top:6px; }
   </style>
 </head>
 <body>
   <header>TeeRadar — WA Realtime</header>
-
   <div class="controls">
     <input type="date" id="date">
     <input type="time" id="start" value="06:00">
     <input type="time" id="end" value="17:00">
     <button onclick="runSearch()">Search</button>
-    <span id="status">Showing WA public courses…</span>
+    <span id="status" style="font-size:13px;color:#64748b;">Showing WA courses…</span>
   </div>
-
   <div id="map"></div>
   <div id="results"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // 1) static WA courses so the map is never empty
+    // match backend/data/courses.json
     const WA_COURSES = [
-      { name:"Whaleback Golf Course", lat:-32.043, lng:115.906,
-        bookingBase:"https://www.whalebackgolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500344725" },
-      { name:"Collier Park Golf Course", lat:-32.007, lng:115.871,
-        bookingBase:"https://bookings.collierparkgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500323733" },
-      { name:"Araluen Estate", lat:-32.124, lng:116.099,
-        bookingBase:"https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102808" },
-      { name:"Wembley Golf Course (Old & Tuart)", lat:-31.934, lng:115.787,
-        bookingBase:"https://bookings.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500299989" },
-      { name:"Maylands Peninsula Golf Course", lat:-31.942, lng:115.904,
-        bookingBase:"https://bookings.maylandsgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500325651" },
-      { name:"The Vines Resort & Country Club", lat:-31.777, lng:116.027,
-        bookingBase:"https://bookings.vinesresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500337002" },
-      { name:"Secret Harbour Golf Links", lat:-32.394, lng:115.762,
-        bookingBase:"https://bookings.secretharbourgolflinks.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500324064" },
-      { name:"Mandurah Country Club", lat:-32.547, lng:115.736,
-        bookingBase:"https://bookings.mandurahcountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500323994" },
-      { name:"Sun City Country Club", lat:-31.646, lng:115.712,
-        bookingBase:"https://bookings.suncitycountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500324018" },
-      { name:"Joondalup Resort Golf Course", lat:-31.746, lng:115.766,
-        bookingBase:"https://bookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500323980" },
-      { name:"The Cut Golf Course", lat:-32.632, lng:115.633,
-        bookingBase:"https://bookings.thecutgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500323719" },
-      { name:"Fremantle Public Golf Course", lat:-32.052, lng:115.751,
-        bookingBase:"https://bookings.fremantlegolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500323742" },
-      { name:"The Springs Golf Course (Armadale)", lat:-32.168, lng:115.996,
-        bookingBase:"https://bookings.thespringsarmadale.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500345001" },
-      { name:"Marangaroo Golf Course", lat:-31.815, lng:115.832,
-        bookingBase:"https://bookings.marangaroogolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD" },
-      { name:"Hamersley Public Golf Course", lat:-31.863, lng:115.776,
-        bookingBase:"https://bookings.hamersleygolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD" },
-      { name:"Hillview Golf Course", lat:-31.95, lng:116.013,
-        bookingBase:"https://bookings.hillviewgolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD" },
-      { name:"Altone Park Golf Course", lat:-31.861, lng:115.96,
-        bookingBase:"https://bookings.altoneparkgolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD" },
-      { name:"Rockingham Golf Club", lat:-32.301, lng:115.766,
-        bookingBase:"https://bookings.rockinghamgolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD" },
-      { name:"The Links Kennedy Bay", lat:-32.382, lng:115.751,
-        bookingBase:"https://bookings.linkskennedybay.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD" },
-      { name:"Meadow Springs Golf and Country Club", lat:-32.523, lng:115.754,
-        bookingBase:"https://bookings.meadowspringsgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD" }
+      {
+        name: "Whaleback Golf Course",
+        lat: -32.043, lng: 115.906,
+        bookingBase: "https://www.whalebackgolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500344725"
+      },
+      {
+        name: "Collier Park Golf Course",
+        lat: -32.007, lng: 115.871,
+        bookingBase: "https://bookings.collierparkgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500323733"
+      },
+      {
+        name: "Araluen Estate",
+        lat: -32.124, lng: 116.099,
+        bookingBase: "https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102808"
+      },
+      {
+        name: "Sun City Country Club",
+        lat: -31.646, lng: 115.712,
+        bookingBase: "https://www.suncitycountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=7301269"
+      },
+      {
+        name: "Marangaroo Golf Course",
+        lat: -31.815, lng: 115.832,
+        bookingBase: "https://marangaroo.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500406571"
+      },
+      {
+        name: "Joondalup Resort Golf Course",
+        lat: -31.746, lng: 115.766,
+        bookingBase: "https://golfbookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=YYYY-MM-DD&feeGroupId=1522096469"
+      },
+      {
+        name: "The Vines Resort & Country Club",
+        lat: -31.777, lng: 116.027,
+        bookingBase: "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=YYYY-MM-DD&feeGroupId=1980988"
+      },
+      {
+        name: "Hamersley Public Golf Course",
+        lat: -31.863, lng: 115.776,
+        bookingBase: "https://hamersley.quick18.com/teetimes/searchmatrix?teedate=YYYYMMDD"
+      },
+      {
+        name: "Altone Park Golf Course",
+        lat: -31.861, lng: 115.96,
+        bookingBase: "https://www.golf-booking.com/en/club/altone-park-golf-course,nc"
+      },
+      {
+        name: "Wembley Golf Course (Old & Tuart)",
+        lat: -31.934, lng: 115.787,
+        bookingBase: "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102211"
+      }
     ];
 
-    // 2) map setup
     const map = L.map('map').setView([-31.95, 115.86], 7);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
     const markers = L.layerGroup().addTo(map);
 
-    // 3) icons (real URLs so you see colours)
     const blueIcon = L.icon({
       iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/blue-dot.png',
       iconSize: [32, 32],
@@ -168,8 +105,15 @@
     const statusEl = document.getElementById('status');
     const resultsEl = document.getElementById('results');
 
-    // show local courses immediately as red
-    function drawLocalCourses(dateStr) {
+    function openBooking(base, date) {
+      if (!base) { alert('No booking link for this course'); return; }
+      const url = base
+        .replace('YYYY-MM-DD', date)
+        .replace('YYYYMMDD', date.replace(/-/g, ''));
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    function drawLocal(dateStr) {
       markers.clearLayers();
       resultsEl.innerHTML = '';
       WA_COURSES.forEach(c => {
@@ -187,19 +131,10 @@
       });
     }
 
-    function openBooking(base, dateStr) {
-      if (!base) { alert('No booking link for this course'); return; }
-      const url = base.replace('YYYY-MM-DD', dateStr);
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-    window.openBooking = openBooking; // expose for inline button
-
-    // init date to today
     const today = new Date().toISOString().slice(0,10);
     document.getElementById('date').value = today;
-    drawLocalCourses(today);
+    drawLocal(today);
 
-    // 4) live search
     async function runSearch() {
       const date = document.getElementById('date').value || today;
       const earliest = document.getElementById('start').value || '06:00';
@@ -207,25 +142,27 @@
       statusEl.textContent = 'Checking live availability…';
 
       try {
-        const res = await fetch('/api/search', {
+        const resp = await fetch('/api/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ date, earliest, latest })
         });
-        const data = await res.json();
+        const data = await resp.json();
         const liveByName = {};
         (data.slots || []).forEach(s => { liveByName[s.course] = s; });
 
-        // redraw with live data
         markers.clearLayers();
         resultsEl.innerHTML = '';
+
         WA_COURSES.forEach(c => {
           const live = liveByName[c.name];
           const isAvail = live ? !!live.available : false;
           const icon = isAvail ? blueIcon : redIcon;
+
           L.marker([c.lat, c.lng], { icon })
             .addTo(markers)
-            .bindPopup(`<b>${c.name}</b><br>${isAvail ? 'Available' : 'Unavailable'}<br><a target="_blank" href="${(c.bookingBase || '').replace('YYYY-MM-DD', date)}">Course booking</a>`);
+            .bindPopup(`<b>${c.name}</b><br>${isAvail ? 'Available' : 'Unavailable'}`);
+
           const card = document.createElement('div');
           card.className = 'card';
           card.innerHTML = `
@@ -237,11 +174,10 @@
         });
 
         statusEl.textContent = 'Live check complete.';
-      } catch (err) {
-        console.warn('live check failed', err);
-        statusEl.textContent = 'Live check failed — showing local courses only.';
-        // keep local view
-        drawLocalCourses(date);
+      } catch (e) {
+        console.warn(e);
+        statusEl.textContent = 'Live check failed — showing local only.';
+        drawLocal(date);
       }
     }
   </script>
