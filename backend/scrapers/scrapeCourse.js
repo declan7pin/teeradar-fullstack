@@ -1,6 +1,7 @@
 // backend/scrapers/scrapeCourse.js
 import * as cheerio from "cheerio";
 
+// helper to build a standard response
 function baseReturn(course, date, available, bookingUrl, extra = {}) {
   return [
     {
@@ -23,6 +24,18 @@ function toMinutes(t) {
   return h * 60 + m;
 }
 
+// NEW: try to read "4 spots", "2 left", "3 available" from a row
+function detectSpotsFromText(text) {
+  // grab the first number that looks like a spots count
+  const m = text.match(/(\d+)\s*(spots|left|available|avail|players)?/i);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (!isNaN(n)) return n;
+  }
+  return null;
+}
+
+// choose best URL for course based on holes + weekday/weekend
 function pickCourseUrl(course, { date, holes }) {
   const day = date ? new Date(date + "T00:00:00") : null;
   const isWeekend = day ? (day.getDay() === 0 || day.getDay() === 6) : false;
@@ -60,15 +73,15 @@ export async function scrapeCourse(course, criteria) {
     holes = ""
   } = criteria;
 
-  // pick right URL
+  // pick right URL from course.json
   let url = pickCourseUrl(course, { date, holes });
 
-  // PHONE
+  // PHONE: show but never "available"
   if (course.provider === "Phone") {
     return baseReturn(course, date, false, null, { note: "phone only" });
   }
 
-  // LINK ONLY
+  // LINK-ONLY: show but user must click through
   if (course.provider === "GolfBooking") {
     return baseReturn(course, date, false, url, { note: "link-only provider" });
   }
@@ -91,10 +104,11 @@ export async function scrapeCourse(course, criteria) {
     }
   }
 
-  // MiClub etc.
+  // MiClub (all those ViewPublicTimesheet.msp URLs)
   if (course.provider === "MiClub") {
     if (!url) return baseReturn(course, date, false, null, { reason: "no url" });
 
+    // replace date
     url = url.replace("YYYY-MM-DD", date);
 
     try {
@@ -116,23 +130,27 @@ export async function scrapeCourse(course, criteria) {
 
       const startMin = toMinutes(earliest);
       const endMin = toMinutes(latest);
+
       const strictMatches = [];
 
+      // go through rows that look like timesheet rows
       $("tr, .timesheet-row, .booking-row").each((i, el) => {
         const $row = $(el);
         const rowText = $row.text().trim();
         if (!rowText) return;
 
-        // time
+        // 1) find a time
         const m = rowText.match(/(\d{1,2}:\d{2})/);
         if (!m) return;
         let time = m[1];
-        if (time.length === 4) time = "0" + time;
+        if (time.length === 4) time = "0" + time; // 7:05 -> 07:05
         const timeMin = toMinutes(time);
 
+        // 2) within window?
         if (startMin && timeMin < startMin) return;
         if (endMin && timeMin > endMin) return;
 
+        // 3) is this actually bookable-looking?
         const lower = rowText.toLowerCase();
         const hasAction =
           lower.includes("book") ||
@@ -140,22 +158,28 @@ export async function scrapeCourse(course, criteria) {
           $row.find("a,button").length > 0;
         if (!hasAction) return;
 
-        if (partySize > 1) {
-          const spotMatch = rowText.match(/(\d+)\s*(spots|left|avail|players)?/i);
-          if (spotMatch) {
-            const spots = parseInt(spotMatch[1], 10);
-            if (!isNaN(spots) && spots < partySize) {
-              return;
-            }
-          }
+        // 4) detect spots in this row
+        const spots = detectSpotsFromText(rowText);
+
+        // 5) if user wants, say, 4 players, and we can SEE the row only has 2 → skip it
+        if (partySize && spots !== null && spots < partySize) {
+          return;
         }
 
+        // 6) holes — only enforce if the course itself has a fixed holes field
+        if (holes && course.holes && String(course.holes) !== String(holes)) {
+          return;
+        }
+
+        // looks good → record it
         strictMatches.push({
           time,
-          snippet: rowText.slice(0, 120) + "..."
+          spots, // might be null
+          snippet: rowText.slice(0, 140) + "..."
         });
       });
 
+      // if we found at least one proper row, mark available
       if (strictMatches.length > 0) {
         return [
           {
@@ -163,7 +187,8 @@ export async function scrapeCourse(course, criteria) {
             provider: course.provider,
             available: true,
             bookingUrl: url,
-            times: strictMatches.map((m) => m.time),
+            times: strictMatches.map(m => m.time),
+            slots: strictMatches,          // <-- frontend can show spots from here
             lat: course.lat,
             lng: course.lng,
             city: course.city,
@@ -173,6 +198,7 @@ export async function scrapeCourse(course, criteria) {
         ];
       }
 
+      // page loaded but we didn't find a row that matched time/players
       return baseReturn(course, date, false, url, {
         confidence: "unknown",
         reason: "no rows matched time/players"
