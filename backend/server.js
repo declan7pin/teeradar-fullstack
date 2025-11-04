@@ -8,14 +8,14 @@ import { scrapeCourse } from './scrapers/scrapeCourse.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// load WA courses
+// load courses
 const coursesPath = path.join(__dirname, 'data', 'courses.json');
 const courses = JSON.parse(fs.readFileSync(coursesPath, 'utf-8'));
 
-// serve static
 const app = express();
 app.use(express.json());
 
+// serve frontend from /public
 const publicDir = path.join(__dirname, '..', 'public');
 app.use(express.static(publicDir));
 
@@ -26,11 +26,13 @@ app.get('/', (req, res) => {
 app.post('/api/search', async (req, res) => {
   const { date, earliest = '06:00', latest = '17:00', partySize = 1 } = req.body || {};
 
-  // scrape all courses
-  const tasks = courses.map(c => scrapeCourse(c, { date, earliest, latest, partySize }));
+  // run scraper for every course
+  const tasks = courses.map(course =>
+    scrapeCourse(course, { date, earliest, latest, partySize })
+  );
   let all = (await Promise.all(tasks)).flat();
 
-  // reattach coords to be safe
+  // safety: reattach coords
   const byName = Object.fromEntries(courses.map(c => [c.name, c]));
   all = all.map(slot => {
     const base = byName[slot.course] || {};
@@ -50,4 +52,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log('TeeRadar WA backend running on', PORT);
 });
+
 
