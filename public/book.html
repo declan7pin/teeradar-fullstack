@@ -13,40 +13,23 @@
       display: flex; align-items: center; justify-content: space-between;
       padding: 10px 16px;
     }
-    .home-btn {
-      background: #fff; color: #0f172a;
-      border: none; border-radius: 999px;
-      padding: 5px 14px; font-weight: 600; cursor: pointer;
-    }
-    .controls {
-      display:flex; gap:10px; padding:10px 16px;
-      background:#f8fafc; flex-wrap:wrap;
-    }
-    .controls input, .controls select, .controls button {
-      padding:6px 8px; border-radius:6px; border:1px solid #cbd5e1;
-    }
-    .controls button { background:#0ea5e9; color:#fff; border:none; cursor:pointer; }
+    .home-btn { background:#fff; color:#0f172a; border:none; border-radius:999px; padding:5px 14px; font-weight:600; cursor:pointer; }
+    .controls { display:flex; gap:10px; padding:10px 16px; background:#f8fafc; flex-wrap:wrap; }
+    .controls input, .controls select, .controls button { padding:6px 8px; border-radius:6px; border:1px solid #cbd5e1; }
+    .controls button { background:#0ea5e9; color:#fff; cursor:pointer; border:none; }
     #map { height:440px; margin:12px 16px 16px; border-radius:14px; overflow:hidden; }
-    #results {
-      padding:0 16px 16px;
-      display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px;
-    }
+    #results { padding:0 16px 16px; display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; }
     .card { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:10px; }
-    .card h3 { margin:0 0 4px 0; font-size:15px; }
     .small { font-size:12px; color:#64748b; }
     .btn { background:#0ea5e9; color:#fff; border:none; border-radius:6px; padding:5px 9px; font-size:13px; cursor:pointer; margin-top:6px; }
-    #loadingOverlay {
-      position: fixed; inset: 0; background: rgba(246, 247, 244, 0.8);
-      display: none; align-items: center; justify-content: center; z-index: 100;
-    }
-    .loader-box {
-      background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
-      padding: 14px 18px; box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
-      text-align: center; min-width: 240px;
-    }
-    .bar { height: 6px; background: #e2e8f0; border-radius: 999px; overflow: hidden; margin-top: 8px; }
-    .bar span { display: block; width: 45%; height: 100%; background: #0ea5e9; animation: slide 1s linear infinite; }
-    @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+    #loadingOverlay { position:fixed; inset:0; background:rgba(246,247,244,.8); display:none; align-items:center; justify-content:center; z-index:100; }
+    .loader-box { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 18px; box-shadow:0 10px 20px rgba(15,23,42,.12); text-align:center; min-width:240px; }
+    .bar { height:6px; background:#e2e8f0; border-radius:999px; overflow:hidden; margin-top:8px; }
+    .bar span { display:block; width:45%; height:100%; background:#0ea5e9; animation:slide 1s linear infinite; }
+    @keyframes slide { 0%{transform:translateX(-100%);} 100%{transform:translateX(250%);} }
+    .legend { position:absolute; top:12px; right:28px; background:#fff; padding:8px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:12px; line-height:1.5; box-shadow:0 10px 20px rgba(15,23,42,.08); }
+    .legend-item { display:flex; gap:6px; align-items:center; }
+    .pill { width:14px; height:14px; border-radius:999px; }
   </style>
 </head>
 <body>
@@ -74,7 +57,14 @@
     <span id="status" style="font-size:13px;color:#64748b;">Showing WA courses…</span>
   </div>
 
-  <div id="map"></div>
+  <div style="position:relative;">
+    <div id="map"></div>
+    <div class="legend">
+      <div class="legend-item"><span class="pill" style="background:#22c55e;"></span> Available</div>
+      <div class="legend-item"><span class="pill" style="background:#ef4444;"></span> Unavailable</div>
+      <div class="legend-item"><span class="pill" style="background:#a855f7;"></span> Phone only</div>
+    </div>
+  </div>
   <div id="results"></div>
 
   <div id="loadingOverlay">
@@ -87,112 +77,47 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // 1) static WA course list
-    const WA_COURSES = [
-      { name: "Whaleback Golf Course", lat: -32.043, lng: 115.906 },
-      { name: "Collier Park Golf Course", lat: -32.007, lng: 115.871 },
-      { name: "Araluen Estate", lat: -32.124, lng: 116.099 },
-      { name: "Sun City Country Club", lat: -31.646, lng: 115.712 },
-      { name: "The Cut Golf Course", lat: -32.632, lng: 115.633 },
-      { name: "Secret Harbour Golf Links", lat: -32.394, lng: 115.762 },
-      { name: "Meadow Springs Golf and Country Club", lat: -32.523, lng: 115.754 },
-      { name: "Hamersley Public Golf Course", lat: -31.863, lng: 115.776 },
-      { name: "Joondalup Resort Golf Course", lat: -31.746, lng: 115.766 },
-      { name: "Marangaroo Golf Course", lat: -31.815, lng: 115.832 },
-      { name: "The Vines Resort & Country Club", lat: -31.777, lng: 116.027 },
-      { name: "Wembley Golf Course (Old) 18", lat: -31.934, lng: 115.787 },
-      { name: "Wembley Golf Course (Tuart) 18", lat: -31.934, lng: 115.787 },
-      { name: "Wembley Golf Course (Old) 9", lat: -31.934, lng: 115.787 },
-      { name: "Wembley Golf Course (Tuart) 9", lat: -31.934, lng: 115.787 },
-      { name: "Mandurah Country Club", lat: -32.547, lng: 115.736 },
-      { name: "Kwinana Golf Club", lat: -32.238, lng: 115.802 },
-      { name: "Altone Park Golf Course", lat: -31.861, lng: 115.96 },
-      { name: "Hillview Golf Course", lat: -31.953, lng: 116.008, provider: "Phone", contact: "08 9454 5554" },
-      { name: "Marri Park Golf Course", lat: -32.254, lng: 115.863, provider: "Phone", contact: "08 9419 3037" }
-    ];
+    const today = new Date().toISOString().slice(0,10);
+    document.getElementById('date').value = today;
 
-    // 2) quick index by name for fallback
-    const COURSE_INDEX = {};
-    WA_COURSES.forEach(c => { COURSE_INDEX[c.name] = c; });
-
-    // 3) we'll store the latest backend results here
-    let lastLiveByName = {};
-
-    // 4) map init
     const map = L.map('map').setView([-31.95, 115.86], 7);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
     const markers = L.layerGroup().addTo(map);
 
     // marker icons
-    const blueIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/blue-dot.png', iconSize: [32,32], iconAnchor: [16,32] });
-    const redIcon  = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png',  iconSize: [32,32], iconAnchor: [16,32] });
-    const purpleIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/purple-dot.png',  iconSize: [32,32], iconAnchor: [16,32] });
+    const greenIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/green-dot.png', iconSize:[32,32], iconAnchor:[16,32] });
+    const redIcon   = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png',   iconSize:[32,32], iconAnchor:[16,32] });
+    const purpleIcon= L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/purple-dot.png',iconSize:[32,32], iconAnchor:[16,32] });
 
     const statusEl = document.getElementById('status');
     const resultsEl = document.getElementById('results');
     const overlayEl = document.getElementById('loadingOverlay');
 
-    // set default date
-    const today = new Date().toISOString().slice(0,10);
-    document.getElementById('date').value = today;
+    let lastLiveByName = {};
 
-    // 5) initial draw
-    function drawLocal(dateStr) {
-      markers.clearLayers();
-      resultsEl.innerHTML = '';
-      WA_COURSES.forEach(c => {
-        const icon = c.provider === 'Phone' ? purpleIcon : redIcon;
-        L.marker([c.lat, c.lng], { icon }).addTo(markers).bindPopup(`<b>${c.name}</b>`);
-        const card = document.createElement('div');
-        card.className = 'card';
-        if (c.provider === 'Phone') {
-          card.innerHTML = `<h3>${c.name}</h3><div class="small">Phone bookings only</div><div class="small">${c.contact || ''}</div>`;
-        } else {
-          card.innerHTML = `<h3>${c.name}</h3><div class="small">Awaiting live check…</div>`;
-        }
-        resultsEl.appendChild(card);
-      });
-    }
-    drawLocal(today);
-
-    // 6) safe opener
-    function openBookingForCourseName(courseName) {
+    function openCourse(name) {
       const date = document.getElementById('date').value || today;
-      const holesSel = document.getElementById('holes') ? document.getElementById('holes').value : '';
-      const live = lastLiveByName[courseName];
-      const course = COURSE_INDEX[courseName];
-
-      // 1. prefer backend url
-      let url = live && live.bookingUrl ? live.bookingUrl : null;
-
-      // 2. if no backend url, see if the course has something (we mostly don’t on FE)
-      if (!url && course) {
-        if (holesSel === '9' && course.bookingBase9) url = course.bookingBase9;
-        else if (holesSel === '18' && course.bookingBase18) url = course.bookingBase18;
-        else url = course.bookingBase || null;
+      const live = lastLiveByName[name];
+      if (live && live.bookingUrl) {
+        const finalUrl = live.bookingUrl
+          .replace('YYYY-MM-DD', date)
+          .replace('YYYYMMDD', date.replace(/-/g,''));
+        window.open(finalUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        window.open('https://www.google.com/search?q=' + encodeURIComponent(name + ' golf booking'), '_blank');
       }
-
-      // 3. if still no url → google
-      if (!url) {
-        window.open('https://www.google.com/search?q=' + encodeURIComponent(courseName + ' golf booking'), '_blank');
-        return;
-      }
-
-      // normalise date placeholders
-      const finalUrl = url
-        .replace('YYYY-MM-DD', date)
-        .replace('YYYYMMDD', date.replace(/-/g, ''));
-
-      window.open(finalUrl, '_blank', 'noopener,noreferrer');
     }
 
-    // 7) run search (live)
+    function drawLocal() {
+      // optional: could draw empty
+    }
+
     async function runSearch() {
-      const date   = document.getElementById('date').value || today;
+      const date = document.getElementById('date').value || today;
       const earliest = document.getElementById('start').value || '06:00';
-      const latest   = document.getElementById('end').value || '17:00';
-      const holes    = document.getElementById('holes').value;
-      const players  = parseInt(document.getElementById('players').value || '1', 10);
+      const latest = document.getElementById('end').value || '17:00';
+      const holes = document.getElementById('holes').value;
+      const partySize = parseInt(document.getElementById('players').value || '1', 10);
 
       statusEl.textContent = 'Checking live availability…';
       overlayEl.style.display = 'flex';
@@ -201,63 +126,43 @@
         const resp = await fetch('/api/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ date, earliest, latest, holes, partySize: players })
+          body: JSON.stringify({ date, earliest, latest, holes, partySize })
         });
         const data = await resp.json();
 
-        // store live results
         lastLiveByName = {};
-        (data.slots || []).forEach(s => {
-          lastLiveByName[s.course] = s;
-        });
+        (data.slots || []).forEach(s => { lastLiveByName[s.course] = s; });
 
         markers.clearLayers();
         resultsEl.innerHTML = '';
 
-        WA_COURSES.forEach(c => {
-          const live = lastLiveByName[c.name];
-          const isAvail = live ? !!live.available : false;
-          const confidence = live && live.confidence ? live.confidence : null;
+        (data.slots || []).forEach(c => {
+          let icon = redIcon;
+          if (c.note === 'phone-only') icon = purpleIcon;
+          else if (c.available) icon = greenIcon;
 
-          const icon =
-            c.provider === 'Phone' ? purpleIcon :
-            isAvail ? blueIcon : redIcon;
-
-          L.marker([c.lat, c.lng], { icon }).addTo(markers).bindPopup(`<b>${c.name}</b>`);
+          L.marker([c.lat, c.lng], { icon }).addTo(markers)
+            .bindPopup(`<b>${c.course}</b>`);
 
           const card = document.createElement('div');
           card.className = 'card';
 
-          if (c.provider === 'Phone') {
+          if (c.note === 'phone-only') {
             card.innerHTML = `
-              <h3>${c.name}</h3>
+              <h3>${c.course}</h3>
               <div class="small">Phone bookings only</div>
-              <div class="small">${c.contact || ''}</div>
+              <div class="small">${c.phone || ''}</div>
             `;
           } else {
-            let spotsLine = '';
-            if (live && Array.isArray(live.slots) && live.slots.length > 0) {
-              const firstSlot = live.slots[0];
-              if (firstSlot.spots != null) {
-                spotsLine = `<div class="small">Spots shown by course: ${firstSlot.spots}</div>`;
-              } else {
-                spotsLine = `<div class="small">Spots not shown on course page</div>`;
-              }
-            }
-
-            const statusLine = isAvail
-              ? '✅ Available in that window'
-              : (confidence === 'medium'
-                  ? '⚪ Time matched — open course to confirm'
-                  : (confidence === 'unknown'
-                      ? '⚪ Could not confirm — open course page'
-                      : '❌ No times found / scrape failed'));
-
+            const spotsLine =
+              c.slots && c.slots.length && c.slots[0].spots != null
+                ? `<div class="small">Spots shown by course: ${c.slots[0].spots}</div>`
+                : `<div class="small">Spots not shown on course page</div>`;
             card.innerHTML = `
-              <h3>${c.name}</h3>
-              <div class="small">${statusLine}</div>
+              <h3>${c.course}</h3>
+              <div class="small">${c.available ? '✅ Available in that window' : '❌ Not confirmed'}</div>
               ${spotsLine}
-              <button class="btn" onclick="openBookingForCourseName('${c.name.replace(/'/g, "\\'")}')">Proceed to booking</button>
+              <button class="btn" onclick="openCourse('${c.course.replace(/'/g,"\\'")}')">Proceed to booking</button>
             `;
           }
 
@@ -267,15 +172,16 @@
         statusEl.textContent = 'Live check complete.';
       } catch (e) {
         console.warn(e);
-        statusEl.textContent = 'Live check failed — showing local only.';
-        drawLocal(date);
+        statusEl.textContent = 'Live check failed.';
       } finally {
         overlayEl.style.display = 'none';
       }
     }
+
+    // initial
+    runSearch();
   </script>
 </body>
 </html>
-
 
 
