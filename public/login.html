@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>TeeRadar — Login</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    body { margin:0; background:#0f172a; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .box { background:#fff; color:#0f172a; padding:22px 20px; border-radius:14px; width: min(360px, 92vw); box-shadow:0 20px 40px rgba(15,23,42,.2); }
+    label { display:block; font-weight:600; margin-bottom:6px; }
+    input { width:100%; padding:8px 10px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:12px; }
+    button { width:100%; background:#0ea5e9; border:none; color:#fff; border-radius:8px; padding:9px 10px; font-size:15px; font-weight:600; cursor:pointer; }
+    .muted { font-size:12px; color:#475569; margin-top:10px; }
+    .link { color:#0ea5e9; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2 style="margin-top:0;">TeeRadar Login</h2>
+    <p style="font-size:13px;">Subscribe to unlock direct booking links. Intro $5/month (first 3 months), then $10/month.</p>
+    <label for="email">Email</label>
+    <input id="email" type="email" placeholder="you@example.com" required>
+    <button onclick="login()">Continue</button>
+    <p class="muted">Have a promo from TeeRadar? Just use that email here.</p>
+    <p class="muted"><span class="link" onclick="window.location.href='/'">← Back to home</span></p>
+  </div>
+
+  <script>
+    // You can maintain this list in admin.html later
+    const DISCOUNT_EMAILS = [
+      "declan@example.com",
+      "testuser@example.com"
+    ];
+
+    function login() {
+      const email = document.getElementById('email').value.trim().toLowerCase();
+      if (!email) {
+        alert("Enter your email");
+        return;
+      }
+
+      // for now: if email is in discount list → auto member
+      if (DISCOUNT_EMAILS.includes(email)) {
+        localStorage.setItem('teeradar_member', '1');
+        localStorage.setItem('teeradar_email', email);
+        alert("Discount member applied. You now have access.");
+        window.location.href = "/book.html";
+        return;
+      }
+
+      // otherwise mark as member anyway (pretend they paid)
+      localStorage.setItem('teeradar_member', '1');
+      localStorage.setItem('teeradar_email', email);
+      alert("Subscription activated (demo). You now have access.");
+      window.location.href = "/book.html";
+    }
+  </script>
+</body>
+</html>
