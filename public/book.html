@@ -30,24 +30,21 @@
     .legend { position:absolute; top:12px; right:28px; background:#fff; padding:8px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:12px; line-height:1.5; box-shadow:0 10px 20px rgba(15,23,42,.08); }
     .legend-item { display:flex; gap:6px; align-items:center; }
     .pill { width:14px; height:14px; border-radius:999px; }
-    .paywall {
-      background:#fef9c3; border:1px solid #facc15; border-radius:6px;
-      padding:8px 10px; margin:0 16px 10px; font-size:13px; color:#854d0e;
-      display:none;
-    }
   </style>
 </head>
 <body>
+  <script>
+    const isMember = localStorage.getItem('teeradar_member') === '1';
+    if (!isMember) {
+      window.location.href = "/login.html";
+    }
+  </script>
+
   <div class="topbar">
     <span style="font-weight:700;">TeeRadar — WA Realtime</span>
     <div>
       <button class="home-btn" onclick="window.location.href='/'">← Home</button>
-      <button class="home-btn" onclick="window.location.href='/login.html'">Login</button>
     </div>
-  </div>
-
-  <div id="paywall" class="paywall">
-    You’re browsing as a guest. To unlock direct booking links it’s $5/month for 3 months, then $10/month. <a href="/login.html" style="color:#0369a1;">Subscribe</a>
   </div>
 
   <div class="controls">
@@ -103,23 +100,12 @@
     const statusEl = document.getElementById('status');
     const resultsEl = document.getElementById('results');
     const overlayEl = document.getElementById('loadingOverlay');
-    const paywallEl = document.getElementById('paywall');
-
-    const isMember = localStorage.getItem('teeradar_member') === '1';
-
-    if (!isMember) {
-      paywallEl.style.display = 'block';
-    }
 
     let lastLiveByName = {};
 
     function openCourse(name) {
       const date = document.getElementById('date').value || today;
       const live = lastLiveByName[name];
-      if (!isMember) {
-        alert('Members only. Please subscribe to open course booking pages.');
-        return;
-      }
       if (live && live.bookingUrl) {
         const finalUrl = live.bookingUrl
           .replace('YYYY-MM-DD', date)
@@ -195,5 +181,6 @@
   </script>
 </body>
 </html>
+
 
 
