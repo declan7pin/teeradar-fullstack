@@ -1,6 +1,7 @@
 // backend/scrapers/scrapeCourse.js
 import * as cheerio from "cheerio";
 
+// small helper
 function baseReturn(course, date, available, bookingUrl, extra = {}) {
   return [
     {
@@ -32,12 +33,13 @@ function detectSpotsFromText(text) {
   return null;
 }
 
+// choose right URL based on holes and special courses
 function pickCourseUrl(course, { date, holes }) {
   const day = date ? new Date(date + "T00:00:00") : null;
   const isWeekend = day ? day.getDay() === 0 || day.getDay() === 6 : false;
 
   // Meadow Springs special
-  if (course.name.startsWith("Meadow Springs")) {
+  if (course.name && course.name.toLowerCase().includes("meadow springs")) {
     if (holes === "9") {
       if (isWeekend && course.bookingBase9_weekend) return course.bookingBase9_weekend;
       if (!isWeekend && course.bookingBase9_weekday) return course.bookingBase9_weekday;
@@ -47,9 +49,11 @@ function pickCourseUrl(course, { date, holes }) {
     }
   }
 
+  // generic 9/18
   if (holes === "9" && course.bookingBase9) return course.bookingBase9;
   if (holes === "18" && course.bookingBase18) return course.bookingBase18;
 
+  // fallback
   return (
     course.bookingBase ||
     course.bookingBase18 ||
@@ -67,19 +71,22 @@ export async function scrapeCourse(course, criteria) {
     holes = ""
   } = criteria;
 
-  let url = pickCourseUrl(course, { date, holes });
-
-  // phone-only
-  if (course.provider === "Phone") {
-    return baseReturn(course, date, false, null, { note: "phone only" });
+  // phone-only: return right away
+  if (course.bookingType === "phone" || course.provider === "Phone") {
+    return baseReturn(course, date, false, null, {
+      note: "phone-only",
+      phone: course.phone || course.contact || ""
+    });
   }
+
+  let url = pickCourseUrl(course, { date, holes });
 
   // link-only
   if (course.provider === "GolfBooking") {
     return baseReturn(course, date, false, url, { note: "link-only provider" });
   }
 
-  // Quick18 style
+  // quick18
   if (course.provider === "Quick18") {
     if (!url) return baseReturn(course, date, false, null, { reason: "no url" });
     url = url.replace("YYYYMMDD", date.replace(/-/g, ""));
@@ -97,7 +104,7 @@ export async function scrapeCourse(course, criteria) {
     }
   }
 
-  // MiClub / ViewPublicTimesheet
+  // MiClub
   if (course.provider === "MiClub") {
     if (!url) return baseReturn(course, date, false, null, { reason: "no url" });
     url = url.replace("YYYY-MM-DD", date);
@@ -212,6 +219,5 @@ export async function scrapeCourse(course, criteria) {
 
   return baseReturn(course, date, false, url, { reason: "unknown provider" });
 }
-
 
 
