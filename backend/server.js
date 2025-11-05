@@ -1,32 +1,37 @@
 // backend/server.js
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch"; // keep for node < 18
+import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// ESM __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// load courses.json from backend/data/courses.json
+// load courses
 const coursesPath = path.join(__dirname, "data", "courses.json");
-const courses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
+const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
+
+// fill missing coords (Perth CBD default)
+const PERTH_LAT = -31.9523;
+const PERTH_LNG = 115.8613;
+const courses = rawCourses.map((c) => ({
+  ...c,
+  lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
+  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG
+}));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-
-// serve the frontend
 app.use(express.static(path.join(__dirname, "..", "public")));
 
-// health
 app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
+  res.json({ status: "ok", courses: courses.length });
 });
 
 // main search
@@ -52,12 +57,10 @@ app.post("/api/search", async (req, res) => {
       partySize: Number(partySize) || 1
     };
 
-    console.log("🟦 search criteria:", criteria);
+    console.log("🔍 search criteria:", criteria);
 
-    // scrape all courses
     const jobs = courses.map((course) => scrapeCourse(course, criteria));
     const settled = await Promise.allSettled(jobs);
-
     const slots = settled
       .filter((r) => r.status === "fulfilled")
       .flatMap((r) => r.value || []);
@@ -72,7 +75,4 @@ app.post("/api/search", async (req, res) => {
 app.listen(PORT, () => {
   console.log("✅ TeeRadar backend running on", PORT);
 });
-
-
-
 
