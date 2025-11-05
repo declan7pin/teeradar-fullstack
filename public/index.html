@@ -2,249 +2,67 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <title>TeeRadar — Book Australian tee times in one place</title>
+  <title>TeeRadar — Find WA tee times</title>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <style>
-    :root {
-      --bg: #e8f5e9;
-      --green: #166534;
-      --panel: #ffffff;
-      --ink: #0f172a;
-      --muted: #6b7280;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--ink);
-    }
-    header {
-      background: #fff;
-      border-bottom: 1px solid rgba(0,0,0,.03);
-      position: sticky;
-      top: 0;
-      z-index: 20;
-    }
-    .nav-wrap {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 14px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-    }
-    .brand {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      font-weight: 700;
-    }
-    .nav-links {
-      display: flex;
-      gap: 14px;
-      align-items: center;
-    }
-    .nav-links a {
-      text-decoration: none;
-      color: #0ea5e9;
-      font-weight: 500;
-    }
-    .login-btn {
-      background: #0f172a;
-      color: #fff;
-      border: none;
-      border-radius: 999px;
-      padding: 6px 14px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .hero {
-      max-width: 1100px;
-      margin: 26px auto 0;
-      padding: 0 16px 32px;
-      display: grid;
-      grid-template-columns: 1.1fr .9fr;
-      gap: 30px;
-      align-items: center;
-    }
-    .hero-card {
-      background: #ecfdf3;
-      border: 1px solid rgba(22, 101, 52, .15);
-      border-radius: 20px;
-      padding: 30px 28px;
-      box-shadow: 0 10px 30px rgba(22, 101, 52, 0.05);
-    }
-    .hero h1 {
-      font-size: clamp(1.9rem, 3vw, 2.3rem);
-      margin-bottom: 10px;
-    }
-    .hero p {
-      color: var(--muted);
-      max-width: 460px;
-      line-height: 1.4;
-    }
-    .btn-primary {
-      display: inline-block;
-      background: #166534;
-      color: #fff;
-      padding: 10px 18px;
-      border-radius: 999px;
-      text-decoration: none;
-      font-weight: 600;
-      margin-top: 18px;
-    }
-    .tagline {
-      display: inline-block;
-      background: rgba(14, 165, 233, .12);
-      color: #0369a1;
-      padding: 4px 12px;
-      border-radius: 999px;
-      font-size: 13px;
-      margin-bottom: 10px;
-    }
-    .hero-preview {
-      background: #fff;
-      border-radius: 16px;
-      border: 1px solid rgba(0,0,0,.02);
-      padding: 16px;
-      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.03);
-    }
-    .hero-preview h3 {
-      margin-top: 0;
-      font-size: 15px;
-    }
-    .small-muted { color: #9ca3af; font-size: 12px; }
-    /* subscription strip */
-    .sub-strip {
-      max-width: 1100px;
-      margin: 0 auto 30px;
-      padding: 0 16px;
-    }
-    .sub-box {
-      background: #fff;
-      border: 1px solid rgba(0,0,0,.02);
-      border-radius: 14px;
-      padding: 14px 16px;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-    }
-    .sub-title { font-weight: 700; }
-    .badge-green {
-      background: rgba(22,101,52,.16);
-      color: #166534;
-      padding: 3px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-    .about {
-      max-width: 1100px;
-      margin: 0 auto 50px;
-      padding: 0 16px;
-      display: grid;
-      grid-template-columns: 1.1fr .9fr;
-      gap: 26px;
-    }
-    .about-panel {
-      background: #fff;
-      border-radius: 14px;
-      border: 1px solid rgba(0,0,0,.02);
-      padding: 18px 18px 20px;
-    }
-    .about-panel h2 {
-      margin-top: 0;
-    }
-    .about-list li { margin-bottom: 6px; }
-    footer {
-      text-align: center;
-      padding: 30px 16px 40px;
-      color: #64748b;
-      font-size: 13px;
-    }
-    @media (max-width: 850px) {
-      .hero, .about {
-        grid-template-columns: 1fr;
-      }
-    }
+    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#f6f7f4; }
+    header { background:#0f172a; color:#fff; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; }
+    .brand { font-weight:700; }
+    .hero { max-width:900px; margin:36px auto; padding:0 16px; }
+    .hero h1 { font-size:2.2rem; margin-bottom:10px; }
+    .hero p { color:#475569; max-width:540px; }
+    .btn-row { display:flex; gap:10px; margin-top:18px; }
+    .btn { background:#0ea5e9; color:#fff; border:none; border-radius:10px; padding:10px 16px; font-weight:600; cursor:pointer; }
+    .btn.secondary { background:#e2e8f0; color:#0f172a; }
+    footer { text-align:center; padding:24px 16px; color:#94a3b8; font-size:13px; }
   </style>
 </head>
 <body>
   <header>
-    <div class="nav-wrap">
-      <div class="brand">
-        <span style="width:10px;height:10px;border-radius:999px;background:#22c55e;display:inline-block;"></span>
-        TeeRadar
-      </div>
-      <div class="nav-links">
-        <a href="/">Home</a>
-        <a href="/book.html">Book</a>
-        <a href="/dashboard.html">Dashboard</a>
-        <a href="/faq.html">FAQ</a>
-        <button class="login-btn" onclick="window.location.href='/login.html'">Log in</button>
-      </div>
+    <div class="brand">TeeRadar</div>
+    <div>
+      <button class="btn secondary" onclick="window.location.href='/login.html'">Login</button>
     </div>
   </header>
 
-  <section class="hero">
-    <div class="hero-card">
-      <div class="tagline">WA public & resort courses — one place</div>
-      <h1>Find tee times across Australia</h1>
-      <p>Filter by date, time window and players — then jump straight to the course’s own booking page. Subscribers get direct links.</p>
-      <a href="/book.html" class="btn-primary">Book a tee time</a>
+  <main class="hero">
+    <h1>All WA public golf tee times in one place.</h1>
+    <p>Search by date, time, 9 or 18 holes, and number of players. Members get direct links to the course booking pages.</p>
+    <div class="btn-row">
+      <button class="btn" onclick="goBook()">Book a tee time</button>
+      <button class="btn secondary" onclick="window.location.href='/faq.html'">FAQ</button>
+      <span id="adminMount"></span>
     </div>
-    <div class="hero-preview">
-      <h3>What’s live right now?</h3>
-      <p class="small-muted">We scan your WA list and show what’s open. More states coming once the course APIs are enabled.</p>
-      <ul style="padding-left:18px; margin-bottom:8px;">
-        <li>Perth metro public courses</li>
-        <li>Resort/club courses on MiClub</li>
-        <li>Phone-only courses still shown on map</li>
-      </ul>
-      <p style="margin-bottom:0;"><a href="/book.html" style="color:#0ea5e9;">Open booking map →</a></p>
-    </div>
-  </section>
-
-  <section class="sub-strip">
-    <div class="sub-box">
-      <div>
-        <div class="sub-title">Intro pricing: $5/month for the first 3 months</div>
-        <div style="color:#64748b;font-size:13px;">Then $10/month ongoing. Cancel anytime.</div>
-      </div>
-      <div class="badge-green">Subscriber-only links</div>
-    </div>
-  </section>
-
-  <section class="about">
-    <div class="about-panel">
-      <h2>About TeeRadar</h2>
-      <p>We’re building a single doorway into Australian golf tee times. Instead of remembering each course’s website, golfers can browse once, filter once, and go straight to the right place.</p>
-      <p>This first version focuses on WA public and resort courses because many of them already expose dates in a similar format. As we collect usage, we’ll use that to request API access from the booking platforms.</p>
-    </div>
-    <div class="about-panel">
-      <h3>What we do today</h3>
-      <ul class="about-list">
-        <li>Show WA courses on a live map</li>
-        <li>Try to read availability from the course page</li>
-        <li>Send the golfer to the official booking page</li>
-        <li>Let phone-only courses appear with their number</li>
-      </ul>
-      <h3>What’s coming</h3>
-      <ul class="about-list">
-        <li>State-by-state expansion</li>
-        <li>Better member profiles (home course, preferences)</li>
-        <li>Course-side integrations once approved</li>
-      </ul>
-    </div>
-  </section>
+  </main>
 
   <footer>
-    © 2025 TeeRadar • <a href="/faq.html">FAQ</a> • <a href="/terms.html">Terms</a> • <a href="/privacy.html">Privacy</a> • <a href="/refunds.html">Refunds</a>
+    © <script>document.write(new Date().getFullYear())</script> TeeRadar
   </footer>
+
+  <script>
+    function goBook() {
+      const isMember = localStorage.getItem('teeradar_member') === '1';
+      if (!isMember) {
+        window.location.href = "/login.html";
+      } else {
+        window.location.href = "/book.html";
+      }
+    }
+
+    // show admin button only for your admin login
+    (function showAdminIfOwner(){
+      const role = localStorage.getItem('teeradar_role');
+      const email = localStorage.getItem('teeradar_email');
+      if (role === 'admin' && email === 'declan7pin@gmail.com') {
+        const mount = document.getElementById('adminMount');
+        const btn = document.createElement('button');
+        btn.className = 'btn secondary';
+        btn.textContent = 'Admin dashboard';
+        btn.onclick = () => window.location.href = '/admin.html';
+        mount.appendChild(btn);
+      }
+    })();
+  </script>
 </body>
 </html>
 
