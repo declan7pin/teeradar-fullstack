@@ -2,6 +2,7 @@
   {
     "name": "Whaleback Golf Course",
     "provider": "MiClub",
+    "region": "WA",
     "city": "Parkwood",
     "state": "WA",
     "lat": -32.043,
@@ -12,8 +13,7 @@
   {
     "name": "Collier Park Golf Course",
     "provider": "MiClub",
-    "city": "Como",
-    "state": "WA",
+    "region": "WA",
     "lat": -32.007,
     "lng": 115.871,
     "bookingBase18": "https://bookings.collierparkgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500257612",
@@ -22,8 +22,7 @@
   {
     "name": "Araluen Estate",
     "provider": "MiClub",
-    "city": "Roleystone",
-    "state": "WA",
+    "region": "WA",
     "lat": -32.124,
     "lng": 116.099,
     "bookingBase18": "https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102807",
@@ -32,8 +31,7 @@
   {
     "name": "Sun City Country Club",
     "provider": "MiClub",
-    "city": "Yanchep",
-    "state": "WA",
+    "region": "WA",
     "lat": -31.646,
     "lng": 115.712,
     "bookingBase18": "https://www.suncitycountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=7301269",
@@ -42,8 +40,7 @@
   {
     "name": "The Cut Golf Course",
     "provider": "MiClub",
-    "city": "Dawesville",
-    "state": "WA",
+    "region": "WA",
     "lat": -32.632,
     "lng": 115.633,
     "bookingBase18": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=247589",
@@ -52,8 +49,7 @@
   {
     "name": "Secret Harbour Golf Links",
     "provider": "MiClub",
-    "city": "Secret Harbour",
-    "state": "WA",
+    "region": "WA",
     "lat": -32.394,
     "lng": 115.762,
     "bookingBase18": "https://secretharbour.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=12445",
@@ -62,8 +58,7 @@
   {
     "name": "Meadow Springs Golf and Country Club",
     "provider": "MiClub",
-    "city": "Meadow Springs",
-    "state": "WA",
+    "region": "WA",
     "lat": -32.523,
     "lng": 115.754,
     "bookingBase18_weekday": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=337072",
@@ -74,91 +69,29 @@
   {
     "name": "Hamersley Public Golf Course",
     "provider": "Quick18",
-    "city": "Karrinyup",
-    "state": "WA",
+    "region": "WA",
     "lat": -31.863,
     "lng": 115.776,
     "bookingBase": "https://hamersley.quick18.com/teetimes/searchmatrix?teedate=YYYYMMDD"
   },
   {
-    "name": "Joondalup Resort Golf Course",
-    "provider": "MiClub",
-    "city": "Joondalup",
-    "state": "WA",
-    "lat": -31.746,
-    "lng": 115.766,
-    "bookingBase18": "https://golfbookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=YYYY-MM-DD&feeGroupId=1508198355",
-    "bookingBase9": "https://golfbookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=YYYY-MM-DD&feeGroupId=1508504524"
-  },
-  {
-    "name": "Marangaroo Golf Course",
-    "provider": "MiClub",
-    "city": "Marangaroo",
-    "state": "WA",
-    "lat": -31.815,
-    "lng": 115.832,
-    "bookingBase18": "https://marangaroo.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500406571",
-    "bookingBase9": "https://marangaroo.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500406575"
-  },
-  {
-    "name": "The Vines Resort & Country Club",
-    "provider": "MiClub",
-    "city": "The Vines",
-    "state": "WA",
-    "lat": -31.777,
-    "lng": 116.027,
-    "bookingBase18": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=YYYY-MM-DD&feeGroupId=22284292",
-    "bookingBase9": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=YYYY-MM-DD&feeGroupId=22289426"
-  },
-  {
-    "name": "Mandurah Country Club",
-    "provider": "MiClub",
-    "city": "Halls Head",
-    "state": "WA",
-    "lat": -32.547,
-    "lng": 115.736,
-    "bookingBase": "https://bookings.mandurahcountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500323994"
-  },
-  {
-    "name": "Kwinana Golf Club",
-    "provider": "MiClub",
-    "city": "Medina",
-    "state": "WA",
-    "lat": -32.238,
-    "lng": 115.802,
-    "bookingBase18": "https://www.kwinanagolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1505795368",
-    "bookingBase9": "https://www.kwinanagolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1502727564"
-  },
-  {
-    "name": "Altone Park Golf Course",
-    "provider": "GolfBooking",
-    "city": "Beechboro",
-    "state": "WA",
-    "lat": -31.861,
-    "lng": 115.96,
-    "bookingBase": "https://www.golf-booking.com/en/club/altone-park-golf-course,nc"
-  },
-  {
     "name": "Hillview Golf Course",
     "provider": "Phone",
-    "city": "Maida Vale",
-    "state": "WA",
+    "bookingType": "phone",
+    "region": "WA",
     "lat": -31.953,
     "lng": 116.008,
-    "contact": "08 9454 5554"
+    "phone": "08 9454 5554"
   },
   {
     "name": "Marri Park Golf Course",
     "provider": "Phone",
-    "city": "Casuarina",
-    "state": "WA",
+    "bookingType": "phone",
+    "region": "WA",
     "lat": -32.254,
     "lng": 115.863,
-    "contact": "08 9419 3037"
+    "phone": "08 9419 3037"
   }
 ]
-
-
-
 
 
