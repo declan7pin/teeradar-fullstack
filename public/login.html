@@ -1,67 +1,88 @@
-<script>
-  // simple local user store
-  function getStore() {
-    try {
-      return JSON.parse(localStorage.getItem('teeradar_users')) || { users: {} };
-    } catch(e) {
-      return { users: {} };
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>TeeRadar — Login</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    body { margin:0; background:#0f172a; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .box { background:#fff; color:#0f172a; padding:22px 20px; border-radius:14px; width: min(360px, 92vw); box-shadow:0 20px 40px rgba(15,23,42,.2); }
+    label { display:block; font-weight:600; margin-bottom:6px; }
+    input { width:100%; padding:8px 10px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:12px; }
+    button { width:100%; background:#0ea5e9; border:none; color:#fff; border-radius:8px; padding:9px 10px; font-size:15px; font-weight:600; cursor:pointer; }
+    .muted { font-size:12px; color:#475569; margin-top:10px; }
+    .link { color:#0ea5e9; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2 style="margin-top:0;">TeeRadar Login</h2>
+    <p style="font-size:13px;">Members only. No guest access beyond the home page.</p>
+    <label for="email">Email</label>
+    <input id="email" type="email" placeholder="you@example.com" required>
+    <label for="pw">Password</label>
+    <input id="pw" type="password" placeholder="Enter password" required>
+    <button onclick="login()">Login</button>
+    <p class="muted"><span class="link" onclick="window.location.href='/'">← Back to home</span></p>
+  </div>
+
+  <script>
+    function getStore() {
+      try {
+        return JSON.parse(localStorage.getItem('teeradar_users')) || { users: {} };
+      } catch(e) {
+        return { users: {} };
+      }
     }
-  }
-  function saveStore(store) {
-    localStorage.setItem('teeradar_users', JSON.stringify(store));
-  }
-
-  // ensure your admin exists
-  const ADMIN_EMAIL = "declan7pin@gmail.com";
-  const ADMIN_PASSWORD = "Kelmscott1";
-
-  (function ensureAdmin(){
-    const store = getStore();
-    if (!store.users[ADMIN_EMAIL]) {
-      store.users[ADMIN_EMAIL] = { password: ADMIN_PASSWORD, role: "admin", subscription: "active" };
-      saveStore(store);
-    }
-  })();
-
-  function login() {
-    const email = document.getElementById('email').value.trim().toLowerCase();
-    const pw = document.getElementById('pw').value;
-    if (!email || !pw) {
-      alert("Enter email and password");
-      return;
-    }
-
-    const store = getStore();
-    const existing = store.users[email];
-
-    if (!existing) {
-      // if you DON'T want anyone else creating accounts, stop here:
-      alert("This account does not exist. Ask admin to create it.");
-      return;
+    function saveStore(store) {
+      localStorage.setItem('teeradar_users', JSON.stringify(store));
     }
 
-    if (existing.password !== pw) {
-      alert("Incorrect password");
-      return;
-    }
+    const ADMIN_EMAIL = "declan7pin@gmail.com";
+    const ADMIN_PASSWORD = "Kelmscott1";
 
-    // mark session
-    localStorage.setItem('teeradar_member', '1');
-    localStorage.setItem('teeradar_email', email);
+    (function ensureAdmin(){
+      const store = getStore();
+      if (!store.users[ADMIN_EMAIL]) {
+        store.users[ADMIN_EMAIL] = { password: ADMIN_PASSWORD, role: "admin", subscription: "active" };
+        saveStore(store);
+      }
+    })();
 
-    // if admin, mark role
-    if (email === ADMIN_EMAIL) {
-      localStorage.setItem('teeradar_role', 'admin');
-    } else {
-      localStorage.setItem('teeradar_role', 'member');
-    }
+    function login() {
+      const email = document.getElementById('email').value.trim().toLowerCase();
+      const pw = document.getElementById('pw').value;
+      if (!email || !pw) {
+        alert("Enter email and password");
+        return;
+      }
 
-    // send to booking or admin
-    if (email === ADMIN_EMAIL) {
-      window.location.href = "/admin.html";
-    } else {
-      window.location.href = "/book.html";
+      const store = getStore();
+      const existing = store.users[email];
+
+      if (!existing) {
+        alert("This account does not exist. Ask admin to create it.");
+        return;
+      }
+
+      if (existing.password !== pw) {
+        alert("Incorrect password");
+        return;
+      }
+
+      // session
+      localStorage.setItem('teeradar_member', '1');
+      localStorage.setItem('teeradar_email', email);
+
+      if (email === ADMIN_EMAIL) {
+        localStorage.setItem('teeradar_role', 'admin');
+        window.location.href = "/admin.html";
+      } else {
+        localStorage.setItem('teeradar_role', 'member');
+        window.location.href = "/book.html";
+      }
     }
-  }
-</script>
+  </script>
+</body>
+</html>
 
