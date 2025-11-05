@@ -8,103 +8,45 @@
   <style>
     body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#f6f7f4; }
     .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 30;
-      background: #0f172a;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      position: sticky; top: 0; z-index: 30;
+      background: #0f172a; color: #fff;
+      display: flex; align-items: center; justify-content: space-between;
       padding: 10px 16px;
     }
     .home-btn {
-      background: #fff;
-      color: #0f172a;
-      border: none;
-      border-radius: 999px;
-      padding: 5px 14px;
-      font-weight: 600;
-      cursor: pointer;
+      background: #fff; color: #0f172a;
+      border: none; border-radius: 999px;
+      padding: 5px 14px; font-weight: 600; cursor: pointer;
     }
     .controls {
-      display:flex;
-      gap:10px;
-      padding:10px 16px;
-      background:#f8fafc;
-      flex-wrap:wrap;
+      display:flex; gap:10px; padding:10px 16px;
+      background:#f8fafc; flex-wrap:wrap;
     }
-    .controls input,
-    .controls select,
-    .controls button {
-      padding:6px 8px;
-      border-radius:6px;
-      border:1px solid #cbd5e1;
+    .controls input, .controls select, .controls button {
+      padding:6px 8px; border-radius:6px; border:1px solid #cbd5e1;
     }
-    .controls button {
-      background:#0ea5e9;
-      color:#fff;
-      border:none;
-      cursor:pointer;
-    }
-    #map {
-      height:440px;
-      margin:12px 16px 16px;
-      border-radius:14px;
-      overflow:hidden;
-    }
+    .controls button { background:#0ea5e9; color:#fff; border:none; cursor:pointer; }
+    #map { height:440px; margin:12px 16px 16px; border-radius:14px; overflow:hidden; }
     #results {
       padding:0 16px 16px;
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
-      gap:10px;
+      display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px;
     }
-    .card {
-      background:#fff;
-      border:1px solid #e2e8f0;
-      border-radius:10px;
-      padding:10px;
-    }
+    .card { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:10px; }
     .card h3 { margin:0 0 4px 0; font-size:15px; }
     .small { font-size:12px; color:#64748b; }
     .btn { background:#0ea5e9; color:#fff; border:none; border-radius:6px; padding:5px 9px; font-size:13px; cursor:pointer; margin-top:6px; }
-    /* loading overlay */
     #loadingOverlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(246, 247, 244, 0.8);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
+      position: fixed; inset: 0; background: rgba(246, 247, 244, 0.8);
+      display: none; align-items: center; justify-content: center; z-index: 100;
     }
     .loader-box {
-      background: #fff;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 14px 18px;
-      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
-      text-align: center;
-      min-width: 240px;
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+      padding: 14px 18px; box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+      text-align: center; min-width: 240px;
     }
-    .bar {
-      height: 6px;
-      background: #e2e8f0;
-      border-radius: 999px;
-      overflow: hidden;
-      margin-top: 8px;
-    }
-    .bar span {
-      display: block;
-      width: 45%;
-      height: 100%;
-      background: #0ea5e9;
-      animation: slide 1s linear infinite;
-    }
-    @keyframes slide {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(250%); }
-    }
+    .bar { height: 6px; background: #e2e8f0; border-radius: 999px; overflow: hidden; margin-top: 8px; }
+    .bar span { display: block; width: 45%; height: 100%; background: #0ea5e9; animation: slide 1s linear infinite; }
+    @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
   </style>
 </head>
 <body>
@@ -145,9 +87,8 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // same WA courses you loaded in the backend
+    // local course list (no booking urls here)
     const WA_COURSES = [
-      // keep IDs/names in sync with backend/data/courses.json
       { name: "Whaleback Golf Course", lat: -32.043, lng: 115.906 },
       { name: "Collier Park Golf Course", lat: -32.007, lng: 115.871 },
       { name: "Araluen Estate", lat: -32.124, lng: 116.099 },
@@ -170,164 +111,65 @@
       { name: "Marri Park Golf Course", lat: -32.254, lng: 115.863, provider: "Phone", contact: "08 9419 3037" }
     ];
 
-    // init map
+    // map init
     const map = L.map('map').setView([-31.95, 115.86], 7);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
     const markers = L.layerGroup().addTo(map);
 
-    // marker icons
-    const blueIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/blue-dot.png', iconSize: [32, 32], iconAnchor: [16, 32] });
-    const redIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png', iconSize: [32, 32], iconAnchor: [16, 32] });
-    const purpleIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/purple-dot.png', iconSize: [32, 32], iconAnchor: [16, 32] });
+    const blueIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/blue-dot.png', iconSize: [32,32], iconAnchor: [16,32] });
+    const redIcon  = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png',  iconSize: [32,32], iconAnchor: [16,32] });
+    const purpleIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/purple-dot.png',  iconSize: [32,32], iconAnchor: [16,32] });
 
     const statusEl = document.getElementById('status');
     const resultsEl = document.getElementById('results');
     const overlayEl = document.getElementById('loadingOverlay');
+    const today = new Date().toISOString().slice(0,10);
+    document.getElementById('date').value = today;
 
-    // open correct booking sheet for course
-    function openBookingForCourse(course, date) {
-      const holesSel = document.getElementById('holes') ? document.getElementById('holes').value : '';
-      // course may have multiple booking fields in backend, but on frontend
-      // we often only have the name. simplest: just open the backend-generated link
-      // BUT we can still try to honour 9 vs 18 if present
-      let url =
-        (holesSel === '9' && course.bookingBase9) ? course.bookingBase9 :
-        (holesSel === '18' && course.bookingBase18) ? course.bookingBase18 :
-        course.bookingBase || course.bookingBase18 || course.bookingBase9;
-
-      if (!url) {
-        // fallback: google the course
-        window.open('https://www.google.com/search?q=' + encodeURIComponent(course.name + ' golf booking'), '_blank');
-        return;
-      }
-
-      const finalUrl = url
-        .replace('YYYY-MM-DD', date)
-        .replace('YYYYMMDD', date.replace(/-/g, ''));
-      window.open(finalUrl, '_blank', 'noopener,noreferrer');
-    }
-
-    // draw initial map
     function drawLocal(dateStr) {
       markers.clearLayers();
       resultsEl.innerHTML = '';
       WA_COURSES.forEach(c => {
         const icon = c.provider === 'Phone' ? purpleIcon : redIcon;
-        const popup = c.provider === 'Phone'
-          ? `<b>${c.name}</b><br>Phone bookings only: ${c.contact || ''}`
-          : `<b>${c.name}</b><br>Awaiting availability`;
-        L.marker([c.lat, c.lng], { icon }).addTo(markers).bindPopup(popup);
-
+        L.marker([c.lat, c.lng], { icon }).addTo(markers).bindPopup(`<b>${c.name}</b>`);
         const card = document.createElement('div');
         card.className = 'card';
         if (c.provider === 'Phone') {
           card.innerHTML = `<h3>${c.name}</h3><div class="small">Phone bookings only</div><div class="small">${c.contact || ''}</div>`;
         } else {
-          card.innerHTML = `<h3>${c.name}</h3><div class="small">Awaiting live check</div>`;
+          card.innerHTML = `<h3>${c.name}</h3><div class="small">Awaiting live check…</div>`;
         }
         resultsEl.appendChild(card);
       });
     }
 
-    // set default date
-    const today = new Date().toISOString().slice(0,10);
-    document.getElementById('date').value = today;
     drawLocal(today);
 
-    async function runSearch() {
-      const date = document.getElementById('date').value || today;
-      const earliest = document.getElementById('start').value || '06:00';
-      const latest = document.getElementById('end').value || '17:00';
-      const holes = document.getElementById('holes').value;
-      const players = parseInt(document.getElementById('players').value || '1', 10);
+    // NEW: universal opener — prefers backend url
+    function openBookingUrl(preferredUrl, fallbackCourse, date) {
+      let url = preferredUrl || null;
+      const holesSel = document.getElementById('holes') ? document.getElementById('holes').value : '';
 
-      statusEl.textContent = 'Checking live availability…';
-      overlayEl.style.display = 'flex';
-
-      try {
-        const resp = await fetch('/api/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ date, earliest, latest, holes, partySize: players })
-        });
-        const data = await resp.json();
-
-        // build fast lookup by course name
-        const liveByName = {};
-        (data.slots || []).forEach(s => {
-          liveByName[s.course] = s;
-        });
-
-        markers.clearLayers();
-        resultsEl.innerHTML = '';
-
-        WA_COURSES.forEach(c => {
-          const live = liveByName[c.name];
-          const isAvail = live ? !!live.available : false;
-          const confidence = live && live.confidence ? live.confidence : null;
-          const icon =
-            c.provider === 'Phone' ? purpleIcon :
-            isAvail ? blueIcon : redIcon;
-
-          const popup =
-            c.provider === 'Phone'
-              ? `<b>${c.name}</b><br>Phone bookings only: ${c.contact || ''}`
-              : `<b>${c.name}</b><br>${isAvail ? 'Available' : 'Unavailable / not confirmed'}`;
-
-          L.marker([c.lat, c.lng], { icon }).addTo(markers).bindPopup(popup);
-
-          const card = document.createElement('div');
-          card.className = 'card';
-
-          if (c.provider === 'Phone') {
-            card.innerHTML = `
-              <h3>${c.name}</h3>
-              <div class="small">Phone bookings only</div>
-              <div class="small">${c.contact || ''}</div>
-            `;
-          } else {
-            // spots line — from backend
-            let spotsLine = '';
-            if (live && Array.isArray(live.slots) && live.slots.length > 0) {
-              const firstSlot = live.slots[0];
-              if (firstSlot.spots != null) {
-                spotsLine = `<div class="small">Spots shown by course: ${firstSlot.spots}</div>`;
-              } else {
-                spotsLine = `<div class="small">Spots not shown on course page</div>`;
-              }
-            }
-
-            const statusLine = isAvail
-              ? '✅ Available in that window'
-              : (confidence === 'unknown'
-                  ? '⚪ Could not confirm — open course page'
-                  : '❌ No times found / scrape failed');
-
-            // we'll pass only name & bookingBase-ish info we have; real link is in backend
-            const safeCourse = JSON.stringify(c).replace(/"/g, '&quot;');
-
-            card.innerHTML = `
-              <h3>${c.name}</h3>
-              <div class="small">${statusLine}</div>
-              ${spotsLine}
-              <button class="btn" onclick="openBookingForCourse(JSON.parse('${safeCourse}'), '${date}')">Proceed to booking</button>
-            `;
-          }
-
-          resultsEl.appendChild(card);
-        });
-
-        statusEl.textContent = 'Live check complete.';
-      } catch (e) {
-        console.warn(e);
-        statusEl.textContent = 'Live check failed — showing local only.';
-        drawLocal(date);
-      } finally {
-        overlayEl.style.display = 'none';
+      // if backend didn't give us a url, try frontend course config (if present)
+      if (!url && fallbackCourse) {
+        if (holesSel === '9' && fallbackCourse.bookingBase9) {
+          url = fallbackCourse.bookingBase9;
+        } else if (holesSel === '18' && fallbackCourse.bookingBase18) {
+          url = fallbackCourse.bookingBase18;
+        } else {
+          url = fallbackCourse.bookingBase || fallbackCourse.bookingBase18 || fallbackCourse.bookingBase9 || null;
+        }
       }
-    }
-  </script>
-</body>
-</html>
+
+      if (!url && fallbackCourse) {
+        // last resort: google the course
+        window.open('https://www.google.com/search?q=' + encodeURIComponent(fallbackCourse.name + ' golf booking'), '_blank');
+        return;
+      }
+
+      // normalise date placeholders
+      const finalUrl = url
+        .replace('YYYY
+
 
 
