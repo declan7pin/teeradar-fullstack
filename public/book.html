@@ -87,7 +87,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // local course list (no booking urls here)
+    // 1) static WA course list
     const WA_COURSES = [
       { name: "Whaleback Golf Course", lat: -32.043, lng: 115.906 },
       { name: "Collier Park Golf Course", lat: -32.007, lng: 115.871 },
@@ -111,11 +111,19 @@
       { name: "Marri Park Golf Course", lat: -32.254, lng: 115.863, provider: "Phone", contact: "08 9419 3037" }
     ];
 
-    // map init
+    // 2) quick index by name for fallback
+    const COURSE_INDEX = {};
+    WA_COURSES.forEach(c => { COURSE_INDEX[c.name] = c; });
+
+    // 3) we'll store the latest backend results here
+    let lastLiveByName = {};
+
+    // 4) map init
     const map = L.map('map').setView([-31.95, 115.86], 7);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
     const markers = L.layerGroup().addTo(map);
 
+    // marker icons
     const blueIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/blue-dot.png', iconSize: [32,32], iconAnchor: [16,32] });
     const redIcon  = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png',  iconSize: [32,32], iconAnchor: [16,32] });
     const purpleIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/purple-dot.png',  iconSize: [32,32], iconAnchor: [16,32] });
@@ -123,9 +131,12 @@
     const statusEl = document.getElementById('status');
     const resultsEl = document.getElementById('results');
     const overlayEl = document.getElementById('loadingOverlay');
+
+    // set default date
     const today = new Date().toISOString().slice(0,10);
     document.getElementById('date').value = today;
 
+    // 5) initial draw
     function drawLocal(dateStr) {
       markers.clearLayers();
       resultsEl.innerHTML = '';
@@ -142,34 +153,129 @@
         resultsEl.appendChild(card);
       });
     }
-
     drawLocal(today);
 
-    // NEW: universal opener — prefers backend url
-    function openBookingUrl(preferredUrl, fallbackCourse, date) {
-      let url = preferredUrl || null;
+    // 6) safe opener
+    function openBookingForCourseName(courseName) {
+      const date = document.getElementById('date').value || today;
       const holesSel = document.getElementById('holes') ? document.getElementById('holes').value : '';
+      const live = lastLiveByName[courseName];
+      const course = COURSE_INDEX[courseName];
 
-      // if backend didn't give us a url, try frontend course config (if present)
-      if (!url && fallbackCourse) {
-        if (holesSel === '9' && fallbackCourse.bookingBase9) {
-          url = fallbackCourse.bookingBase9;
-        } else if (holesSel === '18' && fallbackCourse.bookingBase18) {
-          url = fallbackCourse.bookingBase18;
-        } else {
-          url = fallbackCourse.bookingBase || fallbackCourse.bookingBase18 || fallbackCourse.bookingBase9 || null;
-        }
+      // 1. prefer backend url
+      let url = live && live.bookingUrl ? live.bookingUrl : null;
+
+      // 2. if no backend url, see if the course has something (we mostly don’t on FE)
+      if (!url && course) {
+        if (holesSel === '9' && course.bookingBase9) url = course.bookingBase9;
+        else if (holesSel === '18' && course.bookingBase18) url = course.bookingBase18;
+        else url = course.bookingBase || null;
       }
 
-      if (!url && fallbackCourse) {
-        // last resort: google the course
-        window.open('https://www.google.com/search?q=' + encodeURIComponent(fallbackCourse.name + ' golf booking'), '_blank');
+      // 3. if still no url → google
+      if (!url) {
+        window.open('https://www.google.com/search?q=' + encodeURIComponent(courseName + ' golf booking'), '_blank');
         return;
       }
 
       // normalise date placeholders
       const finalUrl = url
-        .replace('YYYY
+        .replace('YYYY-MM-DD', date)
+        .replace('YYYYMMDD', date.replace(/-/g, ''));
+
+      window.open(finalUrl, '_blank', 'noopener,noreferrer');
+    }
+
+    // 7) run search (live)
+    async function runSearch() {
+      const date   = document.getElementById('date').value || today;
+      const earliest = document.getElementById('start').value || '06:00';
+      const latest   = document.getElementById('end').value || '17:00';
+      const holes    = document.getElementById('holes').value;
+      const players  = parseInt(document.getElementById('players').value || '1', 10);
+
+      statusEl.textContent = 'Checking live availability…';
+      overlayEl.style.display = 'flex';
+
+      try {
+        const resp = await fetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date, earliest, latest, holes, partySize: players })
+        });
+        const data = await resp.json();
+
+        // store live results
+        lastLiveByName = {};
+        (data.slots || []).forEach(s => {
+          lastLiveByName[s.course] = s;
+        });
+
+        markers.clearLayers();
+        resultsEl.innerHTML = '';
+
+        WA_COURSES.forEach(c => {
+          const live = lastLiveByName[c.name];
+          const isAvail = live ? !!live.available : false;
+          const confidence = live && live.confidence ? live.confidence : null;
+
+          const icon =
+            c.provider === 'Phone' ? purpleIcon :
+            isAvail ? blueIcon : redIcon;
+
+          L.marker([c.lat, c.lng], { icon }).addTo(markers).bindPopup(`<b>${c.name}</b>`);
+
+          const card = document.createElement('div');
+          card.className = 'card';
+
+          if (c.provider === 'Phone') {
+            card.innerHTML = `
+              <h3>${c.name}</h3>
+              <div class="small">Phone bookings only</div>
+              <div class="small">${c.contact || ''}</div>
+            `;
+          } else {
+            let spotsLine = '';
+            if (live && Array.isArray(live.slots) && live.slots.length > 0) {
+              const firstSlot = live.slots[0];
+              if (firstSlot.spots != null) {
+                spotsLine = `<div class="small">Spots shown by course: ${firstSlot.spots}</div>`;
+              } else {
+                spotsLine = `<div class="small">Spots not shown on course page</div>`;
+              }
+            }
+
+            const statusLine = isAvail
+              ? '✅ Available in that window'
+              : (confidence === 'medium'
+                  ? '⚪ Time matched — open course to confirm'
+                  : (confidence === 'unknown'
+                      ? '⚪ Could not confirm — open course page'
+                      : '❌ No times found / scrape failed'));
+
+            card.innerHTML = `
+              <h3>${c.name}</h3>
+              <div class="small">${statusLine}</div>
+              ${spotsLine}
+              <button class="btn" onclick="openBookingForCourseName('${c.name.replace(/'/g, "\\'")}')">Proceed to booking</button>
+            `;
+          }
+
+          resultsEl.appendChild(card);
+        });
+
+        statusEl.textContent = 'Live check complete.';
+      } catch (e) {
+        console.warn(e);
+        statusEl.textContent = 'Live check failed — showing local only.';
+        drawLocal(date);
+      } finally {
+        overlayEl.style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>
 
 
 
