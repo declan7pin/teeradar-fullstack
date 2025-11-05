@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>TeeRadar — Admin</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#f1f5f9; }
+    .top { background:#0f172a; color:#fff; padding:12px 16px; font-weight:700; }
+    .wrap { max-width:700px; margin:24px auto; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px; }
+    input { padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; }
+    button { margin-top:8px; background:#0ea5e9; border:none; color:#fff; padding:7px 14px; border-radius:6px; cursor:pointer; }
+    ul { list-style:none; padding-left:0; }
+    li { border-bottom:1px solid #e2e8f0; padding:6px 0; }
+  </style>
+</head>
+<body>
+  <div class="top">TeeRadar Admin</div>
+  <div class="wrap">
+    <h3>Discount / free-access emails</h3>
+    <p style="font-size:13px;color:#475569;">These emails will be treated as members when they log in.</p>
+    <input id="newEmail" placeholder="add email, e.g. player@example.com">
+    <button onclick="addEmail()">Add</button>
+    <h4>Current allowed emails</h4>
+    <ul id="list"></ul>
+  </div>
+
+  <script>
+    // store in localStorage for now
+    const KEY = "teeradar_discount_emails";
+
+    function getEmails() {
+      try {
+        return JSON.parse(localStorage.getItem(KEY)) || [];
+      } catch(e) {
+        return [];
+      }
+    }
+
+    function saveEmails(list) {
+      localStorage.setItem(KEY, JSON.stringify(list));
+    }
+
+    function render() {
+      const ul = document.getElementById('list');
+      ul.innerHTML = '';
+      getEmails().forEach((em, idx) => {
+        const li = document.createElement('li');
+        li.textContent = em;
+        li.onclick = () => {
+          if (confirm("Remove " + em + "?")) {
+            const rest = getEmails().filter(x => x !== em);
+            saveEmails(rest);
+            render();
+          }
+        };
+        ul.appendChild(li);
+      });
+    }
+
+    function addEmail() {
+      const val = document.getElementById('newEmail').value.trim().toLowerCase();
+      if (!val) return;
+      const existing = getEmails();
+      if (!existing.includes(val)) {
+        existing.push(val);
+        saveEmails(existing);
+      }
+      document.getElementById('newEmail').value = '';
+      render();
+    }
+
+    // initial
+    render();
+  </script>
+</body>
+</html>
