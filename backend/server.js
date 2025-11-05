@@ -1,18 +1,30 @@
-// server.js
+// backend/server.js
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch";               // if you're on Node < 18
-import { scrapeCourse } from "./backend/scrapers/scrapeCourse.js";
-import courses from "./backend/data/courses.json" assert { type: "json" };
+import fetch from "node-fetch"; // keep if you're on Render with this template
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { scrapeCourse } from "./scrapers/scrapeCourse.js";
+
+// figure out __dirname in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// load courses.json from ./data/courses.json (because we're already in /backend)
+const coursesPath = path.join(__dirname, "data", "courses.json");
+const courses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public")); // serve your book.html, etc.
 
-// POST /api/search
+// serve frontend from /public (go up one level)
+app.use(express.static(path.join(__dirname, "..", "public")));
+
+// main search route
 app.post("/api/search", async (req, res) => {
   try {
     const {
@@ -27,7 +39,6 @@ app.post("/api/search", async (req, res) => {
       return res.status(400).json({ error: "date is required" });
     }
 
-    // build one criteria object we’ll feed to every course
     const criteria = {
       date,
       earliest,
@@ -38,9 +49,8 @@ app.post("/api/search", async (req, res) => {
 
     // scrape all courses in parallel
     const promises = courses.map((course) => scrapeCourse(course, criteria));
-    const resultsNested = await Promise.all(promises);
-    // resultsNested is array of arrays (because scrapeCourse returns [ ... ])
-    const slots = resultsNested.flat();
+    const nested = await Promise.all(promises);
+    const slots = nested.flat();
 
     res.json({ slots });
   } catch (err) {
@@ -49,6 +59,7 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
+// start server
 app.listen(PORT, () => {
   console.log("TeeRadar backend listening on", PORT);
 });
