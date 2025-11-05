@@ -1,36 +1,35 @@
 // backend/server.js
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch"; // For Node < 18 compatibility
+import fetch from "node-fetch"; // keep for node < 18
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// Get the current file and directory paths
+// ESM __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load the courses.json file
+// load courses.json from backend/data/courses.json
 const coursesPath = path.join(__dirname, "data", "courses.json");
 const courses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware setup
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "..", "public"))); // serve the frontend (book.html, index.html, etc.)
 
-// --- API ENDPOINTS ---
+// serve the frontend
+app.use(express.static(path.join(__dirname, "..", "public")));
 
-// Health check endpoint (useful for debugging on Render)
+// health
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", message: "TeeRadar backend is running" });
+  res.json({ status: "ok" });
 });
 
-// Main booking search endpoint
+// main search
 app.post("/api/search", async (req, res) => {
   try {
     const {
@@ -38,44 +37,42 @@ app.post("/api/search", async (req, res) => {
       earliest = "06:00",
       latest = "17:00",
       holes = "",
-      partySize = 1,
+      partySize = 1
     } = req.body || {};
 
     if (!date) {
       return res.status(400).json({ error: "date is required" });
     }
 
-    // Normalize and log filters for debugging
     const criteria = {
       date,
       earliest,
       latest,
       holes: holes === "" ? "" : String(holes),
-      partySize: Number(partySize) || 1,
+      partySize: Number(partySize) || 1
     };
 
-    console.log("Running search with filters:", criteria);
+    console.log("🟦 search criteria:", criteria);
 
-    // Scrape all courses in parallel
-    const promises = courses.map((course) => scrapeCourse(course, criteria));
-    const results = await Promise.allSettled(promises);
+    // scrape all courses
+    const jobs = courses.map((course) => scrapeCourse(course, criteria));
+    const settled = await Promise.allSettled(jobs);
 
-    // Flatten successful results and ignore failed scrapes
-    const slots = results
+    const slots = settled
       .filter((r) => r.status === "fulfilled")
       .flatMap((r) => r.value || []);
 
     res.json({ slots });
   } catch (err) {
-    console.error("❌ Search error:", err);
-    res.status(500).json({ error: "Internal server error", detail: err.message });
+    console.error("❌ /api/search error:", err);
+    res.status(500).json({ error: "internal error", detail: err.message });
   }
 });
 
-// --- SERVER START ---
 app.listen(PORT, () => {
-  console.log(`✅ TeeRadar backend running on port ${PORT}`);
+  console.log("✅ TeeRadar backend running on", PORT);
 });
+
 
 
 
