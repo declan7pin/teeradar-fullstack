@@ -9,7 +9,6 @@
     "bookingBase18": "https://www.whalebackgolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500344723",
     "bookingBase9": "https://www.whalebackgolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500344725"
   },
-
   {
     "name": "Collier Park Golf Course",
     "provider": "MiClub",
@@ -20,7 +19,6 @@
     "bookingBase18": "https://bookings.collierparkgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500257612",
     "bookingBase9": "https://bookings.collierparkgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500323733"
   },
-
   {
     "name": "Araluen Estate",
     "provider": "MiClub",
@@ -31,7 +29,6 @@
     "bookingBase18": "https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102807",
     "bookingBase9": "https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102808"
   },
-
   {
     "name": "Sun City Country Club",
     "provider": "MiClub",
@@ -42,7 +39,6 @@
     "bookingBase18": "https://www.suncitycountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=7301269",
     "bookingBase9": "https://www.suncitycountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=7301311"
   },
-
   {
     "name": "The Cut Golf Course",
     "provider": "MiClub",
@@ -51,11 +47,8 @@
     "lat": -32.632,
     "lng": 115.633,
     "bookingBase18": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=247589",
-    "bookingBase9": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=247607",
-    "bookingBase18_cart": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=6011789",
-    "bookingBase9_cart": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=6011827"
+    "bookingBase9": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=247607"
   },
-
   {
     "name": "Secret Harbour Golf Links",
     "provider": "MiClub",
@@ -66,7 +59,6 @@
     "bookingBase18": "https://secretharbour.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=12445",
     "bookingBase9": "https://secretharbour.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=12449"
   },
-
   {
     "name": "Meadow Springs Golf and Country Club",
     "provider": "MiClub",
@@ -79,7 +71,6 @@
     "bookingBase9_weekday": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=337074",
     "bookingBase9_weekend": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=337075"
   },
-
   {
     "name": "Hamersley Public Golf Course",
     "provider": "Quick18",
@@ -89,7 +80,6 @@
     "lng": 115.776,
     "bookingBase": "https://hamersley.quick18.com/teetimes/searchmatrix?teedate=YYYYMMDD"
   },
-
   {
     "name": "Joondalup Resort Golf Course",
     "provider": "MiClub",
@@ -100,7 +90,6 @@
     "bookingBase18": "https://golfbookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=YYYY-MM-DD&feeGroupId=1508198355",
     "bookingBase9": "https://golfbookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=YYYY-MM-DD&feeGroupId=1508504524"
   },
-
   {
     "name": "Marangaroo Golf Course",
     "provider": "MiClub",
@@ -111,7 +100,6 @@
     "bookingBase18": "https://marangaroo.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500406571",
     "bookingBase9": "https://marangaroo.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500406575"
   },
-
   {
     "name": "The Vines Resort & Country Club",
     "provider": "MiClub",
@@ -120,48 +108,8 @@
     "lat": -31.777,
     "lng": 116.027,
     "bookingBase18": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=YYYY-MM-DD&feeGroupId=22284292",
-    "bookingBase9": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=YYYY-MM-DD&feeGroupId=22289426",
-    "bookingBase18_cart": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=YYYY-MM-DD&feeGroupId=24488643",
-    "bookingBase9_cart": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=YYYY-MM-DD&feeGroupId=24488670"
+    "bookingBase9": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=YYYY-MM-DD&feeGroupId=22289426"
   },
-
-  {
-    "name": "Wembley Golf Course (Old) 18",
-    "provider": "MiClub",
-    "city": "Wembley Downs",
-    "state": "WA",
-    "lat": -31.934,
-    "lng": 115.787,
-    "bookingBase18": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102184"
-  },
-  {
-    "name": "Wembley Golf Course (Tuart) 18",
-    "provider": "MiClub",
-    "city": "Wembley Downs",
-    "state": "WA",
-    "lat": -31.934,
-    "lng": 115.787,
-    "bookingBase18": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102193"
-  },
-  {
-    "name": "Wembley Golf Course (Old) 9",
-    "provider": "MiClub",
-    "city": "Wembley Downs",
-    "state": "WA",
-    "lat": -31.934,
-    "lng": 115.787,
-    "bookingBase9": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102211"
-  },
-  {
-    "name": "Wembley Golf Course (Tuart) 9",
-    "provider": "MiClub",
-    "city": "Wembley Downs",
-    "state": "WA",
-    "lat": -31.934,
-    "lng": 115.787,
-    "bookingBase9": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=102202"
-  },
-
   {
     "name": "Mandurah Country Club",
     "provider": "MiClub",
@@ -181,7 +129,6 @@
     "bookingBase18": "https://www.kwinanagolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1505795368",
     "bookingBase9": "https://www.kwinanagolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1502727564"
   },
-
   {
     "name": "Altone Park Golf Course",
     "provider": "GolfBooking",
