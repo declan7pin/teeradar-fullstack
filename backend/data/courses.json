@@ -91,7 +91,100 @@
     "lat": -32.254,
     "lng": 115.863,
     "phone": "08 9419 3037"
-  }
-]
+  },
+  {
+  "name": "Wembley Golf Course",
+  "provider": "MiClub",
+  "region": "WA",
+  "city": "Floreat",
+  "lat": -31.940,
+  "lng": 115.780,
+  "bookingBase18": "https://wembleygolf.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=YYYY-MM-DD&feeGroupId=1508250222",
+  "bookingBase9": "https://wembleygolf.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=YYYY-MM-DD&feeGroupId=1508250225"
+},
+{
+  "name": "Joondalup Resort",
+  "provider": "MiClub",
+  "region": "WA",
+  "city": "Connolly",
+  "lat": -31.749,
+  "lng": 115.751,
+  "bookingBase18": "https://golfbookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=YYYY-MM-DD&feeGroupId=1508198355",
+  "bookingBase9": "https://golfbookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=YYYY-MM-DD&feeGroupId=1508504524"
+},
+{
+  "name": "Marangaroo Golf Course",
+  "provider": "MiClub",
+  "region": "WA",
+  "city": "Marangaroo",
+  "lat": -31.823,
+  "lng": 115.831,
+  "bookingBase18": "https://marangaroo.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500406571",
+  "bookingBase9": "https://marangaroo.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500406575"
+},
+{
+  "name": "Point Walter Golf Course",
+  "provider": "MiClub",
+  "region": "WA",
+  "city": "Bicton",
+  "lat": -32.029,
+  "lng": 115.789,
+  "bookingBase18": "https://pointwalter.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500226401",
+  "bookingBase9": "https://pointwalter.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500226402"
+},
+{
+  "name": "Rockingham Golf Club",
+  "provider": "MiClub",
+  "region": "WA",
+  "city": "Rockingham",
+  "lat": -32.281,
+  "lng": 115.754,
+  "bookingBase18": "https://rockingham.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500359601"
+},
+{
+  "name": "The Vines Resort & Country Club",
+  "provider": "MiClub",
+  "region": "WA",
+  "city": "Ellenbrook",
+  "lat": -31.778,
+  "lng": 116.029,
+  "bookingBase18": "https://vinesresort.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500394301"
+},
+{
+  "name": "Mandurah Country Club",
+  "provider": "MiClub",
+  "region": "WA",
+  "city": "Halls Head",
+  "lat": -32.549,
+  "lng": 115.701,
+  "bookingBase18": "https://mandurahcountryclub.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500384601"
+},
+{
+  "name": "Lakelands Country Club",
+  "provider": "MiClub",
+  "region": "WA",
+  "city": "Gnangara",
+  "lat": -31.768,
+  "lng": 115.851,
+  "bookingBase18": "https://lakelands.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500274701"
+},
+{
+  "name": "Hartfield Golf Club",
+  "provider": "MiClub",
+  "region": "WA",
+  "city": "Forrestfield",
+  "lat": -31.985,
+  "lng": 116.000,
+  "bookingBase18": "https://hartfield.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500239201"
+},
+{
+  "name": "Capel Golf Club",
+  "provider": "MiClub",
+  "region": "WA",
+  "city": "Stratham",
+  "lat": -33.497,
+  "lng": 115.612,
+  "bookingBase18": "https://capel.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=YYYY-MM-DD&feeGroupId=1500262501"
+}
 
 
