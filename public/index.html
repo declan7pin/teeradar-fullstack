@@ -17,8 +17,32 @@
     .hero-buttons { display:flex; gap:12px; margin-top:18px; flex-wrap:wrap; }
     .btn-primary { background:#0ea5e9; color:#fff; border:none; border-radius:12px; padding:10px 16px; font-weight:600; cursor:pointer; }
     .btn-secondary { background:#fff; color:#0f172a; border:1px solid #e2e8f0; border-radius:12px; padding:10px 14px; font-weight:600; cursor:pointer; }
-    .hero-right { background:linear-gradient(160deg,#fff 0%,rgba(255,255,255,.7) 100%), url('/assets/hero_golf_bg.jpg') center/cover no-repeat; border:1px solid rgba(255,255,255,.8); border-radius:20px; min-height:250px; box-shadow:0 20px 40px rgba(15,23,42,.12); position:relative; overflow:hidden; }
-    .hero-right::after { content:"Perth • WA • Public"; position:absolute; bottom:12px; right:12px; background:rgba(15,23,42,.55); color:#fff; padding:6px 10px; border-radius:999px; font-size:11px; }
+
+    /* UPDATED: scenic golf image */
+    .hero-right {
+      background:
+        linear-gradient(160deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,0) 100%),
+        url("https://images.unsplash.com/photo-1600374295033-25b77c62a4e0?auto=format&fit=crop&w=1100&q=60")
+        center/cover no-repeat;
+      border:1px solid rgba(255,255,255,.8);
+      border-radius:20px;
+      min-height:250px;
+      box-shadow:0 20px 40px rgba(15,23,42,.12);
+      position:relative;
+      overflow:hidden;
+    }
+    .hero-right::after {
+      content:"Perth • WA • Public";
+      position:absolute;
+      bottom:12px;
+      right:12px;
+      background:rgba(15,23,42,.55);
+      color:#fff;
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:11px;
+    }
+
     .feature-row { max-width:1100px; margin:28px auto 64px; padding:0 16px; display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; }
     .feature { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:10px 12px 14px; font-size:13px; color:#0f172a; box-shadow:0 6px 14px rgba(15,23,42,.04); }
     footer { text-align:center; padding:20px 16px 34px; color:#94a3b8; font-size:12px; }
@@ -92,7 +116,6 @@
         window.location.href = "/login.html";
       }
     }
-    // T&C banner
     (function(){
       if (!localStorage.getItem('teeradar_tc_ok')) {
         document.getElementById('tc-banner').style.display = 'flex';
