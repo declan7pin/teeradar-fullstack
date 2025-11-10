@@ -2,75 +2,106 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <title>TeeRadar — Find WA tee times</title>
+  <title>TeeRadar — WA tee times</title>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <style>
-    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#f6f7f4; }
-    header { background:#0f172a; color:#fff; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; }
-    .brand { font-weight:700; }
-    .hero { max-width:900px; margin:36px auto; padding:0 16px; }
-    .hero h1 { font-size:2.2rem; margin-bottom:10px; }
-    .hero p { color:#475569; max-width:540px; }
-    .btn-row { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
-    .btn { background:#0ea5e9; color:#fff; border:none; border-radius:10px; padding:10px 16px; font-weight:600; cursor:pointer; }
-    .btn.secondary { background:#e2e8f0; color:#0f172a; }
-    footer { text-align:center; padding:24px 16px; color:#94a3b8; font-size:13px; }
+    :root { --bg: radial-gradient(circle at top, #e2f3ff 0%, #f6f7f4 50%, #f6f7f4 100%); }
+    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); min-height:100vh; }
+    header { background:rgba(255,255,255,.9); backdrop-filter:blur(6px); border-bottom:1px solid #e2e8f0; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; }
+    .brand { display:flex; gap:8px; align-items:center; font-weight:700; color:#0f172a; }
+    .brand-circle { width:26px; height:26px; border-radius:999px; background:radial-gradient(circle,#16a34a 0%,#0f766e 80%); }
+    .top-actions button { background:#0f172a; color:#fff; border:none; border-radius:999px; padding:6px 14px; font-weight:600; cursor:pointer; }
+    .hero { max-width:1100px; margin:44px auto 0; padding:0 16px; display:grid; grid-template-columns:1.05fr .95fr; gap:28px; }
+    .hero-left h1 { font-size:clamp(2.2rem,4vw,2.8rem); margin-bottom:12px; color:#0f172a; }
+    .hero-left p { color:#475569; max-width:500px; line-height:1.5; }
+    .hero-buttons { display:flex; gap:12px; margin-top:18px; flex-wrap:wrap; }
+    .btn-primary { background:#0ea5e9; color:#fff; border:none; border-radius:12px; padding:10px 16px; font-weight:600; cursor:pointer; }
+    .btn-secondary { background:#fff; color:#0f172a; border:1px solid #e2e8f0; border-radius:12px; padding:10px 14px; font-weight:600; cursor:pointer; }
+    .hero-right { background:linear-gradient(160deg,#fff 0%,rgba(255,255,255,.7) 100%), url('/assets/hero_golf_bg.jpg') center/cover no-repeat; border:1px solid rgba(255,255,255,.8); border-radius:20px; min-height:250px; box-shadow:0 20px 40px rgba(15,23,42,.12); position:relative; overflow:hidden; }
+    .hero-right::after { content:"Perth • WA • Public"; position:absolute; bottom:12px; right:12px; background:rgba(15,23,42,.55); color:#fff; padding:6px 10px; border-radius:999px; font-size:11px; }
+    .feature-row { max-width:1100px; margin:28px auto 64px; padding:0 16px; display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; }
+    .feature { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:10px 12px 14px; font-size:13px; color:#0f172a; box-shadow:0 6px 14px rgba(15,23,42,.04); }
+    footer { text-align:center; padding:20px 16px 34px; color:#94a3b8; font-size:12px; }
+    @media (max-width:900px){ .hero{grid-template-columns:1fr;} .hero-right{min-height:180px;} }
+
+    /* T&C banner */
+    #tc-banner {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #0f172a; color: #fff;
+      padding: 10px 16px;
+      display: none;
+      justify-content: space-between; align-items: center; gap: 12px;
+      font-size: 12px; z-index: 9999;
+    }
+    #tc-banner button {
+      background: #0ea5e9; border: none; border-radius: 999px; padding: 4px 10px; font-size: 11px; cursor: pointer;
+    }
+    #tc-banner a { color: #fff; text-decoration: underline; }
+    @media (max-width: 600px) { #tc-banner { flex-direction: column; align-items: flex-start; } }
   </style>
 </head>
 <body>
   <header>
-    <div class="brand">TeeRadar</div>
-    <div>
-      <button class="btn secondary" onclick="window.location.href='/login.html'">Login</button>
+    <div class="brand">
+      <div class="brand-circle"></div>
+      <span>TeeRadar</span>
+    </div>
+    <div class="top-actions">
+      <button onclick="window.location.href='/login.html'">Login</button>
     </div>
   </header>
 
-  <main class="hero">
-    <h1>All WA public golf tee times in one place.</h1>
-    <p>Filter by date, time, 9 or 18 holes, and number of players. Members get direct booking links and no pop-up ads.</p>
-    <div class="btn-row">
-      <button class="btn" onclick="goBook()">Book a tee time</button>
-      <button class="btn secondary" onclick="window.location.href='/faq.html'">FAQ</button>
-      <button class="btn secondary" onclick="goSubscribe()">Subscribe — no pop-up ads</button>
-      <span id="adminMount"></span>
+  <section class="hero">
+    <div class="hero-left">
+      <h1>Find a tee time across WA, in one place.</h1>
+      <p>We point you to the golf course’s own booking page. Filter by date, time, 9/18 holes and players.</p>
+      <div class="hero-buttons">
+        <button class="btn-primary" onclick="goBook()">Book a tee time</button>
+        <button class="btn-secondary" onclick="window.location.href='/faq.html'">How it works</button>
+      </div>
     </div>
-  </main>
+    <div class="hero-right"></div>
+  </section>
+
+  <section class="feature-row">
+    <div class="feature">⛳ Perth + WA public courses</div>
+    <div class="feature">🕒 Filter by date & time</div>
+    <div class="feature">👥 Choose players (1–4)</div>
+    <div class="feature">➡️ Go to course booking page</div>
+  </section>
 
   <footer>
-    © <script>document.write(new Date().getFullYear())</script> TeeRadar
+    © <script>document.write(new Date().getFullYear())</script> TeeRadar • Availability subject to course sites.
   </footer>
+
+  <!-- T&C banner -->
+  <div id="tc-banner">
+    <span>By using TeeRadar you agree to our Terms & Conditions.</span>
+    <div>
+      <a href="/terms.html" target="_blank" rel="noopener">View T&Cs</a>
+      <button onclick="dismissTC()">OK</button>
+    </div>
+  </div>
 
   <script>
     function goBook() {
       const isMember = localStorage.getItem('teeradar_member') === '1';
-      const freeUntil = localStorage.getItem('teeradar_free_until');
-      const today = new Date().toISOString().slice(0,10);
-      const isFree = freeUntil && today <= freeUntil;
-      if (!isMember && !isFree) {
-        window.location.href = "/login.html";
-      } else {
+      if (isMember) {
         window.location.href = "/book.html";
+      } else {
+        window.location.href = "/login.html";
       }
     }
-
-    function goSubscribe() {
-      // TODO: replace with your real Lemon Squeezy checkout link:
-      window.location.href = "https://YOUR-STORE.lemonsqueezy.com/checkout/buy/YOUR-PRODUCT-ID";
-    }
-
-    // show admin button only for your admin login
-    (function showAdminIfOwner(){
-      const role = localStorage.getItem('teeradar_role');
-      const email = localStorage.getItem('teeradar_email');
-      if (role === 'admin' && email === 'declan7pin@gmail.com') {
-        const mount = document.getElementById('adminMount');
-        const btn = document.createElement('button');
-        btn.className = 'btn secondary';
-        btn.textContent = 'Admin dashboard';
-        btn.onclick = () => window.location.href = '/admin.html';
-        mount.appendChild(btn);
+    // T&C banner
+    (function(){
+      if (!localStorage.getItem('teeradar_tc_ok')) {
+        document.getElementById('tc-banner').style.display = 'flex';
       }
     })();
+    function dismissTC(){
+      localStorage.setItem('teeradar_tc_ok','1');
+      document.getElementById('tc-banner').style.display='none';
+    }
   </script>
 </body>
 </html>
