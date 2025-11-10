@@ -11,7 +11,7 @@
     .hero { max-width:900px; margin:36px auto; padding:0 16px; }
     .hero h1 { font-size:2.2rem; margin-bottom:10px; }
     .hero p { color:#475569; max-width:540px; }
-    .btn-row { display:flex; gap:10px; margin-top:18px; }
+    .btn-row { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
     .btn { background:#0ea5e9; color:#fff; border:none; border-radius:10px; padding:10px 16px; font-weight:600; cursor:pointer; }
     .btn.secondary { background:#e2e8f0; color:#0f172a; }
     footer { text-align:center; padding:24px 16px; color:#94a3b8; font-size:13px; }
@@ -27,10 +27,11 @@
 
   <main class="hero">
     <h1>All WA public golf tee times in one place.</h1>
-    <p>Search by date, time, 9 or 18 holes, and number of players. Members get direct links to the course booking pages.</p>
+    <p>Filter by date, time, 9 or 18 holes, and number of players. Members get direct booking links and no pop-up ads.</p>
     <div class="btn-row">
       <button class="btn" onclick="goBook()">Book a tee time</button>
       <button class="btn secondary" onclick="window.location.href='/faq.html'">FAQ</button>
+      <button class="btn secondary" onclick="goSubscribe()">Subscribe — no pop-up ads</button>
       <span id="adminMount"></span>
     </div>
   </main>
@@ -42,11 +43,19 @@
   <script>
     function goBook() {
       const isMember = localStorage.getItem('teeradar_member') === '1';
-      if (!isMember) {
+      const freeUntil = localStorage.getItem('teeradar_free_until');
+      const today = new Date().toISOString().slice(0,10);
+      const isFree = freeUntil && today <= freeUntil;
+      if (!isMember && !isFree) {
         window.location.href = "/login.html";
       } else {
         window.location.href = "/book.html";
       }
+    }
+
+    function goSubscribe() {
+      // TODO: replace with your real Lemon Squeezy checkout link:
+      window.location.href = "https://YOUR-STORE.lemonsqueezy.com/checkout/buy/YOUR-PRODUCT-ID";
     }
 
     // show admin button only for your admin login
