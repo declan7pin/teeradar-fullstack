@@ -7,7 +7,7 @@
   <style>
     body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#f1f5f9; }
     .top { background:#0f172a; color:#fff; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; }
-    .wrap { max-width:1000px; margin:20px auto; display:grid; grid-template-columns: 1.1fr 0.9fr; gap:16px; }
+    .wrap { max-width:1000px; margin:20px auto; display:grid; grid-template-columns: 1.1fr 0.9fr; gap:16px; padding:0 16px; }
     .card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 14px 6px; }
     h3 { margin-top:0; }
     table { width:100%; border-collapse:collapse; }
@@ -18,6 +18,9 @@
     input { width:100%; padding:6px 8px; border-radius:6px; border:1px solid #cbd5e1; margin-bottom:8px; }
     .tag { display:inline-block; background:#ecfdf3; color:#166534; font-size:11px; padding:2px 6px; border-radius:999px; }
     .tag.red { background:#fee2e2; color:#b91c1c; }
+    @media (max-width: 900px) {
+      .wrap { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -33,7 +36,7 @@
   <div class="wrap">
     <div class="card">
       <h3>Users</h3>
-      <p style="font-size:12px;color:#64748b;">These are the accounts stored in the browser. Later we can move this to the backend.</p>
+      <p style="font-size:12px;color:#64748b;">Accounts stored in this browser. Later we can move this to backend.</p>
       <table id="usersTable">
         <thead>
           <tr>
@@ -54,6 +57,18 @@
       <button onclick="addDiscount()">Add discount email</button>
       <ul id="discountList" style="list-style:none;padding-left:0;margin-top:12px;"></ul>
     </div>
+
+    <div class="card" style="grid-column:1/-1;">
+      <h3>Analytics</h3>
+      <p style="font-size:12px;color:#64748b;">Local metrics (per browser). For real reporting we can log to backend.</p>
+      <ul style="list-style:none;padding-left:0;font-size:13px;">
+        <li><strong>Subscriptions activated:</strong> <span id="aSubs">0</span></li>
+        <li><strong>Booking / course clicks:</strong> <span id="aCourse">0</span></li>
+        <li><strong>New visitors:</strong> <span id="aNew">0</span></li>
+        <li><strong>Ad clicks:</strong> <span id="aAdClicks">0</span></li>
+        <li><strong>Ad views:</strong> <span id="aAdViews">0</span></li>
+      </ul>
+    </div>
   </div>
 
   <script>
@@ -63,9 +78,7 @@
     const loggedIn = localStorage.getItem('teeradar_member') === '1';
     const role = localStorage.getItem('teeradar_role');
     const email = localStorage.getItem('teeradar_email');
-
     if (!loggedIn || role !== 'admin' || email !== ADMIN_EMAIL) {
-      // kick out
       window.location.href = "/login.html";
     }
 
@@ -120,7 +133,6 @@
     function saveDiscounts(list) {
       localStorage.setItem(DISCOUNT_KEY, JSON.stringify(list));
     }
-
     function addDiscount() {
       const val = document.getElementById('discountEmail').value.trim().toLowerCase();
       if (!val) return;
@@ -132,7 +144,6 @@
       document.getElementById('discountEmail').value = '';
       renderDiscounts();
     }
-
     function renderDiscounts() {
       const list = getDiscounts();
       const ul = document.getElementById('discountList');
@@ -152,6 +163,29 @@
       });
     }
 
+    // analytics
+    function getAnalytics() {
+      try {
+        return JSON.parse(localStorage.getItem('teeradar_analytics')) || {
+          subs: 0,
+          courseClicks: 0,
+          newVisitors: 0,
+          adClicks: 0,
+          adViews: 0
+        };
+      } catch(e) {
+        return { subs:0, courseClicks:0, newVisitors:0, adClicks:0, adViews:0 };
+      }
+    }
+    function renderAnalytics() {
+      const a = getAnalytics();
+      document.getElementById('aSubs').textContent = a.subs || 0;
+      document.getElementById('aCourse').textContent = a.courseClicks || 0;
+      document.getElementById('aNew').textContent = a.newVisitors || 0;
+      document.getElementById('aAdClicks').textContent = a.adClicks || 0;
+      document.getElementById('aAdViews').textContent = a.adViews || 0;
+    }
+
     function logout() {
       localStorage.removeItem('teeradar_member');
       localStorage.removeItem('teeradar_email');
@@ -162,7 +196,9 @@
     // init
     renderUsers();
     renderDiscounts();
+    renderAnalytics();
   </script>
 </body>
 </html>
+
 
