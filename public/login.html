@@ -12,17 +12,20 @@
     button { width:100%; background:#0ea5e9; border:none; color:#fff; border-radius:8px; padding:9px 10px; font-size:15px; font-weight:600; cursor:pointer; }
     .muted { font-size:12px; color:#475569; margin-top:10px; }
     .link { color:#0ea5e9; cursor:pointer; }
+    .outline { background:#fff; color:#0f172a; border:1px solid #0ea5e9; }
   </style>
 </head>
 <body>
   <div class="box">
     <h2 style="margin-top:0;">TeeRadar Login</h2>
-    <p style="font-size:13px;">Members only. No guest access beyond the home page.</p>
+    <p style="font-size:13px;">Members only. Guests can view the home page only.</p>
     <label for="email">Email</label>
     <input id="email" type="email" placeholder="you@example.com" required>
     <label for="pw">Password</label>
     <input id="pw" type="password" placeholder="Enter password" required>
     <button onclick="login()">Login</button>
+    <p class="muted" style="margin-top:14px;">No account or not activated yet?</p>
+    <button class="outline" onclick="subscribe()">Subscribe with Lemon Squeezy (no pop-up ads)</button>
     <p class="muted"><span class="link" onclick="window.location.href='/'">← Back to home</span></p>
   </div>
 
@@ -41,6 +44,7 @@
     const ADMIN_EMAIL = "declan7pin@gmail.com";
     const ADMIN_PASSWORD = "Kelmscott1";
 
+    // make sure admin exists
     (function ensureAdmin(){
       const store = getStore();
       if (!store.users[ADMIN_EMAIL]) {
@@ -49,7 +53,50 @@
       }
     })();
 
-    function login() {
+    // if Lemon Squeezy sent us back with ?paid=1, mark user active and go to book
+    (function detectPaid(){
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("paid") === "1") {
+        const lastEmail = localStorage.getItem('teeradar_email');
+        if (lastEmail) {
+          const store = getStore();
+          if (!store.users[lastEmail]) {
+            store.users[lastEmail] = { password: "setme", role: "member", subscription: "active" };
+          } else {
+            store.users[lastEmail].subscription = "active";
+          }
+          saveStore(store);
+          localStorage.setItem('teeradar_member', '1');
+
+          // record analytics: new sub
+          const a = getAnalytics();
+          a.subs = (a.subs || 0) + 1;
+          saveAnalytics(a);
+
+          window.location.href = "/book.html";
+        }
+      }
+    })();
+
+    // analytics helpers (used here for subs)
+    function getAnalytics() {
+      try {
+        return JSON.parse(localStorage.getItem('teeradar_analytics')) || {
+          subs: 0,
+          courseClicks: 0,
+          newVisitors: 0,
+          adClicks: 0,
+          adViews: 0
+        };
+      } catch(e) {
+        return { subs:0, courseClicks:0, newVisitors:0, adClicks:0, adViews:0 };
+      }
+    }
+    function saveAnalytics(a) {
+      localStorage.setItem('teeradar_analytics', JSON.stringify(a));
+    }
+
+    async function login() {
       const email = document.getElementById('email').value.trim().toLowerCase();
       const pw = document.getElementById('pw').value;
       if (!email || !pw) {
@@ -58,29 +105,43 @@
       }
 
       const store = getStore();
-      const existing = store.users[email];
+      const user = store.users[email];
 
-      if (!existing) {
-        alert("This account does not exist. Ask admin to create it.");
+      if (!user) {
+        alert("This account does not exist. Please subscribe first.");
+        localStorage.setItem('teeradar_email', email);
         return;
       }
 
-      if (existing.password !== pw) {
+      if (user.password !== pw) {
         alert("Incorrect password");
         return;
       }
 
-      // session
+      // add 30-day free trial for now
+      const today = new Date();
+      const freeUntil = new Date(today.getTime() + 30*24*60*60*1000).toISOString().slice(0,10);
+      localStorage.setItem('teeradar_free_until', freeUntil);
+
       localStorage.setItem('teeradar_member', '1');
       localStorage.setItem('teeradar_email', email);
+      localStorage.setItem('teeradar_role', email === ADMIN_EMAIL ? 'admin' : 'member');
 
       if (email === ADMIN_EMAIL) {
-        localStorage.setItem('teeradar_role', 'admin');
         window.location.href = "/admin.html";
       } else {
-        localStorage.setItem('teeradar_role', 'member');
         window.location.href = "/book.html";
       }
+    }
+
+    function subscribe() {
+      const email = document.getElementById('email').value.trim().toLowerCase();
+      if (email) {
+        localStorage.setItem('teeradar_email', email);
+      }
+      // IMPORTANT: set your success/redirect in Lemon Squeezy to:
+      // https://YOUR-SITE/login.html?paid=1
+      window.location.href = "https://YOUR-STORE.lemonsqueezy.com/checkout/buy/YOUR-PRODUCT-ID";
     }
   </script>
 </body>
