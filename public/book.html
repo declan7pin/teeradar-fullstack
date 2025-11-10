@@ -7,105 +7,65 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#f6f7f4; }
-    .topbar {
-      position: sticky; top: 0; z-index: 30;
+    .topbar { position:sticky; top:0; background:#0f172a; color:#fff; display:flex; align-items:center; justify-content:space-between; padding:10px 16px; z-index:30; }
+    .home-btn{background:#fff;color:#0f172a;border:none;border-radius:999px;padding:5px 14px;font-weight:600;cursor:pointer;}
+    .controls{display:flex;gap:10px;padding:10px 16px;background:#f8fafc;flex-wrap:wrap;}
+    .controls input,.controls select,.controls button{padding:6px 8px;border-radius:6px;border:1px solid #cbd5e1;}
+    .controls button{background:#0ea5e9;color:#fff;cursor:pointer;border:none;}
+    #map{height:440px;margin:12px 16px 16px;border-radius:14px;overflow:hidden;}
+    #results{padding:0 16px 68px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px;}
+    .small{font-size:12px;color:#64748b;}
+    .btn{background:#0ea5e9;color:#fff;border:none;border-radius:6px;padding:5px 9px;font-size:13px;cursor:pointer;margin-top:6px;}
+    #loadingOverlay{position:fixed;inset:0;background:rgba(246,247,244,.8);display:none;align-items:center;justify-content:center;z-index:100;}
+    .loader-box{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;box-shadow:0 10px 20px rgba(15,23,42,.12);text-align:center;min-width:240px;}
+    .bar{height:6px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px;}
+    .bar span{display:block;width:45%;height:100%;background:#0ea5e9;animation:slide 1s linear infinite;}
+    @keyframes slide{0%{transform:translateX(-100%);}100%{transform:translateX(250%);}}
+    .legend{position:absolute;top:12px;right:28px;background:#fff;padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;line-height:1.5;box-shadow:0 10px 20px rgba(15,23,42,.08);}
+    .legend-item{display:flex;gap:6px;align-items:center;}
+    .pill{width:14px;height:14px;border-radius:999px;}
+    .ad-panel{position:fixed;right:15px;top:110px;width:180px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px;box-shadow:0 10px 25px rgba(15,23,42,.15);font-size:12px;z-index:999;}
+    .ad-panel h4{margin:0 0 8px 0;font-size:13px;text-align:center;}
+    .ad-item{background:#f1f5f9;border-radius:6px;padding:6px;margin-bottom:8px;cursor:pointer;text-align:center;transition:all .2s;}
+    .ad-item:hover{background:#e2e8f0;transform:scale(1.02);}
+    @media(max-width:1024px){.ad-panel{display:none;}}
+    #adModal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:10000;align-items:center;justify-content:center;}
+    #adModal .content{background:#fff;padding:16px 18px;border-radius:12px;box-shadow:0 20px 35px rgba(15,23,42,.25);text-align:center;width:280px;}
+    #adModal h3{margin:0 0 6px 0;font-size:15px;}
+    #adModal p{font-size:12px;color:#64748b;}
+
+    /* T&C banner */
+    #tc-banner {
+      position: fixed; bottom: 0; left: 0; right: 0;
       background: #0f172a; color: #fff;
-      display: flex; align-items: center; justify-content: space-between;
       padding: 10px 16px;
+      display: none;
+      justify-content: space-between; align-items: center; gap: 12px;
+      font-size: 12px; z-index: 9999;
     }
-    .home-btn { background:#fff; color:#0f172a; border:none; border-radius:999px; padding:5px 14px; font-weight:600; cursor:pointer; }
-    .controls { display:flex; gap:10px; padding:10px 16px; background:#f8fafc; flex-wrap:wrap; }
-    .controls input, .controls select, .controls button { padding:6px 8px; border-radius:6px; border:1px solid #cbd5e1; }
-    .controls button { background:#0ea5e9; color:#fff; cursor:pointer; border:none; }
-    #map { height:440px; margin:12px 16px 16px; border-radius:14px; overflow:hidden; }
-    #results { padding:0 16px 16px; display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; }
-    .card { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:10px; }
-    .small { font-size:12px; color:#64748b; }
-    .btn { background:#0ea5e9; color:#fff; border:none; border-radius:6px; padding:5px 9px; font-size:13px; cursor:pointer; margin-top:6px; }
-    #loadingOverlay { position:fixed; inset:0; background:rgba(246,247,244,.8); display:none; align-items:center; justify-content:center; z-index:100; }
-    .loader-box { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 18px; box-shadow:0 10px 20px rgba(15,23,42,.12); text-align:center; min-width:240px; }
-    .bar { height:6px; background:#e2e8f0; border-radius:999px; overflow:hidden; margin-top:8px; }
-    .bar span { display:block; width:45%; height:100%; background:#0ea5e9; animation:slide 1s linear infinite; }
-    @keyframes slide { 0%{transform:translateX(-100%);} 100%{transform:translateX(250%);} }
-    .legend { position:absolute; top:12px; right:28px; background:#fff; padding:8px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:12px; line-height:1.5; box-shadow:0 10px 20px rgba(15,23,42,.08); }
-    .legend-item { display:flex; gap:6px; align-items:center; }
-    .pill { width:14px; height:14px; border-radius:999px; }
-    /* sidebar ads */
-    .ad-panel {
-      position: fixed;
-      right: 15px;
-      top: 110px;
-      width: 180px;
-      background: #fff;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 10px;
-      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
-      font-size: 12px;
-      z-index: 999;
-    }
-    .ad-panel h4 { margin:0 0 8px 0; font-size:13px; text-align:center; }
-    .ad-item { background:#f1f5f9; border-radius:6px; padding:6px; margin-bottom:8px; cursor:pointer; text-align:center; transition:all .2s; }
-    .ad-item:hover { background:#e2e8f0; transform:scale(1.02); }
-    @media (max-width: 1024px) {
-      .ad-panel { display:none; }
-    }
-    /* popup ad */
-    #adModal {
-      display:none;
-      position:fixed;
-      inset:0;
-      background:rgba(15,23,42,.45);
-      z-index:10000;
-      align-items:center;
-      justify-content:center;
-    }
-    #adModal .content {
-      background:#fff;
-      padding:16px 18px;
-      border-radius:12px;
-      box-shadow:0 20px 35px rgba(15,23,42,.25);
-      text-align:center;
-      width:280px;
-    }
-    #adModal h3 { margin:0 0 6px 0; font-size:15px; }
-    #adModal p { font-size:12px; color:#64748b; }
+    #tc-banner button { background: #0ea5e9; border: none; border-radius: 999px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
+    #tc-banner a { color: #fff; text-decoration: underline; }
+    @media (max-width: 600px) { #tc-banner { flex-direction: column; align-items: flex-start; } }
   </style>
 </head>
 <body>
   <script>
-    // gate: allow logged-in OR free trial
     const isMember = localStorage.getItem('teeradar_member') === '1';
-    const freeUntil = localStorage.getItem('teeradar_free_until');
-    const today = new Date().toISOString().slice(0,10);
-    const isFree = freeUntil && today <= freeUntil;
-    if (!isMember && !isFree) {
-      window.location.href = "/login.html";
-    }
+    if (!isMember) window.location.href = "/login.html";
   </script>
 
   <div class="topbar">
     <span style="font-weight:700;">TeeRadar — WA Realtime</span>
-    <div>
-      <button class="home-btn" onclick="window.location.href='/'">← Home</button>
-    </div>
+    <div><button class="home-btn" onclick="window.location.href='/'">← Home</button></div>
   </div>
 
   <div class="controls">
     <input type="date" id="date">
     <input type="time" id="start" value="06:00">
     <input type="time" id="end" value="17:00">
-    <select id="holes">
-      <option value="">Any holes</option>
-      <option value="9">9 holes</option>
-      <option value="18">18 holes</option>
-    </select>
-    <select id="players">
-      <option value="1">1 player</option>
-      <option value="2" selected>2 players</option>
-      <option value="3">3 players</option>
-      <option value="4">4 players</option>
-    </select>
+    <select id="holes"><option value="">Any holes</option><option value="9">9 holes</option><option value="18">18 holes</option></select>
+    <select id="players"><option value="1">1 player</option><option value="2" selected>2 players</option><option value="3">3 players</option><option value="4">4 players</option></select>
     <button onclick="runSearch()">Search</button>
     <span id="status" style="font-size:13px;color:#64748b;">Showing WA courses…</span>
   </div>
@@ -120,25 +80,17 @@
   </div>
   <div id="results"></div>
 
-  <!-- sidebar ads -->
   <div class="ad-panel">
     <h4>Sponsored</h4>
-    <div class="ad-item" onclick="adClick('golfbox'); window.open('https://www.golfbox.com.au/', '_blank')">
-      ⛳ Golf Gear Sale – Up to 40% Off
-    </div>
-    <div class="ad-item" onclick="adClick('holidays'); window.open('https://www.travelaus.com/golf-holidays', '_blank')">
-      🏌️ WA Golf Holidays
-    </div>
-    <div class="ad-item" onclick="adClick('swingtips'); window.open('https://www.golfdrills.net', '_blank')">
-      🎯 Improve Your Swing
-    </div>
+    <div class="ad-item" onclick="adClick('golfbox');window.open('https://www.golfbox.com.au/')">⛳ Golf Gear Sale – Up to 40% Off</div>
+    <div class="ad-item" onclick="adClick('holidays');window.open('https://www.travelaus.com/golf-holidays')">🏌️ WA Golf Holidays</div>
+    <div class="ad-item" onclick="adClick('swingtips');window.open('https://www.golfdrills.net')">🎯 Improve Your Swing</div>
   </div>
 
-  <!-- popup ad -->
   <div id="adModal">
     <div class="content">
       <h3>Quick ad while your booking loads…</h3>
-      <p>Check out Perth golf specials.</p>
+      <p>Thanks for supporting TeeRadar.</p>
     </div>
   </div>
 
@@ -150,161 +102,121 @@
     </div>
   </div>
 
+  <!-- T&C banner -->
+  <div id="tc-banner">
+    <span>By using TeeRadar you agree to our Terms & Conditions.</span>
+    <div>
+      <a href="/terms.html" target="_blank" rel="noopener">View T&Cs</a>
+      <button onclick="dismissTC()">OK</button>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const todayStr = new Date().toISOString().slice(0,10);
-    document.getElementById('date').value = todayStr;
+    const todayStr=new Date().toISOString().slice(0,10); document.getElementById('date').value=todayStr;
+    const map=L.map('map').setView([-31.95,115.86],7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+    const markers=L.layerGroup().addTo(map);
+    const greenIcon=L.icon({iconUrl:'https://maps.gstatic.com/mapfiles/ms2/micons/green-dot.png',iconSize:[32,32],iconAnchor:[16,32]});
+    const redIcon=L.icon({iconUrl:'https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png',iconSize:[32,32],iconAnchor:[16,32]});
+    const purpleIcon=L.icon({iconUrl:'https://maps.gstatic.com/mapfiles/ms2/micons/purple-dot.png',iconSize:[32,32],iconAnchor:[16,32]});
+    const statusEl=document.getElementById('status'),resultsEl=document.getElementById('results'),overlayEl=document.getElementById('loadingOverlay'),adModal=document.getElementById('adModal');
+    let lastLiveByName={};
 
-    const map = L.map('map').setView([-31.95, 115.86], 7);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
-    const markers = L.layerGroup().addTo(map);
-
-    const greenIcon = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/green-dot.png', iconSize:[32,32], iconAnchor:[16,32] });
-    const redIcon   = L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png',   iconSize:[32,32], iconAnchor:[16,32] });
-    const purpleIcon= L.icon({ iconUrl: 'https://maps.gstatic.com/mapfiles/ms2/micons/purple-dot.png',iconSize:[32,32], iconAnchor:[16,32] });
-
-    const statusEl = document.getElementById('status');
-    const resultsEl = document.getElementById('results');
-    const overlayEl = document.getElementById('loadingOverlay');
-    const adModal = document.getElementById('adModal');
-
-    let lastLiveByName = {};
-
-    // ===== analytics helpers =====
-    function getAnalytics() {
-      try {
-        return JSON.parse(localStorage.getItem('teeradar_analytics')) || {
-          subs: 0,
-          courseClicks: 0,
-          newVisitors: 0,
-          adClicks: 0,
-          adViews: 0
-        };
-      } catch(e) {
-        return { subs:0, courseClicks:0, newVisitors:0, adClicks:0, adViews:0 };
-      }
-    }
-    function saveAnalytics(a) {
-      localStorage.setItem('teeradar_analytics', JSON.stringify(a));
-    }
-    function analyticsInc(key) {
-      const a = getAnalytics();
-      a[key] = (a[key] || 0) + 1;
-      saveAnalytics(a);
-    }
-    // count ad view on page load
+    function getAnalytics(){try{return JSON.parse(localStorage.getItem('teeradar_analytics'))||{subs:0,courseClicks:0,newVisitors:0,adClicks:0,adViews:0};}catch(e){return{subs:0,courseClicks:0,newVisitors:0,adClicks:0,adViews:0};}}
+    function saveAnalytics(a){localStorage.setItem('teeradar_analytics',JSON.stringify(a));}
+    function analyticsInc(k){const a=getAnalytics();a[k]=(a[k]||0)+1;saveAnalytics(a);}
     analyticsInc('adViews');
+    function adClick(){analyticsInc('adClicks');}
 
-    function isSubscribed() {
-      if (localStorage.getItem('teeradar_role') === 'admin') return true;
-      const freeUntil = localStorage.getItem('teeradar_free_until');
-      if (freeUntil && new Date().toISOString().slice(0,10) <= freeUntil) return true;
-      const email = localStorage.getItem('teeradar_email');
-      if (!email) return false;
+    function isExemptFromAds(){
+      const email=localStorage.getItem('teeradar_email');
+      if(email==='declan7pin@gmail.com') return true;
       try {
-        const store = JSON.parse(localStorage.getItem('teeradar_users')) || { users: {} };
-        const u = store.users[email];
-        if (u && u.subscription === 'active') return true;
-      } catch(e) {}
+        const list = JSON.parse(localStorage.getItem('teeradar_discount_emails')) || [];
+        if (email && list.includes(email.toLowerCase())) return true;
+      } catch(e){}
       return false;
     }
 
-    function adClick(label) {
-      analyticsInc('adClicks');
+    function buildBookingUrl(live,name,date){
+      return live && live.bookingUrl
+        ? live.bookingUrl.replace('YYYY-MM-DD',date).replace('YYYYMMDD',date.replace(/-/g,''))
+        : 'https://www.google.com/search?q=' + encodeURIComponent(name + ' golf booking');
     }
 
-    function buildBookingUrl(live, name, date) {
-      if (live && live.bookingUrl) {
-        return live.bookingUrl
-          .replace('YYYY-MM-DD', date)
-          .replace('YYYYMMDD', date.replace(/-/g,''));
-      } else {
-        return 'https://www.google.com/search?q=' + encodeURIComponent(name + ' golf booking');
-      }
-    }
-
-    function openCourse(name) {
-      const date = document.getElementById('date').value || todayStr;
-      const live = lastLiveByName[name];
-
+    function openCourse(name){
+      const date=document.getElementById('date').value || todayStr;
+      const live=lastLiveByName[name];
       analyticsInc('courseClicks');
-
-      if (isSubscribed()) {
-        const targetUrl = buildBookingUrl(live, name, date);
-        window.open(targetUrl, '_blank', 'noopener,noreferrer');
-        return;
+      const targetUrl = buildBookingUrl(live,name,date);
+      if (isExemptFromAds()) {
+        window.open(targetUrl,'_blank','noopener');
+      } else {
+        adModal.style.display='flex';
+        setTimeout(()=>{adModal.style.display='none'; window.open(targetUrl,'_blank','noopener');},1500);
       }
-
-      adModal.style.display = 'flex';
-      setTimeout(function() {
-        adModal.style.display = 'none';
-        const targetUrl = buildBookingUrl(live, name, date);
-        window.open(targetUrl, '_blank', 'noopener,noreferrer');
-      }, 1500);
     }
 
-    async function runSearch() {
-      const date = document.getElementById('date').value || todayStr;
-      const earliest = document.getElementById('start').value || '06:00';
-      const latest = document.getElementById('end').value || '17:00';
-      const holes = document.getElementById('holes').value;
-      const partySize = parseInt(document.getElementById('players').value || '1', 10);
+    async function runSearch(){
+      const date=document.getElementById('date').value||todayStr;
+      const earliest=document.getElementById('start').value||'06:00';
+      const latest=document.getElementById('end').value||'17:00';
+      const holes=document.getElementById('holes').value;
+      const partySize=parseInt(document.getElementById('players').value||'1',10);
 
-      statusEl.textContent = 'Checking live availability…';
-      overlayEl.style.display = 'flex';
-
+      statusEl.textContent='Checking live availability…'; overlayEl.style.display='flex';
       try {
         const resp = await fetch('/api/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
           body: JSON.stringify({ date, earliest, latest, holes, partySize })
         });
         const data = await resp.json();
 
-        lastLiveByName = {};
-        (data.slots || []).forEach(s => { lastLiveByName[s.course] = s; });
+        lastLiveByName={};
+        (data.slots||[]).forEach(s=>{ lastLiveByName[s.course]=s; });
 
-        markers.clearLayers();
-        resultsEl.innerHTML = '';
-
-        (data.slots || []).forEach(c => {
-          let icon = redIcon;
+        markers.clearLayers(); resultsEl.innerHTML='';
+        (data.slots||[]).forEach(c=>{
+          let icon=redIcon;
           if (c.note === 'phone-only') icon = purpleIcon;
           else if (c.available) icon = greenIcon;
 
-          L.marker([c.lat, c.lng], { icon }).addTo(markers)
-            .bindPopup(`<b>${c.course}</b>`);
+          L.marker([c.lat,c.lng],{icon}).addTo(markers).bindPopup(`<b>${c.course}</b>`);
 
           const card = document.createElement('div');
           card.className = 'card';
 
           if (c.note === 'phone-only') {
-            card.innerHTML = `
-              <h3>${c.course}</h3>
-              <div class="small">Phone bookings only</div>
-              <div class="small">${c.phone || ''}</div>
-            `;
+            card.innerHTML = `<h3>${c.course}</h3><div class="small">Phone bookings only</div><div class="small">${c.phone||''}</div>`;
           } else {
-            card.innerHTML = `
-              <h3>${c.course}</h3>
-              <div class="small">${c.available ? '✅ Available in that window' : '❌ Not confirmed'}</div>
-              <button class="btn" onclick="openCourse('${c.course.replace(/'/g,"\\'")}')">Proceed to booking</button>
-            `;
+            card.innerHTML = `<h3>${c.course}</h3><div class="small">${c.available ? '✅ Available in that window' : '❌ Not confirmed'}</div><button class="btn" onclick="openCourse('${c.course.replace(/'/g,"\\'")}')">Proceed to booking</button>`;
           }
 
           resultsEl.appendChild(card);
         });
 
-        statusEl.textContent = 'Live check complete.';
-      } catch (e) {
-        console.warn(e);
-        statusEl.textContent = 'Live check failed.';
+        statusEl.textContent='Live check complete.';
+      } catch(e) {
+        statusEl.textContent='Live check failed.';
       } finally {
-        overlayEl.style.display = 'none';
+        overlayEl.style.display='none';
       }
     }
 
     runSearch();
+
+    // T&C banner
+    (function(){
+      if (!localStorage.getItem('teeradar_tc_ok')) {
+        document.getElementById('tc-banner').style.display = 'flex';
+      }
+    })();
+    function dismissTC(){
+      localStorage.setItem('teeradar_tc_ok','1');
+      document.getElementById('tc-banner').style.display='none';
+    }
   </script>
 </body>
 </html>
