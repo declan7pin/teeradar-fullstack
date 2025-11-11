@@ -5,11 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TeeRadar WA • Find a tee time</title>
   <style>
+    :root {
+      --brand: #0f766e;
+      --bg: #f1f5f9;
+      --text: #0f172a;
+      --muted: #475569;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: #f1f5f9;
-      color: #0f172a;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
     }
 
@@ -26,17 +34,18 @@
     }
     .brand {
       font-weight: 700;
-      color: #0f766e;
+      color: var(--brand);
       font-size: 20px;
     }
     nav a {
       margin-left: 20px;
       text-decoration: none;
-      color: #0f172a;
+      color: var(--text);
       font-weight: 500;
     }
+    nav a:hover { color: var(--brand); }
 
-    /* HERO */
+    /* hero */
     .hero {
       display: grid;
       grid-template-columns: 1.05fr .95fr;
@@ -45,10 +54,9 @@
       align-items: center;
       background: radial-gradient(circle at top, #e2f3ff 0%, #f1f5f9 35%, #f1f5f9 100%);
     }
-
     .hero-left small {
       display: inline-block;
-      color: #0f766e;
+      color: var(--brand);
       margin-bottom: 12px;
       font-weight: 600;
     }
@@ -58,38 +66,64 @@
       margin-bottom: 16px;
     }
     .hero-left p {
-      color: #475569;
+      color: var(--muted);
       margin-bottom: 26px;
       max-width: 500px;
     }
-    .cta-row { display:flex; gap:12px; flex-wrap:wrap; }
+
+    .hero-buttons {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
     .btn-primary {
-      background: #0f766e;
+      background: var(--brand);
       color: #fff;
       border: none;
       border-radius: 10px;
-      padding: 11px 16px;
+      padding: 14px 24px;
       font-weight: 600;
       cursor: pointer;
+      transition: 0.15s ease-in-out;
     }
+    .btn-primary:hover { background: #0d5d55; }
+
     .btn-secondary {
       background: #e2e8f0;
-      color: #0f172a;
+      color: var(--text);
       border: none;
       border-radius: 10px;
-      padding: 11px 16px;
+      padding: 14px 24px;
       font-weight: 600;
       cursor: pointer;
+      transition: 0.15s ease-in-out;
+    }
+    .btn-secondary:hover { background: #cbd5e1; }
+
+    .btn-outline {
+      background-color: transparent;
+      color: var(--brand);
+      border: 2px solid var(--brand);
+      border-radius: 10px;
+      padding: 14px 24px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.15s ease-in-out;
+    }
+    .btn-outline:hover {
+      background: var(--brand);
+      color: #fff;
     }
 
-    /* THIS is the card with your image */
+    /* right hero card */
     .hero-right-card {
       position: relative;
       border-radius: 24px;
       overflow: hidden;
       min-height: 280px;
       box-shadow: 0 18px 38px rgba(15,23,42,.12);
-      background: #166534; /* fallback if img fails */
+      background: #166534; /* fallback */
     }
     .hero-img {
       width: 100%;
@@ -147,9 +181,27 @@
       color: #94a3b8;
     }
 
+    /* mobile tweaks */
     @media (max-width: 900px) {
-      .hero { grid-template-columns: 1fr; }
-      .hero-right-card { min-height: 230px; }
+      .hero {
+        grid-template-columns: 1fr;
+        padding: 40px 6% 60px;
+      }
+      .hero-left h1 {
+        font-size: 34px;
+      }
+    }
+
+    /* stack buttons on narrow screens */
+    @media (max-width: 720px) {
+      .hero-buttons {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .hero-buttons button {
+        width: 100%;
+        text-align: center;
+      }
     }
   </style>
 </head>
@@ -169,14 +221,15 @@
       <small>⛳ WA public courses • live booking links</small>
       <h1>Find a tee time across WA, all in one place.</h1>
       <p>Search live WA golf courses by date, number of players and 9/18 holes. Click through directly to the course’s official booking page.</p>
-      <div class="cta-row">
-        <button class="btn-primary" onclick="window.location.href='/book.html'">Find a Tee Time</button>
-        <button class="btn-secondary" onclick="window.location.href='/faq.html'">How it works</button>
+      <div class="hero-buttons">
+        <button class="btn-primary" onclick="window.location.href='/book.html'">Book a Tee Time</button>
+        <button class="btn-secondary" onclick="window.location.href='/faq.html'">How It Works</button>
+        <button class="btn-outline" onclick="window.location.href='/about.html'">About</button>
       </div>
     </div>
 
-    <!-- 👇 this is the bit that should show your photo -->
     <div class="hero-right-card">
+      <!-- your golf image lives here -->
       <img src="/assets/hero_golf_bg.jpg" alt="Scenic golf course" class="hero-img">
       <div class="info-pill">
         <span>⛳</span>
@@ -209,8 +262,9 @@
   </section>
 
   <footer>
-    © <script>document.write(new Date().getFullYear())</script> TeeRadar WA • Availability subject to course sites.
+    © <script>document.write(new Date().getFullYear())</script> TeeRadar WA • Availability subject to course sites. • <a href="/terms.html" style="color:#0f766e;text-decoration:none;">Terms</a>
   </footer>
 </body>
 </html>
+
 
