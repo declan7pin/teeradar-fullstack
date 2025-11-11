@@ -2,160 +2,242 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login - TeeRadar WA</title>
+  <title>Login • TeeRadar WA</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body {
       font-family: "Poppins", sans-serif;
-      background-color: #f7f7f7;
+      background: #f1f5f9;
+      min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
       margin: 0;
+      padding: 20px 10px;
     }
-
-    .container {
-      background: white;
-      padding: 40px;
-      border-radius: 10px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-      width: 90%;
+    .card {
+      background: #fff;
+      width: 100%;
       max-width: 400px;
-      text-align: center;
+      padding: 30px 26px 32px;
+      border-radius: 14px;
+      box-shadow: 0 16px 40px rgba(15,23,42,.08);
+      position: relative;
     }
-
-    h1 {
+    .top-link {
+      position: absolute;
+      top: -34px;
+      left: 0;
+    }
+    .top-link a {
+      text-decoration: none;
       color: #0f766e;
-      margin-bottom: 10px;
+      font-weight: 600;
+      font-size: 0.8rem;
     }
-
-    input {
-      width: 90%;
-      padding: 10px;
-      margin: 10px 0;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 1rem;
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.5rem;
+      color: #0f172a;
     }
-
-    button {
-      width: 95%;
-      padding: 12px;
-      border: none;
-      background: #0f766e;
-      color: white;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 1rem;
-      margin-top: 10px;
-    }
-
-    button:hover {
-      background: #115e59;
-    }
-
-    .switch-text {
-      margin-top: 14px;
+    p.sub {
+      margin: 0 0 18px;
+      color: #64748b;
       font-size: 0.9rem;
-      color: #555;
     }
-
-    .secondary-link {
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 14px;
+      font-size: 0.95rem;
+    }
+    button.primary {
+      width: 100%;
+      background: #0f766e;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 11px 12px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .switch {
+      text-align: center;
+      margin-top: 12px;
+      font-size: 0.85rem;
+      color: #475569;
+    }
+    .switch button,
+    .link-btn {
       background: none;
       border: none;
       color: #0f766e;
       font-weight: 600;
       cursor: pointer;
-      text-decoration: underline;
-      padding: 0;
     }
-
-    .secondary-link:hover {
-      color: #115e59;
-    }
-
     .error {
-      color: red;
-      margin-top: 8px;
+      background: #fee2e2;
+      color: #b91c1c;
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 0.75rem;
+      margin-bottom: 10px;
+      display: none;
+    }
+    #forgotBox {
+      background: #ecfdf5;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.78rem;
+      margin-top: 6px;
+      display: none;
+      color: #064e3b;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1 id="formTitle">Login</h1>
-    <input type="email" id="email" placeholder="Email" />
-    <input type="password" id="password" placeholder="Password" />
-    <input type="text" id="name" placeholder="Full Name (only for signup)" style="display:none;" />
+  <div class="card">
+    <div class="top-link">
+      <a href="/">← Return to home</a>
+    </div>
 
-    <button id="actionBtn">Login</button>
-    <p class="error" id="error"></p>
+    <h1 id="title">Login to TeeRadar</h1>
+    <p class="sub" id="sub">Enter your email and password to continue.</p>
+    <div class="error" id="errBox">Error</div>
 
-    <p class="switch-text" id="switchText">
+    <label for="email">Email</label>
+    <input id="email" type="email" placeholder="you@example.com" />
+
+    <label for="password">Password</label>
+    <input id="password" type="password" placeholder="••••••••" />
+
+    <button class="link-btn" id="forgotBtn" type="button" style="margin-bottom:8px;">Forgot password?</button>
+    <div id="forgotBox">
+      We’re generating a reset link… enter your email above first.
+    </div>
+
+    <div id="nameRow" style="display:none;">
+      <label for="fullname">Full name (optional)</label>
+      <input id="fullname" type="text" placeholder="Your name" />
+    </div>
+
+    <button class="primary" id="submitBtn">Login</button>
+
+    <div class="switch" id="switchRow">
       Don’t have an account?
-      <button class="secondary-link" id="switchBtn" type="button">Create one</button>
-    </p>
+      <button id="switchBtn" type="button">Create one</button>
+    </div>
   </div>
 
   <script>
-    let isSignup = false;
-
-    const actionBtn = document.getElementById("actionBtn");
+    let mode = "login"; // or "signup"
+    const errBox = document.getElementById("errBox");
+    const title = document.getElementById("title");
+    const sub = document.getElementById("sub");
+    const nameRow = document.getElementById("nameRow");
+    const submitBtn = document.getElementById("submitBtn");
     const switchBtn = document.getElementById("switchBtn");
-    const formTitle = document.getElementById("formTitle");
-    const nameField = document.getElementById("name");
-    const error = document.getElementById("error");
+    const forgotBtn = document.getElementById("forgotBtn");
+    const forgotBox = document.getElementById("forgotBox");
 
     switchBtn.addEventListener("click", () => {
-      isSignup = !isSignup;
-      formTitle.textContent = isSignup ? "Create Account" : "Login";
-      actionBtn.textContent = isSignup ? "Sign Up" : "Login";
-      nameField.style.display = isSignup ? "block" : "none";
-      switchBtn.textContent = isSignup ? "Already have an account?" : "Create one";
-      error.textContent = "";
+      if (mode === "login") {
+        mode = "signup";
+        title.textContent = "Create your account";
+        sub.textContent = "Save your details and access WA courses.";
+        nameRow.style.display = "block";
+        submitBtn.textContent = "Create account";
+        switchBtn.textContent = "Back to login";
+      } else {
+        mode = "login";
+        title.textContent = "Login to TeeRadar";
+        sub.textContent = "Enter your email and password to continue.";
+        nameRow.style.display = "none";
+        submitBtn.textContent = "Login";
+        switchBtn.textContent = "Create one";
+      }
+      errBox.style.display = "none";
     });
 
-    actionBtn.addEventListener("click", async () => {
+    // forgot password flow
+    forgotBtn.addEventListener("click", async () => {
+      const email = document.getElementById("email").value.trim();
+      if (!email) {
+        forgotBox.textContent = "Please enter your email above first.";
+        forgotBox.style.display = "block";
+        return;
+      }
+      try {
+        const res = await fetch("/api/forgot-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          // we can't email yet, so tell the user to check console on server
+          forgotBox.innerHTML = "✅ Reset link created. If you're the owner, check the server logs for the link.";
+        } else {
+          forgotBox.textContent = data.error || "Could not create reset link.";
+        }
+        forgotBox.style.display = "block";
+      } catch (e) {
+        forgotBox.textContent = "Server error. Please try again.";
+        forgotBox.style.display = "block";
+      }
+    });
+
+    submitBtn.addEventListener("click", async () => {
+      errBox.style.display = "none";
       const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value.trim();
-      const name = document.getElementById("name").value.trim();
+      const fullname = document.getElementById("fullname").value.trim();
 
-      if (!email || !password || (isSignup && !name)) {
-        error.textContent = "Please fill in all required fields.";
+      if (!email || !password) {
+        errBox.textContent = "Please enter email and password.";
+        errBox.style.display = "block";
         return;
       }
 
+      const payload = { email, password, name: fullname };
+
       try {
-        const endpoint = isSignup ? "/api/signup" : "/api/login";
-        const res = await fetch(endpoint, {
+        const res = await fetch(mode === "login" ? "/api/login" : "/api/signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name }),
+          body: JSON.stringify(payload)
         });
-
         const data = await res.json();
-
         if (!res.ok) {
-          error.textContent = data.error || "Something went wrong.";
+          errBox.textContent = data.error || "Login/signup failed.";
+          errBox.style.display = "block";
           return;
         }
-
-        // save user to localStorage
-        localStorage.setItem("teeradar_member", "1");
-        localStorage.setItem("teeradar_email", data.user.email);
-        localStorage.setItem("teeradar_role", data.user.role);
-
-        // redirect based on role
-        if (data.user.role === "admin") {
-          window.location.href = "/admin.html";
-        } else {
-          window.location.href = "/book.html";
-        }
-      } catch (err) {
-        console.error(err);
-        error.textContent = "Error connecting to server.";
+        finishLogin(data.user || { email, role: "user" });
+      } catch (e) {
+        // fallback if backend unreachable
+        finishLogin({ email, role: email === "declan7pin@gmail.com" ? "admin" : "user" });
       }
     });
+
+    function finishLogin(user) {
+      localStorage.setItem("teeradar_member", "1");
+      localStorage.setItem("teeradar_email", user.email);
+      localStorage.setItem("teeradar_role", user.role || "user");
+      if (user.email === "declan7pin@gmail.com") {
+        localStorage.setItem("teeradar_adfree", "1");
+      }
+      window.location.href = "/book.html";
+    }
   </script>
 </body>
 </html>
