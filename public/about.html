@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About • TeeRadar WA</title>
+  <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+  <style>
+    :root {
+      --brand-green: #0f766e;
+      --bg-light: #f8fafc;
+      --text-dark: #0f172a;
+      --text-muted: #475569;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(180deg, #f1f5f9 0%, #ffffff 100%);
+      color: var(--text-dark);
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #ffffff;
+      box-shadow: 0 2px 12px rgba(15,23,42,.05);
+      padding: 18px 50px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    .brand {
+      font-weight: 700;
+      font-size: 22px;
+      color: var(--brand-green);
+    }
+
+    nav a {
+      color: var(--text-dark);
+      text-decoration: none;
+      margin-left: 25px;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+    nav a:hover {
+      color: var(--brand-green);
+    }
+
+    .about-hero {
+      text-align: center;
+      padding: 80px 20px 40px;
+      background: radial-gradient(circle at top, #e2f3ff 0%, #f1f5f9 30%, #ffffff 100%);
+    }
+
+    .about-hero h1 {
+      font-size: 40px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      color: var(--text-dark);
+    }
+
+    .about-hero p {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    .about-container {
+      max-width: 900px;
+      margin: 60px auto;
+      padding: 0 24px;
+    }
+
+    .about-container h2 {
+      font-size: 28px;
+      color: var(--brand-green);
+      margin-bottom: 10px;
+    }
+
+    .about-container p {
+      font-size: 17px;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+
+    .cta {
+      display: flex;
+      justify-content: center;
+      margin-top: 50px;
+    }
+
+    .btn-primary {
+      background: var(--brand-green);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 22px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(15,118,110,0.25);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 18px rgba(15,118,110,0.35);
+    }
+
+    footer {
+      margin-top: auto;
+      background: var(--text-dark);
+      color: #e2e8f0;
+      text-align: center;
+      padding: 20px;
+      font-size: 13px;
+    }
+
+    footer a {
+      color: #38bdf8;
+      text-decoration: none;
+    }
+
+    @media (max-width: 768px) {
+      header { padding: 16px 24px; }
+      .about-hero h1 { font-size: 32px; }
+      .about-container { margin: 40px auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">TeeRadar WA</div>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/book.html">Bookings</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/about.html">About</a>
+    </nav>
+  </header>
+
+  <section class="about-hero">
+    <h1>About TeeRadar</h1>
+    <p>Your one-stop platform for finding live tee times and discovering WA’s best public golf courses.</p>
+  </section>
+
+  <div class="about-container">
+    <h2>Our Mission</h2>
+    <p>At <strong>TeeRadar WA</strong>, our goal is simple — make golf booking effortless, transparent, and connected. Instead of searching through multiple club websites, we bring WA’s public golf courses together in one intuitive platform, helping players find live tee times, filter by 9 or 18 holes, and book directly through the official course pages.</p>
+
+    <h2>Our Vision</h2>
+    <p>We believe golf should be accessible to everyone. By simplifying the booking process and supporting local clubs, we aim to help more people play the game they love — from weekend beginners to seasoned golfers.</p>
+
+    <h2>Our Future</h2>
+    <p>TeeRadar is expanding beyond Western Australia. We’re building towards a national platform where every golfer in Australia can find, compare, and book rounds in just a few clicks. Expect more features soon — including analytics, smart filters, and exclusive local course insights.</p>
+
+    <div class="cta">
+      <button class="btn-primary" onclick="window.location.href='/book.html'">Find a Tee Time</button>
+    </div>
+  </div>
+
+  <footer>
+    © <script>document.write(new Date().getFullYear())</script> TeeRadar WA • Availability subject to course sites. • <a href="/terms.html">Terms & Conditions</a>
+  </footer>
+</body>
+</html>
