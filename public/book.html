@@ -2,169 +2,196 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Find Tee Times – TeeRadar WA</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>TeeRadar — WA Realtime</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/assets/leaflet.css" />
   <style>
     body {
-      font-family: "Poppins", sans-serif;
       margin: 0;
-      background: #f5f5f5;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #eef3f1;
     }
     header {
+      background: #036b65;
+      color: #fff;
+      padding: 12px 4vw;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 16px 40px;
-      background: #0f766e;
-      color: white;
+      justify-content: space-between;
     }
-    header a {
-      color: white;
-      text-decoration: none;
-      font-weight: 500;
-      margin-left: 12px;
-    }
-    header a:hover { text-decoration: underline; }
-    .return-home {
-      background: white;
-      color: #0f766e;
-      padding: 6px 14px;
-      border-radius: 8px;
-      font-weight: 600;
-      text-decoration: none;
-    }
-    .filter-bar {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin: 20px;
-    }
-    input, select {
-      padding: 10px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-    }
-    button {
-      background: #0f766e;
-      color: white;
+    .btn-home {
+      background: #fff;
+      color: #036b65;
       border: none;
-      border-radius: 6px;
-      padding: 10px 20px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-weight: 600;
       cursor: pointer;
     }
-    button:hover { background: #115e59; }
-    #map {
-      height: 450px;
-      width: 90%;
-      margin: 0 auto;
-      border-radius: 8px;
-      margin-bottom: 20px;
+    .filters {
+      display: flex;
+      gap: 12px;
+      padding: 16px 4vw;
+      align-items: center;
+      flex-wrap: wrap;
+      background: #fff;
+      border-bottom: 1px solid rgba(0,0,0,.04);
     }
-    footer {
-      text-align: center;
-      background: #0f766e;
-      color: white;
-      padding: 14px;
+    .filters input,
+    .filters select {
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      background: #fff;
+    }
+    .filters button {
+      background: #036b65;
+      color: #fff;
+      border: none;
+      padding: 9px 16px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #map {
+      height: calc(100vh - 150px);
+      margin: 0 4vw 20px;
+      border-radius: 18px;
+      overflow: hidden;
+    }
+    #status {
+      padding: 6px 4vw;
+      font-size: .8rem;
+      color: #475569;
+    }
+    @media(max-width:900px){
+      #map { height: 55vh; margin: 0 2vw 18px; }
     }
   </style>
+  <script src="/assets/leaflet.js"></script>
 </head>
 <body>
   <header>
-    <div class="brand">TeeRadar WA</div>
-    <nav>
-      <a href="/" class="return-home">Return Home</a>
-    </nav>
+    <div style="font-weight:700;">TeeRadar WA</div>
+    <button class="btn-home" onclick="window.location.href='/'">Return Home</button>
   </header>
 
-  <div class="filter-bar">
+  <div class="filters">
     <input type="date" id="date" />
     <select id="holes">
-      <option value="">Any Holes</option>
-      <option value="9">9 Holes</option>
-      <option value="18">18 Holes</option>
+      <option value="">Any holes</option>
+      <option value="9">9 holes</option>
+      <option value="18">18 holes</option>
     </select>
-    <select id="partySize">
+    <select id="players">
       <option value="1">1 Player</option>
       <option value="2">2 Players</option>
       <option value="3">3 Players</option>
-      <option value="4">4 Players</option>
+      <option value="4" selected>4 Players</option>
     </select>
-    <button id="btnSearch">Search Availability</button>
+    <button id="searchBtn">Search Availability</button>
   </div>
 
+  <div id="status">Ready.</div>
   <div id="map"></div>
-  <div id="results" style="width:90%;margin:auto;"></div>
-
-  <footer>© 2025 TeeRadar WA</footer>
 
   <script>
-    // ✅ LOGIN GUARD
-    const loggedIn = localStorage.getItem("teeradar_member") === "1";
-    if (!loggedIn) {
-      window.location.href = "/login.html";
-    }
+    let map, markersLayer;
+    let courseList = [];
 
-    // ✅ MAP SETUP (simple demo)
-    let map;
-    function initMap() {
-      map = L.map("map").setView([-31.9523, 115.8613], 9);
+    function initMap(){
+      map = L.map("map").setView([-31.95, 115.86], 9);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap"
+        maxZoom: 19
       }).addTo(map);
+      markersLayer = L.layerGroup().addTo(map);
     }
 
-    document.addEventListener("DOMContentLoaded", initMap);
+    async function loadCourses(){
+      const res = await fetch("/assets/courses.json");
+      courseList = await res.json();
+      return courseList;
+    }
 
-    // ✅ SEARCH FUNCTION
-    document.getElementById("btnSearch").addEventListener("click", async () => {
+    function markerColor(color) {
+      // simple circle-style marker
+      return {
+        radius: 7,
+        fillColor: color,
+        color: "#fff",
+        weight: 1,
+        opacity: 1,
+        fillOpacity: .9
+      };
+    }
+
+    function renderMarkers(resultsByName = {}){
+      markersLayer.clearLayers();
+      courseList.forEach(c => {
+        const key = (c.name || "").toLowerCase();
+        const match = resultsByName[key];
+        let color = "#ef4444"; // red = unavailable
+        if (c.phoneOnly) {
+          color = "#8b5cf6"; // purple
+        } else if (match && match.available) {
+          color = "#0ea5e9"; // blue = available
+        }
+        const m = L.circleMarker([c.lat, c.lng], markerColor(color))
+          .addTo(markersLayer)
+          .bindPopup(`<strong>${c.name}</strong><br>${match && match.url ? `<a href="${match.url}" target="_blank">Go to booking</a>` : "No direct URL"}`);
+      });
+    }
+
+    async function doSearch(){
+      const statusEl = document.getElementById("status");
       const date = document.getElementById("date").value;
       const holes = document.getElementById("holes").value;
-      const partySize = document.getElementById("partySize").value;
-      if (!date) return alert("Please select a date.");
-
-      const res = await fetch("/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, holes, partySize })
-      });
-      const data = await res.json();
-      renderResults(data.slots || []);
-    });
-
-    function renderResults(list) {
-      const div = document.getElementById("results");
-      div.innerHTML = "";
-      list.forEach((it) => {
-        const card = document.createElement("div");
-        card.style.background = "white";
-        card.style.borderRadius = "8px";
-        card.style.padding = "12px";
-        card.style.margin = "8px 0";
-        card.innerHTML = `
-          <strong>${it.name}</strong><br>
-          ${it.time || ""} – ${it.holes || ""} holes<br>
-          <a href="${it.url}" target="_blank">Book on Course Site</a>
-        `;
-        div.appendChild(card);
-
-        if (it.lat && it.lng) {
-          const color = it.available ? "blue" : "red";
-          L.circleMarker([it.lat, it.lng], {
-            color,
-            radius: 6,
-            fillOpacity: 0.9
+      const players = document.getElementById("players").value;
+      if (!date){
+        statusEl.textContent = "Please choose a date.";
+        return;
+      }
+      statusEl.textContent = "Checking courses… this can take a few seconds";
+      try {
+        const res = await fetch("/api/search", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({
+            date,
+            earliest: "06:00",
+            latest: "17:00",
+            holes,
+            partySize: players
           })
-            .addTo(map)
-            .bindPopup(`<b>${it.name}</b><br>${it.holes || ""} holes`);
-        }
-      });
+        });
+        const data = await res.json();
+        const byName = {};
+        (data.slots || []).forEach(s => {
+          byName[(s.name || "").toLowerCase()] = {
+            available: true,
+            url: s.url
+          };
+        });
+        renderMarkers(byName);
+        statusEl.textContent = "Live check complete.";
+      } catch (err) {
+        console.warn(err);
+        statusEl.textContent = "Could not reach backend — showing default markers.";
+        renderMarkers({});
+      }
     }
-  </script>
 
-  <!-- Leaflet map library -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    (async function start(){
+      initMap();
+      await loadCourses();
+      renderMarkers({});
+      // default date = today
+      const today = new Date().toISOString().slice(0,10);
+      document.getElementById("date").value = today;
+    })();
+
+    document.getElementById("searchBtn").addEventListener("click", doSearch);
+  </script>
 </body>
 </html>
+
