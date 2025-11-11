@@ -4,24 +4,31 @@
   <meta charset="UTF-8" />
   <title>TeeRadar — WA Realtime</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- leaflet -->
   <link rel="stylesheet" href="/assets/leaflet.css" />
   <style>
+    :root {
+      --teal: #036b65;
+      --bg: #eef3f1;
+      --card: #ffffff;
+    }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-      background: #eef3f1;
+      background: var(--bg);
     }
     header {
-      background: #036b65;
+      background: var(--teal);
       color: #fff;
-      padding: 12px 4vw;
+      padding: 10px 4vw;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
-    .btn-home {
+    .home-btn {
       background: #fff;
-      color: #036b65;
+      color: var(--teal);
       border: none;
       padding: 6px 16px;
       border-radius: 999px;
@@ -29,55 +36,94 @@
       cursor: pointer;
     }
     .filters {
+      background: #fff;
+      padding: 14px 4vw;
       display: flex;
-      gap: 12px;
-      padding: 16px 4vw;
+      gap: 10px;
       align-items: center;
       flex-wrap: wrap;
-      background: #fff;
-      border-bottom: 1px solid rgba(0,0,0,.04);
+      border-bottom: 1px solid rgba(0,0,0,.03);
     }
     .filters input,
     .filters select {
-      padding: 8px 10px;
-      border-radius: 8px;
       border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 7px 10px;
       background: #fff;
     }
     .filters button {
-      background: #036b65;
+      background: var(--teal);
       color: #fff;
       border: none;
-      padding: 9px 16px;
       border-radius: 10px;
+      padding: 8px 15px;
       font-weight: 600;
       cursor: pointer;
     }
-    #map {
-      height: calc(100vh - 150px);
-      margin: 0 4vw 20px;
-      border-radius: 18px;
-      overflow: hidden;
-    }
     #status {
-      padding: 6px 4vw;
-      font-size: .8rem;
+      font-size: .78rem;
+      padding: 5px 4vw;
       color: #475569;
     }
-    @media(max-width:900px){
-      #map { height: 55vh; margin: 0 2vw 18px; }
+    #map {
+      height: 400px;
+      margin: 0 4vw;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #cbd5f5;
+    }
+    .course-strip {
+      margin: 16px 4vw 20px;
+      display: flex;
+      gap: 14px;
+      overflow-x: auto;
+      padding-bottom: 10px;
+    }
+    .course-card {
+      min-width: 240px;
+      background: #fff;
+      border-radius: 14px;
+      border: 1px solid rgba(0,0,0,.03);
+      box-shadow: 0 8px 20px rgba(15,23,42,.04);
+      padding: 12px 12px 14px;
+      flex: 0 0 auto;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: .6rem;
+      margin-bottom: 6px;
+      background: #e2e8f0;
+    }
+    .btn-small {
+      background: #eef3f1;
+      border: none;
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: .65rem;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+    @media (max-width: 900px){
+      #map { height: 55vh; margin: 0 2vw; }
+      .filters { padding: 12px 2vw; }
+      .course-strip { margin: 16px 2vw 20px; }
     }
   </style>
   <script src="/assets/leaflet.js"></script>
 </head>
 <body>
   <header>
-    <div style="font-weight:700;">TeeRadar WA</div>
-    <button class="btn-home" onclick="window.location.href='/'">Return Home</button>
+    <div style="font-weight:700;">TeeRadar WA — Realtime</div>
+    <button class="home-btn" onclick="window.location.href='/'">Return Home</button>
   </header>
 
+  <!-- FILTER BAR -->
   <div class="filters">
     <input type="date" id="date" />
+    <input type="time" id="timeStart" value="06:00" />
+    <input type="time" id="timeEnd" value="17:00" />
     <select id="holes">
       <option value="">Any holes</option>
       <option value="9">9 holes</option>
@@ -94,12 +140,13 @@
 
   <div id="status">Ready.</div>
   <div id="map"></div>
+  <div class="course-strip" id="courseStrip"></div>
 
   <script>
     let map, markersLayer;
-    let courseList = [];
+    let courses = [];
 
-    function initMap(){
+    function initMap() {
       map = L.map("map").setView([-31.95, 115.86], 9);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19
@@ -107,59 +154,95 @@
       markersLayer = L.layerGroup().addTo(map);
     }
 
-    async function loadCourses(){
-      const res = await fetch("/assets/courses.json");
-      courseList = await res.json();
-      return courseList;
-    }
-
-    function markerColor(color) {
-      // simple circle-style marker
+    function markerStyle(color) {
       return {
         radius: 7,
         fillColor: color,
         color: "#fff",
         weight: 1,
-        opacity: 1,
-        fillOpacity: .9
+        fillOpacity: 0.9
       };
     }
 
-    function renderMarkers(resultsByName = {}){
+    function renderMarkers(resultsByName = {}) {
       markersLayer.clearLayers();
-      courseList.forEach(c => {
+      courses.forEach(c => {
         const key = (c.name || "").toLowerCase();
         const match = resultsByName[key];
-        let color = "#ef4444"; // red = unavailable
-        if (c.phoneOnly) {
-          color = "#8b5cf6"; // purple
-        } else if (match && match.available) {
-          color = "#0ea5e9"; // blue = available
-        }
-        const m = L.circleMarker([c.lat, c.lng], markerColor(color))
+        let color = "#ef4444"; // red = default unavailable
+        if (c.phoneOnly) color = "#a855f7"; // purple
+        if (match && match.available) color = "#0ea5e9"; // blue
+        L.circleMarker([c.lat, c.lng], markerStyle(color))
           .addTo(markersLayer)
-          .bindPopup(`<strong>${c.name}</strong><br>${match && match.url ? `<a href="${match.url}" target="_blank">Go to booking</a>` : "No direct URL"}`);
+          .bindPopup(
+            `<strong>${c.name}</strong><br>` +
+            (match && match.url
+              ? `<a href="${match.url}" target="_blank">Go to booking</a>`
+              : (c.url
+                  ? `<a href="${c.url}" target="_blank">Open website</a>`
+                  : "No direct link"))
+          );
       });
     }
 
-    async function doSearch(){
+    function renderStrip(resultsByName = {}) {
+      const wrap = document.getElementById("courseStrip");
+      wrap.innerHTML = "";
+      courses.forEach(c => {
+        const key = (c.name || "").toLowerCase();
+        const match = resultsByName[key];
+        const card = document.createElement("div");
+        card.className = "course-card";
+        const statusText = c.phoneOnly
+          ? "Phone bookings"
+          : (match && match.available ? "Available" : "Unavailable");
+        const statusColor = c.phoneOnly
+          ? "#a855f7"
+          : (match && match.available ? "#0ea5e9" : "#ef4444");
+        card.innerHTML = `
+          <div class="badge" style="background:${statusColor};color:#fff;">${statusText}</div>
+          <h4 style="margin:2px 0 4px;">${c.name}</h4>
+          <p style="font-size:.7rem;margin:0 0 6px;">${c.city || "WA"}</p>
+          <button class="btn-small" onclick="openCourse('${encodeURIComponent(c.name)}')">Go to course page</button>
+        `;
+        wrap.appendChild(card);
+      });
+    }
+
+    function openCourse(nameEncoded) {
+      const name = decodeURIComponent(nameEncoded);
+      const course = courses.find(c => c.name === name);
+      if (!course) return;
+      if (course.url) {
+        window.open(course.url, "_blank", "noopener");
+      } else {
+        window.open("https://www.google.com/search?q=" + encodeURIComponent(name + " golf"), "_blank");
+      }
+    }
+
+    async function doSearch() {
       const statusEl = document.getElementById("status");
       const date = document.getElementById("date").value;
+      const earliest = document.getElementById("timeStart").value || "06:00";
+      const latest = document.getElementById("timeEnd").value || "17:00";
       const holes = document.getElementById("holes").value;
       const players = document.getElementById("players").value;
-      if (!date){
-        statusEl.textContent = "Please choose a date.";
+
+      if (!date) {
+        statusEl.textContent = "Please select a date.";
         return;
       }
-      statusEl.textContent = "Checking courses… this can take a few seconds";
+
+      statusEl.textContent = "Checking courses…";
+
       try {
         const res = await fetch("/api/search", {
           method: "POST",
-          headers: {"Content-Type":"application/json"},
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             date,
-            earliest: "06:00",
-            latest: "17:00",
+            earliest,
+            latest,
             holes,
             partySize: players
           })
@@ -169,25 +252,29 @@
         (data.slots || []).forEach(s => {
           byName[(s.name || "").toLowerCase()] = {
             available: true,
-            url: s.url
+            url: s.url || s.link
           };
         });
         renderMarkers(byName);
+        renderStrip(byName);
         statusEl.textContent = "Live check complete.";
       } catch (err) {
         console.warn(err);
-        statusEl.textContent = "Could not reach backend — showing default markers.";
+        statusEl.textContent = "Could not reach backend — showing default map.";
         renderMarkers({});
+        renderStrip({});
       }
     }
 
-    (async function start(){
+    (async function start() {
       initMap();
-      await loadCourses();
-      renderMarkers({});
       // default date = today
-      const today = new Date().toISOString().slice(0,10);
-      document.getElementById("date").value = today;
+      document.getElementById("date").value = new Date().toISOString().slice(0, 10);
+      // load courses.json (your 20 WA courses)
+      const res = await fetch("/assets/courses.json");
+      courses = await res.json();
+      renderMarkers({});
+      renderStrip({});
     })();
 
     document.getElementById("searchBtn").addEventListener("click", doSearch);
