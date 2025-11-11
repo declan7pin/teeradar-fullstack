@@ -1,7 +1,6 @@
 // backend/server.js
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch"; // if your scrapers use it
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -10,10 +9,9 @@ import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ------------------------------------------------------------------
-// 1) simple in-memory users (TEMP for testing)
-// add more later or swap to DB
-// ------------------------------------------------------------------
+// -------------------------------------------------------------
+// TEMP in-memory users (for testing)
+// you already wanted this one:
 const users = [
   {
     email: "declan7pin@gmail.com",
@@ -23,13 +21,14 @@ const users = [
   }
 ];
 
-// ------------------------------------------------------------------
-// 2) load courses (your existing logic)
-// ------------------------------------------------------------------
+// store reset tokens in memory too
+const resetTokens = new Map(); // token -> email
+
+// -------------------------------------------------------------
+// load courses (your existing logic)
 const coursesPath = path.join(__dirname, "data", "courses.json");
 const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 
-// fill missing coords (Perth CBD default)
 const PERTH_LAT = -31.9523;
 const PERTH_LNG = 115.8613;
 const courses = rawCourses.map((c) => ({
@@ -38,31 +37,23 @@ const courses = rawCourses.map((c) => ({
   lng: typeof c.lng === "number" ? c.lng : PERTH_LNG
 }));
 
-// ------------------------------------------------------------------
-// 3) app + middleware
-// ------------------------------------------------------------------
+// -------------------------------------------------------------
+// app setup
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
 
-// serve frontend
+// serve frontend from /public
 app.use(express.static(path.join(__dirname, "..", "public")));
 
-// ------------------------------------------------------------------
-// 4) healthcheck
-// ------------------------------------------------------------------
 app.get("/health", (req, res) => {
   res.json({ status: "ok", courses: courses.length });
 });
 
-// ------------------------------------------------------------------
-// 5) AUTH ROUTES
-// ------------------------------------------------------------------
-
-// POST /api/signup
-// body: { email, password, name? }
+// -------------------------------------------------------------
+// AUTH: signup
 app.post("/api/signup", (req, res) => {
   const { email, password, name } = req.body || {};
   if (!email || !password) {
@@ -78,7 +69,7 @@ app.post("/api/signup", (req, res) => {
 
   const newUser = {
     email,
-    password, // NOTE: in prod, hash this!
+    password, // in real life: hash
     name: name || "",
     role: "user",
     adFree: false
@@ -95,8 +86,7 @@ app.post("/api/signup", (req, res) => {
   });
 });
 
-// POST /api/login
-// body: { email, password }
+// AUTH: login
 app.post("/api/login", (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
@@ -123,15 +113,62 @@ app.post("/api/login", (req, res) => {
   });
 });
 
-// optional: who am I
-app.get("/api/me", (req, res) => {
-  // later you can read from a token/cookie
-  res.json({ ok: true, user: null });
+// -------------------------------------------------------------
+// FORGOT PASSWORD
+function generateToken() {
+  return Math.random().toString(36).substring(2, 15);
+}
+
+app.post("/api/forgot-password", (req, res) => {
+  const { email } = req.body || {};
+  if (!email) {
+    return res.status(400).json({ error: "email required" });
+  }
+
+  const user = users.find(
+    (u) => u.email.toLowerCase() === email.toLowerCase()
+  );
+  if (!user) {
+    return res.status(404).json({ error: "No account found with that email." });
+  }
+
+  const token = generateToken();
+  resetTokens.set(token, email);
+
+  const resetLink = `${req.protocol}://${req.get("host")}/reset-password.html?token=${token}`;
+  console.log(`🪄 Password reset link for ${email}: ${resetLink}`);
+
+  // later: send by email instead of console
+  res.json({ ok: true, message: "Reset link created.", link: resetLink });
 });
 
-// ------------------------------------------------------------------
-// 6) SEARCH (your existing route)
-// ------------------------------------------------------------------
+// RESET PASSWORD
+app.post("/api/reset-password", (req, res) => {
+  const { token, newPassword } = req.body || {};
+  if (!token || !newPassword) {
+    return res.status(400).json({ error: "token and newPassword required" });
+  }
+
+  const email = resetTokens.get(token);
+  if (!email) {
+    return res.status(400).json({ error: "invalid or expired token" });
+  }
+
+  const user = users.find(
+    (u) => u.email.toLowerCase() === email.toLowerCase()
+  );
+  if (!user) {
+    return res.status(404).json({ error: "user not found" });
+  }
+
+  user.password = newPassword;
+  resetTokens.delete(token);
+
+  res.json({ ok: true, message: "Password updated." });
+});
+
+// -------------------------------------------------------------
+// SEARCH (your existing route)
 app.post("/api/search", async (req, res) => {
   try {
     const {
@@ -156,7 +193,6 @@ app.post("/api/search", async (req, res) => {
 
     console.log("🔍 search criteria:", criteria);
 
-    // scrape all courses in parallel
     const jobs = courses.map((course) => scrapeCourse(course, criteria));
     const settled = await Promise.allSettled(jobs);
     const slots = settled
@@ -170,10 +206,9 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
-// ------------------------------------------------------------------
-// 7) start server
-// ------------------------------------------------------------------
+// -------------------------------------------------------------
 app.listen(PORT, () => {
   console.log("✅ TeeRadar backend running on", PORT);
 });
+
 
