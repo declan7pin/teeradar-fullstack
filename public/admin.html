@@ -1,204 +1,81 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <title>TeeRadar — Admin Dashboard</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard - TeeRadar WA</title>
   <style>
-    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#f1f5f9; }
-    .top { background:#0f172a; color:#fff; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; }
-    .wrap { max-width:1000px; margin:20px auto; display:grid; grid-template-columns: 1.1fr 0.9fr; gap:16px; padding:0 16px; }
-    .card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 14px 6px; }
-    h3 { margin-top:0; }
-    table { width:100%; border-collapse:collapse; }
-    th, td { text-align:left; padding:6px 4px; font-size:13px; }
-    th { border-bottom:1px solid #e2e8f0; }
-    tr:not(:last-child) td { border-bottom:1px solid #f1f5f9; }
-    button { background:#0ea5e9; border:none; color:#fff; padding:4px 9px; border-radius:6px; cursor:pointer; font-size:12px; }
-    input { width:100%; padding:6px 8px; border-radius:6px; border:1px solid #cbd5e1; margin-bottom:8px; }
-    .tag { display:inline-block; background:#ecfdf3; color:#166534; font-size:11px; padding:2px 6px; border-radius:999px; }
-    .tag.red { background:#fee2e2; color:#b91c1c; }
-    @media (max-width: 900px) {
-      .wrap { grid-template-columns: 1fr; }
+    body {
+      font-family: "Poppins", sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+    }
+    header {
+      background: #0f766e;
+      color: white;
+      padding: 16px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .return-home {
+      background: white;
+      color: #0f766e;
+      padding: 6px 14px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .dashboard {
+      width: 90%;
+      margin: 20px auto;
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    h2 {
+      color: #0f766e;
+    }
+    footer {
+      background: #0f766e;
+      color: white;
+      text-align: center;
+      padding: 12px;
     }
   </style>
 </head>
 <body>
-  <div class="top">
-    <div>TeeRadar Admin</div>
-    <div>
-      <button onclick="window.location.href='/'">Home</button>
-      <button onclick="window.location.href='/book.html'">Bookings</button>
-      <button onclick="logout()">Logout</button>
-    </div>
+  <header>
+    <h1>TeeRadar Admin</h1>
+    <a href="/" class="return-home">Return Home</a>
+  </header>
+
+  <div class="dashboard">
+    <h2>Analytics Dashboard</h2>
+    <p><strong>Users Online:</strong> <span id="onlineCount">Loading...</span></p>
+    <p><strong>Total Subscriptions:</strong> <span id="subs">Loading...</span></p>
+    <p><strong>Recent Book Clicks:</strong> <span id="bookClicks">Loading...</span></p>
   </div>
 
-  <div class="wrap">
-    <div class="card">
-      <h3>Users</h3>
-      <p style="font-size:12px;color:#64748b;">Accounts stored in this browser. Later we can move this to backend.</p>
-      <table id="usersTable">
-        <thead>
-          <tr>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Subscription</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="usersBody"></tbody>
-      </table>
-    </div>
-
-    <div class="card">
-      <h3>Discount / free access</h3>
-      <p style="font-size:12px;color:#64748b;">Add an email here and tell them to log in — they’ll be treated as paid.</p>
-      <input id="discountEmail" placeholder="player@example.com">
-      <button onclick="addDiscount()">Add discount email</button>
-      <ul id="discountList" style="list-style:none;padding-left:0;margin-top:12px;"></ul>
-    </div>
-
-    <div class="card" style="grid-column:1/-1;">
-      <h3>Analytics</h3>
-      <p style="font-size:12px;color:#64748b;">Local metrics (per browser). For real reporting we can log to backend.</p>
-      <ul style="list-style:none;padding-left:0;font-size:13px;">
-        <li><strong>Subscriptions activated:</strong> <span id="aSubs">0</span></li>
-        <li><strong>Booking / course clicks:</strong> <span id="aCourse">0</span></li>
-        <li><strong>New visitors:</strong> <span id="aNew">0</span></li>
-        <li><strong>Ad clicks:</strong> <span id="aAdClicks">0</span></li>
-        <li><strong>Ad views:</strong> <span id="aAdViews">0</span></li>
-      </ul>
-    </div>
-  </div>
+  <footer>© 2025 TeeRadar WA — Admin</footer>
 
   <script>
-    const ADMIN_EMAIL = "declan7pin@gmail.com";
-
-    // gate
-    const loggedIn = localStorage.getItem('teeradar_member') === '1';
-    const role = localStorage.getItem('teeradar_role');
-    const email = localStorage.getItem('teeradar_email');
-    if (!loggedIn || role !== 'admin' || email !== ADMIN_EMAIL) {
-      window.location.href = "/login.html";
+    // ✅ ADMIN GUARD
+    const role = localStorage.getItem("teeradar_role");
+    const email = localStorage.getItem("teeradar_email");
+    if (role !== "admin" || email !== "declan7pin@gmail.com") {
+      alert("Admin access only");
+      window.location.href = "/";
     }
 
-    function getStore() {
-      try {
-        return JSON.parse(localStorage.getItem('teeradar_users')) || { users: {} };
-      } catch(e) {
-        return { users: {} };
-      }
-    }
-    function saveStore(store) {
-      localStorage.setItem('teeradar_users', JSON.stringify(store));
-    }
-
-    function renderUsers() {
-      const store = getStore();
-      const tbody = document.getElementById('usersBody');
-      tbody.innerHTML = '';
-      Object.entries(store.users).forEach(([email, data]) => {
-        const tr = document.createElement('tr');
-        const role = data.role || (email === ADMIN_EMAIL ? 'admin' : 'member');
-        const sub = data.subscription || (email === ADMIN_EMAIL ? 'active' : 'inactive');
-        tr.innerHTML = `
-          <td>${email}</td>
-          <td>${role === 'admin' ? '<span class="tag">admin</span>' : 'member'}</td>
-          <td>${sub === 'active' ? '<span class="tag">active</span>' : '<span class="tag red">inactive</span>'}</td>
-          <td><button onclick="toggleSub('${email}')">Toggle</button></td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    function toggleSub(email) {
-      const store = getStore();
-      const user = store.users[email];
-      if (!user) return;
-      user.subscription = user.subscription === 'active' ? 'inactive' : 'active';
-      saveStore(store);
-      renderUsers();
-    }
-
-    // discounts
-    const DISCOUNT_KEY = "teeradar_discount_emails";
-
-    function getDiscounts() {
-      try {
-        return JSON.parse(localStorage.getItem(DISCOUNT_KEY)) || [];
-      } catch(e) {
-        return [];
-      }
-    }
-    function saveDiscounts(list) {
-      localStorage.setItem(DISCOUNT_KEY, JSON.stringify(list));
-    }
-    function addDiscount() {
-      const val = document.getElementById('discountEmail').value.trim().toLowerCase();
-      if (!val) return;
-      const list = getDiscounts();
-      if (!list.includes(val)) {
-        list.push(val);
-        saveDiscounts(list);
-      }
-      document.getElementById('discountEmail').value = '';
-      renderDiscounts();
-    }
-    function renderDiscounts() {
-      const list = getDiscounts();
-      const ul = document.getElementById('discountList');
-      ul.innerHTML = '';
-      list.forEach(e => {
-        const li = document.createElement('li');
-        li.textContent = e;
-        li.style.fontSize = "12px";
-        li.onclick = () => {
-          if (confirm("Remove " + e + "?")) {
-            const newList = getDiscounts().filter(x => x !== e);
-            saveDiscounts(newList);
-            renderDiscounts();
-          }
-        };
-        ul.appendChild(li);
-      });
-    }
-
-    // analytics
-    function getAnalytics() {
-      try {
-        return JSON.parse(localStorage.getItem('teeradar_analytics')) || {
-          subs: 0,
-          courseClicks: 0,
-          newVisitors: 0,
-          adClicks: 0,
-          adViews: 0
-        };
-      } catch(e) {
-        return { subs:0, courseClicks:0, newVisitors:0, adClicks:0, adViews:0 };
-      }
-    }
-    function renderAnalytics() {
-      const a = getAnalytics();
-      document.getElementById('aSubs').textContent = a.subs || 0;
-      document.getElementById('aCourse').textContent = a.courseClicks || 0;
-      document.getElementById('aNew').textContent = a.newVisitors || 0;
-      document.getElementById('aAdClicks').textContent = a.adClicks || 0;
-      document.getElementById('aAdViews').textContent = a.adViews || 0;
-    }
-
-    function logout() {
-      localStorage.removeItem('teeradar_member');
-      localStorage.removeItem('teeradar_email');
-      localStorage.removeItem('teeradar_role');
-      window.location.href = "/login.html";
-    }
-
-    // init
-    renderUsers();
-    renderDiscounts();
-    renderAnalytics();
+    // Simulated stats
+    document.getElementById("onlineCount").innerText = Math.floor(Math.random() * 30) + 1;
+    document.getElementById("subs").innerText = Math.floor(Math.random() * 100) + 50;
+    document.getElementById("bookClicks").innerText = Math.floor(Math.random() * 200) + 150;
   </script>
 </body>
 </html>
+
 
 
