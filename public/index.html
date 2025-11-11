@@ -3,179 +3,159 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TeeRadar WA • Find Your Next Tee Time</title>
-  <link rel="icon" type="image/png" href="/assets/favicon.png" />
-
+  <title>TeeRadar WA • Find a tee time</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: "Inter", sans-serif;
-      background: #f9fafb;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #f1f5f9;
       color: #0f172a;
-      line-height: 1.5;
+      min-height: 100vh;
     }
 
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 20px 40px;
-      background: white;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      padding: 18px 40px;
+      background: #fff;
+      box-shadow: 0 2px 12px rgba(15,23,42,.05);
       position: sticky;
       top: 0;
-      z-index: 1000;
+      z-index: 10;
     }
-    header h2 {
-      font-size: 22px;
-      color: #0f766e;
+    .brand {
       font-weight: 700;
+      color: #0f766e;
+      font-size: 20px;
     }
-    header nav a {
+    nav a {
+      margin-left: 20px;
       text-decoration: none;
       color: #0f172a;
-      margin-left: 25px;
       font-weight: 500;
-      transition: 0.2s;
-    }
-    header nav a:hover {
-      color: #0f766e;
     }
 
-    /* Hero section */
+    /* HERO */
     .hero {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1.05fr .95fr;
+      gap: 32px;
+      padding: 50px 8% 70px;
       align-items: center;
-      padding: 60px 8%;
-      gap: 40px;
-      background: linear-gradient(180deg, #f9fafb 0%, #f1f5f9 100%);
+      background: radial-gradient(circle at top, #e2f3ff 0%, #f1f5f9 35%, #f1f5f9 100%);
     }
+
     .hero-left small {
+      display: inline-block;
       color: #0f766e;
+      margin-bottom: 12px;
       font-weight: 600;
-      letter-spacing: 0.5px;
     }
     .hero-left h1 {
-      font-size: 38px;
-      margin-top: 15px;
-      margin-bottom: 15px;
-      color: #0f172a;
-      line-height: 1.2;
+      font-size: 40px;
+      line-height: 1.05;
+      margin-bottom: 16px;
     }
     .hero-left p {
       color: #475569;
-      font-size: 16px;
-      margin-bottom: 30px;
-      max-width: 480px;
+      margin-bottom: 26px;
+      max-width: 500px;
     }
-    .hero-buttons {
-      display: flex;
-      gap: 15px;
-    }
+    .cta-row { display:flex; gap:12px; flex-wrap:wrap; }
     .btn-primary {
       background: #0f766e;
-      color: white;
-      padding: 12px 22px;
+      color: #fff;
       border: none;
-      border-radius: 8px;
-      cursor: pointer;
+      border-radius: 10px;
+      padding: 11px 16px;
       font-weight: 600;
-      transition: background 0.2s;
-    }
-    .btn-primary:hover {
-      background: #0d5d56;
+      cursor: pointer;
     }
     .btn-secondary {
       background: #e2e8f0;
       color: #0f172a;
-      padding: 12px 22px;
       border: none;
-      border-radius: 8px;
-      cursor: pointer;
+      border-radius: 10px;
+      padding: 11px 16px;
       font-weight: 600;
-      transition: 0.2s;
-    }
-    .btn-secondary:hover {
-      background: #cbd5e1;
+      cursor: pointer;
     }
 
-    /* The right hero card w/ image */
+    /* THIS is the card with your image */
     .hero-right-card {
       position: relative;
       border-radius: 24px;
       overflow: hidden;
       min-height: 280px;
-      box-shadow: 0 20px 40px rgba(15,23,42,.15);
-      background: #0f766e;
+      box-shadow: 0 18px 38px rgba(15,23,42,.12);
+      background: #166534; /* fallback if img fails */
     }
-
     .hero-img {
       width: 100%;
       height: 100%;
       object-fit: cover;
       display: block;
     }
-
     .info-pill {
       position: absolute;
       top: 14px; left: 14px;
-      background: rgba(255,255,255,0.9);
+      background: rgba(255,255,255,.9);
       border-radius: 12px;
-      padding: 7px 12px;
+      padding: 6px 10px;
       display: flex;
       gap: 8px;
       align-items: center;
       font-size: 12px;
     }
-
     .info-pill span {
       background: #bbf7d0;
-      width: 22px; height: 22px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 22px; height: 22px; border-radius: 999px;
+      display: flex; align-items: center; justify-content: center;
     }
-
     .hero-chip {
       position: absolute;
       bottom: 12px; right: 12px;
-      background: rgba(15,23,42,.55);
+      background: rgba(15,23,42,.6);
       color: #fff;
-      padding: 5px 12px;
+      padding: 5px 11px;
       border-radius: 999px;
       font-size: 11px;
     }
 
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px,1fr));
+      gap: 16px;
+      max-width: 1060px;
+      margin: 0 auto 70px;
+      padding: 0 8%;
+    }
+    .feature {
+      background: #fff;
+      border-radius: 16px;
+      padding: 14px 14px 16px;
+      box-shadow: 0 6px 18px rgba(15,23,42,.03);
+      border: 1px solid rgba(148,163,184,.15);
+    }
+    .feature-title { font-weight: 600; margin-bottom: 4px; }
+
     footer {
-      background: #0f172a;
-      color: #e2e8f0;
-      padding: 25px 40px;
       text-align: center;
-      font-size: 13px;
-      margin-top: 80px;
+      padding: 22px 16px 30px;
+      font-size: 12px;
+      color: #94a3b8;
     }
 
     @media (max-width: 900px) {
-      .hero {
-        grid-template-columns: 1fr;
-        padding: 40px 6%;
-      }
-      .hero-right-card {
-        min-height: 220px;
-      }
+      .hero { grid-template-columns: 1fr; }
+      .hero-right-card { min-height: 230px; }
     }
   </style>
 </head>
 <body>
-
   <header>
-    <h2>TeeRadar WA</h2>
+    <div class="brand">TeeRadar WA</div>
     <nav>
       <a href="/">Home</a>
       <a href="/book.html">Bookings</a>
@@ -184,36 +164,53 @@
     </nav>
   </header>
 
-  <!-- HERO -->
   <section class="hero">
     <div class="hero-left">
       <small>⛳ WA public courses • live booking links</small>
       <h1>Find a tee time across WA, all in one place.</h1>
       <p>Search live WA golf courses by date, number of players and 9/18 holes. Click through directly to the course’s official booking page.</p>
-      <div class="hero-buttons">
+      <div class="cta-row">
         <button class="btn-primary" onclick="window.location.href='/book.html'">Find a Tee Time</button>
-        <button class="btn-secondary" onclick="window.location.href='/faq.html'">How It Works</button>
+        <button class="btn-secondary" onclick="window.location.href='/faq.html'">How it works</button>
       </div>
     </div>
 
+    <!-- 👇 this is the bit that should show your photo -->
     <div class="hero-right-card">
-      <img src="/assets/hero_golf_bg.jpg" alt="Scenic golf course" class="hero-img" />
+      <img src="/assets/hero_golf_bg.jpg" alt="Scenic golf course" class="hero-img">
       <div class="info-pill">
-        <span>🌤</span>
+        <span>⛳</span>
         <div>
           <div style="font-weight:600;font-size:12px;">Live WA Courses</div>
-          <div style="font-size:11px;color:#475569;">Araluen • Collier • Whaleback • The Cut</div>
+          <div style="font-size:11px;color:#475569;">Araluen, Collier, Whaleback, The Cut…</div>
         </div>
       </div>
       <div class="hero-chip">Live course links</div>
     </div>
   </section>
 
-  <footer>
-    <p>© 2025 TeeRadar WA • All bookings link to official course websites • <a href="/terms.html" style="color:#38bdf8;text-decoration:none;">Terms & Conditions</a></p>
-  </footer>
+  <section class="features">
+    <div class="feature">
+      <div class="feature-title">Single search</div>
+      <p>One place instead of 12 course websites.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-title">Golf-friendly filters</div>
+      <p>Date, time window, 9/18 and players.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-title">Course-first booking</div>
+      <p>We send users to the course’s own page.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-title">Built to expand</div>
+      <p>WA now, other states later.</p>
+    </div>
+  </section>
 
+  <footer>
+    © <script>document.write(new Date().getFullYear())</script> TeeRadar WA • Availability subject to course sites.
+  </footer>
 </body>
 </html>
-
 
