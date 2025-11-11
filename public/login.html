@@ -1,101 +1,162 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <title>TeeRadar — Login</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login - TeeRadar WA</title>
   <style>
-    body { margin:0; background:#0f172a; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; }
-    .box { background:#fff; color:#0f172a; padding:22px 20px; border-radius:14px; width:min(360px,92vw); box-shadow:0 20px 40px rgba(15,23,42,.2); }
-    label { display:block; font-weight:600; margin-bottom:6px; }
-    input { width:100%; padding:8px 10px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:12px; }
-    button { width:100%; background:#0ea5e9; border:none; color:#fff; border-radius:8px; padding:9px 10px; font-size:15px; font-weight:600; cursor:pointer; }
-    .muted { font-size:12px; color:#475569; margin-top:10px; }
-    .link { color:#0ea5e9; cursor:pointer; }
+    body {
+      font-family: "Poppins", sans-serif;
+      background-color: #f7f7f7;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
 
-    #tc-banner {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      background: #0f172a; color: #fff;
-      padding: 10px 16px;
-      display: none;
-      justify-content: space-between; align-items: center; gap: 12px;
-      font-size: 12px; z-index: 9999;
+    .container {
+      background: white;
+      padding: 40px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      width: 90%;
+      max-width: 400px;
+      text-align: center;
     }
-    #tc-banner button {
-      background: #0ea5e9; border: none; border-radius: 999px; padding: 4px 10px; font-size: 11px; cursor: pointer;
+
+    h1 {
+      color: #0f766e;
+      margin-bottom: 10px;
     }
-    #tc-banner a { color: #fff; text-decoration: underline; }
-    @media (max-width: 600px) { #tc-banner { flex-direction: column; align-items: flex-start; } }
+
+    input {
+      width: 90%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+
+    button {
+      width: 95%;
+      padding: 12px;
+      border: none;
+      background: #0f766e;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      margin-top: 10px;
+    }
+
+    button:hover {
+      background: #115e59;
+    }
+
+    .switch-text {
+      margin-top: 14px;
+      font-size: 0.9rem;
+      color: #555;
+    }
+
+    .secondary-link {
+      background: none;
+      border: none;
+      color: #0f766e;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+    }
+
+    .secondary-link:hover {
+      color: #115e59;
+    }
+
+    .error {
+      color: red;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
-  <div class="box">
-    <h2 style="margin-top:0;">TeeRadar Login</h2>
-    <p style="font-size:13px;">Login to view booking map.</p>
-    <label for="email">Email</label>
-    <input id="email" type="email" placeholder="you@example.com" required>
-    <label for="pw">Password</label>
-    <input id="pw" type="password" placeholder="Enter password" required>
-    <button onclick="login()">Login</button>
-    <p class="muted"><span class="link" onclick="window.location.href='/'">← Back to home</span></p>
-  </div>
+  <div class="container">
+    <h1 id="formTitle">Login</h1>
+    <input type="email" id="email" placeholder="Email" />
+    <input type="password" id="password" placeholder="Password" />
+    <input type="text" id="name" placeholder="Full Name (only for signup)" style="display:none;" />
 
-  <!-- T&C banner -->
-  <div id="tc-banner">
-    <span>By using TeeRadar you agree to our Terms & Conditions.</span>
-    <div>
-      <a href="/terms.html" target="_blank" rel="noopener">View T&Cs</a>
-      <button onclick="dismissTC()">OK</button>
-    </div>
+    <button id="actionBtn">Login</button>
+    <p class="error" id="error"></p>
+
+    <p class="switch-text" id="switchText">
+      Don’t have an account?
+      <button class="secondary-link" id="switchBtn" type="button">Create one</button>
+    </p>
   </div>
 
   <script>
-    function getStore() {
-      try { return JSON.parse(localStorage.getItem('teeradar_users')) || { users:{} }; }
-      catch(e){ return { users:{} }; }
-    }
-    function saveStore(store){ localStorage.setItem('teeradar_users', JSON.stringify(store)); }
+    let isSignup = false;
 
-    const ADMIN_EMAIL="declan7pin@gmail.com";
-    const ADMIN_PASSWORD="Kelmscott1";
+    const actionBtn = document.getElementById("actionBtn");
+    const switchBtn = document.getElementById("switchBtn");
+    const formTitle = document.getElementById("formTitle");
+    const nameField = document.getElementById("name");
+    const error = document.getElementById("error");
 
-    (function ensureAdmin(){
-      const store=getStore();
-      if(!store.users[ADMIN_EMAIL]){
-        store.users[ADMIN_EMAIL]={ password:ADMIN_PASSWORD, role:"admin", subscription:"active" };
-        saveStore(store);
+    switchBtn.addEventListener("click", () => {
+      isSignup = !isSignup;
+      formTitle.textContent = isSignup ? "Create Account" : "Login";
+      actionBtn.textContent = isSignup ? "Sign Up" : "Login";
+      nameField.style.display = isSignup ? "block" : "none";
+      switchBtn.textContent = isSignup ? "Already have an account?" : "Create one";
+      error.textContent = "";
+    });
+
+    actionBtn.addEventListener("click", async () => {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const name = document.getElementById("name").value.trim();
+
+      if (!email || !password || (isSignup && !name)) {
+        error.textContent = "Please fill in all required fields.";
+        return;
       }
-    })();
 
-    function login(){
-      const email=document.getElementById('email').value.trim().toLowerCase();
-      const pw=document.getElementById('pw').value;
-      if(!email||!pw){ alert("Enter email and password"); return; }
-      const store=getStore();
-      let user=store.users[email];
-      if(!user){
-        user={ password:pw, role:"member", subscription:"active" };
-        store.users[email]=user; saveStore(store);
+      try {
+        const endpoint = isSignup ? "/api/signup" : "/api/login";
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, name }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          error.textContent = data.error || "Something went wrong.";
+          return;
+        }
+
+        // save user to localStorage
+        localStorage.setItem("teeradar_member", "1");
+        localStorage.setItem("teeradar_email", data.user.email);
+        localStorage.setItem("teeradar_role", data.user.role);
+
+        // redirect based on role
+        if (data.user.role === "admin") {
+          window.location.href = "/admin.html";
+        } else {
+          window.location.href = "/book.html";
+        }
+      } catch (err) {
+        console.error(err);
+        error.textContent = "Error connecting to server.";
       }
-      if(user.password!==pw){ alert("Incorrect password"); return; }
-
-      localStorage.setItem('teeradar_member','1');
-      localStorage.setItem('teeradar_email',email);
-      localStorage.setItem('teeradar_role',email===ADMIN_EMAIL?'admin':'member');
-
-      if(email===ADMIN_EMAIL) window.location.href="/admin.html";
-      else window.location.href="/book.html";
-    }
-
-    (function(){
-      if (!localStorage.getItem('teeradar_tc_ok')) {
-        document.getElementById('tc-banner').style.display = 'flex';
-      }
-    })();
-    function dismissTC(){
-      localStorage.setItem('teeradar_tc_ok','1');
-      document.getElementById('tc-banner').style.display='none';
-    }
+    });
   </script>
 </body>
 </html>
+
