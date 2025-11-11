@@ -3,204 +3,130 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TeeRadar WA • Find a tee time</title>
+  <title>TeeRadar WA</title>
+  <link rel="stylesheet" href="styles.css" />
   <style>
-    :root {
-      --brand: #0f766e;
-      --bg: #f1f5f9;
-      --text: #0f172a;
-      --muted: #475569;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
+      font-family: "Poppins", sans-serif;
+      margin: 0;
+      background-color: #f7f7f7;
+      color: #222;
     }
 
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 18px 40px;
-      background: #fff;
-      box-shadow: 0 2px 12px rgba(15,23,42,.05);
-      position: sticky;
-      top: 0;
-      z-index: 10;
+      padding: 16px 40px;
+      background: #0f766e;
+      color: white;
     }
+
     .brand {
-      font-weight: 700;
-      color: var(--brand);
-      font-size: 20px;
+      font-size: 1.6rem;
+      font-weight: bold;
+      letter-spacing: 1px;
     }
+
     nav a {
-      margin-left: 20px;
+      color: white;
       text-decoration: none;
-      color: var(--text);
+      margin: 0 14px;
       font-weight: 500;
     }
-    nav a:hover { color: var(--brand); }
 
-    /* hero */
+    nav a:hover {
+      text-decoration: underline;
+    }
+
+    nav a.login-btn {
+      background: white;
+      color: #0f766e;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-weight: 600;
+      margin-left: 12px;
+      text-decoration: none;
+    }
+
+    nav a.login-btn:hover {
+      background: #f0fdfa;
+    }
+
     .hero {
-      display: grid;
-      grid-template-columns: 1.05fr .95fr;
-      gap: 32px;
-      padding: 50px 8% 70px;
-      align-items: center;
-      background: radial-gradient(circle at top, #e2f3ff 0%, #f1f5f9 35%, #f1f5f9 100%);
-    }
-    .hero-left small {
-      display: inline-block;
-      color: var(--brand);
-      margin-bottom: 12px;
-      font-weight: 600;
-    }
-    .hero-left h1 {
-      font-size: 40px;
-      line-height: 1.05;
-      margin-bottom: 16px;
-    }
-    .hero-left p {
-      color: var(--muted);
-      margin-bottom: 26px;
-      max-width: 500px;
-    }
-
-    .hero-buttons {
+      background-image: url("assets/hero-golf.jpg");
+      background-size: cover;
+      background-position: center;
+      height: 80vh;
       display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    .btn-primary {
-      background: var(--brand);
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      padding: 14px 24px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: 0.15s ease-in-out;
-    }
-    .btn-primary:hover { background: #0d5d55; }
-
-    .btn-secondary {
-      background: #e2e8f0;
-      color: var(--text);
-      border: none;
-      border-radius: 10px;
-      padding: 14px 24px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: 0.15s ease-in-out;
-    }
-    .btn-secondary:hover { background: #cbd5e1; }
-
-    .btn-outline {
-      background-color: transparent;
-      color: var(--brand);
-      border: 2px solid var(--brand);
-      border-radius: 10px;
-      padding: 14px 24px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: 0.15s ease-in-out;
-    }
-    .btn-outline:hover {
-      background: var(--brand);
-      color: #fff;
-    }
-
-    /* right hero card */
-    .hero-right-card {
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      color: white;
       position: relative;
-      border-radius: 24px;
-      overflow: hidden;
-      min-height: 280px;
-      box-shadow: 0 18px 38px rgba(15,23,42,.12);
-      background: #166534; /* fallback */
-    }
-    .hero-img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-    .info-pill {
-      position: absolute;
-      top: 14px; left: 14px;
-      background: rgba(255,255,255,.9);
-      border-radius: 12px;
-      padding: 6px 10px;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      font-size: 12px;
-    }
-    .info-pill span {
-      background: #bbf7d0;
-      width: 22px; height: 22px; border-radius: 999px;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .hero-chip {
-      position: absolute;
-      bottom: 12px; right: 12px;
-      background: rgba(15,23,42,.6);
-      color: #fff;
-      padding: 5px 11px;
-      border-radius: 999px;
-      font-size: 11px;
     }
 
-    .features {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px,1fr));
-      gap: 16px;
-      max-width: 1060px;
-      margin: 0 auto 70px;
-      padding: 0 8%;
+    .hero::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.45);
     }
-    .feature {
-      background: #fff;
-      border-radius: 16px;
-      padding: 14px 14px 16px;
-      box-shadow: 0 6px 18px rgba(15,23,42,.03);
-      border: 1px solid rgba(148,163,184,.15);
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      max-width: 700px;
+      padding: 20px;
     }
-    .feature-title { font-weight: 600; margin-bottom: 4px; }
+
+    .hero-content h1 {
+      font-size: 2.8rem;
+      margin-bottom: 10px;
+    }
+
+    .hero-content p {
+      font-size: 1.2rem;
+      line-height: 1.6;
+    }
+
+    .cta-btn {
+      background: #10b981;
+      color: white;
+      border: none;
+      padding: 12px 28px;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 20px;
+      text-decoration: none;
+    }
+
+    .cta-btn:hover {
+      background: #059669;
+    }
 
     footer {
       text-align: center;
-      padding: 22px 16px 30px;
-      font-size: 12px;
-      color: #94a3b8;
+      padding: 18px;
+      background: #0f766e;
+      color: white;
     }
 
-    /* mobile tweaks */
-    @media (max-width: 900px) {
-      .hero {
-        grid-template-columns: 1fr;
-        padding: 40px 6% 60px;
-      }
-      .hero-left h1 {
-        font-size: 34px;
-      }
-    }
-
-    /* stack buttons on narrow screens */
-    @media (max-width: 720px) {
-      .hero-buttons {
+    @media (max-width: 768px) {
+      header {
         flex-direction: column;
-        align-items: stretch;
+        gap: 10px;
       }
-      .hero-buttons button {
-        width: 100%;
-        text-align: center;
+      .hero-content h1 {
+        font-size: 2.2rem;
+      }
+      .hero-content p {
+        font-size: 1rem;
       }
     }
   </style>
@@ -213,58 +139,23 @@
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
+      <a href="/login.html" class="login-btn">Login</a>
     </nav>
   </header>
 
   <section class="hero">
-    <div class="hero-left">
-      <small>⛳ WA public courses • live booking links</small>
-      <h1>Find a tee time across WA, all in one place.</h1>
-      <p>Search live WA golf courses by date, number of players and 9/18 holes. Click through directly to the course’s official booking page.</p>
-      <div class="hero-buttons">
-        <button class="btn-primary" onclick="window.location.href='/book.html'">Book a Tee Time</button>
-        <button class="btn-secondary" onclick="window.location.href='/faq.html'">How It Works</button>
-        <button class="btn-outline" onclick="window.location.href='/about.html'">About</button>
-      </div>
-    </div>
-
-    <div class="hero-right-card">
-      <!-- your golf image lives here -->
-      <img src="/assets/hero_golf_bg.jpg" alt="Scenic golf course" class="hero-img">
-      <div class="info-pill">
-        <span>⛳</span>
-        <div>
-          <div style="font-weight:600;font-size:12px;">Live WA Courses</div>
-          <div style="font-size:11px;color:#475569;">Araluen, Collier, Whaleback, The Cut…</div>
-        </div>
-      </div>
-      <div class="hero-chip">Live course links</div>
-    </div>
-  </section>
-
-  <section class="features">
-    <div class="feature">
-      <div class="feature-title">Single search</div>
-      <p>One place instead of 12 course websites.</p>
-    </div>
-    <div class="feature">
-      <div class="feature-title">Golf-friendly filters</div>
-      <p>Date, time window, 9/18 and players.</p>
-    </div>
-    <div class="feature">
-      <div class="feature-title">Course-first booking</div>
-      <p>We send users to the course’s own page.</p>
-    </div>
-    <div class="feature">
-      <div class="feature-title">Built to expand</div>
-      <p>WA now, other states later.</p>
+    <div class="hero-content">
+      <h1>Find and Compare Golf Tee Times Across Western Australia</h1>
+      <p>Instantly view availability, compare prices, and book directly through official course links.</p>
+      <a href="/book.html" class="cta-btn">Find Tee Times</a>
     </div>
   </section>
 
   <footer>
-    © <script>document.write(new Date().getFullYear())</script> TeeRadar WA • Availability subject to course sites. • <a href="/terms.html" style="color:#0f766e;text-decoration:none;">Terms</a>
+    © 2025 TeeRadar WA — All Rights Reserved
   </footer>
 </body>
 </html>
+
 
 
