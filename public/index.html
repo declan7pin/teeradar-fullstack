@@ -1,292 +1,219 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <title>TeeRadar — WA tee times</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <style>
-    :root {
-      --page-bg: radial-gradient(circle at top, #dff2ff 0%, #f6f7f4 55%, #f6f7f4 100%);
-      --ink: #0f172a;
-      --muted: #64748b;
-      --brand: #0ea5e9;
-      --accent: #16a34a;
-    }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TeeRadar WA • Find Your Next Tee Time</title>
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
 
-    body {
+  <style>
+    * {
+      box-sizing: border-box;
       margin: 0;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: var(--page-bg);
-      color: var(--ink);
-      min-height: 100vh;
+      padding: 0;
+    }
+    body {
+      font-family: "Inter", sans-serif;
+      background: #f9fafb;
+      color: #0f172a;
+      line-height: 1.5;
     }
 
     header {
-      position: sticky;
-      top: 0;
-      background: rgba(255,255,255,0.6);
-      backdrop-filter: blur(8px);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 14px 16px;
-      border-bottom: 1px solid rgba(148,163,184,.2);
-      z-index: 50;
+      padding: 20px 40px;
+      background: white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    header h2 {
+      font-size: 22px;
+      color: #0f766e;
+      font-weight: 700;
+    }
+    header nav a {
+      text-decoration: none;
+      color: #0f172a;
+      margin-left: 25px;
+      font-weight: 500;
+      transition: 0.2s;
+    }
+    header nav a:hover {
+      color: #0f766e;
     }
 
-    .brand {
-      display:flex;
-      gap:10px;
-      align-items:center;
-      font-weight:700;
-      letter-spacing:-.02em;
-    }
-    .brand-circle {
-      width:30px;height:30px;border-radius:999px;
-      background:linear-gradient(135deg,#16a34a 0%,#0ea5e9 100%);
-      box-shadow:0 6px 16px rgba(14,165,233,.3);
-    }
-
-    .top-actions button {
-      background:#0f172a;
-      color:#fff;
-      border:none;
-      border-radius:999px;
-      padding:7px 15px;
-      font-weight:600;
-      cursor:pointer;
-    }
-
+    /* Hero section */
     .hero {
-      max-width:1120px;
-      margin:44px auto;
-      padding:0 16px;
-      display:grid;
-      grid-template-columns:1.1fr .9fr;
-      gap:26px;
-      align-items:center;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      padding: 60px 8%;
+      gap: 40px;
+      background: linear-gradient(180deg, #f9fafb 0%, #f1f5f9 100%);
     }
-
     .hero-left small {
-      display:inline-block;
-      font-size:11px;
-      background:rgba(14,165,233,.08);
-      border:1px solid rgba(14,165,233,.2);
-      padding:4px 10px;
-      border-radius:999px;
-      color:#0369a1;
-      margin-bottom:12px;
+      color: #0f766e;
+      font-weight: 600;
+      letter-spacing: 0.5px;
     }
-
     .hero-left h1 {
-      font-size:clamp(2.2rem,4vw,2.9rem);
-      line-height:1.05;
-      margin:0 0 10px;
+      font-size: 38px;
+      margin-top: 15px;
+      margin-bottom: 15px;
+      color: #0f172a;
+      line-height: 1.2;
     }
-
     .hero-left p {
-      color:var(--muted);
-      font-size:15px;
-      line-height:1.55;
-      max-width:520px;
+      color: #475569;
+      font-size: 16px;
+      margin-bottom: 30px;
+      max-width: 480px;
     }
-
     .hero-buttons {
-      margin-top:20px;
-      display:flex;
-      gap:12px;
-      flex-wrap:wrap;
+      display: flex;
+      gap: 15px;
     }
-
     .btn-primary {
-      background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);
-      border:none;
-      border-radius:14px;
-      color:#fff;
-      font-weight:600;
-      padding:10px 16px;
-      box-shadow:0 10px 22px rgba(14,165,233,.25);
-      cursor:pointer;
+      background: #0f766e;
+      color: white;
+      padding: 12px 22px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
     }
-
+    .btn-primary:hover {
+      background: #0d5d56;
+    }
     .btn-secondary {
-      background:#fff;
-      border:1px solid rgba(148,163,184,.2);
-      border-radius:14px;
-      padding:10px 14px;
-      font-weight:600;
-      cursor:pointer;
+      background: #e2e8f0;
+      color: #0f172a;
+      padding: 12px 22px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: 0.2s;
+    }
+    .btn-secondary:hover {
+      background: #cbd5e1;
     }
 
-    .hero-right {
-      background:
-        linear-gradient(170deg, rgba(0,0,0,.2) 0%, rgba(0,0,0,.55) 100%),
-        url("/assets/hero_golf_bg.jpg") center/cover no-repeat;
-      border-radius:24px;
-      min-height:270px;
-      box-shadow:0 20px 40px rgba(15,23,42,.15);
-      animation:fadeIn 1.6s ease-out;
-      position:relative;
-      overflow:hidden;
+    /* The right hero card w/ image */
+    .hero-right-card {
+      position: relative;
+      border-radius: 24px;
+      overflow: hidden;
+      min-height: 280px;
+      box-shadow: 0 20px 40px rgba(15,23,42,.15);
+      background: #0f766e;
+    }
+
+    .hero-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
 
     .info-pill {
-      position:absolute;
-      top:14px; left:14px;
-      background:rgba(255,255,255,0.9);
-      border-radius:12px;
-      padding:7px 12px;
-      display:flex;
-      align-items:center;
-      gap:8px;
-      font-size:12px;
+      position: absolute;
+      top: 14px; left: 14px;
+      background: rgba(255,255,255,0.9);
+      border-radius: 12px;
+      padding: 7px 12px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
     }
+
     .info-pill span {
-      background:#bbf7d0;
-      border-radius:50%;
-      width:22px;height:22px;
-      display:flex;align-items:center;justify-content:center;
+      background: #bbf7d0;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    .hero-right::after {
-      content:"Live course links";
-      position:absolute;
-      bottom:12px; right:12px;
-      font-size:11px;
-      background:rgba(15,23,42,0.5);
-      color:#fff;
-      padding:5px 10px;
-      border-radius:999px;
+    .hero-chip {
+      position: absolute;
+      bottom: 12px; right: 12px;
+      background: rgba(15,23,42,.55);
+      color: #fff;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 11px;
     }
-
-    .feature-row {
-      max-width:1120px;
-      margin:32px auto 72px;
-      padding:0 16px;
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-      gap:16px;
-    }
-
-    .feature {
-      background:rgba(255,255,255,0.7);
-      border-radius:16px;
-      padding:16px;
-      border:1px solid rgba(148,163,184,.25);
-      box-shadow:0 10px 30px rgba(15,23,42,.05);
-    }
-    .feature-title { font-weight:600; margin-bottom:4px; }
-    .feature small { color:var(--muted); }
 
     footer {
-      text-align:center;
-      font-size:12px;
-      color:#94a3b8;
-      padding:18px 16px 32px;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 25px 40px;
+      text-align: center;
+      font-size: 13px;
+      margin-top: 80px;
     }
 
-    #tc-banner {
-      position:fixed;
-      bottom:0;left:0;right:0;
-      background:#0f172a;
-      color:#fff;
-      padding:10px 16px;
-      font-size:12px;
-      display:none;
-      justify-content:space-between;
-      align-items:center;
-      z-index:9999;
-    }
-
-    #tc-banner a {color:#fff;text-decoration:underline;}
-    #tc-banner button {
-      background:#0ea5e9;
-      border:none;
-      border-radius:999px;
-      padding:4px 10px;
-      font-size:11px;
-      cursor:pointer;
-    }
-
-    @keyframes fadeIn {
-      from {opacity:0; transform:scale(1.03);}
-      to {opacity:1; transform:scale(1);}
-    }
-
-    @media(max-width:900px){
-      .hero {grid-template-columns:1fr;}
-      .hero-right {min-height:220px;}
-    }
-    @media(max-width:600px){
-      #tc-banner{flex-direction:column;align-items:flex-start;}
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+        padding: 40px 6%;
+      }
+      .hero-right-card {
+        min-height: 220px;
+      }
     }
   </style>
 </head>
 <body>
-<header>
-  <div class="brand">
-    <div class="brand-circle"></div>
-    <span>TeeRadar</span>
-  </div>
-  <div class="top-actions">
-    <button onclick="window.location.href='/login.html'">Login</button>
-  </div>
-</header>
 
-<section class="hero">
-  <div class="hero-left">
-    <small>⛳ WA public courses • real links</small>
-    <h1>Find a tee time across WA, in one place.</h1>
-    <p>We point you straight to the course’s booking page — filter by date, time, 9/18 holes and players. Built to scale to all Australian courses.</p>
-    <div class="hero-buttons">
-      <button class="btn-primary" onclick="window.location.href='/book.html'">Book a tee time</button>
-      <button class="btn-secondary" onclick="window.location.href='/faq.html'">How it works</button>
+  <header>
+    <h2>TeeRadar WA</h2>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/book.html">Bookings</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/about.html">About</a>
+    </nav>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-left">
+      <small>⛳ WA public courses • live booking links</small>
+      <h1>Find a tee time across WA, all in one place.</h1>
+      <p>Search live WA golf courses by date, number of players and 9/18 holes. Click through directly to the course’s official booking page.</p>
+      <div class="hero-buttons">
+        <button class="btn-primary" onclick="window.location.href='/book.html'">Find a Tee Time</button>
+        <button class="btn-secondary" onclick="window.location.href='/faq.html'">How It Works</button>
+      </div>
     </div>
-  </div>
-  <div class="hero-right">
-    <div class="info-pill"><span>⛳</span>Live WA courses: Araluen, Collier, Whaleback…</div>
-  </div>
-</section>
 
-<section class="feature-row">
-  <div class="feature">
-    <div class="feature-title">Single search</div>
-    <small>One place instead of 12 different course sites.</small>
-  </div>
-  <div class="feature">
-    <div class="feature-title">Filters that match golf</div>
-    <small>Date, time window, 9/18 and player count.</small>
-  </div>
-  <div class="feature">
-    <div class="feature-title">Course-first booking</div>
-    <small>We send the golfer to the course’s own page.</small>
-  </div>
-  <div class="feature">
-    <div class="feature-title">Ready to expand</div>
-    <small>WA now, all Australian states later.</small>
-  </div>
-</section>
+    <div class="hero-right-card">
+      <img src="/assets/hero_golf_bg.jpg" alt="Scenic golf course" class="hero-img" />
+      <div class="info-pill">
+        <span>🌤</span>
+        <div>
+          <div style="font-weight:600;font-size:12px;">Live WA Courses</div>
+          <div style="font-size:11px;color:#475569;">Araluen • Collier • Whaleback • The Cut</div>
+        </div>
+      </div>
+      <div class="hero-chip">Live course links</div>
+    </div>
+  </section>
 
-<footer>
-  © <script>document.write(new Date().getFullYear())</script> TeeRadar • Availability subject to course sites.
-</footer>
+  <footer>
+    <p>© 2025 TeeRadar WA • All bookings link to official course websites • <a href="/terms.html" style="color:#38bdf8;text-decoration:none;">Terms & Conditions</a></p>
+  </footer>
 
-<div id="tc-banner">
-  <span>By using TeeRadar you agree to our Terms & Conditions.</span>
-  <div>
-    <a href="/terms.html" target="_blank">View T&Cs</a>
-    <button onclick="dismissTC()">OK</button>
-  </div>
-</div>
-
-<script>
-  if (!localStorage.getItem('teeradar_tc_ok'))
-    document.getElementById('tc-banner').style.display = 'flex';
-  function dismissTC(){
-    localStorage.setItem('teeradar_tc_ok','1');
-    document.getElementById('tc-banner').style.display='none';
-  }
-</script>
 </body>
 </html>
+
 
