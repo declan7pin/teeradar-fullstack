@@ -1,82 +1,137 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <title>TeeRadar — FAQ</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FAQ • TeeRadar WA</title>
   <style>
-    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#f6f7f4; }
-    header { background:#fff; border-bottom:1px solid #e2e8f0; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; }
-    a { text-decoration:none; color:#0ea5e9; }
-    .wrap { max-width: 900px; margin: 26px auto; background:#fff; border-radius:16px; border:1px solid #e2e8f0; padding:20px; }
-    h1 { margin-top:0; }
-    .qa { margin-bottom:18px; }
-    .q { font-weight:700; }
-    .pill { background:#0f172a; color:#fff; padding:6px 12px; border-radius:999px; }
+    :root {
+      --green: #0f766e;
+      --muted: #475569;
+      --bg: #f7f7f7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Poppins", sans-serif;
+      background: var(--bg);
+      color: #0f172a;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 40px;
+      background: var(--green);
+      color: white;
+    }
+    .brand { font-size: 1.6rem; font-weight: 700; }
+    nav a {
+      color: white;
+      text-decoration: none;
+      margin-left: 14px;
+      font-weight: 500;
+    }
+    nav a:hover { text-decoration: underline; }
+
+    .wrapper {
+      max-width: 980px;
+      margin: 50px auto 70px;
+      background: white;
+      padding: 28px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.03);
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 20px;
+    }
+
+    .faq-item {
+      margin-bottom: 18px;
+    }
+    .faq-item h3 {
+      font-size: 1.1rem;
+      margin-bottom: 4px;
+      color: #0f172a;
+    }
+    .faq-item p {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    footer {
+      background: #0f766e;
+      color: #fff;
+      text-align: center;
+      padding: 16px;
+      margin-top: auto;
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 720px) {
+      header { flex-direction: column; gap: 10px; }
+      .wrapper { margin: 30px 16px 60px; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <div><span class="pill">TeeRadar</span></div>
+    <div class="brand">TeeRadar WA</div>
     <nav>
-      <a href="/">Home</a> •
-      <a href="/book.html">Book</a> •
-      <a href="/login.html">Log in</a>
+      <a href="/">Home</a>
+      <a href="/book.html">Bookings</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/about.html">About</a>
+      <a href="/login.html">Login</a>
     </nav>
   </header>
 
-  <main class="wrap">
+  <main class="wrapper">
     <h1>Frequently Asked Questions</h1>
 
-    <div class="qa">
-      <div class="q">What does TeeRadar do right now?</div>
-      <div>We show WA golf courses on a map, try to read their public booking pages, and send you straight to the course’s own booking page to finish the booking.</div>
+    <div class="faq-item">
+      <h3>Do I book on TeeRadar?</h3>
+      <p>No — TeeRadar shows you courses that match your filters and then sends you straight to the course’s official booking page. That way pricing, payment, carts and conditions are always up to date.</p>
     </div>
 
-    <div class="qa">
-      <div class="q">Why are most courses in Western Australia?</div>
-      <div>We started with WA because many public/resort courses use similar booking systems (MiClub, Quick18, etc.). Once we have traffic and course-level approval, we can add other states.</div>
+    <div class="faq-item">
+      <h3>Why do I have to log in?</h3>
+      <p>We block guests from going past the home page so we can keep scraping/collecting course availability without abuse. Logging in also lets us remember your preferences and later show ad-free or discounted access.</p>
     </div>
 
-    <div class="qa">
-      <div class="q">Why do I need to subscribe?</div>
-      <div>Guests can browse the map, but subscribers get direct booking links and future features (saved home course, faster lookups). Intro price is <strong>$5/month for 3 months</strong>, then <strong>$10/month</strong>.</div>
+    <div class="faq-item">
+      <h3>Why does it sometimes say available when the course page is different?</h3>
+      <p>We read the course’s public timesheet formats (MiClub, Quick18, etc.). If the course changes their page layout or adds reCAPTCHA, we may only be able to show the course but not confirm the exact slot. In that case, click through to the course page.</p>
     </div>
 
-    <div class="qa">
-      <div class="q">Can I get a discount?</div>
-      <div>Yes — the owner can add certain emails to a discount list. If your email is on the list, the login page will show your discounted rate.</div>
+    <div class="faq-item">
+      <h3>Which courses are included?</h3>
+      <p>We started with public courses in WA — including Araluen, Collier Park, Whaleback, The Cut, Secret Harbour, Sun City and others you added — and we’re expanding. The map will keep growing as we add more booking links.</p>
     </div>
 
-    <div class="qa">
-      <div class="q">Some courses say “phone bookings only”. Why?</div>
-      <div>Those courses don’t expose an online timesheet. We still show them on the map so golfers know they exist, and we give the phone number so you can call.</div>
+    <div class="faq-item">
+      <h3>Will this support all of Australia?</h3>
+      <p>Yes — the structure already supports expanding to other states. Once we have enough usage to request official API access from the course platforms, we can make it more real-time and national.</p>
     </div>
 
-    <div class="qa">
-      <div class="q">Why does the availability check take a few seconds?</div>
-      <div>When you click Search, we visit each course URL in your WA list and try to read the times for the date you chose. That’s 15–20 websites sometimes, so we show a loading bar while that runs.</div>
+    <div class="faq-item">
+      <h3>Why do some courses show a phone number instead?</h3>
+      <p>A few WA courses only take bookings over the phone. We still show them on the map so golfers know they exist, and we display the phone number directly.</p>
     </div>
 
-    <div class="qa">
-      <div class="q">Does TeeRadar actually book for me?</div>
-      <div>No. We send you to the course’s own booking page with the right date and course. This keeps the course in control and makes API approval easier later.</div>
-    </div>
-
-    <div class="qa">
-      <div class="q">Can I set my home course?</div>
-      <div>Yes — that feature is being wired into the booking page so the map can centre on your home course automatically.</div>
-    </div>
-
-    <div class="qa">
-      <div class="q">What happens if a course URL changes?</div>
-      <div>Then it may show as unavailable. You can update the course JSON in the backend to fix it.</div>
-    </div>
-
-    <div class="qa">
-      <div class="q">How do I contact you?</div>
-      <div>You can add a “Contact us” page later — for now, update the footer or FAQ with your preferred email.</div>
+    <div class="faq-item">
+      <h3>Does TeeRadar charge me?</h3>
+      <p>Right now we’re testing access free. Later we may add optional subscriptions for ad-free access and extra features.</p>
     </div>
   </main>
+
+  <footer>
+    © <script>document.write(new Date().getFullYear())</script> TeeRadar WA • Availability subject to course sites.
+  </footer>
 </body>
 </html>
+
