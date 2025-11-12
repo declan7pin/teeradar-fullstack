@@ -1,0 +1,41 @@
+{
+  "Whaleback Golf Course": { "9": "1500344725", "18": "1500344723" },
+  "Collier Park Golf Course": { "9": "1500323733", "18": "1500257612" },
+  "Araluen Estate": { "9": "102808", "18": "102807" },
+
+  "Sun City Country Club": { "9": "7301311", "18": "7301269" },
+
+  "The Cut Golf Course": {
+    "9": "247607",
+    "18": "247589",
+    "9_cart": "6011827",
+    "18_cart": "6011789"
+  },
+
+  "Secret Harbour Golf Links": { "9": "12449", "18": "12445" },
+
+  "Meadow Springs Golf & Country Club": {
+    "9": "337074",
+    "18": "337072",
+    "9_weekend": "337075",
+    "18_weekend": "337073"
+  },
+
+  "Kwinana Golf Club": { "9": "1502727564", "18": "1505795368" },
+
+  "Marangaroo Golf Course": { "9": "1500406575", "18": "1500406571" },
+
+  "Joondalup Resort Golf": {
+    "9_cart": "1508504524",
+    "18_cart": "1508198355"
+  },
+
+  "The Vines Resort & Country Club": {
+    "9": "22289426",
+    "18": "22284292",
+    "9_cart": "24488670",
+    "18_cart": "24488643"
+  }
+
+  /* Hamersley is Quick18 → no feeGroupId; others “Info/Phone” don’t use it */
+}
