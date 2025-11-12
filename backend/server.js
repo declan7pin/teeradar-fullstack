@@ -15,17 +15,15 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// serve the frontend (adjust if your public folder is elsewhere)
+// serve frontend
 app.use(express.static(path.join(__dirname, "..", "public")));
 
-// load courses once at startup
-const coursesPath = path.join(__dirname, "data", "courses.json");
-const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
-
-// in case some coords are missing
+// load course list
 const PERTH_LAT = -31.9523;
 const PERTH_LNG = 115.8613;
-const courses = rawCourses.map((c) => ({
+const coursesPath = path.join(__dirname, "data", "courses.json");
+const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
+const courses = rawCourses.map(c => ({
   ...c,
   lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
   lng: typeof c.lng === "number" ? c.lng : PERTH_LNG
@@ -33,6 +31,11 @@ const courses = rawCourses.map((c) => ({
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", courses: courses.length });
+});
+
+// single source of truth for front-end
+app.get("/api/courses", (req, res) => {
+  res.json(courses);
 });
 
 app.post("/api/search", async (req, res) => {
@@ -45,9 +48,7 @@ app.post("/api/search", async (req, res) => {
       partySize = 1
     } = req.body || {};
 
-    if (!date) {
-      return res.status(400).json({ error: "date is required" });
-    }
+    if (!date) return res.status(400).json({ error: "date is required" });
 
     const criteria = {
       date,
@@ -57,13 +58,12 @@ app.post("/api/search", async (req, res) => {
       partySize: Number(partySize) || 1
     };
 
-    // run scrapes in parallel
-    const jobs = courses.map((course) => scrapeCourse(course, criteria));
+    const jobs = courses.map(c => scrapeCourse(c, criteria));
     const settled = await Promise.allSettled(jobs);
 
     const slots = settled
-      .filter((r) => r.status === "fulfilled")
-      .flatMap((r) => r.value || []);
+      .filter(r => r.status === "fulfilled")
+      .flatMap(r => r.value || []);
 
     res.json({ slots });
   } catch (err) {
@@ -73,7 +73,7 @@ app.post("/api/search", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("✅ TeeRadar backend running on port", PORT);
+  console.log("✅ TeeRadar backend running on", PORT);
 });
 
 
