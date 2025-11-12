@@ -29,11 +29,18 @@ const courses = rawCourses.map(c => ({
   lng: typeof c.lng === "number" ? c.lng : PERTH_LNG
 }));
 
+// load fee group mappings
+const feeGroupsPath = path.join(__dirname, "data", "fee_groups.json");
+let feeGroups = {};
+if (fs.existsSync(feeGroupsPath)) {
+  feeGroups = JSON.parse(fs.readFileSync(feeGroupsPath, "utf8"));
+}
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok", courses: courses.length });
 });
 
-// single source of truth for front-end
+// single source for front-end
 app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
@@ -58,7 +65,7 @@ app.post("/api/search", async (req, res) => {
       partySize: Number(partySize) || 1
     };
 
-    const jobs = courses.map(c => scrapeCourse(c, criteria));
+    const jobs = courses.map(c => scrapeCourse(c, criteria, feeGroups));
     const settled = await Promise.allSettled(jobs);
 
     const slots = settled
@@ -75,5 +82,6 @@ app.post("/api/search", async (req, res) => {
 app.listen(PORT, () => {
   console.log("✅ TeeRadar backend running on", PORT);
 });
+
 
 
