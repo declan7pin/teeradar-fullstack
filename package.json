@@ -1,10 +1,9 @@
 {
   "name": "teeradar-wa-full",
   "version": "1.0.0",
-  "description": "Fullstack TeeRadar WA Golf Booking Aggregator",
-  "main": "backend/server.js",
-  "type": "module",
+  "description": "TeeRadar WA — public golf courses search & links",
   "private": true,
+  "type": "module",
   "scripts": {
     "start": "node backend/server.js",
     "dev": "nodemon backend/server.js"
@@ -19,8 +18,7 @@
   },
   "engines": {
     "node": ">=18.x"
-  },
-  "author": "TeeRadar WA",
-  "license": "MIT"
+  }
 }
+
 
