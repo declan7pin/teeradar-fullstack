@@ -1,223 +1,107 @@
 // backend/scrapers/scrapeCourse.js
-import * as cheerio from "cheerio";
+import fetch from "node-fetch";
 
-// small helper
-function baseReturn(course, date, available, bookingUrl, extra = {}) {
+/**
+ * Turn 2025-11-05 into 20251105
+ */
+function toCompactDate(dateStr) {
+  return dateStr.replace(/-/g, "");
+}
+
+/**
+ * For MiClub URLs we saw:
+ *  ...ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-05
+ * We'll just replace selectedDate if it exists, or append it.
+ */
+function buildMiClubUrl(baseUrl, date) {
+  if (!baseUrl) return "";
+  const u = new URL(baseUrl);
+  // if there's selectedDate already, overwrite
+  if (u.searchParams.has("selectedDate")) {
+    u.searchParams.set("selectedDate", date);
+  } else {
+    u.searchParams.append("selectedDate", date);
+  }
+  return u.toString();
+}
+
+/**
+ * For quick18 (Hamersley) we saw:
+ *  https://hamersley.quick18.com/teetimes/searchmatrix?teedate=20251105
+ */
+function buildQuick18Url(baseUrl, date) {
+  if (!baseUrl) return "";
+  const u = new URL(baseUrl);
+  u.searchParams.set("teedate", toCompactDate(date));
+  return u.toString();
+}
+
+/**
+ * Very light "scrape" - we're not doing deep HTML parsing here.
+ * We'll just check if the page loaded. Frontend will still have the real link.
+ */
+export async function scrapeCourse(course, criteria) {
+  const { date, earliest, latest, holes, partySize } = criteria;
+
+  // phone-only courses -> no scraping, just return a "call" slot
+  if (course.phoneOnly) {
+    return [
+      {
+        name: course.name,
+        provider: course.provider || "Phone",
+        lat: course.lat,
+        lng: course.lng,
+        available: true,
+        time: null,
+        holes: null,
+        spots: null,
+        bookingUrl: `tel:${course.phone}`,
+        phone: course.phone,
+        note: "Phone booking only"
+      }
+    ];
+  }
+
+  // build the right URL for the provider
+  let finalUrl = course.url;
+  try {
+    if (course.provider === "MiClub") {
+      finalUrl = buildMiClubUrl(course.url, date);
+    } else if (course.provider === "Quick18") {
+      finalUrl = buildQuick18Url(course.url, date);
+    }
+  } catch (e) {
+    // if URL building fails, we'll fall back to base URL
+    finalUrl = course.url;
+  }
+
+  // try to fetch
+  let ok = false;
+  try {
+    const resp = await fetch(finalUrl, { method: "GET" });
+    ok = resp.ok;
+    // we could inspect HTML here for specific time strings,
+    // but most of these pages are dynamic/protected, so we just mark as reachable.
+  } catch (err) {
+    ok = false;
+  }
+
   return [
     {
-      course: course.name,
+      name: course.name,
       provider: course.provider,
-      available,
-      bookingUrl,
       lat: course.lat,
       lng: course.lng,
-      city: course.city,
-      state: course.state,
-      ...extra
+      // say it's available only if we could reach the page
+      available: ok,
+      // we keep the user's filters so the frontend can display them
+      timeWindow: { earliest, latest },
+      holesRequested: holes || "",
+      spots: partySize,
+      bookingUrl: finalUrl
     }
   ];
 }
 
-function toMinutes(t) {
-  if (!t) return null;
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function detectSpotsFromText(text) {
-  const m = text.match(/(\d+)\s*(spots|left|available|avail|players)?/i);
-  if (m) {
-    const n = parseInt(m[1], 10);
-    if (!isNaN(n)) return n;
-  }
-  return null;
-}
-
-// choose right URL based on holes and special courses
-function pickCourseUrl(course, { date, holes }) {
-  const day = date ? new Date(date + "T00:00:00") : null;
-  const isWeekend = day ? day.getDay() === 0 || day.getDay() === 6 : false;
-
-  // Meadow Springs special
-  if (course.name && course.name.toLowerCase().includes("meadow springs")) {
-    if (holes === "9") {
-      if (isWeekend && course.bookingBase9_weekend) return course.bookingBase9_weekend;
-      if (!isWeekend && course.bookingBase9_weekday) return course.bookingBase9_weekday;
-    } else if (holes === "18") {
-      if (isWeekend && course.bookingBase18_weekend) return course.bookingBase18_weekend;
-      if (!isWeekend && course.bookingBase18_weekday) return course.bookingBase18_weekday;
-    }
-  }
-
-  // generic 9/18
-  if (holes === "9" && course.bookingBase9) return course.bookingBase9;
-  if (holes === "18" && course.bookingBase18) return course.bookingBase18;
-
-  // fallback
-  return (
-    course.bookingBase ||
-    course.bookingBase18 ||
-    course.bookingBase9 ||
-    null
-  );
-}
-
-export async function scrapeCourse(course, criteria) {
-  const {
-    date,
-    earliest = "06:00",
-    latest = "17:00",
-    partySize = 1,
-    holes = ""
-  } = criteria;
-
-  // phone-only: return right away
-  if (course.bookingType === "phone" || course.provider === "Phone") {
-    return baseReturn(course, date, false, null, {
-      note: "phone-only",
-      phone: course.phone || course.contact || ""
-    });
-  }
-
-  let url = pickCourseUrl(course, { date, holes });
-
-  // link-only
-  if (course.provider === "GolfBooking") {
-    return baseReturn(course, date, false, url, { note: "link-only provider" });
-  }
-
-  // quick18
-  if (course.provider === "Quick18") {
-    if (!url) return baseReturn(course, date, false, null, { reason: "no url" });
-    url = url.replace("YYYYMMDD", date.replace(/-/g, ""));
-    try {
-      const r = await fetch(url, { headers: { "User-Agent": "TeeRadar/1.0" } });
-      if (r.ok) {
-        return baseReturn(course, date, false, url, {
-          reachable: true,
-          confidence: "unknown"
-        });
-      }
-      return baseReturn(course, date, false, url, { reachable: false });
-    } catch (e) {
-      return baseReturn(course, date, false, url, { error: e.message });
-    }
-  }
-
-  // MiClub
-  if (course.provider === "MiClub") {
-    if (!url) return baseReturn(course, date, false, null, { reason: "no url" });
-    url = url.replace("YYYY-MM-DD", date);
-
-    try {
-      const resp = await fetch(url, {
-        headers: {
-          "User-Agent": "TeeRadar/1.0",
-          "Accept": "text/html"
-        }
-      });
-
-      if (!resp.ok) {
-        return baseReturn(course, date, false, url, {
-          reason: "fetch not ok",
-          status: resp.status
-        });
-      }
-
-      const html = await resp.text();
-      const $ = cheerio.load(html);
-
-      const startMin = toMinutes(earliest);
-      const endMin = toMinutes(latest);
-
-      const strictMatches = [];
-      const looseMatches = [];
-
-      $("tr, .timesheet-row, .booking-row, td, div").each((i, el) => {
-        const $row = $(el);
-        const rowText = $row.text().trim();
-        if (!rowText) return;
-
-        const m = rowText.match(/(\d{1,2}:\d{2})/);
-        if (!m) return;
-        let time = m[1];
-        if (time.length === 4) time = "0" + time;
-        const timeMin = toMinutes(time);
-
-        if (startMin && timeMin < startMin) return;
-        if (endMin && timeMin > endMin) return;
-
-        const spots = detectSpotsFromText(rowText);
-        if (partySize && spots !== null && spots < partySize) {
-          return;
-        }
-
-        const lower = rowText.toLowerCase();
-        const hasAction =
-          lower.includes("book") ||
-          lower.includes("available") ||
-          $row.find("a,button").length > 0;
-
-        const matchObj = {
-          time,
-          spots,
-          snippet: rowText.slice(0, 140) + "..."
-        };
-
-        if (hasAction) {
-          strictMatches.push(matchObj);
-        } else {
-          looseMatches.push(matchObj);
-        }
-      });
-
-      if (strictMatches.length > 0) {
-        return [
-          {
-            course: course.name,
-            provider: course.provider,
-            available: true,
-            bookingUrl: url,
-            times: strictMatches.map((m) => m.time),
-            slots: strictMatches,
-            lat: course.lat,
-            lng: course.lng,
-            city: course.city,
-            state: course.state,
-            confidence: "high"
-          }
-        ];
-      }
-
-      if (looseMatches.length > 0) {
-        return [
-          {
-            course: course.name,
-            provider: course.provider,
-            available: true,
-            bookingUrl: url,
-            times: looseMatches.map((m) => m.time),
-            slots: looseMatches,
-            lat: course.lat,
-            lng: course.lng,
-            city: course.city,
-            state: course.state,
-            confidence: "medium",
-            note: "matched time window but no explicit booking button"
-          }
-        ];
-      }
-
-      return baseReturn(course, date, false, url, {
-        confidence: "unknown",
-        reason: "no rows matched time/players"
-      });
-    } catch (e) {
-      return baseReturn(course, date, false, url, { error: e.message });
-    }
-  }
-
-  return baseReturn(course, date, false, url, { reason: "unknown provider" });
-}
 
 
