@@ -1,148 +1,25 @@
 [
-  {
-    "name": "Whaleback Golf Course",
-    "lat": -32.0495,
-    "lng": 115.882,
-    "url": "https://www.whalebackgolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000",
-    "provider": "MiClub"
-  },
-  {
-    "name": "Collier Park Golf Course",
-    "lat": -31.9995,
-    "lng": 115.8715,
-    "url": "https://bookings.collierparkgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000",
-    "provider": "MiClub"
-  },
-  {
-    "name": "Araluen Estate",
-    "lat": -32.1625,
-    "lng": 116.085,
-    "url": "https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000",
-    "provider": "MiClub"
-  },
-  {
-    "name": "Sun City Country Club",
-    "lat": -31.68,
-    "lng": 115.718,
-    "url": "https://www.suncitycountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000",
-    "provider": "MiClub"
-  },
-  {
-    "name": "Marangaroo Golf Course",
-    "lat": -31.832,
-    "lng": 115.828,
-    "url": "https://marangaroo.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000",
-    "provider": "MiClub"
-  },
-  {
-    "name": "Joondalup Resort Golf",
-    "lat": -31.7425,
-    "lng": 115.7645,
-    "url": "https://golfbookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000",
-    "provider": "MiClub"
-  },
-  {
-    "name": "The Vines Resort & Country Club",
-    "lat": -31.7785,
-    "lng": 116.0305,
-    "url": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010",
-    "provider": "MiClub"
-  },
-  {
-    "name": "Hamersley Public Golf Course",
-    "lat": -31.8425,
-    "lng": 115.764,
-    "url": "https://hamersley.quick18.com/teetimes/searchmatrix",
-    "provider": "Quick18"
-  },
-  {
-    "name": "Altone Park Golf Course",
-    "lat": -31.8445,
-    "lng": 115.958,
-    "url": "https://www.golf-booking.com/en/club/altone-park-golf-course,nc",
-    "provider": "Info"
-  },
-  {
-    "name": "Wembley Golf Course",
-    "lat": -31.9345,
-    "lng": 115.7775,
-    "url": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000",
-    "provider": "MiClub"
-  },
-  {
-    "name": "Secret Harbour Golf Links",
-    "lat": -32.373,
-    "lng": 115.757,
-    "url": "https://secretharbour.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000",
-    "provider": "MiClub"
-  },
-  {
-    "name": "Meadow Springs Golf & Country Club",
-    "lat": -32.5305,
-    "lng": 115.748,
-    "url": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000",
-    "provider": "MiClub"
-  },
-  {
-    "name": "Kwinana Golf Club",
-    "lat": -32.2405,
-    "lng": 115.8115,
-    "url": "https://www.kwinanagolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000",
-    "provider": "MiClub"
-  },
-  {
-    "name": "The Cut Golf Course",
-    "lat": -32.5735,
-    "lng": 115.6485,
-    "url": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000",
-    "provider": "MiClub"
-  },
-  {
-    "name": "Mandurah Country Club",
-    "lat": -32.5465,
-    "lng": 115.7235,
-    "url": "https://www.google.com/search?q=Mandurah+Country+Club+golf+booking",
-    "provider": "Info"
-  },
-  {
-    "name": "Halls Head Golf Club",
-    "lat": -32.5475,
-    "lng": 115.7,
-    "url": "https://www.google.com/search?q=Halls+Head+Golf+Club+WA",
-    "provider": "Info"
-  },
-  {
-    "name": "Fremantle Public Golf Course",
-    "lat": -32.056,
-    "lng": 115.749,
-    "url": "https://www.google.com/search?q=Fremantle+Public+Golf+Course+booking",
-    "provider": "Info"
-  },
-  {
-    "name": "Hillview Golf Course",
-    "lat": -32.0575,
-    "lng": 116.0065,
-    "phoneOnly": true,
-    "phone": "08 9454 5554",
-    "provider": "Phone"
-  },
-  {
-    "name": "Marri Park Golf Course",
-    "lat": -32.2385,
-    "lng": 115.8205,
-    "phoneOnly": true,
-    "phone": "08 9419 3037",
-    "provider": "Phone"
-  },
-  {
-    "name": "Armadale (The Springs) Golf Course",
-    "lat": -32.1525,
-    "lng": 116.0065,
-    "url": "https://www.google.com/search?q=Armadale+Springs+Golf+Course",
-    "provider": "Info"
-  }
+  { "name": "Whaleback Golf Course", "lat": -32.0495, "lng": 115.8820, "url": "https://www.whalebackgolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000", "provider": "MiClub" },
+  { "name": "Collier Park Golf Course", "lat": -31.9995, "lng": 115.8715, "url": "https://bookings.collierparkgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000", "provider": "MiClub" },
+  { "name": "Araluen Estate", "lat": -32.1625, "lng": 116.0850, "url": "https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000", "provider": "MiClub" },
+  { "name": "Sun City Country Club", "lat": -31.6800, "lng": 115.7180, "url": "https://www.suncitycountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000", "provider": "MiClub" },
+  { "name": "Marangaroo Golf Course", "lat": -31.8320, "lng": 115.8280, "url": "https://marangaroo.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000", "provider": "MiClub" },
+  { "name": "Joondalup Resort Golf", "lat": -31.7425, "lng": 115.7645, "url": "https://golfbookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000", "provider": "MiClub" },
+  { "name": "The Vines Resort & Country Club", "lat": -31.7785, "lng": 116.0305, "url": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010", "provider": "MiClub" },
+  { "name": "Hamersley Public Golf Course", "lat": -31.8425, "lng": 115.7640, "url": "https://hamersley.quick18.com/teetimes/searchmatrix", "provider": "Quick18" },
+  { "name": "Altone Park Golf Course", "lat": -31.8445, "lng": 115.9580, "url": "https://www.golf-booking.com/en/club/altone-park-golf-course,nc", "provider": "Other" },
+  { "name": "Wembley Golf Course", "lat": -31.9345, "lng": 115.7775, "url": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000", "provider": "MiClub" },
+  { "name": "Secret Harbour Golf Links", "lat": -32.3730, "lng": 115.7570, "url": "https://secretharbour.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000", "provider": "MiClub" },
+  { "name": "Meadow Springs Golf & Country Club", "lat": -32.5305, "lng": 115.7480, "url": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000", "provider": "MiClub" },
+  { "name": "Kwinana Golf Club", "lat": -32.2405, "lng": 115.8115, "url": "https://www.kwinanagolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000", "provider": "MiClub" },
+  { "name": "The Cut Golf Course", "lat": -32.5735, "lng": 115.6485, "url": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000", "provider": "MiClub" },
+  { "name": "Mandurah Country Club", "lat": -32.5465, "lng": 115.7235, "url": "https://www.google.com/search?q=Mandurah+Country+Club+golf+booking", "provider": "Info" },
+  { "name": "Halls Head Golf Club", "lat": -32.5475, "lng": 115.7000, "url": "https://www.google.com/search?q=Halls+Head+Golf+Club+WA", "provider": "Info" },
+  { "name": "Fremantle Public Golf Course", "lat": -32.0560, "lng": 115.7490, "url": "https://www.google.com/search?q=Fremantle+Public+Golf+Course+booking", "provider": "Info" },
+  { "name": "Hillview Golf Course", "lat": -32.0575, "lng": 116.0065, "phoneOnly": true, "phone": "08 9454 5554", "provider": "Phone" },
+  { "name": "Marri Park Golf Course", "lat": -32.2385, "lng": 115.8205, "phoneOnly": true, "phone": "08 9419 3037", "provider": "Phone" },
+  { "name": "Armadale (The Springs) Golf Course", "lat": -32.1525, "lng": 116.0065, "url": "https://www.google.com/search?q=Armadale+Springs+Golf+Course", "provider": "Info" }
 ]
-
 
 
 
