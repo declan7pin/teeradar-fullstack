@@ -4,112 +4,23 @@
   <meta charset="UTF-8" />
   <title>TeeRadar — WA Realtime</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <!-- leaflet -->
   <link rel="stylesheet" href="/assets/leaflet.css" />
   <style>
-    :root {
-      --teal: #036b65;
-      --bg: #eef3f1;
-      --card: #ffffff;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-      background: var(--bg);
-    }
-    header {
-      background: var(--teal);
-      color: #fff;
-      padding: 10px 4vw;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .home-btn {
-      background: #fff;
-      color: var(--teal);
-      border: none;
-      padding: 6px 16px;
-      border-radius: 999px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .filters {
-      background: #fff;
-      padding: 14px 4vw;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-      border-bottom: 1px solid rgba(0,0,0,.03);
-    }
-    .filters input,
-    .filters select {
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      padding: 7px 10px;
-      background: #fff;
-    }
-    .filters button {
-      background: var(--teal);
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      padding: 8px 15px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    #status {
-      font-size: .78rem;
-      padding: 5px 4vw;
-      color: #475569;
-    }
-    #map {
-      height: 400px;
-      margin: 0 4vw;
-      border-radius: 16px;
-      overflow: hidden;
-      background: #cbd5f5;
-    }
-    .course-strip {
-      margin: 16px 4vw 20px;
-      display: flex;
-      gap: 14px;
-      overflow-x: auto;
-      padding-bottom: 10px;
-    }
-    .course-card {
-      min-width: 240px;
-      background: #fff;
-      border-radius: 14px;
-      border: 1px solid rgba(0,0,0,.03);
-      box-shadow: 0 8px 20px rgba(15,23,42,.04);
-      padding: 12px 12px 14px;
-      flex: 0 0 auto;
-    }
-    .badge {
-      display: inline-block;
-      padding: 3px 9px;
-      border-radius: 999px;
-      font-size: .6rem;
-      margin-bottom: 6px;
-      background: #e2e8f0;
-    }
-    .btn-small {
-      background: #eef3f1;
-      border: none;
-      border-radius: 10px;
-      padding: 6px 10px;
-      font-size: .65rem;
-      cursor: pointer;
-      margin-top: 6px;
-    }
-    @media (max-width: 900px){
-      #map { height: 55vh; margin: 0 2vw; }
-      .filters { padding: 12px 2vw; }
-      .course-strip { margin: 16px 2vw 20px; }
-    }
+    :root { --teal:#036b65; --bg:#eef3f1; --card:#fff; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg)}
+    header{background:var(--teal);color:#fff;padding:10px 4vw;display:flex;align-items:center;justify-content:space-between}
+    .home-btn{background:#fff;color:var(--teal);border:none;padding:6px 16px;border-radius:999px;font-weight:600;cursor:pointer}
+    .filters{background:#fff;padding:14px 4vw;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid rgba(0,0,0,.05)}
+    .filters input,.filters select{border:1px solid #d1d5db;border-radius:8px;padding:7px 10px;background:#fff}
+    .filters button{background:var(--teal);color:#fff;border:none;border-radius:10px;padding:8px 15px;font-weight:600;cursor:pointer}
+    #status{font-size:.78rem;padding:5px 4vw;color:#475569}
+    #map{height:420px;margin:0 4vw;border-radius:16px;overflow:hidden;background:#cbd5f5}
+    .course-strip{margin:16px 4vw 20px;display:flex;gap:14px;overflow-x:auto;padding-bottom:10px}
+    .course-card{min-width:240px;background:#fff;border-radius:14px;border:1px solid rgba(0,0,0,.05);box-shadow:0 8px 20px rgba(15,23,42,.04);padding:12px 12px 14px;flex:0 0 auto}
+    .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:.6rem;margin-bottom:6px;background:#e2e8f0}
+    .btn-small{background:#eef3f1;border:none;border-radius:10px;padding:6px 10px;font-size:.65rem;cursor:pointer;margin-top:6px}
+    @media (max-width:900px){#map{height:55vh;margin:0 2vw}.filters{padding:12px 2vw}.course-strip{margin:16px 2vw 20px}}
   </style>
   <script src="/assets/leaflet.js"></script>
 </head>
@@ -119,7 +30,6 @@
     <button class="home-btn" onclick="window.location.href='/'">Return Home</button>
   </header>
 
-  <!-- FILTER BAR -->
   <div class="filters">
     <input type="date" id="date" />
     <input type="time" id="timeStart" value="06:00" />
@@ -143,137 +53,111 @@
   <div class="course-strip" id="courseStrip"></div>
 
   <script>
-    let map, markersLayer;
-    let courses = [];
+    let map, markersLayer, courseList = [];
 
-    function initMap() {
+    function initMap(){
       map = L.map("map").setView([-31.95, 115.86], 9);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19
-      }).addTo(map);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(map);
       markersLayer = L.layerGroup().addTo(map);
     }
 
-    function markerStyle(color) {
-      return {
-        radius: 7,
-        fillColor: color,
-        color: "#fff",
-        weight: 1,
-        fillOpacity: 0.9
-      };
+    function markerStyle(color){
+      return {radius:7, fillColor:color, color:"#fff", weight:1, fillOpacity:.9};
     }
 
-    function renderMarkers(resultsByName = {}) {
+    function renderMarkers(resultsByName = {}){
       markersLayer.clearLayers();
-      courses.forEach(c => {
-        const key = (c.name || "").toLowerCase();
+      courseList.forEach(c => {
+        const key = (c.name||"").toLowerCase();
         const match = resultsByName[key];
-        let color = "#ef4444"; // red = default unavailable
-        if (c.phoneOnly) color = "#a855f7"; // purple
-        if (match && match.available) color = "#0ea5e9"; // blue
-        L.circleMarker([c.lat, c.lng], markerStyle(color))
-          .addTo(markersLayer)
-          .bindPopup(
-            `<strong>${c.name}</strong><br>` +
-            (match && match.url
-              ? `<a href="${match.url}" target="_blank">Go to booking</a>`
-              : (c.url
-                  ? `<a href="${c.url}" target="_blank">Open website</a>`
-                  : "No direct link"))
-          );
+        let color = "#ef4444";            // red = default unavailable
+        if (c.phoneOnly) color = "#a855f7";   // purple = phone only
+        if (match && match.available) color = "#0ea5e9"; // blue = reachable/available
+
+        const link = (match && match.bookingUrl) ? match.bookingUrl
+                   : (c.phoneOnly && c.phone ? `tel:${c.phone.replace(/\s+/g,"")}` : (c.url || null));
+
+        let popup = `<strong>${c.name}</strong>`;
+        if (c.phoneOnly && c.phone){
+          popup += `<br><a href="tel:${c.phone.replace(/\s+/g,"")}" target="_blank">Call ${c.phone}</a>`;
+        } else if (link){
+          popup += `<br><a href="${link}" target="_blank">Go to booking</a>`;
+        } else {
+          popup += `<br>No direct link`;
+        }
+
+        L.circleMarker([c.lat, c.lng], markerStyle(color)).addTo(markersLayer).bindPopup(popup);
       });
     }
 
-    function renderStrip(resultsByName = {}) {
+    function renderStrip(resultsByName = {}){
       const wrap = document.getElementById("courseStrip");
       wrap.innerHTML = "";
-      courses.forEach(c => {
-        const key = (c.name || "").toLowerCase();
+      courseList.forEach(c => {
+        const key = (c.name||"").toLowerCase();
         const match = resultsByName[key];
-        const card = document.createElement("div");
-        card.className = "course-card";
-        const statusText = c.phoneOnly
-          ? "Phone bookings"
-          : (match && match.available ? "Available" : "Unavailable");
-        const statusColor = c.phoneOnly
-          ? "#a855f7"
-          : (match && match.available ? "#0ea5e9" : "#ef4444");
-        card.innerHTML = `
+        const statusText = c.phoneOnly ? "Phone bookings" : (match && match.available ? "Available" : "Unavailable");
+        const statusColor = c.phoneOnly ? "#a855f7" : (match && match.available ? "#0ea5e9" : "#ef4444");
+
+        const link = (match && match.bookingUrl) ? match.bookingUrl
+                   : (c.phoneOnly && c.phone ? `tel:${c.phone.replace(/\s+/g,"")}` : (c.url || null));
+
+        const div = document.createElement("div");
+        div.className = "course-card";
+        div.innerHTML = `
           <div class="badge" style="background:${statusColor};color:#fff;">${statusText}</div>
           <h4 style="margin:2px 0 4px;">${c.name}</h4>
           <p style="font-size:.7rem;margin:0 0 6px;">${c.city || "WA"}</p>
-          <button class="btn-small" onclick="openCourse('${encodeURIComponent(c.name)}')">Go to course page</button>
+          ${link ? `<button class="btn-small" onclick="window.open('${link}','_blank')">Go to booking</button>` : `<button class="btn-small" disabled>No link</button>`}
         `;
-        wrap.appendChild(card);
+        wrap.appendChild(div);
       });
     }
 
-    function openCourse(nameEncoded) {
-      const name = decodeURIComponent(nameEncoded);
-      const course = courses.find(c => c.name === name);
-      if (!course) return;
-      if (course.url) {
-        window.open(course.url, "_blank", "noopener");
-      } else {
-        window.open("https://www.google.com/search?q=" + encodeURIComponent(name + " golf"), "_blank");
-      }
+    async function loadCourses(){
+      const res = await fetch("/api/courses");
+      courseList = await res.json();
+      return courseList;
     }
 
-    async function doSearch() {
+    async function doSearch(){
       const statusEl = document.getElementById("status");
-      const date = document.getElementById("date").value;
+      const date     = document.getElementById("date").value;
       const earliest = document.getElementById("timeStart").value || "06:00";
-      const latest = document.getElementById("timeEnd").value || "17:00";
-      const holes = document.getElementById("holes").value;
-      const players = document.getElementById("players").value;
+      const latest   = document.getElementById("timeEnd").value || "17:00";
+      const holes    = document.getElementById("holes").value;
+      const players  = document.getElementById("players").value;
 
-      if (!date) {
-        statusEl.textContent = "Please select a date.";
-        return;
-      }
-
+      if (!date){ statusEl.textContent = "Please select a date."; return; }
       statusEl.textContent = "Checking courses…";
 
-      try {
-        const res = await fetch("/api/search", {
+      try{
+        const r = await fetch("/api/search", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            date,
-            earliest,
-            latest,
-            holes,
-            partySize: players
-          })
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ date, earliest, latest, holes, partySize: players })
         });
-        const data = await res.json();
+        const j = await r.json();
         const byName = {};
-        (data.slots || []).forEach(s => {
-          byName[(s.name || "").toLowerCase()] = {
-            available: true,
-            url: s.url || s.link
-          };
+        (j.slots || []).forEach(s => {
+          byName[(s.name||"").toLowerCase()] = { available: !!s.available, bookingUrl: s.bookingUrl || s.url || s.link };
         });
         renderMarkers(byName);
         renderStrip(byName);
         statusEl.textContent = "Live check complete.";
-      } catch (err) {
-        console.warn(err);
+      } catch (e){
+        console.warn(e);
         statusEl.textContent = "Could not reach backend — showing default map.";
         renderMarkers({});
         renderStrip({});
       }
     }
 
-    (async function start() {
+    (async function start(){
       initMap();
-      // default date = today
-      document.getElementById("date").value = new Date().toISOString().slice(0, 10);
-      // load courses.json (your 20 WA courses)
-      const res = await fetch("/assets/courses.json");
-      courses = await res.json();
-      renderMarkers({});
+      document.getElementById("date").value = new Date().toISOString().slice(0,10);
+      await loadCourses();          // <- loads 20+ from backend
+      renderMarkers({});            // <- show all markers immediately
       renderStrip({});
     })();
 
