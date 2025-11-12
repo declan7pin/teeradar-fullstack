@@ -36,6 +36,4 @@
     "9_cart": "24488670",
     "18_cart": "24488643"
   }
-
-  /* Hamersley is Quick18 → no feeGroupId; others “Info/Phone” don’t use it */
 }
