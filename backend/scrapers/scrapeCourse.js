@@ -1,12 +1,14 @@
 // backend/scrapers/scrapeCourse.js
 import fetch from "node-fetch";
+import * as cheerio from "cheerio";
 
 const toCompactDate = (yyyy_mm_dd) => yyyy_mm_dd.replace(/-/g, "");
 
-// HH:MM -> minutes since midnight, used only if you later want to do more time logic
+// HH:MM -> minutes since midnight
 function toMinutes(t) {
   if (!t) return null;
   const [h, m] = t.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
   return h * 60 + m;
 }
 
@@ -32,7 +34,6 @@ function buildMiClubUrl(baseUrl, date, feeGroupId) {
       u.searchParams.append("feeGroupId", feeGroupId);
     }
   }
-  // these recaptcha tokens go stale quickly, so strip if present
   if (u.searchParams.has("recaptchaResponse")) {
     u.searchParams.delete("recaptchaResponse");
   }
@@ -45,6 +46,76 @@ function buildQuick18Url(baseUrl, date) {
   const u = new URL(baseUrl);
   u.searchParams.set("teedate", toCompactDate(date));
   return u.toString();
+}
+
+// Try to parse slots from a MiClub HTML page
+function parseMiClubSlots(html, earliest, latest) {
+  const $ = cheerio.load(html);
+  const minStart = toMinutes(earliest);
+  const minEnd = toMinutes(latest);
+
+  let bestSlots = 0;
+  const timesFound = [];
+
+  // This selector is a generic guess; you may need to tweak it
+  $("table.timesheet tbody tr").each((_, tr) => {
+    const cells = $(tr).find("td");
+    if (!cells.length) return;
+
+    const timeText = $(cells[0]).text().trim(); // first cell usually time
+    const mm = toMinutes(timeText);
+    if (mm == null || mm < minStart || mm > minEnd) return;
+
+    // look for a number of available spots in the row
+    const rowText = $(tr).text();
+    const matchSpots = rowText.match(/(\d+)\s*(spots|players|avail|available)?/i);
+    let spots = 0;
+    if (matchSpots) {
+      spots = parseInt(matchSpots[1], 10);
+      if (Number.isNaN(spots)) spots = 0;
+    }
+
+    if (spots > bestSlots) bestSlots = spots;
+    timesFound.push(timeText + " (" + spots + ")");
+  });
+
+  // Cap at 4, because you care about a group-of-4 max
+  bestSlots = Math.max(0, Math.min(4, bestSlots));
+  return { slotsAvailable: bestSlots, timesFound };
+}
+
+// Try to parse slots from a Quick18 page (very generic)
+function parseQuick18Slots(html, earliest, latest) {
+  const $ = cheerio.load(html);
+  const minStart = toMinutes(earliest);
+  const minEnd = toMinutes(latest);
+
+  let bestSlots = 0;
+  const timesFound = [];
+
+  // Generic: look for rows that contain a time and a number
+  $("tr").each((_, tr) => {
+    const rowText = $(tr).text();
+    const timeMatch = rowText.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
+    if (!timeMatch) return;
+
+    const timeText = timeMatch[0];
+    const mm = toMinutes(timeText);
+    if (mm == null || mm < minStart || mm > minEnd) return;
+
+    const matchSpots = rowText.match(/(\d+)\s*(spots|players|avail|available)?/i);
+    let spots = 0;
+    if (matchSpots) {
+      spots = parseInt(matchSpots[1], 10);
+      if (Number.isNaN(spots)) spots = 0;
+    }
+
+    if (spots > bestSlots) bestSlots = spots;
+    timesFound.push(timeText + " (" + spots + ")");
+  });
+
+  bestSlots = Math.max(0, Math.min(4, bestSlots));
+  return { slotsAvailable: bestSlots, timesFound };
 }
 
 /**
@@ -63,6 +134,7 @@ export async function scrapeCourse(course, criteria, feeGroups) {
       lng: course.lng,
       status: "phone",   // purple marker
       available: null,
+      slotsAvailable: null,
       bookingUrl: course.phone ? `tel:${course.phone.replace(/\s+/g, "")}` : null,
       phone: course.phone || "",
       note: "Phone booking only",
@@ -85,7 +157,6 @@ export async function scrapeCourse(course, criteria, feeGroups) {
         } else if (holes === "18") {
           feeId = courseMap["18"] || courseMap["18_cart"];
         } else {
-          // no holes specified: pick a sensible default
           feeId = courseMap["18"] || courseMap["9"] || courseMap["18_cart"] || courseMap["9_cart"];
         }
 
@@ -108,13 +179,38 @@ export async function scrapeCourse(course, criteria, feeGroups) {
     finalUrl = course.url || "";
   }
 
-  // We only check that the page is reachable, not the true availability
+  // Fetch the page
   let reachable = false;
+  let html = "";
   try {
     const resp = await fetch(finalUrl, { method: "GET" });
     reachable = resp.ok;
+    if (reachable) {
+      html = await resp.text();
+    }
   } catch {
     reachable = false;
+  }
+
+  // Default values
+  let status = reachable ? "link" : "unknown";
+  let slotsAvailable = null;
+  let timesFound = [];
+
+  if (reachable && html) {
+    try {
+      if (course.provider === "MiClub") {
+        const parsed = parseMiClubSlots(html, earliest, latest);
+        slotsAvailable = parsed.slotsAvailable;
+        timesFound = parsed.timesFound;
+      } else if (course.provider === "Quick18") {
+        const parsed = parseQuick18Slots(html, earliest, latest);
+        slotsAvailable = parsed.slotsAvailable;
+        timesFound = parsed.timesFound;
+      }
+    } catch (e) {
+      console.warn("parse error for", course.name, e.message);
+    }
   }
 
   return [{
@@ -122,14 +218,17 @@ export async function scrapeCourse(course, criteria, feeGroups) {
     provider: course.provider,
     lat: course.lat,
     lng: course.lng,
-    status: reachable ? "link" : "unknown",
-    available: null,              // we don't claim to know
+    status,
+    available: slotsAvailable !== null && slotsAvailable > 0, // basic flag
+    slotsAvailable,
     bookingUrl: finalUrl,
     timeWindow: { earliest, latest },
     holesRequested: holes || "",
-    spots: partySize
+    spots: partySize,
+    timesFound: timesFound.slice(0, 6) // preview
   }];
 }
+
 
 
 
