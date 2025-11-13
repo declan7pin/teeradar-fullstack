@@ -1,234 +1,195 @@
 // backend/scrapers/scrapeCourse.js
 import fetch from "node-fetch";
-import * as cheerio from "cheerio";
+import cheerio from "cheerio";
 
-const toCompactDate = (yyyy_mm_dd) => yyyy_mm_dd.replace(/-/g, "");
+/**
+ * Build a date-specific URL for the course.
+ * We assume courses.json stores a working example link and we just
+ * replace the date part.
+ *
+ * Supports:
+ *   - MiClub:  ?selectedDate=YYYY-MM-DD
+ *   - Quick18: ?teedate=YYYYMMDD
+ */
+function buildCourseUrl(course, date) {
+  if (!course.url) return null;
+  if (!date) return course.url;
 
-// HH:MM -> minutes since midnight
-function toMinutes(t) {
-  if (!t) return null;
-  const [h, m] = t.split(":").map(Number);
-  if (Number.isNaN(h) || Number.isNaN(m)) return null;
-  return h * 60 + m;
-}
+  const ymd = date.replace(/-/g, "");
 
-function isWeekend(dateStr) {
-  const d = new Date(dateStr + "T00:00:00");
-  const day = d.getUTCDay(); // 0=Sun, 6=Sat
-  return day === 0 || day === 6;
-}
+  let url = course.url;
 
-// Build MiClub URL with date + optional feeGroupId
-function buildMiClubUrl(baseUrl, date, feeGroupId) {
-  if (!baseUrl) return "";
-  const u = new URL(baseUrl);
-  if (u.searchParams.has("selectedDate")) {
-    u.searchParams.set("selectedDate", date);
-  } else {
-    u.searchParams.append("selectedDate", date);
-  }
-  if (feeGroupId) {
-    if (u.searchParams.has("feeGroupId")) {
-      u.searchParams.set("feeGroupId", feeGroupId);
+  // MiClub style: ...selectedDate=2025-11-05...
+  if (url.includes("selectedDate=")) {
+    if (/selectedDate=\d{4}-\d{2}-\d{2}/.test(url)) {
+      url = url.replace(/selectedDate=\d{4}-\d{2}-\d{2}/, "selectedDate=" + date);
     } else {
-      u.searchParams.append("feeGroupId", feeGroupId);
+      const sep = url.includes("?") ? "&" : "?";
+      url = url + sep + "selectedDate=" + date;
     }
   }
-  if (u.searchParams.has("recaptchaResponse")) {
-    u.searchParams.delete("recaptchaResponse");
+
+  // Quick18 style: ...teedate=20251105...
+  if (url.includes("teedate=")) {
+    if (/teedate=\d{8}/.test(url)) {
+      url = url.replace(/teedate=\d{8}/, "teedate=" + ymd);
+    } else {
+      const sep = url.includes("?") ? "&" : "?";
+      url = url + sep + "teedate=" + ymd;
+    }
   }
-  return u.toString();
-}
 
-// Build Quick18 URL with teedate=YYYYMMDD
-function buildQuick18Url(baseUrl, date) {
-  if (!baseUrl) return "";
-  const u = new URL(baseUrl);
-  u.searchParams.set("teedate", toCompactDate(date));
-  return u.toString();
-}
-
-// Try to parse slots from a MiClub HTML page
-function parseMiClubSlots(html, earliest, latest) {
-  const $ = cheerio.load(html);
-  const minStart = toMinutes(earliest);
-  const minEnd = toMinutes(latest);
-
-  let bestSlots = 0;
-  const timesFound = [];
-
-  // This selector is a generic guess; you may need to tweak it
-  $("table.timesheet tbody tr").each((_, tr) => {
-    const cells = $(tr).find("td");
-    if (!cells.length) return;
-
-    const timeText = $(cells[0]).text().trim(); // first cell usually time
-    const mm = toMinutes(timeText);
-    if (mm == null || mm < minStart || mm > minEnd) return;
-
-    // look for a number of available spots in the row
-    const rowText = $(tr).text();
-    const matchSpots = rowText.match(/(\d+)\s*(spots|players|avail|available)?/i);
-    let spots = 0;
-    if (matchSpots) {
-      spots = parseInt(matchSpots[1], 10);
-      if (Number.isNaN(spots)) spots = 0;
-    }
-
-    if (spots > bestSlots) bestSlots = spots;
-    timesFound.push(timeText + " (" + spots + ")");
-  });
-
-  // Cap at 4, because you care about a group-of-4 max
-  bestSlots = Math.max(0, Math.min(4, bestSlots));
-  return { slotsAvailable: bestSlots, timesFound };
-}
-
-// Try to parse slots from a Quick18 page (very generic)
-function parseQuick18Slots(html, earliest, latest) {
-  const $ = cheerio.load(html);
-  const minStart = toMinutes(earliest);
-  const minEnd = toMinutes(latest);
-
-  let bestSlots = 0;
-  const timesFound = [];
-
-  // Generic: look for rows that contain a time and a number
-  $("tr").each((_, tr) => {
-    const rowText = $(tr).text();
-    const timeMatch = rowText.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
-    if (!timeMatch) return;
-
-    const timeText = timeMatch[0];
-    const mm = toMinutes(timeText);
-    if (mm == null || mm < minStart || mm > minEnd) return;
-
-    const matchSpots = rowText.match(/(\d+)\s*(spots|players|avail|available)?/i);
-    let spots = 0;
-    if (matchSpots) {
-      spots = parseInt(matchSpots[1], 10);
-      if (Number.isNaN(spots)) spots = 0;
-    }
-
-    if (spots > bestSlots) bestSlots = spots;
-    timesFound.push(timeText + " (" + spots + ")");
-  });
-
-  bestSlots = Math.max(0, Math.min(4, bestSlots));
-  return { slotsAvailable: bestSlots, timesFound };
+  return url;
 }
 
 /**
- * feeGroups: mapping from backend/data/fee_groups.json
- *  e.g. feeGroups["Whaleback Golf Course"]["9"] -> "1500344725"
+ * Convert "12:33 pm" → "12:33" (24-hour HH:MM)
  */
-export async function scrapeCourse(course, criteria, feeGroups) {
-  const { date, earliest, latest, holes, partySize } = criteria;
+function normaliseTimeTo24h(label) {
+  if (!label) return null;
+  const m = label.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
+  if (!m) return null;
 
-  // PHONE ONLY COURSES
-  if (course.phoneOnly) {
-    return [{
-      name: course.name,
-      provider: course.provider || "Phone",
-      lat: course.lat,
-      lng: course.lng,
-      status: "phone",   // purple marker
-      available: null,
-      slotsAvailable: null,
-      bookingUrl: course.phone ? `tel:${course.phone.replace(/\s+/g, "")}` : null,
-      phone: course.phone || "",
-      note: "Phone booking only",
-      timeWindow: { earliest, latest },
-      holesRequested: holes || "",
-      spots: partySize
-    }];
+  let [, hh, mm, ampm] = m;
+  let hour = parseInt(hh, 10);
+
+  if (ampm) {
+    const isPM = ampm.toLowerCase() === "pm";
+    if (isPM && hour < 12) hour += 12;
+    if (!isPM && hour === 12) hour = 0;
   }
 
-  // Build provider-specific URL
-  let finalUrl = course.url || "";
-  try {
-    if (course.provider === "MiClub") {
-      let feeId = undefined;
-      const courseMap = feeGroups?.[course.name];
-
-      if (courseMap) {
-        if (holes === "9" && (courseMap["9"] || courseMap["9_cart"])) {
-          feeId = courseMap["9"] || courseMap["9_cart"];
-        } else if (holes === "18") {
-          feeId = courseMap["18"] || courseMap["18_cart"];
-        } else {
-          feeId = courseMap["18"] || courseMap["9"] || courseMap["18_cart"] || courseMap["9_cart"];
-        }
-
-        // Meadow Springs weekend override
-        if (course.name.includes("Meadow Springs")) {
-          if (holes === "9" && isWeekend(date) && courseMap["9_weekend"]) {
-            feeId = courseMap["9_weekend"];
-          }
-          if (holes === "18" && isWeekend(date) && courseMap["18_weekend"]) {
-            feeId = courseMap["18_weekend"];
-          }
-        }
-      }
-
-      finalUrl = buildMiClubUrl(course.url, date, feeId);
-    } else if (course.provider === "Quick18") {
-      finalUrl = buildQuick18Url(course.url, date);
-    }
-  } catch {
-    finalUrl = course.url || "";
-  }
-
-  // Fetch the page
-  let reachable = false;
-  let html = "";
-  try {
-    const resp = await fetch(finalUrl, { method: "GET" });
-    reachable = resp.ok;
-    if (reachable) {
-      html = await resp.text();
-    }
-  } catch {
-    reachable = false;
-  }
-
-  // Default values
-  let status = reachable ? "link" : "unknown";
-  let slotsAvailable = null;
-  let timesFound = [];
-
-  if (reachable && html) {
-    try {
-      if (course.provider === "MiClub") {
-        const parsed = parseMiClubSlots(html, earliest, latest);
-        slotsAvailable = parsed.slotsAvailable;
-        timesFound = parsed.timesFound;
-      } else if (course.provider === "Quick18") {
-        const parsed = parseQuick18Slots(html, earliest, latest);
-        slotsAvailable = parsed.slotsAvailable;
-        timesFound = parsed.timesFound;
-      }
-    } catch (e) {
-      console.warn("parse error for", course.name, e.message);
-    }
-  }
-
-  return [{
-    name: course.name,
-    provider: course.provider,
-    lat: course.lat,
-    lng: course.lng,
-    status,
-    available: slotsAvailable !== null && slotsAvailable > 0, // basic flag
-    slotsAvailable,
-    bookingUrl: finalUrl,
-    timeWindow: { earliest, latest },
-    holesRequested: holes || "",
-    spots: partySize,
-    timesFound: timesFound.slice(0, 6) // preview
-  }];
+  return `${hour.toString().padStart(2, "0")}:${mm}`;
 }
 
+/**
+ * Parse a MiClub timesheet and return available slots.
+ *
+ * Logic:
+ *  - Each `.row-time` = one tee time / playing group (max 4 players).
+ *  - We read the full text of the row and count occurrences of "Taken".
+ *  - availableSpots = max(0, 4 - takenCount).
+ *  - Only return rows where availableSpots >= requested party size AND
+ *    time is inside the requested window.
+ */
+function scrapeMiClubTimesheet(html, course, criteria) {
+  const { earliest, latest, partySize } = criteria;
+  const maxGroupSize = 4;
+
+  const $ = cheerio.load(html);
+  const slots = [];
+
+  $(".row-time").each((_, rowEl) => {
+    const $row = $(rowEl);
+
+    // 1) Time text (e.g. "12:33 pm")
+    const timeLabel = $row.find(".time-wrapper h3").first().text().trim();
+    const time24 = normaliseTimeTo24h(timeLabel);
+    if (!time24) return;
+
+    // 2) Filter by time window (HH:MM string compare is fine)
+    if (time24 < earliest || time24 > latest) return;
+
+    // 3) Count how many players are already taken in this group
+    const rowText = $row.text();
+    const takenCount = (rowText.match(/Taken/gi) || []).length;
+    const availableSpots = Math.max(0, maxGroupSize - takenCount);
+
+    if (availableSpots < partySize) return;
+
+    // 4) Try to grab a price (first "$xx.xx" we see)
+    let price = null;
+    const priceMatch = rowText.match(/\$\s*\d+(\.\d+)?/);
+    if (priceMatch) {
+      price = priceMatch[0].replace(/\s+/g, "");
+    }
+
+    slots.push({
+      name: course.name,
+      provider: course.provider || "MiClub",
+      holes: course.holes || null,
+      time: time24,
+      spots: availableSpots,
+      price,
+      url: course.url, // front-end still uses this to send user to booking
+      lat: course.lat,
+      lng: course.lng
+    });
+  });
+
+  return slots;
+}
+
+/**
+ * Placeholder Quick18 scraper.
+ *
+ * Right now this returns an empty list so Quick18 courses (Hamersley)
+ * always appear as "Unavailable" in the UI. This is safer than giving
+ * incorrect availability. We can wire proper Quick18 parsing later.
+ */
+function scrapeQuick18Matrix(_html, _course, _criteria) {
+  return [];
+}
+
+/**
+ * For "info/phone" type providers we don't scrape at all:
+ * they never report live availability.
+ */
+function scrapeInfoOnly(_course, _criteria) {
+  return [];
+}
+
+/**
+ * Main exported function used by the backend.
+ *
+ * course:  one entry from backend/data/courses.json
+ * criteria: { date, earliest, latest, holes, partySize }
+ */
+export async function scrapeCourse(course, criteria) {
+  const { date } = criteria;
+
+  // phone/info courses never have live availability
+  if (course.provider === "phone" || course.provider === "info") {
+    return scrapeInfoOnly(course, criteria);
+  }
+
+  const url = buildCourseUrl(course, date);
+  if (!url) {
+    console.warn(`No URL for course "${course.name}"`);
+    return [];
+  }
+
+  let res;
+  try {
+    res = await fetch(url, {
+      // 15 second timeout is usually enough for MiClub
+      // (Render/node-fetch doesn’t support timeout natively in all versions,
+      // but leaving this here doesn't hurt.)
+      timeout: 15000
+    });
+  } catch (err) {
+    console.warn(`Error fetching ${course.name}:`, err.message);
+    return [];
+  }
+
+  if (!res.ok) {
+    console.warn(`Failed fetch for ${course.name}: ${res.status}`);
+    return [];
+  }
+
+  const html = await res.text();
+
+  if ((course.provider || "").toLowerCase() === "miclub") {
+    return scrapeMiClubTimesheet(html, course, criteria);
+  }
+
+  if ((course.provider || "").toLowerCase() === "quick18") {
+    return scrapeQuick18Matrix(html, course, criteria);
+  }
+
+  // Default: treat like MiClub (safe fallback for other similar sites)
+  return scrapeMiClubTimesheet(html, course, criteria);
+}
 
 
 
