@@ -1,25 +1,18 @@
 // backend/scrapers/scrapeCourse.js
 import fetch from "node-fetch";
-import cheerio from "cheerio";
+import * as cheerio from "cheerio";   // ✅ FIXED — Cheerio has no default export
 
 /**
  * Build a date-specific URL for the course.
- * We assume courses.json stores a working example link and we just
- * replace the date part.
- *
- * Supports:
- *   - MiClub:  ?selectedDate=YYYY-MM-DD
- *   - Quick18: ?teedate=YYYYMMDD
  */
 function buildCourseUrl(course, date) {
   if (!course.url) return null;
   if (!date) return course.url;
 
   const ymd = date.replace(/-/g, "");
-
   let url = course.url;
 
-  // MiClub style: ...selectedDate=2025-11-05...
+  // MiClub
   if (url.includes("selectedDate=")) {
     if (/selectedDate=\d{4}-\d{2}-\d{2}/.test(url)) {
       url = url.replace(/selectedDate=\d{4}-\d{2}-\d{2}/, "selectedDate=" + date);
@@ -29,7 +22,7 @@ function buildCourseUrl(course, date) {
     }
   }
 
-  // Quick18 style: ...teedate=20251105...
+  // Quick18
   if (url.includes("teedate=")) {
     if (/teedate=\d{8}/.test(url)) {
       url = url.replace(/teedate=\d{8}/, "teedate=" + ymd);
@@ -42,9 +35,7 @@ function buildCourseUrl(course, date) {
   return url;
 }
 
-/**
- * Convert "12:33 pm" → "12:33" (24-hour HH:MM)
- */
+/** Normalise times */
 function normaliseTimeTo24h(label) {
   if (!label) return null;
   const m = label.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
@@ -62,56 +53,41 @@ function normaliseTimeTo24h(label) {
   return `${hour.toString().padStart(2, "0")}:${mm}`;
 }
 
-/**
- * Parse a MiClub timesheet and return available slots.
- *
- * Logic:
- *  - Each `.row-time` = one tee time / playing group (max 4 players).
- *  - We read the full text of the row and count occurrences of "Taken".
- *  - availableSpots = max(0, 4 - takenCount).
- *  - Only return rows where availableSpots >= requested party size AND
- *    time is inside the requested window.
- */
+/** SCRAPE MiClub */
 function scrapeMiClubTimesheet(html, course, criteria) {
   const { earliest, latest, partySize } = criteria;
-  const maxGroupSize = 4;
+  const maxGroup = 4;
 
   const $ = cheerio.load(html);
   const slots = [];
 
-  $(".row-time").each((_, rowEl) => {
-    const $row = $(rowEl);
+  $(".row-time").each((_, row) => {
+    const $row = $(row);
 
-    // 1) Time text (e.g. "12:33 pm")
     const timeLabel = $row.find(".time-wrapper h3").first().text().trim();
     const time24 = normaliseTimeTo24h(timeLabel);
     if (!time24) return;
 
-    // 2) Filter by time window (HH:MM string compare is fine)
     if (time24 < earliest || time24 > latest) return;
 
-    // 3) Count how many players are already taken in this group
     const rowText = $row.text();
-    const takenCount = (rowText.match(/Taken/gi) || []).length;
-    const availableSpots = Math.max(0, maxGroupSize - takenCount);
+    const taken = (rowText.match(/Taken/gi) || []).length;
+    const available = Math.max(0, maxGroup - taken);
 
-    if (availableSpots < partySize) return;
+    if (available < partySize) return;
 
-    // 4) Try to grab a price (first "$xx.xx" we see)
     let price = null;
     const priceMatch = rowText.match(/\$\s*\d+(\.\d+)?/);
-    if (priceMatch) {
-      price = priceMatch[0].replace(/\s+/g, "");
-    }
+    if (priceMatch) price = priceMatch[0].replace(/\s+/g, "");
 
     slots.push({
       name: course.name,
-      provider: course.provider || "MiClub",
+      provider: "miclub",
       holes: course.holes || null,
       time: time24,
-      spots: availableSpots,
+      spots: available,
       price,
-      url: course.url, // front-end still uses this to send user to booking
+      url: course.url,
       lat: course.lat,
       lng: course.lng
     });
@@ -120,77 +96,45 @@ function scrapeMiClubTimesheet(html, course, criteria) {
   return slots;
 }
 
-/**
- * Placeholder Quick18 scraper.
- *
- * Right now this returns an empty list so Quick18 courses (Hamersley)
- * always appear as "Unavailable" in the UI. This is safer than giving
- * incorrect availability. We can wire proper Quick18 parsing later.
- */
-function scrapeQuick18Matrix(_html, _course, _criteria) {
+/** Quick18 - placeholder */
+function scrapeQuick18Matrix() {
   return [];
 }
 
-/**
- * For "info/phone" type providers we don't scrape at all:
- * they never report live availability.
- */
-function scrapeInfoOnly(_course, _criteria) {
+/** No-scrape courses */
+function scrapeInfoOnly() {
   return [];
 }
 
-/**
- * Main exported function used by the backend.
- *
- * course:  one entry from backend/data/courses.json
- * criteria: { date, earliest, latest, holes, partySize }
- */
+/** Main export */
 export async function scrapeCourse(course, criteria) {
-  const { date } = criteria;
+  const url = buildCourseUrl(course, criteria.date);
+  if (!url) return [];
 
-  // phone/info courses never have live availability
-  if (course.provider === "phone" || course.provider === "info") {
+  if (["phone", "info"].includes(course.provider)) {
     return scrapeInfoOnly(course, criteria);
-  }
-
-  const url = buildCourseUrl(course, date);
-  if (!url) {
-    console.warn(`No URL for course "${course.name}"`);
-    return [];
   }
 
   let res;
   try {
-    res = await fetch(url, {
-      // 15 second timeout is usually enough for MiClub
-      // (Render/node-fetch doesn’t support timeout natively in all versions,
-      // but leaving this here doesn't hurt.)
-      timeout: 15000
-    });
-  } catch (err) {
-    console.warn(`Error fetching ${course.name}:`, err.message);
+    res = await fetch(url, { timeout: 15000 });
+  } catch {
     return [];
   }
 
-  if (!res.ok) {
-    console.warn(`Failed fetch for ${course.name}: ${res.status}`);
-    return [];
-  }
+  if (!res.ok) return [];
 
   const html = await res.text();
 
-  if ((course.provider || "").toLowerCase() === "miclub") {
+  if (course.provider === "miclub") {
     return scrapeMiClubTimesheet(html, course, criteria);
   }
 
-  if ((course.provider || "").toLowerCase() === "quick18") {
+  if (course.provider === "quick18") {
     return scrapeQuick18Matrix(html, course, criteria);
   }
 
-  // Default: treat like MiClub (safe fallback for other similar sites)
   return scrapeMiClubTimesheet(html, course, criteria);
 }
-
-
 
 
