@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>TeeRadar — WA Courses</title>
+  <title>TeeRadar — Book a Tee Time</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="/assets/leaflet.css" />
   <style>
@@ -91,7 +91,7 @@
       box-shadow:0 16px 35px rgba(15,23,42,.12);
     }
     .course-strip{
-      margin:16px 4vw 20px;
+      margin:16px 4vw 24px;
       display:flex;
       gap:14px;
       overflow-x:auto;
@@ -106,18 +106,6 @@
       padding:12px 12px 14px;
       flex:0 0 auto;
     }
-    .badge{
-      display:inline-block;
-      padding:3px 9px;
-      border-radius:999px;
-      font-size:.6rem;
-      margin-bottom:6px;
-      font-weight:600;
-    }
-    .badge.grey{background:#e5e7eb;color:#374151;}
-    .badge.blue{background:#0ea5e9;color:#e0f2fe;}
-    .badge.purple{background:#a855f7;color:#f5f3ff;}
-    .badge.red{background:#ef4444;color:#fee2e2;}
     .course-card h4{
       margin:2px 0 4px;
       font-size:.9rem;
@@ -127,6 +115,34 @@
       font-size:.7rem;
       color:#64748b;
     }
+
+    .badge{
+      display:inline-block;
+      padding:3px 9px;
+      border-radius:999px;
+      font-size:.6rem;
+      margin-bottom:6px;
+      font-weight:600;
+    }
+    .badge-status-grey{background:#e5e7eb;color:#374151;}
+    .badge-status-blue{background:#0ea5e9;color:#e0f2fe;}
+    .badge-status-red{background:#fee2e2;color:#b91c1c;}
+    .badge-status-purple{background:#f5f3ff;color:#7e22ce;}
+
+    .badge-provider{
+      display:inline-block;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:.58rem;
+      margin-left:6px;
+      font-weight:600;
+    }
+    .provider-miclub{background:#dbeafe;color:#1d4ed8;}
+    .provider-quick18{background:#dcfce7;color:#166534;}
+    .provider-phone{background:#fef3c7;color:#92400e;}
+    .provider-info{background:#e5e7eb;color:#111827;}
+    .provider-generic{background:#e5e7eb;color:#111827;}
+
     .btn-small{
       background:#eef3f1;
       border:none;
@@ -140,11 +156,12 @@
       opacity:.6;
       cursor:default;
     }
+
     @media (max-width:900px){
       header{padding:10px 3vw;}
       .filters{padding:12px 3vw;}
       #map{margin:0 3vw;height:55vh;}
-      .course-strip{margin:16px 3vw 20px;}
+      .course-strip{margin:16px 3vw 24px;}
     }
     @media (max-width:640px){
       .filters{
@@ -169,7 +186,7 @@
 </head>
 <body>
   <header>
-    <h1>TeeRadar WA — Find a Tee Time</h1>
+    <h1>TeeRadar — Book a Tee Time</h1>
     <button class="home-btn" onclick="window.location.href='/'">Return Home</button>
   </header>
 
@@ -206,7 +223,7 @@
     <button id="searchBtn">Search availability</button>
   </div>
 
-  <div id="status">Select a date and hit “Search availability” to build live booking links.</div>
+  <div id="status">Select a date and hit “Search availability” to check live course sheets.</div>
 
   <div id="map"></div>
 
@@ -215,6 +232,30 @@
   <script>
     let map, markersLayer, courseList = [];
 
+    /* -----------------------
+       Provider helpers
+    ------------------------*/
+    function providerLabel(raw) {
+      const p = (raw || "").toLowerCase();
+      if (p.includes("miclub"))  return "MiClub • live check";
+      if (p.includes("quick18")) return "Quick18 • live check";
+      if (p.includes("phone"))   return "Phone bookings only";
+      if (p.includes("info"))    return "Info only";
+      return raw || "Course";
+    }
+
+    function providerClass(raw) {
+      const p = (raw || "").toLowerCase();
+      if (p.includes("miclub"))  return "provider-miclub";
+      if (p.includes("quick18")) return "provider-quick18";
+      if (p.includes("phone"))   return "provider-phone";
+      if (p.includes("info"))    return "provider-info";
+      return "provider-generic";
+    }
+
+    /* -----------------------
+       Map init
+    ------------------------*/
     function initMap() {
       map = L.map("map").setView([-31.95, 115.86], 9);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -233,80 +274,66 @@
       };
     }
 
-    function getStatusForCourse(c, match) {
-      // match contains status + slotsAvailable from backend
-      const spots = match && typeof match.slotsAvailable === "number"
-        ? match.slotsAvailable
-        : null;
-
-      // Phone-only courses
-      if (c.phoneOnly || (match && match.status === "phone")) {
+    function getStatusForCourse(course, agg, partySize) {
+      // agg = { bestSpots, hasSlots }
+      if (course.phoneOnly) {
         return {
           text: "Phone to book",
-          color: "#a855f7",
-          badgeClass: "purple"
+          badge: "badge-status-purple",
+          color: "#a855f7"
         };
       }
 
-      // Linkable courses
-      if (match && match.status === "link") {
-        if (spots === null) {
-          return {
-            text: "Tap to check times",
-            color: "#0ea5e9",
-            badgeClass: "blue"
-          };
-        } else if (spots === 0) {
+      if (agg && agg.hasSlots) {
+        if (agg.bestSpots === 0) {
           return {
             text: "No spots in window",
-            color: "#ef4444",
-            badgeClass: "red"
-          };
-        } else {
-          return {
-            text: `${spots} / 4 spots in window`,
-            color: "#0ea5e9",
-            badgeClass: "blue"
+            badge: "badge-status-red",
+            color: "#ef4444"
           };
         }
-      }
-
-      // Unknown / unreachable link
-      if (match && match.status === "unknown") {
+        const label = `${agg.bestSpots} / 4 spots in window`;
         return {
-          text: "No live link",
-          color: "#ef4444",
-          badgeClass: "red"
+          text: label,
+          badge: "badge-status-blue",
+          color: "#0ea5e9"
         };
       }
 
-      // Default before a search
+      // We have a URL but no parsed slots
+      if (course.url) {
+        return {
+          text: "Tap to check times",
+          badge: "badge-status-grey",
+          color: "#6b7280"
+        };
+      }
+
+      // Last resort
       return {
         text: "Unknown (tap to check)",
-        color: "#6b7280",
-        badgeClass: "grey"
+        badge: "badge-status-grey",
+        color: "#6b7280"
       };
     }
 
-    function renderMarkers(resultsByName = {}) {
+    function renderMarkers(availabilityByCourse, partySize) {
       markersLayer.clearLayers();
 
       courseList.forEach(c => {
         const key = (c.name || "").toLowerCase();
-        const match = resultsByName[key];
-        const status = getStatusForCourse(c, match);
+        const agg = availabilityByCourse[key];
+        const status = getStatusForCourse(c, agg, partySize);
 
-        const link = (match && match.bookingUrl)
-          ? match.bookingUrl
-          : (c.phoneOnly && c.phone
-              ? `tel:${c.phone.replace(/\s+/g, "")}`
-              : (c.url || null));
+        const link = c.phoneOnly
+          ? (c.phone ? `tel:${c.phone.replace(/\\s+/g, "")}` : null)
+          : (c.url || null);
 
         let popup = `<strong>${c.name}</strong><br/>
           <span style="font-size:.75rem;color:#6b7280;">${status.text}</span>`;
 
         if (c.phoneOnly && c.phone) {
-          popup += `<br/><a href="tel:${c.phone.replace(/\s+/g,"")}" target="_blank">Call ${c.phone}</a>`;
+          popup += `<br/><a href="tel:${c.phone.replace(/\\s+/g,"")}" target="_blank">Call ${c.phone}</a>`;
         } else if (link) {
           popup += `<br/><a href="${link}" target="_blank" rel="noopener noreferrer">Go to booking</a>`;
         } else {
@@ -319,25 +346,29 @@
       });
     }
 
-    function renderStrip(resultsByName = {}) {
+    function renderStrip(availabilityByCourse, partySize) {
       const wrap = document.getElementById("courseStrip");
       wrap.innerHTML = "";
 
       courseList.forEach(c => {
         const key = (c.name || "").toLowerCase();
-        const match = resultsByName[key];
-        const status = getStatusForCourse(c, match);
+        const agg = availabilityByCourse[key];
+        const status = getStatusForCourse(c, agg, partySize);
 
-        const link = (match && match.bookingUrl)
-          ? match.bookingUrl
-          : (c.phoneOnly && c.phone
-              ? `tel:${c.phone.replace(/\s+/g, "")}`
-              : (c.url || null));
+        const link = c.phoneOnly
+          ? (c.phone ? `tel:${c.phone.replace(/\\s+/g, "")}` : null)
+          : (c.url || null);
+
+        const provClass = providerClass(c.provider);
+        const provLabel = providerLabel(c.provider);
 
         const div = document.createElement("div");
         div.className = "course-card";
         div.innerHTML = `
-          <div class="badge ${status.badgeClass}">${status.text}</div>
+          <div>
+            <span class="badge ${status.badge}">${status.text}</span>
+            <span class="badge-provider ${provClass}">${provLabel}</span>
+          </div>
           <h4>${c.name}</h4>
           <p>${c.city || "Western Australia"}</p>
           ${
@@ -362,7 +393,7 @@
       const earliest = document.getElementById("timeStart").value || "06:00";
       const latest = document.getElementById("timeEnd").value || "17:00";
       const holes = document.getElementById("holes").value;
-      const players = document.getElementById("players").value;
+      const players = parseInt(document.getElementById("players").value || "1", 10);
 
       if (!date) {
         statusEl.textContent = "Please select a date before searching.";
@@ -371,6 +402,7 @@
 
       statusEl.textContent = "Checking each course for this window…";
 
+      let slots = [];
       try {
         const r = await fetch("/api/search", {
           method: "POST",
@@ -384,27 +416,42 @@
           })
         });
         const j = await r.json();
-
-        const byName = {};
-        (j.slots || []).forEach(s => {
-          const key = (s.name || "").toLowerCase();
-          byName[key] = {
-            status: s.status || null,
-            bookingUrl: s.bookingUrl || s.url || s.link || null,
-            slotsAvailable: typeof s.slotsAvailable === "number"
-              ? s.slotsAvailable
-              : null
-          };
-        });
-
-        renderMarkers(byName);
-        renderStrip(byName);
-        statusEl.textContent = "Updated. Tap a course to see live times on the official site.";
+        slots = j.slots || [];
       } catch (e) {
         console.warn("search error", e);
-        statusEl.textContent = "Could not reach backend. Showing default map only.";
-        renderMarkers({});
-        renderStrip({});
+        statusEl.textContent = "Could not reach backend. Showing map only.";
+        renderMarkers({}, players);
+        renderStrip({}, players);
+        return;
+      }
+
+      // Aggregate per course name: best available spots in the window
+      const availabilityByCourse = {};
+      slots.forEach(s => {
+        const key = (s.name || "").toLowerCase();
+        const spots = typeof s.spots === "number" ? s.spots : 0;
+        if (!availabilityByCourse[key]) {
+          availabilityByCourse[key] = {
+            bestSpots: spots,
+            hasSlots: spots > 0
+          };
+        } else {
+          if (spots > availabilityByCourse[key].bestSpots) {
+            availabilityByCourse[key].bestSpots = spots;
+          }
+          if (spots > 0) {
+            availabilityByCourse[key].hasSlots = true;
+          }
+        }
+      });
+
+      renderMarkers(availabilityByCourse, players);
+      renderStrip(availabilityByCourse, players);
+
+      if (slots.length === 0) {
+        statusEl.textContent = "No matching tee times found in that window. Try adjusting the filters.";
+      } else {
+        statusEl.textContent = "Updated. Tap a course to view live times on the official booking site.";
       }
     }
 
@@ -412,9 +459,9 @@
       initMap();
       // default date = today
       document.getElementById("date").value = new Date().toISOString().slice(0, 10);
-      await loadCourses();      // 20+ WA courses from backend
-      renderMarkers({});        // show all markers immediately
-      renderStrip({});
+      await loadCourses();            // 20+ WA courses
+      renderMarkers({}, 4);           // initial neutral view
+      renderStrip({}, 4);
     })();
 
     document.getElementById("searchBtn").addEventListener("click", doSearch);
