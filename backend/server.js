@@ -1,4 +1,4 @@
-// backend/server.js
+// backend/server.js (only the relevant parts)
 import express from "express";
 import cors from "cors";
 import fs from "fs";
@@ -14,11 +14,8 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-
-// serve frontend
 app.use(express.static(path.join(__dirname, "..", "public")));
 
-// load course list
 const PERTH_LAT = -31.9523;
 const PERTH_LNG = 115.8613;
 const coursesPath = path.join(__dirname, "data", "courses.json");
@@ -29,7 +26,6 @@ const courses = rawCourses.map(c => ({
   lng: typeof c.lng === "number" ? c.lng : PERTH_LNG
 }));
 
-// load fee group mappings
 const feeGroupsPath = path.join(__dirname, "data", "fee_groups.json");
 let feeGroups = {};
 if (fs.existsSync(feeGroupsPath)) {
@@ -40,7 +36,6 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", courses: courses.length });
 });
 
-// single source for front-end
 app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
@@ -55,7 +50,9 @@ app.post("/api/search", async (req, res) => {
       partySize = 1
     } = req.body || {};
 
-    if (!date) return res.status(400).json({ error: "date is required" });
+    if (!date) {
+      return res.status(400).json({ error: "date is required" });
+    }
 
     const criteria = {
       date,
@@ -67,7 +64,6 @@ app.post("/api/search", async (req, res) => {
 
     const jobs = courses.map(c => scrapeCourse(c, criteria, feeGroups));
     const settled = await Promise.allSettled(jobs);
-
     const slots = settled
       .filter(r => r.status === "fulfilled")
       .flatMap(r => r.value || []);
@@ -82,6 +78,7 @@ app.post("/api/search", async (req, res) => {
 app.listen(PORT, () => {
   console.log("✅ TeeRadar backend running on", PORT);
 });
+
 
 
 
