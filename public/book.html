@@ -6,7 +6,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="/assets/leaflet.css" />
   <style>
-    :root { --teal:#036b65; --bg:#eef3f1; --card:#ffffff; }
+    :root {
+      --teal:#036b65;
+      --bg:#eef3f1;
+      --card:#ffffff;
+    }
     *{box-sizing:border-box}
     body{
       margin:0;
@@ -230,18 +234,58 @@
     }
 
     function getStatusForCourse(c, match) {
-      // c = course object, match = slot from backend (may be undefined)
+      // match contains status + slotsAvailable from backend
+      const spots = match && typeof match.slotsAvailable === "number"
+        ? match.slotsAvailable
+        : null;
+
+      // Phone-only courses
       if (c.phoneOnly || (match && match.status === "phone")) {
-        return { text: "Phone to book", color: "#a855f7", badgeClass: "purple" };
+        return {
+          text: "Phone to book",
+          color: "#a855f7",
+          badgeClass: "purple"
+        };
       }
+
+      // Linkable courses
       if (match && match.status === "link") {
-        return { text: "Tap to check times", color: "#0ea5e9", badgeClass: "blue" };
+        if (spots === null) {
+          return {
+            text: "Tap to check times",
+            color: "#0ea5e9",
+            badgeClass: "blue"
+          };
+        } else if (spots === 0) {
+          return {
+            text: "No spots in window",
+            color: "#ef4444",
+            badgeClass: "red"
+          };
+        } else {
+          return {
+            text: `${spots} / 4 spots in window`,
+            color: "#0ea5e9",
+            badgeClass: "blue"
+          };
+        }
       }
+
+      // Unknown / unreachable link
       if (match && match.status === "unknown") {
-        return { text: "No live link", color: "#ef4444", badgeClass: "red" };
+        return {
+          text: "No live link",
+          color: "#ef4444",
+          badgeClass: "red"
+        };
       }
-      // default before a search
-      return { text: "Unknown (tap to check)", color: "#6b7280", badgeClass: "grey" };
+
+      // Default before a search
+      return {
+        text: "Unknown (tap to check)",
+        color: "#6b7280",
+        badgeClass: "grey"
+      };
     }
 
     function renderMarkers(resultsByName = {}) {
@@ -258,7 +302,9 @@
               ? `tel:${c.phone.replace(/\s+/g, "")}`
               : (c.url || null));
 
-        let popup = `<strong>${c.name}</strong><br/><span style="font-size:.75rem;color:#6b7280;">${status.text}</span>`;
+        let popup = `<strong>${c.name}</strong><br/>
+          <span style="font-size:.75rem;color:#6b7280;">${status.text}</span>`;
+
         if (c.phoneOnly && c.phone) {
           popup += `<br/><a href="tel:${c.phone.replace(/\s+/g,"")}" target="_blank">Call ${c.phone}</a>`;
         } else if (link) {
@@ -323,7 +369,7 @@
         return;
       }
 
-      statusEl.textContent = "Building booking links for each course…";
+      statusEl.textContent = "Checking each course for this window…";
 
       try {
         const r = await fetch("/api/search", {
@@ -344,13 +390,16 @@
           const key = (s.name || "").toLowerCase();
           byName[key] = {
             status: s.status || null,
-            bookingUrl: s.bookingUrl || s.url || s.link || null
+            bookingUrl: s.bookingUrl || s.url || s.link || null,
+            slotsAvailable: typeof s.slotsAvailable === "number"
+              ? s.slotsAvailable
+              : null
           };
         });
 
         renderMarkers(byName);
         renderStrip(byName);
-        statusEl.textContent = "Links updated. Tap a course to check live times on the official site.";
+        statusEl.textContent = "Updated. Tap a course to see live times on the official site.";
       } catch (e) {
         console.warn("search error", e);
         statusEl.textContent = "Could not reach backend. Showing default map only.";
