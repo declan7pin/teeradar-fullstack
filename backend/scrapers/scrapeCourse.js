@@ -44,11 +44,12 @@ function buildCourseUrl(course, date) {
 }
 
 /**
- * Normalise "12:33 pm" -> "12:33" (24h).
+ * Normalise something like "12:33 pm" -> "12:33" (24h).
  */
 function normaliseTimeTo24h(label) {
   if (!label) return null;
 
+  // Try to catch "06:30", "6:30 am", "6:30pm"
   const m = label.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
   if (!m) return null;
 
@@ -58,7 +59,7 @@ function normaliseTimeTo24h(label) {
   if (ampm) {
     const isPM = ampm.toLowerCase() === "pm";
     if (isPM && hour < 12) hour += 12;
-    if (!isPM && hour === 12) hour = 0;
+    if (!isPM && hour === 12) hour = 0; // 12am -> 00:xx
   }
 
   return `${hour.toString().padStart(2, "0")}:${mm}`;
@@ -110,7 +111,7 @@ function scrapeMiClubTimesheet(html, course, criteria, bookingUrlForDate) {
       time: time24,
       spots: availableSpots,
       price,
-      // 🔴 IMPORTANT: use date-specific URL, not the static example
+      // Date-specific URL, not the static example
       url: bookingUrlForDate || course.url,
       lat: course.lat,
       lng: course.lng
@@ -121,14 +122,103 @@ function scrapeMiClubTimesheet(html, course, criteria, bookingUrlForDate) {
 }
 
 /**
- * SCRAPE: Quick18 (Hamersley, The Springs / Armadale).
+ * SCRAPE: Quick18 matrix (Hamersley, The Springs / Armadale).
  *
- * For now: placeholder that returns no structured slots,
- * so these courses appear but do not claim live availability
- * until we implement JSON parsing for their matrix.
+ * This implementation assumes the /searchmatrix endpoint returns JSON or
+ * JSON-like text. If parsing fails or the structure is unknown, we
+ * return [] so the course shows as “Tap to check times” but we don't
+ * claim any availability.
  */
-function scrapeQuick18Matrix(_html, _course, _criteria, _bookingUrlForDate) {
-  return [];
+function scrapeQuick18Matrix(body, course, criteria, bookingUrlForDate) {
+  const { earliest, latest, partySize } = criteria;
+  const maxGroupSize = 4;
+  const slots = [];
+
+  let data;
+  try {
+    data = JSON.parse(body);
+  } catch (err) {
+    console.warn(`Quick18: response for ${course.name} is not valid JSON yet.`, err.message);
+    return [];
+  }
+
+  // Quick18 can come back in different shapes. We try a couple of common ones.
+
+  let teeTimesArray = null;
+
+  // Case 1: data is already an array
+  if (Array.isArray(data)) {
+    teeTimesArray = data;
+  }
+
+  // Case 2: object with a "teeTimes" or "matrix" array
+  if (!teeTimesArray && data && typeof data === "object") {
+    if (Array.isArray(data.teeTimes)) teeTimesArray = data.teeTimes;
+    else if (Array.isArray(data.matrix)) teeTimesArray = data.matrix;
+    else if (Array.isArray(data.rows)) teeTimesArray = data.rows;
+  }
+
+  if (!teeTimesArray) {
+    console.warn(`Quick18: unrecognised JSON structure for ${course.name}`);
+    return [];
+  }
+
+  teeTimesArray.forEach((row) => {
+    if (!row) return;
+
+    // Try to extract a time string from a likely field
+    const rawTime =
+      row.time ||
+      row.Time ||
+      row.StartTime ||
+      row.startTime ||
+      row.teeTime ||
+      row.tee_time;
+
+    const time24 = normaliseTimeTo24h(String(rawTime || ""));
+    if (!time24) return;
+
+    if (time24 < earliest || time24 > latest) return;
+
+    // Try to get available spots from a likely field
+    const rawSpots =
+      row.availableSpots ??
+      row.AvailableSpots ??
+      row.spots ??
+      row.Spots ??
+      row.openSpots ??
+      row.OpenSpots;
+
+    let availableSpots = Number(rawSpots);
+    if (!Number.isFinite(availableSpots)) {
+      // If no explicit field, we fall back to a simple heuristic:
+      // Quick18 often uses groupSize (4) minus bookedCount.
+      const booked =
+        row.bookedCount ??
+        row.BookedCount ??
+        row.booked ??
+        row.Booked ??
+        0;
+      const used = Number(booked) || 0;
+      availableSpots = Math.max(0, maxGroupSize - used);
+    }
+
+    if (availableSpots < partySize) return;
+
+    slots.push({
+      name: course.name,
+      provider: course.provider || "quick18",
+      holes: course.holes || null,
+      time: time24,
+      spots: availableSpots,
+      price: null, // most Quick18 JSON doesn't carry a clean price here
+      url: bookingUrlForDate || course.url,
+      lat: course.lat,
+      lng: course.lng
+    });
+  });
+
+  return slots;
 }
 
 /**
@@ -169,17 +259,17 @@ export async function scrapeCourse(course, criteria) {
     return [];
   }
 
-  const html = await res.text();
+  const body = await res.text();
 
   if (provider.includes("miclub")) {
-    return scrapeMiClubTimesheet(html, course, criteria, bookingUrlForDate);
+    return scrapeMiClubTimesheet(body, course, criteria, bookingUrlForDate);
   }
 
   if (provider.includes("quick18")) {
-    return scrapeQuick18Matrix(html, course, criteria, bookingUrlForDate);
+    return scrapeQuick18Matrix(body, course, criteria, bookingUrlForDate);
   }
 
   // default: treat unknown provider as MiClub-like HTML
-  return scrapeMiClubTimesheet(html, course, criteria, bookingUrlForDate);
+  return scrapeMiClubTimesheet(body, course, criteria, bookingUrlForDate);
 }
 
