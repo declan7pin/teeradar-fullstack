@@ -5,12 +5,10 @@ import * as cheerio from "cheerio"; // Cheerio v2+ has no default export
 /**
  * Build a date-specific URL for the course.
  *
- * We assume courses.json stores a working example link for that course
- * and we just adjust the date part each time.
- *
- * Supports:
- *   - MiClub:  ?selectedDate=YYYY-MM-DD
- *   - Quick18: ?teedate=YYYYMMDD
+ * We assume courses.json stores a working example link,
+ * and we only adjust the date parameter:
+ *   - MiClub:  selectedDate=YYYY-MM-DD
+ *   - Quick18: teedate=YYYYMMDD
  */
 function buildCourseUrl(course, date) {
   if (!course.url) return null;
@@ -19,7 +17,7 @@ function buildCourseUrl(course, date) {
   const ymd = date.replace(/-/g, "");
   let url = course.url;
 
-  // MiClub style: selectedDate=YYYY-MM-DD
+  // MiClub style
   if (url.includes("selectedDate=")) {
     if (/selectedDate=\d{4}-\d{2}-\d{2}/.test(url)) {
       url = url.replace(
@@ -32,7 +30,7 @@ function buildCourseUrl(course, date) {
     }
   }
 
-  // Quick18 style: teedate=YYYYMMDD
+  // Quick18 style
   if (url.includes("teedate=")) {
     if (/teedate=\d{8}/.test(url)) {
       url = url.replace(/teedate=\d{8}/, "teedate=" + ymd);
@@ -46,7 +44,7 @@ function buildCourseUrl(course, date) {
 }
 
 /**
- * Normalise something like "12:33 pm" -> "12:33" in 24h.
+ * Normalise "12:33 pm" -> "12:33" (24h).
  */
 function normaliseTimeTo24h(label) {
   if (!label) return null;
@@ -60,25 +58,24 @@ function normaliseTimeTo24h(label) {
   if (ampm) {
     const isPM = ampm.toLowerCase() === "pm";
     if (isPM && hour < 12) hour += 12;
-    if (!isPM && hour === 12) hour = 0; // 12am -> 00
+    if (!isPM && hour === 12) hour = 0;
   }
 
   return `${hour.toString().padStart(2, "0")}:${mm}`;
 }
 
 /**
- * SCRAPE: MiClub sheet (Whaleback, Collier, Wembley, Araluen, etc.)
+ * SCRAPE: MiClub timesheet (Whaleback, Collier, Wembley, Araluen, etc.).
  *
- * Logic (relying on your page source):
- *  - Each tee group is rendered as a `.row-time` block.
- *  - We read its time from `.time-wrapper h3`.
- *  - We count how many times "Taken" appears in that block.
- *  - Group size = 4, so available spots = max(0, 4 - takenCount).
- *  - Only return rows where availableSpots >= partySize AND time in window.
+ * Uses .row-time blocks from the HTML:
+ *  - time from .time-wrapper h3
+ *  - count occurrences of "Taken" in that block
+ *  - group size = 4 → available = max(0, 4 - taken)
+ *  - only return rows with available >= partySize, and time in window
  *
- * Holes are taken from `course.holes` in courses.json (manual mapping).
+ * Holes come from course.holes in courses.json (manual, reliable).
  */
-function scrapeMiClubTimesheet(html, course, criteria) {
+function scrapeMiClubTimesheet(html, course, criteria, bookingUrlForDate) {
   const { earliest, latest, partySize } = criteria;
   const maxGroupSize = 4;
 
@@ -88,22 +85,18 @@ function scrapeMiClubTimesheet(html, course, criteria) {
   $(".row-time").each((_, rowEl) => {
     const $row = $(rowEl);
 
-    // 1) Time like "12:33 pm"
     const timeLabel = $row.find(".time-wrapper h3").first().text().trim();
     const time24 = normaliseTimeTo24h(timeLabel);
     if (!time24) return;
 
-    // 2) Filter by user's time window
     if (time24 < earliest || time24 > latest) return;
 
-    // 3) Count "Taken" in the row to estimate used spots
     const rowText = $row.text();
     const takenCount = (rowText.match(/Taken/gi) || []).length;
     const availableSpots = Math.max(0, maxGroupSize - takenCount);
 
     if (availableSpots < partySize) return;
 
-    // 4) Optional: grab a price
     let price = null;
     const priceMatch = rowText.match(/\$\s*\d+(\.\d+)?/);
     if (priceMatch) {
@@ -112,12 +105,13 @@ function scrapeMiClubTimesheet(html, course, criteria) {
 
     slots.push({
       name: course.name,
-      provider: course.provider || "MiClub",
-      holes: course.holes || null,      // ✅ reliable: manual mapping in courses.json
+      provider: course.provider || "miclub",
+      holes: course.holes || null,
       time: time24,
       spots: availableSpots,
       price,
-      url: course.url,
+      // 🔴 IMPORTANT: use date-specific URL, not the static example
+      url: bookingUrlForDate || course.url,
       lat: course.lat,
       lng: course.lng
     });
@@ -127,36 +121,28 @@ function scrapeMiClubTimesheet(html, course, criteria) {
 }
 
 /**
- * SCRAPE: Quick18 matrix (Hamersley, Armadale / The Springs).
+ * SCRAPE: Quick18 (Hamersley, The Springs / Armadale).
  *
- * For now we leave this as a placeholder that returns no structured slots,
- * so they show on the map / list with "Tap to check times", but we don't
- * try to infer live availability incorrectly.
- *
- * You can wire this later once we inspect a Quick18 JSON payload.
+ * For now: placeholder that returns no structured slots,
+ * so these courses appear but do not claim live availability
+ * until we implement JSON parsing for their matrix.
  */
-function scrapeQuick18Matrix(_html, _course, _criteria) {
-  // TODO: implement when we have a captured Quick18 response
+function scrapeQuick18Matrix(_html, _course, _criteria, _bookingUrlForDate) {
   return [];
 }
 
 /**
- * Phone-only / info-only courses: we do NOT scrape.
- * Hillview & Marri Park just show a phone number and "Phone to book".
+ * Phone/info-only courses: no scraping; just show them on map/list.
  */
 function scrapeInfoOnly(_course, _criteria) {
   return [];
 }
 
 /**
- * Main export used by backend/server.js
- *
- * course:   one entry from backend/data/courses.json
- * criteria: { date, earliest, latest, holes, partySize }
+ * Main exported function used by server.js
  */
 export async function scrapeCourse(course, criteria) {
   const { date } = criteria;
-
   const provider = (course.provider || "").toLowerCase();
 
   // Phone / info courses never have live availability
@@ -164,15 +150,15 @@ export async function scrapeCourse(course, criteria) {
     return scrapeInfoOnly(course, criteria);
   }
 
-  const url = buildCourseUrl(course, date);
-  if (!url) {
+  const bookingUrlForDate = buildCourseUrl(course, date);
+  if (!bookingUrlForDate) {
     console.warn(`No URL for course "${course.name}"`);
     return [];
   }
 
   let res;
   try {
-    res = await fetch(url, { timeout: 15000 });
+    res = await fetch(bookingUrlForDate, { timeout: 15000 });
   } catch (err) {
     console.warn(`Error fetching ${course.name}:`, err.message);
     return [];
@@ -186,13 +172,14 @@ export async function scrapeCourse(course, criteria) {
   const html = await res.text();
 
   if (provider.includes("miclub")) {
-    return scrapeMiClubTimesheet(html, course, criteria);
+    return scrapeMiClubTimesheet(html, course, criteria, bookingUrlForDate);
   }
 
   if (provider.includes("quick18")) {
-    return scrapeQuick18Matrix(html, course, criteria);
+    return scrapeQuick18Matrix(html, course, criteria, bookingUrlForDate);
   }
 
-  // Default: treat unknown providers as MiClub-like HTML
-  return scrapeMiClubTimesheet(html, course, criteria);
+  // default: treat unknown provider as MiClub-like HTML
+  return scrapeMiClubTimesheet(html, course, criteria, bookingUrlForDate);
 }
+
