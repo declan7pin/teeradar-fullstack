@@ -254,6 +254,41 @@
     }
 
     /* -----------------------
+       URL date adjuster
+       (front-end guarantee)
+    ------------------------*/
+    function adjustBookingUrl(baseUrl) {
+      if (!baseUrl) return null;
+      const date = document.getElementById("date").value;
+      if (!date) return baseUrl;
+
+      let url = baseUrl;
+      const ymd = date.replace(/-/g,"");
+
+      // MiClub: selectedDate=YYYY-MM-DD
+      if (url.includes("selectedDate=")) {
+        if (/selectedDate=\d{4}-\d{2}-\d{2}/.test(url)) {
+          url = url.replace(/selectedDate=\d{4}-\d{2}-\d{2}/, "selectedDate="+date);
+        } else {
+          const sep = url.includes("?") ? "&" : "?";
+          url = url + sep + "selectedDate=" + date;
+        }
+      }
+
+      // Quick18: teedate=YYYYMMDD
+      if (url.includes("teedate=")) {
+        if (/teedate=\d{8}/.test(url)) {
+          url = url.replace(/teedate=\d{8}/, "teedate="+ymd);
+        } else {
+          const sep = url.includes("?") ? "&" : "?";
+          url = url + sep + "teedate=" + ymd;
+        }
+      }
+
+      return url;
+    }
+
+    /* -----------------------
        Map init
     ------------------------*/
     function initMap() {
@@ -275,8 +310,7 @@
     }
 
     function getStatusForCourse(course, agg, partySize) {
-      // agg = { bestSpots, hasSlots }
-      if (course.phoneOnly) {
+      if (course.provider && course.provider.toLowerCase() === "phone") {
         return {
           text: "Phone to book",
           badge: "badge-status-purple",
@@ -300,7 +334,6 @@
         };
       }
 
-      // We have a URL but no parsed slots
       if (course.url) {
         return {
           text: "Tap to check times",
@@ -309,7 +342,6 @@
         };
       }
 
-      // Last resort
       return {
         text: "Unknown (tap to check)",
         badge: "badge-status-grey",
@@ -325,15 +357,18 @@
         const agg = availabilityByCourse[key];
         const status = getStatusForCourse(c, agg, partySize);
 
-        const link = c.phoneOnly
-          ? (c.phone ? `tel:${c.phone.replace(/\\s+/g, "")}` : null)
-          : (c.url || null);
+        let link = null;
+        if (c.provider && c.provider.toLowerCase() === "phone") {
+          link = c.phone ? `tel:${c.phone.replace(/\s+/g,"")}` : null;
+        } else if (c.url) {
+          link = adjustBookingUrl(c.url);
+        }
 
         let popup = `<strong>${c.name}</strong><br/>
           <span style="font-size:.75rem;color:#6b7280;">${status.text}</span>`;
 
-        if (c.phoneOnly && c.phone) {
-          popup += `<br/><a href="tel:${c.phone.replace(/\\s+/g,"")}" target="_blank">Call ${c.phone}</a>`;
+        if (c.provider && c.provider.toLowerCase() === "phone" && c.phone) {
+          popup += `<br/><a href="tel:${c.phone.replace(/\s+/g,"")}" target="_blank">Call ${c.phone}</a>`;
         } else if (link) {
           popup += `<br/><a href="${link}" target="_blank" rel="noopener noreferrer">Go to booking</a>`;
         } else {
@@ -355,9 +390,12 @@
         const agg = availabilityByCourse[key];
         const status = getStatusForCourse(c, agg, partySize);
 
-        const link = c.phoneOnly
-          ? (c.phone ? `tel:${c.phone.replace(/\\s+/g, "")}` : null)
-          : (c.url || null);
+        let link = null;
+        if (c.provider && c.provider.toLowerCase() === "phone") {
+          link = c.phone ? `tel:${c.phone.replace(/\s+/g,"")}` : null;
+        } else if (c.url) {
+          link = adjustBookingUrl(c.url);
+        }
 
         const provClass = providerClass(c.provider);
         const provLabel = providerLabel(c.provider);
@@ -372,9 +410,11 @@
           <h4>${c.name}</h4>
           <p>${c.city || "Western Australia"}</p>
           ${
-            link
-              ? `<button class="btn-small" onclick="window.open('${link}','_blank')">Go to booking</button>`
-              : `<button class="btn-small" disabled>No link</button>`
+            c.provider && c.provider.toLowerCase() === "phone" && c.phone
+              ? `<button class="btn-small" onclick="window.location.href='tel:${c.phone.replace(/\s+/g,"")}'">Call ${c.phone}</button>`
+              : link
+                ? `<button class="btn-small" onclick="window.open('${link}','_blank')">Go to booking</button>`
+                : `<button class="btn-small" disabled>No link</button>`
           }
         `;
         wrap.appendChild(div);
@@ -459,8 +499,8 @@
       initMap();
       // default date = today
       document.getElementById("date").value = new Date().toISOString().slice(0, 10);
-      await loadCourses();            // 20+ WA courses
-      renderMarkers({}, 4);           // initial neutral view
+      await loadCourses();            // WA courses
+      renderMarkers({}, 4);           // neutral first view
       renderStrip({}, 4);
     })();
 
@@ -468,4 +508,5 @@
   </script>
 </body>
 </html>
+
 
