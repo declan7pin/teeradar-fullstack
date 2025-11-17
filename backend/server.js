@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// ESM path fix
+// Fix ESM pathing
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -15,20 +15,24 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ---------- STATIC FRONTEND ----------
+// =============================================================
+//  STATIC FRONTEND FIX — SERVE backend/public/*
+//  (Your index.html is in backend/public, NOT in /assets)
+// =============================================================
 
-// This folder contains index.html, admin.html, assets/, etc.
 const publicDir = path.join(__dirname, 'public');
 
-// Serve all static files (HTML, JS, CSS, images, etc.)
+// Serve everything inside backend/public
 app.use(express.static(publicDir));
 
-// Serve the main homepage at "/"
+// Serve homepage correctly
 app.get('/', (req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
-// ---------- COURSES API ----------
+// =============================================================
+//  LOAD COURSES JSON
+// =============================================================
 
 const coursesFilePath = path.join(__dirname, 'data', 'courses.json');
 let courses = [];
@@ -36,25 +40,22 @@ let courses = [];
 try {
   const rawData = fs.readFileSync(coursesFilePath, 'utf-8');
   courses = JSON.parse(rawData);
-  console.log(`Loaded ${courses.length} golf courses from courses.json`);
+  console.log(`Loaded ${courses.length} courses.`);
 } catch (err) {
   console.error('Failed to load courses.json:', err);
   courses = [];
 }
 
-// List of courses for the map
+// API: return all courses
 app.get('/api/courses', (req, res) => {
-  try {
-    res.json(courses);
-  } catch (err) {
-    console.error('Error returning courses:', err);
-    res.status(500).json({ error: 'Failed to load course list' });
-  }
+  res.json(courses);
 });
 
-// ---------- START SERVER ----------
+// =============================================================
+//  START SERVER
+// =============================================================
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`);
 });
