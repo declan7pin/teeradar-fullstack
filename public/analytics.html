@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>TeeRadar WA — Admin Analytics</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --teal: #00796b;
+      --teal-soft: #e0f2f1;
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --accent: #0ea5e9;
+      --danger: #f97373;
+      --success: #16a34a;
+      --shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+    }
+    *{box-sizing:border-box}
+    html,body{
+      margin:0;
+      padding:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:radial-gradient(circle at top left,#e0f2f1,#f9fafb);
+      min-height:100%;
+      color:var(--text);
+    }
+    header{
+      background:var(--teal);
+      color:#fff;
+      padding:10px 18px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.1);
+      position:sticky;
+      top:0;
+      z-index:20;
+    }
+    .nav-bar{
+      max-width:1100px;
+      margin:0 auto;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-weight:700;
+      letter-spacing:.03em;
+    }
+    .brand span{font-size:18px;}
+    .brand-dot{
+      width:8px;height:8px;border-radius:999px;
+      background:#bbf7d0;
+      box-shadow:0 0 0 4px rgba(187,247,208,.3);
+    }
+    .nav-links{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .nav-links a{
+      color:#e0f2f1;
+      text-decoration:none;
+      font-size:14px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid transparent;
+    }
+    .nav-links a:hover{
+      background:rgba(255,255,255,.12);
+      border-color:rgba(255,255,255,.12);
+    }
+    .nav-pill{
+      background:rgba(15,118,110,.2);
+      border-radius:999px;
+      padding:4px 10px;
+      font-size:12px;
+      border:1px solid rgba(45,212,191,.35);
+    }
+    .nav-pill span{opacity:.85;font-weight:500;}
+    .nav-logout{
+      background:rgba(239,68,68,.14);
+      border-radius:999px;
+      padding:4px 10px;
+      font-size:12px;
+      border:1px solid rgba(239,68,68,.35);
+      cursor:pointer;
+    }
+    main{
+      max-width:1100px;
+      margin:26px auto 40px;
+      padding:0 16px 40px;
+    }
+    .page-title{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap:14px;
+      margin-bottom:20px;
+    }
+    .page-title h1{
+      margin:0;
+      font-size:clamp(24px,3vw,30px);
+    }
+    .page-title p{
+      margin:4px 0 0;
+      color:var(--muted);
+      font-size:14px;
+    }
+    .tag-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 10px;
+      border-radius:999px;
+      background:#ecfdf5;
+      border:1px solid #bbf7d0;
+      color:#065f46;
+      font-size:12px;
+      font-weight:600;
+    }
+    .tag-dot{
+      width:8px;height:8px;border-radius:999px;
+      background:#22c55e;
+      box-shadow:0 0 0 3px rgba(34,197,94,.25);
+    }
+    .cards-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+      gap:14px;
+      margin-bottom:18px;
+    }
+    .card{
+      background:rgba(255,255,255,.96);
+      border-radius:18px;
+      padding:14px 16px;
+      border:1px solid rgba(226,232,240,.9);
+      box-shadow:var(--shadow);
+    }
+    .card h3{
+      margin:0 0 6px;
+      font-size:14px;
+      color:var(--muted);
+      font-weight:500;
+    }
+    .metric-main{
+      font-size:26px;
+      font-weight:700;
+      display:flex;
+      align-items:baseline;
+      gap:6px;
+    }
+    .metric-main span.sub{
+      font-size:13px;
+      color:var(--muted);
+      font-weight:500;
+    }
+    .metric-trend{
+      margin-top:4px;
+      font-size:12px;
+      display:flex;
+      align-items:center;
+      gap:4px;
+    }
+    .metric-trend.up{color:var(--success);}
+    .metric-trend.down{color:var(--danger);}
+    .metric-trend.neutral{color:var(--muted);}
+    .layout-grid{
+      display:grid;
+      grid-template-columns:3fr 2fr;
+      gap:16px;
+      margin-top:10px;
+    }
+    @media(max-width:860px){
+      .layout-grid{grid-template-columns:1fr;}
+    }
+    .card-header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom:6px;
+    }
+    .card-header h2{
+      font-size:16px;margin:0;
+    }
+    .card-header span{
+      font-size:12px;color:var(--muted);
+    }
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+    }
+    th,td{
+      padding:7px 6px;
+      text-align:left;
+      border-bottom:1px solid var(--border);
+    }
+    th{
+      font-weight:600;
+      color:var(--muted);
+      font-size:12px;
+    }
+    tbody tr:last-child td{border-bottom:none;}
+    .pill{
+      display:inline-flex;
+      padding:2px 8px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:600;
+    }
+    .pill.green{background:#ecfdf5;color:#166534;border:1px solid #bbf7d0;}
+    .pill.red{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;}
+    .pill.grey{background:#f3f4f6;color:#4b5563;border:1px solid #e5e7eb;}
+    .bar-row{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin:5px 0;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .bar-label{width:90px;}
+    .bar-track{
+      flex:1;
+      height:8px;
+      border-radius:999px;
+      background:#e5e7eb;
+      overflow:hidden;
+    }
+    .bar-fill{
+      height:100%;
+      border-radius:999px;
+      background:linear-gradient(90deg,#22c55e,#0ea5e9);
+      width:0;
+      transition:width .6s ease-out;
+    }
+    .footer-note{
+      margin-top:16px;
+      font-size:11px;
+      color:var(--muted);
+      text-align:right;
+    }
+    .footer-note code{
+      background:#e5e7eb;
+      padding:1px 6px;
+      border-radius:4px;
+      font-size:10px;
+    }
+    #loadingMsg{
+      font-size:13px;
+      color:var(--muted);
+      margin-bottom:10px;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="nav-bar">
+    <div class="brand">
+      <div class="brand-dot"></div>
+      <span>TeeRadar WA</span>
+      <span style="font-size:12px;opacity:.85;">Admin</span>
+    </div>
+    <div class="nav-links">
+      <span class="nav-pill"><span>Analytics dashboard</span></span>
+      <a href="/index.html">Home</a>
+      <a href="/book.html">Bookings</a>
+      <a href="/faq.html">FAQ</a>
+      <button type="button" class="nav-logout" onclick="handleLogout()">Log out</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="page-title">
+    <div>
+      <h1>Analytics overview</h1>
+      <p id="rangeLabel">Loading data from backend…</p>
+    </div>
+    <div>
+      <span class="tag-badge">
+        <span class="tag-dot"></span>
+        <span id="badgeRange">Last 7 days</span>
+      </span>
+    </div>
+  </div>
+
+  <div id="loadingMsg">Fetching analytics summary…</div>
+
+  <!-- TOP METRIC CARDS -->
+  <section class="cards-grid">
+    <article class="card">
+      <h3>Unique visitors</h3>
+      <div class="metric-main">
+        <span id="m-visitors">–</span>
+        <span class="sub">users (7 days)</span>
+      </div>
+      <div class="metric-trend neutral" id="t-visitors">Daily / weekly / monthly shown below.</div>
+    </article>
+
+    <article class="card">
+      <h3>New users</h3>
+      <div class="metric-main">
+        <span id="m-newUsers">–</span>
+        <span class="sub">first-time (7 days)</span>
+      </div>
+      <div class="metric-trend neutral" id="t-newUsers"></div>
+    </article>
+
+    <article class="card">
+      <h3>Searches performed</h3>
+      <div class="metric-main">
+        <span id="m-searches">–</span>
+        <span class="sub">searches (7 days)</span>
+      </div>
+      <div class="metric-trend neutral" id="t-searches"></div>
+    </article>
+
+    <article class="card">
+      <h3>“Go to booking” clicks</h3>
+      <div class="metric-main">
+        <span id="m-bookClicks">–</span>
+        <span class="sub">clicks (7 days)</span>
+      </div>
+      <div class="metric-trend neutral" id="t-bookClicks"></div>
+    </article>
+
+    <article class="card">
+      <h3>Ad impressions</h3>
+      <div class="metric-main">
+        <span id="m-adViews">–</span>
+        <span class="sub">views (7 days)</span>
+      </div>
+      <div class="metric-trend neutral" id="t-adViews"></div>
+    </article>
+
+    <article class="card">
+      <h3>Ad clicks</h3>
+      <div class="metric-main">
+        <span id="m-adClicks">–</span>
+        <span class="sub">clicks (7 days)</span>
+      </div>
+      <div class="metric-trend neutral" id="t-adClicks"></div>
+    </article>
+  </section>
+
+  <!-- LOWER GRID: TABLES + SIMPLE "CHARTS" -->
+  <section class="layout-grid">
+    <article class="card">
+      <div class="card-header">
+        <h2>Top courses clicked</h2>
+        <span>Based on “Go to booking” clicks</span>
+      </div>
+      <table>
+        <thead>
+        <tr>
+          <th>Course</th>
+          <th>Provider</th>
+          <th>Clicks (7d)</th>
+        </tr>
+        </thead>
+        <tbody id="topCoursesBody">
+        </tbody>
+      </table>
+    </article>
+
+    <article class="card">
+      <div class="card-header">
+        <h2>Usage breakdown</h2>
+        <span>Daily vs weekly vs monthly</span>
+      </div>
+      <div id="bars-container">
+        <!-- Filled by JS -->
+      </div>
+    </article>
+  </section>
+
+  <section class="card" style="margin-top:16px;">
+    <div class="card-header">
+      <h2>Recent activity snapshot</h2>
+      <span>Last ~20 events</span>
+    </div>
+    <table>
+      <thead>
+      <tr>
+        <th>Time</th>
+        <th>Event</th>
+        <th>Detail</th>
+      </tr>
+      </thead>
+      <tbody id="recentActivityBody">
+      </tbody>
+    </table>
+  </section>
+
+  <div class="footer-note">
+    Data from <code>/api/analytics/summary</code> &amp; events logged via
+    <code>/api/analytics/event</code>.
+  </div>
+</main>
+
+<script>
+  function handleLogout() {
+    // simple frontend "logout" – clears stored email
+    localStorage.removeItem("teeradar_user_email");
+    window.location.href = "/index.html";
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toTimeString().slice(0,5);
+  }
+
+  function renderSummary(data) {
+    document.getElementById("loadingMsg").textContent = "";
+    document.getElementById("rangeLabel").textContent =
+      `${data.rangeLabel || "Last 7 days"} · backed by server logs`;
+    document.getElementById("badgeRange").textContent = data.rangeLabel || "Last 7 days";
+
+    const c = data.countsByRange || {};
+
+    // main metrics (7-day)
+    document.getElementById("m-visitors").textContent = (data.visitors?.value ?? 0).toLocaleString();
+    document.getElementById("m-newUsers").textContent = (data.newUsers?.value ?? 0).toLocaleString();
+    document.getElementById("m-searches").textContent = (data.searches?.value ?? 0).toLocaleString();
+    document.getElementById("m-bookClicks").textContent = (data.bookClicks?.value ?? 0).toLocaleString();
+    document.getElementById("m-adViews").textContent = (data.adViews?.value ?? 0).toLocaleString();
+    document.getElementById("m-adClicks").textContent = (data.adClicks?.value ?? 0).toLocaleString();
+
+    // daily/weekly/monthly text
+    function setRangeText(id, metric) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const m = c[metric] || { d1: 0, d7: 0, d30: 0 };
+      el.textContent = `24h: ${m.d1 || 0} · 7d: ${m.d7 || 0} · 30d: ${m.d30 || 0}`;
+    }
+
+    setRangeText("t-visitors", "visitors");
+    setRangeText("t-newUsers", "newUsers");
+    setRangeText("t-searches", "searches");
+    setRangeText("t-bookClicks", "bookClicks");
+    document.getElementById("t-adViews").textContent = "Ad tracking to come.";
+    document.getElementById("t-adClicks").textContent = "Ad tracking to come.";
+
+    // top courses
+    const body = document.getElementById("topCoursesBody");
+    body.innerHTML = "";
+    (data.topCourses || []).forEach((c) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${c.name}</td>
+        <td><span class="pill grey">${c.provider || "Course"}</span></td>
+        <td>${c.clicks}</td>
+      `;
+      body.appendChild(tr);
+    });
+
+    // breakdown bars: use 7-day totals as 100% reference
+    const barsContainer = document.getElementById("bars-container");
+    barsContainer.innerHTML = "";
+
+    const b = data.countsByRange || {};
+    const items = [
+      { label: "Visitors", m: b.visitors },
+      { label: "New users", m: b.newUsers },
+      { label: "Searches", m: b.searches },
+      { label: "Bookings clicks", m: b.bookClicks }
+    ];
+    items.forEach(({label, m}) => {
+      const d1 = m?.d1 || 0;
+      const d7 = m?.d7 || 0;
+      const d30 = m?.d30 || 0;
+
+      const row = document.createElement("div");
+      row.className = "bar-row";
+      const barId = `bar-${label.replace(/\s+/g,"-").toLowerCase()}`;
+      row.innerHTML = `
+        <div class="bar-label">${label}</div>
+        <div class="bar-track">
+          <div class="bar-fill" id="${barId}"></div>
+        </div>
+        <div>${d7 || 0} (7d)</div>
+      `;
+      barsContainer.appendChild(row);
+
+      const pct = d7 > 0 ? Math.min(100, (d7 / (d30 || d7)) * 100) : 0;
+      requestAnimationFrame(() => {
+        const bar = document.getElementById(barId);
+        if (bar) bar.style.width = pct + "%";
+      });
+    });
+
+    // recent events
+    const recentBody = document.getElementById("recentActivityBody");
+    recentBody.innerHTML = "";
+    (data.recentEvents || []).forEach((e) => {
+      const tr = document.createElement("tr");
+      let pillClass = "grey";
+      let typeLabel = e.type;
+
+      if (e.type === "course_click") {
+        pillClass = "green";
+        typeLabel = "Book click";
+      } else if (e.type === "search") {
+        pillClass = "grey";
+        typeLabel = "Search";
+      } else if (e.type === "home_view") {
+        pillClass = "grey";
+        typeLabel = "Home view";
+      } else if (e.type === "new_user") {
+        pillClass = "green";
+        typeLabel = "New user";
+      }
+
+      let detail = "";
+      if (e.type === "course_click" && e.payload?.course) {
+        detail = `Course: ${e.payload.course}`;
+      } else if (e.type === "search") {
+        const p = e.payload || {};
+        detail = `${p.partySize || 1}p · ${p.holes || "any"} holes · ${p.date || ""}`;
+      }
+
+      tr.innerHTML = `
+        <td>${fmtTime(e.at)}</td>
+        <td><span class="pill ${pillClass}">${typeLabel}</span></td>
+        <td>${detail}</td>
+      `;
+      recentBody.appendChild(tr);
+    });
+  }
+
+  async function loadAnalytics() {
+    const msg = document.getElementById("loadingMsg");
+    try {
+      const res = await fetch("/api/analytics/summary");
+      if (!res.ok) {
+        msg.textContent = "Failed to load analytics summary from backend.";
+        return;
+      }
+      const data = await res.json();
+      renderSummary(data);
+    } catch (err) {
+      console.error("analytics summary error", err);
+      msg.textContent = "Error loading analytics. Check /api/analytics/summary.";
+    }
+  }
+
+  loadAnalytics();
+</script>
+</body>
+</html>
