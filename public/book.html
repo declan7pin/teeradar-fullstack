@@ -230,11 +230,25 @@
   <div class="course-strip" id="courseStrip"></div>
 
   <script>
+    // ---------- simple analytics helper ----------
+    function trackEvent(type, payload) {
+      try {
+        fetch("/api/analytics/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type,
+            payload: payload || {},
+            at: new Date().toISOString()
+          })
+        }).catch(() => {});
+      } catch (e) {
+        console.warn("analytics event failed", e);
+      }
+    }
+
     let map, markersLayer, courseList = [];
 
-    /* -----------------------
-       Provider helpers
-    ------------------------*/
     function providerLabel(raw) {
       const p = (raw || "").toLowerCase();
       if (p.includes("miclub"))  return "MiClub • live check";
@@ -253,19 +267,14 @@
       return "provider-generic";
     }
 
-    /* -----------------------
-       URL date adjuster
-       (front-end guarantee)
-    ------------------------*/
+    // enforce date in URLs
     function adjustBookingUrl(baseUrl) {
       if (!baseUrl) return null;
       const date = document.getElementById("date").value;
       if (!date) return baseUrl;
-
       let url = baseUrl;
-      const ymd = date.replace(/-/g,"");
+      const ymd = date.replace(/-/g, "");
 
-      // MiClub: selectedDate=YYYY-MM-DD
       if (url.includes("selectedDate=")) {
         if (/selectedDate=\d{4}-\d{2}-\d{2}/.test(url)) {
           url = url.replace(/selectedDate=\d{4}-\d{2}-\d{2}/, "selectedDate="+date);
@@ -275,7 +284,6 @@
         }
       }
 
-      // Quick18: teedate=YYYYMMDD
       if (url.includes("teedate=")) {
         if (/teedate=\d{8}/.test(url)) {
           url = url.replace(/teedate=\d{8}/, "teedate="+ymd);
@@ -288,9 +296,6 @@
       return url;
     }
 
-    /* -----------------------
-       Map init
-    ------------------------*/
     function initMap() {
       map = L.map("map").setView([-31.95, 115.86], 9);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -381,6 +386,13 @@
       });
     }
 
+    function handleBookClick(courseName, link) {
+      const decodedName = decodeURIComponent(courseName);
+      const decodedLink = decodeURIComponent(link);
+      trackEvent("course_click", { course: decodedName });
+      window.open(decodedLink, "_blank", "noopener,noreferrer");
+    }
+
     function renderStrip(availabilityByCourse, partySize) {
       const wrap = document.getElementById("courseStrip");
       wrap.innerHTML = "";
@@ -402,6 +414,18 @@
 
         const div = document.createElement("div");
         div.className = "course-card";
+
+        let actionHtml;
+        if (c.provider && c.provider.toLowerCase() === "phone" && c.phone) {
+          actionHtml = `<button class="btn-small" onclick="trackEvent('course_phone_click',{course:'${c.name}'});window.location.href='tel:${c.phone.replace(/\s+/g,"")}';">Call ${c.phone}</button>`;
+        } else if (link) {
+          const encName = encodeURIComponent(c.name);
+          const encLink = encodeURIComponent(link);
+          actionHtml = `<button class="btn-small" onclick="handleBookClick('${encName}','${encLink}')">Go to booking</button>`;
+        } else {
+          actionHtml = `<button class="btn-small" disabled>No link</button>`;
+        }
+
         div.innerHTML = `
           <div>
             <span class="badge ${status.badge}">${status.text}</span>
@@ -409,13 +433,7 @@
           </div>
           <h4>${c.name}</h4>
           <p>${c.city || "Western Australia"}</p>
-          ${
-            c.provider && c.provider.toLowerCase() === "phone" && c.phone
-              ? `<button class="btn-small" onclick="window.location.href='tel:${c.phone.replace(/\s+/g,"")}'">Call ${c.phone}</button>`
-              : link
-                ? `<button class="btn-small" onclick="window.open('${link}','_blank')">Go to booking</button>`
-                : `<button class="btn-small" disabled>No link</button>`
-          }
+          ${actionHtml}
         `;
         wrap.appendChild(div);
       });
@@ -442,6 +460,15 @@
 
       statusEl.textContent = "Checking each course for this window…";
 
+      // log search intent
+      trackEvent("search", {
+        date,
+        earliest,
+        latest,
+        holes: holes || "any",
+        partySize: players
+      });
+
       let slots = [];
       try {
         const r = await fetch("/api/search", {
@@ -465,7 +492,6 @@
         return;
       }
 
-      // Aggregate per course name: best available spots in the window
       const availabilityByCourse = {};
       slots.forEach(s => {
         const key = (s.name || "").toLowerCase();
@@ -497,10 +523,9 @@
 
     (async function start() {
       initMap();
-      // default date = today
       document.getElementById("date").value = new Date().toISOString().slice(0, 10);
-      await loadCourses();            // WA courses
-      renderMarkers({}, 4);           // neutral first view
+      await loadCourses();
+      renderMarkers({}, 4);
       renderStrip({}, 4);
     })();
 
@@ -508,5 +533,3 @@
   </script>
 </body>
 </html>
-
-
