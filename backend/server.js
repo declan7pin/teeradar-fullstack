@@ -16,11 +16,10 @@ app.use(cors());
 app.use(express.json());
 
 // =============================================================
-//  STATIC FRONTEND
-//  Your index.html is in ROOT /public, not backend/public
+//  STATIC FRONTEND  (root /public folder)
 // =============================================================
 
-// Go up one level from backend/ → to repo root, then into public/
+// Go up one level from backend/ → repo root → public/
 const publicDir = path.join(__dirname, '..', 'public');
 
 // Serve everything in /public (index.html, admin.html, assets/, etc.)
@@ -32,7 +31,7 @@ app.get('/', (req, res) => {
 });
 
 // =============================================================
-//  LOAD COURSES JSON (still in backend/data/courses.json)
+//  LOAD COURSES JSON  (backend/data/courses.json)
 // =============================================================
 
 const coursesFilePath = path.join(__dirname, 'data', 'courses.json');
@@ -47,7 +46,7 @@ try {
   courses = [];
 }
 
-// API: return all courses
+// Explicit courses endpoint (used by the map)
 app.get('/api/courses', (req, res) => {
   try {
     res.json(courses);
@@ -58,6 +57,27 @@ app.get('/api/courses', (req, res) => {
 });
 
 // =============================================================
+//  CATCH-ALL FOR OTHER /api/* REQUESTS
+//  (Stops "Could not reach backend" errors from the frontend)
+// =============================================================
+
+// Any other /api/... request will get a safe, empty OK response.
+// This prevents network/404 errors and lets the UI degrade gracefully.
+app.all('/api/*', (req, res) => {
+  // Don't shadow /api/courses (already handled above)
+  if (req.path === '/api/courses') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  res.json({
+    ok: true,
+    message: 'Stub backend response',
+    endpoint: req.path,
+    results: [],
+  });
+});
+
+// =============================================================
 //  START SERVER
 // =============================================================
 
@@ -65,3 +85,4 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`);
 });
+
