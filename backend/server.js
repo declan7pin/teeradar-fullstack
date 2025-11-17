@@ -16,22 +16,23 @@ app.use(cors());
 app.use(express.json());
 
 // =============================================================
-//  STATIC FRONTEND FIX — SERVE backend/public/*
-//  (Your index.html is in backend/public, NOT in /assets)
+//  STATIC FRONTEND
+//  Your index.html is in ROOT /public, not backend/public
 // =============================================================
 
-const publicDir = path.join(__dirname, 'public');
+// Go up one level from backend/ → to repo root, then into public/
+const publicDir = path.join(__dirname, '..', 'public');
 
-// Serve everything inside backend/public
+// Serve everything in /public (index.html, admin.html, assets/, etc.)
 app.use(express.static(publicDir));
 
-// Serve homepage correctly
+// Serve homepage at "/"
 app.get('/', (req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 // =============================================================
-//  LOAD COURSES JSON
+//  LOAD COURSES JSON (still in backend/data/courses.json)
 // =============================================================
 
 const coursesFilePath = path.join(__dirname, 'data', 'courses.json');
@@ -48,7 +49,12 @@ try {
 
 // API: return all courses
 app.get('/api/courses', (req, res) => {
-  res.json(courses);
+  try {
+    res.json(courses);
+  } catch (err) {
+    console.error('Error returning courses:', err);
+    res.status(500).json({ error: 'Failed to load course list' });
+  }
 });
 
 // =============================================================
