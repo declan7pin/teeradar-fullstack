@@ -2,559 +2,790 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>TeeRadar WA — Admin Analytics</title>
+  <title>TeeRadar WA — Analytics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><circle cx=%2222%22 cy=%2242%22 r=%228%22 fill=%22%2316a34a%22/></svg>"/>
+
   <style>
     :root {
-      --teal: #00796b;
-      --teal-soft: #e0f2f1;
       --bg: #f5f7fb;
-      --card: #ffffff;
+      --panel: #ffffff;
       --text: #0f172a;
-      --muted: #64748b;
-      --border: #e2e8f0;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --brand: #059669;
+      --brand-soft: rgba(5, 150, 105, 0.06);
       --accent: #0ea5e9;
-      --danger: #f97373;
-      --success: #16a34a;
-      --shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+      --shadow: 0 18px 35px rgba(15, 23, 42, 0.08);
+      --danger: #ef4444;
     }
-    *{box-sizing:border-box}
-    html,body{
-      margin:0;
-      padding:0;
-      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      background:radial-gradient(circle at top left,#e0f2f1,#f9fafb);
-      min-height:100%;
-      color:var(--text);
+
+    * {
+      box-sizing: border-box;
     }
-    header{
-      background:var(--teal);
-      color:#fff;
-      padding:10px 18px;
-      box-shadow:0 2px 6px rgba(0,0,0,0.1);
-      position:sticky;
-      top:0;
-      z-index:20;
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, sans-serif;
+      background: radial-gradient(circle at top left, #ecfeff, #eef2ff 40%, #f9fafb);
+      color: var(--text);
+      min-height: 100%;
     }
-    .nav-bar{
-      max-width:1100px;
-      margin:0 auto;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
+
+    /* Header / nav */
+
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(12px);
+      background: rgba(248, 250, 252, 0.85);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
     }
-    .brand{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      font-weight:700;
-      letter-spacing:.03em;
+
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
-    .brand span{font-size:18px;}
-    .brand-dot{
-      width:8px;height:8px;border-radius:999px;
-      background:#bbf7d0;
-      box-shadow:0 0 0 4px rgba(187,247,208,.3);
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
     }
-    .nav-links{
-      display:flex;
-      gap:12px;
-      align-items:center;
-      flex-wrap:wrap;
+
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 30% 20%, #bbf7d0, #16a34a);
+      box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.4),
+        0 10px 18px rgba(22, 163, 74, 0.35);
     }
-    .nav-links a{
-      color:#e0f2f1;
-      text-decoration:none;
-      font-size:14px;
-      padding:4px 8px;
-      border-radius:999px;
-      border:1px solid transparent;
+
+    .nav {
+      display: flex;
+      gap: 14px;
+      font-size: 14px;
     }
-    .nav-links a:hover{
-      background:rgba(255,255,255,.12);
-      border-color:rgba(255,255,255,.12);
+
+    .nav a {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      text-decoration: none;
+      color: var(--muted);
+      border: 1px solid transparent;
+      transition: all 0.16s ease-out;
     }
-    .nav-pill{
-      background:rgba(15,118,110,.2);
-      border-radius:999px;
-      padding:4px 10px;
-      font-size:12px;
-      border:1px solid rgba(45,212,191,.35);
+
+    .nav a:hover {
+      color: var(--text);
+      border-color: rgba(148, 163, 184, 0.3);
+      background: rgba(255, 255, 255, 0.8);
     }
-    .nav-pill span{opacity:.85;font-weight:500;}
-    .nav-logout{
-      background:rgba(239,68,68,.14);
-      border-radius:999px;
-      padding:4px 10px;
-      font-size:12px;
-      border:1px solid rgba(239,68,68,.35);
-      cursor:pointer;
+
+    .nav a.active {
+      border-color: rgba(5, 150, 105, 0.4);
+      background: rgba(22, 163, 74, 0.08);
+      color: var(--brand);
+      font-weight: 600;
     }
-    main{
-      max-width:1100px;
-      margin:26px auto 40px;
-      padding:0 16px 40px;
+
+    /* Main layout */
+
+    .page {
+      max-width: 1120px;
+      margin: 18px auto 32px;
+      padding: 0 16px 24px;
     }
-    .page-title{
-      display:flex;
-      flex-wrap:wrap;
-      justify-content:space-between;
-      align-items:flex-end;
-      gap:14px;
-      margin-bottom:20px;
+
+    .page-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 18px;
     }
-    .page-title h1{
-      margin:0;
-      font-size:clamp(24px,3vw,30px);
+
+    .page-header h1 {
+      font-size: clamp(22px, 3vw, 26px);
+      margin: 0;
     }
-    .page-title p{
-      margin:4px 0 0;
-      color:var(--muted);
-      font-size:14px;
+
+    .page-subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 2px;
     }
-    .tag-badge{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding:4px 10px;
-      border-radius:999px;
-      background:#ecfdf5;
-      border:1px solid #bbf7d0;
-      color:#065f46;
-      font-size:12px;
-      font-weight:600;
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--muted);
     }
-    .tag-dot{
-      width:8px;height:8px;border-radius:999px;
-      background:#22c55e;
-      box-shadow:0 0 0 3px rgba(34,197,94,.25);
+
+    /* KPI cards */
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
     }
-    .cards-grid{
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
-      gap:14px;
-      margin-bottom:18px;
+
+    @media (max-width: 920px) {
+      .metrics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
-    .card{
-      background:rgba(255,255,255,.96);
-      border-radius:18px;
-      padding:14px 16px;
-      border:1px solid rgba(226,232,240,.9);
-      box-shadow:var(--shadow);
+
+    @media (max-width: 640px) {
+      .metrics-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
     }
-    .card h3{
-      margin:0 0 6px;
-      font-size:14px;
-      color:var(--muted);
-      font-weight:500;
+
+    .metric-card {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+      position: relative;
+      overflow: hidden;
     }
-    .metric-main{
-      font-size:26px;
-      font-weight:700;
-      display:flex;
-      align-items:baseline;
-      gap:6px;
+
+    .metric-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 8px;
     }
-    .metric-main span.sub{
-      font-size:13px;
-      color:var(--muted);
-      font-weight:500;
+
+    .metric-value {
+      font-size: 24px;
+      font-weight: 700;
     }
-    .metric-trend{
-      margin-top:4px;
-      font-size:12px;
-      display:flex;
-      align-items:center;
-      gap:4px;
+
+    .metric-trend {
+      font-size: 11px;
+      margin-top: 6px;
+      color: var(--muted);
     }
-    .metric-trend.up{color:var(--success);}
-    .metric-trend.down{color:var(--danger);}
-    .metric-trend.neutral{color:var(--muted);}
-    .layout-grid{
-      display:grid;
-      grid-template-columns:3fr 2fr;
-      gap:16px;
-      margin-top:10px;
+
+    .metric-dot {
+      position: absolute;
+      right: -18px;
+      top: -18px;
+      width: 50px;
+      height: 50px;
+      border-radius: 999px;
+      background: var(--brand-soft);
+      border: 1px solid rgba(5, 150, 105, 0.3);
     }
-    @media(max-width:860px){
-      .layout-grid{grid-template-columns:1fr;}
+
+    /* Charts */
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 2fr 1.4fr;
+      gap: 14px;
+      margin-bottom: 20px;
     }
-    .card-header{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      margin-bottom:6px;
+
+    @media (max-width: 880px) {
+      .charts-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
     }
-    .card-header h2{
-      font-size:16px;margin:0;
+
+    .panel {
+      background: rgba(255, 255, 255, 0.97);
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      padding: 14px 16px 16px;
     }
-    .card-header span{
-      font-size:12px;color:var(--muted);
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
     }
-    table{
-      width:100%;
-      border-collapse:collapse;
-      font-size:13px;
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
     }
-    th,td{
-      padding:7px 6px;
-      text-align:left;
-      border-bottom:1px solid var(--border);
+
+    .panel-caption {
+      font-size: 11px;
+      color: var(--muted);
     }
-    th{
-      font-weight:600;
-      color:var(--muted);
-      font-size:12px;
+
+    canvas {
+      max-width: 100%;
     }
-    tbody tr:last-child td{border-bottom:none;}
-    .pill{
-      display:inline-flex;
-      padding:2px 8px;
-      border-radius:999px;
-      font-size:11px;
-      font-weight:600;
+
+    /* Recent events table */
+
+    .events-table-wrap {
+      margin-top: 10px;
+      max-height: 260px;
+      overflow: auto;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(248, 250, 252, 0.9);
     }
-    .pill.green{background:#ecfdf5;color:#166534;border:1px solid #bbf7d0;}
-    .pill.red{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;}
-    .pill.grey{background:#f3f4f6;color:#4b5563;border:1px solid #e5e7eb;}
-    .bar-row{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      margin:5px 0;
-      font-size:12px;
-      color:var(--muted);
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 13px;
     }
-    .bar-label{width:90px;}
-    .bar-track{
-      flex:1;
-      height:8px;
-      border-radius:999px;
-      background:#e5e7eb;
-      overflow:hidden;
+
+    thead {
+      background: #f3f4f6;
+      position: sticky;
+      top: 0;
+      z-index: 5;
     }
-    .bar-fill{
-      height:100%;
-      border-radius:999px;
-      background:linear-gradient(90deg,#22c55e,#0ea5e9);
-      width:0;
-      transition:width .6s ease-out;
+
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+      white-space: nowrap;
     }
-    .footer-note{
-      margin-top:16px;
-      font-size:11px;
-      color:var(--muted);
-      text-align:right;
+
+    th {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
     }
-    .footer-note code{
-      background:#e5e7eb;
-      padding:1px 6px;
-      border-radius:4px;
-      font-size:10px;
+
+    tbody tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.9);
     }
-    #loadingMsg{
-      font-size:13px;
-      color:var(--muted);
-      margin-bottom:10px;
+
+    .pill-type {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .pill-type-view {
+      background: #ecfdf5;
+      color: #166534;
+    }
+
+    .pill-type-search {
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .pill-type-click {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .pill-type-user {
+      background: #f5f3ff;
+      color: #5b21b6;
+    }
+
+    .events-empty {
+      padding: 16px;
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* Messages */
+
+    .status-row {
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.35);
+    }
+
+    .status-dot.error {
+      background: var(--danger);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.38);
+    }
+
+    footer {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 18px 16px 24px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
     }
   </style>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-<header>
-  <div class="nav-bar">
-    <div class="brand">
-      <div class="brand-dot"></div>
-      <span>TeeRadar WA</span>
-      <span style="font-size:12px;opacity:.85;">Admin</span>
+  <!-- Header -->
+  <header class="header">
+    <div class="wrap">
+      <div class="brand">
+        <div class="brand-badge"></div>
+        <span>TeeRadar WA</span>
+        <span style="font-size:12px;color:var(--muted);font-weight:500;">Admin</span>
+      </div>
+      <nav class="nav">
+        <a href="/index.html">Home</a>
+        <a href="/book.html">Bookings</a>
+        <a href="/faq.html">FAQ</a>
+        <a href="/about.html">About</a>
+        <a href="/analytics.html" class="active">Analytics</a>
+      </nav>
     </div>
-    <div class="nav-links">
-      <span class="nav-pill"><span>Analytics dashboard</span></span>
-      <a href="/index.html">Home</a>
-      <a href="/book.html">Bookings</a>
-      <a href="/faq.html">FAQ</a>
-      <button type="button" class="nav-logout" onclick="handleLogout()">Log out</button>
-    </div>
-  </div>
-</header>
+  </header>
 
-<main>
-  <div class="page-title">
-    <div>
-      <h1>Analytics overview</h1>
-      <p id="rangeLabel">Loading data from backend…</p>
-    </div>
-    <div>
-      <span class="tag-badge">
-        <span class="tag-dot"></span>
-        <span id="badgeRange">Last 7 days</span>
+  <main class="page">
+    <div class="page-header">
+      <div>
+        <h1>Analytics dashboard</h1>
+        <p class="page-subtitle">
+          Live tee-time engagement across Western Australia — updated every time a user searches or clicks.
+        </p>
+      </div>
+      <span class="pill">
+        <span style="width:6px;height:6px;border-radius:999px;background:#22c55e;"></span>
+        Realtime, in-memory
       </span>
     </div>
-  </div>
 
-  <div id="loadingMsg">Fetching analytics summary…</div>
-
-  <!-- TOP METRIC CARDS -->
-  <section class="cards-grid">
-    <article class="card">
-      <h3>Unique visitors</h3>
-      <div class="metric-main">
-        <span id="m-visitors">–</span>
-        <span class="sub">users (7 days)</span>
-      </div>
-      <div class="metric-trend neutral" id="t-visitors">Daily / weekly / monthly shown below.</div>
-    </article>
-
-    <article class="card">
-      <h3>New users</h3>
-      <div class="metric-main">
-        <span id="m-newUsers">–</span>
-        <span class="sub">first-time (7 days)</span>
-      </div>
-      <div class="metric-trend neutral" id="t-newUsers"></div>
-    </article>
-
-    <article class="card">
-      <h3>Searches performed</h3>
-      <div class="metric-main">
-        <span id="m-searches">–</span>
-        <span class="sub">searches (7 days)</span>
-      </div>
-      <div class="metric-trend neutral" id="t-searches"></div>
-    </article>
-
-    <article class="card">
-      <h3>“Go to booking” clicks</h3>
-      <div class="metric-main">
-        <span id="m-bookClicks">–</span>
-        <span class="sub">clicks (7 days)</span>
-      </div>
-      <div class="metric-trend neutral" id="t-bookClicks"></div>
-    </article>
-
-    <article class="card">
-      <h3>Ad impressions</h3>
-      <div class="metric-main">
-        <span id="m-adViews">–</span>
-        <span class="sub">views (7 days)</span>
-      </div>
-      <div class="metric-trend neutral" id="t-adViews"></div>
-    </article>
-
-    <article class="card">
-      <h3>Ad clicks</h3>
-      <div class="metric-main">
-        <span id="m-adClicks">–</span>
-        <span class="sub">clicks (7 days)</span>
-      </div>
-      <div class="metric-trend neutral" id="t-adClicks"></div>
-    </article>
-  </section>
-
-  <!-- LOWER GRID: TABLES + SIMPLE "CHARTS" -->
-  <section class="layout-grid">
-    <article class="card">
-      <div class="card-header">
-        <h2>Top courses clicked</h2>
-        <span>Based on “Go to booking” clicks</span>
-      </div>
-      <table>
-        <thead>
-        <tr>
-          <th>Course</th>
-          <th>Provider</th>
-          <th>Clicks (7d)</th>
-        </tr>
-        </thead>
-        <tbody id="topCoursesBody">
-        </tbody>
-      </table>
-    </article>
-
-    <article class="card">
-      <div class="card-header">
-        <h2>Usage breakdown</h2>
-        <span>Daily vs weekly vs monthly</span>
-      </div>
-      <div id="bars-container">
-        <!-- Filled by JS -->
-      </div>
-    </article>
-  </section>
-
-  <section class="card" style="margin-top:16px;">
-    <div class="card-header">
-      <h2>Recent activity snapshot</h2>
-      <span>Last ~20 events</span>
+    <!-- Status message -->
+    <div class="status-row">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Loading analytics…</span>
     </div>
-    <table>
-      <thead>
-      <tr>
-        <th>Time</th>
-        <th>Event</th>
-        <th>Detail</th>
-      </tr>
-      </thead>
-      <tbody id="recentActivityBody">
-      </tbody>
-    </table>
-  </section>
 
-  <div class="footer-note">
-    Data from <code>/api/analytics/summary</code> &amp; events logged via
-    <code>/api/analytics/event</code>.
-  </div>
-</main>
+    <!-- KPI cards -->
+    <section class="metrics-grid">
+      <article class="metric-card">
+        <div class="metric-dot"></div>
+        <div class="metric-label">Home page views</div>
+        <div class="metric-value" id="kpi-home">0</div>
+        <div class="metric-trend" id="kpi-home-trend">—</div>
+      </article>
 
-<script>
-  function handleLogout() {
-    // simple frontend "logout" – clears stored email
-    localStorage.removeItem("teeradar_user_email");
-    window.location.href = "/index.html";
-  }
+      <article class="metric-card">
+        <div class="metric-dot"></div>
+        <div class="metric-label">Course booking clicks</div>
+        <div class="metric-value" id="kpi-course-clicks">0</div>
+        <div class="metric-trend" id="kpi-course-trend">—</div>
+      </article>
 
-  function fmtTime(iso) {
-    if (!iso) return "";
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return "";
-    return d.toTimeString().slice(0,5);
-  }
+      <article class="metric-card">
+        <div class="metric-dot"></div>
+        <div class="metric-label">Searches</div>
+        <div class="metric-value" id="kpi-searches">0</div>
+        <div class="metric-trend" id="kpi-search-trend">—</div>
+      </article>
 
-  function renderSummary(data) {
-    document.getElementById("loadingMsg").textContent = "";
-    document.getElementById("rangeLabel").textContent =
-      `${data.rangeLabel || "Last 7 days"} · backed by server logs`;
-    document.getElementById("badgeRange").textContent = data.rangeLabel || "Last 7 days";
+      <article class="metric-card">
+        <div class="metric-dot"></div>
+        <div class="metric-label">New users</div>
+        <div class="metric-value" id="kpi-users">0</div>
+        <div class="metric-trend" id="kpi-users-trend">—</div>
+      </article>
+    </section>
 
-    const c = data.countsByRange || {};
+    <!-- Charts -->
+    <section class="charts-grid">
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Activity over time</div>
+            <div class="panel-caption">Home views, course clicks &amp; searches per day</div>
+          </div>
+          <span class="pill" style="font-size:10px;padding:2px 8px;">Last 14 days</span>
+        </div>
+        <canvas id="chart-activity" height="140"></canvas>
+      </article>
 
-    // main metrics (7-day)
-    document.getElementById("m-visitors").textContent = (data.visitors?.value ?? 0).toLocaleString();
-    document.getElementById("m-newUsers").textContent = (data.newUsers?.value ?? 0).toLocaleString();
-    document.getElementById("m-searches").textContent = (data.searches?.value ?? 0).toLocaleString();
-    document.getElementById("m-bookClicks").textContent = (data.bookClicks?.value ?? 0).toLocaleString();
-    document.getElementById("m-adViews").textContent = (data.adViews?.value ?? 0).toLocaleString();
-    document.getElementById("m-adClicks").textContent = (data.adClicks?.value ?? 0).toLocaleString();
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Top courses</div>
+            <div class="panel-caption">Most-clicked courses in the selected window</div>
+          </div>
+        </div>
+        <canvas id="chart-courses" height="140"></canvas>
+      </article>
+    </section>
 
-    // daily/weekly/monthly text
-    function setRangeText(id, metric) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const m = c[metric] || { d1: 0, d7: 0, d30: 0 };
-      el.textContent = `24h: ${m.d1 || 0} · 7d: ${m.d7 || 0} · 30d: ${m.d30 || 0}`;
+    <!-- Recent events -->
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Recent events</div>
+          <div class="panel-caption">Last 50 events across all users</div>
+        </div>
+      </div>
+
+      <div class="events-table-wrap" id="events-wrap">
+        <div class="events-empty" id="events-empty">Loading…</div>
+        <table id="events-table" style="display:none;">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Type</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody id="events-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    &copy; <script>document.write(new Date().getFullYear())</script> TeeRadar WA —
+    internal analytics only. Data is stored in memory on the server and resets on deploy.
+  </footer>
+
+  <script>
+    const statusDot = document.getElementById("status-dot");
+    const statusText = document.getElementById("status-text");
+
+    let activityChart;
+    let courseChart;
+
+    function setStatus(ok, message) {
+      if (!ok) {
+        statusDot.classList.add("error");
+      } else {
+        statusDot.classList.remove("error");
+      }
+      statusText.textContent = message;
     }
 
-    setRangeText("t-visitors", "visitors");
-    setRangeText("t-newUsers", "newUsers");
-    setRangeText("t-searches", "searches");
-    setRangeText("t-bookClicks", "bookClicks");
-    document.getElementById("t-adViews").textContent = "Ad tracking to come.";
-    document.getElementById("t-adClicks").textContent = "Ad tracking to come.";
+    function safeNum(v) {
+      return typeof v === "number" && !Number.isNaN(v) ? v : 0;
+    }
 
-    // top courses
-    const body = document.getElementById("topCoursesBody");
-    body.innerHTML = "";
-    (data.topCourses || []).forEach((c) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${c.name}</td>
-        <td><span class="pill grey">${c.provider || "Course"}</span></td>
-        <td>${c.clicks}</td>
-      `;
-      body.appendChild(tr);
-    });
+    function fmtPercent(p) {
+      const sign = p > 0 ? "+" : "";
+      return sign + p.toFixed(1) + "% vs prev";
+    }
 
-    // breakdown bars: use 7-day totals as 100% reference
-    const barsContainer = document.getElementById("bars-container");
-    barsContainer.innerHTML = "";
+    function computeTrend(current, previous) {
+      if (previous <= 0) return "—";
+      const pct = ((current - previous) / previous) * 100;
+      return fmtPercent(pct);
+    }
 
-    const b = data.countsByRange || {};
-    const items = [
-      { label: "Visitors", m: b.visitors },
-      { label: "New users", m: b.newUsers },
-      { label: "Searches", m: b.searches },
-      { label: "Bookings clicks", m: b.bookClicks }
-    ];
-    items.forEach(({label, m}) => {
-      const d1 = m?.d1 || 0;
-      const d7 = m?.d7 || 0;
-      const d30 = m?.d30 || 0;
+    function renderKPIs(data) {
+      const t = data.totals || {};
+      const prev = (data.previousTotals || {});
+      const home = safeNum(t.homeViews || t.home || t.home_views);
+      const clicks = safeNum(t.courseClicks || t.course_clicks);
+      const searches = safeNum(t.searches || t.search_count);
+      const users = safeNum(t.newUsers || t.users || t.uniqueUsers);
 
-      const row = document.createElement("div");
-      row.className = "bar-row";
-      const barId = `bar-${label.replace(/\s+/g,"-").toLowerCase()}`;
-      row.innerHTML = `
-        <div class="bar-label">${label}</div>
-        <div class="bar-track">
-          <div class="bar-fill" id="${barId}"></div>
-        </div>
-        <div>${d7 || 0} (7d)</div>
-      `;
-      barsContainer.appendChild(row);
+      const prevHome = safeNum(prev.homeViews || prev.home || prev.home_views);
+      const prevClicks = safeNum(prev.courseClicks || prev.course_clicks);
+      const prevSearches = safeNum(prev.searches || prev.search_count);
+      const prevUsers = safeNum(prev.newUsers || prev.users || prev.uniqueUsers);
 
-      const pct = d7 > 0 ? Math.min(100, (d7 / (d30 || d7)) * 100) : 0;
-      requestAnimationFrame(() => {
-        const bar = document.getElementById(barId);
-        if (bar) bar.style.width = pct + "%";
+      document.getElementById("kpi-home").textContent = home.toLocaleString();
+      document.getElementById("kpi-course-clicks").textContent = clicks.toLocaleString();
+      document.getElementById("kpi-searches").textContent = searches.toLocaleString();
+      document.getElementById("kpi-users").textContent = users.toLocaleString();
+
+      document.getElementById("kpi-home-trend").textContent =
+        computeTrend(home, prevHome);
+      document.getElementById("kpi-course-trend").textContent =
+        computeTrend(clicks, prevClicks);
+      document.getElementById("kpi-search-trend").textContent =
+        computeTrend(searches, prevSearches);
+      document.getElementById("kpi-users-trend").textContent =
+        computeTrend(users, prevUsers);
+    }
+
+    function renderActivityChart(data) {
+      const byDay = data.byDay || data.eventsByDay || [];
+      const days = byDay.slice(-14); // last 14
+
+      const labels = days.map(d => d.date || d.day || d.label || "");
+      const home = days.map(d => safeNum(d.homeViews || d.home || d.home_views));
+      const clicks = days.map(d => safeNum(d.courseClicks || d.course_clicks));
+      const searches = days.map(d => safeNum(d.searches || d.search_count));
+
+      const ctx = document.getElementById("chart-activity").getContext("2d");
+
+      if (activityChart) {
+        activityChart.destroy();
+      }
+
+      activityChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Home views",
+              data: home,
+              borderColor: "#16a34a",
+              backgroundColor: "rgba(22, 163, 74, 0.12)",
+              tension: 0.35,
+              fill: true,
+              borderWidth: 2,
+              pointRadius: 2.5
+            },
+            {
+              label: "Course clicks",
+              data: clicks,
+              borderColor: "#0ea5e9",
+              backgroundColor: "rgba(14, 165, 233, 0.08)",
+              tension: 0.35,
+              fill: true,
+              borderWidth: 2,
+              pointRadius: 2.5
+            },
+            {
+              label: "Searches",
+              data: searches,
+              borderColor: "#f97316",
+              backgroundColor: "rgba(249, 115, 22, 0.08)",
+              tension: 0.35,
+              fill: true,
+              borderWidth: 2,
+              pointRadius: 2.5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: {
+              labels: {
+                usePointStyle: true,
+                boxWidth: 8
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                precision: 0
+              }
+            }
+          }
+        }
       });
-    });
+    }
 
-    // recent events
-    const recentBody = document.getElementById("recentActivityBody");
-    recentBody.innerHTML = "";
-    (data.recentEvents || []).forEach((e) => {
-      const tr = document.createElement("tr");
-      let pillClass = "grey";
-      let typeLabel = e.type;
+    function renderCoursesChart(data) {
+      const list = data.byCourse ||
+        data.courseClicks ||
+        data.courses ||
+        [];
 
-      if (e.type === "course_click") {
-        pillClass = "green";
-        typeLabel = "Book click";
-      } else if (e.type === "search") {
-        pillClass = "grey";
-        typeLabel = "Search";
-      } else if (e.type === "home_view") {
-        pillClass = "grey";
-        typeLabel = "Home view";
-      } else if (e.type === "new_user") {
-        pillClass = "green";
-        typeLabel = "New user";
+      const top = list
+        .slice()
+        .sort((a, b) =>
+          (b.clicks || b.count || 0) - (a.clicks || a.count || 0)
+        )
+        .slice(0, 8);
+
+      const labels = top.map(c => c.name || c.courseName || c.course || "Unknown");
+      const values = top.map(c => safeNum(c.clicks || c.count || c.total));
+
+      const ctx = document.getElementById("chart-courses").getContext("2d");
+
+      if (courseChart) {
+        courseChart.destroy();
       }
 
-      let detail = "";
-      if (e.type === "course_click" && e.payload?.course) {
-        detail = `Course: ${e.payload.course}`;
-      } else if (e.type === "search") {
-        const p = e.payload || {};
-        detail = `${p.partySize || 1}p · ${p.holes || "any"} holes · ${p.date || ""}`;
+      courseChart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Clicks",
+              data: values,
+              backgroundColor: "rgba(37, 99, 235, 0.7)",
+              borderRadius: 6,
+              maxBarThickness: 26
+            }
+          ]
+        },
+        options: {
+          indexAxis: "y",
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              ticks: { precision: 0 }
+            }
+          }
+        }
+      });
+    }
+
+    function describeEvent(ev) {
+      if (!ev) return "";
+      const p = ev.payload || {};
+      if (ev.type === "course_click" || ev.type === "course") {
+        const name = p.course || p.courseName || p.name || "Unknown course";
+        const provider = p.provider || "";
+        return provider ? `${name} (${provider})` : name;
       }
+      if (ev.type === "search") {
+        const holes = p.holes || p.hole || "any";
+        const party = p.partySize || p.party || 1;
+        return `${holes}-hole, ${party} player search`;
+      }
+      if (ev.type === "home_view") {
+        return "Homepage viewed";
+      }
+      if (ev.type === "new_user") {
+        return `New user: ${p.id || p.device || "anonymous"}`;
+      }
+      return JSON.stringify(p);
+    }
 
-      tr.innerHTML = `
-        <td>${fmtTime(e.at)}</td>
-        <td><span class="pill ${pillClass}">${typeLabel}</span></td>
-        <td>${detail}</td>
-      `;
-      recentBody.appendChild(tr);
-    });
-  }
+    function renderRecentEvents(data) {
+      const empty = document.getElementById("events-empty");
+      const table = document.getElementById("events-table");
+      const body = document.getElementById("events-body");
 
-  async function loadAnalytics() {
-    const msg = document.getElementById("loadingMsg");
-    try {
-      const res = await fetch("/api/analytics/summary");
-      if (!res.ok) {
-        msg.textContent = "Failed to load analytics summary from backend.";
+      const list = data.recent || data.recentEvents || data.events || [];
+
+      if (!list.length) {
+        empty.textContent = "No events captured yet.";
+        table.style.display = "none";
         return;
       }
-      const data = await res.json();
-      renderSummary(data);
-    } catch (err) {
-      console.error("analytics summary error", err);
-      msg.textContent = "Error loading analytics. Check /api/analytics/summary.";
-    }
-  }
 
-  loadAnalytics();
-</script>
+      empty.style.display = "none";
+      table.style.display = "table";
+      body.innerHTML = "";
+
+      list.slice(0, 50).forEach(ev => {
+        const tr = document.createElement("tr");
+
+        const tsRaw = ev.at || ev.timestamp || ev.time;
+        const date = tsRaw
+          ? new Date(tsRaw)
+          : new Date();
+
+        const tdTime = document.createElement("td");
+        tdTime.textContent = date.toLocaleString("en-AU", {
+          hour: "2-digit",
+          minute: "2-digit",
+          day: "2-digit",
+          month: "short"
+        });
+
+        const tdType = document.createElement("td");
+        const pill = document.createElement("span");
+        pill.classList.add("pill-type");
+        const t = (ev.type || "").toLowerCase();
+        if (t.includes("home")) {
+          pill.classList.add("pill-type-view");
+          pill.textContent = "View";
+        } else if (t.includes("search")) {
+          pill.classList.add("pill-type-search");
+          pill.textContent = "Search";
+        } else if (t.includes("click")) {
+          pill.classList.add("pill-type-click");
+          pill.textContent = "Course click";
+        } else if (t.includes("user")) {
+          pill.classList.add("pill-type-user");
+          pill.textContent = "User";
+        } else {
+          pill.textContent = ev.type || "Event";
+        }
+        tdType.appendChild(pill);
+
+        const tdDetail = document.createElement("td");
+        tdDetail.textContent = describeEvent(ev);
+
+        tr.appendChild(tdTime);
+        tr.appendChild(tdType);
+        tr.appendChild(tdDetail);
+        body.appendChild(tr);
+      });
+    }
+
+    async function loadAnalytics() {
+      try {
+        setStatus(true, "Loading analytics…");
+        const res = await fetch("/api/analytics/summary");
+        if (!res.ok) {
+          setStatus(false, "Failed to load analytics (HTTP " + res.status + ")");
+          return;
+        }
+        const data = await res.json();
+
+        renderKPIs(data);
+        renderActivityChart(data);
+        renderCoursesChart(data);
+        renderRecentEvents(data);
+
+        setStatus(true, "Analytics loaded and up to date.");
+      } catch (err) {
+        console.error("analytics error", err);
+        setStatus(false, "Error loading analytics — see console for details.");
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", loadAnalytics);
+  </script>
 </body>
 </html>
