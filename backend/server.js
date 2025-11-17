@@ -17,8 +17,8 @@ app.use(express.json());
 
 // ---------- STATIC FRONTEND ----------
 
-// Folder that contains index.html, about.html, etc.
-const publicDir = path.join(__dirname, 'public', 'assets');
+// This folder contains index.html, admin.html, assets/, etc.
+const publicDir = path.join(__dirname, 'public');
 
 // Serve all static files (HTML, JS, CSS, images, etc.)
 app.use(express.static(publicDir));
