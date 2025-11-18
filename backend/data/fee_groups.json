@@ -1,39 +1,360 @@
 {
-  "Whaleback Golf Course": { "9": "1500344725", "18": "1500344723" },
-  "Collier Park Golf Course": { "9": "1500323733", "18": "1500257612" },
-  "Araluen Estate": { "9": "102808", "18": "102807" },
-
-  "Sun City Country Club": { "9": "7301311", "18": "7301269" },
-
-  "The Cut Golf Course": {
-    "9": "247607",
-    "18": "247589",
-    "9_cart": "6011827",
-    "18_cart": "6011789"
+  "Albany Golf Club (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1739094"
+  },
+  "Albany Golf Club (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1739101"
   },
 
-  "Secret Harbour Golf Links": { "9": "12449", "18": "12445" },
-
-  "Meadow Springs Golf & Country Club": {
-    "9": "337074",
-    "18": "337072",
-    "9_weekend": "337075",
-    "18_weekend": "337073"
+  "Broome Golf Club (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "3074565"
+  },
+  "Broome Golf Club (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "3401009"
   },
 
-  "Kwinana Golf Club": { "9": "1502727564", "18": "1505795368" },
-
-  "Marangaroo Golf Course": { "9": "1500406575", "18": "1500406571" },
-
-  "Joondalup Resort Golf": {
-    "9_cart": "1508504524",
-    "18_cart": "1508198355"
+  "Bunbury Golf Club (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1517098264"
+  },
+  "Bunbury Golf Club (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1506123162"
   },
 
-  "The Vines Resort & Country Club": {
-    "9": "22289426",
-    "18": "22284292",
-    "9_cart": "24488670",
-    "18_cart": "24488643"
+  "Busselton Golf Club (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "4556244"
+  },
+  "Busselton Golf Club (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "4556245"
+  },
+
+  "Capel Golf Club (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "4382604"
+  },
+  "Capel Golf Club (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "4382615"
+  },
+
+  "Carramar Golf Course (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1500624075"
+  },
+  "Carramar Golf Course (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1500682805"
+  },
+
+  "Collier Park Golf Course (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1500257612"
+  },
+  "Collier Park Golf Course (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1500323733"
+  },
+
+  "Dunsborough Lakes Golf Club (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "104995"
+  },
+  "Dunsborough Lakes Golf Club (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "105015"
+  },
+
+  "Geraldton Golf Club (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "3131111"
+  },
+  "Geraldton Golf Club (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "3593179"
+  },
+
+  "Harvey Golf Club (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "2205458"
+  },
+  "Harvey Golf Club (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "2205459"
+  },
+
+  "Joondalup Resort (18 holes + cart)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3900000",
+    "feeGroupId": "1508198355"
+  },
+  "Joondalup Resort (9 holes + cart)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3900000",
+    "feeGroupId": "1508504524"
+  },
+
+  "Kalgoorlie Golf Course (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "122033"
+  },
+  "Kalgoorlie Golf Course (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "122037"
+  },
+
+  "Kwinana Golf Club (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1505795368"
+  },
+  "Kwinana Golf Club (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1502727564"
+  },
+
+  "Marangaroo Golf Course (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1500406571"
+  },
+  "Marangaroo Golf Course (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1500406575"
+  },
+
+  "Margaret River Golf Club (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1954670"
+  },
+  "Margaret River Golf Club (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1954671"
+  },
+
+  "Maylands Peninsula Golf Course (18 holes + cart + lunch)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "934740"
+  },
+  "Maylands Peninsula Golf Course (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "100795"
+  },
+  "Maylands Peninsula Golf Course (9 holes + cart + lunch)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "934741"
+  },
+  "Maylands Peninsula Golf Course (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "100797"
+  },
+
+  "Meadow Springs Golf Course (18 holes weekday)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "337072"
+  },
+  "Meadow Springs Golf Course (18 holes weekend)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "337073"
+  },
+  "Meadow Springs Golf Course (9 holes weekday)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "337074"
+  },
+  "Meadow Springs Golf Course (9 holes weekend)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "337075"
+  },
+
+  "Point Walter Golf Course (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "101527"
+  },
+
+  "Secret Harbour Golf Links (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "12445"
+  },
+  "Secret Harbour Golf Links (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "12449"
+  },
+
+  "The Cut Golf Course (18 holes cart)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "6011789"
+  },
+  "The Cut Golf Course (18 holes walking)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "247589"
+  },
+  "The Cut Golf Course (9 holes cart)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "6011827"
+  },
+  "The Cut Golf Course (9 holes walking)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "247607"
+  },
+
+  "The Vines Golf Course (18 holes + cart)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000010",
+    "feeGroupId": "24488643"
+  },
+  "The Vines Golf Course (18 holes walking)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000010",
+    "feeGroupId": "25803812"
+  },
+  "The Vines Golf Course (9 holes + cart - championship)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000010",
+    "feeGroupId": "24488670"
+  },
+  "The Vines Golf Course (9 holes + cart - lakes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000010",
+    "feeGroupId": "1980988"
+  },
+  "The Vines Golf Course (9 holes walking)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000010",
+    "feeGroupId": "22289426"
+  },
+
+  "Wembley Golf Course (18 holes - Old Course)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "102184"
+  },
+  "Wembley Golf Course (18 holes - Tuart Course)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "102193"
+  },
+  "Wembley Golf Course (9 holes - Old Course)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "102211"
+  },
+  "Wembley Golf Course (9 holes - Tuart Course)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "102202"
+  },
+
+  "Whaleback Golf Course (18 holes)": {
+    "provider": "MiClub",
+    "holes": 18,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1500344723"
+  },
+  "Whaleback Golf Course (9 holes)": {
+    "provider": "MiClub",
+    "holes": 9,
+    "bookingResourceId": "3000000",
+    "feeGroupId": "1500344725"
   }
 }
