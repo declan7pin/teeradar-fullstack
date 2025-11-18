@@ -21,9 +21,7 @@
       --bg: #f4f4f4;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -42,9 +40,7 @@
       color: #fff;
     }
 
-    .top-bar-title {
-      font-weight: 600;
-    }
+    .top-bar-title { font-weight: 600; }
 
     .top-bar button {
       border: none;
@@ -101,10 +97,7 @@
       font-size: 15px;
       cursor: pointer;
     }
-
-    .search-btn:active {
-      background: var(--teal-dark);
-    }
+    .search-btn:active { background: var(--teal-dark); }
 
     .status-line {
       font-size: 13px;
@@ -240,29 +233,14 @@
       box-shadow: 0 0 0 1px rgba(0,0,0,0.4);
     }
 
-    .marker-green {
-      background: var(--green);
-    }
-
-    .marker-red {
-      background: var(--red);
-    }
-
-    .marker-purple {
-      background: var(--purple);
-    }
+    .marker-green { background: var(--green); }
+    .marker-red { background: var(--red); }
+    .marker-purple { background: var(--purple); }
 
     @media (min-width: 800px) {
-      #map {
-        height: 380px;
-      }
-      .courses-strip {
-        flex-wrap: wrap;
-        overflow-x: visible;
-      }
-      .course-card {
-        flex: 0 0 calc(33.33% - 12px);
-      }
+      #map { height: 380px; }
+      .courses-strip { flex-wrap: wrap; overflow-x: visible; }
+      .course-card { flex: 0 0 calc(33.33% - 12px); }
     }
   </style>
 </head>
@@ -329,35 +307,27 @@
   </div>
 
   <!-- Courses strip -->
-  <section class="courses-strip" id="courses-strip">
-    <!-- cards injected here -->
-  </section>
+  <section class="courses-strip" id="courses-strip"></section>
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // ==========================================================
-    // GLOBAL STATE
-    // ==========================================================
     let map;
     let markers = [];
     let courses = [];
-    let lastSearchCriteria = null; // {date, earliest, latest, holes, partySize}
-    let groupedSlots = {}; // courseName => [slots]
+    let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize }
+    let groupedSlots = {};         // courseName => [slots]
 
     const statusLine = document.getElementById("status-line");
     const coursesStrip = document.getElementById("courses-strip");
 
-    // ==========================================================
-    // INIT MAP & COURSES
-    // ==========================================================
     init();
 
     async function init() {
       initMap();
       await loadCourses();
-      renderCourses(); // initial render: all courses, no availability yet
+      renderCourses();
     }
 
     function initMap() {
@@ -377,9 +347,6 @@
       }
     }
 
-    // ==========================================================
-    // SEARCH
-    // ==========================================================
     async function runSearch() {
       const date = document.getElementById("date").value;
       const earliest = document.getElementById("earliest").value || "06:00";
@@ -400,7 +367,6 @@
         partySize: Number(players) || 1,
       };
 
-      // store globally for booking URL builder
       window.teeRadarLastSearchDate = date;
 
       statusLine.textContent = "Checking live availability...";
@@ -416,7 +382,6 @@
         const data = await res.json();
         const slots = Array.isArray(data.slots) ? data.slots : [];
 
-        // group by course name (support slot.course or slot.courseName)
         groupedSlots = {};
         slots.forEach((s) => {
           const name = s.course || s.courseName || s.courseTitle || s.course_name;
@@ -425,18 +390,27 @@
           groupedSlots[name].push(s);
         });
 
-        // status line counts only *matching holes*
         const selectedHoles = Number(holes);
         let availableCourses = 0;
         let totalSlots = 0;
 
         Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
-          const course = courses.find(c => c.name === courseName);
+          const course = courses.find((c) => c.name === courseName);
           if (!course) return;
-          if (selectedHoles && typeof course.holes === "number" &&
-              Number(course.holes) !== selectedHoles) {
+
+          const provider = course.provider || "Other";
+          const isPhone = provider === "Phone";
+
+          // Hole filter applies only to non-phone courses
+          if (
+            !isPhone &&
+            selectedHoles &&
+            typeof course.holes === "number" &&
+            Number(course.holes) !== selectedHoles
+          ) {
             return;
           }
+
           availableCourses++;
           totalSlots += cSlots.length;
         });
@@ -460,9 +434,6 @@
       }
     }
 
-    // ==========================================================
-    // RENDER COURSES & MARKERS
-    // ==========================================================
     function clearMarkers() {
       markers.forEach((m) => map.removeLayer(m));
       markers = [];
@@ -479,7 +450,6 @@
       clearMarkers();
       coursesStrip.innerHTML = "";
 
-      // current holes filter
       const selectedHoles = Number(
         (lastSearchCriteria && lastSearchCriteria.holes) ||
         document.getElementById("holes").value ||
@@ -489,25 +459,25 @@
       courses.forEach((course) => {
         const name = course.name;
         const provider = course.provider || "Other";
+        const isPhone = provider === "Phone";
 
-        // STRICT hole filter: hide non-matching courses from map & cards
+        // Hole filter: hide non-matching *except* phone-booking courses
         if (
+          !isPhone &&
           selectedHoles &&
           typeof course.holes === "number" &&
           Number(course.holes) !== selectedHoles
         ) {
-          return; // skip this course completely
+          return;
         }
 
         const slots = groupedSlots[name] || [];
         const hasSlots = slots.length > 0;
-        const isPhone = provider === "Phone";
 
         let markerKind = "unavailable";
         if (isPhone) markerKind = "phone";
         else if (hasSlots) markerKind = "available";
 
-        // Marker + popup
         if (typeof course.lat === "number" && typeof course.lng === "number") {
           const marker = L.marker([course.lat, course.lng], {
             icon: createMarkerIcon(markerKind),
@@ -540,7 +510,6 @@
           markers.push(marker);
         }
 
-        // Card
         const card = document.createElement("article");
         card.className = "course-card";
 
@@ -599,9 +568,6 @@
       });
     }
 
-    // ==========================================================
-    // BOOKING LINK HANDLING (cards + popups)
-    // ==========================================================
     document.addEventListener("click", (evt) => {
       const el = evt.target.closest(".booking-link");
       if (!el) return;
@@ -623,7 +589,6 @@
         (lastSearchCriteria && lastSearchCriteria.date) ||
         window.teeRadarLastSearchDate;
 
-      // base URL: prefer backend bookingUrl, fallback to course.url
       let baseUrl =
         exampleSlot.bookingUrl ||
         exampleSlot.url ||
@@ -638,9 +603,7 @@
         const u = new URL(baseUrl);
 
         if (provider === "MiClub") {
-          if (searchDate) {
-            u.searchParams.set("selectedDate", searchDate);
-          }
+          if (searchDate) u.searchParams.set("selectedDate", searchDate);
           u.searchParams.delete("recaptchaResponse");
           u.searchParams.delete("mobile");
           finalUrl = u.toString();
@@ -658,9 +621,6 @@
       window.open(finalUrl, "_blank");
     });
 
-    // ==========================================================
-    // DEFAULT DATE = TODAY
-    // ==========================================================
     (function setDefaultDate() {
       const input = document.getElementById("date");
       if (!input) return;
