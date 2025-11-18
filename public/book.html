@@ -2,534 +2,251 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TeeRadar — Book a Tee Time</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="/assets/leaflet.css" />
+
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <style>
-    :root {
-      --teal:#036b65;
-      --bg:#eef3f1;
-      --card:#ffffff;
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
-      background:var(--bg);
-      color:#0f172a;
-    }
-    header{
-      background:var(--teal);
-      color:#fff;
-      padding:10px 4vw;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-    }
-    header h1{
-      margin:0;
-      font-size:1rem;
-      letter-spacing:.03em;
-    }
-    .home-btn{
-      background:#fff;
-      color:var(--teal);
-      border:none;
-      padding:6px 16px;
-      border-radius:999px;
-      font-weight:600;
-      font-size:.8rem;
-      cursor:pointer;
-    }
-    .filters{
-      background:#fff;
-      padding:14px 4vw;
-      display:flex;
-      gap:10px;
-      align-items:center;
-      flex-wrap:wrap;
-      border-bottom:1px solid rgba(15,23,42,.06);
-    }
-    .filters label{
-      font-size:.72rem;
-      font-weight:600;
-      color:#475569;
-      display:flex;
-      flex-direction:column;
-      gap:3px;
-    }
-    .filters input,
-    .filters select{
-      border:1px solid #d1d5db;
-      border-radius:8px;
-      padding:6px 10px;
-      font-size:.8rem;
-      min-width:90px;
-    }
-    .filters button{
-      background:var(--teal);
-      color:#fff;
-      border:none;
-      border-radius:10px;
-      padding:8px 16px;
-      font-weight:600;
-      font-size:.8rem;
-      cursor:pointer;
-      white-space:nowrap;
-    }
-    #status{
-      font-size:.75rem;
-      padding:4px 4vw 8px;
-      color:#475569;
-    }
-    #map{
-      height:420px;
-      margin:0 4vw;
-      border-radius:16px;
-      overflow:hidden;
-      background:#cbd5f5;
-      box-shadow:0 16px 35px rgba(15,23,42,.12);
-    }
-    .course-strip{
-      margin:16px 4vw 24px;
-      display:flex;
-      gap:14px;
-      overflow-x:auto;
-      padding-bottom:10px;
-    }
-    .course-card{
-      min-width:240px;
-      background:var(--card);
-      border-radius:14px;
-      border:1px solid rgba(15,23,42,.06);
-      box-shadow:0 10px 24px rgba(15,23,42,.06);
-      padding:12px 12px 14px;
-      flex:0 0 auto;
-    }
-    .course-card h4{
-      margin:2px 0 4px;
-      font-size:.9rem;
-    }
-    .course-card p{
-      margin:0 0 6px;
-      font-size:.7rem;
-      color:#64748b;
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 0;
+      background: #f4f4f4;
     }
 
-    .badge{
-      display:inline-block;
-      padding:3px 9px;
-      border-radius:999px;
-      font-size:.6rem;
-      margin-bottom:6px;
-      font-weight:600;
-    }
-    .badge-status-grey{background:#e5e7eb;color:#374151;}
-    .badge-status-blue{background:#0ea5e9;color:#e0f2fe;}
-    .badge-status-red{background:#fee2e2;color:#b91c1c;}
-    .badge-status-purple{background:#f5f3ff;color:#7e22ce;}
-
-    .badge-provider{
-      display:inline-block;
-      padding:3px 8px;
-      border-radius:999px;
-      font-size:.58rem;
-      margin-left:6px;
-      font-weight:600;
-    }
-    .provider-miclub{background:#dbeafe;color:#1d4ed8;}
-    .provider-quick18{background:#dcfce7;color:#166534;}
-    .provider-phone{background:#fef3c7;color:#92400e;}
-    .provider-info{background:#e5e7eb;color:#111827;}
-    .provider-generic{background:#e5e7eb;color:#111827;}
-
-    .btn-small{
-      background:#eef3f1;
-      border:none;
-      border-radius:10px;
-      padding:6px 10px;
-      font-size:.7rem;
-      cursor:pointer;
-      font-weight:600;
-    }
-    .btn-small[disabled]{
-      opacity:.6;
-      cursor:default;
+    .search-bar {
+      padding: 16px;
+      background: #fff;
+      margin-bottom: 8px;
     }
 
-    @media (max-width:900px){
-      header{padding:10px 3vw;}
-      .filters{padding:12px 3vw;}
-      #map{margin:0 3vw;height:55vh;}
-      .course-strip{margin:16px 3vw 24px;}
+    .btn {
+      width: 100%;
+      background: #006b57;
+      padding: 14px;
+      border-radius: 8px;
+      text-align: center;
+      color: #fff;
+      font-weight: bold;
+      margin-top: 8px;
+      cursor: pointer;
     }
-    @media (max-width:640px){
-      .filters{
-        flex-direction:column;
-        align-items:stretch;
-      }
-      .filters label{
-        width:100%;
-      }
-      .filters input,
-      .filters select{
-        width:100%;
-      }
-      .filters button{
-        width:100%;
-        justify-content:center;
-        display:flex;
-      }
+
+    #map {
+      height: 340px;
+      border-radius: 12px;
+      margin: 14px;
+    }
+
+    .course-card {
+      background: #fff;
+      padding: 14px;
+      border-radius: 10px;
+      margin: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+    }
+
+    .course-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    /* Marker Colours */
+    .marker-green { background: #00c853; border: 2px solid #fff; }
+    .marker-red { background: #d50000; border: 2px solid #fff; }
+    .marker-purple { background: #7e57c2; border: 2px solid #fff; }
+
+    .go-booking {
+      color: #006bff;
+      font-weight: 600;
+      margin-top: 8px;
+      display: inline-block;
     }
   </style>
-  <script src="/assets/leaflet.js"></script>
 </head>
+
 <body>
-  <header>
-    <h1>TeeRadar — Book a Tee Time</h1>
-    <button class="home-btn" onclick="window.location.href='/'">Return Home</button>
-  </header>
 
-  <div class="filters">
-    <label>
-      Date
-      <input type="date" id="date" />
-    </label>
-    <label>
-      Earliest
-      <input type="time" id="timeStart" value="06:00" />
-    </label>
-    <label>
-      Latest
-      <input type="time" id="timeEnd" value="17:00" />
-    </label>
-    <label>
-      Holes
-      <select id="holes">
-        <option value="">Any</option>
-        <option value="9">9 holes</option>
-        <option value="18">18 holes</option>
-      </select>
-    </label>
-    <label>
-      Players
-      <select id="players">
-        <option value="1">1 player</option>
-        <option value="2">2 players</option>
-        <option value="3">3 players</option>
-        <option value="4" selected>4 players</option>
-      </select>
-    </label>
-    <button id="searchBtn">Search availability</button>
+  <div class="search-bar">
+    <label>Date</label>
+    <input id="date" type="date" style="width:100%;padding:8px">
+
+    <label>Earliest</label>
+    <input id="earliest" type="time" style="width:100%;padding:8px" value="06:00">
+
+    <label>Latest</label>
+    <input id="latest" type="time" style="width:100%;padding:8px" value="17:00">
+
+    <label>Holes</label>
+    <select id="holes" style="width:100%;padding:8px">
+      <option value="9">9 holes</option>
+      <option value="18">18 holes</option>
+    </select>
+
+    <label>Players</label>
+    <select id="players" style="width:100%;padding:8px">
+      <option value="1">1 player</option>
+      <option value="2">2 players</option>
+      <option value="3">3 players</option>
+      <option value="4">4 players</option>
+    </select>
+
+    <div class="btn" onclick="runSearch()">Search availability</div>
   </div>
-
-  <div id="status">Select a date and hit “Search availability” to check live course sheets.</div>
 
   <div id="map"></div>
 
-  <div class="course-strip" id="courseStrip"></div>
+  <div id="course-list"></div>
 
   <script>
-    // ---------- simple analytics helper ----------
-    function trackEvent(type, payload) {
-      try {
-        fetch("/api/analytics/event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type,
-            payload: payload || {},
-            at: new Date().toISOString()
-          })
-        }).catch(() => {});
-      } catch (e) {
-        console.warn("analytics event failed", e);
-      }
+    // ===========================================================
+    // MAP SETUP
+    // ===========================================================
+    let map = L.map("map").setView([-31.95, 115.86], 6);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19
+    }).addTo(map);
+
+    let markers = [];
+
+    function clearMarkers() {
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
     }
 
-    let map, markersLayer, courseList = [];
-
-    function providerLabel(raw) {
-      const p = (raw || "").toLowerCase();
-      if (p.includes("miclub"))  return "MiClub • live check";
-      if (p.includes("quick18")) return "Quick18 • live check";
-      if (p.includes("phone"))   return "Phone bookings only";
-      if (p.includes("info"))    return "Info only";
-      return raw || "Course";
-    }
-
-    function providerClass(raw) {
-      const p = (raw || "").toLowerCase();
-      if (p.includes("miclub"))  return "provider-miclub";
-      if (p.includes("quick18")) return "provider-quick18";
-      if (p.includes("phone"))   return "provider-phone";
-      if (p.includes("info"))    return "provider-info";
-      return "provider-generic";
-    }
-
-    // enforce date in URLs
-    function adjustBookingUrl(baseUrl) {
-      if (!baseUrl) return null;
-      const date = document.getElementById("date").value;
-      if (!date) return baseUrl;
-      let url = baseUrl;
-      const ymd = date.replace(/-/g, "");
-
-      if (url.includes("selectedDate=")) {
-        if (/selectedDate=\d{4}-\d{2}-\d{2}/.test(url)) {
-          url = url.replace(/selectedDate=\d{4}-\d{2}-\d{2}/, "selectedDate="+date);
-        } else {
-          const sep = url.includes("?") ? "&" : "?";
-          url = url + sep + "selectedDate=" + date;
-        }
-      }
-
-      if (url.includes("teedate=")) {
-        if (/teedate=\d{8}/.test(url)) {
-          url = url.replace(/teedate=\d{8}/, "teedate="+ymd);
-        } else {
-          const sep = url.includes("?") ? "&" : "?";
-          url = url + sep + "teedate=" + ymd;
-        }
-      }
-
-      return url;
-    }
-
-    function initMap() {
-      map = L.map("map").setView([-31.95, 115.86], 9);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19
-      }).addTo(map);
-      markersLayer = L.layerGroup().addTo(map);
-    }
-
-    function markerStyle(color) {
-      return {
-        radius: 7,
-        fillColor: color,
-        color: "#ffffff",
-        weight: 1,
-        fillOpacity: 0.9
-      };
-    }
-
-    function getStatusForCourse(course, agg, partySize) {
-      if (course.provider && course.provider.toLowerCase() === "phone") {
-        return {
-          text: "Phone to book",
-          badge: "badge-status-purple",
-          color: "#a855f7"
-        };
-      }
-
-      if (agg && agg.hasSlots) {
-        if (agg.bestSpots === 0) {
-          return {
-            text: "No spots in window",
-            badge: "badge-status-red",
-            color: "#ef4444"
-          };
-        }
-        const label = `${agg.bestSpots} / 4 spots in window`;
-        return {
-          text: label,
-          badge: "badge-status-blue",
-          color: "#0ea5e9"
-        };
-      }
-
-      if (course.url) {
-        return {
-          text: "Tap to check times",
-          badge: "badge-status-grey",
-          color: "#6b7280"
-        };
-      }
-
-      return {
-        text: "Unknown (tap to check)",
-        badge: "badge-status-grey",
-        color: "#6b7280"
-      };
-    }
-
-    function renderMarkers(availabilityByCourse, partySize) {
-      markersLayer.clearLayers();
-
-      courseList.forEach(c => {
-        const key = (c.name || "").toLowerCase();
-        const agg = availabilityByCourse[key];
-        const status = getStatusForCourse(c, agg, partySize);
-
-        let link = null;
-        if (c.provider && c.provider.toLowerCase() === "phone") {
-          link = c.phone ? `tel:${c.phone.replace(/\s+/g,"")}` : null;
-        } else if (c.url) {
-          link = adjustBookingUrl(c.url);
-        }
-
-        let popup = `<strong>${c.name}</strong><br/>
-          <span style="font-size:.75rem;color:#6b7280;">${status.text}</span>`;
-
-        if (c.provider && c.provider.toLowerCase() === "phone" && c.phone) {
-          popup += `<br/><a href="tel:${c.phone.replace(/\s+/g,"")}" target="_blank">Call ${c.phone}</a>`;
-        } else if (link) {
-          popup += `<br/><a href="${link}" target="_blank" rel="noopener noreferrer">Go to booking</a>`;
-        } else {
-          popup += `<br/>No direct link`;
-        }
-
-        L.circleMarker([c.lat, c.lng], markerStyle(status.color))
-          .addTo(markersLayer)
-          .bindPopup(popup);
+    function markerIcon(colorClass) {
+      return L.divIcon({
+        className: colorClass,
+        iconSize: [16, 16]
       });
     }
 
-    function handleBookClick(courseName, link) {
-      const decodedName = decodeURIComponent(courseName);
-      const decodedLink = decodeURIComponent(link);
-      trackEvent("course_click", { course: decodedName });
-      window.open(decodedLink, "_blank", "noopener,noreferrer");
-    }
-
-    function renderStrip(availabilityByCourse, partySize) {
-      const wrap = document.getElementById("courseStrip");
-      wrap.innerHTML = "";
-
-      courseList.forEach(c => {
-        const key = (c.name || "").toLowerCase();
-        const agg = availabilityByCourse[key];
-        const status = getStatusForCourse(c, agg, partySize);
-
-        let link = null;
-        if (c.provider && c.provider.toLowerCase() === "phone") {
-          link = c.phone ? `tel:${c.phone.replace(/\s+/g,"")}` : null;
-        } else if (c.url) {
-          link = adjustBookingUrl(c.url);
-        }
-
-        const provClass = providerClass(c.provider);
-        const provLabel = providerLabel(c.provider);
-
-        const div = document.createElement("div");
-        div.className = "course-card";
-
-        let actionHtml;
-        if (c.provider && c.provider.toLowerCase() === "phone" && c.phone) {
-          actionHtml = `<button class="btn-small" onclick="trackEvent('course_phone_click',{course:'${c.name}'});window.location.href='tel:${c.phone.replace(/\s+/g,"")}';">Call ${c.phone}</button>`;
-        } else if (link) {
-          const encName = encodeURIComponent(c.name);
-          const encLink = encodeURIComponent(link);
-          actionHtml = `<button class="btn-small" onclick="handleBookClick('${encName}','${encLink}')">Go to booking</button>`;
-        } else {
-          actionHtml = `<button class="btn-small" disabled>No link</button>`;
-        }
-
-        div.innerHTML = `
-          <div>
-            <span class="badge ${status.badge}">${status.text}</span>
-            <span class="badge-provider ${provClass}">${provLabel}</span>
-          </div>
-          <h4>${c.name}</h4>
-          <p>${c.city || "Western Australia"}</p>
-          ${actionHtml}
-        `;
-        wrap.appendChild(div);
-      });
-    }
-
-    async function loadCourses() {
-      const res = await fetch("/api/courses");
-      courseList = await res.json();
-      return courseList;
-    }
-
-    async function doSearch() {
-      const statusEl = document.getElementById("status");
+    // ===========================================================
+    // SEARCH FUNCTION
+    // ===========================================================
+    async function runSearch() {
       const date = document.getElementById("date").value;
-      const earliest = document.getElementById("timeStart").value || "06:00";
-      const latest = document.getElementById("timeEnd").value || "17:00";
+      const earliest = document.getElementById("earliest").value;
+      const latest = document.getElementById("latest").value;
       const holes = document.getElementById("holes").value;
-      const players = parseInt(document.getElementById("players").value || "1", 10);
+      const players = document.getElementById("players").value;
 
-      if (!date) {
-        statusEl.textContent = "Please select a date before searching.";
-        return;
-      }
+      window.teeRadarLastSearchDate = date;
 
-      statusEl.textContent = "Checking each course for this window…";
-
-      // log search intent
-      trackEvent("search", {
-        date,
-        earliest,
-        latest,
-        holes: holes || "any",
-        partySize: players
+      const res = await fetch("/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date,
+          earliest,
+          latest,
+          holes,
+          partySize: players
+        })
       });
 
-      let slots = [];
-      try {
-        const r = await fetch("/api/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            date,
-            earliest,
-            latest,
-            holes,
-            partySize: players
-          })
-        });
-        const j = await r.json();
-        slots = j.slots || [];
-      } catch (e) {
-        console.warn("search error", e);
-        statusEl.textContent = "Could not reach backend. Showing map only.";
-        renderMarkers({}, players);
-        renderStrip({}, players);
-        return;
-      }
-
-      const availabilityByCourse = {};
-      slots.forEach(s => {
-        const key = (s.name || "").toLowerCase();
-        const spots = typeof s.spots === "number" ? s.spots : 0;
-        if (!availabilityByCourse[key]) {
-          availabilityByCourse[key] = {
-            bestSpots: spots,
-            hasSlots: spots > 0
-          };
-        } else {
-          if (spots > availabilityByCourse[key].bestSpots) {
-            availabilityByCourse[key].bestSpots = spots;
-          }
-          if (spots > 0) {
-            availabilityByCourse[key].hasSlots = true;
-          }
-        }
-      });
-
-      renderMarkers(availabilityByCourse, players);
-      renderStrip(availabilityByCourse, players);
-
-      if (slots.length === 0) {
-        statusEl.textContent = "No matching tee times found in that window. Try adjusting the filters.";
-      } else {
-        statusEl.textContent = "Updated. Tap a course to view live times on the official booking site.";
-      }
+      const data = await res.json();
+      displayResults(data.slots);
     }
 
-    (async function start() {
-      initMap();
-      document.getElementById("date").value = new Date().toISOString().slice(0, 10);
-      await loadCourses();
-      renderMarkers({}, 4);
-      renderStrip({}, 4);
-    })();
+    // ===========================================================
+    // DISPLAY RESULTS
+    // ===========================================================
+    function displayResults(slots) {
+      clearMarkers();
+      const list = document.getElementById("course-list");
+      list.innerHTML = "";
 
-    document.getElementById("searchBtn").addEventListener("click", doSearch);
+      const grouped = {};
+
+      slots.forEach(s => {
+        if (!grouped[s.course]) grouped[s.course] = [];
+        grouped[s.course].push(s);
+      });
+
+      fetch("/api/courses")
+        .then(r => r.json())
+        .then(courses => {
+          courses.forEach(c => {
+            const name = c.name;
+            const hasSlots = grouped[name] && grouped[name].length > 0;
+
+            let colorClass =
+              c.provider === "Phone"
+                ? "marker-purple"
+                : hasSlots
+                ? "marker-green"
+                : "marker-red";
+
+            // MAP MARKER
+            const m = L.marker([c.lat, c.lng], {
+              icon: markerIcon(colorClass)
+            }).addTo(map);
+
+            markers.push(m);
+
+            // CARD
+            const div = document.createElement("div");
+            div.className = "course-card";
+
+            div.innerHTML = `
+              <div class="course-title">${name}</div>
+              <div>${c.provider === "Phone" ? "Phone Booking" : (hasSlots ? grouped[name].length + " slots" : "No slots")}</div>
+              ${
+                c.provider !== "Phone"
+                  ? `<a class="go-booking" data-provider="${c.provider}" href="${c.url}">Go to booking</a>`
+                  : ""
+              }
+            `;
+
+            list.appendChild(div);
+          });
+        });
+    }
+
+    // ===========================================================
+    // FIX “GO TO BOOKING” LINKS (dynamic dates)
+    // ===========================================================
+    document.addEventListener("click", function (e) {
+      const link = e.target.closest(".go-booking");
+      if (!link) return;
+
+      e.preventDefault();
+
+      const provider = link.dataset.provider;
+      const base = link.getAttribute("href");
+
+      const iso = window.teeRadarLastSearchDate;
+
+      let finalUrl = base;
+
+      try {
+        const u = new URL(base);
+
+        if (provider === "MiClub") {
+          u.searchParams.set("selectedDate", iso);
+          u.searchParams.delete("recaptchaResponse");
+          u.searchParams.delete("mobile");
+          finalUrl = u.toString();
+        }
+
+        if (provider === "Quick18") {
+          const yyyymmdd = iso.replace(/-/g, "");
+          u.searchParams.set("teedate", yyyymmdd);
+          finalUrl = u.toString();
+        }
+      } catch (err) {
+        console.error("booking URL fix failed:", err);
+      }
+
+      window.open(finalUrl, "_blank");
+    });
   </script>
 </body>
 </html>
