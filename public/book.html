@@ -479,18 +479,36 @@
         if (isPhone) markerKind = "phone";
         else if (hasSlots) markerKind = "available";
 
-        // Add marker
+        // Add marker + popup with Go to booking (non-phone) or phone number
         if (typeof course.lat === "number" && typeof course.lng === "number") {
           const marker = L.marker([course.lat, course.lng], {
             icon: createMarkerIcon(markerKind),
           }).addTo(map);
 
-          marker.bindPopup(
-            `<strong>${name}</strong><br>${provider}${
-              hasSlots ? `<br>${slots.length} slots` : isPhone ? "<br>Phone booking" : ""
-            }`
-          );
+          let popupHtml = `<div style="font-size:13px;">
+            <strong>${name}</strong><br>${provider}`;
 
+          if (hasSlots) {
+            popupHtml += `<br>${slots.length} slots`;
+          } else if (isPhone) {
+            popupHtml += `<br>Phone booking`;
+            if (course.phone) {
+              popupHtml += `<br><strong>${course.phone}</strong>`;
+            }
+          }
+
+          if (!isPhone) {
+            popupHtml += `<br><span
+              class="booking-link"
+              role="button"
+              data-course-name="${encodeURIComponent(name)}"
+              style="display:inline-block;margin-top:4px;"
+            >Go to booking</span>`;
+          }
+
+          popupHtml += `</div>`;
+
+          marker.bindPopup(popupHtml);
           markers.push(marker);
         }
 
@@ -521,6 +539,8 @@
             ? "Phone booking"
             : provider;
 
+        const phoneText = isPhone && course.phone ? course.phone : "";
+
         card.innerHTML = `
           <div>
             <div class="course-header">${name}</div>
@@ -532,7 +552,7 @@
             </div>
           </div>
           <div class="card-footer">
-            <span>${hasSlots ? slots.length + " slots" : isPhone ? (course.phone || "") : ""}</span>
+            <span>${hasSlots ? slots.length + " slots" : phoneText}</span>
             ${
               isPhone
                 ? ""
@@ -551,7 +571,7 @@
     }
 
     // ==========================================================
-    // BOOKING LINK HANDLING
+    // BOOKING LINK HANDLING (cards + popups)
     // ==========================================================
     document.addEventListener("click", (evt) => {
       const el = evt.target.closest(".booking-link");
@@ -560,7 +580,10 @@
       const disabled = el.getAttribute("aria-disabled") === "true";
       if (disabled) return;
 
-      const courseName = decodeURIComponent(el.dataset.courseName || "");
+      const courseNameEncoded = el.dataset.courseName;
+      if (!courseNameEncoded) return;
+
+      const courseName = decodeURIComponent(courseNameEncoded);
       const course = courses.find((c) => c.name === courseName);
       if (!course) return;
 
