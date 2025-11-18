@@ -637,6 +637,22 @@
     "lng": 122.2360,
     "url": "https://broome.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&feeGroupId=3401009"
   },
+  {
+  "name": "Araluen Estate (18 holes)",
+  "provider": "MiClub",
+  "holes": 18,
+  "lat": -32.1437,
+  "lng": 116.1140,
+  "url": "https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-08&feeGroupId=102807"
+},
+{
+  "name": "Araluen Estate (9 holes)",
+  "provider": "MiClub",
+  "holes": 9,
+  "lat": -32.1437,
+  "lng": 116.1140,
+  "url": "https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-08&feeGroupId=102808"
+}
 
   {
     "name": "Kununurra Golf Club (18 holes)",
