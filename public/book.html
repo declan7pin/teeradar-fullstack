@@ -466,20 +466,36 @@
       clearMarkers();
       coursesStrip.innerHTML = "";
 
+      // what hole-count is currently selected?
+      const selectedHoles = Number(
+        (lastSearchCriteria && lastSearchCriteria.holes) ||
+        document.getElementById("holes").value ||
+        0
+      );
+
       courses.forEach((course) => {
         const name = course.name;
         const provider = course.provider || "Other";
 
-        // Determine availability
+        // raw availability from backend
         const slots = groupedSlots[name] || [];
-        const hasSlots = slots.length > 0;
+        const rawHasSlots = slots.length > 0;
+
+        // does this course match the current holes filter?
+        const holesMatch =
+          !selectedHoles ||
+          typeof course.holes !== "number" ||
+          Number(course.holes) === selectedHoles;
+
+        // only treat as "available" when it has slots AND matches selected holes
+        const hasSlots = rawHasSlots && holesMatch;
         const isPhone = provider === "Phone";
 
         let markerKind = "unavailable";
         if (isPhone) markerKind = "phone";
         else if (hasSlots) markerKind = "available";
 
-        // Add marker + popup with Go to booking (non-phone) or phone number
+        // Add marker + popup
         if (typeof course.lat === "number" && typeof course.lng === "number") {
           const marker = L.marker([course.lat, course.lng], {
             icon: createMarkerIcon(markerKind),
