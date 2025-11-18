@@ -69,12 +69,18 @@ app.post("/api/search", async (req, res) => {
       return res.status(400).json({ error: "date is required" });
     }
 
+    // 🔑 IMPORTANT: make holes a NUMBER (9 or 18), not a string
+    const holesValue =
+      holes === "" || holes === null || typeof holes === "undefined"
+        ? ""
+        : Number(holes);
+
     const criteria = {
       date,
       earliest,
       latest,
-      holes: holes === "" ? "" : String(holes),
-      partySize: Number(partySize) || 1,
+      holes: holesValue,                 // <--- numeric 9 or 18
+      partySize: Number(partySize) || 1, // numeric party size
     };
 
     console.log("Incoming /api/search", criteria);
