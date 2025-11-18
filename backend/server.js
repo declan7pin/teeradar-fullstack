@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Serve frontend build from /public at project root
+// Serve static frontend from /public at project root
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 // ---------- LOAD DATA ----------
@@ -27,10 +27,10 @@ const coursesPath = path.join(__dirname, "data", "courses.json");
 const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 
 // Ensure every course has lat/lng, fallback to Perth CBD if missing
-const courses = rawCourses.map(c => ({
+const courses = rawCourses.map((c) => ({
   ...c,
   lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
-  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG
+  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG,
 }));
 
 const feeGroupsPath = path.join(__dirname, "data", "fee_groups.json");
@@ -54,7 +54,7 @@ app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Tee time search
+// Tee time search with extra debug logging
 app.post("/api/search", async (req, res) => {
   try {
     const {
@@ -62,7 +62,7 @@ app.post("/api/search", async (req, res) => {
       earliest = "06:00",
       latest = "17:00",
       holes = "",
-      partySize = 1
+      partySize = 1,
     } = req.body || {};
 
     if (!date) {
@@ -74,17 +74,33 @@ app.post("/api/search", async (req, res) => {
       earliest,
       latest,
       holes: holes === "" ? "" : String(holes),
-      partySize: Number(partySize) || 1
+      partySize: Number(partySize) || 1,
     };
 
     console.log("Incoming /api/search", criteria);
 
-    const jobs = courses.map(c => scrapeCourse(c, criteria, feeGroups));
-    const settled = await Promise.allSettled(jobs);
+    const jobs = courses.map(async (c) => {
+      try {
+        const result = await scrapeCourse(c, criteria, feeGroups);
+        const count = Array.isArray(result) ? result.length : 0;
 
-    const slots = settled
-      .filter(r => r.status === "fulfilled")
-      .flatMap(r => r.value || []);
+        if (count > 0) {
+          console.log(`✅ ${c.name} → ${count} slots`);
+        } else {
+          console.log(`⚪ ${c.name} → 0 slots`);
+        }
+
+        return result || [];
+      } catch (err) {
+        console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
+        return [];
+      }
+    });
+
+    const allResults = await Promise.all(jobs);
+    const slots = allResults.flat();
+
+    console.log(`🔎 /api/search finished → total slots: ${slots.length}`);
 
     res.json({ slots });
   } catch (err) {
@@ -100,7 +116,7 @@ app.post("/api/analytics/event", (req, res) => {
     console.log("Incoming analytics event:", {
       type,
       at,
-      payload
+      payload,
     });
     res.json({ ok: true });
   } catch (err) {
@@ -111,24 +127,24 @@ app.post("/api/analytics/event", (req, res) => {
 
 // DEBUG: return list of courses with coords + basic flags
 app.get("/api/debug/courses", (req, res) => {
-  const debugList = courses.map(c => ({
+  const debugList = courses.map((c) => ({
     name: c.name,
     provider: c.provider,
     holes: c.holes,
     lat: c.lat,
     lng: c.lng,
     hasUrl: !!c.url,
-    hasPhone: !!c.phone
+    hasPhone: !!c.phone,
   }));
 
   res.json({
     count: debugList.length,
-    courses: debugList
+    courses: debugList,
   });
 });
 
 // ---------- FRONTEND FALLBACK ----------
-// For any non-API route, serve the React app (SPA routing)
+// For any non-API route, serve the main index.html (SPA routing)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
