@@ -330,7 +330,7 @@
 
   <!-- Courses strip -->
   <section class="courses-strip" id="courses-strip">
-    <!-- cards get injected here -->
+    <!-- cards injected here -->
   </section>
 
   <!-- Leaflet JS -->
@@ -357,7 +357,7 @@
     async function init() {
       initMap();
       await loadCourses();
-      renderCourses(); // initial render with "no availability" / phone markers
+      renderCourses(); // initial render: all courses, no availability yet
     }
 
     function initMap() {
@@ -425,7 +425,7 @@
           groupedSlots[name].push(s);
         });
 
-        // ---- NEW: status counts respect selected holes ----
+        // status line counts only *matching holes*
         const selectedHoles = Number(holes);
         let availableCourses = 0;
         let totalSlots = 0;
@@ -433,11 +433,10 @@
         Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
           const course = courses.find(c => c.name === courseName);
           if (!course) return;
-          const holesMatch =
-            !selectedHoles ||
-            typeof course.holes !== "number" ||
-            Number(course.holes) === selectedHoles;
-          if (!holesMatch) return;
+          if (selectedHoles && typeof course.holes === "number" &&
+              Number(course.holes) !== selectedHoles) {
+            return;
+          }
           availableCourses++;
           totalSlots += cSlots.length;
         });
@@ -480,7 +479,7 @@
       clearMarkers();
       coursesStrip.innerHTML = "";
 
-      // what hole-count is currently selected?
+      // current holes filter
       const selectedHoles = Number(
         (lastSearchCriteria && lastSearchCriteria.holes) ||
         document.getElementById("holes").value ||
@@ -491,25 +490,24 @@
         const name = course.name;
         const provider = course.provider || "Other";
 
-        // raw availability from backend
+        // STRICT hole filter: hide non-matching courses from map & cards
+        if (
+          selectedHoles &&
+          typeof course.holes === "number" &&
+          Number(course.holes) !== selectedHoles
+        ) {
+          return; // skip this course completely
+        }
+
         const slots = groupedSlots[name] || [];
-        const rawHasSlots = slots.length > 0;
-
-        // does this course match the current holes filter?
-        const holesMatch =
-          !selectedHoles ||
-          typeof course.holes !== "number" ||
-          Number(course.holes) === selectedHoles;
-
-        // only treat as "available" when it has slots AND matches selected holes
-        const hasSlots = rawHasSlots && holesMatch;
+        const hasSlots = slots.length > 0;
         const isPhone = provider === "Phone";
 
         let markerKind = "unavailable";
         if (isPhone) markerKind = "phone";
         else if (hasSlots) markerKind = "available";
 
-        // Add marker + popup
+        // Marker + popup
         if (typeof course.lat === "number" && typeof course.lng === "number") {
           const marker = L.marker([course.lat, course.lng], {
             icon: createMarkerIcon(markerKind),
@@ -542,14 +540,15 @@
           markers.push(marker);
         }
 
-        // Build card
+        // Card
         const card = document.createElement("article");
         card.className = "course-card";
 
         const holesLabel =
-          course.holes === 9 ? "9 holes" : course.holes === 18 ? "18 holes" : `${course.holes} holes`;
+          course.holes === 9 ? "9 holes" :
+          course.holes === 18 ? "18 holes" :
+          `${course.holes} holes`;
 
-        // chips
         let availChipClass = "chip-availability-red";
         let availLabel = "No availability";
         if (isPhone) {
@@ -642,7 +641,6 @@
           if (searchDate) {
             u.searchParams.set("selectedDate", searchDate);
           }
-          // clean noise params
           u.searchParams.delete("recaptchaResponse");
           u.searchParams.delete("mobile");
           finalUrl = u.toString();
