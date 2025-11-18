@@ -425,8 +425,22 @@
           groupedSlots[name].push(s);
         });
 
-        const availableCourses = Object.keys(groupedSlots).length;
-        const totalSlots = slots.length;
+        // ---- NEW: status counts respect selected holes ----
+        const selectedHoles = Number(holes);
+        let availableCourses = 0;
+        let totalSlots = 0;
+
+        Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
+          const course = courses.find(c => c.name === courseName);
+          if (!course) return;
+          const holesMatch =
+            !selectedHoles ||
+            typeof course.holes !== "number" ||
+            Number(course.holes) === selectedHoles;
+          if (!holesMatch) return;
+          availableCourses++;
+          totalSlots += cSlots.length;
+        });
 
         if (totalSlots === 0) {
           statusLine.textContent =
