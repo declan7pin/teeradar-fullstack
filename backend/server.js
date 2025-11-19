@@ -6,6 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 import { logAnalyticsEvent } from "./db/analyticsDb.js";
+import Database from "better-sqlite3";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,7 +28,6 @@ const PERTH_LNG = 115.8613;
 const coursesPath = path.join(__dirname, "data", "courses.json");
 const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 
-// Ensure every course has lat/lng, fallback to Perth CBD if missing
 const courses = rawCourses.map((c) => ({
   ...c,
   lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
@@ -40,8 +40,22 @@ if (fs.existsSync(feeGroupsPath)) {
   feeGroups = JSON.parse(fs.readFileSync(feeGroupsPath, "utf8"));
 }
 
-console.log(`Loaded ${courses.length} courses.`);
-console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
+// ---------- SQLITE SETUP ----------
+const dbPath = path.join(__dirname, "data", "analytics.db");
+const db = new Database(dbPath);
+db.pragma("journal_mode = WAL");
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS analytics_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT,
+    at TEXT,
+    payload_json TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+console.log(`SQLite analytics database loaded at ${dbPath}`);
 
 // ---------- ROUTES ----------
 
@@ -50,12 +64,12 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", courses: courses.length });
 });
 
-// Return full course list (used by frontend map + UI)
+// Course list
 app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Tee time search with extra debug logging
+// Search tee times
 app.post("/api/search", async (req, res) => {
   try {
     const {
@@ -70,7 +84,6 @@ app.post("/api/search", async (req, res) => {
       return res.status(400).json({ error: "date is required" });
     }
 
-    // 🔑 IMPORTANT: make holes a NUMBER (9 or 18), not a string
     const holesValue =
       holes === "" || holes === null || typeof holes === "undefined"
         ? ""
@@ -80,8 +93,8 @@ app.post("/api/search", async (req, res) => {
       date,
       earliest,
       latest,
-      holes: holesValue,                 // numeric 9 or 18
-      partySize: Number(partySize) || 1  // numeric party size
+      holes: holesValue,
+      partySize: Number(partySize) || 1
     };
 
     console.log("Incoming /api/search", criteria);
@@ -89,17 +102,9 @@ app.post("/api/search", async (req, res) => {
     const jobs = courses.map(async (c) => {
       try {
         const result = await scrapeCourse(c, criteria, feeGroups);
-        const count = Array.isArray(result) ? result.length : 0;
-
-        if (count > 0) {
-          console.log(`✅ ${c.name} → ${count} slots`);
-        } else {
-          console.log(`⚪ ${c.name} → 0 slots`);
-        }
-
         return result || [];
       } catch (err) {
-        console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
+        console.error(`scrapeCourse error for ${c.name}:`, err.message);
         return [];
       }
     });
@@ -107,7 +112,7 @@ app.post("/api/search", async (req, res) => {
     const allResults = await Promise.all(jobs);
     const slots = allResults.flat();
 
-    console.log(`🔎 /api/search finished → total slots: ${slots.length}`);
+    console.log(`Search complete → ${slots.length} total slots`);
 
     res.json({ slots });
   } catch (err) {
@@ -116,18 +121,13 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
-// Simple analytics logger → now also writes to SQLite
+// ---------- ANALYTICS LOGGING ----------
 app.post("/api/analytics/event", (req, res) => {
   try {
     const { type, payload, at } = req.body || {};
 
-    console.log("Incoming analytics event:", {
-      type,
-      at,
-      payload
-    });
+    console.log("Analytics event:", { type, at, payload });
 
-    // ✅ Persist into SQLite
     logAnalyticsEvent({ type, at, payload });
 
     res.json({ ok: true });
@@ -137,30 +137,54 @@ app.post("/api/analytics/event", (req, res) => {
   }
 });
 
-// DEBUG: return list of courses with coords + basic flags
-app.get("/api/debug/courses", (req, res) => {
-  const debugList = courses.map((c) => ({
-    name: c.name,
-    provider: c.provider,
-    holes: c.holes,
-    lat: c.lat,
-    lng: c.lng,
-    hasUrl: !!c.url,
-    hasPhone: !!c.phone
-  }));
+// ---------- ANALYTICS SUMMARY ----------
+app.get("/api/analytics/summary", (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT type, COUNT(*) as count
+      FROM analytics_events
+      GROUP BY type
+    `).all();
 
-  res.json({
-    count: debugList.length,
-    courses: debugList
-  });
+    const summary = {
+      home_page_views: 0,
+      booking_clicks: 0,
+      searches: 0,
+      new_users: 0,
+      total_events: 0
+    };
+
+    rows.forEach((r) => {
+      if (r.type === "home_page_view") summary.home_page_views = r.count;
+      if (r.type === "booking_click") summary.booking_clicks = r.count;
+      if (r.type === "search") summary.searches = r.count;
+      if (r.type === "new_user") summary.new_users = r.count;
+      summary.total_events += r.count;
+    });
+
+    res.json(summary);
+  } catch (err) {
+    console.error("summary error:", err.message);
+    res.status(500).json({ error: "summary failed" });
+  }
 });
 
-// ---------- FRONTEND FALLBACK ----------
+// DEBUG: list all events
+app.get("/api/analytics/events", (req, res) => {
+  try {
+    const rows = db.prepare(`SELECT * FROM analytics_events ORDER BY id DESC LIMIT 200`).all();
+    res.json({ events: rows });
+  } catch (err) {
+    res.status(500).json({ error: "failed to load events" });
+  }
+});
+
+// Map fallback
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
 
-// ---------- START SERVER ----------
+// Start server
 app.listen(PORT, () => {
-  console.log(`✅ TeeRadar backend running on port ${PORT}`);
+  console.log(`TeeRadar backend running on port ${PORT}`);
 });
