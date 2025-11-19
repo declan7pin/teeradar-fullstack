@@ -6,10 +6,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 import {
-  logAnalyticsEvent,
+  recordEvent,
   getAnalyticsSummary,
-  getAllEvents
-} from "./db/analyticsDb.js";
+  getTopCourses
+} from "./analytics.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,6 +74,7 @@ app.post("/api/search", async (req, res) => {
       return res.status(400).json({ error: "date is required" });
     }
 
+    // Make holes a NUMBER (9 or 18), not a string
     const holesValue =
       holes === "" || holes === null || typeof holes === "undefined"
         ? ""
@@ -83,7 +84,7 @@ app.post("/api/search", async (req, res) => {
       date,
       earliest,
       latest,
-      holes: holesValue, // numeric 9 or 18
+      holes: holesValue,
       partySize: Number(partySize) || 1
     };
 
@@ -119,15 +120,43 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
-// ---------- ANALYTICS API ----------
+// ---------- ANALYTICS ----------
 
-// Log a single event
-app.post("/api/analytics/event", (req, res) => {
+// Receive events from the frontend and store them in SQLite
+app.post("/api/analytics/event", async (req, res) => {
   try {
-    const { type, payload, at } = req.body || {};
-    console.log("Incoming analytics event:", { type, at, payload });
+    const { type, payload = {}, at } = req.body || {};
 
-    logAnalyticsEvent({ type, at, payload });
+    if (!type) {
+      return res.status(400).json({ error: "type is required" });
+    }
+
+    const courseName =
+      payload.courseName ||
+      payload.course ||
+      payload.course_name ||
+      null;
+
+    const explicitUserId = payload.userId || payload.user_id || null;
+
+    // Fallback: approximate unique user by IP if userId not supplied
+    const forwardedFor = req.headers["x-forwarded-for"];
+    const ip =
+      (typeof forwardedFor === "string" &&
+        forwardedFor.split(",")[0].trim()) ||
+      req.socket.remoteAddress ||
+      null;
+
+    const userId = explicitUserId || ip || null;
+
+    await recordEvent({ type, userId, courseName, at });
+
+    console.log("Incoming analytics event:", {
+      type,
+      at,
+      userId,
+      courseName
+    });
 
     res.json({ ok: true });
   } catch (err) {
@@ -136,25 +165,30 @@ app.post("/api/analytics/event", (req, res) => {
   }
 });
 
-// Summary for dashboard
-app.get("/api/analytics/summary", (req, res) => {
+// Summary numbers for the dashboard
+app.get("/api/analytics/summary", async (req, res) => {
   try {
-    const summary = getAnalyticsSummary();
+    const summary = await getAnalyticsSummary();
     res.json(summary);
   } catch (err) {
-    console.error("summary error", err);
-    res.status(500).json({ error: "summary error", detail: err.message });
+    console.error("summary analytics error", err);
+    res
+      .status(500)
+      .json({ error: "analytics summary error", detail: err.message });
   }
 });
 
-// Optional: raw events for debugging
-app.get("/api/analytics/events", (req, res) => {
+// Top courses by booking clicks
+app.get("/api/analytics/top-courses", async (req, res) => {
   try {
-    const events = getAllEvents(200);
-    res.json({ events });
+    const top = await getTopCourses(5);
+    res.json({ top });
   } catch (err) {
-    console.error("events error", err);
-    res.status(500).json({ error: "events error", detail: err.message });
+    console.error("top-courses analytics error", err);
+    res.status(500).json({
+      error: "analytics top-courses error",
+      detail: err.message
+    });
   }
 });
 
