@@ -6,7 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// ✅ NEW: in-memory analytics
+// Analytics (in-memory)
 import {
   recordEvent,
   getAnalyticsSummary,
@@ -76,7 +76,7 @@ app.post("/api/search", async (req, res) => {
       return res.status(400).json({ error: "date is required" });
     }
 
-    // 🔑 IMPORTANT: make holes a NUMBER (9 or 18), not a string
+    // make holes a NUMBER (9 or 18), not a string
     const holesValue =
       holes === "" || holes === null || typeof holes === "undefined"
         ? ""
@@ -86,8 +86,8 @@ app.post("/api/search", async (req, res) => {
       date,
       earliest,
       latest,
-      holes: holesValue, // <--- numeric 9 or 18
-      partySize: Number(partySize) || 1, // numeric party size
+      holes: holesValue,
+      partySize: Number(partySize) || 1,
     };
 
     console.log("Incoming /api/search", criteria);
@@ -122,20 +122,18 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
-// ---------- ANALYTICS ----------
+// ---------- ANALYTICS INGEST ----------
 
-// Ingest events from the frontend
 app.post("/api/analytics/event", async (req, res) => {
   try {
     const { type, payload = {}, at } = req.body || {};
 
     // Derive a userId:
-    //  - Prefer payload.userId (if we add it later from the browser)
-    //  - Fallback to IP so the same device is counted as one user
+    //  - Prefer payload.userId (future)
+    //  - Fallback to IP, so a single device counts as one user
     const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
     const userId = payload.userId || ip || null;
 
-    // Course name (for booking_click, etc.)
     const courseName =
       payload.course ||
       payload.courseName ||
@@ -151,7 +149,6 @@ app.post("/api/analytics/event", async (req, res) => {
     });
 
     await recordEvent({ type, userId, courseName, at });
-
     res.json({ ok: true });
   } catch (err) {
     console.error("analytics error", err);
@@ -159,7 +156,38 @@ app.post("/api/analytics/event", async (req, res) => {
   }
 });
 
-// Admin summary endpoint used by admin UI
+// ---------- ANALYTICS SUMMARY (for existing Admin UI) ----------
+// Your current admin page is showing “Error loading analytics”
+// because it calls a route like this. We return the simple shape
+// it expects: homeViews, searches, bookingClicks, newUsers.
+
+app.get("/api/analytics/summary", async (req, res) => {
+  try {
+    const summary = await getAnalyticsSummary();
+    const topCourses = await getTopCourses(10);
+
+    res.json({
+      homeViews: summary.homeViews ?? 0,
+      searches: summary.searches ?? 0,
+      bookingClicks: summary.bookingClicks ?? 0,
+      // "newUsers" = new users in last 7 days
+      newUsers: summary.newUsers7d ?? 0,
+      // extra fields if you want them later
+      usersAllTime: summary.usersAllTime ?? 0,
+      usersToday: summary.usersToday ?? 0,
+      usersWeek: summary.usersWeek ?? 0,
+      topCourses,
+    });
+  } catch (err) {
+    console.error("analytics summary error", err);
+    res
+      .status(500)
+      .json({ error: "analytics summary error", detail: err.message });
+  }
+});
+
+// ---------- ANALYTICS SUMMARY (for newer UI, optional) ----------
+
 app.get("/api/admin/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
