@@ -2,7 +2,7 @@
 import * as cheerio from "cheerio";
 
 /*
- QUICK18 FORMAT (from your view-source):
+ QUICK18 FORMAT:
  --------------------------------------------------------
  #searchMatrix
    .matrixRow
@@ -36,7 +36,7 @@ function buildCriteriaTimeBounds(criteria = {}) {
  *
  * slot: {
  *   time: "HH:MM",
- *   availableSpots: number,
+ *   availableSpots: number
  * }
  */
 function slotMatchesCriteria(slot, criteria = {}, boundsCache) {
@@ -74,7 +74,11 @@ export function parseQuick18(html, course, criteria = {}) {
     const price = priceRaw ? priceRaw.replace("$", "").trim() : null;
 
     const availRaw = $(row).find(".available").text().trim();
-    const spots = parseInt(availRaw || "0", 10);
+    let spots = parseInt(availRaw || "0", 10);
+    if (Number.isNaN(spots)) {
+      // If the text is weird, be safe and treat as 0
+      spots = 0;
+    }
 
     const slot = {
       name: course.name,
@@ -84,10 +88,11 @@ export function parseQuick18(html, course, criteria = {}) {
       spots,
       price,
       holes: criteria.holes || null,
-      bookUrl: course.quick18Url && compactDate
-        ? `${course.quick18Url}?teedate=${compactDate}`
-        : course.quick18Url || null,
-      // used for generic filtering helper:
+      bookUrl:
+        course.quick18Url && compactDate
+          ? `${course.quick18Url}?teedate=${compactDate}`
+          : course.quick18Url || null,
+      // used for generic filtering helper
       availableSpots: spots
     };
 
