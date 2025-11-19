@@ -1,18 +1,16 @@
 // backend/analytics.js
 //
 // Simple in-memory analytics store.
-// This resets on each redeploy/restart, but is very reliable
-// and requires no native modules or WASM.
+// Resets on each restart/redeploy, but needs no DB/sql.js.
 //
-// It supports:
+// Tracks:
 //  - homeViews (type = "home_view")
 //  - searches  (type = "search")
 //  - bookingClicks (type = "booking_click")
-//  - unique users (all time, today, last 7 days)
-//  - new users in last 7 days
+//  - unique users (all time, today, last 7 days, new users last 7 days)
 //  - most-clicked courses
 
-// Store every event in memory
+// Array of all events:
 // { type, userId, courseName, createdAt: Date }
 const events = [];
 
@@ -36,21 +34,17 @@ export async function recordEvent({ type, userId, courseName, at }) {
     createdAt
   });
 
-  // Optional: hard cap to avoid unbounded growth
+  // Safety cap so memory doesn't grow forever
   if (events.length > 50000) {
     events.splice(0, events.length - 50000);
   }
+
+  // Debug:
+  console.log("[analytics] recorded", { type, userId, courseName, createdAt });
 }
 
 /**
- * Get summary metrics for the admin dashboard.
- *  - homeViews: total home page views
- *  - searches: total searches
- *  - bookingClicks: total booking clicks
- *  - usersAllTime: distinct users (all events)
- *  - usersToday: distinct users since local midnight
- *  - usersWeek: distinct users in last 7 days
- *  - newUsers7d: users whose first-ever event was in last 7 days
+ * Summary numbers for the admin dashboard.
  */
 export async function getAnalyticsSummary() {
   const now = new Date();
@@ -68,7 +62,7 @@ export async function getAnalyticsSummary() {
   const todayUserIds = new Set();
   const weekUserIds = new Set();
 
-  // Track first-seen per user for "new in last 7 days"
+  // For "new users" in last 7 days
   const firstSeen = new Map(); // userId -> Date
 
   for (const ev of events) {
@@ -96,11 +90,11 @@ export async function getAnalyticsSummary() {
   }
 
   let newUsers7d = 0;
-  for (const [_, first] of firstSeen.entries()) {
+  for (const [, first] of firstSeen.entries()) {
     if (first >= sevenDaysAgo) newUsers7d++;
   }
 
-  return {
+  const summary = {
     homeViews,
     searches,
     bookingClicks,
@@ -109,11 +103,14 @@ export async function getAnalyticsSummary() {
     usersWeek: weekUserIds.size,
     newUsers7d
   };
+
+  console.log("[analytics] summary", summary);
+  return summary;
 }
 
 /**
- * Get the most-clicked courses for the "Most clicked courses" panel.
- * Returns an array of { courseName, clicks }.
+ * Most-clicked courses based on booking_click events.
+ * Returns [{ courseName, clicks }, ...]
  */
 export async function getTopCourses(limit = 5) {
   const counts = new Map(); // courseName -> clicks
@@ -131,5 +128,6 @@ export async function getTopCourses(limit = 5) {
     .sort((a, b) => b.clicks - a.clicks)
     .slice(0, limit);
 
+  console.log("[analytics] top courses", arr);
   return arr;
 }
