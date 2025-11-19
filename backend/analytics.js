@@ -1,84 +1,20 @@
 // backend/analytics.js
 //
-// Lightweight analytics using sql.js (SQLite compiled to WebAssembly).
-// Data is stored in backend/analytics.sqlite so it survives restarts
-// on the same Render instance (but will reset on new deploys).
+// Simple in-memory analytics store.
+// This resets on each redeploy/restart, but is very reliable
+// and requires no native modules or WASM.
+//
+// It supports:
+//  - homeViews (type = "home_view")
+//  - searches  (type = "search")
+//  - bookingClicks (type = "booking_click")
+//  - unique users (all time, today, last 7 days)
+//  - new users in last 7 days
+//  - most-clicked courses
 
-import initSqlJs from "sql.js";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const DB_FILE = path.join(__dirname, "analytics.sqlite");
-
-let db;
-let SQL;
-
-// Initialise sql.js and open/create the DB
-const dbReady = (async () => {
-  SQL = await initSqlJs({
-    locateFile: (file) =>
-      path.join(__dirname, "..", "node_modules", "sql.js", "dist", file)
-  });
-
-  let fileBuffer = null;
-  if (fs.existsSync(DB_FILE)) {
-    try {
-      fileBuffer = fs.readFileSync(DB_FILE);
-      console.log("Analytics DB loaded from file.");
-    } catch (err) {
-      console.error("Error reading analytics DB, starting fresh:", err.message);
-    }
-  }
-
-  if (fileBuffer) {
-    db = new SQL.Database(new Uint8Array(fileBuffer));
-  } else {
-    db = new SQL.Database();
-  }
-
-  // Create table if not exists
-  db.run(`
-    CREATE TABLE IF NOT EXISTS events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      type TEXT NOT NULL,
-      user_id TEXT,
-      course_name TEXT,
-      created_at TEXT NOT NULL
-    );
-  `);
-
-  persistDb();
-})();
-
-// Helper to persist DB contents to disk
-function persistDb() {
-  try {
-    if (!db) return;
-    const data = db.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(DB_FILE, buffer);
-  } catch (err) {
-    console.error("Error persisting analytics DB:", err.message);
-  }
-}
-
-// Small helper to run a query that returns a single row
-function singleRow(sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  let row = {};
-  if (stmt.step()) {
-    row = stmt.getAsObject();
-  }
-  stmt.free();
-  return row;
-}
-
-// --------- PUBLIC API FUNCTIONS ----------
+// Store every event in memory
+// { type, userId, courseName, createdAt: Date }
+const events = [];
 
 /**
  * Record a single analytics event.
@@ -89,16 +25,21 @@ function singleRow(sql, params = []) {
  *   at: ISO timestamp (optional)
  */
 export async function recordEvent({ type, userId, courseName, at }) {
-  await dbReady;
   if (!type) return;
 
-  const ts = at || new Date().toISOString();
-  const stmt = db.prepare(
-    "INSERT INTO events (type, user_id, course_name, created_at) VALUES (?, ?, ?, ?)"
-  );
-  stmt.run([type, userId || null, courseName || null, ts]);
-  stmt.free();
-  persistDb();
+  const createdAt = at ? new Date(at) : new Date();
+
+  events.push({
+    type,
+    userId: userId || null,
+    courseName: courseName || null,
+    createdAt
+  });
+
+  // Optional: hard cap to avoid unbounded growth
+  if (events.length > 50000) {
+    events.splice(0, events.length - 50000);
+  }
 }
 
 /**
@@ -107,72 +48,65 @@ export async function recordEvent({ type, userId, courseName, at }) {
  *  - searches: total searches
  *  - bookingClicks: total booking clicks
  *  - usersAllTime: distinct users (all events)
- *  - usersToday: distinct users since midnight local time
+ *  - usersToday: distinct users since local midnight
  *  - usersWeek: distinct users in last 7 days
  *  - newUsers7d: users whose first-ever event was in last 7 days
  */
 export async function getAnalyticsSummary() {
-  await dbReady;
+  const now = new Date();
 
-  const homeViews =
-    singleRow(
-      "SELECT COUNT(*) AS c FROM events WHERE type = 'home_view';"
-    ).c || 0;
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
 
-  const searches =
-    singleRow("SELECT COUNT(*) AS c FROM events WHERE type = 'search';").c ||
-    0;
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const bookingClicks =
-    singleRow(
-      "SELECT COUNT(*) AS c FROM events WHERE type = 'booking_click';"
-    ).c || 0;
+  let homeViews = 0;
+  let searches = 0;
+  let bookingClicks = 0;
 
-  const usersAllTime =
-    singleRow(
-      "SELECT COUNT(DISTINCT user_id) AS c FROM events WHERE user_id IS NOT NULL;"
-    ).c || 0;
+  const allUserIds = new Set();
+  const todayUserIds = new Set();
+  const weekUserIds = new Set();
 
-  const usersToday =
-    singleRow(
-      `
-      SELECT COUNT(DISTINCT user_id) AS c
-      FROM events
-      WHERE user_id IS NOT NULL
-        AND date(created_at, 'localtime') = date('now', 'localtime');
-    `
-    ).c || 0;
+  // Track first-seen per user for "new in last 7 days"
+  const firstSeen = new Map(); // userId -> Date
 
-  const usersWeek =
-    singleRow(
-      `
-      SELECT COUNT(DISTINCT user_id) AS c
-      FROM events
-      WHERE user_id IS NOT NULL
-        AND datetime(created_at) >= datetime('now', '-7 days');
-    `
-    ).c || 0;
+  for (const ev of events) {
+    const { type, userId, createdAt } = ev;
 
-  const newUsers7d =
-    singleRow(
-      `
-      SELECT COUNT(*) AS c FROM (
-        SELECT user_id, MIN(created_at) AS first_seen
-        FROM events
-        WHERE user_id IS NOT NULL
-        GROUP BY user_id
-      )
-      WHERE datetime(first_seen) >= datetime('now', '-7 days');
-    `
-    ).c || 0;
+    if (type === "home_view") homeViews++;
+    if (type === "search") searches++;
+    if (type === "booking_click") bookingClicks++;
+
+    if (!userId) continue;
+
+    allUserIds.add(userId);
+
+    if (createdAt >= startOfToday) {
+      todayUserIds.add(userId);
+    }
+    if (createdAt >= sevenDaysAgo) {
+      weekUserIds.add(userId);
+    }
+
+    const existing = firstSeen.get(userId);
+    if (!existing || createdAt < existing) {
+      firstSeen.set(userId, createdAt);
+    }
+  }
+
+  let newUsers7d = 0;
+  for (const [_, first] of firstSeen.entries()) {
+    if (first >= sevenDaysAgo) newUsers7d++;
+  }
 
   return {
     homeViews,
     searches,
     bookingClicks,
-    usersAllTime,
-    usersToday,
-    usersWeek,
+    usersAllTime: allUserIds.size,
+    usersToday: todayUserIds.size,
+    usersWeek: weekUserIds.size,
     newUsers7d
   };
 }
@@ -182,24 +116,20 @@ export async function getAnalyticsSummary() {
  * Returns an array of { courseName, clicks }.
  */
 export async function getTopCourses(limit = 5) {
-  await dbReady;
+  const counts = new Map(); // courseName -> clicks
 
-  const stmt = db.prepare(
-    `
-    SELECT course_name AS courseName, COUNT(*) AS clicks
-    FROM events
-    WHERE type = 'booking_click' AND course_name IS NOT NULL
-    GROUP BY course_name
-    ORDER BY clicks DESC
-    LIMIT ?;
-  `
-  );
-  stmt.bind([limit]);
+  for (const ev of events) {
+    if (ev.type !== "booking_click") continue;
+    if (!ev.courseName) continue;
 
-  const rows = [];
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject());
+    const current = counts.get(ev.courseName) || 0;
+    counts.set(ev.courseName, current + 1);
   }
-  stmt.free();
-  return rows;
+
+  const arr = [...counts.entries()]
+    .map(([courseName, clicks]) => ({ courseName, clicks }))
+    .sort((a, b) => b.clicks - a.clicks)
+    .slice(0, limit);
+
+  return arr;
 }
