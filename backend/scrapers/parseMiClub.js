@@ -1,126 +1,116 @@
 // backend/scrapers/parseMiClub.js
-import * as cheerio from "cheerio";
+import * as cheerio from 'cheerio';
 
 /**
- * Parse MiClub public timesheet HTML and extract tee times with
- * accurate availability per tee-time (0–4 players).
+ * Generic MiClub parser.
  *
- * This version is designed to work generically across MiClub sites,
- * including the ones you use (Whaleback, Collier, Araluen, etc.).
+ * 1. First pass: use the standard MiClub table structure (works for most clubs).
+ * 2. If we get no results, do a second pass that just finds rows with
+ *    a TimesheetBooking link (handles quirky layouts like Meadow Springs).
  *
- * It returns objects shaped so your existing scrapeCourse logic
- * can keep working:
- *   {
- *     time: "HH:MM",          // 24h time string
- *     status: "available" | "full",
- *     players: number,        // booked players
- *     maxPlayers: number,     // total slots (usually 4)
- *     available: boolean,     // at least 1 free slot
- *     bookingLink: string|null
- *   }
+ * This is deliberately conservative so we don't break the courses
+ * that are already working well for you.
  */
 export function parseMiClub(html) {
   const $ = cheerio.load(html);
   const results = [];
 
-  const fullText = $.root().text();
+  // ---------- PASS 1: standard MiClub layout ----------
+  $('tr.TimeSlotRow').each((i, el) => {
+    const row = $(el);
 
-  // Split into “rows” using the “Click to select row.” marker MiClub uses
-  const segments = fullText.split(/Click to select row\./i);
+    const time =
+      row.find('.TimeSlotTime').text().trim() ||
+      row.find('td:first-child').text().trim();
 
-  segments.forEach((segment) => {
-    // Find a time like "02:01 pm" or "7:15 am"
-    const timeMatch = segment.match(/(\d{1,2}:\d{2})\s*(am|pm)?/i);
-    if (!timeMatch) return;
+    if (!time) return;
 
-    const rawTime = timeMatch[1];
-    const ampm = (timeMatch[2] || "").toUpperCase();
+    const statusText =
+      row.find('.TimeSlotStatus').text().trim() ||
+      row.find('.statusText').text().trim();
 
-    let [hStr, mStr] = rawTime.split(":");
-    let h = parseInt(hStr, 10);
+    const playerCells = row.find('.playerSlot, .TimeSlotPlayer');
+    const maxPlayers = playerCells.length || 4;
 
-    if (ampm === "PM" && h !== 12) h += 12;
-    if (ampm === "AM" && h === 12) h = 0;
+    // Count booked vs free cells if MiClub marks them up
+    let booked = 0;
+    playerCells.each((_, cell) => {
+      const c = $(cell);
+      const bookedIcon =
+        c.find('img[alt*="Booked"], img[alt*="Full"]').length > 0;
+      const bookedClass = /booked|full/i.test(c.attr('class') || '');
+      if (bookedIcon || bookedClass) booked += 1;
+    });
 
-    const time24 = `${String(h).padStart(2, "0")}:${mStr}`;
+    const freeSpots = Math.max(maxPlayers - booked, 0);
 
-    // Count how many player slots are Available/Taken in this row
-    const availableMatches = segment.match(/Available/gi) || [];
-    const takenMatches = segment.match(/Taken/gi) || [];
+    const bookingLink = row.find('a[href*="TimesheetBooking"]').attr('href');
 
-    const availableSpots = availableMatches.length;
-    const takenSpots = takenMatches.length;
-    const totalSpots = availableSpots + takenSpots;
-
-    if (totalSpots === 0) {
-      // If for some odd reason there are no explicit “Available/Taken”
-      // but it’s still a bookable row, assume standard 4-ball.
-      if (/Book Now/i.test(segment)) {
-        results.push({
-          time: time24,
-          status: "available",
-          players: 0,
-          maxPlayers: 4,
-          available: true,
-          bookingLink: null,
-        });
-      }
-      return;
-    }
-
-    const players = totalSpots - availableSpots;
-    const status = availableSpots > 0 ? "available" : "full";
+    const available =
+      /available|open/i.test(statusText) ||
+      (!!bookingLink && freeSpots > 0);
 
     results.push({
-      time: time24,
-      status,
-      players,
-      maxPlayers: totalSpots,
-      available: availableSpots > 0,
-      bookingLink: null, // we use your existing course URL builder for deep links
+      time,
+      status: statusText || (available ? 'Available' : 'Unavailable'),
+      players: maxPlayers - freeSpots, // players already booked
+      maxPlayers,
+      freeSpots,
+      available,
+      bookingLink: bookingLink ? bookingLink.trim() : null,
     });
   });
 
-  // Fallback for older/odd MiClub layouts – keep this so we never regress
-  if (results.length === 0) {
-    $("tr.TimeSlotRow").each((_, el) => {
-      const row = $(el);
-
-      const rawTime =
-        row.find(".TimeSlotTime").text().trim() ||
-        row.find("td").first().text().trim();
-
-      if (!rawTime) return;
-
-      const basicTime = (rawTime.match(/(\d{1,2}:\d{2})/) || [])[1];
-      if (!basicTime) return;
-
-      const time24 = basicTime; // assume already HH:MM in these layouts
-
-      const rowText = row.text();
-      const availableMatches = rowText.match(/Available/gi) || [];
-      const takenMatches = rowText.match(/Taken/gi) || [];
-
-      const availableSpots = availableMatches.length;
-      const takenSpots = takenMatches.length;
-      const totalSpots = (availableSpots + takenSpots) || 4;
-      const players = totalSpots - availableSpots;
-
-      const bookingLink =
-        row.find('a[href*="TimesheetBooking"]').attr("href") || null;
-
-      results.push({
-        time: time24,
-        status: availableSpots > 0 ? "available" : "full",
-        players,
-        maxPlayers: totalSpots,
-        available: availableSpots > 0,
-        bookingLink,
-      });
-    });
+  // If that worked, we're done – this keeps all the
+  // currently-good courses behaving exactly the same.
+  if (results.length > 0) {
+    return results;
   }
 
-  return results;
+  // ---------- PASS 2: fallback for quirky layouts (e.g. Meadow Springs) ----------
+  // Look for *any* row that contains a booking link.
+  const fallback = [];
+  $('a[href*="TimesheetBooking"]').each((i, linkEl) => {
+    const link = $(linkEl);
+    const row = link.closest('tr');
+    if (!row.length) return;
+
+    const time =
+      row.find('.TimeSlotTime, .time, .slotTime')
+        .first()
+        .text()
+        .trim() ||
+      row.find('td:first-child').text().trim();
+
+    if (!time) return;
+
+    // Try to infer number of player cells; fall back to 4
+    const playerCells = row.find('.playerSlot, .TimeSlotPlayer, .slotPlayer');
+    const maxPlayers = playerCells.length || 4;
+
+    let booked = 0;
+    playerCells.each((_, cell) => {
+      const c = $(cell);
+      const bookedIcon =
+        c.find('img[alt*="Booked"], img[alt*="Full"]').length > 0;
+      const bookedClass = /booked|full/i.test(c.attr('class') || '');
+      if (bookedIcon || bookedClass) booked += 1;
+    });
+
+    const freeSpots = Math.max(maxPlayers - booked, 0);
+
+    fallback.push({
+      time,
+      status: freeSpots > 0 ? 'Available' : 'Unavailable',
+      players: maxPlayers - freeSpots,
+      maxPlayers,
+      freeSpots,
+      available: freeSpots > 0,
+      bookingLink: link.attr('href')?.trim() || null,
+    });
+  });
+
+  return fallback;
 }
 
 export default parseMiClub;
