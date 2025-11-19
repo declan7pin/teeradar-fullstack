@@ -3,32 +3,32 @@
     "name": "Wembley Golf Course (18 holes - Old Course)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -31.9273,
-    "lng": 115.7864,
+    "lat": -31.924269884045348,
+    "lng": 115.7763087218749,
     "url": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-05&feeGroupId=102184"
   },
   {
     "name": "Wembley Golf Course (9 holes - Old Course)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -31.9273,
-    "lng": 115.7864,
+    "lat": -31.924269884045348,
+    "lng": 115.7763087218749,
     "url": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-05&feeGroupId=102211"
   },
   {
     "name": "Wembley Golf Course (18 holes - Tuart Course)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -31.9273,
-    "lng": 115.7864,
+    "lat": -31.924269884045348,
+    "lng": 115.7763087218749,
     "url": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-05&feeGroupId=102193"
   },
   {
     "name": "Wembley Golf Course (9 holes - Tuart Course)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -31.9273,
-    "lng": 115.7864,
+    "lat": -31.924269884045348,
+    "lng": 115.7763087218749,
     "url": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-05&feeGroupId=102202"
   },
 
@@ -36,8 +36,8 @@
     "name": "Point Walter Golf Course (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -32.0176,
-    "lng": 115.7947,
+    "lat": -32.01766087020319,
+    "lng": 115.78917035341037,
     "url": "https://pointwalter.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=101527"
   },
 
@@ -45,32 +45,32 @@
     "name": "Maylands Peninsula Golf Course (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -31.9304,
-    "lng": 115.9034,
+    "lat": -31.942041317213896,
+    "lng": 115.90112636383051,
     "url": "https://maylandsembleton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=100795"
   },
   {
     "name": "Maylands Peninsula Golf Course (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -31.9304,
-    "lng": 115.9034,
+    "lat": -31.942041317213896,
+    "lng": 115.90112636383051,
     "url": "https://maylandsembleton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=100797"
   },
   {
     "name": "Maylands Peninsula Golf Course (9 holes + cart + lunch)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -31.9304,
-    "lng": 115.9034,
+    "lat": -31.942041317213896,
+    "lng": 115.90112636383051,
     "url": "https://maylandsembleton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=934741"
   },
   {
     "name": "Maylands Peninsula Golf Course (18 holes + cart + lunch)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -31.9304,
-    "lng": 115.9034,
+    "lat": -31.942041317213896,
+    "lng": 115.90112636383051,
     "url": "https://maylandsembleton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=934740"
   },
 
@@ -78,16 +78,16 @@
     "name": "Collier Park Golf Course (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -31.99784852029364,
-    "lng": 115.88141375231828,
+    "lat": -32.00043970366608,
+    "lng": 115.87971419452452,
     "url": "https://bookings.collierparkgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=1500257612"
   },
   {
     "name": "Collier Park Golf Course (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -31.99784852029364,
-    "lng": 115.88141375231828,
+    "lat": -32.00043970366608,
+    "lng": 115.87971419452452,
     "url": "https://bookings.collierparkgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=1500323733"
   },
 
@@ -95,16 +95,16 @@
     "name": "Whaleback Golf Course (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -32.0445,
-    "lng": 115.8911,
+    "lat": -32.05239040179711,
+    "lng": 115.92136651914497,
     "url": "https://www.whalebackgolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=1500344723"
   },
   {
     "name": "Whaleback Golf Course (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -32.0445,
-    "lng": 115.8911,
+    "lat": -32.05239040179711,
+    "lng": 115.92136651914497,
     "url": "https://www.whalebackgolfcourse.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=1500344725"
   },
 
@@ -112,16 +112,16 @@
     "name": "Araluen Estate (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -32.1437,
-    "lng": 116.114,
+    "lat": -32.14120672245223,
+    "lng": 116.08894583579873,
     "url": "https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-08&feeGroupId=102807"
   },
   {
     "name": "Araluen Estate (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -32.1437,
-    "lng": 116.114,
+    "lat": -32.14120672245223,
+    "lng": 116.08894583579873,
     "url": "https://araluenestategolfcourse.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-08&feeGroupId=102808"
   },
 
@@ -129,16 +129,16 @@
     "name": "Sun City Country Club (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -31.5263,
-    "lng": 115.6267,
+    "lat": -31.534854842854973,
+    "lng": 115.65258843478621,
     "url": "https://www.suncitycountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-05&feeGroupId=7301269"
   },
   {
     "name": "Sun City Country Club (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -31.5263,
-    "lng": 115.6267,
+    "lat": -31.534854842854973,
+    "lng": 115.65258843478621,
     "url": "https://www.suncitycountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-05&feeGroupId=7301311"
   },
 
@@ -146,16 +146,16 @@
     "name": "Marangaroo Golf Course (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -31.8202,
-    "lng": 115.8298,
+    "lat": -31.826555225532594,
+    "lng": 115.82982569938311,
     "url": "https://marangaroo.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=1500406571"
   },
   {
     "name": "Marangaroo Golf Course (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -31.8202,
-    "lng": 115.8298,
+    "lat": -31.826555225532594,
+    "lng": 115.82982569938311,
     "url": "https://marangaroo.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=1500406575"
   },
 
@@ -163,16 +163,16 @@
     "name": "Joondalup Resort (18 holes + cart)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -31.7464,
-    "lng": 115.7526,
+    "lat": -31.748045034458205,
+    "lng": 115.7482810955211,
     "url": "https://golfbookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=2025-11-20&feeGroupId=1508198355"
   },
   {
     "name": "Joondalup Resort (9 holes + cart)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -31.7464,
-    "lng": 115.7526,
+    "lat": -31.748045034458205,
+    "lng": 115.7482810955211,
     "url": "https://golfbookings.joondalupresort.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=2025-11-21&feeGroupId=1508504524"
   },
 
@@ -180,40 +180,40 @@
     "name": "The Vines Golf Course (18 holes + cart)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -31.7724,
-    "lng": 116.0154,
+    "lat": -31.763501107771564,
+    "lng": 116.00810205090961,
     "url": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=2025-11-20&feeGroupId=24488643"
   },
   {
     "name": "The Vines Golf Course (18 holes walking)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -31.7724,
-    "lng": 116.0154,
+    "lat": -31.763501107771564,
+    "lng": 116.00810205090961,
     "url": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=2025-11-20&feeGroupId=25803812"
   },
   {
     "name": "The Vines Golf Course (9 holes walking)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -31.7724,
-    "lng": 116.0154,
+    "lat": -31.763501107771564,
+    "lng": 116.00810205090961,
     "url": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=2025-11-20&feeGroupId=22289426"
   },
   {
     "name": "The Vines Golf Course (9 holes + cart - championship)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -31.7724,
-    "lng": 116.0154,
+    "lat": -31.763501107771564,
+    "lng": 116.00810205090961,
     "url": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=2025-11-21&feeGroupId=24488670"
   },
   {
     "name": "The Vines Golf Course (9 holes + cart - lakes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -31.7724,
-    "lng": 116.0154,
+    "lat": -31.763501107771564,
+    "lng": 116.00810205090961,
     "url": "https://thevines.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000010&selectedDate=2025-11-21&feeGroupId=1980988"
   },
 
@@ -221,16 +221,16 @@
     "name": "Secret Harbour Golf Links (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -32.4152,
-    "lng": 115.7584,
+    "lat": -32.40695561468053,
+    "lng": 115.7501483483263,
     "url": "https://secretharbour.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=12445"
   },
   {
     "name": "Secret Harbour Golf Links (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -32.4152,
-    "lng": 115.7584,
+    "lat": -32.40695561468053,
+    "lng": 115.7501483483263,
     "url": "https://secretharbour.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-18&feeGroupId=12449"
   },
 
@@ -238,32 +238,32 @@
     "name": "Meadow Springs Golf & Country Club (18 holes weekday)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -32.5607,
-    "lng": 115.7388,
+    "lat": -32.49653906545535,
+    "lng": 115.7510941390592,
     "url": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=337072"
   },
   {
     "name": "Meadow Springs Golf & Country Club (18 holes weekend)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -32.5607,
-    "lng": 115.7388,
+    "lat": -32.49653906545535,
+    "lng": 115.7510941390592,
     "url": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-22&feeGroupId=337073"
   },
   {
     "name": "Meadow Springs Golf & Country Club (9 holes weekday)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -32.5607,
-    "lng": 115.7388,
+    "lat": -32.49653906545535,
+    "lng": 115.7510941390592,
     "url": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=337074"
   },
   {
     "name": "Meadow Springs Golf & Country Club (9 holes weekend)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -32.5607,
-    "lng": 115.7388,
+    "lat": -32.49653906545535,
+    "lng": 115.7510941390592,
     "url": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-23&feeGroupId=337075"
   },
 
@@ -271,16 +271,16 @@
     "name": "Kwinana Golf Club (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -32.2439,
-    "lng": 115.821,
+    "lat": -32.24290919044432,
+    "lng": 115.80004045723578,
     "url": "https://www.kwinanagolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=1505795368"
   },
   {
     "name": "Kwinana Golf Club (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -32.2439,
-    "lng": 115.821,
+    "lat": -32.24290919044432,
+    "lng": 115.80004045723578,
     "url": "https://www.kwinanagolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=1502727564"
   },
 
@@ -288,32 +288,32 @@
     "name": "The Cut Golf Course (18 holes walking)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -32.4654,
-    "lng": 115.7289,
+    "lat": -32.61180673076207,
+    "lng": 115.62955291783219,
     "url": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=247589"
   },
   {
     "name": "The Cut Golf Course (18 holes cart)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -32.4654,
-    "lng": 115.7289,
+    "lat": -32.61180673076207,
+    "lng": 115.62955291783219,
     "url": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=6011789"
   },
   {
     "name": "The Cut Golf Course (9 holes walking)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -32.4654,
-    "lng": 115.7289,
+    "lat": -32.61180673076207,
+    "lng": 115.62955291783219,
     "url": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=247607"
   },
   {
     "name": "The Cut Golf Course (9 holes cart)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -32.4654,
-    "lng": 115.7289,
+    "lat": -32.61180673076207,
+    "lng": 115.62955291783219,
     "url": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=6011827"
   },
 
@@ -321,8 +321,8 @@
     "name": "Fremantle Public Golf Course (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -32.0402,
-    "lng": 115.763,
+    "lat": -32.05350195703846,
+    "lng": 115.76684493538063,
     "url": "https://fremantlepublic.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-15&feeGroupId=103961"
   },
 
@@ -330,8 +330,8 @@
     "name": "Armadale / The Springs (9 holes)",
     "provider": "Quick18",
     "holes": 9,
-    "lat": -32.16,
-    "lng": 116,
+    "lat": -32.15833030219607,
+    "lng": 115.95791267126035,
     "url": "https://springs.quick18.com/teetimes/searchmatrix?teedate=20251119",
     "quick18Url": "https://springs.quick18.com/teetimes/searchmatrix"
   },
@@ -339,8 +339,8 @@
     "name": "Armadale / The Springs (18 holes)",
     "provider": "Quick18",
     "holes": 18,
-    "lat": -32.16,
-    "lng": 116,
+    "lat": -32.15833030219607,
+    "lng": 115.95791267126035,
     "url": "https://springs.quick18.com/teetimes/searchmatrix?teedate=20251119",
     "quick18Url": "https://springs.quick18.com/teetimes/searchmatrix"
   },
@@ -349,8 +349,8 @@
     "name": "Hamersley Public Golf Course (18 holes)",
     "provider": "Quick18",
     "holes": 18,
-    "lat": -31.8619,
-    "lng": 115.754,
+    "lat": -31.868023018257883,
+    "lng": 115.76668753851379,
     "url": "https://hamersley.quick18.com/teetimes/searchmatrix?teedate=20251121",
     "quick18Url": "https://hamersley.quick18.com/teetimes/searchmatrix"
   },
@@ -358,8 +358,8 @@
     "name": "Hamersley Public Golf Course (9 holes)",
     "provider": "Quick18",
     "holes": 9,
-    "lat": -31.8619,
-    "lng": 115.754,
+    "lat": -31.868023018257883,
+    "lng": 115.76668753851379,
     "url": "https://hamersley.quick18.com/teetimes/searchmatrix?teedate=20251119",
     "quick18Url": "https://hamersley.quick18.com/teetimes/searchmatrix"
   },
@@ -368,8 +368,8 @@
     "name": "Lake Claremont Golf Course (9 holes)",
     "provider": "Quick18",
     "holes": 9,
-    "lat": -31.972,
-    "lng": 115.792,
+    "lat": -31.977075016218492,
+    "lng": 115.77957448681971,
     "url": "https://lakeclaremont.quick18.com/teetimes/searchmatrix?teedate=20251120",
     "quick18Url": "https://lakeclaremont.quick18.com/teetimes/searchmatrix"
   },
@@ -378,16 +378,16 @@
     "name": "Carramar Golf Course (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -31.7056,
-    "lng": 115.7482,
+    "lat": -31.705979065664298,
+    "lng": 115.78235396363216,
     "url": "https://carramar.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=1500624075"
   },
   {
     "name": "Carramar Golf Course (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -31.7056,
-    "lng": 115.7482,
+    "lat": -31.705979065664298,
+    "lng": 115.78235396363216,
     "url": "https://carramar.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=1500682805"
   },
 
@@ -395,24 +395,24 @@
     "name": "Hillview Golf Course",
     "provider": "Phone",
     "holes": 18,
-    "lat": -32.06,
-    "lng": 115.96,
+    "lat": -31.939010380955974,
+    "lng": 116.01996930968141,
     "phone": "08 9454 5554"
   },
   {
     "name": "Marri Park Golf Course",
     "provider": "Phone",
     "holes": 18,
-    "lat": -32.25,
-    "lng": 115.82,
+    "lat": -32.23155852419737,
+    "lng": 115.86931428104657,
     "phone": "08 9419 3037"
   },
   {
     "name": "Altone Park Golf Course",
     "provider": "Phone",
     "holes": 18,
-    "lat": -31.8816,
-    "lng": 115.9354,
+    "lat": -31.87300858893532,
+    "lng": 115.94113430228738,
     "phone": "08 9377 1918"
   },
 
@@ -420,24 +420,24 @@
     "name": "Bunbury Golf Club (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -33.29,
-    "lng": 115.65,
+    "lat": -33.30262292971879,
+    "lng": 115.71008488927751,
     "url": "https://bunbury.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=1517098264"
   },
   {
     "name": "Bunbury Golf Club (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -33.29,
-    "lng": 115.65,
+    "lat": -33.30262292971879,
+    "lng": 115.71008488927751,
     "url": "https://bunbury.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=1506123162"
   },
   {
     "name": "Sanctuary Golf Resort (Bunbury)",
     "provider": "Other",
     "holes": 18,
-    "lat": -33.33,
-    "lng": 115.67,
+    "lat": -33.3220611545291,
+    "lng": 115.69145962937662,
     "url": "https://www.golf-booking.com/en/club/sanctuary-golf-resort"
   },
 
@@ -445,16 +445,16 @@
     "name": "Busselton Golf Club (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -33.66,
-    "lng": 115.34,
+    "lat": -33.692271123570094,
+    "lng": 115.36379723541958,
     "url": "https://busseltongolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=4556244"
   },
   {
     "name": "Busselton Golf Club (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -33.66,
-    "lng": 115.34,
+    "lat": -33.692271123570094,
+    "lng": 115.36379723541958,
     "url": "https://busseltongolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=4556245"
   },
 
@@ -462,16 +462,16 @@
     "name": "Capel Golf Club (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -33.46,
-    "lng": 115.56,
+    "lat": -33.451994495413636,
+    "lng": 115.6019875888594,
     "url": "https://capel.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=4382604"
   },
   {
     "name": "Capel Golf Club (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -33.46,
-    "lng": 115.56,
+    "lat": -33.451994495413636,
+    "lng": 115.6019875888594,
     "url": "https://capel.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=4382615"
   },
 
@@ -479,16 +479,16 @@
     "name": "Dunsborough Lakes Golf Club (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -33.63,
-    "lng": 115.1,
+    "lat": -33.62289919984393,
+    "lng": 115.11127432379276,
     "url": "https://www.dlgc.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=104995"
   },
   {
     "name": "Dunsborough Lakes Golf Club (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -33.63,
-    "lng": 115.1,
+    "lat": -33.62289919984393,
+    "lng": 115.11127432379276,
     "url": "https://www.dlgc.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=105015"
   },
 
@@ -496,16 +496,16 @@
     "name": "Margaret River Golf Club (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -33.94,
-    "lng": 115.07,
+    "lat": -33.9707100685292,
+    "lng": 115.01510336158319,
     "url": "https://margaretriver.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=1954670"
   },
   {
     "name": "Margaret River Golf Club (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -33.94,
-    "lng": 115.07,
+    "lat": -33.9707100685292,
+    "lng": 115.01510336158319,
     "url": "https://margaretriver.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=1954671"
   },
 
@@ -513,8 +513,8 @@
     "name": "Collie Golf Club (18 holes)",
     "provider": "Phone",
     "holes": 18,
-    "lat": -33.36,
-    "lng": 116.15,
+    "lat": -33.37251176014247,
+    "lng": 116.14276646103822,
     "phone": "+61 (08) 9734 1655"
   },
 
@@ -522,16 +522,16 @@
     "name": "Harvey Golf Club (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -33.08,
-    "lng": 115.89,
+    "lat": -33.07920493104235,
+    "lng": 115.7908782418057,
     "url": "https://www.harveygolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=2205458"
   },
   {
     "name": "Harvey Golf Club (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -33.08,
-    "lng": 115.89,
+    "lat": -33.07920493104235,
+    "lng": 115.7908782418057,
     "url": "https://www.harveygolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=2205459"
   },
 
@@ -539,16 +539,16 @@
     "name": "Manjimup Golf Club (18 holes)",
     "provider": "Phone",
     "holes": 18,
-    "lat": -34.24,
-    "lng": 116.15,
+    "lat": -34.22798858184465,
+    "lng": 116.16793462381473,
     "phone": "08 9771 1032"
   },
   {
     "name": "Pemberton Golf Club (18 holes)",
     "provider": "Other",
     "holes": 18,
-    "lat": -34.45,
-    "lng": 116.03,
+    "lat": -34.43086796867483,
+    "lng": 116.03801040764672,
     "url": "https://pembertongolfclub.org.au"
   },
 
@@ -556,16 +556,16 @@
     "name": "Albany Golf Club (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -35.0322,
-    "lng": 117.9081,
+    "lat": -35.007668257159644,
+    "lng": 117.92442914073659,
     "url": "https://albany.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=1739094"
   },
   {
     "name": "Albany Golf Club (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -35.0322,
-    "lng": 117.9081,
+    "lat": -35.007668257159644,
+    "lng": 117.92442914073659,
     "url": "https://albany.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=1739101"
   },
 
@@ -573,16 +573,16 @@
     "name": "Denmark Country Club (18 holes)",
     "provider": "Phone",
     "holes": 18,
-    "lat": -34.96,
-    "lng": 117.35,
+    "lat": -34.959387727868396,
+    "lng": 117.36898437647788,
     "phone": "9848 1413"
   },
   {
     "name": "Mount Barker Golf Club (18 holes)",
     "provider": "Phone",
     "holes": 18,
-    "lat": -34.63,
-    "lng": 117.67,
+    "lat": -34.6533926241581,
+    "lng": 117.6747244722407,
     "phone": "08 9851 1197"
   },
 
@@ -590,16 +590,16 @@
     "name": "Geraldton Golf Club (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -28.7725,
-    "lng": 114.6145,
+    "lat": -28.774800563556976,
+    "lng": 114.63075231929263,
     "url": "https://geraldton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-18&feeGroupId=3131111"
   },
   {
     "name": "Geraldton Golf Club (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -28.7725,
-    "lng": 114.6145,
+    "lat": -28.774800563556976,
+    "lng": 114.63075231929263,
     "url": "https://geraldton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=3593179"
   },
 
@@ -607,8 +607,8 @@
     "name": "Dongara Golf Club (18 holes)",
     "provider": "Phone",
     "holes": 18,
-    "lat": -29.26,
-    "lng": 114.92,
+    "lat": -29.272093343102366,
+    "lng": 114.93346200953633,
     "phone": "(08) 9927 2727"
   },
 
@@ -616,16 +616,16 @@
     "name": "Kalgoorlie Golf Course (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -30.76,
-    "lng": 121.48,
+    "lat": -30.737467947640944,
+    "lng": 121.44377130187227,
     "url": "https://goldfields.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=122033"
   },
   {
     "name": "Kalgoorlie Golf Course (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -30.76,
-    "lng": 121.48,
+    "lat": -30.737467947640944,
+    "lng": 121.44377130187227,
     "url": "https://goldfields.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=122037"
   },
 
@@ -633,40 +633,40 @@
     "name": "Kambalda Golf Club (18 holes)",
     "provider": "Phone",
     "holes": 18,
-    "lat": -31.2,
-    "lng": 121.66,
+    "lat": -31.21483697936073,
+    "lng": 121.62898731066079,
     "phone": "08 9027 1110"
   },
   {
     "name": "Norseman Golf Club (18 holes)",
     "provider": "Phone",
     "holes": 18,
-    "lat": -32.2,
-    "lng": 121.78,
+    "lat": -32.18590129421152,
+    "lng": 121.77071888187876,
     "phone": "(08) 9039 1205"
   },
   {
     "name": "Port Hedland Golf Club (18 holes)",
     "provider": "Phone",
     "holes": 18,
-    "lat": -20.31,
-    "lng": 118.61,
+    "lat": -20.403296505621732,
+    "lng": 118.5748316580421,
     "phone": "08 9172 2046"
   },
   {
     "name": "Karratha Golf Club (18 holes)",
     "provider": "Phone",
     "holes": 18,
-    "lat": -20.74,
-    "lng": 116.85,
+    "lat": -20.72393836665976,
+    "lng": 116.84998074476752,
     "phone": "08 9185 1045"
   },
   {
     "name": "Fortescue Golf Club (18 holes)",
     "provider": "Phone",
     "holes": 18,
-    "lat": -21.15,
-    "lng": 116.33,
+    "lat": -23.351195819088634,
+    "lng": 119.72641892443758,
     "phone": "0459 810 212"
   },
 
@@ -674,16 +674,16 @@
     "name": "Broome Golf Club (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -17.961,
-    "lng": 122.236,
+    "lat": -17.98268175217335,
+    "lng": 122.21315462271896,
     "url": "https://broome.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=3074565"
   },
   {
     "name": "Broome Golf Club (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -17.961,
-    "lng": 122.236,
+    "lat": -17.98268175217335,
+    "lng": 122.21315462271896,
     "url": "https://broome.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-23&feeGroupId=3401009"
   },
 
@@ -691,8 +691,8 @@
     "name": "Kununurra Golf Club (18 holes)",
     "provider": "Phone",
     "holes": 18,
-    "lat": -15.78,
-    "lng": 128.74,
+    "lat": -15.790876623196917,
+    "lng": 128.71599239886385,
     "phone": "08 9169 1055"
   }
 ]
