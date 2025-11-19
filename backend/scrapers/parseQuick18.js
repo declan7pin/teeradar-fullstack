@@ -2,20 +2,23 @@
 import * as cheerio from "cheerio";
 
 /*
-  QUICK18 FORMAT (from your Hamersley HTML):
+  QUICK18 FORMAT (Hamersley / Armadale / Lake Claremont etc):
 
-  Tee Time  Course              Players
-  ----------------------------------------------
-  5:30 AM   Back 9 Morning      1 or 2 players   $27.00  Select  ...
+  Each tee time is rendered as a row in the "search matrix" table.
+  The combined row text typically looks something like:
 
-  The important bits for us:
-    - Time: "5:30" + "AM"/"PM"
-    - Capacity: text like
-         "1 or 2 players"
-         "1 to 4 players"
-         "1 player"
-    - We build the booking URL by forcing ?teedate=YYYYMMDD
-      on top of the base course URL.
+    "5:30 AM  Back 9 Morning  1 to 4 players  $27.00  Select"
+
+  or
+
+    "7:10 AM  Front 9  1 or 2 players  $19.00  Select"
+
+  We DON'T rely on specific classes (because they differ between courses),
+  we just read the text in each row and pattern-match:
+
+    - Time:     (\d{1,2}:\d{2}) (AM|PM)?
+    - Players:  "1 to 4 players", "1 or 2 players", "1 player", etc.
+    - Price:    first "$xx.xx" in the row
 */
 
 /**
@@ -24,27 +27,20 @@ import * as cheerio from "cheerio";
  *
  * Returns objects like:
  *   {
- *     name,
- *     provider: "Quick18",
- *     time: "HH:MM",       // 24h
- *     date: "YYYY-MM-DD",
- *     spots: number,       // max players this slot can take
- *     price: string|null,  // e.g. "$27.00"
- *     holes: number|null,
- *     bookUrl: string
+ *     time: "HH:MM",        // 24h
+ *     spots: number,        // max players this slot can take
+ *     price: string|null    // "$27.00"
  *   }
  */
-export function parseQuick18(html, course, criteria = {}) {
+export function parseQuick18(html) {
   const results = [];
-  const date = criteria.date || null;
-  const earliest = criteria.earliest || "06:00";
-  const latest = criteria.latest || "17:00";
-  const partySize = Number(criteria.partySize || 1);
+  const $ = cheerio.load(html);
 
   // Helper: "7:15" + "AM"/"PM" → "07:15"
   function toTime24(timeStr, ampm) {
     let [hStr, mStr] = timeStr.split(":");
     let h = parseInt(hStr, 10);
+    const m = mStr;
 
     if (ampm) {
       const upper = ampm.toUpperCase();
@@ -52,78 +48,56 @@ export function parseQuick18(html, course, criteria = {}) {
       if (upper === "AM" && h === 12) h = 0;
     }
 
-    return `${String(h).padStart(2, "0")}:${mStr}`;
+    return `${String(h).padStart(2, "0")}:${m}`;
   }
 
-  const toMinutes = (t) => {
-    const [h, m] = t.split(":").map((n) => parseInt(n, 10));
-    return h * 60 + m;
-  };
+  // Table / matrix that contains the tee times
+  const rows = $("#searchMatrix tr, table#searchMatrix tr, .matrixRow");
 
-  const earliestMin = toMinutes(earliest);
-  const latestMin = toMinutes(latest);
+  rows.each((_, row) => {
+    const text = $(row).text().replace(/\s+/g, " ").trim();
+    if (!text) return;
 
-  // Use the raw HTML string – Quick18 is very text-driven and
-  // this pattern matches:
-  //   "6:15 AM ... 1 to 4 players"
-  const re =
-    /(\d{1,2}:\d{2})\s*(AM|PM)[\s\S]{0,200}?(\d+\s*(?:to|or)\s*\d+\s*players?|\d+\s*player[s]?)/gi;
+    // 1. Time
+    const timeMatch = text.match(/(\d{1,2}:\d{2})\s*(AM|PM)?/i);
+    if (!timeMatch) return;
 
-  let match;
-  while ((match = re.exec(html)) !== null) {
-    const timeRaw = match[1];     // "6:15"
-    const ampm = match[2];        // "AM" / "PM"
-    const playersText = match[3]; // "1 to 4 players", etc.
+    const rawTime = timeMatch[1];
+    const ampm = timeMatch[2] || "";
+    const time24 = toTime24(rawTime, ampm);
 
-    const time24 = toTime24(timeRaw, ampm);
-    const mins = toMinutes(time24);
-
-    // Time window filter
-    if (mins < earliestMin || mins > latestMin) continue;
-
-    // Parse "1 to 4 players" → min=1, max=4
+    // 2. Players capacity
+    // Examples:
+    //   "1 to 4 players"
+    //   "1 or 2 players"
+    //   "1 player"
     let minPlayers = 1;
     let maxPlayers = 4;
 
-    const rangeMatch = playersText.match(/(\d+)\s*(?:to|or)\s*(\d+)/i);
+    const rangeMatch = text.match(/(\d+)\s*(?:to|or)\s*(\d+)\s*players?/i);
     if (rangeMatch) {
       minPlayers = parseInt(rangeMatch[1], 10);
       maxPlayers = parseInt(rangeMatch[2], 10);
     } else {
-      const singleMatch = playersText.match(/(\d+)\s*player/i);
+      const singleMatch = text.match(/(\d+)\s*player[s]?/i);
       if (singleMatch) {
         minPlayers = maxPlayers = parseInt(singleMatch[1], 10);
+      } else {
+        // No players text → we don't know capacity, skip this row
+        return;
       }
     }
 
-    // Respect partySize – only keep slots that can actually fit this group
-    if (partySize > maxPlayers) continue;
-
-    // Try to grab the first price right after this block
-    const slice = html.slice(match.index, match.index + 250);
-    const priceMatch = slice.match(/\$[0-9]+(?:\.[0-9]{2})?/);
+    // 3. Price (first $xx.xx in the row)
+    const priceMatch = text.match(/\$[0-9]+(?:\.[0-9]{2})?/);
     const price = priceMatch ? priceMatch[0] : null;
 
-    // Build a clean booking URL with the selected date
-    const baseQuickUrl = course.quick18Url || course.url || "";
-    const cleanedBase = baseQuickUrl.split("?")[0];
-
-    const bookUrl =
-      date && cleanedBase
-        ? `${cleanedBase}?teedate=${date.replace(/-/g, "")}`
-        : baseQuickUrl;
-
     results.push({
-      name: course.name,
-      provider: "Quick18",
       time: time24,
-      date,
       spots: maxPlayers,
       price,
-      holes: course.holes || null,
-      bookUrl,
     });
-  }
+  });
 
   return results;
 }
