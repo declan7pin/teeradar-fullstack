@@ -219,25 +219,25 @@
     "feeGroupId": "100797"
   },
 
-  "Meadow Springs Golf Course (18 holes weekday)": {
+  "Meadow Springs Golf & Country Club (18 holes weekday)": {
     "provider": "MiClub",
     "holes": 18,
     "bookingResourceId": "3000000",
     "feeGroupId": "337072"
   },
-  "Meadow Springs Golf Course (18 holes weekend)": {
+  "Meadow Springs Golf & Country Club (18 holes weekend)": {
     "provider": "MiClub",
     "holes": 18,
     "bookingResourceId": "3000000",
     "feeGroupId": "337073"
   },
-  "Meadow Springs Golf Course (9 holes weekday)": {
+  "Meadow Springs Golf & Country Club (9 holes weekday)": {
     "provider": "MiClub",
     "holes": 9,
     "bookingResourceId": "3000000",
     "feeGroupId": "337074"
   },
-  "Meadow Springs Golf Course (9 holes weekend)": {
+  "Meadow Springs Golf & Country Club (9 holes weekend)": {
     "provider": "MiClub",
     "holes": 9,
     "bookingResourceId": "3000000",
