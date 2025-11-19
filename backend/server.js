@@ -5,10 +5,12 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
+
+// ✅ NEW: in-memory analytics
 import {
   recordEvent,
   getAnalyticsSummary,
-  getTopCourses
+  getTopCourses,
 } from "./analytics.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -35,7 +37,7 @@ const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 const courses = rawCourses.map((c) => ({
   ...c,
   lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
-  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG
+  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG,
 }));
 
 const feeGroupsPath = path.join(__dirname, "data", "fee_groups.json");
@@ -67,14 +69,14 @@ app.post("/api/search", async (req, res) => {
       earliest = "06:00",
       latest = "17:00",
       holes = "",
-      partySize = 1
+      partySize = 1,
     } = req.body || {};
 
     if (!date) {
       return res.status(400).json({ error: "date is required" });
     }
 
-    // Make holes a NUMBER (9 or 18), not a string
+    // 🔑 IMPORTANT: make holes a NUMBER (9 or 18), not a string
     const holesValue =
       holes === "" || holes === null || typeof holes === "undefined"
         ? ""
@@ -84,8 +86,8 @@ app.post("/api/search", async (req, res) => {
       date,
       earliest,
       latest,
-      holes: holesValue,
-      partySize: Number(partySize) || 1
+      holes: holesValue, // <--- numeric 9 or 18
+      partySize: Number(partySize) || 1, // numeric party size
     };
 
     console.log("Incoming /api/search", criteria);
@@ -122,41 +124,33 @@ app.post("/api/search", async (req, res) => {
 
 // ---------- ANALYTICS ----------
 
-// Receive events from the frontend and store them in SQLite
+// Ingest events from the frontend
 app.post("/api/analytics/event", async (req, res) => {
   try {
     const { type, payload = {}, at } = req.body || {};
 
-    if (!type) {
-      return res.status(400).json({ error: "type is required" });
-    }
+    // Derive a userId:
+    //  - Prefer payload.userId (if we add it later from the browser)
+    //  - Fallback to IP so the same device is counted as one user
+    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
+    const userId = payload.userId || ip || null;
 
+    // Course name (for booking_click, etc.)
     const courseName =
-      payload.courseName ||
       payload.course ||
+      payload.courseName ||
       payload.course_name ||
+      payload.courseTitle ||
       null;
-
-    const explicitUserId = payload.userId || payload.user_id || null;
-
-    // Fallback: approximate unique user by IP if userId not supplied
-    const forwardedFor = req.headers["x-forwarded-for"];
-    const ip =
-      (typeof forwardedFor === "string" &&
-        forwardedFor.split(",")[0].trim()) ||
-      req.socket.remoteAddress ||
-      null;
-
-    const userId = explicitUserId || ip || null;
-
-    await recordEvent({ type, userId, courseName, at });
 
     console.log("Incoming analytics event:", {
       type,
       at,
       userId,
-      courseName
+      courseName,
     });
+
+    await recordEvent({ type, userId, courseName, at });
 
     res.json({ ok: true });
   } catch (err) {
@@ -165,30 +159,16 @@ app.post("/api/analytics/event", async (req, res) => {
   }
 });
 
-// Summary numbers for the dashboard
-app.get("/api/analytics/summary", async (req, res) => {
+// Admin summary endpoint used by admin UI
+app.get("/api/admin/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
-    res.json(summary);
-  } catch (err) {
-    console.error("summary analytics error", err);
-    res
-      .status(500)
-      .json({ error: "analytics summary error", detail: err.message });
-  }
-});
+    const topCourses = await getTopCourses(10);
 
-// Top courses by booking clicks
-app.get("/api/analytics/top-courses", async (req, res) => {
-  try {
-    const top = await getTopCourses(5);
-    res.json({ top });
+    res.json({ summary, topCourses });
   } catch (err) {
-    console.error("top-courses analytics error", err);
-    res.status(500).json({
-      error: "analytics top-courses error",
-      detail: err.message
-    });
+    console.error("admin summary error", err);
+    res.status(500).json({ error: "admin summary error", detail: err.message });
   }
 });
 
@@ -201,12 +181,12 @@ app.get("/api/debug/courses", (req, res) => {
     lat: c.lat,
     lng: c.lng,
     hasUrl: !!c.url,
-    hasPhone: !!c.phone
+    hasPhone: !!c.phone,
   }));
 
   res.json({
     count: debugList.length,
-    courses: debugList
+    courses: debugList,
   });
 });
 
