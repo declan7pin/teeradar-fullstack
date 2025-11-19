@@ -78,16 +78,16 @@
     "name": "Collier Park Golf Course (18 holes)",
     "provider": "MiClub",
     "holes": 18,
-    "lat": -32.0068,
-    "lng": 115.8716,
+    "lat": -31.99784852029364,
+    "lng": 115.88141375231828,
     "url": "https://bookings.collierparkgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=1500257612"
   },
   {
     "name": "Collier Park Golf Course (9 holes)",
     "provider": "MiClub",
     "holes": 9,
-    "lat": -32.0068,
-    "lng": 115.8716,
+    "lat": -31.99784852029364,
+    "lng": 115.88141375231828,
     "url": "https://bookings.collierparkgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=1500323733"
   },
 
