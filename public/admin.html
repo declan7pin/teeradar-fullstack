@@ -2,267 +2,418 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>TeeRadar — Admin Analytics</title>
+  <title>TeeRadar WA — Analytics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <style>
     :root {
       --teal: #006b57;
       --teal-dark: #004e40;
-      --green: #00c853;
-      --red: #d50000;
-      --purple: #7e57c2;
-      --bg: #f4f4f4;
+      --bg: #f5f7fb;
+      --card-bg: #ffffff;
+      --error: #d50000;
+      --muted: #7b8190;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
       background: var(--bg);
-      color: #222;
+      color: #111827;
     }
 
-    .top-bar {
+    /* Top nav */
+    .nav {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 10px 16px;
-      background: var(--teal);
-      color: #fff;
+      gap: 18px;
+      padding: 10px 18px;
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
 
-    .top-bar-title { font-weight: 600; }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 16px;
+    }
 
-    .top-bar button {
-      border: none;
-      background: #fff;
-      color: var(--teal);
-      padding: 6px 10px;
+    .nav-logo-dot {
+      width: 24px;
+      height: 24px;
       border-radius: 999px;
-      font-size: 13px;
-      cursor: pointer;
+      background: linear-gradient(135deg, #34d399, #10b981);
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35);
     }
 
-    main {
-      padding: 16px;
+    .nav-links {
+      display: flex;
+      gap: 14px;
+      margin-left: auto;
+      font-size: 14px;
     }
 
-    h1 {
-      font-size: 20px;
-      margin: 0 0 12px 0;
+    .nav-link {
+      color: #4b5563;
+      text-decoration: none;
+      padding: 4px 8px;
+      border-radius: 999px;
     }
 
-    .subtitle {
-      font-size: 13px;
-      color: #555;
-      margin-bottom: 16px;
+    .nav-link.active {
+      background: rgba(0, 107, 87, 0.08);
+      color: var(--teal);
+      font-weight: 600;
     }
 
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 12px;
-      margin-bottom: 24px;
+    /* Page chrome */
+    .page {
+      max-width: 900px;
+      margin: 18px auto 40px;
+      padding: 0 16px 32px;
     }
 
-    .card {
-      background: #fff;
-      border-radius: 10px;
-      padding: 12px 14px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    }
-
-    .card-title {
-      font-size: 13px;
-      color: #666;
+    .page-title {
+      font-size: 26px;
+      font-weight: 700;
       margin-bottom: 4px;
     }
 
+    .page-subtitle {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 16px;
+      max-width: 540px;
+    }
+
+    .pill-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #e5f7f1;
+      color: var(--teal-dark);
+      font-weight: 500;
+    }
+
+    .pill-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+    }
+
+    .pill-secondary {
+      background: #eef2ff;
+      color: #4f46e5;
+    }
+
+    .pill-secondary .pill-dot {
+      background: #6366f1;
+    }
+
+    .error-banner {
+      display: none;
+      margin-bottom: 14px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #fee2e2;
+      color: #b91c1c;
+      font-size: 13px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .error-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--error);
+    }
+
+    /* Cards layout */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    @media (min-width: 720px) {
+      .cards-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 14px;
+      padding: 16px 16px 14px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.07);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-corner {
+      position: absolute;
+      right: -22px;
+      top: -22px;
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 10px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .card-title {
+      font-size: 12px;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: #9ca3af;
+      margin-bottom: 6px;
+    }
+
     .card-value {
-      font-size: 24px;
+      font-size: 30px;
+      font-weight: 700;
+      margin-bottom: 1px;
+    }
+
+    .card-footnote {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    /* Top courses */
+    .section-title {
+      font-size: 14px;
       font-weight: 600;
-      margin-bottom: 2px;
+      margin: 12px 2px 6px;
+      color: #4b5563;
     }
 
-    .card-note {
-      font-size: 11px;
-      color: #888;
-    }
-
-    .courses-card h2 {
-      font-size: 15px;
-      margin: 0 0 8px 0;
-    }
-
-    .courses-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
+    .course-list {
+      background: var(--card-bg);
+      border-radius: 14px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.07);
+      padding: 10px 12px;
       font-size: 13px;
     }
 
-    .courses-list li {
+    .course-row {
       display: flex;
       justify-content: space-between;
-      padding: 4px 0;
-      border-bottom: 1px solid #eee;
+      padding: 6px 4px;
+      border-bottom: 1px solid rgba(229, 231, 235, 0.7);
     }
 
-    .courses-list li:last-child {
+    .course-row:last-child {
       border-bottom: none;
     }
 
-    .error {
-      color: var(--red);
-      font-size: 13px;
-      margin-bottom: 8px;
+    .course-name {
+      max-width: 75%;
     }
 
-    .refresh-btn {
-      margin-top: 8px;
-      border: none;
-      background: var(--teal);
-      color: #fff;
-      padding: 6px 12px;
-      border-radius: 999px;
-      font-size: 13px;
-      cursor: pointer;
+    .course-clicks {
+      font-weight: 600;
+      color: #111827;
     }
 
-    .refresh-btn:active {
-      background: var(--teal-dark);
+    .muted {
+      color: var(--muted);
     }
   </style>
 </head>
 <body>
-  <header class="top-bar">
-    <div class="top-bar-title">TeeRadar — Admin Analytics</div>
-    <button onclick="window.location.href='index.html'">Return Home</button>
+  <!-- Top nav -->
+  <header class="nav">
+    <div class="nav-logo">
+      <div class="nav-logo-dot"></div>
+      <div>TeeRadar<br /><span class="muted" style="font-size: 12px;">WA</span></div>
+    </div>
+    <nav class="nav-links">
+      <a href="admin.html" class="nav-link active">Admin</a>
+      <a href="index.html" class="nav-link">Home</a>
+      <a href="book.html" class="nav-link">Bookings</a>
+      <a href="faq.html" class="nav-link">FAQ</a>
+    </nav>
   </header>
 
-  <main>
-    <h1>Analytics overview</h1>
-    <div class="subtitle">
-      Live numbers since the last server restart.  
-      Open the main site on your phone, run a search, and click "Go to booking"
-      to see these numbers move.
+  <main class="page">
+    <h1 class="page-title">Analytics dashboard</h1>
+    <p class="page-subtitle">
+      Live tee-time engagement across Western Australia — updated every time a user
+      searches or clicks.
+    </p>
+
+    <div class="pill-row">
+      <div class="pill">
+        <span class="pill-dot"></span>
+        Realtime, SQLite-backed
+      </div>
+      <div class="pill pill-secondary">
+        <span class="pill-dot"></span>
+        Last 7 days &amp; all-time
+      </div>
     </div>
 
-    <div id="error" class="error" style="display:none;"></div>
+    <div id="error-banner" class="error-banner">
+      <span class="error-dot"></span>
+      <span id="error-text">Error loading analytics — see console for details.</span>
+    </div>
 
-    <section class="cards">
+    <!-- Stats cards -->
+    <section class="cards-grid">
       <article class="card">
-        <div class="card-title">Home views</div>
-        <div id="homeViews" class="card-value">0</div>
-        <div class="card-note">Total visits to the home page</div>
+        <div class="card-corner"></div>
+        <div class="card-title">Home page views</div>
+        <div id="stat-home-views" class="card-value">0</div>
+        <div class="card-footnote">All-time</div>
       </article>
 
       <article class="card">
+        <div class="card-corner"></div>
+        <div class="card-title">Course booking clicks</div>
+        <div id="stat-booking-clicks" class="card-value">0</div>
+        <div class="card-footnote">All-time</div>
+      </article>
+
+      <article class="card">
+        <div class="card-corner"></div>
         <div class="card-title">Searches</div>
-        <div id="searches" class="card-value">0</div>
-        <div class="card-note">Total availability checks</div>
+        <div id="stat-searches" class="card-value">0</div>
+        <div class="card-footnote">All-time</div>
       </article>
 
       <article class="card">
-        <div class="card-title">Booking clicks</div>
-        <div id="bookingClicks" class="card-value">0</div>
-        <div class="card-note">Clicked “Go to booking”</div>
-      </article>
-
-      <article class="card">
-        <div class="card-title">Users (all time)</div>
-        <div id="usersAllTime" class="card-value">0</div>
-        <div class="card-note">Distinct users (IP or userId)</div>
-      </article>
-
-      <article class="card">
-        <div class="card-title">Users today</div>
-        <div id="usersToday" class="card-value">0</div>
-        <div class="card-note">Distinct users since midnight</div>
-      </article>
-
-      <article class="card">
-        <div class="card-title">Users last 7 days</div>
-        <div id="usersWeek" class="card-value">0</div>
-        <div class="card-note">Distinct users in last 7 days</div>
-      </article>
-
-      <article class="card">
-        <div class="card-title">New users (7 days)</div>
-        <div id="newUsers7d" class="card-value">0</div>
-        <div class="card-note">First-seen in last 7 days</div>
+        <div class="card-corner"></div>
+        <div class="card-title">New users</div>
+        <div id="stat-new-users" class="card-value">0</div>
+        <div class="card-footnote">Unique devices in last 7 days</div>
       </article>
     </section>
 
-    <section class="card courses-card">
-      <h2>Most clicked courses</h2>
-      <ul id="topCourses" class="courses-list">
-        <li><span>No data yet</span><span>–</span></li>
-      </ul>
-      <button class="refresh-btn" onclick="loadAnalytics()">Refresh</button>
+    <!-- Unique user breakdown -->
+    <section class="cards-grid" style="margin-top: 4px;">
+      <article class="card">
+        <div class="card-corner"></div>
+        <div class="card-title">Unique users</div>
+        <div class="card-value" id="stat-users-today">0</div>
+        <div class="card-footnote">Today</div>
+      </article>
+      <article class="card">
+        <div class="card-corner"></div>
+        <div class="card-title">Unique users</div>
+        <div class="card-value" id="stat-users-week">0</div>
+        <div class="card-footnote">Last 7 days</div>
+      </article>
+    </section>
+
+    <!-- Top courses -->
+    <h2 class="section-title">Most-clicked courses</h2>
+    <section id="courses-panel" class="course-list">
+      <div id="courses-empty" class="muted">
+        No course booking clicks yet — they’ll appear here once people start
+        clicking through to MiClub / Quick18.
+      </div>
+      <div id="courses-rows"></div>
     </section>
   </main>
 
   <script>
     async function loadAnalytics() {
-      const errorEl = document.getElementById("error");
-      errorEl.style.display = "none";
-      errorEl.textContent = "";
+      const errorBanner = document.getElementById("error-banner");
+      const errorText = document.getElementById("error-text");
 
       try {
-        const res = await fetch("/api/admin/summary");
+        // Single source of truth: backend /api/analytics/summary
+        const res = await fetch("/api/analytics/summary");
         if (!res.ok) {
           throw new Error("HTTP " + res.status);
         }
+
         const data = await res.json();
-        const summary = data.summary || {};
-        const topCourses = data.topCourses || [];
+        console.log("[admin] analytics data:", data);
 
-        // Update counters
-        document.getElementById("homeViews").textContent =
-          summary.homeViews ?? 0;
-        document.getElementById("searches").textContent =
-          summary.searches ?? 0;
-        document.getElementById("bookingClicks").textContent =
-          summary.bookingClicks ?? 0;
+        // Hide error banner
+        errorBanner.style.display = "none";
 
-        document.getElementById("usersAllTime").textContent =
-          summary.usersAllTime ?? 0;
-        document.getElementById("usersToday").textContent =
-          summary.usersToday ?? 0;
-        document.getElementById("usersWeek").textContent =
-          summary.usersWeek ?? 0;
-        document.getElementById("newUsers7d").textContent =
-          summary.newUsers7d ?? 0;
+        // Safely pick values, falling back to the alternative names or 0
+        const homeViews = data.homePageViews ?? data.homeViews ?? 0;
+        const bookingClicks = data.courseBookingClicks ?? data.bookingClicks ?? 0;
+        const searches = data.searches ?? 0;
+        const newUsers = data.newUsers ?? data.newUsers7d ?? 0;
 
-        // Update top courses list
-        const listEl = document.getElementById("topCourses");
-        listEl.innerHTML = "";
+        const usersToday = data.usersToday ?? 0;
+        const usersWeek = data.usersWeek ?? 0;
+
+        document.getElementById("stat-home-views").textContent = homeViews;
+        document.getElementById("stat-booking-clicks").textContent = bookingClicks;
+        document.getElementById("stat-searches").textContent = searches;
+        document.getElementById("stat-new-users").textContent = newUsers;
+
+        document.getElementById("stat-users-today").textContent = usersToday;
+        document.getElementById("stat-users-week").textContent = usersWeek;
+
+        // Top courses
+        const topCourses = Array.isArray(data.topCourses) ? data.topCourses : [];
+        const rowsContainer = document.getElementById("courses-rows");
+        const emptyState = document.getElementById("courses-empty");
+
+        rowsContainer.innerHTML = "";
 
         if (!topCourses.length) {
-          const li = document.createElement("li");
-          li.innerHTML = "<span>No data yet</span><span>–</span>";
-          listEl.appendChild(li);
+          emptyState.style.display = "block";
         } else {
-          topCourses.forEach((row) => {
-            const li = document.createElement("li");
-            li.innerHTML = `
-              <span>${row.courseName}</span>
-              <span>${row.clicks} clicks</span>
+          emptyState.style.display = "none";
+          topCourses.forEach((c) => {
+            const row = document.createElement("div");
+            row.className = "course-row";
+
+            const name = c.courseName || c.course || "Unknown course";
+            const clicks = c.clicks ?? c.bookingClicks ?? 0;
+
+            row.innerHTML = `
+              <div class="course-name">${name}</div>
+              <div class="course-clicks">${clicks}</div>
             `;
-            listEl.appendChild(li);
+            rowsContainer.appendChild(row);
           });
         }
       } catch (err) {
-        console.error("Failed to load analytics", err);
-        errorEl.style.display = "block";
-        errorEl.textContent = "Error loading analytics: " + err.message;
+        console.error("[admin] analytics load error", err);
+        errorText.textContent =
+          "Error loading analytics — " + (err.message || "unknown error");
+        errorBanner.style.display = "flex";
       }
     }
 
-    // Load on page open
+    // Initial load
     loadAnalytics();
+
+    // Refresh periodically (optional, every 30s)
+    setInterval(loadAnalytics, 30000);
   </script>
 </body>
 </html>
