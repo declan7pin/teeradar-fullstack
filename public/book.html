@@ -1,4 +1,3 @@
-<!-- frontend/book.html -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -52,6 +51,10 @@
         background: #151b30;
         padding: 12px;
         border-radius: 8px;
+      }
+
+      form.label {
+        font-size: 12px;
       }
 
       form label {
@@ -121,10 +124,6 @@
         background: #b37cff;
       }
 
-      .legend-dot.yellow {
-        background: #ffd54f;
-      }
-
       .results {
         flex: 1;
         overflow-y: auto;
@@ -184,11 +183,6 @@
       .pill-phone {
         background: rgba(179, 124, 255, 0.16);
         color: #e1c6ff;
-      }
-
-      .pill-unknown {
-        background: rgba(255, 213, 79, 0.16);
-        color: #ffe082;
       }
 
       .course-row button {
@@ -306,9 +300,6 @@
           <div class="legend-item">
             <span class="legend-dot purple"></span> Phone booking
           </div>
-          <div class="legend-item">
-            <span class="legend-dot yellow"></span> Unable to confirm
-          </div>
         </div>
 
         <div id="results" class="results">
@@ -333,7 +324,7 @@
         attribution: "&copy; OpenStreetMap contributors",
       }).addTo(map);
 
-      // Marker icons – update paths if your icons live somewhere else
+      // Marker icons – adjust paths if your icons live somewhere else
       const greenIcon = L.icon({
         iconUrl: "/icons/marker-green.png",
         iconSize: [32, 32],
@@ -352,19 +343,10 @@
         iconAnchor: [16, 32],
       });
 
-      const yellowIcon = L.icon({
-        iconUrl: "/icons/marker-yellow.png",
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-      });
-
       // All Leaflet markers we’ve created, keyed by course name
       const markerByCourse = new Map();
       let lastCourses = [];
       let lastSlots = [];
-
-      const WEMBLEY_PREFIX = "Wembley Golf Course";
-      const MEADOW_PREFIX = "Meadow Springs Golf Course";
 
       function getCourseStats(course, slots) {
         const relevant = slots.filter((s) => s.course === course.name);
@@ -377,20 +359,8 @@
         // Phone bookings stay purple, always
         if (course.provider === "Phone") return purpleIcon;
 
-        const totalSlots = stats.totalSlots || 0;
-
-        const isWembleyOrMeadow =
-          course.name.startsWith(WEMBLEY_PREFIX) ||
-          course.name.startsWith(MEADOW_PREFIX);
-
-        // 🟡 Special case: Wembley + Meadow Springs
-        // If we see 0 slots for them, we treat as "unable to confirm"
-        if (isWembleyOrMeadow && totalSlots === 0) {
-          return yellowIcon;
-        }
-
-        // ✅ Normal logic for everyone else:
-        if (totalSlots > 0) {
+        // Normal logic for everyone else
+        if (stats.totalSlots > 0) {
           return greenIcon;
         }
 
@@ -406,21 +376,9 @@
           };
         }
 
-        const totalSlots = stats.totalSlots || 0;
-        const isWembleyOrMeadow =
-          course.name.startsWith(WEMBLEY_PREFIX) ||
-          course.name.startsWith(MEADOW_PREFIX);
-
-        if (isWembleyOrMeadow && totalSlots === 0) {
+        if (stats.totalSlots > 0) {
           return {
-            label: "Unable to confirm (check booking page)",
-            className: "pill-unknown",
-          };
-        }
-
-        if (totalSlots > 0) {
-          return {
-            label: `${totalSlots} matching tee times`,
+            label: `${stats.totalSlots} matching tee times`,
             className: "pill-available",
           };
         }
@@ -458,7 +416,9 @@
               <div>${pill.label}</div>
               ${
                 course.provider === "Phone"
-                  ? `<div style="margin-top:4px;">Call to book: <strong>${course.phone || "See details"}</strong></div>`
+                  ? `<div style="margin-top:4px;">Call to book: <strong>${
+                      course.phone || "See details"
+                    }</strong></div>`
                   : `<button type="button" data-course="${course.name}">Go to booking</button>`
               }
             </div>
@@ -535,8 +495,7 @@
         const course = lastCourses.find((c) => c.name === courseName);
         if (!course) return;
 
-        // We already deep-link via backend: for MiClub & Quick18, each slot has bookUrl.
-        // Use the first slot's URL if available, otherwise fall back to course.url.
+        // Use first slot's bookUrl if available; fall back to course.url
         const slotsForCourse = lastSlots.filter((s) => s.course === courseName);
         const url =
           (slotsForCourse[0] && slotsForCourse[0].bookUrl) ||
@@ -545,7 +504,6 @@
 
         if (!url) return;
 
-        // You can change _blank to _self if you want same-tab behaviour.
         window.open(url, "_blank");
 
         // Fire simple analytics event
@@ -567,9 +525,10 @@
       const searchForm = document.getElementById("search-form");
       const searchBtn = document.getElementById("search-btn");
 
-      // Default date = today
-      document.getElementById("date").valueAsNumber = Date.now() - 
-        new Date().getTimezoneOffset() * 60000;
+      // Default date = today (ISO yyyy-mm-dd)
+      document.getElementById("date").value = new Date()
+        .toISOString()
+        .slice(0, 10);
 
       searchForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -586,7 +545,7 @@
         searchBtn.disabled = true;
         searchBtn.textContent = "Searching...";
 
-        // analytics: home_view + search
+        // analytics: search
         try {
           fetch("/api/analytics", {
             method: "POST",
@@ -607,7 +566,7 @@
           });
 
           const data = await res.json();
-          const { courses, slots } = data; // backend should return these
+          const { courses, slots } = data; // backend returns these
 
           renderMarkers(courses, slots);
           renderList(courses, slots);
