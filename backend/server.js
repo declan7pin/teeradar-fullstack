@@ -5,8 +5,11 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
-import { logAnalyticsEvent } from "./db/analyticsDb.js";
-import Database from "better-sqlite3";
+import {
+  logAnalyticsEvent,
+  getAnalyticsSummary,
+  getAllEvents
+} from "./db/analyticsDb.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,6 +31,7 @@ const PERTH_LNG = 115.8613;
 const coursesPath = path.join(__dirname, "data", "courses.json");
 const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 
+// Ensure every course has lat/lng, fallback to Perth CBD if missing
 const courses = rawCourses.map((c) => ({
   ...c,
   lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
@@ -40,22 +44,8 @@ if (fs.existsSync(feeGroupsPath)) {
   feeGroups = JSON.parse(fs.readFileSync(feeGroupsPath, "utf8"));
 }
 
-// ---------- SQLITE SETUP ----------
-const dbPath = path.join(__dirname, "data", "analytics.db");
-const db = new Database(dbPath);
-db.pragma("journal_mode = WAL");
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS analytics_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type TEXT,
-    at TEXT,
-    payload_json TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-  )
-`);
-
-console.log(`SQLite analytics database loaded at ${dbPath}`);
+console.log(`Loaded ${courses.length} courses.`);
+console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
 // ---------- ROUTES ----------
 
@@ -64,12 +54,12 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", courses: courses.length });
 });
 
-// Course list
+// Return full course list (used by frontend map + UI)
 app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Search tee times
+// Tee time search with extra debug logging
 app.post("/api/search", async (req, res) => {
   try {
     const {
@@ -93,7 +83,7 @@ app.post("/api/search", async (req, res) => {
       date,
       earliest,
       latest,
-      holes: holesValue,
+      holes: holesValue, // numeric 9 or 18
       partySize: Number(partySize) || 1
     };
 
@@ -102,9 +92,17 @@ app.post("/api/search", async (req, res) => {
     const jobs = courses.map(async (c) => {
       try {
         const result = await scrapeCourse(c, criteria, feeGroups);
+        const count = Array.isArray(result) ? result.length : 0;
+
+        if (count > 0) {
+          console.log(`✅ ${c.name} → ${count} slots`);
+        } else {
+          console.log(`⚪ ${c.name} → 0 slots`);
+        }
+
         return result || [];
       } catch (err) {
-        console.error(`scrapeCourse error for ${c.name}:`, err.message);
+        console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
         return [];
       }
     });
@@ -112,7 +110,7 @@ app.post("/api/search", async (req, res) => {
     const allResults = await Promise.all(jobs);
     const slots = allResults.flat();
 
-    console.log(`Search complete → ${slots.length} total slots`);
+    console.log(`🔎 /api/search finished → total slots: ${slots.length}`);
 
     res.json({ slots });
   } catch (err) {
@@ -121,12 +119,13 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
-// ---------- ANALYTICS LOGGING ----------
+// ---------- ANALYTICS API ----------
+
+// Log a single event
 app.post("/api/analytics/event", (req, res) => {
   try {
     const { type, payload, at } = req.body || {};
-
-    console.log("Analytics event:", { type, at, payload });
+    console.log("Incoming analytics event:", { type, at, payload });
 
     logAnalyticsEvent({ type, at, payload });
 
@@ -137,54 +136,53 @@ app.post("/api/analytics/event", (req, res) => {
   }
 });
 
-// ---------- ANALYTICS SUMMARY ----------
+// Summary for dashboard
 app.get("/api/analytics/summary", (req, res) => {
   try {
-    const rows = db.prepare(`
-      SELECT type, COUNT(*) as count
-      FROM analytics_events
-      GROUP BY type
-    `).all();
-
-    const summary = {
-      home_page_views: 0,
-      booking_clicks: 0,
-      searches: 0,
-      new_users: 0,
-      total_events: 0
-    };
-
-    rows.forEach((r) => {
-      if (r.type === "home_page_view") summary.home_page_views = r.count;
-      if (r.type === "booking_click") summary.booking_clicks = r.count;
-      if (r.type === "search") summary.searches = r.count;
-      if (r.type === "new_user") summary.new_users = r.count;
-      summary.total_events += r.count;
-    });
-
+    const summary = getAnalyticsSummary();
     res.json(summary);
   } catch (err) {
-    console.error("summary error:", err.message);
-    res.status(500).json({ error: "summary failed" });
+    console.error("summary error", err);
+    res.status(500).json({ error: "summary error", detail: err.message });
   }
 });
 
-// DEBUG: list all events
+// Optional: raw events for debugging
 app.get("/api/analytics/events", (req, res) => {
   try {
-    const rows = db.prepare(`SELECT * FROM analytics_events ORDER BY id DESC LIMIT 200`).all();
-    res.json({ events: rows });
+    const events = getAllEvents(200);
+    res.json({ events });
   } catch (err) {
-    res.status(500).json({ error: "failed to load events" });
+    console.error("events error", err);
+    res.status(500).json({ error: "events error", detail: err.message });
   }
 });
 
-// Map fallback
+// DEBUG: return list of courses with coords + basic flags
+app.get("/api/debug/courses", (req, res) => {
+  const debugList = courses.map((c) => ({
+    name: c.name,
+    provider: c.provider,
+    holes: c.holes,
+    lat: c.lat,
+    lng: c.lng,
+    hasUrl: !!c.url,
+    hasPhone: !!c.phone
+  }));
+
+  res.json({
+    count: debugList.length,
+    courses: debugList
+  });
+});
+
+// ---------- FRONTEND FALLBACK ----------
+// For any non-API route, serve the main index.html (SPA routing)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
 
-// Start server
+// ---------- START SERVER ----------
 app.listen(PORT, () => {
-  console.log(`TeeRadar backend running on port ${PORT}`);
+  console.log(`✅ TeeRadar backend running on port ${PORT}`);
 });
