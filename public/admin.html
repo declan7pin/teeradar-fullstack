@@ -15,9 +15,7 @@
       --muted: #7b8190;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -76,7 +74,6 @@
       font-weight: 600;
     }
 
-    /* Page chrome */
     .page {
       max-width: 900px;
       margin: 18px auto 40px;
@@ -128,9 +125,7 @@
       color: #4f46e5;
     }
 
-    .pill-secondary .pill-dot {
-      background: #6366f1;
-    }
+    .pill-secondary .pill-dot { background: #6366f1; }
 
     .error-banner {
       display: none;
@@ -140,7 +135,6 @@
       background: #fee2e2;
       color: #b91c1c;
       font-size: 13px;
-      display: none;
       align-items: center;
       gap: 6px;
     }
@@ -152,7 +146,6 @@
       background: var(--error);
     }
 
-    /* Cards layout */
     .cards-grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -161,9 +154,7 @@
     }
 
     @media (min-width: 720px) {
-      .cards-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
+      .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     .card {
@@ -204,7 +195,6 @@
       color: #9ca3af;
     }
 
-    /* Top courses */
     .section-title {
       font-size: 14px;
       font-weight: 600;
@@ -227,21 +217,24 @@
       border-bottom: 1px solid rgba(229, 231, 235, 0.7);
     }
 
-    .course-row:last-child {
-      border-bottom: none;
-    }
+    .course-row:last-child { border-bottom: none; }
 
-    .course-name {
-      max-width: 75%;
-    }
+    .course-name { max-width: 75%; }
 
     .course-clicks {
       font-weight: 600;
       color: #111827;
     }
 
-    .muted {
-      color: var(--muted);
+    .muted { color: var(--muted); }
+
+    /* tiny debug block so you can SEE the raw JSON */
+    #debug-json {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #6b7280;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
   </style>
 </head>
@@ -314,7 +307,7 @@
       </article>
     </section>
 
-    <!-- Unique user breakdown -->
+    <!-- Unique users breakdown -->
     <section class="cards-grid" style="margin-top: 4px;">
       <article class="card">
         <div class="card-corner"></div>
@@ -339,32 +332,35 @@
       </div>
       <div id="courses-rows"></div>
     </section>
+
+    <!-- Raw JSON debug -->
+    <pre id="debug-json"></pre>
   </main>
 
   <script>
     async function loadAnalytics() {
       const errorBanner = document.getElementById("error-banner");
       const errorText = document.getElementById("error-text");
+      const debugJson = document.getElementById("debug-json");
 
       try {
-        // Single source of truth: backend /api/analytics/summary
         const res = await fetch("/api/analytics/summary");
-        if (!res.ok) {
-          throw new Error("HTTP " + res.status);
-        }
+        if (!res.ok) throw new Error("HTTP " + res.status);
 
         const data = await res.json();
-        console.log("[admin] analytics data:", data);
+        console.log("[admin] /api/analytics/summary data:", data);
 
-        // Hide error banner
+        // Show raw JSON on the page for sanity
+        debugJson.textContent = "API payload:\\n" + JSON.stringify(data, null, 2);
+
+        // Hide any previous error
         errorBanner.style.display = "none";
 
-        // Safely pick values, falling back to the alternative names or 0
+        // Map fields from the backend shape you showed in the logs
         const homeViews = data.homePageViews ?? data.homeViews ?? 0;
         const bookingClicks = data.courseBookingClicks ?? data.bookingClicks ?? 0;
         const searches = data.searches ?? 0;
         const newUsers = data.newUsers ?? data.newUsers7d ?? 0;
-
         const usersToday = data.usersToday ?? 0;
         const usersWeek = data.usersWeek ?? 0;
 
@@ -372,7 +368,6 @@
         document.getElementById("stat-booking-clicks").textContent = bookingClicks;
         document.getElementById("stat-searches").textContent = searches;
         document.getElementById("stat-new-users").textContent = newUsers;
-
         document.getElementById("stat-users-today").textContent = usersToday;
         document.getElementById("stat-users-week").textContent = usersWeek;
 
@@ -380,7 +375,6 @@
         const topCourses = Array.isArray(data.topCourses) ? data.topCourses : [];
         const rowsContainer = document.getElementById("courses-rows");
         const emptyState = document.getElementById("courses-empty");
-
         rowsContainer.innerHTML = "";
 
         if (!topCourses.length) {
@@ -390,10 +384,8 @@
           topCourses.forEach((c) => {
             const row = document.createElement("div");
             row.className = "course-row";
-
             const name = c.courseName || c.course || "Unknown course";
             const clicks = c.clicks ?? c.bookingClicks ?? 0;
-
             row.innerHTML = `
               <div class="course-name">${name}</div>
               <div class="course-clicks">${clicks}</div>
@@ -406,14 +398,13 @@
         errorText.textContent =
           "Error loading analytics — " + (err.message || "unknown error");
         errorBanner.style.display = "flex";
+        debugJson.textContent =
+          "Error calling /api/analytics/summary: " + (err.message || "unknown");
       }
     }
 
-    // Initial load
-    loadAnalytics();
-
-    // Refresh periodically (optional, every 30s)
-    setInterval(loadAnalytics, 30000);
+    // Run after DOM is ready
+    window.addEventListener("load", loadAnalytics);
   </script>
 </body>
 </html>
