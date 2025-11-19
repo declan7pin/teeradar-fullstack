@@ -18,6 +18,7 @@
       --green: #00c853;
       --red: #d50000;
       --purple: #7e57c2;
+      --yellow: #f9a825;
       --bg: #f4f4f4;
     }
 
@@ -116,6 +117,7 @@
 
     .legend {
       display: flex;
+      flex-wrap: wrap;
       gap: 10px;
       font-size: 12px;
       padding: 0 16px 6px 16px;
@@ -139,6 +141,7 @@
     .dot-green { background: var(--green); }
     .dot-red { background: var(--red); }
     .dot-purple { background: var(--purple); }
+    .dot-yellow { background: var(--yellow); }
 
     .courses-strip {
       padding: 8px 12px 16px 12px;
@@ -206,6 +209,11 @@
       color: #673ab7;
     }
 
+    .chip-availability-yellow {
+      background: #fff8e1;
+      color: #996600;
+    }
+
     .card-footer {
       display: flex;
       justify-content: space-between;
@@ -236,6 +244,7 @@
     .marker-green { background: var(--green); }
     .marker-red { background: var(--red); }
     .marker-purple { background: var(--purple); }
+    .marker-yellow { background: var(--yellow); }
 
     @media (min-width: 800px) {
       #map { height: 380px; }
@@ -303,6 +312,9 @@
     </div>
     <div class="legend-item">
       <span class="legend-dot dot-purple"></span> Phone booking
+    </div>
+    <div class="legend-item">
+      <span class="legend-dot dot-yellow"></span> Unable to confirm availability
     </div>
   </div>
 
@@ -443,6 +455,7 @@
       let className = "marker-dot marker-red";
       if (kind === "available") className = "marker-dot marker-green";
       if (kind === "phone") className = "marker-dot marker-purple";
+      if (kind === "unknown") className = "marker-dot marker-yellow";
       return L.divIcon({ className, iconSize: [14, 14] });
     }
 
@@ -461,6 +474,11 @@
         const provider = course.provider || "Other";
         const isPhone = provider === "Phone";
 
+        // Wembley & Meadow Springs → unable to confirm (yellow)
+        const isUnconfirmed =
+          name.startsWith("Wembley Golf Course") ||
+          name.startsWith("Meadow Springs Golf Course");
+
         // Hole filter: hide non-matching *except* phone-booking courses
         if (
           !isPhone &&
@@ -476,6 +494,7 @@
 
         let markerKind = "unavailable";
         if (isPhone) markerKind = "phone";
+        else if (isUnconfirmed) markerKind = "unknown";
         else if (hasSlots) markerKind = "available";
 
         if (typeof course.lat === "number" && typeof course.lng === "number") {
@@ -486,7 +505,9 @@
           let popupHtml = `<div style="font-size:13px;">
             <strong>${name}</strong><br>${provider}`;
 
-          if (hasSlots) {
+          if (isUnconfirmed) {
+            popupHtml += `<br><strong>Unable to confirm availability</strong>`;
+          } else if (hasSlots) {
             popupHtml += `<br>${slots.length} slots`;
           } else if (isPhone) {
             popupHtml += `<br>Phone booking`;
@@ -523,6 +544,9 @@
         if (isPhone) {
           availChipClass = "chip-availability-purple";
           availLabel = "Phone booking";
+        } else if (isUnconfirmed) {
+          availChipClass = "chip-availability-yellow";
+          availLabel = "Unable to confirm availability";
         } else if (hasSlots) {
           availChipClass = "chip-availability-green";
           availLabel = "Available";
@@ -550,14 +574,20 @@
             </div>
           </div>
           <div class="card-footer">
-            <span>${hasSlots ? slots.length + " slots" : phoneText}</span>
+            <span>${
+              isUnconfirmed
+                ? "Check course site"
+                : hasSlots
+                ? slots.length + " slots"
+                : phoneText
+            }</span>
             ${
               isPhone
                 ? ""
                 : `<span class="booking-link"
                          role="button"
                          data-course-name="${encodeURIComponent(name)}"
-                         aria-disabled="${hasSlots ? "false" : "true"}">
+                         aria-disabled="${hasSlots || isUnconfirmed ? "false" : "true"}">
                       Go to booking
                    </span>`
             }
