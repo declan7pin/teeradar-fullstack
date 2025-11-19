@@ -9,11 +9,11 @@
     "dev": "nodemon backend/server.js"
   },
   "dependencies": {
+    "cheerio": "^1.0.0-rc.12",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "node-fetch": "^3.3.2",
-    "cheerio": "^1.0.0-rc.12",
-    "better-sqlite3": "^9.4.0"
+    "sql.js": "^1.9.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
