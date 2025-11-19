@@ -25,6 +25,7 @@ export function parseMiClub(html) {
 
   const fullText = $.root().text();
 
+  // ---------- PRIMARY PARSER ----------
   // Split into “rows” using the “Click to select row.” marker MiClub uses
   const segments = fullText.split(/Click to select row\./i);
 
@@ -81,7 +82,8 @@ export function parseMiClub(html) {
     });
   });
 
-  // Fallback for older/odd MiClub layouts – keep this so we never regress
+  // ---------- FALLBACK #1 ----------
+  // Older/odd MiClub layouts: use table rows with TimeSlotRow class
   if (results.length === 0) {
     $("tr.TimeSlotRow").each((_, el) => {
       const row = $(el);
@@ -103,7 +105,7 @@ export function parseMiClub(html) {
 
       const availableSpots = availableMatches.length;
       const takenSpots = takenMatches.length;
-      const totalSpots = (availableSpots + takenSpots) || 4;
+      const totalSpots = (availableSpots + takenMatches.length) || 4;
       const players = totalSpots - availableSpots;
 
       const bookingLink =
@@ -116,6 +118,76 @@ export function parseMiClub(html) {
         maxPlayers: totalSpots,
         available: availableSpots > 0,
         bookingLink,
+      });
+    });
+  }
+
+  // ---------- FALLBACK #2 (Meadow Springs & other weird layouts) ----------
+  // If we STILL have nothing, try a very generic table parser:
+  // - Look for rows with a time AND either a TimesheetBooking link or "Book"
+  // - Try to infer availability from "1/4", "2 of 4", etc.
+  if (results.length === 0) {
+    $("tr").each((_, el) => {
+      const row = $(el);
+      const rowText = row.text().replace(/\s+/g, " ").trim();
+      if (!rowText) return;
+
+      // Any time like "7:15 am" or "14:03"
+      const timeMatch = rowText.match(/(\d{1,2}:\d{2})\s*(am|pm)?/i);
+      if (!timeMatch) return;
+
+      const rawTime = timeMatch[1];
+      const ampm = (timeMatch[2] || "").toUpperCase();
+
+      let [hStr, mStr] = rawTime.split(":");
+      let h = parseInt(hStr, 10);
+
+      if (ampm === "PM" && h !== 12) h += 12;
+      if (ampm === "AM" && h === 12) h = 0;
+
+      const time24 = `${String(h).padStart(2, "0")}:${mStr}`;
+
+      const hasBookingLink =
+        row.find('a[href*="TimesheetBooking"]').length > 0 ||
+        /Book/i.test(rowText);
+
+      if (!hasBookingLink) return;
+
+      // Try to detect patterns like "1/4", "2 / 4", "1 of 4", etc.
+      let players = 0;
+      let maxPlayers = 4;
+
+      const fractionMatch = rowText.match(/(\d+)\s*\/\s*(\d+)/);
+      const ofMatch = rowText.match(/(\d+)\s*of\s*(\d+)/i);
+
+      if (fractionMatch) {
+        const booked = parseInt(fractionMatch[1], 10);
+        const total = parseInt(fractionMatch[2], 10);
+        if (!Number.isNaN(booked) && !Number.isNaN(total) && total > 0) {
+          maxPlayers = total;
+          players = booked;
+        }
+      } else if (ofMatch) {
+        const booked = parseInt(ofMatch[1], 10);
+        const total = parseInt(ofMatch[2], 10);
+        if (!Number.isNaN(booked) && !Number.isNaN(total) && total > 0) {
+          maxPlayers = total;
+          players = booked;
+        }
+      }
+
+      const availableSpots = Math.max(maxPlayers - players, 0);
+      const status = availableSpots > 0 ? "available" : "full";
+
+      results.push({
+        time: time24,
+        status,
+        players,
+        maxPlayers,
+        available: availableSpots > 0,
+        bookingLink: row
+          .find('a[href*="TimesheetBooking"]')
+          .attr("href") || null,
       });
     });
   }
