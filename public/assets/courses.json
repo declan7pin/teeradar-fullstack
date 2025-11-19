@@ -29,7 +29,7 @@
     "holes": 9,
     "lat": -31.9273,
     "lng": 115.7864,
-    "url": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-05&feeGroupId=102211"
+    "url": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-05&feeGroupId=102202"
   },
 
   {
@@ -235,7 +235,7 @@
   },
 
   {
-    "name": "Meadow Springs Golf Course (18 holes weekday)",
+    "name": "Meadow Springs Golf & Country Club (18 holes weekday)",
     "provider": "MiClub",
     "holes": 18,
     "lat": -32.5607,
@@ -243,7 +243,7 @@
     "url": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=337072"
   },
   {
-    "name": "Meadow Springs Golf Course (18 holes weekend)",
+    "name": "Meadow Springs Golf & Country Club (18 holes weekend)",
     "provider": "MiClub",
     "holes": 18,
     "lat": -32.5607,
@@ -251,7 +251,7 @@
     "url": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-22&feeGroupId=337073"
   },
   {
-    "name": "Meadow Springs Golf Course (9 holes weekday)",
+    "name": "Meadow Springs Golf & Country Club (9 holes weekday)",
     "provider": "MiClub",
     "holes": 9,
     "lat": -32.5607,
@@ -259,7 +259,7 @@
     "url": "https://meadowsprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-21&feeGroupId=337074"
   },
   {
-    "name": "Meadow Springs Golf Course (9 holes weekend)",
+    "name": "Meadow Springs Golf & Country Club (9 holes weekend)",
     "provider": "MiClub",
     "holes": 9,
     "lat": -32.5607,
