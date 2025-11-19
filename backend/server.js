@@ -4,8 +4,8 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import Database from "better-sqlite3";          // <-- NEW: SQLite
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
+import { logAnalyticsEvent } from "./db/analyticsDb.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,7 +31,7 @@ const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 const courses = rawCourses.map((c) => ({
   ...c,
   lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
-  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG,
+  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG
 }));
 
 const feeGroupsPath = path.join(__dirname, "data", "fee_groups.json");
@@ -42,38 +42,6 @@ if (fs.existsSync(feeGroupsPath)) {
 
 console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
-
-// ---------- ANALYTICS DB (SQLite) ----------
-
-// DB file lives in backend/data/analytics.db (same folder as courses.json)
-const dataDir = path.join(__dirname, "data");
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const dbPath = path.join(dataDir, "analytics.db");
-const db = new Database(dbPath);
-
-// Simple events table: one row per analytics event
-db.exec(`
-  CREATE TABLE IF NOT EXISTS analytics_events (
-    id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    type    TEXT NOT NULL,
-    at      TEXT NOT NULL,      -- ISO timestamp
-    payload TEXT                -- JSON string
-  );
-`);
-
-const insertEventStmt = db.prepare(
-  "INSERT INTO analytics_events (type, at, payload) VALUES (?, ?, ?)"
-);
-
-const summaryStmt = db.prepare(`
-  SELECT type, COUNT(*) AS count
-  FROM analytics_events
-  WHERE at >= ?
-  GROUP BY type
-`);
 
 // ---------- ROUTES ----------
 
@@ -95,14 +63,14 @@ app.post("/api/search", async (req, res) => {
       earliest = "06:00",
       latest = "17:00",
       holes = "",
-      partySize = 1,
+      partySize = 1
     } = req.body || {};
 
     if (!date) {
       return res.status(400).json({ error: "date is required" });
     }
 
-    // 🔑 Make holes a NUMBER (9 or 18), not a string
+    // 🔑 IMPORTANT: make holes a NUMBER (9 or 18), not a string
     const holesValue =
       holes === "" || holes === null || typeof holes === "undefined"
         ? ""
@@ -113,7 +81,7 @@ app.post("/api/search", async (req, res) => {
       earliest,
       latest,
       holes: holesValue,                 // numeric 9 or 18
-      partySize: Number(partySize) || 1, // numeric party size
+      partySize: Number(partySize) || 1  // numeric party size
     };
 
     console.log("Incoming /api/search", criteria);
@@ -148,70 +116,24 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
-// ---------- ANALYTICS ENDPOINTS ----------
-
-// Ingest an analytics event (from home, search, course click, etc.)
+// Simple analytics logger → now also writes to SQLite
 app.post("/api/analytics/event", (req, res) => {
   try {
     const { type, payload, at } = req.body || {};
-    const eventType = type || "unknown";
-    const timestamp = at || new Date().toISOString();
-    const payloadJson =
-      typeof payload === "undefined" ? null : JSON.stringify(payload);
 
     console.log("Incoming analytics event:", {
-      type: eventType,
-      at: timestamp,
-      payload,
+      type,
+      at,
+      payload
     });
 
-    // Persist to SQLite
-    insertEventStmt.run(eventType, timestamp, payloadJson);
+    // ✅ Persist into SQLite
+    logAnalyticsEvent({ type, at, payload });
 
     res.json({ ok: true });
   } catch (err) {
     console.error("analytics error", err);
     res.status(500).json({ error: "analytics error", detail: err.message });
-  }
-});
-
-// Aggregate analytics for the dashboard
-// GET /api/analytics/summary?windowDays=7
-app.get("/api/analytics/summary", (req, res) => {
-  try {
-    const windowDays = Number(req.query.windowDays || 7);
-    const now = new Date();
-    const fromDate = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
-    const fromIso = fromDate.toISOString();
-
-    const rows = summaryStmt.all(fromIso);
-
-    // Default counts
-    const counts = {
-      home_view: 0,
-      course_click: 0,
-      search: 0,
-      new_user: 0,
-    };
-
-    rows.forEach((row) => {
-      if (counts.hasOwnProperty(row.type)) {
-        counts[row.type] = row.count;
-      }
-    });
-
-    res.json({
-      windowDays,
-      from: fromIso,
-      to: now.toISOString(),
-      homeViews: counts.home_view,
-      courseClicks: counts.course_click,
-      searches: counts.search,
-      newUsers: counts.new_user,
-    });
-  } catch (err) {
-    console.error("analytics summary error", err);
-    res.status(500).json({ error: "summary error", detail: err.message });
   }
 });
 
@@ -224,17 +146,16 @@ app.get("/api/debug/courses", (req, res) => {
     lat: c.lat,
     lng: c.lng,
     hasUrl: !!c.url,
-    hasPhone: !!c.phone,
+    hasPhone: !!c.phone
   }));
 
   res.json({
     count: debugList.length,
-    courses: debugList,
+    courses: debugList
   });
 });
 
 // ---------- FRONTEND FALLBACK ----------
-// For any non-API route, serve the main index.html (SPA routing)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
@@ -242,5 +163,4 @@ app.get("*", (req, res) => {
 // ---------- START SERVER ----------
 app.listen(PORT, () => {
   console.log(`✅ TeeRadar backend running on port ${PORT}`);
-  console.log(`📊 Analytics DB at: ${dbPath}`);
 });
