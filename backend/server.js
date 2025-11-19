@@ -6,7 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// Analytics (in-memory)
+// Analytics helpers (in-memory / SQLite behind the scenes)
 import {
   recordEvent,
   getAnalyticsSummary,
@@ -156,47 +156,91 @@ app.post("/api/analytics/event", async (req, res) => {
   }
 });
 
-// ---------- ANALYTICS SUMMARY (for existing Admin UI) ----------
-// Your current admin page is showing “Error loading analytics”
-// because it calls a route like this. We return the simple shape
-// it expects: homeViews, searches, bookingClicks, newUsers.
+// ---------- ANALYTICS SUMMARY HELPERS ----------
 
-app.get("/api/analytics/summary", async (req, res) => {
+function buildFlatSummary(summary, topCourses) {
+  // Summary coming from analytics.js:
+  // {
+  //   homeViews, searches, bookingClicks,
+  //   usersAllTime, usersToday, usersWeek, newUsers7d
+  // }
+
+  const homeViews = summary.homeViews ?? 0;
+  const searches = summary.searches ?? 0;
+  const bookingClicks = summary.bookingClicks ?? 0;
+  const newUsers7d = summary.newUsers7d ?? 0;
+
+  return {
+    // Names your Admin UI is probably using:
+    homePageViews: homeViews,
+    courseBookingClicks: bookingClicks,
+    searches,
+    newUsers: newUsers7d,
+
+    // Also keep the alternative names we already used:
+    homeViews,
+    bookingClicks,
+
+    // Extra stats if we want them later:
+    usersAllTime: summary.usersAllTime ?? 0,
+    usersToday: summary.usersToday ?? 0,
+    usersWeek: summary.usersWeek ?? 0,
+
+    // Top courses by booking clicks
+    topCourses: topCourses || [],
+  };
+}
+
+// ---------- ANALYTICS SUMMARY ENDPOINTS ----------
+
+// 1) Legacy-style endpoint (in case Admin UI calls /api/analytics)
+app.get("/api/analytics", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
     const topCourses = await getTopCourses(10);
+    const body = buildFlatSummary(summary, topCourses);
 
-    res.json({
-      homeViews: summary.homeViews ?? 0,
-      searches: summary.searches ?? 0,
-      bookingClicks: summary.bookingClicks ?? 0,
-      // "newUsers" = new users in last 7 days
-      newUsers: summary.newUsers7d ?? 0,
-      // extra fields if you want them later
-      usersAllTime: summary.usersAllTime ?? 0,
-      usersToday: summary.usersToday ?? 0,
-      usersWeek: summary.usersWeek ?? 0,
-      topCourses,
-    });
+    console.log("[analytics] /api/analytics →", body);
+    res.json(body);
   } catch (err) {
-    console.error("analytics summary error", err);
+    console.error("analytics summary error (/api/analytics)", err);
     res
       .status(500)
       .json({ error: "analytics summary error", detail: err.message });
   }
 });
 
-// ---------- ANALYTICS SUMMARY (for newer UI, optional) ----------
+// 2) Explicit summary endpoint used earlier
+app.get("/api/analytics/summary", async (req, res) => {
+  try {
+    const summary = await getAnalyticsSummary();
+    const topCourses = await getTopCourses(10);
+    const body = buildFlatSummary(summary, topCourses);
 
+    console.log("[analytics] /api/analytics/summary →", body);
+    res.json(body);
+  } catch (err) {
+    console.error("analytics summary error (/api/analytics/summary)", err);
+    res
+      .status(500)
+      .json({ error: "analytics summary error", detail: err.message });
+  }
+});
+
+// 3) Admin endpoint (if Admin UI points here)
 app.get("/api/admin/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
     const topCourses = await getTopCourses(10);
+    const body = buildFlatSummary(summary, topCourses);
 
-    res.json({ summary, topCourses });
+    console.log("[analytics] /api/admin/summary →", body);
+    res.json(body);
   } catch (err) {
-    console.error("admin summary error", err);
-    res.status(500).json({ error: "admin summary error", detail: err.message });
+    console.error("admin summary error (/api/admin/summary)", err);
+    res
+      .status(500)
+      .json({ error: "admin summary error", detail: err.message });
   }
 });
 
