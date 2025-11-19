@@ -2,80 +2,443 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin Dashboard - TeeRadar WA</title>
+  <title>TeeRadar WA — Admin Analytics</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    :root {
+      --teal: #006b57;
+      --teal-soft: #e5f4f0;
+      --bg: #f3f5fb;
+      --card-bg: #ffffff;
+      --danger: #d32f2f;
+      --muted: #7a8599;
+    }
+
+    * { box-sizing: border-box; }
+
     body {
-      font-family: "Poppins", sans-serif;
-      background: #f5f5f5;
       margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: #1a2233;
     }
-    header {
-      background: #0f766e;
-      color: white;
-      padding: 16px 40px;
+
+    /* Top nav */
+    .nav {
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
+      padding: 10px 18px;
+      background: #ffffff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
-    .return-home {
-      background: white;
-      color: #0f766e;
-      padding: 6px 14px;
-      border-radius: 8px;
+
+    .nav-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-logo {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #3ddc84, #00b26b);
+    }
+
+    .nav-title-main {
+      font-weight: 700;
+      font-size: 16px;
+      line-height: 1.1;
+    }
+
+    .nav-title-sub {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+    }
+
+    .nav-link {
       text-decoration: none;
+      color: var(--muted);
+    }
+
+    .nav-link.active {
+      color: #111827;
       font-weight: 600;
     }
-    .dashboard {
-      width: 90%;
-      margin: 20px auto;
-      background: white;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+    /* Page */
+    .page {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 18px 14px 40px;
     }
-    h2 {
-      color: #0f766e;
+
+    .hero {
+      padding: 18px 16px 20px;
+      border-radius: 18px;
+      background: radial-gradient(circle at top left, #e0f8f2, #f3f5fb);
+      margin-bottom: 18px;
     }
-    footer {
-      background: #0f766e;
-      color: white;
-      text-align: center;
-      padding: 12px;
+
+    .hero-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .hero-subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      max-width: 520px;
+    }
+
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: var(--teal-soft);
+      color: #064e3b;
+      font-weight: 600;
+    }
+
+    .dot-live {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 0 4px rgba(34,197,94,0.18);
+    }
+
+    .status-error {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--danger);
+    }
+
+    .status-error-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--danger);
+    }
+
+    .status-ok {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #15803d;
+    }
+
+    /* Cards */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-top: 6px;
+    }
+
+    @media (min-width: 720px) {
+      .cards-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 14px 16px;
+      box-shadow: 0 1px 4px rgba(15,23,42,0.04);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-corner {
+      position: absolute;
+      right: -26px;
+      top: -26px;
+      width: 76px;
+      height: 76px;
+      border-radius: 999px;
+      border: 12px solid #e0f2f1;
+      opacity: 0.9;
+    }
+
+    .card-title {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .card-value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .card-caption {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .card-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: #f1f5f9;
+      color: #0f172a;
+      margin-top: 6px;
+    }
+
+    .card-wide {
+      grid-column: 1 / -1;
+    }
+
+    .top-courses-list {
+      margin: 8px 0 0;
+      padding: 0;
+      list-style: none;
+      font-size: 13px;
+    }
+
+    .top-courses-list li {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      border-bottom: 1px dashed #e2e8f0;
+    }
+
+    .top-courses-list li:last-child {
+      border-bottom: none;
+    }
+
+    .top-courses-course {
+      max-width: 75%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .top-courses-clicks {
+      font-weight: 600;
+      color: #111827;
+    }
+
+    .refresh-btn {
+      border: none;
+      background: #0f172a;
+      color: #e5e7eb;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      margin-left: 8px;
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>TeeRadar Admin</h1>
-    <a href="/" class="return-home">Return Home</a>
+  <header class="nav">
+    <div class="nav-left">
+      <div class="nav-logo"></div>
+      <div>
+        <div class="nav-title-main">TeeRadar</div>
+        <div class="nav-title-sub">WA</div>
+      </div>
+    </div>
+    <nav class="nav-links">
+      <a href="/admin.html" class="nav-link active">Admin</a>
+      <a href="/index.html" class="nav-link">Home</a>
+      <a href="/book.html" class="nav-link">Bookings</a>
+      <a href="/faq.html" class="nav-link">FAQ</a>
+    </nav>
   </header>
 
-  <div class="dashboard">
-    <h2>Analytics Dashboard</h2>
-    <p><strong>Users Online:</strong> <span id="onlineCount">Loading...</span></p>
-    <p><strong>Total Subscriptions:</strong> <span id="subs">Loading...</span></p>
-    <p><strong>Recent Book Clicks:</strong> <span id="bookClicks">Loading...</span></p>
-  </div>
+  <main class="page">
+    <section class="hero">
+      <div class="hero-title">Analytics dashboard</div>
+      <div class="hero-subtitle">
+        Live tee-time engagement across Western Australia — updated every time a
+        user searches, clicks a booking, or loads the home page.
+      </div>
 
-  <footer>© 2025 TeeRadar WA — Admin</footer>
+      <div class="hero-pill">
+        <span class="dot-live"></span>
+        REALTIME, SQLITE
+        <button id="refresh-btn" class="refresh-btn">Refresh</button>
+      </div>
+
+      <div id="status-ok" class="status-ok" style="display:none;">
+        Analytics loaded from SQLite.
+      </div>
+      <div id="status-error" class="status-error" style="display:none;">
+        <span class="status-error-dot"></span>
+        <span id="status-error-text">Error loading analytics — see console for details.</span>
+      </div>
+    </section>
+
+    <section class="cards-grid">
+      <article class="card">
+        <div class="card-corner"></div>
+        <div class="card-title">Home page views</div>
+        <div id="homeViewsValue" class="card-value">0</div>
+        <div class="card-caption">Number of times the main landing page was opened.</div>
+      </article>
+
+      <article class="card">
+        <div class="card-corner"></div>
+        <div class="card-title">Course booking clicks</div>
+        <div id="bookingClicksValue" class="card-value">0</div>
+        <div class="card-caption">Clicks on “Go to booking” buttons across all courses.</div>
+      </article>
+
+      <article class="card">
+        <div class="card-corner"></div>
+        <div class="card-title">Searches</div>
+        <div id="searchesValue" class="card-value">0</div>
+        <div class="card-caption">Total tee-time searches run by users.</div>
+      </article>
+
+      <article class="card">
+        <div class="card-corner"></div>
+        <div class="card-title">New users</div>
+        <div id="newUsersValue" class="card-value">0</div>
+        <div class="card-caption">Distinct “first seen” events (optional in your tracking).</div>
+      </article>
+
+      <article class="card">
+        <div class="card-corner"></div>
+        <div class="card-title">Unique users</div>
+        <div id="uniqueUsersValue" class="card-value">0</div>
+        <div class="card-caption">
+          Count of distinct browsers (by userId) that sent any analytics events.
+        </div>
+        <div class="card-pill">
+          Based on userId / clientId sent from the frontend.
+        </div>
+      </article>
+
+      <article class="card card-wide">
+        <div class="card-corner"></div>
+        <div class="card-title">Most clicked courses</div>
+        <div class="card-caption">
+          Based on <strong>booking_click</strong> events with a course name.
+        </div>
+        <ul id="topCoursesList" class="top-courses-list">
+          <li>
+            <span class="top-courses-course">No data yet</span>
+            <span class="top-courses-clicks">0</span>
+          </li>
+        </ul>
+      </article>
+    </section>
+  </main>
 
   <script>
-    // ✅ ADMIN GUARD
-    const role = localStorage.getItem("teeradar_role");
-    const email = localStorage.getItem("teeradar_email");
-    if (role !== "admin" || email !== "declan7pin@gmail.com") {
-      alert("Admin access only");
-      window.location.href = "/";
+    async function fetchJson(url) {
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(url + " → status " + res.status);
+      }
+      return res.json();
     }
 
-    // Simulated stats
-    document.getElementById("onlineCount").innerText = Math.floor(Math.random() * 30) + 1;
-    document.getElementById("subs").innerText = Math.floor(Math.random() * 100) + 50;
-    document.getElementById("bookClicks").innerText = Math.floor(Math.random() * 200) + 150;
+    function setText(id, value) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = String(value ?? 0);
+    }
+
+    function showError(message) {
+      const ok = document.getElementById("status-ok");
+      const err = document.getElementById("status-error");
+      const errText = document.getElementById("status-error-text");
+      if (ok) ok.style.display = "none";
+      if (err) err.style.display = "flex";
+      if (errText) errText.textContent = message;
+    }
+
+    function showOk() {
+      const ok = document.getElementById("status-ok");
+      const err = document.getElementById("status-error");
+      if (ok) ok.style.display = "block";
+      if (err) err.style.display = "none";
+    }
+
+    function renderTopCourses(list) {
+      const ul = document.getElementById("topCoursesList");
+      if (!ul) return;
+      ul.innerHTML = "";
+
+      if (!Array.isArray(list) || list.length === 0) {
+        const li = document.createElement("li");
+        li.innerHTML =
+          '<span class="top-courses-course">No booking clicks yet</span>' +
+          '<span class="top-courses-clicks">0</span>';
+        ul.appendChild(li);
+        return;
+      }
+
+      list.forEach((row) => {
+        const li = document.createElement("li");
+        const name = row.courseName || "Unknown course";
+        const clicks = row.clicks ?? 0;
+        li.innerHTML =
+          '<span class="top-courses-course">' +
+          name +
+          "</span>" +
+          '<span class="top-courses-clicks">' +
+          clicks +
+          "</span>";
+        ul.appendChild(li);
+      });
+    }
+
+    async function loadAnalytics() {
+      try {
+        const summary = await fetchJson("/api/analytics/summary");
+
+        setText("homeViewsValue", summary.home_page_views || 0);
+        setText("bookingClicksValue", summary.booking_clicks || 0);
+        setText("searchesValue", summary.searches || 0);
+        setText("newUsersValue", summary.new_users || 0);
+        setText("uniqueUsersValue", summary.unique_users || 0);
+
+        renderTopCourses(summary.top_courses || []);
+
+        showOk();
+      } catch (err) {
+        console.error("Analytics load failed:", err);
+        showError("Error loading analytics — see console for details.");
+      }
+    }
+
+    document.getElementById("refresh-btn").addEventListener("click", () => {
+      loadAnalytics();
+    });
+
+    // Initial load
+    loadAnalytics();
   </script>
 </body>
 </html>
-
-
-
