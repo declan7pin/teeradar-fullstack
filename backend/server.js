@@ -1,161 +1,152 @@
 // backend/server.js
 import express from "express";
 import cors from "cors";
-import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { scrapeCourse } from "./scrapers/scrapeCourse.js";
+import { createRequire } from "module";
 
+import scrapeCourse from "./scrapers/scrapeCourse.js";
+
+const require = createRequire(import.meta.url);
+const courses = require("./data/courses.json");
+const feeGroups = require("./data/fee_groups.json");
+
+// Resolve __dirname for ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+// --------------------------------------------------------
+// In-memory analytics
+// --------------------------------------------------------
+const analytics = {
+  homeViews: 0,
+  searches: 0,
+  courseClicks: 0,
+  newUsers: 0,
+  events: [], // rolling log for debugging
+};
 
-// ---------- MIDDLEWARE ----------
+function logAnalytics(type, payload = {}) {
+  const event = {
+    type,
+    at: new Date().toISOString(),
+    payload,
+  };
+
+  analytics.events.push(event);
+  if (analytics.events.length > 5000) {
+    analytics.events.shift();
+  }
+
+  switch (type) {
+    case "home_view":
+      analytics.homeViews += 1;
+      break;
+    case "search":
+      analytics.searches += 1;
+      break;
+    case "course_click":
+      analytics.courseClicks += 1;
+      break;
+    case "signup":
+      analytics.newUsers += 1;
+      break;
+    default:
+      break;
+  }
+
+  console.log("Incoming analytics event:", event);
+}
+
+// --------------------------------------------------------
+// Express app
+// --------------------------------------------------------
+const app = express();
+const PORT = process.env.PORT || 10000;
+
 app.use(cors());
 app.use(express.json());
 
-// Serve static frontend from /public at project root
-app.use(express.static(path.join(__dirname, "..", "public")));
+// Serve static frontend (index.html, book.html, admin.html, etc.)
+app.use(express.static(path.join(__dirname, "..")));
 
-// ---------- LOAD DATA ----------
-const PERTH_LAT = -31.9523;
-const PERTH_LNG = 115.8613;
-
-const coursesPath = path.join(__dirname, "data", "courses.json");
-const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
-
-// Ensure every course has lat/lng, fallback to Perth CBD if missing
-const courses = rawCourses.map((c) => ({
-  ...c,
-  lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
-  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG,
-}));
-
-const feeGroupsPath = path.join(__dirname, "data", "fee_groups.json");
-let feeGroups = {};
-if (fs.existsSync(feeGroupsPath)) {
-  feeGroups = JSON.parse(fs.readFileSync(feeGroupsPath, "utf8"));
-}
-
-console.log(`Loaded ${courses.length} courses.`);
-console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
-
-// ---------- ROUTES ----------
-
-// Health check
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", courses: courses.length });
-});
-
-// Return full course list (used by frontend map + UI)
+// --------------------------------------------------------
+// API: courses list
+// --------------------------------------------------------
 app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Tee time search with extra debug logging
+// --------------------------------------------------------
+// API: search tee times
+// body: { date, earliest, latest, holes, partySize }
+// --------------------------------------------------------
 app.post("/api/search", async (req, res) => {
+  const criteria = req.body || {};
+  console.log("Incoming /api/search", criteria);
+
+  // Track search analytics
+  logAnalytics("search", {
+    date: criteria.date,
+    earliest: criteria.earliest,
+    latest: criteria.latest,
+    holes: criteria.holes,
+    partySize: criteria.partySize,
+  });
+
   try {
-    const {
-      date,
-      earliest = "06:00",
-      latest = "17:00",
-      holes = "",
-      partySize = 1,
-    } = req.body || {};
+    const promises = courses.map((course) =>
+      scrapeCourse(course, criteria, feeGroups)
+    );
 
-    if (!date) {
-      return res.status(400).json({ error: "date is required" });
-    }
+    const results = await Promise.all(promises);
+    const slots = results.flat();
 
-    // 🔑 IMPORTANT: make holes a NUMBER (9 or 18), not a string
-    const holesValue =
-      holes === "" || holes === null || typeof holes === "undefined"
-        ? ""
-        : Number(holes);
-
-    const criteria = {
-      date,
-      earliest,
-      latest,
-      holes: holesValue,                 // <--- numeric 9 or 18
-      partySize: Number(partySize) || 1, // numeric party size
-    };
-
-    console.log("Incoming /api/search", criteria);
-
-    const jobs = courses.map(async (c) => {
-      try {
-        const result = await scrapeCourse(c, criteria, feeGroups);
-        const count = Array.isArray(result) ? result.length : 0;
-
-        if (count > 0) {
-          console.log(`✅ ${c.name} → ${count} slots`);
-        } else {
-          console.log(`⚪ ${c.name} → 0 slots`);
-        }
-
-        return result || [];
-      } catch (err) {
-        console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
-        return [];
-      }
-    });
-
-    const allResults = await Promise.all(jobs);
-    const slots = allResults.flat();
-
-    console.log(`🔎 /api/search finished → total slots: ${slots.length}`);
+    console.log(
+      `🔎 /api/search finished → total slots: ${slots.length}`
+    );
 
     res.json({ slots });
   } catch (err) {
-    console.error("search error", err);
-    res.status(500).json({ error: "internal error", detail: err.message });
+    console.error("Search error:", err);
+    res.status(500).json({ error: "Search failed" });
   }
 });
 
-// Simple analytics logger
+// --------------------------------------------------------
+// API: analytics event sink
+// frontend sends: { type: "home_view" | "search" | "course_click" | "signup", payload? }
+// --------------------------------------------------------
 app.post("/api/analytics/event", (req, res) => {
-  try {
-    const { type, payload, at } = req.body || {};
-    console.log("Incoming analytics event:", {
-      type,
-      at,
-      payload,
-    });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("analytics error", err);
-    res.status(500).json({ error: "analytics error", detail: err.message });
+  const { type, payload } = req.body || {};
+  if (!type) {
+    return res.status(400).json({ error: "Analytics event 'type' is required" });
   }
+
+  logAnalytics(type, payload || {});
+  return res.json({ ok: true });
 });
 
-// DEBUG: return list of courses with coords + basic flags
-app.get("/api/debug/courses", (req, res) => {
-  const debugList = courses.map((c) => ({
-    name: c.name,
-    provider: c.provider,
-    holes: c.holes,
-    lat: c.lat,
-    lng: c.lng,
-    hasUrl: !!c.url,
-    hasPhone: !!c.phone,
-  }));
-
+// --------------------------------------------------------
+// API: analytics summary for admin dashboard
+// --------------------------------------------------------
+app.get("/api/analytics", (req, res) => {
   res.json({
-    count: debugList.length,
-    courses: debugList,
+    homeViews: analytics.homeViews,
+    searches: analytics.searches,
+    courseClicks: analytics.courseClicks,
+    newUsers: analytics.newUsers,
   });
 });
 
-// ---------- FRONTEND FALLBACK ----------
-// For any non-API route, serve the main index.html (SPA routing)
+// --------------------------------------------------------
+// Catch-all → let frontend handle routing (if needed)
+// --------------------------------------------------------
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+  res.sendFile(path.join(__dirname, "..", "index.html"));
 });
 
-// ---------- START SERVER ----------
+// --------------------------------------------------------
 app.listen(PORT, () => {
-  console.log(`✅ TeeRadar backend running on port ${PORT}`);
+  console.log(`TeeRadar backend listening on port ${PORT}`);
 });
