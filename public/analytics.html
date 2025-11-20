@@ -13,8 +13,6 @@
       --text: #0f172a;
       --muted: #64748b;
       --border: #e2e8f0;
-      --error-bg: #fee2e2;
-      --error-text: #b91c1c;
       --pill: #dcfce7;
     }
     *{box-sizing:border-box;}
@@ -136,34 +134,11 @@
       color:var(--muted);
     }
 
-    .error-banner{
-      display:none;
-      align-items:center;
-      gap:8px;
-      background:var(--error-bg);
-      color:var(--error-text);
-      padding:10px 12px;
-      border-radius:12px;
-      font-size:13px;
-      margin-bottom:14px;
-    }
-    .error-dot{
-      width:10px;
-      height:10px;
-      border-radius:50%;
-      background:#ef4444;
-    }
-
     .cards-grid{
       display:grid;
       grid-template-columns:1fr;
       gap:14px;
       margin-bottom:26px;
-    }
-    @media(min-width:720px){
-      .cards-grid{
-        grid-template-columns:1fr;
-      }
     }
     .card{
       background:var(--card);
@@ -270,11 +245,6 @@
     searches or clicks.
   </p>
 
-  <div id="errorBanner" class="error-banner">
-    <span class="error-dot"></span>
-    <span>Error loading analytics — see console for details.</span>
-  </div>
-
   <section class="cards-grid" aria-label="Key metrics">
     <article class="card">
       <div class="card-label">Home page views</div>
@@ -304,17 +274,17 @@
   <section class="card user-overview">
     <div class="card-label">User overview</div>
     <div class="pill-switch">
-      <button id="btnAllTime" class="active" type="button">All time
-        <span id="usersAllTime" style="font-weight:600;margin-left:4px;">0</span>
+      <button id="btnAllTime" class="active" type="button">
+        All time <span id="usersAllTime" style="font-weight:600;margin-left:4px;">0</span>
       </button>
-      <button id="btnToday" type="button">Today
-        <span id="usersToday" style="font-weight:600;margin-left:4px;">0</span>
+      <button id="btnToday" type="button">
+        Today <span id="usersToday" style="font-weight:600;margin-left:4px;">0</span>
       </button>
-      <button id="btnWeek" type="button">This week
-        <span id="usersWeek" style="font-weight:600;margin-left:4px;">0</span>
+      <button id="btnWeek" type="button">
+        This week <span id="usersWeek" style="font-weight:600;margin-left:4px;">0</span>
       </button>
     </div>
-    <div class="muted-note" id="summaryUpdated">Last updated just now.</div>
+    <div class="muted-note" id="summaryUpdated">Loading analytics…</div>
   </section>
 
   <section class="card" style="margin-top:14px;">
@@ -326,8 +296,90 @@
 </main>
 
 <script>
+  function computeSummaryFromEvents(events) {
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startWeek = startToday - 6 * 24 * 60 * 60 * 1000; // last 7 days
+
+    let homePageViews = 0;
+    let bookingClicks = 0;
+    let searches = 0;
+
+    const userAll = new Set();
+    const userToday = new Set();
+    const userWeek = new Set();
+
+    const courseClicks = new Map();
+
+    (events || []).forEach(ev => {
+      if (!ev) return;
+      const type = ev.type || ev.eventType || "";
+      const t = new Date(ev.at || ev.timestamp || ev.time || Date.now()).getTime();
+      const uid = ev.userId || ev.user || ev.anonId;
+
+      if (type === "home_view") homePageViews++;
+      if (type === "course_booking_click") bookingClicks++;
+      if (type === "search" || type === "search_run") searches++;
+
+      if (uid) {
+        userAll.add(uid);
+        if (t >= startToday) userToday.add(uid);
+        if (t >= startWeek) userWeek.add(uid);
+      }
+
+      if (type === "course_booking_click") {
+        const cname = ev.courseName || (ev.payload && ev.payload.courseName);
+        if (cname) {
+          courseClicks.set(cname, (courseClicks.get(cname) || 0) + 1);
+        }
+      }
+    });
+
+    const topCourses = Array.from(courseClicks.entries())
+      .sort((a,b) => b[1]-a[1])
+      .slice(0,5)
+      .map(([courseName, clicks]) => ({ courseName, clicks }));
+
+    return {
+      homePageViews,
+      courseBookingClicks: bookingClicks,
+      searches,
+      newUsers: userWeek.size,     // show “new users (7d)”
+      usersAllTime: userAll.size,
+      usersToday: userToday.size,
+      usersWeek: userWeek.size,
+      topCourses
+    };
+  }
+
+  async function fetchAnalyticsSummary() {
+    // 1. Try dedicated summary endpoint
+    try {
+      const res = await fetch("/api/analytics/summary", { headers: { "Accept": "application/json" } });
+      if (res.ok) {
+        const data = await res.json();
+        console.log("[analytics] /summary payload", data);
+        return data;
+      }
+    } catch (e) {
+      console.log("summary endpoint failed", e);
+    }
+
+    // 2. Fall back to raw events endpoint
+    try {
+      const res = await fetch("/api/analytics", { headers: { "Accept": "application/json" } });
+      if (!res.ok) return null;
+      const data = await res.json();
+      console.log("[analytics] /api/analytics payload", data);
+      const events = Array.isArray(data) ? data : Array.isArray(data.events) ? data.events : [];
+      return computeSummaryFromEvents(events);
+    } catch (e) {
+      console.log("raw analytics endpoint failed", e);
+      return null;
+    }
+  }
+
   async function loadAnalytics() {
-    const errorBanner = document.getElementById("errorBanner");
     const homeEl = document.getElementById("metricHomeViews");
     const bookingEl = document.getElementById("metricBookingClicks");
     const searchEl = document.getElementById("metricSearches");
@@ -338,66 +390,56 @@
     const topCoursesList = document.getElementById("topCoursesList");
     const summaryUpdated = document.getElementById("summaryUpdated");
 
-    try {
-      errorBanner.style.display = "none";
+    const summary = await fetchAnalyticsSummary();
 
-      const res = await fetch("/api/analytics/summary", {
-        headers: { "Accept": "application/json" }
-      });
+    if (!summary) {
+      summaryUpdated.textContent =
+        "Analytics backend not configured yet on this environment.";
+      return;
+    }
 
-      if (!res.ok) {
-        throw new Error("HTTP " + res.status);
-      }
+    const homeViews = Number(
+      summary.homePageViews ??
+      summary.homeViews ??
+      0
+    );
+    const bookingClicks = Number(
+      summary.courseBookingClicks ??
+      summary.bookingClicks ??
+      0
+    );
+    const searches = Number(summary.searches ?? 0);
+    const newUsers = Number(summary.newUsers ?? summary.newUsers7d ?? 0);
 
-      const data = await res.json();
-      console.log("[analytics] summary payload", data);
+    homeEl.textContent = homeViews.toString();
+    bookingEl.textContent = bookingClicks.toString();
+    searchEl.textContent = searches.toString();
+    newUsersEl.textContent = newUsers.toString();
 
-      const homeViews = Number(
-        data.homePageViews ??
-        data.homeViews ??
-        0
-      );
-      const bookingClicks = Number(
-        data.courseBookingClicks ??
-        data.bookingClicks ??
-        0
-      );
-      const searches = Number(data.searches ?? 0);
-      const newUsers = Number(data.newUsers ?? data.newUsers7d ?? 0);
+    usersAllTimeEl.textContent = Number(summary.usersAllTime ?? 0).toString();
+    usersTodayEl.textContent = Number(summary.usersToday ?? 0).toString();
+    usersWeekEl.textContent = Number(summary.usersWeek ?? 0).toString();
 
-      homeEl.textContent = homeViews.toString();
-      bookingEl.textContent = bookingClicks.toString();
-      searchEl.textContent = searches.toString();
-      newUsersEl.textContent = newUsers.toString();
+    const updatedAt = new Date().toLocaleString();
+    summaryUpdated.textContent = "Last updated " + updatedAt + ".";
 
-      usersAllTimeEl.textContent = Number(data.usersAllTime ?? 0).toString();
-      usersTodayEl.textContent = Number(data.usersToday ?? 0).toString();
-      usersWeekEl.textContent = Number(data.usersWeek ?? 0).toString();
+    const top = Array.isArray(summary.topCourses) ? summary.topCourses : [];
+    topCoursesList.innerHTML = "";
 
-      const updatedAt = new Date().toLocaleString();
-      summaryUpdated.textContent = "Last updated " + updatedAt + ".";
-
-      const top = Array.isArray(data.topCourses) ? data.topCourses : [];
-      topCoursesList.innerHTML = "";
-
-      if (top.length === 0) {
+    if (top.length === 0) {
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="label">No course clicks yet</span>
+                      <span class="value">—</span>`;
+      topCoursesList.appendChild(li);
+    } else {
+      top.forEach((row) => {
         const li = document.createElement("li");
-        li.innerHTML = `<span class="label">No course clicks yet</span>
-                        <span class="value">—</span>`;
+        const name = row.courseName || row.course || "Unknown course";
+        const count = row.clicks ?? row.count ?? 0;
+        li.innerHTML = `<span class="label">${name}</span>
+                        <span class="value">${count} clicks</span>`;
         topCoursesList.appendChild(li);
-      } else {
-        top.forEach((row) => {
-          const li = document.createElement("li");
-          const name = row.courseName || row.course || "Unknown course";
-          const count = row.clicks ?? row.count ?? 0;
-          li.innerHTML = `<span class="label">${name}</span>
-                          <span class="value">${count} clicks</span>`;
-          topCoursesList.appendChild(li);
-        });
-      }
-    } catch (err) {
-      console.error("Analytics load failed", err);
-      errorBanner.style.display = "flex";
+      });
     }
   }
 
