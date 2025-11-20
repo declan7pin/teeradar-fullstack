@@ -16,7 +16,6 @@
       --border: #e2e8f0;
       --accent: #0ea5e9;
       --pill: #ecfeff;
-      --danger: #ef4444;
     }
     *{box-sizing:border-box;}
     html,body{
@@ -94,7 +93,7 @@
       padding:4px 10px;
       font-weight:600;
     }
-    .nav-account-btn{
+    .nav-login{
       background:#ffffff;
       color:var(--teal-dark);
       border:none;
@@ -105,7 +104,7 @@
       cursor:pointer;
     }
 
-    /* MAIN LAYOUT */
+    /* HERO */
     main{
       max-width:1100px;
       margin:28px auto 40px;
@@ -202,76 +201,70 @@
       font-size:13px;
     }
 
-    /* HERO CARD WITH IMAGE */
     .hero-card{
-      background:var(--card);
+      background:linear-gradient(135deg,#064e3b,#0f766e);
       border-radius:22px;
+      color:#ecfdf5;
+      position:relative;
       overflow:hidden;
-      box-shadow:0 26px 45px rgba(15,23,42,0.35);
+      min-height:230px;
+      box-shadow:0 26px 45px rgba(15,23,42,0.55);
+    }
+    .hero-card-inner{
+      padding:16px 18px 18px;
+      position:relative;
+      z-index:1;
+      height:100%;
       display:flex;
       flex-direction:column;
+      justify-content:space-between;
     }
     .hero-card-top{
-      padding:14px 16px 10px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-bottom:6px;
+      font-size:12px;
     }
     .hero-card-badge{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
       padding:4px 9px;
       border-radius:999px;
-      background:#022c22;
-      color:#a7f3d0;
+      background:rgba(15,23,42,0.7);
       font-weight:600;
       font-size:11px;
-      margin-bottom:6px;
-    }
-    .hero-card-badge-dot{
-      width:8px;
-      height:8px;
-      border-radius:999px;
-      background:#22c55e;
-    }
-    .hero-card-title{
-      font-size:13px;
-      font-weight:600;
-      margin-bottom:4px;
-      color:#022c22;
     }
     .hero-card-text{
       font-size:12px;
-      color:#065f46;
-    }
-    .hero-card-img-wrap{
-      width:100%;
-      height:210px;
-      overflow:hidden;
-    }
-    .hero-card-img-wrap img{
-      width:100%;
-      height:100%;
-      object-fit:cover;
-      display:block;
+      opacity:.85;
     }
     .hero-card-footer{
-      padding:10px 16px 14px;
       display:flex;
       justify-content:space-between;
       align-items:center;
+      margin-top:10px;
       font-size:12px;
-      color:#065f46;
-      background:linear-gradient(to right,#ecfdf5,#e0f2fe);
     }
     .hero-card-footer button{
-      background:#059669;
-      color:#ecfdf5;
+      background:#bbf7d0;
+      color:#064e3b;
       border:none;
       border-radius:999px;
       padding:6px 12px;
       font-size:11px;
       font-weight:700;
       cursor:pointer;
-      box-shadow:0 8px 18px rgba(22,163,74,0.4);
+    }
+    .hero-card-bg{
+      position:absolute;
+      inset:0;
+      opacity:.72;
+      background:url("/assets/hero_golf_bg.jpg") center/cover no-repeat;
+      filter:saturate(1.1) contrast(1.05) brightness(0.98);
+    }
+    .hero-card-gradient{
+      position:absolute;
+      inset:0;
+      background:radial-gradient(circle at top,#22c55e33,transparent 55%);
     }
 
     /* FEATURE CARDS */
@@ -299,6 +292,7 @@
       font-size:13px;
     }
 
+    /* FOOTER & T&Cs banner */
     footer{
       max-width:1100px;
       margin:18px auto 32px;
@@ -310,8 +304,6 @@
       flex-wrap:wrap;
       gap:8px;
     }
-
-    /* T&Cs banner */
     #tc-banner{
       position:fixed;
       bottom:0;
@@ -348,8 +340,8 @@
       }
     }
 
-    /* ACCOUNT MODAL */
-    .modal-backdrop{
+    /* MY ACCOUNT MODAL */
+    .account-modal-backdrop{
       position:fixed;
       inset:0;
       background:rgba(15,23,42,0.45);
@@ -357,121 +349,82 @@
       align-items:center;
       justify-content:center;
       z-index:40;
+      padding:16px;
     }
-    .modal{
+    .account-modal{
       background:#f9fafb;
-      border-radius:18px;
-      padding:18px 18px 16px;
+      border-radius:16px;
+      padding:18px 18px 14px;
       max-width:380px;
       width:100%;
-      box-shadow:0 22px 45px rgba(15,23,42,0.45);
+      box-shadow:0 18px 40px rgba(15,23,42,0.35);
+      border:1px solid #e2e8f0;
+      font-size:13px;
     }
-    .modal-header{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      margin-bottom:10px;
+    .account-modal h2{
+      margin:0 0 4px;
+      font-size:17px;
     }
-    .modal-title{
-      font-size:16px;
-      font-weight:700;
-    }
-    .modal-close{
-      border:none;
-      background:transparent;
-      font-size:18px;
-      cursor:pointer;
-    }
-    .modal-sub{
+    .account-status-text{
+      margin:0 0 10px;
       font-size:12px;
       color:var(--muted);
-      margin-bottom:12px;
     }
-    .field{
+    .account-field{
       margin-bottom:10px;
     }
-    .field label{
+    .account-field label{
       display:block;
       font-size:12px;
-      margin-bottom:3px;
       color:#475569;
+      margin-bottom:3px;
     }
-    .field input{
+    .account-input{
       width:100%;
       padding:7px 9px;
       border-radius:8px;
-      border:1px solid #cbd5f5;
+      border:1px solid #cbd5e1;
       font-size:13px;
     }
-    .field input:focus{
-      outline:none;
-      border-color:#0ea5e9;
-      box-shadow:0 0 0 1px rgba(14,165,233,0.5);
-    }
-    .field-helper{
+    .account-hint{
       font-size:11px;
-      color:var(--muted);
-      margin-top:2px;
+      color:#64748b;
+      margin-bottom:8px;
     }
-    .modal-row{
+    .account-actions{
       display:flex;
       justify-content:space-between;
       align-items:center;
       gap:8px;
-      margin-top:10px;
+      margin-top:8px;
     }
-    .btn-secondary{
-      flex:1;
+    .btn-small-primary{
+      background:var(--teal);
+      color:#fff;
+      border:none;
       border-radius:999px;
-      border:1px solid #cbd5f5;
-      background:#e5edff;
-      color:#1d4ed8;
+      padding:7px 14px;
       font-size:12px;
-      padding:7px 0;
       font-weight:600;
       cursor:pointer;
     }
-    .btn-ghost{
-      flex:1;
-      border-radius:999px;
-      border:1px solid transparent;
+    .btn-small-ghost{
       background:transparent;
-      color:#64748b;
-      font-size:11px;
-      padding:6px 0;
-      cursor:pointer;
-    }
-    .modal-error{
-      font-size:11px;
-      color:var(--danger);
-      margin-top:4px;
-      min-height:14px;
-    }
-    /* home course suggestions */
-    .suggestions{
-      position:relative;
-      font-size:12px;
-    }
-    .suggestions-list{
-      position:absolute;
-      top:100%;
-      left:0;
-      right:0;
-      background:#ffffff;
-      border-radius:10px;
-      border:1px solid #e5e7eb;
-      box-shadow:0 10px 24px rgba(15,23,42,0.25);
-      max-height:160px;
-      overflow-y:auto;
-      margin-top:4px;
-      z-index:45;
-    }
-    .suggestion-item{
+      color:#0f172a;
+      border:none;
       padding:6px 10px;
+      border-radius:999px;
+      font-size:12px;
       cursor:pointer;
     }
-    .suggestion-item:hover{
-      background:#e0f2fe;
+    .btn-small-danger{
+      background:#fee2e2;
+      color:#b91c1c;
+      border:none;
+      border-radius:999px;
+      padding:6px 10px;
+      font-size:11px;
+      cursor:pointer;
     }
   </style>
 </head>
@@ -487,8 +440,9 @@
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
+      <!-- analytics tab shown only for admin -->
       <a href="/analytics.html" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
-      <button id="navAccountBtn" class="nav-account-btn" type="button">My Account</button>
+      <button id="navAccountBtn" class="nav-login" type="button">My Account</button>
     </nav>
   </div>
 </header>
@@ -507,8 +461,9 @@
         Find a tee time across WA, in one place.
       </h1>
       <p class="hero-sub">
-        Search public golf courses across Western Australia by date, time, 9/18 holes and players. Tap through
-        to the course’s official booking page — fully compliant.
+        Search public golf courses across Western Australia by date, time window, 9/18
+        holes and players. Tap through to the official course booking page — you stay
+        compliant, we save you the legwork.
       </p>
 
       <div class="hero-actions">
@@ -536,28 +491,27 @@
       </div>
     </div>
 
-    <!-- HERO CARD WITH IMAGE -->
     <aside class="hero-card" aria-label="Live WA course widget">
-      <div class="hero-card-top">
-        <div class="hero-card-badge">
-          <span class="hero-card-badge-dot"></span>
-          Live WA courses
+      <div class="hero-card-bg"></div>
+      <div class="hero-card-gradient"></div>
+
+      <div class="hero-card-inner">
+        <div>
+          <div class="hero-card-top">
+            <span class="hero-card-badge">Live WA courses</span>
+            <span class="hero-card-text">Araluen • Collier • Whaleback • more</span>
+          </div>
+          <p style="font-size:12px;max-width:280px;margin:6px 0 0;">
+            We always send you to the course’s own booking page. WA today, ready to
+            scale to all Australian states later.
+          </p>
         </div>
-        <div class="hero-card-title">
-          Araluen • Collier • Whaleback • more
+        <div class="hero-card-footer">
+          <span style="opacity:.85;">Course-first, compliant booking links.</span>
+          <button type="button" onclick="window.location.href='/book.html'">
+            View live course links
+          </button>
         </div>
-        <p class="hero-card-text">
-          We always send you to the course’s own booking page. WA today, scalable Australia-wide.
-        </p>
-      </div>
-      <div class="hero-card-img-wrap">
-        <img src="/assets/hero_golf_bg.jpg" alt="Aerial view of golf course" />
-      </div>
-      <div class="hero-card-footer">
-        <span>Course-first, compliant booking links.</span>
-        <button type="button" onclick="window.location.href='/book.html'">
-          View course links
-        </button>
       </div>
     </aside>
   </section>
@@ -566,25 +520,29 @@
     <article class="feature-card">
       <h3>Single search</h3>
       <p>
-        One simple search instead of opening a dozen course sites. We aggregate WA public courses into a single map and list.
+        One simple search instead of opening a dozen course sites. We aggregate WA
+        public courses into a single map and list.
       </p>
     </article>
     <article class="feature-card">
       <h3>Filters that match golf</h3>
       <p>
-        Select your date, window, holes and group size. We highlight which courses are worth clicking into.
+        Pick your date, time window, hole count and group size. We highlight which
+        courses are worth clicking into.
       </p>
     </article>
     <article class="feature-card">
       <h3>Course-first booking</h3>
       <p>
-        Every booking flows through the club’s own site. You stay fully compliant and the course keeps control.
+        Every booking flows through the club’s own system. You stay fully compliant
+        and the course keeps control.
       </p>
     </article>
     <article class="feature-card">
       <h3>Ready to expand</h3>
       <p>
-        Built for WA today, designed to roll out to other Australian states as more integrations come online.
+        Built for WA today, designed to roll out to other Australian states as more
+        integrations come online.
       </p>
     </article>
   </section>
@@ -607,42 +565,44 @@
   <button type="button" id="tc-accept-btn">Got it</button>
 </div>
 
-<!-- ACCOUNT MODAL -->
-<div id="account-backdrop" class="modal-backdrop">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="account-modal-title">My account</div>
-      <button class="modal-close" type="button" id="account-close-btn">×</button>
-    </div>
-    <div class="modal-sub" id="account-modal-sub">
-      Log in or create an account so we can remember your home course across devices.
+<!-- My Account modal -->
+<div id="accountModal" class="account-modal-backdrop" aria-hidden="true">
+  <div class="account-modal" role="dialog" aria-modal="true" aria-labelledby="accountModalTitle">
+    <h2 id="accountModalTitle">My account</h2>
+    <p id="accountStatusText" class="account-status-text">
+      Manage your email and home course on this device.
+    </p>
+
+    <div class="account-field">
+      <label for="accountEmailInput">Email address</label>
+      <input id="accountEmailInput" type="email" class="account-input" placeholder="you@example.com" />
     </div>
 
-    <div class="field">
-      <label for="acc-email">Email</label>
-      <input id="acc-email" type="email" autocomplete="email" />
-    </div>
-    <div class="field">
-      <label for="acc-password">Password</label>
-      <input id="acc-password" type="password" autocomplete="current-password" />
-      <div class="field-helper">Minimum 6 characters. Stored securely on the server.</div>
-    </div>
-
-    <div class="field suggestions">
-      <label for="acc-home-course">Home course (optional)</label>
-      <input id="acc-home-course" type="text" placeholder="e.g. Collier Park Golf Course" autocomplete="off" />
-      <div id="acc-home-suggestions" class="suggestions-list" style="display:none;"></div>
-      <div class="field-helper">Used to auto-zoom the bookings map around your course.</div>
+    <div class="account-field">
+      <label for="accountHomeCourseInput">Home course</label>
+      <input
+        id="accountHomeCourseInput"
+        class="account-input"
+        placeholder="Start typing a course name…"
+        list="homeCourseSuggestions"
+      />
+      <datalist id="homeCourseSuggestions"></datalist>
     </div>
 
-    <div class="modal-error" id="acc-error"></div>
+    <p class="account-hint">
+      This is saved locally on this device. Analytics access unlocks when your email matches the admin address.
+    </p>
 
-    <div class="modal-row">
-      <button class="btn-secondary" type="button" id="acc-signup-btn">Sign up</button>
-      <button class="btn-secondary" type="button" id="acc-login-btn">Log in</button>
-    </div>
-    <div class="modal-row">
-      <button class="btn-ghost" type="button" id="acc-update-home-btn">Update home course</button>
+    <div class="account-actions">
+      <button type="button" class="btn-small-danger" id="accountLogoutBtn">
+        Log out on this device
+      </button>
+      <div>
+        <button type="button" class="btn-small-ghost" id="accountCloseBtn">Close</button>
+        <button type="button" class="btn-small-primary" id="accountSaveBtn">
+          Save changes
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -650,24 +610,17 @@
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 
-  // ------- ANALYTICS EVENT HELPER -------
+  // ---------- ANALYTICS ----------
   function trackEvent(type, payload) {
     try {
-      const token = localStorage.getItem("teeradar_auth_token") || null;
-      const email = localStorage.getItem("teeradar_user_email") || null;
-      const homeCourse = localStorage.getItem("teeradar_home_course") || null;
-
       fetch("/api/analytics/event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type,
-          at: new Date().toISOString(),
-          userId: email || undefined,
-          courseName: payload && payload.courseName,
-          homeCourse,
           payload: payload || {},
-        }),
+          at: new Date().toISOString()
+        })
       }).catch(() => {});
     } catch (e) {
       console.warn("analytics event failed", e);
@@ -675,22 +628,19 @@
   }
 
   function isAdmin() {
-    const email = (localStorage.getItem("teeradar_user_email") || "").toLowerCase();
-    return email === ADMIN_EMAIL.toLowerCase();
+    return (localStorage.getItem("teeradar_user_email") || "").toLowerCase() === ADMIN_EMAIL;
   }
 
   function renderNavState() {
     const analyticsLink = document.getElementById("navAnalytics");
     const accountBtn = document.getElementById("navAccountBtn");
-    if (!analyticsLink || !accountBtn) return;
-
-    analyticsLink.style.display = isAdmin() ? "inline-flex" : "none";
-
     const email = localStorage.getItem("teeradar_user_email");
-    if (email) {
-      accountBtn.textContent = "My Account";
-    } else {
-      accountBtn.textContent = "My Account";
+
+    if (analyticsLink) {
+      analyticsLink.style.display = isAdmin() ? "inline-flex" : "none";
+    }
+    if (accountBtn) {
+      accountBtn.textContent = email ? "My Account" : "My Account";
     }
   }
 
@@ -699,9 +649,13 @@
       trackEvent("new_user", {});
       localStorage.setItem("teeradar_seen", "1");
     }
-    trackEvent("home_view", {});
+    trackEvent("home_view", {
+      userEmail: localStorage.getItem("teeradar_user_email") || null,
+      homeCourse: localStorage.getItem("teeradar_home_course") || null
+    });
   }
 
+  // ---------- T&C BANNER ----------
   function initTCBanner() {
     const banner = document.getElementById("tc-banner");
     const btn = document.getElementById("tc-accept-btn");
@@ -716,245 +670,131 @@
     });
   }
 
-  // ------- AUTH HELPERS (FRONT-END) -------
+  // ---------- MY ACCOUNT MODAL ----------
+  function loadAccountIntoModal() {
+    const emailInput = document.getElementById("accountEmailInput");
+    const homeInput = document.getElementById("accountHomeCourseInput");
+    const status = document.getElementById("accountStatusText");
 
-  async function verifyExistingToken() {
-    const token = localStorage.getItem("teeradar_auth_token");
-    if (!token) return;
+    const email = localStorage.getItem("teeradar_user_email") || "";
+    const homeCourse = localStorage.getItem("teeradar_home_course") || "";
 
-    try {
-      const res = await fetch("/api/auth/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      const data = await res.json();
-      if (data.ok && data.user) {
-        if (data.user.email) {
-          localStorage.setItem("teeradar_user_email", data.user.email);
-        }
-        if (data.user.homeCourse) {
-          localStorage.setItem("teeradar_home_course", data.user.homeCourse);
-        }
-      } else {
-        // token not valid anymore
-        localStorage.removeItem("teeradar_auth_token");
-      }
-    } catch (err) {
-      console.warn("verify token failed", err);
+    if (emailInput) emailInput.value = email;
+    if (homeInput) homeInput.value = homeCourse;
+
+    if (status) {
+      status.textContent = email
+        ? `Logged in as ${email} on this device.`
+        : "Not signed in yet on this device.";
     }
   }
 
-  // modal controls
-  const accountBackdrop = document.getElementById("account-backdrop");
-  const accEmailInput = document.getElementById("acc-email");
-  const accPasswordInput = document.getElementById("acc-password");
-  const accHomeInput = document.getElementById("acc-home-course");
-  const accErrorEl = document.getElementById("acc-error");
-  const accSuggestionsBox = document.getElementById("acc-home-suggestions");
+  async function populateCourseSuggestions() {
+    const listEl = document.getElementById("homeCourseSuggestions");
+    if (!listEl) return;
+    listEl.innerHTML = "";
 
-  document.getElementById("navAccountBtn").addEventListener("click", openAccountModal);
-  document.getElementById("account-close-btn").addEventListener("click", closeAccountModal);
-  accountBackdrop.addEventListener("click", (e) => {
-    if (e.target === accountBackdrop) closeAccountModal();
-  });
+    try {
+      const res = await fetch("/api/courses");
+      const data = await res.json();
+      if (!Array.isArray(data)) return;
+
+      const seen = new Set();
+      data.forEach(c => {
+        if (!c || !c.name) return;
+        // Strip anything in parentheses for a cleaner base name
+        const base = String(c.name).split("(")[0].trim();
+        const label = base || c.name;
+        if (seen.has(label.toLowerCase())) return;
+        seen.add(label.toLowerCase());
+
+        const opt = document.createElement("option");
+        opt.value = label;
+        listEl.appendChild(opt);
+      });
+    } catch (err) {
+      console.warn("Failed to load course suggestions", err);
+    }
+  }
 
   function openAccountModal() {
-    accErrorEl.textContent = "";
-    const email = localStorage.getItem("teeradar_user_email") || "";
-    const home = localStorage.getItem("teeradar_home_course") || "";
-    accEmailInput.value = email;
-    accHomeInput.value = home;
-    accPasswordInput.value = "";
-    accountBackdrop.style.display = "flex";
-    accEmailInput.focus();
-    loadCoursesForSuggestions();
+    const modal = document.getElementById("accountModal");
+    if (!modal) return;
+    loadAccountIntoModal();
+    populateCourseSuggestions();
+    modal.style.display = "flex";
+    modal.setAttribute("aria-hidden", "false");
   }
 
   function closeAccountModal() {
-    accountBackdrop.style.display = "none";
-    accSuggestionsBox.style.display = "none";
+    const modal = document.getElementById("accountModal");
+    if (!modal) return;
+    modal.style.display = "none";
+    modal.setAttribute("aria-hidden", "true");
   }
 
-  // ----- home course autosuggest -----
-  let allCourseNames = [];
-  async function loadCoursesForSuggestions() {
-    if (allCourseNames.length) return;
-    try {
-      const res = await fetch("/api/courses");
-      const courses = await res.json();
-      allCourseNames = Array.isArray(courses) ? courses.map(c => c.name).filter(Boolean) : [];
-    } catch (err) {
-      console.warn("course suggestions failed", err);
-    }
-  }
+  function saveAccount() {
+    const emailInput = document.getElementById("accountEmailInput");
+    const homeInput = document.getElementById("accountHomeCourseInput");
 
-  accHomeInput.addEventListener("input", () => {
-    const q = accHomeInput.value.trim().toLowerCase();
-    if (!q || !allCourseNames.length) {
-      accSuggestionsBox.style.display = "none";
-      return;
-    }
-    const matches = allCourseNames.filter(name =>
-      name.toLowerCase().includes(q)
-    ).slice(0, 8);
+    const email = (emailInput && emailInput.value.trim()) || "";
+    const homeCourse = (homeInput && homeInput.value.trim()) || "";
 
-    if (!matches.length) {
-      accSuggestionsBox.style.display = "none";
-      return;
+    if (email) {
+      localStorage.setItem("teeradar_user_email", email.toLowerCase());
+    } else {
+      localStorage.removeItem("teeradar_user_email");
     }
 
-    accSuggestionsBox.innerHTML = "";
-    matches.forEach(name => {
-      const item = document.createElement("div");
-      item.className = "suggestion-item";
-      item.textContent = name;
-      item.addEventListener("click", () => {
-        accHomeInput.value = name;
-        accSuggestionsBox.style.display = "none";
-      });
-      accSuggestionsBox.appendChild(item);
-    });
-    accSuggestionsBox.style.display = "block";
-  });
-
-  // hide suggestions when clicking elsewhere
-  document.addEventListener("click", (e) => {
-    if (!accSuggestionsBox.contains(e.target) && e.target !== accHomeInput) {
-      accSuggestionsBox.style.display = "none";
-    }
-  });
-
-  // ----- signup / login / update home -----
-
-  async function apiSignup(email, password, homeCourse) {
-    const res = await fetch("/api/auth/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, homeCourse }),
-    });
-    return res.json();
-  }
-
-  async function apiLogin(email, password) {
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    return res.json();
-  }
-
-  async function apiUpdateHome(token, homeCourse) {
-    const res = await fetch("/api/auth/update-home", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, homeCourse }),
-    });
-    return res.json();
-  }
-
-  function storeAuthResult(data) {
-    if (!data || !data.ok || !data.user || !data.token) return;
-    localStorage.setItem("teeradar_auth_token", data.token);
-    if (data.user.email) localStorage.setItem("teeradar_user_email", data.user.email);
-    if (data.user.homeCourse) localStorage.setItem("teeradar_home_course", data.user.homeCourse);
-  }
-
-  document.getElementById("acc-signup-btn").addEventListener("click", async () => {
-    accErrorEl.textContent = "";
-    const email = accEmailInput.value.trim();
-    const password = accPasswordInput.value;
-    const homeCourse = accHomeInput.value.trim() || null;
-
-    if (!email || !password) {
-      accErrorEl.textContent = "Email and password are required.";
-      return;
-    }
-    if (password.length < 6) {
-      accErrorEl.textContent = "Password must be at least 6 characters.";
-      return;
-    }
-
-    try {
-      const data = await apiSignup(email, password, homeCourse);
-      if (!data.ok) {
-        accErrorEl.textContent = data.error || "Signup failed.";
-        return;
-      }
-      storeAuthResult(data);
-      renderNavState();
-      trackEvent("signup", { email });
-      closeAccountModal();
-      alert("Account created and saved.");
-    } catch (err) {
-      accErrorEl.textContent = "Signup failed. Please try again.";
-    }
-  });
-
-  document.getElementById("acc-login-btn").addEventListener("click", async () => {
-    accErrorEl.textContent = "";
-    const email = accEmailInput.value.trim();
-    const password = accPasswordInput.value;
-
-    if (!email || !password) {
-      accErrorEl.textContent = "Email and password are required.";
-      return;
-    }
-
-    try {
-      const data = await apiLogin(email, password);
-      if (!data.ok) {
-        accErrorEl.textContent = data.error || "Login failed.";
-        return;
-      }
-      storeAuthResult(data);
-      // prefill home course if exists
-      if (data.user.homeCourse) {
-        accHomeInput.value = data.user.homeCourse;
-      }
-      renderNavState();
-      trackEvent("login", { email });
-      closeAccountModal();
-      alert("Logged in successfully.");
-    } catch (err) {
-      accErrorEl.textContent = "Login failed. Please try again.";
-    }
-  });
-
-  document.getElementById("acc-update-home-btn").addEventListener("click", async () => {
-    accErrorEl.textContent = "";
-    const token = localStorage.getItem("teeradar_auth_token");
-    const homeCourse = accHomeInput.value.trim();
-    if (!token) {
-      accErrorEl.textContent = "Log in first, then update home course.";
-      return;
-    }
-    if (!homeCourse) {
-      accErrorEl.textContent = "Enter a home course first.";
-      return;
-    }
-    try {
-      const data = await apiUpdateHome(token, homeCourse);
-      if (!data.ok) {
-        accErrorEl.textContent = data.error || "Update failed.";
-        return;
-      }
+    if (homeCourse) {
       localStorage.setItem("teeradar_home_course", homeCourse);
-      trackEvent("update_home_course", { homeCourse });
-      closeAccountModal();
-      alert("Home course updated.");
-    } catch (err) {
-      accErrorEl.textContent = "Update failed. Please try again.";
+    } else {
+      localStorage.removeItem("teeradar_home_course");
     }
-  });
 
-  // ------- BOOTSTRAP -------
-  window.addEventListener("load", async () => {
-    await verifyExistingToken();
+    trackEvent("account_update", {
+      userEmail: email || null,
+      homeCourse: homeCourse || null
+    });
+
+    renderNavState();
+    closeAccountModal();
+  }
+
+  function logoutAccount() {
+    localStorage.removeItem("teeradar_user_email");
+    localStorage.removeItem("teeradar_home_course");
+    renderNavState();
+    loadAccountIntoModal();
+    trackEvent("logout", {});
+  }
+
+  window.addEventListener("load", () => {
     renderNavState();
     trackInitialHome();
     initTCBanner();
+
+    const accountBtn = document.getElementById("navAccountBtn");
+    if (accountBtn) {
+      accountBtn.addEventListener("click", openAccountModal);
+    }
+    const saveBtn = document.getElementById("accountSaveBtn");
+    const closeBtn = document.getElementById("accountCloseBtn");
+    const logoutBtn = document.getElementById("accountLogoutBtn");
+
+    if (saveBtn) saveBtn.addEventListener("click", saveAccount);
+    if (closeBtn) closeBtn.addEventListener("click", closeAccountModal);
+    if (logoutBtn) logoutBtn.addEventListener("click", logoutAccount);
+
+    // Close on backdrop click
+    const modalBackdrop = document.getElementById("accountModal");
+    if (modalBackdrop) {
+      modalBackdrop.addEventListener("click", (e) => {
+        if (e.target === modalBackdrop) {
+          closeAccountModal();
+        }
+      });
+    }
   });
 </script>
 </body>
