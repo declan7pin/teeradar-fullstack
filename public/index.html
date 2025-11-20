@@ -339,6 +339,102 @@
         text-align:center;
       }
     }
+
+    /* AUTH MODAL */
+    #auth-modal{
+      position:fixed;
+      inset:0;
+      background:rgba(15,23,42,0.45);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:40;
+      padding:16px;
+    }
+    #auth-modal.visible{
+      display:flex;
+    }
+    .auth-card{
+      background:#f9fafb;
+      border-radius:16px;
+      max-width:360px;
+      width:100%;
+      padding:16px 18px 18px;
+      box-shadow:0 18px 40px rgba(15,23,42,0.45);
+      border:1px solid #e5e7eb;
+    }
+    .auth-title{
+      margin:0 0 4px;
+      font-size:18px;
+      font-weight:700;
+    }
+    .auth-sub{
+      margin:0 0 12px;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .auth-toggle{
+      font-size:11px;
+      margin-bottom:10px;
+      color:var(--muted);
+    }
+    .auth-toggle button{
+      border:none;
+      background:none;
+      color:#0369a1;
+      font-size:11px;
+      font-weight:600;
+      text-decoration:underline;
+      cursor:pointer;
+      padding:0;
+      margin-left:4px;
+    }
+    .auth-field{
+      margin-bottom:8px;
+    }
+    .auth-label{
+      font-size:12px;
+      margin-bottom:2px;
+      color:#4b5563;
+    }
+    .auth-input{
+      width:100%;
+      padding:7px 9px;
+      border-radius:8px;
+      border:1px solid #cbd5e1;
+      font-size:13px;
+    }
+    .auth-actions{
+      display:flex;
+      gap:8px;
+      margin-top:10px;
+    }
+    .auth-primary{
+      flex:1;
+      border:none;
+      border-radius:999px;
+      padding:8px 12px;
+      font-size:13px;
+      font-weight:600;
+      cursor:pointer;
+      background:var(--teal);
+      color:#fff;
+    }
+    .auth-secondary{
+      border:none;
+      border-radius:999px;
+      padding:8px 12px;
+      font-size:13px;
+      cursor:pointer;
+      background:#e5e7eb;
+      color:#111827;
+    }
+    .auth-error{
+      margin-top:6px;
+      font-size:11px;
+      color:#b91c1c;
+      min-height:14px;
+    }
   </style>
 </head>
 <body>
@@ -480,6 +576,39 @@
   <button type="button" id="tc-accept-btn">Got it</button>
 </div>
 
+<!-- AUTH MODAL -->
+<div id="auth-modal">
+  <div class="auth-card">
+    <h2 class="auth-title" id="auth-title">Log in to TeeRadar</h2>
+    <p class="auth-sub" id="auth-sub">
+      Log in to sync your home course and account across devices.
+    </p>
+    <div class="auth-toggle">
+      <span id="auth-toggle-text">Don’t have an account yet?</span>
+      <button type="button" id="auth-switch-mode">Create account</button>
+    </div>
+
+    <div class="auth-field">
+      <div class="auth-label">Email</div>
+      <input id="auth-email" class="auth-input" type="email" autocomplete="email" />
+    </div>
+    <div class="auth-field">
+      <div class="auth-label">Password</div>
+      <input id="auth-password" class="auth-input" type="password" autocomplete="current-password" />
+    </div>
+    <div class="auth-field">
+      <div class="auth-label">Home course (optional)</div>
+      <input id="auth-home" class="auth-input" type="text" placeholder="e.g. Collier Park" />
+    </div>
+
+    <div class="auth-actions">
+      <button type="button" class="auth-primary" id="auth-submit-btn">Log in</button>
+      <button type="button" class="auth-secondary" id="auth-cancel-btn">Cancel</button>
+    </div>
+    <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
+
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 
@@ -534,7 +663,6 @@
   function clearAuth() {
     localStorage.removeItem("teeradar_auth_token");
     localStorage.removeItem("teeradar_user_email");
-    // keep home_course locally if you like; for now we clear it
     localStorage.removeItem("teeradar_home_course");
   }
 
@@ -568,7 +696,7 @@
     }
   }
 
-  // ---- NAV STATE / LOGIN + LOGOUT BUTTON ----
+  // ---- NAV STATE ----
   function renderNavState() {
     const analyticsLink = document.getElementById("navAnalytics");
     const loginBtn = document.getElementById("navLoginBtn");
@@ -581,102 +709,138 @@
     }
 
     if (loginBtn) {
-      if (hasToken && email) {
-        loginBtn.textContent = "Log out";
-      } else {
-        loginBtn.textContent = "Log in";
-      }
+      loginBtn.textContent = hasToken && email ? "Log out" : "Log in";
     }
 
     if (accountBtn) {
-      accountBtn.disabled = !hasToken; // only active when logged in
+      accountBtn.disabled = !hasToken;
       accountBtn.style.opacity = hasToken ? "1" : "0.65";
     }
   }
 
-  async function handleLoginClick() {
-    const hasToken = !!getAuthToken();
-    const loginBtn = document.getElementById("navLoginBtn");
+  // ---- AUTH MODAL UI ----
+  let authMode = "login"; // "login" or "signup"
 
-    if (hasToken) {
-      // LOG OUT
-      if (confirm("Log out of TeeRadar on this device?")) {
-        clearAuth();
-        renderNavState();
-        alert("You’ve been logged out on this device.");
-      }
+  function getAuthEls() {
+    return {
+      modal: document.getElementById("auth-modal"),
+      title: document.getElementById("auth-title"),
+      sub: document.getElementById("auth-sub"),
+      toggleText: document.getElementById("auth-toggle-text"),
+      switchBtn: document.getElementById("auth-switch-mode"),
+      email: document.getElementById("auth-email"),
+      password: document.getElementById("auth-password"),
+      home: document.getElementById("auth-home"),
+      submit: document.getElementById("auth-submit-btn"),
+      cancel: document.getElementById("auth-cancel-btn"),
+      error: document.getElementById("auth-error"),
+    };
+  }
+
+  function setAuthMode(mode) {
+    authMode = mode === "signup" ? "signup" : "login";
+    const els = getAuthEls();
+
+    if (authMode === "login") {
+      els.title.textContent = "Log in to TeeRadar";
+      els.sub.textContent = "Log in to sync your home course and account across devices.";
+      els.toggleText.textContent = "Don’t have an account yet?";
+      els.switchBtn.textContent = "Create account";
+      els.submit.textContent = "Log in";
+    } else {
+      els.title.textContent = "Create your TeeRadar account";
+      els.sub.textContent = "Create an account so we can remember your home course and preferences.";
+      els.toggleText.textContent = "Already have an account?";
+      els.switchBtn.textContent = "Log in instead";
+      els.submit.textContent = "Create account";
+    }
+    els.error.textContent = "";
+  }
+
+  function openAuthModal(initialMode) {
+    const els = getAuthEls();
+    setAuthMode(initialMode || "login");
+
+    const storedEmail = localStorage.getItem("teeradar_user_email") || "";
+    els.email.value = storedEmail;
+    els.password.value = "";
+    els.home.value = localStorage.getItem("teeradar_home_course") || "";
+
+    els.modal.classList.add("visible");
+  }
+
+  function closeAuthModal() {
+    const els = getAuthEls();
+    els.modal.classList.remove("visible");
+  }
+
+  async function handleAuthSubmit() {
+    const els = getAuthEls();
+    const email = (els.email.value || "").trim().toLowerCase();
+    const password = els.password.value || "";
+    const home = (els.home.value || "").trim();
+
+    els.error.textContent = "";
+
+    if (!email) {
+      els.error.textContent = "Email is required.";
       return;
     }
-
-    // LOGIN / SIGNUP FLOW (prompt-based to avoid UI changes)
-    const mode = prompt(
-      "Type 1 to Log in, 2 to Create an account:",
-      "1"
-    );
-    if (!mode) return;
-
-    const trimmedMode = mode.trim();
-    if (trimmedMode !== "1" && trimmedMode !== "2") {
-      alert("Invalid choice.");
-      return;
-    }
-
-    const email = prompt("Email address:") || "";
-    if (!email.trim()) {
-      alert("Email is required.");
-      return;
-    }
-
-    const password = prompt("Password: (min 6 characters)") || "";
     if (!password || password.length < 6) {
-      alert("Password must be at least 6 characters.");
+      els.error.textContent = "Password must be at least 6 characters.";
       return;
     }
 
     try {
       let result;
-      if (trimmedMode === "2") {
-        // Signup - ask once for home course now
-        const homeCourse = prompt(
-          "Optional: type your home course name (or leave blank):"
-        ) || "";
-
+      if (authMode === "signup") {
         result = await apiAuth("signup", {
-          email: email.trim().toLowerCase(),
+          email,
           password,
-          homeCourse: homeCourse.trim() || null,
+          homeCourse: home || null,
         });
       } else {
-        // Login
         result = await apiAuth("login", {
-          email: email.trim().toLowerCase(),
+          email,
           password,
         });
       }
 
       if (!result || !result.ok) {
-        alert((result && result.error) || "Auth failed.");
+        els.error.textContent = (result && result.error) || "Authentication failed.";
         return;
       }
 
       setAuth(result.token, result.user.email, result.user.homeCourse);
       renderNavState();
+      closeAuthModal();
 
-      if (trimmedMode === "2") {
-        alert("Account created and logged in.");
-      } else {
-        alert("Logged in successfully.");
-      }
-
-      trackEvent(trimmedMode === "2" ? "auth_signup" : "auth_login", {
-        email: result.user.email
+      trackEvent(authMode === "signup" ? "auth_signup" : "auth_login", {
+        email: result.user.email,
       });
+
+      alert(authMode === "signup" ? "Account created and logged in." : "Logged in successfully.");
     } catch (e) {
       console.error("Auth error", e);
-      alert("Something went wrong. Please try again.");
+      els.error.textContent = "Something went wrong. Please try again.";
     }
   }
 
+  // ---- LOGIN BUTTON HANDLER ----
+  function handleLoginClick() {
+    const hasToken = !!getAuthToken();
+    if (hasToken) {
+      if (confirm("Log out of TeeRadar on this device?")) {
+        clearAuth();
+        renderNavState();
+        alert("You’ve been logged out on this device.");
+      }
+    } else {
+      openAuthModal("login");
+    }
+  }
+
+  // ---- MY ACCOUNT: update home course only (simple prompt) ----
   async function handleAccountClick() {
     const token = getAuthToken();
     if (!token) {
@@ -684,13 +848,9 @@
       return;
     }
 
-    // Change home course only (simple flow)
     const current = localStorage.getItem("teeradar_home_course") || "";
-    const newHome = prompt(
-      "Update your home course (for map auto-zoom):",
-      current
-    );
-    if (newHome === null) return; // cancelled
+    const newHome = prompt("Update your home course (for map auto-zoom):", current);
+    if (newHome === null) return;
 
     const trimmed = newHome.trim();
 
@@ -713,7 +873,7 @@
     }
   }
 
-  // ---- T&C banner logic (unchanged) ----
+  // ---- T&C banner logic ----
   function initTCBanner() {
     const banner = document.getElementById("tc-banner");
     const btn = document.getElementById("tc-accept-btn");
@@ -729,12 +889,21 @@
   }
 
   window.addEventListener("load", async () => {
-    // wire nav buttons
     const loginBtn = document.getElementById("navLoginBtn");
     const accountBtn = document.getElementById("navAccountBtn");
 
     if (loginBtn) loginBtn.onclick = handleLoginClick;
     if (accountBtn) accountBtn.onclick = handleAccountClick;
+
+    const els = getAuthEls();
+    els.switchBtn.addEventListener("click", () => {
+      setAuthMode(authMode === "login" ? "signup" : "login");
+    });
+    els.cancel.addEventListener("click", closeAuthModal);
+    els.submit.addEventListener("click", handleAuthSubmit);
+    els.modal.addEventListener("click", (e) => {
+      if (e.target === els.modal) closeAuthModal();
+    });
 
     await verifyExistingToken();
     renderNavState();
