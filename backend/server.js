@@ -1,206 +1,273 @@
-// ========================
-//  TeeRadar WA — SERVER
-// ========================
+// backend/server.js
+import express from "express";
+import cors from "cors";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const express = require("express");
-const cors = require("cors");
-const path = require("path");
-const fetch = require("node-fetch");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
+import { scrapeCourse } from "./scrapers/scrapeCourse.js";
+import authRouter from "./auth.js";
 
-// Load auth router
-const { authRouter, verifyToken } = require("./auth");
-
-// In-memory stores (replace with DB later)
-let ANALYTICS = [];
-let USERS = {};        // email → { hash, homeCourse }
-let COURSES = [];      // loaded once at start
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+// ---------- MIDDLEWARE ----------
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public")); // serves index.html, book.html, etc.
 
-// ========================
-//  AUTH ROUTES
-// ========================
-app.use("/api/auth", authRouter);
+// Serve static frontend from /public at project root
+app.use(express.static(path.join(__dirname, "..", "public")));
 
-// ========================
-//  LOAD COURSES (from local JSON file)
-// ========================
-const fs = require("fs");
-const coursesPath = path.join(__dirname, "courses.json");
+// ---------- LOAD DATA ----------
+const PERTH_LAT = -31.9523;
+const PERTH_LNG = 115.8613;
 
-try {
-  const raw = fs.readFileSync(coursesPath, "utf8");
-  COURSES = JSON.parse(raw);
-  console.log("Loaded courses.json:", COURSES.length, "courses");
-} catch (err) {
-  console.error("Failed loading courses.json", err);
-  COURSES = [];
+const coursesPath = path.join(__dirname, "data", "courses.json");
+const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
+
+// Ensure every course has lat/lng, fallback to Perth CBD if missing
+const courses = rawCourses.map((c) => ({
+  ...c,
+  lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
+  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG,
+}));
+
+const feeGroupsPath = path.join(__dirname, "data", "fee_groups.json");
+let feeGroups = {};
+if (fs.existsSync(feeGroupsPath)) {
+  feeGroups = JSON.parse(fs.readFileSync(feeGroupsPath, "utf8"));
 }
 
-// ========================
-//  COURSES ENDPOINT
-// ========================
+console.log(`Loaded ${courses.length} courses.`);
+console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
+
+// ---------- IN-MEMORY ANALYTICS STORE ----------
+// This is enough to power your current analytics UI.
+// (We can move this to SQLite later if you want.)
+const analyticsEvents = [];
+
+// ---------- ROUTES ----------
+
+// Health check
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", courses: courses.length });
+});
+
+// Return full course list (used by frontend map + UI)
 app.get("/api/courses", (req, res) => {
-  res.json(COURSES);
+  res.json(courses);
 });
 
-// ========================
-//  SEARCH ENDPOINT
-// ========================
+// Tee time search
 app.post("/api/search", async (req, res) => {
-  const { date, earliest, latest, holes, partySize } = req.body;
+  try {
+    const {
+      date,
+      earliest = "06:00",
+      latest = "17:00",
+      holes = "",
+      partySize = 1,
+    } = req.body || {};
 
-  console.log("\nIncoming /api/search", req.body);
-
-  const slots = [];
-
-  for (const c of COURSES) {
-    if (!c.provider) continue;
-
-    // PHONE BOOKING
-    if (c.provider === "Phone") {
-      slots.push({
-        course: c.name,
-        provider: "Phone",
-        date,
-        time: null,
-        url: null,
-        phone: c.phone || null,
-      });
-      continue;
+    if (!date) {
+      return res.status(400).json({ error: "date is required" });
     }
 
-    // QUICK18
-    if (c.provider === "Quick18" && c.quick18Url) {
+    // 🔑 IMPORTANT: make holes a NUMBER (9 or 18), not a string
+    const holesValue =
+      holes === "" || holes === null || typeof holes === "undefined"
+        ? ""
+        : Number(holes);
+
+    const criteria = {
+      date,
+      earliest,
+      latest,
+      holes: holesValue,                 // numeric 9 or 18, or ""
+      partySize: Number(partySize) || 1, // numeric party size
+    };
+
+    console.log("Incoming /api/search", criteria);
+
+    const jobs = courses.map(async (c) => {
       try {
-        const yyyymmdd = date.replace(/-/g, "");
-        const r = await fetch(`${c.quick18Url}?teedate=${yyyymmdd}`);
-        const html = await r.text();
+        const result = await scrapeCourse(c, criteria, feeGroups);
+        const count = Array.isArray(result) ? result.length : 0;
 
-        const count = (html.match(/class="timecell"/g) || []).length;
-        for (let i = 0; i < count; i++) {
-          slots.push({
-            course: c.name,
-            provider: "Quick18",
-            date,
-            time: "Unknown",
-            url: c.url,
-          });
+        if (count > 0) {
+          console.log(`✅ ${c.name} → ${count} slots`);
+        } else {
+          console.log(`⚪ ${c.name} → 0 slots`);
         }
-      } catch (e) {
-        console.warn("Quick18 error:", c.name);
+
+        return result || [];
+      } catch (err) {
+        console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
+        return [];
       }
-      continue;
-    }
+    });
 
-    // MiClub UNIVERSITY (the safe one)
-    if (c.provider === "MiClub" && c.url) {
-      try {
-        const u = new URL(c.url);
-        u.searchParams.set("selectedDate", date);
+    const allResults = await Promise.all(jobs);
+    const slots = allResults.flat();
 
-        const r = await fetch(u.toString());
-        const html = await r.text();
+    console.log(`🔎 /api/search finished → total slots: ${slots.length}`);
 
-        // Very soft availability check
-        const count =
-          (html.match(/class="timeslot"/g) ||
-            html.match(/tee-time/g) ||
-            []).length;
+    // optional: track a "search" analytics event
+    analyticsEvents.push({
+      type: "search",
+      createdAt: new Date(),
+      payload: { criteria },
+    });
 
-        for (let i = 0; i < count; i++) {
-          slots.push({
-            course: c.name,
-            provider: "MiClub",
-            date,
-            time: "Unknown",
-            url: c.url,
-          });
-        }
-      } catch (e) {
-        console.warn("MiClub error:", c.name);
-      }
-      continue;
-    }
+    res.json({ slots });
+  } catch (err) {
+    console.error("search error", err);
+    res.status(500).json({ error: "internal error", detail: err.message });
   }
-
-  console.log(
-    `Search complete — ${slots.length} slots across courses`
-  );
-
-  res.json({ ok: true, slots });
 });
 
-// ========================
-//  ANALYTICS ENDPOINTS
-// ========================
-
-// Record event
+// Simple analytics logger
 app.post("/api/analytics/event", (req, res) => {
-  const event = {
-    type: req.body.type,
-    userId: req.body.userId || "unknown",
-    courseName: req.body.courseName || null,
-    payload: req.body.payload || {},
-    at: new Date().toISOString(),
-  };
+  try {
+    const { type, payload = {}, at, userId, courseName } = req.body || {};
 
-  ANALYTICS.push(event);
+    console.log("Incoming analytics event:", {
+      type,
+      at,
+      userId,
+      courseName,
+      payload,
+    });
 
-  console.log("\n[analytics] recorded", event);
+    const createdAt = at ? new Date(at) : new Date();
 
-  res.json({ ok: true });
+    const evt = {
+      type: type || "unknown",
+      userId: userId || null,
+      courseName: courseName || null,
+      payload,
+      createdAt,
+    };
+
+    analyticsEvents.push(evt);
+
+    console.log("[analytics] recorded", evt);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("analytics error", err);
+    res.status(500).json({ error: "analytics error", detail: err.message });
+  }
 });
 
-// Summary
+// Analytics summary for /analytics.html
 app.get("/api/analytics/summary", (req, res) => {
-  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const now = new Date();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const weekMs = 7 * dayMs;
 
-  const homeViews = ANALYTICS.filter((e) => e.type === "home_view").length;
-  const bookingClicks = ANALYTICS.filter(
-    (e) => e.type === "booking_click"
-  ).length;
-  const searches = ANALYTICS.filter((e) => e.type === "search").length;
+    let homeViews = 0;
+    let searches = 0;
+    let bookingClicks = 0;
 
-  const usersToday = new Set(
-    ANALYTICS.filter((e) => e.at.startsWith(today)).map((e) => e.userId)
-  ).size;
+    const usersAll = new Set();
+    const usersToday = new Set();
+    const usersWeek = new Set();
 
-  const usersAllTime = new Set(ANALYTICS.map((e) => e.userId)).size;
+    const firstSeen = new Map(); // userId -> earliest date
+    const courseClicks = new Map(); // courseName -> count
 
-  console.log("\n[analytics] summary", {
-    homeViews,
-    bookingClicks,
-    searches,
-    usersToday,
-    usersAllTime,
-  });
+    for (const evt of analyticsEvents) {
+      const { type, userId, courseName, createdAt } = evt;
+      const ts = createdAt instanceof Date ? createdAt : new Date(createdAt);
+      const ageMs = now - ts;
+
+      if (type === "home_view") homeViews++;
+      if (type === "search") searches++;
+      if (type === "booking_click") {
+        bookingClicks++;
+        if (courseName) {
+          courseClicks.set(courseName, (courseClicks.get(courseName) || 0) + 1);
+        }
+      }
+
+      if (userId) {
+        usersAll.add(userId);
+        if (ageMs <= dayMs) usersToday.add(userId);
+        if (ageMs <= weekMs) usersWeek.add(userId);
+
+        const prev = firstSeen.get(userId);
+        if (!prev || ts < prev) firstSeen.set(userId, ts);
+      }
+    }
+
+    const newUsers7d = new Set();
+    for (const [uid, firstDate] of firstSeen.entries()) {
+      const ageMs = now - firstDate;
+      if (ageMs <= weekMs) newUsers7d.add(uid);
+    }
+
+    const topCourses = Array.from(courseClicks.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, clicks]) => ({ courseName: name, clicks }));
+
+    const summary = {
+      homePageViews: homeViews,
+      courseBookingClicks: bookingClicks,
+      searches,
+      newUsers: newUsers7d.size,
+
+      // extra fields your logger was printing
+      homeViews,
+      bookingClicks,
+      usersAllTime: usersAll.size,
+      usersToday: usersToday.size,
+      usersWeek: usersWeek.size,
+      newUsers7d: newUsers7d.size,
+      topCourses,
+    };
+
+    console.log("[analytics] summary", summary);
+    res.json(summary);
+  } catch (err) {
+    console.error("analytics summary error", err);
+    res.status(500).json({ error: "analytics summary error", detail: err.message });
+  }
+});
+
+// DEBUG: return list of courses with coords + basic flags
+app.get("/api/debug/courses", (req, res) => {
+  const debugList = courses.map((c) => ({
+    name: c.name,
+    provider: c.provider,
+    holes: c.holes,
+    lat: c.lat,
+    lng: c.lng,
+    hasUrl: !!c.url,
+    hasPhone: !!c.phone,
+  }));
 
   res.json({
-    homeViews,
-    bookingClicks,
-    searches,
-    usersToday,
-    usersAllTime,
+    count: debugList.length,
+    courses: debugList,
   });
 });
 
-// ========================
-//  FALLBACK → index.html
-// ========================
+// ---------- AUTH ROUTES ----------
+// Expects backend/auth.js to `export default router;`
+app.use("/api/auth", authRouter);
+
+// ---------- FRONTEND FALLBACK ----------
+// For any non-API route, serve the main index.html (SPA-style routing)
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/index.html"));
+  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
 
-// ========================
-//  START SERVER
-// ========================
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () =>
-  console.log(`TeeRadar backend running on port ${PORT}`)
-);
+// ---------- START SERVER ----------
+app.listen(PORT, () => {
+  console.log(`✅ TeeRadar backend running on port ${PORT}`);
+});
