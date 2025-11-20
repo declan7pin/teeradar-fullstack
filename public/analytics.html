@@ -28,7 +28,6 @@
     a{text-decoration:none;color:inherit;}
     button{font-family:inherit;}
 
-    /* HEADER (admin style) */
     header{
       background:var(--teal);
       color:#fff;
@@ -342,10 +341,9 @@
     return (localStorage.getItem("teeradar_user_email") || "").toLowerCase() === ADMIN_EMAIL;
   }
 
-  // Optional: basic guard so random users don't sit on this page
   function guardAdmin() {
     if (!isAdmin()) {
-      console.warn("Not logged in as admin – analytics are still visible, but nav has no admin gate.");
+      console.warn("Not logged in as admin – analytics page is visible but this user is not the admin email.");
     }
   }
 
@@ -354,12 +352,19 @@
     errorBanner.style.display = "none";
 
     try {
-      const res = await fetch("/api/analytics/summary", { headers: { "Accept": "application/json" } });
+      const res = await fetch("/api/analytics/summary", {
+        headers: { "Accept": "application/json" }
+      });
+
+      const text = await res.text();
+      console.log("[analytics] raw response from /api/analytics/summary", res.status, text);
+
       if (!res.ok) {
         throw new Error("HTTP " + res.status);
       }
-      const data = await res.json();
-      console.log("[analytics] page summary", data);
+
+      const data = JSON.parse(text);
+      console.log("[analytics] parsed summary", data);
       applyAnalytics(data);
     } catch (err) {
       console.error("Error loading analytics summary", err);
@@ -368,7 +373,6 @@
   }
 
   function applyAnalytics(summary) {
-    // Defensive field mapping to match your backend shape
     const homeViews =
       summary.homePageViews ??
       summary.homeViews ??
@@ -400,9 +404,9 @@
     document.getElementById("mHomeViewsSub").textContent =
       "All-time total homepage sessions.";
     document.getElementById("mBookingClicksSub").textContent =
-      "Total unique clicks through to course booking pages.";
+      "Total clicks through to course booking pages.";
     document.getElementById("mSearchesSub").textContent =
-      "Total search requests sent to /api/search.";
+      "Total searches sent to /api/search.";
     document.getElementById("mNewUsersSub").textContent =
       "New browser devices seen in the last 7 days.";
 
@@ -413,7 +417,6 @@
     const updatedAtText = "Last updated " + new Date().toLocaleString();
     document.getElementById("updatedAt").textContent = updatedAtText;
 
-    // Top courses
     const listEl = document.getElementById("topCoursesList");
     listEl.innerHTML = "";
 
@@ -447,8 +450,6 @@
 
   guardAdmin();
   loadAnalytics();
-  // if you want auto-refresh every 30s, uncomment:
-  // setInterval(loadAnalytics, 30000);
 </script>
 </body>
 </html>
