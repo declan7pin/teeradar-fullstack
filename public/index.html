@@ -5,7 +5,6 @@
   <title>TeeRadar WA — Find a tee time across WA</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
-
   <style>
     :root {
       --teal: #00796b;
@@ -29,6 +28,7 @@
     a{text-decoration:none;color:inherit;}
     button{font-family:inherit;}
 
+    /* HEADER */
     header{
       background:var(--teal);
       color:#fff;
@@ -52,8 +52,8 @@
       gap:10px;
     }
     .brand-logo{
-      width:26px;
-      height:26px;
+      width:28px;
+      height:28px;
       border-radius:999px;
       background:#ecfdf5;
       display:flex;
@@ -68,7 +68,10 @@
       font-weight:700;
       letter-spacing:.04em;
       font-size:15px;
+      line-height:1.1;
     }
+    .brand-text span{display:block;}
+
     nav{
       display:flex;
       gap:16px;
@@ -79,32 +82,36 @@
     }
     nav a{
       color:#e0f2f1;
-      opacity:.88;
-      padding:4px 6px;
+      opacity:.9;
+      padding:4px 8px;
       border-radius:999px;
+      transition:background .16s,opacity .16s;
     }
     nav a:hover{
-      background:rgba(255,255,255,0.16);
+      background:rgba(255,255,255,0.14);
       opacity:1;
     }
-    .nav-pill{
-      background:rgba(15,118,110,0.18);
-      border:1px solid rgba(45,212,191,0.6);
+    .nav-analytics{
+      border:1px solid rgba(190,242,100,0.8);
+      background:rgba(15,118,110,0.22);
       padding:4px 12px;
-      border-radius:999px;
       font-weight:600;
     }
-    .nav-btn{
+    .nav-account-btn{
+      margin-left:4px;
       background:#ffffff;
       color:var(--teal-dark);
       border:none;
-      padding:5px 14px;
+      padding:6px 16px;
       border-radius:999px;
       font-size:12px;
       font-weight:600;
       cursor:pointer;
+      box-shadow:0 8px 18px rgba(15,23,42,0.35);
+      white-space:nowrap;
     }
 
+    /* MAIN */
     main{
       max-width:1100px;
       margin:28px auto 40px;
@@ -123,19 +130,26 @@
       }
     }
 
+    .hero-kicker{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:10px;
+      flex-wrap:wrap;
+    }
     .hero-kicker-pill{
       display:inline-flex;
       align-items:center;
       gap:4px;
-      padding:3px 9px;
+      padding:4px 10px;
       border-radius:999px;
       background:#ecfeff;
       border:1px solid #bae6fd;
       font-weight:600;
-      font-size:11px;
       color:#0369a1;
     }
-
     .hero-title{
       font-size:clamp(28px,4vw,36px);
       font-weight:800;
@@ -145,32 +159,44 @@
     .hero-sub{
       font-size:14px;
       color:var(--muted);
-      max-width:480px;
+      max-width:520px;
       margin-bottom:18px;
     }
-
+    .hero-actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-bottom:14px;
+    }
     .btn-primary{
       background:var(--teal);
       color:#fff;
       border:none;
       border-radius:999px;
-      padding:10px 20px;
+      padding:11px 22px;
       font-size:14px;
       font-weight:600;
       cursor:pointer;
-      box-shadow:0 14px 28px rgba(15,118,110,0.28);
+      box-shadow:0 16px 32px rgba(15,118,110,0.32);
     }
+    .btn-primary:active{background:var(--teal-dark);}
     .btn-outline{
       background:#ecfeff;
       color:#0369a1;
       border:none;
       border-radius:999px;
-      padding:9px 16px;
+      padding:10px 18px;
       font-size:13px;
       font-weight:600;
       cursor:pointer;
     }
 
+    .hero-chips{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:4px;
+    }
     .chip{
       display:inline-flex;
       align-items:center;
@@ -181,230 +207,380 @@
       border:1px solid rgba(148,163,184,0.45);
       font-size:11px;
       color:var(--muted);
-      margin-right:8px;
-      margin-bottom:8px;
+    }
+    .chip span.icon{
+      font-size:13px;
     }
 
-    /* Account modal */
-    #accountModal{
-      position:fixed;
+    /* HERO CARD WITH IMAGE */
+    .hero-card{
+      background:linear-gradient(135deg,#064e3b,#0f766e);
+      border-radius:24px;
+      color:#ecfdf5;
+      position:relative;
+      overflow:hidden;
+      min-height:260px;
+      box-shadow:0 26px 45px rgba(15,23,42,0.55);
+    }
+    .hero-card-bg{
+      position:absolute;
       inset:0;
-      display:none;
+      background:url("/assets/hero_golf_bg.jpg") center/cover no-repeat;
+      filter:saturate(1.05) contrast(1.05) brightness(0.98);
+      opacity:.82;
+    }
+    .hero-card-overlay{
+      position:absolute;
+      inset:0;
+      background:radial-gradient(circle at top,#22c55e3a,transparent 60%),
+                 linear-gradient(to bottom,#022c22aa,#022c2277);
+    }
+    .hero-card-inner{
+      position:relative;
+      z-index:1;
+      padding:18px 18px 20px;
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+    }
+    .hero-card-top{
+      display:flex;
       align-items:center;
-      justify-content:center;
-      background:rgba(0,0,0,0.3);
-      z-index:999;
-      padding:20px;
+      gap:8px;
+      margin-bottom:8px;
+      font-size:12px;
     }
-    #accountBox{
-      width:100%;
-      max-width:360px;
-      background:white;
-      border-radius:16px;
-      padding:20px;
-      box-shadow:0 10px 30px rgba(0,0,0,0.25);
+    .hero-card-badge{
+      padding:4px 9px;
+      border-radius:999px;
+      background:rgba(15,23,42,0.7);
+      font-weight:600;
+      font-size:11px;
     }
-    #accountBox h2{
-      margin-top:0;
-      font-size:20px;
+    .hero-card-text{
+      font-size:12px;
+      opacity:.9;
+    }
+    .hero-card-footer{
+      margin-top:12px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      font-size:12px;
+    }
+    .hero-card-footer button{
+      background:#bbf7d0;
+      color:#064e3b;
+      border:none;
+      border-radius:999px;
+      padding:6px 12px;
+      font-size:11px;
       font-weight:700;
-    }
-    .input{
-      width:100%;
-      padding:10px;
-      border-radius:8px;
-      border:1px solid #ccc;
-      margin-bottom:12px;
-      font-size:14px;
-    }
-    .suggest-box{
-      background:white;
-      border:1px solid #ddd;
-      border-radius:8px;
-      max-height:160px;
-      overflow-y:auto;
-      margin-top:-8px;
-      margin-bottom:12px;
-      display:none;
-    }
-    .suggest-item{
-      padding:8px 10px;
       cursor:pointer;
     }
-    .suggest-item:hover{
-      background:#f1f5f9;
+
+    /* FEATURE CARDS */
+    .features{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+      gap:16px;
+      margin-top:30px;
+    }
+    .feature-card{
+      background:var(--card);
+      border-radius:16px;
+      padding:14px 14px 16px;
+      border:1px solid var(--border);
+      box-shadow:0 14px 30px rgba(15,23,42,0.08);
+      font-size:13px;
+    }
+    .feature-card h3{
+      margin:0 0 6px;
+      font-size:15px;
+    }
+    .feature-card p{
+      margin:0;
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    footer{
+      max-width:1100px;
+      margin:18px auto 32px;
+      padding:0 4vw;
+      font-size:11px;
+      color:var(--muted);
+      display:flex;
+      justify-content:space-between;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+
+    /* T&C banner */
+    #tc-banner{
+      position:fixed;
+      bottom:0;
+      left:0;
+      right:0;
+      background:#0f172a;
+      color:#e5e7eb;
+      font-size:11px;
+      padding:8px 10px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      z-index:30;
+    }
+    #tc-banner button{
+      background:#f97316;
+      border:none;
+      color:#fff;
+      font-size:11px;
+      padding:5px 10px;
+      border-radius:999px;
+      cursor:pointer;
+      font-weight:600;
+    }
+    #tc-banner a{
+      color:#bfdbfe;
+      text-decoration:underline;
+    }
+    @media (max-width:550px){
+      #tc-banner{
+        flex-direction:column;
+        text-align:center;
+      }
     }
   </style>
 </head>
-
 <body>
-
 <header>
   <div class="nav-wrap">
     <div class="brand">
       <div class="brand-logo">T</div>
-      <div class="brand-text">TeeRadar WA</div>
+      <div class="brand-text">
+        <span>TeeRadar</span>
+        <span>WA</span>
+      </div>
     </div>
     <nav>
       <a href="/index.html">Home</a>
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
-      <a href="/analytics.html" class="nav-pill" id="navAnalytics" style="display:none;">Analytics</a>
-      <button class="nav-btn" id="myAccountBtn">My Account</button>
+      <a href="/analytics.html" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
+      <button class="nav-account-btn" type="button" id="navAccountBtn">My Account</button>
     </nav>
   </div>
 </header>
 
 <main>
-  <div class="hero">
+  <section class="hero">
     <div>
-      <span class="hero-kicker-pill">WA public courses</span>
+      <div class="hero-kicker">
+        <span class="hero-kicker-pill">WA public courses</span>
+        <span>Live booking links • real-time filters</span>
+      </div>
 
       <h1 class="hero-title">Find a tee time across WA, in one place.</h1>
-
       <p class="hero-sub">
-        Search public golf courses across Western Australia by date, time window, 9/18
-        holes and players. Tap through to the course’s official booking page.
+        Search public golf courses across Western Australia by date, time window,
+        9/18 holes and players. Tap through to the course’s official booking page —
+        you stay compliant, we save you the legwork.
       </p>
 
-      <button class="btn-primary" onclick="window.location.href='/book.html'">
-        Find a tee time
-      </button>
-      <button class="btn-outline" onclick="window.location.href='/faq.html'">
-        How TeeRadar works
-      </button>
+      <div class="hero-actions">
+        <button class="btn-primary" onclick="window.location.href='/book.html'">
+          Find a tee time
+        </button>
+        <button class="btn-outline" onclick="window.location.href='/faq.html'">
+          How TeeRadar works
+        </button>
+      </div>
 
-      <div style="margin-top:18px;">
-        <span class="chip">⛳ 20+ WA public courses</span>
-        <span class="chip">🕒 Filters that match golf</span>
-        <span class="chip">🔗 Course-first booking links</span>
+      <div class="hero-chips">
+        <div class="chip">
+          <span class="icon">⛳</span>
+          <span>20+ WA public courses</span>
+        </div>
+        <div class="chip">
+          <span class="icon">🕒</span>
+          <span>Filters that match golf</span>
+        </div>
+        <div class="chip">
+          <span class="icon">🔗</span>
+          <span>Course-first booking links</span>
+        </div>
       </div>
     </div>
 
-    <aside class="hero-card">
-      <img src="/assets/hero_golf_bg.jpg" style="width:100%; border-radius:16px;" />
+    <aside class="hero-card" aria-label="Live WA course widget">
+      <div class="hero-card-bg"></div>
+      <div class="hero-card-overlay"></div>
+      <div class="hero-card-inner">
+        <div>
+          <div class="hero-card-top">
+            <span class="hero-card-badge">Live WA courses</span>
+            <span class="hero-card-text">Araluen • Collier • Whaleback • more</span>
+          </div>
+          <p style="font-size:12px;max-width:280px;margin:6px 0 0;">
+            We always send you to the course’s own booking page. WA today, ready to
+            scale to all Australian states later.
+          </p>
+        </div>
+        <div class="hero-card-footer">
+          <span style="opacity:.9;">Course-first, compliant booking links.</span>
+          <button type="button" onclick="window.location.href='/book.html'">
+            View live course links
+          </button>
+        </div>
+      </div>
     </aside>
-  </div>
+  </section>
+
+  <section class="features" aria-label="TeeRadar benefits">
+    <article class="feature-card">
+      <h3>Single search</h3>
+      <p>
+        One simple search instead of opening a dozen course sites. We aggregate WA
+        public courses into a single map and list.
+      </p>
+    </article>
+    <article class="feature-card">
+      <h3>Filters that match golf</h3>
+      <p>
+        Pick your date, time window, hole count and group size. We highlight which
+        courses are worth clicking into.
+      </p>
+    </article>
+    <article class="feature-card">
+      <h3>Course-first booking</h3>
+      <p>
+        Every booking flows through the club’s own system. You stay fully compliant
+        and the course keeps control.
+      </p>
+    </article>
+    <article class="feature-card">
+      <h3>Ready to expand</h3>
+      <p>
+        Built for WA today, designed to roll out to other Australian states as more
+        integrations come online.
+      </p>
+    </article>
+  </section>
 </main>
 
-<footer style="max-width:1100px;margin:20px auto;padding:0 4vw;color:#64748b;font-size:12px;">
-  © 2025 TeeRadar WA — <a href="/terms.html">Terms</a> • <a href="/privacy.html">Privacy</a>
+<footer>
+  <span>© 2025 TeeRadar WA — Availability subject to individual course sites.</span>
+  <span>
+    <a href="/terms.html">Terms</a> •
+    <a href="/privacy.html">Privacy</a> •
+    <a href="/refunds.html">Refunds</a>
+  </span>
 </footer>
 
-<!-- ACCOUNT MODAL -->
-<div id="accountModal">
-  <div id="accountBox">
-    <h2>My Account</h2>
-
-    <input id="accEmail" class="input" placeholder="Your email" />
-
-    <input id="accHome" class="input" placeholder="Home course" autocomplete="off" />
-    <div id="accSuggest" class="suggest-box"></div>
-
-    <button class="btn-primary" style="width:100%;" onclick="saveAccount()">
-      Save
-    </button>
-  </div>
+<div id="tc-banner" style="display:none;">
+  <span>
+    By using TeeRadar WA you agree to our
+    <a href="/terms.html" target="_blank">Terms &amp; Conditions</a>.
+  </span>
+  <button type="button" id="tc-accept-btn">Got it</button>
 </div>
 
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 
-  function isAdmin() {
-    return localStorage.getItem("teeradar_user_email") === ADMIN_EMAIL;
-  }
-
-  function renderNavState() {
-    document.getElementById("navAnalytics").style.display = isAdmin() ? "inline-flex" : "none";
-  }
-
-  function getBrowserId() {
-    let id = localStorage.getItem("teeradar_browser_id");
+  function getAnonId() {
+    let id = localStorage.getItem("teeradar_anon_id");
     if (!id) {
-      id = "browser_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-      localStorage.setItem("teeradar_browser_id", id);
+      id = "anon_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem("teeradar_anon_id", id);
     }
     return id;
   }
 
+  function getUserEmail() {
+    const raw = localStorage.getItem("teeradar_user_email");
+    return raw ? raw.toLowerCase() : null;
+  }
+
+  function isAdmin() {
+    return getUserEmail() === ADMIN_EMAIL;
+  }
+
   function trackEvent(type, payload) {
+    const body = {
+      type,
+      at: new Date().toISOString(),
+      userId: getAnonId(),
+      courseName: payload && payload.courseName ? payload.courseName : null,
+      payload: {
+        ...(payload || {}),
+        email: getUserEmail() || null
+      }
+    };
     try {
       fetch("/api/analytics/event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type,
-          payload: payload || {},
-          at: new Date().toISOString(),
-          userId: getBrowserId()
-        })
-      }).catch(()=>{});
-    } catch(err){}
+        body: JSON.stringify(body)
+      }).catch(() => {});
+    } catch (e) {
+      console.warn("analytics event failed", e);
+    }
   }
 
-  trackEvent("home_view");
-
-  const modal = document.getElementById("accountModal");
-  document.getElementById("myAccountBtn").onclick = () => {
-    modal.style.display = "flex";
-    loadAccount();
-  };
-  modal.onclick = (e) => { if (e.target === modal) modal.style.display = "none"; };
-
-  function loadAccount() {
-    document.getElementById("accEmail").value =
-      localStorage.getItem("teeradar_user_email") || "";
-
-    document.getElementById("accHome").value =
-      localStorage.getItem("teeradar_home_course") || "";
+  function trackInitialHome() {
+    if (!localStorage.getItem("teeradar_seen")) {
+      trackEvent("new_user", {});
+      localStorage.setItem("teeradar_seen", "1");
+    }
+    trackEvent("home_view", {});
   }
 
-  function saveAccount() {
-    localStorage.setItem("teeradar_user_email",
-      document.getElementById("accEmail").value.trim().toLowerCase());
-
-    localStorage.setItem("teeradar_home_course",
-      document.getElementById("accHome").value.trim());
-
-    modal.style.display = "none";
-    renderNavState();
-  }
-
-  renderNavState();
-
-  const WA_COURSES = [];
-
-  fetch("/api/courses")
-    .then(r=>r.json())
-    .then(list => WA_COURSES.push(...list.map(c=>c.name)));
-
-  const inp = document.getElementById("accHome");
-  const box = document.getElementById("accSuggest");
-
-  inp.addEventListener("input", () => {
-    const q = inp.value.toLowerCase();
-    box.innerHTML = "";
-    if (!q) { box.style.display="none"; return; }
-
-    const matches = WA_COURSES.filter(c => c.toLowerCase().includes(q)).slice(0,8);
-
-    if (matches.length === 0) { box.style.display="none"; return; }
-
-    matches.forEach(name => {
-      const div = document.createElement("div");
-      div.className = "suggest-item";
-      div.textContent = name;
-      div.onclick = () => {
-        inp.value = name;
-        box.style.display = "none";
-      };
-      box.appendChild(div);
+  function initTCBanner() {
+    const banner = document.getElementById("tc-banner");
+    const btn = document.getElementById("tc-accept-btn");
+    if (!banner || !btn) return;
+    if (!localStorage.getItem("teeradar_tc_accepted")) {
+      banner.style.display = "flex";
+    }
+    btn.addEventListener("click", () => {
+      localStorage.setItem("teeradar_tc_accepted", "1");
+      banner.style.display = "none";
     });
+  }
 
-    box.style.display = "block";
+  function renderNav() {
+    const analyticsLink = document.getElementById("navAnalytics");
+    if (analyticsLink) {
+      analyticsLink.style.display = isAdmin() ? "inline-flex" : "none";
+    }
+  }
+
+  function handleAccountClick() {
+    const existing = getUserEmail();
+    if (!existing) {
+      const email = prompt("Enter your email to set up your TeeRadar account:");
+      if (!email) return;
+      const trimmed = email.trim().toLowerCase();
+      localStorage.setItem("teeradar_user_email", trimmed);
+    }
+    // account.html will handle home course etc.
+    window.location.href = "/account.html";
+  }
+
+  window.addEventListener("load", () => {
+    renderNav();
+    trackInitialHome();
+    initTCBanner();
+    const accountBtn = document.getElementById("navAccountBtn");
+    if (accountBtn) {
+      accountBtn.addEventListener("click", handleAccountClick);
+    }
   });
 </script>
-
 </body>
 </html>
