@@ -1,791 +1,454 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>TeeRadar WA — Analytics</title>
+  <meta charset="UTF-8" />
+  <title>TeeRadar WA — Analytics dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <!-- Favicon -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><circle cx=%2222%22 cy=%2242%22 r=%228%22 fill=%22%2316a34a%22/></svg>"/>
-
   <style>
     :root {
-      --bg: #f5f7fb;
-      --panel: #ffffff;
+      --teal: #00796b;
+      --teal-dark: #005e55;
+      --bg: #f4f7fb;
+      --card: #ffffff;
       --text: #0f172a;
-      --muted: #6b7280;
-      --border: #e5e7eb;
-      --brand: #059669;
-      --brand-soft: rgba(5, 150, 105, 0.06);
+      --muted: #64748b;
+      --border: #e2e8f0;
       --accent: #0ea5e9;
-      --shadow: 0 18px 35px rgba(15, 23, 42, 0.08);
-      --danger: #ef4444;
+      --pill: #ecfeff;
+      --danger: #b91c1c;
+    }
+    *{box-sizing:border-box;}
+    html,body{
+      margin:0;
+      padding:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:radial-gradient(circle at top,#e0f2f1,#f9fafb);
+      color:var(--text);
+    }
+    a{text-decoration:none;color:inherit;}
+    button{font-family:inherit;}
+
+    /* HEADER (admin style) */
+    header{
+      background:var(--teal);
+      color:#fff;
+      padding:10px 4vw;
+      position:sticky;
+      top:0;
+      z-index:20;
+      box-shadow:0 2px 6px rgba(0,0,0,0.12);
+    }
+    .nav-wrap{
+      max-width:1100px;
+      margin:0 auto;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .brand-logo{
+      width:26px;
+      height:26px;
+      border-radius:999px;
+      background:#ecfdf5;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#065f46;
+      font-size:15px;
+      font-weight:800;
+      box-shadow:0 0 0 3px rgba(16,185,129,0.25);
+    }
+    .brand-text{
+      font-weight:700;
+      letter-spacing:.04em;
+      font-size:15px;
+    }
+    nav{
+      display:flex;
+      gap:16px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      font-size:13px;
+    }
+    nav a{
+      color:#e0f2f1;
+      opacity:.9;
+      padding:4px 6px;
+      border-radius:999px;
+    }
+    nav a:hover{
+      background:rgba(255,255,255,0.16);
+      opacity:1;
+    }
+    .nav-pill{
+      background:rgba(15,118,110,0.18);
+      border:1px solid rgba(45,212,191,0.6);
+      padding:4px 10px;
+      font-weight:600;
     }
 
-    * {
-      box-sizing: border-box;
+    main{
+      max-width:1100px;
+      margin:26px auto 40px;
+      padding:0 4vw 50px;
     }
 
-    html, body {
-      margin: 0;
-      padding: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        Roboto, sans-serif;
-      background: radial-gradient(circle at top left, #ecfeff, #eef2ff 40%, #f9fafb);
-      color: var(--text);
-      min-height: 100%;
+    .page-kicker{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 10px;
+      border-radius:999px;
+      background:#ecfeff;
+      border:1px solid #bae6fd;
+      font-size:11px;
+      color:#0369a1;
+      font-weight:600;
+      margin-bottom:8px;
+    }
+    .page-kicker-dot{
+      width:8px;
+      height:8px;
+      border-radius:999px;
+      background:#22c55e;
+      box-shadow:0 0 0 4px rgba(34,197,94,0.35);
     }
 
-    /* Header / nav */
-
-    .header {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      backdrop-filter: blur(12px);
-      background: rgba(248, 250, 252, 0.85);
-      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+    .page-title{
+      font-size:clamp(24px,3.5vw,30px);
+      font-weight:800;
+      letter-spacing:-0.02em;
+      margin:0 0 4px;
+    }
+    .page-sub{
+      font-size:14px;
+      color:var(--muted);
+      max-width:520px;
+      margin:0 0 14px;
     }
 
-    .wrap {
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+    .error-banner{
+      display:none;
+      align-items:center;
+      gap:8px;
+      font-size:13px;
+      color:var(--danger);
+      background:#fee2e2;
+      border:1px solid #fecaca;
+      border-radius:12px;
+      padding:8px 10px;
+      margin-bottom:14px;
     }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 800;
-      letter-spacing: 0.03em;
+    .metrics-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+      gap:14px;
+      margin-top:10px;
+      margin-bottom:20px;
+    }
+    .metric-card{
+      background:var(--card);
+      border-radius:16px;
+      border:1px solid var(--border);
+      padding:12px 14px 14px;
+      box-shadow:0 10px 24px rgba(15,23,42,0.08);
+    }
+    .metric-label{
+      font-size:11px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      color:var(--muted);
+      margin-bottom:4px;
+    }
+    .metric-value{
+      font-size:26px;
+      font-weight:700;
+      margin-bottom:2px;
+    }
+    .metric-sub{
+      font-size:12px;
+      color:var(--muted);
     }
 
-    .brand-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 26px;
-      height: 26px;
-      border-radius: 999px;
-      background: radial-gradient(circle at 30% 20%, #bbf7d0, #16a34a);
-      box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.4),
-        0 10px 18px rgba(22, 163, 74, 0.35);
+    .section-title{
+      font-size:14px;
+      font-weight:700;
+      margin:18px 0 6px;
     }
 
-    .nav {
-      display: flex;
-      gap: 14px;
-      font-size: 14px;
+    .users-row{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+      font-size:13px;
+    }
+    .pill-stat{
+      padding:6px 10px;
+      border-radius:999px;
+      background:#ffffff;
+      border:1px solid var(--border);
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .pill-stat span.label{
+      color:var(--muted);
+      font-size:12px;
+    }
+    .pill-stat span.val{
+      font-weight:600;
     }
 
-    .nav a {
-      display: inline-flex;
-      align-items: center;
-      padding: 6px 10px;
-      border-radius: 999px;
-      text-decoration: none;
-      color: var(--muted);
-      border: 1px solid transparent;
-      transition: all 0.16s ease-out;
+    .courses-list{
+      margin-top:4px;
+      padding-left:0;
+      list-style:none;
+      font-size:13px;
+    }
+    .courses-list li{
+      padding:4px 0;
+      border-bottom:1px dashed #e5e7eb;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .courses-list span.name{
+      color:#0f172a;
+    }
+    .courses-list span.count{
+      color:var(--muted);
+      font-size:12px;
     }
 
-    .nav a:hover {
-      color: var(--text);
-      border-color: rgba(148, 163, 184, 0.3);
-      background: rgba(255, 255, 255, 0.8);
+    .updated-at{
+      font-size:11px;
+      color:var(--muted);
+      margin-top:6px;
     }
 
-    .nav a.active {
-      border-color: rgba(5, 150, 105, 0.4);
-      background: rgba(22, 163, 74, 0.08);
-      color: var(--brand);
-      font-weight: 600;
+    .admin-warning{
+      margin-top:18px;
+      font-size:13px;
+      color:var(--muted);
     }
 
-    /* Main layout */
-
-    .page {
-      max-width: 1120px;
-      margin: 18px auto 32px;
-      padding: 0 16px 24px;
-    }
-
-    .page-header {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: center;
-      margin-bottom: 18px;
-    }
-
-    .page-header h1 {
-      font-size: clamp(22px, 3vw, 26px);
-      margin: 0;
-    }
-
-    .page-subtitle {
-      color: var(--muted);
-      font-size: 14px;
-      margin-top: 2px;
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border-radius: 999px;
-      padding: 4px 10px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      border: 1px solid rgba(148, 163, 184, 0.5);
-      background: rgba(255, 255, 255, 0.9);
-      color: var(--muted);
-    }
-
-    /* KPI cards */
-
-    .metrics-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-
-    @media (max-width: 920px) {
-      .metrics-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-
-    @media (max-width: 640px) {
-      .metrics-grid {
-        grid-template-columns: minmax(0, 1fr);
-      }
-    }
-
-    .metric-card {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 16px;
-      padding: 12px 14px;
-      border: 1px solid var(--border);
-      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .metric-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }
-
-    .metric-value {
-      font-size: 24px;
-      font-weight: 700;
-    }
-
-    .metric-trend {
-      font-size: 11px;
-      margin-top: 6px;
-      color: var(--muted);
-    }
-
-    .metric-dot {
-      position: absolute;
-      right: -18px;
-      top: -18px;
-      width: 50px;
-      height: 50px;
-      border-radius: 999px;
-      background: var(--brand-soft);
-      border: 1px solid rgba(5, 150, 105, 0.3);
-    }
-
-    /* Charts */
-
-    .charts-grid {
-      display: grid;
-      grid-template-columns: 2fr 1.4fr;
-      gap: 14px;
-      margin-bottom: 20px;
-    }
-
-    @media (max-width: 880px) {
-      .charts-grid {
-        grid-template-columns: minmax(0, 1fr);
-      }
-    }
-
-    .panel {
-      background: rgba(255, 255, 255, 0.97);
-      border-radius: 18px;
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow);
-      padding: 14px 16px 16px;
-    }
-
-    .panel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-
-    .panel-title {
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .panel-caption {
-      font-size: 11px;
-      color: var(--muted);
-    }
-
-    canvas {
-      max-width: 100%;
-    }
-
-    /* Recent events table */
-
-    .events-table-wrap {
-      margin-top: 10px;
-      max-height: 260px;
-      overflow: auto;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      background: rgba(248, 250, 252, 0.9);
-    }
-
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      font-size: 13px;
-    }
-
-    thead {
-      background: #f3f4f6;
-      position: sticky;
-      top: 0;
-      z-index: 5;
-    }
-
-    th, td {
-      padding: 8px 10px;
-      border-bottom: 1px solid #e5e7eb;
-      text-align: left;
-      white-space: nowrap;
-    }
-
-    th {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-    }
-
-    tbody tr:nth-child(even) {
-      background: rgba(255, 255, 255, 0.9);
-    }
-
-    .pill-type {
-      display: inline-flex;
-      align-items: center;
-      border-radius: 999px;
-      padding: 3px 8px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-
-    .pill-type-view {
-      background: #ecfdf5;
-      color: #166534;
-    }
-
-    .pill-type-search {
-      background: #eff6ff;
-      color: #1d4ed8;
-    }
-
-    .pill-type-click {
-      background: #fef3c7;
-      color: #92400e;
-    }
-
-    .pill-type-user {
-      background: #f5f3ff;
-      color: #5b21b6;
-    }
-
-    .events-empty {
-      padding: 16px;
-      font-size: 13px;
-      color: var(--muted);
-      text-align: center;
-    }
-
-    /* Messages */
-
-    .status-row {
-      margin-bottom: 10px;
-      font-size: 13px;
-      color: var(--muted);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      background: #22c55e;
-      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.35);
-    }
-
-    .status-dot.error {
-      background: var(--danger);
-      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.38);
-    }
-
-    footer {
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 18px 16px 24px;
-      font-size: 12px;
-      color: var(--muted);
-      text-align: center;
+    @media (max-width:600px){
+      .metric-value{font-size:22px;}
     }
   </style>
-
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <!-- Header -->
-  <header class="header">
-    <div class="wrap">
-      <div class="brand">
-        <div class="brand-badge"></div>
-        <span>TeeRadar WA</span>
-        <span style="font-size:12px;color:var(--muted);font-weight:500;">Admin</span>
-      </div>
-      <nav class="nav">
-        <a href="/index.html">Home</a>
-        <a href="/book.html">Bookings</a>
-        <a href="/faq.html">FAQ</a>
-        <a href="/about.html">About</a>
-        <a href="/analytics.html" class="active">Analytics</a>
-      </nav>
+<header>
+  <div class="nav-wrap">
+    <div class="brand">
+      <div class="brand-logo">T</div>
+      <div class="brand-text">TeeRadar WA</div>
     </div>
-  </header>
+    <nav>
+      <a href="/index.html">Home</a>
+      <a href="/book.html">Bookings</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/about.html">About</a>
+      <a href="/analytics.html" class="nav-pill">Analytics</a>
+    </nav>
+  </div>
+</header>
 
-  <main class="page">
-    <div class="page-header">
-      <div>
-        <h1>Analytics dashboard</h1>
-        <p class="page-subtitle">
-          Live tee-time engagement across Western Australia — updated every time a user searches or clicks.
-        </p>
-      </div>
-      <span class="pill">
-        <span style="width:6px;height:6px;border-radius:999px;background:#22c55e;"></span>
-        Realtime, in-memory
-      </span>
-    </div>
+<main>
+  <div class="page-kicker">
+    <span class="page-kicker-dot"></span>
+    <span>Realtime, in-memory</span>
+  </div>
+  <h1 class="page-title">Analytics dashboard</h1>
+  <p class="page-sub">
+    Live tee-time engagement across Western Australia — updated every time a user
+    searches or clicks.
+  </p>
 
-    <!-- Status message -->
-    <div class="status-row">
-      <div class="status-dot" id="status-dot"></div>
-      <span id="status-text">Loading analytics…</span>
-    </div>
+  <div id="errorBanner" class="error-banner">
+    <span>●</span>
+    <span>Error loading analytics — see console for details.</span>
+  </div>
 
-    <!-- KPI cards -->
-    <section class="metrics-grid">
-      <article class="metric-card">
-        <div class="metric-dot"></div>
-        <div class="metric-label">Home page views</div>
-        <div class="metric-value" id="kpi-home">0</div>
-        <div class="metric-trend" id="kpi-home-trend">—</div>
-      </article>
-
-      <article class="metric-card">
-        <div class="metric-dot"></div>
-        <div class="metric-label">Course booking clicks</div>
-        <div class="metric-value" id="kpi-course-clicks">0</div>
-        <div class="metric-trend" id="kpi-course-trend">—</div>
-      </article>
-
-      <article class="metric-card">
-        <div class="metric-dot"></div>
-        <div class="metric-label">Searches</div>
-        <div class="metric-value" id="kpi-searches">0</div>
-        <div class="metric-trend" id="kpi-search-trend">—</div>
-      </article>
-
-      <article class="metric-card">
-        <div class="metric-dot"></div>
-        <div class="metric-label">New users</div>
-        <div class="metric-value" id="kpi-users">0</div>
-        <div class="metric-trend" id="kpi-users-trend">—</div>
-      </article>
+  <div class="metrics-grid">
+    <section class="metric-card">
+      <div class="metric-label">Home page views</div>
+      <div id="mHomeViews" class="metric-value">0</div>
+      <div id="mHomeViewsSub" class="metric-sub">—</div>
     </section>
 
-    <!-- Charts -->
-    <section class="charts-grid">
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <div class="panel-title">Activity over time</div>
-            <div class="panel-caption">Home views, course clicks &amp; searches per day</div>
-          </div>
-          <span class="pill" style="font-size:10px;padding:2px 8px;">Last 14 days</span>
-        </div>
-        <canvas id="chart-activity" height="140"></canvas>
-      </article>
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <div class="panel-title">Top courses</div>
-            <div class="panel-caption">Most-clicked courses in the selected window</div>
-          </div>
-        </div>
-        <canvas id="chart-courses" height="140"></canvas>
-      </article>
+    <section class="metric-card">
+      <div class="metric-label">Course booking clicks</div>
+      <div id="mBookingClicks" class="metric-value">0</div>
+      <div id="mBookingClicksSub" class="metric-sub">—</div>
     </section>
 
-    <!-- Recent events -->
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">Recent events</div>
-          <div class="panel-caption">Last 50 events across all users</div>
-        </div>
-      </div>
-
-      <div class="events-table-wrap" id="events-wrap">
-        <div class="events-empty" id="events-empty">Loading…</div>
-        <table id="events-table" style="display:none;">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Type</th>
-              <th>Detail</th>
-            </tr>
-          </thead>
-          <tbody id="events-body"></tbody>
-        </table>
-      </div>
+    <section class="metric-card">
+      <div class="metric-label">Searches</div>
+      <div id="mSearches" class="metric-value">0</div>
+      <div id="mSearchesSub" class="metric-sub">—</div>
     </section>
-  </main>
 
-  <footer>
-    &copy; <script>document.write(new Date().getFullYear())</script> TeeRadar WA —
-    internal analytics only. Data is stored in memory on the server and resets on deploy.
-  </footer>
+    <section class="metric-card">
+      <div class="metric-label">New users</div>
+      <div id="mNewUsers" class="metric-value">0</div>
+      <div id="mNewUsersSub" class="metric-sub">—</div>
+    </section>
+  </div>
 
-  <script>
-    const statusDot = document.getElementById("status-dot");
-    const statusText = document.getElementById("status-text");
+  <section>
+    <h2 class="section-title">User overview</h2>
+    <div class="users-row">
+      <div class="pill-stat">
+        <span class="label">All time</span>
+        <span id="uAllTime" class="val">0</span>
+      </div>
+      <div class="pill-stat">
+        <span class="label">Today</span>
+        <span id="uToday" class="val">0</span>
+      </div>
+      <div class="pill-stat">
+        <span class="label">This week</span>
+        <span id="uWeek" class="val">0</span>
+      </div>
+    </div>
+    <p class="updated-at" id="updatedAt">Last updated just now.</p>
+  </section>
 
-    let activityChart;
-    let courseChart;
+  <section>
+    <h2 class="section-title">Most-clicked courses</h2>
+    <ul id="topCoursesList" class="courses-list">
+      <li><span class="name">No course clicks yet.</span></li>
+    </ul>
+  </section>
 
-    function setStatus(ok, message) {
-      if (!ok) {
-        statusDot.classList.add("error");
-      } else {
-        statusDot.classList.remove("error");
+  <p class="admin-warning">
+    Analytics are stored in memory on the server. Deploy restarts will reset these counts.
+  </p>
+</main>
+
+<script>
+  const ADMIN_EMAIL = "declan7pin@gmail.com";
+
+  function isAdmin() {
+    return (localStorage.getItem("teeradar_user_email") || "").toLowerCase() === ADMIN_EMAIL;
+  }
+
+  // Optional: basic guard so random users don't sit on this page
+  function guardAdmin() {
+    if (!isAdmin()) {
+      console.warn("Not logged in as admin – analytics are still visible, but nav has no admin gate.");
+    }
+  }
+
+  async function loadAnalytics() {
+    const errorBanner = document.getElementById("errorBanner");
+    errorBanner.style.display = "none";
+
+    try {
+      const res = await fetch("/api/analytics/summary", { headers: { "Accept": "application/json" } });
+      if (!res.ok) {
+        throw new Error("HTTP " + res.status);
       }
-      statusText.textContent = message;
+      const data = await res.json();
+      console.log("[analytics] page summary", data);
+      applyAnalytics(data);
+    } catch (err) {
+      console.error("Error loading analytics summary", err);
+      errorBanner.style.display = "flex";
+    }
+  }
+
+  function applyAnalytics(summary) {
+    // Defensive field mapping to match your backend shape
+    const homeViews =
+      summary.homePageViews ??
+      summary.homeViews ??
+      0;
+
+    const bookingClicks =
+      summary.courseBookingClicks ??
+      summary.bookingClicks ??
+      0;
+
+    const searches =
+      summary.searches ??
+      0;
+
+    const newUsers =
+      summary.newUsers ??
+      summary.newUsers7d ??
+      0;
+
+    const usersAllTime = summary.usersAllTime ?? 0;
+    const usersToday   = summary.usersToday   ?? 0;
+    const usersWeek    = summary.usersWeek    ?? 0;
+
+    document.getElementById("mHomeViews").textContent = homeViews;
+    document.getElementById("mBookingClicks").textContent = bookingClicks;
+    document.getElementById("mSearches").textContent = searches;
+    document.getElementById("mNewUsers").textContent = newUsers;
+
+    document.getElementById("mHomeViewsSub").textContent =
+      "All-time total homepage sessions.";
+    document.getElementById("mBookingClicksSub").textContent =
+      "Total unique clicks through to course booking pages.";
+    document.getElementById("mSearchesSub").textContent =
+      "Total search requests sent to /api/search.";
+    document.getElementById("mNewUsersSub").textContent =
+      "New browser devices seen in the last 7 days.";
+
+    document.getElementById("uAllTime").textContent = usersAllTime;
+    document.getElementById("uToday").textContent   = usersToday;
+    document.getElementById("uWeek").textContent    = usersWeek;
+
+    const updatedAtText = "Last updated " + new Date().toLocaleString();
+    document.getElementById("updatedAt").textContent = updatedAtText;
+
+    // Top courses
+    const listEl = document.getElementById("topCoursesList");
+    listEl.innerHTML = "";
+
+    const topCourses = Array.isArray(summary.topCourses) ? summary.topCourses : [];
+
+    if (!topCourses.length) {
+      const li = document.createElement("li");
+      li.innerHTML = '<span class="name">No course clicks yet.</span>';
+      listEl.appendChild(li);
+      return;
     }
 
-    function safeNum(v) {
-      return typeof v === "number" && !Number.isNaN(v) ? v : 0;
-    }
+    topCourses.forEach((c) => {
+      const name =
+        c.name ||
+        c.courseName ||
+        c.course ||
+        "Unknown course";
+      const clicks = c.clicks ?? c.total ?? c.count ?? 0;
 
-    function fmtPercent(p) {
-      const sign = p > 0 ? "+" : "";
-      return sign + p.toFixed(1) + "% vs prev";
-    }
+      const li = document.createElement("li");
+      li.innerHTML =
+        '<span class="name">' +
+        name +
+        '</span><span class="count">' +
+        clicks +
+        ' clicks</span>';
+      listEl.appendChild(li);
+    });
+  }
 
-    function computeTrend(current, previous) {
-      if (previous <= 0) return "—";
-      const pct = ((current - previous) / previous) * 100;
-      return fmtPercent(pct);
-    }
-
-    function renderKPIs(data) {
-      const t = data.totals || {};
-      const prev = (data.previousTotals || {});
-      const home = safeNum(t.homeViews || t.home || t.home_views);
-      const clicks = safeNum(t.courseClicks || t.course_clicks);
-      const searches = safeNum(t.searches || t.search_count);
-      const users = safeNum(t.newUsers || t.users || t.uniqueUsers);
-
-      const prevHome = safeNum(prev.homeViews || prev.home || prev.home_views);
-      const prevClicks = safeNum(prev.courseClicks || prev.course_clicks);
-      const prevSearches = safeNum(prev.searches || prev.search_count);
-      const prevUsers = safeNum(prev.newUsers || prev.users || prev.uniqueUsers);
-
-      document.getElementById("kpi-home").textContent = home.toLocaleString();
-      document.getElementById("kpi-course-clicks").textContent = clicks.toLocaleString();
-      document.getElementById("kpi-searches").textContent = searches.toLocaleString();
-      document.getElementById("kpi-users").textContent = users.toLocaleString();
-
-      document.getElementById("kpi-home-trend").textContent =
-        computeTrend(home, prevHome);
-      document.getElementById("kpi-course-trend").textContent =
-        computeTrend(clicks, prevClicks);
-      document.getElementById("kpi-search-trend").textContent =
-        computeTrend(searches, prevSearches);
-      document.getElementById("kpi-users-trend").textContent =
-        computeTrend(users, prevUsers);
-    }
-
-    function renderActivityChart(data) {
-      const byDay = data.byDay || data.eventsByDay || [];
-      const days = byDay.slice(-14); // last 14
-
-      const labels = days.map(d => d.date || d.day || d.label || "");
-      const home = days.map(d => safeNum(d.homeViews || d.home || d.home_views));
-      const clicks = days.map(d => safeNum(d.courseClicks || d.course_clicks));
-      const searches = days.map(d => safeNum(d.searches || d.search_count));
-
-      const ctx = document.getElementById("chart-activity").getContext("2d");
-
-      if (activityChart) {
-        activityChart.destroy();
-      }
-
-      activityChart = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels,
-          datasets: [
-            {
-              label: "Home views",
-              data: home,
-              borderColor: "#16a34a",
-              backgroundColor: "rgba(22, 163, 74, 0.12)",
-              tension: 0.35,
-              fill: true,
-              borderWidth: 2,
-              pointRadius: 2.5
-            },
-            {
-              label: "Course clicks",
-              data: clicks,
-              borderColor: "#0ea5e9",
-              backgroundColor: "rgba(14, 165, 233, 0.08)",
-              tension: 0.35,
-              fill: true,
-              borderWidth: 2,
-              pointRadius: 2.5
-            },
-            {
-              label: "Searches",
-              data: searches,
-              borderColor: "#f97316",
-              backgroundColor: "rgba(249, 115, 22, 0.08)",
-              tension: 0.35,
-              fill: true,
-              borderWidth: 2,
-              pointRadius: 2.5
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: {
-              labels: {
-                usePointStyle: true,
-                boxWidth: 8
-              }
-            }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: {
-                precision: 0
-              }
-            }
-          }
-        }
-      });
-    }
-
-    function renderCoursesChart(data) {
-      const list = data.byCourse ||
-        data.courseClicks ||
-        data.courses ||
-        [];
-
-      const top = list
-        .slice()
-        .sort((a, b) =>
-          (b.clicks || b.count || 0) - (a.clicks || a.count || 0)
-        )
-        .slice(0, 8);
-
-      const labels = top.map(c => c.name || c.courseName || c.course || "Unknown");
-      const values = top.map(c => safeNum(c.clicks || c.count || c.total));
-
-      const ctx = document.getElementById("chart-courses").getContext("2d");
-
-      if (courseChart) {
-        courseChart.destroy();
-      }
-
-      courseChart = new Chart(ctx, {
-        type: "bar",
-        data: {
-          labels,
-          datasets: [
-            {
-              label: "Clicks",
-              data: values,
-              backgroundColor: "rgba(37, 99, 235, 0.7)",
-              borderRadius: 6,
-              maxBarThickness: 26
-            }
-          ]
-        },
-        options: {
-          indexAxis: "y",
-          plugins: {
-            legend: { display: false }
-          },
-          scales: {
-            x: {
-              beginAtZero: true,
-              ticks: { precision: 0 }
-            }
-          }
-        }
-      });
-    }
-
-    function describeEvent(ev) {
-      if (!ev) return "";
-      const p = ev.payload || {};
-      if (ev.type === "course_click" || ev.type === "course") {
-        const name = p.course || p.courseName || p.name || "Unknown course";
-        const provider = p.provider || "";
-        return provider ? `${name} (${provider})` : name;
-      }
-      if (ev.type === "search") {
-        const holes = p.holes || p.hole || "any";
-        const party = p.partySize || p.party || 1;
-        return `${holes}-hole, ${party} player search`;
-      }
-      if (ev.type === "home_view") {
-        return "Homepage viewed";
-      }
-      if (ev.type === "new_user") {
-        return `New user: ${p.id || p.device || "anonymous"}`;
-      }
-      return JSON.stringify(p);
-    }
-
-    function renderRecentEvents(data) {
-      const empty = document.getElementById("events-empty");
-      const table = document.getElementById("events-table");
-      const body = document.getElementById("events-body");
-
-      const list = data.recent || data.recentEvents || data.events || [];
-
-      if (!list.length) {
-        empty.textContent = "No events captured yet.";
-        table.style.display = "none";
-        return;
-      }
-
-      empty.style.display = "none";
-      table.style.display = "table";
-      body.innerHTML = "";
-
-      list.slice(0, 50).forEach(ev => {
-        const tr = document.createElement("tr");
-
-        const tsRaw = ev.at || ev.timestamp || ev.time;
-        const date = tsRaw
-          ? new Date(tsRaw)
-          : new Date();
-
-        const tdTime = document.createElement("td");
-        tdTime.textContent = date.toLocaleString("en-AU", {
-          hour: "2-digit",
-          minute: "2-digit",
-          day: "2-digit",
-          month: "short"
-        });
-
-        const tdType = document.createElement("td");
-        const pill = document.createElement("span");
-        pill.classList.add("pill-type");
-        const t = (ev.type || "").toLowerCase();
-        if (t.includes("home")) {
-          pill.classList.add("pill-type-view");
-          pill.textContent = "View";
-        } else if (t.includes("search")) {
-          pill.classList.add("pill-type-search");
-          pill.textContent = "Search";
-        } else if (t.includes("click")) {
-          pill.classList.add("pill-type-click");
-          pill.textContent = "Course click";
-        } else if (t.includes("user")) {
-          pill.classList.add("pill-type-user");
-          pill.textContent = "User";
-        } else {
-          pill.textContent = ev.type || "Event";
-        }
-        tdType.appendChild(pill);
-
-        const tdDetail = document.createElement("td");
-        tdDetail.textContent = describeEvent(ev);
-
-        tr.appendChild(tdTime);
-        tr.appendChild(tdType);
-        tr.appendChild(tdDetail);
-        body.appendChild(tr);
-      });
-    }
-
-    async function loadAnalytics() {
-      try {
-        setStatus(true, "Loading analytics…");
-        const res = await fetch("/api/analytics/summary");
-        if (!res.ok) {
-          setStatus(false, "Failed to load analytics (HTTP " + res.status + ")");
-          return;
-        }
-        const data = await res.json();
-
-        renderKPIs(data);
-        renderActivityChart(data);
-        renderCoursesChart(data);
-        renderRecentEvents(data);
-
-        setStatus(true, "Analytics loaded and up to date.");
-      } catch (err) {
-        console.error("analytics error", err);
-        setStatus(false, "Error loading analytics — see console for details.");
-      }
-    }
-
-    document.addEventListener("DOMContentLoaded", loadAnalytics);
-  </script>
+  guardAdmin();
+  loadAnalytics();
+  // if you want auto-refresh every 30s, uncomment:
+  // setInterval(loadAnalytics, 30000);
+</script>
 </body>
 </html>
