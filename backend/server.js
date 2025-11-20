@@ -6,13 +6,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// Analytics helpers (in-memory / SQLite behind the scenes)
-import {
-  recordEvent,
-  getAnalyticsSummary,
-  getTopCourses,
-} from "./analytics.js";
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -26,7 +19,7 @@ app.use(express.json());
 // Serve static frontend from /public at project root
 app.use(express.static(path.join(__dirname, "..", "public")));
 
-// ---------- LOAD DATA ----------
+// ---------- LOAD COURSE DATA ----------
 const PERTH_LAT = -31.9523;
 const PERTH_LNG = 115.8613;
 
@@ -49,6 +42,30 @@ if (fs.existsSync(feeGroupsPath)) {
 console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
+// ---------- SIMPLE USER STORE (JSON FILE) ----------
+
+const usersPath = path.join(__dirname, "data", "users.json");
+let users = {};
+
+// Load existing users (if any)
+try {
+  if (fs.existsSync(usersPath)) {
+    const raw = fs.readFileSync(usersPath, "utf8");
+    users = JSON.parse(raw || "{}");
+  }
+} catch (err) {
+  console.error("Failed to load users.json, starting empty:", err.message);
+  users = {};
+}
+
+function saveUsers() {
+  try {
+    fs.writeFileSync(usersPath, JSON.stringify(users, null, 2), "utf8");
+  } catch (err) {
+    console.error("Failed to save users.json:", err.message);
+  }
+}
+
 // ---------- ROUTES ----------
 
 // Health check
@@ -59,6 +76,69 @@ app.get("/health", (req, res) => {
 // Return full course list (used by frontend map + UI)
 app.get("/api/courses", (req, res) => {
   res.json(courses);
+});
+
+// ---- USER PROFILE API ----
+
+// GET /api/user/profile?email=...
+app.get("/api/user/profile", (req, res) => {
+  const emailRaw = req.query.email || "";
+  const email = String(emailRaw).toLowerCase().trim();
+
+  if (!email) {
+    return res.status(400).json({ error: "email is required" });
+  }
+
+  const user = users[email];
+  if (!user) {
+    return res.json({ exists: false });
+  }
+
+  res.json({
+    exists: true,
+    email: user.email,
+    homeCourse: user.homeCourse || null,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  });
+});
+
+// POST /api/user/profile
+// body: { email, homeCourse }
+app.post("/api/user/profile", (req, res) => {
+  try {
+    const { email, homeCourse } = req.body || {};
+    const normalized = String(email || "").toLowerCase().trim();
+
+    if (!normalized) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    const now = new Date().toISOString();
+    const existing = users[normalized] || {
+      email: normalized,
+      createdAt: now,
+    };
+
+    const updated = {
+      ...existing,
+      homeCourse:
+        typeof homeCourse === "string" && homeCourse.trim()
+          ? homeCourse.trim()
+          : existing.homeCourse || null,
+      updatedAt: now,
+    };
+
+    users[normalized] = updated;
+    saveUsers();
+
+    console.log("[users] upsert", updated);
+
+    res.json({ ok: true, user: updated });
+  } catch (err) {
+    console.error("user profile error:", err);
+    res.status(500).json({ error: "user profile error", detail: err.message });
+  }
 });
 
 // Tee time search with extra debug logging
@@ -76,7 +156,7 @@ app.post("/api/search", async (req, res) => {
       return res.status(400).json({ error: "date is required" });
     }
 
-    // make holes a NUMBER (9 or 18), not a string
+    // make holes numeric (9 or 18) if provided
     const holesValue =
       holes === "" || holes === null || typeof holes === "undefined"
         ? ""
@@ -122,125 +202,21 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
-// ---------- ANALYTICS INGEST ----------
-
-app.post("/api/analytics/event", async (req, res) => {
+// Simple analytics logger (still console-only)
+app.post("/api/analytics/event", (req, res) => {
   try {
-    const { type, payload = {}, at } = req.body || {};
-
-    // Derive a userId:
-    //  - Prefer payload.userId (future)
-    //  - Fallback to IP, so a single device counts as one user
-    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
-    const userId = payload.userId || ip || null;
-
-    const courseName =
-      payload.course ||
-      payload.courseName ||
-      payload.course_name ||
-      payload.courseTitle ||
-      null;
-
+    const { type, payload, at, userId, courseName } = req.body || {};
     console.log("Incoming analytics event:", {
       type,
       at,
       userId,
       courseName,
+      payload,
     });
-
-    await recordEvent({ type, userId, courseName, at });
     res.json({ ok: true });
   } catch (err) {
     console.error("analytics error", err);
     res.status(500).json({ error: "analytics error", detail: err.message });
-  }
-});
-
-// ---------- ANALYTICS SUMMARY HELPERS ----------
-
-function buildFlatSummary(summary, topCourses) {
-  // Summary coming from analytics.js:
-  // {
-  //   homeViews, searches, bookingClicks,
-  //   usersAllTime, usersToday, usersWeek, newUsers7d
-  // }
-
-  const homeViews = summary.homeViews ?? 0;
-  const searches = summary.searches ?? 0;
-  const bookingClicks = summary.bookingClicks ?? 0;
-  const newUsers7d = summary.newUsers7d ?? 0;
-
-  return {
-    // Names your Admin UI is probably using:
-    homePageViews: homeViews,
-    courseBookingClicks: bookingClicks,
-    searches,
-    newUsers: newUsers7d,
-
-    // Also keep the alternative names we already used:
-    homeViews,
-    bookingClicks,
-
-    // Extra stats if we want them later:
-    usersAllTime: summary.usersAllTime ?? 0,
-    usersToday: summary.usersToday ?? 0,
-    usersWeek: summary.usersWeek ?? 0,
-
-    // Top courses by booking clicks
-    topCourses: topCourses || [],
-  };
-}
-
-// ---------- ANALYTICS SUMMARY ENDPOINTS ----------
-
-// 1) Legacy-style endpoint (in case Admin UI calls /api/analytics)
-app.get("/api/analytics", async (req, res) => {
-  try {
-    const summary = await getAnalyticsSummary();
-    const topCourses = await getTopCourses(10);
-    const body = buildFlatSummary(summary, topCourses);
-
-    console.log("[analytics] /api/analytics →", body);
-    res.json(body);
-  } catch (err) {
-    console.error("analytics summary error (/api/analytics)", err);
-    res
-      .status(500)
-      .json({ error: "analytics summary error", detail: err.message });
-  }
-});
-
-// 2) Explicit summary endpoint used earlier
-app.get("/api/analytics/summary", async (req, res) => {
-  try {
-    const summary = await getAnalyticsSummary();
-    const topCourses = await getTopCourses(10);
-    const body = buildFlatSummary(summary, topCourses);
-
-    console.log("[analytics] /api/analytics/summary →", body);
-    res.json(body);
-  } catch (err) {
-    console.error("analytics summary error (/api/analytics/summary)", err);
-    res
-      .status(500)
-      .json({ error: "analytics summary error", detail: err.message });
-  }
-});
-
-// 3) Admin endpoint (if Admin UI points here)
-app.get("/api/admin/summary", async (req, res) => {
-  try {
-    const summary = await getAnalyticsSummary();
-    const topCourses = await getTopCourses(10);
-    const body = buildFlatSummary(summary, topCourses);
-
-    console.log("[analytics] /api/admin/summary →", body);
-    res.json(body);
-  } catch (err) {
-    console.error("admin summary error (/api/admin/summary)", err);
-    res
-      .status(500)
-      .json({ error: "admin summary error", detail: err.message });
   }
 });
 
@@ -263,7 +239,7 @@ app.get("/api/debug/courses", (req, res) => {
 });
 
 // ---------- FRONTEND FALLBACK ----------
-// For any non-API route, serve the main index.html (SPA routing)
+// For any non-API route, serve the main index.html (SPA-ish)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
