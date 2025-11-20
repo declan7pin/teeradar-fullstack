@@ -6,7 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// Analytics helpers (SQLite behind the scenes)
+// Analytics helpers (in-memory / SQLite behind the scenes)
 import {
   recordEvent,
   getAnalyticsSummary,
@@ -50,10 +50,10 @@ console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
 // ======================================
-//        SIMPLE SEARCH CACHE (8 DAYS)
+//        SEARCH CACHE (BY FILTERS)
 // ======================================
 
-// Cache keyed by date: "YYYY-MM-DD" → { slots, fetchedAt }
+// Cache keyed by *full criteria* (date + time + holes + partySize)
 const searchCache = new Map();
 
 // 10 minutes TTL (in ms)
@@ -82,39 +82,55 @@ function getNext8Dates() {
   return out;
 }
 
-// Core search function used by both /api/search and pre-scraper
-async function doSearch(criteria) {
+// Normalise incoming criteria so we always treat them the same way
+function normalizeCriteria(raw) {
   const {
     date,
     earliest = "06:00",
     latest = "17:00",
     holes = "",
     partySize = 1,
-  } = criteria || {};
+  } = raw || {};
 
   if (!date) {
     throw new Error("date is required");
   }
 
-  // Normalise holes → number or "" (like original)
   const holesValue =
     holes === "" || holes === null || typeof holes === "undefined"
       ? ""
       : Number(holes);
 
-  const normalizedCriteria = {
+  return {
     date,
     earliest,
     latest,
     holes: holesValue,
     partySize: Number(partySize) || 1,
   };
+}
 
-  console.log("doSearch() with criteria:", normalizedCriteria);
+// Build a stable cache key from criteria
+function criteriaKey(c) {
+  // Make sure order is stable
+  return JSON.stringify({
+    date: c.date,
+    earliest: c.earliest,
+    latest: c.latest,
+    holes: c.holes,
+    partySize: c.partySize,
+  });
+}
+
+// Core search function used by both /api/search and pre-scraper
+async function doSearch(rawCriteria) {
+  const criteria = normalizeCriteria(rawCriteria);
+
+  console.log("doSearch() with criteria:", criteria);
 
   const jobs = courses.map(async (c) => {
     try {
-      const result = await scrapeCourse(c, normalizedCriteria, feeGroups);
+      const result = await scrapeCourse(c, criteria, feeGroups);
       const count = Array.isArray(result) ? result.length : 0;
 
       if (count > 0) {
@@ -154,21 +170,25 @@ async function runPreScrape() {
 
     for (const date of dates) {
       try {
-        const slots = await doSearch({
+        // Pre-scrape with “typical” broad criteria
+        const criteria = normalizeCriteria({
           date,
           earliest: "06:00",
           latest: "17:00",
           holes: "",
-          partySize: 4, // broad search
+          partySize: 4, // broad enough to cover most groups
         });
 
-        searchCache.set(date, {
+        const key = criteriaKey(criteria);
+        const slots = await doSearch(criteria);
+
+        searchCache.set(key, {
           slots,
           fetchedAt: Date.now(),
         });
 
         console.log(
-          `[pre-scrape] stored ${slots.length} slots for ${date} in cache`
+          `[pre-scrape] stored ${slots.length} slots for ${date} under key ${key}`
         );
       } catch (err) {
         console.error(`[pre-scrape] error for ${date}:`, err.message);
@@ -201,40 +221,34 @@ app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Tee time search with cache + live fallback
+// Tee time search with cache + live fallback (RESPECTS filters)
 app.post("/api/search", async (req, res) => {
   try {
-    const {
-      date,
-      earliest = "06:00",
-      latest = "17:00",
-      holes = "",
-      partySize = 1,
-    } = req.body || {};
-
-    if (!date) {
-      return res.status(400).json({ error: "date is required" });
+    let criteria;
+    try {
+      criteria = normalizeCriteria(req.body || {});
+    } catch (err) {
+      return res.status(400).json({ error: err.message || "bad request" });
     }
 
+    const key = criteriaKey(criteria);
     const now = Date.now();
-    const cached = searchCache.get(date);
+    const cached = searchCache.get(key);
 
     if (cached && now - cached.fetchedAt <= CACHE_TTL_MS) {
-      console.log(`[cache] Serving /api/search for ${date} from cache`);
+      console.log(
+        `[cache] Serving /api/search from cache for key ${key} (date=${criteria.date})`
+      );
       return res.json({ slots: cached.slots });
     }
 
-    console.log(`[cache] No fresh cache for ${date}, running live search`);
-    const slots = await doSearch({
-      date,
-      earliest,
-      latest,
-      holes,
-      partySize,
-    });
+    console.log(
+      `[cache] No fresh cache for key ${key} (date=${criteria.date}), running live search`
+    );
 
-    // Store in cache (even if user searched an odd time window)
-    searchCache.set(date, { slots, fetchedAt: Date.now() });
+    const slots = await doSearch(criteria);
+
+    searchCache.set(key, { slots, fetchedAt: Date.now() });
 
     res.json({ slots });
   } catch (err) {
@@ -280,34 +294,24 @@ app.post("/api/analytics/event", async (req, res) => {
 // ---------- ANALYTICS SUMMARY HELPERS ----------
 
 function buildFlatSummary(summary, topCourses) {
-  // Summary coming from analytics.js:
-  // {
-  //   homeViews, searches, bookingClicks,
-  //   usersAllTime, usersToday, usersWeek, newUsers7d
-  // }
-
   const homeViews = summary.homeViews ?? 0;
   const searches = summary.searches ?? 0;
   const bookingClicks = summary.bookingClicks ?? 0;
   const newUsers7d = summary.newUsers7d ?? 0;
 
   return {
-    // Names your Admin UI is probably using:
     homePageViews: homeViews,
     courseBookingClicks: bookingClicks,
     searches,
     newUsers: newUsers7d,
 
-    // Also keep the alternative names we already used:
     homeViews,
     bookingClicks,
 
-    // Extra stats if we want them later:
     usersAllTime: summary.usersAllTime ?? 0,
     usersToday: summary.usersToday ?? 0,
     usersWeek: summary.usersWeek ?? 0,
 
-    // Top courses by booking clicks
     topCourses: topCourses || [],
   };
 }
