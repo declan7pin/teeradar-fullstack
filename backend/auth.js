@@ -1,13 +1,21 @@
-const express = require("express");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const fs = require("fs");
+// backend/auth.js
+import express from "express";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const authRouter = express.Router();
 
-// ===== SIMPLE LOCAL JSON DATABASE =====
-const DB_PATH = "./auth_users.json";
+// ----- Resolve a stable path for auth_users.json -----
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
+// Store the JSON file alongside this file (backend/auth_users.json)
+const DB_PATH = path.join(__dirname, "auth_users.json");
+
+// ===== SIMPLE LOCAL JSON DATABASE =====
 function loadUsers() {
   try {
     if (!fs.existsSync(DB_PATH)) return [];
@@ -19,7 +27,11 @@ function loadUsers() {
 }
 
 function saveUsers(data) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+  try {
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error("Failed saving users:", err);
+  }
 }
 
 // ===== JWT CONFIG =====
@@ -29,14 +41,17 @@ const TOKEN_LIFETIME = "30d";
 // ====== SIGNUP ======
 authRouter.post("/signup", async (req, res) => {
   try {
-    const { email, password, homeCourse } = req.body;
-    if (!email || !password)
+    const { email, password, homeCourse } = req.body || {};
+    if (!email || !password) {
       return res.status(400).json({ error: "Email & password required" });
+    }
 
     const users = loadUsers();
     const exists = users.find((u) => u.email === email);
 
-    if (exists) return res.status(400).json({ error: "Account already exists" });
+    if (exists) {
+      return res.status(400).json({ error: "Account already exists" });
+    }
 
     const hashed = await bcrypt.hash(password, 10);
 
@@ -71,14 +86,21 @@ authRouter.post("/signup", async (req, res) => {
 // ====== LOGIN ======
 authRouter.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const users = loadUsers();
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email & password required" });
+    }
 
+    const users = loadUsers();
     const user = users.find((u) => u.email === email);
-    if (!user) return res.status(400).json({ error: "Invalid login" });
+    if (!user) {
+      return res.status(400).json({ error: "Invalid login" });
+    }
 
     const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(400).json({ error: "Invalid login" });
+    if (!match) {
+      return res.status(400).json({ error: "Invalid login" });
+    }
 
     const token = jwt.sign({ id: user.id }, JWT_SECRET, {
       expiresIn: TOKEN_LIFETIME,
@@ -93,6 +115,7 @@ authRouter.post("/login", async (req, res) => {
       },
     });
   } catch (err) {
+    console.error("Login error:", err);
     res.status(500).json({ error: "Login failed" });
   }
 });
@@ -100,7 +123,7 @@ authRouter.post("/login", async (req, res) => {
 // ====== VERIFY TOKEN ======
 authRouter.post("/verify", (req, res) => {
   try {
-    const { token } = req.body;
+    const { token } = req.body || {};
     if (!token) return res.json({ ok: false });
 
     const data = jwt.verify(token, JWT_SECRET);
@@ -118,6 +141,7 @@ authRouter.post("/verify", (req, res) => {
       },
     });
   } catch (err) {
+    console.error("Verify error:", err);
     return res.json({ ok: false });
   }
 });
@@ -125,13 +149,18 @@ authRouter.post("/verify", (req, res) => {
 // ====== UPDATE HOME COURSE ======
 authRouter.post("/update-home", (req, res) => {
   try {
-    const { token, homeCourse } = req.body;
+    const { token, homeCourse } = req.body || {};
+    if (!token) {
+      return res.status(400).json({ error: "Token required" });
+    }
 
     const data = jwt.verify(token, JWT_SECRET);
 
-    let users = loadUsers();
+    const users = loadUsers();
     const user = users.find((u) => u.id === data.id);
-    if (!user) return res.status(400).json({ error: "User not found" });
+    if (!user) {
+      return res.status(400).json({ error: "User not found" });
+    }
 
     user.homeCourse = homeCourse;
     saveUsers(users);
@@ -143,4 +172,4 @@ authRouter.post("/update-home", (req, res) => {
   }
 });
 
-module.exports = { authRouter };
+export default authRouter;
