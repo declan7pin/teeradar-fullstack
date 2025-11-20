@@ -1,17 +1,18 @@
 {
   "name": "teeradar-fullstack",
   "version": "1.0.0",
-  "description": "TeeRadar WA — unified WA tee time search",
+  "description": "TeeRadar WA fullstack app",
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
+    "express": "^4.18.2",
     "cors": "^2.8.5",
     "node-fetch": "^2.7.0",
+    "cheerio": "^1.0.0-rc.12",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.13.1"
+    "pg": "^8.11.5"
   }
 }
