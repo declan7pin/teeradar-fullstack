@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>TeeRadar WA — Find a Tee Time Across WA</title>
+  <title>TeeRadar WA — Find a tee time across WA</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
-
   <style>
     :root {
       --teal: #00796b;
@@ -17,215 +16,479 @@
       --border: #e2e8f0;
       --accent: #0ea5e9;
       --pill: #ecfeff;
+      --danger: #ef4444;
+    }
+    *{box-sizing:border-box;}
+    html,body{
+      margin:0;
+      padding:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:radial-gradient(circle at top,#e0f2f1,#f9fafb);
+      color:var(--text);
+    }
+    a{text-decoration:none;color:inherit;}
+    button{font-family:inherit;}
+
+    /* HEADER / NAV */
+    header{
+      background:var(--teal);
+      color:#fff;
+      padding:10px 4vw;
+      position:sticky;
+      top:0;
+      z-index:20;
+      box-shadow:0 2px 6px rgba(0,0,0,0.12);
+    }
+    .nav-wrap{
+      max-width:1100px;
+      margin:0 auto;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .brand-logo{
+      width:26px;
+      height:26px;
+      border-radius:999px;
+      background:#ecfdf5;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#065f46;
+      font-size:15px;
+      font-weight:800;
+      box-shadow:0 0 0 3px rgba(16,185,129,0.25);
+    }
+    .brand-text{
+      font-weight:700;
+      letter-spacing:.04em;
+      font-size:15px;
+    }
+    nav{
+      display:flex;
+      gap:16px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      font-size:13px;
+    }
+    nav a{
+      color:#e0f2f1;
+      opacity:.88;
+      padding:4px 6px;
+      border-radius:999px;
+    }
+    nav a:hover{
+      background:rgba(255,255,255,0.16);
+      opacity:1;
+    }
+    .nav-analytics{
+      background:rgba(15,118,110,0.18);
+      border:1px solid rgba(45,212,191,0.6);
+      padding:4px 10px;
+      font-weight:600;
+    }
+    .nav-account-btn{
+      background:#ffffff;
+      color:var(--teal-dark);
+      border:none;
+      padding:5px 14px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:600;
+      cursor:pointer;
     }
 
-    * { box-sizing: border-box; }
-
-    html, body {
-      margin: 0;
-      padding: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top, #e0f2f1, #f9fafb);
-      color: var(--text);
+    /* MAIN LAYOUT */
+    main{
+      max-width:1100px;
+      margin:28px auto 40px;
+      padding:0 4vw 50px;
+    }
+    .hero{
+      display:grid;
+      grid-template-columns:1.1fr 1fr;
+      gap:24px;
+      align-items:center;
+    }
+    @media(max-width:880px){
+      .hero{
+        grid-template-columns:1fr;
+      }
+    }
+    .hero-kicker{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:10px;
+      flex-wrap:wrap;
+    }
+    .hero-kicker-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      padding:3px 9px;
+      border-radius:999px;
+      background:#ecfeff;
+      border:1px solid #bae6fd;
+      font-weight:600;
+      color:#0369a1;
+    }
+    .hero-title{
+      font-size:clamp(28px,4vw,36px);
+      font-weight:800;
+      letter-spacing:-0.02em;
+      margin:0 0 10px;
+    }
+    .hero-sub{
+      font-size:14px;
+      color:var(--muted);
+      max-width:480px;
+      margin-bottom:18px;
+    }
+    .hero-actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-bottom:14px;
+    }
+    .btn-primary{
+      background:var(--teal);
+      color:#fff;
+      border:none;
+      border-radius:999px;
+      padding:10px 20px;
+      font-size:14px;
+      font-weight:600;
+      cursor:pointer;
+      box-shadow:0 14px 28px rgba(15,118,110,0.28);
+    }
+    .btn-outline{
+      background:#ecfeff;
+      color:#0369a1;
+      border:none;
+      border-radius:999px;
+      padding:9px 16px;
+      font-size:13px;
+      font-weight:600;
+      cursor:pointer;
+    }
+    .hero-chips{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:4px;
+    }
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:5px 10px;
+      border-radius:999px;
+      background:#ffffff;
+      border:1px solid rgba(148,163,184,0.45);
+      font-size:11px;
+      color:var(--muted);
+    }
+    .chip span.icon{
+      font-size:13px;
     }
 
-    a { text-decoration: none; color: inherit; }
-    button { font-family: inherit; }
-
-    /* ------------------ HEADER ------------------ */
-    header {
-      background: var(--teal);
-      color: #fff;
-      padding: 10px 4vw;
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    /* HERO CARD WITH IMAGE */
+    .hero-card{
+      background:var(--card);
+      border-radius:22px;
+      overflow:hidden;
+      box-shadow:0 26px 45px rgba(15,23,42,0.35);
+      display:flex;
+      flex-direction:column;
+    }
+    .hero-card-top{
+      padding:14px 16px 10px;
+    }
+    .hero-card-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 9px;
+      border-radius:999px;
+      background:#022c22;
+      color:#a7f3d0;
+      font-weight:600;
+      font-size:11px;
+      margin-bottom:6px;
+    }
+    .hero-card-badge-dot{
+      width:8px;
+      height:8px;
+      border-radius:999px;
+      background:#22c55e;
+    }
+    .hero-card-title{
+      font-size:13px;
+      font-weight:600;
+      margin-bottom:4px;
+      color:#022c22;
+    }
+    .hero-card-text{
+      font-size:12px;
+      color:#065f46;
+    }
+    .hero-card-img-wrap{
+      width:100%;
+      height:210px;
+      overflow:hidden;
+    }
+    .hero-card-img-wrap img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+    .hero-card-footer{
+      padding:10px 16px 14px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      font-size:12px;
+      color:#065f46;
+      background:linear-gradient(to right,#ecfdf5,#e0f2fe);
+    }
+    .hero-card-footer button{
+      background:#059669;
+      color:#ecfdf5;
+      border:none;
+      border-radius:999px;
+      padding:6px 12px;
+      font-size:11px;
+      font-weight:700;
+      cursor:pointer;
+      box-shadow:0 8px 18px rgba(22,163,74,0.4);
     }
 
-    .nav-wrap {
-      max-width: 1100px;
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
+    /* FEATURE CARDS */
+    .features{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+      gap:16px;
+      margin-top:30px;
+    }
+    .feature-card{
+      background:var(--card);
+      border-radius:16px;
+      padding:14px 14px 16px;
+      border:1px solid var(--border);
+      box-shadow:0 14px 30px rgba(15,23,42,0.08);
+      font-size:13px;
+    }
+    .feature-card h3{
+      margin:0 0 6px;
+      font-size:15px;
+    }
+    .feature-card p{
+      margin:0;
+      color:var(--muted);
+      font-size:13px;
     }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    footer{
+      max-width:1100px;
+      margin:18px auto 32px;
+      padding:0 4vw;
+      font-size:11px;
+      color:var(--muted);
+      display:flex;
+      justify-content:space-between;
+      flex-wrap:wrap;
+      gap:8px;
     }
 
-    .brand-logo {
-      width: 26px;
-      height: 26px;
-      border-radius: 999px;
-      background: #ecfdf5;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #065f46;
-      font-size: 15px;
-      font-weight: 800;
-      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+    /* T&Cs banner */
+    #tc-banner{
+      position:fixed;
+      bottom:0;
+      left:0;
+      right:0;
+      background:#0f172a;
+      color:#e5e7eb;
+      font-size:11px;
+      padding:8px 10px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      z-index:30;
+    }
+    #tc-banner button{
+      background:#f97316;
+      border:none;
+      color:#fff;
+      font-size:11px;
+      padding:5px 10px;
+      border-radius:999px;
+      cursor:pointer;
+      font-weight:600;
+    }
+    #tc-banner a{
+      color:#bfdbfe;
+      text-decoration:underline;
+    }
+    @media (max-width:550px){
+      #tc-banner{
+        flex-direction:column;
+        text-align:center;
+      }
     }
 
-    .brand-text {
-      font-weight: 700;
-      letter-spacing: .04em;
-      font-size: 15px;
+    /* ACCOUNT MODAL */
+    .modal-backdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(15,23,42,0.45);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:40;
     }
-
-    nav {
-      display: flex;
-      gap: 16px;
-      align-items: center;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      font-size: 13px;
+    .modal{
+      background:#f9fafb;
+      border-radius:18px;
+      padding:18px 18px 16px;
+      max-width:380px;
+      width:100%;
+      box-shadow:0 22px 45px rgba(15,23,42,0.45);
     }
-
-    nav a {
-      color: #e0f2f1;
-      opacity: .88;
-      padding: 4px 6px;
-      border-radius: 999px;
+    .modal-header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom:10px;
     }
-
-    nav a:hover {
-      background: rgba(255,255,255,0.16);
-      opacity: 1;
+    .modal-title{
+      font-size:16px;
+      font-weight:700;
     }
-
-    .nav-login, .nav-account {
-      background: #ffffff;
-      color: var(--teal-dark);
-      border: none;
-      padding: 6px 14px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
+    .modal-close{
+      border:none;
+      background:transparent;
+      font-size:18px;
+      cursor:pointer;
     }
-
-    .nav-analytics {
-      background: rgba(15,118,110,0.18);
-      border: 1px solid rgba(45,212,191,0.6);
-      padding: 4px 10px;
-      font-weight: 600;
+    .modal-sub{
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:12px;
     }
-
-    /* ------------------ HERO ------------------ */
-    main {
-      max-width: 1100px;
-      margin: 28px auto 40px;
-      padding: 0 4vw 50px;
+    .field{
+      margin-bottom:10px;
     }
-
-    .hero {
-      display: grid;
-      grid-template-columns: 1.1fr 1fr;
-      gap: 24px;
-      align-items: center;
+    .field label{
+      display:block;
+      font-size:12px;
+      margin-bottom:3px;
+      color:#475569;
     }
-
-    @media(max-width:880px) {
-      .hero { grid-template-columns: 1fr; }
+    .field input{
+      width:100%;
+      padding:7px 9px;
+      border-radius:8px;
+      border:1px solid #cbd5f5;
+      font-size:13px;
     }
-
-    .hero-kicker {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 10px;
+    .field input:focus{
+      outline:none;
+      border-color:#0ea5e9;
+      box-shadow:0 0 0 1px rgba(14,165,233,0.5);
     }
-
-    .hero-kicker-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px 9px;
-      border-radius: 999px;
-      background: #ecfeff;
-      border: 1px solid #bae6fd;
-      font-weight: 600;
-      color: #0369a1;
+    .field-helper{
+      font-size:11px;
+      color:var(--muted);
+      margin-top:2px;
     }
-
-    .hero-title {
-      font-size: clamp(28px, 4vw, 36px);
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      margin: 0 0 10px;
+    .modal-row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      margin-top:10px;
     }
-
-    .hero-sub {
-      font-size: 14px;
-      color: var(--muted);
-      max-width: 480px;
-      margin-bottom: 18px;
+    .btn-secondary{
+      flex:1;
+      border-radius:999px;
+      border:1px solid #cbd5f5;
+      background:#e5edff;
+      color:#1d4ed8;
+      font-size:12px;
+      padding:7px 0;
+      font-weight:600;
+      cursor:pointer;
     }
-
-    .hero-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 14px;
+    .btn-ghost{
+      flex:1;
+      border-radius:999px;
+      border:1px solid transparent;
+      background:transparent;
+      color:#64748b;
+      font-size:11px;
+      padding:6px 0;
+      cursor:pointer;
     }
-
-    .btn-primary {
-      background: var(--teal);
-      color: #fff;
-      border: none;
-      border-radius: 999px;
-      padding: 10px 20px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      box-shadow: 0 14px 28px rgba(15,118,110,0.28);
+    .modal-error{
+      font-size:11px;
+      color:var(--danger);
+      margin-top:4px;
+      min-height:14px;
     }
-
-    .btn-outline {
-      background: #ecfeff;
-      color: #0369a1;
-      border: none;
-      border-radius: 999px;
-      padding: 9px 16px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
+    /* home course suggestions */
+    .suggestions{
+      position:relative;
+      font-size:12px;
     }
-
+    .suggestions-list{
+      position:absolute;
+      top:100%;
+      left:0;
+      right:0;
+      background:#ffffff;
+      border-radius:10px;
+      border:1px solid #e5e7eb;
+      box-shadow:0 10px 24px rgba(15,23,42,0.25);
+      max-height:160px;
+      overflow-y:auto;
+      margin-top:4px;
+      z-index:45;
+    }
+    .suggestion-item{
+      padding:6px 10px;
+      cursor:pointer;
+    }
+    .suggestion-item:hover{
+      background:#e0f2fe;
+    }
   </style>
 </head>
-
 <body>
 <header>
   <div class="nav-wrap">
-
     <div class="brand">
       <div class="brand-logo">T</div>
       <div class="brand-text">TeeRadar WA</div>
     </div>
-
     <nav>
       <a href="/index.html">Home</a>
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
-
-      <!-- admin-only link -->
       <a href="/analytics.html" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
-
-      <!-- NEW: My Account -->
-      <button id="navAccountBtn" class="nav-account" style="display:none;">My Account</button>
-
-      <!-- Login -->
-      <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
+      <button id="navAccountBtn" class="nav-account-btn" type="button">My Account</button>
     </nav>
   </div>
 </header>
@@ -234,68 +497,101 @@
   <section class="hero">
     <div>
       <div class="hero-kicker">
-        <span class="hero-kicker-pill">WA public courses</span>
+        <span class="hero-kicker-pill">
+          <span>WA public courses</span>
+        </span>
         <span>Live booking links • real-time filters</span>
       </div>
 
-      <h1 class="hero-title">Find a tee time across WA, in one place.</h1>
-
+      <h1 class="hero-title">
+        Find a tee time across WA, in one place.
+      </h1>
       <p class="hero-sub">
-        Search public golf courses across Western Australia by date, time, 9/18 holes and players.
-        Tap through to the official course booking page — fully compliant.
+        Search public golf courses across Western Australia by date, time, 9/18 holes and players. Tap through
+        to the course’s official booking page — fully compliant.
       </p>
 
       <div class="hero-actions">
-        <button class="btn-primary" onclick="window.location.href='/book.html'">Find a tee time</button>
-        <button class="btn-outline" onclick="window.location.href='/faq.html'">How TeeRadar works</button>
+        <button class="btn-primary" onclick="window.location.href='/book.html'">
+          Find a tee time
+        </button>
+        <button class="btn-outline" onclick="window.location.href='/faq.html'">
+          How TeeRadar works
+        </button>
+      </div>
+
+      <div class="hero-chips">
+        <div class="chip">
+          <span class="icon">⛳</span>
+          <span>20+ WA public courses</span>
+        </div>
+        <div class="chip">
+          <span class="icon">🕒</span>
+          <span>Filters that match golf</span>
+        </div>
+        <div class="chip">
+          <span class="icon">🔗</span>
+          <span>Course-first booking links</span>
+        </div>
       </div>
     </div>
-        <aside class="hero-card" aria-label="Live WA course widget">
-      <div class="hero-card-bg"></div>
-      <div class="hero-card-gradient"></div>
 
-      <div class="hero-card-inner">
-        <div>
-          <div class="hero-card-top">
-            <span class="hero-card-badge">Live WA courses</span>
-            <span class="hero-card-text">Araluen • Collier • Whaleback • more</span>
-          </div>
-          <p style="font-size:12px;max-width:280px;margin:6px 0 0;">
-            We always send you to the course’s own booking page. WA today, scalable Australia-wide.
-          </p>
+    <!-- HERO CARD WITH IMAGE -->
+    <aside class="hero-card" aria-label="Live WA course widget">
+      <div class="hero-card-top">
+        <div class="hero-card-badge">
+          <span class="hero-card-badge-dot"></span>
+          Live WA courses
         </div>
-
-        <div class="hero-card-footer">
-          <span style="opacity:.85;">Course-first, compliant booking links.</span>
-          <button type="button" onclick="window.location.href='/book.html'">View course links</button>
+        <div class="hero-card-title">
+          Araluen • Collier • Whaleback • more
         </div>
+        <p class="hero-card-text">
+          We always send you to the course’s own booking page. WA today, scalable Australia-wide.
+        </p>
+      </div>
+      <div class="hero-card-img-wrap">
+        <img src="/assets/hero_golf_bg.jpg" alt="Aerial view of golf course" />
+      </div>
+      <div class="hero-card-footer">
+        <span>Course-first, compliant booking links.</span>
+        <button type="button" onclick="window.location.href='/book.html'">
+          View course links
+        </button>
       </div>
     </aside>
   </section>
 
-  <!-- FEATURE CARDS -->
-  <section class="features">
+  <section class="features" aria-label="TeeRadar benefits">
     <article class="feature-card">
       <h3>Single search</h3>
-      <p>One simple search instead of opening a dozen course sites.</p>
+      <p>
+        One simple search instead of opening a dozen course sites. We aggregate WA public courses into a single map and list.
+      </p>
     </article>
     <article class="feature-card">
       <h3>Filters that match golf</h3>
-      <p>Select your date, window, holes and group size.</p>
+      <p>
+        Select your date, window, holes and group size. We highlight which courses are worth clicking into.
+      </p>
     </article>
     <article class="feature-card">
       <h3>Course-first booking</h3>
-      <p>Every booking flows through the club’s own site.</p>
+      <p>
+        Every booking flows through the club’s own site. You stay fully compliant and the course keeps control.
+      </p>
     </article>
     <article class="feature-card">
-      <h3>Built to scale</h3>
-      <p>WA today — ready for all Australian states.</p>
+      <h3>Ready to expand</h3>
+      <p>
+        Built for WA today, designed to roll out to other Australian states as more integrations come online.
+      </p>
     </article>
   </section>
 </main>
 
 <footer>
-  <span>© 2025 TeeRadar WA — Availability depends on course systems.</span>
+  <span>© 2025 TeeRadar WA — Availability subject to individual course sites.</span>
   <span>
     <a href="/terms.html">Terms</a> •
     <a href="/privacy.html">Privacy</a> •
@@ -303,198 +599,363 @@
   </span>
 </footer>
 
-<!-- ------------------------- LOGIN / SIGNUP MODAL ------------------------- -->
-<div id="authModal" style="
-  position:fixed; inset:0; background:rgba(0,0,0,0.45);
-  display:none; align-items:center; justify-content:center; z-index:300;">
-  <div style="background:#fff; padding:22px; border-radius:12px; width:92%; max-width:360px; position:relative;">
+<!-- T&Cs banner -->
+<div id="tc-banner" style="display:none;">
+  <span>
+    By using TeeRadar WA you agree to our <a href="/terms.html" target="_blank">Terms &amp; Conditions</a>.
+  </span>
+  <button type="button" id="tc-accept-btn">Got it</button>
+</div>
 
-    <button onclick="closeAuthModal()" style="
-      position:absolute; right:10px; top:10px;
-      background:none; border:none; font-size:18px; cursor:pointer;">×</button>
-
-    <h2 id="authTitle" style="margin-top:0; font-size:20px; font-weight:700;">Log in</h2>
-
-    <label style="font-size:13px;">Email</label>
-    <input id="authEmail" type="email" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #ccc;border-radius:6px;">
-
-    <label style="font-size:13px;">Password</label>
-    <input id="authPassword" type="password" style="width:100%;padding:8px;margin:4px 0 10px;border:1px solid #ccc;border-radius:6px;">
-
-    <!-- Home course selection (Signup only) -->
-    <div id="homeCourseWrapper" style="display:none;">
-      <label style="font-size:13px;">Home Course</label>
-      <input id="homeCourseInput" type="text"
-        placeholder="Start typing your course..."
-        autocomplete="off"
-        style="width:100%;padding:8px;margin:4px 0 0;border:1px solid #ccc;border-radius:6px;">
-
-      <div id="courseSuggestions" style="
-        border:1px solid #ccc; border-top:none; display:none;
-        background:#fff; max-height:160px; overflow-y:auto;
-        position:absolute; width:calc(100% - 44px); z-index:999;">
-      </div>
+<!-- ACCOUNT MODAL -->
+<div id="account-backdrop" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="account-modal-title">My account</div>
+      <button class="modal-close" type="button" id="account-close-btn">×</button>
+    </div>
+    <div class="modal-sub" id="account-modal-sub">
+      Log in or create an account so we can remember your home course across devices.
     </div>
 
-    <button id="authSubmitBtn" style="
-      width:100%; background:#00796b; color:#fff; border:none;
-      padding:10px; margin-top:12px; border-radius:999px; font-weight:600;
-      cursor:pointer;">Continue</button>
+    <div class="field">
+      <label for="acc-email">Email</label>
+      <input id="acc-email" type="email" autocomplete="email" />
+    </div>
+    <div class="field">
+      <label for="acc-password">Password</label>
+      <input id="acc-password" type="password" autocomplete="current-password" />
+      <div class="field-helper">Minimum 6 characters. Stored securely on the server.</div>
+    </div>
 
-    <p id="authSwitchText" style="text-align:center;font-size:13px;margin-top:14px;cursor:pointer;color:#00796b;">
-      Need an account? Sign up
-    </p>
+    <div class="field suggestions">
+      <label for="acc-home-course">Home course (optional)</label>
+      <input id="acc-home-course" type="text" placeholder="e.g. Collier Park Golf Course" autocomplete="off" />
+      <div id="acc-home-suggestions" class="suggestions-list" style="display:none;"></div>
+      <div class="field-helper">Used to auto-zoom the bookings map around your course.</div>
+    </div>
+
+    <div class="modal-error" id="acc-error"></div>
+
+    <div class="modal-row">
+      <button class="btn-secondary" type="button" id="acc-signup-btn">Sign up</button>
+      <button class="btn-secondary" type="button" id="acc-login-btn">Log in</button>
+    </div>
+    <div class="modal-row">
+      <button class="btn-ghost" type="button" id="acc-update-home-btn">Update home course</button>
+    </div>
   </div>
 </div>
 
 <script>
-/* ------------------- AUTH STATE ------------------- */
-let isSignupMode = false;
-let coursesList = [];
+  const ADMIN_EMAIL = "declan7pin@gmail.com";
 
-/* Load course names for auto-suggest */
-fetch("/api/courses")
-  .then(res => res.json())
-  .then(data => coursesList = data);
+  // ------- ANALYTICS EVENT HELPER -------
+  function trackEvent(type, payload) {
+    try {
+      const token = localStorage.getItem("teeradar_auth_token") || null;
+      const email = localStorage.getItem("teeradar_user_email") || null;
+      const homeCourse = localStorage.getItem("teeradar_home_course") || null;
 
-/* ------------------- OPEN / CLOSE MODAL ------------------- */
-function openAuthModal(signup = false) {
-  isSignupMode = signup;
-  document.getElementById("authModal").style.display = "flex";
-
-  document.getElementById("authTitle").textContent = signup ? "Create account" : "Log in";
-  document.getElementById("authSwitchText").textContent =
-    signup ? "Already have an account? Log in" : "Need an account? Sign up";
-
-  document.getElementById("homeCourseWrapper").style.display = signup ? "block" : "none";
-}
-
-function closeAuthModal() {
-  document.getElementById("authModal").style.display = "none";
-}
-
-/* Toggle login/signup */
-document.getElementById("authSwitchText").onclick = () => {
-  openAuthModal(!isSignupMode);
-};
-
-/* ------------------- LOGIN BUTTON IN NAV ------------------- */
-document.getElementById("navLoginBtn").onclick = () => {
-  openAuthModal(false);
-};
-
-/* ------------------- ACCOUNT BUTTON ------------------- */
-document.getElementById("navAccountBtn").onclick = () => {
-  window.location.href = "/account.html";
-};
-
-/* ------------------- ADMIN DISPLAY ------------------- */
-function updateNavForUser() {
-  const token = localStorage.getItem("tr_jwt");
-  const email = localStorage.getItem("tr_email");
-
-  const navLogin = document.getElementById("navLoginBtn");
-  const navAcc = document.getElementById("navAccountBtn");
-  const navAnalytics = document.getElementById("navAnalytics");
-
-  if (!token) {
-    navLogin.style.display = "inline-block";
-    navAcc.style.display = "none";
-    navAnalytics.style.display = "none";
-    return;
+      fetch("/api/analytics/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type,
+          at: new Date().toISOString(),
+          userId: email || undefined,
+          courseName: payload && payload.courseName,
+          homeCourse,
+          payload: payload || {},
+        }),
+      }).catch(() => {});
+    } catch (e) {
+      console.warn("analytics event failed", e);
+    }
   }
 
-  navLogin.style.display = "none";
-  navAcc.style.display = "inline-block";
-
-  if (email === "declan7pin@gmail.com") {
-    navAnalytics.style.display = "inline-flex";
-  }
-}
-updateNavForUser();
-
-/* ------------------- AUTO-SUGGEST LOGIC ------------------- */
-const homeCourseInput = document.getElementById("homeCourseInput");
-const suggestionsBox = document.getElementById("courseSuggestions");
-
-homeCourseInput?.addEventListener("input", () => {
-  const q = homeCourseInput.value.toLowerCase().trim();
-  if (!q) {
-    suggestionsBox.style.display = "none";
-    return;
+  function isAdmin() {
+    const email = (localStorage.getItem("teeradar_user_email") || "").toLowerCase();
+    return email === ADMIN_EMAIL.toLowerCase();
   }
 
-  const matches = coursesList
-    .filter(c => c.name.toLowerCase().includes(q))
-    .slice(0, 8);
+  function renderNavState() {
+    const analyticsLink = document.getElementById("navAnalytics");
+    const accountBtn = document.getElementById("navAccountBtn");
+    if (!analyticsLink || !accountBtn) return;
 
-  if (matches.length === 0) {
-    suggestionsBox.style.display = "none";
-    return;
+    analyticsLink.style.display = isAdmin() ? "inline-flex" : "none";
+
+    const email = localStorage.getItem("teeradar_user_email");
+    if (email) {
+      accountBtn.textContent = "My Account";
+    } else {
+      accountBtn.textContent = "My Account";
+    }
   }
 
-  suggestionsBox.innerHTML = matches
-    .map(c => `<div class="sugg" onclick="pickCourse('${c.name.replace(/'/g, "\\'")}')"
-      style="padding:8px;cursor:pointer;border-bottom:1px solid #eee;">${c.name}</div>`)
-    .join("");
-
-  suggestionsBox.style.display = "block";
-});
-
-function pickCourse(name) {
-  homeCourseInput.value = name;
-  suggestionsBox.style.display = "none";
-}
-
-/* ------------------- SUBMIT LOGIN / SIGNUP ------------------- */
-document.getElementById("authSubmitBtn").onclick = async () => {
-  const email = document.getElementById("authEmail").value.trim();
-  const password = document.getElementById("authPassword").value.trim();
-  const homeCourse = document.getElementById("homeCourseInput").value.trim();
-
-  if (!email || !password) {
-    alert("Email and password required.");
-    return;
+  function trackInitialHome() {
+    if (!localStorage.getItem("teeradar_seen")) {
+      trackEvent("new_user", {});
+      localStorage.setItem("teeradar_seen", "1");
+    }
+    trackEvent("home_view", {});
   }
 
-  if (isSignupMode && !homeCourse) {
-    alert("Please select your home course.");
-    return;
-  }
+  function initTCBanner() {
+    const banner = document.getElementById("tc-banner");
+    const btn = document.getElementById("tc-accept-btn");
+    if (!banner || !btn) return;
 
-  try {
-    const endpoint = isSignupMode ? "/api/auth/signup" : "/api/auth/login";
-
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, homeCourse })
+    if (!localStorage.getItem("teeradar_tc_accepted")) {
+      banner.style.display = "flex";
+    }
+    btn.addEventListener("click", () => {
+      localStorage.setItem("teeradar_tc_accepted", "1");
+      banner.style.display = "none";
     });
+  }
 
-    const data = await res.json();
+  // ------- AUTH HELPERS (FRONT-END) -------
 
-    if (!res.ok) {
-      alert(data.error || "Authentication failed");
+  async function verifyExistingToken() {
+    const token = localStorage.getItem("teeradar_auth_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+      if (data.ok && data.user) {
+        if (data.user.email) {
+          localStorage.setItem("teeradar_user_email", data.user.email);
+        }
+        if (data.user.homeCourse) {
+          localStorage.setItem("teeradar_home_course", data.user.homeCourse);
+        }
+      } else {
+        // token not valid anymore
+        localStorage.removeItem("teeradar_auth_token");
+      }
+    } catch (err) {
+      console.warn("verify token failed", err);
+    }
+  }
+
+  // modal controls
+  const accountBackdrop = document.getElementById("account-backdrop");
+  const accEmailInput = document.getElementById("acc-email");
+  const accPasswordInput = document.getElementById("acc-password");
+  const accHomeInput = document.getElementById("acc-home-course");
+  const accErrorEl = document.getElementById("acc-error");
+  const accSuggestionsBox = document.getElementById("acc-home-suggestions");
+
+  document.getElementById("navAccountBtn").addEventListener("click", openAccountModal);
+  document.getElementById("account-close-btn").addEventListener("click", closeAccountModal);
+  accountBackdrop.addEventListener("click", (e) => {
+    if (e.target === accountBackdrop) closeAccountModal();
+  });
+
+  function openAccountModal() {
+    accErrorEl.textContent = "";
+    const email = localStorage.getItem("teeradar_user_email") || "";
+    const home = localStorage.getItem("teeradar_home_course") || "";
+    accEmailInput.value = email;
+    accHomeInput.value = home;
+    accPasswordInput.value = "";
+    accountBackdrop.style.display = "flex";
+    accEmailInput.focus();
+    loadCoursesForSuggestions();
+  }
+
+  function closeAccountModal() {
+    accountBackdrop.style.display = "none";
+    accSuggestionsBox.style.display = "none";
+  }
+
+  // ----- home course autosuggest -----
+  let allCourseNames = [];
+  async function loadCoursesForSuggestions() {
+    if (allCourseNames.length) return;
+    try {
+      const res = await fetch("/api/courses");
+      const courses = await res.json();
+      allCourseNames = Array.isArray(courses) ? courses.map(c => c.name).filter(Boolean) : [];
+    } catch (err) {
+      console.warn("course suggestions failed", err);
+    }
+  }
+
+  accHomeInput.addEventListener("input", () => {
+    const q = accHomeInput.value.trim().toLowerCase();
+    if (!q || !allCourseNames.length) {
+      accSuggestionsBox.style.display = "none";
+      return;
+    }
+    const matches = allCourseNames.filter(name =>
+      name.toLowerCase().includes(q)
+    ).slice(0, 8);
+
+    if (!matches.length) {
+      accSuggestionsBox.style.display = "none";
       return;
     }
 
-    localStorage.setItem("tr_jwt", data.token);
-    localStorage.setItem("tr_email", data.email);
+    accSuggestionsBox.innerHTML = "";
+    matches.forEach(name => {
+      const item = document.createElement("div");
+      item.className = "suggestion-item";
+      item.textContent = name;
+      item.addEventListener("click", () => {
+        accHomeInput.value = name;
+        accSuggestionsBox.style.display = "none";
+      });
+      accSuggestionsBox.appendChild(item);
+    });
+    accSuggestionsBox.style.display = "block";
+  });
 
-    if (data.homeCourse) {
-      localStorage.setItem("teeradar_home_course", data.homeCourse);
+  // hide suggestions when clicking elsewhere
+  document.addEventListener("click", (e) => {
+    if (!accSuggestionsBox.contains(e.target) && e.target !== accHomeInput) {
+      accSuggestionsBox.style.display = "none";
+    }
+  });
+
+  // ----- signup / login / update home -----
+
+  async function apiSignup(email, password, homeCourse) {
+    const res = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, homeCourse }),
+    });
+    return res.json();
+  }
+
+  async function apiLogin(email, password) {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    return res.json();
+  }
+
+  async function apiUpdateHome(token, homeCourse) {
+    const res = await fetch("/api/auth/update-home", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, homeCourse }),
+    });
+    return res.json();
+  }
+
+  function storeAuthResult(data) {
+    if (!data || !data.ok || !data.user || !data.token) return;
+    localStorage.setItem("teeradar_auth_token", data.token);
+    if (data.user.email) localStorage.setItem("teeradar_user_email", data.user.email);
+    if (data.user.homeCourse) localStorage.setItem("teeradar_home_course", data.user.homeCourse);
+  }
+
+  document.getElementById("acc-signup-btn").addEventListener("click", async () => {
+    accErrorEl.textContent = "";
+    const email = accEmailInput.value.trim();
+    const password = accPasswordInput.value;
+    const homeCourse = accHomeInput.value.trim() || null;
+
+    if (!email || !password) {
+      accErrorEl.textContent = "Email and password are required.";
+      return;
+    }
+    if (password.length < 6) {
+      accErrorEl.textContent = "Password must be at least 6 characters.";
+      return;
     }
 
-    closeAuthModal();
-    updateNavForUser();
-    alert(isSignupMode ? "Account created!" : "Logged in!");
+    try {
+      const data = await apiSignup(email, password, homeCourse);
+      if (!data.ok) {
+        accErrorEl.textContent = data.error || "Signup failed.";
+        return;
+      }
+      storeAuthResult(data);
+      renderNavState();
+      trackEvent("signup", { email });
+      closeAccountModal();
+      alert("Account created and saved.");
+    } catch (err) {
+      accErrorEl.textContent = "Signup failed. Please try again.";
+    }
+  });
 
-  } catch (err) {
-    console.error(err);
-    alert("Server error");
-  }
-};
+  document.getElementById("acc-login-btn").addEventListener("click", async () => {
+    accErrorEl.textContent = "";
+    const email = accEmailInput.value.trim();
+    const password = accPasswordInput.value;
+
+    if (!email || !password) {
+      accErrorEl.textContent = "Email and password are required.";
+      return;
+    }
+
+    try {
+      const data = await apiLogin(email, password);
+      if (!data.ok) {
+        accErrorEl.textContent = data.error || "Login failed.";
+        return;
+      }
+      storeAuthResult(data);
+      // prefill home course if exists
+      if (data.user.homeCourse) {
+        accHomeInput.value = data.user.homeCourse;
+      }
+      renderNavState();
+      trackEvent("login", { email });
+      closeAccountModal();
+      alert("Logged in successfully.");
+    } catch (err) {
+      accErrorEl.textContent = "Login failed. Please try again.";
+    }
+  });
+
+  document.getElementById("acc-update-home-btn").addEventListener("click", async () => {
+    accErrorEl.textContent = "";
+    const token = localStorage.getItem("teeradar_auth_token");
+    const homeCourse = accHomeInput.value.trim();
+    if (!token) {
+      accErrorEl.textContent = "Log in first, then update home course.";
+      return;
+    }
+    if (!homeCourse) {
+      accErrorEl.textContent = "Enter a home course first.";
+      return;
+    }
+    try {
+      const data = await apiUpdateHome(token, homeCourse);
+      if (!data.ok) {
+        accErrorEl.textContent = data.error || "Update failed.";
+        return;
+      }
+      localStorage.setItem("teeradar_home_course", homeCourse);
+      trackEvent("update_home_course", { homeCourse });
+      closeAccountModal();
+      alert("Home course updated.");
+    } catch (err) {
+      accErrorEl.textContent = "Update failed. Please try again.";
+    }
+  });
+
+  // ------- BOOTSTRAP -------
+  window.addEventListener("load", async () => {
+    await verifyExistingToken();
+    renderNavState();
+    trackInitialHome();
+    initTCBanner();
+  });
 </script>
-
 </body>
 </html>
