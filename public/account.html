@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>My Account — TeeRadar WA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f4f7fb;
+      color: #0f172a;
+    }
+
+    header {
+      background: #00796b;
+      color: #fff;
+      padding: 12px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header button {
+      background: #fff;
+      color: #005e55;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    main {
+      max-width: 700px;
+      margin: 28px auto;
+      background: #fff;
+      padding: 20px 22px;
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .section {
+      margin-bottom: 28px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    button.save-btn {
+      padding: 10px 18px;
+      border-radius: 999px;
+      border: none;
+      background: #00796b;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+
+    .note {
+      font-size: 13px;
+      color: #64748b;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <div style="font-weight:700;">My Account — TeeRadar WA</div>
+  <button onclick="window.location.href='/index.html'">Home</button>
+</header>
+
+<main>
+
+  <h2>Account Settings</h2>
+
+  <!-- ACCOUNT EMAIL -->
+  <div class="section">
+    <h3>Email</h3>
+    <p id="emailDisplay" style="font-size:15px; font-weight:600; color:#334155;"></p>
+    <button class="save-btn" onclick="logout()">Log out</button>
+  </div>
+
+  <!-- HOME COURSE -->
+  <div class="section">
+    <h3>Home Course</h3>
+    <label for="homeCourseInput">Your home course</label>
+    <input id="homeCourseInput" type="text" placeholder="e.g. Collier Park Golf Course" />
+    <button class="save-btn" onclick="saveHomeCourse()">Save home course</button>
+    <p class="note">This is used to auto-zoom the booking map to your local area.</p>
+  </div>
+
+  <!-- PASSWORD PLACEHOLDER -->
+  <div class="section">
+    <h3>Password</h3>
+    <p class="note">Password management will be available when secure login is added.</p>
+  </div>
+
+  <!-- SUBSCRIPTION PLACEHOLDER -->
+  <div class="section">
+    <h3>Subscription</h3>
+    <p class="note">Subscription & premium features are coming soon.</p>
+  </div>
+
+</main>
+
+<script>
+  function loadAccountData() {
+    const email = localStorage.getItem("teeradar_user_email");
+    const homeCourse = localStorage.getItem("teeradar_home_course");
+
+    const emailDisplay = document.getElementById("emailDisplay");
+    const homeCourseInput = document.getElementById("homeCourseInput");
+
+    if (!email) {
+      emailDisplay.textContent = "Not logged in.";
+      return;
+    }
+
+    emailDisplay.textContent = email;
+    if (homeCourse) homeCourseInput.value = homeCourse;
+  }
+
+  function saveHomeCourse() {
+    const course = document.getElementById("homeCourseInput").value.trim();
+    if (!course) {
+      alert("Please enter a course name.");
+      return;
+    }
+    localStorage.setItem("teeradar_home_course", course);
+    alert("Home course saved!");
+  }
+
+  function logout() {
+    localStorage.removeItem("teeradar_user_email");
+    localStorage.removeItem("teeradar_home_course");
+    alert("You have been logged out.");
+    window.location.href = "/index.html";
+  }
+
+  loadAccountData();
+</script>
+
+</body>
+</html>
