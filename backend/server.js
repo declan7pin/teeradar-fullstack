@@ -1,250 +1,206 @@
-// backend/server.js
-import express from "express";
-import cors from "cors";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import { scrapeCourse } from "./scrapers/scrapeCourse.js";
+// ========================
+//  TeeRadar WA — SERVER
+// ========================
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const express = require("express");
+const cors = require("cors");
+const path = require("path");
+const fetch = require("node-fetch");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+
+// Load auth router
+const { authRouter, verifyToken } = require("./auth");
+
+// In-memory stores (replace with DB later)
+let ANALYTICS = [];
+let USERS = {};        // email → { hash, homeCourse }
+let COURSES = [];      // loaded once at start
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// ---------- MIDDLEWARE ----------
 app.use(cors());
 app.use(express.json());
+app.use(express.static("public")); // serves index.html, book.html, etc.
 
-// Serve static frontend from /public at project root
-app.use(express.static(path.join(__dirname, "..", "public")));
+// ========================
+//  AUTH ROUTES
+// ========================
+app.use("/api/auth", authRouter);
 
-// ---------- LOAD COURSE DATA ----------
-const PERTH_LAT = -31.9523;
-const PERTH_LNG = 115.8613;
+// ========================
+//  LOAD COURSES (from local JSON file)
+// ========================
+const fs = require("fs");
+const coursesPath = path.join(__dirname, "courses.json");
 
-const coursesPath = path.join(__dirname, "data", "courses.json");
-const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
-
-// Ensure every course has lat/lng, fallback to Perth CBD if missing
-const courses = rawCourses.map((c) => ({
-  ...c,
-  lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
-  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG,
-}));
-
-const feeGroupsPath = path.join(__dirname, "data", "fee_groups.json");
-let feeGroups = {};
-if (fs.existsSync(feeGroupsPath)) {
-  feeGroups = JSON.parse(fs.readFileSync(feeGroupsPath, "utf8"));
-}
-
-console.log(`Loaded ${courses.length} courses.`);
-console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
-
-// ---------- SIMPLE USER STORE (JSON FILE) ----------
-
-const usersPath = path.join(__dirname, "data", "users.json");
-let users = {};
-
-// Load existing users (if any)
 try {
-  if (fs.existsSync(usersPath)) {
-    const raw = fs.readFileSync(usersPath, "utf8");
-    users = JSON.parse(raw || "{}");
-  }
+  const raw = fs.readFileSync(coursesPath, "utf8");
+  COURSES = JSON.parse(raw);
+  console.log("Loaded courses.json:", COURSES.length, "courses");
 } catch (err) {
-  console.error("Failed to load users.json, starting empty:", err.message);
-  users = {};
+  console.error("Failed loading courses.json", err);
+  COURSES = [];
 }
 
-function saveUsers() {
-  try {
-    fs.writeFileSync(usersPath, JSON.stringify(users, null, 2), "utf8");
-  } catch (err) {
-    console.error("Failed to save users.json:", err.message);
-  }
-}
-
-// ---------- ROUTES ----------
-
-// Health check
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", courses: courses.length });
-});
-
-// Return full course list (used by frontend map + UI)
+// ========================
+//  COURSES ENDPOINT
+// ========================
 app.get("/api/courses", (req, res) => {
-  res.json(courses);
+  res.json(COURSES);
 });
 
-// ---- USER PROFILE API ----
-
-// GET /api/user/profile?email=...
-app.get("/api/user/profile", (req, res) => {
-  const emailRaw = req.query.email || "";
-  const email = String(emailRaw).toLowerCase().trim();
-
-  if (!email) {
-    return res.status(400).json({ error: "email is required" });
-  }
-
-  const user = users[email];
-  if (!user) {
-    return res.json({ exists: false });
-  }
-
-  res.json({
-    exists: true,
-    email: user.email,
-    homeCourse: user.homeCourse || null,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-  });
-});
-
-// POST /api/user/profile
-// body: { email, homeCourse }
-app.post("/api/user/profile", (req, res) => {
-  try {
-    const { email, homeCourse } = req.body || {};
-    const normalized = String(email || "").toLowerCase().trim();
-
-    if (!normalized) {
-      return res.status(400).json({ error: "email is required" });
-    }
-
-    const now = new Date().toISOString();
-    const existing = users[normalized] || {
-      email: normalized,
-      createdAt: now,
-    };
-
-    const updated = {
-      ...existing,
-      homeCourse:
-        typeof homeCourse === "string" && homeCourse.trim()
-          ? homeCourse.trim()
-          : existing.homeCourse || null,
-      updatedAt: now,
-    };
-
-    users[normalized] = updated;
-    saveUsers();
-
-    console.log("[users] upsert", updated);
-
-    res.json({ ok: true, user: updated });
-  } catch (err) {
-    console.error("user profile error:", err);
-    res.status(500).json({ error: "user profile error", detail: err.message });
-  }
-});
-
-// Tee time search with extra debug logging
+// ========================
+//  SEARCH ENDPOINT
+// ========================
 app.post("/api/search", async (req, res) => {
-  try {
-    const {
-      date,
-      earliest = "06:00",
-      latest = "17:00",
-      holes = "",
-      partySize = 1,
-    } = req.body || {};
+  const { date, earliest, latest, holes, partySize } = req.body;
 
-    if (!date) {
-      return res.status(400).json({ error: "date is required" });
+  console.log("\nIncoming /api/search", req.body);
+
+  const slots = [];
+
+  for (const c of COURSES) {
+    if (!c.provider) continue;
+
+    // PHONE BOOKING
+    if (c.provider === "Phone") {
+      slots.push({
+        course: c.name,
+        provider: "Phone",
+        date,
+        time: null,
+        url: null,
+        phone: c.phone || null,
+      });
+      continue;
     }
 
-    // make holes numeric (9 or 18) if provided
-    const holesValue =
-      holes === "" || holes === null || typeof holes === "undefined"
-        ? ""
-        : Number(holes);
-
-    const criteria = {
-      date,
-      earliest,
-      latest,
-      holes: holesValue,
-      partySize: Number(partySize) || 1,
-    };
-
-    console.log("Incoming /api/search", criteria);
-
-    const jobs = courses.map(async (c) => {
+    // QUICK18
+    if (c.provider === "Quick18" && c.quick18Url) {
       try {
-        const result = await scrapeCourse(c, criteria, feeGroups);
-        const count = Array.isArray(result) ? result.length : 0;
+        const yyyymmdd = date.replace(/-/g, "");
+        const r = await fetch(`${c.quick18Url}?teedate=${yyyymmdd}`);
+        const html = await r.text();
 
-        if (count > 0) {
-          console.log(`✅ ${c.name} → ${count} slots`);
-        } else {
-          console.log(`⚪ ${c.name} → 0 slots`);
+        const count = (html.match(/class="timecell"/g) || []).length;
+        for (let i = 0; i < count; i++) {
+          slots.push({
+            course: c.name,
+            provider: "Quick18",
+            date,
+            time: "Unknown",
+            url: c.url,
+          });
         }
-
-        return result || [];
-      } catch (err) {
-        console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
-        return [];
+      } catch (e) {
+        console.warn("Quick18 error:", c.name);
       }
-    });
+      continue;
+    }
 
-    const allResults = await Promise.all(jobs);
-    const slots = allResults.flat();
+    // MiClub UNIVERSITY (the safe one)
+    if (c.provider === "MiClub" && c.url) {
+      try {
+        const u = new URL(c.url);
+        u.searchParams.set("selectedDate", date);
 
-    console.log(`🔎 /api/search finished → total slots: ${slots.length}`);
+        const r = await fetch(u.toString());
+        const html = await r.text();
 
-    res.json({ slots });
-  } catch (err) {
-    console.error("search error", err);
-    res.status(500).json({ error: "internal error", detail: err.message });
+        // Very soft availability check
+        const count =
+          (html.match(/class="timeslot"/g) ||
+            html.match(/tee-time/g) ||
+            []).length;
+
+        for (let i = 0; i < count; i++) {
+          slots.push({
+            course: c.name,
+            provider: "MiClub",
+            date,
+            time: "Unknown",
+            url: c.url,
+          });
+        }
+      } catch (e) {
+        console.warn("MiClub error:", c.name);
+      }
+      continue;
+    }
   }
+
+  console.log(
+    `Search complete — ${slots.length} slots across courses`
+  );
+
+  res.json({ ok: true, slots });
 });
 
-// Simple analytics logger (still console-only)
+// ========================
+//  ANALYTICS ENDPOINTS
+// ========================
+
+// Record event
 app.post("/api/analytics/event", (req, res) => {
-  try {
-    const { type, payload, at, userId, courseName } = req.body || {};
-    console.log("Incoming analytics event:", {
-      type,
-      at,
-      userId,
-      courseName,
-      payload,
-    });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("analytics error", err);
-    res.status(500).json({ error: "analytics error", detail: err.message });
-  }
+  const event = {
+    type: req.body.type,
+    userId: req.body.userId || "unknown",
+    courseName: req.body.courseName || null,
+    payload: req.body.payload || {},
+    at: new Date().toISOString(),
+  };
+
+  ANALYTICS.push(event);
+
+  console.log("\n[analytics] recorded", event);
+
+  res.json({ ok: true });
 });
 
-// DEBUG: return list of courses with coords + basic flags
-app.get("/api/debug/courses", (req, res) => {
-  const debugList = courses.map((c) => ({
-    name: c.name,
-    provider: c.provider,
-    holes: c.holes,
-    lat: c.lat,
-    lng: c.lng,
-    hasUrl: !!c.url,
-    hasPhone: !!c.phone,
-  }));
+// Summary
+app.get("/api/analytics/summary", (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const homeViews = ANALYTICS.filter((e) => e.type === "home_view").length;
+  const bookingClicks = ANALYTICS.filter(
+    (e) => e.type === "booking_click"
+  ).length;
+  const searches = ANALYTICS.filter((e) => e.type === "search").length;
+
+  const usersToday = new Set(
+    ANALYTICS.filter((e) => e.at.startsWith(today)).map((e) => e.userId)
+  ).size;
+
+  const usersAllTime = new Set(ANALYTICS.map((e) => e.userId)).size;
+
+  console.log("\n[analytics] summary", {
+    homeViews,
+    bookingClicks,
+    searches,
+    usersToday,
+    usersAllTime,
+  });
 
   res.json({
-    count: debugList.length,
-    courses: debugList,
+    homeViews,
+    bookingClicks,
+    searches,
+    usersToday,
+    usersAllTime,
   });
 });
 
-// ---------- FRONTEND FALLBACK ----------
-// For any non-API route, serve the main index.html (SPA-ish)
+// ========================
+//  FALLBACK → index.html
+// ========================
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+  res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-// ---------- START SERVER ----------
-app.listen(PORT, () => {
-  console.log(`✅ TeeRadar backend running on port ${PORT}`);
-});
+// ========================
+//  START SERVER
+// ========================
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () =>
+  console.log(`TeeRadar backend running on port ${PORT}`)
+);
