@@ -6,10 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// 🔐 AUTH ROUTER (new)
-import { authRouter } from "./auth.js";
-
-// Analytics helpers (in-memory / SQLite behind the scenes)
+// Analytics helpers (SQLite behind the scenes)
 import {
   recordEvent,
   getAnalyticsSummary,
@@ -25,9 +22,6 @@ const PORT = process.env.PORT || 3000;
 // ---------- MIDDLEWARE ----------
 app.use(cors());
 app.use(express.json());
-
-// 🔐 Mount auth API (new)
-app.use("/api/auth", authRouter);
 
 // Serve static frontend from /public at project root
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -55,6 +49,146 @@ if (fs.existsSync(feeGroupsPath)) {
 console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
+// ======================================
+//        SIMPLE SEARCH CACHE (8 DAYS)
+// ======================================
+
+// Cache keyed by date: "YYYY-MM-DD" → { slots, fetchedAt }
+const searchCache = new Map();
+
+// 10 minutes TTL (in ms)
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
+// How many days ahead to pre-scrape
+const PRE_SCRAPE_DAYS = 8;
+
+// Helper: format Date → "YYYY-MM-DD"
+function toISODate(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Returns an array of date strings for today + next 7 days
+function getNext8Dates() {
+  const out = [];
+  const now = new Date();
+  for (let i = 0; i < PRE_SCRAPE_DAYS; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + i);
+    out.push(toISODate(d));
+  }
+  return out;
+}
+
+// Core search function used by both /api/search and pre-scraper
+async function doSearch(criteria) {
+  const {
+    date,
+    earliest = "06:00",
+    latest = "17:00",
+    holes = "",
+    partySize = 1,
+  } = criteria || {};
+
+  if (!date) {
+    throw new Error("date is required");
+  }
+
+  // Normalise holes → number or "" (like original)
+  const holesValue =
+    holes === "" || holes === null || typeof holes === "undefined"
+      ? ""
+      : Number(holes);
+
+  const normalizedCriteria = {
+    date,
+    earliest,
+    latest,
+    holes: holesValue,
+    partySize: Number(partySize) || 1,
+  };
+
+  console.log("doSearch() with criteria:", normalizedCriteria);
+
+  const jobs = courses.map(async (c) => {
+    try {
+      const result = await scrapeCourse(c, normalizedCriteria, feeGroups);
+      const count = Array.isArray(result) ? result.length : 0;
+
+      if (count > 0) {
+        console.log(`✅ ${c.name} → ${count} slots`);
+      } else {
+        console.log(`⚪ ${c.name} → 0 slots`);
+      }
+
+      return result || [];
+    } catch (err) {
+      console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
+      return [];
+    }
+  });
+
+  const allResults = await Promise.all(jobs);
+  const slots = allResults.flat();
+
+  console.log(`🔎 doSearch() finished → total slots: ${slots.length}`);
+  return slots;
+}
+
+// Flag so we don’t overlap pre-scrape runs
+let isPreScraping = false;
+
+// Background job: scrape ALL courses for next 8 days every 10 minutes
+async function runPreScrape() {
+  if (isPreScraping) {
+    console.log("[pre-scrape] already running, skipping this cycle");
+    return;
+  }
+  isPreScraping = true;
+
+  try {
+    const dates = getNext8Dates();
+    console.log("[pre-scrape] starting for dates:", dates.join(", "));
+
+    for (const date of dates) {
+      try {
+        const slots = await doSearch({
+          date,
+          earliest: "06:00",
+          latest: "17:00",
+          holes: "",
+          partySize: 4, // broad search
+        });
+
+        searchCache.set(date, {
+          slots,
+          fetchedAt: Date.now(),
+        });
+
+        console.log(
+          `[pre-scrape] stored ${slots.length} slots for ${date} in cache`
+        );
+      } catch (err) {
+        console.error(`[pre-scrape] error for ${date}:`, err.message);
+      }
+    }
+
+    console.log("[pre-scrape] finished cycle");
+  } catch (err) {
+    console.error("[pre-scrape] fatal error:", err);
+  } finally {
+    isPreScraping = false;
+  }
+}
+
+// Kick off immediately on startup
+runPreScrape();
+
+// Then repeat every 10 minutes
+setInterval(runPreScrape, CACHE_TTL_MS);
+
 // ---------- ROUTES ----------
 
 // Health check
@@ -67,7 +201,7 @@ app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Tee time search with extra debug logging
+// Tee time search with cache + live fallback
 app.post("/api/search", async (req, res) => {
   try {
     const {
@@ -82,44 +216,25 @@ app.post("/api/search", async (req, res) => {
       return res.status(400).json({ error: "date is required" });
     }
 
-    // make holes a NUMBER (9 or 18), not a string
-    const holesValue =
-      holes === "" || holes === null || typeof holes === "undefined"
-        ? ""
-        : Number(holes);
+    const now = Date.now();
+    const cached = searchCache.get(date);
 
-    const criteria = {
+    if (cached && now - cached.fetchedAt <= CACHE_TTL_MS) {
+      console.log(`[cache] Serving /api/search for ${date} from cache`);
+      return res.json({ slots: cached.slots });
+    }
+
+    console.log(`[cache] No fresh cache for ${date}, running live search`);
+    const slots = await doSearch({
       date,
       earliest,
       latest,
-      holes: holesValue,
-      partySize: Number(partySize) || 1,
-    };
-
-    console.log("Incoming /api/search", criteria);
-
-    const jobs = courses.map(async (c) => {
-      try {
-        const result = await scrapeCourse(c, criteria, feeGroups);
-        const count = Array.isArray(result) ? result.length : 0;
-
-        if (count > 0) {
-          console.log(`✅ ${c.name} → ${count} slots`);
-        } else {
-          console.log(`⚪ ${c.name} → 0 slots`);
-        }
-
-        return result || [];
-      } catch (err) {
-        console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
-        return [];
-      }
+      holes,
+      partySize,
     });
 
-    const allResults = await Promise.all(jobs);
-    const slots = allResults.flat();
-
-    console.log(`🔎 /api/search finished → total slots: ${slots.length}`);
+    // Store in cache (even if user searched an odd time window)
+    searchCache.set(date, { slots, fetchedAt: Date.now() });
 
     res.json({ slots });
   } catch (err) {
@@ -216,7 +331,7 @@ app.get("/api/analytics", async (req, res) => {
   }
 });
 
-// 2) Explicit summary endpoint used earlier
+// 2) Explicit summary endpoint
 app.get("/api/analytics/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -269,7 +384,6 @@ app.get("/api/debug/courses", (req, res) => {
 });
 
 // ---------- FRONTEND FALLBACK ----------
-// For any non-API route, serve the main index.html (SPA routing)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
