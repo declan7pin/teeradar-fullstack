@@ -1,124 +1,113 @@
 // backend/auth.js
-// Simple auth router backed by PostgreSQL "users" table.
+// Simple JSON-file auth so it works cleanly with CommonJS + Express
 
-import express from "express";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import pg from "pg";
+const express = require("express");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const fs = require("fs");
+const path = require("path");
 
-const { Pool } = pg;
-export const authRouter = express.Router();
+const authRouter = express.Router();
 
-// ====== DB POOL ======
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL
-    ? { rejectUnauthorized: false }
-    : false,
-});
+// ===== SIMPLE LOCAL JSON "DB" =====
+// File: backend/data/users.json (same folder as courses.json etc.)
+const USERS_PATH = path.join(__dirname, "data", "users.json");
 
-// Ensure "users" table exists
-async function ensureUsersTable() {
-  const sql = `
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      home_course TEXT
-    );
-  `;
-  await pool.query(sql);
+function loadUsers() {
+  try {
+    if (!fs.existsSync(USERS_PATH)) return [];
+    const raw = fs.readFileSync(USERS_PATH, "utf8");
+    if (!raw.trim()) return [];
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("Failed loading users:", err);
+    return [];
+  }
 }
-ensureUsersTable().catch((err) =>
-  console.error("Error ensuring users table:", err)
-);
+
+function saveUsers(users) {
+  try {
+    fs.writeFileSync(USERS_PATH, JSON.stringify(users, null, 2), "utf8");
+  } catch (err) {
+    console.error("Failed saving users:", err);
+  }
+}
 
 // ===== JWT CONFIG =====
-const JWT_SECRET = process.env.JWT_SECRET || "SUPER_SECRET_KEY_12345";
+const JWT_SECRET = process.env.JWT_SECRET || "TEERADAR_SUPER_SECRET_KEY";
 const TOKEN_LIFETIME = "30d";
 
-// Helper to issue token
-function issueToken(userRow) {
-  return jwt.sign({ id: userRow.id }, JWT_SECRET, {
-    expiresIn: TOKEN_LIFETIME,
-  });
+// Helper to issue tokens
+function issueToken(user) {
+  return jwt.sign(
+    { id: user.id, email: user.email },
+    JWT_SECRET,
+    { expiresIn: TOKEN_LIFETIME }
+  );
 }
 
-// ====== SIGNUP ======
+// ========== ROUTES ==========
+
+// POST /api/auth/signup
 authRouter.post("/signup", async (req, res) => {
   try {
     const { email, password, homeCourse } = req.body || {};
+
     if (!email || !password) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "Email & password required" });
+      return res.status(400).json({ error: "Email and password are required." });
     }
 
-    const emailNorm = String(email).trim().toLowerCase();
-
-    const existing = await pool.query(
-      "SELECT id FROM users WHERE email = $1",
-      [emailNorm]
-    );
-    if (existing.rows.length > 0) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "Account already exists" });
+    const users = loadUsers();
+    const existing = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    if (existing) {
+      return res.status(400).json({ error: "An account with that email already exists." });
     }
 
-    const hash = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 10);
+    const newUser = {
+      id: Date.now().toString(),
+      email,
+      password: hashed,
+      homeCourse: homeCourse || null
+    };
 
-    const insert = await pool.query(
-      `
-        INSERT INTO users (email, password_hash, home_course)
-        VALUES ($1, $2, $3)
-        RETURNING id, email, home_course
-      `,
-      [emailNorm, hash, homeCourse || null]
-    );
+    users.push(newUser);
+    saveUsers(users);
 
-    const user = insert.rows[0];
-    const token = issueToken(user);
+    const token = issueToken(newUser);
 
     res.json({
       ok: true,
       token,
       user: {
-        email: user.email,
-        homeCourse: user.home_course,
-      },
+        email: newUser.email,
+        homeCourse: newUser.homeCourse
+      }
     });
   } catch (err) {
     console.error("Signup error:", err);
-    res.status(500).json({ ok: false, error: "Signup failed" });
+    res.status(500).json({ error: "Signup failed." });
   }
 });
 
-// ====== LOGIN ======
+// POST /api/auth/login
 authRouter.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "Email & password required" });
+      return res.status(400).json({ error: "Email and password are required." });
     }
 
-    const emailNorm = String(email).trim().toLowerCase();
+    const users = loadUsers();
+    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
 
-    const result = await pool.query(
-      "SELECT id, email, password_hash, home_course FROM users WHERE email = $1",
-      [emailNorm]
-    );
-    if (result.rows.length === 0) {
-      return res.status(400).json({ ok: false, error: "Invalid login" });
+    if (!user) {
+      return res.status(400).json({ error: "Invalid login credentials." });
     }
 
-    const user = result.rows[0];
-
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) {
-      return res.status(400).json({ ok: false, error: "Invalid login" });
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) {
+      return res.status(400).json({ error: "Invalid login credentials." });
     }
 
     const token = issueToken(user);
@@ -128,72 +117,61 @@ authRouter.post("/login", async (req, res) => {
       token,
       user: {
         email: user.email,
-        homeCourse: user.home_course,
-      },
+        homeCourse: user.homeCourse
+      }
     });
   } catch (err) {
     console.error("Login error:", err);
-    res.status(500).json({ ok: false, error: "Login failed" });
+    res.status(500).json({ error: "Login failed." });
   }
 });
 
-// ====== VERIFY TOKEN ======
-authRouter.post("/verify", async (req, res) => {
+// POST /api/auth/verify  (used on page load to restore session)
+authRouter.post("/verify", (req, res) => {
   try {
     const { token } = req.body || {};
     if (!token) return res.json({ ok: false });
 
-    const data = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET);
+    const users = loadUsers();
+    const user = users.find((u) => u.id === payload.id);
 
-    const result = await pool.query(
-      "SELECT id, email, home_course FROM users WHERE id = $1",
-      [data.id]
-    );
-    if (result.rows.length === 0) {
-      return res.json({ ok: false });
-    }
+    if (!user) return res.json({ ok: false });
 
-    const user = result.rows[0];
     res.json({
       ok: true,
       user: {
         email: user.email,
-        homeCourse: user.home_course,
-      },
+        homeCourse: user.homeCourse
+      }
     });
   } catch (err) {
-    console.error("Verify token error:", err);
-    res.json({ ok: false });
+    console.error("Verify token error:", err.message);
+    return res.json({ ok: false });
   }
 });
 
-// ====== UPDATE HOME COURSE ======
-authRouter.post("/update-home", async (req, res) => {
+// POST /api/auth/update-home  (optional: update home course)
+authRouter.post("/update-home", (req, res) => {
   try {
     const { token, homeCourse } = req.body || {};
-    if (!token) {
-      return res.status(401).json({ ok: false, error: "No token" });
-    }
+    if (!token) return res.status(401).json({ error: "Missing token." });
 
-    const data = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET);
 
-    const result = await pool.query(
-      `
-        UPDATE users
-        SET home_course = $1
-        WHERE id = $2
-        RETURNING id
-      `,
-      [homeCourse || null, data.id]
-    );
+    const users = loadUsers();
+    const idx = users.findIndex((u) => u.id === payload.id);
+    if (idx === -1) return res.status(404).json({ error: "User not found." });
 
-    if (result.rows.length === 0) {
-      return res.status(400).json({ ok: false, error: "User not found" });
-    }
+    users[idx].homeCourse = homeCourse || null;
+    saveUsers(users);
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("Update home course error:", err);
-    res.status(500).json({ ok: false, error: "Failed" });
+    console.error("Update home course error:", err.message);
+    res.status(500).json({ error: "Failed to update home course." });
   }
 });
+
+// Export for server.js
+module.exports = { authRouter };
