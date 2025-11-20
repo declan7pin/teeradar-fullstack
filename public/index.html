@@ -128,7 +128,6 @@
       font-size:12px;
       color:var(--muted);
       margin-bottom:10px;
-      flex-wrap:wrap;
     }
     .hero-kicker-pill{
       display:inline-flex;
@@ -170,6 +169,7 @@
       cursor:pointer;
       box-shadow:0 14px 28px rgba(15,118,110,0.28);
     }
+    .btn-primary:active{background:var(--teal-dark);}
     .btn-outline{
       background:#ecfeff;
       color:#0369a1;
@@ -339,93 +339,6 @@
         text-align:center;
       }
     }
-
-    /* MY ACCOUNT MODAL */
-    .account-modal-backdrop{
-      position:fixed;
-      inset:0;
-      background:rgba(15,23,42,0.45);
-      display:none;
-      align-items:center;
-      justify-content:center;
-      z-index:40;
-      padding:16px;
-    }
-    .account-modal{
-      background:#f9fafb;
-      border-radius:16px;
-      padding:18px 18px 14px;
-      max-width:380px;
-      width:100%;
-      box-shadow:0 18px 40px rgba(15,23,42,0.35);
-      border:1px solid #e2e8f0;
-      font-size:13px;
-    }
-    .account-modal h2{
-      margin:0 0 4px;
-      font-size:17px;
-    }
-    .account-status-text{
-      margin:0 0 10px;
-      font-size:12px;
-      color:var(--muted);
-    }
-    .account-field{
-      margin-bottom:10px;
-    }
-    .account-field label{
-      display:block;
-      font-size:12px;
-      color:#475569;
-      margin-bottom:3px;
-    }
-    .account-input{
-      width:100%;
-      padding:7px 9px;
-      border-radius:8px;
-      border:1px solid #cbd5e1;
-      font-size:13px;
-    }
-    .account-hint{
-      font-size:11px;
-      color:#64748b;
-      margin-bottom:8px;
-    }
-    .account-actions{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:8px;
-      margin-top:8px;
-    }
-    .btn-small-primary{
-      background:var(--teal);
-      color:#fff;
-      border:none;
-      border-radius:999px;
-      padding:7px 14px;
-      font-size:12px;
-      font-weight:600;
-      cursor:pointer;
-    }
-    .btn-small-ghost{
-      background:transparent;
-      color:#0f172a;
-      border:none;
-      padding:6px 10px;
-      border-radius:999px;
-      font-size:12px;
-      cursor:pointer;
-    }
-    .btn-small-danger{
-      background:#fee2e2;
-      color:#b91c1c;
-      border:none;
-      border-radius:999px;
-      padding:6px 10px;
-      font-size:11px;
-      cursor:pointer;
-    }
   </style>
 </head>
 <body>
@@ -442,7 +355,9 @@
       <a href="/about.html">About</a>
       <!-- analytics tab shown only for admin -->
       <a href="/analytics.html" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
-      <button id="navAccountBtn" class="nav-login" type="button">My Account</button>
+      <!-- My account & login/logout -->
+      <button id="navAccountBtn" class="nav-login" type="button">My account</button>
+      <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
     </nav>
   </div>
 </header>
@@ -565,82 +480,29 @@
   <button type="button" id="tc-accept-btn">Got it</button>
 </div>
 
-<!-- My Account modal -->
-<div id="accountModal" class="account-modal-backdrop" aria-hidden="true">
-  <div class="account-modal" role="dialog" aria-modal="true" aria-labelledby="accountModalTitle">
-    <h2 id="accountModalTitle">My account</h2>
-    <p id="accountStatusText" class="account-status-text">
-      Manage your email and home course on this device.
-    </p>
-
-    <div class="account-field">
-      <label for="accountEmailInput">Email address</label>
-      <input id="accountEmailInput" type="email" class="account-input" placeholder="you@example.com" />
-    </div>
-
-    <div class="account-field">
-      <label for="accountHomeCourseInput">Home course</label>
-      <input
-        id="accountHomeCourseInput"
-        class="account-input"
-        placeholder="Start typing a course name…"
-        list="homeCourseSuggestions"
-      />
-      <datalist id="homeCourseSuggestions"></datalist>
-    </div>
-
-    <p class="account-hint">
-      This is saved locally on this device. Analytics access unlocks when your email matches the admin address.
-    </p>
-
-    <div class="account-actions">
-      <button type="button" class="btn-small-danger" id="accountLogoutBtn">
-        Log out on this device
-      </button>
-      <div>
-        <button type="button" class="btn-small-ghost" id="accountCloseBtn">Close</button>
-        <button type="button" class="btn-small-primary" id="accountSaveBtn">
-          Save changes
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 
-  // ---------- ANALYTICS ----------
+  // ---- Analytics (unchanged behaviour) ----
   function trackEvent(type, payload) {
     try {
+      const storedEmail = localStorage.getItem("teeradar_user_email") || null;
+      const body = {
+        type,
+        payload: payload || {},
+        at: new Date().toISOString(),
+      };
+      if (storedEmail) {
+        body.userEmail = storedEmail;
+      }
+
       fetch("/api/analytics/event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type,
-          payload: payload || {},
-          at: new Date().toISOString()
-        })
+        body: JSON.stringify(body)
       }).catch(() => {});
     } catch (e) {
       console.warn("analytics event failed", e);
-    }
-  }
-
-  function isAdmin() {
-    return (localStorage.getItem("teeradar_user_email") || "").toLowerCase() === ADMIN_EMAIL;
-  }
-
-  function renderNavState() {
-    const analyticsLink = document.getElementById("navAnalytics");
-    const accountBtn = document.getElementById("navAccountBtn");
-    const email = localStorage.getItem("teeradar_user_email");
-
-    if (analyticsLink) {
-      analyticsLink.style.display = isAdmin() ? "inline-flex" : "none";
-    }
-    if (accountBtn) {
-      accountBtn.textContent = email ? "My Account" : "My Account";
     }
   }
 
@@ -649,13 +511,209 @@
       trackEvent("new_user", {});
       localStorage.setItem("teeradar_seen", "1");
     }
-    trackEvent("home_view", {
-      userEmail: localStorage.getItem("teeradar_user_email") || null,
-      homeCourse: localStorage.getItem("teeradar_home_course") || null
-    });
+    trackEvent("home_view", {});
   }
 
-  // ---------- T&C BANNER ----------
+  // ---- SIMPLE AUTH FRONT-END (uses backend JWT) ----
+  function getAuthToken() {
+    return localStorage.getItem("teeradar_auth_token") || null;
+  }
+
+  function setAuth(token, email, homeCourse) {
+    if (token) {
+      localStorage.setItem("teeradar_auth_token", token);
+    }
+    if (email) {
+      localStorage.setItem("teeradar_user_email", email.toLowerCase());
+    }
+    if (homeCourse !== undefined && homeCourse !== null) {
+      localStorage.setItem("teeradar_home_course", homeCourse);
+    }
+  }
+
+  function clearAuth() {
+    localStorage.removeItem("teeradar_auth_token");
+    localStorage.removeItem("teeradar_user_email");
+    // keep home_course locally if you like; for now we clear it
+    localStorage.removeItem("teeradar_home_course");
+  }
+
+  function isAdmin() {
+    return (localStorage.getItem("teeradar_user_email") || "").toLowerCase() === ADMIN_EMAIL;
+  }
+
+  async function apiAuth(path, body) {
+    const res = await fetch("/api/auth/" + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    });
+    return res.json();
+  }
+
+  async function verifyExistingToken() {
+    const token = getAuthToken();
+    if (!token) return;
+
+    try {
+      const result = await apiAuth("verify", { token });
+      if (result && result.ok && result.user) {
+        setAuth(token, result.user.email, result.user.homeCourse);
+      } else {
+        clearAuth();
+      }
+    } catch (e) {
+      console.warn("verify failed", e);
+      clearAuth();
+    }
+  }
+
+  // ---- NAV STATE / LOGIN + LOGOUT BUTTON ----
+  function renderNavState() {
+    const analyticsLink = document.getElementById("navAnalytics");
+    const loginBtn = document.getElementById("navLoginBtn");
+    const accountBtn = document.getElementById("navAccountBtn");
+    const hasToken = !!getAuthToken();
+    const email = localStorage.getItem("teeradar_user_email");
+
+    if (analyticsLink) {
+      analyticsLink.style.display = isAdmin() ? "inline-flex" : "none";
+    }
+
+    if (loginBtn) {
+      if (hasToken && email) {
+        loginBtn.textContent = "Log out";
+      } else {
+        loginBtn.textContent = "Log in";
+      }
+    }
+
+    if (accountBtn) {
+      accountBtn.disabled = !hasToken; // only active when logged in
+      accountBtn.style.opacity = hasToken ? "1" : "0.65";
+    }
+  }
+
+  async function handleLoginClick() {
+    const hasToken = !!getAuthToken();
+    const loginBtn = document.getElementById("navLoginBtn");
+
+    if (hasToken) {
+      // LOG OUT
+      if (confirm("Log out of TeeRadar on this device?")) {
+        clearAuth();
+        renderNavState();
+        alert("You’ve been logged out on this device.");
+      }
+      return;
+    }
+
+    // LOGIN / SIGNUP FLOW (prompt-based to avoid UI changes)
+    const mode = prompt(
+      "Type 1 to Log in, 2 to Create an account:",
+      "1"
+    );
+    if (!mode) return;
+
+    const trimmedMode = mode.trim();
+    if (trimmedMode !== "1" && trimmedMode !== "2") {
+      alert("Invalid choice.");
+      return;
+    }
+
+    const email = prompt("Email address:") || "";
+    if (!email.trim()) {
+      alert("Email is required.");
+      return;
+    }
+
+    const password = prompt("Password: (min 6 characters)") || "";
+    if (!password || password.length < 6) {
+      alert("Password must be at least 6 characters.");
+      return;
+    }
+
+    try {
+      let result;
+      if (trimmedMode === "2") {
+        // Signup - ask once for home course now
+        const homeCourse = prompt(
+          "Optional: type your home course name (or leave blank):"
+        ) || "";
+
+        result = await apiAuth("signup", {
+          email: email.trim().toLowerCase(),
+          password,
+          homeCourse: homeCourse.trim() || null,
+        });
+      } else {
+        // Login
+        result = await apiAuth("login", {
+          email: email.trim().toLowerCase(),
+          password,
+        });
+      }
+
+      if (!result || !result.ok) {
+        alert((result && result.error) || "Auth failed.");
+        return;
+      }
+
+      setAuth(result.token, result.user.email, result.user.homeCourse);
+      renderNavState();
+
+      if (trimmedMode === "2") {
+        alert("Account created and logged in.");
+      } else {
+        alert("Logged in successfully.");
+      }
+
+      trackEvent(trimmedMode === "2" ? "auth_signup" : "auth_login", {
+        email: result.user.email
+      });
+    } catch (e) {
+      console.error("Auth error", e);
+      alert("Something went wrong. Please try again.");
+    }
+  }
+
+  async function handleAccountClick() {
+    const token = getAuthToken();
+    if (!token) {
+      alert("Log in first to manage your account.");
+      return;
+    }
+
+    // Change home course only (simple flow)
+    const current = localStorage.getItem("teeradar_home_course") || "";
+    const newHome = prompt(
+      "Update your home course (for map auto-zoom):",
+      current
+    );
+    if (newHome === null) return; // cancelled
+
+    const trimmed = newHome.trim();
+
+    try {
+      const res = await apiAuth("update-home", {
+        token,
+        homeCourse: trimmed || null,
+      });
+
+      if (!res || !res.ok) {
+        alert("Could not update home course.");
+        return;
+      }
+
+      localStorage.setItem("teeradar_home_course", trimmed || "");
+      alert("Home course updated.");
+    } catch (e) {
+      console.error("update home error", e);
+      alert("Error updating home course.");
+    }
+  }
+
+  // ---- T&C banner logic (unchanged) ----
   function initTCBanner() {
     const banner = document.getElementById("tc-banner");
     const btn = document.getElementById("tc-accept-btn");
@@ -670,131 +728,18 @@
     });
   }
 
-  // ---------- MY ACCOUNT MODAL ----------
-  function loadAccountIntoModal() {
-    const emailInput = document.getElementById("accountEmailInput");
-    const homeInput = document.getElementById("accountHomeCourseInput");
-    const status = document.getElementById("accountStatusText");
+  window.addEventListener("load", async () => {
+    // wire nav buttons
+    const loginBtn = document.getElementById("navLoginBtn");
+    const accountBtn = document.getElementById("navAccountBtn");
 
-    const email = localStorage.getItem("teeradar_user_email") || "";
-    const homeCourse = localStorage.getItem("teeradar_home_course") || "";
+    if (loginBtn) loginBtn.onclick = handleLoginClick;
+    if (accountBtn) accountBtn.onclick = handleAccountClick;
 
-    if (emailInput) emailInput.value = email;
-    if (homeInput) homeInput.value = homeCourse;
-
-    if (status) {
-      status.textContent = email
-        ? `Logged in as ${email} on this device.`
-        : "Not signed in yet on this device.";
-    }
-  }
-
-  async function populateCourseSuggestions() {
-    const listEl = document.getElementById("homeCourseSuggestions");
-    if (!listEl) return;
-    listEl.innerHTML = "";
-
-    try {
-      const res = await fetch("/api/courses");
-      const data = await res.json();
-      if (!Array.isArray(data)) return;
-
-      const seen = new Set();
-      data.forEach(c => {
-        if (!c || !c.name) return;
-        // Strip anything in parentheses for a cleaner base name
-        const base = String(c.name).split("(")[0].trim();
-        const label = base || c.name;
-        if (seen.has(label.toLowerCase())) return;
-        seen.add(label.toLowerCase());
-
-        const opt = document.createElement("option");
-        opt.value = label;
-        listEl.appendChild(opt);
-      });
-    } catch (err) {
-      console.warn("Failed to load course suggestions", err);
-    }
-  }
-
-  function openAccountModal() {
-    const modal = document.getElementById("accountModal");
-    if (!modal) return;
-    loadAccountIntoModal();
-    populateCourseSuggestions();
-    modal.style.display = "flex";
-    modal.setAttribute("aria-hidden", "false");
-  }
-
-  function closeAccountModal() {
-    const modal = document.getElementById("accountModal");
-    if (!modal) return;
-    modal.style.display = "none";
-    modal.setAttribute("aria-hidden", "true");
-  }
-
-  function saveAccount() {
-    const emailInput = document.getElementById("accountEmailInput");
-    const homeInput = document.getElementById("accountHomeCourseInput");
-
-    const email = (emailInput && emailInput.value.trim()) || "";
-    const homeCourse = (homeInput && homeInput.value.trim()) || "";
-
-    if (email) {
-      localStorage.setItem("teeradar_user_email", email.toLowerCase());
-    } else {
-      localStorage.removeItem("teeradar_user_email");
-    }
-
-    if (homeCourse) {
-      localStorage.setItem("teeradar_home_course", homeCourse);
-    } else {
-      localStorage.removeItem("teeradar_home_course");
-    }
-
-    trackEvent("account_update", {
-      userEmail: email || null,
-      homeCourse: homeCourse || null
-    });
-
-    renderNavState();
-    closeAccountModal();
-  }
-
-  function logoutAccount() {
-    localStorage.removeItem("teeradar_user_email");
-    localStorage.removeItem("teeradar_home_course");
-    renderNavState();
-    loadAccountIntoModal();
-    trackEvent("logout", {});
-  }
-
-  window.addEventListener("load", () => {
+    await verifyExistingToken();
     renderNavState();
     trackInitialHome();
     initTCBanner();
-
-    const accountBtn = document.getElementById("navAccountBtn");
-    if (accountBtn) {
-      accountBtn.addEventListener("click", openAccountModal);
-    }
-    const saveBtn = document.getElementById("accountSaveBtn");
-    const closeBtn = document.getElementById("accountCloseBtn");
-    const logoutBtn = document.getElementById("accountLogoutBtn");
-
-    if (saveBtn) saveBtn.addEventListener("click", saveAccount);
-    if (closeBtn) closeBtn.addEventListener("click", closeAccountModal);
-    if (logoutBtn) logoutBtn.addEventListener("click", logoutAccount);
-
-    // Close on backdrop click
-    const modalBackdrop = document.getElementById("accountModal");
-    if (modalBackdrop) {
-      modalBackdrop.addEventListener("click", (e) => {
-        if (e.target === modalBackdrop) {
-          closeAccountModal();
-        }
-      });
-    }
   });
 </script>
 </body>
