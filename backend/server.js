@@ -2,149 +2,125 @@
 //  TeeRadar Full Server.js
 // =========================
 
-const express = require("express");
 const path = require("path");
+const express = require("express");
 const cors = require("cors");
 
-// -------- AUTH ROUTER (Postgres-backed) --------
-const { authRouter } = require("./auth");
-
-// -------- COURSES DATA (static WA list) --------
-// Support both module.exports = [...]  OR  module.exports = { courses: [...] }
-const coursesModule = require("./courses");
-const COURSES = Array.isArray(coursesModule)
-  ? coursesModule
-  : Array.isArray(coursesModule.courses)
-  ? coursesModule.courses
-  : [];
-
-// -------- SEARCH LOGIC (live availability) --------
-// This should be your existing scraper/aggregator that already works.
-const { runSearch } = require("./search");
-
 const app = express();
+
+// Use Render's port or default to 3001 locally
 const PORT = process.env.PORT || 3001;
 
-// -------- MIDDLEWARE --------
+// -------------------------
+//  Basic middleware
+// -------------------------
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
-// Mount AUTH API
-app.use("/api/auth", authRouter);
+// -------------------------
+//  AUTH ROUTES
+//  (backend/auth.js)
+// -------------------------
+try {
+  const authModule = require("./auth");
 
-// Serve frontend (public folder)
-app.use(express.static(path.join(__dirname, "..", "public")));
+  // Support different export styles:
+  //   module.exports = router
+  //   module.exports = { authRouter: router }
+  //   module.exports = { router }
+  let authRouter = authModule;
 
-// =========================
-//       ANALYTICS API
-// =========================
+  if (authModule && authModule.authRouter) {
+    authRouter = authModule.authRouter;
+  } else if (authModule && authModule.router) {
+    authRouter = authModule.router;
+  }
 
-// In-memory counters (Render will reset on redeploy)
-let analytics = {
-  homeViews: 0,
-  bookingClicks: 0,
-  searches: 0,
-  newUsers: 0,
-  userDevices: new Set(),
-  courseClicks: {},
-};
+  if (authRouter && typeof authRouter === "function") {
+    app.use("/api/auth", authRouter);
+    console.log("[server] Auth routes mounted at /api/auth");
+  } else {
+    console.warn("[server] Auth module loaded but no router exported.");
+  }
+} catch (err) {
+  console.warn("[server] Auth module not loaded (./backend/auth.js)", err.message);
+}
 
-// Receive events from frontend
-app.post("/api/analytics/event", (req, res) => {
-  try {
-    const { type, userId, courseName } = req.body || {};
+// -------------------------
+//  ANALYTICS ROUTES
+//  (backend/analytics.js)
+// -------------------------
+try {
+  const analyticsModule = require("./analytics");
 
-    if (type === "home_view") {
-      analytics.homeViews++;
-      if (userId) analytics.userDevices.add(userId);
+  // Again, be flexible with how analytics.js exports things
+  let analyticsRouter = null;
+
+  if (typeof analyticsModule === "function") {
+    // e.g. module.exports = (app) => { ... }
+    analyticsModule(app);
+    console.log("[server] Analytics module initialized via function export");
+  } else {
+    if (analyticsModule && analyticsModule.analyticsRouter) {
+      analyticsRouter = analyticsModule.analyticsRouter;
+    } else if (analyticsModule && analyticsModule.router) {
+      analyticsRouter = analyticsModule.router;
+    } else if (analyticsModule && typeof analyticsModule.use === "function") {
+      // Direct router export: module.exports = router
+      analyticsRouter = analyticsModule;
     }
 
-    if (type === "booking_click") {
-      analytics.bookingClicks++;
-      if (courseName) {
-        analytics.courseClicks[courseName] =
-          (analytics.courseClicks[courseName] || 0) + 1;
-      }
+    if (analyticsRouter) {
+      app.use("/api/analytics", analyticsRouter);
+      console.log("[server] Analytics routes mounted at /api/analytics");
+    } else {
+      console.warn("[server] Analytics module loaded but no router exported.");
     }
-
-    if (type === "search") {
-      analytics.searches++;
-    }
-
-    if (type === "new_user") {
-      analytics.newUsers++;
-    }
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("Analytics event error:", err);
-    res.status(500).json({ ok: false });
   }
+} catch (err) {
+  console.warn("[server] Analytics module not loaded (./backend/analytics.js)", err.message);
+}
+
+// --------------------------------------------------
+//  STATIC FRONTEND – DO NOT TOUCH BOOKING / MAP UI
+// --------------------------------------------------
+const publicDir = path.join(__dirname, "..", "public");
+app.use(express.static(publicDir));
+
+// Explicit HTML routes (optional but friendly)
+app.get("/", (_req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
 });
 
-// Analytics dashboard fetch
-// (your analytics.html should already be pointed at this)
-app.get("/api/analytics/stats", (req, res) => {
-  try {
-    res.json({
-      homeViews: analytics.homeViews,
-      bookingClicks: analytics.bookingClicks,
-      searches: analytics.searches,
-      newUsers: analytics.newUsers,
-      uniqueUsers: analytics.userDevices.size,
-      courseClicks: analytics.courseClicks,
-    });
-  } catch (err) {
-    console.error("Analytics stats error:", err);
-    res.status(500).json({ error: "Failed loading analytics" });
-  }
+app.get("/about", (_req, res) => {
+  res.sendFile(path.join(publicDir, "about.html"));
 });
 
-// =========================
-//      COURSES / SEARCH
-// =========================
-
-// 👉 Courses endpoint: used by the map to render markers
-// book.html expects this to be a *plain array* of course objects.
-app.get("/api/courses", (req, res) => {
-  try {
-    res.json(COURSES);
-  } catch (err) {
-    console.error("/api/courses error:", err);
-    res.status(500).json([]);
-  }
+app.get("/faq", (_req, res) => {
+  res.sendFile(path.join(publicDir, "faq.html"));
 });
 
-// 👉 Search endpoint: delegates to your existing live search logic
-// Frontend expects: { slots: [...] }
-app.post("/api/search", async (req, res) => {
-  try {
-    analytics.searches++;
-
-    const criteria = req.body || {};
-    // runSearch should return an array of slot objects:
-    // [{ course, time, provider, bookingUrl, ... }, ...]
-    const slots = await runSearch(criteria);
-
-    res.json({ slots });
-  } catch (err) {
-    console.error("/api/search error:", err);
-    res.status(500).json({ slots: [] });
-  }
+app.get("/analytics", (_req, res) => {
+  res.sendFile(path.join(publicDir, "analytics.html"));
 });
 
-// =========================
-//   FALLBACK → FRONTEND
-// =========================
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+app.get("/login", (_req, res) => {
+  res.sendFile(path.join(publicDir, "login.html"));
 });
 
-// =========================
-//        START SERVER
-// =========================
+app.get("/book", (_req, res) => {
+  res.sendFile(path.join(publicDir, "book.html"));
+});
 
+// Any other route → hand to SPA frontend (keeps deep links working)
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
+});
+
+// -------------------------
+//  START SERVER
+// -------------------------
 app.listen(PORT, () => {
   console.log(`TeeRadar server running on port ${PORT}`);
 });
