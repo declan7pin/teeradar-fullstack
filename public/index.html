@@ -16,7 +16,12 @@
       --border: #e2e8f0;
       --accent: #0ea5e9;
       --pill: #ecfeff;
+
+      --overlay-bg: rgba(15, 23, 42, 0.60);
+      --modal-bg: #0b1120;
+      --modal-border: rgba(148, 163, 184, 0.35);
     }
+
     *{box-sizing:border-box;}
     html,body{
       margin:0;
@@ -93,7 +98,7 @@
       padding:4px 10px;
       font-weight:600;
     }
-    .nav-login{
+    .nav-account-btn{
       background:#ffffff;
       color:var(--teal-dark);
       border:none;
@@ -102,6 +107,9 @@
       font-size:12px;
       font-weight:600;
       cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
     }
 
     /* HERO */
@@ -338,6 +346,138 @@
         text-align:center;
       }
     }
+
+    /* ACCOUNT MODAL */
+    #account-modal{
+      position:fixed;
+      inset:0;
+      display:none;           /* toggled via JS */
+      align-items:center;
+      justify-content:center;
+      background:var(--overlay-bg);
+      z-index:40;
+    }
+    .account-modal-panel{
+      background:var(--modal-bg);
+      border-radius:18px;
+      border:1px solid var(--modal-border);
+      max-width:420px;
+      width:90%;
+      color:#e5e7eb;
+      box-shadow:0 24px 60px rgba(15,23,42,0.7);
+      padding:16px 18px 18px;
+    }
+    .account-modal-header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom:10px;
+    }
+    .account-modal-title{
+      font-size:15px;
+      font-weight:600;
+    }
+    .account-close-btn{
+      border:none;
+      background:transparent;
+      color:#9ca3af;
+      cursor:pointer;
+      font-size:18px;
+      line-height:1;
+      padding:2px 4px;
+    }
+    .account-section-title{
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      color:#9ca3af;
+      margin:10px 0 4px;
+    }
+    .account-field{
+      margin-bottom:8px;
+    }
+    .account-label{
+      font-size:12px;
+      color:#cbd5f5;
+      margin-bottom:2px;
+    }
+    .account-input{
+      width:100%;
+      border-radius:8px;
+      border:1px solid rgba(148,163,184,0.5);
+      padding:7px 9px;
+      font-size:13px;
+      background:#020617;
+      color:#e5e7eb;
+    }
+    .account-input::placeholder{
+      color:#6b7280;
+    }
+    .account-actions-row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      margin-top:6px;
+    }
+    .btn-small-primary{
+      background:#22c55e;
+      color:#022c22;
+      border:none;
+      border-radius:999px;
+      padding:6px 12px;
+      font-size:11px;
+      font-weight:600;
+      cursor:pointer;
+    }
+    .btn-small-subtle{
+      background:transparent;
+      color:#9ca3af;
+      border:none;
+      border-radius:999px;
+      padding:4px 8px;
+      font-size:11px;
+      cursor:pointer;
+    }
+    .account-note{
+      font-size:11px;
+      color:#9ca3af;
+      margin-top:4px;
+    }
+    .account-admin-badge{
+      display:none;
+      font-size:11px;
+      padding:3px 8px;
+      border-radius:999px;
+      background:rgba(34,197,94,0.15);
+      color:#bbf7d0;
+      border:1px solid rgba(34,197,94,0.4);
+      margin-left:8px;
+    }
+
+    /* Auto-suggest list */
+    #homeCourseSuggestions{
+      margin-top:4px;
+      border-radius:8px;
+      border:1px solid rgba(148,163,184,0.5);
+      background:#020617;
+      max-height:180px;
+      overflow-y:auto;
+      display:none;
+    }
+    .home-course-suggestion{
+      width:100%;
+      text-align:left;
+      border:none;
+      background:transparent;
+      padding:6px 9px;
+      font-size:12px;
+      color:#e5e7eb;
+      cursor:pointer;
+    }
+    .home-course-suggestion:hover{
+      background:rgba(148,163,184,0.2);
+    }
   </style>
 </head>
 <body>
@@ -354,7 +494,9 @@
       <a href="/about.html">About</a>
       <!-- analytics tab shown only for admin -->
       <a href="/analytics.html" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
-      <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
+      <button id="navAccountBtn" class="nav-account-btn" type="button">
+        <span>My account</span>
+      </button>
     </nav>
   </div>
 </header>
@@ -477,10 +619,70 @@
   <button type="button" id="tc-accept-btn">Got it</button>
 </div>
 
+<!-- ACCOUNT MODAL -->
+<div id="account-modal" aria-hidden="true">
+  <div class="account-modal-panel" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
+    <div class="account-modal-header">
+      <div class="account-modal-title" id="account-modal-title">
+        My account
+        <span id="accountAdminBadge" class="account-admin-badge">Admin</span>
+      </div>
+      <button class="account-close-btn" type="button" id="accountCloseBtn" aria-label="Close account settings">
+        ×
+      </button>
+    </div>
+
+    <!-- Email / login -->
+    <div class="account-section-title">Login</div>
+    <div class="account-field">
+      <div class="account-label">Email</div>
+      <input id="accountEmail" class="account-input" type="email" placeholder="you@example.com" />
+    </div>
+    <div class="account-actions-row">
+      <button id="saveAccountEmailBtn" class="btn-small-primary" type="button">
+        Save email / Log in
+      </button>
+      <button id="accountLogoutBtn" class="btn-small-subtle" type="button">
+        Log out on this device
+      </button>
+    </div>
+    <div class="account-note">
+      We store your email locally in this browser so we can unlock admin analytics
+      (for your admin email) and personalise features later.
+    </div>
+
+    <!-- Home course -->
+    <div class="account-section-title" style="margin-top:14px;">Home course</div>
+    <div class="account-field">
+      <div class="account-label">Home course (used for map auto-zoom)</div>
+      <input
+        id="homeCourseInput"
+        class="account-input"
+        type="text"
+        placeholder="Start typing e.g. “Collier Park”"
+        autocomplete="off"
+      />
+      <div id="homeCourseSuggestions"></div>
+    </div>
+    <div class="account-actions-row">
+      <button id="saveHomeCourseBtn" class="btn-small-primary" type="button">
+        Save home course
+      </button>
+      <button id="clearHomeCourseBtn" class="btn-small-subtle" type="button">
+        Clear home course
+      </button>
+    </div>
+    <div class="account-note">
+      We’ll remember this on this device. Your Bookings map will auto-zoom around this
+      course when set.
+    </div>
+  </div>
+</div>
+
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
-  const HOME_COURSE_KEY = "teeradar_home_course_name";
 
+  // ---- ANALYTICS ----
   function trackEvent(type, payload) {
     try {
       fetch("/api/analytics/event", {
@@ -498,66 +700,13 @@
   }
 
   function isAdmin() {
-    return localStorage.getItem("teeradar_user_email") === ADMIN_EMAIL;
+    return (localStorage.getItem("teeradar_user_email") || "").toLowerCase() === ADMIN_EMAIL;
   }
 
   function renderNavState() {
     const analyticsLink = document.getElementById("navAnalytics");
-    const loginBtn = document.getElementById("navLoginBtn");
-    if (!analyticsLink || !loginBtn) return;
-
-    if (isAdmin()) {
-      analyticsLink.style.display = "inline-flex";
-      loginBtn.textContent = "Log out";
-      loginBtn.onclick = () => {
-        localStorage.removeItem("teeradar_user_email");
-        // keep home course; user might want it next time
-        renderNavState();
-      };
-    } else {
-      analyticsLink.style.display = "none";
-      loginBtn.textContent = "Log in";
-      loginBtn.onclick = handleLogin;
-    }
-  }
-
-  function ensureHomeCourse() {
-    // Only prompt if user is logged in and doesn't yet have a home course
-    const email = localStorage.getItem("teeradar_user_email");
-    if (!email) return;
-
-    const existing = localStorage.getItem(HOME_COURSE_KEY);
-    if (existing && existing.trim() !== "") return;
-
-    const raw = prompt(
-      "Set your home course (optional):\n\n" +
-      "Type the course name as it appears on TeeRadar, e.g.\n" +
-      "\"Collier Park Golf Course\" or \"Whaleback Golf Course\"."
-    );
-    if (!raw) return;
-
-    const trimmed = raw.trim();
-    if (!trimmed) return;
-
-    localStorage.setItem(HOME_COURSE_KEY, trimmed);
-    // Book page will use this to auto-zoom near the home course.
-  }
-
-  function handleLogin() {
-    const email = prompt("Enter your email:");
-    if (!email) return;
-    const trimmed = email.trim().toLowerCase();
-    localStorage.setItem("teeradar_user_email", trimmed);
-
-    if (trimmed === ADMIN_EMAIL) {
-      alert("Admin login successful – Analytics tab unlocked.");
-    } else {
-      alert("Logged in. You can now set a home course for auto-zoom on the booking map.");
-    }
-
-    renderNavState();
-    // After login, if they don't yet have a home course, ask for one once
-    ensureHomeCourse();
+    if (!analyticsLink) return;
+    analyticsLink.style.display = isAdmin() ? "inline-flex" : "none";
   }
 
   function trackInitialHome() {
@@ -568,7 +717,7 @@
     trackEvent("home_view", {});
   }
 
-  // simple T&C banner logic
+  // ---- T&Cs banner ----
   function initTCBanner() {
     const banner = document.getElementById("tc-banner");
     const btn = document.getElementById("tc-accept-btn");
@@ -583,18 +732,192 @@
     });
   }
 
+  // ---- ACCOUNT MODAL + AUTO-SUGGEST ----
+  let allCoursesForAccount = [];
+  let homeCourseNameOptions = [];
+
+  function computeHomeCourseOptions() {
+    const seen = new Set();
+    homeCourseNameOptions = [];
+
+    allCoursesForAccount.forEach((c) => {
+      const rawName = String(c.name || "").trim();
+      if (!rawName) return;
+      const base = rawName.split("(")[0].trim(); // "Collier Park Golf Course"
+      if (!base) return;
+      const key = base.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      homeCourseNameOptions.push(base);
+    });
+
+    homeCourseNameOptions.sort((a, b) => a.localeCompare(b));
+  }
+
+  function loadCoursesForSuggestions() {
+    fetch("/api/courses")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!Array.isArray(data)) return;
+        allCoursesForAccount = data;
+        computeHomeCourseOptions();
+      })
+      .catch((err) => {
+        console.warn("Failed to load courses for account auto-suggest", err);
+      });
+  }
+
+  function initAccountUI() {
+    const accountBtn = document.getElementById("navAccountBtn");
+    const modal = document.getElementById("account-modal");
+    const closeBtn = document.getElementById("accountCloseBtn");
+    const emailInput = document.getElementById("accountEmail");
+    const saveEmailBtn = document.getElementById("saveAccountEmailBtn");
+    const logoutBtn = document.getElementById("accountLogoutBtn");
+    const adminBadge = document.getElementById("accountAdminBadge");
+
+    const homeInput = document.getElementById("homeCourseInput");
+    const suggestionsBox = document.getElementById("homeCourseSuggestions");
+    const saveHomeBtn = document.getElementById("saveHomeCourseBtn");
+    const clearHomeBtn = document.getElementById("clearHomeCourseBtn");
+
+    if (!accountBtn || !modal) return;
+
+    function openModal() {
+      // Prefill values
+      const storedEmail = localStorage.getItem("teeradar_user_email") || "";
+      const storedHome = localStorage.getItem("teeradar_home_course") || "";
+      if (emailInput) emailInput.value = storedEmail;
+      if (homeInput) homeInput.value = storedHome;
+      if (adminBadge) {
+        adminBadge.style.display = isAdmin() ? "inline-flex" : "none";
+      }
+      if (suggestionsBox) {
+        suggestionsBox.style.display = "none";
+        suggestionsBox.innerHTML = "";
+      }
+
+      modal.style.display = "flex";
+      modal.setAttribute("aria-hidden", "false");
+    }
+
+    function closeModal() {
+      modal.style.display = "none";
+      modal.setAttribute("aria-hidden", "true");
+    }
+
+    accountBtn.addEventListener("click", openModal);
+    closeBtn && closeBtn.addEventListener("click", closeModal);
+
+    // Close on escape
+    window.addEventListener("keydown", (evt) => {
+      if (evt.key === "Escape" && modal.style.display === "flex") {
+        closeModal();
+      }
+    });
+
+    // Save email / login
+    saveEmailBtn &&
+      saveEmailBtn.addEventListener("click", () => {
+        const raw = (emailInput && emailInput.value) || "";
+        const trimmed = raw.trim().toLowerCase();
+        if (!trimmed) {
+          alert("Please enter an email.");
+          return;
+        }
+        localStorage.setItem("teeradar_user_email", trimmed);
+        renderNavState();
+        if (adminBadge) {
+          adminBadge.style.display = isAdmin() ? "inline-flex" : "none";
+        }
+        alert("Email saved for this device.");
+      });
+
+    // Logout
+    logoutBtn &&
+      logoutBtn.addEventListener("click", () => {
+        localStorage.removeItem("teeradar_user_email");
+        renderNavState();
+        if (emailInput) emailInput.value = "";
+        if (adminBadge) adminBadge.style.display = "none";
+        alert("You have been logged out on this device.");
+      });
+
+    // Home course input typing → auto-suggest
+    if (homeInput && suggestionsBox) {
+      homeInput.addEventListener("input", () => {
+        const query = homeInput.value.trim().toLowerCase();
+        if (!query || homeCourseNameOptions.length === 0) {
+          suggestionsBox.style.display = "none";
+          suggestionsBox.innerHTML = "";
+          return;
+        }
+
+        const matches = homeCourseNameOptions
+          .filter((name) => name.toLowerCase().includes(query))
+          .slice(0, 8);
+
+        if (matches.length === 0) {
+          suggestionsBox.style.display = "none";
+          suggestionsBox.innerHTML = "";
+          return;
+        }
+
+        suggestionsBox.innerHTML = matches
+          .map(
+            (name) =>
+              `<button type="button" class="home-course-suggestion" data-course="${name
+                .replace(/"/g, "&quot;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")}">${name}</button>`
+          )
+          .join("");
+        suggestionsBox.style.display = "block";
+      });
+
+      // Click on a suggestion → fill input
+      suggestionsBox.addEventListener("click", (evt) => {
+        const btn = evt.target.closest(".home-course-suggestion");
+        if (!btn) return;
+        const name = btn.getAttribute("data-course") || btn.textContent || "";
+        homeInput.value = name;
+        suggestionsBox.style.display = "none";
+        suggestionsBox.innerHTML = "";
+      });
+    }
+
+    // Save home course
+    saveHomeBtn &&
+      saveHomeBtn.addEventListener("click", () => {
+        const value = (homeInput && homeInput.value.trim()) || "";
+        if (!value) {
+          alert("Please type or pick a home course first.");
+          return;
+        }
+        localStorage.setItem("teeradar_home_course", value);
+        alert("Home course saved for this device.");
+      });
+
+    // Clear home course
+    clearHomeBtn &&
+      clearHomeBtn.addEventListener("click", () => {
+        localStorage.removeItem("teeradar_home_course");
+        if (homeInput) homeInput.value = "";
+        if (suggestionsBox) {
+          suggestionsBox.style.display = "none";
+          suggestionsBox.innerHTML = "";
+        }
+        alert("Home course cleared.");
+      });
+  }
+
+  // ---- INIT ----
   window.addEventListener("load", () => {
     renderNavState();
     trackInitialHome();
     initTCBanner();
-
-    // If user is already logged in but has no home course stored yet,
-    // we can gently prompt once on load.
-    const email = localStorage.getItem("teeradar_user_email");
-    if (email && !localStorage.getItem(HOME_COURSE_KEY)) {
-      // tiny delay so it doesn't clash with other load events
-      setTimeout(ensureHomeCourse, 200);
-    }
+    initAccountUI();
+    loadCoursesForSuggestions();
   });
 </script>
 </body>
