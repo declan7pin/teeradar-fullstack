@@ -50,10 +50,11 @@ console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
 // ======================================
-//        SEARCH CACHE (BY FILTERS)
+//        SEARCH CACHE (BY DATE / HOLES / PLAYERS)
 // ======================================
 
-// Cache keyed by *full criteria* (date + time + holes + partySize)
+// Cache keyed by { date, holes, partySize } → *broad* time window.
+// Actual time window is applied in-memory at query time.
 const searchCache = new Map();
 
 // 10 minutes TTL (in ms)
@@ -61,6 +62,10 @@ const CACHE_TTL_MS = 10 * 60 * 1000;
 
 // How many days ahead to pre-scrape
 const PRE_SCRAPE_DAYS = 8;
+
+// Canonical time window we scrape for (covers the day)
+const CANONICAL_EARLIEST = "05:00";
+const CANONICAL_LATEST = "19:30";
 
 // Helper: format Date → "YYYY-MM-DD"
 function toISODate(d) {
@@ -82,7 +87,7 @@ function getNext8Dates() {
   return out;
 }
 
-// Normalise incoming criteria so we always treat them the same way
+// Normalise incoming criteria
 function normalizeCriteria(raw) {
   const {
     date,
@@ -110,22 +115,80 @@ function normalizeCriteria(raw) {
   };
 }
 
-// Build a stable cache key from criteria
-function criteriaKey(c) {
-  // Make sure order is stable
+// Build a stable cache key from date + holes + partySize
+function cacheKeyFromCriteria(c) {
   return JSON.stringify({
     date: c.date,
-    earliest: c.earliest,
-    latest: c.latest,
-    holes: c.holes,
-    partySize: c.partySize,
+    holes: c.holes === "" ? "" : Number(c.holes),
+    partySize: Number(c.partySize) || 1,
   });
 }
 
-// Core search function used by both /api/search and pre-scraper
-async function doSearch(rawCriteria) {
-  const criteria = normalizeCriteria(rawCriteria);
+// Convert "HH:MM" → minutes from midnight
+function timeToMinutes(str) {
+  if (!str || typeof str !== "string") return null;
+  const m = str.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (Number.isNaN(h) || Number.isNaN(min)) return null;
+  return h * 60 + min;
+}
 
+// Get a slot's time (best-effort across different field names)
+function slotTimeToMinutes(slot) {
+  const t =
+    slot.time ||
+    slot.teeTime ||
+    slot.tee_time ||
+    slot.startTime ||
+    slot.start_time ||
+    "";
+
+  return timeToMinutes(t);
+}
+
+// Filter slots by time + players (we assume holes already handled by scrapers)
+function filterSlotsForCriteria(slots, criteria) {
+  const earliestM = timeToMinutes(criteria.earliest);
+  const latestM = timeToMinutes(criteria.latest);
+  const neededPlayers = Number(criteria.partySize) || 1;
+
+  return slots.filter((slot) => {
+    // Time filter
+    const sm = slotTimeToMinutes(slot);
+    if (
+      sm != null &&
+      earliestM != null &&
+      latestM != null &&
+      (sm < earliestM || sm > latestM)
+    ) {
+      return false;
+    }
+
+    // Capacity filter (best-effort; if we can't read a capacity, we keep it)
+    const capRaw =
+      slot.availableSpots ??
+      slot.available_spots ??
+      slot.spots ??
+      slot.remainingPlayers ??
+      slot.capacity ??
+      slot.remaining ??
+      null;
+
+    if (capRaw != null) {
+      const cap = Number(capRaw);
+      if (!Number.isNaN(cap) && cap < neededPlayers) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+// Core scraping function for a given criteria
+async function scrapeForCriteria(criteria) {
   console.log("doSearch() with criteria:", criteria);
 
   const jobs = courses.map(async (c) => {
@@ -166,32 +229,61 @@ async function runPreScrape() {
 
   try {
     const dates = getNext8Dates();
-    console.log("[pre-scrape] starting for dates:", dates.join(", "));
+    const holesOptions = ["", 9, 18]; // "" = "any" courses where scraper doesn't care
+    const partySizes = [1, 2, 3, 4];
+
+    console.log(
+      "[pre-scrape] starting for dates:",
+      dates.join(", "),
+      "with holes options",
+      holesOptions,
+      "and party sizes",
+      partySizes
+    );
 
     for (const date of dates) {
-      try {
-        // Pre-scrape with “typical” broad criteria
-        const criteria = normalizeCriteria({
-          date,
-          earliest: "06:00",
-          latest: "17:00",
-          holes: "",
-          partySize: 4, // broad enough to cover most groups
-        });
+      for (const holes of holesOptions) {
+        for (const partySize of partySizes) {
+          try {
+            const baseCriteria = {
+              date,
+              earliest: CANONICAL_EARLIEST,
+              latest: CANONICAL_LATEST,
+              holes,
+              partySize,
+            };
 
-        const key = criteriaKey(criteria);
-        const slots = await doSearch(criteria);
+            const criteria = normalizeCriteria(baseCriteria);
+            const key = cacheKeyFromCriteria(criteria);
 
-        searchCache.set(key, {
-          slots,
-          fetchedAt: Date.now(),
-        });
+            // If we have fresh cache, skip
+            const existing = searchCache.get(key);
+            if (existing && Date.now() - existing.fetchedAt <= CACHE_TTL_MS) {
+              console.log(`[pre-scrape] cache fresh, skipping ${key}`);
+              continue;
+            }
 
-        console.log(
-          `[pre-scrape] stored ${slots.length} slots for ${date} under key ${key}`
-        );
-      } catch (err) {
-        console.error(`[pre-scrape] error for ${date}:`, err.message);
+            console.log(
+              `[pre-scrape] scraping date=${date}, holes=${holes}, partySize=${partySize}`
+            );
+
+            const slots = await scrapeForCriteria(criteria);
+
+            searchCache.set(key, {
+              slots,
+              fetchedAt: Date.now(),
+            });
+
+            console.log(
+              `[pre-scrape] stored ${slots.length} slots under key ${key}`
+            );
+          } catch (err) {
+            console.error(
+              `[pre-scrape] error for date=${date}, holes=${holes}, partySize=${partySize}:`,
+              err.message
+            );
+          }
+        }
       }
     }
 
@@ -221,7 +313,7 @@ app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Tee time search with cache + live fallback (RESPECTS filters)
+// Tee time search using cache (date+holes+players) + in-memory time filter
 app.post("/api/search", async (req, res) => {
   try {
     let criteria;
@@ -231,26 +323,37 @@ app.post("/api/search", async (req, res) => {
       return res.status(400).json({ error: err.message || "bad request" });
     }
 
-    const key = criteriaKey(criteria);
+    const cacheKey = cacheKeyFromCriteria(criteria);
     const now = Date.now();
-    const cached = searchCache.get(key);
+    const cached = searchCache.get(cacheKey);
 
     if (cached && now - cached.fetchedAt <= CACHE_TTL_MS) {
       console.log(
-        `[cache] Serving /api/search from cache for key ${key} (date=${criteria.date})`
+        `[cache] Serving /api/search from cache for key ${cacheKey} (date=${criteria.date})`
       );
-      return res.json({ slots: cached.slots });
+      const filtered = filterSlotsForCriteria(cached.slots, criteria);
+      return res.json({ slots: filtered });
     }
 
     console.log(
-      `[cache] No fresh cache for key ${key} (date=${criteria.date}), running live search`
+      `[cache] No fresh cache for key ${cacheKey} (date=${criteria.date}), running live scrape`
     );
 
-    const slots = await doSearch(criteria);
+    // Use canonical time window when scraping; we'll filter by the actual
+    // earliest/latest the user picked afterwards.
+    const scrapeCriteria = {
+      ...criteria,
+      earliest: CANONICAL_EARLIEST,
+      latest: CANONICAL_LATEST,
+    };
 
-    searchCache.set(key, { slots, fetchedAt: Date.now() });
+    const slots = await scrapeForCriteria(scrapeCriteria);
 
-    res.json({ slots });
+    searchCache.set(cacheKey, { slots, fetchedAt: Date.now() });
+
+    const filtered = filterSlotsForCriteria(slots, criteria);
+
+    res.json({ slots: filtered });
   } catch (err) {
     console.error("search error", err);
     res.status(500).json({ error: "internal error", detail: err.message });
@@ -335,7 +438,7 @@ app.get("/api/analytics", async (req, res) => {
   }
 });
 
-// 2) Explicit summary endpoint
+// 2) Explicit summary endpoint used earlier
 app.get("/api/analytics/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -388,6 +491,7 @@ app.get("/api/debug/courses", (req, res) => {
 });
 
 // ---------- FRONTEND FALLBACK ----------
+// For any non-API route, serve the main index.html (SPA routing)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
