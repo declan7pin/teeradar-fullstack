@@ -50,22 +50,20 @@ console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
 // ======================================
-//        SEARCH CACHE (BY DATE / HOLES / PLAYERS)
+//       SEARCH CACHE (DATE + HOLES)
 // ======================================
+//
+// We pre-scrape by (date, holes) with a broad window (06:00–18:00)
+// and partySize = 1 (so we see ALL slots).
+// Then /api/search just filters by time window + players in memory.
+//
 
-// Cache keyed by { date, holes, partySize } → *broad* time window.
-// Actual time window is applied in-memory at query time.
-const searchCache = new Map();
+const searchCache = new Map(); // key: JSON.stringify({date, holes}) -> { slots, fetchedAt }
 
-// 10 minutes TTL (in ms)
-const CACHE_TTL_MS = 10 * 60 * 1000;
-
-// How many days ahead to pre-scrape
-const PRE_SCRAPE_DAYS = 8;
-
-// Canonical time window we scrape for (covers the day)
-const CANONICAL_EARLIEST = "05:00";
-const CANONICAL_LATEST = "19:30";
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const PRE_SCRAPE_DAYS = 8;           // today + next 7 days
+const CANONICAL_EARLIEST = "06:00";
+const CANONICAL_LATEST = "18:00";
 
 // Helper: format Date → "YYYY-MM-DD"
 function toISODate(d) {
@@ -87,7 +85,7 @@ function getNext8Dates() {
   return out;
 }
 
-// Normalise incoming criteria
+// Normalise incoming /api/search criteria
 function normalizeCriteria(raw) {
   const {
     date,
@@ -115,12 +113,11 @@ function normalizeCriteria(raw) {
   };
 }
 
-// Build a stable cache key from date + holes + partySize
+// Cache key depends ONLY on date + holes (NOT players / time window)
 function cacheKeyFromCriteria(c) {
   return JSON.stringify({
     date: c.date,
     holes: c.holes === "" ? "" : Number(c.holes),
-    partySize: Number(c.partySize) || 1,
   });
 }
 
@@ -135,7 +132,7 @@ function timeToMinutes(str) {
   return h * 60 + min;
 }
 
-// Get a slot's time (best-effort across different field names)
+// Extract tee time from a slot object
 function slotTimeToMinutes(slot) {
   const t =
     slot.time ||
@@ -148,7 +145,7 @@ function slotTimeToMinutes(slot) {
   return timeToMinutes(t);
 }
 
-// Filter slots by time + players (we assume holes already handled by scrapers)
+// Filter slots by user’s time window + party size
 function filterSlotsForCriteria(slots, criteria) {
   const earliestM = timeToMinutes(criteria.earliest);
   const latestM = timeToMinutes(criteria.latest);
@@ -166,7 +163,7 @@ function filterSlotsForCriteria(slots, criteria) {
       return false;
     }
 
-    // Capacity filter (best-effort; if we can't read a capacity, we keep it)
+    // Capacity filter (best-effort; we keep slot if we can't read a capacity)
     const capRaw =
       slot.availableSpots ??
       slot.available_spots ??
@@ -187,7 +184,7 @@ function filterSlotsForCriteria(slots, criteria) {
   });
 }
 
-// Core scraping function for a given criteria
+// Core scraping for a given criteria
 async function scrapeForCriteria(criteria) {
   console.log("doSearch() with criteria:", criteria);
 
@@ -216,10 +213,11 @@ async function scrapeForCriteria(criteria) {
   return slots;
 }
 
-// Flag so we don’t overlap pre-scrape runs
+// Flag to avoid overlapping runs
 let isPreScraping = false;
 
-// Background job: scrape ALL courses for next 8 days every 10 minutes
+// Background job: scrape ALL courses for next 8 days, 9 & 18 holes,
+// 06:00–18:00, partySize = 1, every 10 minutes.
 async function runPreScrape() {
   if (isPreScraping) {
     console.log("[pre-scrape] already running, skipping this cycle");
@@ -229,60 +227,55 @@ async function runPreScrape() {
 
   try {
     const dates = getNext8Dates();
-    const holesOptions = ["", 9, 18]; // "" = "any" courses where scraper doesn't care
-    const partySizes = [1, 2, 3, 4];
+    const holesOptions = [9, 18];
 
     console.log(
       "[pre-scrape] starting for dates:",
       dates.join(", "),
-      "with holes options",
-      holesOptions,
-      "and party sizes",
-      partySizes
+      "holes:",
+      holesOptions
     );
 
     for (const date of dates) {
       for (const holes of holesOptions) {
-        for (const partySize of partySizes) {
-          try {
-            const baseCriteria = {
-              date,
-              earliest: CANONICAL_EARLIEST,
-              latest: CANONICAL_LATEST,
-              holes,
-              partySize,
-            };
+        try {
+          const baseCriteria = {
+            date,
+            earliest: CANONICAL_EARLIEST,
+            latest: CANONICAL_LATEST,
+            holes,
+            partySize: 1, // scrape with 1 player so we see ALL times
+          };
 
-            const criteria = normalizeCriteria(baseCriteria);
-            const key = cacheKeyFromCriteria(criteria);
+          const criteria = normalizeCriteria(baseCriteria);
+          const key = cacheKeyFromCriteria(criteria);
 
-            // If we have fresh cache, skip
-            const existing = searchCache.get(key);
-            if (existing && Date.now() - existing.fetchedAt <= CACHE_TTL_MS) {
-              console.log(`[pre-scrape] cache fresh, skipping ${key}`);
-              continue;
-            }
-
-            console.log(
-              `[pre-scrape] scraping date=${date}, holes=${holes}, partySize=${partySize}`
-            );
-
-            const slots = await scrapeForCriteria(criteria);
-
-            searchCache.set(key, {
-              slots,
-              fetchedAt: Date.now(),
-            });
-
-            console.log(
-              `[pre-scrape] stored ${slots.length} slots under key ${key}`
-            );
-          } catch (err) {
-            console.error(
-              `[pre-scrape] error for date=${date}, holes=${holes}, partySize=${partySize}:`,
-              err.message
-            );
+          // If we have fresh cache for this date+holes, skip
+          const existing = searchCache.get(key);
+          if (existing && Date.now() - existing.fetchedAt <= CACHE_TTL_MS) {
+            console.log(`[pre-scrape] cache fresh, skipping ${key}`);
+            continue;
           }
+
+          console.log(
+            `[pre-scrape] scraping date=${date}, holes=${holes}, partySize=1`
+          );
+
+          const slots = await scrapeForCriteria(criteria);
+
+          searchCache.set(key, {
+            slots,
+            fetchedAt: Date.now(),
+          });
+
+          console.log(
+            `[pre-scrape] stored ${slots.length} slots under key ${key}`
+          );
+        } catch (err) {
+          console.error(
+            `[pre-scrape] error for date=${date}, holes=${holes}:`,
+            err.message
+          );
         }
       }
     }
@@ -313,7 +306,7 @@ app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Tee time search using cache (date+holes+players) + in-memory time filter
+// Tee time search: date+holes cached, time window + players filtered in memory
 app.post("/api/search", async (req, res) => {
   try {
     let criteria;
@@ -329,22 +322,22 @@ app.post("/api/search", async (req, res) => {
 
     if (cached && now - cached.fetchedAt <= CACHE_TTL_MS) {
       console.log(
-        `[cache] Serving /api/search from cache for key ${cacheKey} (date=${criteria.date})`
+        `[cache] Serving /api/search from cache for key ${cacheKey} (date=${criteria.date}, holes=${criteria.holes})`
       );
       const filtered = filterSlotsForCriteria(cached.slots, criteria);
       return res.json({ slots: filtered });
     }
 
     console.log(
-      `[cache] No fresh cache for key ${cacheKey} (date=${criteria.date}), running live scrape`
+      `[cache] No fresh cache for key ${cacheKey} (date=${criteria.date}, holes=${criteria.holes}), running live scrape`
     );
 
-    // Use canonical time window when scraping; we'll filter by the actual
-    // earliest/latest the user picked afterwards.
+    // Live scrape still uses canonical full-day window + partySize=1
     const scrapeCriteria = {
       ...criteria,
       earliest: CANONICAL_EARLIEST,
       latest: CANONICAL_LATEST,
+      partySize: 1,
     };
 
     const slots = await scrapeForCriteria(scrapeCriteria);
@@ -366,9 +359,6 @@ app.post("/api/analytics/event", async (req, res) => {
   try {
     const { type, payload = {}, at } = req.body || {};
 
-    // Derive a userId:
-    //  - Prefer payload.userId (future)
-    //  - Fallback to IP, so a single device counts as one user
     const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
     const userId = payload.userId || ip || null;
 
@@ -421,7 +411,6 @@ function buildFlatSummary(summary, topCourses) {
 
 // ---------- ANALYTICS SUMMARY ENDPOINTS ----------
 
-// 1) Legacy-style endpoint (in case Admin UI calls /api/analytics)
 app.get("/api/analytics", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -438,7 +427,6 @@ app.get("/api/analytics", async (req, res) => {
   }
 });
 
-// 2) Explicit summary endpoint used earlier
 app.get("/api/analytics/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -455,7 +443,6 @@ app.get("/api/analytics/summary", async (req, res) => {
   }
 });
 
-// 3) Admin endpoint (if Admin UI points here)
 app.get("/api/admin/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -491,7 +478,6 @@ app.get("/api/debug/courses", (req, res) => {
 });
 
 // ---------- FRONTEND FALLBACK ----------
-// For any non-API route, serve the main index.html (SPA routing)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
