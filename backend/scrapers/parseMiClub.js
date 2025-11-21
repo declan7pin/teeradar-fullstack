@@ -2,103 +2,47 @@
 import * as cheerio from "cheerio";
 
 /**
- * Parse MiClub public timesheet HTML and extract tee times with
- * accurate availability per tee-time (0–4 players).
- *
- * Returns objects like:
- *   {
- *     time: "HH:MM",          // 24h time string
- *     status: "available" | "full",
- *     players: number,        // booked players
- *     maxPlayers: number,     // total slots (usually 4)
- *     available: boolean,     // at least 1 free slot
- *     bookingLink: string|null
- *   }
+ * Stable MiClub parser (previous fully working version)
+ * Counts "Available" and "Taken" to determine booked vs total players.
  */
 export function parseMiClub(html) {
   const $ = cheerio.load(html);
   const results = [];
 
-  /**
-   * Helper: normalise any “7:15 am / 07:15 / 7:15pm” into "HH:MM"
-   */
-  function extractTime(rowText) {
-    const m = rowText.match(/(\d{1,2}:\d{2})\s*(am|pm)?/i);
-    if (!m) return null;
+  // MiClub lists rows where each tee time contains multiple “Available” or “Taken”
+  $("tr").each((_, row) => {
+    const text = $(row).text();
 
-    const rawTime = m[1];
-    const ampm = (m[2] || "").toLowerCase();
+    // Detect times like 7:15 AM, 12:04 PM, etc.
+    const timeMatch = text.match(/(\d{1,2}:\d{2})\s*(am|pm)/i);
+    if (!timeMatch) return;
 
-    let [hStr, mStr] = rawTime.split(":");
-    let h = parseInt(hStr, 10);
+    let time = timeMatch[1];
+    let ampm = timeMatch[2].toLowerCase();
 
+    // Convert to 24h format
+    let [h, m] = time.split(":");
+    h = parseInt(h);
     if (ampm === "pm" && h !== 12) h += 12;
     if (ampm === "am" && h === 12) h = 0;
+    const time24 = `${String(h).padStart(2, "0")}:${m}`;
 
-    if (Number.isNaN(h)) return null;
+    // Count availability
+    const availableSpots = (text.match(/Available/gi) || []).length;
+    const takenSpots = (text.match(/Taken/gi) || []).length;
 
-    return `${String(h).padStart(2, "0")}:${mStr}`;
-  }
+    if (availableSpots + takenSpots === 0) return;
 
-  /**
-   * MAIN STRATEGY:
-   * - Iterate every <tr>
-   * - For each row, look for:
-   *     * a time
-   *     * AND either “Available/Taken” OR a Timesheet booking link
-   * - Count Available/Taken **only inside that row**
-   *   so legends or headers don't affect the result.
-   */
-  $("tr").each((_, el) => {
-    const row = $(el);
-    let rowText = row.text();
-    if (!rowText) return;
-
-    rowText = rowText.replace(/\s+/g, " ").trim();
-    if (!rowText) return;
-
-    // 1) Time in this row
-    const time24 = extractTime(rowText);
-    if (!time24) return;
-
-    // 2) Availability words JUST for this row
-    const availableMatches = rowText.match(/Available/gi) || [];
-    const takenMatches = rowText.match(/Taken/gi) || [];
-
-    // 3) Booking link (if present)
-    const bookingLink =
-      row.find('a[href*="TimesheetBooking"], a[href*="Timesheet"]').attr("href") ||
-      null;
-
-    // Filter out non-timeslot rows:
-    // must have either availability markers OR a booking link.
-    if (
-      availableMatches.length === 0 &&
-      takenMatches.length === 0 &&
-      !bookingLink
-    ) {
-      return;
-    }
-
-    // If the row has “Available/Taken” cells, use that.
-    // Otherwise assume standard 4-ball with all spots free.
-    let totalSpots = availableMatches.length + takenMatches.length;
-    if (totalSpots === 0) {
-      totalSpots = 4; // safe default for weird layouts
-    }
-
-    const availableSpots = availableMatches.length || Math.max(totalSpots - takenMatches.length, 0);
-    const players = Math.max(totalSpots - availableSpots, 0);
-
-    const status = availableSpots > 0 ? "available" : "full";
+    const total = availableSpots + takenSpots;
+    const playersBooked = takenSpots;
 
     results.push({
       time: time24,
-      status,
-      players,
-      maxPlayers: totalSpots,
+      status: availableSpots > 0 ? "available" : "full",
+      players: playersBooked,
+      maxPlayers: total,
       available: availableSpots > 0,
-      bookingLink,
+      bookingLink: null
     });
   });
 
