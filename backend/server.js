@@ -13,7 +13,10 @@ import {
   getTopCourses,
 } from "./analytics.js";
 
-// NEW: slot cache helpers
+// NEW: auth router (login / signup / verify)
+import { authRouter } from "./auth.js";
+
+// NEW: slot cache helpers (uses db.js under the hood)
 import db from "./db.js";
 import { getCachedSlots, saveSlotsToCache } from "./slotCache.js";
 
@@ -29,6 +32,9 @@ app.use(express.json());
 
 // Serve static frontend from /public at project root
 app.use(express.static(path.join(__dirname, "..", "public")));
+
+// ---------- AUTH ROUTES ----------
+app.use("/api/auth", authRouter);
 
 // ---------- LOAD DATA ----------
 const PERTH_LAT = -31.9523;
