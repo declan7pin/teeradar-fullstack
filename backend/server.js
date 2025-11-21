@@ -6,7 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// Analytics helpers (SQLite)
+// Analytics helpers (in-memory / SQLite behind the scenes)
 import {
   recordEvent,
   getAnalyticsSummary,
@@ -53,60 +53,6 @@ if (fs.existsSync(feeGroupsPath)) {
 console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
-// -----------------------------------------------------
-//   CAPACITY HELPER: safest possible interpretation
-//   → look at ALL numeric availability-ish fields
-//   → use the SMALLEST positive value as "spots left"
-// -----------------------------------------------------
-function getRemainingCapacity(slot) {
-  if (!slot || typeof slot !== "object") return 0;
-
-  const candidates = [];
-
-  // Raw "remaining / available" style fields
-  if (typeof slot.remaining === "number") candidates.push(slot.remaining);
-  if (typeof slot.available === "number") candidates.push(slot.available);
-  if (typeof slot.availableSpots === "number")
-    candidates.push(slot.availableSpots);
-  if (typeof slot.openSpots === "number") candidates.push(slot.openSpots);
-  if (typeof slot.slotsRemaining === "number")
-    candidates.push(slot.slotsRemaining);
-  if (typeof slot.spots === "number") candidates.push(slot.spots);
-
-  // Capacity-oriented fields (we treat these *conservatively*)
-  if (typeof slot.size === "number") candidates.push(slot.size);
-  if (typeof slot.partySize === "number") candidates.push(slot.partySize);
-  if (typeof slot.maxParty === "number") candidates.push(slot.maxParty);
-  if (typeof slot.capacity === "number") candidates.push(slot.capacity);
-
-  // Derived from maxPlayers - bookedPlayers / players
-  if (typeof slot.maxPlayers === "number") {
-    if (typeof slot.bookedPlayers === "number") {
-      candidates.push(slot.maxPlayers - slot.bookedPlayers);
-    } else if (typeof slot.players === "number") {
-      candidates.push(slot.maxPlayers - slot.players);
-    } else {
-      // If we *only* know maxPlayers, treat it as an upper bound
-      candidates.push(slot.maxPlayers);
-    }
-  }
-
-  // Filter to positive numbers
-  const positives = candidates
-    .map((n) => Number(n))
-    .filter((n) => Number.isFinite(n) && n > 0);
-
-  if (positives.length === 0) {
-    // We truly don't know – safest is "1 seat"
-    return 1;
-  }
-
-  // SAFEST rule: don't over-estimate available capacity
-  //   → use the smallest positive numeric field
-  const min = Math.min(...positives);
-  return min;
-}
-
 // ---------- ROUTES ----------
 
 // Health check
@@ -119,7 +65,7 @@ app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Tee time search with cache layer + capacity filter
+// Tee time search with cache layer + debug logging
 app.post("/api/search", async (req, res) => {
   try {
     const {
@@ -163,31 +109,25 @@ app.post("/api/search", async (req, res) => {
       });
 
       if (cached) {
-        const filteredCached = cached.filter(
-          (slot) => getRemainingCapacity(slot) >= criteria.partySize
-        );
-
-        console.log(
-          `⚡ cache hit → ${c.name} → raw=${cached.length}, ` +
-            `after capacity filter=${filteredCached.length}`
-        );
-
-        return filteredCached;
+        if (cached.length > 0) {
+          console.log(`⚡ cache hit → ${c.name} → ${cached.length} slots`);
+        } else {
+          console.log(`⚡ cache hit → ${c.name} → 0 slots`);
+        }
+        return cached;
       }
 
       // 2) Fallback: scrape live, then save to cache
       try {
-        const scraped = (await scrapeCourse(c, criteria, feeGroups)) || [];
-        const filteredScraped = scraped.filter(
-          (slot) => getRemainingCapacity(slot) >= criteria.partySize
-        );
+        const result = await scrapeCourse(c, criteria, feeGroups);
+        const count = Array.isArray(result) ? result.length : 0;
 
-        console.log(
-          `✅ scraped ${c.name} → raw=${scraped.length}, ` +
-            `after capacity filter=${filteredScraped.length}`
-        );
+        if (count > 0) {
+          console.log(`✅ scraped ${c.name} → ${count} slots`);
+        } else {
+          console.log(`⚪ scraped ${c.name} → 0 slots`);
+        }
 
-        // Save raw slots into cache
         saveSlotsToCache({
           courseId,
           courseName: c.name,
@@ -197,13 +137,12 @@ app.post("/api/search", async (req, res) => {
           partySize: criteria.partySize,
           earliest,
           latest,
-          slots: scraped,
+          slots: result || [],
         });
 
-        return filteredScraped;
+        return result || [];
       } catch (err) {
         console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
-
         // cache an empty result so subsequent lookups are fast
         saveSlotsToCache({
           courseId,
@@ -221,11 +160,45 @@ app.post("/api/search", async (req, res) => {
     });
 
     const allResults = await Promise.all(jobs);
-    const slots = allResults.flat();
+    const rawSlots = allResults.flat();
+
+    console.log(`🔎 /api/search finished → total raw slots: ${rawSlots.length}`);
+
+    // ---- FINAL PARTY-SIZE FILTER (GLOBAL) ----
+    const party = criteria.partySize || 1;
+
+    function slotSupportsParty(slot, partySize) {
+      // 1-player searches always pass
+      if (!partySize || partySize <= 1) return true;
+
+      // Try to read max capacity and currently booked players from slot
+      const maxP = Number(
+        slot.maxPlayers ??
+          slot.capacity ??
+          slot.max_players ??
+          slot.max_players ??
+          4 // sensible default if missing
+      );
+
+      const booked = Number(
+        slot.players ??
+          slot.booked ??
+          slot.bookedPlayers ??
+          0
+      );
+
+      // If we can't make sense of the numbers, don't filter it out
+      if (!Number.isFinite(maxP) || maxP <= 0) return true;
+      if (!Number.isFinite(booked) || booked < 0) return true;
+
+      const free = maxP - booked;
+      return free >= partySize;
+    }
+
+    const slots = rawSlots.filter((slot) => slotSupportsParty(slot, party));
 
     console.log(
-      `🔎 /api/search finished for ${date} ` +
-        `size=${criteria.partySize} → total slots: ${slots.length}`
+      `✅ /api/search after party-size filter (${party}) → ${slots.length} slots`
     );
 
     res.json({ slots });
@@ -241,6 +214,9 @@ app.post("/api/analytics/event", async (req, res) => {
   try {
     const { type, payload = {}, at } = req.body || {};
 
+    // Derive a userId:
+    //  - Prefer payload.userId (future)
+    //  - Fallback to IP, so a single device counts as one user
     const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
     const userId = payload.userId || ip || null;
 
@@ -269,30 +245,41 @@ app.post("/api/analytics/event", async (req, res) => {
 // ---------- ANALYTICS SUMMARY HELPERS ----------
 
 function buildFlatSummary(summary, topCourses) {
+  // Summary coming from analytics.js:
+  // {
+  //   homeViews, searches, bookingClicks,
+  //   usersAllTime, usersToday, usersWeek, newUsers7d
+  // }
+
   const homeViews = summary.homeViews ?? 0;
   const searches = summary.searches ?? 0;
   const bookingClicks = summary.bookingClicks ?? 0;
   const newUsers7d = summary.newUsers7d ?? 0;
 
   return {
+    // Names your Admin UI is probably using:
     homePageViews: homeViews,
     courseBookingClicks: bookingClicks,
     searches,
     newUsers: newUsers7d,
 
+    // Also keep the alternative names we already used:
     homeViews,
     bookingClicks,
 
+    // Extra stats if we want them later:
     usersAllTime: summary.usersAllTime ?? 0,
     usersToday: summary.usersToday ?? 0,
     usersWeek: summary.usersWeek ?? 0,
 
+    // Top courses by booking clicks
     topCourses: topCourses || [],
   };
 }
 
 // ---------- ANALYTICS SUMMARY ENDPOINTS ----------
 
+// 1) Legacy-style endpoint (in case Admin UI calls /api/analytics)
 app.get("/api/analytics", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -309,6 +296,7 @@ app.get("/api/analytics", async (req, res) => {
   }
 });
 
+// 2) Explicit summary endpoint used earlier
 app.get("/api/analytics/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -325,6 +313,7 @@ app.get("/api/analytics/summary", async (req, res) => {
   }
 });
 
+// 3) Admin endpoint (if Admin UI points here)
 app.get("/api/admin/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -360,6 +349,7 @@ app.get("/api/debug/courses", (req, res) => {
 });
 
 // ---------- FRONTEND FALLBACK ----------
+// For any non-API route, serve the main index.html (SPA routing)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
