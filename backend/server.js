@@ -54,37 +54,57 @@ console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
 // -----------------------------------------------------
-//   CAPACITY HELPER: how many spots left in this slot?
+//   CAPACITY HELPER: safest possible interpretation
+//   → look at ALL numeric availability-ish fields
+//   → use the SMALLEST positive value as "spots left"
 // -----------------------------------------------------
 function getRemainingCapacity(slot) {
   if (!slot || typeof slot !== "object") return 0;
 
-  // 1) Common explicit fields
-  if (typeof slot.remaining === "number") return slot.remaining;
-  if (typeof slot.available === "number") return slot.available;
-  if (typeof slot.availableSpots === "number") return slot.availableSpots;
-  if (typeof slot.spots === "number") return slot.spots;
-  if (typeof slot.openSpots === "number") return slot.openSpots;
-  if (typeof slot.slotsRemaining === "number") return slot.slotsRemaining;
-  if (typeof slot.capacity === "number") return slot.capacity;
+  const candidates = [];
 
-  // 2) Derived from maxPlayers / bookedPlayers style
+  // Raw "remaining / available" style fields
+  if (typeof slot.remaining === "number") candidates.push(slot.remaining);
+  if (typeof slot.available === "number") candidates.push(slot.available);
+  if (typeof slot.availableSpots === "number")
+    candidates.push(slot.availableSpots);
+  if (typeof slot.openSpots === "number") candidates.push(slot.openSpots);
+  if (typeof slot.slotsRemaining === "number")
+    candidates.push(slot.slotsRemaining);
+  if (typeof slot.spots === "number") candidates.push(slot.spots);
+
+  // Capacity-oriented fields (we treat these *conservatively*)
+  if (typeof slot.size === "number") candidates.push(slot.size);
+  if (typeof slot.partySize === "number") candidates.push(slot.partySize);
+  if (typeof slot.maxParty === "number") candidates.push(slot.maxParty);
+  if (typeof slot.capacity === "number") candidates.push(slot.capacity);
+
+  // Derived from maxPlayers - bookedPlayers / players
   if (typeof slot.maxPlayers === "number") {
     if (typeof slot.bookedPlayers === "number") {
-      return Math.max(0, slot.maxPlayers - slot.bookedPlayers);
-    }
-    if (typeof slot.players === "number") {
-      return Math.max(0, slot.maxPlayers - slot.players);
+      candidates.push(slot.maxPlayers - slot.bookedPlayers);
+    } else if (typeof slot.players === "number") {
+      candidates.push(slot.maxPlayers - slot.players);
+    } else {
+      // If we *only* know maxPlayers, treat it as an upper bound
+      candidates.push(slot.maxPlayers);
     }
   }
 
-  // 3) Sometimes scrapers store "size" as how many you *can* book in this slot
-  if (typeof slot.size === "number") return slot.size;
-  if (typeof slot.partySize === "number") return slot.partySize;
-  if (typeof slot.maxParty === "number") return slot.maxParty;
+  // Filter to positive numbers
+  const positives = candidates
+    .map((n) => Number(n))
+    .filter((n) => Number.isFinite(n) && n > 0);
 
-  // 4) Fallback: if we truly don't know, treat as 1 seat
-  return 1;
+  if (positives.length === 0) {
+    // We truly don't know – safest is "1 seat"
+    return 1;
+  }
+
+  // SAFEST rule: don't over-estimate available capacity
+  //   → use the smallest positive numeric field
+  const min = Math.min(...positives);
+  return min;
 }
 
 // ---------- ROUTES ----------
@@ -134,7 +154,7 @@ app.post("/api/search", async (req, res) => {
       const courseId = c.id || c.name;
       const provider = c.provider || "Other";
 
-      // 1) Try cache first (keyed by courseId + date + holes + partySize)
+      // 1) Try cache first
       const cached = getCachedSlots({
         courseId,
         date,
@@ -149,7 +169,7 @@ app.post("/api/search", async (req, res) => {
 
         console.log(
           `⚡ cache hit → ${c.name} → raw=${cached.length}, ` +
-          `after capacity filter=${filteredCached.length}`
+            `after capacity filter=${filteredCached.length}`
         );
 
         return filteredCached;
@@ -157,17 +177,17 @@ app.post("/api/search", async (req, res) => {
 
       // 2) Fallback: scrape live, then save to cache
       try {
-        const scraped = await scrapeCourse(c, criteria, feeGroups) || [];
+        const scraped = (await scrapeCourse(c, criteria, feeGroups)) || [];
         const filteredScraped = scraped.filter(
           (slot) => getRemainingCapacity(slot) >= criteria.partySize
         );
 
         console.log(
           `✅ scraped ${c.name} → raw=${scraped.length}, ` +
-          `after capacity filter=${filteredScraped.length}`
+            `after capacity filter=${filteredScraped.length}`
         );
 
-        // Save *raw* slots into cache (so future logic can change if needed)
+        // Save raw slots into cache
         saveSlotsToCache({
           courseId,
           courseName: c.name,
@@ -205,7 +225,7 @@ app.post("/api/search", async (req, res) => {
 
     console.log(
       `🔎 /api/search finished for ${date} ` +
-      `size=${criteria.partySize} → total slots: ${slots.length}`
+        `size=${criteria.partySize} → total slots: ${slots.length}`
     );
 
     res.json({ slots });
@@ -221,9 +241,6 @@ app.post("/api/analytics/event", async (req, res) => {
   try {
     const { type, payload = {}, at } = req.body || {};
 
-    // Derive a userId:
-    //  - Prefer payload.userId (future)
-    //  - Fallback to IP, so a single device counts as one user
     const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
     const userId = payload.userId || ip || null;
 
