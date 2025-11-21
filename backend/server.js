@@ -13,10 +13,7 @@ import {
   getTopCourses,
 } from "./analytics.js";
 
-// NEW: auth router (login / signup / verify)
-import { authRouter } from "./auth.js";
-
-// NEW: slot cache helpers (uses db.js under the hood)
+// Slot cache helpers
 import db from "./db.js";
 import { getCachedSlots, saveSlotsToCache } from "./slotCache.js";
 
@@ -32,9 +29,6 @@ app.use(express.json());
 
 // Serve static frontend from /public at project root
 app.use(express.static(path.join(__dirname, "..", "public")));
-
-// ---------- AUTH ROUTES ----------
-app.use("/api/auth", authRouter);
 
 // ---------- LOAD DATA ----------
 const PERTH_LAT = -31.9523;
@@ -70,6 +64,32 @@ app.get("/health", (req, res) => {
 app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
+
+// Helper: does this slot have enough room for the requested party?
+function slotHasCapacity(slot, partySize) {
+  if (!partySize || partySize <= 1) return true;
+
+  // Try a bunch of possible fields that the scrapers might set
+  const remaining =
+    typeof slot.remaining === "number"
+      ? slot.remaining
+      : typeof slot.slotsRemaining === "number"
+      ? slot.slotsRemaining
+      : typeof slot.availableSpots === "number"
+      ? slot.availableSpots
+      : typeof slot.spotsAvailable === "number"
+      ? slot.spotsAvailable
+      : typeof slot.spots === "number"
+      ? slot.spots
+      : typeof slot.capacity === "number"
+      ? slot.capacity
+      : null;
+
+  // If we genuinely don't know, keep the slot (safe fallback)
+  if (remaining === null) return true;
+
+  return remaining >= partySize;
+}
 
 // Tee time search with cache layer + debug logging
 app.post("/api/search", async (req, res) => {
@@ -115,11 +135,10 @@ app.post("/api/search", async (req, res) => {
       });
 
       if (cached) {
-        if (cached.length > 0) {
-          console.log(`⚡ cache hit → ${c.name} → ${cached.length} slots`);
-        } else {
-          console.log(`⚡ cache hit → ${c.name} → 0 slots`);
-        }
+        const count = Array.isArray(cached) ? cached.length : 0;
+        console.log(
+          `⚡ cache hit → ${c.name} → ${count} raw slots (before party filter)`
+        );
         return cached;
       }
 
@@ -129,9 +148,9 @@ app.post("/api/search", async (req, res) => {
         const count = Array.isArray(result) ? result.length : 0;
 
         if (count > 0) {
-          console.log(`✅ scraped ${c.name} → ${count} slots`);
+          console.log(`✅ scraped ${c.name} → ${count} raw slots`);
         } else {
-          console.log(`⚪ scraped ${c.name} → 0 slots`);
+          console.log(`⚪ scraped ${c.name} → 0 raw slots`);
         }
 
         saveSlotsToCache({
@@ -168,9 +187,16 @@ app.post("/api/search", async (req, res) => {
     const allResults = await Promise.all(jobs);
     const slots = allResults.flat();
 
-    console.log(`🔎 /api/search finished → total slots: ${slots.length}`);
+    // NEW: enforce party-size capacity on the final list
+    const filteredSlots = slots.filter((slot) =>
+      slotHasCapacity(slot, criteria.partySize)
+    );
 
-    res.json({ slots });
+    console.log(
+      `🔎 /api/search finished → total raw: ${slots.length}, after party filter (${criteria.partySize}): ${filteredSlots.length}`
+    );
+
+    res.json({ slots: filteredSlots });
   } catch (err) {
     console.error("search error", err);
     res.status(500).json({ error: "internal error", detail: err.message });
@@ -214,41 +240,27 @@ app.post("/api/analytics/event", async (req, res) => {
 // ---------- ANALYTICS SUMMARY HELPERS ----------
 
 function buildFlatSummary(summary, topCourses) {
-  // Summary coming from analytics.js:
-  // {
-  //   homeViews, searches, bookingClicks,
-  //   usersAllTime, usersToday, usersWeek, newUsers7d
-  // }
-
   const homeViews = summary.homeViews ?? 0;
   const searches = summary.searches ?? 0;
   const bookingClicks = summary.bookingClicks ?? 0;
   const newUsers7d = summary.newUsers7d ?? 0;
 
   return {
-    // Names your Admin UI is probably using:
     homePageViews: homeViews,
     courseBookingClicks: bookingClicks,
     searches,
     newUsers: newUsers7d,
-
-    // Also keep the alternative names we already used:
     homeViews,
     bookingClicks,
-
-    // Extra stats if we want them later:
     usersAllTime: summary.usersAllTime ?? 0,
     usersToday: summary.usersToday ?? 0,
     usersWeek: summary.usersWeek ?? 0,
-
-    // Top courses by booking clicks
     topCourses: topCourses || [],
   };
 }
 
 // ---------- ANALYTICS SUMMARY ENDPOINTS ----------
 
-// 1) Legacy-style endpoint (in case Admin UI calls /api/analytics)
 app.get("/api/analytics", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -265,7 +277,6 @@ app.get("/api/analytics", async (req, res) => {
   }
 });
 
-// 2) Explicit summary endpoint used earlier
 app.get("/api/analytics/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -282,7 +293,6 @@ app.get("/api/analytics/summary", async (req, res) => {
   }
 });
 
-// 3) Admin endpoint (if Admin UI points here)
 app.get("/api/admin/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -318,7 +328,6 @@ app.get("/api/debug/courses", (req, res) => {
 });
 
 // ---------- FRONTEND FALLBACK ----------
-// For any non-API route, serve the main index.html (SPA routing)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
