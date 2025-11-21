@@ -6,7 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// Analytics helpers (in-memory / SQLite behind the scenes)
+// Analytics helpers (SQLite)
 import {
   recordEvent,
   getAnalyticsSummary,
@@ -53,6 +53,40 @@ if (fs.existsSync(feeGroupsPath)) {
 console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
+// -----------------------------------------------------
+//   CAPACITY HELPER: how many spots left in this slot?
+// -----------------------------------------------------
+function getRemainingCapacity(slot) {
+  if (!slot || typeof slot !== "object") return 0;
+
+  // 1) Common explicit fields
+  if (typeof slot.remaining === "number") return slot.remaining;
+  if (typeof slot.available === "number") return slot.available;
+  if (typeof slot.availableSpots === "number") return slot.availableSpots;
+  if (typeof slot.spots === "number") return slot.spots;
+  if (typeof slot.openSpots === "number") return slot.openSpots;
+  if (typeof slot.slotsRemaining === "number") return slot.slotsRemaining;
+  if (typeof slot.capacity === "number") return slot.capacity;
+
+  // 2) Derived from maxPlayers / bookedPlayers style
+  if (typeof slot.maxPlayers === "number") {
+    if (typeof slot.bookedPlayers === "number") {
+      return Math.max(0, slot.maxPlayers - slot.bookedPlayers);
+    }
+    if (typeof slot.players === "number") {
+      return Math.max(0, slot.maxPlayers - slot.players);
+    }
+  }
+
+  // 3) Sometimes scrapers store "size" as how many you *can* book in this slot
+  if (typeof slot.size === "number") return slot.size;
+  if (typeof slot.partySize === "number") return slot.partySize;
+  if (typeof slot.maxParty === "number") return slot.maxParty;
+
+  // 4) Fallback: if we truly don't know, treat as 1 seat
+  return 1;
+}
+
 // ---------- ROUTES ----------
 
 // Health check
@@ -65,33 +99,7 @@ app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Helper: does this slot have enough room for the requested party?
-function slotHasCapacity(slot, partySize) {
-  if (!partySize || partySize <= 1) return true;
-
-  // Try a bunch of possible fields that the scrapers might set
-  const remaining =
-    typeof slot.remaining === "number"
-      ? slot.remaining
-      : typeof slot.slotsRemaining === "number"
-      ? slot.slotsRemaining
-      : typeof slot.availableSpots === "number"
-      ? slot.availableSpots
-      : typeof slot.spotsAvailable === "number"
-      ? slot.spotsAvailable
-      : typeof slot.spots === "number"
-      ? slot.spots
-      : typeof slot.capacity === "number"
-      ? slot.capacity
-      : null;
-
-  // If we genuinely don't know, keep the slot (safe fallback)
-  if (remaining === null) return true;
-
-  return remaining >= partySize;
-}
-
-// Tee time search with cache layer + debug logging
+// Tee time search with cache layer + capacity filter
 app.post("/api/search", async (req, res) => {
   try {
     const {
@@ -126,7 +134,7 @@ app.post("/api/search", async (req, res) => {
       const courseId = c.id || c.name;
       const provider = c.provider || "Other";
 
-      // 1) Try cache first
+      // 1) Try cache first (keyed by courseId + date + holes + partySize)
       const cached = getCachedSlots({
         courseId,
         date,
@@ -135,24 +143,31 @@ app.post("/api/search", async (req, res) => {
       });
 
       if (cached) {
-        const count = Array.isArray(cached) ? cached.length : 0;
-        console.log(
-          `⚡ cache hit → ${c.name} → ${count} raw slots (before party filter)`
+        const filteredCached = cached.filter(
+          (slot) => getRemainingCapacity(slot) >= criteria.partySize
         );
-        return cached;
+
+        console.log(
+          `⚡ cache hit → ${c.name} → raw=${cached.length}, ` +
+          `after capacity filter=${filteredCached.length}`
+        );
+
+        return filteredCached;
       }
 
       // 2) Fallback: scrape live, then save to cache
       try {
-        const result = await scrapeCourse(c, criteria, feeGroups);
-        const count = Array.isArray(result) ? result.length : 0;
+        const scraped = await scrapeCourse(c, criteria, feeGroups) || [];
+        const filteredScraped = scraped.filter(
+          (slot) => getRemainingCapacity(slot) >= criteria.partySize
+        );
 
-        if (count > 0) {
-          console.log(`✅ scraped ${c.name} → ${count} raw slots`);
-        } else {
-          console.log(`⚪ scraped ${c.name} → 0 raw slots`);
-        }
+        console.log(
+          `✅ scraped ${c.name} → raw=${scraped.length}, ` +
+          `after capacity filter=${filteredScraped.length}`
+        );
 
+        // Save *raw* slots into cache (so future logic can change if needed)
         saveSlotsToCache({
           courseId,
           courseName: c.name,
@@ -162,12 +177,13 @@ app.post("/api/search", async (req, res) => {
           partySize: criteria.partySize,
           earliest,
           latest,
-          slots: result || [],
+          slots: scraped,
         });
 
-        return result || [];
+        return filteredScraped;
       } catch (err) {
         console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
+
         // cache an empty result so subsequent lookups are fast
         saveSlotsToCache({
           courseId,
@@ -187,16 +203,12 @@ app.post("/api/search", async (req, res) => {
     const allResults = await Promise.all(jobs);
     const slots = allResults.flat();
 
-    // NEW: enforce party-size capacity on the final list
-    const filteredSlots = slots.filter((slot) =>
-      slotHasCapacity(slot, criteria.partySize)
-    );
-
     console.log(
-      `🔎 /api/search finished → total raw: ${slots.length}, after party filter (${criteria.partySize}): ${filteredSlots.length}`
+      `🔎 /api/search finished for ${date} ` +
+      `size=${criteria.partySize} → total slots: ${slots.length}`
     );
 
-    res.json({ slots: filteredSlots });
+    res.json({ slots });
   } catch (err) {
     console.error("search error", err);
     res.status(500).json({ error: "internal error", detail: err.message });
@@ -250,11 +262,14 @@ function buildFlatSummary(summary, topCourses) {
     courseBookingClicks: bookingClicks,
     searches,
     newUsers: newUsers7d,
+
     homeViews,
     bookingClicks,
+
     usersAllTime: summary.usersAllTime ?? 0,
     usersToday: summary.usersToday ?? 0,
     usersWeek: summary.usersWeek ?? 0,
+
     topCourses: topCourses || [],
   };
 }
