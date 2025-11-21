@@ -13,6 +13,10 @@ import {
   getTopCourses,
 } from "./analytics.js";
 
+// NEW: slot cache helpers
+import db from "./db.js";
+import { getCachedSlots, saveSlotsToCache } from "./slotCache.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -49,138 +53,7 @@ if (fs.existsSync(feeGroupsPath)) {
 console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
-/* =========================================================
-   METRO vs REGIONAL GROUPING (for pre-scraping only)
-   ========================================================= */
-
-// These names must match entries in data/courses.json
-const METRO_COURSE_NAMES = new Set([
-  "Wembley Golf Course",
-  "Point Walter Golf Course",
-  "Maylands Peninsula Public Golf Course",
-  "Collier Park Golf Course",
-  "Whaleback Golf Course",
-  "Araluen Estate",
-  "Sun City Country Club",
-  "Marangaroo Golf Course",
-  "Joondalup Resort",
-  "The Vines Resort & Country Club",
-  "Secret Harbour Golf Links",
-  "Meadow Springs Golf & Country Club",
-  "Kwinana Golf Club",
-  "The Cut Golf Course",
-  "Fremantle Public Golf Course",
-  "Armadale Golf Course (The Springs)",
-  "Hamersley Public Golf Course",
-  "Lake Claremont Golf Course",
-  "Carramar Golf Course",
-  "Hillview Golf Course",
-  "Marri Park Golf Course",
-  "Altone Park Golf Course",
-]);
-
-function isMetroCourse(course) {
-  const name = String(course.name || "").trim();
-  return METRO_COURSE_NAMES.has(name);
-}
-
-/* =========================================================
-   BACKGROUND PRE-SCRAPING (ONLY WARMS PROVIDER SITES)
-   - Does NOT change UI, filters, or booking behaviour
-   ========================================================= */
-
-const HOLES_OPTIONS = [9, 18];
-const METRO_INTERVAL_MS = 10 * 60 * 1000;   // 10 minutes
-const REGIONAL_INTERVAL_MS = 60 * 60 * 1000; // 60 minutes
-
-function getNext8Days() {
-  const days = [];
-  const today = new Date();
-  for (let i = 0; i < 8; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    days.push(`${yyyy}-${mm}-${dd}`);
-  }
-  return days;
-}
-
-async function preScrapeCourses(coursesSubset, label) {
-  try {
-    const days = getNext8Days();
-
-    console.log(
-      `[pre-scrape] Running batch for ${label}: ${coursesSubset.length} courses, days=${days.join(
-        ","
-      )}`
-    );
-
-    for (const date of days) {
-      for (const holes of HOLES_OPTIONS) {
-        const criteria = {
-          date,
-          earliest: "06:00",
-          latest: "18:00",
-          holes,
-          partySize: 4, // maximum group, your normal filters still apply in real /api/search
-        };
-
-        // Scrape each course in parallel for this (date, holes)
-        const jobs = coursesSubset.map(async (course) => {
-          try {
-            const slots = (await scrapeCourse(course, criteria, feeGroups)) || [];
-            const count = Array.isArray(slots) ? slots.length : 0;
-
-            if (count > 0) {
-              console.log(
-                `  [pre-scrape:${label}] ${course.name} ${date} holes=${holes} → ${count} slots`
-              );
-            }
-          } catch (err) {
-            console.error(
-              `  [pre-scrape:${label}] Error for ${course.name} on ${date} holes=${holes}:`,
-              err.message
-            );
-          }
-        });
-
-        await Promise.all(jobs);
-      }
-    }
-
-    console.log(`[pre-scrape] Finished batch for ${label}`);
-  } catch (err) {
-    console.error(`[pre-scrape] Fatal error for ${label}:`, err);
-  }
-}
-
-// Split courses into metro + regional once at startup
-const metroCourses = courses.filter(isMetroCourse);
-const regionalCourses = courses.filter((c) => !isMetroCourse(c));
-
-console.log(
-  `[pre-scrape] Metro courses: ${metroCourses.length}, Regional courses: ${regionalCourses.length}`
-);
-
-// Kick off initial warmup on startup
-preScrapeCourses(metroCourses, "metro-initial");
-preScrapeCourses(regionalCourses, "regional-initial");
-
-// Metro courses: every 10 minutes
-setInterval(() => {
-  preScrapeCourses(metroCourses, "metro-10min");
-}, METRO_INTERVAL_MS);
-
-// Regional courses: every 60 minutes
-setInterval(() => {
-  preScrapeCourses(regionalCourses, "regional-60min");
-}, REGIONAL_INTERVAL_MS);
-
-/* =========================================================
-   ROUTES (unchanged behaviour)
-   ========================================================= */
+// ---------- ROUTES ----------
 
 // Health check
 app.get("/health", (req, res) => {
@@ -192,7 +65,7 @@ app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Tee time search (live scrape, same behaviour as before)
+// Tee time search with cache layer + debug logging
 app.post("/api/search", async (req, res) => {
   try {
     const {
@@ -207,6 +80,7 @@ app.post("/api/search", async (req, res) => {
       return res.status(400).json({ error: "date is required" });
     }
 
+    // make holes a NUMBER (9 or 18), not a string
     const holesValue =
       holes === "" || holes === null || typeof holes === "undefined"
         ? ""
@@ -223,19 +97,64 @@ app.post("/api/search", async (req, res) => {
     console.log("Incoming /api/search", criteria);
 
     const jobs = courses.map(async (c) => {
+      const courseId = c.id || c.name;
+      const provider = c.provider || "Other";
+
+      // 1) Try cache first
+      const cached = getCachedSlots({
+        courseId,
+        date,
+        holes: holesValue || null,
+        partySize: criteria.partySize,
+      });
+
+      if (cached) {
+        if (cached.length > 0) {
+          console.log(`⚡ cache hit → ${c.name} → ${cached.length} slots`);
+        } else {
+          console.log(`⚡ cache hit → ${c.name} → 0 slots`);
+        }
+        return cached;
+      }
+
+      // 2) Fallback: scrape live, then save to cache
       try {
         const result = await scrapeCourse(c, criteria, feeGroups);
         const count = Array.isArray(result) ? result.length : 0;
 
         if (count > 0) {
-          console.log(`✅ ${c.name} → ${count} slots`);
+          console.log(`✅ scraped ${c.name} → ${count} slots`);
         } else {
-          console.log(`⚪ ${c.name} → 0 slots`);
+          console.log(`⚪ scraped ${c.name} → 0 slots`);
         }
+
+        saveSlotsToCache({
+          courseId,
+          courseName: c.name,
+          provider,
+          date,
+          holes: holesValue || null,
+          partySize: criteria.partySize,
+          earliest,
+          latest,
+          slots: result || [],
+        });
 
         return result || [];
       } catch (err) {
         console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
+        // cache an empty result so subsequent lookups are fast
+        saveSlotsToCache({
+          courseId,
+          courseName: c.name,
+          provider,
+          date,
+          holes: holesValue || null,
+          partySize: criteria.partySize,
+          earliest,
+          latest,
+          slots: [],
+        });
         return [];
       }
     });
@@ -258,6 +177,9 @@ app.post("/api/analytics/event", async (req, res) => {
   try {
     const { type, payload = {}, at } = req.body || {};
 
+    // Derive a userId:
+    //  - Prefer payload.userId (future)
+    //  - Fallback to IP, so a single device counts as one user
     const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
     const userId = payload.userId || ip || null;
 
@@ -286,29 +208,41 @@ app.post("/api/analytics/event", async (req, res) => {
 // ---------- ANALYTICS SUMMARY HELPERS ----------
 
 function buildFlatSummary(summary, topCourses) {
+  // Summary coming from analytics.js:
+  // {
+  //   homeViews, searches, bookingClicks,
+  //   usersAllTime, usersToday, usersWeek, newUsers7d
+  // }
+
   const homeViews = summary.homeViews ?? 0;
   const searches = summary.searches ?? 0;
   const bookingClicks = summary.bookingClicks ?? 0;
   const newUsers7d = summary.newUsers7d ?? 0;
 
   return {
+    // Names your Admin UI is probably using:
     homePageViews: homeViews,
     courseBookingClicks: bookingClicks,
     searches,
     newUsers: newUsers7d,
 
+    // Also keep the alternative names we already used:
     homeViews,
     bookingClicks,
 
+    // Extra stats if we want them later:
     usersAllTime: summary.usersAllTime ?? 0,
     usersToday: summary.usersToday ?? 0,
     usersWeek: summary.usersWeek ?? 0,
 
+    // Top courses by booking clicks
     topCourses: topCourses || [],
   };
 }
 
-// Legacy-style endpoint
+// ---------- ANALYTICS SUMMARY ENDPOINTS ----------
+
+// 1) Legacy-style endpoint (in case Admin UI calls /api/analytics)
 app.get("/api/analytics", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -325,7 +259,7 @@ app.get("/api/analytics", async (req, res) => {
   }
 });
 
-// Explicit summary endpoint
+// 2) Explicit summary endpoint used earlier
 app.get("/api/analytics/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -342,7 +276,7 @@ app.get("/api/analytics/summary", async (req, res) => {
   }
 });
 
-// Admin endpoint
+// 3) Admin endpoint (if Admin UI points here)
 app.get("/api/admin/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -359,7 +293,7 @@ app.get("/api/admin/summary", async (req, res) => {
   }
 });
 
-// DEBUG: list of courses with coords + basic flags
+// DEBUG: return list of courses with coords + basic flags
 app.get("/api/debug/courses", (req, res) => {
   const debugList = courses.map((c) => ({
     name: c.name,
@@ -378,6 +312,7 @@ app.get("/api/debug/courses", (req, res) => {
 });
 
 // ---------- FRONTEND FALLBACK ----------
+// For any non-API route, serve the main index.html (SPA routing)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
