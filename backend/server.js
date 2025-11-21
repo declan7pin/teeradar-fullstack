@@ -49,252 +49,138 @@ if (fs.existsSync(feeGroupsPath)) {
 console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
-// ======================================
-//       SEARCH CACHE (DATE + HOLES)
-// ======================================
-//
-// We pre-scrape by (date, holes) with a broad window (06:00–18:00)
-// and partySize = 1 (so we see ALL slots).
-// Then /api/search just filters by time window + players in memory.
-//
+/* =========================================================
+   METRO vs REGIONAL GROUPING (for pre-scraping only)
+   ========================================================= */
 
-const searchCache = new Map(); // key: JSON.stringify({date, holes}) -> { slots, fetchedAt }
+// These names must match entries in data/courses.json
+const METRO_COURSE_NAMES = new Set([
+  "Wembley Golf Course",
+  "Point Walter Golf Course",
+  "Maylands Peninsula Public Golf Course",
+  "Collier Park Golf Course",
+  "Whaleback Golf Course",
+  "Araluen Estate",
+  "Sun City Country Club",
+  "Marangaroo Golf Course",
+  "Joondalup Resort",
+  "The Vines Resort & Country Club",
+  "Secret Harbour Golf Links",
+  "Meadow Springs Golf & Country Club",
+  "Kwinana Golf Club",
+  "The Cut Golf Course",
+  "Fremantle Public Golf Course",
+  "Armadale Golf Course (The Springs)",
+  "Hamersley Public Golf Course",
+  "Lake Claremont Golf Course",
+  "Carramar Golf Course",
+  "Hillview Golf Course",
+  "Marri Park Golf Course",
+  "Altone Park Golf Course",
+]);
 
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const PRE_SCRAPE_DAYS = 8;           // today + next 7 days
-const CANONICAL_EARLIEST = "06:00";
-const CANONICAL_LATEST = "18:00";
-
-// Helper: format Date → "YYYY-MM-DD"
-function toISODate(d) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+function isMetroCourse(course) {
+  const name = String(course.name || "").trim();
+  return METRO_COURSE_NAMES.has(name);
 }
 
-// Returns an array of date strings for today + next 7 days
-function getNext8Dates() {
-  const out = [];
-  const now = new Date();
-  for (let i = 0; i < PRE_SCRAPE_DAYS; i++) {
-    const d = new Date(now);
-    d.setDate(d.getDate() + i);
-    out.push(toISODate(d));
+/* =========================================================
+   BACKGROUND PRE-SCRAPING (ONLY WARMS PROVIDER SITES)
+   - Does NOT change UI, filters, or booking behaviour
+   ========================================================= */
+
+const HOLES_OPTIONS = [9, 18];
+const METRO_INTERVAL_MS = 10 * 60 * 1000;   // 10 minutes
+const REGIONAL_INTERVAL_MS = 60 * 60 * 1000; // 60 minutes
+
+function getNext8Days() {
+  const days = [];
+  const today = new Date();
+  for (let i = 0; i < 8; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    days.push(`${yyyy}-${mm}-${dd}`);
   }
-  return out;
+  return days;
 }
 
-// Normalise incoming /api/search criteria
-function normalizeCriteria(raw) {
-  const {
-    date,
-    earliest = "06:00",
-    latest = "17:00",
-    holes = "",
-    partySize = 1,
-  } = raw || {};
-
-  if (!date) {
-    throw new Error("date is required");
-  }
-
-  const holesValue =
-    holes === "" || holes === null || typeof holes === "undefined"
-      ? ""
-      : Number(holes);
-
-  return {
-    date,
-    earliest,
-    latest,
-    holes: holesValue,
-    partySize: Number(partySize) || 1,
-  };
-}
-
-// Cache key depends ONLY on date + holes (NOT players / time window)
-function cacheKeyFromCriteria(c) {
-  return JSON.stringify({
-    date: c.date,
-    holes: c.holes === "" ? "" : Number(c.holes),
-  });
-}
-
-// Convert "HH:MM" → minutes from midnight
-function timeToMinutes(str) {
-  if (!str || typeof str !== "string") return null;
-  const m = str.match(/^(\d{1,2}):(\d{2})/);
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (Number.isNaN(h) || Number.isNaN(min)) return null;
-  return h * 60 + min;
-}
-
-// Extract tee time from a slot object
-function slotTimeToMinutes(slot) {
-  const t =
-    slot.time ||
-    slot.teeTime ||
-    slot.tee_time ||
-    slot.startTime ||
-    slot.start_time ||
-    "";
-
-  return timeToMinutes(t);
-}
-
-// Filter slots by user’s time window + party size
-function filterSlotsForCriteria(slots, criteria) {
-  const earliestM = timeToMinutes(criteria.earliest);
-  const latestM = timeToMinutes(criteria.latest);
-  const neededPlayers = Number(criteria.partySize) || 1;
-
-  return slots.filter((slot) => {
-    // Time filter
-    const sm = slotTimeToMinutes(slot);
-    if (
-      sm != null &&
-      earliestM != null &&
-      latestM != null &&
-      (sm < earliestM || sm > latestM)
-    ) {
-      return false;
-    }
-
-    // Capacity filter (best-effort; we keep slot if we can't read a capacity)
-    const capRaw =
-      slot.availableSpots ??
-      slot.available_spots ??
-      slot.spots ??
-      slot.remainingPlayers ??
-      slot.capacity ??
-      slot.remaining ??
-      null;
-
-    if (capRaw != null) {
-      const cap = Number(capRaw);
-      if (!Number.isNaN(cap) && cap < neededPlayers) {
-        return false;
-      }
-    }
-
-    return true;
-  });
-}
-
-// Core scraping for a given criteria
-async function scrapeForCriteria(criteria) {
-  console.log("doSearch() with criteria:", criteria);
-
-  const jobs = courses.map(async (c) => {
-    try {
-      const result = await scrapeCourse(c, criteria, feeGroups);
-      const count = Array.isArray(result) ? result.length : 0;
-
-      if (count > 0) {
-        console.log(`✅ ${c.name} → ${count} slots`);
-      } else {
-        console.log(`⚪ ${c.name} → 0 slots`);
-      }
-
-      return result || [];
-    } catch (err) {
-      console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
-      return [];
-    }
-  });
-
-  const allResults = await Promise.all(jobs);
-  const slots = allResults.flat();
-
-  console.log(`🔎 doSearch() finished → total slots: ${slots.length}`);
-  return slots;
-}
-
-// Flag to avoid overlapping runs
-let isPreScraping = false;
-
-// Background job: scrape ALL courses for next 8 days, 9 & 18 holes,
-// 06:00–18:00, partySize = 1, every 10 minutes.
-async function runPreScrape() {
-  if (isPreScraping) {
-    console.log("[pre-scrape] already running, skipping this cycle");
-    return;
-  }
-  isPreScraping = true;
-
+async function preScrapeCourses(coursesSubset, label) {
   try {
-    const dates = getNext8Dates();
-    const holesOptions = [9, 18];
+    const days = getNext8Days();
 
     console.log(
-      "[pre-scrape] starting for dates:",
-      dates.join(", "),
-      "holes:",
-      holesOptions
+      `[pre-scrape] Running batch for ${label}: ${coursesSubset.length} courses, days=${days.join(
+        ","
+      )}`
     );
 
-    for (const date of dates) {
-      for (const holes of holesOptions) {
-        try {
-          const baseCriteria = {
-            date,
-            earliest: CANONICAL_EARLIEST,
-            latest: CANONICAL_LATEST,
-            holes,
-            partySize: 1, // scrape with 1 player so we see ALL times
-          };
+    for (const date of days) {
+      for (const holes of HOLES_OPTIONS) {
+        const criteria = {
+          date,
+          earliest: "06:00",
+          latest: "18:00",
+          holes,
+          partySize: 4, // maximum group, your normal filters still apply in real /api/search
+        };
 
-          const criteria = normalizeCriteria(baseCriteria);
-          const key = cacheKeyFromCriteria(criteria);
+        // Scrape each course in parallel for this (date, holes)
+        const jobs = coursesSubset.map(async (course) => {
+          try {
+            const slots = (await scrapeCourse(course, criteria, feeGroups)) || [];
+            const count = Array.isArray(slots) ? slots.length : 0;
 
-          // If we have fresh cache for this date+holes, skip
-          const existing = searchCache.get(key);
-          if (existing && Date.now() - existing.fetchedAt <= CACHE_TTL_MS) {
-            console.log(`[pre-scrape] cache fresh, skipping ${key}`);
-            continue;
+            if (count > 0) {
+              console.log(
+                `  [pre-scrape:${label}] ${course.name} ${date} holes=${holes} → ${count} slots`
+              );
+            }
+          } catch (err) {
+            console.error(
+              `  [pre-scrape:${label}] Error for ${course.name} on ${date} holes=${holes}:`,
+              err.message
+            );
           }
+        });
 
-          console.log(
-            `[pre-scrape] scraping date=${date}, holes=${holes}, partySize=1`
-          );
-
-          const slots = await scrapeForCriteria(criteria);
-
-          searchCache.set(key, {
-            slots,
-            fetchedAt: Date.now(),
-          });
-
-          console.log(
-            `[pre-scrape] stored ${slots.length} slots under key ${key}`
-          );
-        } catch (err) {
-          console.error(
-            `[pre-scrape] error for date=${date}, holes=${holes}:`,
-            err.message
-          );
-        }
+        await Promise.all(jobs);
       }
     }
 
-    console.log("[pre-scrape] finished cycle");
+    console.log(`[pre-scrape] Finished batch for ${label}`);
   } catch (err) {
-    console.error("[pre-scrape] fatal error:", err);
-  } finally {
-    isPreScraping = false;
+    console.error(`[pre-scrape] Fatal error for ${label}:`, err);
   }
 }
 
-// Kick off immediately on startup
-runPreScrape();
+// Split courses into metro + regional once at startup
+const metroCourses = courses.filter(isMetroCourse);
+const regionalCourses = courses.filter((c) => !isMetroCourse(c));
 
-// Then repeat every 10 minutes
-setInterval(runPreScrape, CACHE_TTL_MS);
+console.log(
+  `[pre-scrape] Metro courses: ${metroCourses.length}, Regional courses: ${regionalCourses.length}`
+);
 
-// ---------- ROUTES ----------
+// Kick off initial warmup on startup
+preScrapeCourses(metroCourses, "metro-initial");
+preScrapeCourses(regionalCourses, "regional-initial");
+
+// Metro courses: every 10 minutes
+setInterval(() => {
+  preScrapeCourses(metroCourses, "metro-10min");
+}, METRO_INTERVAL_MS);
+
+// Regional courses: every 60 minutes
+setInterval(() => {
+  preScrapeCourses(regionalCourses, "regional-60min");
+}, REGIONAL_INTERVAL_MS);
+
+/* =========================================================
+   ROUTES (unchanged behaviour)
+   ========================================================= */
 
 // Health check
 app.get("/health", (req, res) => {
@@ -306,47 +192,60 @@ app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Tee time search: date+holes cached, time window + players filtered in memory
+// Tee time search (live scrape, same behaviour as before)
 app.post("/api/search", async (req, res) => {
   try {
-    let criteria;
-    try {
-      criteria = normalizeCriteria(req.body || {});
-    } catch (err) {
-      return res.status(400).json({ error: err.message || "bad request" });
+    const {
+      date,
+      earliest = "06:00",
+      latest = "17:00",
+      holes = "",
+      partySize = 1,
+    } = req.body || {};
+
+    if (!date) {
+      return res.status(400).json({ error: "date is required" });
     }
 
-    const cacheKey = cacheKeyFromCriteria(criteria);
-    const now = Date.now();
-    const cached = searchCache.get(cacheKey);
+    const holesValue =
+      holes === "" || holes === null || typeof holes === "undefined"
+        ? ""
+        : Number(holes);
 
-    if (cached && now - cached.fetchedAt <= CACHE_TTL_MS) {
-      console.log(
-        `[cache] Serving /api/search from cache for key ${cacheKey} (date=${criteria.date}, holes=${criteria.holes})`
-      );
-      const filtered = filterSlotsForCriteria(cached.slots, criteria);
-      return res.json({ slots: filtered });
-    }
-
-    console.log(
-      `[cache] No fresh cache for key ${cacheKey} (date=${criteria.date}, holes=${criteria.holes}), running live scrape`
-    );
-
-    // Live scrape still uses canonical full-day window + partySize=1
-    const scrapeCriteria = {
-      ...criteria,
-      earliest: CANONICAL_EARLIEST,
-      latest: CANONICAL_LATEST,
-      partySize: 1,
+    const criteria = {
+      date,
+      earliest,
+      latest,
+      holes: holesValue,
+      partySize: Number(partySize) || 1,
     };
 
-    const slots = await scrapeForCriteria(scrapeCriteria);
+    console.log("Incoming /api/search", criteria);
 
-    searchCache.set(cacheKey, { slots, fetchedAt: Date.now() });
+    const jobs = courses.map(async (c) => {
+      try {
+        const result = await scrapeCourse(c, criteria, feeGroups);
+        const count = Array.isArray(result) ? result.length : 0;
 
-    const filtered = filterSlotsForCriteria(slots, criteria);
+        if (count > 0) {
+          console.log(`✅ ${c.name} → ${count} slots`);
+        } else {
+          console.log(`⚪ ${c.name} → 0 slots`);
+        }
 
-    res.json({ slots: filtered });
+        return result || [];
+      } catch (err) {
+        console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
+        return [];
+      }
+    });
+
+    const allResults = await Promise.all(jobs);
+    const slots = allResults.flat();
+
+    console.log(`🔎 /api/search finished → total slots: ${slots.length}`);
+
+    res.json({ slots });
   } catch (err) {
     console.error("search error", err);
     res.status(500).json({ error: "internal error", detail: err.message });
@@ -409,8 +308,7 @@ function buildFlatSummary(summary, topCourses) {
   };
 }
 
-// ---------- ANALYTICS SUMMARY ENDPOINTS ----------
-
+// Legacy-style endpoint
 app.get("/api/analytics", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -427,6 +325,7 @@ app.get("/api/analytics", async (req, res) => {
   }
 });
 
+// Explicit summary endpoint
 app.get("/api/analytics/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -443,6 +342,7 @@ app.get("/api/analytics/summary", async (req, res) => {
   }
 });
 
+// Admin endpoint
 app.get("/api/admin/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -459,7 +359,7 @@ app.get("/api/admin/summary", async (req, res) => {
   }
 });
 
-// DEBUG: return list of courses with coords + basic flags
+// DEBUG: list of courses with coords + basic flags
 app.get("/api/debug/courses", (req, res) => {
   const debugList = courses.map((c) => ({
     name: c.name,
