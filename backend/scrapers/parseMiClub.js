@@ -1,47 +1,49 @@
-// backend/scrapers/parseMiClub.js
 import * as cheerio from "cheerio";
 
-/**
- * Stable MiClub parser (previous fully working version)
- * Counts "Available" and "Taken" to determine booked vs total players.
- */
 export function parseMiClub(html) {
   const $ = cheerio.load(html);
   const results = [];
 
-  // MiClub lists rows where each tee time contains multiple “Available” or “Taken”
-  $("tr").each((_, row) => {
-    const text = $(row).text();
+  // Select every timesheet "row"
+  $("tr.TimeSlotRow, tr.timeslotrow, tr").each((_, row) => {
+    const $row = $(row);
+    const rowText = $row.text().trim();
 
-    // Detect times like 7:15 AM, 12:04 PM, etc.
-    const timeMatch = text.match(/(\d{1,2}:\d{2})\s*(am|pm)/i);
+    // Extract time (am/pm or 24h)
+    const timeMatch = rowText.match(/(\d{1,2}:\d{2})\s*(am|pm)?/i);
     if (!timeMatch) return;
 
-    let time = timeMatch[1];
-    let ampm = timeMatch[2].toLowerCase();
+    let [rawTime, ampm] = [timeMatch[1], (timeMatch[2] || "").toLowerCase()];
 
-    // Convert to 24h format
-    let [h, m] = time.split(":");
-    h = parseInt(h);
+    let [h, m] = rawTime.split(":").map(Number);
     if (ampm === "pm" && h !== 12) h += 12;
     if (ampm === "am" && h === 12) h = 0;
-    const time24 = `${String(h).padStart(2, "0")}:${m}`;
 
-    // Count availability
-    const availableSpots = (text.match(/Available/gi) || []).length;
-    const takenSpots = (text.match(/Taken/gi) || []).length;
+    const time24 = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 
-    if (availableSpots + takenSpots === 0) return;
+    // Find all slot cells (usually 4)
+    const slotCells = $row.find("td.timesheetSlotCol, td.TimeSlotCol, td.slot");
+    if (!slotCells.length) return;
 
-    const total = availableSpots + takenSpots;
-    const playersBooked = takenSpots;
+    let taken = 0;
+    let available = 0;
+
+    slotCells.each((_, cell) => {
+      const text = $(cell).text().trim().toLowerCase();
+      if (text.includes("taken")) taken++;
+      else if (text.includes("available")) available++;
+    });
+
+    const maxPlayers = slotCells.length;
+    const players = taken;
+    const hasAvailability = available > 0;
 
     results.push({
       time: time24,
-      status: availableSpots > 0 ? "available" : "full",
-      players: playersBooked,
-      maxPlayers: total,
-      available: availableSpots > 0,
+      status: hasAvailability ? "available" : "full",
+      players,
+      maxPlayers,
+      available: hasAvailability,
       bookingLink: null
     });
   });
