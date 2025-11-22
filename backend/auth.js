@@ -1,11 +1,10 @@
 // backend/auth.js
 import express from "express";
-import bcrypt from "bcryptjs";
 import db from "./db.js";
 
 export const authRouter = express.Router();
 
-// ---------- TABLE SETUP ----------
+// Make sure the users table exists (runs once on startup)
 async function ensureUsersTable() {
   try {
     await db.query(`
@@ -32,7 +31,7 @@ function normaliseEmail(email) {
 authRouter.post("/signup", async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    const normEmail = normaliseEmail(email);
+    const normEmail = normaliseEmail(email || "");
 
     if (!normEmail || !password || password.length < 6) {
       return res
@@ -40,33 +39,28 @@ authRouter.post("/signup", async (req, res) => {
         .json({ ok: false, error: "Invalid email or password" });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-
+    // DEV-SIMPLE VERSION:
+    // Store the password as plain text in password_hash.
+    // Also: upsert so you can safely re-create your account.
     const result = await db.query(
       `
-        INSERT INTO users (email, password_hash)
-        VALUES ($1, $2)
-        ON CONFLICT (email) DO NOTHING
-        RETURNING id;
-      `,
-      [normEmail, passwordHash]
+      INSERT INTO users (email, password_hash)
+      VALUES ($1, $2)
+      ON CONFLICT (email)
+      DO UPDATE SET password_hash = EXCLUDED.password_hash
+      RETURNING id;
+    `,
+      [normEmail, password]
     );
 
-    // Email already exists
-    if (result.rowCount === 0) {
-      return res
-        .status(409)
-        .json({ ok: false, error: "Email already registered" });
-    }
+    console.log("🔐 signup/upsert result:", result.rowCount, "rows");
 
     return res.json({ ok: true, email: normEmail });
   } catch (err) {
-    console.error("signup error:", err);
-    // IMPORTANT: bubble the real error so we can see it in the popup
-    return res.status(500).json({
-      ok: false,
-      error: `Signup error: ${err.message}`,
-    });
+    console.error("❌ signup error:", err);
+    return res
+      .status(500)
+      .json({ ok: false, error: "Something went wrong. Please try again." });
   }
 });
 
@@ -74,7 +68,7 @@ authRouter.post("/signup", async (req, res) => {
 authRouter.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    const normEmail = normaliseEmail(email);
+    const normEmail = normaliseEmail(email || "");
 
     if (!normEmail || !password) {
       return res
@@ -87,8 +81,10 @@ authRouter.post("/login", async (req, res) => {
       [normEmail]
     );
 
+    console.log("🔐 login query rows:", result.rowCount);
+
     if (result.rowCount === 0) {
-      // Generic error to avoid leaking which emails exist
+      // email not found
       return res
         .status(401)
         .json({ ok: false, error: "Invalid email or password" });
@@ -96,41 +92,20 @@ authRouter.post("/login", async (req, res) => {
 
     const user = result.rows[0];
 
-    if (!user.password_hash) {
-      // Safety net in case the column/schema is weird
-      console.error("login error: password_hash is null for user", user);
-      return res.status(500).json({
-        ok: false,
-        error: "Login error: password not stored correctly. Please contact support.",
-      });
-    }
-
-    let isValid = false;
-    try {
-      isValid = await bcrypt.compare(password, user.password_hash);
-    } catch (cmpErr) {
-      console.error("bcrypt.compare error:", cmpErr);
-      return res.status(500).json({
-        ok: false,
-        error: `Login error: ${cmpErr.message}`,
-      });
-    }
-
-    if (!isValid) {
+    // Plain text comparison (dev-only)
+    if (user.password_hash !== password) {
       return res
         .status(401)
         .json({ ok: false, error: "Invalid email or password" });
     }
 
-    // For now we just return ok + email (no JWT/session yet)
+    // Success
     return res.json({ ok: true, email: normEmail });
   } catch (err) {
-    console.error("login error:", err);
-    // Again, bubble the actual message so we can see what’s wrong
-    return res.status(500).json({
-      ok: false,
-      error: `Login error: ${err.message}`,
-    });
+    console.error("❌ login error:", err);
+    return res
+      .status(500)
+      .json({ ok: false, error: "Something went wrong. Please try again." });
   }
 });
 
