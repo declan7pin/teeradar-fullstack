@@ -81,7 +81,7 @@ authRouter.post("/login", async (req, res) => {
     }
 
     const result = await db.query(
-      `SELECT id, password_hash FROM users WHERE email = $1`,
+      `SELECT id, email, password_hash FROM users WHERE email = $1`,
       [normEmail]
     );
 
@@ -93,7 +93,30 @@ authRouter.post("/login", async (req, res) => {
     }
 
     const user = result.rows[0];
-    const isValid = await bcrypt.compare(password, user.password_hash);
+
+    // Extra safety: make sure we have a valid hash string
+    const hash = typeof user.password_hash === "string" ? user.password_hash : null;
+    if (!hash) {
+      console.error(
+        "login error: missing or invalid password_hash for user",
+        normEmail
+      );
+      return res.status(500).json({
+        ok: false,
+        error: "Account issue detected. Please reset your password or sign up with a different email.",
+      });
+    }
+
+    let isValid = false;
+    try {
+      isValid = await bcrypt.compare(password, hash);
+    } catch (cmpErr) {
+      console.error("bcrypt.compare error for user", normEmail, cmpErr);
+      // Treat as invalid login rather than crashing
+      return res
+        .status(401)
+        .json({ ok: false, error: "Invalid email or password" });
+    }
 
     if (!isValid) {
       return res
