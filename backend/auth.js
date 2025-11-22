@@ -1,217 +1,147 @@
 // backend/auth.js
 import express from "express";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import pkg from "pg";
 
 const { Pool } = pkg;
 
-// --- JWT CONFIG ---
-const JWT_SECRET = process.env.JWT_SECRET || "SUPER_DEV_SECRET_CHANGE_ME";
-const TOKEN_LIFETIME = "30d";
-
-// --- DATABASE POOL ---
-// Use AUTH_DATABASE_URL if set, otherwise fall back to DATABASE_URL
-const connectionString =
-  process.env.AUTH_DATABASE_URL || process.env.DATABASE_URL;
-
-if (!connectionString) {
-  console.warn(
-    "[auth] No AUTH_DATABASE_URL / DATABASE_URL set. Auth will FAIL in production."
-  );
-}
-
+// Use env var if set, otherwise fall back to your Render URL
 const pool = new Pool({
-  connectionString,
-  ssl:
-    process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
-      : false,
+  connectionString:
+    process.env.DATABASE_URL ||
+    "postgresql://teeradar_user_user:ANWbR8pIDv1yjiRJ5MXBvWpamjuRq3FN@dpg-d4fed4a4d50c73a12t9g-a/teeradar_user",
+  ssl: {
+    rejectUnauthorized: false, // required for Render Postgres
+  },
 });
 
-// Create table if it doesn't exist
-async function initAuthTable() {
-  if (!connectionString) return;
-
-  const sql = `
-    CREATE TABLE IF NOT EXISTS teeradar_users (
-      id SERIAL PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      home_course TEXT,
-      created_at TIMESTAMPTZ DEFAULT now()
-    );
-  `;
+// Create users table if it doesn't exist
+async function initUsersTable() {
   try {
-    await pool.query(sql);
-    console.log("[auth] teeradar_users table ready");
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    console.log("✅ users table ready");
   } catch (err) {
-    console.error("[auth] Failed to init auth table:", err.message);
+    console.error("❌ Error creating users table:", err);
   }
 }
-initAuthTable();
+initUsersTable();
 
-const authRouter = express.Router();
+export const authRouter = express.Router();
 
-// --- HELPERS ---
-async function findUserByEmail(email) {
-  const { rows } = await pool.query(
-    "SELECT * FROM teeradar_users WHERE email = $1",
-    [email]
-  );
-  return rows[0] || null;
+// Helper: normalise email
+function normaliseEmail(email) {
+  return (email || "").trim().toLowerCase();
 }
 
-async function findUserById(id) {
-  const { rows } = await pool.query(
-    "SELECT * FROM teeradar_users WHERE id = $1",
-    [id]
-  );
-  return rows[0] || null;
-}
-
-// --- SIGNUP ---
-authRouter.post("/signup", async (req, res) => {
+// POST /api/auth/register
+authRouter.post("/register", async (req, res) => {
   try {
-    if (!connectionString) {
-      return res
-        .status(500)
-        .json({ error: "Auth DB not configured (no DATABASE_URL set)" });
+    const { email, password } = req.body || {};
+    const normEmail = normaliseEmail(email);
+
+    if (!normEmail || !password || password.length < 6) {
+      return res.json({
+        ok: false,
+        error: "Email and password (min 6 chars) are required.",
+      });
     }
 
-    const { email, password, homeCourse } = req.body || {};
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ error: "Email and password are required" });
+    const existing = await pool.query(
+      "SELECT id FROM users WHERE email = $1 LIMIT 1",
+      [normEmail]
+    );
+    if (existing.rows.length > 0) {
+      return res.json({
+        ok: false,
+        error: "An account already exists with this email.",
+      });
     }
 
-    const existing = await findUserByEmail(email.toLowerCase());
-    if (existing) {
-      return res.status(400).json({ error: "Account already exists" });
-    }
+    const passwordHash = await bcrypt.hash(password, 10);
 
-    const hash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      `
+        INSERT INTO users (email, password_hash)
+        VALUES ($1, $2)
+        RETURNING id, email, created_at;
+      `,
+      [normEmail, passwordHash]
+    );
 
-    const insertSql = `
-      INSERT INTO teeradar_users (email, password_hash, home_course)
-      VALUES ($1, $2, $3)
-      RETURNING id, email, home_course;
-    `;
-    const { rows } = await pool.query(insertSql, [
-      email.toLowerCase(),
-      hash,
-      homeCourse || null,
-    ]);
-    const user = rows[0];
+    const user = result.rows[0];
 
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, {
-      expiresIn: TOKEN_LIFETIME,
-    });
-
-    res.json({
+    return res.json({
       ok: true,
-      token,
       user: {
         id: user.id,
         email: user.email,
-        homeCourse: user.home_course,
+        createdAt: user.created_at,
       },
     });
   } catch (err) {
-    console.error("[auth] signup error:", err);
-    res.status(500).json({ error: "Signup failed" });
+    console.error("register error", err);
+    return res.json({
+      ok: false,
+      error: "Server error while creating account.",
+    });
   }
 });
 
-// --- LOGIN ---
+// POST /api/auth/login
 authRouter.post("/login", async (req, res) => {
   try {
-    if (!connectionString) {
-      return res
-        .status(500)
-        .json({ error: "Auth DB not configured (no DATABASE_URL set)" });
-    }
-
     const { email, password } = req.body || {};
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ error: "Email and password are required" });
+    const normEmail = normaliseEmail(email);
+
+    if (!normEmail || !password) {
+      return res.json({
+        ok: false,
+        error: "Email and password are required.",
+      });
     }
 
-    const user = await findUserByEmail(email.toLowerCase());
-    if (!user) {
-      return res.status(400).json({ error: "Invalid login" });
-    }
-
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) {
-      return res.status(400).json({ error: "Invalid login" });
-    }
-
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, {
-      expiresIn: TOKEN_LIFETIME,
-    });
-
-    res.json({
-      ok: true,
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        homeCourse: user.home_course,
-      },
-    });
-  } catch (err) {
-    console.error("[auth] login error:", err);
-    res.status(500).json({ error: "Login failed" });
-  }
-});
-
-// --- VERIFY TOKEN ---
-authRouter.post("/verify", async (req, res) => {
-  try {
-    const { token } = req.body || {};
-    if (!token) return res.json({ ok: false });
-
-    const payload = jwt.verify(token, JWT_SECRET);
-    const user = await findUserById(payload.id);
-    if (!user) return res.json({ ok: false });
-
-    res.json({
-      ok: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        homeCourse: user.home_course,
-      },
-    });
-  } catch (err) {
-    console.warn("[auth] verify failed:", err.message);
-    res.json({ ok: false });
-  }
-});
-
-// --- UPDATE HOME COURSE ---
-authRouter.post("/update-home", async (req, res) => {
-  try {
-    const { token, homeCourse } = req.body || {};
-    if (!token) {
-      return res.status(400).json({ error: "Missing token" });
-    }
-
-    const payload = jwt.verify(token, JWT_SECRET);
-    await pool.query(
-      "UPDATE teeradar_users SET home_course = $1 WHERE id = $2",
-      [homeCourse || null, payload.id]
+    const result = await pool.query(
+      "SELECT id, email, password_hash FROM users WHERE email = $1 LIMIT 1",
+      [normEmail]
     );
 
-    res.json({ ok: true });
+    if (result.rows.length === 0) {
+      return res.json({
+        ok: false,
+        error: "Incorrect email or password.",
+      });
+    }
+
+    const user = result.rows[0];
+    const match = await bcrypt.compare(password, user.password_hash);
+
+    if (!match) {
+      return res.json({
+        ok: false,
+        error: "Incorrect email or password.",
+      });
+    }
+
+    // Frontend only needs to know success + basic user info
+    return res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+    });
   } catch (err) {
-    console.error("[auth] update-home error:", err);
-    res.status(500).json({ error: "Failed to update home course" });
+    console.error("login error", err);
+    return res.json({
+      ok: false,
+      error: "Server error while logging in.",
+    });
   }
 });
-
-export { authRouter };
