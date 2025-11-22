@@ -3,8 +3,8 @@ import pkg from "pg";
 
 const { Pool } = pkg;
 
-// Render exposes DATABASE_URL for your Postgres instance.
-// We also allow a local fallback for dev if you ever need it.
+// Render will inject DATABASE_URL as an env var.
+// We also keep your hard-coded fallback for safety.
 const connectionString =
   process.env.DATABASE_URL ||
   "postgresql://teeradar_user_user:ANWbR8pIDv1yjiRJ5MXBvWpamjuRq3FN@dpg-d4fed4a4d50c73a12t9g-a/teeradar_user";
@@ -12,11 +12,11 @@ const connectionString =
 const pool = new Pool({
   connectionString,
   ssl: {
-    rejectUnauthorized: false, // required for Render's managed Postgres
+    rejectUnauthorized: false, // required for Render managed Postgres
   },
 });
 
-// Simple helper so we can log connection issues early
+// Just to log whether we can connect
 pool
   .connect()
   .then((client) => {
@@ -27,6 +27,8 @@ pool
     console.error("❌ Postgres connection error:", err.message);
   });
 
-export default {
+const db = {
   query: (text, params) => pool.query(text, params),
 };
+
+export default db;
