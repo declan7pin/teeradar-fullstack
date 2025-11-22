@@ -32,52 +32,41 @@ function normaliseEmail(email) {
 authRouter.post("/signup", async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    const normEmail = normaliseEmail(email);
+    const normEmail = normaliseEmail(email || "");
 
-    if (!normEmail || !password) {
-      console.log("🔐 signup invalid input:", { email });
-      return res.json({
-        ok: false,
-        error: "Please enter an email and password.",
-      });
+    if (!normEmail || !password || password.length < 6) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "Invalid email or password" });
     }
-
-    // (Optional) you can re-enable a length check later if you want
-    // if (password.length < 6) { ... }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
     const result = await db.query(
       `
-      INSERT INTO users (email, password_hash)
-      VALUES ($1, $2)
-      ON CONFLICT (email) DO NOTHING
-      RETURNING id;
-    `,
+        INSERT INTO users (email, password_hash)
+        VALUES ($1, $2)
+        ON CONFLICT (email) DO NOTHING
+        RETURNING id;
+      `,
       [normEmail, passwordHash]
     );
 
-    console.log("🔐 signup/upsert result:", result.rowCount, "rows");
-
+    // Email already exists
     if (result.rowCount === 0) {
-      // Email already exists
-      return res.json({
-        ok: false,
-        error: "That email is already registered. Try logging in instead.",
-      });
+      return res
+        .status(409)
+        .json({ ok: false, error: "Email already registered" });
     }
 
-    // Success
-    return res.json({
-      ok: true,
-      email: normEmail,
-    });
+    console.log("🔐 signup/upsert result:", result.rowCount, "rows");
+
+    return res.json({ ok: true, email: normEmail });
   } catch (err) {
-    console.error("🔐 signup error:", err);
-    return res.json({
-      ok: false,
-      error: "Something went wrong. Please try again.",
-    });
+    console.error("signup error:", err);
+    return res
+      .status(500)
+      .json({ ok: false, error: "Something went wrong. Please try again." });
   }
 });
 
@@ -85,14 +74,12 @@ authRouter.post("/signup", async (req, res) => {
 authRouter.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    const normEmail = normaliseEmail(email);
+    const normEmail = normaliseEmail(email || "");
 
     if (!normEmail || !password) {
-      console.log("🔐 login invalid input:", { email });
-      return res.json({
-        ok: false,
-        error: "Please enter an email and password.",
-      });
+      return res
+        .status(400)
+        .json({ ok: false, error: "Invalid email or password" });
     }
 
     const result = await db.query(
@@ -103,33 +90,71 @@ authRouter.post("/login", async (req, res) => {
     console.log("🔐 login query rows:", result.rowCount);
 
     if (result.rowCount === 0) {
-      return res.json({
-        ok: false,
-        error: "Invalid email or password.",
-      });
+      return res
+        .status(401)
+        .json({ ok: false, error: "Invalid email or password" });
     }
 
     const user = result.rows[0];
     const isValid = await bcrypt.compare(password, user.password_hash);
 
     if (!isValid) {
-      return res.json({
-        ok: false,
-        error: "Invalid email or password.",
-      });
+      return res
+        .status(401)
+        .json({ ok: false, error: "Invalid email or password" });
     }
 
-    // Success
-    return res.json({
-      ok: true,
-      email: normEmail,
-    });
+    // Front-end just needs to know it worked – token can be added later
+    return res.json({ ok: true, email: normEmail });
   } catch (err) {
-    console.error("🔐 login error:", err);
-    return res.json({
-      ok: false,
-      error: "Something went wrong. Please try again.",
-    });
+    console.error("login error:", err);
+    return res
+      .status(500)
+      .json({ ok: false, error: "Something went wrong. Please try again." });
+  }
+});
+
+// ---------- SIMPLE RESET PASSWORD ----------
+// NOTE: this is a basic "forgot password" for now –
+// user enters email + new password in the app.
+// For production you'd normally email a reset link.
+authRouter.post("/reset", async (req, res) => {
+  try {
+    const { email, newPassword } = req.body || {};
+    const normEmail = normaliseEmail(email || "");
+
+    if (!normEmail || !newPassword || newPassword.length < 6) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "Invalid email or password" });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    const result = await db.query(
+      `
+        UPDATE users
+        SET password_hash = $2
+        WHERE email = $1
+        RETURNING id;
+      `,
+      [normEmail, passwordHash]
+    );
+
+    console.log("🔐 reset result rows:", result.rowCount);
+
+    if (result.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ ok: false, error: "Email not found" });
+    }
+
+    return res.json({ ok: true, email: normEmail });
+  } catch (err) {
+    console.error("reset password error:", err);
+    return res
+      .status(500)
+      .json({ ok: false, error: "Something went wrong. Please try again." });
   }
 });
 
