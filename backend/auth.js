@@ -1,147 +1,114 @@
 // backend/auth.js
 import express from "express";
 import bcrypt from "bcryptjs";
-import pkg from "pg";
+import db from "./db.js";
 
-const { Pool } = pkg;
+export const authRouter = express.Router();
 
-// Use env var if set, otherwise fall back to your Render URL
-const pool = new Pool({
-  connectionString:
-    process.env.DATABASE_URL ||
-    "postgresql://teeradar_user_user:ANWbR8pIDv1yjiRJ5MXBvWpamjuRq3FN@dpg-d4fed4a4d50c73a12t9g-a/teeradar_user",
-  ssl: {
-    rejectUnauthorized: false, // required for Render Postgres
-  },
-});
-
-// Create users table if it doesn't exist
-async function initUsersTable() {
+// Make sure the users table exists (runs once on startup)
+async function ensureUsersTable() {
   try {
-    await pool.query(`
+    await db.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW()
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
     console.log("✅ users table ready");
   } catch (err) {
-    console.error("❌ Error creating users table:", err);
+    console.error("❌ ensureUsersTable error:", err.message);
   }
 }
-initUsersTable();
+ensureUsersTable();
 
-export const authRouter = express.Router();
-
-// Helper: normalise email
+// Helper – normalise email
 function normaliseEmail(email) {
   return (email || "").trim().toLowerCase();
 }
 
-// POST /api/auth/register
-authRouter.post("/register", async (req, res) => {
+// ---------- SIGNUP ----------
+authRouter.post("/signup", async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    const normEmail = normaliseEmail(email);
+    const normEmail = normaliseEmail(email || "");
 
     if (!normEmail || !password || password.length < 6) {
-      return res.json({
-        ok: false,
-        error: "Email and password (min 6 chars) are required.",
-      });
-    }
-
-    const existing = await pool.query(
-      "SELECT id FROM users WHERE email = $1 LIMIT 1",
-      [normEmail]
-    );
-    if (existing.rows.length > 0) {
-      return res.json({
-        ok: false,
-        error: "An account already exists with this email.",
-      });
+      return res
+        .status(400)
+        .json({ ok: false, error: "Invalid email or password" });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const result = await pool.query(
+    const result = await db.query(
       `
-        INSERT INTO users (email, password_hash)
-        VALUES ($1, $2)
-        RETURNING id, email, created_at;
-      `,
+      INSERT INTO users (email, password_hash)
+      VALUES ($1, $2)
+      ON CONFLICT (email) DO NOTHING
+      RETURNING id;
+    `,
       [normEmail, passwordHash]
     );
 
-    const user = result.rows[0];
+    // Email already exists
+    if (result.rowCount === 0) {
+      return res
+        .status(409)
+        .json({ ok: false, error: "Email already registered" });
+    }
 
-    return res.json({
-      ok: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        createdAt: user.created_at,
-      },
-    });
+    return res.json({ ok: true, email: normEmail });
   } catch (err) {
-    console.error("register error", err);
-    return res.json({
-      ok: false,
-      error: "Server error while creating account.",
-    });
+    console.error("signup error:", err);
+    return res
+      .status(500)
+      .json({ ok: false, error: "Something went wrong. Please try again." });
   }
 });
 
-// POST /api/auth/login
+// ---------- LOGIN ----------
 authRouter.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    const normEmail = normaliseEmail(email);
+    const normEmail = normaliseEmail(email || "");
 
     if (!normEmail || !password) {
-      return res.json({
-        ok: false,
-        error: "Email and password are required.",
-      });
+      return res
+        .status(400)
+        .json({ ok: false, error: "Invalid email or password" });
     }
 
-    const result = await pool.query(
-      "SELECT id, email, password_hash FROM users WHERE email = $1 LIMIT 1",
+    const result = await db.query(
+      `SELECT id, password_hash FROM users WHERE email = $1`,
       [normEmail]
     );
 
-    if (result.rows.length === 0) {
-      return res.json({
-        ok: false,
-        error: "Incorrect email or password.",
-      });
+    if (result.rowCount === 0) {
+      // Same generic error for security
+      return res
+        .status(401)
+        .json({ ok: false, error: "Invalid email or password" });
     }
 
     const user = result.rows[0];
-    const match = await bcrypt.compare(password, user.password_hash);
+    const isValid = await bcrypt.compare(password, user.password_hash);
 
-    if (!match) {
-      return res.json({
-        ok: false,
-        error: "Incorrect email or password.",
-      });
+    if (!isValid) {
+      return res
+        .status(401)
+        .json({ ok: false, error: "Invalid email or password" });
     }
 
-    // Frontend only needs to know success + basic user info
-    return res.json({
-      ok: true,
-      user: {
-        id: user.id,
-        email: user.email,
-      },
-    });
+    // Front-end just needs to know it worked – token can be added later
+    return res.json({ ok: true, email: normEmail });
   } catch (err) {
-    console.error("login error", err);
-    return res.json({
-      ok: false,
-      error: "Server error while logging in.",
-    });
+    console.error("login error:", err);
+    return res
+      .status(500)
+      .json({ ok: false, error: "Something went wrong. Please try again." });
   }
 });
+
+export default authRouter;
