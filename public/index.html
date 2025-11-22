@@ -343,7 +343,7 @@
       }
     }
 
-    /* === AUTH MODAL (NEW) === */
+    /* === AUTH MODAL === */
     #authModal{
       position:fixed;
       inset:0;
@@ -361,6 +361,7 @@
       padding:22px 20px 18px;
       box-shadow:0 18px 45px rgba(15,23,42,0.55);
       animation:fadeInUp .16s ease-out;
+      position:relative;
     }
     #authBox h2{
       margin:0 0 4px;
@@ -403,7 +404,7 @@
       transform:translateY(1px);
     }
     .auth-switch{
-      margin-top:10px;
+      margin-top:8px;
       text-align:center;
       font-size:12px;
       color:#0369a1;
@@ -560,7 +561,7 @@
   <button type="button" id="tc-accept-btn">Got it</button>
 </div>
 
-<!-- AUTH MODAL (NEW) -->
+<!-- AUTH MODAL -->
 <div id="authModal">
   <div id="authBox">
     <div class="auth-close" id="authCloseBtn">&times;</div>
@@ -569,9 +570,22 @@
 
     <input id="authEmail" class="auth-input" type="email" placeholder="Email" />
     <input id="authPassword" class="auth-input" type="password" placeholder="Password" />
-    <input id="authHomeCourse" class="auth-input" type="text" placeholder="Home course (optional)" />
+
+    <div id="authHomeCourseRow">
+      <input id="authHomeCourse"
+             class="auth-input"
+             type="text"
+             placeholder="Home course (optional)" />
+    </div>
 
     <button id="authSubmit" class="auth-btn">Log in</button>
+
+    <!-- Forgot password section at the bottom -->
+    <div id="authForgot"
+         class="auth-switch"
+         style="margin-top:6px;font-size:11px;color:#6b7280;">
+      Forgot password?
+    </div>
 
     <div id="authSwitch" class="auth-switch">Create an account</div>
   </div>
@@ -654,8 +668,8 @@
     });
   }
 
-  // ---- AUTH MODAL + BACKEND LOGIN/SIGNUP ----
-  let authMode = "login"; // "login" | "signup"
+  // ---- AUTH MODAL + BACKEND LOGIN/SIGNUP/RESET ----
+  let authMode = "login"; // "login" | "signup" | "reset"
 
   const authModal = document.getElementById("authModal");
   const authTitle = document.getElementById("authTitle");
@@ -663,20 +677,40 @@
   const authSubmit = document.getElementById("authSubmit");
   const authSwitch = document.getElementById("authSwitch");
   const authCloseBtn = document.getElementById("authCloseBtn");
+  const authForgot = document.getElementById("authForgot");
+  const authHomeCourseRow = document.getElementById("authHomeCourseRow");
 
-  function openAuthModal(mode) {
-    authMode = mode || "login";
+  function applyAuthView() {
+    if (!authTitle || !authSubtitle || !authSubmit || !authSwitch) return;
+
     if (authMode === "signup") {
       authTitle.textContent = "Create account";
       authSubtitle.textContent = "Use this email + password on any device.";
       authSubmit.textContent = "Sign up";
       authSwitch.textContent = "Already have an account? Log in";
+      if (authHomeCourseRow) authHomeCourseRow.style.display = "block";
+      if (authForgot) authForgot.style.display = "none";
+    } else if (authMode === "reset") {
+      authTitle.textContent = "Reset password";
+      authSubtitle.textContent = "Enter your email and a new password.";
+      authSubmit.textContent = "Reset password";
+      authSwitch.textContent = "Back to log in";
+      if (authHomeCourseRow) authHomeCourseRow.style.display = "none";
+      if (authForgot) authForgot.style.display = "none";
     } else {
+      // login
       authTitle.textContent = "Log in";
       authSubtitle.textContent = "Use your TeeRadar account details.";
       authSubmit.textContent = "Log in";
       authSwitch.textContent = "Create an account";
+      if (authHomeCourseRow) authHomeCourseRow.style.display = "block";
+      if (authForgot) authForgot.style.display = "block";
     }
+  }
+
+  function openAuthModal(mode) {
+    authMode = mode || "login";
+    applyAuthView();
     authModal.style.display = "flex";
   }
 
@@ -690,7 +724,17 @@
 
   if (authSwitch) {
     authSwitch.addEventListener("click", () => {
-      openAuthModal(authMode === "login" ? "signup" : "login");
+      if (authMode === "reset") {
+        openAuthModal("login");
+      } else {
+        openAuthModal(authMode === "login" ? "signup" : "login");
+      }
+    });
+  }
+
+  if (authForgot) {
+    authForgot.addEventListener("click", () => {
+      openAuthModal("reset");
     });
   }
 
@@ -709,20 +753,33 @@
     authSubmit.addEventListener("click", async () => {
       const email = document.getElementById("authEmail").value.trim();
       const password = document.getElementById("authPassword").value.trim();
-      const homeCourse = document.getElementById("authHomeCourse").value.trim() || null;
+      const homeCourse =
+        (document.getElementById("authHomeCourse")?.value.trim() || null);
 
       if (!email || !password) {
         alert("Email and password are required.");
         return;
       }
 
-      const endpoint = authMode === "login" ? "/api/auth/login" : "/api/auth/signup";
+      let endpoint = "";
+      let payload = {};
+
+      if (authMode === "reset") {
+        endpoint = "/api/auth/reset";
+        // send both password & newPassword so backend can pick whichever it expects
+        payload = { email, password, newPassword: password };
+      } else {
+        endpoint = authMode === "login"
+          ? "/api/auth/login"
+          : "/api/auth/signup";
+        payload = { email, password, homeCourse };
+      }
 
       try {
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, homeCourse })
+          body: JSON.stringify(payload)
         });
 
         const data = await res.json();
@@ -732,10 +789,23 @@
           return;
         }
 
-        // Persist login
-        localStorage.setItem("teeradar_jwt", data.token);
-        localStorage.setItem("teeradar_user_email", data.user.email);
-        if (data.user.homeCourse) {
+        if (authMode === "reset") {
+          alert("Password updated. Please log in with your new password.");
+          openAuthModal("login");
+          return;
+        }
+
+        // login / signup success
+        if (data.token) {
+          localStorage.setItem("teeradar_jwt", data.token);
+        }
+        if (data.user && data.user.email) {
+          localStorage.setItem("teeradar_user_email", data.user.email);
+        } else if (data.email) {
+          // fallback to older shape if needed
+          localStorage.setItem("teeradar_user_email", data.email);
+        }
+        if (data.user && data.user.homeCourse) {
           localStorage.setItem("teeradar_home_course", data.user.homeCourse);
         }
 
