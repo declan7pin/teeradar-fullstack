@@ -2,22 +2,29 @@
 import * as cheerio from "cheerio";
 
 /**
- * Parse MiClub public timesheet HTML and extract tee times with
- * accurate per-time availability (0–4 players).
+ * MiClub parser tuned for Whaleback etc.
  *
- * Returned shape:
+ * Strategy:
+ *  - Take the full text of the page.
+ *  - Split on "Click to select row." → each chunk ≈ one tee row.
+ *  - For each chunk:
+ *      * Find the time (e.g. "7:05 am").
+ *      * Count "Available" vs "Taken".
+ *      * Infer players booked & free spots.
+ *
+ * Returns objects like:
  *   {
- *     time: "HH:MM",          // 24h time string
+ *     time: "HH:MM",          // 24h time
  *     status: "available" | "full",
  *     players: number,        // booked players
  *     maxPlayers: number,     // total slots (usually 4)
  *     available: boolean,     // at least 1 free slot
- *     bookingLink: string|null
+ *     bookingLink: null       // we build URLs elsewhere
  *   }
  */
 
-// Convert "7:05" + "am"/"pm" to "07:05"
 function to24h(rawTime, ampmText) {
+  // rawTime like "9:45" or "09:45"
   let [hStr, mStr] = rawTime.split(":");
   let h = parseInt(hStr, 10);
   const ampm = (ampmText || "").toUpperCase();
@@ -30,49 +37,75 @@ function to24h(rawTime, ampmText) {
 
 export function parseMiClub(html) {
   const $ = cheerio.load(html);
-
-  // Get all visible text once
-  const fullText = $.root().text().replace(/\r/g, "");
-
   const results = [];
 
-  // MiClub repeats this string for every tee row
+  // Take the *plain text* of the whole document
+  const fullText = $.root().text();
+
+  // MiClub has "Click to select row." once per tee row
   const segments = fullText.split(/Click to select row\./i);
 
-  for (const seg of segments) {
-    const text = seg.replace(/\s+/g, " ").trim();
-    if (!text) continue;
+  segments.forEach((segmentRaw) => {
+    const segment = segmentRaw.trim();
+    if (!segment) return;
 
-    // Find the tee time inside this segment, e.g. "07:05 am"
-    // Prefer a heading-like pattern first, then fall back to any time
-    const timeMatch =
-      text.match(/###\s*(\d{1,2}:\d{2})\s*(am|pm)/i) ||
-      text.match(/(\d{1,2}:\d{2})\s*(am|pm)/i);
-
-    if (!timeMatch) continue;
+    // Find a time like "7:05 am" or "14:10"
+    const timeMatch = segment.match(/(\d{1,2}:\d{2})\s*(am|pm)?/i);
+    if (!timeMatch) return;
 
     const rawTime = timeMatch[1];
     const ampm = timeMatch[2] || "";
     const time24 = to24h(rawTime, ampm);
 
-    // Count availability words for *this* row only
-    const availableMatches = text.match(/\bAvailable\b/gi) || [];
-    const takenMatches =
-      text.match(/\b(Taken|Booked|Full|Sold Out)\b/gi) || [];
+    // Count how many slots are Available vs Taken in THIS row
+    const availableMatches = segment.match(/\bAvailable\b/gi) || [];
+    const takenMatches = segment.match(/\bTaken\b/gi) || [];
 
     let availableSpots = availableMatches.length;
     let takenSpots = takenMatches.length;
     let totalSpots = availableSpots + takenSpots;
 
-    // If we see nothing, skip this row – we don't want to lie
+    // Fallback: if we don't see explicit "Available"/"Taken",
+    // try patterns like "1/4" or "2 of 4".
     if (totalSpots === 0) {
-      // In almost all MiClub WA public sheets, each tee row has
-      // explicit "Taken"/"Available". If not, we ignore it.
-      continue;
+      const fractionMatch = segment.match(/(\d+)\s*\/\s*(\d+)/);
+      const ofMatch = segment.match(/(\d+)\s*of\s*(\d+)/i);
+
+      if (fractionMatch) {
+        const booked = parseInt(fractionMatch[1], 10);
+        const total = parseInt(fractionMatch[2], 10);
+        if (!Number.isNaN(booked) && !Number.isNaN(total) && total > 0) {
+          totalSpots = total;
+          takenSpots = booked;
+          availableSpots = Math.max(total - booked, 0);
+        }
+      } else if (ofMatch) {
+        const booked = parseInt(ofMatch[1], 10);
+        const total = parseInt(ofMatch[2], 10);
+        if (!Number.isNaN(booked) && !Number.isNaN(total) && total > 0) {
+          totalSpots = total;
+          takenSpots = booked;
+          availableSpots = Math.max(total - booked, 0);
+        }
+      }
     }
 
-    const players = takenSpots;      // people already booked
-    const maxPlayers = totalSpots;   // usually 4
+    // Final fallback: if we *still* don't know, but it's clearly a bookable row,
+    // assume a standard 4-ball and be conservative (full unless we see "Available").
+    if (totalSpots === 0) {
+      const hasBookWord = /Book/i.test(segment);
+      if (!hasBookWord) {
+        // not obviously bookable → skip
+        return;
+      }
+      totalSpots = 4;
+      // if no "Available" seen, assume fully taken
+      takenSpots = 4;
+      availableSpots = 0;
+    }
+
+    const players = takenSpots;
+    const maxPlayers = totalSpots;
     const status = availableSpots > 0 ? "available" : "full";
 
     results.push({
@@ -81,9 +114,9 @@ export function parseMiClub(html) {
       players,
       maxPlayers,
       available: availableSpots > 0,
-      bookingLink: null, // we use your existing URL builder instead
+      bookingLink: null, // we use course.url / feeGroup config to build links
     });
-  }
+  });
 
   return results;
 }
