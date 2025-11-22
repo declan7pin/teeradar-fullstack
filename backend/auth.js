@@ -5,12 +5,7 @@ import db from "./db.js";
 
 export const authRouter = express.Router();
 
-// ----- helpers -----
-function normaliseEmail(email) {
-  return (email || "").trim().toLowerCase();
-}
-
-// Ensure users table exists
+// Make sure the users table exists (runs once on startup)
 async function ensureUsersTable() {
   try {
     await db.query(`
@@ -18,6 +13,7 @@ async function ensureUsersTable() {
         id SERIAL PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
+        home_course TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
@@ -28,11 +24,24 @@ async function ensureUsersTable() {
 }
 ensureUsersTable();
 
-// ---------- SIGNUP ----------
+// Helper – normalise email
+function normaliseEmail(email) {
+  return (email || "").trim().toLowerCase();
+}
+
+/**
+ * SIGNUP
+ *
+ * Behaviour:
+ *  - If email does NOT exist → create new user
+ *  - If email already exists → UPDATE password_hash (acts as reset)
+ *
+ * Response: { ok: true, email, mode: "created" | "reset" }
+ */
 authRouter.post("/signup", async (req, res) => {
   try {
-    const { email, password } = req.body || {};
-    const normEmail = normaliseEmail(email);
+    const { email, password, homeCourse } = req.body || {};
+    const normEmail = normaliseEmail(email || "");
 
     if (!normEmail || !password || password.length < 6) {
       return res
@@ -42,25 +51,51 @@ authRouter.post("/signup", async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const result = await db.query(
-      `
-      INSERT INTO users (email, password_hash)
-      VALUES ($1, $2)
-      ON CONFLICT (email) DO NOTHING
-      RETURNING id;
-    `,
-      [normEmail, passwordHash]
+    // Does this email already exist?
+    const existing = await db.query(
+      `SELECT id FROM users WHERE email = $1`,
+      [normEmail]
     );
 
-    if (result.rowCount === 0) {
-      // email already exists
-      return res
-        .status(409)
-        .json({ ok: false, error: "Email already registered" });
+    if (existing.rowCount > 0) {
+      // Update password (reset)
+      await db.query(
+        `
+        UPDATE users
+        SET password_hash = $2,
+            home_course = COALESCE($3, home_course)
+        WHERE email = $1
+      `,
+        [normEmail, passwordHash, homeCourse || null]
+      );
+
+      console.log("🔐 signup: password reset for existing user", normEmail);
+
+      return res.json({
+        ok: true,
+        email: normEmail,
+        mode: "reset",
+      });
     }
 
-    console.log("🔐 signup/upsert result:", result.rowCount, "rows");
-    return res.json({ ok: true, email: normEmail });
+    // New user
+    const insert = await db.query(
+      `
+      INSERT INTO users (email, password_hash, home_course)
+      VALUES ($1, $2, $3)
+      RETURNING id, email, home_course
+    `,
+      [normEmail, passwordHash, homeCourse || null]
+    );
+
+    const user = insert.rows[0];
+    console.log("🔐 signup: created new user", user.email);
+
+    return res.json({
+      ok: true,
+      email: user.email,
+      mode: "created",
+    });
   } catch (err) {
     console.error("signup error:", err);
     return res
@@ -69,11 +104,15 @@ authRouter.post("/signup", async (req, res) => {
   }
 });
 
-// ---------- LOGIN ----------
+/**
+ * LOGIN
+ *
+ * Checks email + password using bcrypt.
+ */
 authRouter.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    const normEmail = normaliseEmail(email);
+    const normEmail = normaliseEmail(email || "");
 
     if (!normEmail || !password) {
       return res
@@ -82,12 +121,14 @@ authRouter.post("/login", async (req, res) => {
     }
 
     const result = await db.query(
-      `SELECT id, email, password_hash FROM users WHERE email = $1`,
+      `SELECT id, email, password_hash, home_course FROM users WHERE email = $1`,
       [normEmail]
     );
-    console.log("🔐 login query rows:", result.rowCount);
+
+    console.log("🔐 login: rows =", result.rowCount, "email =", normEmail);
 
     if (result.rowCount === 0) {
+      // Same generic error for security
       return res
         .status(401)
         .json({ ok: false, error: "Invalid email or password" });
@@ -96,59 +137,26 @@ authRouter.post("/login", async (req, res) => {
     const user = result.rows[0];
     const isValid = await bcrypt.compare(password, user.password_hash);
 
+    console.log("🔐 login: password match?", isValid);
+
     if (!isValid) {
       return res
         .status(401)
         .json({ ok: false, error: "Invalid email or password" });
     }
 
-    // No JWT yet – front end just checks ok:true
-    return res.json({ ok: true, email: user.email });
+    // For now we don't bother with JWT – we just return success + user info.
+    return res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        homeCourse: user.home_course || null,
+      },
+      token: null, // kept for future compatibility
+    });
   } catch (err) {
     console.error("login error:", err);
-    return res
-      .status(500)
-      .json({ ok: false, error: "Something went wrong. Please try again." });
-  }
-});
-
-// ---------- RESET PASSWORD (simple flow) ----------
-// NOTE: this is a very basic reset – NO email link, etc.
-// User enters email + new password and it updates if the email exists.
-// Fine for your own project, not production-grade security.
-authRouter.post("/reset", async (req, res) => {
-  try {
-    const { email, newPassword } = req.body || {};
-    const normEmail = normaliseEmail(email);
-
-    if (!normEmail || !newPassword || newPassword.length < 6) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "Invalid email or password" });
-    }
-
-    const passwordHash = await bcrypt.hash(newPassword, 10);
-
-    const result = await db.query(
-      `
-      UPDATE users
-      SET password_hash = $2
-      WHERE email = $1
-      RETURNING id;
-    `,
-      [normEmail, passwordHash]
-    );
-
-    if (result.rowCount === 0) {
-      return res
-        .status(404)
-        .json({ ok: false, error: "No account found for that email" });
-    }
-
-    console.log("🔐 password reset for", normEmail);
-    return res.json({ ok: true, email: normEmail });
-  } catch (err) {
-    console.error("reset error:", err);
     return res
       .status(500)
       .json({ ok: false, error: "Something went wrong. Please try again." });
