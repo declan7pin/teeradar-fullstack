@@ -4,9 +4,10 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// Analytics helpers (SQLite)
+// Analytics helpers (SQLite behind the scenes)
 import {
   recordEvent,
   getAnalyticsSummary,
@@ -17,8 +18,8 @@ import {
 import db from "./db.js";
 import { getCachedSlots, saveSlotsToCache } from "./slotCache.js";
 
-// AUTH router (Postgres)
-import { authRouter } from "./auth.js";
+// Auth router
+import authRouter from "./auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,7 +34,7 @@ app.use(express.json());
 // Serve static frontend from /public at project root
 app.use(express.static(path.join(__dirname, "..", "public")));
 
-// Mount auth API
+// ---------- AUTH ROUTES ----------
 app.use("/api/auth", authRouter);
 
 // ---------- LOAD DATA ----------
@@ -66,7 +67,7 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", courses: courses.length });
 });
 
-// Return full course list (used by frontend map + UI)
+// Full course list (map + UI)
 app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
@@ -114,11 +115,8 @@ app.post("/api/search", async (req, res) => {
       });
 
       if (cached) {
-        if (cached.length > 0) {
-          console.log(`⚡ cache hit → ${c.name} → ${cached.length} slots`);
-        } else {
-          console.log(`⚡ cache hit → ${c.name} → 0 slots`);
-        }
+        const count = cached.length;
+        console.log(`⚡ cache hit → ${c.name} → ${count} slots`);
         return cached;
       }
 
@@ -127,13 +125,9 @@ app.post("/api/search", async (req, res) => {
         const result = await scrapeCourse(c, criteria, feeGroups);
         const count = Array.isArray(result) ? result.length : 0;
 
-        if (count > 0) {
-          console.log(`✅ scraped ${c.name} → ${count} slots`);
-        } else {
-          console.log(`⚪ scraped ${c.name} → 0 slots`);
-        }
+        console.log(`✅ scraped ${c.name} → ${count} slots`);
 
-        saveSlotsToCache({
+        await saveSlotsToCache({
           courseId,
           courseName: c.name,
           provider,
@@ -148,8 +142,9 @@ app.post("/api/search", async (req, res) => {
         return result || [];
       } catch (err) {
         console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
-        // cache an empty result so subsequent lookups are fast
-        saveSlotsToCache({
+
+        // Cache empty result to avoid repeated slow failures
+        await saveSlotsToCache({
           courseId,
           courseName: c.name,
           provider,
@@ -160,6 +155,7 @@ app.post("/api/search", async (req, res) => {
           latest,
           slots: [],
         });
+
         return [];
       }
     });
@@ -244,7 +240,7 @@ app.get("/api/analytics", async (req, res) => {
   }
 });
 
-// 2) Summary endpoint
+// 2) Explicit summary endpoint
 app.get("/api/analytics/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -278,7 +274,7 @@ app.get("/api/admin/summary", async (req, res) => {
   }
 });
 
-// DEBUG: courses
+// DEBUG: return list of courses with coords + basic flags
 app.get("/api/debug/courses", (req, res) => {
   const debugList = courses.map((c) => ({
     name: c.name,
