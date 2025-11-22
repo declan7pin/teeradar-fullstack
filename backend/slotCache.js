@@ -1,45 +1,71 @@
 // backend/slotCache.js
-import db from "./db.js";
+import Database from "better-sqlite3";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
+// Create NEW cache file (forces reset)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
+// 💥 IMPORTANT: NEW CACHE FILE (forces a clean rebuild)
+const DB_FILE = path.join(__dirname, "slotCache_v3.db");
+
+const db = new Database(DB_FILE);
+
+// Create tables if missing
+db.exec(`
+  CREATE TABLE IF NOT EXISTS slot_cache (
+    courseId TEXT,
+    date TEXT,
+    holes INTEGER,
+    partySize INTEGER,
+    earliest TEXT,
+    latest TEXT,
+    provider TEXT,
+    slots TEXT,
+    updatedAt INTEGER,
+    PRIMARY KEY(courseId, date, holes, partySize, earliest, latest)
+  );
+`);
+
+// Cached slot lifetime: 10 minutes
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
+// -------------------------------
+// GET cached result
+// -------------------------------
 export function getCachedSlots({
   courseId,
   date,
   holes,
   partySize,
+  earliest,
+  latest,
 }) {
-  const stmt = db.prepare(`
-    SELECT payload_json, scraped_at
-    FROM slots
-    WHERE course_id = ?
-      AND date = ?
-      AND (holes IS NULL OR holes = ?)
-      AND (party_size IS NULL OR party_size = ?)
-    ORDER BY scraped_at DESC
-    LIMIT 1
-  `);
-
-  const row = stmt.get(
-    String(courseId),
-    date,
-    holes || null,
-    partySize || null
-  );
+  const row = db
+    .prepare(
+      `SELECT slots, updatedAt FROM slot_cache
+       WHERE courseId=? AND date=? AND holes IS ? AND partySize=? AND earliest=? AND latest=?`
+    )
+    .get(courseId, date, holes, partySize, earliest, latest);
 
   if (!row) return null;
 
-  const age = Date.now() - row.scraped_at;
-  if (age > MAX_AGE_MS) return null;
+  const age = Date.now() - row.updatedAt;
+  if (age > CACHE_TTL_MS) {
+    return null; // expired
+  }
 
   try {
-    return JSON.parse(row.payload_json);
-  } catch (err) {
-    console.error("Failed to parse cached payload_json", err);
+    return JSON.parse(row.slots);
+  } catch {
     return null;
   }
 }
 
+// -------------------------------
+// SAVE scraped result to cache
+// -------------------------------
 export function saveSlotsToCache({
   courseId,
   courseName,
@@ -51,25 +77,21 @@ export function saveSlotsToCache({
   latest,
   slots,
 }) {
-  const stmt = db.prepare(`
-    INSERT INTO slots
-      (course_id, course_name, provider,
-       date, holes, party_size,
-       earliest, latest,
-       scraped_at, payload_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  stmt.run(
-    String(courseId),
-    courseName,
-    provider || null,
+  db.prepare(
+    `INSERT OR REPLACE INTO slot_cache
+    (courseId, date, holes, partySize, earliest, latest, provider, slots, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    courseId,
     date,
-    holes || null,
-    partySize || null,
-    earliest || null,
-    latest || null,
-    Date.now(),
-    JSON.stringify(slots || [])
+    holes,
+    partySize,
+    earliest,
+    latest,
+    provider,
+    JSON.stringify(slots || []),
+    Date.now()
   );
 }
+
+export default db;
