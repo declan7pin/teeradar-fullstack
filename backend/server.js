@@ -44,7 +44,6 @@ const PERTH_LNG = 115.8613;
 const coursesPath = path.join(__dirname, "data", "courses.json");
 const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 
-// Ensure every course has lat/lng, fallback to Perth CBD if missing
 const courses = rawCourses.map((c) => ({
   ...c,
   lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
@@ -115,8 +114,7 @@ app.post("/api/search", async (req, res) => {
       });
 
       if (cached) {
-        const count = cached.length;
-        console.log(`⚡ cache hit → ${c.name} → ${count} slots`);
+        console.log(`⚡ cache hit → ${c.name} → ${cached.length} slots`);
         return cached;
       }
 
@@ -143,7 +141,6 @@ app.post("/api/search", async (req, res) => {
       } catch (err) {
         console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
 
-        // Cache empty result to avoid repeated slow failures
         await saveSlotsToCache({
           courseId,
           courseName: c.name,
@@ -223,7 +220,6 @@ function buildFlatSummary(summary, topCourses) {
   };
 }
 
-// 1) Legacy-style endpoint
 app.get("/api/analytics", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -240,7 +236,6 @@ app.get("/api/analytics", async (req, res) => {
   }
 });
 
-// 2) Explicit summary endpoint
 app.get("/api/analytics/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -257,7 +252,6 @@ app.get("/api/analytics/summary", async (req, res) => {
   }
 });
 
-// 3) Admin endpoint
 app.get("/api/admin/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
