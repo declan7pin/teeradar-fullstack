@@ -8,6 +8,7 @@ export const authRouter = express.Router();
 // Make sure the users table exists (runs once on startup)
 async function ensureUsersTable() {
   try {
+    // Base table
     await db.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -17,6 +18,13 @@ async function ensureUsersTable() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
+
+    // In case the table already existed without home_course
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS home_course TEXT;
+    `);
+
     console.log("✅ users table ready");
   } catch (err) {
     console.error("❌ ensureUsersTable error:", err.message);
@@ -29,19 +37,11 @@ function normaliseEmail(email) {
   return (email || "").trim().toLowerCase();
 }
 
-/**
- * SIGNUP
- *
- * Behaviour:
- *  - If email does NOT exist → create new user
- *  - If email already exists → UPDATE password_hash (acts as reset)
- *
- * Response: { ok: true, email, mode: "created" | "reset" }
- */
+// ---------- SIGNUP ----------
 authRouter.post("/signup", async (req, res) => {
   try {
     const { email, password, homeCourse } = req.body || {};
-    const normEmail = normaliseEmail(email || "");
+    const normEmail = normaliseEmail(email);
 
     if (!normEmail || !password || password.length < 6) {
       return res
@@ -51,50 +51,33 @@ authRouter.post("/signup", async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Does this email already exist?
-    const existing = await db.query(
-      `SELECT id FROM users WHERE email = $1`,
-      [normEmail]
-    );
-
-    if (existing.rowCount > 0) {
-      // Update password (reset)
-      await db.query(
-        `
-        UPDATE users
-        SET password_hash = $2,
-            home_course = COALESCE($3, home_course)
-        WHERE email = $1
-      `,
-        [normEmail, passwordHash, homeCourse || null]
-      );
-
-      console.log("🔐 signup: password reset for existing user", normEmail);
-
-      return res.json({
-        ok: true,
-        email: normEmail,
-        mode: "reset",
-      });
-    }
-
-    // New user
-    const insert = await db.query(
+    const result = await db.query(
       `
-      INSERT INTO users (email, password_hash, home_course)
-      VALUES ($1, $2, $3)
-      RETURNING id, email, home_course
-    `,
+        INSERT INTO users (email, password_hash, home_course)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (email) DO NOTHING
+        RETURNING id, email, home_course;
+      `,
       [normEmail, passwordHash, homeCourse || null]
     );
 
-    const user = insert.rows[0];
-    console.log("🔐 signup: created new user", user.email);
+    console.log("🔐 signup: rows =", result.rowCount, "email =", normEmail);
+
+    // Email already exists
+    if (result.rowCount === 0) {
+      return res
+        .status(409)
+        .json({ ok: false, error: "Email already registered" });
+    }
+
+    const row = result.rows[0];
 
     return res.json({
       ok: true,
-      email: user.email,
-      mode: "created",
+      user: {
+        email: row.email,
+        homeCourse: row.home_course || null,
+      },
     });
   } catch (err) {
     console.error("signup error:", err);
@@ -104,15 +87,11 @@ authRouter.post("/signup", async (req, res) => {
   }
 });
 
-/**
- * LOGIN
- *
- * Checks email + password using bcrypt.
- */
+// ---------- LOGIN ----------
 authRouter.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    const normEmail = normaliseEmail(email || "");
+    const normEmail = normaliseEmail(email);
 
     if (!normEmail || !password) {
       return res
@@ -128,15 +107,15 @@ authRouter.post("/login", async (req, res) => {
     console.log("🔐 login: rows =", result.rowCount, "email =", normEmail);
 
     if (result.rowCount === 0) {
-      // Same generic error for security
+      // Generic message so we don't leak which emails exist
       return res
         .status(401)
         .json({ ok: false, error: "Invalid email or password" });
     }
 
     const user = result.rows[0];
-    const isValid = await bcrypt.compare(password, user.password_hash);
 
+    const isValid = await bcrypt.compare(password, user.password_hash);
     console.log("🔐 login: password match?", isValid);
 
     if (!isValid) {
@@ -145,18 +124,66 @@ authRouter.post("/login", async (req, res) => {
         .json({ ok: false, error: "Invalid email or password" });
     }
 
-    // For now we don't bother with JWT – we just return success + user info.
+    // If you want JWTs later, generate here – for now we just confirm login
     return res.json({
       ok: true,
       user: {
-        id: user.id,
         email: user.email,
         homeCourse: user.home_course || null,
       },
-      token: null, // kept for future compatibility
     });
   } catch (err) {
     console.error("login error:", err);
+    return res
+      .status(500)
+      .json({ ok: false, error: "Something went wrong. Please try again." });
+  }
+});
+
+// ---------- RESET PASSWORD ----------
+authRouter.post("/reset", async (req, res) => {
+  try {
+    const { email, newPassword } = req.body || {};
+    const normEmail = normaliseEmail(email);
+
+    if (!normEmail || !newPassword || newPassword.length < 6) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "Invalid email or password" });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    const result = await db.query(
+      `
+        UPDATE users
+        SET password_hash = $2
+        WHERE email = $1
+        RETURNING id, email, home_course;
+      `,
+      [normEmail, passwordHash]
+    );
+
+    console.log("🔐 reset: rows =", result.rowCount, "email =", normEmail);
+
+    if (result.rowCount === 0) {
+      // No account with that email
+      return res
+        .status(404)
+        .json({ ok: false, error: "Account not found for this email" });
+    }
+
+    const user = result.rows[0];
+
+    return res.json({
+      ok: true,
+      user: {
+        email: user.email,
+        homeCourse: user.home_course || null,
+      },
+    });
+  } catch (err) {
+    console.error("reset error:", err);
     return res
       .status(500)
       .json({ ok: false, error: "Something went wrong. Please try again." });
