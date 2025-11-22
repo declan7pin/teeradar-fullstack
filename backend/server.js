@@ -6,7 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// Analytics helpers (in-memory / SQLite behind the scenes)
+// Analytics helpers (SQLite)
 import {
   recordEvent,
   getAnalyticsSummary,
@@ -16,6 +16,9 @@ import {
 // Slot cache helpers
 import db from "./db.js";
 import { getCachedSlots, saveSlotsToCache } from "./slotCache.js";
+
+// AUTH router (Postgres)
+import { authRouter } from "./auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,6 +32,9 @@ app.use(express.json());
 
 // Serve static frontend from /public at project root
 app.use(express.static(path.join(__dirname, "..", "public")));
+
+// Mount auth API
+app.use("/api/auth", authRouter);
 
 // ---------- LOAD DATA ----------
 const PERTH_LAT = -31.9523;
@@ -80,7 +86,6 @@ app.post("/api/search", async (req, res) => {
       return res.status(400).json({ error: "date is required" });
     }
 
-    // make holes a NUMBER (9 or 18), not a string
     const holesValue =
       holes === "" || holes === null || typeof holes === "undefined"
         ? ""
@@ -160,46 +165,9 @@ app.post("/api/search", async (req, res) => {
     });
 
     const allResults = await Promise.all(jobs);
-    const rawSlots = allResults.flat();
+    const slots = allResults.flat();
 
-    console.log(`🔎 /api/search finished → total raw slots: ${rawSlots.length}`);
-
-    // ---- FINAL PARTY-SIZE FILTER (GLOBAL) ----
-    const party = criteria.partySize || 1;
-
-    function slotSupportsParty(slot, partySize) {
-      // 1-player searches always pass
-      if (!partySize || partySize <= 1) return true;
-
-      // Try to read max capacity and currently booked players from slot
-      const maxP = Number(
-        slot.maxPlayers ??
-          slot.capacity ??
-          slot.max_players ??
-          slot.max_players ??
-          4 // sensible default if missing
-      );
-
-      const booked = Number(
-        slot.players ??
-          slot.booked ??
-          slot.bookedPlayers ??
-          0
-      );
-
-      // If we can't make sense of the numbers, don't filter it out
-      if (!Number.isFinite(maxP) || maxP <= 0) return true;
-      if (!Number.isFinite(booked) || booked < 0) return true;
-
-      const free = maxP - booked;
-      return free >= partySize;
-    }
-
-    const slots = rawSlots.filter((slot) => slotSupportsParty(slot, party));
-
-    console.log(
-      `✅ /api/search after party-size filter (${party}) → ${slots.length} slots`
-    );
+    console.log(`🔎 /api/search finished → total slots: ${slots.length}`);
 
     res.json({ slots });
   } catch (err) {
@@ -209,14 +177,10 @@ app.post("/api/search", async (req, res) => {
 });
 
 // ---------- ANALYTICS INGEST ----------
-
 app.post("/api/analytics/event", async (req, res) => {
   try {
     const { type, payload = {}, at } = req.body || {};
 
-    // Derive a userId:
-    //  - Prefer payload.userId (future)
-    //  - Fallback to IP, so a single device counts as one user
     const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
     const userId = payload.userId || ip || null;
 
@@ -243,43 +207,27 @@ app.post("/api/analytics/event", async (req, res) => {
 });
 
 // ---------- ANALYTICS SUMMARY HELPERS ----------
-
 function buildFlatSummary(summary, topCourses) {
-  // Summary coming from analytics.js:
-  // {
-  //   homeViews, searches, bookingClicks,
-  //   usersAllTime, usersToday, usersWeek, newUsers7d
-  // }
-
   const homeViews = summary.homeViews ?? 0;
   const searches = summary.searches ?? 0;
   const bookingClicks = summary.bookingClicks ?? 0;
   const newUsers7d = summary.newUsers7d ?? 0;
 
   return {
-    // Names your Admin UI is probably using:
     homePageViews: homeViews,
     courseBookingClicks: bookingClicks,
     searches,
     newUsers: newUsers7d,
-
-    // Also keep the alternative names we already used:
     homeViews,
     bookingClicks,
-
-    // Extra stats if we want them later:
     usersAllTime: summary.usersAllTime ?? 0,
     usersToday: summary.usersToday ?? 0,
     usersWeek: summary.usersWeek ?? 0,
-
-    // Top courses by booking clicks
     topCourses: topCourses || [],
   };
 }
 
-// ---------- ANALYTICS SUMMARY ENDPOINTS ----------
-
-// 1) Legacy-style endpoint (in case Admin UI calls /api/analytics)
+// 1) Legacy-style endpoint
 app.get("/api/analytics", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -296,7 +244,7 @@ app.get("/api/analytics", async (req, res) => {
   }
 });
 
-// 2) Explicit summary endpoint used earlier
+// 2) Summary endpoint
 app.get("/api/analytics/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -313,7 +261,7 @@ app.get("/api/analytics/summary", async (req, res) => {
   }
 });
 
-// 3) Admin endpoint (if Admin UI points here)
+// 3) Admin endpoint
 app.get("/api/admin/summary", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
@@ -330,7 +278,7 @@ app.get("/api/admin/summary", async (req, res) => {
   }
 });
 
-// DEBUG: return list of courses with coords + basic flags
+// DEBUG: courses
 app.get("/api/debug/courses", (req, res) => {
   const debugList = courses.map((c) => ({
     name: c.name,
@@ -349,7 +297,6 @@ app.get("/api/debug/courses", (req, res) => {
 });
 
 // ---------- FRONTEND FALLBACK ----------
-// For any non-API route, serve the main index.html (SPA routing)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
