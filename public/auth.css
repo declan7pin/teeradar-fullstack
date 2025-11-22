@@ -1,0 +1,118 @@
+/* auth.css – minimal styling, tweak as you like */
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.auth-overlay.hidden {
+  display: none;
+}
+
+.auth-card {
+  background: #ffffff;
+  max-width: 400px;
+  width: 90%;
+  border-radius: 16px;
+  padding: 24px 20px 20px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+  position: relative;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.auth-card h2 {
+  margin: 0 0 4px;
+}
+
+.auth-subtitle {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #555;
+}
+
+.auth-card label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.auth-card input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+.auth-primary-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: none;
+  background: #0b7a4b;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-primary-btn:hover {
+  filter: brightness(1.05);
+}
+
+.auth-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 6px 0;
+  color: #0b7a4b;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.auth-switch {
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.auth-close {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  border: none;
+  background: none;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.auth-message {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #0b7a4b;
+}
+
+.auth-message.error {
+  color: #b3261e;
+}
+
+.auth-open-btn {
+  /* style this to match your header */
+  border-radius: 999px;
+  padding: 6px 14px;
+  border: 1px solid #ffffff;
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.hidden {
+  display: none;
+}
