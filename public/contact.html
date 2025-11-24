@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Contact • TeeRadar WA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+  <style>
+    :root {
+      --teal: #00796b;
+      --teal-dark: #005e55;
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+    }
+    *{box-sizing:border-box;}
+    html,body{
+      margin:0;
+      padding:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:radial-gradient(circle at top,#e0f2f1,#f9fafb);
+      color:var(--text);
+    }
+    a{text-decoration:none;color:inherit;}
+    button{font-family:inherit;}
+
+    header{
+      background:var(--teal);
+      color:#fff;
+      padding:10px 4vw;
+      position:sticky;
+      top:0;
+      z-index:20;
+      box-shadow:0 2px 6px rgba(0,0,0,0.12);
+    }
+    .nav-wrap{
+      max-width:1100px;
+      margin:0 auto;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .brand-logo{
+      width:26px;
+      height:26px;
+      border-radius:999px;
+      background:#ecfdf5;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#065f46;
+      font-size:15px;
+      font-weight:800;
+      box-shadow:0 0 0 3px rgba(16,185,129,0.25);
+    }
+    .brand-text{
+      font-weight:700;
+      letter-spacing:.04em;
+      font-size:15px;
+    }
+    nav{
+      display:flex;
+      gap:16px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      font-size:13px;
+    }
+    nav a{
+      color:#e0f2f1;
+      opacity:.88;
+      padding:4px 6px;
+      border-radius:999px;
+    }
+    nav a:hover{
+      background:rgba(255,255,255,0.16);
+      opacity:1;
+    }
+    .nav-analytics{
+      background:rgba(15,118,110,0.18);
+      border:1px solid rgba(45,212,191,0.6);
+      padding:4px 10px;
+      font-weight:600;
+    }
+    .nav-login{
+      background:#ffffff;
+      color:var(--teal-dark);
+      border:none;
+      padding:5px 14px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:600;
+      cursor:pointer;
+    }
+
+    main{
+      max-width:800px;
+      margin:28px auto 40px;
+      padding:0 4vw 50px;
+    }
+    h1{
+      font-size:24px;
+      margin-bottom:8px;
+    }
+    .subtext{
+      font-size:13px;
+      color:var(--muted);
+      margin-bottom:20px;
+    }
+    .card{
+      background:var(--card);
+      border-radius:18px;
+      padding:20px 18px 18px;
+      border:1px solid var(--border);
+      box-shadow:0 16px 32px rgba(15,23,42,0.08);
+    }
+    .field{
+      margin-bottom:14px;
+    }
+    .field label{
+      display:block;
+      font-size:13px;
+      margin-bottom:4px;
+    }
+    .field input,
+    .field textarea{
+      width:100%;
+      font-size:13px;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid #d1d5db;
+      resize:vertical;
+      min-height:38px;
+    }
+    .field textarea{
+      min-height:80px;
+    }
+    .field input:focus,
+    .field textarea:focus{
+      outline:none;
+      border-color:#0ea5e9;
+      box-shadow:0 0 0 1px rgba(14,165,233,0.4);
+    }
+    .btn-submit{
+      background:var(--teal);
+      color:#fff;
+      border:none;
+      border-radius:999px;
+      padding:9px 18px;
+      font-size:14px;
+      font-weight:600;
+      cursor:pointer;
+    }
+    .btn-submit:active{
+      background:var(--teal-dark);
+      transform:translateY(1px);
+    }
+    .status{
+      margin-top:10px;
+      font-size:12px;
+    }
+    .status-ok{
+      color:#15803d;
+    }
+    .status-error{
+      color:#b91c1c;
+    }
+
+    footer{
+      max-width:1100px;
+      margin:18px auto 32px;
+      padding:0 4vw;
+      font-size:11px;
+      color:var(--muted);
+      display:flex;
+      justify-content:space-between;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="nav-wrap">
+    <div class="brand">
+      <div class="brand-logo">T</div>
+      <div class="brand-text">TeeRadar WA</div>
+    </div>
+    <nav>
+      <a href="/index.html">Home</a>
+      <a href="/book.html">Bookings</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/about.html">About</a>
+      <a href="/contact.html" style="background:rgba(255,255,255,0.18); border-radius:999px;">Contact</a>
+      <a href="/analytics.html" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
+      <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <h1>Contact TeeRadar</h1>
+  <p class="subtext">
+    Have a question, feature idea, or bug report? Send it through below and we’ll get back to you.
+  </p>
+
+  <section class="card">
+    <div class="field">
+      <label for="contactEmail">Your email (required)</label>
+      <input id="contactEmail" type="email" placeholder="you@example.com" />
+    </div>
+    <div class="field">
+      <label for="contactQuestion">Question / summary (required)</label>
+      <input id="contactQuestion" type="text" placeholder="e.g. Can you add more Perth courses?" />
+    </div>
+    <div class="field">
+      <label for="contactDescription">Details (required)</label>
+      <textarea id="contactDescription" placeholder="Tell us what you’re seeing or what you’d like to do..."></textarea>
+    </div>
+    <button id="contactSubmit" class="btn-submit" type="button">Send message</button>
+    <div id="contactStatus" class="status"></div>
+  </section>
+</main>
+
+<footer>
+  <span>© 2025 TeeRadar WA — Availability subject to individual course sites.</span>
+  <span>
+    <a href="/terms.html">Terms</a> •
+    <a href="/privacy.html">Privacy</a> •
+    <a href="/refunds.html">Refunds</a>
+  </span>
+</footer>
+
+<script>
+  const ADMIN_EMAIL = "declan7pin@gmail.com";
+
+  function isAdmin() {
+    return localStorage.getItem("teeradar_user_email") === ADMIN_EMAIL;
+  }
+
+  function renderNavState() {
+    const analyticsLink = document.getElementById("navAnalytics");
+    const loginBtn = document.getElementById("navLoginBtn");
+    if (!analyticsLink || !loginBtn) return;
+
+    const email = localStorage.getItem("teeradar_user_email");
+
+    if (!email) {
+      analyticsLink.style.display = "none";
+      loginBtn.textContent = "Log in";
+      loginBtn.onclick = () => {
+        window.location.href = "/index.html"; // open main page login modal
+      };
+      return;
+    }
+
+    if (email === ADMIN_EMAIL) {
+      analyticsLink.style.display = "inline-flex";
+    } else {
+      analyticsLink.style.display = "none";
+    }
+
+    loginBtn.textContent = "Log out";
+    loginBtn.onclick = () => {
+      localStorage.removeItem("teeradar_user_email");
+      localStorage.removeItem("teeradar_jwt");
+      renderNavState();
+    };
+  }
+
+  // Contact submit logic
+  const submitBtn = document.getElementById("contactSubmit");
+  const statusEl = document.getElementById("contactStatus");
+
+  if (submitBtn) {
+    submitBtn.addEventListener("click", async () => {
+      const email = document.getElementById("contactEmail").value.trim();
+      const question = document.getElementById("contactQuestion").value.trim();
+      const description = document.getElementById("contactDescription").value.trim();
+
+      statusEl.textContent = "";
+      statusEl.className = "status";
+
+      if (!email || !question || !description) {
+        statusEl.textContent = "Please fill in all required fields.";
+        statusEl.classList.add("status-error");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, question, description })
+        });
+
+        const data = await res.json();
+
+        if (!data || !data.ok) {
+          statusEl.textContent = data && data.error
+            ? data.error
+            : "Something went wrong. Please try again.";
+          statusEl.classList.add("status-error");
+          return;
+        }
+
+        statusEl.textContent = "Thanks! Your message has been sent.";
+        statusEl.classList.add("status-ok");
+
+        // Clear fields
+        document.getElementById("contactEmail").value = "";
+        document.getElementById("contactQuestion").value = "";
+        document.getElementById("contactDescription").value = "";
+      } catch (err) {
+        console.error("contact error:", err);
+        statusEl.textContent = "Unable to send right now. Please try again later.";
+        statusEl.classList.add("status-error");
+      }
+    });
+  }
+
+  window.addEventListener("load", () => {
+    renderNavState();
+  });
+</script>
+</body>
+</html>
