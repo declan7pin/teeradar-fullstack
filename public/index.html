@@ -295,6 +295,74 @@
       font-size:13px;
     }
 
+    /* CONTACT CARD */
+    .contact-section{
+      margin-top:32px;
+    }
+    .contact-card{
+      background:var(--card);
+      border-radius:18px;
+      padding:16px 16px 18px;
+      border:1px solid var(--border);
+      box-shadow:0 18px 40px rgba(15,23,42,0.08);
+      max-width:520px;
+    }
+    .contact-heading{
+      font-size:16px;
+      font-weight:700;
+      margin:0 0 4px;
+    }
+    .contact-sub{
+      margin:0 0 12px;
+      font-size:13px;
+      color:var(--muted);
+    }
+    .contact-label{
+      font-size:12px;
+      font-weight:600;
+      margin-bottom:4px;
+      display:block;
+      color:#4b5563;
+    }
+    .contact-input,
+    .contact-textarea{
+      width:100%;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid #d1d5db;
+      font-size:13px;
+      margin-bottom:10px;
+    }
+    .contact-textarea{
+      min-height:80px;
+      resize:vertical;
+    }
+    .contact-input:focus,
+    .contact-textarea:focus{
+      outline:none;
+      border-color:#0ea5e9;
+      box-shadow:0 0 0 1px rgba(14,165,233,0.4);
+    }
+    .contact-btn{
+      border:none;
+      border-radius:999px;
+      padding:8px 18px;
+      font-size:13px;
+      font-weight:600;
+      background:var(--teal);
+      color:#fff;
+      cursor:pointer;
+    }
+    .contact-btn:active{
+      background:var(--teal-dark);
+      transform:translateY(1px);
+    }
+    .contact-status{
+      font-size:12px;
+      margin-top:6px;
+      color:var(--muted);
+    }
+
     /* FOOTER & T&Cs banner */
     footer{
       max-width:1100px;
@@ -542,6 +610,46 @@
       </p>
     </article>
   </section>
+
+  <!-- CONTACT ME -->
+  <section class="contact-section" aria-label="Contact TeeRadar">
+    <div class="contact-card">
+      <h3 class="contact-heading">Have a question?</h3>
+      <p class="contact-sub">
+        Send a message and we’ll get back to you via email.
+      </p>
+      <form id="contactForm" novalidate>
+        <label class="contact-label" for="contactEmail">Your email (required)</label>
+        <input
+          id="contactEmail"
+          class="contact-input"
+          type="email"
+          placeholder="you@example.com"
+          required
+        />
+
+        <label class="contact-label" for="contactQuestion">Question</label>
+        <input
+          id="contactQuestion"
+          class="contact-input"
+          type="text"
+          placeholder="e.g. Can you add my local course?"
+        />
+
+        <label class="contact-label" for="contactDetails">Details</label>
+        <textarea
+          id="contactDetails"
+          class="contact-textarea"
+          placeholder="Add any extra information that will help."
+        ></textarea>
+
+        <button id="contactSubmit" type="submit" class="contact-btn">
+          Send message
+        </button>
+        <div id="contactStatus" class="contact-status"></div>
+      </form>
+    </div>
+  </section>
 </main>
 
 <footer>
@@ -639,8 +747,6 @@
     loginBtn.onclick = () => {
       localStorage.removeItem("teeradar_user_email");
       localStorage.removeItem("teeradar_jwt");
-      // keep home course if you like; or clear it:
-      // localStorage.removeItem("teeradar_home_course");
       renderNavState();
     };
   }
@@ -766,7 +872,6 @@
 
       if (authMode === "reset") {
         endpoint = "/api/auth/reset";
-        // send both password & newPassword so backend can pick whichever it expects
         payload = { email, password, newPassword: password };
       } else {
         endpoint = authMode === "login"
@@ -795,14 +900,12 @@
           return;
         }
 
-        // login / signup success
         if (data.token) {
           localStorage.setItem("teeradar_jwt", data.token);
         }
         if (data.user && data.user.email) {
           localStorage.setItem("teeradar_user_email", data.user.email);
         } else if (data.email) {
-          // fallback to older shape if needed
           localStorage.setItem("teeradar_user_email", data.email);
         }
         if (data.user && data.user.homeCourse) {
@@ -818,10 +921,78 @@
     });
   }
 
+  // ---- CONTACT FORM HANDLER ----
+  function initContactForm() {
+    const form = document.getElementById("contactForm");
+    if (!form) return;
+
+    const emailInput = document.getElementById("contactEmail");
+    const questionInput = document.getElementById("contactQuestion");
+    const detailsInput = document.getElementById("contactDetails");
+    const statusEl = document.getElementById("contactStatus");
+    const submitBtn = document.getElementById("contactSubmit");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!emailInput.value.trim()) {
+        statusEl.textContent = "Please enter your email so we can reply.";
+        statusEl.style.color = "#b91c1c";
+        emailInput.focus();
+        return;
+      }
+
+      const email = emailInput.value.trim();
+      const question = questionInput.value.trim();
+      const details = detailsInput.value.trim();
+
+      const subject = question || "New TeeRadar enquiry";
+      const message =
+        (question ? "Question: " + question + "\n\n" : "") +
+        (details ? "Details:\n" + details : "");
+
+      statusEl.textContent = "Sending...";
+      statusEl.style.color = "#64748b";
+      submitBtn.disabled = true;
+
+      try {
+        const res = await fetch("/api/contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            subject,
+            message,
+            question,
+            details
+          })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data.ok) {
+          statusEl.textContent =
+            (data && data.error) || "Something went wrong. Please try again.";
+          statusEl.style.color = "#b91c1c";
+        } else {
+          statusEl.textContent = "Thanks — your message has been sent.";
+          statusEl.style.color = "#15803d";
+          form.reset();
+        }
+      } catch (err) {
+        console.error("Contact error:", err);
+        statusEl.textContent = "Network error — please try again.";
+        statusEl.style.color = "#b91c1c";
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  }
+
   window.addEventListener("load", () => {
     renderNavState();
     trackInitialHome();
     initTCBanner();
+    initContactForm();
   });
 </script>
 </body>
