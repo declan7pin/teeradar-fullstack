@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>TeeRadar WA — Find a tee time across WA</title>
+  <title>TeeRadar — Find a tee time across Australia</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
 
@@ -109,6 +109,32 @@
       cursor:pointer;
     }
 
+    /* STATE SELECTOR IN NAV */
+    .nav-state{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 8px;
+      border-radius:999px;
+      background:rgba(15,118,110,0.25);
+    }
+    .nav-state label{
+      font-size:11px;
+      opacity:.9;
+    }
+    .nav-state select{
+      border:none;
+      border-radius:999px;
+      padding:3px 8px;
+      font-size:11px;
+      background:#ecfdf5;
+      color:#064e3b;
+      cursor:pointer;
+    }
+    .nav-state select:focus{
+      outline:none;
+    }
+
     /* HERO */
     main{
       max-width:1100px;
@@ -133,6 +159,7 @@
       font-size:12px;
       color:var(--muted);
       margin-bottom:10px;
+      flex-wrap:wrap;
     }
     .hero-kicker-pill{
       display:inline-flex;
@@ -233,6 +260,7 @@
       gap:8px;
       margin-bottom:6px;
       font-size:12px;
+      flex-wrap:wrap;
     }
     .hero-card-badge{
       padding:4px 9px;
@@ -251,6 +279,7 @@
       align-items:center;
       margin-top:10px;
       font-size:12px;
+      gap:10px;
     }
     .hero-card-footer button{
       background:#bbf7d0;
@@ -261,6 +290,7 @@
       font-size:11px;
       font-weight:700;
       cursor:pointer;
+      white-space:nowrap;
     }
     .hero-card-bg{
       position:absolute;
@@ -502,9 +532,23 @@
   <div class="nav-wrap">
     <div class="brand">
       <div class="brand-logo">T</div>
-      <div class="brand-text">TeeRadar WA</div>
+      <div class="brand-text">TeeRadar</div>
     </div>
     <nav>
+      <div class="nav-state">
+        <label for="stateSelect">State</label>
+        <select id="stateSelect">
+          <option value="ALL">All</option>
+          <option value="WA" selected>WA</option>
+          <option value="NSW">NSW</option>
+          <option value="VIC">VIC</option>
+          <option value="QLD">QLD</option>
+          <option value="SA">SA</option>
+          <option value="TAS">TAS</option>
+          <option value="ACT">ACT</option>
+          <option value="NT">NT</option>
+        </select>
+      </div>
       <a href="/index.html">Home</a>
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
@@ -521,18 +565,18 @@
     <div>
       <div class="hero-kicker">
         <span class="hero-kicker-pill">
-          <span>WA public courses</span>
+          <span>Australian public courses</span>
         </span>
-        <span>Live booking links • real-time filters</span>
+        <span>Start by picking your state, then search.</span>
       </div>
 
       <h1 class="hero-title">
-        Find a tee time across WA, in one place.
+        Find a tee time across Australia, in one place.
       </h1>
       <p class="hero-sub">
-        Search public golf courses across Western Australia by date, time window, 9/18
-        holes and players. Tap through to the official course booking page — you stay
-        compliant, we save you the legwork.
+        Search public golf courses across Australia by state, date, time window, 9/18
+        holes and players. We start with WA today and roll out to more states as
+        integrations go live.
       </p>
 
       <div class="hero-actions">
@@ -560,23 +604,23 @@
       </div>
     </div>
 
-    <aside class="hero-card" aria-label="Live WA course widget">
+    <aside class="hero-card" aria-label="Live course widget">
       <div class="hero-card-bg"></div>
       <div class="hero-card-gradient"></div>
 
       <div class="hero-card-inner">
         <div>
           <div class="hero-card-top">
-            <span class="hero-card-badge">Live WA courses</span>
-            <span class="hero-card-text">Araluen • Collier • Whaleback • more</span>
+            <span class="hero-card-badge">Live courses</span>
+            <span class="hero-card-text">WA first • more states coming online</span>
           </div>
           <p style="font-size:12px;max-width:280px;margin:6px 0 0;">
-            We always send you to the course’s own booking page. WA today, ready to
-            scale to all Australian states later.
+            We always send you to the course’s own booking page. Pick your state,
+            then jump straight to official tee sheets — compliant and course-first.
           </p>
         </div>
         <div class="hero-card-footer">
-          <span style="opacity:.85;">Course-first, compliant booking links.</span>
+          <span style="opacity:.85;">State-aware, course-first booking links.</span>
           <button type="button" onclick="window.location.href='/book.html'">
             View live course links
           </button>
@@ -589,15 +633,15 @@
     <article class="feature-card">
       <h3>Single search</h3>
       <p>
-        One simple search instead of opening a dozen course sites. We aggregate WA
-        public courses into a single map and list.
+        One simple search instead of opening a dozen course sites. We aggregate
+        public courses (starting with WA) into a single map and list.
       </p>
     </article>
     <article class="feature-card">
       <h3>Filters that match golf</h3>
       <p>
-        Pick your date, time window, hole count and group size. We highlight which
-        courses are worth clicking into.
+        Pick your state, date, time window, hole count and group size. We highlight
+        which courses are worth clicking into.
       </p>
     </article>
     <article class="feature-card">
@@ -608,10 +652,10 @@
       </p>
     </article>
     <article class="feature-card">
-      <h3>Ready to expand</h3>
+      <h3>Built to expand</h3>
       <p>
-        Built for WA today, designed to roll out to other Australian states as more
-        integrations come online.
+        WA today, designed to roll out cleanly to every Australian state as new
+        integrations are added.
       </p>
     </article>
   </section>
@@ -658,7 +702,7 @@
 </main>
 
 <footer>
-  <span>© 2025 TeeRadar WA — Availability subject to individual course sites.</span>
+  <span>© 2025 TeeRadar — Availability subject to individual course sites.</span>
   <span>
     <a href="/terms.html">Terms</a> •
     <a href="/privacy.html">Privacy</a> •
@@ -669,7 +713,7 @@
 <!-- T&Cs banner -->
 <div id="tc-banner" style="display:none;">
   <span>
-    By using TeeRadar WA you agree to our <a href="/terms.html" target="_blank">Terms &amp; Conditions</a>.
+    By using TeeRadar you agree to our <a href="/terms.html" target="_blank">Terms &amp; Conditions</a>.
   </span>
   <button type="button" id="tc-accept-btn">Got it</button>
 </div>
@@ -707,7 +751,35 @@
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 
-  // ---- ANALYTICS (unchanged) ----
+  // ---- STATE SELECTION (shared across site) ----
+  const STATE_KEY = "teeradar_state";
+  const DEFAULT_STATE = "WA";
+  const VALID_STATES = ["ALL","WA","NSW","VIC","QLD","SA","TAS","ACT","NT"];
+
+  function initStateSelector() {
+    const select = document.getElementById("stateSelect");
+    if (!select) return;
+
+    const saved = localStorage.getItem(STATE_KEY) || DEFAULT_STATE;
+    if (VALID_STATES.includes(saved)) {
+      select.value = saved;
+    } else {
+      select.value = DEFAULT_STATE;
+    }
+
+    select.addEventListener("change", () => {
+      const value = select.value;
+      localStorage.setItem(STATE_KEY, value);
+      trackEvent("state_selected", { state: value });
+    });
+  }
+
+  function getCurrentState() {
+    const saved = localStorage.getItem(STATE_KEY);
+    return VALID_STATES.includes(saved) ? saved : DEFAULT_STATE;
+  }
+
+  // ---- ANALYTICS ----
   function trackEvent(type, payload) {
     try {
       fetch("/api/analytics/event", {
@@ -761,7 +833,8 @@
       trackEvent("new_user", {});
       localStorage.setItem("teeradar_seen", "1");
     }
-    trackEvent("home_view", {});
+    const state = getCurrentState();
+    trackEvent("home_view", { state });
   }
 
   // simple T&C banner logic
@@ -995,7 +1068,8 @@
 
   window.addEventListener("load", () => {
     renderNavState();
-    trackInitialHome();
+    initStateSelector();   // new: state selector wired to localStorage + analytics
+    trackInitialHome();    // now sends state with home_view
     initTCBanner();
     initContactForm();
   });
