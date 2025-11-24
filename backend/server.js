@@ -4,25 +4,23 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import nodemailer from "nodemailer";
 
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// Analytics helpers (SQLite behind the scenes)
+// Analytics (SQLite)
 import {
   recordEvent,
   getAnalyticsSummary,
   getTopCourses,
 } from "./analytics.js";
 
-// Slot cache helpers
+// Cache
 import db from "./db.js";
 import { getCachedSlots, saveSlotsToCache } from "./slotCache.js";
 
 // Auth router
 import authRouter from "./auth.js";
-
-// ✉️ Email (contact) support
-import nodemailer from "nodemailer";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,17 +28,15 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ---------- MIDDLEWARE ----------
 app.use(cors());
 app.use(express.json());
-
-// Serve static frontend from /public at project root
 app.use(express.static(path.join(__dirname, "..", "public")));
 
-// ---------- AUTH ROUTES ----------
 app.use("/api/auth", authRouter);
 
-// ---------- LOAD DATA ----------
+// -------------------------------------------------
+// Load course data
+// -------------------------------------------------
 const PERTH_LAT = -31.9523;
 const PERTH_LNG = 115.8613;
 
@@ -62,19 +58,23 @@ if (fs.existsSync(feeGroupsPath)) {
 console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
-// ---------- ROUTES ----------
-
-// Health check
+// -------------------------------------------------
+// Health Check
+// -------------------------------------------------
 app.get("/health", (req, res) => {
   res.json({ status: "ok", courses: courses.length });
 });
 
-// Full course list (map + UI)
+// -------------------------------------------------
+// Course List
+// -------------------------------------------------
 app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
-// Tee time search with cache layer + debug logging
+// -------------------------------------------------
+// Search
+// -------------------------------------------------
 app.post("/api/search", async (req, res) => {
   try {
     const {
@@ -85,9 +85,7 @@ app.post("/api/search", async (req, res) => {
       partySize = 1,
     } = req.body || {};
 
-    if (!date) {
-      return res.status(400).json({ error: "date is required" });
-    }
+    if (!date) return res.status(400).json({ error: "date is required" });
 
     const holesValue =
       holes === "" || holes === null || typeof holes === "undefined"
@@ -108,7 +106,6 @@ app.post("/api/search", async (req, res) => {
       const courseId = c.id || c.name;
       const provider = c.provider || "Other";
 
-      // 1) Try cache first
       const cached = getCachedSlots({
         courseId,
         date,
@@ -117,11 +114,10 @@ app.post("/api/search", async (req, res) => {
       });
 
       if (cached) {
-        console.log(`⚡ cache hit → ${c.name} → ${cached.length} slots`);
+        console.log(`⚡ cache hit → ${c.name} (${cached.length} slots)`);
         return cached;
       }
 
-      // 2) Fallback: scrape live, then save to cache
       try {
         const result = await scrapeCourse(c, criteria, feeGroups);
         const count = Array.isArray(result) ? result.length : 0;
@@ -142,7 +138,7 @@ app.post("/api/search", async (req, res) => {
 
         return result || [];
       } catch (err) {
-        console.error(`❌ scrapeCourse error for ${c.name}:`, err.message);
+        console.error(`❌ scrape error for ${c.name}:`, err.message);
 
         await saveSlotsToCache({
           courseId,
@@ -163,8 +159,7 @@ app.post("/api/search", async (req, res) => {
     const allResults = await Promise.all(jobs);
     const slots = allResults.flat();
 
-    console.log(`🔎 /api/search finished → total slots: ${slots.length}`);
-
+    console.log(`🔎 /api/search complete → ${slots.length} total slots`);
     res.json({ slots });
   } catch (err) {
     console.error("search error", err);
@@ -172,7 +167,9 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
-// ---------- ANALYTICS INGEST ----------
+// -------------------------------------------------
+// Analytics Ingest
+// -------------------------------------------------
 app.post("/api/analytics/event", async (req, res) => {
   try {
     const { type, payload = {}, at } = req.body || {};
@@ -202,20 +199,17 @@ app.post("/api/analytics/event", async (req, res) => {
   }
 });
 
-// ---------- ANALYTICS SUMMARY HELPERS ----------
+// -------------------------------------------------
+// Analytics Summary
+// -------------------------------------------------
 function buildFlatSummary(summary, topCourses) {
-  const homeViews = summary.homeViews ?? 0;
-  const searches = summary.searches ?? 0;
-  const bookingClicks = summary.bookingClicks ?? 0;
-  const newUsers7d = summary.newUsers7d ?? 0;
-
   return {
-    homePageViews: homeViews,
-    courseBookingClicks: bookingClicks,
-    searches,
-    newUsers: newUsers7d,
-    homeViews,
-    bookingClicks,
+    homePageViews: summary.homeViews ?? 0,
+    courseBookingClicks: summary.bookingClicks ?? 0,
+    searches: summary.searches ?? 0,
+    newUsers: summary.newUsers7d ?? 0,
+    homeViews: summary.homeViews ?? 0,
+    bookingClicks: summary.bookingClicks ?? 0,
     usersAllTime: summary.usersAllTime ?? 0,
     usersToday: summary.usersToday ?? 0,
     usersWeek: summary.usersWeek ?? 0,
@@ -227,139 +221,86 @@ app.get("/api/analytics", async (req, res) => {
   try {
     const summary = await getAnalyticsSummary();
     const topCourses = await getTopCourses(10);
-    const body = buildFlatSummary(summary, topCourses);
-
-    console.log("[analytics] /api/analytics →", body);
-    res.json(body);
+    res.json(buildFlatSummary(summary, topCourses));
   } catch (err) {
-    console.error("analytics summary error (/api/analytics)", err);
-    res
-      .status(500)
-      .json({ error: "analytics summary error", detail: err.message });
+    console.error("analytics summary error", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-app.get("/api/analytics/summary", async (req, res) => {
-  try {
-    const summary = await getAnalyticsSummary();
-    const topCourses = await getTopCourses(10);
-    const body = buildFlatSummary(summary, topCourses);
-
-    console.log("[analytics] /api/analytics/summary →", body);
-    res.json(body);
-  } catch (err) {
-    console.error("analytics summary error (/api/analytics/summary)", err);
-    res
-      .status(500)
-      .json({ error: "analytics summary error", detail: err.message });
-  }
-});
-
-app.get("/api/admin/summary", async (req, res) => {
-  try {
-    const summary = await getAnalyticsSummary();
-    const topCourses = await getTopCourses(10);
-    const body = buildFlatSummary(summary, topCourses);
-
-    console.log("[analytics] /api/admin/summary →", body);
-    res.json(body);
-  } catch (err) {
-    console.error("admin summary error (/api/admin/summary)", err);
-    res
-      .status(500)
-      .json({ error: "admin summary error", detail: err.message });
-  }
-});
-
-// ---------- CONTACT FORM EMAIL (NEW) ----------
+// -------------------------------------------------
+// CONTACT FORM EMAIL SYSTEM
+// -------------------------------------------------
 app.post("/api/contact", async (req, res) => {
+  const CONTACT_EMAIL = process.env.CONTACT_EMAIL;
+  const SMTP_HOST = process.env.SMTP_HOST;
+  const SMTP_PORT = process.env.SMTP_PORT;
+  const SMTP_USER = process.env.SMTP_USER;
+  const SMTP_PASS = process.env.SMTP_PASS;
+
+  // Debug what is missing
+  console.log("[contact env] email:", CONTACT_EMAIL);
+  console.log("[contact env] host:", SMTP_HOST);
+  console.log("[contact env] port:", SMTP_PORT);
+  console.log("[contact env] user:", SMTP_USER);
+  console.log("[contact env] pass present:", !!SMTP_PASS);
+
+  if (!CONTACT_EMAIL || !SMTP_HOST || !SMTP_USER || !SMTP_PASS || !SMTP_PORT) {
+    console.error("Contact form error: missing SMTP/CONTACT env vars");
+    return res.status(500).json({ ok: false, error: "Email service not configured" });
+  }
+
+  const { email, question, details } = req.body;
+
+  if (!email || !question || !details) {
+    return res
+      .status(400)
+      .json({ ok: false, error: "Missing required fields" });
+  }
+
   try {
-    const { email, question, details } = req.body || {};
-
-    if (!email || !question) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "Email and question are required." });
-    }
-
-    const toAddress = process.env.CONTACT_TO_EMAIL;
-    const smtpHost = process.env.SMTP_HOST;
-    const smtpPort = Number(process.env.SMTP_PORT || 587);
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-
-    if (!toAddress || !smtpHost || !smtpUser || !smtpPass) {
-      console.error("Contact form error: missing SMTP/CONTACT env vars");
-      return res
-        .status(500)
-        .json({ ok: false, error: "Email service is not configured." });
-    }
-
     const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465, // true for 465, false for 587
+      host: SMTP_HOST,
+      port: Number(SMTP_PORT),
+      secure: false,
       auth: {
-        user: smtpUser,
-        pass: smtpPass,
+        user: SMTP_USER,
+        pass: SMTP_PASS,
       },
     });
 
-    const bodyLines = [
-      `New TeeRadar contact form submission`,
-      "",
-      `From email: ${email}`,
-      "",
-      `Question:`,
-      question,
-      "",
-      `Details:`,
-      details || "(none provided)",
-    ];
-
     await transporter.sendMail({
-      from: `"TeeRadar Contact" <${smtpUser}>`,
-      to: toAddress,
-      replyTo: email,
-      subject: `TeeRadar contact: ${question.slice(0, 80)}`,
-      text: bodyLines.join("\n"),
+      from: `"TeeRadar Contact" <${SMTP_USER}>`,
+      to: CONTACT_EMAIL,
+      subject: `New TeeRadar Question: ${question}`,
+      text: `
+From: ${email}
+
+Question:
+${question}
+
+Details:
+${details}
+      `,
     });
 
-    console.log("✅ Contact email sent from", email);
-
-    return res.json({ ok: true });
+    res.json({ ok: true });
   } catch (err) {
-    console.error("❌ contact form error:", err);
-    return res
-      .status(500)
-      .json({ ok: false, error: "Failed to send message. Please try again." });
+    console.error("Email send error:", err);
+    res.status(500).json({ ok: false, error: "Email failed to send" });
   }
 });
 
-// DEBUG: return list of courses with coords + basic flags
-app.get("/api/debug/courses", (req, res) => {
-  const debugList = courses.map((c) => ({
-    name: c.name,
-    provider: c.provider,
-    holes: c.holes,
-    lat: c.lat,
-    lng: c.lng,
-    hasUrl: !!c.url,
-    hasPhone: !!c.phone,
-  }));
-
-  res.json({
-    count: debugList.length,
-    courses: debugList,
-  });
-});
-
-// ---------- FRONTEND FALLBACK ----------
+// -------------------------------------------------
+// Frontend fallback
+// -------------------------------------------------
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
 
-// ---------- START SERVER ----------
+// -------------------------------------------------
+// Start Server
+// -------------------------------------------------
 app.listen(PORT, () => {
   console.log(`✅ TeeRadar backend running on port ${PORT}`);
 });
