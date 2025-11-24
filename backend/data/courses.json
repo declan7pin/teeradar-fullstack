@@ -320,7 +320,7 @@
   {
     "name": "Fremantle Public Golf Course (18 holes)",
     "provider": "MiClub",
-    "holes": 18,
+    "holes": 9,
     "lat": -32.05350195703846,
     "lng": 115.76684493538063,
     "url": "https://fremantlepublic.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-15&feeGroupId=103961"
