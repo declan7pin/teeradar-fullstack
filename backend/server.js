@@ -21,6 +21,9 @@ import { getCachedSlots, saveSlotsToCache } from "./slotCache.js";
 // Auth router
 import authRouter from "./auth.js";
 
+// ✉️ Email (contact) support
+import nodemailer from "nodemailer";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -265,6 +268,71 @@ app.get("/api/admin/summary", async (req, res) => {
     res
       .status(500)
       .json({ error: "admin summary error", detail: err.message });
+  }
+});
+
+// ---------- CONTACT FORM EMAIL (NEW) ----------
+app.post("/api/contact", async (req, res) => {
+  try {
+    const { email, question, details } = req.body || {};
+
+    if (!email || !question) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "Email and question are required." });
+    }
+
+    const toAddress = process.env.CONTACT_TO_EMAIL;
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpPort = Number(process.env.SMTP_PORT || 587);
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+
+    if (!toAddress || !smtpHost || !smtpUser || !smtpPass) {
+      console.error("Contact form error: missing SMTP/CONTACT env vars");
+      return res
+        .status(500)
+        .json({ ok: false, error: "Email service is not configured." });
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465, // true for 465, false for 587
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    });
+
+    const bodyLines = [
+      `New TeeRadar contact form submission`,
+      "",
+      `From email: ${email}`,
+      "",
+      `Question:`,
+      question,
+      "",
+      `Details:`,
+      details || "(none provided)",
+    ];
+
+    await transporter.sendMail({
+      from: `"TeeRadar Contact" <${smtpUser}>`,
+      to: toAddress,
+      replyTo: email,
+      subject: `TeeRadar contact: ${question.slice(0, 80)}`,
+      text: bodyLines.join("\n"),
+    });
+
+    console.log("✅ Contact email sent from", email);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("❌ contact form error:", err);
+    return res
+      .status(500)
+      .json({ ok: false, error: "Failed to send message. Please try again." });
   }
 });
 
