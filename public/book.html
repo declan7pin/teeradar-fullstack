@@ -265,6 +265,20 @@
   <section class="filters">
     <div class="filters-row">
       <div class="filter-group">
+        <div class="filter-label">State</div>
+        <select id="stateSelect" class="filter-control">
+          <option value="ALL">All states</option>
+          <option value="WA">WA</option>
+          <option value="NSW">NSW</option>
+          <option value="VIC">VIC</option>
+          <option value="QLD">QLD</option>
+          <option value="SA">SA</option>
+          <option value="TAS">TAS</option>
+          <option value="ACT">ACT</option>
+          <option value="NT">NT</option>
+        </select>
+      </div>
+      <div class="filter-group">
         <div class="filter-label">Date</div>
         <input id="date" class="filter-control" type="date" />
       </div>
@@ -297,7 +311,7 @@
   </section>
 
   <div class="status-line" id="status-line">
-    Tap “Search availability” to check live times.
+    <!-- Filled by JS to include state -->
   </div>
 
   <div id="map"></div>
@@ -321,10 +335,120 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
+    // ---- STATE HANDLING (shared with index) ----
+    const STATE_KEY = "teeradar_state";
+    const DEFAULT_STATE = "WA";
+    const VALID_STATES = ["ALL","WA","NSW","VIC","QLD","SA","TAS","ACT","NT"];
+
+    function getCurrentState() {
+      const saved = localStorage.getItem(STATE_KEY);
+      if (VALID_STATES.includes(saved)) return saved;
+      return DEFAULT_STATE;
+    }
+
+    function setCurrentState(code) {
+      const value = VALID_STATES.includes(code) ? code : DEFAULT_STATE;
+      localStorage.setItem(STATE_KEY, value);
+    }
+
+    function getStateLabel(code) {
+      switch (code) {
+        case "WA": return "Western Australia";
+        case "NSW": return "New South Wales";
+        case "VIC": return "Victoria";
+        case "QLD": return "Queensland";
+        case "SA": return "South Australia";
+        case "TAS": return "Tasmania";
+        case "ACT": return "Australian Capital Territory";
+        case "NT": return "Northern Territory";
+        case "ALL": return "all states in Australia";
+        default: return "Australia";
+      }
+    }
+
+    function getMapViewForState(code) {
+      switch (code) {
+        case "ALL":
+          return { center: [-25.0, 133.0], zoom: 4.5 };
+        case "NSW":
+          return { center: [-33.87, 151.21], zoom: 6 };
+        case "VIC":
+          return { center: [-37.81, 144.96], zoom: 6 };
+        case "QLD":
+          return { center: [-27.47, 153.02], zoom: 5.8 };
+        case "SA":
+          return { center: [-34.93, 138.60], zoom: 6 };
+        case "TAS":
+          return { center: [-42.88, 147.32], zoom: 6 };
+        case "ACT":
+          return { center: [-35.28, 149.13], zoom: 7 };
+        case "NT":
+          return { center: [-12.46, 130.84], zoom: 6 };
+        case "WA":
+        default:
+          return { center: [-31.95, 115.86], zoom: 5.8 };
+      }
+    }
+
+    function resetMapViewForState(stateCode) {
+      if (!map) return;
+      const view = getMapViewForState(stateCode || getCurrentState());
+      map.setView(view.center, view.zoom);
+    }
+
+    function updateStatusLineIdle() {
+      const state = getCurrentState();
+      const label = getStateLabel(state);
+      statusLine.textContent =
+        `Searching courses in ${label}. Tap "Search availability" to check live times.`;
+      statusLine.style.color = "#555";
+    }
+
+    function initStateSelector() {
+      const select = document.getElementById("stateSelect");
+      if (!select) return;
+
+      const current = getCurrentState();
+      select.value = VALID_STATES.includes(current) ? current : DEFAULT_STATE;
+
+      select.addEventListener("change", () => {
+        const value = select.value;
+        setCurrentState(value);
+        resetMapViewForState(value);
+        updateStatusLineIdle();
+        // If there's already a search, re-run it for the new state
+        if (lastSearchCriteria) {
+          runSearch();
+        } else {
+          groupedSlots = {};
+          renderCourses();
+        }
+      });
+
+      updateStatusLineIdle();
+    }
+
+    // ---- ANALYTICS (re-using your backend endpoint) ----
+    function trackEvent(type, payload) {
+      try {
+        fetch("/api/analytics/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type,
+            payload: payload || {},
+            at: new Date().toISOString()
+          })
+        }).catch(() => {});
+      } catch (e) {
+        console.warn("analytics event failed", e);
+      }
+    }
+
     let map;
     let markers = [];
     let courses = [];
-    let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize }
+    let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize, state }
     let groupedSlots = {};         // courseName => [slots]
 
     const statusLine = document.getElementById("status-line");
@@ -335,14 +459,15 @@
     async function init() {
       initMap();
       await loadCourses();
-      // 👇 New: auto-zoom around home course if user has set one
       applyHomeCourseZoom();
+      initStateSelector();
       renderCourses();
+      trackEvent("book_view", { state: getCurrentState() });
     }
 
     function initMap() {
-      // Default view over WA
-      map = L.map("map").setView([-31.95, 115.86], 5.8);
+      const view = getMapViewForState(getCurrentState());
+      map = L.map("map").setView(view.center, view.zoom);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 18,
       }).addTo(map);
@@ -399,7 +524,6 @@
       }
 
       if (bestMatch) {
-        // ⬇️ Wider radius (zoom 10 instead of 11)
         map.setView([bestMatch.lat, bestMatch.lng], 10);
       }
     }
@@ -412,6 +536,7 @@
       const latest = document.getElementById("latest").value || "17:00";
       const holes = document.getElementById("holes").value;
       const players = document.getElementById("players").value;
+      const state = getCurrentState();
 
       if (!date) {
         alert("Please select a date.");
@@ -424,12 +549,15 @@
         latest,
         holes,
         partySize: Number(players) || 1,
+        state
       };
 
       window.teeRadarLastSearchDate = date;
 
       statusLine.textContent = "Checking live availability...";
       statusLine.style.color = "#555";
+
+      trackEvent("search_run", lastSearchCriteria);
 
       try {
         const res = await fetch("/api/search", {
@@ -450,12 +578,18 @@
         });
 
         const selectedHoles = Number(holes);
+        const selectedState = state;
         let availableCourses = 0;
         let totalSlots = 0;
 
         Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
           const course = courses.find((c) => c.name === courseName);
           if (!course) return;
+
+          const courseState = course.state || "WA";
+          if (selectedState !== "ALL" && courseState !== selectedState) {
+            return;
+          }
 
           const provider = course.provider || "Other";
           const isPhone = provider === "Phone";
@@ -516,10 +650,21 @@
         0
       );
 
-      courses.forEach((course) => {
+      const selectedState = getCurrentState();
+
+      const filteredCourses = courses.filter((course) => {
+        const courseState = course.state || "WA";
+        if (selectedState === "ALL") return true;
+        return courseState === selectedState;
+      });
+
+      filteredCourses.forEach((course) => {
         const name = course.name;
         const provider = course.provider || "Other";
         const isPhone = provider === "Phone";
+
+        const courseStateCode = course.state || "WA";
+        const courseStateLabel = getStateLabel(courseStateCode);
 
         // Wembley & Meadow Springs → unable to confirm (yellow)
         const isUnconfirmed =
@@ -614,7 +759,7 @@
         card.innerHTML = `
           <div>
             <div class="course-header">${name}</div>
-            <div class="course-sub">Western Australia</div>
+            <div class="course-sub">${courseStateLabel}</div>
             <div class="chip-row">
               <span class="chip chip-provider">${providerLabel}</span>
               <span class="chip ${availChipClass}">${availLabel}</span>
@@ -644,6 +789,15 @@
 
         coursesStrip.appendChild(card);
       });
+
+      // If no courses at all in this state, show a friendly message
+      if (filteredCourses.length === 0) {
+        const msg = document.createElement("div");
+        msg.style.fontSize = "13px";
+        msg.style.color = "#666";
+        msg.textContent = "No courses configured for this state yet.";
+        coursesStrip.appendChild(msg);
+      }
     }
 
     document.addEventListener("click", (evt) => {
