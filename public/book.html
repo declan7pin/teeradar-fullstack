@@ -537,6 +537,7 @@
       const holes = document.getElementById("holes").value;
       const players = document.getElementById("players").value;
       const state = getCurrentState();
+      const stateLabel = getStateLabel(state);
 
       if (!date) {
         alert("Please select a date.");
@@ -554,7 +555,7 @@
 
       window.teeRadarLastSearchDate = date;
 
-      statusLine.textContent = "Checking live availability...";
+      statusLine.textContent = `Checking live availability in ${stateLabel}...`;
       statusLine.style.color = "#555";
 
       trackEvent("search_run", lastSearchCriteria);
@@ -610,11 +611,11 @@
 
         if (totalSlots === 0) {
           statusLine.textContent =
-            "No matching tee times found in that window. Try adjusting the filters.";
+            `No matching tee times found in ${stateLabel} for that window. Try adjusting the filters.`;
           statusLine.style.color = "#b03030";
         } else {
           statusLine.textContent =
-            `Updated. ${availableCourses} courses have availability (${totalSlots} slots). ` +
+            `Updated for ${stateLabel}. ${availableCourses} courses have availability (${totalSlots} slots). ` +
             "Tap a course to view live times on the official booking site.";
           statusLine.style.color = "#1b7d45";
         }
