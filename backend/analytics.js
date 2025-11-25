@@ -1,133 +1,104 @@
 // backend/analytics.js
-//
-// Simple in-memory analytics store.
-// Resets on each restart/redeploy, but needs no DB/sql.js.
-//
-// Tracks:
-//  - homeViews (type = "home_view")
-//  - searches  (type = "search")
-//  - bookingClicks (type = "booking_click")
-//  - unique users (all time, today, last 7 days, new users last 7 days)
-//  - most-clicked courses
-
-// Array of all events:
-// { type, userId, courseName, createdAt: Date }
-const events = [];
+import db from "./db.js";
 
 /**
- * Record a single analytics event.
- * @param {Object} param0
- *   type: "home_view" | "search" | "booking_click" | ...
- *   userId: string | null
- *   courseName: string | null
- *   at: ISO timestamp (optional)
+ * Record an analytics event into SQLite.
+ * 
+ * type:        "home_view" | "search" | "booking_click" | "course_booking_click"
+ * userId:      string (IP or generated ID)
+ * courseName:  string (optional)
+ * at:          timestamp string
  */
 export async function recordEvent({ type, userId, courseName, at }) {
-  if (!type) return;
-
-  const createdAt = at ? new Date(at) : new Date();
-
-  events.push({
-    type,
-    userId: userId || null,
-    courseName: courseName || null,
-    createdAt
-  });
-
-  // Safety cap so memory doesn't grow forever
-  if (events.length > 50000) {
-    events.splice(0, events.length - 50000);
+  try {
+    const timestamp = at || new Date().toISOString();
+    await db.run(
+      `INSERT INTO analytics (type, user_id, course_name, timestamp)
+       VALUES (?, ?, ?, ?)`,
+      type,
+      userId || null,
+      courseName || null,
+      timestamp
+    );
+  } catch (err) {
+    console.error("SQLite analytics insert failed:", err);
   }
-
-  // Debug:
-  console.log("[analytics] recorded", { type, userId, courseName, createdAt });
 }
 
 /**
- * Summary numbers for the admin dashboard.
+ * Return a summary of key metrics.
  */
 export async function getAnalyticsSummary() {
-  const now = new Date();
+  const summary = {};
 
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
+  summary.homeViews = Number(
+    (await db.get(
+      `SELECT COUNT(*) AS n FROM analytics WHERE type = "home_view"`
+    ))?.n || 0
+  );
 
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  summary.bookingClicks = Number(
+    (await db.get(
+      `SELECT COUNT(*) AS n FROM analytics WHERE type IN ("booking_click","course_booking_click")`
+    ))?.n || 0
+  );
 
-  let homeViews = 0;
-  let searches = 0;
-  let bookingClicks = 0;
+  summary.searches = Number(
+    (await db.get(
+      `SELECT COUNT(*) AS n FROM analytics WHERE type = "search"`
+    ))?.n || 0
+  );
 
-  const allUserIds = new Set();
-  const todayUserIds = new Set();
-  const weekUserIds = new Set();
+  // Unique active users (7 days)
+  summary.newUsers7d = Number(
+    (await db.get(
+      `SELECT COUNT(DISTINCT user_id) AS n
+       FROM analytics
+       WHERE timestamp >= datetime('now','-7 days')`
+    ))?.n || 0
+  );
 
-  // For "new users" in last 7 days
-  const firstSeen = new Map(); // userId -> Date
+  // All-time users
+  summary.usersAllTime = Number(
+    (await db.get(
+      `SELECT COUNT(DISTINCT user_id) AS n FROM analytics`
+    ))?.n || 0
+  );
 
-  for (const ev of events) {
-    const { type, userId, createdAt } = ev;
+  // Today users
+  summary.usersToday = Number(
+    (await db.get(
+      `SELECT COUNT(DISTINCT user_id) AS n
+       FROM analytics
+       WHERE date(timestamp) = date('now')`
+    ))?.n || 0
+  );
 
-    if (type === "home_view") homeViews++;
-    if (type === "search") searches++;
-    if (type === "booking_click") bookingClicks++;
+  // This week users
+  summary.usersWeek = Number(
+    (await db.get(
+      `SELECT COUNT(DISTINCT user_id) AS n
+       FROM analytics
+       WHERE timestamp >= datetime('now','-6 days')`
+    ))?.n || 0
+  );
 
-    if (!userId) continue;
-
-    allUserIds.add(userId);
-
-    if (createdAt >= startOfToday) {
-      todayUserIds.add(userId);
-    }
-    if (createdAt >= sevenDaysAgo) {
-      weekUserIds.add(userId);
-    }
-
-    const existing = firstSeen.get(userId);
-    if (!existing || createdAt < existing) {
-      firstSeen.set(userId, createdAt);
-    }
-  }
-
-  let newUsers7d = 0;
-  for (const [, first] of firstSeen.entries()) {
-    if (first >= sevenDaysAgo) newUsers7d++;
-  }
-
-  const summary = {
-    homeViews,
-    searches,
-    bookingClicks,
-    usersAllTime: allUserIds.size,
-    usersToday: todayUserIds.size,
-    usersWeek: weekUserIds.size,
-    newUsers7d
-  };
-
-  console.log("[analytics] summary", summary);
   return summary;
 }
 
 /**
- * Most-clicked courses based on booking_click events.
- * Returns [{ courseName, clicks }, ...]
+ * Return top courses by click count.
  */
-export async function getTopCourses(limit = 5) {
-  const counts = new Map(); // courseName -> clicks
-
-  for (const ev of events) {
-    if (ev.type !== "booking_click") continue;
-    if (!ev.courseName) continue;
-
-    const current = counts.get(ev.courseName) || 0;
-    counts.set(ev.courseName, current + 1);
-  }
-
-  const arr = [...counts.entries()]
-    .map(([courseName, clicks]) => ({ courseName, clicks }))
-    .sort((a, b) => b.clicks - a.clicks)
-    .slice(0, limit);
-
-  console.log("[analytics] top courses", arr);
-  return arr;
+export async function getTopCourses(limit = 10) {
+  return await db.all(
+    `SELECT course_name AS courseName,
+            COUNT(*) AS clicks
+     FROM analytics
+     WHERE course_name IS NOT NULL
+       AND type IN ("booking_click","course_booking_click")
+     GROUP BY course_name
+     ORDER BY clicks DESC
+     LIMIT ?`,
+    limit
+  );
 }
