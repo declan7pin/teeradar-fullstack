@@ -169,7 +169,6 @@
     "state": "WA"
   },
   {
-    
     "name": "Marangaroo Golf Course (9 holes)",
     "provider": "MiClub",
     "holes": 9,
@@ -777,5 +776,250 @@
     "lng": 128.71599239886385,
     "phone": "08 9169 1055",
     "state": "WA"
+  },
+
+  {
+    "name": "Alice Springs Golf Club (18 holes)",
+    "provider": "Other",
+    "holes": 18,
+    "lat": -23.71388888888889,
+    "lng": 133.88222222222223,
+    "state": "NT",
+    "url": "https://alicespringsgolfclub.com.au",
+    "phone": "08 8952 6575"
+  },
+  {
+    "name": "Alice Springs Golf Club (9 holes)",
+    "provider": "Other",
+    "holes": 9,
+    "lat": -23.71388888888889,
+    "lng": 133.88222222222223,
+    "state": "NT",
+    "url": "https://alicespringsgolfclub.com.au",
+    "phone": "08 8952 6575"
+  },
+
+  {
+    "name": "Darwin Golf Club (18 holes weekday)",
+    "provider": "MiClub",
+    "holes": 18,
+    "lat": -12.397222222222222,
+    "lng": 130.89583333333331,
+    "state": "NT",
+    "url": "https://www.darwingolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-28&feeGroupId=5722052"
+  },
+  {
+    "name": "Darwin Golf Club (18 holes weekend)",
+    "provider": "MiClub",
+    "holes": 18,
+    "lat": -12.397222222222222,
+    "lng": 130.89583333333331,
+    "state": "NT",
+    "url": "https://www.darwingolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-30&feeGroupId=5722053"
+  },
+  {
+    "name": "Darwin Golf Club (9 holes weekday)",
+    "provider": "MiClub",
+    "holes": 9,
+    "lat": -12.397222222222222,
+    "lng": 130.89583333333331,
+    "state": "NT",
+    "url": "https://www.darwingolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-27&feeGroupId=5722109"
+  },
+  {
+    "name": "Darwin Golf Club (9 holes weekend)",
+    "provider": "MiClub",
+    "holes": 9,
+    "lat": -12.397222222222222,
+    "lng": 130.89583333333331,
+    "state": "NT",
+    "url": "https://www.darwingolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-29&feeGroupId=5722108"
+  },
+
+  {
+    "name": "Gove Country Club (18 holes)",
+    "provider": "Other",
+    "holes": 18,
+    "lat": -12.16861111111111,
+    "lng": 136.76972222222224,
+    "state": "NT",
+    "url": "https://www.govecountrygolfclub.net",
+    "phone": "08 8987 3191"
+  },
+  {
+    "name": "Gove Country Club (9 holes)",
+    "provider": "Other",
+    "holes": 9,
+    "lat": -12.16861111111111,
+    "lng": 136.76972222222224,
+    "state": "NT",
+    "url": "https://www.govecountrygolfclub.net",
+    "phone": "08 8987 3191"
+  },
+
+  {
+    "name": "Humpty Doo & Rural Golf Club (18 holes)",
+    "provider": "Other",
+    "holes": 18,
+    "lat": -12.546944444444444,
+    "lng": 131.13972222222222,
+    "state": "NT",
+    "url": "https://www.humptydoogolfclub.com.au",
+    "phone": "(08) 8988 1118"
+  },
+  {
+    "name": "Humpty Doo & Rural Golf Club (9 holes)",
+    "provider": "Other",
+    "holes": 9,
+    "lat": -12.546944444444444,
+    "lng": 131.13972222222222,
+    "state": "NT",
+    "url": "https://www.humptydoogolfclub.com.au",
+    "phone": "(08) 8988 1118"
+  },
+
+  {
+    "name": "Jabiru Golf Club (18 holes)",
+    "provider": "Other",
+    "holes": 18,
+    "lat": -12.682222222222222,
+    "lng": 132.83861111111113,
+    "state": "NT",
+    "url": "https://www.jabirugolfclub.com.au",
+    "phone": "08 8979 2575"
+  },
+  {
+    "name": "Jabiru Golf Club (9 holes)",
+    "provider": "Other",
+    "holes": 9,
+    "lat": -12.682222222222222,
+    "lng": 132.83861111111113,
+    "state": "NT",
+    "url": "https://www.jabirugolfclub.com.au",
+    "phone": "08 8979 2575"
+  },
+
+  {
+    "name": "Katherine Country Club (18 holes)",
+    "provider": "Other",
+    "holes": 18,
+    "lat": -14.471111111111112,
+    "lng": 132.26222222222222,
+    "state": "NT",
+    "url": "https://www.katherinecountryclub.com.au",
+    "phone": "0438 723 762"
+  },
+  {
+    "name": "Katherine Country Club (9 holes)",
+    "provider": "Other",
+    "holes": 9,
+    "lat": -14.471111111111112,
+    "lng": 132.26222222222222,
+    "state": "NT",
+    "url": "https://www.katherinecountryclub.com.au",
+    "phone": "0438 723 762"
+  },
+
+  {
+    "name": "Palmerston Golf Course (18 holes)",
+    "provider": "Other",
+    "holes": 18,
+    "lat": -12.481388888888889,
+    "lng": 130.97555555555556,
+    "state": "NT",
+    "url": "https://www.palmerstongolfcourse.com.au/golf-prices",
+    "phone": "08 8932 2681"
+  },
+  {
+    "name": "Palmerston Golf Course (9 holes)",
+    "provider": "Other",
+    "holes": 9,
+    "lat": -12.481388888888889,
+    "lng": 130.97555555555556,
+    "state": "NT",
+    "url": "https://www.palmerstongolfcourse.com.au/golf-prices",
+    "phone": "08 8932 2681"
+  },
+
+  {
+    "name": "RAAF Darwin Golf Club (18 holes)",
+    "provider": "Other",
+    "holes": 18,
+    "lat": -12.415277777777778,
+    "lng": 130.85694444444445,
+    "state": "NT",
+    "url": "https://www.raafdarwingolfclub.com.au",
+    "phone": "0459 746 306"
+  },
+  {
+    "name": "RAAF Darwin Golf Club (9 holes)",
+    "provider": "Other",
+    "holes": 9,
+    "lat": -12.415277777777778,
+    "lng": 130.85694444444445,
+    "state": "NT",
+    "url": "https://www.raafdarwingolfclub.com.au",
+    "phone": "0459 746 306"
+  },
+
+  {
+    "name": "Tennant Creek Golf Club (18 holes)",
+    "provider": "Phone",
+    "holes": 18,
+    "lat": -19.669722222222223,
+    "lng": 134.2513888888889,
+    "state": "NT",
+    "phone": "08 8962 1024"
+  },
+  {
+    "name": "Tennant Creek Golf Club (9 holes)",
+    "provider": "Phone",
+    "holes": 9,
+    "lat": -19.669722222222223,
+    "lng": 134.2513888888889,
+    "state": "NT",
+    "phone": "08 8962 1024"
+  },
+
+  {
+    "name": "Gardens Park Golf Links (18 holes)",
+    "provider": "Other",
+    "holes": 18,
+    "lat": -12.449166666666667,
+    "lng": 130.83277777777778,
+    "state": "NT",
+    "url": "https://www.gardensparkgolflinks.com.au",
+    "phone": "08 8981 6365"
+  },
+  {
+    "name": "Gardens Park Golf Links (9 holes)",
+    "provider": "Other",
+    "holes": 9,
+    "lat": -12.449166666666667,
+    "lng": 130.83277777777778,
+    "state": "NT",
+    "url": "https://www.gardensparkgolflinks.com.au",
+    "phone": "08 8981 6365"
+  },
+
+  {
+    "name": "Alyangula Golf Club (18 holes)",
+    "provider": "Other",
+    "holes": 18,
+    "lat": -13.849166666666667,
+    "lng": 136.4152777777778,
+    "state": "NT",
+    "url": "https://www.alyangulagc.com.au/cms/",
+    "phone": "(08) 8987 6060"
+  },
+  {
+    "name": "Alyangula Golf Club (9 holes)",
+    "provider": "Other",
+    "holes": 9,
+    "lat": -13.849166666666667,
+    "lng": 136.4152777777778,
+    "state": "NT",
+    "url": "https://www.alyangulagc.com.au/cms/",
+    "phone": "(08) 8987 6060"
   }
 ]
