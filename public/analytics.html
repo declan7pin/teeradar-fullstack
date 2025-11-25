@@ -5,7 +5,213 @@
   <title>TeeRadar WA — Analytics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    /* ... your same CSS unchanged ... */
+    :root {
+      --teal: #00796b;
+      --teal-dark: #005e55;
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --pill: #dcfce7;
+    }
+    *{box-sizing:border-box;}
+    html,body{
+      margin:0;
+      padding:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:radial-gradient(circle at top,#e0f2f1,#f9fafb);
+      color:var(--text);
+    }
+    a{text-decoration:none;color:inherit;}
+    button{font-family:inherit;}
+
+    header{
+      background:var(--teal);
+      color:#fff;
+      padding:10px 4vw;
+      position:sticky;
+      top:0;
+      z-index:20;
+      box-shadow:0 2px 6px rgba(0,0,0,0.12);
+    }
+    .nav-wrap{
+      max-width:1100px;
+      margin:0 auto;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .brand-logo{
+      width:28px;
+      height:28px;
+      border-radius:999px;
+      background:#ecfdf5;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#065f46;
+      font-size:15px;
+      font-weight:800;
+      box-shadow:0 0 0 3px rgba(16,185,129,0.25);
+    }
+    .brand-text{
+      font-weight:700;
+      letter-spacing:.04em;
+      font-size:15px;
+      line-height:1.1;
+    }
+    nav{
+      display:flex;
+      gap:16px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      font-size:13px;
+    }
+    nav a{
+      color:#e0f2f1;
+      opacity:.9;
+      padding:4px 8px;
+      border-radius:999px;
+    }
+    nav a:hover{
+      background:rgba(255,255,255,0.14);
+      opacity:1;
+    }
+    .nav-analytics{
+      border:1px solid rgba(190,242,100,0.8);
+      background:rgba(15,118,110,0.22);
+      padding:4px 12px;
+      font-weight:600;
+    }
+
+    main{
+      max-width:1100px;
+      margin:24px auto 40px;
+      padding:0 4vw 40px;
+    }
+
+    .pill-row{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size:12px;
+      margin-bottom:8px;
+    }
+    .pill-live{
+      background:#dcfce7;
+      border-radius:999px;
+      padding:4px 10px;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      color:#166534;
+      font-weight:600;
+    }
+    .pill-dot{
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:#22c55e;
+      box-shadow:0 0 0 3px rgba(34,197,94,0.35);
+    }
+
+    h1{
+      margin:0 0 6px;
+      font-size:26px;
+      letter-spacing:-0.03em;
+    }
+    .page-sub{
+      margin:0 0 16px;
+      font-size:14px;
+      color:var(--muted);
+    }
+
+    .cards-grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:14px;
+      margin-bottom:26px;
+    }
+    .card{
+      background:var(--card);
+      border-radius:18px;
+      padding:14px 16px 16px;
+      border:1px solid var(--border);
+      box-shadow:0 16px 32px rgba(15,23,42,0.06);
+    }
+    .card-label{
+      font-size:12px;
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      margin-bottom:4px;
+    }
+    .card-value{
+      font-size:28px;
+      font-weight:700;
+      margin-bottom:4px;
+    }
+    .card-hint{
+      font-size:11px;
+      color:var(--muted);
+    }
+
+    .user-overview{
+      margin-top:6px;
+    }
+    .pill-switch{
+      display:inline-flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top:8px;
+      margin-bottom:6px;
+    }
+    .pill-switch button{
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#fff;
+      padding:4px 10px;
+      font-size:12px;
+      cursor:pointer;
+    }
+    .pill-switch button.active{
+      background:#e0f2fe;
+      border-color:#60a5fa;
+      color:#1d4ed8;
+      font-weight:600;
+    }
+    .muted-note{
+      font-size:11px;
+      color:var(--muted);
+    }
+
+    .top-courses-list{
+      margin:10px 0 0;
+      padding:0;
+      list-style:none;
+      font-size:13px;
+    }
+    .top-courses-list li{
+      padding:4px 0;
+      border-bottom:1px dashed #e5e7eb;
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+    }
+    .top-courses-list span.label{
+      font-weight:500;
+    }
+    .top-courses-list span.value{
+      color:var(--muted);
+    }
   </style>
 </head>
 
@@ -27,36 +233,116 @@
 </header>
 
 <main>
-  <!-- same HTML as your existing layout -->
+  <div class="pill-row">
+    <div class="pill-live">
+      <span class="pill-dot"></span>
+      <span>Realtime, in-memory</span>
+    </div>
+  </div>
+
+  <h1>Analytics dashboard</h1>
+  <p class="page-sub">
+    Live tee-time engagement across Western Australia.
+  </p>
+
+  <section class="cards-grid" aria-label="Key metrics">
+    <article class="card">
+      <div class="card-label">Home page views</div>
+      <div id="metricHomeViews" class="card-value">0</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Course booking clicks</div>
+      <div id="metricBookingClicks" class="card-value">0</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Searches</div>
+      <div id="metricSearches" class="card-value">0</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">New users</div>
+      <div id="metricNewUsers" class="card-value">0</div>
+    </article>
+  </section>
+
+  <section class="card user-overview">
+    <div class="card-label">User overview</div>
+    <div class="pill-switch">
+      <button id="btnAllTime" class="active" type="button">
+        All time <span id="usersAllTime" style="font-weight:600;margin-left:4px;">0</span>
+      </button>
+      <button id="btnToday" type="button">
+        Today <span id="usersToday" style="font-weight:600;margin-left:4px;">0</span>
+      </button>
+      <button id="btnWeek" type="button">
+        This week <span id="usersWeek" style="font-weight:600;margin-left:4px;">0</span>
+      </button>
+    </div>
+    <div class="muted-note" id="summaryUpdated">Loading analytics…</div>
+  </section>
+
+  <section class="card" style="margin-top:14px;">
+    <div class="card-label">Most-clicked courses</div>
+    <ul id="topCoursesList" class="top-courses-list">
+      <li><span class="label">No clicks yet</span><span class="value">—</span></li>
+    </ul>
+  </section>
 </main>
 
+
 <script>
-  // 🔥 NEW — correct summary fetcher (matches your backend)
+  /* ================================
+     🔒 ADMIN-ONLY ACCESS ENFORCER
+     ================================ */
+  function enforceAdmin() {
+    try {
+      const raw = localStorage.getItem("teeradar_user"); // <-- change if needed
+      if (!raw) throw new Error("No login stored");
+
+      const user = JSON.parse(raw);
+      if (!user || user.email !== "declan7pin@gmail.com") {
+        throw new Error("Not admin");
+      }
+
+      console.log("[analytics] Admin access granted:", user.email);
+    } catch (err) {
+      console.warn("[analytics] Access blocked:", err.message);
+      window.location.href = "/index.html";
+    }
+  }
+
+  /* ================================
+     🔍 Fetch analytics summary
+     ================================ */
   async function fetchAnalyticsSummary() {
     try {
       const res = await fetch("/api/analytics", {
         headers: { "Accept": "application/json" }
       });
       if (!res.ok) return null;
-      const data = await res.json();
-      console.log("[analytics] summary:", data);
-      return data;
+      return await res.json();
     } catch (err) {
-      console.error("analytics summary error", err);
+      console.error("analytics fetch failed:", err);
       return null;
     }
   }
 
+  /* ================================
+     📊 Populate page with metrics
+     ================================ */
   async function loadAnalytics() {
+    enforceAdmin(); // 🔥 BEFORE ANYTHING ELSE
+
     const summary = await fetchAnalyticsSummary();
+    const updatedAt = document.getElementById("summaryUpdated");
 
     if (!summary) {
-      document.getElementById("summaryUpdated").textContent =
-        "Analytics backend not configured.";
+      updatedAt.textContent = "Analytics backend not configured.";
       return;
     }
 
-    // 🔥 Map values
     document.getElementById("metricHomeViews").textContent =
       summary.homePageViews ?? summary.homeViews ?? 0;
 
@@ -78,7 +364,8 @@
     document.getElementById("usersWeek").textContent =
       summary.usersWeek ?? 0;
 
-    // 🔥 Top courses
+    updatedAt.textContent = "Last updated " + new Date().toLocaleString();
+
     const topList = document.getElementById("topCoursesList");
     topList.innerHTML = "";
 
@@ -88,17 +375,15 @@
       topList.innerHTML =
         `<li><span class="label">No course clicks yet</span><span class="value">—</span></li>`;
     } else {
-      top.forEach((c) => {
+      top.forEach((row) => {
         topList.innerHTML += `
           <li>
-            <span class="label">${c.courseName}</span>
-            <span class="value">${c.clicks} clicks</span>
-          </li>`;
+            <span class="label">${row.courseName}</span>
+            <span class="value">${row.clicks} clicks</span>
+          </li>
+        `;
       });
     }
-
-    document.getElementById("summaryUpdated").textContent =
-      "Last updated " + new Date().toLocaleString();
   }
 
   window.addEventListener("load", loadAnalytics);
