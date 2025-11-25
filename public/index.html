@@ -756,27 +756,45 @@
   const DEFAULT_STATE = "WA";
   const VALID_STATES = ["ALL","WA","NSW","VIC","QLD","SA","TAS","ACT","NT"];
 
+  function getCurrentState() {
+    const saved = localStorage.getItem(STATE_KEY);
+    return VALID_STATES.includes(saved) ? saved : DEFAULT_STATE;
+  }
+
+  // NEW: match book.html helper
+  function setCurrentState(code) {
+    const value = VALID_STATES.includes(code) ? code : DEFAULT_STATE;
+    localStorage.setItem(STATE_KEY, value);
+  }
+
+  // NEW: shared label helper (matches book.html)
+  function getStateLabel(code) {
+    switch (code) {
+      case "WA": return "Western Australia";
+      case "NSW": return "New South Wales";
+      case "VIC": return "Victoria";
+      case "QLD": return "Queensland";
+      case "SA": return "South Australia";
+      case "TAS": return "Tasmania";
+      case "ACT": return "Australian Capital Territory";
+      case "NT": return "Northern Territory";
+      case "ALL": return "all states in Australia";
+      default: return "Australia";
+    }
+  }
+
   function initStateSelector() {
     const select = document.getElementById("stateSelect");
     if (!select) return;
 
-    const saved = localStorage.getItem(STATE_KEY) || DEFAULT_STATE;
-    if (VALID_STATES.includes(saved)) {
-      select.value = saved;
-    } else {
-      select.value = DEFAULT_STATE;
-    }
+    const saved = getCurrentState();
+    select.value = saved;
 
     select.addEventListener("change", () => {
       const value = select.value;
-      localStorage.setItem(STATE_KEY, value);
+      setCurrentState(value); // use shared helper
       trackEvent("state_selected", { state: value });
     });
-  }
-
-  function getCurrentState() {
-    const saved = localStorage.getItem(STATE_KEY);
-    return VALID_STATES.includes(saved) ? saved : DEFAULT_STATE;
   }
 
   // ---- ANALYTICS ----
@@ -1068,8 +1086,8 @@
 
   window.addEventListener("load", () => {
     renderNavState();
-    initStateSelector();   // new: state selector wired to localStorage + analytics
-    trackInitialHome();    // now sends state with home_view
+    initStateSelector();   // state selector wired to shared helpers + analytics
+    trackInitialHome();    // sends state with home_view
     initTCBanner();
     initContactForm();
   });
