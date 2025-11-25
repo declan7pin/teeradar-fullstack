@@ -291,22 +291,24 @@
   </section>
 </main>
 
-
 <script>
   /* ================================
      🔒 ADMIN-ONLY ACCESS ENFORCER
      ================================ */
+  const ADMIN_EMAIL = "declan7pin@gmail.com";
+
+  function isAdminEmail(email) {
+    return (email || "").trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  }
+
   function enforceAdmin() {
     try {
-      const raw = localStorage.getItem("teeradar_user"); // <-- change if needed
-      if (!raw) throw new Error("No login stored");
-
-      const user = JSON.parse(raw);
-      if (!user || user.email !== "declan7pin@gmail.com") {
+      // This matches what index.html uses:
+      const storedEmail = localStorage.getItem("teeradar_user_email");
+      if (!isAdminEmail(storedEmail)) {
         throw new Error("Not admin");
       }
-
-      console.log("[analytics] Admin access granted:", user.email);
+      console.log("[analytics] Admin access granted:", storedEmail);
     } catch (err) {
       console.warn("[analytics] Access blocked:", err.message);
       window.location.href = "/index.html";
@@ -333,7 +335,7 @@
      📊 Populate page with metrics
      ================================ */
   async function loadAnalytics() {
-    enforceAdmin(); // 🔥 BEFORE ANYTHING ELSE
+    enforceAdmin(); // 🔥 gate-keep first
 
     const summary = await fetchAnalyticsSummary();
     const updatedAt = document.getElementById("summaryUpdated");
