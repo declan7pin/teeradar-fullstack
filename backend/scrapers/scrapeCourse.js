@@ -87,8 +87,15 @@ async function scrapeMiClubCourse(course, criteria, feeGroups) {
     const players = slot.players || 0;
     const availableSpots = maxPlayers - players;
 
+    const courseName = course.name;
+
     return {
-      course: course.name,
+      // 🔹 make sure the frontend can group these under the exact course entry
+      course: courseName,
+      courseName,
+      courseTitle: courseName,
+      course_name: courseName,
+
       provider: "MiClub",
       date: criteria.date,
       time: slot.time,
@@ -146,18 +153,26 @@ async function scrapeQuick18Course(course, criteria) {
     return true;
   });
 
-  const mapped = filtered.map((slot) => ({
-    course: course.name,
-    provider: "Quick18",
-    date: criteria.date,
-    time: slot.time,
-    holes: course.holes || null, // can leave as-is from courses.json
-    price: slot.price || null,
-    maxPlayers: slot.spots || 4,
-    playersBooked: 0, // Quick18 doesn't expose bookings, just capacity
-    availableSpots: slot.spots || 4,
-    bookUrl: url,
-  }));
+  const mapped = filtered.map((slot) => {
+    const courseName = course.name;
+
+    return {
+      course: courseName,
+      courseName,
+      courseTitle: courseName,
+      course_name: courseName,
+
+      provider: "Quick18",
+      date: criteria.date,
+      time: slot.time,
+      holes: course.holes || null, // can leave as-is from courses.json
+      price: slot.price || null,
+      maxPlayers: slot.spots || 4,
+      playersBooked: 0, // Quick18 doesn't expose bookings, just capacity
+      availableSpots: slot.spots || 4,
+      bookUrl: url,
+    };
+  });
 
   console.log(
     `Quick18 → ${course.name} → ${mapped.length} slots (after partySize filter)`
