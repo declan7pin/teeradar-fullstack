@@ -15,7 +15,7 @@ import {
   getTopCourses,
 } from "./analytics.js";
 
-// Cache
+// Cache + DB
 import db from "./db.js";
 import { getCachedSlots, saveSlotsToCache } from "./slotCache.js";
 
@@ -229,6 +229,68 @@ app.get("/api/analytics", async (req, res) => {
 });
 
 // -------------------------------------------------
+// ADMIN DASHBOARD – USERS
+// (does NOT change any existing analytics logic)
+// -------------------------------------------------
+
+// Simple summary for dashboard cards
+app.get("/api/admin/users/summary", (req, res) => {
+  try {
+    const totalRow = db
+      .prepare(`SELECT COUNT(*) AS total FROM teeradar_users`)
+      .get();
+
+    const last7Row = db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM teeradar_users
+         WHERE created_at >= datetime('now', '-7 days')`
+      )
+      .get();
+
+    const last30Row = db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM teeradar_users
+         WHERE created_at >= datetime('now', '-30 days')`
+      )
+      .get();
+
+    res.json({
+      totalUsers: totalRow?.total || 0,
+      newUsers7d: last7Row?.count || 0,
+      newUsers30d: last30Row?.count || 0,
+    });
+  } catch (err) {
+    console.error("admin users summary error:", err.message);
+    res.status(500).json({ error: "internal error" });
+  }
+});
+
+// Detailed list (for a table in the admin dashboard)
+app.get("/api/admin/users", (req, res) => {
+  try {
+    const rows = db
+      .prepare(
+        `SELECT
+           id,
+           email,
+           created_at AS createdAt,
+           last_login AS lastLogin
+         FROM teeradar_users
+         ORDER BY created_at DESC
+         LIMIT 200`
+      )
+      .all();
+
+    res.json({ users: rows || [] });
+  } catch (err) {
+    console.error("admin users list error:", err.message);
+    res.status(500).json({ error: "internal error" });
+  }
+});
+
+// -------------------------------------------------
 // CONTACT FORM EMAIL SYSTEM
 // -------------------------------------------------
 app.post("/api/contact", async (req, res) => {
@@ -247,7 +309,9 @@ app.post("/api/contact", async (req, res) => {
 
   if (!CONTACT_EMAIL || !SMTP_HOST || !SMTP_USER || !SMTP_PASS || !SMTP_PORT) {
     console.error("Contact form error: missing SMTP/CONTACT env vars");
-    return res.status(500).json({ ok: false, error: "Email service not configured" });
+    return res
+      .status(500)
+      .json({ ok: false, error: "Email service not configured" });
   }
 
   const { email, question, details } = req.body;
