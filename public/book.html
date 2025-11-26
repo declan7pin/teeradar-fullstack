@@ -330,6 +330,23 @@
     const statusLine = document.getElementById("status-line");
     const coursesStrip = document.getElementById("courses-strip");
 
+    // 🔥 NEW: analytics helper (used for searches + booking clicks)
+    function trackEvent(type, payload) {
+      try {
+        fetch("/api/analytics/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type,
+            payload: payload || {},
+            at: new Date().toISOString(),
+          }),
+        });
+      } catch (err) {
+        console.warn("analytics error", err);
+      }
+    }
+
     init();
 
     async function init() {
@@ -447,6 +464,16 @@
           if (!name) return;
           if (!groupedSlots[name]) groupedSlots[name] = [];
           groupedSlots[name].push(s);
+        });
+
+        // 🔥 analytics: record a search
+        trackEvent("search", {
+          date,
+          earliest,
+          latest,
+          holes,
+          partySize: Number(players) || 1,
+          slots: slots.length,
         });
 
         const selectedHoles = Number(holes);
@@ -695,6 +722,13 @@
       } catch (err) {
         console.error("Error building booking URL:", err);
       }
+
+      // 🔥 analytics: record a booking click
+      trackEvent("course_booking_click", {
+        courseName,
+        provider,
+        url: finalUrl,
+      });
 
       window.open(finalUrl, "_blank");
     });
