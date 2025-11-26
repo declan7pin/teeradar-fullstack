@@ -54,54 +54,50 @@ export async function getAnalyticsSummary() {
 
   const summary = {};
 
-  // Helper to run a COUNT(*) query and return an integer
   async function count(sql, params = []) {
     const { rows } = await db.query(sql, params);
     return rows.length ? Number(rows[0].n) || 0 : 0;
   }
 
-  // Total home page views
   summary.homeViews = await count(
     `SELECT COUNT(*)::int AS n FROM analytics WHERE type = 'home_view'`
   );
 
-  // Booking clicks (both types)
   summary.bookingClicks = await count(
     `SELECT COUNT(*)::int AS n
      FROM analytics
      WHERE type IN ('booking_click','course_booking_click')`
   );
 
-  // Searches
   summary.searches = await count(
     `SELECT COUNT(*)::int AS n
      FROM analytics
      WHERE type = 'search'`
   );
 
-  // New users in last 7 days (unique user_id)
+  // New users last 7 days
   summary.newUsers7d = await count(
     `SELECT COUNT(DISTINCT user_id)::int AS n
      FROM analytics
      WHERE occurred_at >= NOW() - INTERVAL '7 days'`
   );
 
-  // For the dashboard metric called "New users"
+  // Also expose as newUsers for your dashboard
   summary.newUsers = summary.newUsers7d;
 
-  // All-time unique users
+  // All-time users
   summary.usersAllTime = await count(
     `SELECT COUNT(DISTINCT user_id)::int AS n FROM analytics`
   );
 
-  // Today unique users (from start of today)
+  // Today
   summary.usersToday = await count(
     `SELECT COUNT(DISTINCT user_id)::int AS n
      FROM analytics
      WHERE occurred_at >= date_trunc('day', NOW())`
   );
 
-  // This week unique users (last 7 days including today)
+  // This week (last 7 days including today)
   summary.usersWeek = await count(
     `SELECT COUNT(DISTINCT user_id)::int AS n
      FROM analytics
