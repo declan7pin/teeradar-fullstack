@@ -1,113 +1,134 @@
 // backend/analytics.js
-// Simple in-memory analytics store for TeeRadar
+// Postgres-based analytics storage
 
-// Each event: { type, at: ISO string, userId, courseName }
-const events = [];
+import db from "./db.js";
+
+let initPromise = null;
+
+// Ensure the analytics table exists (run once)
+async function ensureAnalyticsTable() {
+  if (initPromise) return initPromise;
+
+  initPromise = db.query(`
+    CREATE TABLE IF NOT EXISTS analytics (
+      id          SERIAL PRIMARY KEY,
+      type        TEXT NOT NULL,
+      user_id     TEXT,
+      course_name TEXT,
+      occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  return initPromise;
+}
 
 /**
- * Record a single analytics event.
- * Called from /api/analytics/event
+ * Record an analytics event into Postgres.
+ *
+ * type:        "home_view" | "search" | "booking_click" | "course_booking_click"
+ * userId:      string (IP or generated ID)
+ * courseName:  string (optional)
+ * at:          timestamp string
  */
-export function recordEvent({ type, at, userId, courseName }) {
+export async function recordEvent({ type, userId, courseName, at }) {
   try {
-    const timestamp = at ? new Date(at).toISOString() : new Date().toISOString();
+    await ensureAnalyticsTable();
 
-    events.push({
-      type,
-      at: timestamp,
-      userId: userId || null,
-      courseName: courseName || null,
-    });
+    const timestamp = at || new Date().toISOString();
 
-    // Optional debug log
-    console.log("📈 stored analytics event:", {
-      type,
-      at: timestamp,
-      userId,
-      courseName,
-    });
+    await db.query(
+      `INSERT INTO analytics (type, user_id, course_name, occurred_at)
+       VALUES ($1, $2, $3, $4)`,
+      [type, userId || null, courseName || null, timestamp]
+    );
   } catch (err) {
-    console.error("analytics recordEvent error:", err);
+    console.error("Postgres analytics insert failed:", err);
   }
 }
 
 /**
- * Build a summary object for the dashboard.
- * Called from GET /api/analytics
+ * Return a summary of key metrics.
  */
 export async function getAnalyticsSummary() {
-  const now = Date.now();
-  const ONE_DAY = 24 * 60 * 60 * 1000;
-  const ONE_WEEK = 7 * ONE_DAY;
+  await ensureAnalyticsTable();
 
-  let homePageViews = 0;
-  let courseBookingClicks = 0;
-  let searches = 0;
-  let newUsers = 0;
+  const summary = {};
 
-  const userIdsAllTime = new Set();
-  const userIdsToday = new Set();
-  const userIdsWeek = new Set();
-
-  // courseName -> click count
-  const courseClickCounts = new Map();
-
-  for (const ev of events) {
-    const t = new Date(ev.at).getTime();
-    const age = now - t;
-
-    const userId = ev.userId || null;
-    const isToday = age < ONE_DAY;
-    const isWeek = age < ONE_WEEK;
-
-    switch (ev.type) {
-      case "home_view":
-        homePageViews++;
-        break;
-      case "course_booking_click":
-        courseBookingClicks++;
-        if (ev.courseName) {
-          const key = ev.courseName;
-          courseClickCounts.set(key, (courseClickCounts.get(key) || 0) + 1);
-        }
-        break;
-      case "search":
-        searches++;
-        break;
-      case "new_user":
-        newUsers++;
-        break;
-      default:
-        // ignore other event types for now
-        break;
-    }
-
-    if (userId) {
-      userIdsAllTime.add(userId);
-      if (isToday) userIdsToday.add(userId);
-      if (isWeek) userIdsWeek.add(userId);
-    }
+  // Helper to run a COUNT(*) query and return an integer
+  async function count(sql, params = []) {
+    const { rows } = await db.query(sql, params);
+    return rows.length ? Number(rows[0].n) || 0 : 0;
   }
 
-  // Build top courses list
-  const topCourses = Array.from(courseClickCounts.entries())
-    .map(([courseName, clicks]) => ({ courseName, clicks }))
-    .sort((a, b) => b.clicks - a.clicks)
-    .slice(0, 10);
+  // Total home page views
+  summary.homeViews = await count(
+    `SELECT COUNT(*)::int AS n FROM analytics WHERE type = 'home_view'`
+  );
 
-  return {
-    // key metrics
-    homePageViews,
-    courseBookingClicks,
-    searches,
-    newUsers,
+  // Booking clicks (both types)
+  summary.bookingClicks = await count(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type IN ('booking_click','course_booking_click')`
+  );
 
-    // user overview
-    usersAllTime: userIdsAllTime.size,
-    usersToday: userIdsToday.size,
-    usersWeek: userIdsWeek.size,
+  // Searches
+  summary.searches = await count(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'search'`
+  );
 
-    // per-course stats
-    topCourses,
-  };
+  // New users in last 7 days (unique user_id)
+  summary.newUsers7d = await count(
+    `SELECT COUNT(DISTINCT user_id)::int AS n
+     FROM analytics
+     WHERE occurred_at >= NOW() - INTERVAL '7 days'`
+  );
+
+  // For the dashboard metric called "New users"
+  summary.newUsers = summary.newUsers7d;
+
+  // All-time unique users
+  summary.usersAllTime = await count(
+    `SELECT COUNT(DISTINCT user_id)::int AS n FROM analytics`
+  );
+
+  // Today unique users (from start of today)
+  summary.usersToday = await count(
+    `SELECT COUNT(DISTINCT user_id)::int AS n
+     FROM analytics
+     WHERE occurred_at >= date_trunc('day', NOW())`
+  );
+
+  // This week unique users (last 7 days including today)
+  summary.usersWeek = await count(
+    `SELECT COUNT(DISTINCT user_id)::int AS n
+     FROM analytics
+     WHERE occurred_at >= date_trunc('day', NOW()) - INTERVAL '6 days'`
+  );
+
+  return summary;
+}
+
+/**
+ * Return top courses by click count.
+ */
+export async function getTopCourses(limit = 10) {
+  await ensureAnalyticsTable();
+
+  const { rows } = await db.query(
+    `SELECT
+        course_name AS "courseName",
+        COUNT(*)::int AS "clicks"
+     FROM analytics
+     WHERE course_name IS NOT NULL
+       AND type IN ('booking_click','course_booking_click')
+     GROUP BY course_name
+     ORDER BY COUNT(*) DESC
+     LIMIT $1`,
+    [limit]
+  );
+
+  return rows;
 }
