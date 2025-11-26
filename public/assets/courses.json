@@ -316,16 +316,22 @@
     "lng": 115.62955291783219,
     "url": "https://thecut.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=6011827"
   },
-
   {
-    "name": "Fremantle Public Golf Course (18 holes)",
-    "provider": "MiClub",
-    "holes": 9,
-    "lat": -32.05350195703846,
-    "lng": 115.76684493538063,
-    "url": "https://fremantlepublic.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-15&feeGroupId=103961"
+  "name": "Fremantle Public Golf Course (18 holes)",
+  "provider": "MiClub",
+  "holes": 18,
+  "lat": -32.05350195703846,
+  "lng": 115.76684493538063,
+  "url": "https://fremantlepublic.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&feeGroupId=112751"
   },
-
+  {
+  "name": "Fremantle Public Golf Course (9 holes)",
+  "provider": "MiClub",
+  "holes": 9,
+  "lat": -32.05350195703846,
+  "lng": 115.76684493538063,
+  "url": "https://fremantlepublic.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&feeGroupId=103961"
+  },
   {
     "name": "Armadale / The Springs (9 holes)",
     "provider": "Quick18",
