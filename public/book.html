@@ -104,11 +104,6 @@
       cursor: pointer;
     }
 
-    .search-btn:active {
-      background: var(--teal-dark);
-      transform: translateY(1px);
-    }
-
     .status-line {
       font-size: 13px;
       padding: 6px 16px 0 16px;
@@ -335,8 +330,10 @@
     const statusLine = document.getElementById("status-line");
     const coursesStrip = document.getElementById("courses-strip");
 
-    // ---- SIMPLE ANALYTICS HOOK ----
-    function trackEvent(type, payload) {
+    /* ---------------------------
+       Simple analytics helper
+       --------------------------- */
+    function sendAnalyticsEvent(type, payload) {
       try {
         fetch("/api/analytics/event", {
           method: "POST",
@@ -344,66 +341,17 @@
           body: JSON.stringify({
             type,
             payload: payload || {},
-            at: new Date().toISOString(),
-          }),
+            at: new Date().toISOString()
+          })
         }).catch(() => {});
       } catch (e) {
-        console.warn("trackEvent failed", e);
+        console.warn("analytics event failed", e);
       }
     }
 
-    // ---- HELPERS FOR HOLES + DISPLAY NAME ----
-    function getSelectedHoles() {
-      const fromCriteria =
-        lastSearchCriteria && Number(lastSearchCriteria.holes || 0);
-      if (fromCriteria) return fromCriteria;
-
-      const sel = document.getElementById("holes");
-      return sel ? Number(sel.value || 0) : 0;
-    }
-
-    function getHolesLabel(course) {
-      const selected = getSelectedHoles();
-
-      if (course && typeof course.holes === "number") {
-        if (course.holes === 9 || course.holes === 18) {
-          return course.holes + " holes";
-        }
-        return course.holes + " holes";
-      }
-
-      if (selected === 9 || selected === 18) {
-        return selected + " holes";
-      }
-
-      return "9 / 18 holes";
-    }
-
-    function displayNameForCourse(course) {
-      const name = String(course.name || "");
-      const selected = getSelectedHoles();
-      const holesForName =
-        (course && typeof course.holes === "number" &&
-          (course.holes === 9 || course.holes === 18)
-          ? course.holes
-          : selected === 9 || selected === 18
-            ? selected
-            : null);
-
-      if (!holesForName) {
-        // Nothing to override, return original
-        return name;
-      }
-
-      // If name already has "(xx holes)" replace it, otherwise append.
-      const re = /\(\s*\d+\s*holes?\s*\)/i;
-      if (re.test(name)) {
-        return name.replace(re, `(${holesForName} holes)`);
-      }
-      return `${name} (${holesForName} holes)`;
-    }
-
-    // ---- INIT ----
+    /* ---------------------------
+       Init
+       --------------------------- */
     init();
 
     async function init() {
@@ -432,6 +380,7 @@
     }
 
     // ---- HOME COURSE ZOOM LOGIC ----
+
     function getHomeCourseName() {
       // Set elsewhere on login: localStorage.setItem("teeradar_home_course", courseName)
       return localStorage.getItem("teeradar_home_course") || null;
@@ -473,7 +422,10 @@
       }
     }
 
-    // ---- SEARCH & RENDER ----
+    /* ---------------------------
+       SEARCH & RENDER
+       --------------------------- */
+
     async function runSearch() {
       const date = document.getElementById("date").value;
       const earliest = document.getElementById("earliest").value || "06:00";
@@ -509,16 +461,16 @@
         const data = await res.json();
         const slots = Array.isArray(data.slots) ? data.slots : [];
 
-        // group slots by course name
+        // Group slots by course name
         groupedSlots = {};
         slots.forEach((s) => {
-          const name =
-            s.course || s.courseName || s.courseTitle || s.course_name;
+          const name = s.course || s.courseName || s.courseTitle || s.course_name;
           if (!name) return;
           if (!groupedSlots[name]) groupedSlots[name] = [];
           groupedSlots[name].push(s);
         });
 
+        // ---- update status line
         const selectedHoles = Number(holes);
         let availableCourses = 0;
         let totalSlots = 0;
@@ -554,15 +506,14 @@
           statusLine.style.color = "#1b7d45";
         }
 
-        // 🔢 analytics: record search
-        trackEvent("search", {
+        // 🔢 analytics: count a search
+        sendAnalyticsEvent("search", {
           date,
           earliest,
           latest,
           holes: Number(holes) || null,
           partySize: Number(players) || 1,
-          totalSlots,
-          availableCourses,
+          totalSlots
         });
 
         renderCourses();
@@ -586,24 +537,37 @@
       return L.divIcon({ className, iconSize: [14, 14] });
     }
 
+    // Helper: adjust course display name to match selected holes
+    function getDisplayName(course, selectedHoles) {
+      const raw = course.name || "";
+      if (!selectedHoles) return raw;
+
+      // Replace any existing "(XX holes)" suffix with current selection
+      return raw.replace(/\(\s*\d+\s*holes?\s*\)/i, `(${selectedHoles} holes)`);
+    }
+
     function renderCourses() {
       clearMarkers();
       coursesStrip.innerHTML = "";
 
-      const selectedHoles = getSelectedHoles();
+      const selectedHoles = Number(
+        (lastSearchCriteria && lastSearchCriteria.holes) ||
+        document.getElementById("holes").value ||
+        0
+      );
 
       courses.forEach((course) => {
-        const nameKey = course.name;       // key used by slots
-        const displayName = displayNameForCourse(course);
+        const name = course.name;
         const provider = course.provider || "Other";
         const isPhone = provider === "Phone";
 
-        // Special "unknown availability" courses
+        // Wembley & Meadow Springs → unable to confirm (yellow)
         const isUnconfirmed =
-          displayName.startsWith("Wembley Golf Course") ||
-          displayName.startsWith("Meadow Springs Golf Course") ||
-          displayName.startsWith("Meadow Springs Golf & Country Club");
+          name.startsWith("Wembley Golf Course") ||
+          name.startsWith("Meadow Springs Golf Course") ||
+          name.startsWith("Meadow Springs Golf & Country Club");
 
+        // Hole filter: hide non-matching *except* phone-booking courses
         if (
           !isPhone &&
           selectedHoles &&
@@ -613,13 +577,15 @@
           return;
         }
 
-        const slots = groupedSlots[nameKey] || [];
+        const slots = groupedSlots[name] || [];
         const hasSlots = slots.length > 0;
 
         let markerKind = "unavailable";
         if (isPhone) markerKind = "phone";
         else if (isUnconfirmed) markerKind = "unknown";
         else if (hasSlots) markerKind = "available";
+
+        const displayName = getDisplayName(course, selectedHoles || course.holes);
 
         if (typeof course.lat === "number" && typeof course.lng === "number") {
           const marker = L.marker([course.lat, course.lng], {
@@ -644,7 +610,7 @@
             popupHtml += `<br><span
               class="booking-link"
               role="button"
-              data-course-name="${encodeURIComponent(nameKey)}"
+              data-course-name="${encodeURIComponent(name)}"
               style="display:inline-block;margin-top:4px;"
             >Go to booking</span>`;
           }
@@ -655,7 +621,10 @@
           markers.push(marker);
         }
 
-        const holesLabel = getHolesLabel(course);
+        const displayHoles = selectedHoles || course.holes || null;
+        const holesLabel = displayHoles
+          ? `${displayHoles} holes`
+          : (course.holes ? `${course.holes} holes` : "Holes");
 
         let availChipClass = "chip-availability-red";
         let availLabel = "No availability";
@@ -683,6 +652,7 @@
 
         const card = document.createElement("article");
         card.className = "course-card";
+
         card.innerHTML = `
           <div>
             <div class="course-header">${displayName}</div>
@@ -706,7 +676,7 @@
                 ? ""
                 : `<span class="booking-link"
                          role="button"
-                         data-course-name="${encodeURIComponent(nameKey)}"
+                         data-course-name="${encodeURIComponent(name)}"
                          aria-disabled="${hasSlots || isUnconfirmed ? "false" : "true"}">
                       Go to booking
                    </span>`
@@ -718,7 +688,7 @@
       });
     }
 
-    // ---- BOOKING LINK HANDLER + ANALYTICS ----
+    // Handle clicks on "Go to booking" – includes analytics
     document.addEventListener("click", (evt) => {
       const el = evt.target.closest(".booking-link");
       if (!el) return;
@@ -769,21 +739,17 @@
         console.error("Error building booking URL:", err);
       }
 
-      // 🔢 analytics: record booking click
-      trackEvent("course_booking_click", {
-        course: courseName,
+      // 🔢 analytics: booking click
+      sendAnalyticsEvent("course_booking_click", {
+        courseName,
         provider,
-        date: searchDate || null,
-        holes: getSelectedHoles() || null,
-        partySize: lastSearchCriteria
-          ? lastSearchCriteria.partySize
-          : Number(document.getElementById("players")?.value || 1),
+        date: searchDate || null
       });
 
       window.open(finalUrl, "_blank");
     });
 
-    // ---- DEFAULT DATE ----
+    // Default the date field to today
     (function setDefaultDate() {
       const input = document.getElementById("date");
       if (!input) return;
