@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TeeRadar — Admin Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --green: #006d4f;
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --pill: #e0f2fe;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      background: var(--green);
+      color: #fff;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { margin: 0; font-size: 20px; }
+    header button {
+      border: none;
+      background: #ffffff22;
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    main {
+      max-width: 1100px;
+      margin: 16px auto 32px;
+      padding: 0 16px;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px 16px;
+      box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+      border: 1px solid var(--border);
+    }
+    .card h2 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0 0 6px;
+      color: var(--muted);
+    }
+    .card .value { font-size: 26px; font-weight: 600; }
+    .card small { display:block; margin-top:4px; color:var(--muted); }
+    .section-title { font-size: 16px; font-weight: 600; margin: 18px 0 10px; }
+    .table-wrapper {
+      background: var(--card);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+      overflow: auto;
+    }
+    table {
+      width:100%;
+      border-collapse: collapse;
+      min-width: 500px;
+      font-size: 13px;
+    }
+    thead { background:#f8fafc; }
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      white-space: nowrap;
+    }
+    th { font-weight: 600; color: var(--muted); }
+    tbody tr:nth-child(even) { background:#f9fafb; }
+    .pill {
+      display:inline-flex;
+      align-items:center;
+      padding:2px 8px;
+      border-radius:999px;
+      background:var(--pill);
+      font-size:11px;
+      color:#0369a1;
+    }
+    .toolbar {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin:6px 0 10px;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .toolbar input {
+      font-size:13px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      min-width:160px;
+    }
+    .toolbar .hint { font-size:12px; color:var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TeeRadar — Admin Dashboard</h1>
+    <button onclick="window.location.href='/'">Return to site</button>
+  </header>
+
+  <main>
+    <div class="cards">
+      <div class="card">
+        <h2>Total users</h2>
+        <div class="value" id="stat-total-users">–</div>
+        <small id="stat-last-signup">Last signup: –</small>
+      </div>
+      <div class="card">
+        <h2>New users (7 days)</h2>
+        <div class="value" id="stat-7day-users">–</div>
+        <small class="hint">Based on created_at</small>
+      </div>
+      <div class="card">
+        <h2>Preview</h2>
+        <div class="value" id="stat-preview-count">–</div>
+        <small>Users listed below</small>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="section-title">Users</div>
+      <div class="hint">
+        Showing latest from <code>teeradar_users</code>. Filter by email below.
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input type="search" id="search-input" placeholder="Filter by email…" />
+      <div class="hint" id="row-count-hint">0 users</div>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Email</th>
+            <th>Created at</th>
+            <th>Last login</th>
+          </tr>
+        </thead>
+        <tbody id="users-body"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    async function fetchJson(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Request failed " + res.status);
+      return res.json();
+    }
+
+    function formatDate(value) {
+      if (!value) return "–";
+      const d = new Date(value);
+      if (isNaN(d.getTime())) return value;
+      return d.toLocaleString();
+    }
+
+    function renderUsers(users) {
+      const tbody = document.getElementById("users-body");
+      tbody.innerHTML = "";
+      users.forEach((u) => {
+        const tr = document.createElement("tr");
+
+        const idTd = document.createElement("td");
+        idTd.textContent = u.id ?? "–";
+
+        const emailTd = document.createElement("td");
+        emailTd.innerHTML = u.email
+          ? `<span class="pill">${u.email}</span>`
+          : "–";
+
+        const createdTd = document.createElement("td");
+        createdTd.textContent = formatDate(u.created_at);
+
+        const lastLoginTd = document.createElement("td");
+        lastLoginTd.textContent = formatDate(u.last_login);
+
+        tr.appendChild(idTd);
+        tr.appendChild(emailTd);
+        tr.appendChild(createdTd);
+        tr.appendChild(lastLoginTd);
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("row-count-hint").textContent =
+        users.length + " users listed";
+    }
+
+    function applyFilter(allUsers) {
+      const q = document.getElementById("search-input").value.toLowerCase();
+      if (!q) {
+        renderUsers(allUsers);
+        return;
+      }
+      const filtered = allUsers.filter((u) =>
+        (u.email || "").toLowerCase().includes(q)
+      );
+      renderUsers(filtered);
+    }
+
+    async function init() {
+      try {
+        const summary = await fetchJson("/admin/users/summary");
+        document.getElementById("stat-total-users").textContent =
+          summary.total_users ?? "0";
+        document.getElementById("stat-7day-users").textContent =
+          summary.last7_days ?? "0";
+        document.getElementById("stat-last-signup").textContent =
+          "Last signup: " +
+          (summary.last_signup ? formatDate(summary.last_signup) : "–");
+
+        const data = await fetchJson("/admin/users/data");
+        const allUsers = data.users || [];
+
+        document.getElementById("stat-preview-count").textContent =
+          allUsers.length.toString();
+
+        renderUsers(allUsers);
+
+        document
+          .getElementById("search-input")
+          .addEventListener("input", () => applyFilter(allUsers));
+      } catch (err) {
+        console.error(err);
+        alert("Failed to load admin dashboard data. Check server logs.");
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
