@@ -214,6 +214,7 @@
     }
   </style>
 </head>
+
 <body>
 <header>
   <div class="nav-wrap">
@@ -241,33 +242,28 @@
 
   <h1>Analytics dashboard</h1>
   <p class="page-sub">
-    Live tee-time engagement across Western Australia — updated every time a user
-    searches or clicks.
+    Live tee-time engagement across Western Australia.
   </p>
 
   <section class="cards-grid" aria-label="Key metrics">
     <article class="card">
       <div class="card-label">Home page views</div>
       <div id="metricHomeViews" class="card-value">0</div>
-      <div class="card-hint">All-time across all devices.</div>
     </article>
 
     <article class="card">
       <div class="card-label">Course booking clicks</div>
       <div id="metricBookingClicks" class="card-value">0</div>
-      <div class="card-hint">Clicks out to MiClub / Quick18 / other providers.</div>
     </article>
 
     <article class="card">
       <div class="card-label">Searches</div>
       <div id="metricSearches" class="card-value">0</div>
-      <div class="card-hint">Distinct /api/search calls.</div>
     </article>
 
     <article class="card">
       <div class="card-label">New users</div>
       <div id="metricNewUsers" class="card-value">0</div>
-      <div class="card-hint">Unique devices seen in the last 7 days.</div>
     </article>
   </section>
 
@@ -296,149 +292,98 @@
 </main>
 
 <script>
-  function computeSummaryFromEvents(events) {
-    const now = new Date();
-    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const startWeek = startToday - 6 * 24 * 60 * 60 * 1000; // last 7 days
+  /* ================================
+     🔒 ADMIN-ONLY ACCESS ENFORCER
+     ================================ */
+  const ADMIN_EMAIL = "declan7pin@gmail.com";
 
-    let homePageViews = 0;
-    let bookingClicks = 0;
-    let searches = 0;
-
-    const userAll = new Set();
-    const userToday = new Set();
-    const userWeek = new Set();
-
-    const courseClicks = new Map();
-
-    (events || []).forEach(ev => {
-      if (!ev) return;
-      const type = ev.type || ev.eventType || "";
-      const t = new Date(ev.at || ev.timestamp || ev.time || Date.now()).getTime();
-      const uid = ev.userId || ev.user || ev.anonId;
-
-      if (type === "home_view") homePageViews++;
-      if (type === "course_booking_click") bookingClicks++;
-      if (type === "search" || type === "search_run") searches++;
-
-      if (uid) {
-        userAll.add(uid);
-        if (t >= startToday) userToday.add(uid);
-        if (t >= startWeek) userWeek.add(uid);
-      }
-
-      if (type === "course_booking_click") {
-        const cname = ev.courseName || (ev.payload && ev.payload.courseName);
-        if (cname) {
-          courseClicks.set(cname, (courseClicks.get(cname) || 0) + 1);
-        }
-      }
-    });
-
-    const topCourses = Array.from(courseClicks.entries())
-      .sort((a,b) => b[1]-a[1])
-      .slice(0,5)
-      .map(([courseName, clicks]) => ({ courseName, clicks }));
-
-    return {
-      homePageViews,
-      courseBookingClicks: bookingClicks,
-      searches,
-      newUsers: userWeek.size,     // show “new users (7d)”
-      usersAllTime: userAll.size,
-      usersToday: userToday.size,
-      usersWeek: userWeek.size,
-      topCourses
-    };
+  function isAdminEmail(email) {
+    return (email || "").trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
   }
 
-  async function fetchAnalyticsSummary() {
-    // 1. Try dedicated summary endpoint
+  function enforceAdmin() {
     try {
-      const res = await fetch("/api/analytics/summary", { headers: { "Accept": "application/json" } });
-      if (res.ok) {
-        const data = await res.json();
-        console.log("[analytics] /summary payload", data);
-        return data;
+      // This matches what index.html uses:
+      const storedEmail = localStorage.getItem("teeradar_user_email");
+      if (!isAdminEmail(storedEmail)) {
+        throw new Error("Not admin");
       }
-    } catch (e) {
-      console.log("summary endpoint failed", e);
+      console.log("[analytics] Admin access granted:", storedEmail);
+    } catch (err) {
+      console.warn("[analytics] Access blocked:", err.message);
+      window.location.href = "/index.html";
     }
+  }
 
-    // 2. Fall back to raw events endpoint
+  /* ================================
+     🔍 Fetch analytics summary
+     ================================ */
+  async function fetchAnalyticsSummary() {
     try {
-      const res = await fetch("/api/analytics", { headers: { "Accept": "application/json" } });
+      const res = await fetch("/api/analytics", {
+        headers: { "Accept": "application/json" }
+      });
       if (!res.ok) return null;
-      const data = await res.json();
-      console.log("[analytics] /api/analytics payload", data);
-      const events = Array.isArray(data) ? data : Array.isArray(data.events) ? data.events : [];
-      return computeSummaryFromEvents(events);
-    } catch (e) {
-      console.log("raw analytics endpoint failed", e);
+      return await res.json();
+    } catch (err) {
+      console.error("analytics fetch failed:", err);
       return null;
     }
   }
 
+  /* ================================
+     📊 Populate page with metrics
+     ================================ */
   async function loadAnalytics() {
-    const homeEl = document.getElementById("metricHomeViews");
-    const bookingEl = document.getElementById("metricBookingClicks");
-    const searchEl = document.getElementById("metricSearches");
-    const newUsersEl = document.getElementById("metricNewUsers");
-    const usersAllTimeEl = document.getElementById("usersAllTime");
-    const usersTodayEl = document.getElementById("usersToday");
-    const usersWeekEl = document.getElementById("usersWeek");
-    const topCoursesList = document.getElementById("topCoursesList");
-    const summaryUpdated = document.getElementById("summaryUpdated");
+    enforceAdmin(); // 🔥 gate-keep first
 
     const summary = await fetchAnalyticsSummary();
+    const updatedAt = document.getElementById("summaryUpdated");
 
     if (!summary) {
-      summaryUpdated.textContent =
-        "Analytics backend not configured yet on this environment.";
+      updatedAt.textContent = "Analytics backend not configured.";
       return;
     }
 
-    const homeViews = Number(
-      summary.homePageViews ??
-      summary.homeViews ??
-      0
-    );
-    const bookingClicks = Number(
-      summary.courseBookingClicks ??
-      summary.bookingClicks ??
-      0
-    );
-    const searches = Number(summary.searches ?? 0);
-    const newUsers = Number(summary.newUsers ?? summary.newUsers7d ?? 0);
+    document.getElementById("metricHomeViews").textContent =
+      summary.homePageViews ?? summary.homeViews ?? 0;
 
-    homeEl.textContent = homeViews.toString();
-    bookingEl.textContent = bookingClicks.toString();
-    searchEl.textContent = searches.toString();
-    newUsersEl.textContent = newUsers.toString();
+    document.getElementById("metricBookingClicks").textContent =
+      summary.courseBookingClicks ?? summary.bookingClicks ?? 0;
 
-    usersAllTimeEl.textContent = Number(summary.usersAllTime ?? 0).toString();
-    usersTodayEl.textContent = Number(summary.usersToday ?? 0).toString();
-    usersWeekEl.textContent = Number(summary.usersWeek ?? 0).toString();
+    document.getElementById("metricSearches").textContent =
+      summary.searches ?? 0;
 
-    const updatedAt = new Date().toLocaleString();
-    summaryUpdated.textContent = "Last updated " + updatedAt + ".";
+    document.getElementById("metricNewUsers").textContent =
+      summary.newUsers ?? 0;
 
-    const top = Array.isArray(summary.topCourses) ? summary.topCourses : [];
-    topCoursesList.innerHTML = "";
+    document.getElementById("usersAllTime").textContent =
+      summary.usersAllTime ?? 0;
+
+    document.getElementById("usersToday").textContent =
+      summary.usersToday ?? 0;
+
+    document.getElementById("usersWeek").textContent =
+      summary.usersWeek ?? 0;
+
+    updatedAt.textContent = "Last updated " + new Date().toLocaleString();
+
+    const topList = document.getElementById("topCoursesList");
+    topList.innerHTML = "";
+
+    const top = summary.topCourses || [];
 
     if (top.length === 0) {
-      const li = document.createElement("li");
-      li.innerHTML = `<span class="label">No course clicks yet</span>
-                      <span class="value">—</span>`;
-      topCoursesList.appendChild(li);
+      topList.innerHTML =
+        `<li><span class="label">No course clicks yet</span><span class="value">—</span></li>`;
     } else {
       top.forEach((row) => {
-        const li = document.createElement("li");
-        const name = row.courseName || row.course || "Unknown course";
-        const count = row.clicks ?? row.count ?? 0;
-        li.innerHTML = `<span class="label">${name}</span>
-                        <span class="value">${count} clicks</span>`;
-        topCoursesList.appendChild(li);
+        topList.innerHTML += `
+          <li>
+            <span class="label">${row.courseName}</span>
+            <span class="value">${row.clicks} clicks</span>
+          </li>
+        `;
       });
     }
   }
