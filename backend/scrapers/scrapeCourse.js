@@ -13,13 +13,32 @@ function toMinutes(t) {
 /**
  * Build a MiClub timesheet URL for a course + date,
  * using fee_groups.json where available.
+ *
+ * FALLBACK:
+ * - If fee_groups.json doesn't specify bookingResourceId / feeGroupId,
+ *   we pull them from course.url instead (this is what Fremantle needs).
  */
 function buildMiClubUrl(course, criteria, feeGroups = {}) {
-  const cfg = feeGroups[course.name] || {};
-  const base = (cfg.baseUrl || course.url || "").split("?")[0];
+  const courseUrl = course.url || "";
+  const [courseBase, courseQuery] = courseUrl.split("?");
 
-  const bookingResourceId = cfg.bookingResourceId || "3000000";
-  const feeGroupId = cfg.feeGroupId || null;
+  const cfg = feeGroups[course.name] || {};
+
+  // Base URL: prefer cfg.baseUrl, then the base part of course.url
+  const base = (cfg.baseUrl || courseBase || "").trim();
+
+  // Existing params from course.url (if any)
+  const existingParams = new URLSearchParams(courseQuery || "");
+
+  const bookingResourceId =
+    cfg.bookingResourceId ||
+    existingParams.get("bookingResourceId") ||
+    "3000000";
+
+  const feeGroupId =
+    cfg.feeGroupId ||
+    existingParams.get("feeGroupId") ||
+    null;
 
   const params = new URLSearchParams();
   params.set("bookingResourceId", bookingResourceId);
@@ -86,14 +105,19 @@ async function scrapeMiClubCourse(course, criteria, feeGroups) {
     const maxPlayers = slot.maxPlayers || 4;
     const players = slot.players || 0;
     const availableSpots = maxPlayers - players;
+    const courseName = course.name;
 
     return {
-      course: course.name,
+      course: courseName,
+      courseName,
+      courseTitle: courseName,
+      course_name: courseName,
+
       provider: "MiClub",
       date: criteria.date,
       time: slot.time,
       holes: course.holes || null,
-      price: null, // MiClub price parsing is messy; can be added later if needed
+      price: null,
       maxPlayers,
       playersBooked: players,
       availableSpots,
@@ -140,24 +164,31 @@ async function scrapeQuick18Course(course, criteria) {
     const maxPlayers = slot.spots || 4;
     if (maxPlayers < partySize) return false;
 
-    // IMPORTANT:
     // We do NOT filter on criteria.holes here,
     // so these courses appear for both 9- and 18-hole searches.
     return true;
   });
 
-  const mapped = filtered.map((slot) => ({
-    course: course.name,
-    provider: "Quick18",
-    date: criteria.date,
-    time: slot.time,
-    holes: course.holes || null, // can leave as-is from courses.json
-    price: slot.price || null,
-    maxPlayers: slot.spots || 4,
-    playersBooked: 0, // Quick18 doesn't expose bookings, just capacity
-    availableSpots: slot.spots || 4,
-    bookUrl: url,
-  }));
+  const mapped = filtered.map((slot) => {
+    const courseName = course.name;
+
+    return {
+      course: courseName,
+      courseName,
+      courseTitle: courseName,
+      course_name: courseName,
+
+      provider: "Quick18",
+      date: criteria.date,
+      time: slot.time,
+      holes: course.holes || null,
+      price: slot.price || null,
+      maxPlayers: slot.spots || 4,
+      playersBooked: 0,
+      availableSpots: slot.spots || 4,
+      bookUrl: url,
+    };
+  });
 
   console.log(
     `Quick18 → ${course.name} → ${mapped.length} slots (after partySize filter)`
@@ -168,11 +199,6 @@ async function scrapeQuick18Course(course, criteria) {
 
 /**
  * Main entry point used by server.js
- *
- * @param {Object} course   – course entry from courses.json
- * @param {Object} criteria – { date, earliest, latest, holes, partySize }
- * @param {Object} feeGroups – data from fee_groups.json
- * @returns {Promise<Array>} list of slot objects
  */
 export async function scrapeCourse(course, criteria, feeGroups = {}) {
   try {
