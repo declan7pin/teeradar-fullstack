@@ -209,6 +209,22 @@ export async function scrapeCourse(course, criteria, feeGroups = {}) {
       return [];
     }
 
+    const requestedHoles = criteria.holes ? Number(criteria.holes) : null;
+
+    // 🔹 Skip MiClub courses that don't match the requested holes,
+    //     so we don't waste time fetching them.
+    if (
+      course.provider === "MiClub" &&
+      requestedHoles &&
+      course.holes &&
+      Number(course.holes) !== requestedHoles
+    ) {
+      console.log(
+        `Skipping ${course.name} – course is ${course.holes} holes, user requested ${requestedHoles}`
+      );
+      return [];
+    }
+
     if (course.provider === "MiClub") {
       return await scrapeMiClubCourse(course, criteria, feeGroups);
     }
