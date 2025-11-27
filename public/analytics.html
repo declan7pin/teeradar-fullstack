@@ -212,6 +212,26 @@
     .top-courses-list span.value{
       color:var(--muted);
     }
+
+    /* NEW: simple styles for registered users table */
+    .users-table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:12px;
+      margin-top:8px;
+    }
+    .users-table th,
+    .users-table td{
+      padding:6px 4px;
+      border-bottom:1px solid #e5e7eb;
+      text-align:left;
+      word-break:break-all;
+    }
+    .users-empty{
+      font-size:12px;
+      color:var(--muted);
+      margin-top:4px;
+    }
   </style>
 </head>
 
@@ -288,6 +308,27 @@
     <ul id="topCoursesList" class="top-courses-list">
       <li><span class="label">No clicks yet</span><span class="value">—</span></li>
     </ul>
+  </section>
+
+  <!-- NEW: Registered users / emails -->
+  <section class="card" style="margin-top:14px;">
+    <div class="card-label">Registered users</div>
+    <div id="usersEmpty" class="users-empty" style="display:none;">
+      No registered users yet.
+    </div>
+    <div style="overflow-x:auto;">
+      <table id="usersTable" class="users-table" style="display:none;">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Email</th>
+            <th>Created at</th>
+            <th>Last seen</th>
+          </tr>
+        </thead>
+        <tbody id="usersTbody"></tbody>
+      </table>
+    </div>
   </section>
 </main>
 
@@ -388,7 +429,54 @@
     }
   }
 
-  window.addEventListener("load", loadAnalytics);
+  /* ================================
+     📨 Load registered users (emails)
+     ================================ */
+  async function loadRegisteredUsers() { // NEW
+    try {
+      // assuming backend mounts analyticsRoutes under /api/analytics
+      const res = await fetch("/api/analytics/users", {
+        headers: { "Accept": "application/json" }
+      });
+      if (!res.ok) {
+        console.warn("Failed to load users:", res.status);
+        return;
+      }
+      const data = await res.json();
+      const users = data.users || [];
+
+      const table = document.getElementById("usersTable");
+      const tbody = document.getElementById("usersTbody");
+      const empty = document.getElementById("usersEmpty");
+
+      if (!users.length) {
+        table.style.display = "none";
+        empty.style.display = "block";
+        return;
+      }
+
+      empty.style.display = "none";
+      table.style.display = "table";
+
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td>${u.id}</td>
+          <td>${u.email}</td>
+          <td>${u.created_at || ""}</td>
+          <td>${u.last_seen_at || ""}</td>
+        </tr>
+      `).join("");
+
+    } catch (err) {
+      console.error("Error loading registered users:", err);
+    }
+  }
+
+  // CHANGED: call both loaders on window load
+  window.addEventListener("load", () => {
+    loadAnalytics();
+    loadRegisteredUsers(); // NEW
+  });
 </script>
 </body>
 </html>
