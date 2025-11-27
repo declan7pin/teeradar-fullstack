@@ -3,6 +3,9 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import db from "./db.js";
 
+// ▶️ NEW: import analytics DB so we can record registered users
+import analyticsDb from "./db/analyticsDb.js";
+
 export const authRouter = express.Router();
 
 // Make sure the users table exists (runs once on startup)
@@ -72,6 +75,9 @@ authRouter.post("/signup", async (req, res) => {
 
     const row = result.rows[0];
 
+    // ▶️ NEW: log this user in analytics registered_users table
+    analyticsDb.recordRegisteredUser(normEmail);
+
     return res.json({
       ok: true,
       user: {
@@ -124,7 +130,9 @@ authRouter.post("/login", async (req, res) => {
         .json({ ok: false, error: "Invalid email or password" });
     }
 
-    // If you want JWTs later, generate here – for now we just confirm login
+    // ▶️ NEW: update last_seen_at in registered_users
+    analyticsDb.recordRegisteredUser(normEmail);
+
     return res.json({
       ok: true,
       user: {
@@ -174,6 +182,9 @@ authRouter.post("/reset", async (req, res) => {
     }
 
     const user = result.rows[0];
+
+    // ▶️ NEW: ensure reset users are also logged in analytics
+    analyticsDb.recordRegisteredUser(normEmail);
 
     return res.json({
       ok: true,
