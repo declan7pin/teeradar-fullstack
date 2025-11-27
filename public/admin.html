@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>TeeRadar WA — Analytics</title>
+  <title>TeeRadar WA — Admin & Analytics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <style>
@@ -75,7 +75,7 @@
     }
 
     .page {
-      max-width: 900px;
+      max-width: 1040px;
       margin: 18px auto 40px;
       padding: 0 16px 32px;
     }
@@ -157,6 +157,12 @@
       .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
+    @media (min-width: 980px) {
+      .cards-grid.cards-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
     .card {
       background: var(--card-bg);
       border-radius: 14px;
@@ -198,16 +204,18 @@
     .section-title {
       font-size: 14px;
       font-weight: 600;
-      margin: 12px 2px 6px;
+      margin: 18px 2px 6px;
       color: #4b5563;
     }
 
-    .course-list {
+    .course-list,
+    .users-list {
       background: var(--card-bg);
       border-radius: 14px;
       box-shadow: 0 1px 3px rgba(15, 23, 42, 0.07);
       padding: 10px 12px;
       font-size: 13px;
+      overflow-x: auto;
     }
 
     .course-row {
@@ -227,6 +235,53 @@
     }
 
     .muted { color: var(--muted); }
+
+    /* Users table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead {
+      background: #f3f4f6;
+    }
+
+    th, td {
+      padding: 6px 8px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+      white-space: nowrap;
+    }
+
+    th {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #6b7280;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #f9fafb;
+    }
+
+    .email-cell {
+      max-width: 260px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: #ecfdf5;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
 
     /* tiny debug block so you can SEE the raw JSON */
     #debug-json {
@@ -254,10 +309,9 @@
   </header>
 
   <main class="page">
-    <h1 class="page-title">Analytics dashboard</h1>
+    <h1 class="page-title">Admin & analytics</h1>
     <p class="page-subtitle">
-      Live tee-time engagement across Western Australia — updated every time a user
-      searches or clicks.
+      Live tee-time engagement and user sign-ups for TeeRadar WA — powered by SQLite behind the scenes.
     </p>
 
     <div class="pill-row">
@@ -333,6 +387,49 @@
       <div id="courses-rows"></div>
     </section>
 
+    <!-- User summary -->
+    <h2 class="section-title">Signed-up users</h2>
+    <section class="cards-grid cards-3">
+      <article class="card">
+        <div class="card-corner"></div>
+        <div class="card-title">Total users</div>
+        <div id="stat-users-total" class="card-value">0</div>
+        <div class="card-footnote">All-time TeeRadar accounts</div>
+      </article>
+      <article class="card">
+        <div class="card-corner"></div>
+        <div class="card-title">New last 7 days</div>
+        <div id="stat-users-7d" class="card-value">0</div>
+        <div class="card-footnote">Sign-ups this week</div>
+      </article>
+      <article class="card">
+        <div class="card-corner"></div>
+        <div class="card-title">New last 30 days</div>
+        <div id="stat-users-30d" class="card-value">0</div>
+        <div class="card-footnote">Rolling month</div>
+      </article>
+    </section>
+
+    <!-- Users table -->
+    <section class="users-list" style="margin-top: 10px;">
+      <div id="users-empty" class="muted" style="margin-bottom: 6px;">
+        No registered users found yet.
+      </div>
+      <div id="users-table-wrapper" style="display:none;">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Email</th>
+              <th>Created</th>
+              <th>Last login</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- Raw JSON debug -->
     <pre id="debug-json"></pre>
   </main>
@@ -344,19 +441,21 @@
       const debugJson = document.getElementById("debug-json");
 
       try {
-        const res = await fetch("/api/analytics/summary");
+        // 🔹 This matches your existing backend route:
+        // app.get("/api/analytics", ...)
+        const res = await fetch("/api/analytics");
         if (!res.ok) throw new Error("HTTP " + res.status);
 
         const data = await res.json();
-        console.log("[admin] /api/analytics/summary data:", data);
+        console.log("[admin] /api/analytics data:", data);
 
         // Show raw JSON on the page for sanity
-        debugJson.textContent = "API payload:\\n" + JSON.stringify(data, null, 2);
+        debugJson.textContent = "API payload (/api/analytics):\n" + JSON.stringify(data, null, 2);
 
         // Hide any previous error
         errorBanner.style.display = "none";
 
-        // Map fields from the backend shape you showed in the logs
+        // Backend fields from buildFlatSummary() in server.js
         const homeViews = data.homePageViews ?? data.homeViews ?? 0;
         const bookingClicks = data.courseBookingClicks ?? data.bookingClicks ?? 0;
         const searches = data.searches ?? 0;
@@ -398,13 +497,79 @@
         errorText.textContent =
           "Error loading analytics — " + (err.message || "unknown error");
         errorBanner.style.display = "flex";
+        const debugJson = document.getElementById("debug-json");
         debugJson.textContent =
-          "Error calling /api/analytics/summary: " + (err.message || "unknown");
+          "Error calling /api/analytics: " + (err.message || "unknown");
+      }
+    }
+
+    async function loadUserStats() {
+      const totalEl = document.getElementById("stat-users-total");
+      const sevenEl = document.getElementById("stat-users-7d");
+      const thirtyEl = document.getElementById("stat-users-30d");
+      const emptyEl = document.getElementById("users-empty");
+      const tableWrapper = document.getElementById("users-table-wrapper");
+      const tbody = document.getElementById("users-tbody");
+
+      // Summary
+      try {
+        const res = await fetch("/api/admin/users/summary");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        console.log("[admin] /api/admin/users/summary data:", data);
+
+        totalEl.textContent = data.totalUsers ?? 0;
+        sevenEl.textContent = data.newUsers7d ?? 0;
+        thirtyEl.textContent = data.newUsers30d ?? 0;
+      } catch (err) {
+        console.warn("[admin] user summary not available:", err.message);
+        // If this 404s because you haven't added the route yet,
+        // the cards will just stay at 0.
+      }
+
+      // List
+      try {
+        const res = await fetch("/api/admin/users");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        console.log("[admin] /api/admin/users data:", data);
+
+        const users = Array.isArray(data.users) ? data.users : [];
+        tbody.innerHTML = "";
+
+        if (!users.length) {
+          emptyEl.style.display = "block";
+          tableWrapper.style.display = "none";
+          return;
+        }
+
+        emptyEl.style.display = "none";
+        tableWrapper.style.display = "block";
+
+        users.forEach((u) => {
+          const tr = document.createElement("tr");
+          const created = u.createdAt || u.created_at || "";
+          const lastLogin = u.lastLogin || u.last_login || "";
+
+          tr.innerHTML = `
+            <td>${u.id}</td>
+            <td class="email-cell">${u.email || ""}</td>
+            <td>${created || "-"}</td>
+            <td>${lastLogin || "-"}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.warn("[admin] user list not available:", err.message);
+        // If this 404s (no admin routes yet), just leave the "no users" message.
       }
     }
 
     // Run after DOM is ready
-    window.addEventListener("load", loadAnalytics);
+    window.addEventListener("load", () => {
+      loadAnalytics();
+      loadUserStats();
+    });
   </script>
 </body>
 </html>
