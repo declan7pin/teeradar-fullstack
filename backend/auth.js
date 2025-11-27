@@ -3,12 +3,15 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import db from "./db.js";
 
+// Optional: SQLite analytics tracking (safe to keep even if not used)
+import analyticsDb from "./db/analyticsDb.js";
+
 export const authRouter = express.Router();
 
 // Make sure the users table exists (runs once on startup)
 async function ensureUsersTable() {
   try {
-    // Base table
+    // Base table (will NOT override existing table)
     await db.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -19,10 +22,22 @@ async function ensureUsersTable() {
       );
     `);
 
-    // In case the table already existed without home_course
+    // In case the table already existed without newer columns
     await db.query(`
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS home_course TEXT;
+    `);
+
+    // NEW: ensure created_at exists on older DBs
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    `);
+
+    // NEW: track last_login for "Last seen" column
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ;
     `);
 
     console.log("✅ users table ready");
@@ -53,10 +68,10 @@ authRouter.post("/signup", async (req, res) => {
 
     const result = await db.query(
       `
-        INSERT INTO users (email, password_hash, home_course)
-        VALUES ($1, $2, $3)
+        INSERT INTO users (email, password_hash, home_course, last_login)
+        VALUES ($1, $2, $3, NOW())
         ON CONFLICT (email) DO NOTHING
-        RETURNING id, email, home_course;
+        RETURNING id, email, home_course, created_at, last_login;
       `,
       [normEmail, passwordHash, homeCourse || null]
     );
@@ -71,6 +86,11 @@ authRouter.post("/signup", async (req, res) => {
     }
 
     const row = result.rows[0];
+
+    // Optional: log to SQLite analytics
+    if (analyticsDb?.recordRegisteredUser) {
+      analyticsDb.recordRegisteredUser(normEmail);
+    }
 
     return res.json({
       ok: true,
@@ -100,7 +120,9 @@ authRouter.post("/login", async (req, res) => {
     }
 
     const result = await db.query(
-      `SELECT id, email, password_hash, home_course FROM users WHERE email = $1`,
+      `SELECT id, email, password_hash, home_course, last_login
+       FROM users
+       WHERE email = $1`,
       [normEmail]
     );
 
@@ -124,7 +146,17 @@ authRouter.post("/login", async (req, res) => {
         .json({ ok: false, error: "Invalid email or password" });
     }
 
-    // If you want JWTs later, generate here – for now we just confirm login
+    // NEW: update last_login timestamp
+    await db.query(
+      `UPDATE users SET last_login = NOW() WHERE id = $1`,
+      [user.id]
+    );
+
+    // Optional: also touch SQLite analytics user tracker
+    if (analyticsDb?.recordRegisteredUser) {
+      analyticsDb.recordRegisteredUser(normEmail);
+    }
+
     return res.json({
       ok: true,
       user: {
@@ -157,9 +189,10 @@ authRouter.post("/reset", async (req, res) => {
     const result = await db.query(
       `
         UPDATE users
-        SET password_hash = $2
+        SET password_hash = $2,
+            last_login = NOW()
         WHERE email = $1
-        RETURNING id, email, home_course;
+        RETURNING id, email, home_course, last_login;
       `,
       [normEmail, passwordHash]
     );
@@ -174,6 +207,11 @@ authRouter.post("/reset", async (req, res) => {
     }
 
     const user = result.rows[0];
+
+    // Optional: track in SQLite analytics as "seen"
+    if (analyticsDb?.recordRegisteredUser) {
+      analyticsDb.recordRegisteredUser(normEmail);
+    }
 
     return res.json({
       ok: true,
