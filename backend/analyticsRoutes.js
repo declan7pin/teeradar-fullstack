@@ -1,6 +1,7 @@
 // backend/analyticsRoutes.js
 import express from "express";
 import analyticsDb from "./db/analyticsDb.js";
+import db from "./db.js";
 
 const router = express.Router();
 
@@ -19,8 +20,9 @@ router.get("/", (req, res) => {
       searches: summary.searches,
       newUsers: summary.new_users,
       usersAllTime: summary.unique_users,
-      usersToday: summary.unique_users,  // you can customize
-      usersWeek: summary.unique_users,   // you can customize
+      // You can customise these later if you want true "today" / "week"
+      usersToday: summary.unique_users,
+      usersWeek: summary.unique_users,
       topCourses: summary.top_courses
     });
   } catch (err) {
@@ -44,12 +46,28 @@ router.post("/event", (req, res) => {
 });
 
 /* ============================================================
-   NEW — GET Registered users
+   NEW — GET Registered users (from main users table)
    Used by analytics.html to display emails
    ============================================================ */
-router.get("/users", (req, res) => {
+router.get("/users", async (req, res) => {
   try {
-    const users = analyticsDb.getRegisteredUsers(500);
+    const result = await db.query(
+      `
+        SELECT id, email, home_course, created_at
+        FROM users
+        ORDER BY created_at DESC
+        LIMIT 500;
+      `
+    );
+
+    const users = result.rows.map((row) => ({
+      id: row.id,
+      email: row.email,
+      created_at: row.created_at,
+      last_seen_at: null,          // optional – we don't track this yet
+      home_course: row.home_course // not used in UI now but handy later
+    }));
+
     res.json({ users });
   } catch (err) {
     console.error("Error loading registered users:", err);
@@ -58,8 +76,8 @@ router.get("/users", (req, res) => {
 });
 
 /* ============================================================
-   NEW — POST Register / update a user by email
-   Call this from login/signup frontend
+   STILL THERE — POST Register / update a user by email
+   (Safe to keep; you can call this separately if you want)
    ============================================================ */
 router.post("/register-user", (req, res) => {
   try {
@@ -77,7 +95,7 @@ router.post("/register-user", (req, res) => {
 });
 
 /* ============================================================
-   OPTIONAL — Debug route: list events (HTML uses this sometimes)
+   OPTIONAL — Debug route: list events
    ============================================================ */
 router.get("/events", (req, res) => {
   try {
