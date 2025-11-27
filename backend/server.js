@@ -8,14 +8,14 @@ import nodemailer from "nodemailer";
 
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
-// Analytics (SQLite)
+// Analytics (Postgres)
 import {
   recordEvent,
   getAnalyticsSummary,
   getTopCourses,
 } from "./analytics.js";
 
-// Cache
+// Cache + DB
 import db from "./db.js";
 import { getCachedSlots, saveSlotsToCache } from "./slotCache.js";
 
@@ -168,7 +168,7 @@ app.post("/api/search", async (req, res) => {
 });
 
 // -------------------------------------------------
-// Analytics Ingest
+// Analytics Event Ingest
 // -------------------------------------------------
 app.post("/api/analytics/event", async (req, res) => {
   try {
@@ -229,7 +229,67 @@ app.get("/api/analytics", async (req, res) => {
 });
 
 // -------------------------------------------------
-// CONTACT FORM EMAIL SYSTEM
+// Registered Users for Admin Dashboard
+// -------------------------------------------------
+app.get("/api/analytics/users", async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT
+        id,
+        email,
+        home_course,
+        created_at,
+        last_login
+      FROM users
+      ORDER BY id DESC
+      LIMIT 200;
+    `);
+
+    const users = rows.map((u) => ({
+      id: u.id,
+      email: u.email,
+      created_at: u.created_at,
+      last_seen_at: u.last_login || u.created_at || null,
+      home_course: u.home_course || null,
+    }));
+
+    res.json({ users });
+  } catch (err) {
+    console.error("analytics users error:", err);
+    res.status(500).json({ error: "internal error" });
+  }
+});
+
+// -------------------------------------------------
+// ✅ NEW: Delete user (used by admin dashboard)
+// -------------------------------------------------
+app.delete("/api/analytics/users/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: "invalid user id" });
+    }
+
+    const result = await db.query(
+      `DELETE FROM users WHERE id = $1`,
+      [id]
+    );
+
+    console.log("🗑 deleted user id =", id, "rows:", result.rowCount);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "user not found" });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("delete user error:", err);
+    res.status(500).json({ error: "internal error" });
+  }
+});
+
+// -------------------------------------------------
+// Contact Form Email System
 // -------------------------------------------------
 app.post("/api/contact", async (req, res) => {
   const CONTACT_EMAIL = process.env.CONTACT_EMAIL;
@@ -238,7 +298,6 @@ app.post("/api/contact", async (req, res) => {
   const SMTP_USER = process.env.SMTP_USER;
   const SMTP_PASS = process.env.SMTP_PASS;
 
-  // Debug what is missing
   console.log("[contact env] email:", CONTACT_EMAIL);
   console.log("[contact env] host:", SMTP_HOST);
   console.log("[contact env] port:", SMTP_PORT);
@@ -246,8 +305,9 @@ app.post("/api/contact", async (req, res) => {
   console.log("[contact env] pass present:", !!SMTP_PASS);
 
   if (!CONTACT_EMAIL || !SMTP_HOST || !SMTP_USER || !SMTP_PASS || !SMTP_PORT) {
-    console.error("Contact form error: missing SMTP/CONTACT env vars");
-    return res.status(500).json({ ok: false, error: "Email service not configured" });
+    return res
+      .status(500)
+      .json({ ok: false, error: "Email service not configured" });
   }
 
   const { email, question, details } = req.body;
