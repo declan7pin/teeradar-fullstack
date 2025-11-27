@@ -66,14 +66,14 @@ app.get("/health", (req, res) => {
 });
 
 // -------------------------------------------------
-/** Course List */
+// Course List
 // -------------------------------------------------
 app.get("/api/courses", (req, res) => {
   res.json(courses);
 });
 
 // -------------------------------------------------
-/** Search */
+// Search
 // -------------------------------------------------
 app.post("/api/search", async (req, res) => {
   try {
@@ -168,7 +168,7 @@ app.post("/api/search", async (req, res) => {
 });
 
 // -------------------------------------------------
-/** Analytics Ingest */
+// Analytics Ingest
 // -------------------------------------------------
 app.post("/api/analytics/event", async (req, res) => {
   try {
@@ -200,7 +200,7 @@ app.post("/api/analytics/event", async (req, res) => {
 });
 
 // -------------------------------------------------
-/** Analytics Summary */
+// Analytics Summary
 // -------------------------------------------------
 function buildFlatSummary(summary, topCourses) {
   return {
@@ -229,8 +229,8 @@ app.get("/api/analytics", async (req, res) => {
 });
 
 // -------------------------------------------------
-// ✅ NEW: Analytics – Registered users for dashboard
-// Uses the main Postgres "users" table created in auth.js
+// ✅ Analytics – Registered users for dashboard
+// Uses main Postgres "users" table; some DBs may not have created_at
 // -------------------------------------------------
 app.get("/api/analytics/users", async (req, res) => {
   try {
@@ -239,10 +239,9 @@ app.get("/api/analytics/users", async (req, res) => {
         SELECT
           id,
           email,
-          home_course,
-          created_at
+          home_course
         FROM users
-        ORDER BY created_at DESC
+        ORDER BY id DESC
         LIMIT 200;
       `
     );
@@ -250,8 +249,9 @@ app.get("/api/analytics/users", async (req, res) => {
     const users = rows.map((row) => ({
       id: row.id,
       email: row.email,
-      created_at: row.created_at,
-      last_seen_at: null,                 // we don't track this yet
+      // created_at not reliable on this DB yet
+      created_at: null,
+      last_seen_at: null,
       home_course: row.home_course || null,
     }));
 
