@@ -213,7 +213,7 @@
       color:var(--muted);
     }
 
-    /* NEW: simple styles for registered users table */
+    /* simple styles for registered users table */
     .users-table{
       width:100%;
       border-collapse:collapse;
@@ -310,11 +310,14 @@
     </ul>
   </section>
 
-  <!-- NEW: Registered users / emails -->
+  <!-- Registered users / emails -->
   <section class="card" style="margin-top:14px;">
     <div class="card-label">Registered users</div>
     <div id="usersEmpty" class="users-empty" style="display:none;">
       No registered users yet.
+    </div>
+    <div id="usersError" class="users-empty" style="display:none;color:#b91c1c;">
+      Error loading users.
     </div>
     <div style="overflow-x:auto;">
       <table id="usersTable" class="users-table" style="display:none;">
@@ -344,7 +347,6 @@
 
   function enforceAdmin() {
     try {
-      // This matches what index.html uses:
       const storedEmail = localStorage.getItem("teeradar_user_email");
       if (!isAdminEmail(storedEmail)) {
         throw new Error("Not admin");
@@ -376,7 +378,7 @@
      📊 Populate page with metrics
      ================================ */
   async function loadAnalytics() {
-    enforceAdmin(); // 🔥 gate-keep first
+    enforceAdmin();
 
     const summary = await fetchAnalyticsSummary();
     const updatedAt = document.getElementById("summaryUpdated");
@@ -432,50 +434,65 @@
   /* ================================
      📨 Load registered users (emails)
      ================================ */
-  async function loadRegisteredUsers() { // NEW
+  async function loadRegisteredUsers() {
     try {
-      // assuming backend mounts analyticsRoutes under /api/analytics
       const res = await fetch("/api/analytics/users", {
         headers: { "Accept": "application/json" }
       });
-      if (!res.ok) {
-        console.warn("Failed to load users:", res.status);
-        return;
-      }
-      const data = await res.json();
-      const users = data.users || [];
 
       const table = document.getElementById("usersTable");
       const tbody = document.getElementById("usersTbody");
       const empty = document.getElementById("usersEmpty");
+      const errorEl = document.getElementById("usersError");
+
+      if (!res.ok) {
+        console.warn("Failed to load users:", res.status);
+        table.style.display = "none";
+        empty.style.display = "none";
+        errorEl.style.display = "block";
+        return;
+      }
+
+      const data = await res.json();
+      const users = data.users || [];
 
       if (!users.length) {
         table.style.display = "none";
         empty.style.display = "block";
+        errorEl.style.display = "none";
         return;
       }
 
       empty.style.display = "none";
+      errorEl.style.display = "none";
       table.style.display = "table";
 
-      tbody.innerHTML = users.map(u => `
-        <tr>
-          <td>${u.id}</td>
-          <td>${u.email}</td>
-          <td>${u.created_at || ""}</td>
-          <td>${u.last_seen_at || ""}</td>
-        </tr>
-      `).join("");
-
+      tbody.innerHTML = users.map(u => {
+        const created = u.created_at || u.createdAt || "";
+        const lastSeen = u.last_seen_at || u.lastLogin || "";
+        return `
+          <tr>
+            <td>${u.id}</td>
+            <td>${u.email}</td>
+            <td>${created}</td>
+            <td>${lastSeen}</td>
+          </tr>
+        `;
+      }).join("");
     } catch (err) {
       console.error("Error loading registered users:", err);
+      const table = document.getElementById("usersTable");
+      const empty = document.getElementById("usersEmpty");
+      const errorEl = document.getElementById("usersError");
+      table.style.display = "none";
+      empty.style.display = "none";
+      errorEl.style.display = "block";
     }
   }
 
-  // CHANGED: call both loaders on window load
   window.addEventListener("load", () => {
     loadAnalytics();
-    loadRegisteredUsers(); // NEW
+    loadRegisteredUsers();
   });
 </script>
 </body>
