@@ -212,6 +212,40 @@
     .top-courses-list span.value{
       color:var(--muted);
     }
+
+    .users-table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:12px;
+      margin-top:8px;
+    }
+    .users-table th,
+    .users-table td{
+      padding:6px 4px;
+      border-bottom:1px solid #e5e7eb;
+      text-align:left;
+      word-break:break-all;
+    }
+    .users-empty{
+      font-size:12px;
+      color:var(--muted);
+      margin-top:4px;
+    }
+
+    .user-delete-btn{
+      font-size:11px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid #fecaca;
+      background:#fef2f2;
+      color:#b91c1c;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .user-delete-btn:disabled{
+      opacity:0.6;
+      cursor:default;
+    }
   </style>
 </head>
 
@@ -289,12 +323,33 @@
       <li><span class="label">No clicks yet</span><span class="value">—</span></li>
     </ul>
   </section>
+
+  <section class="card" style="margin-top:14px;">
+    <div class="card-label">Registered users</div>
+    <div id="usersEmpty" class="users-empty" style="display:none;">
+      No registered users yet.
+    </div>
+    <div id="usersError" class="users-empty" style="display:none;color:#b91c1c;">
+      Error loading users.
+    </div>
+    <div style="overflow-x:auto;">
+      <table id="usersTable" class="users-table" style="display:none;">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Email</th>
+            <th>Created at</th>
+            <th>Last seen</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="usersTbody"></tbody>
+      </table>
+    </div>
+  </section>
 </main>
 
 <script>
-  /* ================================
-     🔒 ADMIN-ONLY ACCESS ENFORCER
-     ================================ */
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 
   function isAdminEmail(email) {
@@ -303,7 +358,6 @@
 
   function enforceAdmin() {
     try {
-      // This matches what index.html uses:
       const storedEmail = localStorage.getItem("teeradar_user_email");
       if (!isAdminEmail(storedEmail)) {
         throw new Error("Not admin");
@@ -315,9 +369,6 @@
     }
   }
 
-  /* ================================
-     🔍 Fetch analytics summary
-     ================================ */
   async function fetchAnalyticsSummary() {
     try {
       const res = await fetch("/api/analytics", {
@@ -331,11 +382,8 @@
     }
   }
 
-  /* ================================
-     📊 Populate page with metrics
-     ================================ */
   async function loadAnalytics() {
-    enforceAdmin(); // 🔥 gate-keep first
+    enforceAdmin();
 
     const summary = await fetchAnalyticsSummary();
     const updatedAt = document.getElementById("summaryUpdated");
@@ -388,7 +436,113 @@
     }
   }
 
-  window.addEventListener("load", loadAnalytics);
+  async function loadRegisteredUsers() {
+    try {
+      const res = await fetch("/api/analytics/users", {
+        headers: { "Accept": "application/json" }
+      });
+
+      const table = document.getElementById("usersTable");
+      const tbody = document.getElementById("usersTbody");
+      const empty = document.getElementById("usersEmpty");
+      const errorEl = document.getElementById("usersError");
+
+      if (!res.ok) {
+        console.warn("Failed to load users:", res.status);
+        table.style.display = "none";
+        empty.style.display = "none";
+        errorEl.style.display = "block";
+        return;
+      }
+
+      const data = await res.json();
+      const users = data.users || [];
+
+      if (!users.length) {
+        table.style.display = "none";
+        empty.style.display = "block";
+        errorEl.style.display = "none";
+        return;
+      }
+
+      empty.style.display = "none";
+      errorEl.style.display = "none";
+      table.style.display = "table";
+
+      tbody.innerHTML = users.map(u => {
+        const created = u.created_at || u.createdAt || "";
+        const lastSeen = u.last_seen_at || u.lastLogin || "";
+        return `
+          <tr>
+            <td>${u.id}</td>
+            <td>${u.email}</td>
+            <td>${created ? new Date(created).toLocaleString() : ""}</td>
+            <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
+            <td>
+              <button
+                type="button"
+                class="user-delete-btn"
+                data-user-id="${u.id}"
+                data-user-email="${u.email}"
+              >
+                Delete
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      // wire up delete buttons
+      document.querySelectorAll(".user-delete-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-user-id");
+          const email = btn.getAttribute("data-user-email");
+
+          const sure = window.confirm(
+            `Are you sure you want to delete user:\n\n${email}\n\nThis cannot be undone.`
+          );
+          if (!sure) return;
+
+          const originalText = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = "Deleting…";
+
+          try {
+            const res = await fetch(`/api/analytics/users/${id}`, {
+              method: "DELETE",
+            });
+            if (!res.ok) {
+              alert("Failed to delete user. Please try again.");
+              btn.disabled = false;
+              btn.textContent = originalText;
+              return;
+            }
+
+            await loadRegisteredUsers(); // refresh list
+          } catch (err) {
+            console.error("delete user error:", err);
+            alert("Error deleting user.");
+            btn.disabled = false;
+            btn.textContent = originalText;
+          }
+        });
+      });
+
+    } catch (err) {
+      console.error("Error loading registered users:", err);
+      const table = document.getElementById("usersTable");
+      const empty = document.getElementById("usersEmpty");
+      const errorEl = document.getElementById("usersError");
+      table.style.display = "none";
+      empty.style.display = "none";
+      errorEl.style.display = "block";
+    }
+  }
+
+  window.addEventListener("load", () => {
+    loadAnalytics();
+    loadRegisteredUsers();
+  });
 </script>
 </body>
 </html>
