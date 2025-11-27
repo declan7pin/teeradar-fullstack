@@ -213,7 +213,6 @@
       color:var(--muted);
     }
 
-    /* simple styles for registered users table */
     .users-table{
       width:100%;
       border-collapse:collapse;
@@ -231,6 +230,21 @@
       font-size:12px;
       color:var(--muted);
       margin-top:4px;
+    }
+
+    .user-delete-btn{
+      font-size:11px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid #fecaca;
+      background:#fef2f2;
+      color:#b91c1c;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .user-delete-btn:disabled{
+      opacity:0.6;
+      cursor:default;
     }
   </style>
 </head>
@@ -310,7 +324,6 @@
     </ul>
   </section>
 
-  <!-- Registered users / emails -->
   <section class="card" style="margin-top:14px;">
     <div class="card-label">Registered users</div>
     <div id="usersEmpty" class="users-empty" style="display:none;">
@@ -327,6 +340,7 @@
             <th>Email</th>
             <th>Created at</th>
             <th>Last seen</th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="usersTbody"></tbody>
@@ -336,9 +350,6 @@
 </main>
 
 <script>
-  /* ================================
-     🔒 ADMIN-ONLY ACCESS ENFORCER
-     ================================ */
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 
   function isAdminEmail(email) {
@@ -358,9 +369,6 @@
     }
   }
 
-  /* ================================
-     🔍 Fetch analytics summary
-     ================================ */
   async function fetchAnalyticsSummary() {
     try {
       const res = await fetch("/api/analytics", {
@@ -374,9 +382,6 @@
     }
   }
 
-  /* ================================
-     📊 Populate page with metrics
-     ================================ */
   async function loadAnalytics() {
     enforceAdmin();
 
@@ -431,9 +436,6 @@
     }
   }
 
-  /* ================================
-     📨 Load registered users (emails)
-     ================================ */
   async function loadRegisteredUsers() {
     try {
       const res = await fetch("/api/analytics/users", {
@@ -474,11 +476,58 @@
           <tr>
             <td>${u.id}</td>
             <td>${u.email}</td>
-            <td>${created}</td>
-            <td>${lastSeen}</td>
+            <td>${created ? new Date(created).toLocaleString() : ""}</td>
+            <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
+            <td>
+              <button
+                type="button"
+                class="user-delete-btn"
+                data-user-id="${u.id}"
+                data-user-email="${u.email}"
+              >
+                Delete
+              </button>
+            </td>
           </tr>
         `;
       }).join("");
+
+      // wire up delete buttons
+      document.querySelectorAll(".user-delete-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-user-id");
+          const email = btn.getAttribute("data-user-email");
+
+          const sure = window.confirm(
+            `Are you sure you want to delete user:\n\n${email}\n\nThis cannot be undone.`
+          );
+          if (!sure) return;
+
+          const originalText = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = "Deleting…";
+
+          try {
+            const res = await fetch(`/api/analytics/users/${id}`, {
+              method: "DELETE",
+            });
+            if (!res.ok) {
+              alert("Failed to delete user. Please try again.");
+              btn.disabled = false;
+              btn.textContent = originalText;
+              return;
+            }
+
+            await loadRegisteredUsers(); // refresh list
+          } catch (err) {
+            console.error("delete user error:", err);
+            alert("Error deleting user.");
+            btn.disabled = false;
+            btn.textContent = originalText;
+          }
+        });
+      });
+
     } catch (err) {
       console.error("Error loading registered users:", err);
       const table = document.getElementById("usersTable");
