@@ -30,9 +30,26 @@ try { db.exec(`ALTER TABLE analytics_events ADD COLUMN user_id TEXT;`); } catch 
 try { db.exec(`ALTER TABLE analytics_events ADD COLUMN course_name TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE analytics_events ADD COLUMN payload_json TEXT;`); } catch {}
 
+// 🔹 NEW: table to hold registered users / emails
+db.exec(`
+  CREATE TABLE IF NOT EXISTS registered_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    created_at TEXT DEFAULT (datetime('now')),
+    last_seen_at TEXT
+  );
+`);
+
 const insertStmt = db.prepare(`
   INSERT INTO analytics_events (type, at, user_id, course_name, payload_json)
   VALUES (@type, @at, @user_id, @course_name, @payload_json)
+`);
+
+// 🔹 NEW: simple upsert for registered users by email
+const upsertUserStmt = db.prepare(`
+  INSERT INTO registered_users (email, created_at, last_seen_at)
+  VALUES (?, datetime('now'), datetime('now'))
+  ON CONFLICT(email) DO UPDATE SET last_seen_at = excluded.last_seen_at
 `);
 
 /**
@@ -64,6 +81,31 @@ export function logAnalyticsEvent({ type, at, payload }) {
   };
 
   insertStmt.run(record);
+}
+
+/**
+ * 🔹 NEW: record a registered user's email
+ * Call this from your auth/registration flow.
+ */
+export function recordRegisteredUser(email) {
+  if (!email) return;
+  const trimmed = String(email).trim().toLowerCase();
+  if (!trimmed) return;
+  upsertUserStmt.run(trimmed);
+}
+
+/**
+ * 🔹 NEW: fetch registered users for the admin dashboard
+ */
+export function getRegisteredUsers(limit = 500) {
+  return db
+    .prepare(
+      `SELECT id, email, created_at, last_seen_at
+       FROM registered_users
+       ORDER BY created_at DESC
+       LIMIT ?`
+    )
+    .all(limit);
 }
 
 /**
@@ -158,5 +200,8 @@ export function getAllEvents(limit = 200) {
 export default {
   logAnalyticsEvent,
   getAnalyticsSummary,
-  getAllEvents
+  getAllEvents,
+  // 🔹 NEW exports
+  recordRegisteredUser,
+  getRegisteredUsers
 };
