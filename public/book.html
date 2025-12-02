@@ -253,14 +253,130 @@
       .courses-strip { flex-wrap: wrap; overflow-x: visible; }
       .course-card { flex: 0 0 calc(33.33% - 12px); }
     }
+
+    /* ---- ADDED: State selector + coming-soon banner ---- */
+
+    .state-selector {
+      position: relative;
+      margin-left: auto;
+      margin-right: 8px;
+    }
+
+    .state-selector-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: none;
+      background: #fff;
+      color: var(--teal);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .state-selector-chevron {
+      font-size: 11px;
+      opacity: 0.8;
+    }
+
+    .state-dropdown {
+      position: absolute;
+      right: 0;
+      top: 110%;
+      min-width: 220px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+      border: 1px solid rgba(0,0,0,0.08);
+      padding: 4px 0;
+      z-index: 50;
+      display: none;
+    }
+
+    .state-dropdown.open {
+      display: block;
+    }
+
+    .state-option {
+      width: 100%;
+      text-align: left;
+      padding: 6px 10px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      color: #222;
+      cursor: pointer;
+    }
+
+    .state-option:hover {
+      background: rgba(255,255,255,0.9);
+      background-color: rgba(0,0,0,0.04);
+    }
+
+    .state-option.state-coming-soon {
+      color: #777;
+      font-style: italic;
+    }
+
+    .state-divider {
+      margin: 4px 0;
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .state-coming-soon-banner {
+      margin: 4px 16px 0 16px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: #fff7ed;
+      color: #9a3412;
+      font-size: 12px;
+      border: 1px solid #fed7aa;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .state-coming-soon-banner::before {
+      content: "⚠️";
+      font-size: 13px;
+    }
   </style>
 </head>
 
 <body>
   <header class="top-bar">
     <div class="top-bar-title">TeeRadar — Book a Tee Time</div>
+
+    <!-- ADDED: State selector -->
+    <div class="state-selector">
+      <button id="stateSelectorButton" class="state-selector-button" type="button">
+        <span id="stateSelectorLabel">State: WA</span>
+        <span class="state-selector-chevron">▾</span>
+      </button>
+      <div id="stateDropdown" class="state-dropdown">
+        <!-- Active states -->
+        <button class="state-option" data-state="WA">Western Australia (WA)</button>
+        <button class="state-option" data-state="NT">Northern Territory (NT)</button>
+        <button class="state-option" data-state="QLD">Queensland (QLD)</button>
+
+        <div class="state-divider"></div>
+
+        <!-- Coming soon states -->
+        <button class="state-option state-coming-soon" data-state="NSW">New South Wales (NSW) – Coming soon</button>
+        <button class="state-option state-coming-soon" data-state="VIC">Victoria (VIC) – Coming soon</button>
+        <button class="state-option state-coming-soon" data-state="SA">South Australia (SA) – Coming soon</button>
+        <button class="state-option state-coming-soon" data-state="TAS">Tasmania (TAS) – Coming soon</button>
+      </div>
+    </div>
+
     <button onclick="window.location.href='index.html'">Return Home</button>
   </header>
+
+  <!-- ADDED: Coming-soon banner -->
+  <div id="stateComingSoonBanner" class="state-coming-soon-banner" hidden>
+    <span id="stateComingSoonText"></span>
+  </div>
 
   <section class="filters">
     <div class="filters-row">
@@ -327,13 +443,16 @@
     let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize }
     let groupedSlots = {};         // courseName => [slots]
 
+    // ADDED: full list + state handling
+    let allCourses = [];
+    let selectedState = "WA";
+    const ACTIVE_STATES = ["WA", "NT", "QLD"];
+
     const statusLine = document.getElementById("status-line");
     const coursesStrip = document.getElementById("courses-strip");
 
-    /* ---------------------------
-       Simple analytics helper
-       --------------------------- */
-    function sendAnalyticsEvent(type, payload) {
+    // 🔥 NEW: analytics helper (used for searches + booking clicks)
+    function trackEvent(type, payload) {
       try {
         fetch("/api/analytics/event", {
           method: "POST",
@@ -341,22 +460,20 @@
           body: JSON.stringify({
             type,
             payload: payload || {},
-            at: new Date().toISOString()
-          })
-        }).catch(() => {});
-      } catch (e) {
-        console.warn("analytics event failed", e);
+            at: new Date().toISOString(),
+          }),
+        });
+      } catch (err) {
+        console.warn("analytics error", err);
       }
     }
 
-    /* ---------------------------
-       Init
-       --------------------------- */
     init();
 
     async function init() {
       initMap();
       await loadCourses();
+      // 👇 New: auto-zoom around home course if user has set one
       applyHomeCourseZoom();
       renderCourses();
     }
@@ -373,9 +490,14 @@
       try {
         const res = await fetch("/api/courses");
         courses = await res.json();
+
+        // ADDED: store all states then apply initial state filter
+        allCourses = Array.isArray(courses) ? courses : [];
+        applyStateFilter();
       } catch (err) {
         console.error("Failed to load courses", err);
         courses = [];
+        allCourses = [];
       }
     }
 
@@ -404,11 +526,13 @@
         const cname = String(c.name || "").toLowerCase();
         if (!cname) continue;
 
+        // Exact or strong contains match
         if (cname === target || cname.includes(target)) {
           bestMatch = c;
           break;
         }
 
+        // Fallback: compare base names (before any "(")
         if (!bestMatch) {
           const baseTarget = target.split("(")[0].trim();
           if (baseTarget && cname.includes(baseTarget)) {
@@ -418,13 +542,41 @@
       }
 
       if (bestMatch) {
+        // ⬇️ Wider radius (zoom 10 instead of 11)
         map.setView([bestMatch.lat, bestMatch.lng], 10);
       }
     }
 
-    /* ---------------------------
-       SEARCH & RENDER
-       --------------------------- */
+    // ---- ADDED: state helpers ----
+
+    function applyStateFilter() {
+      if (!Array.isArray(allCourses) || allCourses.length === 0) {
+        courses = [];
+        return;
+      }
+      courses = allCourses.filter((c) => {
+        if (!selectedState) return true;
+        const code = (c.state || "WA").toString().toUpperCase();
+        return code === selectedState;
+      });
+    }
+
+    function getPrettyStateName(code) {
+      if (!code) return "Western Australia";
+      const upper = String(code).toUpperCase();
+      switch (upper) {
+        case "WA": return "Western Australia";
+        case "NT": return "Northern Territory";
+        case "QLD": return "Queensland";
+        case "NSW": return "New South Wales";
+        case "VIC": return "Victoria";
+        case "SA": return "South Australia";
+        case "TAS": return "Tasmania";
+        default: return "Australia";
+      }
+    }
+
+    // ---- SEARCH & RENDER ----
 
     async function runSearch() {
       const date = document.getElementById("date").value;
@@ -461,7 +613,6 @@
         const data = await res.json();
         const slots = Array.isArray(data.slots) ? data.slots : [];
 
-        // Group slots by course name
         groupedSlots = {};
         slots.forEach((s) => {
           const name = s.course || s.courseName || s.courseTitle || s.course_name;
@@ -470,7 +621,16 @@
           groupedSlots[name].push(s);
         });
 
-        // ---- update status line
+        // 🔥 analytics: record a search
+        trackEvent("search", {
+          date,
+          earliest,
+          latest,
+          holes,
+          partySize: Number(players) || 1,
+          slots: slots.length,
+        });
+
         const selectedHoles = Number(holes);
         let availableCourses = 0;
         let totalSlots = 0;
@@ -482,6 +642,7 @@
           const provider = course.provider || "Other";
           const isPhone = provider === "Phone";
 
+          // Hole filter applies only to non-phone courses
           if (
             !isPhone &&
             selectedHoles &&
@@ -506,16 +667,6 @@
           statusLine.style.color = "#1b7d45";
         }
 
-        // 🔢 analytics: count a search
-        sendAnalyticsEvent("search", {
-          date,
-          earliest,
-          latest,
-          holes: Number(holes) || null,
-          partySize: Number(players) || 1,
-          totalSlots
-        });
-
         renderCourses();
       } catch (err) {
         console.error("Search error", err);
@@ -535,15 +686,6 @@
       if (kind === "phone") className = "marker-dot marker-purple";
       if (kind === "unknown") className = "marker-dot marker-yellow";
       return L.divIcon({ className, iconSize: [14, 14] });
-    }
-
-    // Helper: adjust course display name to match selected holes
-    function getDisplayName(course, selectedHoles) {
-      const raw = course.name || "";
-      if (!selectedHoles) return raw;
-
-      // Replace any existing "(XX holes)" suffix with current selection
-      return raw.replace(/\(\s*\d+\s*holes?\s*\)/i, `(${selectedHoles} holes)`);
     }
 
     function renderCourses() {
@@ -585,15 +727,13 @@
         else if (isUnconfirmed) markerKind = "unknown";
         else if (hasSlots) markerKind = "available";
 
-        const displayName = getDisplayName(course, selectedHoles || course.holes);
-
         if (typeof course.lat === "number" && typeof course.lng === "number") {
           const marker = L.marker([course.lat, course.lng], {
             icon: createMarkerIcon(markerKind),
           }).addTo(map);
 
           let popupHtml = `<div style="font-size:13px;">
-            <strong>${displayName}</strong><br>${provider}`;
+            <strong>${name}</strong><br>${provider}`;
 
           if (isUnconfirmed) {
             popupHtml += `<br><strong>Unable to confirm availability</strong>`;
@@ -621,10 +761,13 @@
           markers.push(marker);
         }
 
-        const displayHoles = selectedHoles || course.holes || null;
-        const holesLabel = displayHoles
-          ? `${displayHoles} holes`
-          : (course.holes ? `${course.holes} holes` : "Holes");
+        const card = document.createElement("article");
+        card.className = "course-card";
+
+        const holesLabel =
+          course.holes === 9 ? "9 holes" :
+          course.holes === 18 ? "18 holes" :
+          `${course.holes} holes`;
 
         let availChipClass = "chip-availability-red";
         let availLabel = "No availability";
@@ -650,12 +793,9 @@
 
         const phoneText = isPhone && course.phone ? course.phone : "";
 
-        const card = document.createElement("article");
-        card.className = "course-card";
-
         card.innerHTML = `
           <div>
-            <div class="course-header">${displayName}</div>
+            <div class="course-header">${name}</div>
             <div class="course-sub">Western Australia</div>
             <div class="chip-row">
               <span class="chip chip-provider">${providerLabel}</span>
@@ -684,11 +824,16 @@
           </div>
         `;
 
+        // ADDED: correct the state name on the card without changing the template
+        const subStateEl = card.querySelector(".course-sub");
+        if (subStateEl) {
+          subStateEl.textContent = getPrettyStateName(course.state);
+        }
+
         coursesStrip.appendChild(card);
       });
     }
 
-    // Handle clicks on "Go to booking" – includes analytics
     document.addEventListener("click", (evt) => {
       const el = evt.target.closest(".booking-link");
       if (!el) return;
@@ -739,17 +884,16 @@
         console.error("Error building booking URL:", err);
       }
 
-      // 🔢 analytics: booking click
-      sendAnalyticsEvent("course_booking_click", {
+      // 🔥 analytics: record a booking click
+      trackEvent("course_booking_click", {
         courseName,
         provider,
-        date: searchDate || null
+        url: finalUrl,
       });
 
       window.open(finalUrl, "_blank");
     });
 
-    // Default the date field to today
     (function setDefaultDate() {
       const input = document.getElementById("date");
       if (!input) return;
@@ -758,6 +902,85 @@
       const mm = String(today.getMonth() + 1).padStart(2, "0");
       const dd = String(today.getDate()).padStart(2, "0");
       input.value = `${yyyy}-${mm}-${dd}`;
+    })();
+
+    // ADDED: State selector behaviour
+    (function setupStateSelector() {
+      const btn = document.getElementById("stateSelectorButton");
+      const dropdown = document.getElementById("stateDropdown");
+      const label = document.getElementById("stateSelectorLabel");
+      const comingBanner = document.getElementById("stateComingSoonBanner");
+      const comingText = document.getElementById("stateComingSoonText");
+
+      if (!btn || !dropdown) return;
+
+      function setState(stateCode, stateLabel) {
+        selectedState = stateCode;
+        if (label) {
+          label.textContent = `State: ${stateCode}`;
+        }
+
+        // Hide coming-soon banner by default
+        if (comingBanner && comingText) {
+          comingBanner.hidden = true;
+          comingText.textContent = "";
+        }
+
+        const prettyName = getPrettyStateName(stateCode);
+
+        if (ACTIVE_STATES.includes(stateCode)) {
+          // Active states: filter data + zoom + re-search if we already have criteria
+          applyStateFilter();
+          applyHomeCourseZoom();
+
+          if (lastSearchCriteria) {
+            runSearch();
+          } else {
+            renderCourses();
+            if (statusLine) {
+              statusLine.textContent = `Showing courses in ${prettyName}. Tap “Search availability” to check live times.`;
+              statusLine.style.color = "#555";
+            }
+          }
+        } else {
+          // Coming soon states
+          courses = [];
+          renderCourses();
+          if (comingBanner && comingText) {
+            comingText.textContent = `${prettyName} is coming soon to TeeRadar. For now, WA, NT & QLD are live.`;
+            comingBanner.hidden = false;
+          }
+          if (statusLine) {
+            statusLine.textContent = `Courses for ${prettyName} are coming soon.`;
+            statusLine.style.color = "#9a3412";
+          }
+        }
+      }
+
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        dropdown.classList.toggle("open");
+      });
+
+      dropdown.addEventListener("click", function (e) {
+        const option = e.target.closest(".state-option");
+        if (!option) return;
+        const stateCode = option.getAttribute("data-state");
+        const stateLabel = option.textContent.trim();
+        dropdown.classList.remove("open");
+        if (!stateCode) return;
+        setState(stateCode, stateLabel);
+      });
+
+      document.addEventListener("click", function (e) {
+        if (!dropdown.classList.contains("open")) return;
+        if (!e.target.closest(".state-selector")) {
+          dropdown.classList.remove("open");
+        }
+      });
+
+      // Initial state (WA)
+      setState("WA", "Western Australia (WA)");
     })();
   </script>
 </body>
