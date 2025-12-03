@@ -1,6 +1,7 @@
 // backend/scrapers/scrapeCourse.js
 import { parseMiClub } from "./parseMiClub.js";
 import { parseQuick18 } from "./parseQuick18.js";
+import { scrapeTeeItUpCourse } from "./parseTeeItUp.js";
 
 /**
  * Turn "HH:MM" into minutes from midnight
@@ -231,6 +232,10 @@ export async function scrapeCourse(course, criteria, feeGroups = {}) {
 
     if (course.provider === "Quick18") {
       return await scrapeQuick18Course(course, criteria);
+    }
+
+    if (course.provider === "TeeItUp") {
+      return await scrapeTeeItUpCourse(course, criteria);
     }
 
     console.log(`Unknown provider for course: ${course.name}`, course.provider);
