@@ -2,6 +2,7 @@
   {
     "name": "Wembley Golf Course (18 holes - Old Course)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -31.924269884045348,
     "lng": 115.7763087218749,
@@ -10,6 +11,7 @@
   {
     "name": "Wembley Golf Course (9 holes - Old Course)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -31.924269884045348,
     "lng": 115.7763087218749,
@@ -18,6 +20,7 @@
   {
     "name": "Wembley Golf Course (18 holes - Tuart Course)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -31.924269884045348,
     "lng": 115.7763087218749,
@@ -26,6 +29,7 @@
   {
     "name": "Wembley Golf Course (9 holes - Tuart Course)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -31.924269884045348,
     "lng": 115.7763087218749,
@@ -35,6 +39,7 @@
   {
     "name": "Point Walter Golf Course (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -32.01766087020319,
     "lng": 115.78917035341037,
@@ -44,6 +49,7 @@
   {
     "name": "Maylands Peninsula Golf Course (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -31.942041317213896,
     "lng": 115.90112636383051,
@@ -52,6 +58,7 @@
   {
     "name": "Maylands Peninsula Golf Course (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -31.942041317213896,
     "lng": 115.90112636383051,
@@ -60,6 +67,7 @@
   {
     "name": "Maylands Peninsula Golf Course (9 holes + cart + lunch)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -31.942041317213896,
     "lng": 115.90112636383051,
@@ -68,6 +76,7 @@
   {
     "name": "Maylands Peninsula Golf Course (18 holes + cart + lunch)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -31.942041317213896,
     "lng": 115.90112636383051,
@@ -77,6 +86,7 @@
   {
     "name": "Collier Park Golf Course (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -32.00043970366608,
     "lng": 115.87971419452452,
@@ -85,6 +95,7 @@
   {
     "name": "Collier Park Golf Course (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -32.00043970366608,
     "lng": 115.87971419452452,
@@ -94,6 +105,7 @@
   {
     "name": "Whaleback Golf Course (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -32.05239040179711,
     "lng": 115.92136651914497,
@@ -102,6 +114,7 @@
   {
     "name": "Whaleback Golf Course (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -32.05239040179711,
     "lng": 115.92136651914497,
@@ -111,6 +124,7 @@
   {
     "name": "Araluen Estate (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -32.14120672245223,
     "lng": 116.08894583579873,
@@ -119,6 +133,7 @@
   {
     "name": "Araluen Estate (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -32.14120672245223,
     "lng": 116.08894583579873,
@@ -128,6 +143,7 @@
   {
     "name": "Sun City Country Club (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -31.534854842854973,
     "lng": 115.65258843478621,
@@ -136,6 +152,7 @@
   {
     "name": "Sun City Country Club (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -31.534854842854973,
     "lng": 115.65258843478621,
@@ -145,6 +162,7 @@
   {
     "name": "Marangaroo Golf Course (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -31.826555225532594,
     "lng": 115.82982569938311,
@@ -153,6 +171,7 @@
   {
     "name": "Marangaroo Golf Course (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -31.826555225532594,
     "lng": 115.82982569938311,
@@ -162,6 +181,7 @@
   {
     "name": "Joondalup Resort (18 holes + cart)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -31.748045034458205,
     "lng": 115.7482810955211,
@@ -170,6 +190,7 @@
   {
     "name": "Joondalup Resort (9 holes + cart)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -31.748045034458205,
     "lng": 115.7482810955211,
@@ -179,6 +200,7 @@
   {
     "name": "The Vines Golf Course (18 holes + cart)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -31.763501107771564,
     "lng": 116.00810205090961,
@@ -187,6 +209,7 @@
   {
     "name": "The Vines Golf Course (18 holes walking)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -31.763501107771564,
     "lng": 116.00810205090961,
@@ -195,6 +218,7 @@
   {
     "name": "The Vines Golf Course (9 holes walking)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -31.763501107771564,
     "lng": 116.00810205090961,
@@ -203,6 +227,7 @@
   {
     "name": "The Vines Golf Course (9 holes + cart - championship)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -31.763501107771564,
     "lng": 116.00810205090961,
@@ -211,6 +236,7 @@
   {
     "name": "The Vines Golf Course (9 holes + cart - lakes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -31.763501107771564,
     "lng": 116.00810205090961,
@@ -220,6 +246,7 @@
   {
     "name": "Secret Harbour Golf Links (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -32.40695561468053,
     "lng": 115.7501483483263,
@@ -228,6 +255,7 @@
   {
     "name": "Secret Harbour Golf Links (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -32.40695561468053,
     "lng": 115.7501483483263,
@@ -237,6 +265,7 @@
   {
     "name": "Meadow Springs Golf & Country Club (18 holes weekday)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -32.49653906545535,
     "lng": 115.7510941390592,
@@ -245,6 +274,7 @@
   {
     "name": "Meadow Springs Golf & Country Club (18 holes weekend)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -32.49653906545535,
     "lng": 115.7510941390592,
@@ -253,6 +283,7 @@
   {
     "name": "Meadow Springs Golf & Country Club (9 holes weekday)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -32.49653906545535,
     "lng": 115.7510941390592,
@@ -261,6 +292,7 @@
   {
     "name": "Meadow Springs Golf & Country Club (9 holes weekend)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -32.49653906545535,
     "lng": 115.7510941390592,
@@ -270,6 +302,7 @@
   {
     "name": "Kwinana Golf Club (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -32.24290919044432,
     "lng": 115.80004045723578,
@@ -278,6 +311,7 @@
   {
     "name": "Kwinana Golf Club (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -32.24290919044432,
     "lng": 115.80004045723578,
@@ -287,6 +321,7 @@
   {
     "name": "The Cut Golf Course (18 holes walking)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -32.61180673076207,
     "lng": 115.62955291783219,
@@ -295,6 +330,7 @@
   {
     "name": "The Cut Golf Course (18 holes cart)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -32.61180673076207,
     "lng": 115.62955291783219,
@@ -303,6 +339,7 @@
   {
     "name": "The Cut Golf Course (9 holes walking)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -32.61180673076207,
     "lng": 115.62955291783219,
@@ -311,6 +348,7 @@
   {
     "name": "The Cut Golf Course (9 holes cart)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -32.61180673076207,
     "lng": 115.62955291783219,
@@ -319,6 +357,7 @@
   {
   "name": "Fremantle Public Golf Course (18 holes)",
   "provider": "MiClub",
+    "state": "WA",
   "holes": 18,
   "lat": -32.05350195703846,
   "lng": 115.76684493538063,
@@ -327,6 +366,7 @@
   {
   "name": "Fremantle Public Golf Course (9 holes)",
   "provider": "MiClub",
+    "state": "WA",
   "holes": 9,
   "lat": -32.05350195703846,
   "lng": 115.76684493538063,
@@ -335,6 +375,7 @@
   {
     "name": "Armadale / The Springs (9 holes)",
     "provider": "Quick18",
+    "state": "WA",
     "holes": 9,
     "lat": -32.15833030219607,
     "lng": 115.95791267126035,
@@ -344,6 +385,7 @@
   {
     "name": "Armadale / The Springs (18 holes)",
     "provider": "Quick18",
+    "state": "WA",
     "holes": 18,
     "lat": -32.15833030219607,
     "lng": 115.95791267126035,
@@ -354,6 +396,7 @@
   {
     "name": "Hamersley Public Golf Course (18 holes)",
     "provider": "Quick18",
+    "state": "WA",
     "holes": 18,
     "lat": -31.868023018257883,
     "lng": 115.76668753851379,
@@ -363,6 +406,7 @@
   {
     "name": "Hamersley Public Golf Course (9 holes)",
     "provider": "Quick18",
+    "state": "WA",
     "holes": 9,
     "lat": -31.868023018257883,
     "lng": 115.76668753851379,
@@ -373,6 +417,7 @@
   {
     "name": "Lake Claremont Golf Course (9 holes)",
     "provider": "Quick18",
+    "state": "WA",
     "holes": 9,
     "lat": -31.977075016218492,
     "lng": 115.77957448681971,
@@ -383,6 +428,7 @@
   {
     "name": "Carramar Golf Course (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -31.705979065664298,
     "lng": 115.78235396363216,
@@ -391,6 +437,7 @@
   {
     "name": "Carramar Golf Course (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -31.705979065664298,
     "lng": 115.78235396363216,
@@ -400,6 +447,7 @@
   {
     "name": "Hillview Golf Course",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -31.939010380955974,
     "lng": 116.01996930968141,
@@ -408,6 +456,7 @@
   {
     "name": "Marri Park Golf Course",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -32.23155852419737,
     "lng": 115.86931428104657,
@@ -416,6 +465,7 @@
   {
     "name": "Altone Park Golf Course",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -31.87300858893532,
     "lng": 115.94113430228738,
@@ -425,6 +475,7 @@
   {
     "name": "Bunbury Golf Club (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -33.30262292971879,
     "lng": 115.71008488927751,
@@ -433,6 +484,7 @@
   {
     "name": "Bunbury Golf Club (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -33.30262292971879,
     "lng": 115.71008488927751,
@@ -441,6 +493,7 @@
   {
     "name": "Sanctuary Golf Resort (Bunbury)",
     "provider": "Other",
+    "state": "WA",
     "holes": 18,
     "lat": -33.3220611545291,
     "lng": 115.69145962937662,
@@ -450,6 +503,7 @@
   {
     "name": "Busselton Golf Club (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -33.692271123570094,
     "lng": 115.36379723541958,
@@ -458,6 +512,7 @@
   {
     "name": "Busselton Golf Club (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -33.692271123570094,
     "lng": 115.36379723541958,
@@ -467,6 +522,7 @@
   {
     "name": "Capel Golf Club (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -33.451994495413636,
     "lng": 115.6019875888594,
@@ -475,6 +531,7 @@
   {
     "name": "Capel Golf Club (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -33.451994495413636,
     "lng": 115.6019875888594,
@@ -484,6 +541,7 @@
   {
     "name": "Dunsborough Lakes Golf Club (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -33.62289919984393,
     "lng": 115.11127432379276,
@@ -492,6 +550,7 @@
   {
     "name": "Dunsborough Lakes Golf Club (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -33.62289919984393,
     "lng": 115.11127432379276,
@@ -501,6 +560,7 @@
   {
     "name": "Margaret River Golf Club (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -33.9707100685292,
     "lng": 115.01510336158319,
@@ -509,6 +569,7 @@
   {
     "name": "Margaret River Golf Club (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -33.9707100685292,
     "lng": 115.01510336158319,
@@ -518,6 +579,7 @@
   {
     "name": "Collie Golf Club (18 holes)",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -33.37251176014247,
     "lng": 116.14276646103822,
@@ -527,6 +589,7 @@
   {
     "name": "Harvey Golf Club (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -33.07920493104235,
     "lng": 115.7908782418057,
@@ -535,6 +598,7 @@
   {
     "name": "Harvey Golf Club (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -33.07920493104235,
     "lng": 115.7908782418057,
@@ -544,6 +608,7 @@
   {
     "name": "Manjimup Golf Club (18 holes)",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -34.22798858184465,
     "lng": 116.16793462381473,
@@ -552,6 +617,7 @@
   {
     "name": "Pemberton Golf Club (18 holes)",
     "provider": "Other",
+    "state": "WA",
     "holes": 18,
     "lat": -34.43086796867483,
     "lng": 116.03801040764672,
@@ -561,6 +627,7 @@
   {
     "name": "Albany Golf Club (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -35.007668257159644,
     "lng": 117.92442914073659,
@@ -569,6 +636,7 @@
   {
     "name": "Albany Golf Club (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -35.007668257159644,
     "lng": 117.92442914073659,
@@ -578,6 +646,7 @@
   {
     "name": "Denmark Country Club (18 holes)",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -34.959387727868396,
     "lng": 117.36898437647788,
@@ -586,6 +655,7 @@
   {
     "name": "Mount Barker Golf Club (18 holes)",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -34.6533926241581,
     "lng": 117.6747244722407,
@@ -595,6 +665,7 @@
   {
     "name": "Geraldton Golf Club (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -28.774800563556976,
     "lng": 114.63075231929263,
@@ -603,6 +674,7 @@
   {
     "name": "Geraldton Golf Club (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -28.774800563556976,
     "lng": 114.63075231929263,
@@ -612,6 +684,7 @@
   {
     "name": "Dongara Golf Club (18 holes)",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -29.272093343102366,
     "lng": 114.93346200953633,
@@ -621,6 +694,7 @@
   {
     "name": "Kalgoorlie Golf Course (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -30.737467947640944,
     "lng": 121.44377130187227,
@@ -629,6 +703,7 @@
   {
     "name": "Kalgoorlie Golf Course (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -30.737467947640944,
     "lng": 121.44377130187227,
@@ -638,6 +713,7 @@
   {
     "name": "Kambalda Golf Club (18 holes)",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -31.21483697936073,
     "lng": 121.62898731066079,
@@ -646,6 +722,7 @@
   {
     "name": "Norseman Golf Club (18 holes)",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -32.18590129421152,
     "lng": 121.77071888187876,
@@ -654,6 +731,7 @@
   {
     "name": "Port Hedland Golf Club (18 holes)",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -20.403296505621732,
     "lng": 118.5748316580421,
@@ -662,6 +740,7 @@
   {
     "name": "Karratha Golf Club (18 holes)",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -20.72393836665976,
     "lng": 116.84998074476752,
@@ -670,6 +749,7 @@
   {
     "name": "Fortescue Golf Club (18 holes)",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -23.351195819088634,
     "lng": 119.72641892443758,
@@ -679,6 +759,7 @@
   {
     "name": "Broome Golf Club (18 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 18,
     "lat": -17.98268175217335,
     "lng": 122.21315462271896,
@@ -687,6 +768,7 @@
   {
     "name": "Broome Golf Club (9 holes)",
     "provider": "MiClub",
+    "state": "WA",
     "holes": 9,
     "lat": -17.98268175217335,
     "lng": 122.21315462271896,
@@ -696,9 +778,2965 @@
   {
     "name": "Kununurra Golf Club (18 holes)",
     "provider": "Phone",
+    "state": "WA",
     "holes": 18,
     "lat": -15.790876623196917,
     "lng": 128.71599239886385,
     "phone": "08 9169 1055"
+  },
+  {
+    "name": "Alice Springs Golf Club (18 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 18,
+    "lat": -23.713888888888889,
+    "lng": 133.88222222222223,
+    "url": "https://alicespringsgolfclub.com.au",
+    "phone": "08 8952 6575"
+  },
+  {
+    "name": "Alice Springs Golf Club (9 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 9,
+    "lat": -23.713888888888889,
+    "lng": 133.88222222222223,
+    "url": "https://alicespringsgolfclub.com.au",
+    "phone": "08 8952 6575"
+  },
+
+  {
+    "name": "Darwin Golf Club (18 holes weekday)",
+    "provider": "MiClub",
+    "state": "NT",
+    "holes": 18,
+    "lat": -12.397222222222222,
+    "lng": 130.89583333333331,
+    "url": "https://www.darwingolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-28&feeGroupId=5722052"
+  },
+  {
+    "name": "Darwin Golf Club (18 holes weekend)",
+    "provider": "MiClub",
+    "state": "NT",
+    "holes": 18,
+    "lat": -12.397222222222222,
+    "lng": 130.89583333333331,
+    "url": "https://www.darwingolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-30&feeGroupId=5722053"
+  },
+  {
+    "name": "Darwin Golf Club (9 holes weekday)",
+    "provider": "MiClub",
+    "state": "NT",
+    "holes": 9,
+    "lat": -12.397222222222222,
+    "lng": 130.89583333333331,
+    "url": "https://www.darwingolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-27&feeGroupId=5722109"
+  },
+  {
+    "name": "Darwin Golf Club (9 holes weekend)",
+    "provider": "MiClub",
+    "state": "NT",
+    "holes": 9,
+    "lat": -12.397222222222222,
+    "lng": 130.89583333333331,
+    "url": "https://www.darwingolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-29&feeGroupId=5722108"
+  },
+
+  {
+    "name": "Gove Country Club (18 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 18,
+    "lat": -12.16861111111111,
+    "lng": 136.76972222222224,
+    "url": "https://www.govecountrygolfclub.net",
+    "phone": "08 8987 3191"
+  },
+  {
+    "name": "Gove Country Club (9 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 9,
+    "lat": -12.16861111111111,
+    "lng": 136.76972222222224,
+    "url": "https://www.govecountrygolfclub.net",
+    "phone": "08 8987 3191"
+  },
+
+  {
+    "name": "Humpty Doo & Rural Golf Club (18 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 18,
+    "lat": -12.546944444444444,
+    "lng": 131.13972222222222,
+    "url": "https://www.humptydoogolfclub.com.au",
+    "phone": "(08) 8988 1118"
+  },
+  {
+    "name": "Humpty Doo & Rural Golf Club (9 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 9,
+    "lat": -12.546944444444444,
+    "lng": 131.13972222222222,
+    "url": "https://www.humptydoogolfclub.com.au",
+    "phone": "(08) 8988 1118"
+  },
+
+  {
+    "name": "Jabiru Golf Club (18 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 18,
+    "lat": -12.682222222222222,
+    "lng": 132.83861111111113,
+    "url": "https://www.jabirugolfclub.com.au",
+    "phone": "08 8979 2575"
+  },
+  {
+    "name": "Jabiru Golf Club (9 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 9,
+    "lat": -12.682222222222222,
+    "lng": 132.83861111111113,
+    "url": "https://www.jabirugolfclub.com.au",
+    "phone": "08 8979 2575"
+  },
+
+  {
+    "name": "Katherine Golf Club (18 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 18,
+    "lat": -14.471111111111112,
+    "lng": 132.26222222222222,
+    "url": "https://www.katherinecountryclub.com.au",
+    "phone": "0438 723 762"
+  },
+  {
+    "name": "Katherine Golf Club (9 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 9,
+    "lat": -14.471111111111112,
+    "lng": 132.26222222222222,
+    "url": "https://www.katherinecountryclub.com.au",
+    "phone": "0438 723 762"
+  },
+
+  {
+    "name": "Palmerston Golf Course (18 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 18,
+    "lat": -12.481388888888889,
+    "lng": 130.97555555555556,
+    "url": "https://www.palmerstongolfcourse.com.au/golf-prices",
+    "phone": "08 8932 2681"
+  },
+  {
+    "name": "Palmerston Golf Course (9 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 9,
+    "lat": -12.481388888888889,
+    "lng": 130.97555555555556,
+    "url": "https://www.palmerstongolfcourse.com.au/golf-prices",
+    "phone": "08 8932 2681"
+  },
+
+  {
+    "name": "RAAF Darwin Golf Club (18 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 18,
+    "lat": -12.415277777777778,
+    "lng": 130.85694444444445,
+    "url": "https://www.raafdarwingolfclub.com.au",
+    "phone": "0459 746 306"
+  },
+  {
+    "name": "RAAF Darwin Golf Club (9 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 9,
+    "lat": -12.415277777777778,
+    "lng": 130.85694444444445,
+    "url": "https://www.raafdarwingolfclub.com.au",
+    "phone": "0459 746 306"
+  },
+
+  {
+    "name": "Tennant Creek Golf Club (18 holes)",
+    "provider": "Phone",
+    "state": "NT",
+    "holes": 18,
+    "lat": -19.669722222222223,
+    "lng": 134.2513888888889,
+    "phone": "08 8962 1024"
+  },
+  {
+    "name": "Tennant Creek Golf Club (9 holes)",
+    "provider": "Phone",
+    "state": "NT",
+    "holes": 9,
+    "lat": -19.669722222222223,
+    "lng": 134.2513888888889,
+    "phone": "08 8962 1024"
+  },
+
+  {
+    "name": "Gardens Park Golf Links (18 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 18,
+    "lat": -12.449166666666667,
+    "lng": 130.83277777777778,
+    "url": "https://www.gardensparkgolflinks.com.au",
+    "phone": "08 8981 6365"
+  },
+  {
+    "name": "Gardens Park Golf Links (9 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 9,
+    "lat": -12.449166666666667,
+    "lng": 130.83277777777778,
+    "url": "https://www.gardensparkgolflinks.com.au",
+    "phone": "08 8981 6365"
+  },
+
+  {
+    "name": "Alyangula Golf Club (18 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 18,
+    "lat": -13.849166666666667,
+    "lng": 136.4152777777778,
+    "url": "https://www.alyangulagc.com.au/cms/",
+    "phone": "(08) 8987 6060"
+  },
+  {
+    "name": "Alyangula Golf Club (9 holes)",
+    "provider": "Other",
+    "state": "NT",
+    "holes": 9,
+    "lat": -13.849166666666667,
+    "lng": 136.4152777777778,
+    "url": "https://www.alyangulagc.com.au/cms/",
+    "phone": "(08) 8987 6060"
+  },
+ {
+    "name": "Victoria Park Golf Complex (Brisbane) (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.450833,
+    "lng": 153.020556,
+    "url": "https://victoriapark.com.au/golf/",
+    "phone": "0732529891"
+  },
+  {
+    "name": "Victoria Park Golf Complex (Brisbane) (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.450833,
+    "lng": 153.020556,
+    "url": "https://victoriapark.com.au/golf/",
+    "phone": "0732529891"
+  },
+  {
+    "name": "St Lucia Golf Links (back 9)",
+    "provider": "Quick18",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.503889,
+    "lng": 152.992778,
+    "url": "https://stlucia.quick18.com/teetimes/searchmatrix",
+    "phone": null
+  },
+  {
+    "name": "St Lucia Golf Links (9)",
+    "provider": "Quick18",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.503889,
+    "lng": 152.992778,
+    "url": "https://stlucia.quick18.com/teetimes/searchmatrix",
+    "phone": null
+  },
+  {
+    "name": "St Lucia Golf Links (18)",
+    "provider": "Quick18",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.503889,
+    "lng": 152.992778,
+    "url": "https://stlucia.quick18.com/teetimes/searchmatrix",
+    "phone": null
+  },
+  {
+    "name": "Nudgee Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.373611,
+    "lng": 153.099444,
+    "url": "https://www.nudgeegolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=9295969",
+    "phone": null
+  },
+  {
+    "name": "Nudgee Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.373611,
+    "lng": 153.099444,
+    "url": "https://www.nudgeegolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=9506557",
+    "phone": null
+  },
+  {
+    "name": "Keperra Country Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.409722,
+    "lng": 152.952778,
+    "url": "https://www.keperragolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=1517009714",
+    "phone": null
+  },
+  {
+    "name": "Keperra Country Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.409722,
+    "lng": 152.952778,
+    "url": "https://www.keperragolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=1517009720",
+    "phone": null
+  },
+  {
+    "name": "Redcliffe Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.259167,
+    "lng": 153.077778,
+    "url": "https://www.redcliffegolf.com/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=2997688",
+    "phone": null
+  },
+  {
+    "name": "Wynnum Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.446389,
+    "lng": 153.164722,
+    "url": "https://wynnum.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=1509143739",
+    "phone": null
+  },
+  {
+    "name": "Wynnum Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.446389,
+    "lng": 153.164722,
+    "url": "https://wynnum.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1509152339",
+    "phone": null
+  },
+  {
+    "name": "Virginia Golf Club - championship course 18",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.3725,
+    "lng": 153.068056,
+    "url": "https://www.virginiagolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=7451213",
+    "phone": null
+  },
+  {
+    "name": "Virginia Golf Club - championship course 9",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.3725,
+    "lng": 153.068056,
+    "url": "https://www.virginiagolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=7451217",
+    "phone": null
+  },
+  {
+    "name": "Virginia Golf Club - composite course 18",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.3725,
+    "lng": 153.068056,
+    "url": "https://www.virginiagolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=7451217",
+    "phone": null
+  },
+  {
+    "name": "Virginia Golf Club - heritage course 9",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.3725,
+    "lng": 153.068056,
+    "url": "https://www.virginiagolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-06&feeGroupId=7451216",
+    "phone": null
+  },
+  {
+    "name": "Virginia Golf Club - heritage course 18",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.3725,
+    "lng": 153.068056,
+    "url": "https://www.virginiagolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=7451215",
+    "phone": null
+  },
+  {
+    "name": "Pacific Golf Club (Carindale) 9",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.515556,
+    "lng": 153.103333,
+    "url": "https://pacificgolf.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=20016441",
+    "phone": null
+  },
+  {
+    "name": "Pacific Golf Club (Cardinale) 18",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.515556,
+    "lng": 153.103333,
+    "url": "https://pacificgolf.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=7127420",
+    "phone": null
+  },
+  {
+    "name": "McLeod Country Golf Club (Mount Ommaney) (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.549444,
+    "lng": 152.924167,
+    "url": "https://mcleod.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=3326590",
+    "phone": null
+  },
+  {
+    "name": "McLeod Country Golf Club (Mount Ommaney) (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.549444,
+    "lng": 152.924167,
+    "url": "https://mcleod.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-06&feeGroupId=4110689",
+    "phone": null
+  },
+  {
+    "name": "Oxley Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.571667,
+    "lng": 152.977222,
+    "url": "https://oxley.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1899120",
+    "phone": null
+  },
+  {
+    "name": "Oxley Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.571667,
+    "lng": 152.977222,
+    "url": "https://oxley.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-07&feeGroupId=1899129",
+    "phone": null
+  },
+  {
+    "name": "Gailes Golf Club (18)",
+    "provider": "TeeItUp",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.600556,
+    "lng": 152.916944,
+    "url": "https://gailes-golf-club.book-v2.teeitup.golf/?course=15309&date=2025-12-04&golfers=3&holes=18&max=999999",
+    "phone": null
+  },
+  {
+    "name": "Redland Bay Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.601667,
+    "lng": 153.297222,
+    "url": "https://redlandbay.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=3",
+    "phone": null
+  },
+  {
+    "name": "Redland Bay Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.601667,
+    "lng": 153.297222,
+    "url": "https://redlandbay.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=4",
+    "phone": null
+  },
+  {
+    "name": "Brookwater Golf & Country Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.661944,
+    "lng": 152.894722,
+    "url": "https://brookwater.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=398531",
+    "phone": null
+  },
+  {
+    "name": "Brookwater Golf & Country Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.661944,
+    "lng": 152.894722,
+    "url": "https://brookwater.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=398554",
+    "phone": null
+  },
+  {
+    "name": "Wantima Country Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.329444,
+    "lng": 152.963889,
+    "url": "https://www.wantimacountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=3358087",
+    "phone": null
+  },
+  {
+    "name": "Wantima Country Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.329444,
+    "lng": 152.963889,
+    "url": "https://www.wantimacountryclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=3358088",
+    "phone": null
+  },
+  {
+    "name": "Brisbane River Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.543333,
+    "lng": 152.830278,
+    "url": "https://brisbaneriver.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=103368",
+    "phone": null
+  },
+  {
+    "name": "Brisbane River Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.543333,
+    "lng": 152.830278,
+    "url": "https://brisbaneriver.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-06&feeGroupId=133512",
+    "phone": null
+  },
+  {
+    "name": "Howeston Golf Course (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.5,
+    "lng": 153.198611,
+    "url": "https://www.howestongolfcourse.com.au",
+    "phone": "(07) 3207 2452"
+  },
+  {
+    "name": "Howeston Golf Course (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.5,
+    "lng": 153.198611,
+    "url": "https://www.howestongolfcourse.com.au",
+    "phone": "(07) 3207 2452"
+  },
+  {
+    "name": "Sandgate Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.330278,
+    "lng": 153.080278,
+    "url": "https://teenet.com.au/teenet?clubId=40115#NearbyClubs",
+    "phone": "07 3269 3252"
+  },
+  {
+    "name": "Sandgate Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.330278,
+    "lng": 153.080278,
+    "url": "https://teenet.com.au/teenet?clubId=40115#NearbyClubs",
+    "phone": "07 3269 3252"
+  },
+  {
+    "name": "Bulimba Golf Course (9)",
+    "provider": "Chronogolf",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.444444,
+    "lng": 153.052222,
+    "url": "https://www.chronogolf.com/club/16370/widget?medium=widget&source=club#?course_id=23233&nb_holes=18&date=2025-12-04&affiliation_type_ids=67260,67260,67260",
+    "phone": null
+  },
+  {
+    "name": "Bulimba Golf Course (18)",
+    "provider": "Chronogolf",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.444444,
+    "lng": 153.052222,
+    "url": "https://www.chronogolf.com/club/16370/widget?medium=widget&source=club#?course_id=23233&nb_holes=18&date=2025-12-04&affiliation_type_ids=67260,67260,67260",
+    "phone": null
+  },
+  {
+    "name": "Meadowbrook Golf Course (18 walking)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.6575,
+    "lng": 153.149167,
+    "url": "https://meadowbrook.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=4612067",
+    "phone": null
+  },
+  {
+    "name": "Meadowbrook Golf Course (18 HOLES 1 PLAYER WITH CART)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.6575,
+    "lng": 153.149167,
+    "url": "https://meadowbrook.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=7436454",
+    "phone": null
+  },
+  {
+    "name": "Meadowbrook Golf Course (18 HOLES 2 PLAYERS WITH CART)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.6575,
+    "lng": 153.149167,
+    "url": "https://meadowbrook.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=4612086",
+    "phone": null
+  },
+  {
+    "name": "Meadowbrook Golf Course (18 HOLES 4 PLAYERS WITH 2 CARTS",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.6575,
+    "lng": 153.149167,
+    "url": "https://meadowbrook.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=5507468",
+    "phone": null
+  },
+  {
+    "name": "Meadowbrook Golf Course (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.6575,
+    "lng": 153.149167,
+    "url": "https://meadowbrook.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=4612070",
+    "phone": null
+  },
+  {
+    "name": "Meadowbrook Golf Course (9 HOLES 1 PLAYER WITH CART)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.6575,
+    "lng": 153.149167,
+    "url": "https://meadowbrook.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=7436471",
+    "phone": null
+  },
+  {
+    "name": "Meadowbrook Golf Course (9 HOLES  2 PLAYER WITH CART)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.6575,
+    "lng": 153.149167,
+    "url": "https://meadowbrook.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=7436506",
+    "phone": null
+  },
+  {
+    "name": "Riverlakes Golf Course (9)",
+    "provider": "TeeItUp",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.674444,
+    "lng": 153.214444,
+    "url": "https://riverlakes-golf-course.book-v2.teeitup.golf/?course=17225&date=2025-12-03&max=999999",
+    "phone": null
+  },
+  {
+    "name": "Riverlakes Golf Course (18)",
+    "provider": "TeeItUp",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.674444,
+    "lng": 153.214444,
+    "url": "https://riverlakes-golf-course.book-v2.teeitup.golf/?course=17225&date=2025-12-03&max=999999",
+    "phone": null
+  },
+  {
+    "name": "Wolston Park Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.603889,
+    "lng": 152.905,
+    "url": "https://wpgc.com.au/golf/",
+    "phone": "07 3271 6641"
+  },
+  {
+    "name": "Wolston Park Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.603889,
+    "lng": 152.905,
+    "url": "https://wpgc.com.au/golf/",
+    "phone": "07 3271 6641"
+  },
+  {
+    "name": "Mt Warren Park Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.7325,
+    "lng": 153.214722,
+    "url": "https://mtwarrenpark.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=3271",
+    "phone": null
+  },
+  {
+    "name": "Mt Warren Park Golf Club (18 Holes with CART)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.7325,
+    "lng": 153.214722,
+    "url": "https://mtwarrenpark.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=7441",
+    "phone": null
+  },
+  {
+    "name": "Mt Warren Park Golf Club (18 Holes 2ppl with CART)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.7325,
+    "lng": 153.214722,
+    "url": "https://mtwarrenpark.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=8231384",
+    "phone": null
+  },
+  {
+    "name": "Mt Warren Park Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.7325,
+    "lng": 153.214722,
+    "url": "https://mtwarrenpark.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-06&feeGroupId=3272",
+    "phone": null
+  },
+  {
+    "name": "Mt Warren Park Golf Club (9 Holes 2ppl with CART)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.7325,
+    "lng": 153.214722,
+    "url": "https://mtwarrenpark.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=8231397",
+    "phone": null
+  },
+  {
+    "name": "Mt Warren Park Golf Club (9 Holes with CART)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.7325,
+    "lng": 153.214722,
+    "url": "https://mtwarrenpark.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=10940",
+    "phone": null
+  },
+  {
+    "name": "Pine Rivers Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.230833,
+    "lng": 152.973889,
+    "url": "https://pinerivers.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=104514",
+    "phone": null
+  },
+  {
+    "name": "Pine Rivers Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.230833,
+    "lng": 152.973889,
+    "url": "https://pinerivers.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-06&feeGroupId=104515",
+    "phone": null
+  },
+  {
+    "name": "Caboolture Golf Club",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.075833,
+    "lng": 152.919167,
+    "url": "https://caboolturegolf.com.au/golf-bookings/",
+    "phone": "07 5495 1033"
+  },
+  {
+    "name": "Bribie Island Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.082222,
+    "lng": 153.2,
+    "url": "https://bribieisland.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=26477270",
+    "phone": null
+  },
+  {
+    "name": "Bribie Island Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.082222,
+    "lng": 153.2,
+    "url": "https://bribieisland.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=26480917",
+    "phone": null
+  },
+  {
+    "name": "Woodford Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.948889,
+    "lng": 152.788889,
+    "url": "https://woodford.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=101541",
+    "phone": null
+  },
+  {
+    "name": "Woodford Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.948889,
+    "lng": 152.788889,
+    "url": "https://woodford.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=101571",
+    "phone": null
+  },
+  {
+    "name": "Ashgrove Golf Club (18 Holes: Non-Members)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.444444,
+    "lng": 152.959722,
+    "url": "https://ashgrove.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=105994",
+    "phone": null
+  },
+  {
+    "name": "Ashgrove Golf Club (18 Holes Junior < 18 Years Old)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.444444,
+    "lng": 152.959722,
+    "url": "https://ashgrove.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=114612",
+    "phone": null
+  },
+  {
+    "name": "Ashgrove Golf Club (9 Holes: Non-Members)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.444444,
+    "lng": 152.959722,
+    "url": "https://ashgrove.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=114537",
+    "phone": null
+  },
+  {
+    "name": "Ashgrove Golf Club (18 Holes: Social Members)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.444444,
+    "lng": 152.959722,
+    "url": "https://ashgrove.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=114674",
+    "phone": null
+  },
+  {
+    "name": "Ashgrove Golf Club (9 Holes: Social Members)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.444444,
+    "lng": 152.959722,
+    "url": "https://ashgrove.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=114675",
+    "phone": null
+  },
+  {
+    "name": "Ashgrove Golf Club (9 Holes Junior < 18 Years Old)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -28.004722,
+    "lng": 153.375556,
+    "url": "https://royalpines.miclub.com.au/guests/bookings/ViewPublicCalendar.msp?booking_resource_id=3000000",
+    "phone": null
+  },
+  {
+    "name": "Palmer Gold Coast (18 walking)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.072222,
+    "lng": 153.405,
+    "url": "https://www.palmergolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1501539023",
+    "phone": null
+  },
+  {
+    "name": "Palmer Gold Coast (9 HOLES INC. CART)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.072222,
+    "lng": 153.405,
+    "url": "https://www.palmergolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1502601426",
+    "phone": null
+  },
+  {
+    "name": "Palmer Gold Coast (COLONIAL 18 HOLES + CART)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.072222,
+    "lng": 153.405,
+    "url": "https://www.palmergolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1501540163",
+    "phone": null
+  },
+  {
+    "name": "Palm Meadows Golf Course (18 Holes (Including Shared Cart)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.027222,
+    "lng": 153.378333,
+    "url": "https://palmmeadows.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=5225",
+    "phone": null
+  },
+  {
+    "name": "Palm Meadows Golf Course (18 - TWILIGHT (Sept to Apr)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.027222,
+    "lng": 153.378333,
+    "url": "https://palmmeadows.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=11433107",
+    "phone": null
+  },
+  {
+    "name": "Palm Meadows Golf Course (18 - PRE-TWILIGHT - 1pm to 2pm)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.027222,
+    "lng": 153.378333,
+    "url": "https://palmmeadows.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-02&feeGroupId=11724782",
+    "phone": null
+  },
+  {
+    "name": "The Glades Golf Club (9)",
+    "provider": "TeeItUp",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -28.075833,
+    "lng": 153.368333,
+    "url": "https://thegladesgolfclub.book.teeitup.com/?course=15365&date=2025-12-01&max=999999",
+    "phone": null
+  },
+  {
+    "name": "The Glades Golf Club (18)",
+    "provider": "TeeItUp",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.075833,
+    "lng": 153.368333,
+    "url": "https://thegladesgolfclub.book.teeitup.com/?course=15365&date=2025-12-01&max=999999",
+    "phone": null
+  },
+  {
+    "name": "Links Hope Island (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.876389,
+    "lng": 153.348889,
+    "url": "https://linkshopeisland.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=1514469113",
+    "phone": null
+  },
+  {
+    "name": "Links Hope Island (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.876389,
+    "lng": 153.348889,
+    "url": "https://linkshopeisland.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=1506654631",
+    "phone": null
+  },
+  {
+    "name": "Helensvale Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.906389,
+    "lng": 153.3325,
+    "url": "https://www.helensvalegolfcourse.com.au/course-layout",
+    "phone": "(07) 5573 - 1278"
+  },
+  {
+    "name": "Helensvale Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.906389,
+    "lng": 153.3325,
+    "url": "https://www.helensvalegolfcourse.com.au/course-layout",
+    "phone": "(07) 5573 - 1278"
+  },
+  {
+    "name": "Parkwood International (18 twilight walking)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.950833,
+    "lng": 153.374444,
+    "url": "https://parkwood.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-06&feeGroupId=13575558",
+    "phone": null
+  },
+  {
+    "name": "Parkwood International (Prepaid Special - 9 Holes)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.950833,
+    "lng": 153.374444,
+    "url": "https://parkwood.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-06&feeGroupId=11327918",
+    "phone": null
+  },
+  {
+    "name": "Parkwood International (Prepaid Special - 18 Holes Walking)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.950833,
+    "lng": 153.374444,
+    "url": "https://parkwood.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-06&feeGroupId=11327223",
+    "phone": null
+  },
+  {
+    "name": "Parkwood International (Prepaid Special - 18 Holes with Shared Electric Cart)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.950833,
+    "lng": 153.374444,
+    "url": "https://parkwood.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-06&feeGroupId=15613139",
+    "phone": null
+  },
+  {
+    "name": "Parkwood International (Prepaid Special - 9 Holes with Shared Electric Cart)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.950833,
+    "lng": 153.374444,
+    "url": "https://parkwood.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-06&feeGroupId=15651699",
+    "phone": null
+  },
+  {
+    "name": "Boomerang Farm Golf Course (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.106667,
+    "lng": 153.321111,
+    "url": "https://boomerangfarm.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-06&feeGroupId=157787",
+    "phone": null
+  },
+  {
+    "name": "Boomerang Farm Golf Course (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -28.106667,
+    "lng": 153.321111,
+    "url": "https://boomerangfarm.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=157773",
+    "phone": null
+  },
+  {
+    "name": "Tallebudgera Golf Course (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -28.137222,
+    "lng": 153.430278,
+    "url": "https://www.tallebudgeragolfcourse.com.au",
+    "phone": "(07) 5534 8484"
+  },
+  {
+    "name": "Tallebudgera Golf Course (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.137222,
+    "lng": 153.430278,
+    "url": "https://www.tallebudgeragolfcourse.com.au",
+    "phone": "(07) 5534 8484"
+  },
+  {
+    "name": "Meadow Park Golf Course (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -28.1475,
+    "lng": 153.428889,
+    "url": "https://meadowpark.com.au",
+    "phone": "(07) 5534 8444"
+  },
+  {
+    "name": "Meadow Park Golf Course (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.1475,
+    "lng": 153.428889,
+    "url": "https://meadowpark.com.au",
+    "phone": "(07) 5534 8444"
+  },
+  {
+    "name": "Murwillumbah Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -28.330833,
+    "lng": 153.37,
+    "url": "https://www.murwillumbahgolfclub.com.au/membership/fees/",
+    "phone": "(02) 6672 4200"
+  },
+  {
+    "name": "Murwillumbah Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.330833,
+    "lng": 153.37,
+    "url": "https://www.murwillumbahgolfclub.com.au/membership/fees/",
+    "phone": "(02) 6672 4200"
+  },
+  {
+    "name": "Coolangatta & Tweed Heads Golf Club (River Course - 18 Holes)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.2075,
+    "lng": 153.559444,
+    "url": "https://www.cooltweedgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=7514424",
+    "phone": null
+  },
+  {
+    "name": "Coolangatta & Tweed Heads Golf Club (West Course - 18 Holes)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.2075,
+    "lng": 153.559444,
+    "url": "https://www.cooltweedgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=10995896",
+    "phone": null
+  },
+  {
+    "name": "Coolangatta & Tweed Heads Golf Club (River Course - 9 Holes)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -28.2075,
+    "lng": 153.559444,
+    "url": "https://www.cooltweedgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=7514426",
+    "phone": null
+  },
+  {
+    "name": "Coolangatta & Tweed Heads Golf Club (West Course - 9 Holes)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -28.2075,
+    "lng": 153.559444,
+    "url": "https://www.cooltweedgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-06&feeGroupId=7514427",
+    "phone": null
+  },
+  {
+    "name": "Gainsborough Greens Golf Course (9)",
+    "provider": "TeeItUp",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -27.819444,
+    "lng": 153.317778,
+    "url": "https://gainsborough-greens-golf-course.book.teeitup.com/?course=16659&date=2025-12-03&max=999999",
+    "phone": null
+  },
+  {
+    "name": "Gainsborough Greens Golf Course (18)",
+    "provider": "TeeItUp",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -27.819444,
+    "lng": 153.317778,
+    "url": "https://gainsborough-greens-golf-course.book.teeitup.com/?course=16659&date=2025-12-03&max=999999",
+    "phone": null
+  },
+  {
+    "name": "Emerald Lakes Golf Club (9)",
+    "provider": "TeeItUp",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -28.011389,
+    "lng": 153.366111,
+    "url": "https://emerald-lakes-golf-club.book-v2.teeitup.golf/?course=15307&date=2025-12-05&max=999999&utm_campaign=reserve",
+    "phone": null
+  },
+  {
+    "name": "Emerald Lakes Golf Club (18)",
+    "provider": "TeeItUp",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.011389,
+    "lng": 153.366111,
+    "url": "https://emerald-lakes-golf-club.book-v2.teeitup.golf/?course=15307&date=2025-12-05&max=999999&utm_campaign=reserve",
+    "phone": null
+  },
+  {
+    "name": "Twin Waters Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.626389,
+    "lng": 153.084722,
+    "url": "https://www.twinwatersgolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=109938",
+    "phone": null
+  },
+  {
+    "name": "Twin Waters Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.626389,
+    "lng": 153.084722,
+    "url": "https://www.twinwatersgolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=114306",
+    "phone": null
+  },
+  {
+    "name": "Maroochy River Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.687222,
+    "lng": 153.093889,
+    "url": "https://headland.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-02&feeGroupId=4439139",
+    "phone": "0754570900"
+  },
+  {
+    "name": "Maroochy River Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.687222,
+    "lng": 153.093889,
+    "url": "https://headland.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-02&feeGroupId=4439139",
+    "phone": "0754570900"
+  },
+  {
+    "name": "Headland Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.687222,
+    "lng": 153.093889,
+    "url": "https://headland.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-02&feeGroupId=4439140",
+    "phone": null
+  },
+  {
+    "name": "Pelican Waters Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.836667,
+    "lng": 153.092222,
+    "url": "https://pelicanwaters.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=231841",
+    "phone": null
+  },
+  {
+    "name": "Pelican Waters Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.836667,
+    "lng": 153.092222,
+    "url": "https://pelicanwaters.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=106442",
+    "phone": null
+  },
+  {
+    "name": "Maleny Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.760278,
+    "lng": 152.865,
+    "url": "https://malenygc.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-09&feeGroupId=1383068",
+    "phone": null
+  },
+  {
+    "name": "Maleny Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.760278,
+    "lng": 152.865,
+    "url": "https://malenygc.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-09&feeGroupId=1383085",
+    "phone": null
+  },
+  {
+    "name": "Noosa Springs Golf & Spa Resort (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.418333,
+    "lng": 153.085833,
+    "url": "https://noosasprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=106495",
+    "phone": null
+  },
+  {
+    "name": "Noosa Springs Golf & Spa Resort (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.418333,
+    "lng": 153.085833,
+    "url": "https://noosasprings.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=139948",
+    "phone": null
+  },
+  {
+    "name": "Noosa Valley Country Club (9)",
+    "provider": "Other",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.441944,
+    "lng": 152.993333,
+    "url": "https://www.noosavalleycountryclub.com.au/index.php?option=com_content&task=view&id=34&Itemid=45",
+    "phone": null
+  },
+  {
+    "name": "Noosa Valley Country Club (18)",
+    "provider": "Other",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.441944,
+    "lng": 152.993333,
+    "url": "https://www.noosavalleycountryclub.com.au/index.php?option=com_content&task=view&id=34&Itemid=45",
+    "phone": null
+  },
+  {
+    "name": "Cooroy Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.424722,
+    "lng": 152.913333,
+    "url": "https://cooroygolf.com.au/visitors/#social_tee",
+    "phone": "07 54476258"
+  },
+  {
+    "name": "Cooroy Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.424722,
+    "lng": 152.913333,
+    "url": "https://cooroygolf.com.au/visitors/#social_tee",
+    "phone": "07 54476258"
+  },
+  {
+    "name": "Mount Coolum Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.567778,
+    "lng": 153.084444,
+    "url": "https://www.mtcoolumgolf.com/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=101007",
+    "phone": null
+  },
+  {
+    "name": "Mount Coolum Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.567778,
+    "lng": 153.084444,
+    "url": "https://www.mtcoolumgolf.com/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=101008",
+    "phone": null
+  },
+  {
+    "name": "Beerwah Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.8575,
+    "lng": 152.966111,
+    "url": "https://www.beerwahgolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-08&feeGroupId=107197",
+    "phone": null
+  },
+  {
+    "name": "Beerwah Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.8575,
+    "lng": 152.966111,
+    "url": "https://www.beerwahgolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-07&feeGroupId=107204",
+    "phone": null
+  },
+  {
+    "name": "Gympie Golf Club (18 walking)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.175833,
+    "lng": 152.648611,
+    "url": "https://gympiegc.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1679196",
+    "phone": null
+  },
+  {
+    "name": "Gympie Golf Club (9 walking)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.175833,
+    "lng": 152.648611,
+    "url": "https://gympiegc.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1679914",
+    "phone": null
+  },
+  {
+    "name": "Gympie Golf Club (Freedom Social 2 Players 18 holes 1 Cart)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.175833,
+    "lng": 152.648611,
+    "url": "https://gympiegc.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1788148",
+    "phone": null
+  },
+  {
+    "name": "Gympie Golf Club (Freedom Social 1 player)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.175833,
+    "lng": 152.648611,
+    "url": "https://gympiegc.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1914588",
+    "phone": null
+  },
+  {
+    "name": "Gympie Golf Club (Freedom Social 9 Holes 2 Players 1 Cart)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.175833,
+    "lng": 152.648611,
+    "url": "https://gympiegc.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=1914643",
+    "phone": null
+  },
+  {
+    "name": "Gympie Golf Club (Freedom Social 9 Holes 1 Player and cart)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.175833,
+    "lng": 152.648611,
+    "url": "https://gympiegc.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=3114012",
+    "phone": null
+  },
+  {
+    "name": "Peregian Golf Course (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.4925,
+    "lng": 153.070278,
+    "url": "https://peregian.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=3657903",
+    "phone": null
+  },
+  {
+    "name": "Peregian Golf Course (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.4925,
+    "lng": 153.070278,
+    "url": "https://peregian.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=3663339",
+    "phone": null
+  },
+  {
+    "name": "Palmer Coolum Resort Golf Course (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.553056,
+    "lng": 153.092778,
+    "url": "https://palmercoolumresort.com.au/booking-and-fees/",
+    "phone": "07 5440 2222"
+  },
+  {
+    "name": "Palmer Coolum Resort Golf Course (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.553056,
+    "lng": 153.092778,
+    "url": "https://palmercoolumresort.com.au/booking-and-fees/",
+    "phone": "07 5440 2222"
+  },
+  {
+    "name": "Kilcoy Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.936667,
+    "lng": 152.558333,
+    "url": "https://kilcoygolf.com.au/bookings/",
+    "phone": "07 5405 5705"
+  },
+  {
+    "name": "Kilcoy Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.936667,
+    "lng": 152.558333,
+    "url": "https://kilcoygolf.com.au/bookings/",
+    "phone": "07 5405 5705"
+  },
+  {
+    "name": "Wondai Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.311389,
+    "lng": 151.874167,
+    "url": null,
+    "phone": "0741685582"
+  },
+  {
+    "name": "Wondai Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.311389,
+    "lng": 151.874167,
+    "url": null,
+    "phone": "0741685582"
+  },
+  {
+    "name": "Nambour Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.606944,
+    "lng": 152.968889,
+    "url": "https://www.nambourgolfclub.com.au/course/social-play/",
+    "phone": "0754412049"
+  },
+  {
+    "name": "Nambour Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.606944,
+    "lng": 152.968889,
+    "url": "https://www.nambourgolfclub.com.au/course/social-play/",
+    "phone": "0754412049"
+  },
+  {
+    "name": "Hervey Bay Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -25.281111,
+    "lng": 152.821944,
+    "url": "https://hbgcc.com.au",
+    "phone": "0741284249"
+  },
+  {
+    "name": "Hervey Bay Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -25.281111,
+    "lng": 152.821944,
+    "url": "https://hbgcc.com.au",
+    "phone": "0741284249"
+  },
+  {
+    "name": "Maryborough Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -25.533889,
+    "lng": 152.683056,
+    "url": "https://www.maryboroughgolfqld.com.au",
+    "phone": "07 4121 3717"
+  },
+  {
+    "name": "Maryborough Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -25.533889,
+    "lng": 152.683056,
+    "url": "https://www.maryboroughgolfqld.com.au",
+    "phone": "07 4121 3717"
+  },
+  {
+    "name": "Bargara Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -24.817778,
+    "lng": 152.465,
+    "url": "https://bargara.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=107939",
+    "phone": null
+  },
+  {
+    "name": "Bargara Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -24.817778,
+    "lng": 152.465,
+    "url": "https://bargara.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=107943",
+    "phone": null
+  },
+  {
+    "name": "Coral Cove Golf Course (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -24.888056,
+    "lng": 152.484167,
+    "url": "https://coralcovegolfclub.com.au/book-a-tee-time/",
+    "phone": "+61741593333"
+  },
+  {
+    "name": "Coral Cove Golf Course (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -24.888056,
+    "lng": 152.484167,
+    "url": "https://coralcovegolfclub.com.au/book-a-tee-time/",
+    "phone": "+61741593333"
+  },
+  {
+    "name": "Bundaberg Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -24.856667,
+    "lng": 152.321944,
+    "url": "https://bundaberg.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=105338",
+    "phone": null
+  },
+  {
+    "name": "Bundaberg Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -24.856667,
+    "lng": 152.321944,
+    "url": "https://bundaberg.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=105350",
+    "phone": null
+  },
+  {
+    "name": "Isis Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -25.228889,
+    "lng": 152.304167,
+    "url": "https://www.isisgolfclub.com.au",
+    "phone": "(07) 4126 1430"
+  },
+  {
+    "name": "Isis Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -25.228889,
+    "lng": 152.304167,
+    "url": "https://www.isisgolfclub.com.au",
+    "phone": "(07) 4126 1430"
+  },
+  {
+    "name": "Gayndah Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -25.635,
+    "lng": 151.623333,
+    "url": null,
+    "phone": "+61 7 4161 1587"
+  },
+  {
+    "name": "Gayndah Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -25.635,
+    "lng": 151.623333,
+    "url": null,
+    "phone": "+61 7 4161 1587"
+  },
+  {
+    "name": "Mundubbera Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -25.586389,
+    "lng": 151.3075,
+    "url": null,
+    "phone": "(07) 4165 4134"
+  },
+  {
+    "name": "Mundubbera Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -25.586389,
+    "lng": 151.3075,
+    "url": null,
+    "phone": "(07) 4165 4134"
+  },
+  {
+    "name": "Biggenden Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -25.501944,
+    "lng": 152.052778,
+    "url": null,
+    "phone": "0482 174 827"
+  },
+  {
+    "name": "Biggenden Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -25.501944,
+    "lng": 152.052778,
+    "url": null,
+    "phone": "0482 174 827"
+  },
+  {
+    "name": "Burrum District Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -25.311944,
+    "lng": 152.568611,
+    "url": null,
+    "phone": "0481568296"
+  },
+  {
+    "name": "Burrum District Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -25.311944,
+    "lng": 152.568611,
+    "url": null,
+    "phone": "0481568296"
+  },
+  {
+    "name": "Tin Can Bay Country Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -25.928611,
+    "lng": 152.991111,
+    "url": "https://www.tcbcc.com.au/golf/",
+    "phone": "+61409727577"
+  },
+  {
+    "name": "Tin Can Bay Country Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -25.928611,
+    "lng": 152.991111,
+    "url": "https://www.tcbcc.com.au/golf/",
+    "phone": "+61409727577"
+  },
+  {
+    "name": "Rockhampton Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -23.394444,
+    "lng": 150.489167,
+    "url": "https://rockhamptongc.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=6784785",
+    "phone": null
+  },
+  {
+    "name": "Rockhampton Gold Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -23.394444,
+    "lng": 150.489167,
+    "url": "https://rockhamptongc.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=6784788",
+    "phone": null
+  },
+  {
+    "name": "Yeppoon Golf Course (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -23.145556,
+    "lng": 150.72,
+    "url": "https://www.yeppoongolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=100503",
+    "phone": null
+  },
+  {
+    "name": "Yeppoon Golf Course (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -23.145556,
+    "lng": 150.72,
+    "url": "https://www.yeppoongolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=100522",
+    "phone": null
+  },
+  {
+    "name": "Capricorn Resort Golf Course (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -23.056944,
+    "lng": 150.755,
+    "url": null,
+    "phone": "(07) 4925 2621"
+  },
+  {
+    "name": "Capricorn Resort Golf Course (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -23.056944,
+    "lng": 150.755,
+    "url": null,
+    "phone": "(07) 4925 2621"
+  },
+  {
+    "name": "Emu Park Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -23.261389,
+    "lng": 150.806667,
+    "url": "https://emuparkgolf.com.au",
+    "phone": "(07) 4939 6804"
+  },
+  {
+    "name": "Emu Park Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -23.261389,
+    "lng": 150.806667,
+    "url": "https://emuparkgolf.com.au",
+    "phone": "(07) 4939 6804"
+  },
+  {
+    "name": "Gladstone Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -23.872778,
+    "lng": 151.243056,
+    "url": "https://yaralla.com.au/golf-club/",
+    "phone": "(07) 4978 1200"
+  },
+  {
+    "name": "Gladstone Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -23.872778,
+    "lng": 151.243056,
+    "url": "https://yaralla.com.au/golf-club/",
+    "phone": "(07) 4978 1200"
+  },
+  {
+    "name": "Tannum Sands Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -23.965556,
+    "lng": 151.340278,
+    "url": null,
+    "phone": "(07) 4973 9191"
+  },
+  {
+    "name": "Tannum Sands Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -23.965556,
+    "lng": 151.340278,
+    "url": null,
+    "phone": "(07) 4973 9191"
+  },
+  {
+    "name": "Calliope Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -23.995833,
+    "lng": 151.1925,
+    "url": null,
+    "phone": "(07) 4975 7454"
+  },
+  {
+    "name": "Calliope Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -23.995833,
+    "lng": 151.1925,
+    "url": null,
+    "phone": "(07) 4975 7454"
+  },
+  {
+    "name": "Biloela Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -24.42,
+    "lng": 150.557778,
+    "url": null,
+    "phone": "(07) 4992 1860"
+  },
+  {
+    "name": "Biloela Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -24.42,
+    "lng": 150.557778,
+    "url": null,
+    "phone": "(07) 4992 1860"
+  },
+  {
+    "name": "Moura Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -24.595556,
+    "lng": 149.9125,
+    "url": null,
+    "phone": "(07) 4997 1550"
+  },
+  {
+    "name": "Moura Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -24.595556,
+    "lng": 149.9125,
+    "url": null,
+    "phone": "(07) 4997 1550"
+  },
+  {
+    "name": "Baralaba Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -24.185278,
+    "lng": 149.802222,
+    "url": null,
+    "phone": "(07) 4998 1244"
+  },
+  {
+    "name": "Baralaba Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -24.185278,
+    "lng": 149.802222,
+    "url": null,
+    "phone": "(07) 4998 1244"
+  },
+  {
+    "name": "Theodore Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -24.958611,
+    "lng": 150.102222,
+    "url": null,
+    "phone": "0427118474"
+  },
+  {
+    "name": "Theodore Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -24.958611,
+    "lng": 150.102222,
+    "url": null,
+    "phone": "0427118474"
+  },
+  {
+    "name": "Blackwater Country Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -23.581111,
+    "lng": 148.868889,
+    "url": null,
+    "phone": "07 4982 5275"
+  },
+  {
+    "name": "Blackwater Country Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -23.581111,
+    "lng": 148.868889,
+    "url": null,
+    "phone": "07 4982 5275"
+  },
+  {
+    "name": "Emerald Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -23.523889,
+    "lng": 148.167222,
+    "url": null,
+    "phone": "07 4982 1274"
+  },
+  {
+    "name": "Emerald Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -23.523889,
+    "lng": 148.167222,
+    "url": null,
+    "phone": "07 4982 1274"
+  },
+  {
+    "name": "Springsure Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -24.096667,
+    "lng": 148.091111,
+    "url": null,
+    "phone": "(07) 4984 1351"
+  },
+  {
+    "name": "Springsure Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -24.096667,
+    "lng": 148.091111,
+    "url": null,
+    "phone": "(07) 4984 1351"
+  },
+  {
+    "name": "Capella Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -23.087222,
+    "lng": 148.011944,
+    "url": null,
+    "phone": "(07) 4984 9294"
+  },
+  {
+    "name": "Capella Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -23.087222,
+    "lng": 148.011944,
+    "url": null,
+    "phone": "(07) 4984 9294"
+  },
+  {
+    "name": "Dysart Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -22.578611,
+    "lng": 148.334722,
+    "url": null,
+    "phone": "(07) 4958 2378"
+  },
+  {
+    "name": "Dysart Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -22.578611,
+    "lng": 148.334722,
+    "url": null,
+    "phone": "(07) 4958 2378"
+  },
+  {
+    "name": "Mackay Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -21.086667,
+    "lng": 149.16,
+    "url": "https://www.mackaygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=5382264",
+    "phone": null
+  },
+  {
+    "name": "Mackay Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -21.086667,
+    "lng": 149.16,
+    "url": "https://www.mackaygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=8888685",
+    "phone": null
+  },
+  {
+    "name": "Black Springs Golf Course (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -21.209722,
+    "lng": 149.144167,
+    "url": null,
+    "phone": "(07) 4952 6446"
+  },
+  {
+    "name": "Black Springs Golf Course (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -21.209722,
+    "lng": 149.144167,
+    "url": null,
+    "phone": "(07) 4952 6446"
+  },
+  {
+    "name": "Pioneer Valley Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -21.184722,
+    "lng": 148.872778,
+    "url": null,
+    "phone": "07 4959 1277"
+  },
+  {
+    "name": "Pioneer Valley Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -21.184722,
+    "lng": 148.872778,
+    "url": null,
+    "phone": "07 4959 1277"
+  },
+  {
+    "name": "Sarina Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -21.435278,
+    "lng": 149.23,
+    "url": null,
+    "phone": "07 4956 1761"
+  },
+  {
+    "name": "Sarina Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -21.435278,
+    "lng": 149.23,
+    "url": null,
+    "phone": "07 4956 1761"
+  },
+  {
+    "name": "Bowen Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -19.986389,
+    "lng": 148.239167,
+    "url": null,
+    "phone": "(07) 4785 1206"
+  },
+  {
+    "name": "Bowen Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -19.986389,
+    "lng": 148.239167,
+    "url": null,
+    "phone": "(07) 4785 1206"
+  },
+  {
+    "name": "Proserpine Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -20.403333,
+    "lng": 148.568056,
+    "url": null,
+    "phone": "0749451337"
+  },
+  {
+    "name": "Proserpine Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -20.403333,
+    "lng": 148.568056,
+    "url": null,
+    "phone": "0749451337"
+  },
+  {
+    "name": "Collinsville Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -20.562222,
+    "lng": 147.846389,
+    "url": null,
+    "phone": "(07) 4785 5352"
+  },
+  {
+    "name": "Collinsville Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -20.562222,
+    "lng": 147.846389,
+    "url": null,
+    "phone": "(07) 4785 5352"
+  },
+  {
+    "name": "Hamilton Island Golf Club (18)",
+    "provider": "Other",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -20.354722,
+    "lng": 148.932222,
+    "url": "https://bookgolf.hamiltonisland.com.au/onecart/golf/courses-v2/1317/Hamilton?id=75&_ga=2.198141478.8646063.1764599831-1547144576.1764599831",
+    "phone": null
+  },
+  {
+    "name": "Airlie Beach Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -20.301389,
+    "lng": 148.666667,
+    "url": null,
+    "phone": "07 4946 1190"
+  },
+  {
+    "name": "Airlie Beach Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -20.301389,
+    "lng": 148.666667,
+    "url": null,
+    "phone": "07 4946 1190"
+  },
+  {
+    "name": "Townsville Golf Club (18 walking)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -19.295556,
+    "lng": 146.803611,
+    "url": "https://www.townsvillegolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=1510022748",
+    "phone": null
+  },
+  {
+    "name": "Townsville Golf Club (9 walking)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -19.295556,
+    "lng": 146.803611,
+    "url": "https://www.townsvillegolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1517666629",
+    "phone": null
+  },
+  {
+    "name": "Townsville Golf Club (1 Player + 1 Cart 18 Holes)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -19.295556,
+    "lng": 146.803611,
+    "url": "https://www.townsvillegolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=1517666488",
+    "phone": null
+  },
+  {
+    "name": "Townsville Golf Club (2 Player + 1 Cart 18 Holes)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -19.295556,
+    "lng": 146.803611,
+    "url": "https://www.townsvillegolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1517666510",
+    "phone": null
+  },
+  {
+    "name": "Townsville Golf Club (1 Player + 1 Cart 9 Holes)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -19.295556,
+    "lng": 146.803611,
+    "url": "https://www.townsvillegolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1517666579",
+    "phone": null
+  },
+  {
+    "name": "Townsville Golf Club (2 Player + 1 Cart 9 Holes)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -19.295556,
+    "lng": 146.803611,
+    "url": "https://www.townsvillegolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=1517666589",
+    "phone": null
+  },
+  {
+    "name": "Rowes Bay Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -19.225833,
+    "lng": 146.774722,
+    "url": null,
+    "phone": "(07) 4774 1188"
+  },
+  {
+    "name": "Rowes Bay Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -19.225833,
+    "lng": 146.774722,
+    "url": null,
+    "phone": "(07) 4774 1188"
+  },
+  {
+    "name": "Tropics Golf Club (18)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -19.312778,
+    "lng": 146.706944,
+    "url": "https://tropics.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=4050291",
+    "phone": null
+  },
+  {
+    "name": "Tropics Golf Club (9)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -19.312778,
+    "lng": 146.706944,
+    "url": "https://tropics.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-03&feeGroupId=4050323",
+    "phone": null
+  },
+  {
+    "name": "Ingham Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -18.6575,
+    "lng": 146.171667,
+    "url": null,
+    "phone": "0400 958 731"
+  },
+  {
+    "name": "Ingham Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -18.6575,
+    "lng": 146.171667,
+    "url": null,
+    "phone": "0400 958 731"
+  },
+  {
+    "name": "Cardwell Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -18.270278,
+    "lng": 146.025556,
+    "url": null,
+    "phone": "0448 098 260"
+  },
+  {
+    "name": "Cardwell Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -18.270278,
+    "lng": 146.025556,
+    "url": null,
+    "phone": "0448 098 260"
+  },
+  {
+    "name": "Tully Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -17.936111,
+    "lng": 145.935278,
+    "url": null,
+    "phone": "(07) 4068 1236"
+  },
+  {
+    "name": "Tully Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -17.936111,
+    "lng": 145.935278,
+    "url": null,
+    "phone": "(07) 4068 1236"
+  },
+  {
+    "name": "MYSTIC SANDS GOLF RESORT (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -19.043333,
+    "lng": 146.421667,
+    "url": null,
+    "phone": "(07) 4770 7355"
+  },
+  {
+    "name": "MYSTIC SANDS GOLF RESORT (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -19.043333,
+    "lng": 146.421667,
+    "url": null,
+    "phone": "(07) 4770 7355"
+  },
+  {
+    "name": "Charters Towers Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -20.054444,
+    "lng": 146.253611,
+    "url": null,
+    "phone": "(07) 4787 1229"
+  },
+  {
+    "name": "Charters Towers Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -20.054444,
+    "lng": 146.253611,
+    "url": null,
+    "phone": "(07) 4787 1229"
+  },
+  {
+    "name": "Home Hill Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -19.690556,
+    "lng": 147.407222,
+    "url": null,
+    "phone": "(07) 4782 1632"
+  },
+  {
+    "name": "Home Hill Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -19.690556,
+    "lng": 147.407222,
+    "url": null,
+    "phone": "(07) 4782 1632"
+  },
+  {
+    "name": "Ayr Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -19.581667,
+    "lng": 147.411111,
+    "url": null,
+    "phone": "(07) 4783 1296"
+  },
+  {
+    "name": "Ayr Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -19.581667,
+    "lng": 147.411111,
+    "url": null,
+    "phone": "(07) 4783 1296"
+  },
+  {
+    "name": "Innisfail Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -17.527222,
+    "lng": 146.017778,
+    "url": null,
+    "phone": "(07) 4061 2223"
+  },
+  {
+    "name": "Innisfail Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -17.527222,
+    "lng": 146.017778,
+    "url": null,
+    "phone": "(07) 4061 2223"
+  },
+  {
+    "name": "Cairns Golf Club (18 walking)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -16.964722,
+    "lng": 145.749444,
+    "url": "https://cairns.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=471954",
+    "phone": null
+  },
+  {
+    "name": "Cairns Golf Club (18 shared cart)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -16.964722,
+    "lng": 145.749444,
+    "url": "https://cairns.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=107158",
+    "phone": null
+  },
+  {
+    "name": "Cairns Golf Club (9 walking)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -16.964722,
+    "lng": 145.749444,
+    "url": "https://cairns.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-04&feeGroupId=107187",
+    "phone": null
+  },
+  {
+    "name": "Cairns Golf Club (9 shared cart)",
+    "provider": "MiClub",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -16.964722,
+    "lng": 145.749444,
+    "url": "https://cairns.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-05&feeGroupId=107168",
+    "phone": null
+  },
+  {
+    "name": "Half Moon Bay Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -16.808056,
+    "lng": 145.7175,
+    "url": null,
+    "phone": "07 4055 7933"
+  },
+  {
+    "name": "Half Moon Bay Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -16.808056,
+    "lng": 145.7175,
+    "url": null,
+    "phone": "07 4055 7933"
+  },
+  {
+    "name": "Port Douglas \u2013 Mirage Country Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -16.5075,
+    "lng": 145.460278,
+    "url": null,
+    "phone": "0740995537"
+  },
+  {
+    "name": "Port Douglas \u2013 Mirage Country Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -16.5075,
+    "lng": 145.460278,
+    "url": null,
+    "phone": "0740995537"
+  },
+  {
+    "name": "Mareeba Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -16.984444,
+    "lng": 145.413889,
+    "url": null,
+    "phone": "0740921528"
+  },
+  {
+    "name": "Mareeba Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -16.984444,
+    "lng": 145.413889,
+    "url": null,
+    "phone": "0740921528"
+  },
+  {
+    "name": "Atherton Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -17.268056,
+    "lng": 145.47,
+    "url": null,
+    "phone": "(07) 4091 1283"
+  },
+  {
+    "name": "Atherton Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -17.268056,
+    "lng": 145.47,
+    "url": null,
+    "phone": "(07) 4091 1283"
+  },
+  {
+    "name": "Millaa Millaa Golf Course (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -17.515278,
+    "lng": 145.603611,
+    "url": null,
+    "phone": "07 4097 2117"
+  },
+  {
+    "name": "Millaa Millaa Golf Course (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -17.515278,
+    "lng": 145.603611,
+    "url": null,
+    "phone": "07 4097 2117"
+  },
+  {
+    "name": "Ravenshoe Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -17.640556,
+    "lng": 145.426667,
+    "url": null,
+    "phone": "0408 567 547"
+  },
+  {
+    "name": "Ravenshoe Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -17.640556,
+    "lng": 145.426667,
+    "url": null,
+    "phone": "0408 567 547"
+  },
+  {
+    "name": "Cooktown Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -15.508611,
+    "lng": 145.272222,
+    "url": null,
+    "phone": "07 4069 5800"
+  },
+  {
+    "name": "Cooktown Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -15.508611,
+    "lng": 145.272222,
+    "url": null,
+    "phone": "07 4069 5800"
+  },
+  {
+    "name": "Mossman Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -16.430278,
+    "lng": 145.391389,
+    "url": null,
+    "phone": "0455 216 520"
+  },
+  {
+    "name": "Mossman Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -16.430278,
+    "lng": 145.391389,
+    "url": null,
+    "phone": "0455 216 520"
+  },
+  {
+    "name": "Babinda Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -17.091667,
+    "lng": 145.782778,
+    "url": null,
+    "phone": "(07) 4056 3999"
+  },
+  {
+    "name": "Babinda Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -17.091667,
+    "lng": 145.782778,
+    "url": null,
+    "phone": "(07) 4056 3999"
+  },
+  {
+    "name": "Weipa Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -12.634722,
+    "lng": 141.88,
+    "url": null,
+    "phone": "0740697332"
+  },
+  {
+    "name": "Weipa Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -12.634722,
+    "lng": 141.88,
+    "url": null,
+    "phone": "0740697332"
+  },
+  {
+    "name": "Palmer Sea Reef (Port Douglas) (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -16.529444,
+    "lng": 145.470556,
+    "url": null,
+    "phone": "+61 7 4087 2222"
+  },
+  {
+    "name": "Palmer Sea Reef (Port Douglas) (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -16.529444,
+    "lng": 145.470556,
+    "url": null,
+    "phone": "+61 7 4087 2222"
+  },
+  {
+    "name": "Barcaldine Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -23.546944,
+    "lng": 145.300278,
+    "url": null,
+    "phone": "(07) 4651 2441"
+  },
+  {
+    "name": "Barcaldine Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -23.546944,
+    "lng": 145.300278,
+    "url": null,
+    "phone": "(07) 4651 2441"
+  },
+  {
+    "name": "Blackall Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -24.423056,
+    "lng": 145.451667,
+    "url": null,
+    "phone": "(07) 5457 4362"
+  },
+  {
+    "name": "Blackall Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -24.423056,
+    "lng": 145.451667,
+    "url": null,
+    "phone": "(07) 5457 4362"
+  },
+  {
+    "name": "Charleville Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.421667,
+    "lng": 146.229722,
+    "url": null,
+    "phone": "(07) 4654 3551"
+  },
+  {
+    "name": "Charleville Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.421667,
+    "lng": 146.229722,
+    "url": null,
+    "phone": "(07) 4654 3551"
+  },
+  {
+    "name": "St George Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -28.063889,
+    "lng": 145.681389,
+    "url": null,
+    "phone": "07 4625 3283"
+  },
+  {
+    "name": "St George Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -28.063889,
+    "lng": 145.681389,
+    "url": null,
+    "phone": "07 4625 3283"
+  },
+  {
+    "name": "Roma Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -26.589444,
+    "lng": 148.794722,
+    "url": null,
+    "phone": "(07) 4622 1233"
+  },
+  {
+    "name": "Roma Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -26.589444,
+    "lng": 148.794722,
+    "url": null,
+    "phone": "(07) 4622 1233"
+  },
+  {
+    "name": "Mt Isa Golf Club (9)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 9,
+    "lat": -20.765833,
+    "lng": 139.478056,
+    "url": null,
+    "phone": "(07) 4743 2371"
+  },
+  {
+    "name": "Mt Isa Golf Club (18)",
+    "provider": "Phone",
+    "state": "QLD",
+    "holes": 18,
+    "lat": -20.765833,
+    "lng": 139.478056,
+    "url": null,
+    "phone": "(07) 4743 2371"
   }
 ]
+
