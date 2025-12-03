@@ -1,12 +1,12 @@
 // backend/scrapers/parseTeeItUp.js
 
-const fetch = require("node-fetch");
+import fetch from "node-fetch";
 
 /**
  * Try to pull the TeeItUp `course` id out of the course object / URL.
  * e.g. https://gailes-golf-club.book-v2.teeitup.golf/?course=15309&date=...
  */
-function getTeeItUpCourseId(course) {
+export function getTeeItUpCourseId(course) {
   if (!course) return null;
 
   // optional explicit id if we ever store it in JSON later
@@ -28,7 +28,7 @@ function getTeeItUpCourseId(course) {
 /**
  * Build the TeeItUp public availability API URL.
  */
-function buildTeeItUpApiUrl({ courseId, date, holes, golfers }) {
+export function buildTeeItUpApiUrl({ courseId, date, holes, golfers }) {
   const params = new URLSearchParams();
 
   params.set("course", courseId);
@@ -43,7 +43,7 @@ function buildTeeItUpApiUrl({ courseId, date, holes, golfers }) {
 /**
  * Normalise the TeeItUp API response into TeeRadar slot objects.
  */
-function parseTeeItUpResponse(json, { course, criteria }) {
+export function parseTeeItUpResponse(json, { course, criteria }) {
   if (!json) return [];
 
   // Try to find the main array of tee times
@@ -150,13 +150,13 @@ function parseTeeItUpResponse(json, { course, criteria }) {
 /**
  * Main entry: used by scrapeCourse.js
  */
-async function scrapeTeeItUpCourse(course, criteria) {
+export async function scrapeTeeItUpCourse(course, criteria) {
   const courseId = getTeeItUpCourseId(course);
 
   if (!courseId || !criteria || !criteria.date) {
     console.warn(
       "[TeeItUp] Missing courseId or criteria.date",
-      course.name,
+      course?.name,
       courseId,
       criteria
     );
@@ -236,10 +236,3 @@ async function scrapeTeeItUpCourse(course, criteria) {
 
   return slots;
 }
-
-module.exports = {
-  getTeeItUpCourseId,
-  buildTeeItUpApiUrl,
-  parseTeeItUpResponse,
-  scrapeTeeItUpCourse,
-};
