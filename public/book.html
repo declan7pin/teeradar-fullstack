@@ -450,6 +450,7 @@
     async function init() {
       initMap();
       await loadCourses();
+      // First load: WA + optional home-course zoom
       applyHomeCourseZoom();
       renderCourses();
     }
@@ -545,6 +546,20 @@
       }
     }
 
+    // 🔹 NEW: zoom map to all courses in the current state
+    function zoomToStateCourses() {
+      if (!map || !Array.isArray(courses) || courses.length === 0) return;
+
+      const coords = courses
+        .filter(c => typeof c.lat === "number" && typeof c.lng === "number")
+        .map(c => [c.lat, c.lng]);
+
+      if (!coords.length) return;
+
+      const bounds = L.latLngBounds(coords);
+      map.fitBounds(bounds, { padding: [40, 40] });
+    }
+
     // ---- SEARCH & RENDER ----
     async function runSearch() {
       const date = document.getElementById("date").value;
@@ -636,6 +651,8 @@
         }
 
         renderCourses();
+        // 🔹 NEW: after search, ensure map frames the current state’s courses
+        zoomToStateCourses();
       } catch (err) {
         console.error("Search error", err);
         statusLine.textContent = "Error checking availability. Please try again.";
@@ -887,15 +904,16 @@
 
         if (ACTIVE_STATES.includes(stateCode)) {
           applyStateFilter();
-          applyHomeCourseZoom();
 
           if (lastSearchCriteria) {
+            // runSearch will update slots and then zoomToStateCourses()
             runSearch();
           } else {
             renderCourses();
+            zoomToStateCourses();
             if (statusLine) {
-              statusLine.textContent = `Showing courses in ${prettyName}. Tap “Search availability” to check live times.`;
-              statusLine.style.color = "#ffffff";
+              statusLine.textContent =
+                `Showing courses in ${prettyName}. Tap “Search availability” to check live times.`;
               statusLine.style.color = "#555";
             }
           }
