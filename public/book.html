@@ -865,8 +865,14 @@
             u.searchParams.set("teedate", yyyymmdd);
           }
           finalUrl = u.toString();
+        } else if (provider === "TeeItUp") {
+          // 🔥 Option C: only adjust TeeItUp URL
+          if (searchDate) {
+            u.searchParams.set("date", searchDate); // e.g. ?date=2025-12-03
+          }
+          finalUrl = u.toString();
         }
-        // TeeItUp or other providers fall through: use bookingUrl as-is
+        // Other providers: leave finalUrl as baseUrl
       } catch (err) {
         console.error("Error building booking URL:", err);
       }
