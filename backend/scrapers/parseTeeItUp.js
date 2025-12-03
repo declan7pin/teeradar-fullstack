@@ -1,12 +1,14 @@
 // backend/scrapers/parseTeeItUp.js
 
-const fetch = require("node-fetch");
+// Node 18+ has global fetch, so we can use it directly.
+// If you prefer node-fetch, you could:
+//   import fetch from "node-fetch";
 
 /**
  * Try to pull the TeeItUp `course` id out of the course object / URL.
- * e.g. https://gailes-golf-club.book-v2.teeitup.golf/?course=15309&date=2025-12-04&holes=18&max=999999
+ * e.g. https://gailes-golf-club.book-v2.teeitup.golf/?course=15309&date=...
  */
-function getTeeItUpCourseId(course) {
+export function getTeeItUpCourseId(course) {
   if (!course) return null;
 
   // optional explicit id if we ever store it in JSON later
@@ -27,15 +29,14 @@ function getTeeItUpCourseId(course) {
 
 /**
  * Build the TeeItUp public availability API URL.
- * NOTE: This mirrors the booking URL you sent:
- *   course=15309&date=2025-12-04&holes=18&max=999999
- * and we add `golfers` from the search criteria.
+ * Mirrors:
+ *   course=15309&date=2025-12-04&holes=18&max=999999&golfers=3
  */
-function buildTeeItUpApiUrl({ courseId, date, holes, golfers }) {
+export function buildTeeItUpApiUrl({ courseId, date, holes, golfers }) {
   const params = new URLSearchParams();
 
   params.set("course", courseId);
-  params.set("date", date);                    // YYYY-MM-DD from your filters
+  params.set("date", date);                    // YYYY-MM-DD
   params.set("holes", String(holes || 18));    // 9 / 18
   params.set("golfers", String(golfers || 1)); // party size
   params.set("max", "999999");
@@ -44,32 +45,24 @@ function buildTeeItUpApiUrl({ courseId, date, holes, golfers }) {
 }
 
 /**
- * Build a booking URL that opens the TeeItUp page on the *same* date/holes/partySize
- * as the search criteria.
- *
- * We assume `course.url` is the normal public booking URL, e.g.:
- *   https://gailes-golf-club.book-v2.teeitup.golf/?course=15309
+ * Build a *booking* URL for TeeItUp so the user lands on the right date.
+ * We start from course.url (e.g. https://gailes-golf-club.book-v2.teeitup.golf/?course=15309)
+ * and just force the date param.
  */
-function buildTeeItUpBookingUrl({ course, date, holes, partySize }) {
+export function buildTeeItUpBookingUrl(course, date) {
   if (!course || !course.url) return null;
 
   try {
     const u = new URL(course.url);
 
-    // keep the existing "course" param exactly as is, just override others
-    u.searchParams.set("date", date);                   // YYYY-MM-DD
-    u.searchParams.set("holes", String(holes || 18));   // 9 / 18
-    if (partySize) {
-      // TeeItUp often uses "golfers" in its APIs; harmless if they ignore it
-      u.searchParams.set("golfers", String(partySize));
+    if (date) {
+      // TeeItUp booking pages generally accept ?date=YYYY-MM-DD
+      u.searchParams.set("date", date);
     }
-    // harmless extra
-    u.searchParams.set("max", "999999");
 
     return u.toString();
   } catch (err) {
-    console.error("TeeItUp booking URL error for", course.name, err.message);
-    // Worst case, fall back to the raw URL
+    console.error("buildTeeItUpBookingUrl error for", course.name, err.message);
     return course.url;
   }
 }
@@ -77,7 +70,7 @@ function buildTeeItUpBookingUrl({ course, date, holes, partySize }) {
 /**
  * Normalise the TeeItUp API response into TeeRadar slot objects.
  */
-function parseTeeItUpResponse(json, { course, criteria }) {
+export function parseTeeItUpResponse(json, { course, criteria }) {
   if (!json) return [];
 
   // If the API returns an object with a known "root" array, grab it.
@@ -102,16 +95,6 @@ function parseTeeItUpResponse(json, { course, criteria }) {
 
   const slots = [];
   const date = criteria.date; // YYYY-MM-DD
-  const holes = criteria.holes ? Number(criteria.holes) : course.holes || 18;
-  const partySize = criteria.partySize || null;
-
-  // Pre-build a booking URL for this course/day
-  const baseBookingUrl = buildTeeItUpBookingUrl({
-    course,
-    date,
-    holes,
-    partySize,
-  });
 
   for (const item of items) {
     if (!item || typeof item !== "object") continue;
@@ -175,12 +158,11 @@ function parseTeeItUpResponse(json, { course, criteria }) {
       course: course.name,
       provider: "TeeItUp",
       state: course.state || null,
-      holes,
-      partySize,
+      holes: criteria.holes ? Number(criteria.holes) : course.holes || 18,
+      partySize: criteria.partySize || null,
       time: isoStart,
       availableSpots,
       price,
-      bookingUrl: baseBookingUrl, // 👈 key bit for the frontend
       raw: item, // keep raw so we can inspect later if needed
     });
   }
@@ -191,7 +173,7 @@ function parseTeeItUpResponse(json, { course, criteria }) {
 /**
  * Main entry: used by scrapeCourse.js
  */
-async function scrapeTeeItUpCourse(course, criteria) {
+export async function scrapeTeeItUpCourse(course, criteria) {
   const courseId = getTeeItUpCourseId(course);
 
   if (!courseId || !criteria || !criteria.date) {
@@ -207,20 +189,14 @@ async function scrapeTeeItUpCourse(course, criteria) {
 
   let res;
   try {
-    console.log(
-      "[TeeItUp] Fetching",
-      course.name,
-      "— date=" + criteria.date + ", url=" + apiUrl
-    );
-
     res = await fetch(apiUrl, {
       headers: {
         Accept: "application/json, text/plain, */*",
-        // These mimic a normal browser request; usually not strictly required
+        // These mimick a normal browser request; usually not strictly required
         Origin: course.url || "https://teeitup.golf",
         Referer: course.url || "https://teeitup.golf",
       },
-      timeout: 10000,
+      // Node 22 fetch supports AbortSignal, but we’ll keep it simple for now
     });
   } catch (err) {
     console.error("TeeItUp fetch error for", course.name, err.message);
@@ -247,18 +223,17 @@ async function scrapeTeeItUpCourse(course, criteria) {
 
   const slots = parseTeeItUpResponse(json, { course, criteria });
 
-  // Helpful logging while we’re dialing this in
+  // Attach a booking URL with the *search date* baked in, so the front-end can just open it.
+  const bookingUrl = buildTeeItUpBookingUrl(course, criteria.date);
+
+  const enriched = slots.map((s) => ({
+    ...s,
+    bookingUrl: s.bookingUrl || bookingUrl || course.url || null,
+  }));
+
   console.log(
-    `[TeeItUp] ${course.name} — date=${criteria.date}, found ${slots.length} slots`
+    `[TeeItUp] ${course.name} — date=${criteria.date}, found ${enriched.length} slots`
   );
 
-  return slots;
+  return enriched;
 }
-
-module.exports = {
-  getTeeItUpCourseId,
-  buildTeeItUpApiUrl,
-  buildTeeItUpBookingUrl,
-  parseTeeItUpResponse,
-  scrapeTeeItUpCourse,
-};
