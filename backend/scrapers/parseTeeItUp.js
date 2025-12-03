@@ -1,12 +1,12 @@
 // backend/scrapers/parseTeeItUp.js
 
-const fetch = require("node-fetch");
+import fetch from "node-fetch";
 
 /**
  * Try to pull the TeeItUp `course` id out of the course object / URL.
  * e.g. https://gailes-golf-club.book-v2.teeitup.golf/?course=15309&date=...
  */
-function getTeeItUpCourseId(course) {
+export function getTeeItUpCourseId(course) {
   if (!course) return null;
 
   // optional explicit id if we ever store it in JSON later
@@ -31,7 +31,7 @@ function getTeeItUpCourseId(course) {
  *   course=15309&date=2025-12-04&holes=18&max=999999
  * and we add `golfers` from the search criteria.
  */
-function buildTeeItUpApiUrl({ courseId, date, holes, golfers }) {
+export function buildTeeItUpApiUrl({ courseId, date, holes, golfers }) {
   const params = new URLSearchParams();
 
   params.set("course", courseId);
@@ -48,7 +48,7 @@ function buildTeeItUpApiUrl({ courseId, date, holes, golfers }) {
  * This is written defensively because we haven't inspected the JSON
  * payload yet – but it should get us most of the way there.
  */
-function parseTeeItUpResponse(json, { course, criteria }) {
+export function parseTeeItUpResponse(json, { course, criteria }) {
   if (!json) return [];
 
   // If the API returns an object with a known "root" array, grab it.
@@ -151,7 +151,7 @@ function parseTeeItUpResponse(json, { course, criteria }) {
 /**
  * Main entry: used by scrapeCourse.js
  */
-async function scrapeTeeItUpCourse(course, criteria) {
+export async function scrapeTeeItUpCourse(course, criteria) {
   const courseId = getTeeItUpCourseId(course);
 
   if (!courseId || !criteria || !criteria.date) {
@@ -208,10 +208,3 @@ async function scrapeTeeItUpCourse(course, criteria) {
 
   return slots;
 }
-
-module.exports = {
-  getTeeItUpCourseId,
-  buildTeeItUpApiUrl,
-  parseTeeItUpResponse,
-  scrapeTeeItUpCourse,
-};
