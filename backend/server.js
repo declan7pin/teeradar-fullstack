@@ -83,6 +83,8 @@ app.post("/api/search", async (req, res) => {
       latest = "17:00",
       holes = "",
       partySize = 1,
+      // 🔹 NEW: selected state coming from frontend
+      state = "",
     } = req.body || {};
 
     if (!date) return res.status(400).json({ error: "date is required" });
@@ -92,18 +94,36 @@ app.post("/api/search", async (req, res) => {
         ? ""
         : Number(holes);
 
+    const stateCode = (state || "").toString().toUpperCase();
+
     const criteria = {
       date,
       earliest,
       latest,
       holes: holesValue,
       partySize: Number(partySize) || 1,
+      // not strictly needed by scraper, but useful for logging
+      state: stateCode || null,
     };
 
     console.log("Incoming /api/search", criteria);
 
-    const jobs = courses.map(async (c) => {
-      const courseId = c.id || c.name;
+    // 🔹 NEW: only scrape courses in the requested state
+    const searchCourses = stateCode
+      ? courses.filter(
+          (c) => (c.state || "").toString().toUpperCase() === stateCode
+        )
+      : courses;
+
+    console.log(
+      `Searching ${searchCourses.length} courses for state=${stateCode || "ALL"}`
+    );
+
+    const jobs = searchCourses.map(async (c) => {
+      // 🔹 NEW: make cache key state-aware to avoid clashes
+      const courseId = `${(c.state || "NA").toString().toUpperCase()}::${
+        c.id || c.name
+      }`;
       const provider = c.provider || "Other";
 
       const cached = getCachedSlots({
