@@ -254,8 +254,7 @@
       .course-card { flex: 0 0 calc(33.33% - 12px); }
     }
 
-    /* ---- ADDED: State selector + coming-soon banner ---- */
-
+    /* ---- State selector ---- */
     .state-selector {
       position: relative;
       margin-left: auto;
@@ -265,19 +264,21 @@
     .state-selector-button {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 6px 10px;
+      gap: 6px;
+      padding: 7px 14px;
       border-radius: 999px;
-      border: none;
-      background: #fff;
-      color: var(--teal);
-      font-size: 13px;
+      border: 1px solid rgba(255,255,255,0.7);
+      background: var(--teal-dark);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
       cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
     }
 
     .state-selector-chevron {
       font-size: 11px;
-      opacity: 0.8;
+      opacity: 0.9;
     }
 
     .state-dropdown {
@@ -310,7 +311,6 @@
     }
 
     .state-option:hover {
-      background: rgba(255,255,255,0.9);
       background-color: rgba(0,0,0,0.04);
     }
 
@@ -323,24 +323,6 @@
       margin: 4px 0;
       border-top: 1px solid rgba(0,0,0,0.06);
     }
-
-    .state-coming-soon-banner {
-      margin: 4px 16px 0 16px;
-      padding: 6px 10px;
-      border-radius: 8px;
-      background: #fff7ed;
-      color: #9a3412;
-      font-size: 12px;
-      border: 1px solid #fed7aa;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .state-coming-soon-banner::before {
-      content: "⚠️";
-      font-size: 13px;
-    }
   </style>
 </head>
 
@@ -348,7 +330,6 @@
   <header class="top-bar">
     <div class="top-bar-title">TeeRadar — Book a Tee Time</div>
 
-    <!-- ADDED: State selector -->
     <div class="state-selector">
       <button id="stateSelectorButton" class="state-selector-button" type="button">
         <span id="stateSelectorLabel">State: WA</span>
@@ -373,11 +354,6 @@
 
     <button onclick="window.location.href='index.html'">Return Home</button>
   </header>
-
-  <!-- ADDED: Coming-soon banner -->
-  <div id="stateComingSoonBanner" class="state-coming-soon-banner" hidden>
-    <span id="stateComingSoonText"></span>
-  </div>
 
   <section class="filters">
     <div class="filters-row">
@@ -444,7 +420,7 @@
     let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize, state }
     let groupedSlots = {};         // courseName => [slots]
 
-    // ADDED: full list + state handling
+    // full list + state handling
     let allCourses = [];
     let selectedState = "WA";
     const ACTIVE_STATES = ["WA", "NT", "QLD"];
@@ -452,7 +428,7 @@
     const statusLine = document.getElementById("status-line");
     const coursesStrip = document.getElementById("courses-strip");
 
-    // 🔥 NEW: analytics helper (used for searches + booking clicks)
+    // analytics helper (used for searches + booking clicks)
     function trackEvent(type, payload) {
       try {
         fetch("/api/analytics/event", {
@@ -474,13 +450,11 @@
     async function init() {
       initMap();
       await loadCourses();
-      // 👇 New: auto-zoom around home course if user has set one
       applyHomeCourseZoom();
       renderCourses();
     }
 
     function initMap() {
-      // Default view over WA
       map = L.map("map").setView([-31.95, 115.86], 5.8);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 18,
@@ -492,7 +466,6 @@
         const res = await fetch("/api/courses");
         courses = await res.json();
 
-        // ADDED: store all states then apply initial state filter
         allCourses = Array.isArray(courses) ? courses : [];
         applyStateFilter();
       } catch (err) {
@@ -503,9 +476,7 @@
     }
 
     // ---- HOME COURSE ZOOM LOGIC ----
-
     function getHomeCourseName() {
-      // Set elsewhere on login: localStorage.setItem("teeradar_home_course", courseName)
       return localStorage.getItem("teeradar_home_course") || null;
     }
 
@@ -527,13 +498,11 @@
         const cname = String(c.name || "").toLowerCase();
         if (!cname) continue;
 
-        // Exact or strong contains match
         if (cname === target || cname.includes(target)) {
           bestMatch = c;
           break;
         }
 
-        // Fallback: compare base names (before any "(")
         if (!bestMatch) {
           const baseTarget = target.split("(")[0].trim();
           if (baseTarget && cname.includes(baseTarget)) {
@@ -543,13 +512,11 @@
       }
 
       if (bestMatch) {
-        // ⬇️ Wider radius (zoom 10 instead of 11)
         map.setView([bestMatch.lat, bestMatch.lng], 10);
       }
     }
 
-    // ---- ADDED: state helpers ----
-
+    // ---- state helpers ----
     function applyStateFilter() {
       if (!Array.isArray(allCourses) || allCourses.length === 0) {
         courses = [];
@@ -579,7 +546,6 @@
     }
 
     // ---- SEARCH & RENDER ----
-
     async function runSearch() {
       const date = document.getElementById("date").value;
       const earliest = document.getElementById("earliest").value || "06:00";
@@ -592,14 +558,13 @@
         return;
       }
 
-      // 🔹 Include state in criteria (for backend + later reuse)
       lastSearchCriteria = {
         date,
         earliest,
         latest,
         holes,
         partySize: Number(players) || 1,
-        state: selectedState || "WA",
+        state: selectedState || "",
       };
 
       window.teeRadarLastSearchDate = date;
@@ -611,7 +576,6 @@
         const res = await fetch("/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          // 🔹 Send state to backend
           body: JSON.stringify(lastSearchCriteria),
         });
 
@@ -626,14 +590,13 @@
           groupedSlots[name].push(s);
         });
 
-        // 🔥 analytics: record a search (now includes state)
         trackEvent("search", {
           date,
           earliest,
           latest,
           holes,
           partySize: Number(players) || 1,
-          state: selectedState || "WA",
+          state: selectedState || "",
           slots: slots.length,
         });
 
@@ -648,7 +611,6 @@
           const provider = course.provider || "Other";
           const isPhone = provider === "Phone";
 
-          // Hole filter applies only to non-phone courses
           if (
             !isPhone &&
             selectedHoles &&
@@ -709,13 +671,11 @@
         const provider = course.provider || "Other";
         const isPhone = provider === "Phone";
 
-        // Wembley & Meadow Springs → unable to confirm (yellow)
         const isUnconfirmed =
           name.startsWith("Wembley Golf Course") ||
           name.startsWith("Meadow Springs Golf Course") ||
           name.startsWith("Meadow Springs Golf & Country Club");
 
-        // Hole filter: hide non-matching *except* phone-booking courses
         if (
           !isPhone &&
           selectedHoles &&
@@ -830,7 +790,6 @@
           </div>
         `;
 
-        // ADDED: correct the state name on the card without changing the template
         const subStateEl = card.querySelector(".course-sub");
         if (subStateEl) {
           subStateEl.textContent = getPrettyStateName(course.state);
@@ -890,11 +849,11 @@
         console.error("Error building booking URL:", err);
       }
 
-      // 🔥 analytics: record a booking click
       trackEvent("course_booking_click", {
         courseName,
         provider,
         url: finalUrl,
+        state: course.state || null,
       });
 
       window.open(finalUrl, "_blank");
@@ -910,13 +869,11 @@
       input.value = `${yyyy}-${mm}-${dd}`;
     })();
 
-    // ADDED: State selector behaviour
+    // State selector behaviour
     (function setupStateSelector() {
       const btn = document.getElementById("stateSelectorButton");
       const dropdown = document.getElementById("stateDropdown");
       const label = document.getElementById("stateSelectorLabel");
-      const comingBanner = document.getElementById("stateComingSoonBanner");
-      const comingText = document.getElementById("stateComingSoonText");
 
       if (!btn || !dropdown) return;
 
@@ -926,16 +883,9 @@
           label.textContent = `State: ${stateCode}`;
         }
 
-        // Hide coming-soon banner by default
-        if (comingBanner && comingText) {
-          comingBanner.hidden = true;
-          comingText.textContent = "";
-        }
-
         const prettyName = getPrettyStateName(stateCode);
 
         if (ACTIVE_STATES.includes(stateCode)) {
-          // Active states: filter data + zoom + re-search if we already have criteria
           applyStateFilter();
           applyHomeCourseZoom();
 
@@ -945,19 +895,16 @@
             renderCourses();
             if (statusLine) {
               statusLine.textContent = `Showing courses in ${prettyName}. Tap “Search availability” to check live times.`;
+              statusLine.style.color = "#ffffff";
               statusLine.style.color = "#555";
             }
           }
         } else {
-          // Coming soon states
           courses = [];
           renderCourses();
-          if (comingBanner && comingText) {
-            comingText.textContent = `${prettyName} is coming soon to TeeRadar. For now, WA, NT & QLD are live.`;
-            comingBanner.hidden = false;
-          }
           if (statusLine) {
-            statusLine.textContent = `Courses for ${prettyName} are coming soon.`;
+            statusLine.textContent =
+              `${prettyName} is coming soon to TeeRadar. For now, WA, NT & QLD are live.`;
             statusLine.style.color = "#9a3412";
           }
         }
