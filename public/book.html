@@ -441,7 +441,7 @@
     let map;
     let markers = [];
     let courses = [];
-    let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize }
+    let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize, state }
     let groupedSlots = {};         // courseName => [slots]
 
     // ADDED: full list + state handling
@@ -592,12 +592,14 @@
         return;
       }
 
+      // 🔹 Include state in criteria (for backend + later reuse)
       lastSearchCriteria = {
         date,
         earliest,
         latest,
         holes,
         partySize: Number(players) || 1,
+        state: selectedState || "WA",
       };
 
       window.teeRadarLastSearchDate = date;
@@ -609,6 +611,7 @@
         const res = await fetch("/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          // 🔹 Send state to backend
           body: JSON.stringify(lastSearchCriteria),
         });
 
@@ -623,13 +626,14 @@
           groupedSlots[name].push(s);
         });
 
-        // 🔥 analytics: record a search
+        // 🔥 analytics: record a search (now includes state)
         trackEvent("search", {
           date,
           earliest,
           latest,
           holes,
           partySize: Number(players) || 1,
+          state: selectedState || "WA",
           slots: slots.length,
         });
 
