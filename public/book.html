@@ -546,7 +546,7 @@
       }
     }
 
-    // 🔹 NEW: zoom map to all courses in the current state
+    // 🔹 Zoom map to all courses in the current state
     function zoomToStateCourses() {
       if (!map || !Array.isArray(courses) || courses.length === 0) return;
 
@@ -651,7 +651,7 @@
         }
 
         renderCourses();
-        // 🔹 NEW: after search, ensure map frames the current state’s courses
+        // Ensure map frames the current state’s courses
         zoomToStateCourses();
       } catch (err) {
         console.error("Search error", err);
@@ -770,6 +770,8 @@
             ? "MiClub • live check"
             : provider === "Quick18"
             ? "Quick18 • live check"
+            : provider === "TeeItUp"
+            ? "TeeItUp • live check"
             : provider === "Phone"
             ? "Phone booking"
             : provider;
@@ -816,6 +818,7 @@
       });
     }
 
+    // Handle clicks on "Go to booking" (cards + map popups)
     document.addEventListener("click", (evt) => {
       const el = evt.target.closest(".booking-link");
       if (!el) return;
@@ -830,13 +833,14 @@
       const course = courses.find((c) => c.name === courseName);
       if (!course) return;
 
-      const provider = course.provider || "MiClub";
+      const provider = course.provider || "Other";
       const slots = groupedSlots[courseName] || [];
       const exampleSlot = slots[0] || {};
       const searchDate =
         (lastSearchCriteria && lastSearchCriteria.date) ||
         window.teeRadarLastSearchDate;
 
+      // 🔹 For TeeItUp, backend should provide exampleSlot.bookingUrl
       let baseUrl =
         exampleSlot.bookingUrl ||
         exampleSlot.url ||
@@ -862,6 +866,7 @@
           }
           finalUrl = u.toString();
         }
+        // TeeItUp or other providers fall through: use bookingUrl as-is
       } catch (err) {
         console.error("Error building booking URL:", err);
       }
