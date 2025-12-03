@@ -456,7 +456,8 @@
     }
 
     function initMap() {
-      map = L.map("map").setView([-31.95, 115.86], 5.8);
+      // 🔹 slightly closer default zoom for WA
+      map = L.map("map").setView([-31.95, 115.86], 6.2);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 18,
       }).addTo(map);
@@ -546,7 +547,7 @@
       }
     }
 
-    // 🔹 NEW: zoom map to all courses in the current state
+    // zoom map to all courses in the current state
     function zoomToStateCourses() {
       if (!map || !Array.isArray(courses) || courses.length === 0) return;
 
@@ -558,6 +559,12 @@
 
       const bounds = L.latLngBounds(coords);
       map.fitBounds(bounds, { padding: [40, 40] });
+
+      // 🔹 WA gets a slightly closer zoom than the bounds would pick
+      if (selectedState === "WA") {
+        const currentCenter = bounds.getCenter();
+        map.setView(currentCenter, 6.2);
+      }
     }
 
     // ---- SEARCH & RENDER ----
@@ -651,7 +658,7 @@
         }
 
         renderCourses();
-        // 🔹 NEW: after search, ensure map frames the current state’s courses
+        // after search, ensure map frames the current state’s courses
         zoomToStateCourses();
       } catch (err) {
         console.error("Search error", err);
