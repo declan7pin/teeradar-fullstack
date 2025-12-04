@@ -445,6 +445,14 @@
       }
     }
 
+    // 💡 helper to turn a phone string into a tel: href
+    function getTelHref(phone) {
+      if (!phone) return "";
+      const digits = String(phone).replace(/[^\d+]/g, "");
+      if (!digits) return "";
+      return "tel:" + digits;
+    }
+
     init();
 
     async function init() {
@@ -644,8 +652,8 @@
             return;
           }
 
-          availableCourses++;
-          totalSlots += cSlots.length;
+        availableCourses++;
+        totalSlots += cSlots.length;
         });
 
         if (totalSlots === 0) {
@@ -760,7 +768,12 @@
           } else if (isPhone) {
             popupHtml += `<br>Phone booking`;
             if (course.phone) {
-              popupHtml += `<br><strong>${course.phone}</strong>`;
+              const telHref = getTelHref(course.phone);
+              if (telHref) {
+                popupHtml += `<br><strong><a href="${telHref}">${course.phone}</a></strong>`;
+              } else {
+                popupHtml += `<br><strong>${course.phone}</strong>`;
+              }
             }
           }
 
@@ -818,6 +831,7 @@
             : provider;
 
         const phoneText = isPhone && course.phone ? course.phone : "";
+        const phoneHref = isPhone && course.phone ? getTelHref(course.phone) : "";
 
         card.innerHTML = `
           <div>
@@ -836,7 +850,7 @@
                 : hasSlots
                 ? slots.length + " slots"
                 : isPhone
-                ? phoneText
+                ? (phoneHref ? `<a href="${phoneHref}">${phoneText}</a>` : phoneText)
                 : ""
             }</span>
             ${
