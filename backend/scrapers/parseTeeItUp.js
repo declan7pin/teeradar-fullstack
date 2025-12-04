@@ -1,17 +1,19 @@
 // backend/scrapers/parseTeeItUp.js
 
-// Node 18+ has global fetch, so we can use it directly.
-// If you prefer node-fetch, you could:
-//   import fetch from "node-fetch";
+// Node 18+ has global fetch, so we *could* use it, but for TeeItUp we are
+// no longer doing a server-side availability fetch because their site is
+// behind Cloudflare and uses React Server Components instead of a simple
+// public JSON API.
 
 /**
  * Try to pull the TeeItUp `course` id out of the course object / URL.
  * e.g. https://gailes-golf-club.book-v2.teeitup.golf/?course=15309&date=...
+ * (Currently unused, but kept here in case we ever get an official API.)
  */
 export function getTeeItUpCourseId(course) {
   if (!course) return null;
 
-  // optional explicit id if we ever store it in JSON later
+  // Optional explicit id if we ever store it in JSON later
   if (course.teeItUpCourseId) return String(course.teeItUpCourseId);
 
   if (course.url) {
@@ -25,23 +27,6 @@ export function getTeeItUpCourseId(course) {
   }
 
   return null;
-}
-
-/**
- * Build the TeeItUp public availability API URL.
- * Mirrors:
- *   course=15309&date=2025-12-04&holes=18&max=999999&golfers=3
- */
-export function buildTeeItUpApiUrl({ courseId, date, holes, golfers }) {
-  const params = new URLSearchParams();
-
-  params.set("course", courseId);
-  params.set("date", date);                    // YYYY-MM-DD
-  params.set("holes", String(holes || 18));    // 9 / 18
-  params.set("golfers", String(golfers || 1)); // party size
-  params.set("max", "999999");
-
-  return `https://phx-api.teeitup.com/api/v1/public/availability?${params.toString()}`;
 }
 
 /**
@@ -68,12 +53,13 @@ export function buildTeeItUpBookingUrl(course, date) {
 }
 
 /**
- * Normalise the TeeItUp API response into TeeRadar slot objects.
+ * (Kept for future use, but NOT used now.)
+ * If TeeItUp ever exposes a proper JSON availability API, we can wire it
+ * up through this parser.
  */
 export function parseTeeItUpResponse(json, { course, criteria }) {
   if (!json) return [];
 
-  // If the API returns an object with a known "root" array, grab it.
   let items = [];
   if (Array.isArray(json)) {
     items = json;
@@ -84,7 +70,6 @@ export function parseTeeItUpResponse(json, { course, criteria }) {
   } else if (Array.isArray(json.teeTimes)) {
     items = json.teeTimes;
   } else {
-    // last resort: find the first array in any property
     const firstArrayKey = Object.keys(json).find(
       (k) => Array.isArray(json[k])
     );
@@ -99,7 +84,6 @@ export function parseTeeItUpResponse(json, { course, criteria }) {
   for (const item of items) {
     if (!item || typeof item !== "object") continue;
 
-    // Try to find a time field – TeeItUp naming is guessed here.
     const rawTime =
       item.teeTime ||
       item.tee_time ||
@@ -110,32 +94,26 @@ export function parseTeeItUpResponse(json, { course, criteria }) {
 
     if (!rawTime) continue;
 
-    // Normalise time to "HH:MM"
     let timePart = String(rawTime).trim();
 
-    // If ISO-ish (2025-12-04T06:30:00), strip the date.
     const tIdx = timePart.indexOf("T");
     if (tIdx !== -1) {
       timePart = timePart.slice(tIdx + 1);
     }
 
-    // Strip seconds and AM/PM if present.
     timePart = timePart
       .replace(/([AP]M)$/i, "")
       .replace(/\s+[AP]\.?M\.?/i, "")
       .trim();
 
-    // Now we expect something like "06:30" or "6:30"
     const hhmmMatch = timePart.match(/^(\d{1,2}):(\d{2})/);
     if (!hhmmMatch) continue;
 
     const hh = hhmmMatch[1].padStart(2, "0");
     const mm = hhmmMatch[2];
 
-    // Build an ISO-like local datetime string; frontend just treats this as local.
     const isoStart = `${date}T${hh}:${mm}:00`;
 
-    // Available spots / capacity
     const availableSpots =
       item.availableSpots ??
       item.available_spots ??
@@ -144,7 +122,6 @@ export function parseTeeItUpResponse(json, { course, criteria }) {
       item.capacity ??
       null;
 
-    // Price guess (various possible shapes)
     let price = null;
     if (item.price && typeof item.price === "number") {
       price = item.price;
@@ -163,7 +140,7 @@ export function parseTeeItUpResponse(json, { course, criteria }) {
       time: isoStart,
       availableSpots,
       price,
-      raw: item, // keep raw so we can inspect later if needed
+      raw: item,
     });
   }
 
@@ -172,68 +149,27 @@ export function parseTeeItUpResponse(json, { course, criteria }) {
 
 /**
  * Main entry: used by scrapeCourse.js
+ *
+ * We NO LONGER scrape live availability for TeeItUp because:
+ *  - The booking site uses Cloudflare and React Server Components,
+ *  - There is no stable public JSON API to call from Node.
+ *
+ * Instead, we return no slots and let the front-end send users directly
+ * to the official TeeItUp booking page for the chosen date.
  */
 export async function scrapeTeeItUpCourse(course, criteria) {
-  const courseId = getTeeItUpCourseId(course);
-
-  if (!courseId || !criteria || !criteria.date) {
+  if (!criteria || !criteria.date) {
     return [];
   }
 
-  const apiUrl = buildTeeItUpApiUrl({
-    courseId,
-    date: criteria.date,
-    holes: Number(criteria.holes) || course.holes || 18,
-    golfers: criteria.partySize || 1,
-  });
-
-  let res;
-  try {
-    res = await fetch(apiUrl, {
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        // These mimick a normal browser request; usually not strictly required
-        Origin: course.url || "https://teeitup.golf",
-        Referer: course.url || "https://teeitup.golf",
-      },
-      // Node 22 fetch supports AbortSignal, but we’ll keep it simple for now
-    });
-  } catch (err) {
-    console.error("TeeItUp fetch error for", course.name, err.message);
-    return [];
-  }
-
-  if (!res.ok) {
-    console.error(
-      "TeeItUp HTTP error for",
-      course.name,
-      res.status,
-      res.statusText
-    );
-    return [];
-  }
-
-  let json;
-  try {
-    json = await res.json();
-  } catch (err) {
-    console.error("TeeItUp JSON parse error for", course.name, err.message);
-    return [];
-  }
-
-  const slots = parseTeeItUpResponse(json, { course, criteria });
-
-  // Attach a booking URL with the *search date* baked in, so the front-end can just open it.
   const bookingUrl = buildTeeItUpBookingUrl(course, criteria.date);
 
-  const enriched = slots.map((s) => ({
-    ...s,
-    bookingUrl: s.bookingUrl || bookingUrl || course.url || null,
-  }));
-
   console.log(
-    `[TeeItUp] ${course.name} — date=${criteria.date}, found ${enriched.length} slots`
+    `[TeeItUp] Skipping server-side availability scrape for ${
+      course?.name || "(unknown)"
+    } — click-through only. bookingUrl=${bookingUrl || course?.url || "none"}`
   );
 
-  return enriched;
+  // No server-side slots; MiClub + Quick18 will still return real slots.
+  return [];
 }
