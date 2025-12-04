@@ -561,11 +561,19 @@
 
       // 👇 Force a closer minimum zoom for WA
       if (selectedState === "WA") {
-        const minZoomForWA = 6.3; // tweak this if you want slightly more/less zoom
+        const minZoomForWA = 6.3; // adjust if you want slightly more/less zoom
         if (map.getZoom() < minZoomForWA) {
           map.setZoom(minZoomForWA);
         }
       }
+    }
+
+    // ---- date helper: is the search date a weekend? ----
+    function isWeekendDateStr(dateStr) {
+      if (!dateStr) return false;
+      const d = new Date(dateStr); // local time
+      const day = d.getDay(); // 0 = Sun, 6 = Sat
+      return day === 0 || day === 6;
     }
 
     // ---- SEARCH & RENDER ----
@@ -691,14 +699,32 @@
         0
       );
 
+      const searchDate = lastSearchCriteria && lastSearchCriteria.date;
+      const dateIsWeekend = searchDate ? isWeekendDateStr(searchDate) : null;
+
       courses.forEach((course) => {
-        const name = course.name;
+        const name = course.name || "";
         const provider = course.provider || "Other";
         const isPhone = provider === "Phone";
         const isTeeItUp = provider === "TeeItUp";
         const isChronogolf = provider === "Chronogolf";
         // click-through only providers (no server-side scrape)
         const isClickThroughOnly = isTeeItUp || isChronogolf;
+
+        // 🔹 Weekday/weekend filtering:
+        // If the search date is a weekday, hide any "(weekend)" variants.
+        // If the search date is Sat/Sun, hide any "(weekday)" variants.
+        if (searchDate) {
+          const hasWeekendWord = /weekend/i.test(name);
+          const hasWeekdayWord = /weekday/i.test(name);
+
+          if (hasWeekendWord && dateIsWeekend === false) {
+            return; // searching weekday -> skip weekend course
+          }
+          if (hasWeekdayWord && dateIsWeekend === true) {
+            return; // searching weekend -> skip weekday course
+          }
+        }
 
         // ✅ Treat TeeItUp, Chronogolf and these edge cases as "unable to confirm"
         const isUnconfirmed =
