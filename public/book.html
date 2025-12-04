@@ -558,6 +558,14 @@
 
       const bounds = L.latLngBounds(coords);
       map.fitBounds(bounds, { padding: [40, 40] });
+
+      // 👇 Force a closer minimum zoom for WA
+      if (selectedState === "WA") {
+        const minZoomForWA = 6.3; // tweak this if you want slightly more/less zoom
+        if (map.getZoom() < minZoomForWA) {
+          map.setZoom(minZoomForWA);
+        }
+      }
     }
 
     // ---- SEARCH & RENDER ----
