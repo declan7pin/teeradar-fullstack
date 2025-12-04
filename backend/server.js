@@ -73,7 +73,7 @@ app.get("/api/courses", (req, res) => {
 });
 
 // -------------------------------------------------
-// Search
+// Search (UPDATED: state filter + state-aware cache)
 // -------------------------------------------------
 app.post("/api/search", async (req, res) => {
   try {
@@ -83,6 +83,7 @@ app.post("/api/search", async (req, res) => {
       latest = "17:00",
       holes = "",
       partySize = 1,
+      state = "",                 // ✅ New
     } = req.body || {};
 
     if (!date) return res.status(400).json({ error: "date is required" });
@@ -92,18 +93,36 @@ app.post("/api/search", async (req, res) => {
         ? ""
         : Number(holes);
 
+    const stateCode = (state || "").toString().toUpperCase();   // ✅ Normalize state code
+
     const criteria = {
       date,
       earliest,
       latest,
       holes: holesValue,
       partySize: Number(partySize) || 1,
+      state: stateCode || null,                                // for logging only
     };
 
     console.log("Incoming /api/search", criteria);
 
-    const jobs = courses.map(async (c) => {
-      const courseId = c.id || c.name;
+    // ✅ ONLY scrape courses in the selected state
+    const searchCourses = stateCode
+      ? courses.filter(
+          (c) => (c.state || "").toString().toUpperCase() === stateCode
+        )
+      : courses;
+
+    console.log(
+      `Searching ${searchCourses.length} courses for state=${stateCode || "ALL"}`
+    );
+
+    const jobs = searchCourses.map(async (c) => {
+      // ✅ Make cache state-specific (avoids WA/QLD clashes)
+      const courseId = `${(c.state || "NA").toString().toUpperCase()}::${
+        c.id || c.name
+      }`;
+
       const provider = c.provider || "Other";
 
       const cached = getCachedSlots({
@@ -261,7 +280,7 @@ app.get("/api/analytics/users", async (req, res) => {
 });
 
 // -------------------------------------------------
-// ✅ NEW: Delete user (used by admin dashboard)
+// Delete user
 // -------------------------------------------------
 app.delete("/api/analytics/users/:id", async (req, res) => {
   try {
