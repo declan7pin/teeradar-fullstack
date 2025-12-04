@@ -12,6 +12,9 @@ const DB_FILE = path.join(__dirname, "slotCache_v3.db");
 
 const db = new Database(DB_FILE);
 
+// NOTE: courseId is already state-aware (e.g. "WA::123" or "QLD::CourseName")
+// This is handled in server.js when building the courseId.
+
 // Create tables if missing
 db.exec(`
   CREATE TABLE IF NOT EXISTS slot_cache (
