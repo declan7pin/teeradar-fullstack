@@ -558,14 +558,7 @@
 
       const bounds = L.latLngBounds(coords);
       map.fitBounds(bounds, { padding: [40, 40] });
-
-      // 👇 Force a closer minimum zoom for WA
-      if (selectedState === "WA") {
-        const minZoomForWA = 6.3; // adjust if you want slightly more/less zoom
-        if (map.getZoom() < minZoomForWA) {
-          map.setZoom(minZoomForWA);
-        }
-      }
+      // No extra WA-specific zoom tweaking here to avoid weird jump behaviour
     }
 
     // ---- date helper: is the search date a weekend? ----
@@ -666,9 +659,9 @@
           statusLine.style.color = "#1b7d45";
         }
 
+        // 🔹 Just re-render cards/markers. Do NOT move the map after a search,
+        // so the user keeps the location/zoom they were looking at.
         renderCourses();
-        // Ensure map frames the current state’s courses
-        zoomToStateCourses();
       } catch (err) {
         console.error("Search error", err);
         statusLine.textContent = "Error checking availability. Please try again.";
@@ -711,18 +704,16 @@
         // click-through only providers (no server-side scrape)
         const isClickThroughOnly = isTeeItUp || isChronogolf;
 
-        // 🔹 Weekday/weekend filtering:
-        // If the search date is a weekday, hide any "(weekend)" variants.
-        // If the search date is Sat/Sun, hide any "(weekday)" variants.
+        // 🔹 Weekday/weekend filtering for Darwin-style courses:
         if (searchDate) {
           const hasWeekendWord = /weekend/i.test(name);
           const hasWeekdayWord = /weekday/i.test(name);
 
           if (hasWeekendWord && dateIsWeekend === false) {
-            return; // searching weekday -> skip weekend course
+            return; // weekday search -> skip weekend course variants
           }
           if (hasWeekdayWord && dateIsWeekend === true) {
-            return; // searching weekend -> skip weekday course
+            return; // weekend search -> skip weekday variants
           }
         }
 
@@ -749,7 +740,6 @@
         if (isPhone) {
           markerKind = "phone";
         } else if ((isClickThroughOnly && !hasSlots) || isUnconfirmed) {
-          // yellow: either click-through only or otherwise unconfirmed
           markerKind = "unknown";
         } else if (hasSlots) {
           markerKind = "available";
@@ -804,11 +794,9 @@
           availChipClass = "chip-availability-purple";
           availLabel = "Phone booking";
         } else if (isClickThroughOnly && !hasSlots) {
-          // TeeItUp / Chronogolf: click-through only, no confirmed slots
           availChipClass = "chip-availability-yellow";
           availLabel = "Check course site";
         } else if (isUnconfirmed) {
-          // Other "can't confirm" cases
           availChipClass = "chip-availability-yellow";
           availLabel = "Unable to confirm availability";
         } else if (hasSlots) {
@@ -982,7 +970,7 @@
           applyStateFilter();
 
           if (lastSearchCriteria) {
-            // runSearch will update slots and then zoomToStateCourses()
+            // Re-run search when changing state so results/slots match.
             runSearch();
           } else {
             renderCourses();
