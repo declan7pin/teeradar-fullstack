@@ -687,8 +687,11 @@
         const name = course.name;
         const provider = course.provider || "Other";
         const isPhone = provider === "Phone";
+        const isTeeItUp = provider === "TeeItUp";
 
+        // ✅ Treat TeeItUp as "unable to confirm availability" (yellow)
         const isUnconfirmed =
+          isTeeItUp ||
           name.startsWith("Wembley Golf Course") ||
           name.startsWith("Meadow Springs Golf Course") ||
           name.startsWith("Meadow Springs Golf & Country Club");
@@ -707,7 +710,7 @@
 
         let markerKind = "unavailable";
         if (isPhone) markerKind = "phone";
-        else if (isUnconfirmed) markerKind = "unknown";
+        else if (isUnconfirmed) markerKind = "unknown"; // yellow
         else if (hasSlots) markerKind = "available";
 
         if (typeof course.lat === "number" && typeof course.lng === "number") {
@@ -758,11 +761,8 @@
         if (isPhone) {
           availChipClass = "chip-availability-purple";
           availLabel = "Phone booking";
-        } else if (provider === "TeeItUp" && !hasSlots) {
-          // We don't scrape TeeItUp server-side, so don't say "No availability".
-          availChipClass = "chip-availability-yellow";
-          availLabel = "Check course site";
         } else if (isUnconfirmed) {
+          // ✅ TeeItUp and other unconfirmed = yellow + "Unable to confirm availability"
           availChipClass = "chip-availability-yellow";
           availLabel = "Unable to confirm availability";
         } else if (hasSlots) {
@@ -801,8 +801,6 @@
                 ? slots.length + " slots"
                 : isPhone
                 ? phoneText
-                : provider === "TeeItUp"
-                ? "Check course site"
                 : ""
             }</span>
             ${
@@ -811,7 +809,7 @@
                 : `<span class="booking-link"
                          role="button"
                          data-course-name="${encodeURIComponent(name)}"
-                         aria-disabled="${hasSlots || isUnconfirmed || provider === "TeeItUp" ? "false" : "true"}">
+                         aria-disabled="${hasSlots || isUnconfirmed ? "false" : "true"}">
                       Go to booking
                    </span>`
             }
@@ -851,8 +849,7 @@
 
       let baseUrl = "";
 
-      // For TeeItUp, we don't have slots (no server-side scrape).
-      // Build the URL directly from course.url plus ?date=YYYY-MM-DD.
+      // For TeeItUp, build URL directly from course.url plus ?date=YYYY-MM-DD.
       if (provider === "TeeItUp" && course.url) {
         try {
           const u = new URL(course.url);
@@ -864,7 +861,7 @@
           baseUrl = course.url;
         }
       } else {
-        // MiClub / Quick18 / others: can still prefer slot-specific URL if present
+        // MiClub / Quick18 / others: prefer slot-specific URL if present
         baseUrl =
           exampleSlot.bookingUrl ||
           exampleSlot.url ||
