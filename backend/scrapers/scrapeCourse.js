@@ -239,6 +239,11 @@ export async function scrapeCourse(course, criteria, feeGroups = {}) {
       return await scrapeTeeItUpCourse(course, criteria);
     }
 
+    // ✅ NEW: Chronogolf support
+    if (course.provider === "Chronogolf") {
+      return await scrapeChronogolfCourse(course, criteria);
+    }
+
     console.log(`Unknown provider for course: ${course.name}`, course.provider);
     return [];
   } catch (err) {
