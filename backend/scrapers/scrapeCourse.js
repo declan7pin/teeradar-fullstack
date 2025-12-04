@@ -1,6 +1,7 @@
 // backend/scrapers/scrapeCourse.js
 import { parseMiClub } from "./parseMiClub.js";
 import { parseQuick18 } from "./parseQuick18.js";
+import { scrapeChronogolfCourse } from "./parseChronogolf.js";
 import { scrapeTeeItUpCourse } from "./parseTeeItUp.js";
 
 /**
