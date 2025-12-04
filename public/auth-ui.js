@@ -18,6 +18,14 @@
   const signupPassword = document.getElementById("auth-signup-password");
   const signupHomeCourse = document.getElementById("auth-signup-homecourse");
 
+  // NEW: optional hidden fields for home course ID + state
+  const signupHomeCourseId = document.getElementById(
+    "auth-signup-homecourse-id"
+  );
+  const signupHomeCourseState = document.getElementById(
+    "auth-signup-homecourse-state"
+  );
+
   const switchToSignup = document.getElementById("auth-switch-to-signup");
   const switchToLogin = document.getElementById("auth-switch-to-login");
 
@@ -94,8 +102,13 @@
       if (data && data.ok && data.user) {
         currentUser = data.user;
         if (currentUser.homeCourse) {
-          localStorage.setItem("teeradar_home_course", currentUser.homeCourse);
+          localStorage.setItem(
+            "teeradar_home_course",
+            currentUser.homeCourse
+          );
         }
+        // NEW: keep a full copy of the user for Book page defaults
+        localStorage.setItem("tr_user", JSON.stringify(currentUser));
       } else {
         authToken = null;
         localStorage.removeItem("tr_auth_token");
@@ -130,12 +143,23 @@
         return;
       }
 
+      // NOTE: backend currently doesn't return a token, but we keep this
+      // line so we don't break anything if you add one later.
       authToken = data.token;
       localStorage.setItem("tr_auth_token", authToken);
+
       currentUser = data.user || null;
 
       if (currentUser && currentUser.homeCourse) {
-        localStorage.setItem("teeradar_home_course", currentUser.homeCourse);
+        localStorage.setItem(
+          "teeradar_home_course",
+          currentUser.homeCourse
+        );
+      }
+
+      // NEW: store the full user so Book page can preload home course
+      if (currentUser) {
+        localStorage.setItem("tr_user", JSON.stringify(currentUser));
       }
 
       applyUserUi();
@@ -152,7 +176,14 @@
 
     const email = (signupEmail && signupEmail.value.trim()) || "";
     const password = (signupPassword && signupPassword.value) || "";
-    const homeCourse = (signupHomeCourse && signupHomeCourse.value.trim()) || "";
+    const homeCourse =
+      (signupHomeCourse && signupHomeCourse.value.trim()) || "";
+
+    // NEW: pick up ID + state if you add hidden fields
+    const homeCourseId =
+      (signupHomeCourseId && signupHomeCourseId.value.trim()) || "";
+    const homeCourseState =
+      (signupHomeCourseState && signupHomeCourseState.value.trim()) || "";
 
     if (!email || !password) {
       setError("Email and password are required.");
@@ -163,7 +194,13 @@
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, homeCourse }),
+        body: JSON.stringify({
+          email,
+          password,
+          homeCourse,
+          homeCourseId,
+          homeCourseState,
+        }),
       });
 
       const data = await res.json();
@@ -172,12 +209,22 @@
         return;
       }
 
+      // As above, token may be undefined today, but this keeps the shape
       authToken = data.token;
       localStorage.setItem("tr_auth_token", authToken);
+
       currentUser = data.user || null;
 
       if (currentUser && currentUser.homeCourse) {
-        localStorage.setItem("teeradar_home_course", currentUser.homeCourse);
+        localStorage.setItem(
+          "teeradar_home_course",
+          currentUser.homeCourse
+        );
+      }
+
+      // NEW: store the full user
+      if (currentUser) {
+        localStorage.setItem("tr_user", JSON.stringify(currentUser));
       }
 
       applyUserUi();
@@ -192,6 +239,9 @@
     authToken = null;
     currentUser = null;
     localStorage.removeItem("tr_auth_token");
+    // NEW: clear stored user + home course
+    localStorage.removeItem("tr_user");
+    localStorage.removeItem("teeradar_home_course");
     applyUserUi();
   }
 
