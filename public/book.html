@@ -688,10 +688,13 @@
         const provider = course.provider || "Other";
         const isPhone = provider === "Phone";
         const isTeeItUp = provider === "TeeItUp";
+        const isChronogolf = provider === "Chronogolf";
+        // click-through only providers (no server-side scrape)
+        const isClickThroughOnly = isTeeItUp || isChronogolf;
 
-        // ✅ Treat TeeItUp as "unable to confirm availability" (yellow)
+        // ✅ Treat TeeItUp, Chronogolf and these edge cases as "unable to confirm"
         const isUnconfirmed =
-          isTeeItUp ||
+          isClickThroughOnly ||
           name.startsWith("Wembley Golf Course") ||
           name.startsWith("Meadow Springs Golf Course") ||
           name.startsWith("Meadow Springs Golf & Country Club");
@@ -709,9 +712,14 @@
         const hasSlots = slots.length > 0;
 
         let markerKind = "unavailable";
-        if (isPhone) markerKind = "phone";
-        else if (isUnconfirmed) markerKind = "unknown"; // yellow
-        else if (hasSlots) markerKind = "available";
+        if (isPhone) {
+          markerKind = "phone";
+        } else if ((isClickThroughOnly && !hasSlots) || isUnconfirmed) {
+          // yellow: either click-through only or otherwise unconfirmed
+          markerKind = "unknown";
+        } else if (hasSlots) {
+          markerKind = "available";
+        }
 
         if (typeof course.lat === "number" && typeof course.lng === "number") {
           const marker = L.marker([course.lat, course.lng], {
@@ -721,7 +729,7 @@
           let popupHtml = `<div style="font-size:13px;">
             <strong>${name}</strong><br>${provider}`;
 
-          if (isUnconfirmed) {
+          if (isClickThroughOnly || isUnconfirmed) {
             popupHtml += `<br><strong>Unable to confirm availability</strong>`;
           } else if (hasSlots) {
             popupHtml += `<br>${slots.length} slots`;
@@ -761,8 +769,12 @@
         if (isPhone) {
           availChipClass = "chip-availability-purple";
           availLabel = "Phone booking";
+        } else if (isClickThroughOnly && !hasSlots) {
+          // TeeItUp / Chronogolf: click-through only, no confirmed slots
+          availChipClass = "chip-availability-yellow";
+          availLabel = "Check course site";
         } else if (isUnconfirmed) {
-          // ✅ TeeItUp and other unconfirmed = yellow + "Unable to confirm availability"
+          // Other "can't confirm" cases
           availChipClass = "chip-availability-yellow";
           availLabel = "Unable to confirm availability";
         } else if (hasSlots) {
@@ -777,6 +789,8 @@
             ? "Quick18 • live check"
             : provider === "TeeItUp"
             ? "TeeItUp"
+            : provider === "Chronogolf"
+            ? "Chronogolf"
             : provider === "Phone"
             ? "Phone booking"
             : provider;
@@ -795,7 +809,7 @@
           </div>
           <div class="card-footer">
             <span>${
-              isUnconfirmed
+              isClickThroughOnly || isUnconfirmed
                 ? "Check course site"
                 : hasSlots
                 ? slots.length + " slots"
@@ -809,7 +823,7 @@
                 : `<span class="booking-link"
                          role="button"
                          data-course-name="${encodeURIComponent(name)}"
-                         aria-disabled="${hasSlots || isUnconfirmed ? "false" : "true"}">
+                         aria-disabled="${hasSlots || isClickThroughOnly || isUnconfirmed ? "false" : "true"}">
                       Go to booking
                    </span>`
             }
@@ -861,7 +875,7 @@
           baseUrl = course.url;
         }
       } else {
-        // MiClub / Quick18 / others: prefer slot-specific URL if present
+        // MiClub / Quick18 / Chronogolf / others: prefer slot-specific URL if present
         baseUrl =
           exampleSlot.bookingUrl ||
           exampleSlot.url ||
@@ -888,7 +902,8 @@
           }
           finalUrl = u.toString();
         }
-        // TeeItUp: finalUrl already has ?date baked in above; leave as-is.
+        // TeeItUp already handled above with ?date
+        // Chronogolf + others: leave URL as-is.
       } catch (err) {
         console.error("Error building booking URL:", err);
       }
