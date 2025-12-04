@@ -754,9 +754,14 @@
 
         let availChipClass = "chip-availability-red";
         let availLabel = "No availability";
+
         if (isPhone) {
           availChipClass = "chip-availability-purple";
           availLabel = "Phone booking";
+        } else if (provider === "TeeItUp" && !hasSlots) {
+          // We don't scrape TeeItUp server-side, so don't say "No availability".
+          availChipClass = "chip-availability-yellow";
+          availLabel = "Check course site";
         } else if (isUnconfirmed) {
           availChipClass = "chip-availability-yellow";
           availLabel = "Unable to confirm availability";
@@ -771,7 +776,7 @@
             : provider === "Quick18"
             ? "Quick18 • live check"
             : provider === "TeeItUp"
-            ? "TeeItUp • live check"
+            ? "TeeItUp"
             : provider === "Phone"
             ? "Phone booking"
             : provider;
@@ -794,7 +799,11 @@
                 ? "Check course site"
                 : hasSlots
                 ? slots.length + " slots"
-                : phoneText
+                : isPhone
+                ? phoneText
+                : provider === "TeeItUp"
+                ? "Check course site"
+                : ""
             }</span>
             ${
               isPhone
@@ -802,7 +811,7 @@
                 : `<span class="booking-link"
                          role="button"
                          data-course-name="${encodeURIComponent(name)}"
-                         aria-disabled="${hasSlots || isUnconfirmed ? "false" : "true"}">
+                         aria-disabled="${hasSlots || isUnconfirmed || provider === "TeeItUp" ? "false" : "true"}">
                       Go to booking
                    </span>`
             }
@@ -840,12 +849,28 @@
         (lastSearchCriteria && lastSearchCriteria.date) ||
         window.teeRadarLastSearchDate;
 
-      // 🔹 For TeeItUp, backend should provide exampleSlot.bookingUrl
-      let baseUrl =
-        exampleSlot.bookingUrl ||
-        exampleSlot.url ||
-        course.url ||
-        "";
+      let baseUrl = "";
+
+      // For TeeItUp, we don't have slots (no server-side scrape).
+      // Build the URL directly from course.url plus ?date=YYYY-MM-DD.
+      if (provider === "TeeItUp" && course.url) {
+        try {
+          const u = new URL(course.url);
+          if (searchDate) {
+            u.searchParams.set("date", searchDate);
+          }
+          baseUrl = u.toString();
+        } catch (e) {
+          baseUrl = course.url;
+        }
+      } else {
+        // MiClub / Quick18 / others: can still prefer slot-specific URL if present
+        baseUrl =
+          exampleSlot.bookingUrl ||
+          exampleSlot.url ||
+          course.url ||
+          "";
+      }
 
       if (!baseUrl) return;
 
@@ -865,14 +890,8 @@
             u.searchParams.set("teedate", yyyymmdd);
           }
           finalUrl = u.toString();
-        } else if (provider === "TeeItUp") {
-          // 🔥 Option C: only adjust TeeItUp URL
-          if (searchDate) {
-            u.searchParams.set("date", searchDate); // e.g. ?date=2025-12-03
-          }
-          finalUrl = u.toString();
         }
-        // Other providers: leave finalUrl as baseUrl
+        // TeeItUp: finalUrl already has ?date baked in above; leave as-is.
       } catch (err) {
         console.error("Error building booking URL:", err);
       }
