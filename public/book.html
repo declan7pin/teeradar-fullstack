@@ -253,12 +253,105 @@
       .courses-strip { flex-wrap: wrap; overflow-x: visible; }
       .course-card { flex: 0 0 calc(33.33% - 12px); }
     }
+
+    /* ---- State selector ---- */
+    .state-selector {
+      position: relative;
+      margin-left: auto;
+      margin-right: 8px;
+    }
+
+    .state-selector-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.7);
+      background: var(--teal-dark);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    }
+
+    .state-selector-chevron {
+      font-size: 11px;
+      opacity: 0.9;
+    }
+
+    .state-dropdown {
+      position: absolute;
+      right: 0;
+      top: 110%;
+      min-width: 220px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+      border: 1px solid rgba(0,0,0,0.08);
+      padding: 4px 0;
+      z-index: 50;
+      display: none;
+    }
+
+    .state-dropdown.open {
+      display: block;
+    }
+
+    .state-option {
+      width: 100%;
+      text-align: left;
+      padding: 6px 10px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      color: #222;
+      cursor: pointer;
+    }
+
+    .state-option:hover {
+      background-color: rgba(0,0,0,0.04);
+    }
+
+    .state-option.state-coming-soon {
+      color: #777;
+      font-style: italic;
+    }
+
+    .state-divider {
+      margin: 4px 0;
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
   </style>
 </head>
 
 <body>
   <header class="top-bar">
     <div class="top-bar-title">TeeRadar — Book a Tee Time</div>
+
+    <div class="state-selector">
+      <button id="stateSelectorButton" class="state-selector-button" type="button">
+        <span id="stateSelectorLabel">State: WA</span>
+        <span class="state-selector-chevron">▾</span>
+      </button>
+      <div id="stateDropdown" class="state-dropdown">
+        <!-- Active states -->
+        <button class="state-option" data-state="WA">Western Australia (WA)</button>
+        <button class="state-option" data-state="NT">Northern Territory (NT)</button>
+        <button class="state-option" data-state="QLD">Queensland (QLD)</button>
+
+        <div class="state-divider"></div>
+
+        <!-- Coming soon states -->
+        <button class="state-option state-coming-soon" data-state="NSW">New South Wales (NSW) – Coming soon</button>
+        <button class="state-option state-coming-soon" data-state="VIC">Victoria (VIC) – Coming soon</button>
+        <button class="state-option state-coming-soon" data-state="SA">South Australia (SA) – Coming soon</button>
+        <button class="state-option state-coming-soon" data-state="TAS">Tasmania (TAS) – Coming soon</button>
+        <button class="state-option state-coming-soon" data-state="ACT">Australian Capital Territory (ACT) – Coming soon</button>
+      </div>
+    </div>
+
     <button onclick="window.location.href='index.html'">Return Home</button>
   </header>
 
@@ -324,13 +417,18 @@
     let map;
     let markers = [];
     let courses = [];
-    let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize }
+    let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize, state }
     let groupedSlots = {};         // courseName => [slots]
+
+    // full list + state handling
+    let allCourses = [];
+    let selectedState = "WA";
+    const ACTIVE_STATES = ["WA", "NT", "QLD"];
 
     const statusLine = document.getElementById("status-line");
     const coursesStrip = document.getElementById("courses-strip");
 
-    // 🔥 NEW: analytics helper (used for searches + booking clicks)
+    // analytics helper (used for searches + booking clicks)
     function trackEvent(type, payload) {
       try {
         fetch("/api/analytics/event", {
@@ -347,18 +445,25 @@
       }
     }
 
+    // 💡 helper to turn a phone string into a tel: href
+    function getTelHref(phone) {
+      if (!phone) return "";
+      const digits = String(phone).replace(/[^\d+]/g, "");
+      if (!digits) return "";
+      return "tel:" + digits;
+    }
+
     init();
 
     async function init() {
       initMap();
       await loadCourses();
-      // 👇 New: auto-zoom around home course if user has set one
+      // First load: WA + optional home-course zoom
       applyHomeCourseZoom();
       renderCourses();
     }
 
     function initMap() {
-      // Default view over WA
       map = L.map("map").setView([-31.95, 115.86], 5.8);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 18,
@@ -369,16 +474,18 @@
       try {
         const res = await fetch("/api/courses");
         courses = await res.json();
+
+        allCourses = Array.isArray(courses) ? courses : [];
+        applyStateFilter();
       } catch (err) {
         console.error("Failed to load courses", err);
         courses = [];
+        allCourses = [];
       }
     }
 
     // ---- HOME COURSE ZOOM LOGIC ----
-
     function getHomeCourseName() {
-      // Set elsewhere on login: localStorage.setItem("teeradar_home_course", courseName)
       return localStorage.getItem("teeradar_home_course") || null;
     }
 
@@ -400,13 +507,11 @@
         const cname = String(c.name || "").toLowerCase();
         if (!cname) continue;
 
-        // Exact or strong contains match
         if (cname === target || cname.includes(target)) {
           bestMatch = c;
           break;
         }
 
-        // Fallback: compare base names (before any "(")
         if (!bestMatch) {
           const baseTarget = target.split("(")[0].trim();
           if (baseTarget && cname.includes(baseTarget)) {
@@ -416,13 +521,63 @@
       }
 
       if (bestMatch) {
-        // ⬇️ Wider radius (zoom 10 instead of 11)
         map.setView([bestMatch.lat, bestMatch.lng], 10);
       }
     }
 
-    // ---- SEARCH & RENDER ----
+    // ---- state helpers ----
+    function applyStateFilter() {
+      if (!Array.isArray(allCourses) || allCourses.length === 0) {
+        courses = [];
+        return;
+      }
+      courses = allCourses.filter((c) => {
+        if (!selectedState) return true;
+        const code = (c.state || "WA").toString().toUpperCase();
+        return code === selectedState;
+      });
+    }
 
+    function getPrettyStateName(code) {
+      if (!code) return "Western Australia";
+      const upper = String(code).toUpperCase();
+      switch (upper) {
+        case "WA": return "Western Australia";
+        case "NT": return "Northern Territory";
+        case "QLD": return "Queensland";
+        case "NSW": return "New South Wales";
+        case "VIC": return "Victoria";
+        case "SA": return "South Australia";
+        case "TAS": return "Tasmania";
+        case "ACT": return "Australian Capital Territory";
+        default: return "Australia";
+      }
+    }
+
+    // 🔹 Zoom map to all courses in the current state
+    function zoomToStateCourses() {
+      if (!map || !Array.isArray(courses) || courses.length === 0) return;
+
+      const coords = courses
+        .filter(c => typeof c.lat === "number" && typeof c.lng === "number")
+        .map(c => [c.lat, c.lng]);
+
+      if (!coords.length) return;
+
+      const bounds = L.latLngBounds(coords);
+      map.fitBounds(bounds, { padding: [40, 40] });
+      // No extra WA-specific zoom tweaking here to avoid weird jump behaviour
+    }
+
+    // ---- date helper: is the search date a weekend? ----
+    function isWeekendDateStr(dateStr) {
+      if (!dateStr) return false;
+      const d = new Date(dateStr); // local time
+      const day = d.getDay(); // 0 = Sun, 6 = Sat
+      return day === 0 || day === 6;
+    }
+
+    // ---- SEARCH & RENDER ----
     async function runSearch() {
       const date = document.getElementById("date").value;
       const earliest = document.getElementById("earliest").value || "06:00";
@@ -441,6 +596,7 @@
         latest,
         holes,
         partySize: Number(players) || 1,
+        state: selectedState || "",
       };
 
       window.teeRadarLastSearchDate = date;
@@ -466,13 +622,13 @@
           groupedSlots[name].push(s);
         });
 
-        // 🔥 analytics: record a search
         trackEvent("search", {
           date,
           earliest,
           latest,
           holes,
           partySize: Number(players) || 1,
+          state: selectedState || "",
           slots: slots.length,
         });
 
@@ -487,7 +643,6 @@
           const provider = course.provider || "Other";
           const isPhone = provider === "Phone";
 
-          // Hole filter applies only to non-phone courses
           if (
             !isPhone &&
             selectedHoles &&
@@ -497,8 +652,8 @@
             return;
           }
 
-          availableCourses++;
-          totalSlots += cSlots.length;
+        availableCourses++;
+        totalSlots += cSlots.length;
         });
 
         if (totalSlots === 0) {
@@ -512,6 +667,8 @@
           statusLine.style.color = "#1b7d45";
         }
 
+        // 🔹 Just re-render cards/markers. Do NOT move the map after a search,
+        // so the user keeps the location/zoom they were looking at.
         renderCourses();
       } catch (err) {
         console.error("Search error", err);
@@ -543,18 +700,38 @@
         0
       );
 
+      const searchDate = lastSearchCriteria && lastSearchCriteria.date;
+      const dateIsWeekend = searchDate ? isWeekendDateStr(searchDate) : null;
+
       courses.forEach((course) => {
-        const name = course.name;
+        const name = course.name || "";
         const provider = course.provider || "Other";
         const isPhone = provider === "Phone";
+        const isTeeItUp = provider === "TeeItUp";
+        const isChronogolf = provider === "Chronogolf";
+        // click-through only providers (no server-side scrape)
+        const isClickThroughOnly = isTeeItUp || isChronogolf;
 
-        // Wembley & Meadow Springs → unable to confirm (yellow)
+        // 🔹 Weekday/weekend filtering for Darwin-style courses:
+        if (searchDate) {
+          const hasWeekendWord = /weekend/i.test(name);
+          const hasWeekdayWord = /weekday/i.test(name);
+
+          if (hasWeekendWord && dateIsWeekend === false) {
+            return; // weekday search -> skip weekend course variants
+          }
+          if (hasWeekdayWord && dateIsWeekend === true) {
+            return; // weekend search -> skip weekday variants
+          }
+        }
+
+        // ✅ Treat TeeItUp, Chronogolf and these edge cases as "unable to confirm"
         const isUnconfirmed =
+          isClickThroughOnly ||
           name.startsWith("Wembley Golf Course") ||
           name.startsWith("Meadow Springs Golf Course") ||
           name.startsWith("Meadow Springs Golf & Country Club");
 
-        // Hole filter: hide non-matching *except* phone-booking courses
         if (
           !isPhone &&
           selectedHoles &&
@@ -568,9 +745,13 @@
         const hasSlots = slots.length > 0;
 
         let markerKind = "unavailable";
-        if (isPhone) markerKind = "phone";
-        else if (isUnconfirmed) markerKind = "unknown";
-        else if (hasSlots) markerKind = "available";
+        if (isPhone) {
+          markerKind = "phone";
+        } else if ((isClickThroughOnly && !hasSlots) || isUnconfirmed) {
+          markerKind = "unknown";
+        } else if (hasSlots) {
+          markerKind = "available";
+        }
 
         if (typeof course.lat === "number" && typeof course.lng === "number") {
           const marker = L.marker([course.lat, course.lng], {
@@ -580,14 +761,19 @@
           let popupHtml = `<div style="font-size:13px;">
             <strong>${name}</strong><br>${provider}`;
 
-          if (isUnconfirmed) {
+          if (isClickThroughOnly || isUnconfirmed) {
             popupHtml += `<br><strong>Unable to confirm availability</strong>`;
           } else if (hasSlots) {
             popupHtml += `<br>${slots.length} slots`;
           } else if (isPhone) {
             popupHtml += `<br>Phone booking`;
             if (course.phone) {
-              popupHtml += `<br><strong>${course.phone}</strong>`;
+              const telHref = getTelHref(course.phone);
+              if (telHref) {
+                popupHtml += `<br><strong><a href="${telHref}">${course.phone}</a></strong>`;
+              } else {
+                popupHtml += `<br><strong>${course.phone}</strong>`;
+              }
             }
           }
 
@@ -616,9 +802,13 @@
 
         let availChipClass = "chip-availability-red";
         let availLabel = "No availability";
+
         if (isPhone) {
           availChipClass = "chip-availability-purple";
           availLabel = "Phone booking";
+        } else if (isClickThroughOnly && !hasSlots) {
+          availChipClass = "chip-availability-yellow";
+          availLabel = "Check course site";
         } else if (isUnconfirmed) {
           availChipClass = "chip-availability-yellow";
           availLabel = "Unable to confirm availability";
@@ -632,11 +822,16 @@
             ? "MiClub • live check"
             : provider === "Quick18"
             ? "Quick18 • live check"
+            : provider === "TeeItUp"
+            ? "TeeItUp"
+            : provider === "Chronogolf"
+            ? "Chronogolf"
             : provider === "Phone"
             ? "Phone booking"
             : provider;
 
         const phoneText = isPhone && course.phone ? course.phone : "";
+        const phoneHref = isPhone && course.phone ? getTelHref(course.phone) : "";
 
         card.innerHTML = `
           <div>
@@ -650,11 +845,13 @@
           </div>
           <div class="card-footer">
             <span>${
-              isUnconfirmed
+              isClickThroughOnly || isUnconfirmed
                 ? "Check course site"
                 : hasSlots
                 ? slots.length + " slots"
-                : phoneText
+                : isPhone
+                ? (phoneHref ? `<a href="${phoneHref}">${phoneText}</a>` : phoneText)
+                : ""
             }</span>
             ${
               isPhone
@@ -662,17 +859,23 @@
                 : `<span class="booking-link"
                          role="button"
                          data-course-name="${encodeURIComponent(name)}"
-                         aria-disabled="${hasSlots || isUnconfirmed ? "false" : "true"}">
+                         aria-disabled="${hasSlots || isClickThroughOnly || isUnconfirmed ? "false" : "true"}">
                       Go to booking
                    </span>`
             }
           </div>
         `;
 
+        const subStateEl = card.querySelector(".course-sub");
+        if (subStateEl) {
+          subStateEl.textContent = getPrettyStateName(course.state);
+        }
+
         coursesStrip.appendChild(card);
       });
     }
 
+    // Handle clicks on "Go to booking" (cards + map popups)
     document.addEventListener("click", (evt) => {
       const el = evt.target.closest(".booking-link");
       if (!el) return;
@@ -687,18 +890,34 @@
       const course = courses.find((c) => c.name === courseName);
       if (!course) return;
 
-      const provider = course.provider || "MiClub";
+      const provider = course.provider || "Other";
       const slots = groupedSlots[courseName] || [];
       const exampleSlot = slots[0] || {};
       const searchDate =
         (lastSearchCriteria && lastSearchCriteria.date) ||
         window.teeRadarLastSearchDate;
 
-      let baseUrl =
-        exampleSlot.bookingUrl ||
-        exampleSlot.url ||
-        course.url ||
-        "";
+      let baseUrl = "";
+
+      // For TeeItUp, build URL directly from course.url plus ?date=YYYY-MM-DD.
+      if (provider === "TeeItUp" && course.url) {
+        try {
+          const u = new URL(course.url);
+          if (searchDate) {
+            u.searchParams.set("date", searchDate);
+          }
+          baseUrl = u.toString();
+        } catch (e) {
+          baseUrl = course.url;
+        }
+      } else {
+        // MiClub / Quick18 / Chronogolf / others: prefer slot-specific URL if present
+        baseUrl =
+          exampleSlot.bookingUrl ||
+          exampleSlot.url ||
+          course.url ||
+          "";
+      }
 
       if (!baseUrl) return;
 
@@ -719,15 +938,17 @@
           }
           finalUrl = u.toString();
         }
+        // TeeItUp already handled above with ?date
+        // Chronogolf + others: leave URL as-is.
       } catch (err) {
         console.error("Error building booking URL:", err);
       }
 
-      // 🔥 analytics: record a booking click
       trackEvent("course_booking_click", {
         courseName,
         provider,
         url: finalUrl,
+        state: course.state || null,
       });
 
       window.open(finalUrl, "_blank");
@@ -741,6 +962,74 @@
       const mm = String(today.getMonth() + 1).padStart(2, "0");
       const dd = String(today.getDate()).padStart(2, "0");
       input.value = `${yyyy}-${mm}-${dd}`;
+    })();
+
+    // State selector behaviour
+    (function setupStateSelector() {
+      const btn = document.getElementById("stateSelectorButton");
+      const dropdown = document.getElementById("stateDropdown");
+      const label = document.getElementById("stateSelectorLabel");
+
+      if (!btn || !dropdown) return;
+
+      function setState(stateCode, stateLabel) {
+        selectedState = stateCode;
+        if (label) {
+          label.textContent = `State: ${stateCode}`;
+        }
+
+        const prettyName = getPrettyStateName(stateCode);
+
+        if (ACTIVE_STATES.includes(stateCode)) {
+          applyStateFilter();
+
+          if (lastSearchCriteria) {
+            // Re-run search when changing state so results/slots match.
+            runSearch();
+          } else {
+            renderCourses();
+            zoomToStateCourses();
+            if (statusLine) {
+              statusLine.textContent =
+                `Showing courses in ${prettyName}. Tap “Search availability” to check live times.`;
+              statusLine.style.color = "#555";
+            }
+          }
+        } else {
+          courses = [];
+          renderCourses();
+          if (statusLine) {
+            statusLine.textContent =
+              `${prettyName} is coming soon to TeeRadar. For now, WA, NT & QLD are live.`;
+            statusLine.style.color = "#9a3412";
+          }
+        }
+      }
+
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        dropdown.classList.toggle("open");
+      });
+
+      dropdown.addEventListener("click", function (e) {
+        const option = e.target.closest(".state-option");
+        if (!option) return;
+        const stateCode = option.getAttribute("data-state");
+        const stateLabel = option.textContent.trim();
+        dropdown.classList.remove("open");
+        if (!stateCode) return;
+        setState(stateCode, stateLabel);
+      });
+
+      document.addEventListener("click", function (e) {
+        if (!dropdown.classList.contains("open")) return;
+        if (!e.target.closest(".state-selector")) {
+          dropdown.classList.remove("open");
+        }
+      });
+
+      // Initial state (WA)
+      setState("WA", "Western Australia (WA)");
     })();
   </script>
 </body>
