@@ -458,7 +458,6 @@
     async function init() {
       initMap();
       await loadCourses();
-      // Use the logged-in user's home course (if any) to set state + zoom
       applyHomeCourseDefaults();
       renderCourses();
     }
@@ -476,7 +475,6 @@
         courses = await res.json();
 
         allCourses = Array.isArray(courses) ? courses : [];
-        // expose globally if other scripts need it
         window.allCourses = allCourses;
 
         applyStateFilter();
@@ -487,7 +485,6 @@
       }
     }
 
-    // ---- stored user helper ----
     function getStoredUser() {
       try {
         const raw = localStorage.getItem("tr_user");
@@ -510,44 +507,58 @@
         localStorage.getItem("teeradar_home_course") ||
         null;
 
-      let homeCourse = null;
-
-      if (storedName) {
-        const target = storedName.toLowerCase().trim();
-
-        // 1) exact match
-        homeCourse = allCourses.find(
-          (c) => (c.name || "").toLowerCase().trim() === target
-        );
-
-        // 2) if no exact match (e.g. "Darwin Golf Club" vs "Darwin Golf Club (18 hole Weekday)")
-        if (!homeCourse) {
-          homeCourse = allCourses.find((c) => {
-            const cname = (c.name || "").toLowerCase();
-            return cname.includes(target);
-          });
+      if (!storedName) {
+        // no home course saved: just show the current state's courses
+        applyStateFilter();
+        zoomToStateCourses();
+        const pretty = getPrettyStateName(selectedState);
+        if (statusLine && ACTIVE_STATES.includes(selectedState)) {
+          statusLine.textContent =
+            `Showing courses in ${pretty}. Tap “Search availability” to check live times.`;
+          statusLine.style.color = "#555";
         }
+        return;
       }
 
-      if (homeCourse) {
-        const stateCode = (homeCourse.state || "WA").toString().toUpperCase();
-        if (ACTIVE_STATES.includes(stateCode)) {
-          selectedState = stateCode;
-        }
+      const target = storedName.toLowerCase().trim();
+      if (!target) return;
 
+      // fuzzy match: any course whose name contains the stored string
+      const matches = allCourses.filter((c) =>
+        (c.name || "").toLowerCase().includes(target)
+      );
+
+      let homeCourse = matches[0] || null;
+
+      if (!homeCourse) {
+        // couldn't match – fall back to normal WA behaviour
         applyStateFilter();
-
-        if (
-          typeof homeCourse.lat === "number" &&
-          typeof homeCourse.lng === "number"
-        ) {
-          map.setView([homeCourse.lat, homeCourse.lng], 12);
-        } else {
-          zoomToStateCourses();
+        zoomToStateCourses();
+        const prettyFallback = getPrettyStateName(selectedState);
+        if (statusLine && ACTIVE_STATES.includes(selectedState)) {
+          statusLine.textContent =
+            `Showing courses in ${prettyFallback}. Tap “Search availability” to check live times.`;
+          statusLine.style.color = "#555";
         }
+        return;
+      }
+
+      // work out state *if* we have it
+      let stateCode = homeCourse.state
+        ? homeCourse.state.toString().toUpperCase()
+        : null;
+      if (stateCode && ACTIVE_STATES.includes(stateCode)) {
+        selectedState = stateCode;
+      }
+
+      applyStateFilter();
+
+      if (
+        typeof homeCourse.lat === "number" &&
+        typeof homeCourse.lng === "number"
+      ) {
+        map.setView([homeCourse.lat, homeCourse.lng], 12);
       } else {
-        // No home course match: just zoom to the current state's courses.
-        applyStateFilter();
         zoomToStateCourses();
       }
 
@@ -572,7 +583,12 @@
       }
       courses = allCourses.filter((c) => {
         if (!selectedState) return true;
-        const code = (c.state || "WA").toString().toUpperCase();
+        const rawState = c.state;
+        if (!rawState) {
+          // courses without a state tag are shown for all states
+          return true;
+        }
+        const code = rawState.toString().toUpperCase();
         return code === selectedState;
       });
     }
@@ -605,13 +621,12 @@
 
       const bounds = L.latLngBounds(coords);
       map.fitBounds(bounds, { padding: [40, 40] });
-      // No extra WA-specific zoom tweaking here to avoid weird jump behaviour
     }
 
     // ---- date helper: is the search date a weekend? ----
     function isWeekendDateStr(dateStr) {
       if (!dateStr) return false;
-      const d = new Date(dateStr); // local time
+      const d = new Date(dateStr);
       const day = d.getDay(); // 0 = Sun, 6 = Sat
       return day === 0 || day === 6;
     }
@@ -706,8 +721,6 @@
           statusLine.style.color = "#1b7d45";
         }
 
-        // 🔹 Just re-render cards/markers. Do NOT move the map after a search,
-        // so the user keeps the location/zoom they were looking at.
         renderCourses();
       } catch (err) {
         console.error("Search error", err);
@@ -748,23 +761,20 @@
         const isPhone = provider === "Phone";
         const isTeeItUp = provider === "TeeItUp";
         const isChronogolf = provider === "Chronogolf";
-        // click-through only providers (no server-side scrape)
         const isClickThroughOnly = isTeeItUp || isChronogolf;
 
-        // 🔹 Weekday/weekend filtering for Darwin-style courses:
         if (searchDate) {
           const hasWeekendWord = /weekend/i.test(name);
           const hasWeekdayWord = /weekday/i.test(name);
 
           if (hasWeekendWord && dateIsWeekend === false) {
-            return; // weekday search -> skip weekend course variants
+            return;
           }
           if (hasWeekdayWord && dateIsWeekend === true) {
-            return; // weekend search -> skip weekday variants
+            return;
           }
         }
 
-        // ✅ Treat TeeItUp, Chronogolf and these edge cases as "unable to confirm"
         const isUnconfirmed =
           isClickThroughOnly ||
           name.startsWith("Wembley Golf Course") ||
@@ -938,7 +948,6 @@
 
       let baseUrl = "";
 
-      // For TeeItUp, build URL directly from course.url plus ?date=YYYY-MM-DD.
       if (provider === "TeeItUp" && course.url) {
         try {
           const u = new URL(course.url);
@@ -950,7 +959,6 @@
           baseUrl = course.url;
         }
       } else {
-        // MiClub / Quick18 / Chronogolf / others: prefer slot-specific URL if present
         baseUrl =
           exampleSlot.bookingUrl ||
           exampleSlot.url ||
@@ -977,8 +985,6 @@
           }
           finalUrl = u.toString();
         }
-        // TeeItUp already handled above with ?date
-        // Chronogolf + others: leave URL as-is.
       } catch (err) {
         console.error("Error building booking URL:", err);
       }
@@ -1023,7 +1029,6 @@
           applyStateFilter();
 
           if (lastSearchCriteria) {
-            // Re-run search when changing state so results/slots match.
             runSearch();
           } else {
             renderCourses();
@@ -1067,7 +1072,6 @@
         }
       });
 
-      // Initial label should match whatever state we ended up with
       const initialState = selectedState || "WA";
       if (label) {
         label.textContent = `State: ${initialState}`;
