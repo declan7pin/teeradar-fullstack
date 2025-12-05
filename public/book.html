@@ -458,7 +458,7 @@
     async function init() {
       initMap();
       await loadCourses();
-      // NEW: use the logged-in user's home course (if any) to set state + zoom
+      // Use the logged-in user's home course (if any) to set state + zoom
       applyHomeCourseDefaults();
       renderCourses();
     }
@@ -487,7 +487,7 @@
       }
     }
 
-    // ---- NEW: read stored user + apply home course defaults ----
+    // ---- stored user helper ----
     function getStoredUser() {
       try {
         const raw = localStorage.getItem("tr_user");
@@ -498,53 +498,46 @@
       }
     }
 
+    // ---- NEW: home-course → state + map defaults ----
     function applyHomeCourseDefaults() {
       if (!map || !Array.isArray(allCourses) || allCourses.length === 0) {
         return;
       }
 
       const user = getStoredUser();
+      const storedName =
+        (user && user.homeCourse) ||
+        localStorage.getItem("teeradar_home_course") ||
+        null;
 
-      if (!user) {
-        // No user: just zoom to whatever the current state's courses are.
-        applyStateFilter();
-        zoomToStateCourses();
-        const pretty = getPrettyStateName(selectedState);
-        if (statusLine && ACTIVE_STATES.includes(selectedState)) {
-          statusLine.textContent =
-            `Showing courses in ${pretty}. Tap “Search availability” to check live times.`;
-          statusLine.style.color = "#555";
-        }
-        return;
-      }
-
-      // Use the user's homeCourseState if it's one of the active states
-      if (user.homeCourseState && ACTIVE_STATES.includes(user.homeCourseState)) {
-        selectedState = user.homeCourseState;
-      }
-
-      applyStateFilter();
-
-      // Prefer homeCourseId, fall back to matching by name
       let homeCourse = null;
-      if (user.homeCourseId) {
-        homeCourse = allCourses.find((c) => c.id === user.homeCourseId);
-      }
-      if (!homeCourse && user.homeCourse) {
-        const targetName = user.homeCourse.toLowerCase().trim();
+
+      if (storedName) {
+        const target = storedName.toLowerCase().trim();
         homeCourse = allCourses.find(
-          (c) => (c.name || "").toLowerCase().trim() === targetName
+          (c) => (c.name || "").toLowerCase().trim() === target
         );
       }
 
-      if (
-        homeCourse &&
-        typeof homeCourse.lat === "number" &&
-        typeof homeCourse.lng === "number"
-      ) {
-        map.setView([homeCourse.lat, homeCourse.lng], 12);
+      if (homeCourse) {
+        const stateCode = (homeCourse.state || "WA").toString().toUpperCase();
+        if (ACTIVE_STATES.includes(stateCode)) {
+          selectedState = stateCode;
+        }
+
+        applyStateFilter();
+
+        if (
+          typeof homeCourse.lat === "number" &&
+          typeof homeCourse.lng === "number"
+        ) {
+          map.setView([homeCourse.lat, homeCourse.lng], 12);
+        } else {
+          zoomToStateCourses();
+        }
       } else {
-        // If we couldn't find the specific course, at least zoom to the state
+        // No home course match: just zoom to the current state's courses.
+        applyStateFilter();
         zoomToStateCourses();
       }
 
@@ -555,7 +548,6 @@
         statusLine.style.color = "#555";
       }
 
-      // Also update the visible label on the state selector, if it's already in the DOM
       const labelEl = document.getElementById("stateSelectorLabel");
       if (labelEl) {
         labelEl.textContent = `State: ${selectedState}`;
@@ -1065,8 +1057,7 @@
         }
       });
 
-      // Initial label should match whatever state we chose (WA by default,
-      // or the user's homeCourseState if applyHomeCourseDefaults changed it).
+      // Initial label should match whatever state we ended up with
       const initialState = selectedState || "WA";
       if (label) {
         label.textContent = `State: ${initialState}`;
