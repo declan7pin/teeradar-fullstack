@@ -55,8 +55,60 @@ function closeAuth() {
   setMessage("");
 }
 
-// --- wire up on load ---
+// AUTOCOMPLETE (Home Course Signup)
+function initHomeCourseAutocomplete() {
+  const input = $("signupHomeCourseInput");
+  const list = $("signupHomeCourseSuggestions");
+  const hiddenId = $("signupHomeCourseId");
+  const hiddenState = $("signupHomeCourseState");
+
+  if (!input || !list) return;
+
+  input.addEventListener("input", () => {
+    const q = input.value.trim().toLowerCase();
+    hiddenId.value = "";
+    hiddenState.value = "";
+    list.innerHTML = "";
+
+    if (!q) return;
+
+    // allCourses must exist globally
+    const matches = (window.allCourses || [])
+      .filter((c) => c.name.toLowerCase().includes(q))
+      .slice(0, 10);
+
+    if (!matches.length) return;
+
+    list.innerHTML = matches
+      .map(
+        (c) => `
+        <div class="suggestion"
+             data-id="${c.id}"
+             data-name="${c.name}"
+             data-state="${c.state}">
+          ${c.name} (${c.state})
+        </div>
+      `
+      )
+      .join("");
+  });
+
+  list.addEventListener("click", (e) => {
+    const item = e.target.closest(".suggestion");
+    if (!item) return;
+
+    input.value = `${item.dataset.name} (${item.dataset.state})`;
+    hiddenId.value = item.dataset.id;
+    hiddenState.value = item.dataset.state;
+
+    list.innerHTML = "";
+  });
+}
+
+// ---------- WIRE UP ----------
 window.addEventListener("DOMContentLoaded", () => {
+  initHomeCourseAutocomplete();
+
   const openBtn = $("openAuthBtn");
   const closeBtn = $("authCloseBtn");
 
@@ -81,37 +133,65 @@ window.addEventListener("DOMContentLoaded", () => {
   if (showReset) showReset.addEventListener("click", () => showView("auth-view-reset"));
   if (resetBackToLogin) resetBackToLogin.addEventListener("click", () => showView("auth-view-login"));
 
-  // Signup
+  // ---------- SIGNUP ----------
   const signupForm = $("signupForm");
   if (signupForm) {
     signupForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       setMessage("Creating account...");
+
       try {
         const email = $("signupEmail").value;
         const password = $("signupPassword").value;
-        await postJSON("/api/auth/signup", { email, password });
+
+        const homeCourse = $("signupHomeCourseInput").value || null;
+        const homeCourseId = $("signupHomeCourseId").value || null;
+        const homeCourseState = $("signupHomeCourseState").value || null;
+
+        const result = await postJSON("/api/auth/signup", {
+          email,
+          password,
+          homeCourse,
+          homeCourseId,
+          homeCourseState,
+        });
+
+        // Store user for automatic state/course preload
+        if (result.user) {
+          localStorage.setItem("tr_user", JSON.stringify(result.user));
+        }
+
         setMessage("Account created. You can now log in.");
         showView("auth-view-login");
         $("loginEmail").value = email;
+
       } catch (err) {
         setMessage(err.message || "Could not create account", true);
       }
     });
   }
 
-  // Login
+  // ---------- LOGIN ----------
   const loginForm = $("loginForm");
   if (loginForm) {
     loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       setMessage("Logging in...");
+
       try {
         const email = $("loginEmail").value;
         const password = $("loginPassword").value;
-        await postJSON("/api/auth/login", { email, password });
+
+        const result = await postJSON("/api/auth/login", {
+          email,
+          password,
+        });
+
+        if (result.user) {
+          localStorage.setItem("tr_user", JSON.stringify(result.user));
+        }
+
         setMessage("Logged in!");
-        // If you later add JWT or localStorage, do it here.
         closeAuth();
       } catch (err) {
         setMessage(err.message || "Login failed", true);
@@ -119,19 +199,30 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Reset
+  // ---------- RESET PASSWORD ----------
   const resetForm = $("resetForm");
   if (resetForm) {
     resetForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       setMessage("Resetting password...");
+
       try {
         const email = $("resetEmail").value;
         const newPassword = $("resetPassword").value;
-        await postJSON("/api/auth/reset", { email, newPassword });
+
+        const result = await postJSON("/api/auth/reset", {
+          email,
+          newPassword,
+        });
+
+        if (result.user) {
+          localStorage.setItem("tr_user", JSON.stringify(result.user));
+        }
+
         setMessage("Password updated. You can now log in.");
         showView("auth-view-login");
         $("loginEmail").value = email;
+
       } catch (err) {
         setMessage(err.message || "Reset failed", true);
       }
