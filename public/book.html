@@ -498,7 +498,7 @@
       }
     }
 
-    // ---- NEW: home-course → state + map defaults ----
+    // ---- home-course → state + map defaults ----
     function applyHomeCourseDefaults() {
       if (!map || !Array.isArray(allCourses) || allCourses.length === 0) {
         return;
@@ -514,9 +514,19 @@
 
       if (storedName) {
         const target = storedName.toLowerCase().trim();
+
+        // 1) exact match
         homeCourse = allCourses.find(
           (c) => (c.name || "").toLowerCase().trim() === target
         );
+
+        // 2) if no exact match (e.g. "Darwin Golf Club" vs "Darwin Golf Club (18 hole Weekday)")
+        if (!homeCourse) {
+          homeCourse = allCourses.find((c) => {
+            const cname = (c.name || "").toLowerCase();
+            return cname.includes(target);
+          });
+        }
       }
 
       if (homeCourse) {
