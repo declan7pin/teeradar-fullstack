@@ -18,7 +18,10 @@ async function ensureUsersTable() {
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         home_course TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        home_course_id TEXT,
+        home_course_state TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_login TIMESTAMPTZ
       );
     `);
 
@@ -28,13 +31,23 @@ async function ensureUsersTable() {
       ADD COLUMN IF NOT EXISTS home_course TEXT;
     `);
 
-    // NEW: ensure created_at exists on older DBs
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS home_course_id TEXT;
+    `);
+
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS home_course_state TEXT;
+    `);
+
+    // ensure created_at exists on older DBs
     await db.query(`
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
     `);
 
-    // NEW: track last_login for "Last seen" column
+    // track last_login for "Last seen" column
     await db.query(`
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ;
@@ -55,7 +68,15 @@ function normaliseEmail(email) {
 // ---------- SIGNUP ----------
 authRouter.post("/signup", async (req, res) => {
   try {
-    const { email, password, homeCourse } = req.body || {};
+    // NEW: accept homeCourseId + homeCourseState from frontend
+    const {
+      email,
+      password,
+      homeCourse,
+      homeCourseId,
+      homeCourseState,
+    } = req.body || {};
+
     const normEmail = normaliseEmail(email);
 
     if (!normEmail || !password || password.length < 6) {
@@ -68,12 +89,18 @@ authRouter.post("/signup", async (req, res) => {
 
     const result = await db.query(
       `
-        INSERT INTO users (email, password_hash, home_course, last_login)
-        VALUES ($1, $2, $3, NOW())
+        INSERT INTO users (email, password_hash, home_course, home_course_id, home_course_state, last_login)
+        VALUES ($1, $2, $3, $4, $5, NOW())
         ON CONFLICT (email) DO NOTHING
-        RETURNING id, email, home_course, created_at, last_login;
+        RETURNING id, email, home_course, home_course_id, home_course_state, created_at, last_login;
       `,
-      [normEmail, passwordHash, homeCourse || null]
+      [
+        normEmail,
+        passwordHash,
+        homeCourse || null,
+        homeCourseId || null,
+        homeCourseState || null,
+      ]
     );
 
     console.log("🔐 signup: rows =", result.rowCount, "email =", normEmail);
@@ -97,6 +124,8 @@ authRouter.post("/signup", async (req, res) => {
       user: {
         email: row.email,
         homeCourse: row.home_course || null,
+        homeCourseId: row.home_course_id || null,
+        homeCourseState: row.home_course_state || null,
       },
     });
   } catch (err) {
@@ -120,7 +149,13 @@ authRouter.post("/login", async (req, res) => {
     }
 
     const result = await db.query(
-      `SELECT id, email, password_hash, home_course, last_login
+      `SELECT id,
+              email,
+              password_hash,
+              home_course,
+              home_course_id,
+              home_course_state,
+              last_login
        FROM users
        WHERE email = $1`,
       [normEmail]
@@ -146,11 +181,10 @@ authRouter.post("/login", async (req, res) => {
         .json({ ok: false, error: "Invalid email or password" });
     }
 
-    // NEW: update last_login timestamp
-    await db.query(
-      `UPDATE users SET last_login = NOW() WHERE id = $1`,
-      [user.id]
-    );
+    // update last_login timestamp
+    await db.query(`UPDATE users SET last_login = NOW() WHERE id = $1`, [
+      user.id,
+    ]);
 
     // Optional: also touch SQLite analytics user tracker
     if (analyticsDb?.recordRegisteredUser) {
@@ -162,6 +196,8 @@ authRouter.post("/login", async (req, res) => {
       user: {
         email: user.email,
         homeCourse: user.home_course || null,
+        homeCourseId: user.home_course_id || null,
+        homeCourseState: user.home_course_state || null,
       },
     });
   } catch (err) {
@@ -192,7 +228,12 @@ authRouter.post("/reset", async (req, res) => {
         SET password_hash = $2,
             last_login = NOW()
         WHERE email = $1
-        RETURNING id, email, home_course, last_login;
+        RETURNING id,
+                  email,
+                  home_course,
+                  home_course_id,
+                  home_course_state,
+                  last_login;
       `,
       [normEmail, passwordHash]
     );
@@ -218,6 +259,8 @@ authRouter.post("/reset", async (req, res) => {
       user: {
         email: user.email,
         homeCourse: user.home_course || null,
+        homeCourseId: user.home_course_id || null,
+        homeCourseState: user.home_course_state || null,
       },
     });
   } catch (err) {
