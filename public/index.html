@@ -491,6 +491,36 @@
       cursor:pointer;
       color:#6b7280;
     }
+
+    /* 🔹 make row a positioning context for autocomplete */
+    #authHomeCourseRow{
+      position:relative;
+    }
+
+    /* 🔹 autocomplete dropdown styles */
+    .autocomplete-list{
+      position:absolute;
+      left:0;
+      right:0;
+      top:100%;
+      margin-top:2px;
+      background:#ffffff;
+      border:1px solid #d1d5db;
+      border-radius:0 0 8px 8px;
+      max-height:180px;
+      overflow-y:auto;
+      font-size:13px;
+      z-index:250;
+      box-shadow:0 10px 20px rgba(15,23,42,0.15);
+    }
+    .autocomplete-item{
+      padding:6px 9px;
+      cursor:pointer;
+    }
+    .autocomplete-item:hover{
+      background:#f3f4f6;
+    }
+
     @keyframes fadeInUp{
       from{opacity:0;transform:translateY(10px);}
       to{opacity:1;transform:translateY(0);}
@@ -679,7 +709,7 @@
   <div id="authBox">
     <div class="auth-close" id="authCloseBtn">&times;</div>
     <h2 id="authTitle">Log in</h2>
-    <p id="authSubtitle">Use the same email and password on any device.</p>
+    <p id="authSubtitle">Use this email + password on any device.</p>
 
     <input id="authEmail" class="auth-input" type="email" placeholder="Email" />
     <input id="authPassword" class="auth-input" type="password" placeholder="Password" />
@@ -860,6 +890,73 @@
     }
   });
 
+  // 🔹 Home-course autocomplete state
+  let authCourses = [];
+  let homeCourseListEl = null;
+
+  async function loadAuthCoursesOnce() {
+    if (authCourses.length) return;
+
+    try {
+      const res = await fetch("/api/courses");
+      const data = await res.json();
+      authCourses = Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error("loadAuthCoursesOnce error", err);
+      // very small fallback so you still see something
+      authCourses = [
+        { name: "Whaleback Golf Course", state: "WA" },
+        { name: "Darwin Golf Club", state: "NT" }
+      ];
+    }
+  }
+
+  function initHomeCourseAutocomplete() {
+    const row = document.getElementById("authHomeCourseRow");
+    const input = document.getElementById("authHomeCourse");
+    if (!row || !input) return;
+
+    homeCourseListEl = document.createElement("div");
+    homeCourseListEl.className = "autocomplete-list";
+    row.appendChild(homeCourseListEl);
+
+    input.addEventListener("input", async () => {
+      const q = input.value.trim().toLowerCase();
+      homeCourseListEl.innerHTML = "";
+      if (!q) return;
+
+      await loadAuthCoursesOnce();
+
+      const matches = authCourses
+        .filter((c) => (c.name || "").toLowerCase().includes(q))
+        .slice(0, 8);
+
+      if (!matches.length) return;
+
+      matches.forEach((c) => {
+        const item = document.createElement("div");
+        item.className = "autocomplete-item";
+        const label = c.state ? `${c.name} (${c.state})` : c.name;
+        item.textContent = label;
+        item.dataset.value = label;
+        homeCourseListEl.appendChild(item);
+      });
+    });
+
+    homeCourseListEl.addEventListener("click", (e) => {
+      const item = e.target.closest(".autocomplete-item");
+      if (!item) return;
+      input.value = item.dataset.value || item.textContent;
+      homeCourseListEl.innerHTML = "";
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!homeCourseListEl) return;
+      if (e.target === input || homeCourseListEl.contains(e.target)) return;
+      homeCourseListEl.innerHTML = "";
+    });
+  }
+
   if (authSubmit) {
     authSubmit.addEventListener("click", async () => {
       const email = document.getElementById("authEmail").value.trim();
@@ -998,6 +1095,7 @@
     trackInitialHome();
     initTCBanner();
     initContactForm();
+    initHomeCourseAutocomplete(); // 🔹 enable home-course autocomplete
   });
 </script>
 </body>
