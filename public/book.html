@@ -458,8 +458,8 @@
     async function init() {
       initMap();
       await loadCourses();
-      // First load: WA + optional home-course zoom
-      applyHomeCourseZoom();
+      // NEW: use the logged-in user's home course (if any) to set state + zoom
+      applyHomeCourseDefaults();
       renderCourses();
     }
 
@@ -476,6 +476,9 @@
         courses = await res.json();
 
         allCourses = Array.isArray(courses) ? courses : [];
+        // expose globally if other scripts need it
+        window.allCourses = allCourses;
+
         applyStateFilter();
       } catch (err) {
         console.error("Failed to load courses", err);
@@ -484,44 +487,78 @@
       }
     }
 
-    // ---- HOME COURSE ZOOM LOGIC ----
-    function getHomeCourseName() {
-      return localStorage.getItem("teeradar_home_course") || null;
+    // ---- NEW: read stored user + apply home course defaults ----
+    function getStoredUser() {
+      try {
+        const raw = localStorage.getItem("tr_user");
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (e) {
+        return null;
+      }
     }
 
-    function applyHomeCourseZoom() {
-      if (!map || !Array.isArray(courses) || courses.length === 0) return;
-
-      const homeName = getHomeCourseName();
-      if (!homeName) return;
-
-      const target = homeName.toLowerCase().trim();
-      if (!target) return;
-
-      let bestMatch = null;
-
-      for (const c of courses) {
-        if (!c) continue;
-        if (typeof c.lat !== "number" || typeof c.lng !== "number") continue;
-
-        const cname = String(c.name || "").toLowerCase();
-        if (!cname) continue;
-
-        if (cname === target || cname.includes(target)) {
-          bestMatch = c;
-          break;
-        }
-
-        if (!bestMatch) {
-          const baseTarget = target.split("(")[0].trim();
-          if (baseTarget && cname.includes(baseTarget)) {
-            bestMatch = c;
-          }
-        }
+    function applyHomeCourseDefaults() {
+      if (!map || !Array.isArray(allCourses) || allCourses.length === 0) {
+        return;
       }
 
-      if (bestMatch) {
-        map.setView([bestMatch.lat, bestMatch.lng], 10);
+      const user = getStoredUser();
+
+      if (!user) {
+        // No user: just zoom to whatever the current state's courses are.
+        applyStateFilter();
+        zoomToStateCourses();
+        const pretty = getPrettyStateName(selectedState);
+        if (statusLine && ACTIVE_STATES.includes(selectedState)) {
+          statusLine.textContent =
+            `Showing courses in ${pretty}. Tap “Search availability” to check live times.`;
+          statusLine.style.color = "#555";
+        }
+        return;
+      }
+
+      // Use the user's homeCourseState if it's one of the active states
+      if (user.homeCourseState && ACTIVE_STATES.includes(user.homeCourseState)) {
+        selectedState = user.homeCourseState;
+      }
+
+      applyStateFilter();
+
+      // Prefer homeCourseId, fall back to matching by name
+      let homeCourse = null;
+      if (user.homeCourseId) {
+        homeCourse = allCourses.find((c) => c.id === user.homeCourseId);
+      }
+      if (!homeCourse && user.homeCourse) {
+        const targetName = user.homeCourse.toLowerCase().trim();
+        homeCourse = allCourses.find(
+          (c) => (c.name || "").toLowerCase().trim() === targetName
+        );
+      }
+
+      if (
+        homeCourse &&
+        typeof homeCourse.lat === "number" &&
+        typeof homeCourse.lng === "number"
+      ) {
+        map.setView([homeCourse.lat, homeCourse.lng], 12);
+      } else {
+        // If we couldn't find the specific course, at least zoom to the state
+        zoomToStateCourses();
+      }
+
+      const pretty = getPrettyStateName(selectedState);
+      if (statusLine && ACTIVE_STATES.includes(selectedState)) {
+        statusLine.textContent =
+          `Showing courses in ${pretty}. Tap “Search availability” to check live times.`;
+        statusLine.style.color = "#555";
+      }
+
+      // Also update the visible label on the state selector, if it's already in the DOM
+      const labelEl = document.getElementById("stateSelectorLabel");
+      if (labelEl) {
+        labelEl.textContent = `State: ${selectedState}`;
       }
     }
 
@@ -652,8 +689,8 @@
             return;
           }
 
-        availableCourses++;
-        totalSlots += cSlots.length;
+          availableCourses++;
+          totalSlots += cSlots.length;
         });
 
         if (totalSlots === 0) {
@@ -1028,8 +1065,12 @@
         }
       });
 
-      // Initial state (WA)
-      setState("WA", "Western Australia (WA)");
+      // Initial label should match whatever state we chose (WA by default,
+      // or the user's homeCourseState if applyHomeCourseDefaults changed it).
+      const initialState = selectedState || "WA";
+      if (label) {
+        label.textContent = `State: ${initialState}`;
+      }
     })();
   </script>
 </body>
