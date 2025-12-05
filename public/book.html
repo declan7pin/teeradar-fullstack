@@ -571,6 +571,32 @@
         return;
       }
 
+      // helper to clean names, same logic as above
+      function cleanName(str) {
+        if (!str) return "";
+        let s = String(str).toLowerCase();
+        s = s.replace(/\(\s*(wa|nt|qld|nsw|vic|sa|tas|act)\s*\)/gi, "");
+        const idx = s.indexOf("(");
+        if (idx >= 0) s = s.slice(0, idx);
+        return s.trim();
+      }
+
+      function findCourseFromHome(homeRaw) {
+        const target = cleanName(homeRaw);
+        if (!target || !Array.isArray(allCourses)) return null;
+
+        let best = null;
+        for (const c of allCourses) {
+          const cname = cleanName(c.name || "");
+          if (!cname) continue;
+          if (cname === target) return c;
+          if (!best && (cname.includes(target) || target.includes(cname))) {
+            best = c;
+          }
+        }
+        return best;
+      }
+
       // Use the user's homeCourseState if it's one of the active states
       if (user.homeCourseState && ACTIVE_STATES.includes(user.homeCourseState)) {
         selectedState = user.homeCourseState;
@@ -578,16 +604,13 @@
 
       applyStateFilter();
 
-      // Prefer homeCourseId, fall back to matching by name
+      // Prefer homeCourseId, fall back to fuzzy match by name
       let homeCourse = null;
       if (user.homeCourseId) {
         homeCourse = allCourses.find((c) => c.id === user.homeCourseId);
       }
       if (!homeCourse && user.homeCourse) {
-        const targetName = user.homeCourse.toLowerCase().trim();
-        homeCourse = allCourses.find(
-          (c) => (c.name || "").toLowerCase().trim() === targetName
-        );
+        homeCourse = findCourseFromHome(user.homeCourse);
       }
 
       if (
