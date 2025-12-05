@@ -458,6 +458,7 @@
     async function init() {
       initMap();
       await loadCourses();
+      // NEW: use the logged-in user's home course (if any) to set state + zoom
       applyHomeCourseDefaults();
       renderCourses();
     }
@@ -475,6 +476,7 @@
         courses = await res.json();
 
         allCourses = Array.isArray(courses) ? courses : [];
+        // expose globally if other scripts need it
         window.allCourses = allCourses;
 
         applyStateFilter();
@@ -485,30 +487,52 @@
       }
     }
 
+    // ---- NEW: read stored user + apply home course defaults ----
     function getStoredUser() {
+      // Preferred: object previously saved as "tr_user"
       try {
         const raw = localStorage.getItem("tr_user");
-        if (!raw) return null;
-        return JSON.parse(raw);
+        if (raw) {
+          return JSON.parse(raw);
+        }
       } catch (e) {
-        return null;
+        // ignore parse errors and fall back
       }
+
+      // Fallback: older storage where we only saved "teeradar_home_course"
+      const legacyHome = localStorage.getItem("teeradar_home_course");
+      if (!legacyHome) return null;
+
+      const targetName = legacyHome.toLowerCase().trim();
+      let match = null;
+      if (Array.isArray(allCourses)) {
+        match = allCourses.find(
+          (c) => (c.name || "").toLowerCase().trim() === targetName
+        );
+      }
+
+      if (!match) {
+        return { homeCourse: legacyHome };
+      }
+
+      return {
+        homeCourse: legacyHome,
+        homeCourseId: match.id || null,
+        homeCourseState: match.state
+          ? String(match.state).toUpperCase()
+          : null,
+      };
     }
 
-    // ---- home-course → state + map defaults ----
     function applyHomeCourseDefaults() {
       if (!map || !Array.isArray(allCourses) || allCourses.length === 0) {
         return;
       }
 
       const user = getStoredUser();
-      const storedName =
-        (user && user.homeCourse) ||
-        localStorage.getItem("teeradar_home_course") ||
-        null;
 
-      if (!storedName) {
-        // no home course saved: just show the current state's courses
+      if (!user) {
+        // No user: just zoom to whatever the current state's courses are.
         applyStateFilter();
         zoomToStateCourses();
         const pretty = getPrettyStateName(selectedState);
@@ -520,45 +544,33 @@
         return;
       }
 
-      const target = storedName.toLowerCase().trim();
-      if (!target) return;
-
-      // fuzzy match: any course whose name contains the stored string
-      const matches = allCourses.filter((c) =>
-        (c.name || "").toLowerCase().includes(target)
-      );
-
-      let homeCourse = matches[0] || null;
-
-      if (!homeCourse) {
-        // couldn't match – fall back to normal WA behaviour
-        applyStateFilter();
-        zoomToStateCourses();
-        const prettyFallback = getPrettyStateName(selectedState);
-        if (statusLine && ACTIVE_STATES.includes(selectedState)) {
-          statusLine.textContent =
-            `Showing courses in ${prettyFallback}. Tap “Search availability” to check live times.`;
-          statusLine.style.color = "#555";
-        }
-        return;
-      }
-
-      // work out state *if* we have it
-      let stateCode = homeCourse.state
-        ? homeCourse.state.toString().toUpperCase()
-        : null;
-      if (stateCode && ACTIVE_STATES.includes(stateCode)) {
-        selectedState = stateCode;
+      // Use the user's homeCourseState if it's one of the active states
+      if (user.homeCourseState && ACTIVE_STATES.includes(user.homeCourseState)) {
+        selectedState = user.homeCourseState;
       }
 
       applyStateFilter();
 
+      // Prefer homeCourseId, fall back to matching by name
+      let homeCourse = null;
+      if (user.homeCourseId) {
+        homeCourse = allCourses.find((c) => c.id === user.homeCourseId);
+      }
+      if (!homeCourse && user.homeCourse) {
+        const targetName = user.homeCourse.toLowerCase().trim();
+        homeCourse = allCourses.find(
+          (c) => (c.name || "").toLowerCase().trim() === targetName
+        );
+      }
+
       if (
+        homeCourse &&
         typeof homeCourse.lat === "number" &&
         typeof homeCourse.lng === "number"
       ) {
         map.setView([homeCourse.lat, homeCourse.lng], 12);
       } else {
+        // If we couldn't find the specific course, at least zoom to the state
         zoomToStateCourses();
       }
 
@@ -569,6 +581,7 @@
         statusLine.style.color = "#555";
       }
 
+      // Also update the visible label on the state selector, if it's already in the DOM
       const labelEl = document.getElementById("stateSelectorLabel");
       if (labelEl) {
         labelEl.textContent = `State: ${selectedState}`;
@@ -583,12 +596,7 @@
       }
       courses = allCourses.filter((c) => {
         if (!selectedState) return true;
-        const rawState = c.state;
-        if (!rawState) {
-          // courses without a state tag are shown for all states
-          return true;
-        }
-        const code = rawState.toString().toUpperCase();
+        const code = (c.state || "WA").toString().toUpperCase();
         return code === selectedState;
       });
     }
@@ -621,12 +629,13 @@
 
       const bounds = L.latLngBounds(coords);
       map.fitBounds(bounds, { padding: [40, 40] });
+      // No extra WA-specific zoom tweaking here to avoid weird jump behaviour
     }
 
     // ---- date helper: is the search date a weekend? ----
     function isWeekendDateStr(dateStr) {
       if (!dateStr) return false;
-      const d = new Date(dateStr);
+      const d = new Date(dateStr); // local time
       const day = d.getDay(); // 0 = Sun, 6 = Sat
       return day === 0 || day === 6;
     }
@@ -721,6 +730,8 @@
           statusLine.style.color = "#1b7d45";
         }
 
+        // 🔹 Just re-render cards/markers. Do NOT move the map after a search,
+        // so the user keeps the location/zoom they were looking at.
         renderCourses();
       } catch (err) {
         console.error("Search error", err);
@@ -761,20 +772,23 @@
         const isPhone = provider === "Phone";
         const isTeeItUp = provider === "TeeItUp";
         const isChronogolf = provider === "Chronogolf";
+        // click-through only providers (no server-side scrape)
         const isClickThroughOnly = isTeeItUp || isChronogolf;
 
+        // 🔹 Weekday/weekend filtering for Darwin-style courses:
         if (searchDate) {
           const hasWeekendWord = /weekend/i.test(name);
           const hasWeekdayWord = /weekday/i.test(name);
 
           if (hasWeekendWord && dateIsWeekend === false) {
-            return;
+            return; // weekday search -> skip weekend course variants
           }
           if (hasWeekdayWord && dateIsWeekend === true) {
-            return;
+            return; // weekend search -> skip weekday variants
           }
         }
 
+        // ✅ Treat TeeItUp, Chronogolf and these edge cases as "unable to confirm"
         const isUnconfirmed =
           isClickThroughOnly ||
           name.startsWith("Wembley Golf Course") ||
@@ -948,6 +962,7 @@
 
       let baseUrl = "";
 
+      // For TeeItUp, build URL directly from course.url plus ?date=YYYY-MM-DD.
       if (provider === "TeeItUp" && course.url) {
         try {
           const u = new URL(course.url);
@@ -959,6 +974,7 @@
           baseUrl = course.url;
         }
       } else {
+        // MiClub / Quick18 / Chronogolf / others: prefer slot-specific URL if present
         baseUrl =
           exampleSlot.bookingUrl ||
           exampleSlot.url ||
@@ -985,6 +1001,8 @@
           }
           finalUrl = u.toString();
         }
+        // TeeItUp already handled above with ?date
+        // Chronogolf + others: leave URL as-is.
       } catch (err) {
         console.error("Error building booking URL:", err);
       }
@@ -1029,6 +1047,7 @@
           applyStateFilter();
 
           if (lastSearchCriteria) {
+            // Re-run search when changing state so results/slots match.
             runSearch();
           } else {
             renderCourses();
@@ -1072,6 +1091,8 @@
         }
       });
 
+      // Initial label should match whatever state we chose (WA by default,
+      // or the user's homeCourseState if applyHomeCourseDefaults changed it).
       const initialState = selectedState || "WA";
       if (label) {
         label.textContent = `State: ${initialState}`;
