@@ -116,3 +116,28 @@
 .hidden {
   display: none;
 }
+
+/* --- NEW: Autocomplete dropdown for Home Course --- */
+/* Use this with a div#home-course-suggestions.autocomplete-list
+   and children .suggestion items (as per the JS) */
+
+.autocomplete-list {
+  position: relative;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-top: 4px;
+  z-index: 20;
+  font-size: 14px;
+}
+
+.autocomplete-list .suggestion {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.autocomplete-list .suggestion:hover {
+  background: #f1f5f9;
+}
