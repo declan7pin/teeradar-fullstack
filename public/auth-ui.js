@@ -30,7 +30,7 @@
   let currentUser = null;
   let currentMode = "login"; // "login" | "signup"
 
-  // NEW: cache of courses for autocomplete
+  // cache of courses for autocomplete
   let authCourses = [];
   let homeCourseSuggestionsEl = null;
 
@@ -103,7 +103,6 @@
             currentUser.homeCourse
           );
         }
-        // keep a full copy of the user for Book page defaults
         localStorage.setItem("tr_user", JSON.stringify(currentUser));
       } else {
         authToken = null;
@@ -142,6 +141,14 @@
   // --- load courses for autocomplete ---
   async function loadAuthCoursesOnce() {
     if (authCourses.length) return;
+
+    // 1) Prefer global allCourses if present (e.g. from other pages)
+    if (Array.isArray(window.allCourses) && window.allCourses.length) {
+      authCourses = window.allCourses;
+      return;
+    }
+
+    // 2) Otherwise fetch from backend
     try {
       const res = await fetch("/api/courses");
       const data = await res.json();
@@ -149,6 +156,27 @@
     } catch (err) {
       console.error("Error loading courses for auth autocomplete", err);
       authCourses = [];
+    }
+
+    // 3) Last-resort fallback so you at least see *something* (includes Darwin)
+    if (!authCourses.length) {
+      authCourses = [
+        {
+          id: "darwin-golf-club-nt",
+          name: "Darwin Golf Club",
+          state: "NT",
+        },
+        {
+          id: "araluen-estate-wa",
+          name: "Araluen Estate Golf Course",
+          state: "WA",
+        },
+        {
+          id: "whaleback-wa",
+          name: "Whaleback Golf Course",
+          state: "WA",
+        },
+      ];
     }
   }
 
@@ -251,7 +279,6 @@
         return;
       }
 
-      // backend may not send a token yet; keep this for future compatibility
       authToken = data.token;
       if (authToken) {
         localStorage.setItem("tr_auth_token", authToken);
@@ -400,7 +427,7 @@
 
   // Initial bootstrap
   (async function init() {
-    setupHomeCourseAutocomplete();   // NEW: enable autocomplete
+    setupHomeCourseAutocomplete();   // enable autocomplete
     await verifyExistingToken();
     applyUserUi();
   })();
