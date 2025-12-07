@@ -340,12 +340,13 @@
         <button class="state-option" data-state="WA">Western Australia (WA)</button>
         <button class="state-option" data-state="NT">Northern Territory (NT)</button>
         <button class="state-option" data-state="QLD">Queensland (QLD)</button>
+        <button class="state-option" data-state="VIC">Victoria (VIC)</button>
 
         <div class="state-divider"></div>
 
         <!-- Coming soon states -->
         <button class="state-option state-coming-soon" data-state="NSW">New South Wales (NSW) – Coming soon</button>
-        <button class="state-option state-coming-soon" data-state="VIC">Victoria (VIC) – Coming soon</button>
+        <!-- VIC removed from coming-soon now that it is live -->
         <button class="state-option state-coming-soon" data-state="SA">South Australia (SA) – Coming soon</button>
         <button class="state-option state-coming-soon" data-state="TAS">Tasmania (TAS) – Coming soon</button>
         <button class="state-option state-coming-soon" data-state="ACT">Australian Capital Territory (ACT) – Coming soon</button>
@@ -423,7 +424,7 @@
     // full list + state handling
     let allCourses = [];
     let selectedState = "WA";
-    const ACTIVE_STATES = ["WA", "NT", "QLD"];
+    const ACTIVE_STATES = ["WA", "NT", "QLD", "VIC"];
 
     const statusLine = document.getElementById("status-line");
     const coursesStrip = document.getElementById("courses-strip");
@@ -1100,7 +1101,7 @@
           renderCourses();
           if (statusLine) {
             statusLine.textContent =
-              `${prettyName} is coming soon to TeeRadar. For now, WA, NT & QLD are live.`;
+              `${prettyName} is coming soon to TeeRadar. For now, WA, NT, QLD & VIC are live.`;
             statusLine.style.color = "#9a3412";
           }
         }
