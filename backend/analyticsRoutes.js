@@ -20,11 +20,8 @@ router.get("/", (req, res) => {
     const homeViews =
       summary.home_page_views ?? summary.homeViews ?? 0;
 
-    // Count both legacy + new booking click types
     const bookingClicks =
-      summary.booking_clicks ??
-      summary.bookingClicks ??
-      0;
+      summary.booking_clicks ?? summary.bookingClicks ?? 0;
 
     const searches =
       summary.searches ?? 0;
@@ -50,7 +47,7 @@ router.get("/", (req, res) => {
     const topCourses =
       summary.top_courses ?? summary.topCourses ?? [];
 
-    // Try to read from DB summary first
+    // These may be empty from the DB summary — we'll fill from events
     let topSearchedCourses =
       summary.top_searched_courses ?? summary.topSearchedCourses ?? [];
 
@@ -64,7 +61,7 @@ router.get("/", (req, res) => {
       summary.peak_booking_hour ?? summary.peakBookingHour ?? null;
 
     /* --------------------------------------------------------
-       Fallback: derive from raw events if DB summary is empty
+       Fallback: derive search-based stats from raw events
        -------------------------------------------------------- */
     if (events && events.length > 0) {
       const courseStats = {};
@@ -93,9 +90,9 @@ router.get("/", (req, res) => {
         // Peak booking hour
         if (type === "booking_click" || type === "course_booking_click") {
           if (at) {
-            const h = new Date(at);
-            if (!Number.isNaN(h.getTime())) {
-              const hour = String(h.getHours()).padStart(2, "0");
+            const d = new Date(at);
+            if (!Number.isNaN(d.getTime())) {
+              const hour = String(d.getHours()).padStart(2, "0");
               bookingByHour[hour] = (bookingByHour[hour] || 0) + 1;
             }
           }
@@ -110,7 +107,7 @@ router.get("/", (req, res) => {
         }
       }
 
-      // If DB didn't give us top searched, compute it
+      // If DB didn't return topSearchedCourses, compute it
       if (!topSearchedCourses || topSearchedCourses.length === 0) {
         topSearchedCourses = Object.entries(courseStats)
           .map(([courseName, s]) => ({ courseName, searches: s.searches }))
@@ -119,7 +116,7 @@ router.get("/", (req, res) => {
           .slice(0, 5);
       }
 
-      // If DB didn't give us demand rank, compute it
+      // If DB didn't return demandRank, compute it
       if (!demandRank || demandRank.length === 0) {
         demandRank = Object.entries(courseStats)
           .map(([courseName, s]) => ({
@@ -142,14 +139,24 @@ router.get("/", (req, res) => {
 
       // Peak booking hour fallback
       if (!peakBookingHour && Object.keys(bookingByHour).length > 0) {
-        const best = Object.entries(bookingByHour).sort(
+        const [hour, clicks] = Object.entries(bookingByHour).sort(
           (a, b) => b[1] - a[1]
         )[0];
-        peakBookingHour = { hour: best[0], clicks: best[1] };
+        peakBookingHour = { hour, clicks };
       }
+
+      // Helpful debug in your Render logs
+      console.log(
+        "Analytics summary derived from events:",
+        {
+          eventsCount: events.length,
+          topSearchedCount: topSearchedCourses.length,
+          demandRankCount: demandRank.length,
+        }
+      );
     }
 
-    // Derived conversion metrics (0–1 ratios)
+    // Conversion metrics
     const conversionHomeToBooking =
       homeViews > 0 ? bookingClicks / homeViews : 0;
 
@@ -157,7 +164,6 @@ router.get("/", (req, res) => {
       searches > 0 ? bookingClicks / searches : 0;
 
     res.json({
-      // original metrics
       homeViews,
       homePageViews: homeViews,
       bookingClicks,
@@ -167,19 +173,15 @@ router.get("/", (req, res) => {
       usersAllTime,
       usersToday,
       usersWeek,
-      topCourses,
-
-      // new metrics
       users30d,
       returningUsers7d,
-      conversionHomeToBooking,
-      conversionSearchToBooking,
-      repeatBookers,
-      peakBookingHour,
-
-      // search-based breakdowns
+      topCourses,
       topSearchedCourses,
       demandRank,
+      repeatBookers,
+      peakBookingHour,
+      conversionHomeToBooking,
+      conversionSearchToBooking,
     });
   } catch (err) {
     console.error("Error loading analytics summary:", err);
@@ -189,11 +191,29 @@ router.get("/", (req, res) => {
 
 /* ============================================================
    POST — Log a new analytics event
+   Accepts BOTH:
+   - { type, at, payload: {...} }
+   - { type, at, userId, courseName, ... }
    ============================================================ */
 router.post("/event", (req, res) => {
   try {
-    const { type, at, payload } = req.body || {};
-    analyticsDb.logAnalyticsEvent({ type, at, payload });
+    const body = req.body || {};
+    const { type, at } = body;
+
+    let payload = body.payload;
+
+    // If no nested payload, treat top-level fields (except type/at) as payload
+    if (!payload || typeof payload !== "object") {
+      const { type: _t, at: _a, ...rest } = body;
+      payload = rest;
+    }
+
+    analyticsDb.logAnalyticsEvent({
+      type,
+      at,
+      payload,
+    });
+
     res.json({ ok: true });
   } catch (err) {
     console.error("Error logging analytics event:", err);
@@ -232,25 +252,7 @@ router.get("/users", async (req, res) => {
 });
 
 /* ============================================================
-   STILL THERE — POST Register / update a user by email
-   ============================================================ */
-router.post("/register-user", (req, res) => {
-  try {
-    const { email } = req.body || {};
-    if (!email) {
-      return res.status(400).json({ error: "Email required" });
-    }
-
-    analyticsDb.recordRegisteredUser(email);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("Error recording registered user:", err);
-    res.status(500).json({ error: "Failed to record user" });
-  }
-});
-
-/* ============================================================
-   OPTIONAL — Debug route: list events
+   OPTIONAL — Debug route: list recent events
    ============================================================ */
 router.get("/events", (req, res) => {
   try {
