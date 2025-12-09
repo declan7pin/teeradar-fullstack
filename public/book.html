@@ -1,4 +1,4 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -728,7 +728,21 @@
           groupedSlots[name].push(s);
         });
 
-        // 🔹 Keep existing overall search event (for "Searches" metric)
+        // 🔹 NEW: log one search_course event per course with slots
+        Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
+          trackEvent("search_course", {
+            courseName,
+            date,
+            earliest,
+            latest,
+            holes,
+            partySize: Number(players) || 1,
+            state: selectedState || "",
+            slots: cSlots.length,
+          });
+        });
+
+        // Existing overall search event (kept)
         trackEvent("search", {
           date,
           earliest,
@@ -737,21 +751,6 @@
           partySize: Number(players) || 1,
           state: selectedState || "",
           slots: slots.length,
-        });
-
-        // 🔹 NEW: per-course search events for "Most-searched courses" + demand ranking
-        Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
-          const meta = courses.find((c) => c.name === courseName) || {};
-          trackEvent("search_course", {
-            courseName,
-            state: meta.state || selectedState || "",
-            date,
-            earliest,
-            latest,
-            holes,
-            partySize: Number(players) || 1,
-            slots: cSlots.length,
-          });
         });
 
         const selectedHoles = Number(holes);
