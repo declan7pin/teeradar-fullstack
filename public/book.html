@@ -728,6 +728,21 @@
           groupedSlots[name].push(s);
         });
 
+        // 🔹 NEW: log one search_course event per course with slots
+        Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
+          trackEvent("search_course", {
+            courseName,
+            date,
+            earliest,
+            latest,
+            holes,
+            partySize: Number(players) || 1,
+            state: selectedState || "",
+            slots: cSlots.length,
+          });
+        });
+
+        // Existing overall search event (kept)
         trackEvent("search", {
           date,
           earliest,
