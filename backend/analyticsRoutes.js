@@ -29,29 +29,34 @@ router.get("/", (req, res) => {
     const usersAllTime =
       summary.unique_users ?? summary.usersAllTime ?? 0;
 
-    // If SQLite layer doesn't yet provide these explicitly,
-    // fall back to usersAllTime so nothing breaks.
     const usersToday =
       summary.users_today ?? summary.usersToday ?? usersAllTime;
 
     const usersWeek =
       summary.users_week ?? summary.usersWeek ?? usersAllTime;
 
-    const topCourses =
-      summary.top_courses ?? summary.topCourses ?? [];
-
-    // 🔹 NEW: top searched courses
-    const topSearchedCourses =
-      summary.top_searched_courses ?? summary.topSearchedCourses ?? [];
-
-    // 🔹 NEW: extra user metrics if provided by DB
     const users30d =
       summary.users30d ?? summary.users_30d ?? 0;
 
     const returningUsers7d =
       summary.returning_users_7d ?? summary.returningUsers7d ?? 0;
 
-    // 🔹 NEW: derived conversion metrics (0–1 ratios)
+    const topCourses =
+      summary.top_courses ?? summary.topCourses ?? [];
+
+    const topSearchedCourses =
+      summary.top_searched_courses ?? summary.topSearchedCourses ?? [];
+
+    const peakBookingHour =
+      summary.peak_booking_hour ?? summary.peakBookingHour ?? null;
+
+    const repeatBookers =
+      summary.repeat_bookers ?? summary.repeatBookers ?? 0;
+
+    const demandRank =
+      summary.demand_rank ?? summary.demandRank ?? [];
+
+    // Derived conversion metrics (0–1 ratios)
     const conversionHomeToBooking =
       homeViews > 0 ? bookingClicks / homeViews : 0;
 
@@ -67,17 +72,19 @@ router.get("/", (req, res) => {
       searches: searches,
       newUsers: newUsers,
       usersAllTime: usersAllTime,
-      // You can customise these later if you want true "today" / "week"
       usersToday: usersToday,
       usersWeek: usersWeek,
       topCourses: topCourses,
 
-      // 🔹 new fields – safe to ignore on the front end until you use them
+      // new fields
       users30d,
       returningUsers7d,
       conversionHomeToBooking,
       conversionSearchToBooking,
-      topSearchedCourses
+      topSearchedCourses,
+      peakBookingHour,
+      repeatBookers,
+      demandRank
     });
   } catch (err) {
     console.error("Error loading analytics summary:", err);
