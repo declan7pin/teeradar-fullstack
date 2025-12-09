@@ -22,6 +22,10 @@ import { getCachedSlots, saveSlotsToCache } from "./slotCache.js";
 // Auth router
 import authRouter from "./auth.js";
 
+// 🔔 Alerts (NEW)
+import alertsRouter from "./alertsRoutes.js";
+import { startAlertWorker } from "./alertWorker.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -33,6 +37,9 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 app.use("/api/auth", authRouter);
+
+// 🔔 Alerts API (NEW)
+app.use("/api/alerts", alertsRouter);
 
 // -------------------------------------------------
 // Load course data
@@ -83,7 +90,7 @@ app.post("/api/search", async (req, res) => {
       latest = "17:00",
       holes = "",
       partySize = 1,
-      state = "",                 // ✅ New
+      state = "", // ✅ New
     } = req.body || {};
 
     if (!date) return res.status(400).json({ error: "date is required" });
@@ -93,7 +100,7 @@ app.post("/api/search", async (req, res) => {
         ? ""
         : Number(holes);
 
-    const stateCode = (state || "").toString().toUpperCase();   // ✅ Normalize state code
+    const stateCode = (state || "").toString().toUpperCase(); // ✅ Normalize state code
 
     const criteria = {
       date,
@@ -101,7 +108,7 @@ app.post("/api/search", async (req, res) => {
       latest,
       holes: holesValue,
       partySize: Number(partySize) || 1,
-      state: stateCode || null,                                // for logging only
+      state: stateCode || null, // for logging only
     };
 
     console.log("Incoming /api/search", criteria);
@@ -289,10 +296,7 @@ app.delete("/api/analytics/users/:id", async (req, res) => {
       return res.status(400).json({ error: "invalid user id" });
     }
 
-    const result = await db.query(
-      `DELETE FROM users WHERE id = $1`,
-      [id]
-    );
+    const result = await db.query(`DELETE FROM users WHERE id = $1`, [id]);
 
     console.log("🗑 deleted user id =", id, "rows:", result.rowCount);
 
@@ -383,3 +387,6 @@ app.get("*", (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ TeeRadar backend running on port ${PORT}`);
 });
+
+// 🔔 Start alerts worker (NEW)
+startAlertWorker();
