@@ -299,6 +299,19 @@
       <div class="card-label">New users</div>
       <div id="metricNewUsers" class="card-value">0</div>
     </article>
+
+    <!-- NEW: conversion cards -->
+    <article class="card">
+      <div class="card-label">Home → booking conversion</div>
+      <div id="metricConvHomeBooking" class="card-value">0%</div>
+      <div class="card-hint">Booking clicks ÷ home page views</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Search → booking conversion</div>
+      <div id="metricConvSearchBooking" class="card-value">0%</div>
+      <div class="card-hint">Booking clicks ÷ searches</div>
+    </article>
   </section>
 
   <section class="card user-overview">
@@ -314,6 +327,10 @@
         This week <span id="usersWeek" style="font-weight:600;margin-left:4px;">0</span>
       </button>
     </div>
+    <!-- NEW: extra user metrics -->
+    <div class="muted-note" style="margin-top:4px;">
+      Last 30 days: <span id="users30d">0</span> • Returning last 7 days: <span id="returning7d">0</span>
+    </div>
     <div class="muted-note" id="summaryUpdated">Loading analytics…</div>
   </section>
 
@@ -321,6 +338,14 @@
     <div class="card-label">Most-clicked courses</div>
     <ul id="topCoursesList" class="top-courses-list">
       <li><span class="label">No clicks yet</span><span class="value">—</span></li>
+    </ul>
+  </section>
+
+  <!-- NEW: most-searched courses -->
+  <section class="card" style="margin-top:14px;">
+    <div class="card-label">Most-searched courses</div>
+    <ul id="topSearchedCoursesList" class="top-courses-list">
+      <li><span class="label">No searches yet</span><span class="value">—</span></li>
     </ul>
   </section>
 
@@ -393,6 +418,7 @@
       return;
     }
 
+    // existing metrics
     document.getElementById("metricHomeViews").textContent =
       summary.homePageViews ?? summary.homeViews ?? 0;
 
@@ -414,8 +440,35 @@
     document.getElementById("usersWeek").textContent =
       summary.usersWeek ?? 0;
 
+    // NEW: conversion metrics
+    const convHome = summary.conversionHomeToBooking ?? 0;
+    const convSearch = summary.conversionSearchToBooking ?? 0;
+
+    const convHomeEl = document.getElementById("metricConvHomeBooking");
+    if (convHomeEl) {
+      const pct = (convHome * 100).toFixed(1).replace(/\.0$/, "");
+      convHomeEl.textContent = pct + "%";
+    }
+
+    const convSearchEl = document.getElementById("metricConvSearchBooking");
+    if (convSearchEl) {
+      const pct = (convSearch * 100).toFixed(1).replace(/\.0$/, "");
+      convSearchEl.textContent = pct + "%";
+    }
+
+    // NEW: extra user metrics
+    const users30d = summary.users30d ?? summary.users_30d ?? 0;
+    const returning7d = summary.returningUsers7d ?? summary.returning_users_7d ?? 0;
+
+    const users30dEl = document.getElementById("users30d");
+    if (users30dEl) users30dEl.textContent = users30d;
+
+    const returning7dEl = document.getElementById("returning7d");
+    if (returning7dEl) returning7dEl.textContent = returning7d;
+
     updatedAt.textContent = "Last updated " + new Date().toLocaleString();
 
+    // most-clicked courses
     const topList = document.getElementById("topCoursesList");
     topList.innerHTML = "";
 
@@ -433,6 +486,27 @@
           </li>
         `;
       });
+    }
+
+    // NEW: most-searched courses
+    const topSearchList = document.getElementById("topSearchedCoursesList");
+    if (topSearchList) {
+      topSearchList.innerHTML = "";
+      const topSearched = summary.topSearchedCourses || summary.top_searched_courses || [];
+
+      if (!topSearched.length) {
+        topSearchList.innerHTML =
+          `<li><span class="label">No searches yet</span><span class="value">—</span></li>`;
+      } else {
+        topSearched.forEach((row) => {
+          topSearchList.innerHTML += `
+            <li>
+              <span class="label">${row.courseName}</span>
+              <span class="value">${row.searches} searches</span>
+            </li>
+          `;
+        });
+      }
     }
   }
 
