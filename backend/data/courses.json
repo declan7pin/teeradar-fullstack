@@ -6467,7 +6467,7 @@
   },
   {
     "name": "Shoalhaven Heads Golf Club (9 and 18)",
-   provider": "Phone",
+    "provider": "Phone",
     "state": "NSW",
     "holes": 9,
     "lat": -34.846111111111,
