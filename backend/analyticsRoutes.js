@@ -11,16 +11,23 @@ const router = express.Router();
 router.get("/", (req, res) => {
   try {
     const summary = analyticsDb.getAnalyticsSummary();
+    const events =
+      typeof analyticsDb.getAllEvents === "function"
+        ? analyticsDb.getAllEvents(5000)
+        : [];
 
-    // Support both snake_case (SQLite impl) and camelCase (if you ever swap)
+    // Support both snake_case and camelCase from analyticsDb
     const homeViews =
       summary.home_page_views ?? summary.homeViews ?? 0;
 
+    // Count both legacy + new booking click types
     const bookingClicks =
-      summary.booking_clicks ?? summary.bookingClicks ?? 0;
+      summary.booking_clicks ??
+      summary.bookingClicks ??
+      0;
 
     const searches =
-      summary.searches ?? summary.searches ?? 0;
+      summary.searches ?? 0;
 
     const newUsers =
       summary.new_users ?? summary.newUsers ?? 0;
@@ -34,27 +41,113 @@ router.get("/", (req, res) => {
     const usersWeek =
       summary.users_week ?? summary.usersWeek ?? usersAllTime;
 
+    const users30d =
+      summary.users30d ?? summary.users_30d ?? 0;
+
+    const returningUsers7d =
+      summary.returning_users_7d ?? summary.returningUsers7d ?? 0;
+
     const topCourses =
       summary.top_courses ?? summary.topCourses ?? [];
 
-    // 🔹 NEW: extra fields from analyticsDb
-    const users30d =
-      summary.users30d ?? summary.users_30d ?? null;
-
-    const returningUsers7d =
-      summary.returning_users_7d ?? summary.returningUsers7d ?? null;
-
-    const topSearchedCourses =
+    // Try to read from DB summary first
+    let topSearchedCourses =
       summary.top_searched_courses ?? summary.topSearchedCourses ?? [];
 
-    const demandRank =
+    let demandRank =
       summary.demand_rank ?? summary.demandRank ?? [];
 
-    const peakBookingHour =
+    let repeatBookers =
+      summary.repeat_bookers ?? summary.repeatBookers ?? 0;
+
+    let peakBookingHour =
       summary.peak_booking_hour ?? summary.peakBookingHour ?? null;
 
-    const repeatBookers =
-      summary.repeat_bookers ?? summary.repeatBookers ?? 0;
+    /* --------------------------------------------------------
+       Fallback: derive from raw events if DB summary is empty
+       -------------------------------------------------------- */
+    if (events && events.length > 0) {
+      const courseStats = {};
+      const bookingByHour = {};
+      const bookingByUser = {};
+
+      for (const ev of events) {
+        const type = ev.type;
+        const courseName = ev.course_name || null;
+        const userId = ev.user_id || null;
+        const at = ev.at;
+
+        // Per-course stats
+        if (courseName) {
+          if (!courseStats[courseName]) {
+            courseStats[courseName] = { searches: 0, clicks: 0 };
+          }
+          if (type === "search_course" || type === "search") {
+            courseStats[courseName].searches += 1;
+          }
+          if (type === "booking_click" || type === "course_booking_click") {
+            courseStats[courseName].clicks += 1;
+          }
+        }
+
+        // Peak booking hour
+        if (type === "booking_click" || type === "course_booking_click") {
+          if (at) {
+            const h = new Date(at);
+            if (!Number.isNaN(h.getTime())) {
+              const hour = String(h.getHours()).padStart(2, "0");
+              bookingByHour[hour] = (bookingByHour[hour] || 0) + 1;
+            }
+          }
+        }
+
+        // Repeat bookers
+        if (
+          (type === "booking_click" || type === "course_booking_click") &&
+          userId
+        ) {
+          bookingByUser[userId] = (bookingByUser[userId] || 0) + 1;
+        }
+      }
+
+      // If DB didn't give us top searched, compute it
+      if (!topSearchedCourses || topSearchedCourses.length === 0) {
+        topSearchedCourses = Object.entries(courseStats)
+          .map(([courseName, s]) => ({ courseName, searches: s.searches }))
+          .filter((row) => row.searches > 0)
+          .sort((a, b) => b.searches - a.searches)
+          .slice(0, 5);
+      }
+
+      // If DB didn't give us demand rank, compute it
+      if (!demandRank || demandRank.length === 0) {
+        demandRank = Object.entries(courseStats)
+          .map(([courseName, s]) => ({
+            courseName,
+            searches: s.searches,
+            clicks: s.clicks,
+            score: s.searches * 2 + s.clicks,
+          }))
+          .filter((row) => row.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 5);
+      }
+
+      // Repeat bookers fallback
+      if (!repeatBookers) {
+        repeatBookers = Object.values(bookingByUser).filter(
+          (count) => count > 1
+        ).length;
+      }
+
+      // Peak booking hour fallback
+      if (!peakBookingHour && Object.keys(bookingByHour).length > 0) {
+        const best = Object.entries(bookingByHour).sort(
+          (a, b) => b[1] - a[1]
+        )[0];
+        peakBookingHour = { hour: best[0], clicks: best[1] };
+      }
+    }
 
     // Derived conversion metrics (0–1 ratios)
     const conversionHomeToBooking =
@@ -64,27 +157,29 @@ router.get("/", (req, res) => {
       searches > 0 ? bookingClicks / searches : 0;
 
     res.json({
-      // existing fields (kept the same so nothing breaks)
-      homeViews: homeViews,
+      // original metrics
+      homeViews,
       homePageViews: homeViews,
-      bookingClicks: bookingClicks,
+      bookingClicks,
       courseBookingClicks: bookingClicks,
-      searches: searches,
-      newUsers: newUsers,
-      usersAllTime: usersAllTime,
-      usersToday: usersToday,
-      usersWeek: usersWeek,
-      topCourses: topCourses,
+      searches,
+      newUsers,
+      usersAllTime,
+      usersToday,
+      usersWeek,
+      topCourses,
 
-      // 🔹 new fields used by the updated analytics.html
+      // new metrics
       users30d,
       returningUsers7d,
+      conversionHomeToBooking,
+      conversionSearchToBooking,
+      repeatBookers,
+      peakBookingHour,
+
+      // search-based breakdowns
       topSearchedCourses,
       demandRank,
-      peakBookingHour,
-      repeatBookers,
-      conversionHomeToBooking,
-      conversionSearchToBooking
     });
   } catch (err) {
     console.error("Error loading analytics summary:", err);
@@ -125,8 +220,8 @@ router.get("/users", async (req, res) => {
       id: row.id,
       email: row.email,
       created_at: row.created_at,
-      last_seen_at: null,          // optional – not tracked yet
-      home_course: row.home_course // not used in UI now but handy later
+      last_seen_at: null,
+      home_course: row.home_course,
     }));
 
     res.json({ users });
@@ -138,7 +233,6 @@ router.get("/users", async (req, res) => {
 
 /* ============================================================
    STILL THERE — POST Register / update a user by email
-   (Safe to keep; you can call this separately if you want)
    ============================================================ */
 router.post("/register-user", (req, res) => {
   try {
