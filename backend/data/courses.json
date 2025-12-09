@@ -5802,7 +5802,7 @@
   },
   {
     "name": "Eastlake Golf Club - Weekday before 3pm (9 and 18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
     "lat": -33.928333333333,
@@ -5811,7 +5811,7 @@
   },
   {
     "name": "Eastlake Golf Club - Weekday before 3pm (9 and 18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "lat": -33.928333333333,
@@ -5820,24 +5820,9 @@
   },
   {
     "name": "Eastlake Golf Club - Weekday 3pm - 4pm",
-    "provider": "Phone",
-    "state": "NSW",
-    "holes": 18
-  },
-  {
-    "name": "(9 and 18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
-    "lat": -33.928333333333,
-    "lng": 151.216666666667,
-    "url": "https://www.eastlakegolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-10&feeGroupId=10230959"
-  },
-  {
-    "name": "(9 and 18)",
-    "provider": "Other",
-    "state": "NSW",
-    "holes": 18,
     "lat": -33.928333333333,
     "lng": 151.216666666667,
     "url": "https://www.eastlakegolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-10&feeGroupId=10230959"
@@ -6394,6 +6379,9 @@
     "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
+    "lat": -37.04611,
+    "lng": 149.89583,
+
     "url": "https://edenfishermens.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-09&feeGroupId=102579"
   },
   {
@@ -6401,6 +6389,8 @@
     "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
+    "lat": -37.04611,
+    "lng": 149.89583,
     "url": "https://edenfishermens.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-09&feeGroupId=102580"
   },
   {
@@ -6477,7 +6467,7 @@
   },
   {
     "name": "Shoalhaven Heads Golf Club (9 and 18)",
-    "provider": "Phone",
+   provider": "Phone",
     "state": "NSW",
     "holes": 9,
     "lat": -34.846111111111,
@@ -7019,16 +7009,20 @@
   },
   {
     "name": "Coffs Harbour Golf Club (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
+    "lat": -30.30889,
+    "lng": 153.11389,
     "url": "https://www.coffsharbourgolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-11&feeGroupId=1520851893"
   },
   {
     "name": "Coffs Harbour Golf Club (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
+    "lat": -30.30889,
+    "lng": 153.11389,
     "url": "https://www.coffsharbourgolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-10&feeGroupId=1520126879"
   },
   {
@@ -7108,20 +7102,18 @@
     "provider": "Phone",
     "state": "NSW",
     "holes": 9,
+    "lat": -33.29056,
+    "lng": 149.06833,
     "phone": "(02) 6361 4505"
   },
   {
     "name": "Wentworth Golf Club (9 and 18)",
     "provider": "Phone",
     "state": "NSW",
+    "lat": -33.29056,
+    "lng": 149.06833,
     "holes": 18,
     "phone": "(02) 6361 4505"
-  },
-  {
-    "name": "(02) 6361 4505",
-    "provider": "Phone",
-    "state": "NSW",
-    "holes": 18
   },
   {
     "name": "Bathurst Golf Club (18)",
@@ -7889,24 +7881,6 @@
     "lat": -34.801111111111,
     "lng": 138.728333333333,
     "url": "https://www.ttggolfclub.com.au/guests/bookings/ViewPublicCalendar.msp?bookingResourceId=3000000&selectedDate=2025-12-16&weekends=false"
-  },
-  {
-    "name": "Riverside Golf Club (9 and 18)",
-    "provider": "Phone",
-    "state": "SA",
-    "holes": 9,
-    "lat": -34.185,
-    "lng": 142.217777777778,
-    "phone": "+61350234255"
-  },
-  {
-    "name": "Riverside Golf Club (9 and 18)",
-    "provider": "Phone",
-    "state": "SA",
-    "holes": 18,
-    "lat": -34.185,
-    "lng": 142.217777777778,
-    "phone": "+61350234255"
   },
   {
     "name": "Tanunda Pines Golf Club (18)",
