@@ -12,8 +12,7 @@ router.get("/", (req, res) => {
   try {
     const summary = analyticsDb.getAnalyticsSummary();
 
-    // Support both snake_case (SQLite analyticsDb)
-    // and camelCase (if you ever swap implementations)
+    // Support both snake_case (SQLite impl) and camelCase (if you ever swap)
     const homeViews =
       summary.home_page_views ?? summary.homeViews ?? 0;
 
@@ -35,26 +34,27 @@ router.get("/", (req, res) => {
     const usersWeek =
       summary.users_week ?? summary.usersWeek ?? usersAllTime;
 
-    const users30d =
-      summary.users30d ?? summary.users_30d ?? 0;
-
-    const returningUsers7d =
-      summary.returning_users_7d ?? summary.returningUsers7d ?? 0;
-
     const topCourses =
       summary.top_courses ?? summary.topCourses ?? [];
 
+    // 🔹 NEW: extra fields from analyticsDb
+    const users30d =
+      summary.users30d ?? summary.users_30d ?? null;
+
+    const returningUsers7d =
+      summary.returning_users_7d ?? summary.returningUsers7d ?? null;
+
     const topSearchedCourses =
       summary.top_searched_courses ?? summary.topSearchedCourses ?? [];
+
+    const demandRank =
+      summary.demand_rank ?? summary.demandRank ?? [];
 
     const peakBookingHour =
       summary.peak_booking_hour ?? summary.peakBookingHour ?? null;
 
     const repeatBookers =
       summary.repeat_bookers ?? summary.repeatBookers ?? 0;
-
-    const demandRank =
-      summary.demand_rank ?? summary.demandRank ?? [];
 
     // Derived conversion metrics (0–1 ratios)
     const conversionHomeToBooking =
@@ -64,7 +64,7 @@ router.get("/", (req, res) => {
       searches > 0 ? bookingClicks / searches : 0;
 
     res.json({
-      // existing fields (kept the same so current UI keeps working)
+      // existing fields (kept the same so nothing breaks)
       homeViews: homeViews,
       homePageViews: homeViews,
       bookingClicks: bookingClicks,
@@ -76,15 +76,15 @@ router.get("/", (req, res) => {
       usersWeek: usersWeek,
       topCourses: topCourses,
 
-      // new fields
+      // 🔹 new fields used by the updated analytics.html
       users30d,
       returningUsers7d,
-      conversionHomeToBooking,
-      conversionSearchToBooking,
       topSearchedCourses,
+      demandRank,
       peakBookingHour,
       repeatBookers,
-      demandRank
+      conversionHomeToBooking,
+      conversionSearchToBooking
     });
   } catch (err) {
     console.error("Error loading analytics summary:", err);
@@ -107,7 +107,7 @@ router.post("/event", (req, res) => {
 });
 
 /* ============================================================
-   NEW — GET Registered users (from main users table)
+   GET Registered users (from main users table)
    Used by analytics.html to display emails
    ============================================================ */
 router.get("/users", async (req, res) => {
@@ -125,7 +125,7 @@ router.get("/users", async (req, res) => {
       id: row.id,
       email: row.email,
       created_at: row.created_at,
-      last_seen_at: null,          // optional – we don't track this yet
+      last_seen_at: null,          // optional – not tracked yet
       home_course: row.home_course // not used in UI now but handy later
     }));
 
