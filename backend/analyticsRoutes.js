@@ -12,7 +12,7 @@ router.get("/", (req, res) => {
   try {
     const summary = analyticsDb.getAnalyticsSummary();
 
-    // Support both snake_case (existing analyticsDb)
+    // Support both snake_case (SQLite analyticsDb)
     // and camelCase (if you ever swap implementations)
     const homeViews =
       summary.home_page_views ?? summary.homeViews ?? 0;
@@ -29,6 +29,8 @@ router.get("/", (req, res) => {
     const usersAllTime =
       summary.unique_users ?? summary.usersAllTime ?? 0;
 
+    // If SQLite layer doesn't yet provide these explicitly,
+    // fall back to usersAllTime so nothing breaks.
     const usersToday =
       summary.users_today ?? summary.usersToday ?? usersAllTime;
 
@@ -38,14 +40,18 @@ router.get("/", (req, res) => {
     const topCourses =
       summary.top_courses ?? summary.topCourses ?? [];
 
-    // Optional extra metrics if your DB layer starts providing them
+    // 🔹 NEW: top searched courses
+    const topSearchedCourses =
+      summary.top_searched_courses ?? summary.topSearchedCourses ?? [];
+
+    // 🔹 NEW: extra user metrics if provided by DB
     const users30d =
-      summary.users30d ?? summary.users_30d ?? null;
+      summary.users30d ?? summary.users_30d ?? 0;
 
     const returningUsers7d =
-      summary.returningUsers7d ?? summary.returning_users_7d ?? null;
+      summary.returning_users_7d ?? summary.returningUsers7d ?? 0;
 
-    // Derived conversion metrics (0–1 ratios)
+    // 🔹 NEW: derived conversion metrics (0–1 ratios)
     const conversionHomeToBooking =
       homeViews > 0 ? bookingClicks / homeViews : 0;
 
@@ -53,7 +59,7 @@ router.get("/", (req, res) => {
       searches > 0 ? bookingClicks / searches : 0;
 
     res.json({
-      // existing fields (kept the same)
+      // existing fields (kept the same so current UI keeps working)
       homeViews: homeViews,
       homePageViews: homeViews,
       bookingClicks: bookingClicks,
@@ -66,11 +72,12 @@ router.get("/", (req, res) => {
       usersWeek: usersWeek,
       topCourses: topCourses,
 
-      // new fields – safe to ignore on the front end until you use them
+      // 🔹 new fields – safe to ignore on the front end until you use them
       users30d,
       returningUsers7d,
       conversionHomeToBooking,
-      conversionSearchToBooking
+      conversionSearchToBooking,
+      topSearchedCourses
     });
   } catch (err) {
     console.error("Error loading analytics summary:", err);
