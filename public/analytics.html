@@ -464,7 +464,7 @@
       return;
     }
 
-    // existing metrics
+    // base metrics
     const homeViewsVal =
       summary.homePageViews ?? summary.homeViews ?? 0;
     const bookingClicksVal =
@@ -488,9 +488,16 @@
     document.getElementById("usersToday").textContent = usersTodayVal;
     document.getElementById("usersWeek").textContent = usersWeekVal;
 
-    // NEW: conversion metrics
-    const convHome = summary.conversionHomeToBooking ?? 0;
-    const convSearch = summary.conversionSearchToBooking ?? 0;
+    // 🔹 conversion metrics: prefer backend values, otherwise compute locally
+    let convHome = summary.conversionHomeToBooking;
+    if (convHome == null) {
+      convHome = homeViewsVal > 0 ? bookingClicksVal / homeViewsVal : 0;
+    }
+
+    let convSearch = summary.conversionSearchToBooking;
+    if (convSearch == null) {
+      convSearch = searchesVal > 0 ? bookingClicksVal / searchesVal : 0;
+    }
 
     const convHomeEl = document.getElementById("metricConvHomeBooking");
     if (convHomeEl) {
@@ -504,7 +511,7 @@
       convSearchEl.textContent = pct + "%";
     }
 
-    // NEW: extra user metrics
+    // extra user metrics
     const users30d = summary.users30d ?? summary.users_30d ?? 0;
     const returning7d = summary.returningUsers7d ?? summary.returning_users_7d ?? 0;
 
@@ -514,12 +521,12 @@
     const returning7dEl = document.getElementById("returning7d");
     if (returning7dEl) returning7dEl.textContent = returning7d;
 
-    // NEW: repeat bookers
+    // repeat bookers (will stay 0 until we start sending userId in events)
     const repeatBookersVal = summary.repeatBookers ?? summary.repeat_bookers ?? 0;
     const repeatEl = document.getElementById("metricRepeatBookers");
     if (repeatEl) repeatEl.textContent = repeatBookersVal;
 
-    // NEW: peak booking hour
+    // peak booking hour
     const peak = summary.peakBookingHour ?? summary.peak_booking_hour ?? null;
     const peakEl = document.getElementById("metricPeakHour");
     if (peakEl) {
@@ -530,7 +537,7 @@
       }
     }
 
-    // NEW: health summary line
+    // health summary line
     const healthEl = document.getElementById("healthSummary");
     if (healthEl) {
       let signupRateRaw = 0;
