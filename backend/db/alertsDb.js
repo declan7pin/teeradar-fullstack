@@ -1,39 +1,54 @@
 // backend/db/alertsDb.js
-import pkg from "pg";
+import Database from "better-sqlite3";
 
-const { Pool } = pkg;
+// Use the same DB file you already use for analytics
+const db = new Database("analytics.db");
+db.pragma("journal_mode = WAL");
 
-// If you already have a shared Pool somewhere (e.g. ./pool.js),
-// you can replace this with: `import pool from "./pool.js";`
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.DATABASE_SSL === "false"
-      ? false
-      : { rejectUnauthorized: false },
-});
+// Create tables automatically if they don't exist
+db.exec(`
+  CREATE TABLE IF NOT EXISTS availability_watches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    user_email TEXT NOT NULL,
+    course_id TEXT NOT NULL,
+    date TEXT NOT NULL,          -- YYYY-MM-DD
+    time_from TEXT NOT NULL,     -- "HH:MM"
+    time_to TEXT NOT NULL,       -- "HH:MM"
+    group_size INTEGER NOT NULL, -- number of players
+    subscription_level INTEGER NOT NULL DEFAULT 1,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
 
-// ------- Core helpers --------
+  CREATE TABLE IF NOT EXISTS notifications_sent (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    watch_id INTEGER NOT NULL,
+    tee_time TEXT NOT NULL,      -- "YYYY-MM-DDTHH:MM"
+    sent_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+`);
 
-export async function createWatch({
+// ----- Helper functions -----
+
+export function createWatch({
   userId,
   userEmail,
   courseId,
-  date, // 'YYYY-MM-DD'
-  timeFrom, // 'HH:MM'
-  timeTo, // 'HH:MM'
+  date,
+  timeFrom,
+  timeTo,
   groupSize,
   subscriptionLevel,
 }) {
-  const query = `
+  const stmt = db.prepare(`
     INSERT INTO availability_watches
       (user_id, user_email, course_id, date, time_from, time_to, group_size, subscription_level, active)
     VALUES
-      ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
-    RETURNING id;
-  `;
+      (@userId, @userEmail, @courseId, @date, @timeFrom, @timeTo, @groupSize, @subscriptionLevel, 1)
+  `);
 
-  const values = [
+  const info = stmt.run({
     userId,
     userEmail,
     courseId,
@@ -42,84 +57,69 @@ export async function createWatch({
     timeTo,
     groupSize,
     subscriptionLevel,
-  ];
+  });
 
-  const { rows } = await pool.query(query, values);
-  return rows[0].id;
+  return info.lastInsertRowid;
 }
 
-export async function getWatchesForUser(userId) {
-  const { rows } = await pool.query(
-    `
-    SELECT *
-    FROM availability_watches
-    WHERE user_id = $1 AND active = TRUE
-    ORDER BY created_at DESC;
-    `,
-    [userId]
-  );
-  return rows;
+export function getWatchesForUser(userId) {
+  return db
+    .prepare(
+      `SELECT * FROM availability_watches
+       WHERE user_id = ? AND active = 1
+       ORDER BY created_at DESC`
+    )
+    .all(userId);
 }
 
-export async function countActiveWatchesForUser(userId) {
-  const { rows } = await pool.query(
-    `
-    SELECT COUNT(*)::INT AS count
-    FROM availability_watches
-    WHERE user_id = $1 AND active = TRUE;
-    `,
-    [userId]
-  );
-  return rows[0]?.count ?? 0;
+export function countActiveWatchesForUser(userId) {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM availability_watches
+       WHERE user_id = ? AND active = 1`
+    )
+    .get(userId);
+  return row?.count ?? 0;
 }
 
-export async function deactivateWatch({ watchId, userId }) {
-  await pool.query(
-    `
-    UPDATE availability_watches
-    SET active = FALSE
-    WHERE id = $1 AND user_id = $2;
-    `,
-    [watchId, userId]
-  );
+export function deactivateWatch({ watchId, userId }) {
+  return db
+    .prepare(
+      `UPDATE availability_watches
+       SET active = 0
+       WHERE id = ? AND user_id = ?`
+    )
+    .run(watchId, userId);
 }
 
-// ------- Worker helpers --------
-
-export async function getAllActiveWatches() {
-  const { rows } = await pool.query(
-    `
-    SELECT *
-    FROM availability_watches
-    WHERE active = TRUE;
-    `
-  );
-  return rows;
+// Used by the worker
+export function getAllActiveWatches() {
+  return db
+    .prepare(
+      `SELECT *
+       FROM availability_watches
+       WHERE active = 1`
+    )
+    .all();
 }
 
-export async function getSentTeeTimesForWatch(watchId) {
-  const { rows } = await pool.query(
-    `
-    SELECT tee_time
-    FROM notifications_sent
-    WHERE watch_id = $1;
-    `,
-    [watchId]
-  );
-  // Return array of ISO strings
-  return rows.map((r) => r.tee_time.toISOString());
+export function getSentTeeTimesForWatch(watchId) {
+  return db
+    .prepare(
+      `SELECT tee_time
+       FROM notifications_sent
+       WHERE watch_id = ?`
+    )
+    .all(watchId)
+    .map((row) => row.tee_time);
 }
 
-export async function recordNotificationSent({ watchId, teeTime }) {
-  // teeTime should be an ISO string or Date
-  const teeTimeValue =
-    teeTime instanceof Date ? teeTime.toISOString() : teeTime;
-
-  await pool.query(
-    `
-    INSERT INTO notifications_sent (watch_id, tee_time)
-    VALUES ($1, $2);
-    `,
-    [watchId, teeTimeValue]
-  );
+export function recordNotificationSent({ watchId, teeTime }) {
+  return db
+    .prepare(
+      `INSERT INTO notifications_sent (watch_id, tee_time)
+       VALUES (?, ?)`
+    )
+    .run(watchId, teeTime);
 }
