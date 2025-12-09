@@ -12,18 +12,65 @@ router.get("/", (req, res) => {
   try {
     const summary = analyticsDb.getAnalyticsSummary();
 
+    // Support both snake_case (existing analyticsDb)
+    // and camelCase (if you ever swap implementations)
+    const homeViews =
+      summary.home_page_views ?? summary.homeViews ?? 0;
+
+    const bookingClicks =
+      summary.booking_clicks ?? summary.bookingClicks ?? 0;
+
+    const searches =
+      summary.searches ?? summary.searches ?? 0;
+
+    const newUsers =
+      summary.new_users ?? summary.newUsers ?? 0;
+
+    const usersAllTime =
+      summary.unique_users ?? summary.usersAllTime ?? 0;
+
+    const usersToday =
+      summary.users_today ?? summary.usersToday ?? usersAllTime;
+
+    const usersWeek =
+      summary.users_week ?? summary.usersWeek ?? usersAllTime;
+
+    const topCourses =
+      summary.top_courses ?? summary.topCourses ?? [];
+
+    // Optional extra metrics if your DB layer starts providing them
+    const users30d =
+      summary.users30d ?? summary.users_30d ?? null;
+
+    const returningUsers7d =
+      summary.returningUsers7d ?? summary.returning_users_7d ?? null;
+
+    // Derived conversion metrics (0–1 ratios)
+    const conversionHomeToBooking =
+      homeViews > 0 ? bookingClicks / homeViews : 0;
+
+    const conversionSearchToBooking =
+      searches > 0 ? bookingClicks / searches : 0;
+
     res.json({
-      homeViews: summary.home_page_views,
-      homePageViews: summary.home_page_views,
-      bookingClicks: summary.booking_clicks,
-      courseBookingClicks: summary.booking_clicks,
-      searches: summary.searches,
-      newUsers: summary.new_users,
-      usersAllTime: summary.unique_users,
+      // existing fields (kept the same)
+      homeViews: homeViews,
+      homePageViews: homeViews,
+      bookingClicks: bookingClicks,
+      courseBookingClicks: bookingClicks,
+      searches: searches,
+      newUsers: newUsers,
+      usersAllTime: usersAllTime,
       // You can customise these later if you want true "today" / "week"
-      usersToday: summary.unique_users,
-      usersWeek: summary.unique_users,
-      topCourses: summary.top_courses
+      usersToday: usersToday,
+      usersWeek: usersWeek,
+      topCourses: topCourses,
+
+      // new fields – safe to ignore on the front end until you use them
+      users30d,
+      returningUsers7d,
+      conversionHomeToBooking,
+      conversionSearchToBooking
     });
   } catch (err) {
     console.error("Error loading analytics summary:", err);
