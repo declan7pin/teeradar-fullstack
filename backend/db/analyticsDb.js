@@ -119,7 +119,10 @@ export function getRegisteredUsers(limit = 500) {
  *   new_users,
  *   unique_users,
  *   total_events,
- *   top_courses: [{ courseName, clicks }, ...]
+ *   users30d,
+ *   returning_users_7d,
+ *   top_courses: [{ courseName, clicks }, ...],
+ *   top_searched_courses: [{ courseName, searches }, ...]
  * }
  */
 export function getAnalyticsSummary() {
@@ -138,7 +141,11 @@ export function getAnalyticsSummary() {
     new_users: 0,
     unique_users: 0,
     total_events: 0,
-    top_courses: []
+    top_courses: [],
+    // new fields initialised here
+    users30d: 0,
+    returning_users_7d: 0,
+    top_searched_courses: []
   };
 
   for (const row of byType) {
@@ -164,6 +171,45 @@ export function getAnalyticsSummary() {
     .get();
   summary.unique_users = uniqueRow?.cnt || 0;
 
+  // Distinct users in the last 30 days
+  const last30Row = db
+    .prepare(
+      `SELECT COUNT(DISTINCT user_id) as cnt
+       FROM analytics_events
+       WHERE user_id IS NOT NULL
+         AND user_id <> ''
+         AND datetime(at) >= datetime('now', '-30 days')`
+    )
+    .get();
+  summary.users30d = last30Row?.cnt || 0;
+
+  // Returning users in the last 7 days:
+  // users with events in last 7 days AND also before that
+  const returningRow = db
+    .prepare(
+      `
+      WITH recent AS (
+        SELECT DISTINCT user_id
+        FROM analytics_events
+        WHERE user_id IS NOT NULL
+          AND user_id <> ''
+          AND datetime(at) >= datetime('now', '-7 days')
+      ),
+      earlier AS (
+        SELECT DISTINCT user_id
+        FROM analytics_events
+        WHERE user_id IS NOT NULL
+          AND user_id <> ''
+          AND datetime(at) < datetime('now', '-7 days')
+      )
+      SELECT COUNT(*) AS cnt
+      FROM recent
+      JOIN earlier USING (user_id)
+      `
+    )
+    .get();
+  summary.returning_users_7d = returningRow?.cnt || 0;
+
   // Top 5 most-clicked courses
   const topCourses = db
     .prepare(
@@ -177,8 +223,22 @@ export function getAnalyticsSummary() {
        LIMIT 5`
     )
     .all();
-
   summary.top_courses = topCourses;
+
+  // Top 5 most-searched courses
+  const topSearchedCourses = db
+    .prepare(
+      `SELECT course_name AS courseName, COUNT(*) AS searches
+       FROM analytics_events
+       WHERE type = 'search'
+         AND course_name IS NOT NULL
+         AND course_name <> ''
+       GROUP BY course_name
+       ORDER BY searches DESC
+       LIMIT 5`
+    )
+    .all();
+  summary.top_searched_courses = topSearchedCourses;
 
   return summary;
 }
