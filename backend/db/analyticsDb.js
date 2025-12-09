@@ -45,7 +45,7 @@ const insertStmt = db.prepare(`
   VALUES (@type, @at, @user_id, @course_name, @payload_json)
 `);
 
-// 🔹 simple upsert for registered users by email
+// 🔹 NEW: simple upsert for registered users by email
 const upsertUserStmt = db.prepare(`
   INSERT INTO registered_users (email, created_at, last_seen_at)
   VALUES (?, datetime('now'), datetime('now'))
@@ -84,7 +84,8 @@ export function logAnalyticsEvent({ type, at, payload }) {
 }
 
 /**
- * Record a registered user's email
+ * 🔹 NEW: record a registered user's email
+ * Call this from your auth/registration flow.
  */
 export function recordRegisteredUser(email) {
   if (!email) return;
@@ -94,7 +95,7 @@ export function recordRegisteredUser(email) {
 }
 
 /**
- * Fetch registered users for the admin dashboard
+ * 🔹 NEW: fetch registered users for the admin dashboard
  */
 export function getRegisteredUsers(limit = 500) {
   return db
@@ -157,22 +158,22 @@ export function getAnalyticsSummary() {
   };
 
   for (const row of byType) {
-    if (row.type === "home_view" || row.type === "home_page_view") {
-      summary.home_page_views = row.count;
-    } else if (
-      row.type === "booking_click" ||
-      row.type === "course_booking_click"   // 🔹 alias for booking clicks
-    ) {
-      summary.booking_clicks += row.count;
-    } else if (
-      row.type === "search" ||
-      row.type === "search_course"          // 🔹 alias for course-level search
-    ) {
-      summary.searches += row.count;
-    } else if (row.type === "new_user") {
-      summary.new_users = row.count;
+    const t = row.type;
+    const c = row.count;
+
+    if (t === "home_view" || t === "home_page_view") {
+      summary.home_page_views = c;
+    } else if (t === "booking_click" || t === "course_booking_click") {
+      // Count both legacy and new booking click events
+      summary.booking_clicks += c;
+    } else if (t === "search") {
+      // "search" is the top-level search action (no course_name)
+      summary.searches = c;
+    } else if (t === "new_user") {
+      summary.new_users = c;
     }
-    summary.total_events += row.count;
+
+    summary.total_events += c;
   }
 
   // Unique users across all events
@@ -248,7 +249,7 @@ export function getAnalyticsSummary() {
     .get();
   summary.returning_users_7d = returningRow?.cnt || 0;
 
-  // Top 5 most-clicked courses (booking_click + course_booking_click)
+  // Top 5 most-clicked courses
   const topCourses = db
     .prepare(
       `SELECT course_name AS courseName, COUNT(*) AS clicks
@@ -263,12 +264,12 @@ export function getAnalyticsSummary() {
     .all();
   summary.top_courses = topCourses;
 
-  // Top 5 most-searched courses (course-level search)
+  // Top 5 most-searched courses (per-course search events)
   const topSearchedCourses = db
     .prepare(
       `SELECT course_name AS courseName, COUNT(*) AS searches
        FROM analytics_events
-       WHERE type = 'search_course'
+       WHERE type IN ('search_course','search')
          AND course_name IS NOT NULL
          AND course_name <> ''
        GROUP BY course_name
@@ -278,7 +279,7 @@ export function getAnalyticsSummary() {
     .all();
   summary.top_searched_courses = topSearchedCourses;
 
-  // Peak booking hour (booking_click + course_booking_click)
+  // Peak booking hour (by any booking click type)
   const peakHourRow = db
     .prepare(
       `SELECT strftime('%H', at) AS hour, COUNT(*) AS clicks
@@ -293,7 +294,7 @@ export function getAnalyticsSummary() {
     ? { hour: peakHourRow.hour, clicks: peakHourRow.clicks }
     : null;
 
-  // Repeat bookers: users with >1 booking_click / course_booking_click
+  // Repeat bookers: users with >1 booking_click (either type)
   const repeatRow = db
     .prepare(
       `
@@ -318,40 +319,16 @@ export function getAnalyticsSummary() {
       `
       SELECT
         course_name AS courseName,
-        SUM(
-          CASE
-            WHEN type IN ('search','search_course') THEN 1
-            ELSE 0
-          END
-        ) AS searches,
-        SUM(
-          CASE
-            WHEN type IN ('booking_click','course_booking_click') THEN 1
-            ELSE 0
-          END
-        ) AS clicks,
+        SUM(CASE WHEN type IN ('search_course','search') THEN 1 ELSE 0 END) AS searches,
+        SUM(CASE WHEN type IN ('booking_click','course_booking_click') THEN 1 ELSE 0 END) AS clicks,
         (
-          SUM(
-            CASE
-              WHEN type IN ('search','search_course') THEN 1
-              ELSE 0
-            END
-          ) * 2
-          +
-          SUM(
-            CASE
-              WHEN type IN ('booking_click','course_booking_click') THEN 1
-              ELSE 0
-            END
-          )
+          SUM(CASE WHEN type IN ('search_course','search') THEN 1 ELSE 0 END) * 2
+          + SUM(CASE WHEN type IN ('booking_click','course_booking_click') THEN 1 ELSE 0 END)
         ) AS score
       FROM analytics_events
       WHERE course_name IS NOT NULL
         AND course_name <> ''
-        AND type IN (
-          'search','search_course',
-          'booking_click','course_booking_click'
-        )
+        AND type IN ('search_course','search','booking_click','course_booking_click')
       GROUP BY course_name
       ORDER BY score DESC
       LIMIT 5
@@ -381,6 +358,7 @@ export default {
   logAnalyticsEvent,
   getAnalyticsSummary,
   getAllEvents,
+  // 🔹 NEW exports
   recordRegisteredUser,
   getRegisteredUsers
 };
