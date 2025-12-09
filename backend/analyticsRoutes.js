@@ -1,266 +1,138 @@
 // backend/analyticsRoutes.js
 import express from "express";
-import analyticsDb from "./db/analyticsDb.js";
-import db from "./db.js";
+import {
+  logAnalyticsEvent,
+  getAnalyticsSummary,
+  getAllEvents,
+  getRegisteredUsers,
+  recordRegisteredUser,
+  deleteRegisteredUser,
+} from "./db/analyticsDb.js";
 
 const router = express.Router();
 
-/* ============================================================
-   GET — Summary used by analytics.html
-   ============================================================ */
-router.get("/", (req, res) => {
-  try {
-    const summary = analyticsDb.getAnalyticsSummary();
-    const events =
-      typeof analyticsDb.getAllEvents === "function"
-        ? analyticsDb.getAllEvents(5000)
-        : [];
-
-    // Support both snake_case and camelCase from analyticsDb
-    const homeViews =
-      summary.home_page_views ?? summary.homeViews ?? 0;
-
-    const bookingClicks =
-      summary.booking_clicks ?? summary.bookingClicks ?? 0;
-
-    const searches =
-      summary.searches ?? 0;
-
-    const newUsers =
-      summary.new_users ?? summary.newUsers ?? 0;
-
-    const usersAllTime =
-      summary.unique_users ?? summary.usersAllTime ?? 0;
-
-    const usersToday =
-      summary.users_today ?? summary.usersToday ?? usersAllTime;
-
-    const usersWeek =
-      summary.users_week ?? summary.usersWeek ?? usersAllTime;
-
-    const users30d =
-      summary.users30d ?? summary.users_30d ?? 0;
-
-    const returningUsers7d =
-      summary.returning_users_7d ?? summary.returningUsers7d ?? 0;
-
-    const topCourses =
-      summary.top_courses ?? summary.topCourses ?? [];
-
-    // These may be empty from the DB summary — we'll fill from events
-    let topSearchedCourses =
-      summary.top_searched_courses ?? summary.topSearchedCourses ?? [];
-
-    let demandRank =
-      summary.demand_rank ?? summary.demandRank ?? [];
-
-    let repeatBookers =
-      summary.repeat_bookers ?? summary.repeatBookers ?? 0;
-
-    let peakBookingHour =
-      summary.peak_booking_hour ?? summary.peakBookingHour ?? null;
-
-    /* --------------------------------------------------------
-       Fallback: derive search-based stats from raw events
-       -------------------------------------------------------- */
-    if (events && events.length > 0) {
-      const courseStats = {};
-      const bookingByHour = {};
-      const bookingByUser = {};
-
-      for (const ev of events) {
-        const type = ev.type;
-        const courseName = ev.course_name || null;
-        const userId = ev.user_id || null;
-        const at = ev.at;
-
-        // Per-course stats
-        if (courseName) {
-          if (!courseStats[courseName]) {
-            courseStats[courseName] = { searches: 0, clicks: 0 };
-          }
-          if (type === "search_course" || type === "search") {
-            courseStats[courseName].searches += 1;
-          }
-          if (type === "booking_click" || type === "course_booking_click") {
-            courseStats[courseName].clicks += 1;
-          }
-        }
-
-        // Peak booking hour
-        if (type === "booking_click" || type === "course_booking_click") {
-          if (at) {
-            const d = new Date(at);
-            if (!Number.isNaN(d.getTime())) {
-              const hour = String(d.getHours()).padStart(2, "0");
-              bookingByHour[hour] = (bookingByHour[hour] || 0) + 1;
-            }
-          }
-        }
-
-        // Repeat bookers
-        if (
-          (type === "booking_click" || type === "course_booking_click") &&
-          userId
-        ) {
-          bookingByUser[userId] = (bookingByUser[userId] || 0) + 1;
-        }
-      }
-
-      // If DB didn't return topSearchedCourses, compute it
-      if (!topSearchedCourses || topSearchedCourses.length === 0) {
-        topSearchedCourses = Object.entries(courseStats)
-          .map(([courseName, s]) => ({ courseName, searches: s.searches }))
-          .filter((row) => row.searches > 0)
-          .sort((a, b) => b.searches - a.searches)
-          .slice(0, 5);
-      }
-
-      // If DB didn't return demandRank, compute it
-      if (!demandRank || demandRank.length === 0) {
-        demandRank = Object.entries(courseStats)
-          .map(([courseName, s]) => ({
-            courseName,
-            searches: s.searches,
-            clicks: s.clicks,
-            score: s.searches * 2 + s.clicks,
-          }))
-          .filter((row) => row.score > 0)
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 5);
-      }
-
-      // Repeat bookers fallback
-      if (!repeatBookers) {
-        repeatBookers = Object.values(bookingByUser).filter(
-          (count) => count > 1
-        ).length;
-      }
-
-      // Peak booking hour fallback
-      if (!peakBookingHour && Object.keys(bookingByHour).length > 0) {
-        const [hour, clicks] = Object.entries(bookingByHour).sort(
-          (a, b) => b[1] - a[1]
-        )[0];
-        peakBookingHour = { hour, clicks };
-      }
-
-      // Helpful debug in your Render logs
-      console.log(
-        "Analytics summary derived from events:",
-        {
-          eventsCount: events.length,
-          topSearchedCount: topSearchedCourses.length,
-          demandRankCount: demandRank.length,
-        }
-      );
-    }
-
-    // Conversion metrics
-    const conversionHomeToBooking =
-      homeViews > 0 ? bookingClicks / homeViews : 0;
-
-    const conversionSearchToBooking =
-      searches > 0 ? bookingClicks / searches : 0;
-
-    res.json({
-      homeViews,
-      homePageViews: homeViews,
-      bookingClicks,
-      courseBookingClicks: bookingClicks,
-      searches,
-      newUsers,
-      usersAllTime,
-      usersToday,
-      usersWeek,
-      users30d,
-      returningUsers7d,
-      topCourses,
-      topSearchedCourses,
-      demandRank,
-      repeatBookers,
-      peakBookingHour,
-      conversionHomeToBooking,
-      conversionSearchToBooking,
-    });
-  } catch (err) {
-    console.error("Error loading analytics summary:", err);
-    res.status(500).json({ error: "Failed to load analytics summary" });
-  }
-});
-
-/* ============================================================
-   POST — Log a new analytics event
-   Accepts BOTH:
-   - { type, at, payload: {...} }
-   - { type, at, userId, courseName, ... }
-   ============================================================ */
+/**
+ * POST /api/analytics/event
+ * Body: { type, at?, payload? }
+ */
 router.post("/event", (req, res) => {
   try {
-    const body = req.body || {};
-    const { type, at } = body;
+    const { type, at, payload } = req.body || {};
 
-    let payload = body.payload;
-
-    // If no nested payload, treat top-level fields (except type/at) as payload
-    if (!payload || typeof payload !== "object") {
-      const { type: _t, at: _a, ...rest } = body;
-      payload = rest;
+    if (!type) {
+      return res.status(400).json({ error: "Missing event type" });
     }
 
-    analyticsDb.logAnalyticsEvent({
-      type,
-      at,
-      payload,
-    });
-
-    res.json({ ok: true });
+    logAnalyticsEvent({ type, at, payload });
+    return res.json({ ok: true });
   } catch (err) {
-    console.error("Error logging analytics event:", err);
-    res.status(500).json({ error: "Failed to log event" });
+    console.error("Error logging analytics event", err);
+    return res.status(500).json({ error: "Failed to log event" });
   }
 });
 
-/* ============================================================
-   GET Registered users (from main users table)
-   Used by analytics.html to display emails
-   ============================================================ */
-router.get("/users", async (req, res) => {
+/**
+ * GET /api/analytics/summary
+ * Returns everything the front-end needs.
+ */
+router.get("/summary", (req, res) => {
   try {
-    const result = await db.query(
-      `
-        SELECT id, email, home_course, created_at
-        FROM users
-        ORDER BY created_at DESC
-        LIMIT 500;
-      `
-    );
+    const s = getAnalyticsSummary();
 
-    const users = result.rows.map((row) => ({
-      id: row.id,
-      email: row.email,
-      created_at: row.created_at,
-      last_seen_at: null,
-      home_course: row.home_course,
-    }));
+    const response = {
+      // backwards-compatible fields you already use
+      homePageViews: s.home_page_views,
+      courseBookingClicks: s.booking_clicks,
+      searches: s.searches,
+      newUsers: s.new_users,
+      homeViews: s.home_page_views,
+      bookingClicks: s.booking_clicks,
+      usersAllTime: s.unique_users,
+      usersToday: s.users_today,
+      usersWeek: s.users_week,
 
-    res.json({ users });
+      // extra fields for new cards/metrics
+      users30d: s.users30d,
+      returningUsers7d: s.returning_users_7d,
+      repeatBookers: s.repeat_bookers,
+      peakBookingHour: s.peak_booking_hour,
+
+      topCourses: s.top_courses,
+      topSearchedCourses: s.top_searched_courses,
+      demandRank: s.demand_rank,
+    };
+
+    return res.json(response);
   } catch (err) {
-    console.error("Error loading registered users:", err);
-    res.status(500).json({ error: "Failed to load registered users" });
+    console.error("Error building analytics summary", err);
+    return res.status(500).json({ error: "Failed to load analytics summary" });
   }
 });
 
-/* ============================================================
-   OPTIONAL — Debug route: list recent events
-   ============================================================ */
+/**
+ * GET /api/analytics/events
+ * For debugging – recent raw events.
+ */
 router.get("/events", (req, res) => {
   try {
-    const events = analyticsDb.getAllEvents(200);
-    res.json({ events });
+    const limit = Number(req.query.limit) || 200;
+    const events = getAllEvents(limit);
+    return res.json({ events });
   } catch (err) {
-    console.error("Error loading events:", err);
-    res.status(500).json({ error: "Failed to load events" });
+    console.error("Error fetching analytics events", err);
+    return res.status(500).json({ error: "Failed to fetch events" });
+  }
+});
+
+/**
+ * (Optional) PUT /api/analytics/register-user
+ * Call this from your auth flow when someone signs up / logs in.
+ * Body: { email }
+ */
+router.put("/register-user", (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) {
+      return res.status(400).json({ error: "Missing email" });
+    }
+    recordRegisteredUser(email);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Error recording registered user", err);
+    return res.status(500).json({ error: "Failed to record user" });
+  }
+});
+
+/**
+ * GET /api/analytics/registered-users
+ * Used by the admin dashboard table.
+ */
+router.get("/registered-users", (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 500;
+    const users = getRegisteredUsers(limit);
+    return res.json({ users });
+  } catch (err) {
+    console.error("Error fetching registered users", err);
+    return res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+/**
+ * DELETE /api/analytics/registered-users/:id
+ * Used by the "Delete" button in the admin UI.
+ */
+router.delete("/registered-users/:id", (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!id) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+    deleteRegisteredUser(id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Error deleting registered user", err);
+    return res.status(500).json({ error: "Failed to delete user" });
   }
 });
 
