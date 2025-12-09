@@ -246,6 +246,12 @@
       opacity:0.6;
       cursor:default;
     }
+
+    @media (min-width: 768px) {
+      .cards-grid{
+        grid-template-columns:repeat(3,minmax(0,1fr));
+      }
+    }
   </style>
 </head>
 
@@ -299,6 +305,33 @@
       <div class="card-label">New users</div>
       <div id="metricNewUsers" class="card-value">0</div>
     </article>
+
+    <!-- NEW: conversion cards -->
+    <article class="card">
+      <div class="card-label">Home → booking conversion</div>
+      <div id="metricConvHomeBooking" class="card-value">0%</div>
+      <div class="card-hint">Booking clicks ÷ home page views</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Search → booking conversion</div>
+      <div id="metricConvSearchBooking" class="card-value">0%</div>
+      <div class="card-hint">Booking clicks ÷ searches</div>
+    </article>
+
+    <!-- NEW: repeat bookers -->
+    <article class="card">
+      <div class="card-label">Repeat bookers</div>
+      <div id="metricRepeatBookers" class="card-value">0</div>
+      <div class="card-hint">Users who clicked bookings more than once</div>
+    </article>
+
+    <!-- NEW: peak booking hour -->
+    <article class="card">
+      <div class="card-label">Peak booking hour</div>
+      <div id="metricPeakHour" class="card-value">–</div>
+      <div class="card-hint">Busiest hour by booking clicks</div>
+    </article>
   </section>
 
   <section class="card user-overview">
@@ -314,6 +347,12 @@
         This week <span id="usersWeek" style="font-weight:600;margin-left:4px;">0</span>
       </button>
     </div>
+    <!-- NEW: extra user metrics -->
+    <div class="muted-note" style="margin-top:4px;">
+      Last 30 days: <span id="users30d">0</span> • Returning last 7 days: <span id="returning7d">0</span>
+    </div>
+    <!-- NEW: health summary line -->
+    <div class="muted-note" id="healthSummary" style="margin-top:4px;"></div>
     <div class="muted-note" id="summaryUpdated">Loading analytics…</div>
   </section>
 
@@ -321,6 +360,22 @@
     <div class="card-label">Most-clicked courses</div>
     <ul id="topCoursesList" class="top-courses-list">
       <li><span class="label">No clicks yet</span><span class="value">—</span></li>
+    </ul>
+  </section>
+
+  <!-- NEW: most-searched courses -->
+  <section class="card" style="margin-top:14px;">
+    <div class="card-label">Most-searched courses</div>
+    <ul id="topSearchedCoursesList" class="top-courses-list">
+      <li><span class="label">No searches yet</span><span class="value">—</span></li>
+    </ul>
+  </section>
+
+  <!-- NEW: demand ranking -->
+  <section class="card" style="margin-top:14px;">
+    <div class="card-label">Course demand ranking</div>
+    <ul id="demandRankList" class="top-courses-list">
+      <li><span class="label">No demand data yet</span><span class="value">—</span></li>
     </ul>
   </section>
 
@@ -382,6 +437,22 @@
     }
   }
 
+  function formatHourRange(hourStr) {
+    if (hourStr == null) return "–";
+    const h = parseInt(hourStr, 10);
+    if (isNaN(h)) return "–";
+    const next = (h + 1) % 24;
+
+    function fmt(x) {
+      if (x === 0) return "12am";
+      if (x < 12) return x + "am";
+      if (x === 12) return "12pm";
+      return (x - 12) + "pm";
+    }
+
+    return `${fmt(h)}–${fmt(next)}`;
+  }
+
   async function loadAnalytics() {
     enforceAdmin();
 
@@ -393,29 +464,101 @@
       return;
     }
 
-    document.getElementById("metricHomeViews").textContent =
+    // base metrics
+    const homeViewsVal =
       summary.homePageViews ?? summary.homeViews ?? 0;
-
-    document.getElementById("metricBookingClicks").textContent =
+    const bookingClicksVal =
       summary.courseBookingClicks ?? summary.bookingClicks ?? 0;
-
-    document.getElementById("metricSearches").textContent =
+    const searchesVal =
       summary.searches ?? 0;
-
-    document.getElementById("metricNewUsers").textContent =
+    const newUsersVal =
       summary.newUsers ?? 0;
-
-    document.getElementById("usersAllTime").textContent =
+    const usersAllTimeVal =
       summary.usersAllTime ?? 0;
-
-    document.getElementById("usersToday").textContent =
+    const usersTodayVal =
       summary.usersToday ?? 0;
-
-    document.getElementById("usersWeek").textContent =
+    const usersWeekVal =
       summary.usersWeek ?? 0;
+
+    document.getElementById("metricHomeViews").textContent = homeViewsVal;
+    document.getElementById("metricBookingClicks").textContent = bookingClicksVal;
+    document.getElementById("metricSearches").textContent = searchesVal;
+    document.getElementById("metricNewUsers").textContent = newUsersVal;
+    document.getElementById("usersAllTime").textContent = usersAllTimeVal;
+    document.getElementById("usersToday").textContent = usersTodayVal;
+    document.getElementById("usersWeek").textContent = usersWeekVal;
+
+    // 🔹 conversion metrics: prefer backend values, otherwise compute locally
+    let convHome = summary.conversionHomeToBooking;
+    if (convHome == null) {
+      convHome = homeViewsVal > 0 ? bookingClicksVal / homeViewsVal : 0;
+    }
+
+    let convSearch = summary.conversionSearchToBooking;
+    if (convSearch == null) {
+      convSearch = searchesVal > 0 ? bookingClicksVal / searchesVal : 0;
+    }
+
+    const convHomeEl = document.getElementById("metricConvHomeBooking");
+    if (convHomeEl) {
+      const pct = (convHome * 100).toFixed(1).replace(/\.0$/, "");
+      convHomeEl.textContent = pct + "%";
+    }
+
+    const convSearchEl = document.getElementById("metricConvSearchBooking");
+    if (convSearchEl) {
+      const pct = (convSearch * 100).toFixed(1).replace(/\.0$/, "");
+      convSearchEl.textContent = pct + "%";
+    }
+
+    // extra user metrics
+    const users30d = summary.users30d ?? summary.users_30d ?? 0;
+    const returning7d = summary.returningUsers7d ?? summary.returning_users_7d ?? 0;
+
+    const users30dEl = document.getElementById("users30d");
+    if (users30dEl) users30dEl.textContent = users30d;
+
+    const returning7dEl = document.getElementById("returning7d");
+    if (returning7dEl) returning7dEl.textContent = returning7d;
+
+    // repeat bookers (will stay 0 until we start sending userId in events)
+    const repeatBookersVal = summary.repeatBookers ?? summary.repeat_bookers ?? 0;
+    const repeatEl = document.getElementById("metricRepeatBookers");
+    if (repeatEl) repeatEl.textContent = repeatBookersVal;
+
+    // peak booking hour
+    const peak = summary.peakBookingHour ?? summary.peak_booking_hour ?? null;
+    const peakEl = document.getElementById("metricPeakHour");
+    if (peakEl) {
+      if (peak && peak.hour != null) {
+        peakEl.textContent = `${formatHourRange(peak.hour)} (${peak.clicks} clicks)`;
+      } else {
+        peakEl.textContent = "–";
+      }
+    }
+
+    // health summary line
+    const healthEl = document.getElementById("healthSummary");
+    if (healthEl) {
+      let signupRateRaw = 0;
+      const activeBase = users30d > 0 ? users30d : usersAllTimeVal;
+      if (activeBase > 0) {
+        signupRateRaw = newUsersVal / activeBase;
+      }
+      if (!Number.isFinite(signupRateRaw)) signupRateRaw = 0;
+
+      const bookingClickRatePct = (convHome * 100).toFixed(1).replace(/\.0$/, "");
+      const signupRatePct = (signupRateRaw * 100).toFixed(1).replace(/\.0$/, "");
+
+      healthEl.textContent =
+        `${bookingClickRatePct}% of visitors click a booking, ` +
+        `${signupRatePct}% sign up, ` +
+        `${returning7d} users returned in the last 7 days.`;
+    }
 
     updatedAt.textContent = "Last updated " + new Date().toLocaleString();
 
+    // most-clicked courses
     const topList = document.getElementById("topCoursesList");
     topList.innerHTML = "";
 
@@ -433,6 +576,49 @@
           </li>
         `;
       });
+    }
+
+    // most-searched courses
+    const topSearchList = document.getElementById("topSearchedCoursesList");
+    if (topSearchList) {
+      topSearchList.innerHTML = "";
+      const topSearched = summary.topSearchedCourses || summary.top_searched_courses || [];
+
+      if (!topSearched.length) {
+        topSearchList.innerHTML =
+          `<li><span class="label">No searches yet</span><span class="value">—</span></li>`;
+      } else {
+        topSearched.forEach((row) => {
+          topSearchList.innerHTML += `
+            <li>
+              <span class="label">${row.courseName}</span>
+              <span class="value">${row.searches} searches</span>
+            </li>
+          `;
+        });
+      }
+    }
+
+    // demand ranking
+    const demandList = document.getElementById("demandRankList");
+    if (demandList) {
+      demandList.innerHTML = "";
+      const demand = summary.demandRank || summary.demand_rank || [];
+      if (!demand.length) {
+        demandList.innerHTML =
+          `<li><span class="label">No demand data yet</span><span class="value">—</span></li>`;
+      } else {
+        demand.forEach((row) => {
+          demandList.innerHTML += `
+            <li>
+              <span class="label">${row.courseName}</span>
+              <span class="value">
+                ${row.score} pts · ${row.clicks} clicks · ${row.searches} searches
+              </span>
+            </li>
+          `;
+        });
+      }
     }
   }
 
