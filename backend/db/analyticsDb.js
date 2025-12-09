@@ -56,7 +56,7 @@ const upsertUserStmt = db.prepare(`
  * Log a single analytics event.
  * We auto-extract:
  *  - userId from payload.userId / payload.user_id / payload.clientId
- *  - courseName from payload.courseName / payload.course
+ *  - courseName from payload.courseName / payload.course / payload.course_name
  */
 export function logAnalyticsEvent({ type, at, payload }) {
   const safePayload = payload || {};
@@ -70,6 +70,7 @@ export function logAnalyticsEvent({ type, at, payload }) {
   const courseName =
     safePayload.courseName ||
     safePayload.course ||
+    safePayload.course_name ||
     null;
 
   const record = {
@@ -157,17 +158,23 @@ export function getAnalyticsSummary() {
     demand_rank: []
   };
 
+  // Aggregate counts by type (allowing for multiple variants)
   for (const row of byType) {
-    if (row.type === "home_view" || row.type === "home_page_view") {
-      summary.home_page_views = row.count;
-    } else if (row.type === "booking_click") {
-      summary.booking_clicks = row.count;
-    } else if (row.type === "search") {
-      summary.searches = row.count;
-    } else if (row.type === "new_user") {
-      summary.new_users = row.count;
+    const type = row.type;
+    const count = Number(row.count) || 0;
+
+    if (type === "home_view" || type === "home_page_view") {
+      summary.home_page_views += count;
+    } else if (type === "booking_click" || type === "course_booking_click") {
+      summary.booking_clicks += count;
+    } else if (type === "search") {
+      // overall search metric — keep this as the "Search availability" taps
+      summary.searches += count;
+    } else if (type === "new_user") {
+      summary.new_users += count;
     }
-    summary.total_events += row.count;
+
+    summary.total_events += count;
   }
 
   // Unique users across all events
@@ -243,12 +250,12 @@ export function getAnalyticsSummary() {
     .get();
   summary.returning_users_7d = returningRow?.cnt || 0;
 
-  // Top 5 most-clicked courses
+  // Top 5 most-clicked courses (include both booking_click + course_booking_click)
   const topCourses = db
     .prepare(
       `SELECT course_name AS courseName, COUNT(*) AS clicks
        FROM analytics_events
-       WHERE type = 'booking_click'
+       WHERE type IN ('booking_click','course_booking_click')
          AND course_name IS NOT NULL
          AND course_name <> ''
        GROUP BY course_name
@@ -259,11 +266,12 @@ export function getAnalyticsSummary() {
   summary.top_courses = topCourses;
 
   // Top 5 most-searched courses
+  // Use new per-course type 'search_course' plus any legacy 'search' rows that had a course_name
   const topSearchedCourses = db
     .prepare(
       `SELECT course_name AS courseName, COUNT(*) AS searches
        FROM analytics_events
-       WHERE type = 'search'
+       WHERE type IN ('search','search_course')
          AND course_name IS NOT NULL
          AND course_name <> ''
        GROUP BY course_name
@@ -273,12 +281,12 @@ export function getAnalyticsSummary() {
     .all();
   summary.top_searched_courses = topSearchedCourses;
 
-  // Peak booking hour (by booking_click)
+  // Peak booking hour (by all booking click variants)
   const peakHourRow = db
     .prepare(
       `SELECT strftime('%H', at) AS hour, COUNT(*) AS clicks
        FROM analytics_events
-       WHERE type = 'booking_click'
+       WHERE type IN ('booking_click','course_booking_click')
        GROUP BY hour
        ORDER BY clicks DESC
        LIMIT 1`
@@ -288,7 +296,7 @@ export function getAnalyticsSummary() {
     ? { hour: peakHourRow.hour, clicks: peakHourRow.clicks }
     : null;
 
-  // Repeat bookers: users with >1 booking_click
+  // Repeat bookers: users with >1 booking_click (any variant)
   const repeatRow = db
     .prepare(
       `
@@ -296,7 +304,7 @@ export function getAnalyticsSummary() {
       FROM (
         SELECT user_id
         FROM analytics_events
-        WHERE type = 'booking_click'
+        WHERE type IN ('booking_click','course_booking_click')
           AND user_id IS NOT NULL
           AND user_id <> ''
         GROUP BY user_id
@@ -313,16 +321,36 @@ export function getAnalyticsSummary() {
       `
       SELECT
         course_name AS courseName,
-        SUM(CASE WHEN type = 'search' THEN 1 ELSE 0 END) AS searches,
-        SUM(CASE WHEN type = 'booking_click' THEN 1 ELSE 0 END) AS clicks,
+        SUM(
+          CASE
+            WHEN type IN ('search','search_course') THEN 1
+            ELSE 0
+          END
+        ) AS searches,
+        SUM(
+          CASE
+            WHEN type IN ('booking_click','course_booking_click') THEN 1
+            ELSE 0
+          END
+        ) AS clicks,
         (
-          SUM(CASE WHEN type = 'search' THEN 1 ELSE 0 END) * 2
-          + SUM(CASE WHEN type = 'booking_click' THEN 1 ELSE 0 END)
+          SUM(
+            CASE
+              WHEN type IN ('search','search_course') THEN 1
+              ELSE 0
+            END
+          ) * 2
+          + SUM(
+            CASE
+              WHEN type IN ('booking_click','course_booking_click') THEN 1
+              ELSE 0
+            END
+          )
         ) AS score
       FROM analytics_events
       WHERE course_name IS NOT NULL
         AND course_name <> ''
-        AND type IN ('search','booking_click')
+        AND type IN ('search','search_course','booking_click','course_booking_click')
       GROUP BY course_name
       ORDER BY score DESC
       LIMIT 5
