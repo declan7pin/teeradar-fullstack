@@ -246,6 +246,12 @@
       opacity:0.6;
       cursor:default;
     }
+
+    @media (min-width: 768px) {
+      .cards-grid{
+        grid-template-columns:repeat(3,minmax(0,1fr));
+      }
+    }
   </style>
 </head>
 
@@ -312,6 +318,20 @@
       <div id="metricConvSearchBooking" class="card-value">0%</div>
       <div class="card-hint">Booking clicks ÷ searches</div>
     </article>
+
+    <!-- NEW: repeat bookers -->
+    <article class="card">
+      <div class="card-label">Repeat bookers</div>
+      <div id="metricRepeatBookers" class="card-value">0</div>
+      <div class="card-hint">Users who clicked bookings more than once</div>
+    </article>
+
+    <!-- NEW: peak booking hour -->
+    <article class="card">
+      <div class="card-label">Peak booking hour</div>
+      <div id="metricPeakHour" class="card-value">–</div>
+      <div class="card-hint">Busiest hour by booking clicks</div>
+    </article>
   </section>
 
   <section class="card user-overview">
@@ -331,6 +351,8 @@
     <div class="muted-note" style="margin-top:4px;">
       Last 30 days: <span id="users30d">0</span> • Returning last 7 days: <span id="returning7d">0</span>
     </div>
+    <!-- NEW: health summary line -->
+    <div class="muted-note" id="healthSummary" style="margin-top:4px;"></div>
     <div class="muted-note" id="summaryUpdated">Loading analytics…</div>
   </section>
 
@@ -346,6 +368,14 @@
     <div class="card-label">Most-searched courses</div>
     <ul id="topSearchedCoursesList" class="top-courses-list">
       <li><span class="label">No searches yet</span><span class="value">—</span></li>
+    </ul>
+  </section>
+
+  <!-- NEW: demand ranking -->
+  <section class="card" style="margin-top:14px;">
+    <div class="card-label">Course demand ranking</div>
+    <ul id="demandRankList" class="top-courses-list">
+      <li><span class="label">No demand data yet</span><span class="value">—</span></li>
     </ul>
   </section>
 
@@ -407,6 +437,22 @@
     }
   }
 
+  function formatHourRange(hourStr) {
+    if (hourStr == null) return "–";
+    const h = parseInt(hourStr, 10);
+    if (isNaN(h)) return "–";
+    const next = (h + 1) % 24;
+
+    function fmt(x) {
+      if (x === 0) return "12am";
+      if (x < 12) return x + "am";
+      if (x === 12) return "12pm";
+      return (x - 12) + "pm";
+    }
+
+    return `${fmt(h)}–${fmt(next)}`;
+  }
+
   async function loadAnalytics() {
     enforceAdmin();
 
@@ -419,26 +465,28 @@
     }
 
     // existing metrics
-    document.getElementById("metricHomeViews").textContent =
+    const homeViewsVal =
       summary.homePageViews ?? summary.homeViews ?? 0;
-
-    document.getElementById("metricBookingClicks").textContent =
+    const bookingClicksVal =
       summary.courseBookingClicks ?? summary.bookingClicks ?? 0;
-
-    document.getElementById("metricSearches").textContent =
+    const searchesVal =
       summary.searches ?? 0;
-
-    document.getElementById("metricNewUsers").textContent =
+    const newUsersVal =
       summary.newUsers ?? 0;
-
-    document.getElementById("usersAllTime").textContent =
+    const usersAllTimeVal =
       summary.usersAllTime ?? 0;
-
-    document.getElementById("usersToday").textContent =
+    const usersTodayVal =
       summary.usersToday ?? 0;
-
-    document.getElementById("usersWeek").textContent =
+    const usersWeekVal =
       summary.usersWeek ?? 0;
+
+    document.getElementById("metricHomeViews").textContent = homeViewsVal;
+    document.getElementById("metricBookingClicks").textContent = bookingClicksVal;
+    document.getElementById("metricSearches").textContent = searchesVal;
+    document.getElementById("metricNewUsers").textContent = newUsersVal;
+    document.getElementById("usersAllTime").textContent = usersAllTimeVal;
+    document.getElementById("usersToday").textContent = usersTodayVal;
+    document.getElementById("usersWeek").textContent = usersWeekVal;
 
     // NEW: conversion metrics
     const convHome = summary.conversionHomeToBooking ?? 0;
@@ -466,6 +514,41 @@
     const returning7dEl = document.getElementById("returning7d");
     if (returning7dEl) returning7dEl.textContent = returning7d;
 
+    // NEW: repeat bookers
+    const repeatBookersVal = summary.repeatBookers ?? summary.repeat_bookers ?? 0;
+    const repeatEl = document.getElementById("metricRepeatBookers");
+    if (repeatEl) repeatEl.textContent = repeatBookersVal;
+
+    // NEW: peak booking hour
+    const peak = summary.peakBookingHour ?? summary.peak_booking_hour ?? null;
+    const peakEl = document.getElementById("metricPeakHour");
+    if (peakEl) {
+      if (peak && peak.hour != null) {
+        peakEl.textContent = `${formatHourRange(peak.hour)} (${peak.clicks} clicks)`;
+      } else {
+        peakEl.textContent = "–";
+      }
+    }
+
+    // NEW: health summary line
+    const healthEl = document.getElementById("healthSummary");
+    if (healthEl) {
+      let signupRateRaw = 0;
+      const activeBase = users30d > 0 ? users30d : usersAllTimeVal;
+      if (activeBase > 0) {
+        signupRateRaw = newUsersVal / activeBase;
+      }
+      if (!Number.isFinite(signupRateRaw)) signupRateRaw = 0;
+
+      const bookingClickRatePct = (convHome * 100).toFixed(1).replace(/\.0$/, "");
+      const signupRatePct = (signupRateRaw * 100).toFixed(1).replace(/\.0$/, "");
+
+      healthEl.textContent =
+        `${bookingClickRatePct}% of visitors click a booking, ` +
+        `${signupRatePct}% sign up, ` +
+        `${returning7d} users returned in the last 7 days.`;
+    }
+
     updatedAt.textContent = "Last updated " + new Date().toLocaleString();
 
     // most-clicked courses
@@ -488,7 +571,7 @@
       });
     }
 
-    // NEW: most-searched courses
+    // most-searched courses
     const topSearchList = document.getElementById("topSearchedCoursesList");
     if (topSearchList) {
       topSearchList.innerHTML = "";
@@ -503,6 +586,28 @@
             <li>
               <span class="label">${row.courseName}</span>
               <span class="value">${row.searches} searches</span>
+            </li>
+          `;
+        });
+      }
+    }
+
+    // demand ranking
+    const demandList = document.getElementById("demandRankList");
+    if (demandList) {
+      demandList.innerHTML = "";
+      const demand = summary.demandRank || summary.demand_rank || [];
+      if (!demand.length) {
+        demandList.innerHTML =
+          `<li><span class="label">No demand data yet</span><span class="value">—</span></li>`;
+      } else {
+        demand.forEach((row) => {
+          demandList.innerHTML += `
+            <li>
+              <span class="label">${row.courseName}</span>
+              <span class="value">
+                ${row.score} pts · ${row.clicks} clicks · ${row.searches} searches
+              </span>
             </li>
           `;
         });
