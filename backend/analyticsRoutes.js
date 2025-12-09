@@ -1,109 +1,147 @@
 // backend/analyticsRoutes.js
 import express from "express";
-import analyticsDb from "./db/analyticsDb.js";
-import db from "./db.js";
+import {
+  logAnalyticsEvent,
+  getAnalyticsSummary,
+  getAllEvents,
+  getRegisteredUsers,
+  recordRegisteredUser,
+  deleteRegisteredUser,
+} from "./db/analyticsDb.js";
 
 const router = express.Router();
 
-/* ============================================================
-   GET — Summary used by analytics.html
-   ============================================================ */
-router.get("/", (req, res) => {
-  try {
-    const summary = analyticsDb.getAnalyticsSummary();
-
-    res.json({
-      homeViews: summary.home_page_views,
-      homePageViews: summary.home_page_views,
-      bookingClicks: summary.booking_clicks,
-      courseBookingClicks: summary.booking_clicks,
-      searches: summary.searches,
-      newUsers: summary.new_users,
-      usersAllTime: summary.unique_users,
-      // You can customise these later if you want true "today" / "week"
-      usersToday: summary.unique_users,
-      usersWeek: summary.unique_users,
-      topCourses: summary.top_courses
-    });
-  } catch (err) {
-    console.error("Error loading analytics summary:", err);
-    res.status(500).json({ error: "Failed to load analytics summary" });
-  }
-});
-
-/* ============================================================
-   POST — Log a new analytics event
-   ============================================================ */
+/**
+ * POST /api/analytics/event
+ * Body: { type, at?, payload? }
+ */
 router.post("/event", (req, res) => {
   try {
     const { type, at, payload } = req.body || {};
-    analyticsDb.logAnalyticsEvent({ type, at, payload });
-    res.json({ ok: true });
+
+    if (!type) {
+      return res.status(400).json({ error: "Missing event type" });
+    }
+
+    logAnalyticsEvent({ type, at, payload });
+    return res.json({ ok: true });
   } catch (err) {
-    console.error("Error logging analytics event:", err);
-    res.status(500).json({ error: "Failed to log event" });
+    console.error("Error logging analytics event", err);
+    return res.status(500).json({ error: "Failed to log event" });
   }
 });
 
-/* ============================================================
-   NEW — GET Registered users (from main users table)
-   Used by analytics.html to display emails
-   ============================================================ */
-router.get("/users", async (req, res) => {
+// shared handler for summary so we can serve both "/" and "/summary"
+function handleSummary(req, res) {
   try {
-    const result = await db.query(
-      `
-        SELECT id, email, home_course, created_at
-        FROM users
-        ORDER BY created_at DESC
-        LIMIT 500;
-      `
-    );
+    const s = getAnalyticsSummary();
 
-    const users = result.rows.map((row) => ({
-      id: row.id,
-      email: row.email,
-      created_at: row.created_at,
-      last_seen_at: null,          // optional – we don't track this yet
-      home_course: row.home_course // not used in UI now but handy later
-    }));
+    const response = {
+      // backwards-compatible fields you already use
+      homePageViews: s.home_page_views,
+      courseBookingClicks: s.booking_clicks,
+      searches: s.searches,
+      newUsers: s.new_users,
+      homeViews: s.home_page_views,
+      bookingClicks: s.booking_clicks,
+      usersAllTime: s.unique_users,
+      usersToday: s.users_today,
+      usersWeek: s.users_week,
 
-    res.json({ users });
+      // extra fields for new cards/metrics
+      users30d: s.users30d,
+      returningUsers7d: s.returning_users_7d,
+      repeatBookers: s.repeat_bookers,
+      peakBookingHour: s.peak_booking_hour,
+
+      topCourses: s.top_courses,
+      topSearchedCourses: s.top_searched_courses,
+      demandRank: s.demand_rank,
+    };
+
+    return res.json(response);
   } catch (err) {
-    console.error("Error loading registered users:", err);
-    res.status(500).json({ error: "Failed to load registered users" });
+    console.error("Error building analytics summary", err);
+    return res.status(500).json({ error: "Failed to load analytics summary" });
+  }
+}
+
+/**
+ * GET /api/analytics
+ * Main endpoint used by analytics.html
+ */
+router.get("/", handleSummary);
+
+/**
+ * GET /api/analytics/summary
+ * Backwards-compatible alias
+ */
+router.get("/summary", handleSummary);
+
+/**
+ * GET /api/analytics/events
+ * For debugging – recent raw events.
+ */
+router.get("/events", (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 200;
+    const events = getAllEvents(limit);
+    return res.json({ events });
+  } catch (err) {
+    console.error("Error fetching analytics events", err);
+    return res.status(500).json({ error: "Failed to fetch events" });
   }
 });
 
-/* ============================================================
-   STILL THERE — POST Register / update a user by email
-   (Safe to keep; you can call this separately if you want)
-   ============================================================ */
-router.post("/register-user", (req, res) => {
+/**
+ * PUT /api/analytics/register-user
+ * Call this from your auth flow when someone signs up / logs in.
+ * Body: { email }
+ */
+router.put("/register-user", (req, res) => {
   try {
     const { email } = req.body || {};
     if (!email) {
-      return res.status(400).json({ error: "Email required" });
+      return res.status(400).json({ error: "Missing email" });
     }
-
-    analyticsDb.recordRegisteredUser(email);
-    res.json({ ok: true });
+    recordRegisteredUser(email);
+    return res.json({ ok: true });
   } catch (err) {
-    console.error("Error recording registered user:", err);
-    res.status(500).json({ error: "Failed to record user" });
+    console.error("Error recording registered user", err);
+    return res.status(500).json({ error: "Failed to record user" });
   }
 });
 
-/* ============================================================
-   OPTIONAL — Debug route: list events
-   ============================================================ */
-router.get("/events", (req, res) => {
+/**
+ * GET /api/analytics/users
+ * Used by the admin dashboard table (analytics.html).
+ */
+router.get("/users", (req, res) => {
   try {
-    const events = analyticsDb.getAllEvents(200);
-    res.json({ events });
+    const limit = Number(req.query.limit) || 500;
+    const users = getRegisteredUsers(limit);
+    return res.json({ users });
   } catch (err) {
-    console.error("Error loading events:", err);
-    res.status(500).json({ error: "Failed to load events" });
+    console.error("Error fetching registered users", err);
+    return res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+/**
+ * DELETE /api/analytics/users/:id
+ * Used by the "Delete" button in the admin UI.
+ */
+router.delete("/users/:id", (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!id) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+    deleteRegisteredUser(id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Error deleting registered user", err);
+    return res.status(500).json({ error: "Failed to delete user" });
   }
 });
 
