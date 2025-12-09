@@ -142,6 +142,53 @@ export async function getAnalyticsSummary() {
   summary.searchToBookingRate =
     summary.searches > 0 ? summary.bookingClicks / summary.searches : 0;
 
+  // Aliases that the frontend expects
+  summary.homePageViews = summary.homeViews;
+  summary.courseBookingClicks = summary.bookingClicks;
+  summary.conversionHomeToBooking = summary.homeToBookingRate;
+  summary.conversionSearchToBooking = summary.searchToBookingRate;
+
+  // Repeat bookers: users with >1 booking_click / course_booking_click
+  summary.repeatBookers = await count(
+    `
+    SELECT COUNT(*)::int AS n
+    FROM (
+      SELECT user_id
+      FROM analytics
+      WHERE type IN ('booking_click','course_booking_click')
+        AND user_id IS NOT NULL
+        AND user_id <> ''
+      GROUP BY user_id
+      HAVING COUNT(*) > 1
+    ) AS sub
+    `
+  );
+
+  // Peak booking hour (by booking_click + course_booking_click)
+  {
+    const { rows } = await db.query(
+      `
+      SELECT
+        to_char(date_trunc('hour', occurred_at), 'HH24') AS hour,
+        COUNT(*)::int AS clicks
+      FROM analytics
+      WHERE type IN ('booking_click','course_booking_click')
+      GROUP BY hour
+      ORDER BY clicks DESC
+      LIMIT 1
+      `
+    );
+
+    summary.peakBookingHour = rows.length
+      ? { hour: rows[0].hour, clicks: rows[0].clicks }
+      : null;
+  }
+
+  // Attach course-level metrics to the summary
+  summary.topCourses = await getTopCourses(10);
+  summary.topSearchedCourses = await getTopSearchedCourses(10);
+  summary.demandRank = await getDemandRanking(10);
+
   return summary;
 }
 
@@ -169,7 +216,7 @@ export async function getTopCourses(limit = 10) {
 
 /**
  * Return top courses by search count.
- * Useful for "most searched" vs "most clicked" comparisons.
+ * Uses per-course search events ("search_course").
  */
 export async function getTopSearchedCourses(limit = 10) {
   await ensureAnalyticsTable();
@@ -180,10 +227,40 @@ export async function getTopSearchedCourses(limit = 10) {
         COUNT(*)::int AS "searches"
      FROM analytics
      WHERE course_name IS NOT NULL
-       AND type = 'search'
+       AND type = 'search_course'
      GROUP BY course_name
      ORDER BY COUNT(*) DESC
      LIMIT $1`,
+    [limit]
+  );
+
+  return rows;
+}
+
+/**
+ * Course demand ranking:
+ * score = (per-course searches * 2) + booking clicks.
+ */
+export async function getDemandRanking(limit = 10) {
+  await ensureAnalyticsTable();
+
+  const { rows } = await db.query(
+    `
+    SELECT
+      course_name AS "courseName",
+      SUM(CASE WHEN type = 'search_course' THEN 1 ELSE 0 END)::int AS "searches",
+      SUM(CASE WHEN type IN ('booking_click','course_booking_click') THEN 1 ELSE 0 END)::int AS "clicks",
+      (
+        SUM(CASE WHEN type = 'search_course' THEN 1 ELSE 0 END) * 2
+        + SUM(CASE WHEN type IN ('booking_click','course_booking_click') THEN 1 ELSE 0 END)
+      )::int AS "score"
+    FROM analytics
+    WHERE course_name IS NOT NULL
+      AND type IN ('search_course','booking_click','course_booking_click')
+    GROUP BY course_name
+    ORDER BY "score" DESC
+    LIMIT $1
+    `,
     [limit]
   );
 
