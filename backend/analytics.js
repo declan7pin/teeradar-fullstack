@@ -59,6 +59,8 @@ export async function getAnalyticsSummary() {
     return rows.length ? Number(rows[0].n) || 0 : 0;
   }
 
+  // ----- existing metrics (unchanged) -----
+
   summary.homeViews = await count(
     `SELECT COUNT(*)::int AS n FROM analytics WHERE type = 'home_view'`
   );
@@ -104,6 +106,89 @@ export async function getAnalyticsSummary() {
      WHERE occurred_at >= date_trunc('day', NOW()) - INTERVAL '6 days'`
   );
 
+  // ----- new metrics added below -----
+
+  // Distinct users in the last 30 days (for "last month" views)
+  summary.users30d = await count(
+    `SELECT COUNT(DISTINCT user_id)::int AS n
+     FROM analytics
+     WHERE occurred_at >= NOW() - INTERVAL '30 days'`
+  );
+
+  // Returning users in the last 7 days:
+  // users who had activity in the last 7 days AND also before that
+  summary.returningUsers7d = await count(
+    `
+    WITH recent AS (
+      SELECT DISTINCT user_id
+      FROM analytics
+      WHERE occurred_at >= NOW() - INTERVAL '7 days'
+    ),
+    earlier AS (
+      SELECT DISTINCT user_id
+      FROM analytics
+      WHERE occurred_at < NOW() - INTERVAL '7 days'
+    )
+    SELECT COUNT(*)::int AS n
+    FROM recent
+    JOIN earlier USING (user_id)
+    `
+  );
+
+  // Conversion rates (returned as 0–1 ratios; front-end can multiply by 100 for %)
+  summary.homeToBookingRate =
+    summary.homeViews > 0 ? summary.bookingClicks / summary.homeViews : 0;
+
+  summary.searchToBookingRate =
+    summary.searches > 0 ? summary.bookingClicks / summary.searches : 0;
+
+  // Aliases that the frontend expects
+  summary.homePageViews = summary.homeViews;
+  summary.courseBookingClicks = summary.bookingClicks;
+  summary.conversionHomeToBooking = summary.homeToBookingRate;
+  summary.conversionSearchToBooking = summary.searchToBookingRate;
+
+  // Repeat bookers: users with >1 booking_click / course_booking_click
+  summary.repeatBookers = await count(
+    `
+    SELECT COUNT(*)::int AS n
+    FROM (
+      SELECT user_id
+      FROM analytics
+      WHERE type IN ('booking_click','course_booking_click')
+        AND user_id IS NOT NULL
+        AND user_id <> ''
+      GROUP BY user_id
+      HAVING COUNT(*) > 1
+    ) AS sub
+    `
+  );
+
+  // Peak booking hour (by booking_click + course_booking_click)
+  {
+    const { rows } = await db.query(
+      `
+      SELECT
+        to_char(date_trunc('hour', occurred_at), 'HH24') AS hour,
+        COUNT(*)::int AS clicks
+      FROM analytics
+      WHERE type IN ('booking_click','course_booking_click')
+      GROUP BY hour
+      ORDER BY clicks DESC
+      LIMIT 1
+      `
+    );
+
+    summary.peakBookingHour = rows.length
+      ? { hour: rows[0].hour, clicks: rows[0].clicks }
+      : null;
+  }
+
+  // Attach course-level metrics to the summary
+  summary.topCourses = await getTopCourses(10);
+  summary.topSearchedCourses = await getTopSearchedCourses(10);
+  summary.demandRank = await getDemandRanking(10);
+
   return summary;
 }
 
@@ -123,6 +208,59 @@ export async function getTopCourses(limit = 10) {
      GROUP BY course_name
      ORDER BY COUNT(*) DESC
      LIMIT $1`,
+    [limit]
+  );
+
+  return rows;
+}
+
+/**
+ * Return top courses by search count.
+ * Uses per-course search events ("search_course").
+ */
+export async function getTopSearchedCourses(limit = 10) {
+  await ensureAnalyticsTable();
+
+  const { rows } = await db.query(
+    `SELECT
+        course_name AS "courseName",
+        COUNT(*)::int AS "searches"
+     FROM analytics
+     WHERE course_name IS NOT NULL
+       AND type = 'search_course'
+     GROUP BY course_name
+     ORDER BY COUNT(*) DESC
+     LIMIT $1`,
+    [limit]
+  );
+
+  return rows;
+}
+
+/**
+ * Course demand ranking:
+ * score = (per-course searches * 2) + booking clicks.
+ */
+export async function getDemandRanking(limit = 10) {
+  await ensureAnalyticsTable();
+
+  const { rows } = await db.query(
+    `
+    SELECT
+      course_name AS "courseName",
+      SUM(CASE WHEN type = 'search_course' THEN 1 ELSE 0 END)::int AS "searches",
+      SUM(CASE WHEN type IN ('booking_click','course_booking_click') THEN 1 ELSE 0 END)::int AS "clicks",
+      (
+        SUM(CASE WHEN type = 'search_course' THEN 1 ELSE 0 END) * 2
+        + SUM(CASE WHEN type IN ('booking_click','course_booking_click') THEN 1 ELSE 0 END)
+      )::int AS "score"
+    FROM analytics
+    WHERE course_name IS NOT NULL
+      AND type IN ('search_course','booking_click','course_booking_click')
+    GROUP BY course_name
+    ORDER BY "score" DESC
+    LIMIT $1
+    `,
     [limit]
   );
 
