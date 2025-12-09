@@ -31,11 +31,8 @@ router.post("/event", (req, res) => {
   }
 });
 
-/**
- * GET /api/analytics/summary
- * Returns everything the front-end needs.
- */
-router.get("/summary", (req, res) => {
+// shared handler for summary so we can serve both "/" and "/summary"
+function handleSummary(req, res) {
   try {
     const s = getAnalyticsSummary();
 
@@ -67,7 +64,19 @@ router.get("/summary", (req, res) => {
     console.error("Error building analytics summary", err);
     return res.status(500).json({ error: "Failed to load analytics summary" });
   }
-});
+}
+
+/**
+ * GET /api/analytics
+ * Main endpoint used by analytics.html
+ */
+router.get("/", handleSummary);
+
+/**
+ * GET /api/analytics/summary
+ * Backwards-compatible alias
+ */
+router.get("/summary", handleSummary);
 
 /**
  * GET /api/analytics/events
@@ -85,7 +94,7 @@ router.get("/events", (req, res) => {
 });
 
 /**
- * (Optional) PUT /api/analytics/register-user
+ * PUT /api/analytics/register-user
  * Call this from your auth flow when someone signs up / logs in.
  * Body: { email }
  */
@@ -104,10 +113,10 @@ router.put("/register-user", (req, res) => {
 });
 
 /**
- * GET /api/analytics/registered-users
- * Used by the admin dashboard table.
+ * GET /api/analytics/users
+ * Used by the admin dashboard table (analytics.html).
  */
-router.get("/registered-users", (req, res) => {
+router.get("/users", (req, res) => {
   try {
     const limit = Number(req.query.limit) || 500;
     const users = getRegisteredUsers(limit);
@@ -119,10 +128,10 @@ router.get("/registered-users", (req, res) => {
 });
 
 /**
- * DELETE /api/analytics/registered-users/:id
+ * DELETE /api/analytics/users/:id
  * Used by the "Delete" button in the admin UI.
  */
-router.delete("/registered-users/:id", (req, res) => {
+router.delete("/users/:id", (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!id) {
