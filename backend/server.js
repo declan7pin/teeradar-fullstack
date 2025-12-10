@@ -124,7 +124,7 @@ app.post("/api/subscribe", async (req, res) => {
         },
       ],
       success_url:
-        "https://teeradar-fullstack-4.onrender.com/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}",
+         "https://teeradar-fullstack-4.onrender.com/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1",
       cancel_url:
         "https://teeradar-fullstack-4.onrender.com/subscribe-cancel.html",
     });
