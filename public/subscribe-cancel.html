@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TeeRadar – Payment Cancelled</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --teal: #006b57;
+      --bg: #f5f7fb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .card {
+      background: #ffffff;
+      padding: 24px 20px;
+      max-width: 420px;
+      width: 100%;
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+      text-align: center;
+    }
+
+    .icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 1.5rem;
+      color: #111827;
+    }
+
+    p {
+      margin: 6px 0;
+      color: #4b5563;
+      font-size: 0.95rem;
+    }
+
+    .primary-btn {
+      margin-top: 18px;
+      display: inline-block;
+      padding: 10px 18px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      background: var(--teal);
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">⚠️</div>
+    <h1>Payment cancelled</h1>
+    <p>Your subscription wasn’t completed. You haven’t been charged.</p>
+    <p>You can try again any time from the subscription page.</p>
+
+    <button class="primary-btn" onclick="goHome()">
+      Back to TeeRadar
+    </button>
+  </div>
+
+  <script>
+    function goHome() {
+      window.location.href = "/";
+    }
+  </script>
+</body>
+</html>
