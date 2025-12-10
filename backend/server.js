@@ -125,8 +125,8 @@ app.post("/api/subscribe", async (req, res) => {
       ],
       // TODO: replace YOUR_DOMAIN with your actual domain (test/prod)
       success_url:
-        "https://YOUR_DOMAIN/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://YOUR_DOMAIN/subscribe-cancel.html",
+        "https://teeradar-fullstack-4.onrender.com/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://teeradar-fullstack-4.onrender.com/subscribe-cancel.html",
     });
 
     res.json({ url: session.url });
