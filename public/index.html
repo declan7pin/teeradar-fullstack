@@ -736,8 +736,6 @@
 
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
-  const urlParams = new URLSearchParams(window.location.search);
-  const fromSignupFlag = urlParams.get("signup") === "1";
 
   // ---- ANALYTICS (unchanged) ----
   function trackEvent(type, payload) {
@@ -823,6 +821,15 @@
   const authForgot = document.getElementById("authForgot");
   const authHomeCourseRow = document.getElementById("authHomeCourseRow");
 
+  // ✅ helper: does this browser think the user has paid?
+  function hasPaidSubscription() {
+    try {
+      return localStorage.getItem("teeradar_paid") === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+
   function applyAuthView() {
     if (!authTitle || !authSubtitle || !authSubmit || !authSwitch) return;
 
@@ -865,27 +872,34 @@
     openAuthModal("login");
   }
 
-  // 🔹 UPDATED: "Create an account" only redirects to subscribe
-  // if the user hasn't just paid. If they have paid (or came with
-  // ?signup=1), it toggles between login/signup.
+  // ✅ read query flags from Stripe success and auto-open signup modal
+  function maybeAutoOpenSignupFromQuery() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const signupFlag = params.get("signup");
+      const subscribeFlag = params.get("subscribe");
+      if (signupFlag === "1" || subscribeFlag === "1") {
+        openAuthModal("signup");
+      }
+    } catch (e) {
+      console.warn("Failed to read URL params", e);
+    }
+  }
+
+  // 🔹 UPDATED: "Create an account" → Stripe if not paid, toggle login/signup if paid
   if (authSwitch) {
     authSwitch.addEventListener("click", () => {
-      let hasPaid = false;
-      try {
-        hasPaid = localStorage.getItem("teeradar_paid") === "1";
-      } catch (e) {
-        hasPaid = false;
-      }
-      const signupParam = new URLSearchParams(window.location.search).get("signup") === "1";
-
-      if (hasPaid || signupParam) {
-        if (authMode === "reset") {
-          openAuthModal("login");
-        } else {
-          openAuthModal(authMode === "login" ? "signup" : "login");
-        }
-      } else {
+      if (!hasPaidSubscription()) {
+        // not marked as paid yet → go to subscriptions page
         window.location.href = "/subscribe.html";
+        return;
+      }
+
+      // already paid → just switch between login/signup views
+      if (authMode === "reset") {
+        openAuthModal("login");
+      } else {
+        openAuthModal(authMode === "login" ? "signup" : "login");
       }
     });
   }
@@ -1113,19 +1127,7 @@
     initTCBanner();
     initContactForm();
     initHomeCourseAutocomplete(); // 🔹 enable home-course autocomplete
-
-    // 🔹 If we were sent here with ?signup=1 from Stripe success,
-    // auto-open the auth modal in signup mode and clean the URL.
-    if (fromSignupFlag) {
-      try {
-        localStorage.setItem("teeradar_paid", "1");
-      } catch (e) {}
-      openAuthModal("signup");
-      if (window.history && window.history.replaceState) {
-        const cleanUrl = window.location.pathname + window.location.hash;
-        window.history.replaceState(null, "", cleanUrl);
-      }
-    }
+    maybeAutoOpenSignupFromQuery(); // 🔹 open signup modal after Stripe success
   });
 </script>
 </body>
