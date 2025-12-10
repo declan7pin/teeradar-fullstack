@@ -736,6 +736,8 @@
 
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
+  const urlParams = new URLSearchParams(window.location.search);
+  const fromSignupFlag = urlParams.get("signup") === "1";
 
   // ---- ANALYTICS (unchanged) ----
   function trackEvent(type, payload) {
@@ -863,10 +865,28 @@
     openAuthModal("login");
   }
 
-  // 🔹 UPDATED: "Create an account" now sends users to the subscription page
+  // 🔹 UPDATED: "Create an account" only redirects to subscribe
+  // if the user hasn't just paid. If they have paid (or came with
+  // ?signup=1), it toggles between login/signup.
   if (authSwitch) {
     authSwitch.addEventListener("click", () => {
-      window.location.href = "/subscribe.html";
+      let hasPaid = false;
+      try {
+        hasPaid = localStorage.getItem("teeradar_paid") === "1";
+      } catch (e) {
+        hasPaid = false;
+      }
+      const signupParam = new URLSearchParams(window.location.search).get("signup") === "1";
+
+      if (hasPaid || signupParam) {
+        if (authMode === "reset") {
+          openAuthModal("login");
+        } else {
+          openAuthModal(authMode === "login" ? "signup" : "login");
+        }
+      } else {
+        window.location.href = "/subscribe.html";
+      }
     });
   }
 
@@ -1093,6 +1113,19 @@
     initTCBanner();
     initContactForm();
     initHomeCourseAutocomplete(); // 🔹 enable home-course autocomplete
+
+    // 🔹 If we were sent here with ?signup=1 from Stripe success,
+    // auto-open the auth modal in signup mode and clean the URL.
+    if (fromSignupFlag) {
+      try {
+        localStorage.setItem("teeradar_paid", "1");
+      } catch (e) {}
+      openAuthModal("signup");
+      if (window.history && window.history.replaceState) {
+        const cleanUrl = window.location.pathname + window.location.hash;
+        window.history.replaceState(null, "", cleanUrl);
+      }
+    }
   });
 </script>
 </body>
