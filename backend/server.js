@@ -36,12 +36,12 @@ const PORT = process.env.PORT || 3000;
 // ✅ Stripe init (ADDED)
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// ✅ Map of plan keys → Stripe price IDs (ADDED)
+// ✅ Map of plan keys → Stripe price IDs (UPDATED TO TEST PRICES)
 const PRICE_IDS = {
-  BASIC_MONTHLY: "price_1ScbpVASm4geYL4WJmSABxlb",
-  BASIC_ANNUAL: "price_1Scbq9ASm4geYL4WyjPjX8Go",
-  PRO_MONTHLY: "price_1ScbklASm4geYL4WPpbT6PtL",
-  PRO_ANNUAL: "price_1ScbmCASm4geYL4W0EQZBrvf",
+  BASIC_MONTHLY: "price_1SchVzASm4geYL4WAc7X3aAw",
+  BASIC_ANNUAL: "price_1SchWMASm4geYL4WhVk8Zc0Q",
+  PRO_MONTHLY: "price_1SchWrASm4geYL4WmltAvVLF",
+  PRO_ANNUAL: "price_1SchXiASm4geYL4WUm6YUQlV",
 };
 
 app.use(cors());
@@ -123,10 +123,10 @@ app.post("/api/subscribe", async (req, res) => {
           quantity: 1,
         },
       ],
-      // TODO: replace YOUR_DOMAIN with your actual domain (test/prod)
       success_url:
         "https://teeradar-fullstack-4.onrender.com/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://teeradar-fullstack-4.onrender.com/subscribe-cancel.html",
+      cancel_url:
+        "https://teeradar-fullstack-4.onrender.com/subscribe-cancel.html",
     });
 
     res.json({ url: session.url });
