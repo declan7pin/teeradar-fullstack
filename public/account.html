@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TeeRadar — My account</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+
+  <style>
+    :root {
+      --teal: #00796b;
+      --teal-dark: #005e55;
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --danger: #b91c1c;
+      --pill: #ecfeff;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #e0f2f1, #f9fafb);
+      color: var(--text);
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; }
+
+    /* HEADER (simple) */
+    header {
+      background: var(--teal);
+      color: #fff;
+      padding: 10px 4vw;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .nav-wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-logo {
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      background: #ecfdf5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #065f46;
+      font-size: 15px;
+      font-weight: 800;
+      box-shadow: 0 0 0 3px rgba(16,185,129,0.25);
+    }
+    .brand-text {
+      font-weight: 700;
+      letter-spacing: .04em;
+      font-size: 15px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 14px;
+      font-size: 13px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .nav-links a {
+      padding: 4px 8px;
+      border-radius: 999px;
+      color: #e0f2f1;
+      opacity: .9;
+    }
+    .nav-links a:hover {
+      background: rgba(255,255,255,0.16);
+      opacity: 1;
+    }
+    .nav-login {
+      background:#ffffff;
+      color:var(--teal-dark);
+      border:none;
+      padding:5px 14px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:600;
+      cursor:pointer;
+    }
+
+    /* MAIN LAYOUT */
+    main {
+      max-width: 960px;
+      margin: 24px auto 40px;
+      padding: 0 4vw 40px;
+    }
+    h1 {
+      font-size: 24px;
+      margin: 0 0 6px;
+    }
+    .muted {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      padding: 16px 16px 18px;
+      box-shadow: 0 16px 34px rgba(15,23,42,0.08);
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      font-size: 16px;
+      margin: 0 0 6px;
+    }
+    .card p {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0 0 10px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #4b5563;
+    }
+    select, input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+    select:focus, input[type="text"]:focus {
+      outline: none;
+      border-color: #0ea5e9;
+      box-shadow: 0 0 0 1px rgba(14,165,233,0.35);
+    }
+
+    .pill {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 8px;
+      border-radius:999px;
+      background:var(--pill);
+      border:1px solid #bae6fd;
+      font-size:11px;
+      color:#0369a1;
+      margin-bottom:8px;
+    }
+
+    /* FAVOURITES */
+    .fav-help {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: -4px;
+      margin-bottom: 8px;
+    }
+    .fav-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .fav-item {
+      font-size: 11px;
+      background:#ecfdf5;
+      border-radius:999px;
+      padding:4px 7px;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      border:1px solid #bbf7d0;
+    }
+    .fav-remove {
+      border:none;
+      background:transparent;
+      font-size:13px;
+      cursor:pointer;
+      color:#065f46;
+      line-height:1;
+    }
+
+    .autocomplete {
+      position: relative;
+    }
+    .autocomplete-list {
+      position:absolute;
+      left:0;
+      right:0;
+      top:100%;
+      margin-top:2px;
+      background:#ffffff;
+      border:1px solid #d1d5db;
+      border-radius:0 0 8px 8px;
+      max-height:200px;
+      overflow-y:auto;
+      font-size:13px;
+      z-index:30;
+      box-shadow:0 10px 20px rgba(15,23,42,0.15);
+    }
+    .autocomplete-item {
+      padding:6px 9px;
+      cursor:pointer;
+    }
+    .autocomplete-item small {
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .autocomplete-item:hover {
+      background:#f3f4f6;
+    }
+
+    .btn-primary {
+      background: var(--teal);
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-right: 8px;
+    }
+    .btn-primary:active {
+      background: var(--teal-dark);
+      transform: translateY(1px);
+    }
+    .btn-secondary {
+      background:#e5e7eb;
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      font-weight:600;
+      cursor:pointer;
+    }
+    .btn-danger-text {
+      border:none;
+      background:transparent;
+      color:var(--danger);
+      font-size:12px;
+      cursor:pointer;
+      margin-left:auto;
+    }
+
+    .row-actions {
+      margin-top: 8px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+    }
+
+    .status {
+      font-size: 12px;
+      margin-top: 6px;
+      color: var(--muted);
+    }
+    .status.ok { color:#15803d; }
+    .status.err { color:#b91c1c; }
+
+    .blocked {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background:#fee2e2;
+      border:1px solid #fecaca;
+      font-size: 13px;
+      color:#b91c1c;
+      margin-top:10px;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="nav-wrap">
+    <div class="brand">
+      <div class="brand-logo">T</div>
+      <div class="brand-text">TeeRadar</div>
+    </div>
+    <div class="nav-links">
+      <a href="/index.html">Home</a>
+      <a href="/book.html">Bookings</a>
+      <a href="/faq.html">FAQ</a>
+      <a href="/about.html">About</a>
+      <button id="navLogout" class="nav-login" type="button">Log out</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <h1>My account</h1>
+  <p class="muted">
+    Set your default state and favourite courses. Your subscription is managed securely via Stripe.
+  </p>
+
+  <div id="notLoggedIn" class="blocked" style="display:none;">
+    You’re not logged in. Please go back to the home page and log in first, then return to this page.
+  </div>
+
+  <div id="accountContent" style="display:none;">
+    <div class="card">
+      <h2>Account details</h2>
+      <p>Signed in as <strong id="accountEmail"></strong></p>
+      <span class="pill" id="planPill">Plan: Basic (3 favourite courses)</span>
+      <p style="margin-top:6px;">
+        If you upgrade to Pro later, we’ll automatically let you save up to 10 favourites.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Preferences</h2>
+      <p>We’ll use these defaults on your bookings page.</p>
+
+      <label for="homeState">Home state</label>
+      <select id="homeState">
+        <option value="">Select a state</option>
+        <option value="WA">Western Australia</option>
+        <option value="NT">Northern Territory</option>
+        <option value="QLD">Queensland</option>
+        <option value="SA">South Australia</option>
+        <option value="TAS">Tasmania</option>
+        <option value="VIC">Victoria</option>
+        <option value="NSW">New South Wales</option>
+        <option value="ACT">Australian Capital Territory</option>
+      </select>
+
+      <label for="favCourseInput">Favourite courses</label>
+      <div class="fav-help">
+        Start typing to search MiClub / Quick18 public courses.  
+        Basic: up to 3 favourites. Pro: up to 10 favourites.
+      </div>
+
+      <div class="autocomplete">
+        <input id="favCourseInput" type="text" placeholder="Search course name…" autocomplete="off" />
+        <div id="favAutocompleteList" class="autocomplete-list" style="display:none;"></div>
+      </div>
+
+      <ul id="favList" class="fav-list"></ul>
+
+      <div class="row-actions">
+        <button id="savePrefsBtn" class="btn-primary" type="button">Save preferences</button>
+        <span id="prefsStatus" class="status"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Subscription</h2>
+      <p>
+        Manage your billing details, upgrade, or cancel your TeeRadar subscription using Stripe’s
+        secure customer portal.
+      </p>
+
+      <div class="row-actions">
+        <button id="manageBillingBtn" class="btn-secondary" type="button">
+          Manage / cancel subscription
+        </button>
+        <span id="billingStatus" class="status"></span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  // --- basic auth presence check using localStorage ---
+  const email = localStorage.getItem("teeradar_user_email") || "";
+  const token = localStorage.getItem("teeradar_jwt") || "";
+
+  const notLoggedInEl = document.getElementById("notLoggedIn");
+  const accountContentEl = document.getElementById("accountContent");
+  const accountEmailEl = document.getElementById("accountEmail");
+  const planPill = document.getElementById("planPill");
+  const homeStateSelect = document.getElementById("homeState");
+  const favInput = document.getElementById("favCourseInput");
+  const favListEl = document.getElementById("favList");
+  const favDropdown = document.getElementById("favAutocompleteList");
+  const prefsStatus = document.getElementById("prefsStatus");
+  const billingStatus = document.getElementById("billingStatus");
+  const logoutBtn = document.getElementById("navLogout");
+
+  if (!email) {
+    notLoggedInEl.style.display = "block";
+    accountContentEl.style.display = "none";
+  } else {
+    notLoggedInEl.style.display = "none";
+    accountContentEl.style.display = "block";
+    accountEmailEl.textContent = email;
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", () => {
+      localStorage.removeItem("teeradar_user_email");
+      localStorage.removeItem("teeradar_jwt");
+      localStorage.removeItem("teeradar_home_state");
+      localStorage.removeItem("teeradar_fav_courses");
+      window.location.href = "/index.html";
+    });
+  }
+
+  // For now, assume Basic (3 favs); if you later store plan in localStorage,
+  // you can change this.
+  let maxFavs = 3;
+  planPill.textContent = "Plan: Basic (3 favourite courses)";
+
+  // --- load existing prefs from localStorage ---
+  function loadPrefsFromStorage() {
+    const savedState = localStorage.getItem("teeradar_home_state");
+    if (savedState && homeStateSelect) {
+      homeStateSelect.value = savedState;
+    }
+
+    const favJson = localStorage.getItem("teeradar_fav_courses");
+    let favourites = [];
+    if (favJson) {
+      try { favourites = JSON.parse(favJson) || []; } catch {}
+    }
+    renderFavList(favourites);
+  }
+
+  function savePrefsToStorage(homeState, favourites) {
+    if (homeState) {
+      localStorage.setItem("teeradar_home_state", homeState);
+    } else {
+      localStorage.removeItem("teeradar_home_state");
+    }
+    localStorage.setItem("teeradar_fav_courses", JSON.stringify(favourites));
+  }
+
+  // --- favourites UI state ---
+  let favCourses = [];
+
+  function renderFavList(list) {
+    favCourses = list.slice();
+    favListEl.innerHTML = "";
+    if (!favCourses.length) return;
+    favCourses.forEach((c, idx) => {
+      const li = document.createElement("li");
+      li.className = "fav-item";
+      li.innerHTML = `
+        <span>${c.name}${c.state ? " (" + c.state + ")" : ""}</span>
+        <button class="fav-remove" data-idx="${idx}" aria-label="Remove">&times;</button>
+      `;
+      favListEl.appendChild(li);
+    });
+
+    favListEl.querySelectorAll(".fav-remove").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.idx, 10);
+        favCourses.splice(i, 1);
+        renderFavList(favCourses);
+      });
+    });
+  }
+
+  // --- course search (MiClub + Quick18 only) ---
+  let allCourses = [];
+  let searchableCourses = [];
+
+  async function loadCourses() {
+    try {
+      const res = await fetch("/api/courses");
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        allCourses = data;
+        const allowed = ["MiClub","Quick18"];
+        searchableCourses = data.filter(
+          c => allowed.includes(c.provider || "")
+        );
+      }
+    } catch (err) {
+      console.error("Failed to load courses for account page", err);
+      allCourses = [];
+      searchableCourses = [];
+    }
+  }
+
+  function showCourseDropdown(matches) {
+    favDropdown.innerHTML = "";
+    if (!matches.length) {
+      favDropdown.style.display = "none";
+      return;
+    }
+    matches.forEach(c => {
+      const div = document.createElement("div");
+      div.className = "autocomplete-item";
+      div.innerHTML = `
+        <div>${c.name}</div>
+        <small>${c.provider || "Course"}${c.state ? " • " + c.state : ""}</small>
+      `;
+      div.addEventListener("click", () => {
+        if (favCourses.length >= maxFavs) {
+          alert(`Your plan lets you pick up to ${maxFavs} favourites.`);
+          favDropdown.style.display = "none";
+          return;
+        }
+        // avoid exact duplicates by name+state
+        const key = (x) => `${x.name}::${x.state || ""}`;
+        const newKey = key(c);
+        if (favCourses.some(fc => key(fc) === newKey)) {
+          favDropdown.style.display = "none";
+          favInput.value = "";
+          return;
+        }
+        favCourses.push({ name: c.name, state: c.state || null, provider: c.provider || null });
+        renderFavList(favCourses);
+        favDropdown.style.display = "none";
+        favInput.value = "";
+      });
+      favDropdown.appendChild(div);
+    });
+    favDropdown.style.display = "block";
+  }
+
+  if (favInput) {
+    favInput.addEventListener("input", () => {
+      const q = favInput.value.trim().toLowerCase();
+      favDropdown.innerHTML = "";
+      if (!q || !searchableCourses.length) {
+        favDropdown.style.display = "none";
+        return;
+      }
+      const matches = searchableCourses
+        .filter(c => (c.name || "").toLowerCase().includes(q))
+        .slice(0, 8);
+      showCourseDropdown(matches);
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    if (!favDropdown) return;
+    if (e.target === favInput || favDropdown.contains(e.target)) return;
+    favDropdown.style.display = "none";
+  });
+
+  // --- save prefs button ---
+  const savePrefsBtn = document.getElementById("savePrefsBtn");
+  if (savePrefsBtn) {
+    savePrefsBtn.addEventListener("click", async () => {
+      if (!email) return;
+
+      const homeState = homeStateSelect.value || "";
+      savePrefsToStorage(homeState, favCourses);
+
+      prefsStatus.textContent = "Saving…";
+      prefsStatus.className = "status";
+
+      // If you later add a real API, this will try to send it; otherwise it silently fails.
+      try {
+        const body = {
+          homeState,
+          favourites: favCourses
+        };
+        const res = await fetch("/api/account/preferences", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": "Bearer " + token } : {})
+          },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          prefsStatus.textContent = "Preferences saved.";
+          prefsStatus.className = "status ok";
+        } else {
+          prefsStatus.textContent = "Saved locally. Server update failed (not configured yet).";
+          prefsStatus.className = "status";
+        }
+      } catch (err) {
+        console.error("prefs save error", err);
+        prefsStatus.textContent = "Saved locally. Server update failed (network).";
+        prefsStatus.className = "status";
+      }
+    });
+  }
+
+  // --- manage billing (Stripe customer portal) ---
+  const manageBillingBtn = document.getElementById("manageBillingBtn");
+  if (manageBillingBtn) {
+    manageBillingBtn.addEventListener("click", async () => {
+      billingStatus.textContent = "Opening billing portal…";
+      billingStatus.className = "status";
+
+      try {
+        const res = await fetch("/api/billing/portal", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": "Bearer " + token } : {})
+          },
+          body: JSON.stringify({
+            returnUrl: window.location.href
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data && data.url) {
+          window.location.href = data.url;
+          return;
+        }
+        billingStatus.textContent = "Could not open billing portal yet (backend not wired).";
+        billingStatus.className = "status err";
+      } catch (err) {
+        console.error("billing portal error", err);
+        billingStatus.textContent = "Network error opening billing portal.";
+        billingStatus.className = "status err";
+      }
+    });
+  }
+
+  // --- boot ---
+  (async function init() {
+    if (!email) return;
+    await loadCourses();
+    loadPrefsFromStorage();
+  })();
+</script>
+</body>
+</html>
