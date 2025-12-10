@@ -821,7 +821,7 @@
   const authForgot = document.getElementById("authForgot");
   const authHomeCourseRow = document.getElementById("authHomeCourseRow");
 
-  // ✅ helper: does this browser think the user has paid?
+  // helper currently unused, but kept in case you want it later
   function hasPaidSubscription() {
     try {
       return localStorage.getItem("teeradar_paid") === "1";
@@ -872,7 +872,7 @@
     openAuthModal("login");
   }
 
-  // ✅ read query flags from Stripe success and auto-open signup modal
+  // read query flags from Stripe success and auto-open signup modal
   function maybeAutoOpenSignupFromQuery() {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -886,21 +886,10 @@
     }
   }
 
-  // 🔹 UPDATED: "Create an account" → Stripe if not paid, toggle login/signup if paid
+  // 🔹 "Create an account" ALWAYS goes to subscriptions page now
   if (authSwitch) {
     authSwitch.addEventListener("click", () => {
-      if (!hasPaidSubscription()) {
-        // not marked as paid yet → go to subscriptions page
-        window.location.href = "/subscribe.html";
-        return;
-      }
-
-      // already paid → just switch between login/signup views
-      if (authMode === "reset") {
-        openAuthModal("login");
-      } else {
-        openAuthModal(authMode === "login" ? "signup" : "login");
-      }
+      window.location.href = "/subscribe.html";
     });
   }
 
@@ -921,7 +910,7 @@
     }
   });
 
-  // 🔹 Home-course autocomplete state
+  // Home-course autocomplete state
   let authCourses = [];
   let homeCourseListEl = null;
 
@@ -934,7 +923,6 @@
       authCourses = Array.isArray(data) ? data : [];
     } catch (err) {
       console.error("loadAuthCoursesOnce error", err);
-      // very small fallback so you still see something
       authCourses = [
         { name: "Whaleback Golf Course", state: "WA" },
         { name: "Darwin Golf Club", state: "NT" }
@@ -1126,8 +1114,8 @@
     trackInitialHome();
     initTCBanner();
     initContactForm();
-    initHomeCourseAutocomplete(); // 🔹 enable home-course autocomplete
-    maybeAutoOpenSignupFromQuery(); // 🔹 open signup modal after Stripe success
+    initHomeCourseAutocomplete();
+    maybeAutoOpenSignupFromQuery(); // open signup after Stripe success
   });
 </script>
 </body>
