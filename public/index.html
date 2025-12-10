@@ -778,11 +778,10 @@
       analyticsLink.style.display = "none";
     }
 
-    loginBtn.textContent = "Log out";
+    // 🔹 When logged in: show "My account" and go to account page
+    loginBtn.textContent = "My account";
     loginBtn.onclick = () => {
-      localStorage.removeItem("teeradar_user_email");
-      localStorage.removeItem("teeradar_jwt");
-      renderNavState();
+      window.location.href = "/account.html";
     };
   }
 
@@ -821,7 +820,6 @@
   const authForgot = document.getElementById("authForgot");
   const authHomeCourseRow = document.getElementById("authHomeCourseRow");
 
-  // helper currently unused, but kept in case you want it later
   function hasPaidSubscription() {
     try {
       return localStorage.getItem("teeradar_paid") === "1";
@@ -886,7 +884,7 @@
     }
   }
 
-  // 🔹 "Create an account" ALWAYS goes to subscriptions page now
+  // "Create an account" goes to subscriptions page
   if (authSwitch) {
     authSwitch.addEventListener("click", () => {
       window.location.href = "/subscribe.html";
