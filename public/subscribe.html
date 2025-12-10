@@ -123,6 +123,8 @@
 
     .btn.secondary {
       background: #6b7280;
+      width: auto;
+      padding-inline: 16px;
     }
 
     .note {
@@ -147,6 +149,11 @@
       font-size: 0.85rem;
       min-height: 1em;
     }
+
+    .home-row {
+      margin-top: 18px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -165,7 +172,6 @@
     </div>
 
     <div class="plans">
-      <!-- BASIC MONTHLY -->
       <div class="card">
         <h2>Basic – Monthly</h2>
         <div class="price">$5 / month</div>
@@ -181,7 +187,6 @@
         </button>
       </div>
 
-      <!-- BASIC ANNUAL -->
       <div class="card">
         <h2>Basic – Annual</h2>
         <div class="price">$49 / year</div>
@@ -197,12 +202,11 @@
         </button>
       </div>
 
-      <!-- PRO MONTHLY -->
       <div class="card">
         <h2>Pro – Monthly</h2>
         <div class="price">$10 / month</div>
         <p class="desc">
-          Built for golfers who bounce between courses and want first access to new features.
+          For golfers who bounce between multiple courses and chase open slots.
         </p>
         <ul>
           <li>Alerts for up to 10 favourite courses</li>
@@ -214,7 +218,6 @@
         </button>
       </div>
 
-      <!-- PRO ANNUAL -->
       <div class="card">
         <h2>Pro – Annual</h2>
         <div class="price">$99 / year</div>
@@ -234,6 +237,16 @@
 
     <div class="error" id="errorBox"></div>
     <div class="success" id="successBox"></div>
+
+    <div class="home-row">
+      <button
+        class="btn secondary"
+        type="button"
+        onclick="window.location.href='/index.html'"
+      >
+        ← Back to TeeRadar home
+      </button>
+    </div>
 
     <p class="note">
       Payments are processed securely by Stripe. You can cancel any time from your
