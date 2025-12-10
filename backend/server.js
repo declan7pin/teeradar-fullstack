@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import nodemailer from "nodemailer";
+import Stripe from "stripe"; // ✅ ADDED
 
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
@@ -32,7 +33,65 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ✅ Stripe init (ADDED)
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+// ✅ Map of plan keys → Stripe price IDs (ADDED)
+const PRICE_IDS = {
+  BASIC_MONTHLY: "price_1ScbpVASm4geYL4WJmSABxlb",
+  BASIC_ANNUAL: "price_1Scbq9ASm4geYL4WyjPjX8Go",
+  PRO_MONTHLY: "price_1ScbklASm4geYL4WPpbT6PtL",
+  PRO_ANNUAL: "price_1ScbmCASm4geYL4W0EQZBrvf",
+};
+
 app.use(cors());
+
+// -------------------------------------------------
+// Stripe Webhook (ADDED) – must be BEFORE express.json
+// -------------------------------------------------
+app.post(
+  "/api/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      console.error("❌ Stripe webhook error:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        console.log("✅ Stripe checkout completed for:", session.customer_email);
+        // TODO later: look up user by email and mark as subscribed
+        break;
+      }
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object;
+        console.log("❌ Subscription cancelled:", subscription.id);
+        break;
+      }
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object;
+        console.log("💰 Payment succeeded for:", invoice.customer_email);
+        break;
+      }
+      default:
+        console.log(`ℹ️ Unhandled Stripe event type: ${event.type}`);
+    }
+
+    res.json({ received: true });
+  }
+);
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
 
@@ -40,6 +99,44 @@ app.use("/api/auth", authRouter);
 
 // 🔔 Alerts API (NEW)
 app.use("/api/alerts", alertsRouter);
+
+// -------------------------------------------------
+// Stripe Checkout route (ADDED) – create subscription session
+// -------------------------------------------------
+app.post("/api/subscribe", async (req, res) => {
+  try {
+    const { plan, email } = req.body || {};
+    const priceId = PRICE_IDS[plan];
+
+    if (!priceId) {
+      return res.status(400).json({ error: "Invalid subscription plan" });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      payment_method_types: ["card"],
+      customer_email: email || undefined,
+      allow_promotion_codes: true,
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      // TODO: replace YOUR_DOMAIN with your actual domain (test/prod)
+      success_url:
+        "https://YOUR_DOMAIN/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://YOUR_DOMAIN/subscribe-cancel.html",
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error("Stripe checkout error:", err);
+    res
+      .status(500)
+      .json({ error: "Stripe checkout failed", detail: err.message });
+  }
+});
 
 // -------------------------------------------------
 // Load course data
