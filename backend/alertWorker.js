@@ -35,6 +35,34 @@ console.log(
 );
 
 // ---------------------------------------------------------
+// DB: ensure alert hits table exists
+// ---------------------------------------------------------
+async function ensureUserAlertHitsTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS user_alert_hits (
+        id SERIAL PRIMARY KEY,
+        email TEXT NOT NULL,
+        course_name TEXT NOT NULL,
+        provider TEXT,
+        date TEXT NOT NULL,              -- 'YYYY-MM-DD'
+        holes INTEGER,
+        party_size INTEGER,
+        earliest TEXT,
+        latest TEXT,
+        slots JSONB,
+        created_at TIMESTAMPTZ DEFAULT now(),
+        read_at TIMESTAMPTZ
+      );
+    `);
+    console.log("✅ user_alert_hits table ready");
+  } catch (err) {
+    console.error("❌ error ensuring user_alert_hits table:", err);
+  }
+}
+ensureUserAlertHitsTable();
+
+// ---------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------
 
@@ -43,7 +71,6 @@ function normaliseDayToken(token) {
   const t = token.toString().trim().toLowerCase();
   if (!t) return null;
 
-  // allow things like "monday", "Mon", "MON"
   const short = t.slice(0, 3);
   switch (short) {
     case "mon":
@@ -69,8 +96,7 @@ function normaliseDayToken(token) {
 function nextDateForDow(targetDow) {
   const now = new Date();
   const todayDow = now.getDay();
-  let delta = (targetDow - todayDow + 7) % 7;
-  // allow "today" if delta === 0
+  let delta = (targetDow - todayDow + 7) % 7; // allow "today" if 0
   const d = new Date(
     now.getFullYear(),
     now.getMonth(),
@@ -82,12 +108,24 @@ function nextDateForDow(targetDow) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// Fallback: if user didn't pick any days, just use today
-// ✅ UPDATED: when days are chosen, scan the next 14 days (2 weekends)
+function addDaysToIso(isoDate, days) {
+  const [y, m, d] = isoDate.split("-").map((x) => parseInt(x, 10));
+  const base = new Date(y, m - 1, d + days);
+  const yyyy = base.getFullYear();
+  const mm = String(base.getMonth() + 1).padStart(2, "0");
+  const dd = String(base.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Returns dates for this weekend + next weekend for chosen days
 function resolveDatesFromPreferredDays(preferredDays) {
-  // No days chosen → just today (same behaviour as before)
+  const todayDow = new Date().getDay();
+
+  // no days chosen → today + same day next week
   if (!Array.isArray(preferredDays) || preferredDays.length === 0) {
-    return [nextDateForDow(new Date().getDay())];
+    const thisDate = nextDateForDow(todayDow);
+    const nextDate = addDaysToIso(thisDate, 7);
+    return [thisDate, nextDate];
   }
 
   const dows = new Set();
@@ -95,42 +133,39 @@ function resolveDatesFromPreferredDays(preferredDays) {
     const dow = normaliseDayToken(d);
     if (dow !== null) dows.add(dow);
   }
+
   if (!dows.size) {
-    return [nextDateForDow(new Date().getDay())];
+    const thisDate = nextDateForDow(todayDow);
+    const nextDate = addDaysToIso(thisDate, 7);
+    return [thisDate, nextDate];
   }
 
-  // Look ahead 14 days and pick any date whose DOW is in preferredDays
-  const today = new Date();
-  const dates = [];
+  const thisWindow = Array.from(dows).map((dow) => nextDateForDow(dow));
+  const nextWindow = thisWindow.map((iso) => addDaysToIso(iso, 7));
+  const combined = [...thisWindow, ...nextWindow];
 
-  for (let offset = 0; offset < 14; offset++) {
-    const d = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate() + offset
-    );
-    if (dows.has(d.getDay())) {
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, "0");
-      const dd = String(d.getDate()).padStart(2, "0");
-      dates.push(`${yyyy}-${mm}-${dd}`);
+  // dedupe while preserving order
+  const seen = new Set();
+  const out = [];
+  for (const d of combined) {
+    if (!seen.has(d)) {
+      seen.add(d);
+      out.push(d);
     }
   }
-
-  return dates;
+  return out;
 }
 
 function findCourseByFavourite(fav) {
   if (!fav) return null;
-  // UI usually stores { name, id, provider, ... }
   const name = fav.name || fav.courseName || fav.course || null;
   if (!name) return null;
 
-  // Strict name match first
+  // strict match first
   let course = courses.find((c) => c.name === name);
   if (course) return course;
 
-  // Loose includes match as fallback
+  // loose contains match
   const lower = name.toLowerCase();
   course = courses.find((c) => c.name.toLowerCase().includes(lower));
   return course || null;
@@ -190,22 +225,34 @@ async function runAlertTick() {
         )}, dates=${datesToScan.join(",")}`
       );
 
+      const userHoles = holes ? Number(holes) : null;
+
       for (const fav of favourites) {
         const course = findCourseByFavourite(fav);
         if (!course) {
+          console.log(`  ⚠️ Could not match favourite to course.json:`, fav);
+          continue;
+        }
+
+        // If user requested a specific hole count and course has a different fixed hole count, skip
+        const courseHoles =
+          course.holes != null ? Number(course.holes) : null;
+
+        if (userHoles && courseHoles && courseHoles !== userHoles) {
           console.log(
-            `  ⚠️ Could not match favourite to course.json:`,
-            fav
+            `Skipping ${course.name} – course is ${courseHoles} holes, user requested ${userHoles}`
           );
           continue;
         }
+
+        const providerLabel = course.provider || "Course";
 
         for (const date of datesToScan) {
           const criteria = {
             date,
             earliest,
             latest,
-            holes: holes === 0 ? "" : holes,
+            holes: userHoles || "",
             partySize: partySize || 1,
             state: (course.state || "").toUpperCase() || null,
           };
@@ -214,11 +261,50 @@ async function runAlertTick() {
             const result = await scrapeCourse(course, criteria, feeGroups);
             const count = Array.isArray(result) ? result.length : 0;
 
+            console.log(
+              `${providerLabel} → ${course.name} → ${count} slots (after partySize filter)`
+            );
+
             if (count > 0) {
               console.log(
                 `  ✅ ${email} – ${course.name} on ${date}: ${count} slot(s) found.`
               );
-              // NEXT STEP: send email / push notification here.
+
+              // 🔹 Store this hit so we can email + show popups later
+              try {
+                await db.query(
+                  `
+                  INSERT INTO user_alert_hits (
+                    email,
+                    course_name,
+                    provider,
+                    date,
+                    holes,
+                    party_size,
+                    earliest,
+                    latest,
+                    slots
+                  )
+                  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                  `,
+                  [
+                    email,
+                    course.name,
+                    course.provider || null,
+                    date,
+                    userHoles || null,
+                    partySize || null,
+                    earliest || null,
+                    latest || null,
+                    JSON.stringify(result || []),
+                  ]
+                );
+              } catch (err) {
+                console.error(
+                  `  ⚠️ failed to insert alert hit for ${email} / ${course.name} / ${date}:`,
+                  err.message
+                );
+              }
             } else {
               console.log(
                 `  ⛔ ${email} – ${course.name} on ${date}: no slots.`
