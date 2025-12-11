@@ -224,7 +224,9 @@
       padding:6px 4px;
       border-bottom:1px solid #e5e7eb;
       text-align:left;
-      word-break:break-all;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
     }
     .users-table tbody tr:hover {
       background:#f1f5f9;
@@ -259,6 +261,7 @@
       background:var(--pill);
       font-size:11px;
       color:#166534;
+      cursor:pointer;
     }
 
     @media (min-width: 768px) {
@@ -320,7 +323,6 @@
       <div id="metricNewUsers" class="card-value">0</div>
     </article>
 
-    <!-- conversion cards -->
     <article class="card">
       <div class="card-label">Home → booking conversion</div>
       <div id="metricConvHomeBooking" class="card-value">0%</div>
@@ -333,14 +335,12 @@
       <div class="card-hint">Booking clicks ÷ searches</div>
     </article>
 
-    <!-- repeat bookers -->
     <article class="card">
       <div class="card-label">Repeat bookers</div>
       <div id="metricRepeatBookers" class="card-value">0</div>
       <div class="card-hint">Users who clicked bookings more than once</div>
     </article>
 
-    <!-- peak booking hour -->
     <article class="card">
       <div class="card-label">Peak booking hour</div>
       <div id="metricPeakHour" class="card-value">–</div>
@@ -361,11 +361,9 @@
         This week <span id="usersWeek" style="font-weight:600;margin-left:4px;">0</span>
       </button>
     </div>
-    <!-- extra user metrics -->
     <div class="muted-note" style="margin-top:4px;">
       Last 30 days: <span id="users30d">0</span> • Returning last 7 days: <span id="returning7d">0</span>
     </div>
-    <!-- health summary line -->
     <div class="muted-note" id="healthSummary" style="margin-top:4px;"></div>
     <div class="muted-note" id="summaryUpdated">Loading analytics…</div>
   </section>
@@ -377,7 +375,6 @@
     </ul>
   </section>
 
-  <!-- most-searched courses -->
   <section class="card" style="margin-top:14px;">
     <div class="card-label">Most-searched courses</div>
     <ul id="topSearchedCoursesList" class="top-courses-list">
@@ -385,7 +382,6 @@
     </ul>
   </section>
 
-  <!-- demand ranking -->
   <section class="card" style="margin-top:14px;">
     <div class="card-label">Course demand ranking</div>
     <ul id="demandRankList" class="top-courses-list">
@@ -507,7 +503,6 @@
       return;
     }
 
-    // base metrics
     const homeViewsVal =
       summary.homePageViews ?? summary.homeViews ?? 0;
     const bookingClicksVal =
@@ -531,7 +526,6 @@
     document.getElementById("usersToday").textContent = usersTodayVal;
     document.getElementById("usersWeek").textContent = usersWeekVal;
 
-    // conversion metrics
     let convHome = summary.conversionHomeToBooking;
     if (convHome == null) {
       convHome = homeViewsVal > 0 ? bookingClicksVal / homeViewsVal : 0;
@@ -554,7 +548,6 @@
       convSearchEl.textContent = pct + "%";
     }
 
-    // extra user metrics
     const users30d = summary.users30d ?? summary.users_30d ?? 0;
     const returning7d = summary.returningUsers7d ?? summary.returning_users_7d ?? 0;
 
@@ -564,12 +557,10 @@
     const returning7dEl = document.getElementById("returning7d");
     if (returning7dEl) returning7dEl.textContent = returning7d;
 
-    // repeat bookers
     const repeatBookersVal = summary.repeatBookers ?? summary.repeat_bookers ?? 0;
     const repeatEl = document.getElementById("metricRepeatBookers");
     if (repeatEl) repeatEl.textContent = repeatBookersVal;
 
-    // peak booking hour
     const peak = summary.peakBookingHour ?? summary.peak_booking_hour ?? null;
     const peakEl = document.getElementById("metricPeakHour");
     if (peakEl) {
@@ -580,7 +571,6 @@
       }
     }
 
-    // health summary line
     const healthEl = document.getElementById("healthSummary");
     if (healthEl) {
       let signupRateRaw = 0;
@@ -601,12 +591,10 @@
 
     updatedAt.textContent = "Last updated " + new Date().toLocaleString();
 
-    // most-clicked courses
     const topList = document.getElementById("topCoursesList");
     topList.innerHTML = "";
 
     const top = summary.topCourses || [];
-
     if (top.length === 0) {
       topList.innerHTML =
         `<li><span class="label">No course clicks yet</span><span class="value">—</span></li>`;
@@ -621,12 +609,10 @@
       });
     }
 
-    // most-searched courses
     const topSearchList = document.getElementById("topSearchedCoursesList");
     if (topSearchList) {
       topSearchList.innerHTML = "";
       const topSearched = summary.topSearchedCourses || summary.top_searched_courses || [];
-
       if (!topSearched.length) {
         topSearchList.innerHTML =
           `<li><span class="label">No searches yet</span><span class="value">—</span></li>`;
@@ -642,7 +628,6 @@
       }
     }
 
-    // demand ranking
     const demandList = document.getElementById("demandRankList");
     if (demandList) {
       demandList.innerHTML = "";
@@ -665,7 +650,7 @@
     }
   }
 
-  // ---------- Registered users table + detail card ----------
+  // ---------- Registered users + detail card + plan lookup ----------
 
   let USERS_CACHE = [];
 
@@ -696,26 +681,33 @@
       .join(" • ");
   }
 
+  function normalisePlanLabel(plan) {
+    if (!plan) return "Unsubscribed";
+    const p = String(plan).toUpperCase();
+    if (p === "PRO") return "Pro";
+    if (p === "BASIC") return "Basic";
+    if (p === "FREE") return "Unsubscribed";
+    return plan;
+  }
+
   function showUserDetail(u) {
     const card = document.getElementById("userDetailCard");
     if (!card || !u) return;
 
     const favString = favouritesToString(u.favourites || u.favourite_courses);
+    const planLabel = normalisePlanLabel(u.plan);
 
     document.getElementById("detailEmail").textContent = u.email || "—";
-    document.getElementById("detailPlan").textContent = u.plan || "Unsubscribed";
+    document.getElementById("detailPlan").textContent = planLabel;
     document.getElementById("detailHomeState").textContent = u.home_state || "Not set";
     document.getElementById("detailFavs").textContent = favString || "None yet";
 
     document.getElementById("detailDays").textContent =
       u.alert_days || "Not set";
-
     document.getElementById("detailTimeRange").textContent =
       u.alert_time_range || "Not set";
-
     document.getElementById("detailHoles").textContent =
       u.alert_holes != null ? u.alert_holes : "Any";
-
     document.getElementById("detailPlayers").textContent =
       u.alert_players != null ? u.alert_players : "Any";
 
@@ -728,6 +720,32 @@
       lastSeen ? new Date(lastSeen).toLocaleString() : "—";
 
     card.style.display = "block";
+  }
+
+  async function refreshPlansForUsers(users) {
+    await Promise.all(
+      users.map(async (u, idx) => {
+        if (!u.email) return;
+        try {
+          const res = await fetch(
+            `/api/account/plan?email=${encodeURIComponent(u.email)}`,
+            { headers: { "Accept": "application/json" } }
+          );
+          if (!res.ok) return;
+          const data = await res.json();
+          const plan = normalisePlanLabel(data.plan);
+          USERS_CACHE[idx].plan = plan;
+
+          const row = document.querySelector(`tr.user-row[data-idx="${idx}"]`);
+          if (row) {
+            const cell = row.querySelector("td[data-col='plan']");
+            if (cell) cell.textContent = plan;
+          }
+        } catch (err) {
+          console.error("plan lookup failed for", u.email, err);
+        }
+      })
+    );
   }
 
   async function loadRegisteredUsers() {
@@ -769,14 +787,14 @@
         const created = u.created_at || u.createdAt || "";
         const lastSeen = u.last_seen_at || u.lastLogin || "";
         const favDisplay = favouritesToString(u.favourites || u.favourite_courses);
-        const planLabel = u.plan || "Unsubscribed";
         const homeState = u.home_state || "";
+        const planLabel = normalisePlanLabel(u.plan);
 
         return `
           <tr class="user-row" data-idx="${idx}">
             <td>${u.id}</td>
             <td><span class="user-email-pill">${u.email}</span></td>
-            <td>${planLabel}</td>
+            <td data-col="plan">${planLabel}</td>
             <td>${homeState}</td>
             <td>${favDisplay || ""}</td>
             <td>${created ? new Date(created).toLocaleString() : ""}</td>
@@ -798,6 +816,8 @@
       // row click → detail card
       document.querySelectorAll(".user-row").forEach((row) => {
         row.addEventListener("click", (e) => {
+          // ignore clicks on the Delete button
+          if (e.target && e.target.classList.contains("user-delete-btn")) return;
           const idx = Number(row.getAttribute("data-idx"));
           const user = USERS_CACHE[idx];
           if (user) {
@@ -806,10 +826,10 @@
         });
       });
 
-      // delete buttons (stop row click)
+      // delete buttons
       document.querySelectorAll(".user-delete-btn").forEach((btn) => {
         btn.addEventListener("click", async (event) => {
-          event.stopPropagation(); // don't open detail card on delete click
+          event.stopPropagation();
 
           const id = btn.getAttribute("data-user-id");
           const email = btn.getAttribute("data-user-email");
@@ -834,7 +854,7 @@
               return;
             }
 
-            await loadRegisteredUsers(); // refresh list
+            await loadRegisteredUsers();
           } catch (err) {
             console.error("delete user error:", err);
             alert("Error deleting user.");
@@ -843,6 +863,9 @@
           }
         });
       });
+
+      // pull live plan from Stripe for each user
+      await refreshPlansForUsers(users);
 
     } catch (err) {
       console.error("Error loading registered users:", err);
