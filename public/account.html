@@ -412,6 +412,19 @@
         <option value="4">4 players</option>
       </select>
 
+      <!-- NEW: alert frequency -->
+      <label for="alertFrequency">Alert frequency</label>
+      <div class="fav-help">
+        Choose how often TeeRadar should alert you when new tee times match your favourites.
+      </div>
+      <select id="alertFrequency">
+        <option value="POPUP_ONLY">TeeRadar pop-ups only</option>
+        <option value="6H">Every 6 hours</option>
+        <option value="1D">Once per day</option>
+        <option value="2D">Every 2 days</option>
+        <option value="3D">Every 3 days</option>
+      </select>
+
       <div class="row-actions">
         <button id="savePrefsBtn" class="btn-primary" type="button">Save preferences</button>
         <span id="prefsStatus" class="status"></span>
@@ -459,6 +472,7 @@
   const prefLatest = document.getElementById("prefLatest");
   const prefHoles = document.getElementById("prefHoles");
   const prefPartySize = document.getElementById("prefPartySize");
+  const alertFrequencySelect = document.getElementById("alertFrequency");
 
   if (!email) {
     notLoggedInEl.style.display = "block";
@@ -488,6 +502,7 @@
       localStorage.removeItem("teeradar_pref_latest");
       localStorage.removeItem("teeradar_pref_holes");
       localStorage.removeItem("teeradar_pref_party_size");
+      localStorage.removeItem("teeradar_alert_frequency");
       window.location.href = "/index.html";
     });
   }
@@ -536,6 +551,7 @@
     const latest = localStorage.getItem("teeradar_pref_latest");
     const holes = localStorage.getItem("teeradar_pref_holes");
     const partySize = localStorage.getItem("teeradar_pref_party_size");
+    const alertFreq = localStorage.getItem("teeradar_alert_frequency");
 
     if (prefEarliest && earliest) prefEarliest.value = earliest;
     if (prefLatest && latest) prefLatest.value = latest;
@@ -544,6 +560,9 @@
     }
     if (prefPartySize && partySize) {
       prefPartySize.value = partySize;
+    }
+    if (alertFrequencySelect && alertFreq) {
+      alertFrequencySelect.value = alertFreq;
     }
   }
 
@@ -576,6 +595,11 @@
         localStorage.setItem("teeradar_pref_party_size", String(advanced.partySize));
       } else {
         localStorage.removeItem("teeradar_pref_party_size");
+      }
+      if (advanced.frequency) {
+        localStorage.setItem("teeradar_alert_frequency", advanced.frequency);
+      } else {
+        localStorage.removeItem("teeradar_alert_frequency");
       }
     }
   }
@@ -699,13 +723,17 @@
       const latest = prefLatest && prefLatest.value ? prefLatest.value : "";
       const holesValue = prefHoles ? (prefHoles.value || "") : "";
       const partySizeValue = prefPartySize ? Number(prefPartySize.value) || 1 : 1;
+      const alertFrequency = alertFrequencySelect
+        ? (alertFrequencySelect.value || "POPUP_ONLY")
+        : "POPUP_ONLY";
 
       savePrefsToStorage(homeState, favCourses, {
         days: selectedDays,
         earliest,
         latest,
         holes: holesValue,
-        partySize: partySizeValue
+        partySize: partySizeValue,
+        frequency: alertFrequency
       });
 
       prefsStatus.textContent = "Saving…";
@@ -720,7 +748,8 @@
           earliest,
           latest,
           holes: holesValue,
-          partySize: partySizeValue
+          partySize: partySizeValue,
+          alertFrequency
         };
         const res = await fetch("/api/account/preferences", {
           method: "POST",
