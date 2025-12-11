@@ -69,21 +69,20 @@ async function ensureUserPreferencesTable() {
         preferred_holes INTEGER,
         preferred_party_size INTEGER,
         alert_frequency TEXT,
-        alert_last_run TIMESTAMPTZ,
+        alert_last_sent TIMESTAMPTZ,
         updated_at TIMESTAMPTZ DEFAULT now()
       );
     `);
 
-    // Ensure alert_frequency exists on older deployments
+    // Ensure columns exist on older deployments
     await db.query(`
       ALTER TABLE user_preferences
       ADD COLUMN IF NOT EXISTS alert_frequency TEXT;
     `);
 
-    // Ensure alert_last_run exists on older deployments
     await db.query(`
       ALTER TABLE user_preferences
-      ADD COLUMN IF NOT EXISTS alert_last_run TIMESTAMPTZ;
+      ADD COLUMN IF NOT EXISTS alert_last_sent TIMESTAMPTZ;
     `);
 
     console.log("✅ user_preferences table ready");
@@ -660,7 +659,7 @@ app.delete("/api/analytics/users/:id", async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("delete user error:", err);
+    console.error("delete user error", err);
     res.status(500).json({ error: "internal error" });
   }
 });
