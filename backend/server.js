@@ -55,6 +55,29 @@ for (const [key, priceId] of Object.entries(PRICE_IDS)) {
   }
 }
 
+// ✅ NEW: ensure user_preferences table exists
+async function ensureUserPreferencesTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        email TEXT PRIMARY KEY,
+        home_state TEXT,
+        favourites JSONB,
+        preferred_days TEXT[],
+        preferred_earliest TEXT,
+        preferred_latest TEXT,
+        preferred_holes INTEGER,
+        preferred_party_size INTEGER,
+        updated_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+    console.log("✅ user_preferences table ready");
+  } catch (err) {
+    console.error("❌ error ensuring user_preferences table:", err);
+  }
+}
+ensureUserPreferencesTable();
+
 app.use(cors());
 
 // -------------------------------------------------
@@ -150,7 +173,7 @@ app.post("/api/subscribe", async (req, res) => {
 });
 
 // -------------------------------------------------
-// ✅ NEW: Billing portal – open Stripe customer portal
+// ✅ Billing portal – open Stripe customer portal
 // -------------------------------------------------
 app.post("/api/billing/portal", async (req, res) => {
   try {
@@ -192,7 +215,7 @@ app.post("/api/billing/portal", async (req, res) => {
 });
 
 // -------------------------------------------------
-// 🔎 NEW: Account plan lookup (Stripe is source of truth)
+// 🔎 Account plan lookup (Stripe is source of truth)
 // -------------------------------------------------
 app.get("/api/account/plan", async (req, res) => {
   try {
@@ -256,6 +279,73 @@ app.get("/api/account/plan", async (req, res) => {
   } catch (err) {
     console.error("account/plan error:", err);
     res.status(500).json({ error: "plan_lookup_failed", detail: err.message });
+  }
+});
+
+// -------------------------------------------------
+// ✅ NEW: Save account preferences (for favourites + scan settings)
+// -------------------------------------------------
+app.post("/api/account/preferences", async (req, res) => {
+  try {
+    const {
+      email,
+      homeState,
+      favourites = [],
+      days = [],
+      earliest,
+      latest,
+      holes,
+      partySize,
+    } = req.body || {};
+
+    const trimmedEmail = (email || "").toString().trim().toLowerCase();
+    if (!trimmedEmail) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    const preferredDays =
+      Array.isArray(days) && days.length ? days : null;
+
+    await db.query(
+      `
+      INSERT INTO user_preferences (
+        email,
+        home_state,
+        favourites,
+        preferred_days,
+        preferred_earliest,
+        preferred_latest,
+        preferred_holes,
+        preferred_party_size,
+        updated_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now())
+      ON CONFLICT (email) DO UPDATE SET
+        home_state = EXCLUDED.home_state,
+        favourites = EXCLUDED.favourites,
+        preferred_days = EXCLUDED.preferred_days,
+        preferred_earliest = EXCLUDED.preferred_earliest,
+        preferred_latest = EXCLUDED.preferred_latest,
+        preferred_holes = EXCLUDED.preferred_holes,
+        preferred_party_size = EXCLUDED.preferred_party_size,
+        updated_at = now()
+      `,
+      [
+        trimmedEmail,
+        homeState || null,
+        JSON.stringify(favourites || []),
+        preferredDays,
+        earliest || null,
+        latest || null,
+        holes ? Number(holes) : null,
+        partySize ? Number(partySize) : null,
+      ]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("account/preferences error:", err);
+    res.status(500).json({ error: "internal error", detail: err.message });
   }
 });
 
@@ -477,13 +567,22 @@ app.get("/api/analytics/users", async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT
-        id,
-        email,
-        home_course,
-        created_at,
-        last_login
-      FROM users
-      ORDER BY id DESC
+        u.id,
+        u.email,
+        u.home_course,
+        u.created_at,
+        u.last_login,
+        p.home_state,
+        p.favourites,
+        p.preferred_days,
+        p.preferred_earliest,
+        p.preferred_latest,
+        p.preferred_holes,
+        p.preferred_party_size
+      FROM users u
+      LEFT JOIN user_preferences p
+        ON p.email = u.email
+      ORDER BY u.id DESC
       LIMIT 200;
     `);
 
@@ -493,6 +592,14 @@ app.get("/api/analytics/users", async (req, res) => {
       created_at: u.created_at,
       last_seen_at: u.last_login || u.created_at || null,
       home_course: u.home_course || null,
+      // NEW fields from user_preferences
+      home_state: u.home_state || null,
+      favourites: u.favourites || null,
+      preferred_days: u.preferred_days || null,
+      preferred_earliest: u.preferred_earliest || null,
+      preferred_latest: u.preferred_latest || null,
+      preferred_holes: u.preferred_holes,
+      preferred_party_size: u.preferred_party_size,
     }));
 
     res.json({ users });
