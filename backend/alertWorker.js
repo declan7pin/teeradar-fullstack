@@ -127,10 +127,14 @@ async function sendAlertEmailForHit({
     return;
   }
 
+  // 🔹 Handle 587 (STARTTLS) vs 465 (SSL) correctly
+  const portNumber = Number(SMTP_PORT);
+
   const transporter = nodemailer.createTransport({
     host: SMTP_HOST,
-    port: Number(SMTP_PORT),
-    secure: false,
+    port: portNumber,
+    secure: portNumber === 465, // true for 465 (SSL), false for 587 (STARTTLS)
+    requireTLS: portNumber === 587, // Office365-style STARTTLS on 587
     auth: {
       user: SMTP_USER,
       pass: SMTP_PASS,
