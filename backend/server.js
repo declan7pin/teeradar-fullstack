@@ -592,7 +592,8 @@ app.get("/api/analytics/users", async (req, res) => {
       created_at: u.created_at,
       last_seen_at: u.last_login || u.created_at || null,
       home_course: u.home_course || null,
-      // NEW fields from user_preferences
+
+      // existing preference fields
       home_state: u.home_state || null,
       favourites: u.favourites || null,
       preferred_days: u.preferred_days || null,
@@ -600,6 +601,15 @@ app.get("/api/analytics/users", async (req, res) => {
       preferred_latest: u.preferred_latest || null,
       preferred_holes: u.preferred_holes,
       preferred_party_size: u.preferred_party_size,
+
+      // 🔹 NEW: aliases specifically for the analytics "Alert settings" card
+      alert_days: u.preferred_days || null,
+      alert_time_range:
+        u.preferred_earliest && u.preferred_latest
+          ? `${u.preferred_earliest}–${u.preferred_latest}`
+          : null,
+      alert_holes: u.preferred_holes,
+      alert_players: u.preferred_party_size,
     }));
 
     res.json({ users });
