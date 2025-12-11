@@ -124,7 +124,7 @@ app.post("/api/subscribe", async (req, res) => {
         },
       ],
       success_url:
-         "https://teeradar-fullstack-4.onrender.com/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1",
+        "https://teeradar-fullstack-4.onrender.com/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1",
       cancel_url:
         "https://teeradar-fullstack-4.onrender.com/subscribe-cancel.html",
     });
@@ -135,6 +135,48 @@ app.post("/api/subscribe", async (req, res) => {
     res
       .status(500)
       .json({ error: "Stripe checkout failed", detail: err.message });
+  }
+});
+
+// -------------------------------------------------
+// Stripe Billing Portal – manage / cancel subscription (NEW)
+// -------------------------------------------------
+app.post("/api/billing/portal", async (req, res) => {
+  try {
+    const { email, returnUrl } = req.body || {};
+
+    if (!email) {
+      return res.status(400).json({ error: "Email is required for billing portal" });
+    }
+
+    // Find existing Stripe customer by email
+    const customers = await stripe.customers.list({
+      email,
+      limit: 1,
+    });
+
+    const customer = customers.data[0];
+
+    if (!customer) {
+      console.warn("No Stripe customer found for email:", email);
+      return res
+        .status(404)
+        .json({ error: "No active subscription found for this email yet." });
+    }
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customer.id,
+      return_url:
+        returnUrl ||
+        "https://teeradar-fullstack-4.onrender.com/account.html",
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error("Stripe billing portal error:", err);
+    res
+      .status(500)
+      .json({ error: "Billing portal failed", detail: err.message });
   }
 });
 
