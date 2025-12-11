@@ -82,7 +82,7 @@ app.post(
       case "checkout.session.completed": {
         const session = event.data.object;
         console.log("✅ Stripe checkout completed for:", session.customer_email);
-        // Later: sync into DB if you want
+        // TODO: later sync to DB if you like
         break;
       }
       case "customer.subscription.deleted": {
@@ -150,6 +150,48 @@ app.post("/api/subscribe", async (req, res) => {
 });
 
 // -------------------------------------------------
+// ✅ NEW: Billing portal – open Stripe customer portal
+// -------------------------------------------------
+app.post("/api/billing/portal", async (req, res) => {
+  try {
+    const { email, returnUrl } = req.body || {};
+    const trimmedEmail = (email || "").toString().trim().toLowerCase();
+
+    if (!trimmedEmail) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    // 1) Find Stripe customer by email
+    const customers = await stripe.customers.list({
+      email: trimmedEmail,
+      limit: 1,
+    });
+
+    if (!customers.data.length) {
+      console.log("No Stripe customer for email:", trimmedEmail);
+      return res
+        .status(404)
+        .json({ error: "no_stripe_customer_for_email" });
+    }
+
+    const customer = customers.data[0];
+
+    // 2) Create billing portal session
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customer.id,
+      return_url:
+        returnUrl ||
+        "https://teeradar-fullstack-4.onrender.com/account.html",
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error("billing portal error:", err);
+    res.status(500).json({ error: "billing_portal_failed", detail: err.message });
+  }
+});
+
+// -------------------------------------------------
 // 🔎 NEW: Account plan lookup (Stripe is source of truth)
 // -------------------------------------------------
 app.get("/api/account/plan", async (req, res) => {
@@ -196,7 +238,6 @@ app.get("/api/account/plan", async (req, res) => {
     const priceId = firstItem?.price?.id;
 
     if (!priceId || !PRICE_TO_PLAN[priceId]) {
-      // Unknown price → treat as free/basic fallback
       return res.json({
         plan: "BASIC",
         maxFavs: 3,
@@ -481,7 +522,7 @@ app.delete("/api/analytics/users/:id", async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("delete user error", err);
+    console.error("delete user error:", err);
     res.status(500).json({ error: "internal error" });
   }
 });
