@@ -613,6 +613,12 @@
   const manageBillingBtn = document.getElementById("manageBillingBtn");
   if (manageBillingBtn) {
     manageBillingBtn.addEventListener("click", async () => {
+      if (!email) {
+        billingStatus.textContent = "You need to be logged in to manage billing.";
+        billingStatus.className = "status err";
+        return;
+      }
+
       billingStatus.textContent = "Opening billing portal…";
       billingStatus.className = "status";
 
@@ -624,6 +630,7 @@
             ...(token ? { "Authorization": "Bearer " + token } : {})
           },
           body: JSON.stringify({
+            email,                      // 🔹 send the logged-in email to backend
             returnUrl: window.location.href
           })
         });
@@ -632,7 +639,7 @@
           window.location.href = data.url;
           return;
         }
-        billingStatus.textContent = "Could not open billing portal yet (backend not wired).";
+        billingStatus.textContent = "Could not open billing portal yet.";
         billingStatus.className = "status err";
       } catch (err) {
         console.error("billing portal error", err);
