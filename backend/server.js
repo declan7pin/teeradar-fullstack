@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import nodemailer from "nodemailer";
-import Stripe from "stripe"; // ✅ ADDED
+import Stripe from "stripe"; // ✅ Stripe
 
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
@@ -33,10 +33,10 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ Stripe init (ADDED)
+// ✅ Stripe init
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// ✅ Map of plan keys → Stripe price IDs (UPDATED TO TEST PRICES)
+// ✅ Map of plan keys → Stripe price IDs
 const PRICE_IDS = {
   BASIC_MONTHLY: "price_1SchVzASm4geYL4WAc7X3aAw",
   BASIC_ANNUAL: "price_1SchWMASm4geYL4WhVk8Zc0Q",
@@ -44,10 +44,21 @@ const PRICE_IDS = {
   PRO_ANNUAL: "price_1SchXiASm4geYL4WUm6YUQlV",
 };
 
+// ✅ Reverse map: price → plan + favourite limit
+const PRICE_TO_PLAN = {};
+for (const [key, priceId] of Object.entries(PRICE_IDS)) {
+  if (!priceId) continue;
+  if (key.startsWith("BASIC")) {
+    PRICE_TO_PLAN[priceId] = { plan: "BASIC", maxFavs: 3 };
+  } else if (key.startsWith("PRO")) {
+    PRICE_TO_PLAN[priceId] = { plan: "PRO", maxFavs: 10 };
+  }
+}
+
 app.use(cors());
 
 // -------------------------------------------------
-// Stripe Webhook (ADDED) – must be BEFORE express.json
+// Stripe Webhook – must be BEFORE express.json
 // -------------------------------------------------
 app.post(
   "/api/webhook",
@@ -71,7 +82,7 @@ app.post(
       case "checkout.session.completed": {
         const session = event.data.object;
         console.log("✅ Stripe checkout completed for:", session.customer_email);
-        // TODO later: look up user by email and mark as subscribed
+        // Later: sync into DB if you want
         break;
       }
       case "customer.subscription.deleted": {
@@ -97,11 +108,11 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 
 app.use("/api/auth", authRouter);
 
-// 🔔 Alerts API (NEW)
+// 🔔 Alerts API
 app.use("/api/alerts", alertsRouter);
 
 // -------------------------------------------------
-// Stripe Checkout route (ADDED) – create subscription session
+// Stripe Checkout – create subscription session
 // -------------------------------------------------
 app.post("/api/subscribe", async (req, res) => {
   try {
@@ -139,44 +150,71 @@ app.post("/api/subscribe", async (req, res) => {
 });
 
 // -------------------------------------------------
-// Stripe Billing Portal – manage / cancel subscription (NEW)
+// 🔎 NEW: Account plan lookup (Stripe is source of truth)
 // -------------------------------------------------
-app.post("/api/billing/portal", async (req, res) => {
+app.get("/api/account/plan", async (req, res) => {
   try {
-    const { email, returnUrl } = req.body || {};
-
+    const email = (req.query.email || "").toString().trim().toLowerCase();
     if (!email) {
-      return res.status(400).json({ error: "Email is required for billing portal" });
+      return res.status(400).json({ error: "email is required" });
     }
 
-    // Find existing Stripe customer by email
+    // 1) Find customer by email
     const customers = await stripe.customers.list({
       email,
       limit: 1,
     });
 
-    const customer = customers.data[0];
-
-    if (!customer) {
-      console.warn("No Stripe customer found for email:", email);
-      return res
-        .status(404)
-        .json({ error: "No active subscription found for this email yet." });
+    if (!customers.data.length) {
+      return res.json({
+        plan: "FREE",
+        maxFavs: 3,
+        reason: "no_stripe_customer",
+      });
     }
 
-    const session = await stripe.billingPortal.sessions.create({
+    const customer = customers.data[0];
+
+    // 2) Find active subscription for that customer
+    const subs = await stripe.subscriptions.list({
       customer: customer.id,
-      return_url:
-        returnUrl ||
-        "https://teeradar-fullstack-4.onrender.com/account.html",
+      status: "active",
+      limit: 1,
+      expand: ["data.items.data.price"],
     });
 
-    res.json({ url: session.url });
+    if (!subs.data.length) {
+      return res.json({
+        plan: "FREE",
+        maxFavs: 3,
+        reason: "no_active_subscription",
+      });
+    }
+
+    const sub = subs.data[0];
+    const firstItem = sub.items.data[0];
+    const priceId = firstItem?.price?.id;
+
+    if (!priceId || !PRICE_TO_PLAN[priceId]) {
+      // Unknown price → treat as free/basic fallback
+      return res.json({
+        plan: "BASIC",
+        maxFavs: 3,
+        reason: "unknown_price",
+        priceId,
+      });
+    }
+
+    const { plan, maxFavs } = PRICE_TO_PLAN[priceId];
+
+    return res.json({
+      plan,
+      maxFavs,
+      priceId,
+    });
   } catch (err) {
-    console.error("Stripe billing portal error:", err);
-    res
-      .status(500)
-      .json({ error: "Billing portal failed", detail: err.message });
+    console.error("account/plan error:", err);
+    res.status(500).json({ error: "plan_lookup_failed", detail: err.message });
   }
 });
 
@@ -219,7 +257,7 @@ app.get("/api/courses", (req, res) => {
 });
 
 // -------------------------------------------------
-// Search (UPDATED: state filter + state-aware cache)
+// Search (state filter + state-aware cache)
 // -------------------------------------------------
 app.post("/api/search", async (req, res) => {
   try {
@@ -229,7 +267,7 @@ app.post("/api/search", async (req, res) => {
       latest = "17:00",
       holes = "",
       partySize = 1,
-      state = "", // ✅ New
+      state = "",
     } = req.body || {};
 
     if (!date) return res.status(400).json({ error: "date is required" });
@@ -239,7 +277,7 @@ app.post("/api/search", async (req, res) => {
         ? ""
         : Number(holes);
 
-    const stateCode = (state || "").toString().toUpperCase(); // ✅ Normalize state code
+    const stateCode = (state || "").toString().toUpperCase();
 
     const criteria = {
       date,
@@ -247,12 +285,11 @@ app.post("/api/search", async (req, res) => {
       latest,
       holes: holesValue,
       partySize: Number(partySize) || 1,
-      state: stateCode || null, // for logging only
+      state: stateCode || null,
     };
 
     console.log("Incoming /api/search", criteria);
 
-    // ✅ ONLY scrape courses in the selected state
     const searchCourses = stateCode
       ? courses.filter(
           (c) => (c.state || "").toString().toUpperCase() === stateCode
@@ -264,7 +301,6 @@ app.post("/api/search", async (req, res) => {
     );
 
     const jobs = searchCourses.map(async (c) => {
-      // ✅ Make cache state-specific (avoids WA/QLD clashes)
       const courseId = `${(c.state || "NA").toString().toUpperCase()}::${
         c.id || c.name
       }`;
@@ -445,7 +481,7 @@ app.delete("/api/analytics/users/:id", async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("delete user error:", err);
+    console.error("delete user error", err);
     res.status(500).json({ error: "internal error" });
   }
 });
@@ -527,5 +563,5 @@ app.listen(PORT, () => {
   console.log(`✅ TeeRadar backend running on port ${PORT}`);
 });
 
-// 🔔 Start alerts worker (NEW)
+// 🔔 Start alerts worker
 startAlertWorker();
