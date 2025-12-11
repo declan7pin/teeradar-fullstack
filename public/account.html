@@ -139,7 +139,7 @@
       margin-bottom: 4px;
       color: #4b5563;
     }
-    select, input[type="text"] {
+    select, input[type="text"], input[type="time"] {
       width: 100%;
       padding: 8px 10px;
       border-radius: 8px;
@@ -147,7 +147,7 @@
       font-size: 13px;
       margin-bottom: 10px;
     }
-    select:focus, input[type="text"]:focus {
+    select:focus, input[type="text"]:focus, input[type="time"]:focus {
       outline: none;
       border-color: #0ea5e9;
       box-shadow: 0 0 0 1px rgba(14,165,233,0.35);
@@ -254,14 +254,6 @@
       font-weight:600;
       cursor:pointer;
     }
-    .btn-danger-text {
-      border:none;
-      background:transparent;
-      color:var(--danger);
-      font-size:12px;
-      cursor:pointer;
-      margin-left:auto;
-    }
 
     .row-actions {
       margin-top: 8px;
@@ -287,6 +279,27 @@
       font-size: 13px;
       color:#b91c1c;
       margin-top:10px;
+    }
+
+    /* NEW: day choice chips */
+    .day-choices {
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-bottom:10px;
+      font-size:12px;
+    }
+    .day-choices label {
+      display:flex;
+      align-items:center;
+      gap:4px;
+      background:#f3f4f6;
+      border-radius:999px;
+      padding:4px 8px;
+      cursor:pointer;
+    }
+    .day-choices input[type="checkbox"] {
+      margin:0;
     }
   </style>
 </head>
@@ -363,6 +376,42 @@
 
       <ul id="favList" class="fav-list"></ul>
 
+      <!-- NEW: scraping preferences -->
+      <label>Days to scan</label>
+      <div class="fav-help">
+        Pick the day(s) you usually want us to scan for tee times.
+      </div>
+      <div class="day-choices">
+        <label><input type="checkbox" name="prefDays" value="MON" /> Mon</label>
+        <label><input type="checkbox" name="prefDays" value="TUE" /> Tue</label>
+        <label><input type="checkbox" name="prefDays" value="WED" /> Wed</label>
+        <label><input type="checkbox" name="prefDays" value="THU" /> Thu</label>
+        <label><input type="checkbox" name="prefDays" value="FRI" /> Fri</label>
+        <label><input type="checkbox" name="prefDays" value="SAT" /> Sat</label>
+        <label><input type="checkbox" name="prefDays" value="SUN" /> Sun</label>
+      </div>
+
+      <label for="prefEarliest">Earliest tee time</label>
+      <input id="prefEarliest" type="time" />
+
+      <label for="prefLatest">Latest tee time</label>
+      <input id="prefLatest" type="time" />
+
+      <label for="prefHoles">Number of holes</label>
+      <select id="prefHoles">
+        <option value="">Any</option>
+        <option value="9">9 holes</option>
+        <option value="18">18 holes</option>
+      </select>
+
+      <label for="prefPartySize">Group size</label>
+      <select id="prefPartySize">
+        <option value="1">1 player</option>
+        <option value="2">2 players</option>
+        <option value="3">3 players</option>
+        <option value="4">4 players</option>
+      </select>
+
       <div class="row-actions">
         <button id="savePrefsBtn" class="btn-primary" type="button">Save preferences</button>
         <span id="prefsStatus" class="status"></span>
@@ -404,6 +453,13 @@
   const navAccountBtn = document.getElementById("navAccount");
   const logoutBtn = document.getElementById("pageLogout");
 
+  // NEW: extra preference inputs
+  const dayCheckboxes = Array.from(document.querySelectorAll('input[name="prefDays"]'));
+  const prefEarliest = document.getElementById("prefEarliest");
+  const prefLatest = document.getElementById("prefLatest");
+  const prefHoles = document.getElementById("prefHoles");
+  const prefPartySize = document.getElementById("prefPartySize");
+
   if (!email) {
     notLoggedInEl.style.display = "block";
     accountContentEl.style.display = "none";
@@ -427,12 +483,31 @@
       localStorage.removeItem("teeradar_jwt");
       localStorage.removeItem("teeradar_home_state");
       localStorage.removeItem("teeradar_fav_courses");
+      localStorage.removeItem("teeradar_pref_days");
+      localStorage.removeItem("teeradar_pref_earliest");
+      localStorage.removeItem("teeradar_pref_latest");
+      localStorage.removeItem("teeradar_pref_holes");
+      localStorage.removeItem("teeradar_pref_party_size");
       window.location.href = "/index.html";
     });
   }
 
   // Default: Basic (3 favs). This will be updated after we hit the server.
   let maxFavs = 3;
+
+  // --- helpers for days ---
+  function getSelectedDays() {
+    return dayCheckboxes
+      .filter(cb => cb.checked)
+      .map(cb => cb.value);
+  }
+
+  function setSelectedDays(days) {
+    if (!Array.isArray(days)) return;
+    dayCheckboxes.forEach(cb => {
+      cb.checked = days.includes(cb.value);
+    });
+  }
 
   // --- load existing prefs from localStorage ---
   function loadPrefsFromStorage() {
@@ -447,15 +522,62 @@
       try { favourites = JSON.parse(favJson) || []; } catch {}
     }
     renderFavList(favourites);
+
+    // NEW: extra prefs
+    const daysJson = localStorage.getItem("teeradar_pref_days");
+    if (daysJson) {
+      try {
+        const arr = JSON.parse(daysJson) || [];
+        setSelectedDays(arr);
+      } catch {}
+    }
+
+    const earliest = localStorage.getItem("teeradar_pref_earliest");
+    const latest = localStorage.getItem("teeradar_pref_latest");
+    const holes = localStorage.getItem("teeradar_pref_holes");
+    const partySize = localStorage.getItem("teeradar_pref_party_size");
+
+    if (prefEarliest && earliest) prefEarliest.value = earliest;
+    if (prefLatest && latest) prefLatest.value = latest;
+    if (prefHoles && holes !== null && typeof holes !== "undefined") {
+      prefHoles.value = holes;
+    }
+    if (prefPartySize && partySize) {
+      prefPartySize.value = partySize;
+    }
   }
 
-  function savePrefsToStorage(homeState, favourites) {
+  function savePrefsToStorage(homeState, favourites, advanced) {
     if (homeState) {
       localStorage.setItem("teeradar_home_state", homeState);
     } else {
       localStorage.removeItem("teeradar_home_state");
     }
     localStorage.setItem("teeradar_fav_courses", JSON.stringify(favourites));
+
+    if (advanced) {
+      localStorage.setItem("teeradar_pref_days", JSON.stringify(advanced.days || []));
+      if (advanced.earliest) {
+        localStorage.setItem("teeradar_pref_earliest", advanced.earliest);
+      } else {
+        localStorage.removeItem("teeradar_pref_earliest");
+      }
+      if (advanced.latest) {
+        localStorage.setItem("teeradar_pref_latest", advanced.latest);
+      } else {
+        localStorage.removeItem("teeradar_pref_latest");
+      }
+      if (advanced.holes !== undefined && advanced.holes !== null) {
+        localStorage.setItem("teeradar_pref_holes", String(advanced.holes));
+      } else {
+        localStorage.removeItem("teeradar_pref_holes");
+      }
+      if (advanced.partySize) {
+        localStorage.setItem("teeradar_pref_party_size", String(advanced.partySize));
+      } else {
+        localStorage.removeItem("teeradar_pref_party_size");
+      }
+    }
   }
 
   // --- favourites UI state ---
@@ -571,15 +693,34 @@
       if (!email) return;
 
       const homeState = homeStateSelect.value || "";
-      savePrefsToStorage(homeState, favCourses);
+
+      const selectedDays = getSelectedDays();
+      const earliest = prefEarliest && prefEarliest.value ? prefEarliest.value : "";
+      const latest = prefLatest && prefLatest.value ? prefLatest.value : "";
+      const holesValue = prefHoles ? (prefHoles.value || "") : "";
+      const partySizeValue = prefPartySize ? Number(prefPartySize.value) || 1 : 1;
+
+      savePrefsToStorage(homeState, favCourses, {
+        days: selectedDays,
+        earliest,
+        latest,
+        holes: holesValue,
+        partySize: partySizeValue
+      });
 
       prefsStatus.textContent = "Saving…";
       prefsStatus.className = "status";
 
       try {
         const body = {
+          email,
           homeState,
-          favourites: favCourses
+          favourites: favCourses,
+          days: selectedDays,
+          earliest,
+          latest,
+          holes: holesValue,
+          partySize: partySizeValue
         };
         const res = await fetch("/api/account/preferences", {
           method: "POST",
@@ -608,8 +749,6 @@
   const manageBillingBtn = document.getElementById("manageBillingBtn");
   if (manageBillingBtn) {
     manageBillingBtn.addEventListener("click", async () => {
-      if (!email) return; // ✅ make sure we have an email for Stripe lookup
-
       billingStatus.textContent = "Opening billing portal…";
       billingStatus.className = "status";
 
@@ -621,7 +760,6 @@
             ...(token ? { "Authorization": "Bearer " + token } : {})
           },
           body: JSON.stringify({
-            email,                      // ✅ send the logged-in email
             returnUrl: window.location.href
           })
         });
