@@ -302,7 +302,8 @@
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
-      <button id="navLogout" class="nav-login" type="button">Log out</button>
+      <!-- now a "My account" button in the header, no longer log out -->
+      <button id="navAccount" class="nav-login" type="button">My account</button>
     </div>
   </div>
 </header>
@@ -325,6 +326,11 @@
       <p style="margin-top:6px;">
         If you upgrade to Pro later, we’ll automatically let you save up to 10 favourites.
       </p>
+
+      <!-- 🔹 main in-page log out button -->
+      <div class="row-actions">
+        <button id="pageLogout" class="btn-primary" type="button">Log out</button>
+      </div>
     </div>
 
     <div class="card">
@@ -395,7 +401,8 @@
   const favDropdown = document.getElementById("favAutocompleteList");
   const prefsStatus = document.getElementById("prefsStatus");
   const billingStatus = document.getElementById("billingStatus");
-  const logoutBtn = document.getElementById("navLogout");
+  const navAccountBtn = document.getElementById("navAccount");
+  const logoutBtn = document.getElementById("pageLogout");
 
   if (!email) {
     notLoggedInEl.style.display = "block";
@@ -406,6 +413,15 @@
     accountEmailEl.textContent = email;
   }
 
+  // header "My account" button – stays on this page or can be reused elsewhere
+  if (navAccountBtn) {
+    navAccountBtn.addEventListener("click", () => {
+      // already on account page; just scroll to top
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  // main in-page log out button
   if (logoutBtn) {
     logoutBtn.addEventListener("click", () => {
       localStorage.removeItem("teeradar_user_email");
@@ -510,6 +526,7 @@
         if (favCourses.length >= maxFavs) {
           alert(`Your plan lets you pick up to ${maxFavs} favourites.`);
           favDropdown.style.display = "none";
+          favInput.value = "";
           return;
         }
         // avoid exact duplicates by name+state
