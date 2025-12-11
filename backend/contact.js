@@ -35,10 +35,13 @@ contactRouter.post("/", async (req, res) => {
 
     // Configure SMTP transport
     // ⚠️ You will set these as environment vars in Render.
+    const portNumber = Number(process.env.SMTP_PORT) || 587;
+
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,         // e.g. "smtp.gmail.com" or your provider
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: false,                       // true for 465, false for 587
+      host: process.env.SMTP_HOST, // e.g. "smtp.office365.com" or your provider
+      port: portNumber,
+      secure: portNumber === 465,  // true for 465 (SSL), false otherwise
+      requireTLS: portNumber === 587, // STARTTLS on 587 (Office365/Gmail style)
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
