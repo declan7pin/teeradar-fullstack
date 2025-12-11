@@ -225,7 +225,10 @@
       border-bottom:1px solid #e5e7eb;
       text-align:left;
       word-break:break-all;
-      white-space:nowrap;
+    }
+    .users-table tbody tr:hover {
+      background:#f1f5f9;
+      cursor:pointer;
     }
     .users-empty{
       font-size:12px;
@@ -246,6 +249,16 @@
     .user-delete-btn:disabled{
       opacity:0.6;
       cursor:default;
+    }
+
+    .user-email-pill {
+      display:inline-flex;
+      align-items:center;
+      padding:2px 8px;
+      border-radius:999px;
+      background:var(--pill);
+      font-size:11px;
+      color:#166534;
     }
 
     @media (min-width: 768px) {
@@ -397,10 +410,6 @@
             <th>Plan</th>
             <th>Home state</th>
             <th>Favourite courses</th>
-            <th>Days</th>
-            <th>Time range</th>
-            <th>Holes</th>
-            <th>Players</th>
             <th>Created at</th>
             <th>Last seen</th>
             <th></th>
@@ -408,6 +417,32 @@
         </thead>
         <tbody id="usersTbody"></tbody>
       </table>
+    </div>
+  </section>
+
+  <!-- detail card populated when you click a user row -->
+  <section class="card" id="userDetailCard" style="margin-top:14px; display:none;">
+    <div class="card-label">User details</div>
+    <div class="muted-note" style="margin-bottom:6px;">
+      Click a user row above to populate this card.
+    </div>
+    <div style="font-size:13px; line-height:1.5;">
+      <p><strong>Email:</strong> <span id="detailEmail">—</span></p>
+      <p><strong>Plan:</strong> <span id="detailPlan">—</span></p>
+      <p><strong>Home state:</strong> <span id="detailHomeState">—</span></p>
+      <p><strong>Favourite courses:</strong><br>
+        <span id="detailFavs">—</span>
+      </p>
+      <p><strong>Alert settings:</strong><br>
+        Days: <span id="detailDays">—</span><br>
+        Time range: <span id="detailTimeRange">—</span><br>
+        Holes: <span id="detailHoles">—</span><br>
+        Players: <span id="detailPlayers">—</span>
+      </p>
+      <p>
+        <strong>Created at:</strong> <span id="detailCreatedAt">—</span><br>
+        <strong>Last seen:</strong> <span id="detailLastSeen">—</span>
+      </p>
     </div>
   </section>
 </main>
@@ -630,79 +665,69 @@
     }
   }
 
-  // Helpers for registered users table
-  function formatPlan(raw) {
-    const p = (raw || "").toString().toUpperCase();
-    if (p === "BASIC") return "Basic";
-    if (p === "PRO") return "Pro";
-    if (!p) return "Unsubscribed";
-    return raw;
-  }
+  // ---------- Registered users table + detail card ----------
 
-  function formatHomeState(raw) {
-    if (!raw) return "";
-    const s = raw.toString().toUpperCase();
-    const map = {
-      WA: "Western Australia",
-      NT: "Northern Territory",
-      QLD: "Queensland",
-      SA: "South Australia",
-      TAS: "Tasmania",
-      VIC: "Victoria",
-      NSW: "New South Wales",
-      ACT: "Australian Capital Territory"
-    };
-    return map[s] || s;
-  }
+  let USERS_CACHE = [];
 
-  function formatFavourites(raw) {
-    if (!raw) return "";
-    let list = raw;
-    if (typeof raw === "string") {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) list = parsed;
-      } catch {
-        // not JSON, just return as-is
-        return raw;
-      }
+  function parseFavourites(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+      return [];
+    } catch {
+      return [];
     }
-    if (!Array.isArray(list)) return "";
-    return list
+  }
+
+  function favouritesToString(raw) {
+    const favs = parseFavourites(raw);
+    if (!favs.length) return "";
+    return favs
       .map((c) => {
-        if (!c) return "";
-        const name = c.name || c.course || "";
-        const state = c.state || "";
-        return state ? `${name} (${state})` : name;
+        if (typeof c === "string") return c;
+        if (!c || typeof c !== "object") return "";
+        const name = c.name || "";
+        const state = c.state ? ` (${c.state})` : "";
+        return name + state;
       })
       .filter(Boolean)
-      .join(" · ");
+      .join(" • ");
   }
 
-  function formatDays(raw) {
-    if (!raw) return "";
-    let list = raw;
-    if (typeof raw === "string") {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) list = parsed;
-      } catch {
-        return raw;
-      }
-    }
-    if (!Array.isArray(list)) return "";
-    return list.join(", ");
-  }
+  function showUserDetail(u) {
+    const card = document.getElementById("userDetailCard");
+    if (!card || !u) return;
 
-  function formatTimeRange(raw) {
-    if (!raw) return "";
-    if (typeof raw === "string") return raw;
-    if (typeof raw === "object" && raw !== null) {
-      const earliest = raw.earliest || raw.start || "";
-      const latest = raw.latest || raw.end || "";
-      if (earliest || latest) return `${earliest || "?"}–${latest || "?"}`;
-    }
-    return "";
+    const favString = favouritesToString(u.favourites || u.favourite_courses);
+
+    document.getElementById("detailEmail").textContent = u.email || "—";
+    document.getElementById("detailPlan").textContent = u.plan || "Unsubscribed";
+    document.getElementById("detailHomeState").textContent = u.home_state || "Not set";
+    document.getElementById("detailFavs").textContent = favString || "None yet";
+
+    document.getElementById("detailDays").textContent =
+      u.alert_days || "Not set";
+
+    document.getElementById("detailTimeRange").textContent =
+      u.alert_time_range || "Not set";
+
+    document.getElementById("detailHoles").textContent =
+      u.alert_holes != null ? u.alert_holes : "Any";
+
+    document.getElementById("detailPlayers").textContent =
+      u.alert_players != null ? u.alert_players : "Any";
+
+    const created = u.created_at || u.createdAt || "";
+    const lastSeen = u.last_seen_at || u.lastLogin || "";
+
+    document.getElementById("detailCreatedAt").textContent =
+      created ? new Date(created).toLocaleString() : "—";
+    document.getElementById("detailLastSeen").textContent =
+      lastSeen ? new Date(lastSeen).toLocaleString() : "—";
+
+    card.style.display = "block";
   }
 
   async function loadRegisteredUsers() {
@@ -726,11 +751,13 @@
 
       const data = await res.json();
       const users = data.users || [];
+      USERS_CACHE = users;
 
       if (!users.length) {
         table.style.display = "none";
         empty.style.display = "block";
         errorEl.style.display = "none";
+        document.getElementById("userDetailCard").style.display = "none";
         return;
       }
 
@@ -738,31 +765,20 @@
       errorEl.style.display = "none";
       table.style.display = "table";
 
-      tbody.innerHTML = users.map(u => {
+      tbody.innerHTML = users.map((u, idx) => {
         const created = u.created_at || u.createdAt || "";
         const lastSeen = u.last_seen_at || u.lastLogin || "";
-
-        const plan = formatPlan(u.plan);
-        const homeState = formatHomeState(u.home_state || u.homeState);
-        const favourites = formatFavourites(
-          u.favourites || u.favourites_json || u.favourite_courses
-        );
-        const days = formatDays(u.scrape_days || u.scrapeDays);
-        const timeRange = formatTimeRange(u.time_range || u.timeRange);
-        const holes = u.holes != null ? u.holes : "";
-        const players = u.party_size != null ? u.party_size : (u.partySize || "");
+        const favDisplay = favouritesToString(u.favourites || u.favourite_courses);
+        const planLabel = u.plan || "Unsubscribed";
+        const homeState = u.home_state || "";
 
         return `
-          <tr>
+          <tr class="user-row" data-idx="${idx}">
             <td>${u.id}</td>
-            <td>${u.email}</td>
-            <td>${plan}</td>
+            <td><span class="user-email-pill">${u.email}</span></td>
+            <td>${planLabel}</td>
             <td>${homeState}</td>
-            <td>${favourites}</td>
-            <td>${days}</td>
-            <td>${timeRange}</td>
-            <td>${holes}</td>
-            <td>${players}</td>
+            <td>${favDisplay || ""}</td>
             <td>${created ? new Date(created).toLocaleString() : ""}</td>
             <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
             <td>
@@ -779,9 +795,22 @@
         `;
       }).join("");
 
-      // wire up delete buttons
+      // row click → detail card
+      document.querySelectorAll(".user-row").forEach((row) => {
+        row.addEventListener("click", (e) => {
+          const idx = Number(row.getAttribute("data-idx"));
+          const user = USERS_CACHE[idx];
+          if (user) {
+            showUserDetail(user);
+          }
+        });
+      });
+
+      // delete buttons (stop row click)
       document.querySelectorAll(".user-delete-btn").forEach((btn) => {
-        btn.addEventListener("click", async () => {
+        btn.addEventListener("click", async (event) => {
+          event.stopPropagation(); // don't open detail card on delete click
+
           const id = btn.getAttribute("data-user-id");
           const email = btn.getAttribute("data-user-email");
 
