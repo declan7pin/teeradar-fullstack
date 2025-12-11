@@ -142,6 +142,11 @@ async function sendAlertEmailForHit({
   const windowLabel =
     earliest && latest ? `${earliest}–${latest}` : "Any time";
 
+  // 🔹 NEW: prefer direct course booking URL if we have one
+  const bookingLink =
+    (course && (course.url || course.bookingUrl || course.bookUrl)) ||
+    "https://teeradar-fullstack-4.onrender.com/book.html";
+
   const subject = `TeeRadar – ${count} tee time(s) found at ${course.name}`;
   const textBody = `
 Hi ${email},
@@ -154,15 +159,15 @@ TeeRadar just found ${count} tee time(s) that match your alert:
 • Holes: ${holesLabel}
 • Group size: ${playersLabel}
 
-Log in to TeeRadar to view and book:
+Book directly using the link below:
 
-  https://teeradar-fullstack-4.onrender.com/book.html
+  ${bookingLink}
 
 You can adjust or turn off alerts any time from your account page:
 
   https://teeradar-fullstack-4.onrender.com/account.html
 
-Fairways and greens,
+Enjoy your round,
 TeeRadar
   `.trim();
 
