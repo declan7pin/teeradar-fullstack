@@ -63,6 +63,37 @@ async function ensureUserAlertHitsTable() {
 ensureUserAlertHitsTable();
 
 // ---------------------------------------------------------
+// 🔹 ADDED: alert frequency helper
+// ---------------------------------------------------------
+function shouldRunBasedOnFrequency(freq, lastRunIso) {
+  if (!freq) return true;
+  if (!lastRunIso) return true;
+
+  const last = new Date(lastRunIso).getTime();
+  if (!Number.isFinite(last)) return true;
+
+  const now = Date.now();
+  const diff = now - last;
+
+  const HOUR = 1000 * 60 * 60;
+
+  switch (freq.toLowerCase()) {
+    case "6hrs":
+      return diff >= 6 * HOUR;
+    case "daily":
+      return diff >= 24 * HOUR;
+    case "2days":
+      return diff >= 48 * HOUR;
+    case "3days":
+      return diff >= 72 * HOUR;
+    case "popup":
+      return true; // still run normally, user just gets popups instead of email
+    default:
+      return true;
+  }
+}
+
+// ---------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------
 
@@ -92,11 +123,11 @@ function normaliseDayToken(token) {
   }
 }
 
-// Next date (YYYY-MM-DD) matching target DOW (0=Sun..6=Sat)
+// Next date matching target DOW
 function nextDateForDow(targetDow) {
   const now = new Date();
   const todayDow = now.getDay();
-  let delta = (targetDow - todayDow + 7) % 7; // allow "today" if 0
+  let delta = (targetDow - todayDow + 7) % 7;
   const d = new Date(
     now.getFullYear(),
     now.getMonth(),
@@ -117,11 +148,9 @@ function addDaysToIso(isoDate, days) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// Returns dates for this weekend + next weekend for chosen days
 function resolveDatesFromPreferredDays(preferredDays) {
   const todayDow = new Date().getDay();
 
-  // no days chosen → today + same day next week
   if (!Array.isArray(preferredDays) || preferredDays.length === 0) {
     const thisDate = nextDateForDow(todayDow);
     const nextDate = addDaysToIso(thisDate, 7);
@@ -144,7 +173,6 @@ function resolveDatesFromPreferredDays(preferredDays) {
   const nextWindow = thisWindow.map((iso) => addDaysToIso(iso, 7));
   const combined = [...thisWindow, ...nextWindow];
 
-  // dedupe while preserving order
   const seen = new Set();
   const out = [];
   for (const d of combined) {
@@ -161,11 +189,9 @@ function findCourseByFavourite(fav) {
   const name = fav.name || fav.courseName || fav.course || null;
   if (!name) return null;
 
-  // strict match first
   let course = courses.find((c) => c.name === name);
   if (course) return course;
 
-  // loose contains match
   const lower = name.toLowerCase();
   course = courses.find((c) => c.name.toLowerCase().includes(lower));
   return course || null;
@@ -190,7 +216,11 @@ async function runAlertTick() {
         p.preferred_earliest,
         p.preferred_latest,
         p.preferred_holes,
-        p.preferred_party_size
+        p.preferred_party_size,
+
+        p.alert_frequency,   -- 🔹 ADDED
+        p.alert_last_run     -- 🔹 ADDED
+
       FROM users u
       JOIN user_preferences p
         ON p.email = u.email
@@ -206,6 +236,16 @@ async function runAlertTick() {
 
     for (const row of rows) {
       const email = (row.email || "").toLowerCase();
+
+      const alertFrequency = row.alert_frequency || null; // 🔹 ADDED
+      const alertLastRun = row.alert_last_run || null;     // 🔹 ADDED
+
+      // 🔹 ADDED: Frequency gate
+      if (!shouldRunBasedOnFrequency(alertFrequency, alertLastRun)) {
+        console.log(`⏳ Skipping ${email} — not due yet (freq=${alertFrequency})`);
+        continue;
+      }
+
       const favourites = row.favourites || [];
       const preferredDays = row.preferred_days || [];
       const earliest = row.preferred_earliest || "06:00";
@@ -234,7 +274,6 @@ async function runAlertTick() {
           continue;
         }
 
-        // If user requested a specific hole count and course has a different fixed hole count, skip
         const courseHoles =
           course.holes != null ? Number(course.holes) : null;
 
@@ -270,7 +309,6 @@ async function runAlertTick() {
                 `  ✅ ${email} – ${course.name} on ${date}: ${count} slot(s) found.`
               );
 
-              // 🔹 Store this hit so we can email + show popups later
               try {
                 await db.query(
                   `
@@ -318,6 +356,16 @@ async function runAlertTick() {
           }
         }
       }
+
+      // 🔹 ADDED: Update last run timestamp
+      try {
+        await db.query(
+          `UPDATE user_preferences SET alert_last_run = now() WHERE email = $1`,
+          [email]
+        );
+      } catch (err) {
+        console.error(`⚠️ Failed to update alert_last_run for ${email}:`, err);
+      }
     }
 
     console.log("🔔 Alert tick finished.");
@@ -327,9 +375,6 @@ async function runAlertTick() {
 }
 
 // ---------------------------------------------------------
-// Public entrypoint used by server.js
-// ---------------------------------------------------------
-
 export function startAlertWorker() {
   const disabled = (process.env.ALERT_WORKER_ENABLED || "").toLowerCase();
   if (disabled === "0" || disabled === "false" || disabled === "off") {
@@ -339,12 +384,10 @@ export function startAlertWorker() {
 
   console.log("🔔 Starting alert worker…");
 
-  // run once shortly after boot, then every 15 minutes
   setTimeout(runAlertTick, 15000);
   setInterval(runAlertTick, 15 * 60 * 1000);
 }
 
-// Optional: allow manual trigger when importing directly in scripts
 export async function runAlertTickOnce() {
   await runAlertTick();
 }
