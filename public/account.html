@@ -608,6 +608,8 @@
   const manageBillingBtn = document.getElementById("manageBillingBtn");
   if (manageBillingBtn) {
     manageBillingBtn.addEventListener("click", async () => {
+      if (!email) return; // ✅ make sure we have an email for Stripe lookup
+
       billingStatus.textContent = "Opening billing portal…";
       billingStatus.className = "status";
 
@@ -619,6 +621,7 @@
             ...(token ? { "Authorization": "Bearer " + token } : {})
           },
           body: JSON.stringify({
+            email,                      // ✅ send the logged-in email
             returnUrl: window.location.href
           })
         });
@@ -673,7 +676,7 @@
     if (!email) return;
     await loadCourses();
     loadPrefsFromStorage();
-    await refreshPlanFromServer(); // 🔹 sync plan from Stripe
+    await refreshPlanFromServer(); // sync plan from Stripe
   })();
 </script>
 </body>
