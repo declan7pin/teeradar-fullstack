@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 
 import db from "./db.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
+import nodemailer from "nodemailer"; // 🔹 NEW: for alert emails
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,33 +64,132 @@ async function ensureUserAlertHitsTable() {
 ensureUserAlertHitsTable();
 
 // ---------------------------------------------------------
-// 🔹 ADDED: alert frequency helper
+// Alert email helpers
 // ---------------------------------------------------------
-function shouldRunBasedOnFrequency(freq, lastRunIso) {
-  if (!freq) return true;
-  if (!lastRunIso) return true;
 
-  const last = new Date(lastRunIso).getTime();
-  if (!Number.isFinite(last)) return true;
+/**
+ * Map alert_frequency string → minimum time between emails (ms).
+ * Handles a few possible string variants defensively.
+ */
+function getFrequencyWindowMs(freqRaw) {
+  if (!freqRaw) return null;
+  const f = freqRaw.toString().trim().toUpperCase();
 
-  const now = Date.now();
-  const diff = now - last;
+  // "popups only" or explicit off → never send emails
+  if (f === "POPUPS_ONLY" || f === "OFF") {
+    return null;
+  }
 
-  const HOUR = 1000 * 60 * 60;
-
-  switch (freq.toLowerCase()) {
-    case "6hrs":
-      return diff >= 6 * HOUR;
-    case "daily":
-      return diff >= 24 * HOUR;
-    case "2days":
-      return diff >= 48 * HOUR;
-    case "3days":
-      return diff >= 72 * HOUR;
-    case "popup":
-      return true; // still run normally, user just gets popups instead of email
+  switch (f) {
+    case "6H":
+    case "6HOURS":
+    case "EVERY_6_HOURS":
+      return 6 * 60 * 60 * 1000; // 6 hours
+    case "DAILY":
+    case "1D":
+    case "EVERY_DAY":
+      return 24 * 60 * 60 * 1000; // 1 day
+    case "2D":
+    case "EVERY_2_DAYS":
+      return 2 * 24 * 60 * 60 * 1000;
+    case "3D":
+    case "EVERY_3_DAYS":
+      return 3 * 24 * 60 * 60 * 1000;
     default:
-      return true;
+      // Default: once per day if we don't understand the string
+      return 24 * 60 * 60 * 1000;
+  }
+}
+
+/**
+ * Send a single alert email for a user / course / date.
+ * Also updates user_preferences.alert_last_sent when it sends.
+ */
+async function sendAlertEmailForHit({
+  email,
+  course,
+  date,
+  count,
+  earliest,
+  latest,
+  userHoles,
+  partySize,
+}) {
+  const SMTP_HOST = process.env.SMTP_HOST;
+  const SMTP_PORT = process.env.SMTP_PORT;
+  const SMTP_USER = process.env.SMTP_USER;
+  const SMTP_PASS = process.env.SMTP_PASS;
+
+  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) {
+    console.log(
+      "⚠️ Alert email skipped – SMTP env vars not fully configured."
+    );
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: Number(SMTP_PORT),
+    secure: false,
+    auth: {
+      user: SMTP_USER,
+      pass: SMTP_PASS,
+    },
+  });
+
+  const holesLabel = userHoles ? `${userHoles} holes` : "Any holes";
+  const playersLabel = partySize ? `${partySize} player(s)` : "Any size";
+  const windowLabel =
+    earliest && latest ? `${earliest}–${latest}` : "Any time";
+
+  const subject = `TeeRadar – ${count} tee time(s) found at ${course.name}`;
+  const textBody = `
+Hi ${email},
+
+TeeRadar just found ${count} tee time(s) that match your alert:
+
+• Course: ${course.name}
+• Date: ${date}
+• Time window: ${windowLabel}
+• Holes: ${holesLabel}
+• Group size: ${playersLabel}
+
+Log in to TeeRadar to view and book:
+
+  https://teeradar-fullstack-4.onrender.com/book.html
+
+You can adjust or turn off alerts any time from your account page:
+
+  https://teeradar-fullstack-4.onrender.com/account.html
+
+Fairways and greens,
+TeeRadar
+  `.trim();
+
+  try {
+    await transporter.sendMail({
+      from: `"TeeRadar Alerts" <${SMTP_USER}>`,
+      to: email,
+      subject,
+      text: textBody,
+    });
+
+    // Record that we sent an email now
+    await db.query(
+      `
+      UPDATE user_preferences
+      SET alert_last_sent = now()
+      WHERE email = $1
+      `,
+      [email]
+    );
+
+    console.log(`📧 Alert email sent to ${email} for ${course.name} on ${date}`);
+  } catch (err) {
+    console.error(
+      `❌ Failed to send alert email to ${email} for ${course.name} / ${date}:`,
+      err.message
+    );
   }
 }
 
@@ -123,11 +223,11 @@ function normaliseDayToken(token) {
   }
 }
 
-// Next date matching target DOW
+// Next date (YYYY-MM-DD) matching target DOW (0=Sun..6=Sat)
 function nextDateForDow(targetDow) {
   const now = new Date();
   const todayDow = now.getDay();
-  let delta = (targetDow - todayDow + 7) % 7;
+  let delta = (targetDow - todayDow + 7) % 7; // allow "today" if 0
   const d = new Date(
     now.getFullYear(),
     now.getMonth(),
@@ -144,13 +244,16 @@ function addDaysToIso(isoDate, days) {
   const base = new Date(y, m - 1, d + days);
   const yyyy = base.getFullYear();
   const mm = String(base.getMonth() + 1).padStart(2, "0");
-  const dd = String(base.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  const dd = String(base.getDate()) + "";
+  const ddPadded = dd.padStart(2, "0");
+  return `${yyyy}-${mm}-${ddPadded}`;
 }
 
+// Returns dates for this weekend + next weekend for chosen days
 function resolveDatesFromPreferredDays(preferredDays) {
   const todayDow = new Date().getDay();
 
+  // no days chosen → today + same day next week
   if (!Array.isArray(preferredDays) || preferredDays.length === 0) {
     const thisDate = nextDateForDow(todayDow);
     const nextDate = addDaysToIso(thisDate, 7);
@@ -173,6 +276,7 @@ function resolveDatesFromPreferredDays(preferredDays) {
   const nextWindow = thisWindow.map((iso) => addDaysToIso(iso, 7));
   const combined = [...thisWindow, ...nextWindow];
 
+  // dedupe while preserving order
   const seen = new Set();
   const out = [];
   for (const d of combined) {
@@ -189,9 +293,11 @@ function findCourseByFavourite(fav) {
   const name = fav.name || fav.courseName || fav.course || null;
   if (!name) return null;
 
+  // strict match first
   let course = courses.find((c) => c.name === name);
   if (course) return course;
 
+  // loose contains match
   const lower = name.toLowerCase();
   course = courses.find((c) => c.name.toLowerCase().includes(lower));
   return course || null;
@@ -217,10 +323,8 @@ async function runAlertTick() {
         p.preferred_latest,
         p.preferred_holes,
         p.preferred_party_size,
-
-        p.alert_frequency,   -- 🔹 ADDED
-        p.alert_last_run     -- 🔹 ADDED
-
+        p.alert_frequency,
+        p.alert_last_sent
       FROM users u
       JOIN user_preferences p
         ON p.email = u.email
@@ -234,24 +338,18 @@ async function runAlertTick() {
 
     console.log(`🔔 Alert tick: found ${rows.length} user(s) with alerts.`);
 
+    const now = new Date();
+
     for (const row of rows) {
       const email = (row.email || "").toLowerCase();
-
-      const alertFrequency = row.alert_frequency || null; // 🔹 ADDED
-      const alertLastRun = row.alert_last_run || null;     // 🔹 ADDED
-
-      // 🔹 ADDED: Frequency gate
-      if (!shouldRunBasedOnFrequency(alertFrequency, alertLastRun)) {
-        console.log(`⏳ Skipping ${email} — not due yet (freq=${alertFrequency})`);
-        continue;
-      }
-
       const favourites = row.favourites || [];
       const preferredDays = row.preferred_days || [];
       const earliest = row.preferred_earliest || "06:00";
       const latest = row.preferred_latest || "17:00";
       const holes = row.preferred_holes || "";
       const partySize = row.preferred_party_size || 1;
+      const alertFrequencyRaw = row.alert_frequency || null;
+      const alertLastSentRaw = row.alert_last_sent || null;
 
       if (!Array.isArray(favourites) || favourites.length === 0) {
         continue;
@@ -262,10 +360,34 @@ async function runAlertTick() {
       console.log(
         `👤 ${email}: ${favourites.length} favourite(s), days=${JSON.stringify(
           preferredDays
-        )}, dates=${datesToScan.join(",")}`
+        )}, dates=${datesToScan.join(",")}, freq=${alertFrequencyRaw}`
       );
 
       const userHoles = holes ? Number(holes) : null;
+
+      // 🔹 Frequency gating (per user, per tick)
+      const windowMs = getFrequencyWindowMs(alertFrequencyRaw);
+      const emailsAllowed = windowMs !== null; // null → POPUPS_ONLY / OFF
+      let canSendEmailForUser = true;
+
+      if (emailsAllowed && alertLastSentRaw) {
+        try {
+          const last = new Date(alertLastSentRaw);
+          if (!isNaN(last.getTime())) {
+            const diff = now.getTime() - last.getTime();
+            if (diff < windowMs) {
+              canSendEmailForUser = false;
+              console.log(
+                `⏱️ Skipping emails for ${email} – last sent ${Math.round(
+                  diff / (60 * 1000)
+                )} min ago (freq=${alertFrequencyRaw}).`
+              );
+            }
+          }
+        } catch {
+          // ignore parse errors, treat as "never sent"
+        }
+      }
 
       for (const fav of favourites) {
         const course = findCourseByFavourite(fav);
@@ -274,6 +396,7 @@ async function runAlertTick() {
           continue;
         }
 
+        // If user requested a specific hole count and course has a different fixed hole count, skip
         const courseHoles =
           course.holes != null ? Number(course.holes) : null;
 
@@ -309,6 +432,7 @@ async function runAlertTick() {
                 `  ✅ ${email} – ${course.name} on ${date}: ${count} slot(s) found.`
               );
 
+              // 🔹 Store this hit so we can email + show popups later
               try {
                 await db.query(
                   `
@@ -343,6 +467,22 @@ async function runAlertTick() {
                   err.message
                 );
               }
+
+              // 🔹 Email: only if allowed, and only first email per user per tick
+              if (emailsAllowed && canSendEmailForUser) {
+                await sendAlertEmailForHit({
+                  email,
+                  course,
+                  date,
+                  count,
+                  earliest,
+                  latest,
+                  userHoles,
+                  partySize,
+                });
+                // After first email this run, don't send more for this user
+                canSendEmailForUser = false;
+              }
             } else {
               console.log(
                 `  ⛔ ${email} – ${course.name} on ${date}: no slots.`
@@ -356,16 +496,6 @@ async function runAlertTick() {
           }
         }
       }
-
-      // 🔹 ADDED: Update last run timestamp
-      try {
-        await db.query(
-          `UPDATE user_preferences SET alert_last_run = now() WHERE email = $1`,
-          [email]
-        );
-      } catch (err) {
-        console.error(`⚠️ Failed to update alert_last_run for ${email}:`, err);
-      }
     }
 
     console.log("🔔 Alert tick finished.");
@@ -375,6 +505,9 @@ async function runAlertTick() {
 }
 
 // ---------------------------------------------------------
+// Public entrypoint used by server.js
+// ---------------------------------------------------------
+
 export function startAlertWorker() {
   const disabled = (process.env.ALERT_WORKER_ENABLED || "").toLowerCase();
   if (disabled === "0" || disabled === "false" || disabled === "off") {
@@ -384,10 +517,12 @@ export function startAlertWorker() {
 
   console.log("🔔 Starting alert worker…");
 
+  // run once shortly after boot, then every 15 minutes
   setTimeout(runAlertTick, 15000);
   setInterval(runAlertTick, 15 * 60 * 1000);
 }
 
+// Optional: allow manual trigger when importing directly in scripts
 export async function runAlertTickOnce() {
   await runAlertTick();
 }
