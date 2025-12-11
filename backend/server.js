@@ -69,6 +69,7 @@ async function ensureUserPreferencesTable() {
         preferred_holes INTEGER,
         preferred_party_size INTEGER,
         alert_frequency TEXT,
+        alert_last_run TIMESTAMPTZ,
         updated_at TIMESTAMPTZ DEFAULT now()
       );
     `);
@@ -77,6 +78,12 @@ async function ensureUserPreferencesTable() {
     await db.query(`
       ALTER TABLE user_preferences
       ADD COLUMN IF NOT EXISTS alert_frequency TEXT;
+    `);
+
+    // Ensure alert_last_run exists on older deployments
+    await db.query(`
+      ALTER TABLE user_preferences
+      ADD COLUMN IF NOT EXISTS alert_last_run TIMESTAMPTZ;
     `);
 
     console.log("✅ user_preferences table ready");
