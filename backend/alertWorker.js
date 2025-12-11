@@ -83,7 +83,9 @@ function nextDateForDow(targetDow) {
 }
 
 // Fallback: if user didn't pick any days, just use today
+// ✅ UPDATED: when days are chosen, scan the next 14 days (2 weekends)
 function resolveDatesFromPreferredDays(preferredDays) {
+  // No days chosen → just today (same behaviour as before)
   if (!Array.isArray(preferredDays) || preferredDays.length === 0) {
     return [nextDateForDow(new Date().getDay())];
   }
@@ -97,7 +99,25 @@ function resolveDatesFromPreferredDays(preferredDays) {
     return [nextDateForDow(new Date().getDay())];
   }
 
-  return Array.from(dows).map((dow) => nextDateForDow(dow));
+  // Look ahead 14 days and pick any date whose DOW is in preferredDays
+  const today = new Date();
+  const dates = [];
+
+  for (let offset = 0; offset < 14; offset++) {
+    const d = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + offset
+    );
+    if (dows.has(d.getDay())) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      dates.push(`${yyyy}-${mm}-${dd}`);
+    }
+  }
+
+  return dates;
 }
 
 function findCourseByFavourite(fav) {
