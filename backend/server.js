@@ -68,9 +68,17 @@ async function ensureUserPreferencesTable() {
         preferred_latest TEXT,
         preferred_holes INTEGER,
         preferred_party_size INTEGER,
+        alert_frequency TEXT,
         updated_at TIMESTAMPTZ DEFAULT now()
       );
     `);
+
+    // Ensure alert_frequency exists on older deployments
+    await db.query(`
+      ALTER TABLE user_preferences
+      ADD COLUMN IF NOT EXISTS alert_frequency TEXT;
+    `);
+
     console.log("✅ user_preferences table ready");
   } catch (err) {
     console.error("❌ error ensuring user_preferences table:", err);
@@ -296,6 +304,7 @@ app.post("/api/account/preferences", async (req, res) => {
       latest,
       holes,
       partySize,
+      alertFrequency, // 🔹 NEW
     } = req.body || {};
 
     const trimmedEmail = (email || "").toString().trim().toLowerCase();
@@ -317,9 +326,10 @@ app.post("/api/account/preferences", async (req, res) => {
         preferred_latest,
         preferred_holes,
         preferred_party_size,
+        alert_frequency,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now())
       ON CONFLICT (email) DO UPDATE SET
         home_state = EXCLUDED.home_state,
         favourites = EXCLUDED.favourites,
@@ -328,6 +338,7 @@ app.post("/api/account/preferences", async (req, res) => {
         preferred_latest = EXCLUDED.preferred_latest,
         preferred_holes = EXCLUDED.preferred_holes,
         preferred_party_size = EXCLUDED.preferred_party_size,
+        alert_frequency = EXCLUDED.alert_frequency,
         updated_at = now()
       `,
       [
@@ -339,6 +350,7 @@ app.post("/api/account/preferences", async (req, res) => {
         latest || null,
         holes ? Number(holes) : null,
         partySize ? Number(partySize) : null,
+        alertFrequency || null,
       ]
     );
 
@@ -578,7 +590,8 @@ app.get("/api/analytics/users", async (req, res) => {
         p.preferred_earliest,
         p.preferred_latest,
         p.preferred_holes,
-        p.preferred_party_size
+        p.preferred_party_size,
+        p.alert_frequency
       FROM users u
       LEFT JOIN user_preferences p
         ON p.email = u.email
@@ -601,6 +614,7 @@ app.get("/api/analytics/users", async (req, res) => {
       preferred_latest: u.preferred_latest || null,
       preferred_holes: u.preferred_holes,
       preferred_party_size: u.preferred_party_size,
+      alert_frequency: u.alert_frequency || null,
 
       // 🔹 NEW: aliases specifically for the analytics "Alert settings" card
       alert_days: u.preferred_days || null,
