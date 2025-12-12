@@ -1342,6 +1342,23 @@
     }, 3000);
   }
 
+  /* ✅ NEW (only addition): force booking URLs to the exact hit date shown in the popup */
+  function buildBookingLinkForDate(rawUrl, date) {
+    if (!rawUrl || !date) return rawUrl || "";
+    try {
+      const u = new URL(rawUrl);
+      if (u.searchParams.has("selectedDate")) u.searchParams.set("selectedDate", date);
+      if (u.searchParams.has("date")) u.searchParams.set("date", date);
+      if (u.searchParams.has("selected_date")) u.searchParams.set("selected_date", date);
+      return u.toString();
+    } catch (e) {
+      return (rawUrl || "")
+        .replace(/([?&]selectedDate=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
+        .replace(/([?&]date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
+        .replace(/([?&]selected_date=)\d{4}-\d{2}-\d{2}/, `$1${date}`);
+    }
+  }
+
   async function tryShowAvailablePopupForSubscribedUser() {
     try {
       const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
@@ -1437,8 +1454,8 @@
 
         const link = document.createElement("a");
         link.className = "tr-av-link";
-        // ✅ UPDATED (only change): link directly to booking page if available
-        link.href = item.bookingUrl || "/book.html";
+        // ✅ UPDATED (only change): if bookingUrl exists, force it to the popup date
+        link.href = item.bookingUrl ? buildBookingLinkForDate(item.bookingUrl, item.date) : "/book.html";
         link.textContent = "View & book";
         link.target = "_blank";
         link.rel = "noopener";
