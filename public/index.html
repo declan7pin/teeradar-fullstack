@@ -1437,15 +1437,17 @@
         const date = h.date || "";
         const slots = h.slots || h.results || [];
         const count = Array.isArray(slots) ? slots.length : 0;
+        const bookingUrl = h.bookingUrl || null;
 
         if (!map.has(courseName)) {
-          map.set(courseName, { courseName, date, count, ids: [] });
+          map.set(courseName, { courseName, date, count, ids: [], bookingUrl });
         }
         const cur = map.get(courseName);
         cur.count += count;
         if (date && (!cur.date || date < cur.date)) {
           cur.date = date;
         }
+        if (!cur.bookingUrl && bookingUrl) cur.bookingUrl = bookingUrl;
         if (h.id != null) cur.ids.push(h.id);
       });
 
@@ -1475,8 +1477,11 @@
 
         const link = document.createElement("a");
         link.className = "tr-av-link";
-        link.href = "/book.html";
-        link.textContent = "View & book";
+
+        // ✅ NEW: direct booking link (from backend), fallback to book.html
+        link.href = item.bookingUrl || "/book.html";
+        link.textContent = item.bookingUrl ? "View & book" : "Open TeeRadar";
+        if (item.bookingUrl) link.target = "_blank";
 
         actions.appendChild(pill);
         actions.appendChild(link);
