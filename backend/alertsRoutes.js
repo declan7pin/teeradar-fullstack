@@ -33,6 +33,26 @@ async function ensureUserAlertHitsTable() {
 ensureUserAlertHitsTable();
 
 // ---------------------------------------------------------
+// helper: pull a direct booking URL from slots array (if present)
+// ---------------------------------------------------------
+function pickBookingUrlFromSlots(slots) {
+  try {
+    if (!Array.isArray(slots) || !slots.length) return null;
+    const s0 = slots[0] || {};
+    return (
+      s0.url ||
+      s0.bookingUrl ||
+      s0.bookUrl ||
+      s0.link ||
+      s0.booking_link ||
+      null
+    );
+  } catch (e) {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------
 // GET /api/alerts/unread?email=...
 // Returns unread alert hits (read_at IS NULL) for that user
 // ---------------------------------------------------------
@@ -68,19 +88,25 @@ router.get("/unread", async (req, res) => {
     );
 
     // Shape the response to what your index expects
-    const hits = rows.map((r) => ({
-      id: r.id,
-      email: r.email,
-      course_name: r.course_name,
-      provider: r.provider,
-      date: r.date,
-      holes: r.holes,
-      party_size: r.party_size,
-      earliest: r.earliest,
-      latest: r.latest,
-      slots: r.slots || [],
-      created_at: r.created_at,
-    }));
+    const hits = rows.map((r) => {
+      const slots = r.slots || [];
+      const bookingUrl = pickBookingUrlFromSlots(slots);
+
+      return {
+        id: r.id,
+        email: r.email,
+        course_name: r.course_name,
+        provider: r.provider,
+        date: r.date,
+        holes: r.holes,
+        party_size: r.party_size,
+        earliest: r.earliest,
+        latest: r.latest,
+        slots,
+        bookingUrl, // ✅ NEW: direct booking link for popup button
+        created_at: r.created_at,
+      };
+    });
 
     res.json({ ok: true, hits });
   } catch (err) {
