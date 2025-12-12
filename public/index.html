@@ -1388,8 +1388,16 @@
         const slots = h.slots || h.results || [];
         const count = Array.isArray(slots) ? slots.length : 0;
 
+        // ✅ NEW (only addition): attempt to grab a direct booking URL from hit/slot
+        const firstSlot = (Array.isArray(slots) && slots.length) ? slots[0] : null;
+        const bookingUrl =
+          h.bookingUrl ||
+          h.url ||
+          (firstSlot && (firstSlot.bookingUrl || firstSlot.bookUrl || firstSlot.url || firstSlot.link || firstSlot.href)) ||
+          null;
+
         if (!map.has(courseName)) {
-          map.set(courseName, { courseName, date, count, ids: [] });
+          map.set(courseName, { courseName, date, count, ids: [], bookingUrl: bookingUrl || null });
         }
         const cur = map.get(courseName);
         cur.count += count;
@@ -1397,6 +1405,11 @@
           cur.date = date;
         }
         if (h.id != null) cur.ids.push(h.id);
+
+        // ✅ NEW (only addition): keep first non-empty bookingUrl
+        if (!cur.bookingUrl && bookingUrl) {
+          cur.bookingUrl = bookingUrl;
+        }
       });
 
       const items = Array.from(map.values());
@@ -1424,8 +1437,11 @@
 
         const link = document.createElement("a");
         link.className = "tr-av-link";
-        link.href = "/book.html";
+        // ✅ UPDATED (only change): link directly to booking page if available
+        link.href = item.bookingUrl || "/book.html";
         link.textContent = "View & book";
+        link.target = "_blank";
+        link.rel = "noopener";
 
         actions.appendChild(pill);
         actions.appendChild(link);
