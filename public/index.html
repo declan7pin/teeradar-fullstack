@@ -619,6 +619,79 @@
       color:#9ca3af;
       line-height:1;
     }
+
+    /* === NEW: AVAILABLE COURSES POPUP (for logged-in subscribed users) === */
+    .tr-av-title{
+      font-size:18px;
+      font-weight:800;
+      margin:0 0 6px;
+      color:#0f172a;
+    }
+    .tr-av-sub{
+      margin:0 0 10px;
+      color:#6b7280;
+      font-size:13px;
+    }
+    .tr-av-list{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      margin-top:8px;
+      margin-bottom:10px;
+    }
+    .tr-av-item{
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      padding:10px 10px;
+      background:#ffffff;
+    }
+    .tr-av-item-title{
+      font-weight:700;
+      font-size:13px;
+      margin:0 0 4px;
+      color:#0f172a;
+    }
+    .tr-av-item-meta{
+      font-size:12px;
+      color:#64748b;
+      margin:0 0 8px;
+    }
+    .tr-av-item-actions{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .tr-av-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 10px;
+      border-radius:999px;
+      background:#ecfdf5;
+      color:#065f46;
+      border:1px solid rgba(16,185,129,0.35);
+      font-size:11px;
+      font-weight:700;
+    }
+    .tr-av-link{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:6px 12px;
+      border-radius:999px;
+      background:#00796b;
+      color:#ffffff;
+      font-weight:700;
+      font-size:12px;
+      border:none;
+      cursor:pointer;
+      text-decoration:none;
+    }
+    .tr-av-link:active{
+      background:#005e55;
+      transform:translateY(1px);
+    }
   </style>
 </head>
 <body>
@@ -830,6 +903,32 @@
 
     <p class="tr-alert-footnote">
       Cancel anytime. Alerts are delivered instantly when new times appear.
+    </p>
+  </div>
+</div>
+
+<!-- NEW: AVAILABLE COURSES POPUP (only for logged-in subscribed users) -->
+<div id="tr-av-modal-backdrop" class="tr-alert-modal-backdrop tr-hidden">
+  <div class="tr-alert-modal">
+    <button class="tr-alert-close" id="tr-av-close-btn" aria-label="Close">
+      ×
+    </button>
+
+    <h2 class="tr-av-title">Tee times available now</h2>
+    <p class="tr-av-sub">
+      These are your favourite courses with tee times currently available.
+    </p>
+
+    <div id="tr-av-list" class="tr-av-list"></div>
+
+    <div class="tr-alert-actions">
+      <button id="tr-av-ok" class="tr-alert-primary" type="button">
+        Got it
+      </button>
+    </div>
+
+    <p class="tr-alert-footnote" style="margin-top:10px;">
+      Closing this marks the popup as viewed.
     </p>
   </div>
 </div>
@@ -1163,6 +1262,9 @@
 
         closeAuthModal();
         renderNavState();
+
+        // NEW: after login, try show available tee times popup for subscribed users
+        tryShowAvailablePopupForSubscribedUser();
       } catch (err) {
         console.error("Auth error:", err);
         alert("Something went wrong. Please try again.");
@@ -1272,6 +1374,149 @@
     }, 3000);
   }
 
+  // NEW: AVAILABLE POPUP FOR SUBSCRIBED USERS
+  function tryShowAvailablePopupForSubscribedUser() {
+    try {
+      const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
+      if (!email) return;
+
+      // Only for paid subscribers
+      if (!hasPaidSubscription()) return;
+
+      const modal = document.getElementById("tr-av-modal-backdrop");
+      const listEl = document.getElementById("tr-av-list");
+      const closeBtn = document.getElementById("tr-av-close-btn");
+      const okBtn = document.getElementById("tr-av-ok");
+      if (!modal || !listEl) return;
+
+      // Prevent re-showing too often (local-only gating)
+      const lastSeen = Number(localStorage.getItem("teeradar_av_popup_seen_at") || "0");
+      const now = Date.now();
+      // if they saw it in last 10 minutes, don't show again
+      if (lastSeen && (now - lastSeen) < (10 * 60 * 1000)) return;
+
+      const token = localStorage.getItem("teeradar_jwt") || "";
+
+      // Fetch unread/available hits from backend (if route exists)
+      fetch("/api/alerts/unread?email=" + encodeURIComponent(email), {
+        method: "GET",
+        headers: token ? { "Authorization": "Bearer " + token } : {}
+      })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || !data.ok) return null;
+        return data;
+      })
+      .then((data) => {
+        if (!data) return;
+
+        const hits = Array.isArray(data.hits) ? data.hits : [];
+        // Only show courses that actually have slots
+        const filtered = hits.filter(h => {
+          const slots = h.slots || h.results || [];
+          return Array.isArray(slots) && slots.length > 0;
+        });
+
+        if (!filtered.length) return;
+
+        // Group by course name (unique courses only)
+        const map = new Map();
+        filtered.forEach(h => {
+          const courseName = h.course_name || h.course || h.courseName || "Course";
+          const date = h.date || "";
+          const slots = h.slots || h.results || [];
+          const count = Array.isArray(slots) ? slots.length : 0;
+
+          if (!map.has(courseName)) {
+            map.set(courseName, { courseName, date, count, ids: [] });
+          }
+          const cur = map.get(courseName);
+          cur.count += count;
+          if (date && (!cur.date || date < cur.date)) {
+            // keep a date if provided (doesn't matter which, just show something)
+            cur.date = date;
+          }
+          if (h.id != null) cur.ids.push(h.id);
+        });
+
+        const items = Array.from(map.values());
+        if (!items.length) return;
+
+        // Render available courses
+        listEl.innerHTML = "";
+        items.forEach(item => {
+          const div = document.createElement("div");
+          div.className = "tr-av-item";
+
+          const title = document.createElement("div");
+          title.className = "tr-av-item-title";
+          title.textContent = item.courseName;
+
+          const meta = document.createElement("div");
+          meta.className = "tr-av-item-meta";
+          meta.textContent = item.date ? ("Available on: " + item.date) : "Available now";
+
+          const actions = document.createElement("div");
+          actions.className = "tr-av-item-actions";
+
+          const pill = document.createElement("span");
+          pill.className = "tr-av-pill";
+          pill.textContent = (item.count || 0) + " tee time(s)";
+
+          const link = document.createElement("a");
+          link.className = "tr-av-link";
+          link.href = "/book.html";
+          link.textContent = "View & book";
+
+          actions.appendChild(pill);
+          actions.appendChild(link);
+
+          div.appendChild(title);
+          div.appendChild(meta);
+          div.appendChild(actions);
+
+          listEl.appendChild(div);
+        });
+
+        function markViewedAndClose() {
+          // local mark viewed
+          localStorage.setItem("teeradar_av_popup_seen_at", String(Date.now()));
+
+          // best-effort: mark hits read on backend (if route exists)
+          try {
+            const allIds = filtered
+              .map(h => h.id)
+              .filter(v => v !== undefined && v !== null);
+
+            if (allIds.length) {
+              fetch("/api/alerts/mark-read", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(token ? { "Authorization": "Bearer " + token } : {})
+                },
+                body: JSON.stringify({ email, ids: allIds })
+              }).catch(() => {});
+            }
+          } catch (e) {}
+
+          modal.classList.add("tr-hidden");
+        }
+
+        if (closeBtn) closeBtn.onclick = markViewedAndClose;
+        if (okBtn) okBtn.onclick = markViewedAndClose;
+
+        // Show modal
+        modal.classList.remove("tr-hidden");
+      })
+      .catch(() => {
+        // silent
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+
   window.addEventListener("load", () => {
     renderNavState();
     trackInitialHome();
@@ -1280,6 +1525,9 @@
     initHomeCourseAutocomplete();
     maybeAutoOpenSignupFromQuery(); // open signup after Stripe success
     initSubscriberAlertModal();     // show subscriber prompt for logged-out users
+
+    // NEW: show available tee times popup for subscribed users on page load (if already logged in)
+    tryShowAvailablePopupForSubscribedUser();
   });
 </script>
 </body>
