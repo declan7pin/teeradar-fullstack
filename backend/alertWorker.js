@@ -127,18 +127,23 @@ async function sendAlertEmailForHit({
     return;
   }
 
+  // 🔧 Use correct TLS mode based on port
+  const smtpPort = Number(SMTP_PORT) || 587;
+  const smtpSecure = smtpPort === 465; // Gmail: 465 = SSL, 587 = STARTTLS
+
   // 🔍 DEBUG: log what SMTP settings the worker is actually using
   console.log("[alerts SMTP]", {
     host: SMTP_HOST,
-    port: SMTP_PORT,
+    port: smtpPort,
+    secure: smtpSecure,
     user: SMTP_USER,
     passPresent: !!SMTP_PASS,
   });
 
   const transporter = nodemailer.createTransport({
     host: SMTP_HOST,
-    port: Number(SMTP_PORT),
-    secure: false,
+    port: smtpPort,
+    secure: smtpSecure,
     auth: {
       user: SMTP_USER,
       pass: SMTP_PASS,
