@@ -5,7 +5,10 @@ import { fileURLToPath } from "url";
 
 import db from "./db.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
-import nodemailer from "nodemailer"; // 🔹 NEW: for alert emails
+import nodemailer from "nodemailer"; // still used for other places if needed
+import { Resend } from "resend"; // 🔹 NEW: Resend for alert emails
+
+const resend = new Resend(process.env.RESEND_API_KEY || ""); // 🔹 NEW
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -104,6 +107,7 @@ function getFrequencyWindowMs(freqRaw) {
 /**
  * Send a single alert email for a user / course / date.
  * Also updates user_preferences.alert_last_sent when it sends.
+ * 🔹 NOW uses Resend instead of raw SMTP.
  */
 async function sendAlertEmailForHit({
   email,
@@ -115,81 +119,50 @@ async function sendAlertEmailForHit({
   userHoles,
   partySize,
 }) {
-  const SMTP_HOST = process.env.SMTP_HOST;
-  const SMTP_PORT = process.env.SMTP_PORT;
-  const SMTP_USER = process.env.SMTP_USER;
-  const SMTP_PASS = process.env.SMTP_PASS;
-
-  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) {
+  if (!process.env.RESEND_API_KEY) {
     console.log(
-      "⚠️ Alert email skipped – SMTP env vars not fully configured."
+      "⚠️ Alert email skipped – RESEND_API_KEY not configured."
     );
     return;
   }
-
-  // 🔧 Use correct TLS mode based on port
-  const smtpPort = Number(SMTP_PORT) || 587;
-  const smtpSecure = smtpPort === 465; // Gmail: 465 = SSL, 587 = STARTTLS
-
-  // 🔍 DEBUG: log what SMTP settings the worker is actually using
-  console.log("[alerts SMTP]", {
-    host: SMTP_HOST,
-    port: smtpPort,
-    secure: smtpSecure,
-    user: SMTP_USER,
-    passPresent: !!SMTP_PASS,
-  });
-
-  const transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: smtpPort,
-    secure: smtpSecure,
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS,
-    },
-  });
 
   const holesLabel = userHoles ? `${userHoles} holes` : "Any holes";
   const playersLabel = partySize ? `${partySize} player(s)` : "Any size";
   const windowLabel =
     earliest && latest ? `${earliest}–${latest}` : "Any time";
 
-  // 🔹 NEW: prefer direct course booking URL if we have one
+  // prefer direct course booking URL if we have one
   const bookingLink =
     (course && (course.url || course.bookingUrl || course.bookUrl)) ||
     "https://teeradar-fullstack-4.onrender.com/book.html";
 
   const subject = `TeeRadar – ${count} tee time(s) found at ${course.name}`;
-  const textBody = `
-Hi ${email},
 
-TeeRadar just found ${count} tee time(s) that match your alert:
-
-• Course: ${course.name}
-• Date: ${date}
-• Time window: ${windowLabel}
-• Holes: ${holesLabel}
-• Group size: ${playersLabel}
-
-Book directly using the link below:
-
-  ${bookingLink}
-
-You can adjust or turn off alerts any time from your account page:
-
-  https://teeradar-fullstack-4.onrender.com/account.html
-
-Enjoy your round,
-TeeRadar
-  `.trim();
+  const html = `
+    <p>Hi ${email},</p>
+    <p>TeeRadar just found <strong>${count}</strong> tee time(s) that match your alert:</p>
+    <ul>
+      <li><strong>Course:</strong> ${course.name}</li>
+      <li><strong>Date:</strong> ${date}</li>
+      <li><strong>Time window:</strong> ${windowLabel}</li>
+      <li><strong>Holes:</strong> ${holesLabel}</li>
+      <li><strong>Group size:</strong> ${playersLabel}</li>
+    </ul>
+    <p>Book directly using the link below:</p>
+    <p><a href="${bookingLink}">${bookingLink}</a></p>
+    <p>You can adjust or turn off alerts any time from your account page:</p>
+    <p><a href="https://teeradar-fullstack-4.onrender.com/account.html">
+      https://teeradar-fullstack-4.onrender.com/account.html
+    </a></p>
+    <p>Enjoy your round,<br/>TeeRadar</p>
+  `;
 
   try {
-    await transporter.sendMail({
-      from: `"TeeRadar Alerts" <${SMTP_USER}>`,
+    await resend.emails.send({
+      from: "TeeRadar Alerts <alerts@onresend.com>",
       to: email,
       subject,
-      text: textBody,
+      html,
     });
 
     // Record that we sent an email now
@@ -202,10 +175,10 @@ TeeRadar
       [email]
     );
 
-    console.log(`📧 Alert email sent to ${email} for ${course.name} on ${date}`);
+    console.log(`📧 Alert email sent to ${email} for ${course.name} on ${date} via Resend`);
   } catch (err) {
     console.error(
-      `❌ Failed to send alert email to ${email} for ${course.name} / ${date}:`,
+      `❌ Failed to send alert email to ${email} for ${course.name} / ${date} via Resend:`,
       err.message
     );
   }
