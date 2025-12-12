@@ -109,6 +109,46 @@ function getFrequencyWindowMs(freqRaw) {
 }
 
 /**
+ * ✅ Ensure the booking URL uses the alert date.
+ * - If the URL has selectedDate/date params, overwrite them.
+ * - If not, return the original URL.
+ */
+function buildBookingLinkForDate(course, date) {
+  const raw =
+    (course && (course.url || course.bookingUrl || course.bookUrl)) || "";
+  if (!raw) return "";
+
+  // Try URL parsing first (best)
+  try {
+    const u = new URL(raw);
+
+    if (u.searchParams.has("selectedDate")) {
+      u.searchParams.set("selectedDate", date);
+    }
+    if (u.searchParams.has("date")) {
+      u.searchParams.set("date", date);
+    }
+    if (u.searchParams.has("selected_date")) {
+      u.searchParams.set("selected_date", date);
+    }
+
+    return u.toString();
+  } catch {
+    // Fallback: regex replace if URL isn't parseable by URL()
+    return raw
+      .replace(
+        /([?&]selectedDate=)\d{4}-\d{2}-\d{2}/,
+        `$1${date}`
+      )
+      .replace(/([?&]date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
+      .replace(
+        /([?&]selected_date=)\d{4}-\d{2}-\d{2}/,
+        `$1${date}`
+      );
+  }
+}
+
+/**
  * Send a single alert email for a user / course / date.
  * Also updates user_preferences.alert_last_sent when it sends.
  */
@@ -134,8 +174,9 @@ async function sendAlertEmailForHit({
   const windowLabel =
     earliest && latest ? `${earliest}–${latest}` : "Any time";
 
-  // Prefer direct course booking URL if we have one
+  // Prefer direct course booking URL if we have one (✅ but force correct date)
   const bookingLink =
+    buildBookingLinkForDate(course, date) ||
     (course && (course.url || course.bookingUrl || course.bookUrl)) ||
     "https://teeradar-fullstack-4.onrender.com/book.html";
 
