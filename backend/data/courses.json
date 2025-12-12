@@ -5829,7 +5829,7 @@
   },
   {
     "name": "Eastlake Golf Club - Weekend before 3pm (9 and 18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
     "lat": -33.928333333333,
@@ -5838,7 +5838,7 @@
   },
   {
     "name": "Eastlake Golf Club - Weekend before 3pm (9 and 18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "lat": -33.928333333333,
@@ -5847,7 +5847,7 @@
   },
   {
     "name": "Eastlake Golf Club - Weekend 3pm-4pm (9 and 18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
     "lat": -33.928333333333,
@@ -5856,7 +5856,7 @@
   },
   {
     "name": "Eastlake Golf Club - Weekend 3pm-4pm (9 and 18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "lat": -33.928333333333,
@@ -5865,7 +5865,7 @@
   },
   {
     "name": "The Coast Golf Club (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "lat": -33.983611111111,
@@ -5874,7 +5874,7 @@
   },
   {
     "name": "The Coast Golf Club (18 international)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "lat": -33.987777777778,
@@ -5991,7 +5991,7 @@
   },
   {
     "name": "Wyong Golf Club (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "lat": -33.270833333333,
@@ -6000,7 +6000,7 @@
   },
   {
     "name": "Wyong Golf Club (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
     "lat": -33.270833333333,
@@ -6144,14 +6144,14 @@
   },
   {
     "name": "Belmont Golf Club (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "url": "https://www.belmontgolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-09&feeGroupId=2018422"
   },
   {
     "name": "Belmont Golf Club (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
     "lat": -33.056388888889,
@@ -6703,7 +6703,7 @@
   },
   {
     "name": "Stonecutters Ridge Golf Club (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "lat": -33.721666666667,
@@ -6793,7 +6793,7 @@
   },
   {
     "name": "Byron Bay Golf Club (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "lat": -28.675,
@@ -6802,7 +6802,7 @@
   },
   {
     "name": "Byron Bay Golf Club (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
     "lat": -28.675,
@@ -6829,7 +6829,7 @@
   },
   {
     "name": "Ballina Golf Club (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "lat": -28.853333333333,
@@ -6838,7 +6838,7 @@
   },
   {
     "name": "Ballina Golf Club (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
     "lat": -28.853333333333,
@@ -6919,7 +6919,7 @@
   },
   {
     "name": "Coolangatta & Tweed Heads - River Course (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "lat": -28.206666666667,
@@ -6928,7 +6928,7 @@
   },
   {
     "name": "Coolangatta & Tweed Heads - River Course (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
     "lat": -28.206666666667,
@@ -6937,7 +6937,7 @@
   },
   {
     "name": "Coolangatta & Tweed Heads - West Course (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "lat": -28.2025,
@@ -6946,7 +6946,7 @@
   },
   {
     "name": "Coolangatta & Tweed Heads - West Course (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
     "lat": -28.2025,
@@ -7081,7 +7081,7 @@
   },
   {
     "name": "Dubbo Golf Club (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 18,
     "lat": -32.261111111111,
@@ -7090,7 +7090,7 @@
   },
   {
     "name": "Dubbo Golf Club (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "NSW",
     "holes": 9,
     "lat": -32.261111111111,
@@ -7738,7 +7738,7 @@
   },
   {
     "name": "West Beach Parks Golf (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "SA",
     "holes": 18,
     "lat": -34.954444444444,
@@ -7747,7 +7747,7 @@
   },
   {
     "name": "West Beach Parks Golf (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "SA",
     "holes": 9,
     "lat": -34.954444444444,
@@ -7756,7 +7756,7 @@
   },
   {
     "name": "Mt Osmond Golf Club (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "SA",
     "holes": 18,
     "lat": -34.963888888889,
@@ -7765,7 +7765,7 @@
   },
   {
     "name": "Mt Osmond Golf Club (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "SA",
     "holes": 9,
     "lat": -34.963888888889,
@@ -7866,7 +7866,7 @@
   },
   {
     "name": "Tea Tree Gully Golf Club (9 and 18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "SA",
     "holes": 9,
     "lat": -34.801111111111,
@@ -7875,7 +7875,7 @@
   },
   {
     "name": "Tea Tree Gully Golf Club (9 and 18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "SA",
     "holes": 18,
     "lat": -34.801111111111,
@@ -7884,7 +7884,7 @@
   },
   {
     "name": "Tanunda Pines Golf Club (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "SA",
     "holes": 18,
     "lat": -34.561666666667,
@@ -7893,7 +7893,7 @@
   },
   {
     "name": "Tanunda Pines Golf Club (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "SA",
     "holes": 9,
     "lat": -34.561666666667,
@@ -7902,7 +7902,7 @@
   },
   {
     "name": "Sandy Creek Golf Club (18)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "SA",
     "holes": 18,
     "lat": -34.608333333333,
@@ -7911,7 +7911,7 @@
   },
   {
     "name": "Sandy Creek Golf Club (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "SA",
     "holes": 9,
     "lat": -34.608333333333,
@@ -7920,7 +7920,7 @@
   },
   {
     "name": "Sandy Creek Golf Club - Twilight (9)",
-    "provider": "Other",
+    "provider": "MiClub",
     "state": "SA",
     "holes": 9,
     "lat": -34.608333333333,
