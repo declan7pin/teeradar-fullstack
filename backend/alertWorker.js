@@ -114,36 +114,84 @@ function getFrequencyWindowMs(freqRaw) {
 
 /**
  * ✅ Ensure the booking URL uses the alert date.
- * - If the URL has selectedDate/date params, overwrite them.
- * - If not, return the original URL.
+ * - MiClub uses selectedDate=YYYY-MM-DD
+ * - Quick18 often expects DD/MM/YYYY (and can ignore/override if not)
  */
 function buildBookingLinkForDate(course, date) {
   const raw =
     (course && (course.url || course.bookingUrl || course.bookUrl)) || "";
   if (!raw) return "";
 
+  const provider = (course?.provider || "").toString().toLowerCase();
+  const isQuick18 = provider.includes("quick18");
+
+  // Quick18 date format often behaves better as DD/MM/YYYY
+  let dateForUrl = date;
+  if (isQuick18) {
+    const [yyyy, mm, dd] = (date || "").split("-");
+    if (yyyy && mm && dd) dateForUrl = `${dd}/${mm}/${yyyy}`;
+  }
+
   // Try URL parsing first (best)
   try {
     const u = new URL(raw);
 
     if (u.searchParams.has("selectedDate")) {
-      u.searchParams.set("selectedDate", date);
+      u.searchParams.set("selectedDate", dateForUrl);
     }
     if (u.searchParams.has("date")) {
-      u.searchParams.set("date", date);
+      u.searchParams.set("date", dateForUrl);
     }
     if (u.searchParams.has("selected_date")) {
-      u.searchParams.set("selected_date", date);
+      u.searchParams.set("selected_date", dateForUrl);
+    }
+
+    // Defensive: some systems use different casing
+    if (u.searchParams.has("Date")) {
+      u.searchParams.set("Date", dateForUrl);
     }
 
     return u.toString();
   } catch {
     // Fallback: regex replace if URL isn't parseable by URL()
     return raw
-      .replace(/([?&]selectedDate=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
-      .replace(/([?&]date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
-      .replace(/([?&]selected_date=)\d{4}-\d{2}-\d{2}/, `$1${date}`);
+      .replace(
+        /([?&]selectedDate=)\d{4}-\d{2}-\d{2}/,
+        `$1${dateForUrl}`
+      )
+      .replace(/([?&]date=)\d{4}-\d{2}-\d{2}/, `$1${dateForUrl}`)
+      .replace(
+        /([?&]selected_date=)\d{4}-\d{2}-\d{2}/,
+        `$1${dateForUrl}`
+      )
+      // Quick18-style DD/MM/YYYY replacement if present
+      .replace(
+        /([?&]date=)\d{2}\/\d{2}\/\d{4}/,
+        `$1${dateForUrl}`
+      )
+      .replace(
+        /([?&]Date=)\d{2}\/\d{2}\/\d{4}/,
+        `$1${dateForUrl}`
+      );
   }
+}
+
+/**
+ * ✅ Put a correct-dated bookingLink on every slot so the popup can open the right date.
+ */
+function enrichSlotsWithBookingLink(result, course, date) {
+  const bookingLink =
+    buildBookingLinkForDate(course, date) ||
+    (course && (course.url || course.bookingUrl || course.bookUrl)) ||
+    "";
+
+  if (!Array.isArray(result)) return [];
+
+  return result.map((s) => ({
+    ...(s || {}),
+    bookingLink,
+    alertDate: date,
+  }));
 }
 
 /**
@@ -422,11 +470,7 @@ async function runAlertTick() {
           const last = new Date(alertLastSentRaw);
           if (!isNaN(last.getTime())) {
             const diff = now.getTime() - last.getTime();
-
-            // ✅ allow small timer drift so "15M" works reliably
-            const TOLERANCE_MS = 30 * 1000;
-
-            if (diff < windowMs - TOLERANCE_MS) {
+            if (diff < windowMs) {
               canSendEmailForUser = false;
               console.log(
                 `⏱️ Skipping emails for ${email} – last sent ${Math.round(
@@ -483,6 +527,13 @@ async function runAlertTick() {
                 `  ✅ ${email} – ${course.name} on ${date}: ${count} slot(s) found.`
               );
 
+              // ✅ Enrich slots with a correct-dated bookingLink for popups/UI
+              const enrichedSlots = enrichSlotsWithBookingLink(
+                result,
+                course,
+                date
+              );
+
               // 🔹 Store this hit so we can email + show popups later
               try {
                 await db.query(
@@ -509,7 +560,7 @@ async function runAlertTick() {
                     partySize || null,
                     earliest || null,
                     latest || null,
-                    JSON.stringify(result || []),
+                    JSON.stringify(enrichedSlots || []),
                   ]
                 );
               } catch (err) {
