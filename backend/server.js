@@ -92,6 +92,35 @@ async function ensureUserPreferencesTable() {
 }
 ensureUserPreferencesTable();
 
+// ✅ NEW: table for alert "hits" (used by the logged-in popup unread/viewed flow)
+async function ensureAlertHitsTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS alert_hits (
+        id BIGSERIAL PRIMARY KEY,
+        email TEXT NOT NULL,
+        course_name TEXT,
+        course_id TEXT,
+        state TEXT,
+        date TEXT,
+        slots JSONB,
+        created_at TIMESTAMPTZ DEFAULT now(),
+        read_at TIMESTAMPTZ
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS alert_hits_email_read_idx
+      ON alert_hits (email, read_at);
+    `);
+
+    console.log("✅ alert_hits table ready");
+  } catch (err) {
+    console.error("❌ error ensuring alert_hits table:", err);
+  }
+}
+ensureAlertHitsTable();
+
 app.use(cors());
 
 // -------------------------------------------------
@@ -147,6 +176,76 @@ app.use("/api/auth", authRouter);
 
 // 🔔 Alerts API
 app.use("/api/alerts", alertsRouter);
+
+// ✅ NEW: fallback endpoints for the "logged-in popup" unread/viewed flow
+// These are safe even if alertsRoutes.js already implements them (Express will route to the first match).
+app.get("/api/alerts/unread", async (req, res) => {
+  try {
+    const email = (req.query.email || "").toString().trim().toLowerCase();
+    if (!email) return res.status(400).json({ ok: false, error: "email is required" });
+
+    const { rows } = await db.query(
+      `
+      SELECT id, email, course_name, course_id, state, date, slots, created_at
+      FROM alert_hits
+      WHERE email = $1 AND read_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT 100
+      `,
+      [email]
+    );
+
+    // Return in the shape the frontend expects
+    const hits = rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      course_name: r.course_name,
+      course_id: r.course_id,
+      state: r.state,
+      date: r.date,
+      slots: r.slots || [],
+      created_at: r.created_at,
+    }));
+
+    res.json({ ok: true, hits });
+  } catch (err) {
+    console.error("/api/alerts/unread error:", err);
+    res.status(500).json({ ok: false, error: "internal error", detail: err.message });
+  }
+});
+
+app.post("/api/alerts/mark-read", async (req, res) => {
+  try {
+    const { email, ids = [] } = req.body || {};
+    const trimmedEmail = (email || "").toString().trim().toLowerCase();
+    if (!trimmedEmail) {
+      return res.status(400).json({ ok: false, error: "email is required" });
+    }
+
+    const cleanIds = Array.isArray(ids)
+      ? ids.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+
+    if (!cleanIds.length) {
+      return res.json({ ok: true, updated: 0 });
+    }
+
+    const result = await db.query(
+      `
+      UPDATE alert_hits
+      SET read_at = now()
+      WHERE email = $1
+        AND id = ANY($2::bigint[])
+      `,
+      [trimmedEmail, cleanIds]
+    );
+
+    res.json({ ok: true, updated: result.rowCount || 0 });
+  } catch (err) {
+    console.error("/api/alerts/mark-read error:", err);
+    res.status(500).json({ ok: false, error: "internal error", detail: err.message });
+  }
+});
 
 // -------------------------------------------------
 // Stripe Checkout – create subscription session
