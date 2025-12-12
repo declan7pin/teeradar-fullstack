@@ -538,17 +538,26 @@
       align-items:center;
       justify-content:center;
       z-index:250;
+      padding:14px; /* ✅ ensures modal never touches edges on mobile */
     }
+
+    /* ✅ UPDATED: cap height so close button is always reachable */
     .tr-alert-modal{
       background:#ffffff;
       border-radius:16px;
       padding:20px 18px 18px;
-      width:90%;
+      width:100%;
       max-width:380px;
       box-shadow:0 18px 40px rgba(15,23,42,0.4);
       position:relative;
       font-size:13px;
+
+      max-height:85vh;      /* ✅ key fix */
+      overflow:hidden;      /* ✅ keep header/footer visible */
+      display:flex;         /* ✅ allow inner scroll area */
+      flex-direction:column;
     }
+
     .tr-alert-title{
       font-size:18px;
       font-weight:700;
@@ -618,9 +627,10 @@
       cursor:pointer;
       color:#9ca3af;
       line-height:1;
+      z-index:2; /* ✅ always above scroll area */
     }
 
-    /* === NEW: AVAILABLE COURSES POPUP (for logged-in subscribed users) === */
+    /* === AVAILABLE COURSES POPUP (logged-in subscribed users) === */
     .tr-av-title{
       font-size:18px;
       font-weight:800;
@@ -632,13 +642,22 @@
       color:#6b7280;
       font-size:13px;
     }
+
+    /* ✅ UPDATED: scrollable list area */
     .tr-av-list{
       display:flex;
       flex-direction:column;
       gap:10px;
+
       margin-top:8px;
       margin-bottom:10px;
+
+      overflow-y:auto;        /* ✅ scroll */
+      -webkit-overflow-scrolling:touch;
+      max-height:42vh;        /* ✅ shows ~3 cards on most phones */
+      padding-right:4px;      /* ✅ avoids scrollbar covering content */
     }
+
     .tr-av-item{
       border:1px solid #e5e7eb;
       border-radius:12px;
@@ -706,7 +725,6 @@
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
-      <!-- analytics tab shown only for admin -->
       <a href="/analytics.html" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
       <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
     </nav>
@@ -822,32 +840,15 @@
       </p>
       <form id="contactForm" novalidate>
         <label class="contact-label" for="contactEmail">Your email (required)</label>
-        <input
-          id="contactEmail"
-          class="contact-input"
-          type="email"
-          placeholder="you@example.com"
-          required
-        />
+        <input id="contactEmail" class="contact-input" type="email" placeholder="you@example.com" required />
 
         <label class="contact-label" for="contactQuestion">Question</label>
-        <input
-          id="contactQuestion"
-          class="contact-input"
-          type="text"
-          placeholder="e.g. Can you add my local course?"
-        />
+        <input id="contactQuestion" class="contact-input" type="text" placeholder="e.g. Can you add my local course?" />
 
         <label class="contact-label" for="contactDetails">Details</label>
-        <textarea
-          id="contactDetails"
-          class="contact-textarea"
-          placeholder="Add any extra information that will help."
-        ></textarea>
+        <textarea id="contactDetails" class="contact-textarea" placeholder="Add any extra information that will help."></textarea>
 
-        <button id="contactSubmit" type="submit" class="contact-btn">
-          Send message
-        </button>
+        <button id="contactSubmit" type="submit" class="contact-btn">Send message</button>
         <div id="contactStatus" class="contact-status"></div>
       </form>
     </div>
@@ -863,7 +864,6 @@
   </span>
 </footer>
 
-<!-- T&Cs banner -->
 <div id="tc-banner" style="display:none;">
   <span>
     By using TeeRadar WA you agree to our <a href="/terms.html" target="_blank">Terms &amp; Conditions</a>.
@@ -871,12 +871,9 @@
   <button type="button" id="tc-accept-btn">Got it</button>
 </div>
 
-<!-- SUBSCRIBER ALERT MODAL (only for logged-out users) -->
 <div id="tr-alert-modal-backdrop" class="tr-alert-modal-backdrop tr-hidden">
   <div class="tr-alert-modal">
-    <button class="tr-alert-close" id="tr-alert-close-btn" aria-label="Close">
-      ×
-    </button>
+    <button class="tr-alert-close" id="tr-alert-close-btn" aria-label="Close">×</button>
 
     <h2 class="tr-alert-title">Unlock instant tee time alerts</h2>
 
@@ -893,47 +890,31 @@
     </ul>
 
     <div class="tr-alert-actions">
-      <a href="/subscribe.html" id="tr-alert-cta" class="tr-alert-primary">
-        Unlock with Subscription
-      </a>
-      <button id="tr-alert-later" class="tr-alert-secondary">
-        Maybe later
-      </button>
+      <a href="/subscribe.html" id="tr-alert-cta" class="tr-alert-primary">Unlock with Subscription</a>
+      <button id="tr-alert-later" class="tr-alert-secondary">Maybe later</button>
     </div>
 
-    <p class="tr-alert-footnote">
-      Cancel anytime. Alerts are delivered instantly when new times appear.
-    </p>
+    <p class="tr-alert-footnote">Cancel anytime. Alerts are delivered instantly when new times appear.</p>
   </div>
 </div>
 
-<!-- NEW: AVAILABLE COURSES POPUP (only for logged-in subscribed users) -->
 <div id="tr-av-modal-backdrop" class="tr-alert-modal-backdrop tr-hidden">
   <div class="tr-alert-modal">
-    <button class="tr-alert-close" id="tr-av-close-btn" aria-label="Close">
-      ×
-    </button>
+    <button class="tr-alert-close" id="tr-av-close-btn" aria-label="Close">×</button>
 
     <h2 class="tr-av-title">Tee times available now</h2>
-    <p class="tr-av-sub">
-      These are your favourite courses with tee times currently available.
-    </p>
+    <p class="tr-av-sub">These are your favourite courses with tee times currently available.</p>
 
     <div id="tr-av-list" class="tr-av-list"></div>
 
     <div class="tr-alert-actions">
-      <button id="tr-av-ok" class="tr-alert-primary" type="button">
-        Got it
-      </button>
+      <button id="tr-av-ok" class="tr-alert-primary" type="button">Got it</button>
     </div>
 
-    <p class="tr-alert-footnote" style="margin-top:10px;">
-      Closing this marks the popup as viewed.
-    </p>
+    <p class="tr-alert-footnote" style="margin-top:10px;">Closing this marks the popup as viewed.</p>
   </div>
 </div>
 
-<!-- AUTH MODAL -->
 <div id="authModal">
   <div id="authBox">
     <div class="auth-close" id="authCloseBtn">&times;</div>
@@ -944,18 +925,12 @@
     <input id="authPassword" class="auth-input" type="password" placeholder="Password" />
 
     <div id="authHomeCourseRow">
-      <input id="authHomeCourse"
-             class="auth-input"
-             type="text"
-             placeholder="Home course (optional)" />
+      <input id="authHomeCourse" class="auth-input" type="text" placeholder="Home course (optional)" />
     </div>
 
     <button id="authSubmit" class="auth-btn">Log in</button>
 
-    <!-- Forgot password section at the bottom -->
-    <div id="authForgot"
-         class="auth-switch"
-         style="margin-top:6px;font-size:11px;color:#6b7280;">
+    <div id="authForgot" class="auth-switch" style="margin-top:6px;font-size:11px;color:#6b7280;">
       Forgot password?
     </div>
 
@@ -966,7 +941,6 @@
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 
-  // ---- ANALYTICS (unchanged) ----
   function trackEvent(type, payload) {
     try {
       fetch("/api/analytics/event", {
@@ -1007,7 +981,6 @@
       analyticsLink.style.display = "none";
     }
 
-    // 🔹 When logged in: show "My account" and go to account page
     loginBtn.textContent = "My account";
     loginBtn.onclick = () => {
       window.location.href = "/account.html";
@@ -1022,7 +995,6 @@
     trackEvent("home_view", {});
   }
 
-  // simple T&C banner logic
   function initTCBanner() {
     const banner = document.getElementById("tc-banner");
     const btn = document.getElementById("tc-accept-btn");
@@ -1037,8 +1009,7 @@
     });
   }
 
-  // ---- AUTH MODAL + BACKEND LOGIN/SIGNUP/RESET ----
-  let authMode = "login"; // "login" | "signup" | "reset"
+  let authMode = "login";
 
   const authModal = document.getElementById("authModal");
   const authTitle = document.getElementById("authTitle");
@@ -1057,7 +1028,6 @@
     }
   }
 
-  // ✅ NEW: fallback check against Stripe plan endpoint if local flag not set
   async function hasActivePlanViaStripe(email) {
     try {
       const res = await fetch("/api/account/plan?email=" + encodeURIComponent(email));
@@ -1087,7 +1057,6 @@
       if (authHomeCourseRow) authHomeCourseRow.style.display = "none";
       if (authForgot) authForgot.style.display = "none";
     } else {
-      // login
       authTitle.textContent = "Log in";
       authSubtitle.textContent = "Use your TeeRadar account details.";
       authSubmit.textContent = "Log in";
@@ -1111,7 +1080,6 @@
     openAuthModal("login");
   }
 
-  // read query flags from Stripe success and auto-open signup modal
   function maybeAutoOpenSignupFromQuery() {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -1125,7 +1093,6 @@
     }
   }
 
-  // "Create an account" goes to subscriptions page
   if (authSwitch) {
     authSwitch.addEventListener("click", () => {
       window.location.href = "/subscribe.html";
@@ -1142,14 +1109,12 @@
     authCloseBtn.addEventListener("click", closeAuthModal);
   }
 
-  // Click outside to close
   window.addEventListener("click", (e) => {
     if (e.target === authModal) {
       closeAuthModal();
     }
   });
 
-  // Home-course autocomplete state
   let authCourses = [];
   let homeCourseListEl = null;
 
@@ -1275,7 +1240,6 @@
         closeAuthModal();
         renderNavState();
 
-        // NEW: after login, try show available tee times popup for subscribed users
         tryShowAvailablePopupForSubscribedUser();
       } catch (err) {
         console.error("Auth error:", err);
@@ -1284,7 +1248,6 @@
     });
   }
 
-  // ---- CONTACT FORM HANDLER ----
   function initContactForm() {
     const form = document.getElementById("contactForm");
     if (!form) return;
@@ -1351,18 +1314,14 @@
     });
   }
 
-  // ---- SUBSCRIBER ALERT MODAL (front-end only, for logged-out users) ----
   function initSubscriberAlertModal() {
     const modal = document.getElementById("tr-alert-modal-backdrop");
     if (!modal) return;
 
-    // Only show for logged-out users
     try {
       const email = localStorage.getItem("teeradar_user_email");
       if (email) return;
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
 
     const closeBtn = document.getElementById("tr-alert-close-btn");
     const laterBtn = document.getElementById("tr-alert-later");
@@ -1374,25 +1333,20 @@
     if (closeBtn) closeBtn.addEventListener("click", hideModal);
     if (laterBtn) laterBtn.addEventListener("click", hideModal);
 
-    // Show after a short delay so they see the hero first
     setTimeout(() => {
       try {
         const emailNow = localStorage.getItem("teeradar_user_email");
-        if (emailNow) return; // user logged in during delay
-      } catch (e) {
-        // ignore
-      }
+        if (emailNow) return;
+      } catch (e) {}
       modal.classList.remove("tr-hidden");
     }, 3000);
   }
 
-  // NEW: AVAILABLE POPUP FOR SUBSCRIBED USERS
   async function tryShowAvailablePopupForSubscribedUser() {
     try {
       const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
       if (!email) return;
 
-      // Only for paid subscribers (fallback to Stripe plan if local flag isn't set)
       let okToShow = hasPaidSubscription();
       if (!okToShow) {
         okToShow = await hasActivePlanViaStripe(email);
@@ -1405,15 +1359,12 @@
       const okBtn = document.getElementById("tr-av-ok");
       if (!modal || !listEl) return;
 
-      // Prevent re-showing too often (local-only gating)
       const lastSeen = Number(localStorage.getItem("teeradar_av_popup_seen_at") || "0");
       const now = Date.now();
-      // if they saw it in last 10 minutes, don't show again
       if (lastSeen && (now - lastSeen) < (10 * 60 * 1000)) return;
 
       const token = localStorage.getItem("teeradar_jwt") || "";
 
-      // Fetch unread/available hits from backend (requires /api/alerts/unread)
       const res = await fetch("/api/alerts/unread?email=" + encodeURIComponent(email), {
         method: "GET",
         headers: token ? { "Authorization": "Bearer " + token } : {}
@@ -1430,31 +1381,27 @@
 
       if (!filtered.length) return;
 
-      // Group by course name (unique courses only)
       const map = new Map();
       filtered.forEach(h => {
         const courseName = h.course_name || h.course || h.courseName || "Course";
         const date = h.date || "";
         const slots = h.slots || h.results || [];
         const count = Array.isArray(slots) ? slots.length : 0;
-        const bookingUrl = h.bookingUrl || null;
 
         if (!map.has(courseName)) {
-          map.set(courseName, { courseName, date, count, ids: [], bookingUrl });
+          map.set(courseName, { courseName, date, count, ids: [] });
         }
         const cur = map.get(courseName);
         cur.count += count;
         if (date && (!cur.date || date < cur.date)) {
           cur.date = date;
         }
-        if (!cur.bookingUrl && bookingUrl) cur.bookingUrl = bookingUrl;
         if (h.id != null) cur.ids.push(h.id);
       });
 
       const items = Array.from(map.values());
       if (!items.length) return;
 
-      // Render available courses
       listEl.innerHTML = "";
       items.forEach(item => {
         const div = document.createElement("div");
@@ -1477,11 +1424,8 @@
 
         const link = document.createElement("a");
         link.className = "tr-av-link";
-
-        // ✅ NEW: direct booking link (from backend), fallback to book.html
-        link.href = item.bookingUrl || "/book.html";
-        link.textContent = item.bookingUrl ? "View & book" : "Open TeeRadar";
-        if (item.bookingUrl) link.target = "_blank";
+        link.href = "/book.html";
+        link.textContent = "View & book";
 
         actions.appendChild(pill);
         actions.appendChild(link);
@@ -1494,10 +1438,8 @@
       });
 
       async function markViewedAndClose() {
-        // local mark viewed
         localStorage.setItem("teeradar_av_popup_seen_at", String(Date.now()));
 
-        // best-effort: mark hits read on backend (requires /api/alerts/mark-read)
         try {
           const allIds = filtered
             .map(h => h.id)
@@ -1521,11 +1463,8 @@
       if (closeBtn) closeBtn.onclick = markViewedAndClose;
       if (okBtn) okBtn.onclick = markViewedAndClose;
 
-      // Show modal
       modal.classList.remove("tr-hidden");
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   }
 
   window.addEventListener("load", () => {
@@ -1534,10 +1473,8 @@
     initTCBanner();
     initContactForm();
     initHomeCourseAutocomplete();
-    maybeAutoOpenSignupFromQuery(); // open signup after Stripe success
-    initSubscriberAlertModal();     // show subscriber prompt for logged-out users
-
-    // NEW: show available tee times popup for subscribed users on page load (if already logged in)
+    maybeAutoOpenSignupFromQuery();
+    initSubscriberAlertModal();
     tryShowAvailablePopupForSubscribedUser();
   });
 </script>
