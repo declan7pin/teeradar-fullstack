@@ -140,15 +140,9 @@ function buildBookingLinkForDate(course, date) {
   } catch {
     // Fallback: regex replace if URL isn't parseable by URL()
     return raw
-      .replace(
-        /([?&]selectedDate=)\d{4}-\d{2}-\d{2}/,
-        `$1${date}`
-      )
+      .replace(/([?&]selectedDate=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
       .replace(/([?&]date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
-      .replace(
-        /([?&]selected_date=)\d{4}-\d{2}-\d{2}/,
-        `$1${date}`
-      );
+      .replace(/([?&]selected_date=)\d{4}-\d{2}-\d{2}/, `$1${date}`);
   }
 }
 
@@ -428,7 +422,11 @@ async function runAlertTick() {
           const last = new Date(alertLastSentRaw);
           if (!isNaN(last.getTime())) {
             const diff = now.getTime() - last.getTime();
-            if (diff < windowMs) {
+
+            // ✅ allow small timer drift so "15M" works reliably
+            const TOLERANCE_MS = 30 * 1000;
+
+            if (diff < windowMs - TOLERANCE_MS) {
               canSendEmailForUser = false;
               console.log(
                 `⏱️ Skipping emails for ${email} – last sent ${Math.round(
