@@ -33,28 +33,53 @@ async function ensureUserAlertHitsTable() {
 ensureUserAlertHitsTable();
 
 // ---------------------------------------------------------
-// helper: pull a direct booking URL from slots array (if present)
+// Helper: build a Set of favourite course names for a user
 // ---------------------------------------------------------
-function pickBookingUrlFromSlots(slots) {
+async function getFavouriteCourseNameSet(email) {
   try {
-    if (!Array.isArray(slots) || !slots.length) return null;
-    const s0 = slots[0] || {};
-    return (
-      s0.url ||
-      s0.bookingUrl ||
-      s0.bookUrl ||
-      s0.link ||
-      s0.booking_link ||
-      null
+    const prefRes = await db.query(
+      `
+      SELECT favourites
+      FROM user_preferences
+      WHERE email = $1
+      LIMIT 1;
+      `,
+      [email]
     );
+
+    const favRaw = prefRes.rows?.[0]?.favourites;
+
+    // favourites might be JSONB array OR (older) a stringified JSON
+    let favs = favRaw;
+
+    if (typeof favRaw === "string") {
+      try {
+        favs = JSON.parse(favRaw);
+      } catch {
+        favs = [];
+      }
+    }
+
+    if (!Array.isArray(favs)) return new Set();
+
+    const set = new Set();
+    for (const f of favs) {
+      const name =
+        (f && (f.name || f.courseName || f.course)) ? String(f.name || f.courseName || f.course) : "";
+      const trimmed = name.trim();
+      if (trimmed) set.add(trimmed);
+    }
+
+    return set;
   } catch (e) {
-    return null;
+    return new Set();
   }
 }
 
 // ---------------------------------------------------------
 // GET /api/alerts/unread?email=...
 // Returns unread alert hits (read_at IS NULL) for that user
+// FILTERED to only current favourites
 // ---------------------------------------------------------
 router.get("/unread", async (req, res) => {
   try {
@@ -62,6 +87,9 @@ router.get("/unread", async (req, res) => {
     if (!email) {
       return res.status(400).json({ ok: false, error: "email is required" });
     }
+
+    // Get current favourites for this user (prevents old hits showing)
+    const favNameSet = await getFavouriteCourseNameSet(email);
 
     // Return most recent unread hits first (cap to keep payload small)
     const { rows } = await db.query(
@@ -82,31 +110,30 @@ router.get("/unread", async (req, res) => {
       WHERE email = $1
         AND read_at IS NULL
       ORDER BY created_at DESC
-      LIMIT 100;
+      LIMIT 200;
       `,
       [email]
     );
 
-    // Shape the response to what your index expects
-    const hits = rows.map((r) => {
-      const slots = r.slots || [];
-      const bookingUrl = pickBookingUrlFromSlots(slots);
+    // Filter to favourites only (if favourites exist)
+    const filteredRows =
+      favNameSet.size > 0
+        ? rows.filter((r) => favNameSet.has(String(r.course_name || "").trim()))
+        : rows;
 
-      return {
-        id: r.id,
-        email: r.email,
-        course_name: r.course_name,
-        provider: r.provider,
-        date: r.date,
-        holes: r.holes,
-        party_size: r.party_size,
-        earliest: r.earliest,
-        latest: r.latest,
-        slots,
-        bookingUrl, // ✅ NEW: direct booking link for popup button
-        created_at: r.created_at,
-      };
-    });
+    const hits = filteredRows.slice(0, 100).map((r) => ({
+      id: r.id,
+      email: r.email,
+      course_name: r.course_name,
+      provider: r.provider,
+      date: r.date,
+      holes: r.holes,
+      party_size: r.party_size,
+      earliest: r.earliest,
+      latest: r.latest,
+      slots: r.slots || [],
+      created_at: r.created_at,
+    }));
 
     res.json({ ok: true, hits });
   } catch (err) {
