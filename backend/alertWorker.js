@@ -5,13 +5,17 @@ import { fileURLToPath } from "url";
 
 import db from "./db.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
-import nodemailer from "nodemailer"; // still used for other places if needed
-import { Resend } from "resend"; // 🔹 NEW: Resend for alert emails
-
-const resend = new Resend(process.env.RESEND_API_KEY || ""); // 🔹 NEW
+import { Resend } from "resend"; // ✅ use Resend instead of nodemailer
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// --- Resend client ---
+const resendApiKey = process.env.RESEND_API_KEY || "";
+const resend =
+  resendApiKey && resendApiKey.trim()
+    ? new Resend(resendApiKey.trim())
+    : null;
 
 // --- Load course + fee group data (same as server.js) ---
 const PERTH_LAT = -31.9523;
@@ -107,7 +111,6 @@ function getFrequencyWindowMs(freqRaw) {
 /**
  * Send a single alert email for a user / course / date.
  * Also updates user_preferences.alert_last_sent when it sends.
- * 🔹 NOW uses Resend instead of raw SMTP.
  */
 async function sendAlertEmailForHit({
   email,
@@ -119,9 +122,9 @@ async function sendAlertEmailForHit({
   userHoles,
   partySize,
 }) {
-  if (!process.env.RESEND_API_KEY) {
+  if (!resend) {
     console.log(
-      "⚠️ Alert email skipped – RESEND_API_KEY not configured."
+      "⚠️ Alert email skipped – RESEND_API_KEY not configured or empty."
     );
     return;
   }
@@ -131,39 +134,53 @@ async function sendAlertEmailForHit({
   const windowLabel =
     earliest && latest ? `${earliest}–${latest}` : "Any time";
 
-  // prefer direct course booking URL if we have one
+  // Prefer direct course booking URL if we have one
   const bookingLink =
     (course && (course.url || course.bookingUrl || course.bookUrl)) ||
     "https://teeradar-fullstack-4.onrender.com/book.html";
 
   const subject = `TeeRadar – ${count} tee time(s) found at ${course.name}`;
+  const textBody = `
+Hi ${email},
 
-  const html = `
-    <p>Hi ${email},</p>
-    <p>TeeRadar just found <strong>${count}</strong> tee time(s) that match your alert:</p>
-    <ul>
-      <li><strong>Course:</strong> ${course.name}</li>
-      <li><strong>Date:</strong> ${date}</li>
-      <li><strong>Time window:</strong> ${windowLabel}</li>
-      <li><strong>Holes:</strong> ${holesLabel}</li>
-      <li><strong>Group size:</strong> ${playersLabel}</li>
-    </ul>
-    <p>Book directly using the link below:</p>
-    <p><a href="${bookingLink}">${bookingLink}</a></p>
-    <p>You can adjust or turn off alerts any time from your account page:</p>
-    <p><a href="https://teeradar-fullstack-4.onrender.com/account.html">
-      https://teeradar-fullstack-4.onrender.com/account.html
-    </a></p>
-    <p>Enjoy your round,<br/>TeeRadar</p>
-  `;
+TeeRadar just found ${count} tee time(s) that match your alert:
+
+• Course: ${course.name}
+• Date: ${date}
+• Time window: ${windowLabel}
+• Holes: ${holesLabel}
+• Group size: ${playersLabel}
+
+Book directly using the link below:
+
+  ${bookingLink}
+
+You can adjust or turn off alerts any time from your account page:
+
+  https://teeradar-fullstack-4.onrender.com/account.html
+
+Enjoy your round,
+TeeRadar
+  `.trim();
+
+  const fromAddress =
+    process.env.ALERT_FROM_EMAIL || "TeeRadar Alerts <onboarding@resend.dev>";
 
   try {
-    await resend.emails.send({
-      from: "TeeRadar Alerts <alerts@onresend.com>",
+    const { error } = await resend.emails.send({
+      from: fromAddress,
       to: email,
       subject,
-      html,
+      text: textBody,
     });
+
+    if (error) {
+      console.error(
+        `❌ Resend error sending alert to ${email} for ${course.name} / ${date}:`,
+        error
+      );
+      return;
+    }
 
     // Record that we sent an email now
     await db.query(
@@ -175,10 +192,10 @@ async function sendAlertEmailForHit({
       [email]
     );
 
-    console.log(`📧 Alert email sent to ${email} for ${course.name} on ${date} via Resend`);
+    console.log(`📧 Alert email sent to ${email} for ${course.name} on ${date}`);
   } catch (err) {
     console.error(
-      `❌ Failed to send alert email to ${email} for ${course.name} / ${date} via Resend:`,
+      `❌ Failed to send alert email to ${email} for ${course.name} / ${date}:`,
       err.message
     );
   }
