@@ -1057,6 +1057,18 @@
     }
   }
 
+  // ✅ NEW: fallback check against Stripe plan endpoint if local flag not set
+  async function hasActivePlanViaStripe(email) {
+    try {
+      const res = await fetch("/api/account/plan?email=" + encodeURIComponent(email));
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data) return false;
+      return (data.plan === "BASIC" || data.plan === "PRO");
+    } catch (e) {
+      return false;
+    }
+  }
+
   function applyAuthView() {
     if (!authTitle || !authSubtitle || !authSubmit || !authSwitch) return;
 
@@ -1375,13 +1387,17 @@
   }
 
   // NEW: AVAILABLE POPUP FOR SUBSCRIBED USERS
-  function tryShowAvailablePopupForSubscribedUser() {
+  async function tryShowAvailablePopupForSubscribedUser() {
     try {
       const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
       if (!email) return;
 
-      // Only for paid subscribers
-      if (!hasPaidSubscription()) return;
+      // Only for paid subscribers (fallback to Stripe plan if local flag isn't set)
+      let okToShow = hasPaidSubscription();
+      if (!okToShow) {
+        okToShow = await hasActivePlanViaStripe(email);
+      }
+      if (!okToShow) return;
 
       const modal = document.getElementById("tr-av-modal-backdrop");
       const listEl = document.getElementById("tr-av-list");
@@ -1397,121 +1413,111 @@
 
       const token = localStorage.getItem("teeradar_jwt") || "";
 
-      // Fetch unread/available hits from backend (if route exists)
-      fetch("/api/alerts/unread?email=" + encodeURIComponent(email), {
+      // Fetch unread/available hits from backend (requires /api/alerts/unread)
+      const res = await fetch("/api/alerts/unread?email=" + encodeURIComponent(email), {
         method: "GET",
         headers: token ? { "Authorization": "Bearer " + token } : {}
-      })
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data || !data.ok) return null;
-        return data;
-      })
-      .then((data) => {
-        if (!data) return;
-
-        const hits = Array.isArray(data.hits) ? data.hits : [];
-        // Only show courses that actually have slots
-        const filtered = hits.filter(h => {
-          const slots = h.slots || h.results || [];
-          return Array.isArray(slots) && slots.length > 0;
-        });
-
-        if (!filtered.length) return;
-
-        // Group by course name (unique courses only)
-        const map = new Map();
-        filtered.forEach(h => {
-          const courseName = h.course_name || h.course || h.courseName || "Course";
-          const date = h.date || "";
-          const slots = h.slots || h.results || [];
-          const count = Array.isArray(slots) ? slots.length : 0;
-
-          if (!map.has(courseName)) {
-            map.set(courseName, { courseName, date, count, ids: [] });
-          }
-          const cur = map.get(courseName);
-          cur.count += count;
-          if (date && (!cur.date || date < cur.date)) {
-            // keep a date if provided (doesn't matter which, just show something)
-            cur.date = date;
-          }
-          if (h.id != null) cur.ids.push(h.id);
-        });
-
-        const items = Array.from(map.values());
-        if (!items.length) return;
-
-        // Render available courses
-        listEl.innerHTML = "";
-        items.forEach(item => {
-          const div = document.createElement("div");
-          div.className = "tr-av-item";
-
-          const title = document.createElement("div");
-          title.className = "tr-av-item-title";
-          title.textContent = item.courseName;
-
-          const meta = document.createElement("div");
-          meta.className = "tr-av-item-meta";
-          meta.textContent = item.date ? ("Available on: " + item.date) : "Available now";
-
-          const actions = document.createElement("div");
-          actions.className = "tr-av-item-actions";
-
-          const pill = document.createElement("span");
-          pill.className = "tr-av-pill";
-          pill.textContent = (item.count || 0) + " tee time(s)";
-
-          const link = document.createElement("a");
-          link.className = "tr-av-link";
-          link.href = "/book.html";
-          link.textContent = "View & book";
-
-          actions.appendChild(pill);
-          actions.appendChild(link);
-
-          div.appendChild(title);
-          div.appendChild(meta);
-          div.appendChild(actions);
-
-          listEl.appendChild(div);
-        });
-
-        function markViewedAndClose() {
-          // local mark viewed
-          localStorage.setItem("teeradar_av_popup_seen_at", String(Date.now()));
-
-          // best-effort: mark hits read on backend (if route exists)
-          try {
-            const allIds = filtered
-              .map(h => h.id)
-              .filter(v => v !== undefined && v !== null);
-
-            if (allIds.length) {
-              fetch("/api/alerts/mark-read", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  ...(token ? { "Authorization": "Bearer " + token } : {})
-                },
-                body: JSON.stringify({ email, ids: allIds })
-              }).catch(() => {});
-            }
-          } catch (e) {}
-
-          modal.classList.add("tr-hidden");
-        }
-
-        if (closeBtn) closeBtn.onclick = markViewedAndClose;
-        if (okBtn) okBtn.onclick = markViewedAndClose;
-
-        // Show modal
-        modal.classList.remove("tr-hidden");
-      })
-      .catch(() => {
-        // silent
       });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data || !data.ok) return;
+
+      const hits = Array.isArray(data.hits) ? data.hits : [];
+      const filtered = hits.filter(h => {
+        const slots = h.slots || h.results || [];
+        return Array.isArray(slots) && slots.length > 0;
+      });
+
+      if (!filtered.length) return;
+
+      // Group by course name (unique courses only)
+      const map = new Map();
+      filtered.forEach(h => {
+        const courseName = h.course_name || h.course || h.courseName || "Course";
+        const date = h.date || "";
+        const slots = h.slots || h.results || [];
+        const count = Array.isArray(slots) ? slots.length : 0;
+
+        if (!map.has(courseName)) {
+          map.set(courseName, { courseName, date, count, ids: [] });
+        }
+        const cur = map.get(courseName);
+        cur.count += count;
+        if (date && (!cur.date || date < cur.date)) {
+          cur.date = date;
+        }
+        if (h.id != null) cur.ids.push(h.id);
+      });
+
+      const items = Array.from(map.values());
+      if (!items.length) return;
+
+      // Render available courses
+      listEl.innerHTML = "";
+      items.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "tr-av-item";
+
+        const title = document.createElement("div");
+        title.className = "tr-av-item-title";
+        title.textContent = item.courseName;
+
+        const meta = document.createElement("div");
+        meta.className = "tr-av-item-meta";
+        meta.textContent = item.date ? ("Available on: " + item.date) : "Available now";
+
+        const actions = document.createElement("div");
+        actions.className = "tr-av-item-actions";
+
+        const pill = document.createElement("span");
+        pill.className = "tr-av-pill";
+        pill.textContent = (item.count || 0) + " tee time(s)";
+
+        const link = document.createElement("a");
+        link.className = "tr-av-link";
+        link.href = "/book.html";
+        link.textContent = "View & book";
+
+        actions.appendChild(pill);
+        actions.appendChild(link);
+
+        div.appendChild(title);
+        div.appendChild(meta);
+        div.appendChild(actions);
+
+        listEl.appendChild(div);
+      });
+
+      async function markViewedAndClose() {
+        // local mark viewed
+        localStorage.setItem("teeradar_av_popup_seen_at", String(Date.now()));
+
+        // best-effort: mark hits read on backend (requires /api/alerts/mark-read)
+        try {
+          const allIds = filtered
+            .map(h => h.id)
+            .filter(v => v !== undefined && v !== null);
+
+          if (allIds.length) {
+            fetch("/api/alerts/mark-read", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(token ? { "Authorization": "Bearer " + token } : {})
+              },
+              body: JSON.stringify({ email, ids: allIds })
+            }).catch(() => {});
+          }
+        } catch (e) {}
+
+        modal.classList.add("tr-hidden");
+      }
+
+      if (closeBtn) closeBtn.onclick = markViewedAndClose;
+      if (okBtn) okBtn.onclick = markViewedAndClose;
+
+      // Show modal
+      modal.classList.remove("tr-hidden");
     } catch (e) {
       // ignore
     }
