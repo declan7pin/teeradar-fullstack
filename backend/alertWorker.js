@@ -164,7 +164,7 @@ TeeRadar
   `.trim();
 
   const fromAddress =
-    process.env.ALERT_FROM_EMAIL || "TeeRadar Alerts <onboarding@resend.dev>";
+    process.env.ALERT_FROM_EMAIL || "TeeRadar Alerts <alerts@teeradar.com.au>";
 
   try {
     const { error } = await resend.emails.send({
