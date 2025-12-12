@@ -114,41 +114,26 @@ function getFrequencyWindowMs(freqRaw) {
 
 /**
  * ✅ Ensure the booking URL uses the alert date.
- * - MiClub uses selectedDate=YYYY-MM-DD
- * - Quick18 often expects DD/MM/YYYY (and can ignore/override if not)
+ * - If the URL has selectedDate/date params, overwrite them.
+ * - If not, return the original URL.
  */
 function buildBookingLinkForDate(course, date) {
   const raw =
     (course && (course.url || course.bookingUrl || course.bookUrl)) || "";
   if (!raw) return "";
 
-  const provider = (course?.provider || "").toString().toLowerCase();
-  const isQuick18 = provider.includes("quick18");
-
-  // Quick18 date format often behaves better as DD/MM/YYYY
-  let dateForUrl = date;
-  if (isQuick18) {
-    const [yyyy, mm, dd] = (date || "").split("-");
-    if (yyyy && mm && dd) dateForUrl = `${dd}/${mm}/${yyyy}`;
-  }
-
   // Try URL parsing first (best)
   try {
     const u = new URL(raw);
 
     if (u.searchParams.has("selectedDate")) {
-      u.searchParams.set("selectedDate", dateForUrl);
+      u.searchParams.set("selectedDate", date);
     }
     if (u.searchParams.has("date")) {
-      u.searchParams.set("date", dateForUrl);
+      u.searchParams.set("date", date);
     }
     if (u.searchParams.has("selected_date")) {
-      u.searchParams.set("selected_date", dateForUrl);
-    }
-
-    // Defensive: some systems use different casing
-    if (u.searchParams.has("Date")) {
-      u.searchParams.set("Date", dateForUrl);
+      u.searchParams.set("selected_date", date);
     }
 
     return u.toString();
@@ -157,41 +142,112 @@ function buildBookingLinkForDate(course, date) {
     return raw
       .replace(
         /([?&]selectedDate=)\d{4}-\d{2}-\d{2}/,
-        `$1${dateForUrl}`
+        `$1${date}`
       )
-      .replace(/([?&]date=)\d{4}-\d{2}-\d{2}/, `$1${dateForUrl}`)
+      .replace(/([?&]date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
       .replace(
         /([?&]selected_date=)\d{4}-\d{2}-\d{2}/,
-        `$1${dateForUrl}`
-      )
-      // Quick18-style DD/MM/YYYY replacement if present
-      .replace(
-        /([?&]date=)\d{2}\/\d{2}\/\d{4}/,
-        `$1${dateForUrl}`
-      )
-      .replace(
-        /([?&]Date=)\d{2}\/\d{2}\/\d{4}/,
-        `$1${dateForUrl}`
+        `$1${date}`
       );
   }
 }
 
 /**
- * ✅ Put a correct-dated bookingLink on every slot so the popup can open the right date.
+ * Send ONE email that includes ALL favourites with availability for this tick.
+ * Also updates user_preferences.alert_last_sent when it sends.
  */
-function enrichSlotsWithBookingLink(result, course, date) {
-  const bookingLink =
-    buildBookingLinkForDate(course, date) ||
-    (course && (course.url || course.bookingUrl || course.bookUrl)) ||
-    "";
+async function sendAlertEmailSummaryForUser({
+  email,
+  hits,
+  earliest,
+  latest,
+  userHoles,
+  partySize,
+}) {
+  if (!resend) {
+    console.log(
+      "⚠️ Alert email skipped – RESEND_API_KEY not configured or empty."
+    );
+    return;
+  }
 
-  if (!Array.isArray(result)) return [];
+  if (!Array.isArray(hits) || hits.length === 0) return;
 
-  return result.map((s) => ({
-    ...(s || {}),
-    bookingLink,
-    alertDate: date,
-  }));
+  const holesLabel = userHoles ? `${userHoles} holes` : "Any holes";
+  const playersLabel = partySize ? `${partySize} player(s)` : "Any size";
+  const windowLabel =
+    earliest && latest ? `${earliest}–${latest}` : "Any time";
+
+  // Group hits by date (keeps the email readable)
+  const byDate = new Map();
+  for (const h of hits) {
+    const key = h.date || "Unknown date";
+    if (!byDate.has(key)) byDate.set(key, []);
+    byDate.get(key).push(h);
+  }
+
+  const sortedDates = Array.from(byDate.keys()).sort();
+
+  let lines = [];
+  lines.push(`Hi ${email},`);
+  lines.push("");
+  lines.push(`TeeRadar found tee times matching your alert:`);
+  lines.push(`• Time window: ${windowLabel}`);
+  lines.push(`• Holes: ${holesLabel}`);
+  lines.push(`• Group size: ${playersLabel}`);
+  lines.push("");
+
+  for (const d of sortedDates) {
+    lines.push(`=== ${d} ===`);
+    const arr = byDate.get(d) || [];
+    // sort by course name for stability
+    arr.sort((a, b) => (a.courseName || "").localeCompare(b.courseName || ""));
+    for (const item of arr) {
+      lines.push(`• ${item.courseName} — ${item.count} slot(s)`);
+      lines.push(`  ${item.bookingLink}`);
+    }
+    lines.push("");
+  }
+
+  lines.push(`You can adjust or turn off alerts any time from your account page:`);
+  lines.push(`  https://teeradar-fullstack-4.onrender.com/account.html`);
+  lines.push("");
+  lines.push(`Enjoy your round,`);
+  lines.push(`TeeRadar`);
+
+  const subject = `TeeRadar – tee times found for your favourites`;
+  const textBody = lines.join("\n");
+
+  const fromAddress =
+    process.env.ALERT_FROM_EMAIL || "TeeRadar Alerts <alerts@teeradar.com.au>";
+
+  try {
+    const { error } = await resend.emails.send({
+      from: fromAddress,
+      to: email,
+      subject,
+      text: textBody,
+    });
+
+    if (error) {
+      console.error(`❌ Resend error sending summary alert to ${email}:`, error);
+      return;
+    }
+
+    // Record that we sent an email now
+    await db.query(
+      `
+      UPDATE user_preferences
+      SET alert_last_sent = now()
+      WHERE email = $1
+      `,
+      [email]
+    );
+
+    console.log(`📧 Summary alert email sent to ${email} (${hits.length} hit(s))`);
+  } catch (err) {
+    console.error(`❌ Failed to send summary alert email to ${email}:`, err.message);
+  }
 }
 
 /**
@@ -484,6 +540,9 @@ async function runAlertTick() {
         }
       }
 
+      // ✅ Collect all hits for this user for this tick so the email includes ALL favourites
+      const emailHits = [];
+
       for (const fav of favourites) {
         const course = findCourseByFavourite(fav);
         if (!course) {
@@ -527,13 +586,6 @@ async function runAlertTick() {
                 `  ✅ ${email} – ${course.name} on ${date}: ${count} slot(s) found.`
               );
 
-              // ✅ Enrich slots with a correct-dated bookingLink for popups/UI
-              const enrichedSlots = enrichSlotsWithBookingLink(
-                result,
-                course,
-                date
-              );
-
               // 🔹 Store this hit so we can email + show popups later
               try {
                 await db.query(
@@ -560,7 +612,7 @@ async function runAlertTick() {
                     partySize || null,
                     earliest || null,
                     latest || null,
-                    JSON.stringify(enrichedSlots || []),
+                    JSON.stringify(result || []),
                   ]
                 );
               } catch (err) {
@@ -570,21 +622,19 @@ async function runAlertTick() {
                 );
               }
 
-              // 🔹 Email: only if allowed, and only first email per user per tick
-              if (emailsAllowed && canSendEmailForUser) {
-                await sendAlertEmailForHit({
-                  email,
-                  course,
-                  date,
-                  count,
-                  earliest,
-                  latest,
-                  userHoles,
-                  partySize,
-                });
-                // After first email this run, don't send more for this user
-                canSendEmailForUser = false;
-              }
+              // ✅ Add to the email summary list (date-correct URL)
+              const bookingLink =
+                buildBookingLinkForDate(course, date) ||
+                (course && (course.url || course.bookingUrl || course.bookUrl)) ||
+                "https://teeradar-fullstack-4.onrender.com/book.html";
+
+              emailHits.push({
+                courseName: course.name,
+                provider: course.provider || null,
+                date,
+                count,
+                bookingLink,
+              });
             } else {
               console.log(
                 `  ⛔ ${email} – ${course.name} on ${date}: no slots.`
@@ -597,6 +647,18 @@ async function runAlertTick() {
             );
           }
         }
+      }
+
+      // ✅ Send ONE email that contains ALL courses found this tick (if allowed)
+      if (emailsAllowed && canSendEmailForUser && emailHits.length > 0) {
+        await sendAlertEmailSummaryForUser({
+          email,
+          hits: emailHits,
+          earliest,
+          latest,
+          userHoles,
+          partySize,
+        });
       }
     }
 
