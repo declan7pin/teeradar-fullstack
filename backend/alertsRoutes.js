@@ -1,103 +1,130 @@
 // backend/alertsRoutes.js
 import express from "express";
-import {
-  createWatch,
-  getWatchesForUser,
-  deactivateWatch,
-  countActiveWatchesForUser,
-} from "./db/alertsDb.js";
+import db from "./db.js";
 
 const router = express.Router();
 
-// 0 = free, 1 = Tier1, 2 = Tier2, 3 = Tier3
-const MAX_WATCHES_BY_LEVEL = {
-  0: 0,
-  1: 3,
-  2: 5,
-  3: 10,
-};
-
-// TEMP auth stub:
-// Replace this with your real auth logic when you're ready.
-function requireAuth(req, res, next) {
-  // For now, hard-code a test user so you can try the feature:
-  // Later this should come from your session / JWT / etc.
-  if (!req.user) {
-    req.user = {
-      id: 1,
-      email: "test@example.com",
-      subscriptionLevel: 3, // Tier 3 for testing
-    };
+// ---------------------------------------------------------
+// Ensure table exists (same schema as alertWorker.js)
+// ---------------------------------------------------------
+async function ensureUserAlertHitsTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS user_alert_hits (
+        id SERIAL PRIMARY KEY,
+        email TEXT NOT NULL,
+        course_name TEXT NOT NULL,
+        provider TEXT,
+        date TEXT NOT NULL,              -- 'YYYY-MM-DD'
+        holes INTEGER,
+        party_size INTEGER,
+        earliest TEXT,
+        latest TEXT,
+        slots JSONB,
+        created_at TIMESTAMPTZ DEFAULT now(),
+        read_at TIMESTAMPTZ
+      );
+    `);
+    console.log("✅ user_alert_hits table ready (alertsRoutes)");
+  } catch (err) {
+    console.error("❌ error ensuring user_alert_hits table (alertsRoutes):", err);
   }
-  next();
 }
+ensureUserAlertHitsTable();
 
-// Get all alerts for current user
-router.get("/", requireAuth, (req, res) => {
+// ---------------------------------------------------------
+// GET /api/alerts/unread?email=...
+// Returns unread alert hits (read_at IS NULL) for that user
+// ---------------------------------------------------------
+router.get("/unread", async (req, res) => {
   try {
-    const userId = req.user.id;
-    const watches = getWatchesForUser(userId);
-    res.json({ watches });
+    const email = (req.query.email || "").toString().trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ ok: false, error: "email is required" });
+    }
+
+    // Return most recent unread hits first (cap to keep payload small)
+    const { rows } = await db.query(
+      `
+      SELECT
+        id,
+        email,
+        course_name,
+        provider,
+        date,
+        holes,
+        party_size,
+        earliest,
+        latest,
+        slots,
+        created_at
+      FROM user_alert_hits
+      WHERE email = $1
+        AND read_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT 100;
+      `,
+      [email]
+    );
+
+    // Shape the response to what your index expects
+    const hits = rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      course_name: r.course_name,
+      provider: r.provider,
+      date: r.date,
+      holes: r.holes,
+      party_size: r.party_size,
+      earliest: r.earliest,
+      latest: r.latest,
+      slots: r.slots || [],
+      created_at: r.created_at,
+    }));
+
+    res.json({ ok: true, hits });
   } catch (err) {
-    console.error("Error fetching alerts", err);
-    res.status(500).json({ error: "Failed to fetch alerts" });
+    console.error("alerts/unread error:", err);
+    res.status(500).json({ ok: false, error: "internal error" });
   }
 });
 
-// Create a new alert
-router.post("/", requireAuth, (req, res) => {
+// ---------------------------------------------------------
+// POST /api/alerts/mark-read
+// Body: { email, ids: [1,2,3] }
+// Marks those hits as read (sets read_at=now())
+// ---------------------------------------------------------
+router.post("/mark-read", async (req, res) => {
   try {
-    const userId = req.user.id;
-    const userEmail = req.user.email;
-    const subscriptionLevel = req.user.subscriptionLevel ?? 1;
+    const email = (req.body?.email || "").toString().trim().toLowerCase();
+    const idsRaw = req.body?.ids;
 
-    const maxWatches = MAX_WATCHES_BY_LEVEL[subscriptionLevel] ?? 0;
-    const currentCount = countActiveWatchesForUser(userId);
-
-    if (currentCount >= maxWatches) {
-      return res.status(400).json({
-        error: `You have reached the limit of ${maxWatches} active alerts for your plan.`,
-      });
+    if (!email) {
+      return res.status(400).json({ ok: false, error: "email is required" });
     }
 
-    const { courseId, date, timeFrom, timeTo, groupSize } = req.body || {};
+    const ids = Array.isArray(idsRaw)
+      ? idsRaw.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0)
+      : [];
 
-    if (!courseId || !date || !timeFrom || !timeTo || !groupSize) {
-      return res.status(400).json({ error: "Missing required fields" });
+    if (!ids.length) {
+      return res.json({ ok: true, updated: 0 });
     }
 
-    const watchId = createWatch({
-      userId,
-      userEmail,
-      courseId,
-      date,
-      timeFrom,
-      timeTo,
-      groupSize: Number(groupSize),
-      subscriptionLevel,
-    });
+    const result = await db.query(
+      `
+      UPDATE user_alert_hits
+      SET read_at = now()
+      WHERE email = $1
+        AND id = ANY($2::int[])
+      `,
+      [email, ids]
+    );
 
-    res.json({ ok: true, watchId });
+    res.json({ ok: true, updated: result.rowCount || 0 });
   } catch (err) {
-    console.error("Error creating alert", err);
-    res.status(500).json({ error: "Failed to create alert" });
-  }
-});
-
-// Deactivate an alert
-router.delete("/:id", requireAuth, (req, res) => {
-  try {
-    const userId = req.user.id;
-    const watchId = Number(req.params.id);
-    if (!watchId) {
-      return res.status(400).json({ error: "Invalid alert id" });
-    }
-
-    deactivateWatch({ watchId, userId });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("Error deleting alert", err);
-    res.status(500).json({ error: "Failed to delete alert" });
+    console.error("alerts/mark-read error:", err);
+    res.status(500).json({ ok: false, error: "internal error" });
   }
 });
 
