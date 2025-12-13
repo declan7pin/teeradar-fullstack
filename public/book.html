@@ -424,6 +424,12 @@
     const statusLine = document.getElementById("status-line");
     const coursesStrip = document.getElementById("courses-strip");
 
+    // ✅ NEW: coerce string/number -> number (or null)
+    function toNum(v) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+
     // analytics helper (used for searches + booking clicks)
     function trackEvent(type, payload) {
       try {
@@ -530,20 +536,7 @@
         const res = await fetch("/api/courses");
         courses = await res.json();
 
-        // ✅ NEW: normalise lat/lng to numbers so zoomToStateCourses() + setView() work
-        const raw = Array.isArray(courses) ? courses : [];
-        allCourses = raw.map((c) => {
-          const latNum = Number(c.lat);
-          const lngNum = Number(c.lng);
-          return {
-            ...c,
-            lat: Number.isFinite(latNum) ? latNum : c.lat,
-            lng: Number.isFinite(lngNum) ? lngNum : c.lng,
-          };
-        });
-
-        // keep both in sync
-        courses = allCourses;
+        allCourses = Array.isArray(courses) ? courses : [];
         window.allCourses = allCourses;
 
         applyStateFilter();
@@ -681,12 +674,11 @@
         homeCourse = findCourseFromHome(user.homeCourse);
       }
 
-      if (
-        homeCourse &&
-        typeof homeCourse.lat === "number" &&
-        typeof homeCourse.lng === "number"
-      ) {
-        map.setView([homeCourse.lat, homeCourse.lng], 12);
+      const hLat = homeCourse ? toNum(homeCourse.lat) : null;
+      const hLng = homeCourse ? toNum(homeCourse.lng) : null;
+
+      if (homeCourse && hLat !== null && hLng !== null) {
+        map.setView([hLat, hLng], 12);
       } else {
         zoomToStateCourses();
       }
@@ -738,8 +730,13 @@
       if (!map || !Array.isArray(courses) || courses.length === 0) return;
 
       const coords = courses
-        .filter(c => typeof c.lat === "number" && typeof c.lng === "number")
-        .map(c => [c.lat, c.lng]);
+        .map(c => {
+          const lat = toNum(c.lat);
+          const lng = toNum(c.lng);
+          if (lat === null || lng === null) return null;
+          return [lat, lng];
+        })
+        .filter(Boolean);
 
       if (!coords.length) return;
 
@@ -941,8 +938,11 @@
           markerKind = "available";
         }
 
-        if (typeof course.lat === "number" && typeof course.lng === "number") {
-          const marker = L.marker([course.lat, course.lng], {
+        const cLat = toNum(course.lat);
+        const cLng = toNum(course.lng);
+
+        if (cLat !== null && cLng !== null) {
+          const marker = L.marker([cLat, cLng], {
             icon: createMarkerIcon(markerKind),
           }).addTo(map);
 
