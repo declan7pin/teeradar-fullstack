@@ -424,6 +424,12 @@
     const statusLine = document.getElementById("status-line");
     const coursesStrip = document.getElementById("courses-strip");
 
+    // ✅ NEW: coerce string/number -> number (or null)
+    function toNum(v) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+
     // analytics helper (used for searches + booking clicks)
     function trackEvent(type, payload) {
       try {
@@ -449,11 +455,70 @@
       return "tel:" + digits;
     }
 
+    // ✅ NEW: safely get logged-in email from localStorage (no assumptions)
+    function getLoggedInEmail() {
+      try {
+        const raw = localStorage.getItem("tr_user");
+        if (raw) {
+          const u = JSON.parse(raw);
+          if (u && u.email) return String(u.email).trim().toLowerCase();
+        }
+      } catch (e) {}
+
+      const fallbackKeys = [
+        "teeradar_email",
+        "teeradar_user_email",
+        "user_email",
+        "email"
+      ];
+
+      for (const k of fallbackKeys) {
+        const v = localStorage.getItem(k);
+        if (v && String(v).includes("@")) return String(v).trim().toLowerCase();
+      }
+
+      return "";
+    }
+
+    // ✅ NEW: pull home state from backend and hydrate localStorage.tr_user
+    async function hydrateUserFromServer() {
+      try {
+        const email = getLoggedInEmail();
+        if (!email) return;
+
+        const res = await fetch(`/api/me?email=${encodeURIComponent(email)}`);
+        if (!res.ok) return;
+
+        const me = await res.json();
+
+        // Update / create tr_user so existing applyHomeCourseDefaults() works
+        let obj = { email };
+        try {
+          const raw = localStorage.getItem("tr_user");
+          if (raw) obj = { ...obj, ...JSON.parse(raw) };
+        } catch (e) {}
+
+        obj.email = (me.email || obj.email || email || "").toString().trim().toLowerCase();
+        if (me.homeCourse) obj.homeCourse = me.homeCourse;
+        if (me.homeCourseId) obj.homeCourseId = me.homeCourseId;
+        if (me.homeCourseState) obj.homeCourseState = me.homeCourseState;
+
+        localStorage.setItem("tr_user", JSON.stringify(obj));
+      } catch (err) {
+        // silent fail (no breaking)
+        console.warn("hydrateUserFromServer error", err);
+      }
+    }
+
     init();
 
     async function init() {
       initMap();
       await loadCourses();
+
+      // ✅ NEW: ensure we pull the stored home state from DB before defaults apply
+      await hydrateUserFromServer();
+
       // use the logged-in user's home course (if any) to set state + zoom
       applyHomeCourseDefaults();
       renderCourses();
@@ -609,12 +674,11 @@
         homeCourse = findCourseFromHome(user.homeCourse);
       }
 
-      if (
-        homeCourse &&
-        typeof homeCourse.lat === "number" &&
-        typeof homeCourse.lng === "number"
-      ) {
-        map.setView([homeCourse.lat, homeCourse.lng], 12);
+      const hLat = homeCourse ? toNum(homeCourse.lat) : null;
+      const hLng = homeCourse ? toNum(homeCourse.lng) : null;
+
+      if (homeCourse && hLat !== null && hLng !== null) {
+        map.setView([hLat, hLng], 12);
       } else {
         zoomToStateCourses();
       }
@@ -666,8 +730,13 @@
       if (!map || !Array.isArray(courses) || courses.length === 0) return;
 
       const coords = courses
-        .filter(c => typeof c.lat === "number" && typeof c.lng === "number")
-        .map(c => [c.lat, c.lng]);
+        .map(c => {
+          const lat = toNum(c.lat);
+          const lng = toNum(c.lng);
+          if (lat === null || lng === null) return null;
+          return [lat, lng];
+        })
+        .filter(Boolean);
 
       if (!coords.length) return;
 
@@ -869,8 +938,11 @@
           markerKind = "available";
         }
 
-        if (typeof course.lat === "number" && typeof course.lng === "number") {
-          const marker = L.marker([course.lat, course.lng], {
+        const cLat = toNum(course.lat);
+        const cLng = toNum(course.lng);
+
+        if (cLat !== null && cLng !== null) {
+          const marker = L.marker([cLat, cLng], {
             icon: createMarkerIcon(markerKind),
           }).addTo(map);
 
