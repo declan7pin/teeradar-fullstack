@@ -38,10 +38,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // ✅ Map of plan keys → Stripe price IDs
 const PRICE_IDS = {
-  BASIC_MONTHLY: "price_1SchVzASm4geYL4WAc7X3aAw",
-  BASIC_ANNUAL: "price_1SchWMASm4geYL4WhVk8Zc0Q",
-  PRO_MONTHLY: "price_1SchWrASm4geYL4WmltAvVLF",
-  PRO_ANNUAL: "price_1SchXiASm4geYL4WUm6YUQlV",
+  BASIC_MONTHLY: "price_1SdnQTASm4geYL4WeBGAEEkA",
+  BASIC_ANNUAL: "price_1SdnRLASm4geYL4W23IKreHO",
+  PRO_MONTHLY: "price_1SdnSGASm4geYL4WBWsFWUNe",
+  PRO_ANNUAL: "price_1SdnSpASm4geYL4W1yxaZf2i",
 };
 
 // ✅ Reverse map: price → plan + favourite limit
