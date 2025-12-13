@@ -145,7 +145,7 @@
     <div class="toolbar">
       <div class="section-title">Users</div>
       <div class="hint">
-        Showing latest from <code>teeradar_users</code>. Filter by email below.
+        Showing latest from <code>users</code>. Filter by email below.
       </div>
     </div>
 
@@ -160,8 +160,14 @@
           <tr>
             <th>ID</th>
             <th>Email</th>
+            <th>Home state</th>
+            <th>Favourites</th>
+            <th>Scrape days</th>
+            <th>Time window</th>
+            <th>Holes</th>
+            <th>People</th>
             <th>Created at</th>
-            <th>Last login</th>
+            <th>Last seen</th>
           </tr>
         </thead>
         <tbody id="users-body"></tbody>
@@ -183,6 +189,30 @@
       return d.toLocaleString();
     }
 
+    function formatFavourites(favs) {
+      if (!Array.isArray(favs) || !favs.length) return "–";
+      // Expect each item like { name, state }
+      return favs
+        .map((c) =>
+          c.name
+            ? c.name + (c.state ? ` (${c.state})` : "")
+            : ""
+        )
+        .filter(Boolean)
+        .join(", ");
+    }
+
+    function formatDays(days) {
+      if (!days) return "–";
+      if (Array.isArray(days)) return days.join(", ");
+      return String(days);
+    }
+
+    function formatTimeWindow(from, to) {
+      if (!from && !to) return "–";
+      return `${from || "?"} – ${to || "?"}`;
+    }
+
     function renderUsers(users) {
       const tbody = document.getElementById("users-body");
       tbody.innerHTML = "";
@@ -197,14 +227,46 @@
           ? `<span class="pill">${u.email}</span>`
           : "–";
 
+        const homeStateTd = document.createElement("td");
+        homeStateTd.textContent = u.home_state || "–";
+
+        const favsTd = document.createElement("td");
+        favsTd.textContent = formatFavourites(u.favourite_courses);
+
+        const daysTd = document.createElement("td");
+        daysTd.textContent = formatDays(u.preferred_days);
+
+        const timeTd = document.createElement("td");
+        timeTd.textContent = formatTimeWindow(
+          u.preferred_time_from,
+          u.preferred_time_to
+        );
+
+        const holesTd = document.createElement("td");
+        holesTd.textContent =
+          u.preferred_holes != null ? String(u.preferred_holes) : "–";
+
+        const peopleTd = document.createElement("td");
+        peopleTd.textContent =
+          u.preferred_party_size != null
+            ? String(u.preferred_party_size)
+            : "–";
+
         const createdTd = document.createElement("td");
         createdTd.textContent = formatDate(u.created_at);
 
         const lastLoginTd = document.createElement("td");
-        lastLoginTd.textContent = formatDate(u.last_login);
+        // backend may send last_seen_at or last_login
+        lastLoginTd.textContent = formatDate(u.last_seen_at || u.last_login);
 
         tr.appendChild(idTd);
         tr.appendChild(emailTd);
+        tr.appendChild(homeStateTd);
+        tr.appendChild(favsTd);
+        tr.appendChild(daysTd);
+        tr.appendChild(timeTd);
+        tr.appendChild(holesTd);
+        tr.appendChild(peopleTd);
         tr.appendChild(createdTd);
         tr.appendChild(lastLoginTd);
         tbody.appendChild(tr);
@@ -226,23 +288,41 @@
       renderUsers(filtered);
     }
 
+    function computeSummary(allUsers) {
+      const total = allUsers.length;
+      let lastSignup = null;
+      let last7Count = 0;
+
+      const now = Date.now();
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+      allUsers.forEach((u) => {
+        if (u.created_at) {
+          const t = new Date(u.created_at).getTime();
+          if (!isNaN(t)) {
+            if (!lastSignup || t > lastSignup) lastSignup = t;
+            if (now - t <= sevenDaysMs) last7Count += 1;
+          }
+        }
+      });
+
+      document.getElementById("stat-total-users").textContent =
+        total.toString();
+      document.getElementById("stat-7day-users").textContent =
+        last7Count.toString();
+      document.getElementById("stat-last-signup").textContent =
+        "Last signup: " + (lastSignup ? formatDate(lastSignup) : "–");
+      document.getElementById("stat-preview-count").textContent =
+        total.toString();
+    }
+
     async function init() {
       try {
-        const summary = await fetchJson("/admin/users/summary");
-        document.getElementById("stat-total-users").textContent =
-          summary.total_users ?? "0";
-        document.getElementById("stat-7day-users").textContent =
-          summary.last7_days ?? "0";
-        document.getElementById("stat-last-signup").textContent =
-          "Last signup: " +
-          (summary.last_signup ? formatDate(summary.last_signup) : "–");
-
-        const data = await fetchJson("/admin/users/data");
+        // Pull everything from one endpoint: /api/analytics/users
+        const data = await fetchJson("/api/analytics/users");
         const allUsers = data.users || [];
 
-        document.getElementById("stat-preview-count").textContent =
-          allUsers.length.toString();
-
+        computeSummary(allUsers);
         renderUsers(allUsers);
 
         document
