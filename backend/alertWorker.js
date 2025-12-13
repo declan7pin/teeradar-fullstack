@@ -91,7 +91,7 @@ function getFrequencyWindowMs(freqRaw) {
     case "6H":
     case "6HOURS":
     case "EVERY_6_HOURS":
-      return 6 * 60 * 1000; // 6 hours
+      return 6 * 60 * 60 * 1000; // 6 hours ✅ FIXED
     case "12H":
     case "12HOURS":
     case "EVERY_12_HOURS":
@@ -726,9 +726,9 @@ export function startAlertWorker() {
 
   console.log("🔔 Starting alert worker…");
 
-  // run once shortly after boot, then every 15 minutes
+  // run once shortly after boot, then every 12 hours ✅ UPDATED
   setTimeout(runAlertTick, 15000);
-  setInterval(runAlertTick, 15 * 60 * 1000);
+  setInterval(runAlertTick, 12 * 60 * 60 * 1000); // 12 hours
 }
 
 // Optional: allow manual trigger when importing directly in scripts
