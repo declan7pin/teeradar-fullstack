@@ -1342,20 +1342,64 @@
     }, 3000);
   }
 
-  /* ✅ NEW (only addition): force booking URLs to the exact hit date shown in the popup */
+  /* ✅ UPDATED (only change needed): force booking URLs to the exact hit date shown in the popup (MiClub + Quick18 variants) */
   function buildBookingLinkForDate(rawUrl, date) {
     if (!rawUrl || !date) return rawUrl || "";
+
+    const toDMY = (iso) => {
+      const [y, m, d] = iso.split("-");
+      return `${d}/${m}/${y}`;
+    };
+
+    const toYMDNoDash = (iso) => {
+      const [y, m, d] = iso.split("-");
+      return `${y}${m}${d}`;
+    };
+
     try {
       const u = new URL(rawUrl);
-      if (u.searchParams.has("selectedDate")) u.searchParams.set("selectedDate", date);
-      if (u.searchParams.has("date")) u.searchParams.set("date", date);
-      if (u.searchParams.has("selected_date")) u.searchParams.set("selected_date", date);
+
+      const keys = [
+        "selectedDate",
+        "date",
+        "selected_date",
+        "startDate",
+        "bookingDate",
+        "playDate",
+        "teeDate",
+        "teedate",
+        "dt"
+      ];
+
+      keys.forEach((k) => {
+        if (!u.searchParams.has(k)) return;
+
+        const cur = u.searchParams.get(k);
+
+        // Quick18 DD/MM/YYYY
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(cur || "")) {
+          u.searchParams.set(k, toDMY(date));
+          return;
+        }
+
+        // Quick18 YYYYMMDD
+        if (/^\d{8}$/.test(cur || "")) {
+          u.searchParams.set(k, toYMDNoDash(date));
+          return;
+        }
+
+        // Default ISO
+        u.searchParams.set(k, date);
+      });
+
       return u.toString();
     } catch (e) {
       return (rawUrl || "")
         .replace(/([?&]selectedDate=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
         .replace(/([?&]date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
-        .replace(/([?&]selected_date=)\d{4}-\d{2}-\d{2}/, `$1${date}`);
+        .replace(/([?&]selected_date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
+        .replace(/([?&]startDate=)\d{2}\/\d{2}\/\d{4}/, `$1${toDMY(date)}`)
+        .replace(/([?&]date=)\d{8}/, `$1${toYMDNoDash(date)}`);
     }
   }
 
