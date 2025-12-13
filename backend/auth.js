@@ -271,4 +271,44 @@ authRouter.post("/reset", async (req, res) => {
   }
 });
 
+// ---------- ME (fetch current user's saved preferences) ----------
+authRouter.get("/me", async (req, res) => {
+  try {
+    // Minimal identification: header OR query param
+    const headerEmail = req.headers["x-user-email"];
+    const queryEmail = req.query.email;
+    const normEmail = normaliseEmail(headerEmail || queryEmail);
+
+    if (!normEmail) {
+      return res.status(401).json({ ok: false, error: "Missing email" });
+    }
+
+    const result = await db.query(
+      `SELECT email, home_course, home_course_id, home_course_state
+       FROM users
+       WHERE email = $1`,
+      [normEmail]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: "User not found" });
+    }
+
+    const row = result.rows[0];
+
+    return res.json({
+      ok: true,
+      user: {
+        email: row.email,
+        homeCourse: row.home_course || null,
+        homeCourseId: row.home_course_id || null,
+        homeCourseState: row.home_course_state || null,
+      },
+    });
+  } catch (err) {
+    console.error("me error:", err);
+    return res.status(500).json({ ok: false, error: "Failed to load user" });
+  }
+});
+
 export default authRouter;
