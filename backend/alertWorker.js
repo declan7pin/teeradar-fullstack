@@ -114,41 +114,86 @@ function getFrequencyWindowMs(freqRaw) {
 
 /**
  * ✅ Ensure the booking URL uses the alert date.
- * - If the URL has selectedDate/date params, overwrite them.
- * - If not, return the original URL.
+ * - Supports MiClub (YYYY-MM-DD) and common Quick18 formats (DD/MM/YYYY, YYYYMMDD).
  */
 function buildBookingLinkForDate(course, date) {
   const raw =
     (course && (course.url || course.bookingUrl || course.bookUrl)) || "";
   if (!raw) return "";
 
+  const toDMY = (iso) => {
+    const [y, m, d] = String(iso).split("-");
+    if (!y || !m || !d) return iso;
+    return `${d}/${m}/${y}`;
+  };
+
+  const toYMDNoDash = (iso) => {
+    const [y, m, d] = String(iso).split("-");
+    if (!y || !m || !d) return iso;
+    return `${y}${m}${d}`;
+  };
+
+  const PARAMS = [
+    "selectedDate",
+    "date",
+    "selected_date",
+    "startDate",
+    "bookingDate",
+    "playDate",
+    "teeDate",
+    "teedate",
+    "dt",
+  ];
+
   // Try URL parsing first (best)
   try {
     const u = new URL(raw);
 
-    if (u.searchParams.has("selectedDate")) {
-      u.searchParams.set("selectedDate", date);
-    }
-    if (u.searchParams.has("date")) {
-      u.searchParams.set("date", date);
-    }
-    if (u.searchParams.has("selected_date")) {
-      u.searchParams.set("selected_date", date);
+    const setPreservingFormat = (key) => {
+      const cur = u.searchParams.get(key);
+
+      // If existing value looks like DD/MM/YYYY → keep DMY
+      if (cur && /^\d{2}\/\d{2}\/\d{4}$/.test(cur)) {
+        u.searchParams.set(key, toDMY(date));
+        return true;
+      }
+
+      // If existing value looks like YYYYMMDD → keep that
+      if (cur && /^\d{8}$/.test(cur)) {
+        u.searchParams.set(key, toYMDNoDash(date));
+        return true;
+      }
+
+      // Default → ISO YYYY-MM-DD
+      u.searchParams.set(key, date);
+      return true;
+    };
+
+    let changed = false;
+    for (const key of PARAMS) {
+      if (u.searchParams.has(key)) {
+        changed = setPreservingFormat(key) || changed;
+      }
     }
 
     return u.toString();
   } catch {
     // Fallback: regex replace if URL isn't parseable by URL()
     return raw
-      .replace(
-        /([?&]selectedDate=)\d{4}-\d{2}-\d{2}/,
-        `$1${date}`
-      )
+      // YYYY-MM-DD
+      .replace(/([?&]selectedDate=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
       .replace(/([?&]date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
-      .replace(
-        /([?&]selected_date=)\d{4}-\d{2}-\d{2}/,
-        `$1${date}`
-      );
+      .replace(/([?&]selected_date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
+      .replace(/([?&]startDate=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
+      .replace(/([?&]bookingDate=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
+      .replace(/([?&]playDate=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
+      .replace(/([?&]teeDate=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
+      // DD/MM/YYYY
+      .replace(/([?&]startDate=)\d{2}\/\d{2}\/\d{4}/, `$1${toDMY(date)}`)
+      .replace(/([?&]date=)\d{2}\/\d{2}\/\d{4}/, `$1${toDMY(date)}`)
+      // YYYYMMDD
+      .replace(/([?&]startDate=)\d{8}/, `$1${toYMDNoDash(date)}`)
+      .replace(/([?&]date=)\d{8}/, `$1${toYMDNoDash(date)}`);
   }
 }
 
