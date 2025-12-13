@@ -530,7 +530,20 @@
         const res = await fetch("/api/courses");
         courses = await res.json();
 
-        allCourses = Array.isArray(courses) ? courses : [];
+        // ✅ NEW: normalise lat/lng to numbers so zoomToStateCourses() + setView() work
+        const raw = Array.isArray(courses) ? courses : [];
+        allCourses = raw.map((c) => {
+          const latNum = Number(c.lat);
+          const lngNum = Number(c.lng);
+          return {
+            ...c,
+            lat: Number.isFinite(latNum) ? latNum : c.lat,
+            lng: Number.isFinite(lngNum) ? lngNum : c.lng,
+          };
+        });
+
+        // keep both in sync
+        courses = allCourses;
         window.allCourses = allCourses;
 
         applyStateFilter();
