@@ -230,15 +230,32 @@
     });
 
     function finishLogin(user) {
+      // ✅ NEW: keep existing keys (don’t break anything)
       localStorage.setItem("teeradar_member", "1");
       localStorage.setItem("teeradar_email", user.email);
       localStorage.setItem("teeradar_role", user.role || "user");
       if (user.email === "declan7pin@gmail.com") {
         localStorage.setItem("teeradar_adfree", "1");
       }
+
+      // ✅ NEW: also write the keys used by account.html + JWT storage
+      localStorage.setItem("teeradar_user_email", user.email);
+      if (user.token) {
+        localStorage.setItem("teeradar_jwt", user.token);
+      }
+
+      // ✅ NEW: store unified user object used by bookings page
+      try {
+        const raw = localStorage.getItem("tr_user");
+        let obj = {};
+        if (raw) obj = JSON.parse(raw) || {};
+        if (!obj || typeof obj !== "object") obj = {};
+        obj.email = String(user.email || "").trim().toLowerCase();
+        localStorage.setItem("tr_user", JSON.stringify(obj));
+      } catch (e) {}
+
       window.location.href = "/book.html";
     }
   </script>
 </body>
 </html>
-
