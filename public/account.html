@@ -363,10 +363,10 @@
         <option value="ACT">Australian Capital Territory</option>
       </select>
 
-      <!-- ✅ NEW: Home course picker (stored locally for bookings page) -->
+      <!-- ✅ NEW: Home course preference -->
       <label for="homeCourseInput">Home course</label>
       <div class="fav-help">
-        Choose your home course (used to set your default map/state on the bookings page).
+        Start typing to select your home course (used to auto-zoom on bookings).
       </div>
       <div class="autocomplete">
         <input id="homeCourseInput" type="text" placeholder="Search home course…" autocomplete="off" />
@@ -462,7 +462,14 @@
 
 <script>
   // --- basic auth presence check using localStorage ---
-  const email = localStorage.getItem("teeradar_user_email") || "";
+  const email =
+    localStorage.getItem("teeradar_user_email") ||
+    localStorage.getItem("teeradar_email") ||
+    localStorage.getItem("teeradar_user_email") ||
+    localStorage.getItem("teeradar_email") ||
+    localStorage.getItem("email") ||
+    "";
+
   const token = localStorage.getItem("teeradar_jwt") || "";
 
   const notLoggedInEl = document.getElementById("notLoggedIn");
@@ -510,8 +517,10 @@
   if (logoutBtn) {
     logoutBtn.addEventListener("click", () => {
       localStorage.removeItem("teeradar_user_email");
+      localStorage.removeItem("teeradar_email");
       localStorage.removeItem("teeradar_jwt");
       localStorage.removeItem("teeradar_home_state");
+      localStorage.removeItem("teeradar_home_course");
       localStorage.removeItem("teeradar_fav_courses");
       localStorage.removeItem("teeradar_pref_days");
       localStorage.removeItem("teeradar_pref_earliest");
@@ -519,24 +528,7 @@
       localStorage.removeItem("teeradar_pref_holes");
       localStorage.removeItem("teeradar_pref_party_size");
       localStorage.removeItem("teeradar_alert_frequency");
-
-      // ✅ NEW: clear home course preference
-      localStorage.removeItem("teeradar_home_course");
-      localStorage.removeItem("teeradar_home_course_id");
-      localStorage.removeItem("teeradar_home_course_state");
-      try {
-        const raw = localStorage.getItem("tr_user");
-        if (raw) {
-          const u = JSON.parse(raw);
-          if (u && typeof u === "object") {
-            delete u.homeCourse;
-            delete u.homeCourseId;
-            delete u.homeCourseState;
-            localStorage.setItem("tr_user", JSON.stringify(u));
-          }
-        }
-      } catch (e) {}
-
+      localStorage.removeItem("tr_user");
       window.location.href = "/index.html";
     });
   }
@@ -558,66 +550,13 @@
     });
   }
 
-  // ✅ NEW: Home course in-memory selection
-  let homeCourseSelection = null; // { name, id, state, provider } or null
+  // ✅ NEW: selected home course object (name/id/state)
+  let selectedHomeCourse = null;
 
-  // ✅ NEW: persist home course in both legacy + tr_user
-  function saveHomeCourseToStorage(sel) {
-    if (!sel || !sel.name) {
-      localStorage.removeItem("teeradar_home_course");
-      localStorage.removeItem("teeradar_home_course_id");
-      localStorage.removeItem("teeradar_home_course_state");
-    } else {
-      // legacy string used by bookings page fallback
-      const legacyStr = sel.state ? `${sel.name} (${sel.state})` : sel.name;
-      localStorage.setItem("teeradar_home_course", legacyStr);
-      if (sel.id) localStorage.setItem("teeradar_home_course_id", String(sel.id));
-      else localStorage.removeItem("teeradar_home_course_id");
-      if (sel.state) localStorage.setItem("teeradar_home_course_state", String(sel.state));
-      else localStorage.removeItem("teeradar_home_course_state");
-    }
-
-    // also hydrate tr_user so bookings page can read it immediately
-    try {
-      const raw = localStorage.getItem("tr_user");
-      let u = {};
-      if (raw) u = JSON.parse(raw) || {};
-      if (!u || typeof u !== "object") u = {};
-      if (email) u.email = String(email).trim().toLowerCase();
-
-      if (!sel || !sel.name) {
-        delete u.homeCourse;
-        delete u.homeCourseId;
-        delete u.homeCourseState;
-      } else {
-        u.homeCourse = sel.name;
-        u.homeCourseId = sel.id || null;
-        u.homeCourseState = sel.state || null;
-      }
-      localStorage.setItem("tr_user", JSON.stringify(u));
-    } catch (e) {}
-  }
-
-  // ✅ NEW: load home course from storage into input
-  function loadHomeCourseFromStorage() {
-    const legacy = localStorage.getItem("teeradar_home_course") || "";
-    const id = localStorage.getItem("teeradar_home_course_id") || "";
-    const st = localStorage.getItem("teeradar_home_course_state") || "";
-
-    if (legacy && homeCourseInput) {
-      homeCourseInput.value = legacy;
-    }
-
-    // best-effort to rebuild selection object
-    if (legacy) {
-      homeCourseSelection = {
-        name: legacy.replace(/\s*\((WA|NT|QLD|NSW|VIC|SA|TAS|ACT)\)\s*$/i, "").trim(),
-        id: id || null,
-        state: st || null,
-        provider: null
-      };
-    } else {
-      homeCourseSelection = null;
+  function setHomeCourse(courseObj) {
+    selectedHomeCourse = courseObj || null;
+    if (homeCourseInput) {
+      homeCourseInput.value = courseObj && courseObj.name ? courseObj.name : "";
     }
   }
 
@@ -628,8 +567,27 @@
       homeStateSelect.value = savedState;
     }
 
-    // ✅ NEW: home course
-    loadHomeCourseFromStorage();
+    // ✅ NEW: pull home course from tr_user or legacy key
+    try {
+      const raw = localStorage.getItem("tr_user");
+      if (raw) {
+        const u = JSON.parse(raw);
+        if (u && u.homeCourse) {
+          selectedHomeCourse = {
+            name: u.homeCourse,
+            id: u.homeCourseId || null,
+            state: u.homeCourseState || null
+          };
+          if (homeCourseInput) homeCourseInput.value = u.homeCourse;
+        }
+      }
+    } catch {}
+
+    const legacyHome = localStorage.getItem("teeradar_home_course");
+    if (!selectedHomeCourse && legacyHome) {
+      selectedHomeCourse = { name: legacyHome, id: null, state: savedState || null };
+      if (homeCourseInput) homeCourseInput.value = legacyHome;
+    }
 
     const favJson = localStorage.getItem("teeradar_fav_courses");
     let favourites = [];
@@ -666,13 +624,39 @@
     }
   }
 
-  function savePrefsToStorage(homeState, favourites, advanced) {
+  function savePrefsToStorage(homeState, homeCourseObj, favourites, advanced) {
     if (homeState) {
       localStorage.setItem("teeradar_home_state", homeState);
     } else {
       localStorage.removeItem("teeradar_home_state");
     }
+
+    // ✅ NEW: save legacy home course string too
+    if (homeCourseObj && homeCourseObj.name) {
+      localStorage.setItem("teeradar_home_course", homeCourseObj.name);
+    } else {
+      localStorage.removeItem("teeradar_home_course");
+    }
+
     localStorage.setItem("teeradar_fav_courses", JSON.stringify(favourites));
+
+    // ✅ NEW: keep bookings in sync by updating tr_user (this is what book.html reads)
+    try {
+      let obj = {};
+      const raw = localStorage.getItem("tr_user");
+      if (raw) obj = JSON.parse(raw) || {};
+      obj.email = (obj.email || email || "").toString().trim().toLowerCase();
+      if (homeCourseObj && homeCourseObj.name) {
+        obj.homeCourse = homeCourseObj.name;
+        obj.homeCourseId = homeCourseObj.id || null;
+        obj.homeCourseState = homeCourseObj.state || homeState || null;
+      } else {
+        obj.homeCourse = null;
+        obj.homeCourseId = null;
+        obj.homeCourseState = homeState || null;
+      }
+      localStorage.setItem("tr_user", JSON.stringify(obj));
+    } catch {}
 
     if (advanced) {
       localStorage.setItem("teeradar_pref_days", JSON.stringify(advanced.days || []));
@@ -730,12 +714,9 @@
     });
   }
 
-  // --- course search (MiClub + Quick18 only) ---
+  // --- course search ---
   let allCourses = [];
   let searchableCourses = [];
-
-  // ✅ NEW: home course search list (all courses)
-  let homeSearchCourses = [];
 
   async function loadCourses() {
     try {
@@ -748,15 +729,11 @@
         searchableCourses = data.filter(
           c => allowed.includes(c.provider || "")
         );
-
-        // ✅ NEW: allow any provider for home course (but only those with a name)
-        homeSearchCourses = data.filter(c => (c && c.name));
       }
     } catch (err) {
       console.error("Failed to load courses for account page", err);
       allCourses = [];
       searchableCourses = [];
-      homeSearchCourses = [];
     }
   }
 
@@ -797,46 +774,6 @@
     favDropdown.style.display = "block";
   }
 
-  // ✅ NEW: home course dropdown renderer
-  function showHomeCourseDropdown(matches) {
-    homeCourseDropdown.innerHTML = "";
-    if (!matches.length) {
-      homeCourseDropdown.style.display = "none";
-      return;
-    }
-    matches.forEach(c => {
-      const div = document.createElement("div");
-      div.className = "autocomplete-item";
-      div.innerHTML = `
-        <div>${c.name}</div>
-        <small>${c.provider || "Course"}${c.state ? " • " + c.state : ""}</small>
-      `;
-      div.addEventListener("click", () => {
-        homeCourseSelection = {
-          name: c.name,
-          id: c.id || null,
-          state: c.state || null,
-          provider: c.provider || null
-        };
-
-        // reflect in input + storage immediately
-        if (homeCourseInput) {
-          homeCourseInput.value = c.state ? `${c.name} (${c.state})` : c.name;
-        }
-        saveHomeCourseToStorage(homeCourseSelection);
-
-        // (optional) if they haven't chosen home state, help them by setting it
-        if (homeStateSelect && !homeStateSelect.value && c.state) {
-          homeStateSelect.value = c.state;
-        }
-
-        homeCourseDropdown.style.display = "none";
-      });
-      homeCourseDropdown.appendChild(div);
-    });
-    homeCourseDropdown.style.display = "block";
-  }
-
   if (favInput) {
     favInput.addEventListener("input", () => {
       const q = favInput.value.trim().toLowerCase();
@@ -852,42 +789,59 @@
     });
   }
 
-  // ✅ NEW: home course input behaviour
+  // ✅ NEW: home course autocomplete (uses ALL courses, optionally filtered by selected state)
+  function showHomeCourseDropdown(matches) {
+    homeCourseDropdown.innerHTML = "";
+    if (!matches.length) {
+      homeCourseDropdown.style.display = "none";
+      return;
+    }
+    matches.forEach(c => {
+      const div = document.createElement("div");
+      div.className = "autocomplete-item";
+      div.innerHTML = `
+        <div>${c.name}</div>
+        <small>${c.provider || "Course"}${c.state ? " • " + c.state : ""}</small>
+      `;
+      div.addEventListener("click", () => {
+        setHomeCourse({ name: c.name, id: c.id || null, state: c.state || null });
+        homeCourseDropdown.style.display = "none";
+      });
+      homeCourseDropdown.appendChild(div);
+    });
+    homeCourseDropdown.style.display = "block";
+  }
+
   if (homeCourseInput) {
     homeCourseInput.addEventListener("input", () => {
       const q = homeCourseInput.value.trim().toLowerCase();
       homeCourseDropdown.innerHTML = "";
-      if (!q || !homeSearchCourses.length) {
+      if (!q || !allCourses.length) {
         homeCourseDropdown.style.display = "none";
+        selectedHomeCourse = null; // user is editing / clearing
         return;
       }
-      const matches = homeSearchCourses
+
+      const stateFilter = (homeStateSelect && homeStateSelect.value) ? homeStateSelect.value : "";
+      let pool = allCourses;
+
+      if (stateFilter) {
+        pool = pool.filter(c => String(c.state || "").toUpperCase() === String(stateFilter).toUpperCase());
+      }
+
+      const matches = pool
         .filter(c => (c.name || "").toLowerCase().includes(q))
         .slice(0, 8);
-      showHomeCourseDropdown(matches);
-    });
 
-    // If they manually clear it, clear stored selection too
-    homeCourseInput.addEventListener("blur", () => {
-      const v = (homeCourseInput.value || "").trim();
-      if (!v) {
-        homeCourseSelection = null;
-        saveHomeCourseToStorage(null);
-      }
+      showHomeCourseDropdown(matches);
     });
   }
 
   document.addEventListener("click", (e) => {
-    if (!favDropdown) return;
-    if (e.target === favInput || favDropdown.contains(e.target)) return;
-    favDropdown.style.display = "none";
-  });
-
-  // ✅ NEW: close home dropdown when clicking outside
-  document.addEventListener("click", (e) => {
-    if (!homeCourseDropdown) return;
-    if (e.target === homeCourseInput || homeCourseDropdown.contains(e.target)) return;
-    homeCourseDropdown.style.display = "none";
+    if (favDropdown && (e.target === favInput || favDropdown.contains(e.target))) return;
+    if (homeCourseDropdown && (e.target === homeCourseInput || homeCourseDropdown.contains(e.target))) return;
+    if (favDropdown) favDropdown.style.display = "none";
+    if (homeCourseDropdown) homeCourseDropdown.style.display = "none";
   });
 
   // --- save prefs button ---
@@ -907,19 +861,14 @@
         ? (alertFrequencySelect.value || "POPUP_ONLY")
         : "POPUP_ONLY";
 
-      // ✅ NEW: ensure we persist the current home course input (even if they didn't click a suggestion)
-      if (homeCourseInput) {
-        const typed = (homeCourseInput.value || "").trim();
-        if (!typed) {
-          homeCourseSelection = null;
-          saveHomeCourseToStorage(null);
-        } else if (!homeCourseSelection || !homeCourseSelection.name) {
-          // store typed value as legacy string only (best-effort)
-          localStorage.setItem("teeradar_home_course", typed);
-        }
-      }
+      // ✅ NEW: home course payload
+      const homeCourseObj = (selectedHomeCourse && selectedHomeCourse.name)
+        ? selectedHomeCourse
+        : (homeCourseInput && homeCourseInput.value.trim()
+            ? { name: homeCourseInput.value.trim(), id: null, state: homeState || null }
+            : null);
 
-      savePrefsToStorage(homeState, favCourses, {
+      savePrefsToStorage(homeState, homeCourseObj, favCourses, {
         days: selectedDays,
         earliest,
         latest,
@@ -941,8 +890,14 @@
           latest,
           holes: holesValue,
           partySize: partySizeValue,
-          alertFrequency
+          alertFrequency,
+
+          // ✅ NEW: send home course to backend so /api/me updates
+          homeCourse: homeCourseObj ? homeCourseObj.name : null,
+          homeCourseId: homeCourseObj ? (homeCourseObj.id || null) : null,
+          homeCourseState: homeCourseObj ? (homeCourseObj.state || homeState || null) : (homeState || null)
         };
+
         const res = await fetch("/api/account/preferences", {
           method: "POST",
           headers: {
@@ -951,11 +906,12 @@
           },
           body: JSON.stringify(body)
         });
+
         if (res.ok) {
           prefsStatus.textContent = "Preferences saved.";
           prefsStatus.className = "status ok";
         } else {
-          prefsStatus.textContent = "Saved locally. Server update failed (not configured yet).";
+          prefsStatus.textContent = "Saved locally. Server update failed.";
           prefsStatus.className = "status";
         }
       } catch (err) {
