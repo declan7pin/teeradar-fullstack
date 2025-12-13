@@ -69,6 +69,15 @@
       font-weight:800;
       box-shadow:0 0 0 3px rgba(16,185,129,0.25);
     }
+    /* ✅ NEW: logo image inside the brand circle */
+    .brand-logo img{
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      border-radius:999px;
+      display:block;
+    }
+
     .brand-text{
       font-weight:700;
       letter-spacing:.04em;
@@ -717,8 +726,12 @@
 <header>
   <div class="nav-wrap">
     <div class="brand">
-      <div class="brand-logo">T</div>
-      <div class="brand-text">TeeRadar WA</div>
+      <!-- ✅ UPDATED (only change): show your logo instead of "T" -->
+      <div class="brand-logo">
+        <img src="/assets/teeradar-logo.png" alt="TeeRadar" />
+      </div>
+      <!-- ✅ UPDATED (only change): TeeRadar WA → TeeRadar -->
+      <div class="brand-text">TeeRadar</div>
     </div>
     <nav>
       <a href="/index.html">Home</a>
