@@ -1359,6 +1359,12 @@
     try {
       const u = new URL(rawUrl);
 
+      /* ✅ NEW (only addition): Quick18 must ALWAYS have teedate=YYYYMMDD (even if missing) */
+      const isQuick18 = /quick18/i.test(u.hostname) || /quick18/i.test(u.pathname);
+      if (isQuick18) {
+        u.searchParams.set("teedate", toYMDNoDash(date));
+      }
+
       const keys = [
         "selectedDate",
         "date",
@@ -1399,7 +1405,7 @@
         .replace(/([?&]date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
         .replace(/([?&]selected_date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
         .replace(/([?&]startDate=)\d{2}\/\d{2}\/\d{4}/, `$1${toDMY(date)}`)
-        .replace(/([?&]date=)\d{8}/, `$1${toYMDNoDash(date)}`);
+        .replace(/([?&]teedate=)\d{8}/, `$1${toYMDNoDash(date)}`);
     }
   }
 
