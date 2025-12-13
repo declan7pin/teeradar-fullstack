@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>TeeRadar WA — Find a tee time across WA</title>
+  <title>TeeRadar — Find a tee time across Australia</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
 
@@ -68,7 +68,17 @@
       font-size:15px;
       font-weight:800;
       box-shadow:0 0 0 3px rgba(16,185,129,0.25);
+      overflow:hidden;
     }
+    /* ✅ NEW: logo image inside the brand circle */
+    .brand-logo img{
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      border-radius:999px;
+      display:block;
+    }
+
     .brand-text{
       font-weight:700;
       letter-spacing:.04em;
@@ -525,21 +535,208 @@
       from{opacity:0;transform:translateY(10px);}
       to{opacity:1;transform:translateY(0);}
     }
+
+    /* === SUBSCRIBER ALERT MODAL (for logged-out users) === */
+    .tr-hidden{
+      display:none !important;
+    }
+    .tr-alert-modal-backdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(15,23,42,0.55);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:250;
+      padding:14px; /* ✅ ensures modal never touches edges on mobile */
+    }
+
+    /* ✅ UPDATED: cap height so close button is always reachable */
+    .tr-alert-modal{
+      background:#ffffff;
+      border-radius:16px;
+      padding:20px 18px 18px;
+      width:100%;
+      max-width:380px;
+      box-shadow:0 18px 40px rgba(15,23,42,0.4);
+      position:relative;
+      font-size:13px;
+
+      max-height:85vh;      /* ✅ key fix */
+      overflow:hidden;      /* ✅ keep header/footer visible */
+      display:flex;         /* ✅ allow inner scroll area */
+      flex-direction:column;
+    }
+
+    .tr-alert-title{
+      font-size:18px;
+      font-weight:700;
+      margin:0 0 6px;
+      text-align:left;
+      color:#0f172a;
+    }
+    .tr-alert-text{
+      margin:0 0 10px;
+      color:#6b7280;
+      font-size:13px;
+    }
+    .tr-alert-benefits{
+      margin:0 0 10px 0;
+      padding-left:18px;
+      color:#4b5563;
+      font-size:13px;
+    }
+    .tr-alert-benefits li{
+      margin-bottom:3px;
+    }
+    .tr-alert-actions{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      margin-top:6px;
+    }
+    .tr-alert-primary{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:8px 14px;
+      border-radius:999px;
+      background:#00796b;
+      color:#ffffff;
+      font-weight:600;
+      font-size:13px;
+      border:none;
+      cursor:pointer;
+      text-decoration:none;
+    }
+    .tr-alert-primary:active{
+      background:#005e55;
+      transform:translateY(1px);
+    }
+    .tr-alert-secondary{
+      border:none;
+      background:transparent;
+      color:#6b7280;
+      font-size:12px;
+      text-decoration:underline;
+      cursor:pointer;
+      padding:4px 0 0;
+    }
+    .tr-alert-footnote{
+      margin:8px 0 0;
+      font-size:11px;
+      color:#9ca3af;
+    }
+    .tr-alert-close{
+      position:absolute;
+      right:10px;
+      top:8px;
+      border:none;
+      background:transparent;
+      font-size:18px;
+      cursor:pointer;
+      color:#9ca3af;
+      line-height:1;
+      z-index:2; /* ✅ always above scroll area */
+    }
+
+    /* === AVAILABLE COURSES POPUP (logged-in subscribed users) === */
+    .tr-av-title{
+      font-size:18px;
+      font-weight:800;
+      margin:0 0 6px;
+      color:#0f172a;
+    }
+    .tr-av-sub{
+      margin:0 0 10px;
+      color:#6b7280;
+      font-size:13px;
+    }
+
+    /* ✅ UPDATED: scrollable list area */
+    .tr-av-list{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+
+      margin-top:8px;
+      margin-bottom:10px;
+
+      overflow-y:auto;        /* ✅ scroll */
+      -webkit-overflow-scrolling:touch;
+      max-height:42vh;        /* ✅ shows ~3 cards on most phones */
+      padding-right:4px;      /* ✅ avoids scrollbar covering content */
+    }
+
+    .tr-av-item{
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      padding:10px 10px;
+      background:#ffffff;
+    }
+    .tr-av-item-title{
+      font-weight:700;
+      font-size:13px;
+      margin:0 0 4px;
+      color:#0f172a;
+    }
+    .tr-av-item-meta{
+      font-size:12px;
+      color:#64748b;
+      margin:0 0 8px;
+    }
+    .tr-av-item-actions{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .tr-av-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 10px;
+      border-radius:999px;
+      background:#ecfdf5;
+      color:#065f46;
+      border:1px solid rgba(16,185,129,0.35);
+      font-size:11px;
+      font-weight:700;
+    }
+    .tr-av-link{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:6px 12px;
+      border-radius:999px;
+      background:#00796b;
+      color:#ffffff;
+      font-weight:700;
+      font-size:12px;
+      border:none;
+      cursor:pointer;
+      text-decoration:none;
+    }
+    .tr-av-link:active{
+      background:#005e55;
+      transform:translateY(1px);
+    }
   </style>
 </head>
 <body>
 <header>
   <div class="nav-wrap">
     <div class="brand">
-      <div class="brand-logo">T</div>
-      <div class="brand-text">TeeRadar WA</div>
+      <div class="brand-logo">
+        <img src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png" alt="TeeRadar" />
+      </div>
+      <div class="brand-text">TeeRadar</div>
     </div>
     <nav>
       <a href="/index.html">Home</a>
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
-      <!-- analytics tab shown only for admin -->
       <a href="/analytics.html" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
       <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
     </nav>
@@ -551,16 +748,16 @@
     <div>
       <div class="hero-kicker">
         <span class="hero-kicker-pill">
-          <span>WA public courses</span>
+          <span>Australian public courses</span>
         </span>
         <span>Live booking links • real-time filters</span>
       </div>
 
       <h1 class="hero-title">
-        Find a tee time across WA, in one place.
+        Find a tee time across Australia, in one place.
       </h1>
       <p class="hero-sub">
-        Search public golf courses across Western Australia by date, time window, 9/18
+        Search public golf courses across Australia by date, time window, 9/18
         holes and players. Tap through to the official course booking page — you stay
         compliant, we save you the legwork.
       </p>
@@ -577,7 +774,7 @@
       <div class="hero-chips">
         <div class="chip">
           <span class="icon">⛳</span>
-          <span>20+ WA public courses</span>
+          <span>Public courses across Australia</span>
         </div>
         <div class="chip">
           <span class="icon">🕒</span>
@@ -590,19 +787,19 @@
       </div>
     </div>
 
-    <aside class="hero-card" aria-label="Live WA course widget">
+    <aside class="hero-card" aria-label="Live Australia course widget">
       <div class="hero-card-bg"></div>
       <div class="hero-card-gradient"></div>
 
       <div class="hero-card-inner">
         <div>
           <div class="hero-card-top">
-            <span class="hero-card-badge">Live WA courses</span>
+            <span class="hero-card-badge">Live Australian courses</span>
             <span class="hero-card-text">Araluen • Collier • Whaleback • more</span>
           </div>
           <p style="font-size:12px;max-width:280px;margin:6px 0 0;">
-            We always send you to the course’s own booking page. WA today, ready to
-            scale to all Australian states later.
+            We always send you to the course’s own booking page. Australia-wide, built
+            to scale as more integrations come online.
           </p>
         </div>
         <div class="hero-card-footer">
@@ -619,7 +816,7 @@
     <article class="feature-card">
       <h3>Single search</h3>
       <p>
-        One simple search instead of opening a dozen course sites. We aggregate WA
+        One simple search instead of opening a dozen course sites. We aggregate
         public courses into a single map and list.
       </p>
     </article>
@@ -640,7 +837,7 @@
     <article class="feature-card">
       <h3>Ready to expand</h3>
       <p>
-        Built for WA today, designed to roll out to other Australian states as more
+        Built for Australia, designed to roll out as more booking platforms and
         integrations come online.
       </p>
     </article>
@@ -655,32 +852,15 @@
       </p>
       <form id="contactForm" novalidate>
         <label class="contact-label" for="contactEmail">Your email (required)</label>
-        <input
-          id="contactEmail"
-          class="contact-input"
-          type="email"
-          placeholder="you@example.com"
-          required
-        />
+        <input id="contactEmail" class="contact-input" type="email" placeholder="you@example.com" required />
 
         <label class="contact-label" for="contactQuestion">Question</label>
-        <input
-          id="contactQuestion"
-          class="contact-input"
-          type="text"
-          placeholder="e.g. Can you add my local course?"
-        />
+        <input id="contactQuestion" class="contact-input" type="text" placeholder="e.g. Can you add my local course?" />
 
         <label class="contact-label" for="contactDetails">Details</label>
-        <textarea
-          id="contactDetails"
-          class="contact-textarea"
-          placeholder="Add any extra information that will help."
-        ></textarea>
+        <textarea id="contactDetails" class="contact-textarea" placeholder="Add any extra information that will help."></textarea>
 
-        <button id="contactSubmit" type="submit" class="contact-btn">
-          Send message
-        </button>
+        <button id="contactSubmit" type="submit" class="contact-btn">Send message</button>
         <div id="contactStatus" class="contact-status"></div>
       </form>
     </div>
@@ -688,7 +868,7 @@
 </main>
 
 <footer>
-  <span>© 2025 TeeRadar WA — Availability subject to individual course sites.</span>
+  <span>© 2025 TeeRadar — Availability subject to individual course sites.</span>
   <span>
     <a href="/terms.html">Terms</a> •
     <a href="/privacy.html">Privacy</a> •
@@ -696,15 +876,57 @@
   </span>
 </footer>
 
-<!-- T&Cs banner -->
 <div id="tc-banner" style="display:none;">
   <span>
-    By using TeeRadar WA you agree to our <a href="/terms.html" target="_blank">Terms &amp; Conditions</a>.
+    By using TeeRadar you agree to our <a href="/terms.html" target="_blank">Terms &amp; Conditions</a>.
   </span>
   <button type="button" id="tc-accept-btn">Got it</button>
 </div>
 
-<!-- AUTH MODAL -->
+<div id="tr-alert-modal-backdrop" class="tr-alert-modal-backdrop tr-hidden">
+  <div class="tr-alert-modal">
+    <button class="tr-alert-close" id="tr-alert-close-btn" aria-label="Close">×</button>
+
+    <h2 class="tr-alert-title">Unlock instant tee time alerts</h2>
+
+    <p class="tr-alert-text">
+      Get real-time notifications when new tee times open up at your favourite
+      courses. This feature is available exclusively to
+      <strong>TeeRadar subscribers</strong>.
+    </p>
+
+    <ul class="tr-alert-benefits">
+      <li>Track your favourite golf courses</li>
+      <li>Alerts the moment new tee times appear</li>
+      <li>Never miss the tee times you actually want</li>
+    </ul>
+
+    <div class="tr-alert-actions">
+      <a href="/subscribe.html" id="tr-alert-cta" class="tr-alert-primary">Unlock with Subscription</a>
+      <button id="tr-alert-later" class="tr-alert-secondary">Maybe later</button>
+    </div>
+
+    <p class="tr-alert-footnote">Cancel anytime. Alerts are delivered instantly when new times appear.</p>
+  </div>
+</div>
+
+<div id="tr-av-modal-backdrop" class="tr-alert-modal-backdrop tr-hidden">
+  <div class="tr-alert-modal">
+    <button class="tr-alert-close" id="tr-av-close-btn" aria-label="Close">×</button>
+
+    <h2 class="tr-av-title">Tee times available now</h2>
+    <p class="tr-av-sub">These are your favourite courses with tee times currently available.</p>
+
+    <div id="tr-av-list" class="tr-av-list"></div>
+
+    <div class="tr-alert-actions">
+      <button id="tr-av-ok" class="tr-alert-primary" type="button">Got it</button>
+    </div>
+
+    <p class="tr-alert-footnote" style="margin-top:10px;">Closing this marks the popup as viewed.</p>
+  </div>
+</div>
+
 <div id="authModal">
   <div id="authBox">
     <div class="auth-close" id="authCloseBtn">&times;</div>
@@ -715,18 +937,12 @@
     <input id="authPassword" class="auth-input" type="password" placeholder="Password" />
 
     <div id="authHomeCourseRow">
-      <input id="authHomeCourse"
-             class="auth-input"
-             type="text"
-             placeholder="Home course (optional)" />
+      <input id="authHomeCourse" class="auth-input" type="text" placeholder="Home course (optional)" />
     </div>
 
     <button id="authSubmit" class="auth-btn">Log in</button>
 
-    <!-- Forgot password section at the bottom -->
-    <div id="authForgot"
-         class="auth-switch"
-         style="margin-top:6px;font-size:11px;color:#6b7280;">
+    <div id="authForgot" class="auth-switch" style="margin-top:6px;font-size:11px;color:#6b7280;">
       Forgot password?
     </div>
 
@@ -737,7 +953,6 @@
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 
-  // ---- ANALYTICS (unchanged) ----
   function trackEvent(type, payload) {
     try {
       fetch("/api/analytics/event", {
@@ -778,11 +993,9 @@
       analyticsLink.style.display = "none";
     }
 
-    loginBtn.textContent = "Log out";
+    loginBtn.textContent = "My account";
     loginBtn.onclick = () => {
-      localStorage.removeItem("teeradar_user_email");
-      localStorage.removeItem("teeradar_jwt");
-      renderNavState();
+      window.location.href = "/account.html";
     };
   }
 
@@ -794,7 +1007,6 @@
     trackEvent("home_view", {});
   }
 
-  // simple T&C banner logic
   function initTCBanner() {
     const banner = document.getElementById("tc-banner");
     const btn = document.getElementById("tc-accept-btn");
@@ -809,8 +1021,7 @@
     });
   }
 
-  // ---- AUTH MODAL + BACKEND LOGIN/SIGNUP/RESET ----
-  let authMode = "login"; // "login" | "signup" | "reset"
+  let authMode = "login";
 
   const authModal = document.getElementById("authModal");
   const authTitle = document.getElementById("authTitle");
@@ -820,6 +1031,25 @@
   const authCloseBtn = document.getElementById("authCloseBtn");
   const authForgot = document.getElementById("authForgot");
   const authHomeCourseRow = document.getElementById("authHomeCourseRow");
+
+  function hasPaidSubscription() {
+    try {
+      return localStorage.getItem("teeradar_paid") === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function hasActivePlanViaStripe(email) {
+    try {
+      const res = await fetch("/api/account/plan?email=" + encodeURIComponent(email));
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data) return false;
+      return (data.plan === "BASIC" || data.plan === "PRO");
+    } catch (e) {
+      return false;
+    }
+  }
 
   function applyAuthView() {
     if (!authTitle || !authSubtitle || !authSubmit || !authSwitch) return;
@@ -839,7 +1069,6 @@
       if (authHomeCourseRow) authHomeCourseRow.style.display = "none";
       if (authForgot) authForgot.style.display = "none";
     } else {
-      // login
       authTitle.textContent = "Log in";
       authSubtitle.textContent = "Use your TeeRadar account details.";
       authSubmit.textContent = "Log in";
@@ -863,13 +1092,22 @@
     openAuthModal("login");
   }
 
+  function maybeAutoOpenSignupFromQuery() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const signupFlag = params.get("signup");
+      const subscribeFlag = params.get("subscribe");
+      if (signupFlag === "1" || subscribeFlag === "1") {
+        openAuthModal("signup");
+      }
+    } catch (e) {
+      console.warn("Failed to read URL params", e);
+    }
+  }
+
   if (authSwitch) {
     authSwitch.addEventListener("click", () => {
-      if (authMode === "reset") {
-        openAuthModal("login");
-      } else {
-        openAuthModal(authMode === "login" ? "signup" : "login");
-      }
+      window.location.href = "/subscribe.html";
     });
   }
 
@@ -883,14 +1121,12 @@
     authCloseBtn.addEventListener("click", closeAuthModal);
   }
 
-  // Click outside to close
   window.addEventListener("click", (e) => {
     if (e.target === authModal) {
       closeAuthModal();
     }
   });
 
-  // 🔹 Home-course autocomplete state
   let authCourses = [];
   let homeCourseListEl = null;
 
@@ -903,7 +1139,6 @@
       authCourses = Array.isArray(data) ? data : [];
     } catch (err) {
       console.error("loadAuthCoursesOnce error", err);
-      // very small fallback so you still see something
       authCourses = [
         { name: "Whaleback Golf Course", state: "WA" },
         { name: "Darwin Golf Club", state: "NT" }
@@ -1016,6 +1251,8 @@
 
         closeAuthModal();
         renderNavState();
+
+        tryShowAvailablePopupForSubscribedUser();
       } catch (err) {
         console.error("Auth error:", err);
         alert("Something went wrong. Please try again.");
@@ -1023,7 +1260,6 @@
     });
   }
 
-  // ---- CONTACT FORM HANDLER ----
   function initContactForm() {
     const form = document.getElementById("contactForm");
     if (!form) return;
@@ -1090,12 +1326,251 @@
     });
   }
 
+  function initSubscriberAlertModal() {
+    const modal = document.getElementById("tr-alert-modal-backdrop");
+    if (!modal) return;
+
+    try {
+      const email = localStorage.getItem("teeradar_user_email");
+      if (email) return;
+    } catch (e) {}
+
+    const closeBtn = document.getElementById("tr-alert-close-btn");
+    const laterBtn = document.getElementById("tr-alert-later");
+
+    function hideModal() {
+      modal.classList.add("tr-hidden");
+    }
+
+    if (closeBtn) closeBtn.addEventListener("click", hideModal);
+    if (laterBtn) laterBtn.addEventListener("click", hideModal);
+
+    setTimeout(() => {
+      try {
+        const emailNow = localStorage.getItem("teeradar_user_email");
+        if (emailNow) return;
+      } catch (e) {}
+      modal.classList.remove("tr-hidden");
+    }, 3000);
+  }
+
+  /* ✅ UPDATED (only change needed): force booking URLs to the exact hit date shown in the popup (MiClub + Quick18 variants) */
+  function buildBookingLinkForDate(rawUrl, date) {
+    if (!rawUrl || !date) return rawUrl || "";
+
+    const toDMY = (iso) => {
+      const [y, m, d] = iso.split("-");
+      return `${d}/${m}/${y}`;
+    };
+
+    const toYMDNoDash = (iso) => {
+      const [y, m, d] = iso.split("-");
+      return `${y}${m}${d}`;
+    };
+
+    try {
+      const u = new URL(rawUrl);
+
+      /* ✅ NEW (only addition): Quick18 must ALWAYS have teedate=YYYYMMDD (even if missing) */
+      const isQuick18 = /quick18/i.test(u.hostname) || /quick18/i.test(u.pathname);
+      if (isQuick18) {
+        u.searchParams.set("teedate", toYMDNoDash(date));
+      }
+
+      const keys = [
+        "selectedDate",
+        "date",
+        "selected_date",
+        "startDate",
+        "bookingDate",
+        "playDate",
+        "teeDate",
+        "teedate",
+        "dt"
+      ];
+
+      keys.forEach((k) => {
+        if (!u.searchParams.has(k)) return;
+
+        const cur = u.searchParams.get(k);
+
+        // Quick18 DD/MM/YYYY
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(cur || "")) {
+          u.searchParams.set(k, toDMY(date));
+          return;
+        }
+
+        // Quick18 YYYYMMDD
+        if (/^\d{8}$/.test(cur || "")) {
+          u.searchParams.set(k, toYMDNoDash(date));
+          return;
+        }
+
+        // Default ISO
+        u.searchParams.set(k, date);
+      });
+
+      return u.toString();
+    } catch (e) {
+      return (rawUrl || "")
+        .replace(/([?&]selectedDate=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
+        .replace(/([?&]date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
+        .replace(/([?&]selected_date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
+        .replace(/([?&]startDate=)\d{2}\/\d{2}\/\d{4}/, `$1${toDMY(date)}`)
+        .replace(/([?&]teedate=)\d{8}/, `$1${toYMDNoDash(date)}`);
+    }
+  }
+
+  async function tryShowAvailablePopupForSubscribedUser() {
+    try {
+      const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
+      if (!email) return;
+
+      let okToShow = hasPaidSubscription();
+      if (!okToShow) {
+        okToShow = await hasActivePlanViaStripe(email);
+      }
+      if (!okToShow) return;
+
+      const modal = document.getElementById("tr-av-modal-backdrop");
+      const listEl = document.getElementById("tr-av-list");
+      const closeBtn = document.getElementById("tr-av-close-btn");
+      const okBtn = document.getElementById("tr-av-ok");
+      if (!modal || !listEl) return;
+
+      const lastSeen = Number(localStorage.getItem("teeradar_av_popup_seen_at") || "0");
+      const now = Date.now();
+      if (lastSeen && (now - lastSeen) < (10 * 60 * 1000)) return;
+
+      const token = localStorage.getItem("teeradar_jwt") || "";
+
+      const res = await fetch("/api/alerts/unread?email=" + encodeURIComponent(email), {
+        method: "GET",
+        headers: token ? { "Authorization": "Bearer " + token } : {}
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data || !data.ok) return;
+
+      const hits = Array.isArray(data.hits) ? data.hits : [];
+      const filtered = hits.filter(h => {
+        const slots = h.slots || h.results || [];
+        return Array.isArray(slots) && slots.length > 0;
+      });
+
+      if (!filtered.length) return;
+
+      const map = new Map();
+      filtered.forEach(h => {
+        const courseName = h.course_name || h.course || h.courseName || "Course";
+        const date = h.date || "";
+        const slots = h.slots || h.results || [];
+        const count = Array.isArray(slots) ? slots.length : 0;
+
+        // ✅ NEW (only addition): attempt to grab a direct booking URL from hit/slot
+        const firstSlot = (Array.isArray(slots) && slots.length) ? slots[0] : null;
+        const bookingUrl =
+          h.bookingUrl ||
+          h.url ||
+          (firstSlot && (firstSlot.bookingUrl || firstSlot.bookUrl || firstSlot.url || firstSlot.link || firstSlot.href)) ||
+          null;
+
+        if (!map.has(courseName)) {
+          map.set(courseName, { courseName, date, count, ids: [], bookingUrl: bookingUrl || null });
+        }
+        const cur = map.get(courseName);
+        cur.count += count;
+        if (date && (!cur.date || date < cur.date)) {
+          cur.date = date;
+        }
+        if (h.id != null) cur.ids.push(h.id);
+
+        // ✅ NEW (only addition): keep first non-empty bookingUrl
+        if (!cur.bookingUrl && bookingUrl) {
+          cur.bookingUrl = bookingUrl;
+        }
+      });
+
+      const items = Array.from(map.values());
+      if (!items.length) return;
+
+      listEl.innerHTML = "";
+      items.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "tr-av-item";
+
+        const title = document.createElement("div");
+        title.className = "tr-av-item-title";
+        title.textContent = item.courseName;
+
+        const meta = document.createElement("div");
+        meta.className = "tr-av-item-meta";
+        meta.textContent = item.date ? ("Available on: " + item.date) : "Available now";
+
+        const actions = document.createElement("div");
+        actions.className = "tr-av-item-actions";
+
+        const pill = document.createElement("span");
+        pill.className = "tr-av-pill";
+        pill.textContent = (item.count || 0) + " tee time(s)";
+
+        const link = document.createElement("a");
+        link.className = "tr-av-link";
+        // ✅ UPDATED (only change): if bookingUrl exists, force it to the popup date
+        link.href = item.bookingUrl ? buildBookingLinkForDate(item.bookingUrl, item.date) : "/book.html";
+        link.textContent = "View & book";
+        link.target = "_blank";
+        link.rel = "noopener";
+
+        actions.appendChild(pill);
+        actions.appendChild(link);
+
+        div.appendChild(title);
+        div.appendChild(meta);
+        div.appendChild(actions);
+
+        listEl.appendChild(div);
+      });
+
+      async function markViewedAndClose() {
+        localStorage.setItem("teeradar_av_popup_seen_at", String(Date.now()));
+
+        try {
+          const allIds = filtered
+            .map(h => h.id)
+            .filter(v => v !== undefined && v !== null);
+
+          if (allIds.length) {
+            fetch("/api/alerts/mark-read", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(token ? { "Authorization": "Bearer " + token } : {})
+              },
+              body: JSON.stringify({ email, ids: allIds })
+            }).catch(() => {});
+          }
+        } catch (e) {}
+
+        modal.classList.add("tr-hidden");
+      }
+
+      if (closeBtn) closeBtn.onclick = markViewedAndClose;
+      if (okBtn) okBtn.onclick = markViewedAndClose;
+
+      modal.classList.remove("tr-hidden");
+    } catch (e) {}
+  }
+
   window.addEventListener("load", () => {
     renderNavState();
     trackInitialHome();
     initTCBanner();
     initContactForm();
-    initHomeCourseAutocomplete(); // 🔹 enable home-course autocomplete
+    initHomeCourseAutocomplete();
+    maybeAutoOpenSignupFromQuery();
+    initSubscriberAlertModal();
+    tryShowAvailablePopupForSubscribedUser();
   });
 </script>
 </body>
