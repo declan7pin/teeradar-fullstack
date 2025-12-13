@@ -363,6 +363,16 @@
         <option value="ACT">Australian Capital Territory</option>
       </select>
 
+      <!-- ✅ NEW: Home course picker (stored locally for bookings page) -->
+      <label for="homeCourseInput">Home course</label>
+      <div class="fav-help">
+        Choose your home course (used to set your default map/state on the bookings page).
+      </div>
+      <div class="autocomplete">
+        <input id="homeCourseInput" type="text" placeholder="Search home course…" autocomplete="off" />
+        <div id="homeCourseAutocompleteList" class="autocomplete-list" style="display:none;"></div>
+      </div>
+
       <label for="favCourseInput">Favourite courses</label>
       <div class="fav-help">
         Start typing to search MiClub / Quick18 public courses.  
@@ -468,6 +478,10 @@
   const navAccountBtn = document.getElementById("navAccount");
   const logoutBtn = document.getElementById("pageLogout");
 
+  // ✅ NEW: home course elements
+  const homeCourseInput = document.getElementById("homeCourseInput");
+  const homeCourseDropdown = document.getElementById("homeCourseAutocompleteList");
+
   // NEW: extra preference inputs
   const dayCheckboxes = Array.from(document.querySelectorAll('input[name="prefDays"]'));
   const prefEarliest = document.getElementById("prefEarliest");
@@ -505,6 +519,24 @@
       localStorage.removeItem("teeradar_pref_holes");
       localStorage.removeItem("teeradar_pref_party_size");
       localStorage.removeItem("teeradar_alert_frequency");
+
+      // ✅ NEW: clear home course preference
+      localStorage.removeItem("teeradar_home_course");
+      localStorage.removeItem("teeradar_home_course_id");
+      localStorage.removeItem("teeradar_home_course_state");
+      try {
+        const raw = localStorage.getItem("tr_user");
+        if (raw) {
+          const u = JSON.parse(raw);
+          if (u && typeof u === "object") {
+            delete u.homeCourse;
+            delete u.homeCourseId;
+            delete u.homeCourseState;
+            localStorage.setItem("tr_user", JSON.stringify(u));
+          }
+        }
+      } catch (e) {}
+
       window.location.href = "/index.html";
     });
   }
@@ -526,12 +558,78 @@
     });
   }
 
+  // ✅ NEW: Home course in-memory selection
+  let homeCourseSelection = null; // { name, id, state, provider } or null
+
+  // ✅ NEW: persist home course in both legacy + tr_user
+  function saveHomeCourseToStorage(sel) {
+    if (!sel || !sel.name) {
+      localStorage.removeItem("teeradar_home_course");
+      localStorage.removeItem("teeradar_home_course_id");
+      localStorage.removeItem("teeradar_home_course_state");
+    } else {
+      // legacy string used by bookings page fallback
+      const legacyStr = sel.state ? `${sel.name} (${sel.state})` : sel.name;
+      localStorage.setItem("teeradar_home_course", legacyStr);
+      if (sel.id) localStorage.setItem("teeradar_home_course_id", String(sel.id));
+      else localStorage.removeItem("teeradar_home_course_id");
+      if (sel.state) localStorage.setItem("teeradar_home_course_state", String(sel.state));
+      else localStorage.removeItem("teeradar_home_course_state");
+    }
+
+    // also hydrate tr_user so bookings page can read it immediately
+    try {
+      const raw = localStorage.getItem("tr_user");
+      let u = {};
+      if (raw) u = JSON.parse(raw) || {};
+      if (!u || typeof u !== "object") u = {};
+      if (email) u.email = String(email).trim().toLowerCase();
+
+      if (!sel || !sel.name) {
+        delete u.homeCourse;
+        delete u.homeCourseId;
+        delete u.homeCourseState;
+      } else {
+        u.homeCourse = sel.name;
+        u.homeCourseId = sel.id || null;
+        u.homeCourseState = sel.state || null;
+      }
+      localStorage.setItem("tr_user", JSON.stringify(u));
+    } catch (e) {}
+  }
+
+  // ✅ NEW: load home course from storage into input
+  function loadHomeCourseFromStorage() {
+    const legacy = localStorage.getItem("teeradar_home_course") || "";
+    const id = localStorage.getItem("teeradar_home_course_id") || "";
+    const st = localStorage.getItem("teeradar_home_course_state") || "";
+
+    if (legacy && homeCourseInput) {
+      homeCourseInput.value = legacy;
+    }
+
+    // best-effort to rebuild selection object
+    if (legacy) {
+      homeCourseSelection = {
+        name: legacy.replace(/\s*\((WA|NT|QLD|NSW|VIC|SA|TAS|ACT)\)\s*$/i, "").trim(),
+        id: id || null,
+        state: st || null,
+        provider: null
+      };
+    } else {
+      homeCourseSelection = null;
+    }
+  }
+
   // --- load existing prefs from localStorage ---
   function loadPrefsFromStorage() {
     const savedState = localStorage.getItem("teeradar_home_state");
     if (savedState && homeStateSelect) {
       homeStateSelect.value = savedState;
     }
+
+    // ✅ NEW: home course
+    loadHomeCourseFromStorage();
 
     const favJson = localStorage.getItem("teeradar_fav_courses");
     let favourites = [];
@@ -636,21 +734,29 @@
   let allCourses = [];
   let searchableCourses = [];
 
+  // ✅ NEW: home course search list (all courses)
+  let homeSearchCourses = [];
+
   async function loadCourses() {
     try {
       const res = await fetch("/api/courses");
       const data = await res.json();
       if (Array.isArray(data)) {
         allCourses = data;
+
         const allowed = ["MiClub","Quick18"];
         searchableCourses = data.filter(
           c => allowed.includes(c.provider || "")
         );
+
+        // ✅ NEW: allow any provider for home course (but only those with a name)
+        homeSearchCourses = data.filter(c => (c && c.name));
       }
     } catch (err) {
       console.error("Failed to load courses for account page", err);
       allCourses = [];
       searchableCourses = [];
+      homeSearchCourses = [];
     }
   }
 
@@ -691,6 +797,46 @@
     favDropdown.style.display = "block";
   }
 
+  // ✅ NEW: home course dropdown renderer
+  function showHomeCourseDropdown(matches) {
+    homeCourseDropdown.innerHTML = "";
+    if (!matches.length) {
+      homeCourseDropdown.style.display = "none";
+      return;
+    }
+    matches.forEach(c => {
+      const div = document.createElement("div");
+      div.className = "autocomplete-item";
+      div.innerHTML = `
+        <div>${c.name}</div>
+        <small>${c.provider || "Course"}${c.state ? " • " + c.state : ""}</small>
+      `;
+      div.addEventListener("click", () => {
+        homeCourseSelection = {
+          name: c.name,
+          id: c.id || null,
+          state: c.state || null,
+          provider: c.provider || null
+        };
+
+        // reflect in input + storage immediately
+        if (homeCourseInput) {
+          homeCourseInput.value = c.state ? `${c.name} (${c.state})` : c.name;
+        }
+        saveHomeCourseToStorage(homeCourseSelection);
+
+        // (optional) if they haven't chosen home state, help them by setting it
+        if (homeStateSelect && !homeStateSelect.value && c.state) {
+          homeStateSelect.value = c.state;
+        }
+
+        homeCourseDropdown.style.display = "none";
+      });
+      homeCourseDropdown.appendChild(div);
+    });
+    homeCourseDropdown.style.display = "block";
+  }
+
   if (favInput) {
     favInput.addEventListener("input", () => {
       const q = favInput.value.trim().toLowerCase();
@@ -706,10 +852,42 @@
     });
   }
 
+  // ✅ NEW: home course input behaviour
+  if (homeCourseInput) {
+    homeCourseInput.addEventListener("input", () => {
+      const q = homeCourseInput.value.trim().toLowerCase();
+      homeCourseDropdown.innerHTML = "";
+      if (!q || !homeSearchCourses.length) {
+        homeCourseDropdown.style.display = "none";
+        return;
+      }
+      const matches = homeSearchCourses
+        .filter(c => (c.name || "").toLowerCase().includes(q))
+        .slice(0, 8);
+      showHomeCourseDropdown(matches);
+    });
+
+    // If they manually clear it, clear stored selection too
+    homeCourseInput.addEventListener("blur", () => {
+      const v = (homeCourseInput.value || "").trim();
+      if (!v) {
+        homeCourseSelection = null;
+        saveHomeCourseToStorage(null);
+      }
+    });
+  }
+
   document.addEventListener("click", (e) => {
     if (!favDropdown) return;
     if (e.target === favInput || favDropdown.contains(e.target)) return;
     favDropdown.style.display = "none";
+  });
+
+  // ✅ NEW: close home dropdown when clicking outside
+  document.addEventListener("click", (e) => {
+    if (!homeCourseDropdown) return;
+    if (e.target === homeCourseInput || homeCourseDropdown.contains(e.target)) return;
+    homeCourseDropdown.style.display = "none";
   });
 
   // --- save prefs button ---
@@ -728,6 +906,18 @@
       const alertFrequency = alertFrequencySelect
         ? (alertFrequencySelect.value || "POPUP_ONLY")
         : "POPUP_ONLY";
+
+      // ✅ NEW: ensure we persist the current home course input (even if they didn't click a suggestion)
+      if (homeCourseInput) {
+        const typed = (homeCourseInput.value || "").trim();
+        if (!typed) {
+          homeCourseSelection = null;
+          saveHomeCourseToStorage(null);
+        } else if (!homeCourseSelection || !homeCourseSelection.name) {
+          // store typed value as legacy string only (best-effort)
+          localStorage.setItem("teeradar_home_course", typed);
+        }
+      }
 
       savePrefsToStorage(homeState, favCourses, {
         days: selectedDays,
