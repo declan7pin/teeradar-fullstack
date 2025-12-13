@@ -520,11 +520,17 @@ const PERTH_LNG = 115.8613;
 const coursesPath = path.join(__dirname, "data", "courses.json");
 const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 
-const courses = rawCourses.map((c) => ({
-  ...c,
-  lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
-  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG,
-}));
+// ✅ FIX: coerce lat/lng to numbers (courses.json often stores them as strings)
+const courses = rawCourses.map((c) => {
+  const latNum = Number(c.lat);
+  const lngNum = Number(c.lng);
+
+  return {
+    ...c,
+    lat: Number.isFinite(latNum) ? latNum : PERTH_LAT,
+    lng: Number.isFinite(lngNum) ? lngNum : PERTH_LNG,
+  };
+});
 
 const feeGroupsPath = path.join(__dirname, "data", "fee_groups.json");
 let feeGroups = {};
