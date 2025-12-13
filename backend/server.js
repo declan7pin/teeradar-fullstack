@@ -341,9 +341,9 @@ app.post("/api/subscribe", async (req, res) => {
         },
       ],
       success_url:
-        "https://teeradar-fullstack-4.onrender.com/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1",
+        "https://teeradar.com.au/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1",
       cancel_url:
-        "https://teeradar-fullstack-4.onrender.com/subscribe-cancel.html",
+        "https://teeradar.com.au/subscribe-cancel.html",
     });
 
     res.json({ url: session.url });
