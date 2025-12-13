@@ -936,6 +936,7 @@
             ...(token ? { "Authorization": "Bearer " + token } : {})
           },
           body: JSON.stringify({
+            email, /* ✅ REQUIRED so backend can find Stripe customer */
             returnUrl: window.location.href
           })
         });
