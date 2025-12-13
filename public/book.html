@@ -449,48 +449,58 @@
       return "tel:" + digits;
     }
 
-    // ---- NEW: pull user's saved Home State from backend (if logged in) ----
-    async function applyHomeStateFromAccount() {
+    // ✅ NEW: safely get logged-in email from localStorage (no assumptions)
+    function getLoggedInEmail() {
       try {
-        const res = await fetch("/api/me", { credentials: "include" });
+        const raw = localStorage.getItem("tr_user");
+        if (raw) {
+          const u = JSON.parse(raw);
+          if (u && u.email) return String(u.email).trim().toLowerCase();
+        }
+      } catch (e) {}
+
+      const fallbackKeys = [
+        "teeradar_email",
+        "teeradar_user_email",
+        "user_email",
+        "email"
+      ];
+
+      for (const k of fallbackKeys) {
+        const v = localStorage.getItem(k);
+        if (v && String(v).includes("@")) return String(v).trim().toLowerCase();
+      }
+
+      return "";
+    }
+
+    // ✅ NEW: pull home state from backend and hydrate localStorage.tr_user
+    async function hydrateUserFromServer() {
+      try {
+        const email = getLoggedInEmail();
+        if (!email) return;
+
+        const res = await fetch(`/api/me?email=${encodeURIComponent(email)}`);
         if (!res.ok) return;
 
         const me = await res.json();
 
-        const hs =
-          (me && me.homeState) ||
-          (me && me.home_state) ||
-          (me && me.preferences && me.preferences.homeState) ||
-          (me && me.preferences && me.preferences.home_state) ||
-          null;
-
-        if (!hs) return;
-
-        const code = String(hs).toUpperCase();
-        if (!ACTIVE_STATES.includes(code)) return;
-
-        selectedState = code;
-
-        // Persist into existing storage format so your current defaults logic picks it up
+        // Update / create tr_user so existing applyHomeCourseDefaults() works
+        let obj = { email };
         try {
-          const existingRaw = localStorage.getItem("tr_user");
-          let existing = null;
-          if (existingRaw) {
-            try { existing = JSON.parse(existingRaw); } catch (e) { existing = null; }
-          }
-          const next = Object.assign({}, (existing || {}), { homeCourseState: code });
-          localStorage.setItem("tr_user", JSON.stringify(next));
-        } catch (e) {
-          // ignore storage errors
-        }
+          const raw = localStorage.getItem("tr_user");
+          if (raw) obj = { ...obj, ...JSON.parse(raw) };
+        } catch (e) {}
 
-        // Update the visible label immediately
-        const labelEl = document.getElementById("stateSelectorLabel");
-        if (labelEl) {
-          labelEl.textContent = `State: ${selectedState}`;
-        }
+        obj.email = (me.email || obj.email || email || "").toString().trim().toLowerCase();
+        if (me.homeCourse) obj.homeCourse = me.homeCourse;
+        if (me.homeCourseId) obj.homeCourseId = me.homeCourseId;
+        if (me.homeCourseState) obj.homeCourseState = me.homeCourseState;
+
+        localStorage.setItem("tr_user", JSON.stringify(obj));
       } catch (err) {
-        // ignore (not logged in / no session / endpoint missing)
+        // silent fail (no breaking)
+        console.warn("hydrateUserFromServer error", err);
       }
     }
 
@@ -498,9 +508,11 @@
 
     async function init() {
       initMap();
-      // NEW: set state from account preference before loading/filtering courses
-      await applyHomeStateFromAccount();
       await loadCourses();
+
+      // ✅ NEW: ensure we pull the stored home state from DB before defaults apply
+      await hydrateUserFromServer();
+
       // use the logged-in user's home course (if any) to set state + zoom
       applyHomeCourseDefaults();
       renderCourses();
