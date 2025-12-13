@@ -449,10 +449,57 @@
       return "tel:" + digits;
     }
 
+    // ---- NEW: pull user's saved Home State from backend (if logged in) ----
+    async function applyHomeStateFromAccount() {
+      try {
+        const res = await fetch("/api/me", { credentials: "include" });
+        if (!res.ok) return;
+
+        const me = await res.json();
+
+        const hs =
+          (me && me.homeState) ||
+          (me && me.home_state) ||
+          (me && me.preferences && me.preferences.homeState) ||
+          (me && me.preferences && me.preferences.home_state) ||
+          null;
+
+        if (!hs) return;
+
+        const code = String(hs).toUpperCase();
+        if (!ACTIVE_STATES.includes(code)) return;
+
+        selectedState = code;
+
+        // Persist into existing storage format so your current defaults logic picks it up
+        try {
+          const existingRaw = localStorage.getItem("tr_user");
+          let existing = null;
+          if (existingRaw) {
+            try { existing = JSON.parse(existingRaw); } catch (e) { existing = null; }
+          }
+          const next = Object.assign({}, (existing || {}), { homeCourseState: code });
+          localStorage.setItem("tr_user", JSON.stringify(next));
+        } catch (e) {
+          // ignore storage errors
+        }
+
+        // Update the visible label immediately
+        const labelEl = document.getElementById("stateSelectorLabel");
+        if (labelEl) {
+          labelEl.textContent = `State: ${selectedState}`;
+        }
+      } catch (err) {
+        // ignore (not logged in / no session / endpoint missing)
+      }
+    }
+
     init();
 
     async function init() {
       initMap();
+      // NEW: set state from account preference before loading/filtering courses
+      await applyHomeStateFromAccount();
       await loadCourses();
       // use the logged-in user's home course (if any) to set state + zoom
       applyHomeCourseDefaults();
