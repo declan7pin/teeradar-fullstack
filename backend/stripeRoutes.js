@@ -7,10 +7,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 // Map plan names from the frontend → real Stripe price IDs
 const PRICE_IDS = {
-  BASIC_MONTHLY: "price_1SdnSpASm4geYL4W1yxaZf2i",
+  BASIC_MONTHLY: "price_1SdnQTASm4geYL4WeBGAEEkA",
   BASIC_ANNUAL:  "price_1SdnRLASm4geYL4W23IKreHO",
   PRO_MONTHLY:   "price_1SdnSGASm4geYL4WBWsFWUNe",
-  PRO_ANNUAL:    "price_1ScbmCASm4geYL4W0EQZBrvf",
+  PRO_ANNUAL:    "price_1SdnSpASm4geYL4W1yxaZf2i",
 };
 
 export async function createCheckoutSession(req, res) {
