@@ -22,8 +22,19 @@ export async function createCheckoutSession(req, res) {
       return res.status(400).json({ error: "Invalid plan selected" });
     }
 
-    // Fallback email in case you don't send one yet
-    const customerEmail = email && email.trim() !== "" ? email : undefined;
+    // ✅ Ensure we store a clean email in Stripe (so Option B portal lookup works)
+    const customerEmail =
+      email && email.toString().trim() !== ""
+        ? email.toString().trim().toLowerCase()
+        : undefined;
+
+    // ✅ Single source of truth for where Stripe sends users back
+    const successUrl =
+      process.env.STRIPE_SUCCESS_URL ||
+      "https://teeradar.com.au/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}";
+    const cancelUrl =
+      process.env.STRIPE_CANCEL_URL ||
+      "https://teeradar.com.au/subscribe-cancel.html";
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -36,11 +47,8 @@ export async function createCheckoutSession(req, res) {
       ],
       customer_email: customerEmail,
       allow_promotion_codes: true,
-
-      // TODO: replace YOUR_DOMAIN with your test/prod URL
-      success_url:
-        "https://teeradar.com.au/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://teeradar.com.au/subscribe-cancel.html",
+      success_url: successUrl,
+      cancel_url: cancelUrl,
     });
 
     return res.json({ url: session.url });
