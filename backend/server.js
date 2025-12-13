@@ -174,6 +174,51 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 
 app.use("/api/auth", authRouter);
 
+// -------------------------------------------------
+// ✅ NEW: /api/me (for bookings page to read home state)
+// -------------------------------------------------
+app.get("/api/me", async (req, res) => {
+  try {
+    const email = (req.query.email || "").toString().trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    const { rows } = await db.query(
+      `
+      SELECT
+        u.email,
+        u.home_course,
+        u.home_course_id,
+        u.home_course_state,
+        p.home_state
+      FROM users u
+      LEFT JOIN user_preferences p
+        ON p.email = u.email
+      WHERE u.email = $1
+      LIMIT 1;
+      `,
+      [email]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: "user not found" });
+    }
+
+    const row = rows[0];
+
+    return res.json({
+      email: row.email,
+      homeCourse: row.home_course || null,
+      homeCourseId: row.home_course_id || null,
+      homeCourseState: row.home_state || row.home_course_state || null,
+    });
+  } catch (err) {
+    console.error("/api/me error:", err);
+    return res.status(500).json({ error: "internal error" });
+  }
+});
+
 // 🔔 Alerts API
 app.use("/api/alerts", alertsRouter);
 
@@ -672,7 +717,7 @@ app.get("/api/analytics", async (req, res) => {
     const topCourses = await getTopCourses(10);
     res.json(buildFlatSummary(summary, topCourses));
   } catch (err) {
-    console.error("analytics summary error", err);
+    console.error("analytics summary error:", err);
     res.status(500).json({ error: err.message });
   }
 });
