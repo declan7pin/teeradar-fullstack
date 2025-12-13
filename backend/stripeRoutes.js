@@ -39,8 +39,8 @@ export async function createCheckoutSession(req, res) {
 
       // TODO: replace YOUR_DOMAIN with your test/prod URL
       success_url:
-        "https://YOUR_DOMAIN/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://YOUR_DOMAIN/subscribe-cancel.html",
+        "https://teeradar.com.au/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://teeradar.com.au/subscribe-cancel.html",
     });
 
     return res.json({ url: session.url });
