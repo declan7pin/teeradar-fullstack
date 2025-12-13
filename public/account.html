@@ -428,7 +428,7 @@
         Choose how often TeeRadar should alert you when new tee times match your favourites.
       </div>
       <select id="alertFrequency">
-        <option value="POPUP_ONLY">TeeRadar pop-ups only</option>
+        <option value="POPUPS_ONLY">TeeRadar pop-ups only</option>
         <option value="6H">Every 6 hours</option>
         <option value="12H">Every 12 hours</option>
         <option value="1D">Once per day</option>
@@ -857,8 +857,8 @@
       const holesValue = prefHoles ? (prefHoles.value || "") : "";
       const partySizeValue = prefPartySize ? Number(prefPartySize.value) || 1 : 1;
       const alertFrequency = alertFrequencySelect
-        ? (alertFrequencySelect.value || "POPUP_ONLY")
-        : "POPUP_ONLY";
+        ? (alertFrequencySelect.value || "POPUPS_ONLY")
+        : "POPUPS_ONLY";
 
       // ✅ NEW: home course payload
       const homeCourseObj = (selectedHomeCourse && selectedHomeCourse.name)
