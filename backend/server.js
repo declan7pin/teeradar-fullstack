@@ -227,7 +227,8 @@ app.use("/api/alerts", alertsRouter);
 app.get("/api/alerts/unread", async (req, res) => {
   try {
     const email = (req.query.email || "").toString().trim().toLowerCase();
-    if (!email) return res.status(400).json({ ok: false, error: "email is required" });
+    if (!email)
+      return res.status(400).json({ ok: false, error: "email is required" });
 
     const { rows } = await db.query(
       `
@@ -255,7 +256,9 @@ app.get("/api/alerts/unread", async (req, res) => {
     res.json({ ok: true, hits });
   } catch (err) {
     console.error("/api/alerts/unread error:", err);
-    res.status(500).json({ ok: false, error: "internal error", detail: err.message });
+    res
+      .status(500)
+      .json({ ok: false, error: "internal error", detail: err.message });
   }
 });
 
@@ -288,7 +291,9 @@ app.post("/api/alerts/mark-read", async (req, res) => {
     res.json({ ok: true, updated: result.rowCount || 0 });
   } catch (err) {
     console.error("/api/alerts/mark-read error:", err);
-    res.status(500).json({ ok: false, error: "internal error", detail: err.message });
+    res
+      .status(500)
+      .json({ ok: false, error: "internal error", detail: err.message });
   }
 });
 
@@ -350,9 +355,7 @@ app.post("/api/billing/portal", async (req, res) => {
 
     if (!customers.data.length) {
       console.log("No Stripe customer for email:", trimmedEmail);
-      return res
-        .status(404)
-        .json({ error: "no_stripe_customer_for_email" });
+      return res.status(404).json({ error: "no_stripe_customer_for_email" });
     }
 
     const customer = customers.data[0];
@@ -361,14 +364,15 @@ app.post("/api/billing/portal", async (req, res) => {
     const session = await stripe.billingPortal.sessions.create({
       customer: customer.id,
       return_url:
-        returnUrl ||
-        "https://teeradar-fullstack-4.onrender.com/account.html",
+        returnUrl || "https://teeradar-fullstack-4.onrender.com/account.html",
     });
 
     res.json({ url: session.url });
   } catch (err) {
     console.error("billing portal error:", err);
-    res.status(500).json({ error: "billing_portal_failed", detail: err.message });
+    res
+      .status(500)
+      .json({ error: "billing_portal_failed", detail: err.message });
   }
 });
 
@@ -462,8 +466,7 @@ app.post("/api/account/preferences", async (req, res) => {
       return res.status(400).json({ error: "email is required" });
     }
 
-    const preferredDays =
-      Array.isArray(days) && days.length ? days : null;
+    const preferredDays = Array.isArray(days) && days.length ? days : null;
 
     await db.query(
       `
@@ -520,15 +523,15 @@ const PERTH_LNG = 115.8613;
 const coursesPath = path.join(__dirname, "data", "courses.json");
 const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 
-// ✅ FIX: coerce lat/lng to numbers (courses.json often stores them as strings)
+// ✅ FIX (ONLY CHANGE NEEDED): coerce lat/lng to numbers, otherwise keep null (do NOT default to Perth)
 const courses = rawCourses.map((c) => {
   const latNum = Number(c.lat);
   const lngNum = Number(c.lng);
 
   return {
     ...c,
-    lat: Number.isFinite(latNum) ? latNum : PERTH_LAT,
-    lng: Number.isFinite(lngNum) ? lngNum : PERTH_LNG,
+    lat: Number.isFinite(latNum) ? latNum : null,
+    lng: Number.isFinite(lngNum) ? lngNum : null,
   };
 });
 
@@ -839,9 +842,7 @@ app.post("/api/contact", async (req, res) => {
   const { email, question, details } = req.body;
 
   if (!email || !question || !details) {
-    return res
-      .status(400)
-      .json({ ok: false, error: "Missing required fields" });
+    return res.status(400).json({ ok: false, error: "Missing required fields" });
   }
 
   try {
