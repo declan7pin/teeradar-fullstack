@@ -120,7 +120,37 @@ router.get("/users", (req, res) => {
   try {
     const limit = Number(req.query.limit) || 500;
     const users = getRegisteredUsers(limit);
-    return res.json({ users });
+
+    // Add alert frequency (mins) so admin dashboard can show it.
+    // - If your DB already has alert_frequency_mins, we pass it through.
+    // - If not, we infer a sane default based on plan/tier/subscription if present.
+    const getAlertFrequencyMinsForPlan = (plan) => {
+      const p = String(plan || "").toLowerCase();
+      if (p === "pro") return 5;
+      if (p === "basic") return 15;
+      return 30; // free/default
+    };
+
+    const usersWithFreq = Array.isArray(users)
+      ? users.map((u) => {
+          const direct =
+            u.alert_frequency_mins ??
+            u.alertFrequencyMins ??
+            u.alert_frequency ??
+            u.alertFrequency ??
+            null;
+
+          const mins = Number(direct);
+          if (Number.isFinite(mins) && mins > 0) {
+            return { ...u, alert_frequency_mins: mins };
+          }
+
+          const plan = u.plan ?? u.tier ?? u.subscription ?? "";
+          return { ...u, alert_frequency_mins: getAlertFrequencyMinsForPlan(plan) };
+        })
+      : users;
+
+    return res.json({ users: usersWithFreq });
   } catch (err) {
     console.error("Error fetching registered users", err);
     return res.status(500).json({ error: "Failed to fetch users" });
