@@ -746,9 +746,13 @@ export function startAlertWorker() {
 
   console.log("🔔 Starting alert worker…");
 
-  // run once shortly after boot, then check frequently (email cadence is per-user)
+  // ✅ run once shortly after boot, then check frequently (email cadence is per-user)
+  // ✅ Optional env override (ms) if you want: ALERT_TICK_INTERVAL_MS=60000
+  const intervalMs =
+    Number(process.env.ALERT_TICK_INTERVAL_MS) || 5 * 60 * 1000;
+
   setTimeout(runAlertTick, 15000);
-  setInterval(runAlertTick, 5 * 60 * 1000); // 5 minutes
+  setInterval(runAlertTick, intervalMs);
 }
 
 // Optional: allow manual trigger when importing directly in scripts
