@@ -36,9 +36,13 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL UNIQUE,
     created_at TEXT DEFAULT (datetime('now')),
-    last_seen_at TEXT
+    last_seen_at TEXT,
+    last_digest_sent_at TEXT
   );
 `);
+
+// In case table existed without newer column
+try { db.exec(`ALTER TABLE registered_users ADD COLUMN last_digest_sent_at TEXT;`); } catch {}
 
 const insertStmt = db.prepare(`
   INSERT INTO analytics_events (type, at, user_id, course_name, payload_json)
@@ -50,6 +54,13 @@ const upsertUserStmt = db.prepare(`
   INSERT INTO registered_users (email, created_at, last_seen_at)
   VALUES (?, datetime('now'), datetime('now'))
   ON CONFLICT(email) DO UPDATE SET last_seen_at = excluded.last_seen_at
+`);
+
+// 🔹 update last_digest_sent_at by email
+const updateDigestSentStmt = db.prepare(`
+  UPDATE registered_users
+  SET last_digest_sent_at = datetime('now')
+  WHERE email = ?
 `);
 
 /**
@@ -94,12 +105,22 @@ export function recordRegisteredUser(email) {
 }
 
 /**
+ * Mark that we sent a digest/interval email to this user (by email)
+ */
+export function markDigestSent(email) {
+  if (!email) return;
+  const trimmed = String(email).trim().toLowerCase();
+  if (!trimmed) return;
+  updateDigestSentStmt.run(trimmed);
+}
+
+/**
  * Fetch registered users for the admin dashboard
  */
 export function getRegisteredUsers(limit = 500) {
   return db
     .prepare(
-      `SELECT id, email, created_at, last_seen_at
+      `SELECT id, email, created_at, last_seen_at, last_digest_sent_at
        FROM registered_users
        ORDER BY created_at DESC
        LIMIT ?`
@@ -361,5 +382,6 @@ export default {
   getAnalyticsSummary,
   getAllEvents,
   recordRegisteredUser,
-  getRegisteredUsers
+  getRegisteredUsers,
+  markDigestSent
 };
