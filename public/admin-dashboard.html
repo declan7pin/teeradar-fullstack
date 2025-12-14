@@ -166,6 +166,7 @@
             <th>Time window</th>
             <th>Holes</th>
             <th>People</th>
+            <th>Alert frequency</th>
             <th>Created at</th>
             <th>Last seen</th>
           </tr>
@@ -213,6 +214,29 @@
       return `${from || "?"} – ${to || "?"}`;
     }
 
+    function getAlertFrequencyMinsForPlan(plan) {
+      const p = String(plan || "").toLowerCase();
+      if (p === "pro") return 5;
+      if (p === "basic") return 15;
+      return 30; // free/default
+    }
+
+    function formatAlertFrequency(u) {
+      const direct =
+        u.alert_frequency_mins ??
+        u.alertFrequencyMins ??
+        u.alert_frequency ??
+        u.alertFrequency ??
+        null;
+
+      const mins = Number(direct);
+      if (Number.isFinite(mins) && mins > 0) return `Every ${mins} min`;
+
+      const plan = u.plan ?? u.tier ?? u.subscription ?? "";
+      const inferred = getAlertFrequencyMinsForPlan(plan);
+      return inferred ? `Every ${inferred} min` : "–";
+    }
+
     function renderUsers(users) {
       const tbody = document.getElementById("users-body");
       tbody.innerHTML = "";
@@ -252,6 +276,9 @@
             ? String(u.preferred_party_size)
             : "–";
 
+        const freqTd = document.createElement("td");
+        freqTd.textContent = formatAlertFrequency(u);
+
         const createdTd = document.createElement("td");
         createdTd.textContent = formatDate(u.created_at);
 
@@ -267,6 +294,7 @@
         tr.appendChild(timeTd);
         tr.appendChild(holesTd);
         tr.appendChild(peopleTd);
+        tr.appendChild(freqTd);
         tr.appendChild(createdTd);
         tr.appendChild(lastLoginTd);
         tbody.appendChild(tr);
