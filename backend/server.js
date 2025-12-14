@@ -26,7 +26,7 @@ import authRouter from "./auth.js";
 
 // 🔔 Alerts (NEW)
 import alertsRouter from "./alertsRoutes.js";
-import { startAlertWorker } from "./alertWorker.js";
+import { startAlertWorker, runAlertTickOnce } from "./alertWorker.js"; // ✅ ADDED runAlertTickOnce
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -354,7 +354,7 @@ app.post("/api/alerts/mark-read", async (req, res) => {
 
     res.json({ ok: true, updated: result.rowCount || 0 });
   } catch (err) {
-    console.error("/api/alerts/mark-read error:", err);
+    console.error("/api/alerts/mark-read error", err);
     res.status(500).json({ ok: false, error: "internal error", detail: err.message });
   }
 });
@@ -1000,3 +1000,27 @@ app.listen(PORT, () => {
 
 // 🔔 Start alerts worker
 startAlertWorker();
+
+// ✅ ADDED: run alert ticks frequently so per-user frequency (6h/12h/etc) actually works
+// (frequency gating is already handled inside alertWorker.js via alert_last_sent)
+let __alertTickRunning = false;
+
+async function runAlertTickSafe() {
+  if (__alertTickRunning) return;
+  __alertTickRunning = true;
+  try {
+    await runAlertTickOnce();
+  } catch (err) {
+    console.error("❌ runAlertTickSafe error:", err?.message || err);
+  } finally {
+    __alertTickRunning = false;
+  }
+}
+
+// Default every 5 minutes, configurable via env
+const ALERT_TICK_INTERVAL_MS =
+  Number(process.env.ALERT_TICK_INTERVAL_MS) || 5 * 60 * 1000;
+
+// Run shortly after boot, then on interval
+setTimeout(runAlertTickSafe, 20000);
+setInterval(runAlertTickSafe, ALERT_TICK_INTERVAL_MS);
