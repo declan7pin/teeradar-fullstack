@@ -88,14 +88,14 @@ function getFrequencyWindowMs(freqRaw) {
   }
 
   switch (f) {
-    case "15M":
-    case "15MIN":
-    case "EVERY_15_MINUTES":
-      return 15 * 60 * 1000; // ✅ 15 minutes
     case "6H":
     case "6HOURS":
     case "EVERY_6_HOURS":
-      return 6 * 60 * 60 * 1000; // 6 hours
+      return 6 * 60 * 60 * 1000; // 6 hours ✅ FIXED
+    case "12H":
+    case "12HOURS":
+    case "EVERY_12_HOURS":
+      return 12 * 60 * 60 * 1000; // 12 hours
     case "DAILY":
     case "1D":
     case "EVERY_DAY":
@@ -199,6 +199,7 @@ function buildBookingLinkForDate(course, date) {
 
 /**
  * Send ONE email that includes ALL favourites with availability for this tick.
+ * If none found, still send a "no matches" email (digest/heartbeat).
  * Also updates user_preferences.alert_last_sent when it sends.
  */
 async function sendAlertEmailSummaryForUser({
@@ -216,8 +217,7 @@ async function sendAlertEmailSummaryForUser({
     return;
   }
 
-  if (!Array.isArray(hits) || hits.length === 0) return;
-
+  const safeHits = Array.isArray(hits) ? hits : [];
   const holesLabel = userHoles ? `${userHoles} holes` : "Any holes";
   const playersLabel = partySize ? `${partySize} player(s)` : "Any size";
   const windowLabel =
@@ -225,7 +225,7 @@ async function sendAlertEmailSummaryForUser({
 
   // Group hits by date (keeps the email readable)
   const byDate = new Map();
-  for (const h of hits) {
+  for (const h of safeHits) {
     const key = h.date || "Unknown date";
     if (!byDate.has(key)) byDate.set(key, []);
     byDate.get(key).push(h);
@@ -236,21 +236,32 @@ async function sendAlertEmailSummaryForUser({
   let lines = [];
   lines.push(`Hi ${email},`);
   lines.push("");
-  lines.push(`TeeRadar found tee times matching your alert:`);
+
+  if (safeHits.length > 0) {
+    lines.push(`TeeRadar found tee times matching your alert:`);
+  } else {
+    lines.push(`TeeRadar update: no matching tee times were found on this check.`);
+  }
+
   lines.push(`• Time window: ${windowLabel}`);
   lines.push(`• Holes: ${holesLabel}`);
   lines.push(`• Group size: ${playersLabel}`);
   lines.push("");
 
-  for (const d of sortedDates) {
-    lines.push(`=== ${d} ===`);
-    const arr = byDate.get(d) || [];
-    // sort by course name for stability
-    arr.sort((a, b) => (a.courseName || "").localeCompare(b.courseName || ""));
-    for (const item of arr) {
-      lines.push(`• ${item.courseName} — ${item.count} slot(s)`);
-      lines.push(`  ${item.bookingLink}`);
+  if (safeHits.length > 0) {
+    for (const d of sortedDates) {
+      lines.push(`=== ${d} ===`);
+      const arr = byDate.get(d) || [];
+      // sort by course name for stability
+      arr.sort((a, b) => (a.courseName || "").localeCompare(b.courseName || ""));
+      for (const item of arr) {
+        lines.push(`• ${item.courseName} — ${item.count} slot(s)`);
+        lines.push(`  ${item.bookingLink}`);
+      }
+      lines.push("");
     }
+  } else {
+    lines.push(`We’ll keep checking and email you again at your selected interval.`);
     lines.push("");
   }
 
@@ -260,7 +271,11 @@ async function sendAlertEmailSummaryForUser({
   lines.push(`Enjoy your round,`);
   lines.push(`TeeRadar`);
 
-  const subject = `TeeRadar – tee times found for your favourites`;
+  const subject =
+    safeHits.length > 0
+      ? `TeeRadar – tee times found for your favourites`
+      : `TeeRadar – update (no tee times found)`;
+
   const textBody = lines.join("\n");
 
   const fromAddress =
@@ -289,9 +304,14 @@ async function sendAlertEmailSummaryForUser({
       [email]
     );
 
-    console.log(`📧 Summary alert email sent to ${email} (${hits.length} hit(s))`);
+    console.log(
+      `📧 Summary alert email sent to ${email} (${safeHits.length} hit(s))`
+    );
   } catch (err) {
-    console.error(`❌ Failed to send summary alert email to ${email}:`, err.message);
+    console.error(
+      `❌ Failed to send summary alert email to ${email}:`,
+      err.message
+    );
   }
 }
 
@@ -694,8 +714,8 @@ async function runAlertTick() {
         }
       }
 
-      // ✅ Send ONE email that contains ALL courses found this tick (if allowed)
-      if (emailsAllowed && canSendEmailForUser && emailHits.length > 0) {
+      // ✅ Send ONE email per interval even if there are no hits (digest/heartbeat)
+      if (emailsAllowed && canSendEmailForUser) {
         await sendAlertEmailSummaryForUser({
           email,
           hits: emailHits,
@@ -726,9 +746,13 @@ export function startAlertWorker() {
 
   console.log("🔔 Starting alert worker…");
 
-  // run once shortly after boot, then every 15 minutes
+  // ✅ run once shortly after boot, then check frequently (email cadence is per-user)
+  // ✅ Optional env override (ms) if you want: ALERT_TICK_INTERVAL_MS=60000
+  const intervalMs =
+    Number(process.env.ALERT_TICK_INTERVAL_MS) || 5 * 60 * 1000;
+
   setTimeout(runAlertTick, 15000);
-  setInterval(runAlertTick, 15 * 60 * 1000);
+  setInterval(runAlertTick, intervalMs);
 }
 
 // Optional: allow manual trigger when importing directly in scripts
