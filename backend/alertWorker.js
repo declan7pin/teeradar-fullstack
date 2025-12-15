@@ -266,7 +266,7 @@ async function sendAlertEmailSummaryForUser({
   }
 
   lines.push(`You can adjust or turn off alerts any time from your account page:`);
-  lines.push(`  https://teeradar-fullstack-4.onrender.com/account.html`);
+  lines.push(`  https://teeradar.com.au/account.html`);
   lines.push("");
   lines.push(`Enjoy your round,`);
   lines.push(`TeeRadar`);
@@ -345,7 +345,7 @@ async function sendAlertEmailForHit({
   const bookingLink =
     buildBookingLinkForDate(course, date) ||
     (course && (course.url || course.bookingUrl || course.bookUrl)) ||
-    "https://teeradar-fullstack-4.onrender.com/book.html";
+    "https://teeradar.com.au/book.html";
 
   const subject = `TeeRadar – ${count} tee time(s) found at ${course.name}`;
   const textBody = `
@@ -365,7 +365,7 @@ Book directly using the link below:
 
 You can adjust or turn off alerts any time from your account page:
 
-  https://teeradar-fullstack-4.onrender.com/account.html
+  https://teeradar.com.au/account.html
 
 Enjoy your round,
 TeeRadar
@@ -691,7 +691,7 @@ async function runAlertTick() {
               const bookingLink =
                 buildBookingLinkForDate(course, date) ||
                 (course && (course.url || course.bookingUrl || course.bookUrl)) ||
-                "https://teeradar-fullstack-4.onrender.com/book.html";
+                "https://teeradar.com.au/book.html";
 
               emailHits.push({
                 courseName: course.name,
