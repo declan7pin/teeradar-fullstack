@@ -423,6 +423,7 @@
               <th>Email</th>
               <th>Created</th>
               <th>Last login</th>
+              <th>Alert freq</th>
             </tr>
           </thead>
           <tbody id="users-tbody"></tbody>
@@ -435,6 +436,29 @@
   </main>
 
   <script>
+    function getAlertFrequencyMinsForPlan(plan) {
+      const p = String(plan || "").toLowerCase();
+      if (p === "pro") return 5;
+      if (p === "basic") return 15;
+      return 30; // free/default
+    }
+
+    function formatAlertFrequency(u) {
+      const direct =
+        u.alertFrequencyMins ??
+        u.alert_frequency_mins ??
+        u.alertFrequency ??
+        u.alert_frequency ??
+        null;
+
+      const mins = Number(direct);
+      if (Number.isFinite(mins) && mins > 0) return `Every ${mins} min`;
+
+      const plan = u.plan ?? u.tier ?? u.subscription ?? "";
+      const inferred = getAlertFrequencyMinsForPlan(plan);
+      return inferred ? `Every ${inferred} min` : "-";
+    }
+
     async function loadAnalytics() {
       const errorBanner = document.getElementById("error-banner");
       const errorText = document.getElementById("error-text");
@@ -550,12 +574,14 @@
           const tr = document.createElement("tr");
           const created = u.createdAt || u.created_at || "";
           const lastLogin = u.lastLogin || u.last_login || "";
+          const alertFreq = formatAlertFrequency(u);
 
           tr.innerHTML = `
             <td>${u.id}</td>
             <td class="email-cell">${u.email || ""}</td>
             <td>${created || "-"}</td>
             <td>${lastLogin || "-"}</td>
+            <td>${alertFreq || "-"}</td>
           `;
           tbody.appendChild(tr);
         });
