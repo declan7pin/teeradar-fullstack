@@ -281,7 +281,8 @@ app.get("/api/me", async (req, res) => {
       email: row.email,
       homeCourse: row.home_course || null,
       homeCourseId: row.home_course_id || null,
-      homeCourseState: row.home_state || row.home_course_state || null,
+      homeCourseState: row.home_state || row.home_course_state ||
+      " null,
     });
   } catch (err) {
     console.error("/api/me error:", err);
@@ -654,20 +655,21 @@ app.post("/api/account/preferences", async (req, res) => {
     const finalHomeCourseState =
       (homeCourseState || homeState || null);
 
+    // ✅ FIX: do NOT wipe existing home course fields if user saves prefs without selecting one
     await db.query(
       `
       UPDATE users
       SET
-        home_course = $2,
-        home_course_id = $3,
-        home_course_state = $4
+        home_course = COALESCE(NULLIF($2, ''), home_course),
+        home_course_id = COALESCE(NULLIF($3, ''), home_course_id),
+        home_course_state = COALESCE(NULLIF($4, ''), home_course_state)
       WHERE email = $1
       `,
       [
         trimmedEmail,
-        homeCourse || null,
-        homeCourseId || null,
-        finalHomeCourseState,
+        (homeCourse || ""),
+        (homeCourseId || ""),
+        (finalHomeCourseState || ""),
       ]
     );
 
@@ -976,7 +978,7 @@ app.delete("/api/analytics/users/:id", async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("delete user error", err);
+    console.error("delete user error:", err);
     res.status(500).json({ error: "internal error" });
   }
 });
