@@ -33,6 +33,64 @@ async function ensureUserAlertHitsTable() {
 ensureUserAlertHitsTable();
 
 // ---------------------------------------------------------
+// ✅ NEW: GET preferences so account.html can re-hydrate fields
+// GET /api/account/preferences?email=...
+// (Also available as /api/preferences?email=... depending on mount path)
+// ---------------------------------------------------------
+async function getUserPreferencesRow(email) {
+  const result = await db.query(
+    `
+    SELECT *
+    FROM user_preferences
+    WHERE email = $1
+    LIMIT 1;
+    `,
+    [email]
+  );
+  return result.rows?.[0] || null;
+}
+
+// Primary path (matches your frontend fetch: /api/account/preferences)
+router.get("/account/preferences", async (req, res) => {
+  try {
+    const email = (req.query.email || "").toString().trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ ok: false, error: "email is required" });
+    }
+
+    const prefs = await getUserPreferencesRow(email);
+    if (!prefs) {
+      return res.json({ ok: true, found: false, preferences: null });
+    }
+
+    return res.json({ ok: true, found: true, preferences: prefs });
+  } catch (err) {
+    console.error("account/preferences GET error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// Alias path (useful if you decide to call /api/preferences from frontend)
+router.get("/preferences", async (req, res) => {
+  try {
+    const email = (req.query.email || "").toString().trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ ok: false, error: "email is required" });
+    }
+
+    const prefs = await getUserPreferencesRow(email);
+    if (!prefs) {
+      return res.json({ ok: true, found: false, preferences: null });
+    }
+
+    return res.json({ ok: true, found: true, preferences: prefs });
+  } catch (err) {
+    console.error("preferences GET error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// ---------------------------------------------------------
 // Helper: build a Set of favourite course names for a user
 // ---------------------------------------------------------
 async function getFavouriteCourseNameSet(email) {
