@@ -100,6 +100,38 @@ function getEmailFromRequest(req) {
   }
 }
 
+// ✅ NEW: require login via Bearer token (for "My Rounds")
+function requireAuth(req, res, next) {
+  const JWT_SECRET =
+    process.env.JWT_SECRET ||
+    process.env.AUTH_JWT_SECRET ||
+    process.env.AUTH_SECRET ||
+    "";
+
+  if (!JWT_SECRET) {
+    return res.status(500).json({ ok: false, error: "JWT_SECRET not set" });
+  }
+
+  const auth = String(req.headers.authorization || "");
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  const token = m ? m[1].trim() : "";
+
+  if (!token) {
+    return res.status(401).json({ ok: false, error: "Missing token" });
+  }
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.user = {
+      id: payload.id,
+      email: payload.email,
+    };
+    return next();
+  } catch {
+    return res.status(401).json({ ok: false, error: "Invalid token" });
+  }
+}
+
 // ✅ NEW: ensure user_preferences table exists
 async function ensureUserPreferencesTable() {
   try {
@@ -403,6 +435,244 @@ app.get("/api/preferences", async (req, res) => {
     return res.json({ ok: true, found: true, preferences: rows[0] });
   } catch (err) {
     console.error("/api/preferences GET error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// -------------------------------------------------
+// ✅ NEW: My Rounds (logged-in only)
+// -------------------------------------------------
+
+// List my rounds (latest first)
+app.get("/api/rounds", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+
+    const { rows } = await db.query(
+      `
+      SELECT id, course, layout, state, holes, par_mode, created_at
+      FROM rounds
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 200;
+      `,
+      [userId]
+    );
+
+    return res.json({ ok: true, rounds: rows || [] });
+  } catch (err) {
+    console.error("/api/rounds GET error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// Create a round + create blank holes (pars optional, putts supported)
+app.post("/api/rounds", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+
+    const {
+      course,
+      layout = null,
+      state = null,
+      holes = 18,
+      pars = null,        // optional array (length 9/18) or null
+      par_mode = "PUBLISHED", // "PUBLISHED" or "USER"
+    } = req.body || {};
+
+    const courseName = (course || "").toString().trim();
+    const holesCount = Number(holes);
+
+    if (!courseName) {
+      return res.status(400).json({ ok: false, error: "course is required" });
+    }
+
+    if (![9, 18].includes(holesCount)) {
+      return res.status(400).json({ ok: false, error: "holes must be 9 or 18" });
+    }
+
+    const parMode = (par_mode || "").toString().trim().toUpperCase() || "PUBLISHED";
+
+    const parsedPars = Array.isArray(pars)
+      ? pars.map((p) => (p === null || typeof p === "undefined" || p === "" ? null : Number(p)))
+      : null;
+
+    // If pars provided, enforce correct length
+    if (parsedPars && parsedPars.length !== holesCount) {
+      return res.status(400).json({
+        ok: false,
+        error: `pars must have length ${holesCount} (or be null)`,
+      });
+    }
+
+    // Create round
+    const roundInsert = await db.query(
+      `
+      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, created_at)
+      VALUES ($1,$2,$3,$4,$5,$6,now())
+      RETURNING id, course, layout, state, holes, par_mode, created_at;
+      `,
+      [userId, courseName, layout, state, holesCount, parMode]
+    );
+
+    const round = roundInsert.rows[0];
+
+    // Create round holes rows (strokes/putts start null)
+    const values = [];
+    const params = [];
+    let idx = 1;
+
+    for (let i = 1; i <= holesCount; i++) {
+      const parVal = parsedPars ? parsedPars[i - 1] : null;
+
+      values.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
+      params.push(round.id, i, parVal, null, null);
+    }
+
+    await db.query(
+      `
+      INSERT INTO round_holes (round_id, hole_number, par, strokes, putts)
+      VALUES ${values.join(", ")}
+      `,
+      params
+    );
+
+    return res.json({ ok: true, round });
+  } catch (err) {
+    console.error("/api/rounds POST error:", err);
+    return res.status(500).json({ ok: false, error: "internal error", detail: err.message });
+  }
+});
+
+// Get a round (and its holes) – must be my round
+app.get("/api/rounds/:id", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+    if (!Number.isInteger(roundId) || roundId <= 0) {
+      return res.status(400).json({ ok: false, error: "Invalid round id" });
+    }
+
+    const roundRes = await db.query(
+      `
+      SELECT id, user_id, course, layout, state, holes, par_mode, created_at
+      FROM rounds
+      WHERE id = $1
+      LIMIT 1;
+      `,
+      [roundId]
+    );
+
+    if (!roundRes.rows.length) {
+      return res.status(404).json({ ok: false, error: "Round not found" });
+    }
+
+    const round = roundRes.rows[0];
+
+    if (Number(round.user_id) !== userId) {
+      return res.status(403).json({ ok: false, error: "Forbidden" });
+    }
+
+    const holesRes = await db.query(
+      `
+      SELECT hole_number, par, strokes, putts
+      FROM round_holes
+      WHERE round_id = $1
+      ORDER BY hole_number ASC;
+      `,
+      [roundId]
+    );
+
+    return res.json({ ok: true, round, holes: holesRes.rows || [] });
+  } catch (err) {
+    console.error("/api/rounds/:id GET error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// Update a single hole (strokes + putts + optional par) – must be my round
+app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
+    const holeNumber = Number(req.params.holeNumber);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+    if (!Number.isInteger(roundId) || roundId <= 0) {
+      return res.status(400).json({ ok: false, error: "Invalid round id" });
+    }
+    if (!Number.isInteger(holeNumber) || holeNumber <= 0) {
+      return res.status(400).json({ ok: false, error: "Invalid hole number" });
+    }
+
+    // Ensure round belongs to user
+    const own = await db.query(
+      `SELECT id FROM rounds WHERE id = $1 AND user_id = $2 LIMIT 1;`,
+      [roundId, userId]
+    );
+    if (!own.rows.length) {
+      return res.status(403).json({ ok: false, error: "Forbidden" });
+    }
+
+    const { strokes, putts, par } = req.body || {};
+
+    const strokesVal =
+      strokes === null || typeof strokes === "undefined" || strokes === ""
+        ? null
+        : Number(strokes);
+
+    const puttsVal =
+      putts === null || typeof putts === "undefined" || putts === ""
+        ? null
+        : Number(putts);
+
+    const parVal =
+      par === null || typeof par === "undefined" || par === ""
+        ? undefined
+        : Number(par);
+
+    if (strokesVal !== null && !Number.isFinite(strokesVal)) {
+      return res.status(400).json({ ok: false, error: "strokes must be a number or null" });
+    }
+    if (puttsVal !== null && !Number.isFinite(puttsVal)) {
+      return res.status(400).json({ ok: false, error: "putts must be a number or null" });
+    }
+    if (typeof parVal !== "undefined" && !Number.isFinite(parVal)) {
+      return res.status(400).json({ ok: false, error: "par must be a number or omitted" });
+    }
+
+    const result = await db.query(
+      `
+      UPDATE round_holes
+      SET
+        strokes = $3,
+        putts = $4,
+        par = COALESCE($5, par)
+      WHERE round_id = $1 AND hole_number = $2
+      RETURNING hole_number, par, strokes, putts;
+      `,
+      [roundId, holeNumber, strokesVal, puttsVal, typeof parVal === "undefined" ? null : parVal]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ ok: false, error: "Hole not found" });
+    }
+
+    return res.json({ ok: true, hole: result.rows[0] });
+  } catch (err) {
+    console.error("/api/rounds/:id/hole/:holeNumber PATCH error:", err);
     return res.status(500).json({ ok: false, error: "internal error" });
   }
 });
