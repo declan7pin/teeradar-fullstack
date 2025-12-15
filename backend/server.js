@@ -6,6 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import nodemailer from "nodemailer";
 import Stripe from "stripe"; // ✅ Stripe
+import jwt from "jsonwebtoken"; // ✅ NEW (only used to read email from Bearer token)
 
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
@@ -25,7 +26,7 @@ import authRouter from "./auth.js";
 
 // 🔔 Alerts (NEW)
 import alertsRouter from "./alertsRoutes.js";
-import { startAlertWorker } from "./alertWorker.js";
+import { startAlertWorker, runAlertTickOnce } from "./alertWorker.js"; // ✅ ADDED runAlertTickOnce
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,10 +39,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // ✅ Map of plan keys → Stripe price IDs
 const PRICE_IDS = {
-  BASIC_MONTHLY: "price_1SchVzASm4geYL4WAc7X3aAw",
-  BASIC_ANNUAL: "price_1SchWMASm4geYL4WhVk8Zc0Q",
-  PRO_MONTHLY: "price_1SchWrASm4geYL4WmltAvVLF",
-  PRO_ANNUAL: "price_1SchXiASm4geYL4WUm6YUQlV",
+  BASIC_MONTHLY: "price_1SdnQTASm4geYL4WeBGAEEkA",
+  BASIC_ANNUAL: "price_1SdnRLASm4geYL4W23IKreHO",
+  PRO_MONTHLY: "price_1SdnSGASm4geYL4WBWsFWUNe",
+  PRO_ANNUAL: "price_1SdnSpASm4geYL4W1yxaZf2i",
 };
 
 // ✅ Reverse map: price → plan + favourite limit
@@ -52,6 +53,47 @@ for (const [key, priceId] of Object.entries(PRICE_IDS)) {
     PRICE_TO_PLAN[priceId] = { plan: "BASIC", maxFavs: 3 };
   } else if (key.startsWith("PRO")) {
     PRICE_TO_PLAN[priceId] = { plan: "PRO", maxFavs: 10 };
+  }
+}
+
+// ✅ NEW: small helper to get email from body/query OR Bearer token
+function getEmailFromRequest(req) {
+  const fromBody = (req.body && req.body.email) ? String(req.body.email) : "";
+  const fromQuery = req.query && req.query.email ? String(req.query.email) : "";
+  let email = (fromBody || fromQuery || "").trim().toLowerCase();
+  if (email) return email;
+
+  const auth = String(req.headers.authorization || "");
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  const token = m ? m[1].trim() : "";
+  if (!token) return "";
+
+  // Prefer verified token if a secret exists
+  const JWT_SECRET =
+    process.env.JWT_SECRET ||
+    process.env.AUTH_JWT_SECRET ||
+    process.env.AUTH_SECRET ||
+    "";
+
+  try {
+    if (JWT_SECRET) {
+      const payload = jwt.verify(token, JWT_SECRET);
+      const tokenEmail =
+        (payload && (payload.email || payload.userEmail || payload.sub)) || "";
+      return String(tokenEmail).trim().toLowerCase();
+    }
+  } catch {
+    // fall through to decode-only
+  }
+
+  // Fallback: decode without verifying (lets billing portal work even if you haven't set JWT_SECRET)
+  try {
+    const payload = jwt.decode(token);
+    const tokenEmail =
+      (payload && (payload.email || payload.userEmail || payload.sub)) || "";
+    return String(tokenEmail).trim().toLowerCase();
+  } catch {
+    return "";
   }
 }
 
@@ -312,7 +354,7 @@ app.post("/api/alerts/mark-read", async (req, res) => {
 
     res.json({ ok: true, updated: result.rowCount || 0 });
   } catch (err) {
-    console.error("/api/alerts/mark-read error:", err);
+    console.error("/api/alerts/mark-read error", err);
     res.status(500).json({ ok: false, error: "internal error", detail: err.message });
   }
 });
@@ -329,10 +371,22 @@ app.post("/api/subscribe", async (req, res) => {
       return res.status(400).json({ error: "Invalid subscription plan" });
     }
 
+    const customerEmail =
+      email && email.toString().trim() !== ""
+        ? email.toString().trim().toLowerCase()
+        : undefined;
+
+    const successUrl =
+      process.env.STRIPE_SUCCESS_URL ||
+      "https://teeradar.com.au/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1";
+    const cancelUrl =
+      process.env.STRIPE_CANCEL_URL ||
+      "https://teeradar.com.au/subscribe-cancel.html";
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
-      customer_email: email || undefined,
+      customer_email: customerEmail,
       allow_promotion_codes: true,
       line_items: [
         {
@@ -340,10 +394,8 @@ app.post("/api/subscribe", async (req, res) => {
           quantity: 1,
         },
       ],
-      success_url:
-        "https://teeradar-fullstack-4.onrender.com/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1",
-      cancel_url:
-        "https://teeradar-fullstack-4.onrender.com/subscribe-cancel.html",
+      success_url: successUrl,
+      cancel_url: cancelUrl,
     });
 
     res.json({ url: session.url });
@@ -360,8 +412,10 @@ app.post("/api/subscribe", async (req, res) => {
 // -------------------------------------------------
 app.post("/api/billing/portal", async (req, res) => {
   try {
-    const { email, returnUrl } = req.body || {};
-    const trimmedEmail = (email || "").toString().trim().toLowerCase();
+    // ✅ email can come from body OR Bearer token (account.html currently sends only returnUrl)
+    const trimmedEmail = getEmailFromRequest(req);
+
+    const { returnUrl } = req.body || {};
 
     if (!trimmedEmail) {
       return res.status(400).json({ error: "email is required" });
@@ -387,12 +441,12 @@ app.post("/api/billing/portal", async (req, res) => {
       customer: customer.id,
       return_url:
         returnUrl ||
-        "https://teeradar-fullstack-4.onrender.com/account.html",
+        "https://teeradar.com.au/account.html",
     });
 
     res.json({ url: session.url });
   } catch (err) {
-    console.error("billing portal error:", err);
+    console.error("billing portal error", err);
     res.status(500).json({ error: "billing_portal_failed", detail: err.message });
   }
 });
@@ -946,3 +1000,27 @@ app.listen(PORT, () => {
 
 // 🔔 Start alerts worker
 startAlertWorker();
+
+// ✅ ADDED: run alert ticks frequently so per-user frequency (6h/12h/etc) actually works
+// (frequency gating is already handled inside alertWorker.js via alert_last_sent)
+let __alertTickRunning = false;
+
+async function runAlertTickSafe() {
+  if (__alertTickRunning) return;
+  __alertTickRunning = true;
+  try {
+    await runAlertTickOnce();
+  } catch (err) {
+    console.error("❌ runAlertTickSafe error:", err?.message || err);
+  } finally {
+    __alertTickRunning = false;
+  }
+}
+
+// Default every 5 minutes, configurable via env
+const ALERT_TICK_INTERVAL_MS =
+  Number(process.env.ALERT_TICK_INTERVAL_MS) || 5 * 60 * 1000;
+
+// Run shortly after boot, then on interval
+setTimeout(runAlertTickSafe, 20000);
+setInterval(runAlertTickSafe, ALERT_TICK_INTERVAL_MS);
