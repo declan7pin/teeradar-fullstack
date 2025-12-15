@@ -34,6 +34,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ✅ Live site base URL (use everywhere we generate links)
+const SITE_URL = "https://teeradar.com.au";
+
 // ✅ Stripe init
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -286,6 +289,63 @@ app.get("/api/me", async (req, res) => {
   }
 });
 
+// -------------------------------------------------
+// ✅ NEW: GET account preferences (Option 2 response shape)
+// Fixes account.html hydrate: /api/account/preferences?email=...
+// -------------------------------------------------
+app.get("/api/account/preferences", async (req, res) => {
+  try {
+    const email = (req.query.email || "").toString().trim().toLowerCase();
+    if (!email) return res.status(400).json({ ok: false, error: "email is required" });
+
+    const { rows } = await db.query(
+      `
+      SELECT *
+      FROM user_preferences
+      WHERE email = $1
+      LIMIT 1;
+      `,
+      [email]
+    );
+
+    if (!rows.length) {
+      return res.json({ ok: true, found: false, preferences: null });
+    }
+
+    return res.json({ ok: true, found: true, preferences: rows[0] });
+  } catch (err) {
+    console.error("/api/account/preferences GET error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// ✅ Optional alias (handy if you ever want /api/preferences)
+app.get("/api/preferences", async (req, res) => {
+  try {
+    const email = (req.query.email || "").toString().trim().toLowerCase();
+    if (!email) return res.status(400).json({ ok: false, error: "email is required" });
+
+    const { rows } = await db.query(
+      `
+      SELECT *
+      FROM user_preferences
+      WHERE email = $1
+      LIMIT 1;
+      `,
+      [email]
+    );
+
+    if (!rows.length) {
+      return res.json({ ok: true, found: false, preferences: null });
+    }
+
+    return res.json({ ok: true, found: true, preferences: rows[0] });
+  } catch (err) {
+    console.error("/api/preferences GET error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
 // 🔔 Alerts API
 app.use("/api/alerts", alertsRouter);
 
@@ -378,10 +438,10 @@ app.post("/api/subscribe", async (req, res) => {
 
     const successUrl =
       process.env.STRIPE_SUCCESS_URL ||
-      "https://teeradar.com.au/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1";
+      `${SITE_URL}/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1`;
     const cancelUrl =
       process.env.STRIPE_CANCEL_URL ||
-      "https://teeradar.com.au/subscribe-cancel.html";
+      `${SITE_URL}/subscribe-cancel.html`;
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -441,7 +501,7 @@ app.post("/api/billing/portal", async (req, res) => {
       customer: customer.id,
       return_url:
         returnUrl ||
-        "https://teeradar.com.au/account.html",
+        `${SITE_URL}/account.html`,
     });
 
     res.json({ url: session.url });
@@ -830,7 +890,7 @@ app.get("/api/analytics", async (req, res) => {
     const topCourses = await getTopCourses(10);
     res.json(buildFlatSummary(summary, topCourses));
   } catch (err) {
-    console.error("analytics summary error", err);
+    console.error("analytics summary error:", err);
     res.status(500).json({ error: err.message });
   }
 });
