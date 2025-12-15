@@ -281,8 +281,7 @@ app.get("/api/me", async (req, res) => {
       email: row.email,
       homeCourse: row.home_course || null,
       homeCourseId: row.home_course_id || null,
-      homeCourseState: row.home_state || row.home_course_state ||
-      " null,
+      homeCourseState: row.home_state || row.home_course_state || null, // ✅ FIXED
     });
   } catch (err) {
     console.error("/api/me error:", err);
@@ -978,7 +977,7 @@ app.delete("/api/analytics/users/:id", async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("delete user error:", err);
+    console.error("delete user error", err);
     res.status(500).json({ error: "internal error" });
   }
 });
