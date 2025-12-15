@@ -1,0 +1,854 @@
+<!-- public/my-rounds.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TeeRadar — My Rounds</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --teal:#00796b;
+      --teal-dark:#005e55;
+      --bg:#f4f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e2e8f0;
+      --danger:#d50000;
+      --ok:#16a34a;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      min-height:100vh;
+    }
+    header{
+      position:sticky;
+      top:0;
+      z-index:5;
+      background:linear-gradient(180deg,var(--teal),var(--teal-dark));
+      color:#fff;
+      padding:14px 18px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .brand{
+      font-weight:800;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size:1.15rem;
+      white-space:nowrap;
+    }
+    .brand small{
+      opacity:.9;
+      font-weight:600;
+      font-size:.9rem;
+    }
+    .navbtns{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .btn{
+      border:1px solid rgba(255,255,255,.25);
+      background:rgba(255,255,255,.14);
+      color:#fff;
+      padding:9px 12px;
+      border-radius:10px;
+      font-weight:700;
+      cursor:pointer;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      transition:transform .06s ease, background .15s ease;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn.secondary{
+      border-color:rgba(255,255,255,.18);
+      background:rgba(255,255,255,.10);
+    }
+    .btn.danger{
+      border-color:rgba(255,255,255,.18);
+      background:rgba(213,0,0,.25);
+    }
+
+    main{
+      max-width:1100px;
+      margin:0 auto;
+      padding:18px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap:16px;
+    }
+    @media (max-width: 980px){
+      .grid{grid-template-columns:1fr}
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:14px;
+      box-shadow:0 2px 16px rgba(15,23,42,.04);
+    }
+    .card h2{
+      margin:0 0 10px 0;
+      font-size:1.05rem;
+    }
+    .muted{color:var(--muted)}
+    .row{display:grid; grid-template-columns: 1fr 1fr; gap:10px}
+    .row3{display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px}
+    @media (max-width:520px){
+      .row,.row3{grid-template-columns:1fr}
+    }
+    label{
+      display:block;
+      font-size:.85rem;
+      font-weight:700;
+      margin:10px 0 6px;
+    }
+    input, select, textarea{
+      width:100%;
+      padding:10px 11px;
+      border:1px solid var(--border);
+      border-radius:10px;
+      outline:none;
+      font-size:1rem;
+      background:#fff;
+      color:var(--text);
+    }
+    textarea{min-height:74px; resize:vertical}
+    input:focus, select:focus, textarea:focus{border-color:#9ad7cf; box-shadow:0 0 0 3px rgba(0,121,107,.10)}
+    .actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:12px;
+    }
+    .actions .btn2{
+      border:1px solid var(--border);
+      background:var(--teal);
+      color:#fff;
+      padding:10px 12px;
+      border-radius:10px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .actions .btn2.secondary{
+      background:#fff;
+      color:var(--text);
+    }
+    .actions .btn2.danger{
+      background:var(--danger);
+      border-color:rgba(213,0,0,.3);
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:7px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#fff;
+      font-weight:700;
+      font-size:.85rem;
+      color:var(--text);
+      margin-right:8px;
+      margin-top:8px;
+    }
+    .pill.ok{border-color:rgba(22,163,74,.25); background:rgba(22,163,74,.07)}
+    .pill.bad{border-color:rgba(213,0,0,.25); background:rgba(213,0,0,.06)}
+    .list{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      margin-top:10px;
+    }
+    .roundItem{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:12px;
+      cursor:pointer;
+      background:#fff;
+      transition:transform .06s ease, box-shadow .15s ease;
+    }
+    .roundItem:hover{
+      box-shadow:0 10px 28px rgba(15,23,42,.07);
+      transform:translateY(-1px);
+    }
+    .roundItem .top{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-start;
+    }
+    .roundItem .title{font-weight:900}
+    .roundItem .meta{color:var(--muted); font-size:.88rem; margin-top:4px}
+    .roundItem .score{
+      font-weight:900;
+      white-space:nowrap;
+    }
+
+    .scorecardHeader{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .scorecardHeader h2{margin:0}
+    .scorecardHeader .sub{color:var(--muted); font-weight:700}
+    .tableWrap{
+      overflow:auto;
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:#fff;
+    }
+    table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      min-width:720px;
+    }
+    th, td{
+      padding:10px 10px;
+      border-bottom:1px solid var(--border);
+      text-align:center;
+      font-size:.95rem;
+      white-space:nowrap;
+    }
+    th{
+      position:sticky;
+      top:0;
+      background:#f8fafc;
+      z-index:2;
+      font-weight:900;
+    }
+    td:first-child, th:first-child{
+      text-align:left;
+      position:sticky;
+      left:0;
+      background:#fff;
+      z-index:1;
+      border-right:1px solid var(--border);
+      font-weight:900;
+    }
+    th:first-child{
+      background:#f8fafc;
+      z-index:3;
+    }
+    tr:last-child td{border-bottom:none}
+    .mini{
+      width:86px;
+      padding:8px 8px;
+      border-radius:10px;
+      border:1px solid var(--border);
+      font-weight:800;
+      text-align:center;
+    }
+    .mini:focus{border-color:#9ad7cf; box-shadow:0 0 0 3px rgba(0,121,107,.10)}
+    .rightActions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .notice{
+      border:1px solid var(--border);
+      background:#fff;
+      border-radius:14px;
+      padding:12px;
+      color:var(--muted);
+      font-weight:700;
+      line-height:1.35;
+    }
+    .notice strong{color:var(--text)}
+    .toast{
+      margin-top:10px;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#fff;
+      font-weight:800;
+      display:none;
+    }
+    .toast.ok{display:block; border-color:rgba(22,163,74,.25); background:rgba(22,163,74,.07); color:var(--ok)}
+    .toast.bad{display:block; border-color:rgba(213,0,0,.25); background:rgba(213,0,0,.06); color:var(--danger)}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      TeeRadar <small>My Rounds</small>
+    </div>
+    <div class="navbtns">
+      <a class="btn secondary" href="/book.html">Back to Book</a>
+      <a class="btn secondary" href="/account.html">Account</a>
+      <button class="btn danger" id="logoutBtn" type="button">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="authGate" class="notice" style="display:none;">
+      <strong>Login required.</strong><br/>
+      This page is only available to logged-in users. Please log in, then come back here.
+      <div class="actions" style="margin-top:12px;">
+        <a class="btn2" href="/account.html">Go to Account / Login</a>
+      </div>
+    </div>
+
+    <div id="app" style="display:none;">
+      <div class="grid">
+        <!-- LEFT: Create + list -->
+        <section class="card">
+          <h2>Create a new round</h2>
+          <div class="muted" style="font-weight:700;">
+            Track strokes + <strong>putts</strong>. If pars are missing, start a blank scorecard and fill as you go.
+          </div>
+
+          <label for="course">Course</label>
+          <input id="course" placeholder="e.g. Collier Park Golf Course" />
+
+          <div class="row">
+            <div>
+              <label for="state">State</label>
+              <select id="state">
+                <option value="WA">WA</option>
+                <option value="NT">NT</option>
+                <option value="QLD">QLD</option>
+                <option value="NSW">NSW</option>
+                <option value="VIC">VIC</option>
+                <option value="SA">SA</option>
+                <option value="TAS">TAS</option>
+                <option value="ACT">ACT</option>
+              </select>
+            </div>
+            <div>
+              <label for="holes">Holes</label>
+              <select id="holes">
+                <option value="18">18</option>
+                <option value="9">9</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="layout">Layout (optional)</label>
+              <input id="layout" placeholder="e.g. Island–Lakes / Old Course / Lakeside" />
+            </div>
+            <div>
+              <label for="parMode">Par mode</label>
+              <select id="parMode">
+                <option value="published">Use published pars (if available)</option>
+                <option value="blank">Blank scorecard (fill pars as you go)</option>
+              </select>
+            </div>
+          </div>
+
+          <label for="notes">Notes (optional)</label>
+          <textarea id="notes" placeholder="Weather, tees, playing partners, etc."></textarea>
+
+          <div class="actions">
+            <button class="btn2" id="createRoundBtn" type="button">Create round</button>
+            <button class="btn2 secondary" id="refreshBtn" type="button">Refresh list</button>
+          </div>
+
+          <div id="leftToast" class="toast"></div>
+
+          <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;" />
+
+          <h2 style="margin-top:0;">Your rounds</h2>
+          <div class="muted" style="font-weight:700;">
+            Select a round to view/edit the scorecard.
+          </div>
+
+          <div id="roundsList" class="list" style="margin-top:12px;"></div>
+
+          <div class="muted" id="roundsEmpty" style="margin-top:10px;font-weight:800;display:none;">
+            No rounds yet — create your first one above.
+          </div>
+        </section>
+
+        <!-- RIGHT: Scorecard -->
+        <section class="card">
+          <div class="scorecardHeader">
+            <div>
+              <h2 id="scTitle">Scorecard</h2>
+              <div class="sub" id="scSub">Select a round to begin.</div>
+              <div id="scPills"></div>
+            </div>
+            <div class="rightActions">
+              <button class="btn2 secondary" id="saveAllBtn" type="button" disabled>Save</button>
+              <button class="btn2 danger" id="deleteRoundBtn" type="button" disabled>Delete</button>
+            </div>
+          </div>
+
+          <div id="rightToast" class="toast"></div>
+
+          <div id="scorecardEmpty" class="notice">
+            <strong>No round selected.</strong><br/>
+            Create a round on the left, then click it to load the hole-by-hole scorecard.
+          </div>
+
+          <div id="scorecardWrap" style="display:none;">
+            <div class="tableWrap">
+              <table id="scoreTable">
+                <thead>
+                  <tr>
+                    <th>Hole</th>
+                    <th>Par</th>
+                    <th>Strokes</th>
+                    <th>Putts</th>
+                  </tr>
+                </thead>
+                <tbody id="scoreBody"></tbody>
+              </table>
+            </div>
+
+            <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <span class="pill" id="totPar">Par: —</span>
+              <span class="pill" id="totStrokes">Strokes: —</span>
+              <span class="pill" id="totPutts">Putts: —</span>
+              <span class="pill" id="totToPar">To Par: —</span>
+            </div>
+
+            <div class="muted" style="margin-top:10px; font-weight:800;">
+              Tip: enter strokes + putts each hole. Pars can be blank if you don’t know them yet.
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="notice" style="margin-top:16px;">
+        <strong>Important:</strong> This page expects round APIs on the backend (create/list/get/update/delete).  
+        If you haven’t added those endpoints yet, you’ll see an “API not ready” error — tell me and I’ll generate the exact backend routes file next.
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // -----------------------------
+    // Auth helpers
+    // -----------------------------
+    function getToken() {
+      // support a few common keys without breaking anything
+      const keys = ["teeradar_token", "token", "authToken", "jwt", "access_token"];
+      for (const k of keys) {
+        const v = localStorage.getItem(k);
+        if (v && String(v).trim().length > 10) return String(v).trim();
+      }
+      return "";
+    }
+
+    function setToast(el, msg, ok=true){
+      el.className = "toast " + (ok ? "ok" : "bad");
+      el.textContent = msg;
+      setTimeout(() => {
+        el.className = "toast";
+        el.style.display = "none";
+      }, 2600);
+      el.style.display = "block";
+    }
+
+    async function api(path, options = {}) {
+      const token = getToken();
+      const headers = Object.assign({}, options.headers || {});
+      headers["Content-Type"] = headers["Content-Type"] || "application/json";
+      if (token) headers["Authorization"] = "Bearer " + token;
+
+      const res = await fetch(path, { ...options, headers });
+      let data = null;
+      try { data = await res.json(); } catch { /* ignore */ }
+      if (!res.ok) {
+        const message = (data && (data.error || data.detail)) ? (data.error || data.detail) : (res.status + " " + res.statusText);
+        const err = new Error(message);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    }
+
+    // -----------------------------
+    // State
+    // -----------------------------
+    let currentRoundId = null;
+    let currentRound = null; // { id, course, layout, state, holes, par_mode, created_at, notes, holesData: [...] }
+    let roundsCache = [];
+
+    // -----------------------------
+    // UI refs
+    // -----------------------------
+    const authGate = document.getElementById("authGate");
+    const appEl = document.getElementById("app");
+
+    const courseEl = document.getElementById("course");
+    const stateEl = document.getElementById("state");
+    const holesEl = document.getElementById("holes");
+    const layoutEl = document.getElementById("layout");
+    const parModeEl = document.getElementById("parMode");
+    const notesEl = document.getElementById("notes");
+
+    const createRoundBtn = document.getElementById("createRoundBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    const roundsListEl = document.getElementById("roundsList");
+    const roundsEmptyEl = document.getElementById("roundsEmpty");
+
+    const scTitleEl = document.getElementById("scTitle");
+    const scSubEl = document.getElementById("scSub");
+    const scPillsEl = document.getElementById("scPills");
+
+    const scorecardEmpty = document.getElementById("scorecardEmpty");
+    const scorecardWrap = document.getElementById("scorecardWrap");
+    const scoreBody = document.getElementById("scoreBody");
+
+    const saveAllBtn = document.getElementById("saveAllBtn");
+    const deleteRoundBtn = document.getElementById("deleteRoundBtn");
+
+    const totParEl = document.getElementById("totPar");
+    const totStrokesEl = document.getElementById("totStrokes");
+    const totPuttsEl = document.getElementById("totPutts");
+    const totToParEl = document.getElementById("totToPar");
+
+    const leftToast = document.getElementById("leftToast");
+    const rightToast = document.getElementById("rightToast");
+
+    // -----------------------------
+    // Round list rendering
+    // -----------------------------
+    function formatDate(d) {
+      try {
+        const dt = new Date(d);
+        return dt.toLocaleString(undefined, { year:"numeric", month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit" });
+      } catch {
+        return d || "";
+      }
+    }
+
+    function calcTotals(holesData){
+      let par=0, strokes=0, putts=0;
+      let parCount=0, strokesCount=0, puttsCount=0;
+
+      for (const h of holesData || []) {
+        const p = Number(h.par);
+        const s = Number(h.strokes);
+        const u = Number(h.putts);
+
+        if (Number.isFinite(p)) { par += p; parCount++; }
+        if (Number.isFinite(s)) { strokes += s; strokesCount++; }
+        if (Number.isFinite(u)) { putts += u; puttsCount++; }
+      }
+
+      const toPar = (strokesCount ? strokes : null) - (parCount ? par : 0);
+
+      return {
+        par: parCount ? par : null,
+        strokes: strokesCount ? strokes : null,
+        putts: puttsCount ? putts : null,
+        toPar: (strokesCount && parCount) ? toPar : null
+      };
+    }
+
+    function renderRoundsList(){
+      roundsListEl.innerHTML = "";
+      roundsEmptyEl.style.display = roundsCache.length ? "none" : "block";
+
+      for (const r of roundsCache) {
+        const item = document.createElement("div");
+        item.className = "roundItem";
+        item.dataset.id = r.id;
+
+        const totals = calcTotals(r.holesData || []);
+        const scoreLabel = (totals.strokes != null) ? totals.strokes : "—";
+        const toParLabel = (totals.toPar != null)
+          ? (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+"+totals.toPar : ""+totals.toPar))
+          : "—";
+
+        item.innerHTML = `
+          <div class="top">
+            <div>
+              <div class="title">${escapeHtml(r.course || "Round")}${r.layout ? " — " + escapeHtml(r.layout) : ""}</div>
+              <div class="meta">${escapeHtml(r.state || "")} • ${r.holes || ""} holes • ${escapeHtml(r.par_mode || "")} • ${formatDate(r.created_at)}</div>
+            </div>
+            <div class="score">${scoreLabel} <span class="muted" style="font-weight:900;">(${toParLabel})</span></div>
+          </div>
+        `;
+
+        item.addEventListener("click", () => loadRound(r.id));
+        roundsListEl.appendChild(item);
+      }
+    }
+
+    function escapeHtml(s){
+      return String(s || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    // -----------------------------
+    // Scorecard rendering
+    // -----------------------------
+    function renderScorecard(round){
+      currentRound = round;
+      currentRoundId = round?.id || null;
+
+      if (!round || !currentRoundId) {
+        scorecardEmpty.style.display = "block";
+        scorecardWrap.style.display = "none";
+        saveAllBtn.disabled = true;
+        deleteRoundBtn.disabled = true;
+        scTitleEl.textContent = "Scorecard";
+        scSubEl.textContent = "Select a round to begin.";
+        scPillsEl.innerHTML = "";
+        return;
+      }
+
+      scorecardEmpty.style.display = "none";
+      scorecardWrap.style.display = "block";
+      saveAllBtn.disabled = false;
+      deleteRoundBtn.disabled = false;
+
+      scTitleEl.textContent = round.course || "Round";
+      scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
+      scPillsEl.innerHTML = `
+        <span class="pill">${escapeHtml(round.par_mode || "")}</span>
+        <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
+      `;
+
+      scoreBody.innerHTML = "";
+
+      const holesCount = Number(round.holes) || 18;
+      const holesData = Array.isArray(round.holesData) ? round.holesData : [];
+
+      // ensure we have rows 1..holesCount
+      const map = new Map();
+      for (const h of holesData) map.set(Number(h.hole_number), h);
+
+      for (let i=1; i<=holesCount; i++){
+        const existing = map.get(i) || { hole_number: i, par: null, strokes: null, putts: null };
+        const tr = document.createElement("tr");
+
+        tr.innerHTML = `
+          <td>Hole ${i}</td>
+          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${existing.par ?? ""}" placeholder="—"></td>
+          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="strokes" data-hole="${i}" value="${existing.strokes ?? ""}" placeholder="—"></td>
+          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="putts" data-hole="${i}" value="${existing.putts ?? ""}" placeholder="—"></td>
+        `;
+
+        scoreBody.appendChild(tr);
+      }
+
+      // totals refresh on input
+      scoreBody.querySelectorAll("input").forEach((inp) => {
+        inp.addEventListener("input", () => updateTotalsFromTable());
+      });
+
+      updateTotalsFromTable();
+    }
+
+    function readTableHoles(){
+      const rows = [];
+      const inputs = scoreBody.querySelectorAll("input[data-hole]");
+      const byHole = new Map();
+
+      for (const inp of inputs) {
+        const hole = Number(inp.dataset.hole);
+        const field = inp.dataset.field;
+
+        if (!byHole.has(hole)) byHole.set(hole, { hole_number: hole, par: null, strokes: null, putts: null });
+
+        const v = String(inp.value || "").trim();
+        const n = v === "" ? null : Number(v);
+
+        byHole.get(hole)[field] = Number.isFinite(n) ? n : null;
+      }
+
+      const holesCount = Number(currentRound?.holes) || 18;
+      for (let i=1;i<=holesCount;i++){
+        rows.push(byHole.get(i) || { hole_number:i, par:null, strokes:null, putts:null });
+      }
+
+      return rows;
+    }
+
+    function updateTotalsFromTable(){
+      const holesRows = readTableHoles();
+      const totals = calcTotals(holesRows);
+
+      totParEl.textContent = "Par: " + (totals.par != null ? totals.par : "—");
+      totStrokesEl.textContent = "Strokes: " + (totals.strokes != null ? totals.strokes : "—");
+      totPuttsEl.textContent = "Putts: " + (totals.putts != null ? totals.putts : "—");
+
+      if (totals.toPar == null) {
+        totToParEl.textContent = "To Par: —";
+      } else {
+        totToParEl.textContent = "To Par: " + (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+" + totals.toPar : "" + totals.toPar));
+      }
+    }
+
+    // -----------------------------
+    // API calls (expects you to add these routes)
+    // -----------------------------
+    async function fetchRounds(){
+      // expected: GET /api/rounds -> { ok:true, rounds:[...] }
+      const data = await api("/api/rounds", { method:"GET" });
+      const rounds = (data && data.rounds) ? data.rounds : [];
+      roundsCache = rounds.map(r => ({
+        ...r,
+        holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
+      }));
+      renderRoundsList();
+    }
+
+    async function loadRound(id){
+      // expected: GET /api/rounds/:id -> { ok:true, round:{... , holesData:[...] } }
+      const data = await api(`/api/rounds/${encodeURIComponent(id)}`, { method:"GET" });
+      const round = data.round || data;
+      // normalise holesData
+      round.holesData = round.holesData || round.holes || [];
+      renderScorecard(round);
+    }
+
+    async function createRound(){
+      const course = String(courseEl.value || "").trim();
+      const state = String(stateEl.value || "WA").trim().toUpperCase();
+      const holes = Number(holesEl.value || 18);
+      const layout = String(layoutEl.value || "").trim();
+      const par_mode = String(parModeEl.value || "published").trim();
+      const notes = String(notesEl.value || "").trim();
+
+      if (!course) {
+        setToast(leftToast, "Please enter a course name.", false);
+        return;
+      }
+
+      // expected: POST /api/rounds -> { ok:true, roundId, round:{...} }
+      const payload = { course, state, holes, layout: layout || null, par_mode, notes: notes || null };
+      const data = await api("/api/rounds", { method:"POST", body: JSON.stringify(payload) });
+
+      const newId = data.roundId || (data.round && data.round.id);
+      setToast(leftToast, "Round created.", true);
+
+      // refresh list and load new round
+      await safeFetchRounds();
+      if (newId) {
+        await safeLoadRound(newId);
+      }
+    }
+
+    async function saveRoundAll(){
+      if (!currentRoundId) return;
+
+      const holesRows = readTableHoles();
+
+      // expected: PUT /api/rounds/:id -> { ok:true }
+      const payload = { holes: holesRows };
+      await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, {
+        method:"PUT",
+        body: JSON.stringify(payload)
+      });
+
+      setToast(rightToast, "Saved.", true);
+
+      // refresh cache list scores
+      await safeFetchRounds();
+    }
+
+    async function deleteRound(){
+      if (!currentRoundId) return;
+
+      // expected: DELETE /api/rounds/:id -> { ok:true }
+      await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, { method:"DELETE" });
+
+      setToast(rightToast, "Round deleted.", true);
+
+      currentRoundId = null;
+      currentRound = null;
+      renderScorecard(null);
+      await safeFetchRounds();
+    }
+
+    // -----------------------------
+    // Safe wrappers (nice errors)
+    // -----------------------------
+    async function safeFetchRounds(){
+      try{
+        await fetchRounds();
+      }catch(err){
+        setToast(leftToast, "Rounds API not ready: " + (err.message || "error"), false);
+      }
+    }
+    async function safeLoadRound(id){
+      try{
+        await loadRound(id);
+      }catch(err){
+        setToast(rightToast, "Load failed: " + (err.message || "error"), false);
+      }
+    }
+
+    // -----------------------------
+    // Init + events
+    // -----------------------------
+    function logout(){
+      // clear only token-ish keys
+      ["teeradar_token","token","authToken","jwt","access_token"].forEach(k => localStorage.removeItem(k));
+      setToast(leftToast, "Logged out.", true);
+      setTimeout(() => window.location.href = "/account.html", 450);
+    }
+
+    logoutBtn.addEventListener("click", logout);
+    createRoundBtn.addEventListener("click", createRound);
+    refreshBtn.addEventListener("click", safeFetchRounds);
+    saveAllBtn.addEventListener("click", async () => {
+      try{
+        await saveRoundAll();
+      }catch(err){
+        setToast(rightToast, "Save failed: " + (err.message || "error"), false);
+      }
+    });
+    deleteRoundBtn.addEventListener("click", async () => {
+      const ok = confirm("Delete this round? This cannot be undone.");
+      if (!ok) return;
+      try{
+        await deleteRound();
+      }catch(err){
+        setToast(rightToast, "Delete failed: " + (err.message || "error"), false);
+      }
+    });
+
+    (async function init(){
+      const token = getToken();
+      if (!token) {
+        authGate.style.display = "block";
+        appEl.style.display = "none";
+        return;
+      }
+
+      // token exists -> show app
+      authGate.style.display = "none";
+      appEl.style.display = "block";
+
+      // try to fetch rounds
+      await safeFetchRounds();
+    })();
+  </script>
+</body>
+</html>
