@@ -1078,10 +1078,60 @@
     }
   }
 
+  // ✅ NEW: prefill helpers (used after Stripe success redirect)
+  function normalizeEmail(v) {
+    return String(v || "").trim().toLowerCase();
+  }
+
+  function getSignupPrefillEmail() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const fromQuery =
+        normalizeEmail(params.get("email")) ||
+        normalizeEmail(params.get("prefill_email")) ||
+        "";
+      if (fromQuery) return fromQuery;
+
+      const fromStorage =
+        normalizeEmail(localStorage.getItem("teeradar_prefill_email")) ||
+        normalizeEmail(localStorage.getItem("teeradar_checkout_email")) ||
+        normalizeEmail(localStorage.getItem("teeradar_subscribe_email")) ||
+        normalizeEmail(localStorage.getItem("teeradar_email_pending")) ||
+        "";
+      return fromStorage || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function applySignupPrefillEmailIfAny() {
+    try {
+      const emailEl = document.getElementById("authEmail");
+      if (!emailEl) return;
+
+      const prefill = getSignupPrefillEmail();
+      if (!prefill) return;
+
+      if (!emailEl.value || !emailEl.value.trim()) {
+        emailEl.value = prefill;
+      }
+
+      // Optional: clear the one-time prefill so it doesn't keep overriding later
+      try {
+        localStorage.removeItem("teeradar_prefill_email");
+      } catch (e) {}
+    } catch (e) {}
+  }
+
   function openAuthModal(mode) {
     authMode = mode || "login";
     applyAuthView();
     authModal.style.display = "flex";
+
+    // ✅ NEW: prefill email when coming into signup flow
+    if (authMode === "signup") {
+      applySignupPrefillEmailIfAny();
+    }
   }
 
   function closeAuthModal() {
