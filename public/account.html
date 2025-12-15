@@ -375,7 +375,7 @@
 
       <label for="favCourseInput">Favourite courses</label>
       <div class="fav-help">
-        Start typing to search MiClub / Quick18 public courses.  
+        Start typing to search MiClub / Quick18 public courses.
         Basic: up to 3 favourites. Pro: up to 10 favourites.
       </div>
 
@@ -687,86 +687,6 @@
     }
   }
 
-  // ✅ NEW: hydrate preferences from backend so they persist across logins/devices
-  async function hydratePrefsFromServer() {
-    if (!email) return false;
-
-    try {
-      const res = await fetch(`/api/account/preferences?email=${encodeURIComponent(email)}`, {
-        method: "GET",
-        headers: {
-          ...(token ? { "Authorization": "Bearer " + token } : {})
-        }
-      });
-
-      const payload = await res.json().catch(() => null);
-      if (!res.ok || !payload || !payload.ok || !payload.found) return false;
-
-      // ✅ OPTION 2: backend returns { ok, found, preferences: {...} }
-      const data = payload.preferences;
-      if (!data || typeof data !== "object") return false;
-
-      const homeState = data.homeState || data.state || data.home_state || "";
-      const favourites = data.favourites || data.favoriteCourses || data.favCourses || [];
-      const days = data.days || data.prefDays || data.days_to_scan || data.pref_days || [];
-      const earliest = data.earliest || data.prefEarliest || data.earliest_time || data.pref_earliest || "";
-      const latest = data.latest || data.prefLatest || data.latest_time || data.pref_latest || "";
-      const holes = (data.holes !== undefined ? data.holes : (data.prefHoles !== undefined ? data.prefHoles : (data.pref_holes !== undefined ? data.pref_holes : "")));
-      const partySize = data.partySize || data.prefPartySize || data.party_size || data.pref_party_size || "";
-      const alertFrequency = data.alertFrequency || data.frequency || data.alert_frequency || data.pref_alert_frequency || "";
-      const homeCourseName = data.homeCourse || data.home_course || "";
-      const homeCourseId = data.homeCourseId || data.home_course_id || null;
-      const homeCourseState = data.homeCourseState || data.home_course_state || homeState || null;
-
-      if (homeStateSelect && homeState) homeStateSelect.value = homeState;
-
-      if (homeCourseName && homeCourseInput) {
-        setHomeCourse({
-          name: homeCourseName,
-          id: homeCourseId,
-          state: homeCourseState
-        });
-      }
-
-      if (Array.isArray(favourites)) {
-        renderFavList(favourites);
-      }
-
-      if (Array.isArray(days)) {
-        setSelectedDays(days);
-      }
-
-      if (prefEarliest) prefEarliest.value = earliest || "";
-      if (prefLatest) prefLatest.value = latest || "";
-      if (prefHoles) prefHoles.value = (holes === null || holes === undefined) ? "" : String(holes);
-      if (prefPartySize) prefPartySize.value = (partySize === null || partySize === undefined || partySize === "") ? "1" : String(partySize);
-      if (alertFrequencySelect && alertFrequency) alertFrequencySelect.value = String(alertFrequency);
-
-      const homeCourseObj = homeCourseName
-        ? { name: homeCourseName, id: homeCourseId || null, state: homeCourseState || homeState || null }
-        : null;
-
-      savePrefsToStorage(
-        homeState,
-        homeCourseObj,
-        Array.isArray(favourites) ? favourites : [],
-        {
-          days: Array.isArray(days) ? days : [],
-          earliest: earliest || "",
-          latest: latest || "",
-          holes: (holes === null || holes === undefined) ? "" : String(holes),
-          partySize: (partySize === null || partySize === undefined || partySize === "") ? "1" : String(partySize),
-          frequency: alertFrequency ? String(alertFrequency) : (alertFrequencySelect ? alertFrequencySelect.value : "POPUPS_ONLY")
-        }
-      );
-
-      return true;
-    } catch (err) {
-      console.error("hydrate prefs error:", err);
-      return false;
-    }
-  }
-
   // --- favourites UI state ---
   let favCourses = [];
 
@@ -923,6 +843,58 @@
     if (homeCourseDropdown) homeCourseDropdown.style.display = "none";
   });
 
+  // ✅ NEW: hydrate preferences from backend (maps preferred_* columns)
+  async function hydratePrefsFromServer() {
+    if (!email) return false;
+
+    try {
+      const res = await fetch(`/api/account/preferences?email=${encodeURIComponent(email)}`, {
+        method: "GET",
+        headers: {
+          ...(token ? { "Authorization": "Bearer " + token } : {})
+        }
+      });
+
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload || !payload.ok || !payload.found || !payload.preferences) {
+        return false;
+      }
+
+      const p = payload.preferences || {};
+
+      // ✅ Map DB columns -> UI/localStorage
+      const homeState = p.home_state || "";
+      const favourites = Array.isArray(p.favourites) ? p.favourites : (p.favourites ? p.favourites : []);
+
+      const days = Array.isArray(p.preferred_days) ? p.preferred_days : [];
+      const earliest = p.preferred_earliest || "";
+      const latest = p.preferred_latest || "";
+      const holes = (p.preferred_holes === null || typeof p.preferred_holes === "undefined") ? "" : String(p.preferred_holes);
+      const partySize = (p.preferred_party_size === null || typeof p.preferred_party_size === "undefined") ? "1" : String(p.preferred_party_size);
+      const alertFrequency = p.alert_frequency || "";
+
+      // Save to localStorage in the exact keys your page already uses
+      savePrefsToStorage(
+        homeState,
+        selectedHomeCourse, // home course is already handled via users/tr_user; leave as-is
+        Array.isArray(favourites) ? favourites : [],
+        {
+          days,
+          earliest,
+          latest,
+          holes,
+          partySize,
+          frequency: alertFrequency || (alertFrequencySelect ? alertFrequencySelect.value : "POPUPS_ONLY")
+        }
+      );
+
+      return true;
+    } catch (err) {
+      console.warn("hydratePrefsFromServer error:", err);
+      return false;
+    }
+  }
+
   // --- save prefs button ---
   const savePrefsBtn = document.getElementById("savePrefsBtn");
   if (savePrefsBtn) {
@@ -1070,8 +1042,11 @@
   (async function init() {
     if (!email) return;
     await loadCourses();
-    loadPrefsFromStorage();
+
+    // ✅ NEW: pull from DB first so UI gets preferred_days/earliest/latest/holes/party_size
     await hydratePrefsFromServer();
+
+    loadPrefsFromStorage();
     await refreshPlanFromServer(); // sync plan from Stripe
   })();
 </script>
