@@ -691,106 +691,80 @@
   async function hydratePrefsFromServer() {
     if (!email) return false;
 
-    const tryFetch = async (url) => {
-      const res = await fetch(url, {
+    try {
+      const res = await fetch(`/api/account/preferences?email=${encodeURIComponent(email)}`, {
         method: "GET",
         headers: {
           ...(token ? { "Authorization": "Bearer " + token } : {})
         }
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data) return null;
-      return data;
-    };
 
-    // Try a few common GET shapes. We keep it safe + non-breaking.
-    let data =
-      await tryFetch(`/api/account/preferences?email=${encodeURIComponent(email)}`) ||
-      await tryFetch(`/api/account/preferences`) ||
-      await tryFetch(`/api/me?email=${encodeURIComponent(email)}`) ||
-      await tryFetch(`/api/me`);
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload || !payload.ok || !payload.found) return false;
 
-    if (!data || typeof data !== "object") return false;
+      // ✅ OPTION 2: backend returns { ok, found, preferences: {...} }
+      const data = payload.preferences;
+      if (!data || typeof data !== "object") return false;
 
-    // Accept a few possible key names (backend may differ)
-    const homeState =
-      data.homeState || data.state || data.home_state || "";
+      const homeState = data.homeState || data.state || data.home_state || "";
+      const favourites = data.favourites || data.favoriteCourses || data.favCourses || [];
+      const days = data.days || data.prefDays || data.days_to_scan || data.pref_days || [];
+      const earliest = data.earliest || data.prefEarliest || data.earliest_time || data.pref_earliest || "";
+      const latest = data.latest || data.prefLatest || data.latest_time || data.pref_latest || "";
+      const holes = (data.holes !== undefined ? data.holes : (data.prefHoles !== undefined ? data.prefHoles : (data.pref_holes !== undefined ? data.pref_holes : "")));
+      const partySize = data.partySize || data.prefPartySize || data.party_size || data.pref_party_size || "";
+      const alertFrequency = data.alertFrequency || data.frequency || data.alert_frequency || data.pref_alert_frequency || "";
+      const homeCourseName = data.homeCourse || data.home_course || "";
+      const homeCourseId = data.homeCourseId || data.home_course_id || null;
+      const homeCourseState = data.homeCourseState || data.home_course_state || homeState || null;
 
-    const favourites =
-      data.favourites || data.favoriteCourses || data.favCourses || [];
+      if (homeStateSelect && homeState) homeStateSelect.value = homeState;
 
-    const days =
-      data.days || data.prefDays || data.days_to_scan || data.pref_days || [];
-
-    const earliest =
-      data.earliest || data.prefEarliest || data.earliest_time || data.pref_earliest || "";
-
-    const latest =
-      data.latest || data.prefLatest || data.latest_time || data.pref_latest || "";
-
-    const holes =
-      (data.holes !== undefined ? data.holes : (data.prefHoles !== undefined ? data.prefHoles : (data.pref_holes !== undefined ? data.pref_holes : "")));
-
-    const partySize =
-      data.partySize || data.prefPartySize || data.party_size || data.pref_party_size || "";
-
-    const alertFrequency =
-      data.alertFrequency || data.frequency || data.alert_frequency || data.pref_alert_frequency || "";
-
-    const homeCourseName =
-      data.homeCourse || data.home_course || "";
-
-    const homeCourseId =
-      data.homeCourseId || data.home_course_id || null;
-
-    const homeCourseState =
-      data.homeCourseState || data.home_course_state || homeState || null;
-
-    // Apply to UI
-    if (homeStateSelect && homeState) homeStateSelect.value = homeState;
-
-    if (homeCourseName && homeCourseInput) {
-      setHomeCourse({
-        name: homeCourseName,
-        id: homeCourseId,
-        state: homeCourseState
-      });
-    }
-
-    if (Array.isArray(favourites)) {
-      renderFavList(favourites);
-    }
-
-    if (Array.isArray(days)) {
-      setSelectedDays(days);
-    }
-
-    if (prefEarliest) prefEarliest.value = earliest || "";
-    if (prefLatest) prefLatest.value = latest || "";
-    if (prefHoles) prefHoles.value = (holes === null || holes === undefined) ? "" : String(holes);
-    if (prefPartySize) prefPartySize.value = (partySize === null || partySize === undefined || partySize === "") ? "1" : String(partySize);
-    if (alertFrequencySelect && alertFrequency) alertFrequencySelect.value = String(alertFrequency);
-
-    // Sync to localStorage so bookings page stays consistent
-    const homeCourseObj = homeCourseName
-      ? { name: homeCourseName, id: homeCourseId || null, state: homeCourseState || homeState || null }
-      : null;
-
-    savePrefsToStorage(
-      homeState,
-      homeCourseObj,
-      Array.isArray(favourites) ? favourites : [],
-      {
-        days: Array.isArray(days) ? days : [],
-        earliest: earliest || "",
-        latest: latest || "",
-        holes: (holes === null || holes === undefined) ? "" : String(holes),
-        partySize: (partySize === null || partySize === undefined || partySize === "") ? "1" : String(partySize),
-        frequency: alertFrequency ? String(alertFrequency) : (alertFrequencySelect ? alertFrequencySelect.value : "POPUPS_ONLY")
+      if (homeCourseName && homeCourseInput) {
+        setHomeCourse({
+          name: homeCourseName,
+          id: homeCourseId,
+          state: homeCourseState
+        });
       }
-    );
 
-    return true;
+      if (Array.isArray(favourites)) {
+        renderFavList(favourites);
+      }
+
+      if (Array.isArray(days)) {
+        setSelectedDays(days);
+      }
+
+      if (prefEarliest) prefEarliest.value = earliest || "";
+      if (prefLatest) prefLatest.value = latest || "";
+      if (prefHoles) prefHoles.value = (holes === null || holes === undefined) ? "" : String(holes);
+      if (prefPartySize) prefPartySize.value = (partySize === null || partySize === undefined || partySize === "") ? "1" : String(partySize);
+      if (alertFrequencySelect && alertFrequency) alertFrequencySelect.value = String(alertFrequency);
+
+      const homeCourseObj = homeCourseName
+        ? { name: homeCourseName, id: homeCourseId || null, state: homeCourseState || homeState || null }
+        : null;
+
+      savePrefsToStorage(
+        homeState,
+        homeCourseObj,
+        Array.isArray(favourites) ? favourites : [],
+        {
+          days: Array.isArray(days) ? days : [],
+          earliest: earliest || "",
+          latest: latest || "",
+          holes: (holes === null || holes === undefined) ? "" : String(holes),
+          partySize: (partySize === null || partySize === undefined || partySize === "") ? "1" : String(partySize),
+          frequency: alertFrequency ? String(alertFrequency) : (alertFrequencySelect ? alertFrequencySelect.value : "POPUPS_ONLY")
+        }
+      );
+
+      return true;
+    } catch (err) {
+      console.error("hydrate prefs error:", err);
+      return false;
+    }
   }
 
   // --- favourites UI state ---
@@ -1097,7 +1071,6 @@
     if (!email) return;
     await loadCourses();
     loadPrefsFromStorage();
-    // ✅ NEW: pull prefs from backend so they persist after logging back in
     await hydratePrefsFromServer();
     await refreshPlanFromServer(); // sync plan from Stripe
   })();
