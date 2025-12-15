@@ -375,7 +375,7 @@
 
       <label for="favCourseInput">Favourite courses</label>
       <div class="fav-help">
-        Start typing to search MiClub / Quick18 public courses.  
+        Start typing to search MiClub / Quick18 public courses.
         Basic: up to 3 favourites. Pro: up to 10 favourites.
       </div>
 
@@ -843,6 +843,118 @@
     if (homeCourseDropdown) homeCourseDropdown.style.display = "none";
   });
 
+  // ✅ NEW: hydrate preferences from backend (maps preferred_* columns)
+  async function hydratePrefsFromServer() {
+    if (!email) return false;
+
+    // ✅ NEW: keep existing home course (don't wipe it during hydrate)
+    function getExistingHomeCourseFromStorage() {
+      try {
+        const raw = localStorage.getItem("tr_user");
+        if (raw) {
+          const u = JSON.parse(raw);
+          if (u && u.homeCourse) {
+            return {
+              name: u.homeCourse,
+              id: u.homeCourseId || null,
+              state: u.homeCourseState || null
+            };
+          }
+        }
+      } catch {}
+      const legacy = localStorage.getItem("teeradar_home_course");
+      const st = localStorage.getItem("teeradar_home_state");
+      if (legacy) return { name: legacy, id: null, state: st || null };
+      return null;
+    }
+
+    try {
+      const res = await fetch(`/api/account/preferences?email=${encodeURIComponent(email)}`, {
+        method: "GET",
+        headers: {
+          ...(token ? { "Authorization": "Bearer " + token } : {})
+        }
+      });
+
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload || !payload.ok || !payload.found || !payload.preferences) {
+        return false;
+      }
+
+      const p = payload.preferences || {};
+
+      // ✅ Map DB columns -> UI/localStorage
+      const homeState = p.home_state || "";
+
+      // ✅ NEW: favourites might come back as JSON, or as a JSON string depending on DB/driver
+      let favourites = [];
+      if (Array.isArray(p.favourites)) {
+        favourites = p.favourites;
+      } else if (typeof p.favourites === "string") {
+        try { favourites = JSON.parse(p.favourites) || []; } catch { favourites = []; }
+      } else if (p.favourites) {
+        favourites = p.favourites;
+      }
+
+      const days = Array.isArray(p.preferred_days) ? p.preferred_days : [];
+      const earliest = p.preferred_earliest || "";
+      const latest = p.preferred_latest || "";
+      const holes = (p.preferred_holes === null || typeof p.preferred_holes === "undefined") ? "" : String(p.preferred_holes);
+      const partySize = (p.preferred_party_size === null || typeof p.preferred_party_size === "undefined") ? "1" : String(p.preferred_party_size);
+      const alertFrequency = p.alert_frequency || "";
+
+      // ✅ NEW: try to hydrate home course from /api/me (source of truth), else keep existing
+      let homeCourseObj = getExistingHomeCourseFromStorage();
+      try {
+        const meRes = await fetch(`/api/me?email=${encodeURIComponent(email)}`);
+        const me = await meRes.json().catch(() => null);
+        if (meRes.ok && me && (me.homeCourse || me.homeCourseId || me.homeCourseState)) {
+          homeCourseObj = {
+            name: me.homeCourse || (homeCourseObj ? homeCourseObj.name : null),
+            id: me.homeCourseId || (homeCourseObj ? homeCourseObj.id : null),
+            state: me.homeCourseState || (homeCourseObj ? homeCourseObj.state : null) || homeState || null
+          };
+        }
+      } catch {}
+
+      // ✅ NEW: set UI immediately (so it shows even before loadPrefsFromStorage runs)
+      if (homeStateSelect && homeState) homeStateSelect.value = homeState;
+      renderFavList(Array.isArray(favourites) ? favourites : []);
+      setSelectedDays(days);
+      if (prefEarliest) prefEarliest.value = earliest || "";
+      if (prefLatest) prefLatest.value = latest || "";
+      if (prefHoles) prefHoles.value = holes;
+      if (prefPartySize) prefPartySize.value = partySize;
+      if (alertFrequencySelect) {
+        alertFrequencySelect.value = alertFrequency || "POPUPS_ONLY";
+      }
+
+      if (homeCourseObj && homeCourseObj.name) {
+        setHomeCourse(homeCourseObj);
+      }
+
+      // Save to localStorage in the exact keys your page already uses
+      savePrefsToStorage(
+        homeState,
+        homeCourseObj,  // ✅ NEW: don't wipe home course during hydrate
+        Array.isArray(favourites) ? favourites : [],
+        {
+          days,
+          earliest,
+          latest,
+          holes,
+          partySize,
+          frequency: alertFrequency || (alertFrequencySelect ? alertFrequencySelect.value : "POPUPS_ONLY")
+        }
+      );
+
+      return true;
+    } catch (err) {
+      console.warn("hydratePrefsFromServer error:", err);
+      return false;
+    }
+  }
+
   // --- save prefs button ---
   const savePrefsBtn = document.getElementById("savePrefsBtn");
   if (savePrefsBtn) {
@@ -990,6 +1102,10 @@
   (async function init() {
     if (!email) return;
     await loadCourses();
+
+    // ✅ NEW: pull from DB first so UI gets preferred_days/earliest/latest/holes/party_size
+    await hydratePrefsFromServer();
+
     loadPrefsFromStorage();
     await refreshPlanFromServer(); // sync plan from Stripe
   })();
