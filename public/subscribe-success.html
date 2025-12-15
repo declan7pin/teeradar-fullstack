@@ -89,22 +89,72 @@
       const params = new URLSearchParams(window.location.search);
       const sessionId = params.get("session_id") || null;
 
+      // ✅ NEW: try to capture the email so signup can be prefilled
+      // (Stripe redirect usually doesn't include email, so we also look for any saved "checkout email" keys)
+      function normalizeEmail(v) {
+        return String(v || "").trim().toLowerCase();
+      }
+
+      function getPrefillEmail() {
+        // 1) if you ever decide to pass it via URL
+        const fromQuery =
+          normalizeEmail(params.get("email")) ||
+          normalizeEmail(params.get("prefill_email")) ||
+          "";
+
+        if (fromQuery) return fromQuery;
+
+        // 2) try common localStorage keys (covers different versions of your flow)
+        try {
+          const candidates = [
+            localStorage.getItem("teeradar_checkout_email"),
+            localStorage.getItem("teeradar_subscribe_email"),
+            localStorage.getItem("teeradar_email_pending"),
+            localStorage.getItem("teeradar_email"),
+            localStorage.getItem("teeradar_user_email"),
+            localStorage.getItem("email"),
+          ].map(normalizeEmail).filter(Boolean);
+
+          return candidates[0] || "";
+        } catch {
+          return "";
+        }
+      }
+
+      const prefillEmail = getPrefillEmail();
+
       // Mark that this browser has just completed a Stripe checkout
       try {
         localStorage.setItem("teeradar_paid", "1");
         if (sessionId) {
           localStorage.setItem("teeradar_stripe_session", sessionId);
         }
+
+        // ✅ NEW: store the email for the signup page to read
+        if (prefillEmail) {
+          localStorage.setItem("teeradar_prefill_email", prefillEmail);
+        } else {
+          localStorage.removeItem("teeradar_prefill_email");
+        }
       } catch (e) {
         console.warn("Could not write to localStorage", e);
       }
 
-      // Send user straight into signup flow
+      // Send user straight into signup flow (with optional prefill)
       const createBtn = document.getElementById("createAccountBtn");
       if (createBtn) {
         createBtn.addEventListener("click", function (e) {
           e.preventDefault();
-          window.location.href = "/index.html?signup=1";
+
+          // ✅ NEW: pass the email in the URL too (in case index prefers query params)
+          const url = new URL("/index.html", window.location.origin);
+          url.searchParams.set("signup", "1");
+          if (prefillEmail) {
+            url.searchParams.set("email", prefillEmail);
+            url.searchParams.set("prefill_email", prefillEmail);
+          }
+
+          window.location.href = url.pathname + url.search;
         });
       }
     })();
