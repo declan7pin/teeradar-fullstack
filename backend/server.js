@@ -191,6 +191,67 @@ async function ensureAlertHitsTable() {
 }
 ensureAlertHitsTable();
 
+// ✅ NEW: ensure rounds + round_holes tables exist (score tracking)
+async function ensureRoundsTables() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS rounds (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+
+        course TEXT NOT NULL,
+        layout TEXT,
+        state TEXT,
+
+        holes INTEGER NOT NULL,
+        par_mode TEXT NOT NULL,
+
+        created_at TIMESTAMPTZ DEFAULT now(),
+
+        CONSTRAINT fk_round_user
+          FOREIGN KEY (user_id)
+          REFERENCES users(id)
+          ON DELETE CASCADE
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS round_holes (
+        id SERIAL PRIMARY KEY,
+        round_id INTEGER NOT NULL,
+
+        hole_number INTEGER NOT NULL,
+        par INTEGER,
+        strokes INTEGER,
+        putts INTEGER,
+
+        CONSTRAINT fk_round
+          FOREIGN KEY (round_id)
+          REFERENCES rounds(id)
+          ON DELETE CASCADE,
+
+        CONSTRAINT unique_round_hole
+          UNIQUE (round_id, hole_number)
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_rounds_user
+      ON rounds(user_id);
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_round_holes_round
+      ON round_holes(round_id);
+    `);
+
+    console.log("✅ rounds + round_holes tables ready");
+  } catch (err) {
+    console.error("❌ error ensuring rounds tables:", err);
+  }
+}
+ensureRoundsTables();
+
 app.use(cors());
 
 // -------------------------------------------------
