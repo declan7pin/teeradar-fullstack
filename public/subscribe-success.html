@@ -45,7 +45,7 @@
     }
     .btn {
       display: inline-block;
-      margin-top: 10px;
+      margin-top: 12px;
       padding: 9px 16px;
       border-radius: 999px;
       border: none;
@@ -55,10 +55,6 @@
       color: #ffffff;
       background: var(--teal);
       text-decoration: none;
-    }
-    .btn.secondary {
-      background: #6b7280;
-      margin-top: 8px;
     }
     .small-note {
       margin-top: 14px;
@@ -76,20 +72,10 @@
       email address.
     </p>
 
-    <!-- primary CTA: create account -->
+    <!-- single clear CTA -->
     <a id="createAccountBtn" class="btn" href="/index.html">
-      Create your TeeRadar account
+      Continue to create your TeeRadar account
     </a>
-
-    <!-- secondary CTA: just go home -->
-    <button
-      id="homeBtn"
-      class="btn secondary"
-      type="button"
-      onclick="window.location.href='/index.html'"
-    >
-      Back to TeeRadar home
-    </button>
 
     <p class="small-note">
       Use the same email address here that you just used for your TeeRadar
@@ -110,28 +96,15 @@
           localStorage.setItem("teeradar_stripe_session", sessionId);
         }
       } catch (e) {
-        // localStorage might be blocked; fail silently
         console.warn("Could not write to localStorage", e);
       }
 
-      // When the user taps "Create your TeeRadar account",
-      // send them to index with a flag so the homepage can
-      // auto-open the signup flow.
+      // Send user straight into signup flow
       const createBtn = document.getElementById("createAccountBtn");
       if (createBtn) {
         createBtn.addEventListener("click", function (e) {
           e.preventDefault();
-          // 🔹 change ONLY this line: add ?signup=1
           window.location.href = "/index.html?signup=1";
-        });
-      }
-
-      // Home button already has an inline onclick, this just keeps
-      // behaviour consistent if we ever change the URL.
-      const homeBtn = document.getElementById("homeBtn");
-      if (homeBtn) {
-        homeBtn.addEventListener("click", function () {
-          window.location.href = "/index.html";
         });
       }
     })();
