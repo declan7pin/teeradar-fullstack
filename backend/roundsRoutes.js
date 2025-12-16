@@ -17,8 +17,17 @@ const router = express.Router();
 let __scorecardsCache = null;
 
 function safeJsonParse(raw, fallback) {
+  // 1) Normal JSON parse
   try {
     return JSON.parse(raw);
+  } catch {}
+
+  // 2) Tolerate common “JSON with trailing commas” + BOM
+  try {
+    const cleaned = String(raw)
+      .replace(/^\uFEFF/, "") // BOM
+      .replace(/,\s*([}\]])/g, "$1"); // trailing commas before } or ]
+    return JSON.parse(cleaned);
   } catch {
     return fallback;
   }
@@ -65,11 +74,14 @@ function loadScorecardsOnce() {
     for (const file of files) {
       const full = path.join(baseDir, file);
       const raw = fs.readFileSync(full, "utf8");
-      const data = safeJsonParse(raw, []);
+      const data = safeJsonParse(raw, null);
 
-      if (Array.isArray(data)) {
-        for (const item of data) out.push(item);
+      if (!Array.isArray(data)) {
+        console.warn("⚠️ scorecards file failed to parse as array:", file);
+        continue;
       }
+
+      for (const item of data) out.push(item);
     }
 
     console.log(`✅ loaded ${out.length} scorecards from ${baseDir}`);
