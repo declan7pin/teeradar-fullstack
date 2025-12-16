@@ -148,6 +148,27 @@ function findScorecard({ course, layout, state, holes }) {
 }
 
 // -------------------------------------------------
+// ✅ NEW: Multi-player helpers (only adds support; doesn't break existing)
+// -------------------------------------------------
+function clampPlayers(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return 1;
+  return Math.max(1, Math.min(4, Math.floor(x)));
+}
+
+function cleanPlayerMap(obj) {
+  if (!obj || typeof obj !== "object") return {};
+  const out = {};
+  for (let i = 1; i <= 4; i++) {
+    const v = obj[String(i)];
+    if (v === null || typeof v === "undefined" || v === "") continue;
+    const n = Number(v);
+    if (Number.isFinite(n)) out[String(i)] = n;
+  }
+  return out;
+}
+
+// -------------------------------------------------
 // Helpers
 // -------------------------------------------------
 async function getRoundOwner(roundId) {
@@ -161,7 +182,8 @@ async function getRoundOwner(roundId) {
 async function getRoundWithHoles(roundId) {
   const roundRow = await db.query(
     `
-    SELECT id, user_id, course, layout, state, holes, par_mode, created_at
+    SELECT id, user_id, course, layout, state, holes, par_mode, created_at,
+           players_count
     FROM rounds
     WHERE id = $1
     LIMIT 1;
@@ -173,7 +195,8 @@ async function getRoundWithHoles(roundId) {
 
   const holesRows = await db.query(
     `
-    SELECT hole_number, par, strokes, putts
+    SELECT hole_number, par, strokes, putts,
+           strokes_by_player, putts_by_player
     FROM round_holes
     WHERE round_id = $1
     ORDER BY hole_number ASC;
@@ -201,6 +224,9 @@ router.post("/", requireAuth, async (req, res) => {
       par_mode = "published", // "published" | "blank"
       nineLoop = "front",     // "front" | "back" (only relevant for 9 holes)
       publishedPars = null,
+
+      // ✅ NEW: players count (1–4)
+      players_count = 1,
     } = req.body || {};
 
     const holesNum = Number(holes);
@@ -216,6 +242,9 @@ router.post("/", requireAuth, async (req, res) => {
     const stateCode = (state || "").toString().trim().toUpperCase() || null;
     const layoutName = (layout || "").toString().trim() || null;
     const mode = (par_mode || "").toString().trim().toLowerCase() || "published";
+
+    // ✅ NEW
+    const playersCount = clampPlayers(players_count);
 
     let pars = null;
 
@@ -278,11 +307,11 @@ router.post("/", requireAuth, async (req, res) => {
 
     const roundInsert = await db.query(
       `
-      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, user_id, course, layout, state, holes, par_mode, created_at;
+      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, players_count)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, user_id, course, layout, state, holes, par_mode, created_at, players_count;
       `,
-      [userId, String(course).trim(), layoutName, stateCode, holesNum, finalParMode]
+      [userId, String(course).trim(), layoutName, stateCode, holesNum, finalParMode, playersCount]
     );
 
     const round = roundInsert.rows[0];
@@ -292,8 +321,8 @@ router.post("/", requireAuth, async (req, res) => {
 
       await db.query(
         `
-        INSERT INTO round_holes (round_id, hole_number, par, strokes, putts)
-        VALUES ($1, $2, $3, NULL, NULL)
+        INSERT INTO round_holes (round_id, hole_number, par, strokes, putts, strokes_by_player, putts_by_player)
+        VALUES ($1, $2, $3, NULL, NULL, '{}'::jsonb, '{}'::jsonb)
         ON CONFLICT (round_id, hole_number) DO NOTHING;
         `,
         [round.id, i, parVal]
@@ -304,7 +333,7 @@ router.post("/", requireAuth, async (req, res) => {
 
     const holesRows = await db.query(
       `
-      SELECT hole_number, par, strokes, putts
+      SELECT hole_number, par, strokes, putts, strokes_by_player, putts_by_player
       FROM round_holes
       WHERE round_id = $1
       ORDER BY hole_number ASC;
@@ -339,7 +368,8 @@ router.get("/", requireAuth, async (req, res) => {
 
     const { rows } = await db.query(
       `
-      SELECT id, course, layout, state, holes, par_mode, created_at
+      SELECT id, course, layout, state, holes, par_mode, created_at,
+             players_count
       FROM rounds
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -416,24 +446,33 @@ router.put("/:id", requireAuth, async (req, res) => {
           ? null
           : Number(h.par);
 
+      // ✅ NEW: accept multi-player JSON maps
+      const strokesMap = cleanPlayerMap(h?.strokes_by_player || h?.strokesByPlayer || {});
+      const puttsMap = cleanPlayerMap(h?.putts_by_player || h?.puttsByPlayer || {});
+
+      // keep old compatibility: strokes/putts represent Player 1
       const strokesVal =
-        h?.strokes === null || typeof h?.strokes === "undefined" || h?.strokes === ""
+        (typeof strokesMap["1"] !== "undefined") ? strokesMap["1"] :
+        (h?.strokes === null || typeof h?.strokes === "undefined" || h?.strokes === ""
           ? null
-          : Number(h.strokes);
+          : Number(h.strokes));
 
       const puttsVal =
-        h?.putts === null || typeof h?.putts === "undefined" || h?.putts === ""
+        (typeof puttsMap["1"] !== "undefined") ? puttsMap["1"] :
+        (h?.putts === null || typeof h?.putts === "undefined" || h?.putts === ""
           ? null
-          : Number(h.putts);
+          : Number(h.putts));
 
       await db.query(
         `
-        INSERT INTO round_holes (round_id, hole_number, par, strokes, putts)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO round_holes (round_id, hole_number, par, strokes, putts, strokes_by_player, putts_by_player)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
         ON CONFLICT (round_id, hole_number) DO UPDATE SET
           par = EXCLUDED.par,
           strokes = EXCLUDED.strokes,
-          putts = EXCLUDED.putts;
+          putts = EXCLUDED.putts,
+          strokes_by_player = EXCLUDED.strokes_by_player,
+          putts_by_player = EXCLUDED.putts_by_player;
         `,
         [
           roundId,
@@ -441,6 +480,8 @@ router.put("/:id", requireAuth, async (req, res) => {
           Number.isFinite(parVal) ? parVal : null,
           Number.isFinite(strokesVal) ? strokesVal : null,
           Number.isFinite(puttsVal) ? puttsVal : null,
+          JSON.stringify(strokesMap),
+          JSON.stringify(puttsMap),
         ]
       );
     }
@@ -494,8 +535,8 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
 
     await db.query(
       `
-      INSERT INTO round_holes (round_id, hole_number, par, strokes, putts)
-      VALUES ($1, $2, NULL, NULL, NULL)
+      INSERT INTO round_holes (round_id, hole_number, par, strokes, putts, strokes_by_player, putts_by_player)
+      VALUES ($1, $2, NULL, NULL, NULL, '{}'::jsonb, '{}'::jsonb)
       ON CONFLICT (round_id, hole_number) DO NOTHING;
       `,
       [roundId, holeNum]
@@ -509,7 +550,7 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
         putts = $4,
         par = COALESCE($5, par)
       WHERE round_id = $1 AND hole_number = $2
-      RETURNING hole_number, par, strokes, putts;
+      RETURNING hole_number, par, strokes, putts, strokes_by_player, putts_by_player;
       `,
       [
         roundId,
