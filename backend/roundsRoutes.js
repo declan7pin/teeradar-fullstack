@@ -1,96 +1,132 @@
 // backend/roundsRoutes.js
 import express from "express";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
 import db from "./db.js";
 import { requireAuth } from "./auth.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const roundsRouter = express.Router();
 
-// ✅ helper: ensure notes + updated_at columns exist (safe on older DBs)
-async function ensureRoundsColumns() {
-  try {
-    await db.query(`
-      ALTER TABLE rounds
-      ADD COLUMN IF NOT EXISTS notes TEXT;
-    `);
-    await db.query(`
-      ALTER TABLE rounds
-      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
-    `);
-  } catch (err) {
-    console.error("❌ ensureRoundsColumns error:", err?.message || err);
-  }
-}
-ensureRoundsColumns();
+// -----------------------------------------
+// Load scorecards (WA for now)
+// -----------------------------------------
+const SCORECARDS_PATH = path.join(__dirname, "data", "scorecards_wa.json");
 
-// -------------------------------------------------
-// GET /api/rounds  (logged-in user's rounds)
-// returns: { ok:true, rounds:[{... , holesData:[...] }] }
-// -------------------------------------------------
+function norm(s) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+let SCORECARDS = [];
+try {
+  if (fs.existsSync(SCORECARDS_PATH)) {
+    SCORECARDS = JSON.parse(fs.readFileSync(SCORECARDS_PATH, "utf8")) || [];
+  }
+} catch (e) {
+  console.error("❌ Failed to load scorecards_wa.json:", e?.message || e);
+  SCORECARDS = [];
+}
+
+function findScorecard({ course, state, layout, holes }) {
+  const c = norm(course);
+  const s = norm(state);
+  const l = norm(layout);
+  const h = Number(holes);
+
+  // Try exact match on course+state+layout+holes
+  let hit = SCORECARDS.find((x) => {
+    const xc = norm(x.course);
+    const xs = norm(x.state);
+    const xl = norm(x.layout);
+    const xh = Number(x.holes);
+
+    if (!xc || !xs || !xh) return false;
+
+    const layoutOk =
+      (l && xl && xl === l) ||
+      (!l && !xl); // both empty ok
+
+    return xc === c && xs === s && xh === h && layoutOk;
+  });
+
+  // Fallback: course+state+holes (ignore layout)
+  if (!hit) {
+    hit = SCORECARDS.find((x) => {
+      const xc = norm(x.course);
+      const xs = norm(x.state);
+      const xh = Number(x.holes);
+      return xc === c && xs === s && xh === h;
+    });
+  }
+
+  if (!hit) return null;
+
+  const pars = Array.isArray(hit.pars) ? hit.pars.map((n) => (n == null ? null : Number(n))) : null;
+  if (!pars || pars.length !== h) return null;
+
+  return { ...hit, pars };
+}
+
+// -----------------------------------------
+// Helpers
+// -----------------------------------------
+async function fetchRoundOwned(roundId, userId) {
+  const { rows } = await db.query(
+    `
+    SELECT *
+    FROM rounds
+    WHERE id = $1 AND user_id = $2
+    LIMIT 1
+    `,
+    [Number(roundId), Number(userId)]
+  );
+  return rows[0] || null;
+}
+
+async function fetchRoundHoles(roundId) {
+  const { rows } = await db.query(
+    `
+    SELECT hole_number, par, strokes, putts
+    FROM round_holes
+    WHERE round_id = $1
+    ORDER BY hole_number ASC
+    `,
+    [Number(roundId)]
+  );
+  return rows;
+}
+
+// -----------------------------------------
+// GET /api/rounds  (my rounds list)
+// -----------------------------------------
 roundsRouter.get("/", requireAuth, async (req, res) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
+    const userId = req.user.id;
 
     const { rows } = await db.query(
       `
-      SELECT
-        r.id,
-        r.user_id,
-        r.course,
-        r.layout,
-        r.state,
-        r.holes,
-        r.par_mode,
-        r.notes,
-        r.created_at,
-        r.updated_at
-      FROM rounds r
-      WHERE r.user_id = $1
-      ORDER BY r.created_at DESC
+      SELECT id, course, layout, state, holes, par_mode, created_at
+      FROM rounds
+      WHERE user_id = $1
+      ORDER BY created_at DESC
       LIMIT 200
       `,
       [userId]
     );
 
-    const ids = rows.map((r) => r.id);
-
-    let holesByRound = new Map();
-    if (ids.length) {
-      const holesRes = await db.query(
-        `
-        SELECT round_id, hole_number, par, strokes, putts
-        FROM round_holes
-        WHERE round_id = ANY($1::int[])
-        ORDER BY round_id, hole_number
-        `,
-        [ids]
-      );
-
-      holesByRound = new Map();
-      for (const h of holesRes.rows) {
-        if (!holesByRound.has(h.round_id)) holesByRound.set(h.round_id, []);
-        holesByRound.get(h.round_id).push({
-          hole_number: h.hole_number,
-          par: h.par,
-          strokes: h.strokes,
-          putts: h.putts,
-        });
-      }
+    // Include holesData for each round (simple, ok at this scale)
+    const rounds = [];
+    for (const r of rows) {
+      const holesData = await fetchRoundHoles(r.id);
+      rounds.push({ ...r, holesData });
     }
-
-    const rounds = rows.map((r) => ({
-      id: r.id,
-      user_id: r.user_id,
-      course: r.course,
-      layout: r.layout,
-      state: r.state,
-      holes: r.holes,
-      par_mode: r.par_mode,
-      notes: r.notes || null,
-      created_at: r.created_at,
-      updated_at: r.updated_at,
-      holesData: holesByRound.get(r.id) || [],
-    }));
 
     return res.json({ ok: true, rounds });
   } catch (err) {
@@ -99,265 +135,165 @@ roundsRouter.get("/", requireAuth, async (req, res) => {
   }
 });
 
-// -------------------------------------------------
-// GET /api/rounds/:id  (single round + holes)
-// -------------------------------------------------
-roundsRouter.get("/:id", requireAuth, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const roundId = Number(req.params.id);
-
-    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
-    if (!Number.isInteger(roundId) || roundId <= 0) {
-      return res.status(400).json({ ok: false, error: "invalid round id" });
-    }
-
-    const roundRes = await db.query(
-      `
-      SELECT id, user_id, course, layout, state, holes, par_mode, notes, created_at, updated_at
-      FROM rounds
-      WHERE id = $1 AND user_id = $2
-      LIMIT 1
-      `,
-      [roundId, userId]
-    );
-
-    if (!roundRes.rows.length) {
-      return res.status(404).json({ ok: false, error: "round not found" });
-    }
-
-    const r = roundRes.rows[0];
-
-    const holesRes = await db.query(
-      `
-      SELECT hole_number, par, strokes, putts
-      FROM round_holes
-      WHERE round_id = $1
-      ORDER BY hole_number
-      `,
-      [roundId]
-    );
-
-    return res.json({
-      ok: true,
-      round: {
-        id: r.id,
-        user_id: r.user_id,
-        course: r.course,
-        layout: r.layout,
-        state: r.state,
-        holes: r.holes,
-        par_mode: r.par_mode,
-        notes: r.notes || null,
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-        holesData: holesRes.rows.map((h) => ({
-          hole_number: h.hole_number,
-          par: h.par,
-          strokes: h.strokes,
-          putts: h.putts,
-        })),
-      },
-    });
-  } catch (err) {
-    console.error("GET /api/rounds/:id error:", err);
-    return res.status(500).json({ ok: false, error: "internal error" });
-  }
-});
-
-// -------------------------------------------------
+// -----------------------------------------
 // POST /api/rounds  (create round)
-// body: { course, state, holes, layout?, par_mode, notes? }
-// -------------------------------------------------
+// Body: { course, layout?, state?, holes, par_mode? }
+// par_mode optional: "published" or "blank" (if omitted, auto-detect)
+// -----------------------------------------
 roundsRouter.post("/", requireAuth, async (req, res) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
+    const userId = req.user.id;
 
     const {
       course,
-      state,
-      holes,
       layout = null,
-      par_mode = "published",
-      notes = null,
+      state = null,
+      holes,
+      par_mode: requestedParMode = "",
     } = req.body || {};
 
-    const courseName = String(course || "").trim();
-    const stateCode = String(state || "").trim().toUpperCase();
     const holesNum = Number(holes);
 
-    if (!courseName) return res.status(400).json({ ok: false, error: "course is required" });
-    if (!Number.isFinite(holesNum) || ![9, 18].includes(holesNum)) {
-      return res.status(400).json({ ok: false, error: "holes must be 9 or 18" });
-    }
-    if (!["published", "blank"].includes(String(par_mode))) {
-      return res.status(400).json({ ok: false, error: "par_mode must be published or blank" });
+    if (!course || !Number.isFinite(holesNum) || (holesNum !== 9 && holesNum !== 18)) {
+      return res.status(400).json({ ok: false, error: "course and holes (9 or 18) are required" });
     }
 
-    const roundRes = await db.query(
+    const scorecard = findScorecard({ course, state, layout, holes: holesNum });
+
+    // Decide par mode:
+    // - if client explicitly requests "blank" -> blank
+    // - else if scorecard exists -> published
+    // - else -> blank
+    const forced = String(requestedParMode || "").toLowerCase();
+    const parMode =
+      forced === "blank" ? "blank" : scorecard ? "published" : "blank";
+
+    // Create round
+    const roundInsert = await db.query(
       `
-      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, notes, created_at, updated_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,now(),now())
-      RETURNING id
+      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode)
+      VALUES ($1,$2,$3,$4,$5,$6)
+      RETURNING id, course, layout, state, holes, par_mode, created_at
       `,
-      [
-        userId,
-        courseName,
-        layout ? String(layout).trim() : null,
-        stateCode || null,
-        holesNum,
-        String(par_mode),
-        notes ? String(notes).trim() : null,
-      ]
+      [userId, course, layout, state, holesNum, parMode]
     );
 
-    const roundId = roundRes.rows[0]?.id;
+    const round = roundInsert.rows[0];
 
-    // Pre-create hole rows so UI always has a row for each hole
-    const insertRows = [];
+    // Create hole rows
+    const pars = (parMode === "published" && scorecard) ? scorecard.pars : null;
+
     for (let i = 1; i <= holesNum; i++) {
-      insertRows.push([roundId, i, null, null, null]);
+      const parVal = pars ? pars[i - 1] : null;
+
+      await db.query(
+        `
+        INSERT INTO round_holes (round_id, hole_number, par, strokes, putts)
+        VALUES ($1,$2,$3,NULL,NULL)
+        ON CONFLICT (round_id, hole_number)
+        DO NOTHING
+        `,
+        [round.id, i, parVal]
+      );
     }
 
-    // bulk insert with UNNEST
-    await db.query(
-      `
-      INSERT INTO round_holes (round_id, hole_number, par, strokes, putts)
-      SELECT * FROM UNNEST (
-        $1::int[],
-        $2::int[],
-        $3::int[],
-        $4::int[],
-        $5::int[]
-      )
-      `,
-      [
-        insertRows.map((r) => r[0]),
-        insertRows.map((r) => r[1]),
-        insertRows.map((r) => r[2]),
-        insertRows.map((r) => r[3]),
-        insertRows.map((r) => r[4]),
-      ]
-    );
+    const holesData = await fetchRoundHoles(round.id);
 
-    return res.json({ ok: true, roundId });
+    return res.json({ ok: true, round: { ...round, holesData } });
   } catch (err) {
     console.error("POST /api/rounds error:", err);
     return res.status(500).json({ ok: false, error: "internal error" });
   }
 });
 
-// -------------------------------------------------
-// PUT /api/rounds/:id  (update holes + optional notes)
-// body: { holes:[{hole_number, par, strokes, putts}], notes? }
-// -------------------------------------------------
-roundsRouter.put("/:id", requireAuth, async (req, res) => {
+// -----------------------------------------
+// GET /api/rounds/:id  (single round + holes)
+// -----------------------------------------
+roundsRouter.get("/:id", requireAuth, async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user.id;
     const roundId = Number(req.params.id);
 
-    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
-    if (!Number.isInteger(roundId) || roundId <= 0) {
-      return res.status(400).json({ ok: false, error: "invalid round id" });
-    }
+    const round = await fetchRoundOwned(roundId, userId);
+    if (!round) return res.status(404).json({ ok: false, error: "round not found" });
 
-    // ownership check
-    const own = await db.query(
-      `SELECT id, holes FROM rounds WHERE id = $1 AND user_id = $2 LIMIT 1`,
-      [roundId, userId]
-    );
-    if (!own.rows.length) {
-      return res.status(404).json({ ok: false, error: "round not found" });
-    }
+    const holesData = await fetchRoundHoles(roundId);
 
-    const holesCount = Number(own.rows[0].holes) || 18;
-
-    const { holes = [], notes } = req.body || {};
-    const arr = Array.isArray(holes) ? holes : [];
-
-    // Upsert each hole (safe/simple)
-    for (const h of arr) {
-      const holeNum = Number(h.hole_number);
-      if (!Number.isInteger(holeNum) || holeNum < 1 || holeNum > holesCount) continue;
-
-      const par = h.par === null || h.par === "" ? null : Number(h.par);
-      const strokes = h.strokes === null || h.strokes === "" ? null : Number(h.strokes);
-      const putts = h.putts === null || h.putts === "" ? null : Number(h.putts);
-
-      await db.query(
-        `
-        INSERT INTO round_holes (round_id, hole_number, par, strokes, putts)
-        VALUES ($1,$2,$3,$4,$5)
-        ON CONFLICT (round_id, hole_number) DO UPDATE SET
-          par = EXCLUDED.par,
-          strokes = EXCLUDED.strokes,
-          putts = EXCLUDED.putts
-        `,
-        [
-          roundId,
-          holeNum,
-          Number.isFinite(par) ? par : null,
-          Number.isFinite(strokes) ? strokes : null,
-          Number.isFinite(putts) ? putts : null,
-        ]
-      );
-    }
-
-    // optional notes update
-    if (typeof notes !== "undefined") {
-      await db.query(
-        `
-        UPDATE rounds
-        SET notes = $2,
-            updated_at = now()
-        WHERE id = $1 AND user_id = $3
-        `,
-        [roundId, notes ? String(notes).trim() : null, userId]
-      );
-    } else {
-      await db.query(
-        `
-        UPDATE rounds
-        SET updated_at = now()
-        WHERE id = $1 AND user_id = $2
-        `,
-        [roundId, userId]
-      );
-    }
-
-    return res.json({ ok: true });
+    return res.json({ ok: true, round: { ...round, holesData } });
   } catch (err) {
-    console.error("PUT /api/rounds/:id error:", err);
+    console.error("GET /api/rounds/:id error:", err);
     return res.status(500).json({ ok: false, error: "internal error" });
   }
 });
 
-// -------------------------------------------------
-// DELETE /api/rounds/:id
-// -------------------------------------------------
-roundsRouter.delete("/:id", requireAuth, async (req, res) => {
+// -----------------------------------------
+// PUT /api/rounds/:id  (update strokes/putts and optionally par if blank mode)
+// Body: { holes: [{ hole_number, strokes, putts, par? }, ...] }
+// -----------------------------------------
+roundsRouter.put("/:id", requireAuth, async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user.id;
     const roundId = Number(req.params.id);
 
-    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
-    if (!Number.isInteger(roundId) || roundId <= 0) {
-      return res.status(400).json({ ok: false, error: "invalid round id" });
+    const round = await fetchRoundOwned(roundId, userId);
+    if (!round) return res.status(404).json({ ok: false, error: "round not found" });
+
+    const holes = Array.isArray(req.body?.holes) ? req.body.holes : [];
+    if (!holes.length) return res.json({ ok: true, updated: 0 });
+
+    let updated = 0;
+
+    for (const h of holes) {
+      const holeNum = Number(h.hole_number);
+      if (!Number.isFinite(holeNum) || holeNum <= 0) continue;
+
+      const strokes =
+        h.strokes === null || typeof h.strokes === "undefined" ? null : Number(h.strokes);
+      const putts =
+        h.putts === null || typeof h.putts === "undefined" ? null : Number(h.putts);
+
+      // Only allow editing par if round is blank mode
+      const parAllowed = (round.par_mode === "blank");
+      const par =
+        parAllowed && !(h.par === null || typeof h.par === "undefined")
+          ? Number(h.par)
+          : undefined;
+
+      if (!Number.isFinite(strokes) && strokes !== null) continue;
+      if (!Number.isFinite(putts) && putts !== null) continue;
+      if (typeof par !== "undefined" && !Number.isFinite(par)) continue;
+
+      if (typeof par === "undefined") {
+        const r = await db.query(
+          `
+          UPDATE round_holes
+          SET strokes = $3,
+              putts = $4
+          WHERE round_id = $1 AND hole_number = $2
+          `,
+          [roundId, holeNum, strokes, putts]
+        );
+        updated += r.rowCount || 0;
+      } else {
+        const r = await db.query(
+          `
+          UPDATE round_holes
+          SET par = $3,
+              strokes = $4,
+              putts = $5
+          WHERE round_id = $1 AND hole_number = $2
+          `,
+          [roundId, holeNum, par, strokes, putts]
+        );
+        updated += r.rowCount || 0;
+      }
     }
 
-    const result = await db.query(
-      `DELETE FROM rounds WHERE id = $1 AND user_id = $2`,
-      [roundId, userId]
-    );
+    const holesData = await fetchRoundHoles(roundId);
 
-    if ((result.rowCount || 0) === 0) {
-      return res.status(404).json({ ok: false, error: "round not found" });
-    }
-
-    return res.json({ ok: true });
+    return res.json({ ok: true, updated, round: { ...round, holesData } });
   } catch (err) {
-    console.error("DELETE /api/rounds/:id error:", err);
+    console.error("PUT /api/rounds/:id error:", err);
     return res.status(500).json({ ok: false, error: "internal error" });
   }
 });
