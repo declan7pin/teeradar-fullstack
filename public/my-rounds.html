@@ -257,6 +257,7 @@
       border:1px solid var(--border);
       font-weight:800;
       text-align:center;
+      background:#fff;
     }
     .mini:focus{border-color:#9ad7cf; box-shadow:0 0 0 3px rgba(0,121,107,.10)}
     .rightActions{
@@ -572,6 +573,52 @@
     const courseAutoList = document.getElementById("courseAutoList");
 
     // -----------------------------
+    // ✅ NEW: scroll-wheel selectors for strokes & putts (Pickup/Chipped in = 0)
+    // -----------------------------
+    function strokeOptions() {
+      return [
+        { label: "Pickup", value: 0 },
+        ...Array.from({ length: 10 }, (_, i) => ({ label: String(i + 1), value: i + 1 })),
+        { label: "11+", value: 11 }
+      ];
+    }
+
+    function puttOptions() {
+      return [
+        { label: "Chipped in", value: 0 },
+        ...Array.from({ length: 10 }, (_, i) => ({ label: String(i + 1), value: i + 1 }))
+      ];
+    }
+
+    function buildSelect(options, value, hole, field) {
+      const sel = document.createElement("select");
+      sel.className = "mini";
+      sel.dataset.hole = hole;
+      sel.dataset.field = field;
+
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = "—";
+      sel.appendChild(blank);
+
+      options.forEach(opt => {
+        const o = document.createElement("option");
+        o.value = String(opt.value);
+        o.textContent = opt.label;
+        sel.appendChild(o);
+      });
+
+      if (value === null || value === undefined || value === "") {
+        sel.value = "";
+      } else {
+        sel.value = String(Number(value));
+      }
+
+      sel.addEventListener("change", updateTotalsFromTable);
+      return sel;
+    }
+
+    // -----------------------------
     // Helpers
     // -----------------------------
     function norm(s){ return String(s || "").trim().toLowerCase(); }
@@ -581,10 +628,6 @@
     }
 
     function pickParsFromCourseObj(courseObj, holes){
-      // supports a few possible shapes without breaking anything:
-      // - course.pars18 / course.pars9 = [..]
-      // - course.pars = { "18":[..], "9":[..] } OR course.pars = [..] (assume 18)
-      // - course.holes = [{hole_number, par}] style arrays
       const h = Number(holes) || 18;
       const c = courseObj || {};
 
@@ -601,7 +644,6 @@
         return arr.length ? arr : null;
       }
 
-      // holes array in some formats
       const holesArr = c.holesData || c.holes || c.scorecard || null;
       if (Array.isArray(holesArr)) {
         const map = new Map();
@@ -661,7 +703,6 @@
           selectedCourseKey = courseKey(nm, st2 || stateEl.value);
           hideCourseAutocomplete();
 
-          // if they already selected "published", and they have a round loaded, try apply pars
           if (currentRoundId && String(parModeEl.value || "") === "published") {
             tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, currentRound?.holes);
           }
@@ -677,14 +718,13 @@
 
       courseEl.addEventListener("input", async () => {
         const q = norm(courseEl.value);
-        selectedCourseKey = ""; // typing resets "picked" state
+        selectedCourseKey = "";
 
         hideCourseAutocomplete();
         if (!q || q.length < 2) return;
 
         await loadCoursesOnce();
 
-        // prefer matching current state filter (but allow all if none)
         const stateNow = (stateEl?.value || "").trim().toUpperCase();
 
         const matches = coursesCache
@@ -702,7 +742,6 @@
         showCourseAutocomplete(matches);
       });
 
-      // click away closes
       document.addEventListener("click", (e) => {
         if (e.target === courseEl) return;
         if (courseAutoList.contains(e.target)) return;
@@ -723,12 +762,11 @@
         const k = courseKey(name, st);
         const courseObj =
           coursesCache.find(c => courseKey(c.name || c.course || c.title, c.state) === k) ||
-          coursesCache.find(c => norm(c.name || c.course || c.title) === norm(name)); // fallback match by name
+          coursesCache.find(c => norm(c.name || c.course || c.title) === norm(name));
 
         const pars = pickParsFromCourseObj(courseObj, h);
         if (!pars || !Array.isArray(pars) || !pars.length) return;
 
-        // fill only empty par inputs
         for (let i=1;i<=h;i++){
           const input = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
           if (!input) continue;
@@ -861,19 +899,38 @@
         const existing = map.get(i) || { hole_number: i, par: null, strokes: null, putts: null };
         const tr = document.createElement("tr");
 
-        tr.innerHTML = `
-          <td>Hole ${i}</td>
-          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${existing.par ?? ""}" placeholder="—"></td>
-          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="strokes" data-hole="${i}" value="${existing.strokes ?? ""}" placeholder="—"></td>
-          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="putts" data-hole="${i}" value="${existing.putts ?? ""}" placeholder="—"></td>
-        `;
+        const parInput = document.createElement("input");
+        parInput.className = "mini";
+        parInput.dataset.hole = i;
+        parInput.dataset.field = "par";
+        parInput.inputMode = "numeric";
+        parInput.pattern = "[0-9]*";
+        parInput.value = existing.par ?? "";
+        parInput.placeholder = "—";
+        parInput.addEventListener("input", updateTotalsFromTable);
+
+        const strokesSelect = buildSelect(strokeOptions(), (existing.strokes ?? null), i, "strokes");
+        const puttsSelect = buildSelect(puttOptions(), (existing.putts ?? null), i, "putts");
+
+        const tdHole = document.createElement("td");
+        tdHole.textContent = `Hole ${i}`;
+
+        const tdPar = document.createElement("td");
+        tdPar.appendChild(parInput);
+
+        const tdStrokes = document.createElement("td");
+        tdStrokes.appendChild(strokesSelect);
+
+        const tdPutts = document.createElement("td");
+        tdPutts.appendChild(puttsSelect);
+
+        tr.appendChild(tdHole);
+        tr.appendChild(tdPar);
+        tr.appendChild(tdStrokes);
+        tr.appendChild(tdPutts);
 
         scoreBody.appendChild(tr);
       }
-
-      scoreBody.querySelectorAll("input").forEach((inp) => {
-        inp.addEventListener("input", () => updateTotalsFromTable());
-      });
 
       updateTotalsFromTable();
 
@@ -883,7 +940,7 @@
 
     function readTableHoles(){
       const rows = [];
-      const inputs = scoreBody.querySelectorAll("input[data-hole]");
+      const inputs = scoreBody.querySelectorAll("input[data-hole], select[data-hole]");
       const byHole = new Map();
 
       for (const inp of inputs) {
@@ -972,7 +1029,7 @@
         layout: layout || null,
         par_mode,
         notes: notes || null,
-        ...(publishedPars ? { publishedPars } : {}) // ✅ NEW (optional)
+        ...(publishedPars ? { publishedPars } : {})
       };
 
       const data = await api("/api/rounds", { method:"POST", body: JSON.stringify(payload) });
