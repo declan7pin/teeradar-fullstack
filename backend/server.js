@@ -28,6 +28,9 @@ import authRouter from "./auth.js";
 import alertsRouter from "./alertsRoutes.js";
 import { startAlertWorker, runAlertTickOnce } from "./alertWorker.js"; // ✅ ADDED runAlertTickOnce
 
+// ✅ NEW: Rounds router
+import roundsRouter from "./roundsRoutes.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -336,6 +339,9 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 app.use("/api/auth", authRouter);
+
+// ✅ NEW: mount rounds router
+app.use("/api/rounds", roundsRouter);
 
 // -------------------------------------------------
 // ✅ NEW: /api/me (for bookings page to read home state)
