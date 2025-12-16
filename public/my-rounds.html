@@ -286,6 +286,39 @@
     }
     .toast.ok{display:block; border-color:rgba(22,163,74,.25); background:rgba(22,163,74,.07); color:var(--ok)}
     .toast.bad{display:block; border-color:rgba(213,0,0,.25); background:rgba(213,0,0,.06); color:var(--danger)}
+
+    /* ✅ NEW: course autocomplete */
+    #courseRow{ position:relative; }
+    .autocomplete-list{
+      position:absolute;
+      left:0;
+      right:0;
+      top:100%;
+      margin-top:2px;
+      background:#ffffff;
+      border:1px solid var(--border);
+      border-radius:0 0 10px 10px;
+      max-height:200px;
+      overflow-y:auto;
+      z-index:50;
+      box-shadow:0 10px 20px rgba(15,23,42,0.12);
+    }
+    .autocomplete-item{
+      padding:8px 10px;
+      cursor:pointer;
+      font-weight:800;
+      font-size:.92rem;
+    }
+    .autocomplete-item:hover{
+      background:#f3f4f6;
+    }
+    .autocomplete-item small{
+      display:block;
+      font-weight:800;
+      color:var(--muted);
+      font-size:.8rem;
+      margin-top:2px;
+    }
   </style>
 </head>
 <body>
@@ -319,7 +352,10 @@
           </div>
 
           <label for="course">Course</label>
-          <input id="course" placeholder="e.g. Collier Park Golf Course" />
+          <div id="courseRow">
+            <input id="course" placeholder="e.g. Collier Park Golf Course" />
+            <div id="courseAutoList" class="autocomplete-list" style="display:none;"></div>
+          </div>
 
           <div class="row">
             <div>
@@ -444,8 +480,7 @@
     // Auth helpers
     // -----------------------------
     function getToken() {
-      // support a few common keys without breaking anything
-      const keys = ["teeradar_jwt", "teeradar_token", "token", "authToken", "jwt", "access_token"]; // ✅ UPDATED
+      const keys = ["teeradar_jwt", "teeradar_token", "token", "authToken", "jwt", "access_token"];
       for (const k of keys) {
         const v = localStorage.getItem(k);
         if (v && String(v).trim().length > 10) return String(v).trim();
@@ -486,8 +521,13 @@
     // State
     // -----------------------------
     let currentRoundId = null;
-    let currentRound = null; // { id, course, layout, state, holes, par_mode, created_at, notes, holesData: [...] }
+    let currentRound = null;
     let roundsCache = [];
+
+    // ✅ NEW: course data cache for autocomplete + pars
+    let coursesCache = [];
+    let coursesLoaded = false;
+    let selectedCourseKey = ""; // tracks the last picked course (name|state)
 
     // -----------------------------
     // UI refs
@@ -527,6 +567,182 @@
 
     const leftToast = document.getElementById("leftToast");
     const rightToast = document.getElementById("rightToast");
+
+    // ✅ NEW: autocomplete refs
+    const courseAutoList = document.getElementById("courseAutoList");
+
+    // -----------------------------
+    // Helpers
+    // -----------------------------
+    function norm(s){ return String(s || "").trim().toLowerCase(); }
+
+    function courseKey(name, state){
+      return (norm(name) + "|" + String(state || "").trim().toUpperCase());
+    }
+
+    function pickParsFromCourseObj(courseObj, holes){
+      // supports a few possible shapes without breaking anything:
+      // - course.pars18 / course.pars9 = [..]
+      // - course.pars = { "18":[..], "9":[..] } OR course.pars = [..] (assume 18)
+      // - course.holes = [{hole_number, par}] style arrays
+      const h = Number(holes) || 18;
+      const c = courseObj || {};
+
+      if (h === 9 && Array.isArray(c.pars9)) return c.pars9.slice(0, 9);
+      if (h === 18 && Array.isArray(c.pars18)) return c.pars18.slice(0, 18);
+
+      if (c.pars && typeof c.pars === "object" && !Array.isArray(c.pars)) {
+        const arr = c.pars[String(h)];
+        if (Array.isArray(arr)) return arr.slice(0, h);
+      }
+
+      if (Array.isArray(c.pars)) {
+        const arr = c.pars.slice(0, h);
+        return arr.length ? arr : null;
+      }
+
+      // holes array in some formats
+      const holesArr = c.holesData || c.holes || c.scorecard || null;
+      if (Array.isArray(holesArr)) {
+        const map = new Map();
+        holesArr.forEach(x => map.set(Number(x.hole_number || x.hole || x.number), Number(x.par)));
+        const out = [];
+        for (let i=1;i<=h;i++){
+          const p = map.get(i);
+          out.push(Number.isFinite(p) ? p : null);
+        }
+        return out.some(v => v != null) ? out : null;
+      }
+
+      return null;
+    }
+
+    async function loadCoursesOnce(){
+      if (coursesLoaded) return;
+      coursesLoaded = true;
+      try{
+        const res = await fetch("/api/courses");
+        const data = await res.json();
+        coursesCache = Array.isArray(data) ? data : [];
+      }catch(e){
+        coursesCache = [];
+      }
+    }
+
+    function hideCourseAutocomplete(){
+      if (!courseAutoList) return;
+      courseAutoList.style.display = "none";
+      courseAutoList.innerHTML = "";
+    }
+
+    function showCourseAutocomplete(items){
+      if (!courseAutoList) return;
+      courseAutoList.innerHTML = "";
+      if (!items.length){
+        hideCourseAutocomplete();
+        return;
+      }
+      items.forEach(c => {
+        const div = document.createElement("div");
+        div.className = "autocomplete-item";
+        const label = c.name || c.course || c.title || "";
+        const st = (c.state || "").toUpperCase();
+        const meta = st ? `State: ${st}` : "";
+
+        div.innerHTML = `${escapeHtml(label)}${meta ? `<small>${escapeHtml(meta)}</small>` : ""}`;
+
+        div.addEventListener("click", () => {
+          const nm = c.name || c.course || c.title || "";
+          const st2 = (c.state || "").toUpperCase();
+
+          courseEl.value = nm;
+          if (st2 && stateEl) stateEl.value = st2;
+
+          selectedCourseKey = courseKey(nm, st2 || stateEl.value);
+          hideCourseAutocomplete();
+
+          // if they already selected "published", and they have a round loaded, try apply pars
+          if (currentRoundId && String(parModeEl.value || "") === "published") {
+            tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, currentRound?.holes);
+          }
+        });
+
+        courseAutoList.appendChild(div);
+      });
+      courseAutoList.style.display = "block";
+    }
+
+    async function initCourseAutocomplete(){
+      if (!courseEl || !courseAutoList) return;
+
+      courseEl.addEventListener("input", async () => {
+        const q = norm(courseEl.value);
+        selectedCourseKey = ""; // typing resets "picked" state
+
+        hideCourseAutocomplete();
+        if (!q || q.length < 2) return;
+
+        await loadCoursesOnce();
+
+        // prefer matching current state filter (but allow all if none)
+        const stateNow = (stateEl?.value || "").trim().toUpperCase();
+
+        const matches = coursesCache
+          .filter(c => norm(c.name || c.course || c.title).includes(q))
+          .sort((a,b) => {
+            const aState = String(a.state || "").toUpperCase();
+            const bState = String(b.state || "").toUpperCase();
+            const aBoost = (stateNow && aState === stateNow) ? -1 : 0;
+            const bBoost = (stateNow && bState === stateNow) ? -1 : 0;
+            if (aBoost !== bBoost) return aBoost - bBoost;
+            return norm(a.name).localeCompare(norm(b.name));
+          })
+          .slice(0, 10);
+
+        showCourseAutocomplete(matches);
+      });
+
+      // click away closes
+      document.addEventListener("click", (e) => {
+        if (e.target === courseEl) return;
+        if (courseAutoList.contains(e.target)) return;
+        hideCourseAutocomplete();
+      });
+    }
+
+    function tryApplyPublishedParsToTableFromCourseCache(courseName, state, holes){
+      try{
+        const mode = String(currentRound?.par_mode || parModeEl?.value || "");
+        if (mode !== "published") return;
+
+        const name = String(courseName || "").trim();
+        const st = String(state || "").trim().toUpperCase() || String(stateEl?.value || "").trim().toUpperCase();
+        const h = Number(holes || holesEl?.value || 18) || 18;
+        if (!name) return;
+
+        const k = courseKey(name, st);
+        const courseObj =
+          coursesCache.find(c => courseKey(c.name || c.course || c.title, c.state) === k) ||
+          coursesCache.find(c => norm(c.name || c.course || c.title) === norm(name)); // fallback match by name
+
+        const pars = pickParsFromCourseObj(courseObj, h);
+        if (!pars || !Array.isArray(pars) || !pars.length) return;
+
+        // fill only empty par inputs
+        for (let i=1;i<=h;i++){
+          const input = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
+          if (!input) continue;
+          const existing = String(input.value || "").trim();
+          if (existing !== "") continue;
+
+          const p = pars[i-1];
+          if (p == null) continue;
+          input.value = String(p);
+        }
+
+        updateTotalsFromTable();
+      }catch(e){}
+    }
 
     // -----------------------------
     // Round list rendering
@@ -660,6 +876,9 @@
       });
 
       updateTotalsFromTable();
+
+      // ✅ NEW: if par mode is published, try to auto-fill pars (only if missing)
+      tryApplyPublishedParsToTableFromCourseCache(round.course, round.state, round.holes);
     }
 
     function readTableHoles(){
@@ -703,7 +922,7 @@
     }
 
     // -----------------------------
-    // API calls (expects you to add these routes)
+    // API calls
     // -----------------------------
     async function fetchRounds(){
       const data = await api("/api/rounds", { method:"GET" });
@@ -735,7 +954,27 @@
         return;
       }
 
-      const payload = { course, state, holes, layout: layout || null, par_mode, notes: notes || null };
+      // ✅ NEW: if they picked a course + par_mode=published, include pars (backend can use/ignore safely)
+      let publishedPars = null;
+      if (par_mode === "published") {
+        await loadCoursesOnce();
+        const k = courseKey(course, state);
+        const courseObj =
+          coursesCache.find(c => courseKey(c.name || c.course || c.title, c.state) === k) ||
+          coursesCache.find(c => norm(c.name || c.course || c.title) === norm(course));
+        publishedPars = pickParsFromCourseObj(courseObj, holes);
+      }
+
+      const payload = {
+        course,
+        state,
+        holes,
+        layout: layout || null,
+        par_mode,
+        notes: notes || null,
+        ...(publishedPars ? { publishedPars } : {}) // ✅ NEW (optional)
+      };
+
       const data = await api("/api/rounds", { method:"POST", body: JSON.stringify(payload) });
 
       const newId = data.roundId || (data.round && data.round.id);
@@ -797,8 +1036,7 @@
     // Init + events
     // -----------------------------
     function logout(){
-      // clear only token-ish keys
-      ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"].forEach(k => localStorage.removeItem(k)); // ✅ UPDATED
+      ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"].forEach(k => localStorage.removeItem(k));
       setToast(leftToast, "Logged out.", true);
       setTimeout(() => window.location.href = "/account.html", 450);
     }
@@ -823,6 +1061,16 @@
       }
     });
 
+    // ✅ NEW: if they change holes/par mode after selecting a course, try fill again (only empty pars)
+    holesEl.addEventListener("change", () => {
+      if (!currentRoundId) return;
+      tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, holesEl.value);
+    });
+    parModeEl.addEventListener("change", () => {
+      if (!currentRoundId) return;
+      tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, holesEl.value);
+    });
+
     (async function init(){
       const token = getToken();
       if (!token) {
@@ -833,6 +1081,9 @@
 
       authGate.style.display = "none";
       appEl.style.display = "block";
+
+      // ✅ NEW
+      initCourseAutocomplete();
 
       await safeFetchRounds();
     })();
