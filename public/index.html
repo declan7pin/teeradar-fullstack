@@ -738,6 +738,10 @@
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
       <a href="/analytics.html" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
+
+      <!-- ✅ NEW: My Rounds (only visible when logged in) -->
+      <a href="/my-rounds.html" id="navMyRounds" style="display:none;">My Rounds</a>
+
       <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
     </nav>
   </div>
@@ -976,16 +980,20 @@
   function renderNavState() {
     const analyticsLink = document.getElementById("navAnalytics");
     const loginBtn = document.getElementById("navLoginBtn");
+    const roundsLink = document.getElementById("navMyRounds"); // ✅ NEW
     if (!analyticsLink || !loginBtn) return;
 
     const email = localStorage.getItem("teeradar_user_email");
 
     if (!email) {
       analyticsLink.style.display = "none";
+      if (roundsLink) roundsLink.style.display = "none"; // ✅ NEW
       loginBtn.textContent = "Log in";
       loginBtn.onclick = handleLogin;
       return;
     }
+
+    if (roundsLink) roundsLink.style.display = "inline-flex"; // ✅ NEW
 
     if (email === ADMIN_EMAIL) {
       analyticsLink.style.display = "inline-flex";
