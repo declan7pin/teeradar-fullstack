@@ -257,8 +257,17 @@
       border:1px solid var(--border);
       font-weight:800;
       text-align:center;
+      background:#fff;
+      color:var(--text);
     }
     .mini:focus{border-color:#9ad7cf; box-shadow:0 0 0 3px rgba(0,121,107,.10)}
+
+    /* ✅ NEW: make selects render iOS wheel picker consistently */
+    select.mini{
+      -webkit-appearance: menulist;
+      appearance: auto;
+    }
+
     .rightActions{
       display:flex;
       gap:10px;
@@ -596,6 +605,17 @@
       return (norm(name) + "|" + String(state || "").trim().toUpperCase());
     }
 
+    // ✅ NEW: build options for iOS wheel pickers
+    function buildNumberOptions(min, max, currentValue){
+      const cur = (currentValue === null || typeof currentValue === "undefined" || currentValue === "") ? "" : String(currentValue);
+      let html = `<option value=""></option>`;
+      for (let i = min; i <= max; i++){
+        const v = String(i);
+        html += `<option value="${v}"${(cur !== "" && cur === v) ? " selected" : ""}>${v}</option>`;
+      }
+      return html;
+    }
+
     function pickParsFromCourseObj(courseObj, holes){
       // supports a few possible shapes without breaking anything:
       // - course.pars18 / course.pars9 = [..]
@@ -889,15 +909,25 @@
         tr.innerHTML = `
           <td>Hole ${i}</td>
           <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${existing.par ?? ""}" placeholder="—"></td>
-          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="strokes" data-hole="${i}" value="${existing.strokes ?? ""}" placeholder="—"></td>
-          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="putts" data-hole="${i}" value="${existing.putts ?? ""}" placeholder="—"></td>
+          <td>
+            <select class="mini" data-field="strokes" data-hole="${i}">
+              ${buildNumberOptions(0, 25, existing.strokes ?? "")}
+            </select>
+          </td>
+          <td>
+            <select class="mini" data-field="putts" data-hole="${i}">
+              ${buildNumberOptions(0, 10, existing.putts ?? "")}
+            </select>
+          </td>
         `;
 
         scoreBody.appendChild(tr);
       }
 
-      scoreBody.querySelectorAll("input").forEach((inp) => {
-        inp.addEventListener("input", () => updateTotalsFromTable());
+      // ✅ update totals on any change (inputs + selects)
+      scoreBody.querySelectorAll('input[data-hole], select[data-hole]').forEach((el) => {
+        el.addEventListener("input", () => updateTotalsFromTable());
+        el.addEventListener("change", () => updateTotalsFromTable());
       });
 
       updateTotalsFromTable();
@@ -907,16 +937,16 @@
 
     function readTableHoles(){
       const rows = [];
-      const inputs = scoreBody.querySelectorAll("input[data-hole]");
+      const controls = scoreBody.querySelectorAll('[data-hole]');
       const byHole = new Map();
 
-      for (const inp of inputs) {
-        const hole = Number(inp.dataset.hole);
-        const field = inp.dataset.field;
+      for (const el of controls) {
+        const hole = Number(el.dataset.hole);
+        const field = el.dataset.field;
 
         if (!byHole.has(hole)) byHole.set(hole, { hole_number: hole, par: null, strokes: null, putts: null });
 
-        const v = String(inp.value || "").trim();
+        const v = String(el.value || "").trim();
         const n = v === "" ? null : Number(v);
 
         byHole.get(hole)[field] = Number.isFinite(n) ? n : null;
