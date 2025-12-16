@@ -257,7 +257,6 @@
       border:1px solid var(--border);
       font-weight:800;
       text-align:center;
-      background:#fff;
     }
     .mini:focus{border-color:#9ad7cf; box-shadow:0 0 0 3px rgba(0,121,107,.10)}
     .rightActions{
@@ -288,7 +287,7 @@
     .toast.ok{display:block; border-color:rgba(22,163,74,.25); background:rgba(22,163,74,.07); color:var(--ok)}
     .toast.bad{display:block; border-color:rgba(213,0,0,.25); background:rgba(213,0,0,.06); color:var(--danger)}
 
-    /* course autocomplete */
+    /* ✅ NEW: course autocomplete */
     #courseRow{ position:relative; }
     .autocomplete-list{
       position:absolute;
@@ -381,16 +380,16 @@
             </div>
           </div>
 
-          <!-- ask Front/Back 9 when 9 holes + published pars -->
-          <div class="row" id="nineSideRow" style="display:none;">
-            <div>
-              <label for="nineSide">9-hole side</label>
-              <select id="nineSide">
-                <option value="front">Front 9</option>
-                <option value="back">Back 9</option>
-              </select>
+          <!-- ✅ NEW: front/back selector (only when 9 holes) -->
+          <div id="nineLoopWrap" style="display:none;">
+            <label for="nineLoop">9 holes (front or back?)</label>
+            <select id="nineLoop">
+              <option value="front">Front 9</option>
+              <option value="back">Back 9</option>
+            </select>
+            <div class="muted" style="margin-top:6px;font-weight:800;">
+              If the course only has an 18-hole scorecard saved, this picks which 9 pars to use.
             </div>
-            <div></div>
           </div>
 
           <div class="row">
@@ -475,7 +474,7 @@
             </div>
 
             <div class="muted" style="margin-top:10px; font-weight:800;">
-              Tip: use the scroll wheels for Strokes + Putts. “Pickup” and “Chipped in” save as <strong>0</strong>.
+              Tip: enter strokes + putts each hole. Pars can be blank if you don’t know them yet.
             </div>
           </div>
         </section>
@@ -537,13 +536,10 @@
     let currentRound = null;
     let roundsCache = [];
 
-    // course cache
+    // ✅ NEW: course data cache for autocomplete + pars
     let coursesCache = [];
     let coursesLoaded = false;
-
-    // ✅ NEW: scorecards cache fallback (for pars)
-    let scorecardsCache = [];
-    let scorecardsLoaded = false;
+    let selectedCourseKey = ""; // tracks the last picked course (name|state)
 
     // -----------------------------
     // UI refs
@@ -558,8 +554,9 @@
     const parModeEl = document.getElementById("parMode");
     const notesEl = document.getElementById("notes");
 
-    const nineSideRow = document.getElementById("nineSideRow");
-    const nineSideEl = document.getElementById("nineSide");
+    // ✅ NEW: 9-hole loop selector refs
+    const nineLoopWrap = document.getElementById("nineLoopWrap");
+    const nineLoopEl = document.getElementById("nineLoop");
 
     const createRoundBtn = document.getElementById("createRoundBtn");
     const refreshBtn = document.getElementById("refreshBtn");
@@ -587,92 +584,25 @@
     const leftToast = document.getElementById("leftToast");
     const rightToast = document.getElementById("rightToast");
 
+    // ✅ NEW: autocomplete refs
     const courseAutoList = document.getElementById("courseAutoList");
-
-    // -----------------------------
-    // Scroll-wheel selectors (Pickup/Chipped in = 0)
-    // -----------------------------
-    function strokeOptions() {
-      return [
-        { label: "Pickup", value: 0 },
-        ...Array.from({ length: 10 }, (_, i) => ({ label: String(i + 1), value: i + 1 })),
-        { label: "11+", value: 11 }
-      ];
-    }
-
-    function puttOptions() {
-      return [
-        { label: "Chipped in", value: 0 },
-        ...Array.from({ length: 10 }, (_, i) => ({ label: String(i + 1), value: i + 1 }))
-      ];
-    }
-
-    function buildSelect(options, value, hole, field) {
-      const sel = document.createElement("select");
-      sel.className = "mini";
-      sel.dataset.hole = hole;
-      sel.dataset.field = field;
-
-      const blank = document.createElement("option");
-      blank.value = "";
-      blank.textContent = "—";
-      sel.appendChild(blank);
-
-      options.forEach(opt => {
-        const o = document.createElement("option");
-        o.value = String(opt.value);
-        o.textContent = opt.label;
-        sel.appendChild(o);
-      });
-
-      if (value === null || value === undefined || value === "") {
-        sel.value = "";
-      } else {
-        sel.value = String(Number(value));
-      }
-
-      sel.addEventListener("change", updateTotalsFromTable);
-      return sel;
-    }
 
     // -----------------------------
     // Helpers
     // -----------------------------
     function norm(s){ return String(s || "").trim().toLowerCase(); }
 
-    function cleanCourseName(s){
-      return norm(String(s || ""))
-        .replace(/\([^)]*\)/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
+    function courseKey(name, state){
+      return (norm(name) + "|" + String(state || "").trim().toUpperCase());
     }
 
-    function ensureNineSideVisibility(){
-      const holes = Number(holesEl?.value || 18);
-      const mode = String(parModeEl?.value || "published");
-      if (nineSideRow) {
-        nineSideRow.style.display = (holes === 9 && mode === "published") ? "grid" : "none";
-      }
-    }
-
-    function getNineSideValue(){
-      const v = String(nineSideEl?.value || "front");
-      return (v === "back") ? "back" : "front";
-    }
-
-    function escapeHtml(s){
-      return String(s || "")
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-    }
-
-    function pickParsFromCourseObj(courseObj, holes, nineSide){
+    function pickParsFromCourseObj(courseObj, holes){
+      // supports a few possible shapes without breaking anything:
+      // - course.pars18 / course.pars9 = [..]
+      // - course.pars = { "18":[..], "9":[..] } OR course.pars = [..] (assume 18)
+      // - course.holes = [{hole_number, par}] style arrays
       const h = Number(holes) || 18;
       const c = courseObj || {};
-      const side = (nineSide === "back") ? "back" : "front";
 
       if (h === 9 && Array.isArray(c.pars9)) return c.pars9.slice(0, 9);
       if (h === 18 && Array.isArray(c.pars18)) return c.pars18.slice(0, 18);
@@ -680,31 +610,29 @@
       if (c.pars && typeof c.pars === "object" && !Array.isArray(c.pars)) {
         const arr = c.pars[String(h)];
         if (Array.isArray(arr)) return arr.slice(0, h);
-
-        if (h === 9 && Array.isArray(c.pars["18"])) {
-          const p18 = c.pars["18"].slice(0, 18);
-          if (p18.length >= 18) return (side === "back") ? p18.slice(9, 18) : p18.slice(0, 9);
-        }
       }
 
       if (Array.isArray(c.pars)) {
-        const arr = c.pars.slice(0, Math.max(h, 18));
-        if (!arr.length) return null;
-        if (h === 9 && arr.length >= 18) return (side === "back") ? arr.slice(9, 18) : arr.slice(0, 9);
-        return arr.slice(0, h);
+        const arr = c.pars.slice(0, h);
+        return arr.length ? arr : null;
       }
 
-      if (h === 9 && Array.isArray(c.pars18) && c.pars18.length >= 18) {
-        const p18 = c.pars18.slice(0, 18);
-        return (side === "back") ? p18.slice(9, 18) : p18.slice(0, 9);
+      // holes array in some formats
+      const holesArr = c.holesData || c.holes || c.scorecard || null;
+      if (Array.isArray(holesArr)) {
+        const map = new Map();
+        holesArr.forEach(x => map.set(Number(x.hole_number || x.hole || x.number), Number(x.par)));
+        const out = [];
+        for (let i=1;i<=h;i++){
+          const p = map.get(i);
+          out.push(Number.isFinite(p) ? p : null);
+        }
+        return out.some(v => v != null) ? out : null;
       }
 
       return null;
     }
 
-    // -----------------------------
-    // Load data sources
-    // -----------------------------
     async function loadCoursesOnce(){
       if (coursesLoaded) return;
       coursesLoaded = true;
@@ -717,99 +645,56 @@
       }
     }
 
-    // ✅ NEW: scorecards fallback loader (tries multiple likely endpoints)
-    async function loadScorecardsOnce(){
-      if (scorecardsLoaded) return;
-      scorecardsLoaded = true;
-
-      const st = String(stateEl?.value || "WA").toLowerCase();
-
-      const candidates = [
-        "/api/scorecards",
-        "/api/scorecards/all",
-        "/api/scorecards/" + st,
-        "/api/scorecards?state=" + encodeURIComponent(String(stateEl?.value || "WA"))
-      ];
-
-      for (const url of candidates) {
-        try{
-          const res = await fetch(url);
-          if (!res.ok) continue;
-          const data = await res.json().catch(() => null);
-          const list =
-            (Array.isArray(data) ? data :
-            (data && Array.isArray(data.scorecards) ? data.scorecards :
-            (data && Array.isArray(data.data) ? data.data : null)));
-
-          if (Array.isArray(list) && list.length) {
-            scorecardsCache = list;
-            return;
-          }
-        }catch(e){}
-      }
-
-      scorecardsCache = [];
+    function hideCourseAutocomplete(){
+      if (!courseAutoList) return;
+      courseAutoList.style.display = "none";
+      courseAutoList.innerHTML = "";
     }
 
-    function findBestCourseObj(name, st){
-      const targetClean = cleanCourseName(name);
-      const stateUp = String(st || "").toUpperCase();
+    function showCourseAutocomplete(items){
+      if (!courseAutoList) return;
+      courseAutoList.innerHTML = "";
+      if (!items.length){
+        hideCourseAutocomplete();
+        return;
+      }
+      items.forEach(c => {
+        const div = document.createElement("div");
+        div.className = "autocomplete-item";
+        const label = c.name || c.course || c.title || "";
+        const st = (c.state || "").toUpperCase();
+        const meta = st ? `State: ${st}` : "";
 
-      const matchFrom = (arr) => {
-        if (!Array.isArray(arr) || !arr.length) return null;
+        div.innerHTML = `${escapeHtml(label)}${meta ? `<small>${escapeHtml(meta)}</small>` : ""}`;
 
-        // exact clean + state
-        let hit = arr.find(c => {
-          const cn = c.name || c.course || c.title || c.courseName || "";
-          const cs = String(c.state || c.region || "").toUpperCase();
-          return (cleanCourseName(cn) === targetClean) && (!stateUp || cs === stateUp);
-        });
-        if (hit) return hit;
+        div.addEventListener("click", () => {
+          const nm = c.name || c.course || c.title || "";
+          const st2 = (c.state || "").toUpperCase();
 
-        // exact clean ignoring state
-        hit = arr.find(c => {
-          const cn = c.name || c.course || c.title || c.courseName || "";
-          return cleanCourseName(cn) === targetClean;
-        });
-        if (hit) return hit;
+          courseEl.value = nm;
+          if (st2 && stateEl) stateEl.value = st2;
 
-        // contains match
-        hit = arr.find(c => {
-          const cn = c.name || c.course || c.title || c.courseName || "";
-          const cc = cleanCourseName(cn);
-          if (!cc || !targetClean) return false;
-          const cs = String(c.state || c.region || "").toUpperCase();
-          const stateOk = !stateUp || cs === stateUp;
-          return stateOk && (cc.includes(targetClean) || targetClean.includes(cc));
-        });
-        if (hit) return hit;
+          selectedCourseKey = courseKey(nm, st2 || stateEl.value);
+          hideCourseAutocomplete();
 
-        // contains ignoring state
-        hit = arr.find(c => {
-          const cn = c.name || c.course || c.title || c.courseName || "";
-          const cc = cleanCourseName(cn);
-          if (!cc || !targetClean) return false;
-          return (cc.includes(targetClean) || targetClean.includes(cc));
+          if (currentRoundId && String(parModeEl.value || "") === "published") {
+            tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, currentRound?.holes);
+          }
         });
 
-        return hit || null;
-      };
-
-      return matchFrom(coursesCache) || matchFrom(scorecardsCache) || null;
+        courseAutoList.appendChild(div);
+      });
+      courseAutoList.style.display = "block";
     }
 
     async function initCourseAutocomplete(){
       if (!courseEl || !courseAutoList) return;
 
-      function hide(){
-        courseAutoList.style.display = "none";
-        courseAutoList.innerHTML = "";
-      }
-
       courseEl.addEventListener("input", async () => {
         const q = norm(courseEl.value);
+        selectedCourseKey = ""; // typing resets "picked" state
 
-        hide();
+        hideCourseAutocomplete();
         if (!q || q.length < 2) return;
 
         await loadCoursesOnce();
@@ -824,43 +709,21 @@
             const aBoost = (stateNow && aState === stateNow) ? -1 : 0;
             const bBoost = (stateNow && bState === stateNow) ? -1 : 0;
             if (aBoost !== bBoost) return aBoost - bBoost;
-            return norm(a.name || a.course || a.title).localeCompare(norm(b.name || b.course || b.title));
+            return norm(a.name).localeCompare(norm(b.name));
           })
           .slice(0, 10);
 
-        courseAutoList.innerHTML = "";
-        matches.forEach(c => {
-          const div = document.createElement("div");
-          div.className = "autocomplete-item";
-          const label = c.name || c.course || c.title || "";
-          const st = (c.state || "").toUpperCase();
-          div.innerHTML = `${escapeHtml(label)}${st ? `<small>State: ${escapeHtml(st)}</small>` : ""}`;
-
-          div.addEventListener("click", () => {
-            const nm = c.name || c.course || c.title || "";
-            const st2 = (c.state || "").toUpperCase();
-            courseEl.value = nm;
-            if (st2 && stateEl) stateEl.value = st2;
-            hide();
-          });
-
-          courseAutoList.appendChild(div);
-        });
-
-        if (matches.length) courseAutoList.style.display = "block";
+        showCourseAutocomplete(matches);
       });
 
       document.addEventListener("click", (e) => {
         if (e.target === courseEl) return;
         if (courseAutoList.contains(e.target)) return;
-        hide();
+        hideCourseAutocomplete();
       });
     }
 
-    // -----------------------------
-    // Auto-fill pars
-    // -----------------------------
-    async function tryApplyPublishedParsToTable(courseName, state, holes, nineSide){
+    function tryApplyPublishedParsToTableFromCourseCache(courseName, state, holes){
       try{
         const mode = String(currentRound?.par_mode || parModeEl?.value || "");
         if (mode !== "published") return;
@@ -868,30 +731,14 @@
         const name = String(courseName || "").trim();
         const st = String(state || "").trim().toUpperCase() || String(stateEl?.value || "").trim().toUpperCase();
         const h = Number(holes || holesEl?.value || 18) || 18;
-        const side = nineSide || currentRound?.nine_side || currentRound?.nineSide || getNineSideValue();
         if (!name) return;
 
-        // 1) backend-provided publishedPars wins
-        const roundPars = currentRound?.publishedPars || currentRound?.published_pars || null;
-        let pars = null;
-        if (Array.isArray(roundPars) && roundPars.length >= h) {
-          pars = roundPars.slice(0, h);
-        }
+        const k = courseKey(name, st);
+        const courseObj =
+          coursesCache.find(c => courseKey(c.name || c.course || c.title, c.state) === k) ||
+          coursesCache.find(c => norm(c.name || c.course || c.title) === norm(name));
 
-        // 2) /api/courses (if it has pars)
-        if (!pars) {
-          await loadCoursesOnce();
-          const courseObj = findBestCourseObj(name, st);
-          pars = pickParsFromCourseObj(courseObj, h, side);
-        }
-
-        // 3) fallback: /api/scorecards (WA scorecards etc)
-        if (!pars) {
-          await loadScorecardsOnce();
-          const courseObj2 = findBestCourseObj(name, st);
-          pars = pickParsFromCourseObj(courseObj2, h, side);
-        }
-
+        const pars = pickParsFromCourseObj(courseObj, h);
         if (!pars || !Array.isArray(pars) || !pars.length) return;
 
         for (let i=1;i<=h;i++){
@@ -909,8 +756,15 @@
       }catch(e){}
     }
 
+    // ✅ NEW: show/hide the front/back selector when holes=9
+    function syncNineLoopVisibility(){
+      const holesNow = Number(holesEl?.value || 18);
+      if (!nineLoopWrap) return;
+      nineLoopWrap.style.display = (holesNow === 9) ? "block" : "none";
+    }
+
     // -----------------------------
-    // Totals + rendering
+    // Round list rendering
     // -----------------------------
     function formatDate(d) {
       try {
@@ -960,14 +814,11 @@
           ? (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+"+totals.toPar : ""+totals.toPar))
           : "—";
 
-        const nineSide = (Number(r.holes) === 9) ? (r.nine_side || r.nineSide || "") : "";
-        const nineSideLabel = nineSide ? (" • " + (nineSide === "back" ? "Back 9" : "Front 9")) : "";
-
         item.innerHTML = `
           <div class="top">
             <div>
               <div class="title">${escapeHtml(r.course || "Round")}${r.layout ? " — " + escapeHtml(r.layout) : ""}</div>
-              <div class="meta">${escapeHtml(r.state || "")} • ${r.holes || ""} holes${nineSideLabel} • ${escapeHtml(r.par_mode || "")} • ${formatDate(r.created_at)}</div>
+              <div class="meta">${escapeHtml(r.state || "")} • ${r.holes || ""} holes${(Number(r.holes)===9 && r.nine_loop) ? (" • " + escapeHtml(String(r.nine_loop))) : ""} • ${escapeHtml(r.par_mode || "")} • ${formatDate(r.created_at)}</div>
             </div>
             <div class="score">${scoreLabel} <span class="muted" style="font-weight:900;">(${toParLabel})</span></div>
           </div>
@@ -978,6 +829,18 @@
       }
     }
 
+    function escapeHtml(s){
+      return String(s || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    // -----------------------------
+    // Scorecard rendering
+    // -----------------------------
     function renderScorecard(round){
       currentRound = round;
       currentRoundId = round?.id || null;
@@ -998,15 +861,17 @@
       saveAllBtn.disabled = false;
       deleteRoundBtn.disabled = false;
 
-      const nineSide = (Number(round.holes) === 9) ? (round.nine_side || round.nineSide || "") : "";
-      const nineSideLabel = nineSide ? (" • " + (nineSide === "back" ? "Back 9" : "Front 9")) : "";
-
       scTitleEl.textContent = round.course || "Round";
-      scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes${nineSideLabel} • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
+      scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
+
+      const loopPill = (Number(round.holes) === 9 && round.nine_loop)
+        ? `<span class="pill">${escapeHtml(String(round.nine_loop).toLowerCase()==="back" ? "Back 9" : "Front 9")}</span>`
+        : "";
+
       scPillsEl.innerHTML = `
         <span class="pill">${escapeHtml(round.par_mode || "")}</span>
         <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
-        ${(Number(round.holes) === 9) ? `<span class="pill">${nineSide ? (nineSide === "back" ? "Back 9" : "Front 9") : "9 side: —"}</span>` : ``}
+        ${loopPill}
       `;
 
       scoreBody.innerHTML = "";
@@ -1021,40 +886,28 @@
         const existing = map.get(i) || { hole_number: i, par: null, strokes: null, putts: null };
         const tr = document.createElement("tr");
 
-        const parInput = document.createElement("input");
-        parInput.className = "mini";
-        parInput.dataset.hole = i;
-        parInput.dataset.field = "par";
-        parInput.inputMode = "numeric";
-        parInput.pattern = "[0-9]*";
-        parInput.value = existing.par ?? "";
-        parInput.placeholder = "—";
-        parInput.addEventListener("input", updateTotalsFromTable);
-
-        const strokesSelect = buildSelect(strokeOptions(), (existing.strokes ?? null), i, "strokes");
-        const puttsSelect = buildSelect(puttOptions(), (existing.putts ?? null), i, "putts");
-
-        tr.innerHTML = `<td>Hole ${i}</td>`;
-        const tdPar = document.createElement("td"); tdPar.appendChild(parInput);
-        const tdS = document.createElement("td"); tdS.appendChild(strokesSelect);
-        const tdP = document.createElement("td"); tdP.appendChild(puttsSelect);
-
-        tr.appendChild(tdPar);
-        tr.appendChild(tdS);
-        tr.appendChild(tdP);
+        tr.innerHTML = `
+          <td>Hole ${i}</td>
+          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${existing.par ?? ""}" placeholder="—"></td>
+          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="strokes" data-hole="${i}" value="${existing.strokes ?? ""}" placeholder="—"></td>
+          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="putts" data-hole="${i}" value="${existing.putts ?? ""}" placeholder="—"></td>
+        `;
 
         scoreBody.appendChild(tr);
       }
 
+      scoreBody.querySelectorAll("input").forEach((inp) => {
+        inp.addEventListener("input", () => updateTotalsFromTable());
+      });
+
       updateTotalsFromTable();
 
-      // ✅ auto-fill pars (with scorecards fallback)
-      tryApplyPublishedParsToTable(round.course, round.state, round.holes, round.nine_side || round.nineSide);
+      tryApplyPublishedParsToTableFromCourseCache(round.course, round.state, round.holes);
     }
 
     function readTableHoles(){
       const rows = [];
-      const inputs = scoreBody.querySelectorAll("input[data-hole], select[data-hole]");
+      const inputs = scoreBody.querySelectorAll("input[data-hole]");
       const byHole = new Map();
 
       for (const inp of inputs) {
@@ -1108,7 +961,8 @@
     async function loadRound(id){
       const data = await api(`/api/rounds/${encodeURIComponent(id)}`, { method:"GET" });
       const round = data.round || data;
-      round.holesData = round.holesData || round.holes || [];
+      const holesArr = data.holes || data.holesData || round.holesData || round.holes || [];
+      round.holesData = holesArr || [];
       renderScorecard(round);
     }
 
@@ -1119,25 +973,24 @@
       const layout = String(layoutEl.value || "").trim();
       const par_mode = String(parModeEl.value || "published").trim();
       const notes = String(notesEl.value || "").trim();
-      const nine_side = (holes === 9 && par_mode === "published") ? getNineSideValue() : null;
+
+      // ✅ NEW
+      const nineLoop = (holes === 9) ? String(nineLoopEl?.value || "front").trim().toLowerCase() : null;
 
       if (!course) {
         setToast(leftToast, "Please enter a course name.", false);
         return;
       }
 
+      // ✅ NEW: if they picked a course + par_mode=published, include pars (backend can use/ignore safely)
       let publishedPars = null;
       if (par_mode === "published") {
         await loadCoursesOnce();
-        let courseObj = findBestCourseObj(course, state);
-        publishedPars = pickParsFromCourseObj(courseObj, holes, nine_side || "front");
-
-        // fallback to scorecards
-        if (!publishedPars) {
-          await loadScorecardsOnce();
-          courseObj = findBestCourseObj(course, state);
-          publishedPars = pickParsFromCourseObj(courseObj, holes, nine_side || "front");
-        }
+        const k = courseKey(course, state);
+        const courseObj =
+          coursesCache.find(c => courseKey(c.name || c.course || c.title, c.state) === k) ||
+          coursesCache.find(c => norm(c.name || c.course || c.title) === norm(course));
+        publishedPars = pickParsFromCourseObj(courseObj, holes);
       }
 
       const payload = {
@@ -1147,8 +1000,11 @@
         layout: layout || null,
         par_mode,
         notes: notes || null,
-        ...(nine_side ? { nine_side } : {}),
-        ...(publishedPars ? { publishedPars } : {})
+
+        // ✅ NEW: for 9-hole rounds so backend can choose front/back when it only has 18-hole pars
+        ...(holes === 9 ? { nineLoop } : {}),
+
+        ...(publishedPars ? { publishedPars } : {}) // ✅ NEW (optional)
       };
 
       const data = await api("/api/rounds", { method:"POST", body: JSON.stringify(payload) });
@@ -1220,7 +1076,6 @@
     logoutBtn.addEventListener("click", logout);
     createRoundBtn.addEventListener("click", createRound);
     refreshBtn.addEventListener("click", safeFetchRounds);
-
     saveAllBtn.addEventListener("click", async () => {
       try{
         await saveRoundAll();
@@ -1228,7 +1083,6 @@
         setToast(rightToast, "Save failed: " + (err.message || "error"), false);
       }
     });
-
     deleteRoundBtn.addEventListener("click", async () => {
       const ok = confirm("Delete this round? This cannot be undone.");
       if (!ok) return;
@@ -1239,22 +1093,18 @@
       }
     });
 
+    // ✅ NEW: keep selector visibility in sync
     holesEl.addEventListener("change", () => {
-      ensureNineSideVisibility();
+      syncNineLoopVisibility();
       if (!currentRoundId) return;
-      tryApplyPublishedParsToTable(currentRound?.course, currentRound?.state, holesEl.value, getNineSideValue());
+      tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, holesEl.value);
     });
+
+    // ✅ NEW: if they change par mode after selecting a course, try fill again (only empty pars)
     parModeEl.addEventListener("change", () => {
-      ensureNineSideVisibility();
       if (!currentRoundId) return;
-      tryApplyPublishedParsToTable(currentRound?.course, currentRound?.state, holesEl.value, getNineSideValue());
+      tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, holesEl.value);
     });
-    if (nineSideEl) {
-      nineSideEl.addEventListener("change", () => {
-        if (!currentRoundId) return;
-        tryApplyPublishedParsToTable(currentRound?.course, currentRound?.state, holesEl.value, getNineSideValue());
-      });
-    }
 
     (async function init(){
       const token = getToken();
@@ -1267,8 +1117,11 @@
       authGate.style.display = "none";
       appEl.style.display = "block";
 
-      ensureNineSideVisibility();
+      // ✅ NEW
       initCourseAutocomplete();
+
+      // ✅ NEW
+      syncNineLoopVisibility();
 
       await safeFetchRounds();
     })();
