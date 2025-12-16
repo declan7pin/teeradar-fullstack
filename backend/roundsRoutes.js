@@ -28,10 +28,26 @@ function normalise(s) {
   return (s || "").toString().trim().toLowerCase();
 }
 
+// ✅ NEW: normalise course names so they match scorecards JSON
+// Removes trailing "(18 holes)" / "(9 holes)" etc.
+function normaliseCourseName(s) {
+  let x = (s || "").toString().trim().toLowerCase();
+
+  // remove trailing "(...holes...)" e.g. "Whaleback Golf Course (18 holes)"
+  x = x.replace(/\s*\(\s*\d+\s*holes?\s*\)\s*$/i, "");
+
+  // also handle "(9 hole)" just in case
+  x = x.replace(/\s*\(\s*\d+\s*hole\s*\)\s*$/i, "");
+
+  // collapse whitespace
+  x = x.replace(/\s+/g, " ").trim();
+
+  return x;
+}
+
 function loadScorecardsOnce() {
   if (__scorecardsCache) return __scorecardsCache;
 
-  // roundsRoutes.js sits in /backend, so /backend/data/scorecards is correct
   const baseDir = path.join(__dirname, "data", "scorecards");
   const out = [];
 
@@ -65,10 +81,19 @@ function loadScorecardsOnce() {
   return __scorecardsCache;
 }
 
+function sliceParsForNineFromEighteen(pars18, nineLoop) {
+  if (!Array.isArray(pars18) || pars18.length !== 18) return null;
+
+  const loop = (nineLoop || "front").toString().trim().toLowerCase();
+  if (loop === "back") return pars18.slice(9, 18);
+  return pars18.slice(0, 9);
+}
+
 function findScorecard({ course, layout, state, holes }) {
   const cards = loadScorecardsOnce();
 
-  const wantCourse = normalise(course);
+  // ✅ use course normaliser that strips "(18 holes)"
+  const wantCourse = normaliseCourseName(course);
   const wantLayout = normalise(layout);
   const wantState = normalise(state);
   const wantHoles = Number(holes);
@@ -76,7 +101,7 @@ function findScorecard({ course, layout, state, holes }) {
   // 1) Try exact match: course + state + layout + holes
   let match =
     cards.find((c) => {
-      const cCourse = normalise(c.course);
+      const cCourse = normaliseCourseName(c.course);
       const cLayout = normalise(c.layout);
       const cState = normalise(c.state);
       const cHoles = Number(c.holes);
@@ -95,7 +120,7 @@ function findScorecard({ course, layout, state, holes }) {
   // 2) Try: course + state + holes (ignore layout)
   match =
     cards.find((c) => {
-      const cCourse = normalise(c.course);
+      const cCourse = normaliseCourseName(c.course);
       const cState = normalise(c.state);
       const cHoles = Number(c.holes);
 
@@ -108,14 +133,6 @@ function findScorecard({ course, layout, state, holes }) {
     }) || null;
 
   return match;
-}
-
-function sliceParsForNineFromEighteen(pars18, nineLoop) {
-  if (!Array.isArray(pars18) || pars18.length !== 18) return null;
-
-  const loop = (nineLoop || "front").toString().trim().toLowerCase();
-  if (loop === "back") return pars18.slice(9, 18);
-  return pars18.slice(0, 9); // default front
 }
 
 // -------------------------------------------------
@@ -156,18 +173,10 @@ async function getRoundWithHoles(roundId) {
 }
 
 // -------------------------------------------------
-// Routes (ALL require login)
-// NOTE: These paths are mounted at /api/rounds in server.js
-// So:
-//   POST   /api/rounds        -> create
-//   GET    /api/rounds        -> list mine
-//   GET    /api/rounds/:id    -> get one
-//   PUT    /api/rounds/:id    -> bulk save
-//   DELETE /api/rounds/:id    -> delete
+// Routes (mounted at /api/rounds)
 // -------------------------------------------------
 
-// ✅ Create a new round + seed holes (pars if available; otherwise blank)
-// Frontend calls: POST /api/rounds
+// Create a new round + seed holes (pars if available; otherwise blank)
 router.post("/", requireAuth, async (req, res) => {
   const userId = req.user?.id;
 
@@ -179,7 +188,6 @@ router.post("/", requireAuth, async (req, res) => {
       holes = 18,
       par_mode = "published", // "published" | "blank"
       nineLoop = "front",     // "front" | "back" (only relevant for 9 holes)
-      // publishedPars optional from frontend (we don't rely on it)
       publishedPars = null,
     } = req.body || {};
 
@@ -267,7 +275,6 @@ router.post("/", requireAuth, async (req, res) => {
 
     const round = roundInsert.rows[0];
 
-    // Seed holes 1..holes (include par if we have it)
     for (let i = 1; i <= holesNum; i++) {
       const parVal = pars ? (Number.isFinite(Number(pars[i - 1])) ? Number(pars[i - 1]) : null) : null;
 
@@ -298,13 +305,6 @@ router.post("/", requireAuth, async (req, res) => {
       round,
       holes: holesRows.rows,
       scorecardUsed: !!pars,
-      // helpful debugging:
-      debug: {
-        requestedParMode: mode,
-        finalParMode,
-        holes: holesNum,
-        nineLoop: holesNum === 9 ? (nineLoop || "front") : null,
-      },
     });
   } catch (err) {
     try { await db.query("ROLLBACK"); } catch {}
@@ -313,14 +313,13 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
-// ✅ Alias (keeps your older frontend compatible if it still calls /create)
+// Alias for older frontend
 router.post("/create", requireAuth, async (req, res) => {
-  // forward to the main create handler
   req.url = "/";
   return router.handle(req, res);
 });
 
-// ✅ List my rounds (frontend calls GET /api/rounds)
+// List my rounds
 router.get("/", requireAuth, async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -344,13 +343,12 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-// ✅ Alias (older route)
 router.get("/mine", requireAuth, async (req, res) => {
   req.url = "/";
   return router.handle(req, res);
 });
 
-// ✅ Get one round + holes (frontend calls GET /api/rounds/:id)
+// Get one round + holes (must own it)
 router.get("/:id", requireAuth, async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -375,8 +373,7 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
-// ✅ Bulk save all holes (your frontend "Save" button should call this)
-// PUT /api/rounds/:id  body: { holes: [{hole_number, par, strokes, putts}, ...] }
+// Bulk save all holes
 router.put("/:id", requireAuth, async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -417,7 +414,6 @@ router.put("/:id", requireAuth, async (req, res) => {
           ? null
           : Number(h.putts);
 
-      // Ensure row exists
       await db.query(
         `
         INSERT INTO round_holes (round_id, hole_number, par, strokes, putts)
@@ -427,9 +423,13 @@ router.put("/:id", requireAuth, async (req, res) => {
           strokes = EXCLUDED.strokes,
           putts = EXCLUDED.putts;
         `,
-        [roundId, holeNum, Number.isFinite(parVal) ? parVal : null,
-         Number.isFinite(strokesVal) ? strokesVal : null,
-         Number.isFinite(puttsVal) ? puttsVal : null]
+        [
+          roundId,
+          holeNum,
+          Number.isFinite(parVal) ? parVal : null,
+          Number.isFinite(strokesVal) ? strokesVal : null,
+          Number.isFinite(puttsVal) ? puttsVal : null,
+        ]
       );
     }
 
@@ -444,7 +444,7 @@ router.put("/:id", requireAuth, async (req, res) => {
   }
 });
 
-// ✅ Single-hole update (keeps your older PUT route working)
+// Single-hole update (older route)
 router.put("/:id/hole/:n", requireAuth, async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -480,7 +480,6 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
         ? null
         : Number(par);
 
-    // Ensure hole row exists, then update
     await db.query(
       `
       INSERT INTO round_holes (round_id, hole_number, par, strokes, putts)
@@ -500,10 +499,13 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
       WHERE round_id = $1 AND hole_number = $2
       RETURNING hole_number, par, strokes, putts;
       `,
-      [roundId, holeNum,
-       Number.isFinite(strokesVal) ? strokesVal : null,
-       Number.isFinite(puttsVal) ? puttsVal : null,
-       Number.isFinite(parVal) ? parVal : null]
+      [
+        roundId,
+        holeNum,
+        Number.isFinite(strokesVal) ? strokesVal : null,
+        Number.isFinite(puttsVal) ? puttsVal : null,
+        Number.isFinite(parVal) ? parVal : null,
+      ]
     );
 
     return res.json({ ok: true, hole: result.rows[0] || null });
@@ -513,7 +515,7 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
   }
 });
 
-// ✅ Delete a round (frontend calls DELETE /api/rounds/:id)
+// Delete a round (must own it)
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
     const userId = req.user?.id;
