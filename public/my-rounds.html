@@ -392,8 +392,7 @@
             </div>
             <div class="rightActions">
               <button class="btn2 secondary" id="saveAllBtn" type="button" disabled>Save</button>
-              <!-- disabled until backend delete exists -->
-              <button class="btn2 danger" id="deleteRoundBtn" type="button" disabled title="Delete endpoint not added yet">Delete</button>
+              <button class="btn2 danger" id="deleteRoundBtn" type="button" disabled>Delete</button>
             </div>
           </div>
 
@@ -434,8 +433,8 @@
       </div>
 
       <div class="notice" style="margin-top:16px;">
-        <strong>Important:</strong> This page uses your existing backend routes:
-        <br/>GET /api/rounds • POST /api/rounds • GET /api/rounds/:id • PATCH /api/rounds/:id/hole/:holeNumber
+        <strong>Important:</strong> This page expects round APIs on the backend (create/list/get/update/delete).  
+        If you haven’t added those endpoints yet, you’ll see an “API not ready” error — tell me and I’ll generate the exact backend routes file next.
       </div>
     </div>
   </main>
@@ -445,8 +444,8 @@
     // Auth helpers
     // -----------------------------
     function getToken() {
-      // ✅ includes your real key: teeradar_jwt
-      const keys = ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"];
+      // support a few common keys without breaking anything
+      const keys = ["teeradar_jwt", "teeradar_token", "token", "authToken", "jwt", "access_token"]; // ✅ UPDATED
       for (const k of keys) {
         const v = localStorage.getItem(k);
         if (v && String(v).trim().length > 10) return String(v).trim();
@@ -487,7 +486,7 @@
     // State
     // -----------------------------
     let currentRoundId = null;
-    let currentRound = null;
+    let currentRound = null; // { id, course, layout, state, holes, par_mode, created_at, notes, holesData: [...] }
     let roundsCache = [];
 
     // -----------------------------
@@ -529,15 +528,9 @@
     const leftToast = document.getElementById("leftToast");
     const rightToast = document.getElementById("rightToast");
 
-    function escapeHtml(s){
-      return String(s || "")
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-    }
-
+    // -----------------------------
+    // Round list rendering
+    // -----------------------------
     function formatDate(d) {
       try {
         const dt = new Date(d);
@@ -601,6 +594,18 @@
       }
     }
 
+    function escapeHtml(s){
+      return String(s || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    // -----------------------------
+    // Scorecard rendering
+    // -----------------------------
     function renderScorecard(round){
       currentRound = round;
       currentRoundId = round?.id || null;
@@ -619,8 +624,7 @@
       scorecardEmpty.style.display = "none";
       scorecardWrap.style.display = "block";
       saveAllBtn.disabled = false;
-      // delete stays disabled until backend route exists
-      deleteRoundBtn.disabled = true;
+      deleteRoundBtn.disabled = false;
 
       scTitleEl.textContent = round.course || "Round";
       scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
@@ -659,6 +663,7 @@
     }
 
     function readTableHoles(){
+      const rows = [];
       const inputs = scoreBody.querySelectorAll("input[data-hole]");
       const byHole = new Map();
 
@@ -675,7 +680,6 @@
       }
 
       const holesCount = Number(currentRound?.holes) || 18;
-      const rows = [];
       for (let i=1;i<=holesCount;i++){
         rows.push(byHole.get(i) || { hole_number:i, par:null, strokes:null, putts:null });
       }
@@ -699,24 +703,23 @@
     }
 
     // -----------------------------
-    // API calls (matches your server.js)
+    // API calls (expects you to add these routes)
     // -----------------------------
     async function fetchRounds(){
       const data = await api("/api/rounds", { method:"GET" });
       const rounds = (data && data.rounds) ? data.rounds : [];
-      roundsCache = rounds.map(r => ({ ...r, holesData: [] }));
+      roundsCache = rounds.map(r => ({
+        ...r,
+        holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
+      }));
       renderRoundsList();
     }
 
     async function loadRound(id){
       const data = await api(`/api/rounds/${encodeURIComponent(id)}`, { method:"GET" });
       const round = data.round || data;
-      round.holesData = data.holes || round.holesData || round.holes || [];
+      round.holesData = round.holesData || round.holes || [];
       renderScorecard(round);
-
-      // update cache item with holes for score preview
-      roundsCache = roundsCache.map(r => (r.id === round.id ? { ...r, holesData: round.holesData } : r));
-      renderRoundsList();
     }
 
     async function createRound(){
@@ -725,7 +728,7 @@
       const holes = Number(holesEl.value || 18);
       const layout = String(layoutEl.value || "").trim();
       const par_mode = String(parModeEl.value || "published").trim();
-      const notes = String(notesEl.value || "").trim(); // backend ignores this for now (safe)
+      const notes = String(notesEl.value || "").trim();
 
       if (!course) {
         setToast(leftToast, "Please enter a course name.", false);
@@ -735,41 +738,51 @@
       const payload = { course, state, holes, layout: layout || null, par_mode, notes: notes || null };
       const data = await api("/api/rounds", { method:"POST", body: JSON.stringify(payload) });
 
-      const newId = (data.round && data.round.id) ? data.round.id : null;
+      const newId = data.roundId || (data.round && data.round.id);
       setToast(leftToast, "Round created.", true);
 
       await safeFetchRounds();
-      if (newId) await safeLoadRound(newId);
+      if (newId) {
+        await safeLoadRound(newId);
+      }
     }
 
-    // ✅ Save using your existing PATCH hole route
     async function saveRoundAll(){
       if (!currentRoundId) return;
 
       const holesRows = readTableHoles();
 
-      // PATCH each hole (backend supports this)
-      for (const h of holesRows) {
-        const holeNumber = Number(h.hole_number);
-        await api(`/api/rounds/${encodeURIComponent(currentRoundId)}/hole/${encodeURIComponent(holeNumber)}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            par: h.par,
-            strokes: h.strokes,
-            putts: h.putts
-          })
-        });
-      }
+      const payload = { holes: holesRows };
+      await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, {
+        method:"PUT",
+        body: JSON.stringify(payload)
+      });
 
       setToast(rightToast, "Saved.", true);
-      await safeLoadRound(currentRoundId);
+      await safeFetchRounds();
     }
 
+    async function deleteRound(){
+      if (!currentRoundId) return;
+
+      await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, { method:"DELETE" });
+
+      setToast(rightToast, "Round deleted.", true);
+
+      currentRoundId = null;
+      currentRound = null;
+      renderScorecard(null);
+      await safeFetchRounds();
+    }
+
+    // -----------------------------
+    // Safe wrappers (nice errors)
+    // -----------------------------
     async function safeFetchRounds(){
       try{
         await fetchRounds();
       }catch(err){
-        setToast(leftToast, "Rounds API error: " + (err.message || "error"), false);
+        setToast(leftToast, "Rounds API not ready: " + (err.message || "error"), false);
       }
     }
     async function safeLoadRound(id){
@@ -780,8 +793,12 @@
       }
     }
 
+    // -----------------------------
+    // Init + events
+    // -----------------------------
     function logout(){
-      ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"].forEach(k => localStorage.removeItem(k));
+      // clear only token-ish keys
+      ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"].forEach(k => localStorage.removeItem(k)); // ✅ UPDATED
       setToast(leftToast, "Logged out.", true);
       setTimeout(() => window.location.href = "/account.html", 450);
     }
@@ -794,6 +811,15 @@
         await saveRoundAll();
       }catch(err){
         setToast(rightToast, "Save failed: " + (err.message || "error"), false);
+      }
+    });
+    deleteRoundBtn.addEventListener("click", async () => {
+      const ok = confirm("Delete this round? This cannot be undone.");
+      if (!ok) return;
+      try{
+        await deleteRound();
+      }catch(err){
+        setToast(rightToast, "Delete failed: " + (err.message || "error"), false);
       }
     });
 
