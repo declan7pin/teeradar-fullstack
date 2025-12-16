@@ -280,6 +280,51 @@ async function ensureRoundsTables() {
       ON round_holes(round_id);
     `);
 
+    // ✅ NEW (only adds what's needed): players + multi-player storage
+    await db.query(`
+      ALTER TABLE rounds
+      ADD COLUMN IF NOT EXISTS players_count INTEGER;
+    `);
+
+    await db.query(`
+      ALTER TABLE rounds
+      ALTER COLUMN players_count SET DEFAULT 1;
+    `);
+
+    await db.query(`
+      UPDATE rounds
+      SET players_count = 1
+      WHERE players_count IS NULL;
+    `);
+
+    await db.query(`
+      ALTER TABLE round_holes
+      ADD COLUMN IF NOT EXISTS strokes_by_player JSONB;
+    `);
+
+    await db.query(`
+      ALTER TABLE round_holes
+      ADD COLUMN IF NOT EXISTS putts_by_player JSONB;
+    `);
+
+    await db.query(`
+      UPDATE round_holes
+      SET
+        strokes_by_player = COALESCE(strokes_by_player, '{}'::jsonb),
+        putts_by_player   = COALESCE(putts_by_player, '{}'::jsonb)
+      WHERE strokes_by_player IS NULL OR putts_by_player IS NULL;
+    `);
+
+    await db.query(`
+      ALTER TABLE round_holes
+      ALTER COLUMN strokes_by_player SET DEFAULT '{}'::jsonb;
+    `);
+
+    await db.query(`
+      ALTER TABLE round_holes
+      ALTER COLUMN putts_by_player SET DEFAULT '{}'::jsonb;
+    `);
+
     console.log("✅ rounds + round_holes tables ready");
   } catch (err) {
     console.error("❌ error ensuring rounds tables:", err);
