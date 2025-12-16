@@ -401,19 +401,30 @@
             </div>
           </div>
 
-          <div class="row">
-            <div>
-              <label for="layout">Layout (optional)</label>
-              <input id="layout" placeholder="e.g. Island–Lakes / Old Course / Lakeside" />
-            </div>
-            <div>
-              <label for="parMode">Par mode</label>
-              <select id="parMode">
-                <option value="published">Use published pars (if available)</option>
-                <option value="blank">Blank scorecard (fill pars as you go)</option>
-              </select>
-            </div>
-          </div>
+          <div class="row3">
+  <div>
+    <label for="layout">Layout (optional)</label>
+    <input id="layout" placeholder="e.g. Island–Lakes / Old Course / Lakeside" />
+  </div>
+
+  <div>
+    <label for="players">Players</label>
+    <select id="players">
+      <option value="1">1 player</option>
+      <option value="2">2 players</option>
+      <option value="3">3 players</option>
+      <option value="4">4 players</option>
+    </select>
+  </div>
+
+  <div>
+    <label for="parMode">Par mode</label>
+    <select id="parMode">
+      <option value="published">Use published pars (if available)</option>
+      <option value="blank">Blank scorecard (fill pars as you go)</option>
+    </select>
+  </div>
+</div>
 
           <label for="notes">Notes (optional)</label>
           <textarea id="notes" placeholder="Weather, tees, playing partners, etc."></textarea>
