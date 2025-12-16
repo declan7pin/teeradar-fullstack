@@ -5,7 +5,10 @@
     "layout": "Old Course",
     "holes": 18,
     "pars": [5, 3, 4, 5, 4, 3, 4, 4, 4, 4, 5, 4, 3, 4, 4, 3, 5, 4],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [5, 3, 4, 5, 4, 3, 4, 4, 4],
+    "back9_pars": [4, 5, 4, 3, 4, 4, 3, 5, 4],
+    "loop_supported": true
   },
   {
     "course": "Wembley Golf Course",
@@ -13,28 +16,40 @@
     "layout": "Tuart Course",
     "holes": 18,
     "pars": [4, 4, 3, 5, 4, 3, 4, 4, 4, 4, 4, 3, 4, 4, 5, 4, 4, 3],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 3, 5, 4, 3, 4, 4, 4],
+    "back9_pars": [4, 4, 3, 4, 4, 5, 4, 4, 3],
+    "loop_supported": true
   },
   {
     "course": "Maylands Peninsula Golf Course",
     "state": "WA",
     "holes": 18,
     "pars": [5, 4, 4, 5, 3, 4, 4, 3, 3, 4, 4, 4, 3, 5, 4, 3, 4, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [5, 4, 4, 5, 3, 4, 4, 3, 3],
+    "back9_pars": [4, 4, 4, 3, 5, 4, 3, 4, 5],
+    "loop_supported": true
   },
   {
     "course": "Marangaroo Golf Course",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 4, 3, 5, 3, 4, 4, 5, 4, 5, 3, 4, 4, 4, 3, 5, 4],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 4, 3, 5, 3, 4, 4, 5],
+    "back9_pars": [4, 5, 3, 4, 4, 4, 3, 5, 4],
+    "loop_supported": true
   },
   {
     "course": "Araluen Estate",
     "state": "WA",
     "holes": 18,
     "pars": [5, 4, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5, 4],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [5, 4, 4, 3, 4, 4, 3, 5, 4],
+    "back9_pars": [4, 5, 3, 4, 4, 4, 3, 5, 4],
+    "loop_supported": true
   },
   {
     "course": "The Vines Golf Course",
@@ -42,7 +57,10 @@
     "layout": "Championship",
     "holes": 18,
     "pars": [4, 4, 5, 3, 4, 4, 4, 3, 5, 5, 4, 4, 3, 4, 4, 3, 4, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "back9_pars": [5, 4, 4, 3, 4, 4, 3, 4, 5],
+    "loop_supported": true
   },
   {
     "course": "The Vines Golf Course",
@@ -50,21 +68,26 @@
     "layout": "Lakes",
     "holes": 18,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
+    "back9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "Fremantle Public Golf Course",
     "state": "WA",
     "holes": 9,
     "pars": [3, 4, 4, 3, 3, 4, 5, 4, 4],
-    "putts": [null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null],
+    "loop_supported": true
   },
   {
     "course": "Point Walter Golf Course",
     "state": "WA",
     "holes": 9,
     "pars": [4, 3, 5, 4, 4, 3, 4, 4, 4],
-    "putts": [null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null],
+    "loop_supported": true
   },
   {
     "course": "Collier Park Golf Course",
@@ -72,14 +95,20 @@
     "layout": "Island-Lakes (18)",
     "holes": 18,
     "pars": [4, 3, 4, 3, 5, 4, 4, 5, 4, 5, 4, 3, 4, 3, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 3, 4, 3, 5, 4, 4, 5, 4],
+    "back9_pars": [5, 4, 3, 4, 3, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "Whaleback Golf Course",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 4, 4, 3, 4, 3, 4, 4, 5, 4, 3, 4, 4, 5, 4, 3],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 4, 3, 4, 3, 4],
+    "back9_pars": [4, 5, 4, 3, 4, 4, 5, 4, 3],
+    "loop_supported": true
   },
   {
     "course": "Joondalup Resort",
@@ -87,114 +116,161 @@
     "layout": "Dune / Quarry",
     "holes": 18,
     "pars": [4, 4, 4, 3, 5, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 5, 4],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 4, 3, 5, 4, 3, 4, 5],
+    "back9_pars": [4, 4, 3, 5, 4, 4, 3, 5, 4],
+    "loop_supported": true
   },
   {
     "course": "Secret Harbour Golf Links",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
+    "back9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "Meadow Springs Golf & Country Club",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
+    "back9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "Kwinana Golf Club",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
+    "back9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "The Cut Golf Course",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 3, 5, 4, 4],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 3, 4, 4, 3, 5, 4],
+    "back9_pars": [4, 5, 3, 4, 4, 3, 5, 4, 4],
+    "loop_supported": true
   },
   {
     "course": "Carramar Golf Course",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 4, 3, 5, 3, 4, 4, 5, 4, 4, 3, 5, 4, 4, 3, 5, 4],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 4, 3, 5, 3, 4, 4, 5],
+    "back9_pars": [4, 4, 3, 5, 4, 4, 3, 5, 4],
+    "loop_supported": true
   },
   {
     "course": "Bunbury Golf Club",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
+    "back9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "Busselton Golf Club",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
+    "back9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "Capel Golf Club",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
+    "back9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "Dunsborough Lakes Golf Club",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
+    "back9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "Margaret River Golf Club",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
+    "back9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "Albany Golf Club",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
+    "back9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "Geraldton Golf Club",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
+    "back9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "Kalgoorlie Golf Course",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 4, 3, 5, 3, 4, 4, 5, 4, 4, 3, 5, 4, 4, 3, 5, 4],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 4, 3, 5, 3, 4, 4, 5],
+    "back9_pars": [4, 4, 3, 5, 4, 4, 3, 5, 4],
+    "loop_supported": true
   },
   {
     "course": "Broome Golf Club",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
+    "back9_pars": [4, 4, 5, 3, 4, 4, 4, 3, 5],
+    "loop_supported": true
   },
   {
     "course": "Kununurra Golf Club",
     "state": "WA",
     "holes": 18,
     "pars": [4, 4, 4, 3, 5, 3, 4, 4, 5, 4, 4, 3, 5, 4, 4, 3, 5, 4],
-    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "front9_pars": [4, 4, 4, 3, 5, 3, 4, 4, 5],
+    "back9_pars": [4, 4, 3, 5, 4, 4, 3, 5, 4],
+    "loop_supported": true
   },
-
   {
     "course": "Lake Claremont Golf Course",
     "state": "WA",
@@ -336,7 +412,8 @@
     "layout": "Classic",
     "holes": 9,
     "pars": [5, 4, 3, 4, 4, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null],
+    "loop_supported": true
   },
   {
     "course": "Hillview Golf Course",
@@ -344,7 +421,8 @@
     "layout": "Lakeside",
     "holes": 9,
     "pars": [5, 4, 3, 4, 5, 3, 4, 4, 4],
-    "putts": [null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null],
+    "loop_supported": true
   },
   {
     "course": "Hillview Golf Course",
@@ -352,6 +430,7 @@
     "layout": "Heritage",
     "holes": 9,
     "pars": [4, 4, 5, 4, 3, 4, 4, 3, 5],
-    "putts": [null, null, null, null, null, null, null, null, null]
+    "putts": [null, null, null, null, null, null, null, null, null],
+    "loop_supported": true
   }
 ]
