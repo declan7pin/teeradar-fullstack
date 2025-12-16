@@ -537,9 +537,13 @@
     let currentRound = null;
     let roundsCache = [];
 
-    // course cache for autocomplete + pars
+    // course cache
     let coursesCache = [];
     let coursesLoaded = false;
+
+    // ✅ NEW: scorecards cache fallback (for pars)
+    let scorecardsCache = [];
+    let scorecardsLoaded = false;
 
     // -----------------------------
     // UI refs
@@ -583,7 +587,6 @@
     const leftToast = document.getElementById("leftToast");
     const rightToast = document.getElementById("rightToast");
 
-    // autocomplete refs
     const courseAutoList = document.getElementById("courseAutoList");
 
     // -----------------------------
@@ -637,16 +640,11 @@
     // -----------------------------
     function norm(s){ return String(s || "").trim().toLowerCase(); }
 
-    // ✅ NEW: robust course name matching (handles "(18 holes)" in saved round names)
     function cleanCourseName(s){
       return norm(String(s || ""))
-        .replace(/\([^)]*\)/g, "")        // remove anything in brackets
-        .replace(/\s+/g, " ")             // collapse spaces
+        .replace(/\([^)]*\)/g, "")
+        .replace(/\s+/g, " ")
         .trim();
-    }
-
-    function courseKey(name, state){
-      return (cleanCourseName(name) + "|" + String(state || "").trim().toUpperCase());
     }
 
     function ensureNineSideVisibility(){
@@ -662,44 +660,13 @@
       return (v === "back") ? "back" : "front";
     }
 
-    // ✅ NEW: find best matching course object from /api/courses
-    function findCourseObjByNameState(name, st){
-      const targetClean = cleanCourseName(name);
-      const stateUp = String(st || "").toUpperCase();
-
-      // 1) exact clean match + state
-      let hit = coursesCache.find(c => {
-        const cn = c.name || c.course || c.title || "";
-        const cs = String(c.state || "").toUpperCase();
-        return (cleanCourseName(cn) === targetClean) && (!stateUp || cs === stateUp);
-      });
-      if (hit) return hit;
-
-      // 2) exact clean match ignoring state
-      hit = coursesCache.find(c => {
-        const cn = c.name || c.course || c.title || "";
-        return cleanCourseName(cn) === targetClean;
-      });
-      if (hit) return hit;
-
-      // 3) contains match (handles “Whaleback Golf Course (18 holes)” vs “Whaleback Golf Course”)
-      hit = coursesCache.find(c => {
-        const cn = c.name || c.course || c.title || "";
-        const cc = cleanCourseName(cn);
-        if (!cc || !targetClean) return false;
-        const stateOk = !stateUp || String(c.state || "").toUpperCase() === stateUp;
-        return stateOk && (cc.includes(targetClean) || targetClean.includes(cc));
-      });
-      if (hit) return hit;
-
-      // 4) final fallback contains ignoring state
-      hit = coursesCache.find(c => {
-        const cn = c.name || c.course || c.title || "";
-        const cc = cleanCourseName(cn);
-        if (!cc || !targetClean) return false;
-        return (cc.includes(targetClean) || targetClean.includes(cc));
-      });
-      return hit || null;
+    function escapeHtml(s){
+      return String(s || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
     }
 
     function pickParsFromCourseObj(courseObj, holes, nineSide){
@@ -732,21 +699,12 @@
         return (side === "back") ? p18.slice(9, 18) : p18.slice(0, 9);
       }
 
-      const holesArr = c.holesData || c.holes || c.scorecard || null;
-      if (Array.isArray(holesArr)) {
-        const map = new Map();
-        holesArr.forEach(x => map.set(Number(x.hole_number || x.hole || x.number), Number(x.par)));
-        const out = [];
-        for (let i=1;i<=h;i++){
-          const p = map.get(i);
-          out.push(Number.isFinite(p) ? p : null);
-        }
-        return out.some(v => v != null) ? out : null;
-      }
-
       return null;
     }
 
+    // -----------------------------
+    // Load data sources
+    // -----------------------------
     async function loadCoursesOnce(){
       if (coursesLoaded) return;
       coursesLoaded = true;
@@ -759,50 +717,99 @@
       }
     }
 
-    function hideCourseAutocomplete(){
-      if (!courseAutoList) return;
-      courseAutoList.style.display = "none";
-      courseAutoList.innerHTML = "";
+    // ✅ NEW: scorecards fallback loader (tries multiple likely endpoints)
+    async function loadScorecardsOnce(){
+      if (scorecardsLoaded) return;
+      scorecardsLoaded = true;
+
+      const st = String(stateEl?.value || "WA").toLowerCase();
+
+      const candidates = [
+        "/api/scorecards",
+        "/api/scorecards/all",
+        "/api/scorecards/" + st,
+        "/api/scorecards?state=" + encodeURIComponent(String(stateEl?.value || "WA"))
+      ];
+
+      for (const url of candidates) {
+        try{
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const data = await res.json().catch(() => null);
+          const list =
+            (Array.isArray(data) ? data :
+            (data && Array.isArray(data.scorecards) ? data.scorecards :
+            (data && Array.isArray(data.data) ? data.data : null)));
+
+          if (Array.isArray(list) && list.length) {
+            scorecardsCache = list;
+            return;
+          }
+        }catch(e){}
+      }
+
+      scorecardsCache = [];
     }
 
-    function showCourseAutocomplete(items){
-      if (!courseAutoList) return;
-      courseAutoList.innerHTML = "";
-      if (!items.length){
-        hideCourseAutocomplete();
-        return;
-      }
-      items.forEach(c => {
-        const div = document.createElement("div");
-        div.className = "autocomplete-item";
-        const label = c.name || c.course || c.title || "";
-        const st = (c.state || "").toUpperCase();
-        const meta = st ? `State: ${st}` : "";
+    function findBestCourseObj(name, st){
+      const targetClean = cleanCourseName(name);
+      const stateUp = String(st || "").toUpperCase();
 
-        div.innerHTML = `${escapeHtml(label)}${meta ? `<small>${escapeHtml(meta)}</small>` : ""}`;
+      const matchFrom = (arr) => {
+        if (!Array.isArray(arr) || !arr.length) return null;
 
-        div.addEventListener("click", () => {
-          const nm = c.name || c.course || c.title || "";
-          const st2 = (c.state || "").toUpperCase();
+        // exact clean + state
+        let hit = arr.find(c => {
+          const cn = c.name || c.course || c.title || c.courseName || "";
+          const cs = String(c.state || c.region || "").toUpperCase();
+          return (cleanCourseName(cn) === targetClean) && (!stateUp || cs === stateUp);
+        });
+        if (hit) return hit;
 
-          courseEl.value = nm;
-          if (st2 && stateEl) stateEl.value = st2;
+        // exact clean ignoring state
+        hit = arr.find(c => {
+          const cn = c.name || c.course || c.title || c.courseName || "";
+          return cleanCourseName(cn) === targetClean;
+        });
+        if (hit) return hit;
 
-          hideCourseAutocomplete();
+        // contains match
+        hit = arr.find(c => {
+          const cn = c.name || c.course || c.title || c.courseName || "";
+          const cc = cleanCourseName(cn);
+          if (!cc || !targetClean) return false;
+          const cs = String(c.state || c.region || "").toUpperCase();
+          const stateOk = !stateUp || cs === stateUp;
+          return stateOk && (cc.includes(targetClean) || targetClean.includes(cc));
+        });
+        if (hit) return hit;
+
+        // contains ignoring state
+        hit = arr.find(c => {
+          const cn = c.name || c.course || c.title || c.courseName || "";
+          const cc = cleanCourseName(cn);
+          if (!cc || !targetClean) return false;
+          return (cc.includes(targetClean) || targetClean.includes(cc));
         });
 
-        courseAutoList.appendChild(div);
-      });
-      courseAutoList.style.display = "block";
+        return hit || null;
+      };
+
+      return matchFrom(coursesCache) || matchFrom(scorecardsCache) || null;
     }
 
     async function initCourseAutocomplete(){
       if (!courseEl || !courseAutoList) return;
 
+      function hide(){
+        courseAutoList.style.display = "none";
+        courseAutoList.innerHTML = "";
+      }
+
       courseEl.addEventListener("input", async () => {
         const q = norm(courseEl.value);
 
-        hideCourseAutocomplete();
+        hide();
         if (!q || q.length < 2) return;
 
         await loadCoursesOnce();
@@ -821,26 +828,39 @@
           })
           .slice(0, 10);
 
-        showCourseAutocomplete(matches);
+        courseAutoList.innerHTML = "";
+        matches.forEach(c => {
+          const div = document.createElement("div");
+          div.className = "autocomplete-item";
+          const label = c.name || c.course || c.title || "";
+          const st = (c.state || "").toUpperCase();
+          div.innerHTML = `${escapeHtml(label)}${st ? `<small>State: ${escapeHtml(st)}</small>` : ""}`;
+
+          div.addEventListener("click", () => {
+            const nm = c.name || c.course || c.title || "";
+            const st2 = (c.state || "").toUpperCase();
+            courseEl.value = nm;
+            if (st2 && stateEl) stateEl.value = st2;
+            hide();
+          });
+
+          courseAutoList.appendChild(div);
+        });
+
+        if (matches.length) courseAutoList.style.display = "block";
       });
 
       document.addEventListener("click", (e) => {
         if (e.target === courseEl) return;
         if (courseAutoList.contains(e.target)) return;
-        hideCourseAutocomplete();
+        hide();
       });
     }
 
-    function escapeHtml(s){
-      return String(s || "")
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-    }
-
-    async function tryApplyPublishedParsToTableFromCourseCache(courseName, state, holes, nineSide){
+    // -----------------------------
+    // Auto-fill pars
+    // -----------------------------
+    async function tryApplyPublishedParsToTable(courseName, state, holes, nineSide){
       try{
         const mode = String(currentRound?.par_mode || parModeEl?.value || "");
         if (mode !== "published") return;
@@ -849,10 +869,7 @@
         const st = String(state || "").trim().toUpperCase() || String(stateEl?.value || "").trim().toUpperCase();
         const h = Number(holes || holesEl?.value || 18) || 18;
         const side = nineSide || currentRound?.nine_side || currentRound?.nineSide || getNineSideValue();
-
         if (!name) return;
-
-        await loadCoursesOnce();
 
         // 1) backend-provided publishedPars wins
         const roundPars = currentRound?.publishedPars || currentRound?.published_pars || null;
@@ -861,10 +878,18 @@
           pars = roundPars.slice(0, h);
         }
 
-        // 2) otherwise derive from matching course object
+        // 2) /api/courses (if it has pars)
         if (!pars) {
-          const courseObj = findCourseObjByNameState(name, st);
+          await loadCoursesOnce();
+          const courseObj = findBestCourseObj(name, st);
           pars = pickParsFromCourseObj(courseObj, h, side);
+        }
+
+        // 3) fallback: /api/scorecards (WA scorecards etc)
+        if (!pars) {
+          await loadScorecardsOnce();
+          const courseObj2 = findBestCourseObj(name, st);
+          pars = pickParsFromCourseObj(courseObj2, h, side);
         }
 
         if (!pars || !Array.isArray(pars) || !pars.length) return;
@@ -885,7 +910,7 @@
     }
 
     // -----------------------------
-    // Round list rendering
+    // Totals + rendering
     // -----------------------------
     function formatDate(d) {
       try {
@@ -953,9 +978,6 @@
       }
     }
 
-    // -----------------------------
-    // Scorecard rendering
-    // -----------------------------
     function renderScorecard(round){
       currentRound = round;
       currentRoundId = round?.id || null;
@@ -1012,30 +1034,22 @@
         const strokesSelect = buildSelect(strokeOptions(), (existing.strokes ?? null), i, "strokes");
         const puttsSelect = buildSelect(puttOptions(), (existing.putts ?? null), i, "putts");
 
-        const tdHole = document.createElement("td");
-        tdHole.textContent = `Hole ${i}`;
+        tr.innerHTML = `<td>Hole ${i}</td>`;
+        const tdPar = document.createElement("td"); tdPar.appendChild(parInput);
+        const tdS = document.createElement("td"); tdS.appendChild(strokesSelect);
+        const tdP = document.createElement("td"); tdP.appendChild(puttsSelect);
 
-        const tdPar = document.createElement("td");
-        tdPar.appendChild(parInput);
-
-        const tdStrokes = document.createElement("td");
-        tdStrokes.appendChild(strokesSelect);
-
-        const tdPutts = document.createElement("td");
-        tdPutts.appendChild(puttsSelect);
-
-        tr.appendChild(tdHole);
         tr.appendChild(tdPar);
-        tr.appendChild(tdStrokes);
-        tr.appendChild(tdPutts);
+        tr.appendChild(tdS);
+        tr.appendChild(tdP);
 
         scoreBody.appendChild(tr);
       }
 
       updateTotalsFromTable();
 
-      // try to auto-fill pars
-      tryApplyPublishedParsToTableFromCourseCache(round.course, round.state, round.holes, round.nine_side || round.nineSide);
+      // ✅ auto-fill pars (with scorecards fallback)
+      tryApplyPublishedParsToTable(round.course, round.state, round.holes, round.nine_side || round.nineSide);
     }
 
     function readTableHoles(){
@@ -1115,8 +1129,15 @@
       let publishedPars = null;
       if (par_mode === "published") {
         await loadCoursesOnce();
-        const courseObj = findCourseObjByNameState(course, state);
+        let courseObj = findBestCourseObj(course, state);
         publishedPars = pickParsFromCourseObj(courseObj, holes, nine_side || "front");
+
+        // fallback to scorecards
+        if (!publishedPars) {
+          await loadScorecardsOnce();
+          courseObj = findBestCourseObj(course, state);
+          publishedPars = pickParsFromCourseObj(courseObj, holes, nine_side || "front");
+        }
       }
 
       const payload = {
@@ -1221,17 +1242,17 @@
     holesEl.addEventListener("change", () => {
       ensureNineSideVisibility();
       if (!currentRoundId) return;
-      tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, holesEl.value, getNineSideValue());
+      tryApplyPublishedParsToTable(currentRound?.course, currentRound?.state, holesEl.value, getNineSideValue());
     });
     parModeEl.addEventListener("change", () => {
       ensureNineSideVisibility();
       if (!currentRoundId) return;
-      tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, holesEl.value, getNineSideValue());
+      tryApplyPublishedParsToTable(currentRound?.course, currentRound?.state, holesEl.value, getNineSideValue());
     });
     if (nineSideEl) {
       nineSideEl.addEventListener("change", () => {
         if (!currentRoundId) return;
-        tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, holesEl.value, getNineSideValue());
+        tryApplyPublishedParsToTable(currentRound?.course, currentRound?.state, holesEl.value, getNineSideValue());
       });
     }
 
