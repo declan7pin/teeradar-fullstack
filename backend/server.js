@@ -1047,6 +1047,79 @@ console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
 // -------------------------------------------------
+// ✅ NEW: Load scorecards (published pars) and attach to /api/courses
+// This fixes My Rounds par auto-fill without breaking booking.
+// -------------------------------------------------
+function _norm(s) {
+  return String(s || "").trim().toLowerCase();
+}
+function _courseKey(course, state) {
+  return `${_norm(course)}|${String(state || "").trim().toUpperCase()}`;
+}
+function _safeReadJsonIfExists(p) {
+  try {
+    if (!fs.existsSync(p)) return null;
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+// Load scorecards by state (start with WA, add others later)
+const scorecardsWAPath = path.join(__dirname, "data", "scorecards-wa.json");
+const scorecardsWA = _safeReadJsonIfExists(scorecardsWAPath);
+const scorecardsAll = []
+  .concat(Array.isArray(scorecardsWA) ? scorecardsWA : []);
+
+// Build index: course|state|holes -> [scorecardEntries]
+const scorecardIndex = new Map();
+for (const sc of scorecardsAll) {
+  const courseName = sc.course || sc.name || "";
+  const st = (sc.state || "").toString().toUpperCase();
+  const holes = Number(sc.holes) || null;
+  if (!courseName || !st || !holes) continue;
+
+  const k = `${_courseKey(courseName, st)}|${holes}`;
+  if (!scorecardIndex.has(k)) scorecardIndex.set(k, []);
+  scorecardIndex.get(k).push(sc);
+}
+
+// Create enriched version of the courses list (keep original intact)
+const coursesEnriched = courses.map((c) => {
+  const courseName = c.name || c.course || "";
+  const st = (c.state || "").toString().toUpperCase();
+  const holes = Number(c.holes) || null;
+
+  if (!courseName || !st || !holes) return c;
+
+  const k = `${_courseKey(courseName, st)}|${holes}`;
+  const list = scorecardIndex.get(k) || [];
+
+  // Only auto-attach pars when unambiguous (exactly 1 match with a pars array)
+  // If multiple layouts exist, we expose them but DO NOT guess.
+  if (list.length === 1 && Array.isArray(list[0].pars) && list[0].pars.length === holes) {
+    if (holes === 18) return { ...c, pars18: list[0].pars };
+    if (holes === 9) return { ...c, pars9: list[0].pars };
+    return c;
+  }
+
+  if (list.length > 1) {
+    const layouts = list
+      .map((x) => (x.layout || "").toString().trim())
+      .filter((x) => x.length > 0);
+
+    return {
+      ...c,
+      // doesn't break anything; lets frontend ask user which layout later
+      availableLayouts: Array.from(new Set(layouts)),
+      hasMultipleScorecards: true,
+    };
+  }
+
+  return c;
+});
+
+// -------------------------------------------------
 // Health Check
 // -------------------------------------------------
 app.get("/health", (req, res) => {
@@ -1057,7 +1130,8 @@ app.get("/health", (req, res) => {
 // Course List
 // -------------------------------------------------
 app.get("/api/courses", (req, res) => {
-  res.json(courses);
+  // ✅ return enriched courses (includes pars18/pars9 where available + unambiguous)
+  res.json(coursesEnriched);
 });
 
 // -------------------------------------------------
