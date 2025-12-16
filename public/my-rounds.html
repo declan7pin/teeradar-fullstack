@@ -220,7 +220,7 @@
       width:100%;
       border-collapse:separate;
       border-spacing:0;
-      min-width:720px;
+      min-width:860px;
     }
     th, td{
       padding:10px 10px;
@@ -257,17 +257,8 @@
       border:1px solid var(--border);
       font-weight:800;
       text-align:center;
-      background:#fff;
-      color:var(--text);
     }
     .mini:focus{border-color:#9ad7cf; box-shadow:0 0 0 3px rgba(0,121,107,.10)}
-
-    /* ✅ NEW: make selects render iOS wheel picker consistently */
-    select.mini{
-      -webkit-appearance: menulist;
-      appearance: auto;
-    }
-
     .rightActions{
       display:flex;
       gap:10px;
@@ -296,7 +287,7 @@
     .toast.ok{display:block; border-color:rgba(22,163,74,.25); background:rgba(22,163,74,.07); color:var(--ok)}
     .toast.bad{display:block; border-color:rgba(213,0,0,.25); background:rgba(213,0,0,.06); color:var(--danger)}
 
-    /* ✅ NEW: course autocomplete */
+    /* ✅ course autocomplete */
     #courseRow{ position:relative; }
     .autocomplete-list{
       position:absolute;
@@ -328,6 +319,15 @@
       font-size:.8rem;
       margin-top:2px;
     }
+
+    /* ✅ compact totals grid for multi-player */
+    .totalsGrid{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      margin-top:12px;
+    }
   </style>
 </head>
 <body>
@@ -353,7 +353,7 @@
 
     <div id="app" style="display:none;">
       <div class="grid">
-        <!-- LEFT: Create + list -->
+        <!-- LEFT -->
         <section class="card">
           <h2>Create a new round</h2>
           <div class="muted" style="font-weight:700;">
@@ -389,7 +389,7 @@
             </div>
           </div>
 
-          <!-- ✅ NEW: front/back selector (only when 9 holes) -->
+          <!-- ✅ front/back selector (only when 9 holes) -->
           <div id="nineLoopWrap" style="display:none;">
             <label for="nineLoop">9 holes (front or back?)</label>
             <select id="nineLoop">
@@ -401,30 +401,36 @@
             </div>
           </div>
 
-          <div class="row3">
-  <div>
-    <label for="layout">Layout (optional)</label>
-    <input id="layout" placeholder="e.g. Island–Lakes / Old Course / Lakeside" />
-  </div>
+          <div class="row">
+            <div>
+              <label for="layout">Layout (optional)</label>
+              <input id="layout" placeholder="e.g. Island–Lakes / Old Course / Lakeside" />
+            </div>
+            <div>
+              <label for="parMode">Par mode</label>
+              <select id="parMode">
+                <option value="published">Use published pars (if available)</option>
+                <option value="blank">Blank scorecard (fill pars as you go)</option>
+              </select>
+            </div>
+          </div>
 
-  <div>
-    <label for="players">Players</label>
-    <select id="players">
-      <option value="1">1 player</option>
-      <option value="2">2 players</option>
-      <option value="3">3 players</option>
-      <option value="4">4 players</option>
-    </select>
-  </div>
-
-  <div>
-    <label for="parMode">Par mode</label>
-    <select id="parMode">
-      <option value="published">Use published pars (if available)</option>
-      <option value="blank">Blank scorecard (fill pars as you go)</option>
-    </select>
-  </div>
-</div>
+          <!-- ✅ NEW: Players selector -->
+          <div class="row">
+            <div>
+              <label for="players">Players</label>
+              <select id="players">
+                <option value="1">1 player</option>
+                <option value="2">2 players</option>
+                <option value="3">3 players</option>
+                <option value="4">4 players</option>
+              </select>
+              <div class="muted" style="margin-top:6px;font-weight:800;">
+                Adds columns for Player 1–4 (strokes + putts) on the scorecard.
+              </div>
+            </div>
+            <div></div>
+          </div>
 
           <label for="notes">Notes (optional)</label>
           <textarea id="notes" placeholder="Weather, tees, playing partners, etc."></textarea>
@@ -450,7 +456,7 @@
           </div>
         </section>
 
-        <!-- RIGHT: Scorecard -->
+        <!-- RIGHT -->
         <section class="card">
           <div class="scorecardHeader">
             <div>
@@ -474,24 +480,13 @@
           <div id="scorecardWrap" style="display:none;">
             <div class="tableWrap">
               <table id="scoreTable">
-                <thead>
-                  <tr>
-                    <th>Hole</th>
-                    <th>Par</th>
-                    <th>Strokes</th>
-                    <th>Putts</th>
-                  </tr>
-                </thead>
+                <thead id="scoreHead"></thead>
                 <tbody id="scoreBody"></tbody>
               </table>
             </div>
 
-            <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-              <span class="pill" id="totPar">Par: —</span>
-              <span class="pill" id="totStrokes">Strokes: —</span>
-              <span class="pill" id="totPutts">Putts: —</span>
-              <span class="pill" id="totToPar">To Par: —</span>
-            </div>
+            <!-- ✅ NEW: per-player totals -->
+            <div class="totalsGrid" id="totalsGrid"></div>
 
             <div class="muted" style="margin-top:10px; font-weight:800;">
               Tip: enter strokes + putts each hole. Pars can be blank if you don’t know them yet.
@@ -501,8 +496,8 @@
       </div>
 
       <div class="notice" style="margin-top:16px;">
-        <strong>Important:</strong> This page expects round APIs on the backend (create/list/get/update/delete).  
-        If you haven’t added those endpoints yet, you’ll see an “API not ready” error — tell me and I’ll generate the exact backend routes file next.
+        <strong>Important:</strong> Multi-player rounds require backend support (players_count + JSON per-hole fields).  
+        If Save doesn't persist multi-player columns, update backend files below.
       </div>
     </div>
   </main>
@@ -556,10 +551,10 @@
     let currentRound = null;
     let roundsCache = [];
 
-    // ✅ NEW: course data cache for autocomplete + pars
+    // course cache (optional)
     let coursesCache = [];
     let coursesLoaded = false;
-    let selectedCourseKey = ""; // tracks the last picked course (name|state)
+    let selectedCourseKey = "";
 
     // -----------------------------
     // UI refs
@@ -573,9 +568,8 @@
     const layoutEl = document.getElementById("layout");
     const parModeEl = document.getElementById("parMode");
     const notesEl = document.getElementById("notes");
-    const playersEl = document.getElementById("players");
+    const playersEl = document.getElementById("players"); // ✅ NEW
 
-    // ✅ NEW: 9-hole loop selector refs
     const nineLoopWrap = document.getElementById("nineLoopWrap");
     const nineLoopEl = document.getElementById("nineLoop");
 
@@ -594,45 +588,49 @@
     const scorecardWrap = document.getElementById("scorecardWrap");
     const scoreBody = document.getElementById("scoreBody");
 
+    const scoreHead = document.getElementById("scoreHead"); // ✅ NEW
+    const totalsGrid = document.getElementById("totalsGrid"); // ✅ NEW
+
     const saveAllBtn = document.getElementById("saveAllBtn");
     const deleteRoundBtn = document.getElementById("deleteRoundBtn");
-
-    const totParEl = document.getElementById("totPar");
-    const totStrokesEl = document.getElementById("totStrokes");
-    const totPuttsEl = document.getElementById("totPutts");
-    const totToParEl = document.getElementById("totToPar");
 
     const leftToast = document.getElementById("leftToast");
     const rightToast = document.getElementById("rightToast");
 
-    // ✅ NEW: autocomplete refs
     const courseAutoList = document.getElementById("courseAutoList");
 
     // -----------------------------
     // Helpers
     // -----------------------------
     function norm(s){ return String(s || "").trim().toLowerCase(); }
+    function clamp(n, a, b){ n = Number(n); if (!Number.isFinite(n)) return a; return Math.max(a, Math.min(b, n)); }
+
+    function escapeHtml(s){
+      return String(s || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
 
     function courseKey(name, state){
       return (norm(name) + "|" + String(state || "").trim().toUpperCase());
     }
 
-    // ✅ NEW: build options for iOS wheel pickers
-    function buildNumberOptions(min, max, currentValue){
-      const cur = (currentValue === null || typeof currentValue === "undefined" || currentValue === "") ? "" : String(currentValue);
-      let html = `<option value=""></option>`;
-      for (let i = min; i <= max; i++){
-        const v = String(i);
-        html += `<option value="${v}"${(cur !== "" && cur === v) ? " selected" : ""}>${v}</option>`;
+    async function loadCoursesOnce(){
+      if (coursesLoaded) return;
+      coursesLoaded = true;
+      try{
+        const res = await fetch("/api/courses");
+        const data = await res.json();
+        coursesCache = Array.isArray(data) ? data : [];
+      }catch(e){
+        coursesCache = [];
       }
-      return html;
     }
 
     function pickParsFromCourseObj(courseObj, holes){
-      // supports a few possible shapes without breaking anything:
-      // - course.pars18 / course.pars9 = [..]
-      // - course.pars = { "18":[..], "9":[..] } OR course.pars = [..] (assume 18)
-      // - course.holes = [{hole_number, par}] style arrays
       const h = Number(holes) || 18;
       const c = courseObj || {};
 
@@ -649,32 +647,7 @@
         return arr.length ? arr : null;
       }
 
-      // holes array in some formats
-      const holesArr = c.holesData || c.holes || c.scorecard || null;
-      if (Array.isArray(holesArr)) {
-        const map = new Map();
-        holesArr.forEach(x => map.set(Number(x.hole_number || x.hole || x.number), Number(x.par)));
-        const out = [];
-        for (let i=1;i<=h;i++){
-          const p = map.get(i);
-          out.push(Number.isFinite(p) ? p : null);
-        }
-        return out.some(v => v != null) ? out : null;
-      }
-
       return null;
-    }
-
-    async function loadCoursesOnce(){
-      if (coursesLoaded) return;
-      coursesLoaded = true;
-      try{
-        const res = await fetch("/api/courses");
-        const data = await res.json();
-        coursesCache = Array.isArray(data) ? data : [];
-      }catch(e){
-        coursesCache = [];
-      }
     }
 
     function hideCourseAutocomplete(){
@@ -708,10 +681,6 @@
 
           selectedCourseKey = courseKey(nm, st2 || stateEl.value);
           hideCourseAutocomplete();
-
-          if (currentRoundId && String(parModeEl.value || "") === "published") {
-            tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, currentRound?.holes);
-          }
         });
 
         courseAutoList.appendChild(div);
@@ -724,8 +693,7 @@
 
       courseEl.addEventListener("input", async () => {
         const q = norm(courseEl.value);
-        selectedCourseKey = ""; // typing resets "picked" state
-
+        selectedCourseKey = "";
         hideCourseAutocomplete();
         if (!q || q.length < 2) return;
 
@@ -755,49 +723,12 @@
       });
     }
 
-    function tryApplyPublishedParsToTableFromCourseCache(courseName, state, holes){
-      try{
-        const mode = String(currentRound?.par_mode || parModeEl?.value || "");
-        if (mode !== "published") return;
-
-        const name = String(courseName || "").trim();
-        const st = String(state || "").trim().toUpperCase() || String(stateEl?.value || "").trim().toUpperCase();
-        const h = Number(holes || holesEl?.value || 18) || 18;
-        if (!name) return;
-
-        const k = courseKey(name, st);
-        const courseObj =
-          coursesCache.find(c => courseKey(c.name || c.course || c.title, c.state) === k) ||
-          coursesCache.find(c => norm(c.name || c.course || c.title) === norm(name));
-
-        const pars = pickParsFromCourseObj(courseObj, h);
-        if (!pars || !Array.isArray(pars) || !pars.length) return;
-
-        for (let i=1;i<=h;i++){
-          const input = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
-          if (!input) continue;
-          const existing = String(input.value || "").trim();
-          if (existing !== "") continue;
-
-          const p = pars[i-1];
-          if (p == null) continue;
-          input.value = String(p);
-        }
-
-        updateTotalsFromTable();
-      }catch(e){}
-    }
-
-    // ✅ NEW: show/hide the front/back selector when holes=9
     function syncNineLoopVisibility(){
       const holesNow = Number(holesEl?.value || 18);
       if (!nineLoopWrap) return;
       nineLoopWrap.style.display = (holesNow === 9) ? "block" : "none";
     }
 
-    // -----------------------------
-    // Round list rendering
-    // -----------------------------
     function formatDate(d) {
       try {
         const dt = new Date(d);
@@ -807,14 +738,52 @@
       }
     }
 
-    function calcTotals(holesData){
+    // -----------------------------
+    // Multi-player helpers
+    // -----------------------------
+    function getPlayersCountFromRound(r){
+      const pc = Number(r?.players_count ?? r?.players ?? 1);
+      return clamp(pc, 1, 4);
+    }
+
+    function getHolePlayerValue(holeObj, field, playerIndex){
+      // field: "strokes" | "putts"
+      // We support:
+      // - hole.strokes / hole.putts (player1)
+      // - hole.strokes_by_player / hole.putts_by_player (object like {"1":4,"2":5})
+      const pNum = String(playerIndex + 1);
+
+      const by = holeObj && holeObj[`${field}_by_player`];
+      if (by && typeof by === "object") {
+        const v = by[pNum];
+        return (v === null || typeof v === "undefined") ? null : Number(v);
+      }
+
+      if (playerIndex === 0) {
+        const v = holeObj ? holeObj[field] : null;
+        return (v === null || typeof v === "undefined") ? null : Number(v);
+      }
+
+      return null;
+    }
+
+    function setHolePlayerValue(outHoleObj, field, playerIndex, value){
+      const key = `${field}_by_player`;
+      if (!outHoleObj[key] || typeof outHoleObj[key] !== "object") outHoleObj[key] = {};
+      outHoleObj[key][String(playerIndex + 1)] = value;
+    }
+
+    // -----------------------------
+    // Round list
+    // -----------------------------
+    function calcTotalsForPlayer(holesData, playerIndex){
       let par=0, strokes=0, putts=0;
       let parCount=0, strokesCount=0, puttsCount=0;
 
       for (const h of holesData || []) {
         const p = Number(h.par);
-        const s = Number(h.strokes);
-        const u = Number(h.putts);
+        const s = getHolePlayerValue(h, "strokes", playerIndex);
+        const u = getHolePlayerValue(h, "putts", playerIndex);
 
         if (Number.isFinite(p)) { par += p; parCount++; }
         if (Number.isFinite(s)) { strokes += s; strokesCount++; }
@@ -840,17 +809,23 @@
         item.className = "roundItem";
         item.dataset.id = r.id;
 
-        const totals = calcTotals(r.holesData || []);
-        const scoreLabel = (totals.strokes != null) ? totals.strokes : "—";
-        const toParLabel = (totals.toPar != null)
-          ? (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+"+totals.toPar : ""+totals.toPar))
+        // show Player 1 score on the list
+        const totalsP1 = calcTotalsForPlayer(r.holesData || [], 0);
+        const scoreLabel = (totalsP1.strokes != null) ? totalsP1.strokes : "—";
+        const toParLabel = (totalsP1.toPar != null)
+          ? (totalsP1.toPar === 0 ? "E" : (totalsP1.toPar > 0 ? "+"+totalsP1.toPar : ""+totalsP1.toPar))
           : "—";
+
+        const pc = getPlayersCountFromRound(r);
 
         item.innerHTML = `
           <div class="top">
             <div>
               <div class="title">${escapeHtml(r.course || "Round")}${r.layout ? " — " + escapeHtml(r.layout) : ""}</div>
-              <div class="meta">${escapeHtml(r.state || "")} • ${r.holes || ""} holes${(Number(r.holes)===9 && r.nine_loop) ? (" • " + escapeHtml(String(r.nine_loop))) : ""} • ${escapeHtml(r.par_mode || "")} • ${formatDate(r.created_at)}</div>
+              <div class="meta">
+                ${escapeHtml(r.state || "")} • ${r.holes || ""} holes • Players: ${pc}
+                • ${escapeHtml(r.par_mode || "")} • ${formatDate(r.created_at)}
+              </div>
             </div>
             <div class="score">${scoreLabel} <span class="muted" style="font-weight:900;">(${toParLabel})</span></div>
           </div>
@@ -861,18 +836,32 @@
       }
     }
 
-    function escapeHtml(s){
-      return String(s || "")
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-    }
-
     // -----------------------------
     // Scorecard rendering
     // -----------------------------
+    function buildScoreHead(playersCount){
+      const pc = clamp(playersCount, 1, 4);
+
+      // Header row 1
+      let th1 = `<tr>
+        <th rowspan="2">Hole</th>
+        <th rowspan="2">Par</th>
+      `;
+      for (let p=1; p<=pc; p++){
+        th1 += `<th colspan="2">P${p}</th>`;
+      }
+      th1 += `</tr>`;
+
+      // Header row 2
+      let th2 = `<tr>`;
+      for (let p=1; p<=pc; p++){
+        th2 += `<th>Strokes</th><th>Putts</th>`;
+      }
+      th2 += `</tr>`;
+
+      scoreHead.innerHTML = `<thead>${th1}${th2}</thead>`;
+    }
+
     function renderScorecard(round){
       currentRound = round;
       currentRoundId = round?.id || null;
@@ -885,6 +874,9 @@
         scTitleEl.textContent = "Scorecard";
         scSubEl.textContent = "Select a round to begin.";
         scPillsEl.innerHTML = "";
+        totalsGrid.innerHTML = "";
+        scoreHead.innerHTML = "";
+        scoreBody.innerHTML = "";
         return;
       }
 
@@ -893,19 +885,18 @@
       saveAllBtn.disabled = false;
       deleteRoundBtn.disabled = false;
 
+      const pc = getPlayersCountFromRound(round);
+
       scTitleEl.textContent = round.course || "Round";
       scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
 
-      const loopPill = (Number(round.holes) === 9 && round.nine_loop)
-        ? `<span class="pill">${escapeHtml(String(round.nine_loop).toLowerCase()==="back" ? "Back 9" : "Front 9")}</span>`
-        : "";
-
       scPillsEl.innerHTML = `
         <span class="pill">${escapeHtml(round.par_mode || "")}</span>
+        <span class="pill">Players: ${pc}</span>
         <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
-        ${loopPill}
       `;
 
+      buildScoreHead(pc);
       scoreBody.innerHTML = "";
 
       const holesCount = Number(round.holes) || 18;
@@ -915,75 +906,127 @@
       for (const h of holesData) map.set(Number(h.hole_number), h);
 
       for (let i=1; i<=holesCount; i++){
-        const existing = map.get(i) || { hole_number: i, par: null, strokes: null, putts: null };
+        const existing = map.get(i) || { hole_number: i, par: null };
         const tr = document.createElement("tr");
+
+        // build player columns
+        let playerTds = "";
+        for (let pi=0; pi<pc; pi++){
+          const s = getHolePlayerValue(existing, "strokes", pi);
+          const u = getHolePlayerValue(existing, "putts", pi);
+
+          playerTds += `
+            <td>
+              <input class="mini" inputmode="numeric" pattern="[0-9]*"
+                data-field="strokes" data-hole="${i}" data-player="${pi+1}"
+                value="${s ?? ""}" placeholder="—">
+            </td>
+            <td>
+              <input class="mini" inputmode="numeric" pattern="[0-9]*"
+                data-field="putts" data-hole="${i}" data-player="${pi+1}"
+                value="${u ?? ""}" placeholder="—">
+            </td>
+          `;
+        }
 
         tr.innerHTML = `
           <td>Hole ${i}</td>
           <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${existing.par ?? ""}" placeholder="—"></td>
-          <td>
-            <select class="mini" data-field="strokes" data-hole="${i}">
-              ${buildNumberOptions(0, 25, existing.strokes ?? "")}
-            </select>
-          </td>
-          <td>
-            <select class="mini" data-field="putts" data-hole="${i}">
-              ${buildNumberOptions(0, 10, existing.putts ?? "")}
-            </select>
-          </td>
+          ${playerTds}
         `;
 
         scoreBody.appendChild(tr);
       }
 
-      // ✅ update totals on any change (inputs + selects)
-      scoreBody.querySelectorAll('input[data-hole], select[data-hole]').forEach((el) => {
-        el.addEventListener("input", () => updateTotalsFromTable());
-        el.addEventListener("change", () => updateTotalsFromTable());
+      scoreBody.querySelectorAll("input").forEach((inp) => {
+        inp.addEventListener("input", () => updateTotalsFromTable());
       });
 
       updateTotalsFromTable();
-
-      tryApplyPublishedParsToTableFromCourseCache(round.course, round.state, round.holes);
     }
 
     function readTableHoles(){
-      const rows = [];
-      const controls = scoreBody.querySelectorAll('[data-hole]');
       const byHole = new Map();
-
-      for (const el of controls) {
-        const hole = Number(el.dataset.hole);
-        const field = el.dataset.field;
-
-        if (!byHole.has(hole)) byHole.set(hole, { hole_number: hole, par: null, strokes: null, putts: null });
-
-        const v = String(el.value || "").trim();
-        const n = v === "" ? null : Number(v);
-
-        byHole.get(hole)[field] = Number.isFinite(n) ? n : null;
-      }
-
       const holesCount = Number(currentRound?.holes) || 18;
+      const pc = getPlayersCountFromRound(currentRound);
+
       for (let i=1;i<=holesCount;i++){
-        rows.push(byHole.get(i) || { hole_number:i, par:null, strokes:null, putts:null });
+        byHole.set(i, { hole_number: i, par: null, strokes_by_player: {}, putts_by_player: {} });
       }
 
+      // Par
+      for (let i=1;i<=holesCount;i++){
+        const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
+        if (parInp){
+          const v = String(parInp.value || "").trim();
+          const n = v === "" ? null : Number(v);
+          byHole.get(i).par = Number.isFinite(n) ? n : null;
+        }
+      }
+
+      // Player fields
+      const inputs = scoreBody.querySelectorAll("input[data-player]");
+      inputs.forEach(inp => {
+        const hole = Number(inp.dataset.hole);
+        const field = String(inp.dataset.field || "");
+        const player = Number(inp.dataset.player); // 1..4
+        if (!Number.isFinite(hole) || !byHole.has(hole)) return;
+        if (![ "strokes", "putts" ].includes(field)) return;
+        if (!Number.isFinite(player) || player < 1 || player > 4) return;
+
+        const v = String(inp.value || "").trim();
+        const n = v === "" ? null : Number(v);
+        const val = Number.isFinite(n) ? n : null;
+
+        if (field === "strokes") byHole.get(hole).strokes_by_player[String(player)] = val;
+        if (field === "putts") byHole.get(hole).putts_by_player[String(player)] = val;
+      });
+
+      // For backward compat, mirror Player 1 into strokes/putts too
+      for (let i=1;i<=holesCount;i++){
+        const h = byHole.get(i);
+        h.strokes = (h.strokes_by_player && typeof h.strokes_by_player === "object") ? (h.strokes_by_player["1"] ?? null) : null;
+        h.putts = (h.putts_by_player && typeof h.putts_by_player === "object") ? (h.putts_by_player["1"] ?? null) : null;
+
+        // clean unused players beyond pc (optional)
+        for (let p=pc+1; p<=4; p++){
+          delete h.strokes_by_player[String(p)];
+          delete h.putts_by_player[String(p)];
+        }
+      }
+
+      const rows = [];
+      for (let i=1;i<=holesCount;i++) rows.push(byHole.get(i));
       return rows;
     }
 
     function updateTotalsFromTable(){
       const holesRows = readTableHoles();
-      const totals = calcTotals(holesRows);
+      const pc = getPlayersCountFromRound(currentRound);
 
-      totParEl.textContent = "Par: " + (totals.par != null ? totals.par : "—");
-      totStrokesEl.textContent = "Strokes: " + (totals.strokes != null ? totals.strokes : "—");
-      totPuttsEl.textContent = "Putts: " + (totals.putts != null ? totals.putts : "—");
+      totalsGrid.innerHTML = "";
 
-      if (totals.toPar == null) {
-        totToParEl.textContent = "To Par: —";
-      } else {
-        totToParEl.textContent = "To Par: " + (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+" + totals.toPar : "" + totals.toPar));
+      for (let pi=0; pi<pc; pi++){
+        // build a temporary shape for totals calc
+        const holesForCalc = holesRows.map(h => ({
+          hole_number: h.hole_number,
+          par: h.par,
+          strokes: (pi===0 ? h.strokes : null),
+          putts: (pi===0 ? h.putts : null),
+          strokes_by_player: h.strokes_by_player,
+          putts_by_player: h.putts_by_player
+        }));
+
+        const totals = calcTotalsForPlayer(holesForCalc, pi);
+
+        const toParLabel = (totals.toPar == null)
+          ? "—"
+          : (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+" + totals.toPar : "" + totals.toPar));
+
+        const pill = document.createElement("span");
+        pill.className = "pill";
+        pill.textContent = `P${pi+1}: Strokes ${totals.strokes ?? "—"} • Putts ${totals.putts ?? "—"} • To Par ${toParLabel}`;
+        totalsGrid.appendChild(pill);
       }
     }
 
@@ -1015,8 +1058,8 @@
       const layout = String(layoutEl.value || "").trim();
       const par_mode = String(parModeEl.value || "published").trim();
       const notes = String(notesEl.value || "").trim();
+      const players_count = clamp(playersEl?.value || 1, 1, 4); // ✅ NEW
 
-      // ✅ NEW
       const nineLoop = (holes === 9) ? String(nineLoopEl?.value || "front").trim().toLowerCase() : null;
 
       if (!course) {
@@ -1024,7 +1067,7 @@
         return;
       }
 
-      // ✅ NEW: if they picked a course + par_mode=published, include pars (backend can use/ignore safely)
+      // Optional published pars from courses cache (backend can ignore)
       let publishedPars = null;
       if (par_mode === "published") {
         await loadCoursesOnce();
@@ -1042,11 +1085,9 @@
         layout: layout || null,
         par_mode,
         notes: notes || null,
-
-        // ✅ NEW: for 9-hole rounds so backend can choose front/back when it only has 18-hole pars
+        players_count, // ✅ NEW
         ...(holes === 9 ? { nineLoop } : {}),
-
-        ...(publishedPars ? { publishedPars } : {}) // ✅ NEW (optional)
+        ...(publishedPars ? { publishedPars } : {})
       };
 
       const data = await api("/api/rounds", { method:"POST", body: JSON.stringify(payload) });
@@ -1064,8 +1105,8 @@
       if (!currentRoundId) return;
 
       const holesRows = readTableHoles();
-
       const payload = { holes: holesRows };
+
       await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, {
         method:"PUT",
         body: JSON.stringify(payload)
@@ -1089,7 +1130,7 @@
     }
 
     // -----------------------------
-    // Safe wrappers (nice errors)
+    // Safe wrappers
     // -----------------------------
     async function safeFetchRounds(){
       try{
@@ -1135,17 +1176,8 @@
       }
     });
 
-    // ✅ NEW: keep selector visibility in sync
     holesEl.addEventListener("change", () => {
       syncNineLoopVisibility();
-      if (!currentRoundId) return;
-      tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, holesEl.value);
-    });
-
-    // ✅ NEW: if they change par mode after selecting a course, try fill again (only empty pars)
-    parModeEl.addEventListener("change", () => {
-      if (!currentRoundId) return;
-      tryApplyPublishedParsToTableFromCourseCache(currentRound?.course, currentRound?.state, holesEl.value);
     });
 
     (async function init(){
@@ -1159,10 +1191,7 @@
       authGate.style.display = "none";
       appEl.style.display = "block";
 
-      // ✅ NEW
       initCourseAutocomplete();
-
-      // ✅ NEW
       syncNineLoopVisibility();
 
       await safeFetchRounds();
