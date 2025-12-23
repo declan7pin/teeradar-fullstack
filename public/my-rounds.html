@@ -220,7 +220,7 @@
       width:100%;
       border-collapse:separate;
       border-spacing:0;
-      min-width:860px;
+      min-width:980px; /* ✅ was 860, now includes distance column */
     }
     th, td{
       padding:10px 10px;
@@ -329,33 +329,14 @@
       margin-top:12px;
     }
 
-    /* ✅ distances */
-    .distHidden .distCol{ display:none !important; }
-    .teeWrap{
-      display:flex;
-      gap:8px;
-      align-items:center;
-      flex-wrap:wrap;
-    }
-    .teeWrap .teeLabel{
+    /* ✅ distance cell style */
+    .distCell{
       font-weight:900;
-      color:#fff;
-      background:rgba(255,255,255,.14);
-      border:1px solid rgba(255,255,255,.22);
-      padding:7px 10px;
-      border-radius:999px;
-      font-size:.85rem;
-      white-space:nowrap;
+      color:#0f172a;
     }
-    .teeSelect{
-      width:auto;
-      min-width:140px;
-      padding:9px 10px;
-      border-radius:10px;
-      border:1px solid var(--border);
-      font-weight:900;
-      background:#fff;
-      color:var(--text);
+    .distMuted{
+      color:var(--muted);
+      font-weight:800;
     }
   </style>
 </head>
@@ -494,9 +475,6 @@
               <div id="scPills"></div>
             </div>
             <div class="rightActions">
-              <!-- ✅ NEW: tee selector (auto-hides if no distances) -->
-              <select id="teeSelect" class="teeSelect" style="display:none;" aria-label="Select tee"></select>
-
               <button class="btn2 secondary" id="saveAllBtn" type="button" disabled>Save</button>
               <button class="btn2 danger" id="deleteRoundBtn" type="button" disabled>Delete</button>
             </div>
@@ -510,7 +488,7 @@
           </div>
 
           <div id="scorecardWrap" style="display:none;">
-            <div class="tableWrap" id="tableWrap">
+            <div class="tableWrap">
               <table id="scoreTable">
                 <thead id="scoreHead"></thead>
                 <tbody id="scoreBody"></tbody>
@@ -588,10 +566,9 @@
     let coursesLoaded = false;
     let selectedCourseKey = "";
 
-    // ✅ distances cache/state
-    const scorecardsCacheByState = new Map(); // state -> array
-    let currentDistances = null; // { tees: string[], byTee: {tee: number[]}, holes: number }
-    let currentSelectedTee = "";
+    // ✅ scorecards cache (pars + distances)
+    const scorecardsCacheByState = {};   // { "WA": [ ...scorecard objects... ] }
+    const scorecardMetaCache = new Map(); // key -> { pars[], distancesArr[], teeName }
 
     // -----------------------------
     // UI refs
@@ -636,10 +613,6 @@
 
     const courseAutoList = document.getElementById("courseAutoList");
 
-    // ✅ NEW refs
-    const teeSelect = document.getElementById("teeSelect");
-    const tableWrap = document.getElementById("tableWrap");
-
     // -----------------------------
     // Helpers
     // -----------------------------
@@ -657,6 +630,11 @@
 
     function courseKey(name, state){
       return (norm(name) + "|" + String(state || "").trim().toUpperCase());
+    }
+
+    function cleanCourseNameForMatch(name){
+      // remove "(...)" parts and normalize spaces for matching scorecards
+      return norm(String(name || "").replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim());
     }
 
     async function loadCoursesOnce(){
@@ -780,221 +758,150 @@
     }
 
     // -----------------------------
-    // ✅ Scorecards + distances helpers
+    // ✅ Scorecards (pars + distances) loader
     // -----------------------------
-    function stripParenBits(s){
-      // helps match: "Wembley Golf Course (18 holes - Old Course)" vs "Wembley Golf Course"
-      return String(s || "").replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
-    }
-
-    function includesEither(a,b){
-      const A = norm(a), B = norm(b);
-      if (!A || !B) return false;
-      return A.includes(B) || B.includes(A);
-    }
-
-    async function fetchFirstJson(urls){
-      for (const u of urls){
-        try{
-          const res = await fetch(u, { cache: "no-store" });
-          if (!res.ok) continue;
-          const data = await res.json();
-          if (Array.isArray(data)) return data;
-          if (data && Array.isArray(data.scorecards)) return data.scorecards;
-        }catch(e){
-          // try next
-        }
-      }
-      return null;
-    }
-
     async function loadScorecardsForState(state){
       const st = String(state || "").toUpperCase();
-      if (scorecardsCacheByState.has(st)) return scorecardsCacheByState.get(st);
+      if (!st) return [];
+      if (Array.isArray(scorecardsCacheByState[st])) return scorecardsCacheByState[st];
 
-      const lower = st.toLowerCase();
-
-      // ✅ try a few common locations (does not break if some 404)
-      const urls = [
-        `/data/scorecards_${st}.json`,
-        `/data/${lower}_scorecards.json`,
-        `/${lower}_scorecards.json`,
-        `/data/${lower}_scorecards_final_format_with_distances.json`,
-        `/${lower}_scorecards_final_format_with_distances.json`
-      ];
-
-      // WA convenience (matches your file naming vibe)
+      // Try common paths. (Put your WA scorecards json in one of these locations)
+      const candidates = [];
       if (st === "WA") {
-        urls.unshift(
-          `/data/wa_scorecards_final_format_with_distances.json`,
-          `/wa_scorecards_final_format_with_distances.json`
+        candidates.push(
+          "/data/wa_scorecards.json",
+          "/data/wa_scorecards_with_distances.json",
+          "/data/wa_scorecards_extended_missing_distances.json",
+          "/wa_scorecards.json",
+          "/wa_scorecards_with_distances.json"
         );
+      } else {
+        // future states can follow same pattern
+        candidates.push(`/data/${st.toLowerCase()}_scorecards.json`);
       }
 
-      const arr = await fetchFirstJson(urls);
-      const out = Array.isArray(arr) ? arr : [];
-      scorecardsCacheByState.set(st, out);
-      return out;
-    }
-
-    function getTeesFromDistances(dist){
-      if (!dist || typeof dist !== "object") return [];
-      return Object.keys(dist).filter(k => Array.isArray(dist[k]) && dist[k].length);
-    }
-
-    function pickDefaultTee(tees){
-      // prefer common order
-      const pref = ["Black","Championship","Blue","White","Green","Yellow","Red"];
-      for (const p of pref){
-        const hit = tees.find(t => norm(t) === norm(p));
-        if (hit) return hit;
+      for (const url of candidates){
+        try{
+          const res = await fetch(url, { cache: "no-store" });
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (Array.isArray(data) && data.length){
+            scorecardsCacheByState[st] = data;
+            return data;
+          }
+        }catch(e){
+          // keep trying
+        }
       }
-      return tees[0] || "";
+
+      scorecardsCacheByState[st] = [];
+      return [];
     }
 
-    function findBestScorecardEntry(scorecards, round){
+    function pickBestScorecardEntry(scorecards, round){
+      const holes = Number(round?.holes) || 18;
+      const nineLoop = String(round?.nineLoop || "").toLowerCase(); // "front"|"back"|""
+
+      const roundCourse = cleanCourseNameForMatch(round?.course || "");
+      const roundLayout = norm(round?.layout || "");
+
+      // filter course matches
+      const matches = (scorecards || []).filter(sc => {
+        const scCourse = cleanCourseNameForMatch(sc.course || sc.name || "");
+        if (!scCourse || !roundCourse) return false;
+        // allow partial either way
+        return scCourse === roundCourse || scCourse.includes(roundCourse) || roundCourse.includes(scCourse);
+      });
+
+      if (!matches.length) return null;
+
+      // score entries
+      function score(sc){
+        let s = 0;
+        const scHoles = Number(sc.holes) || (Array.isArray(sc.pars) ? sc.pars.length : null);
+
+        if (scHoles === holes) s += 50;
+        if (holes === 9 && scHoles === 9) s += 30;
+        if (holes === 9 && scHoles === 18) s += 10; // fallback ok
+        if (holes === 18 && scHoles === 18) s += 30;
+
+        const scLayout = norm(sc.layout || "");
+        if (roundLayout && scLayout) {
+          if (scLayout.includes(roundLayout) || roundLayout.includes(scLayout)) s += 15;
+        }
+
+        // front/back preference for 9-hole rounds if the scorecard has that in layout text
+        if (holes === 9 && nineLoop) {
+          if (nineLoop === "front" && scLayout.includes("front")) s += 25;
+          if (nineLoop === "back" && scLayout.includes("back")) s += 25;
+        }
+
+        return s;
+      }
+
+      matches.sort((a,b) => score(b) - score(a));
+      return matches[0];
+    }
+
+    function getParsFromScorecard(sc, round){
+      if (!sc) return null;
+      const holes = Number(round?.holes) || 18;
+      const nineLoop = String(round?.nineLoop || "front").toLowerCase();
+
+      const pars = Array.isArray(sc.pars) ? sc.pars.slice() : null;
+      if (!pars || !pars.length) return null;
+
+      if (holes === 18) return pars.slice(0,18);
+
+      // holes == 9
+      if (pars.length === 9) return pars.slice(0,9);
+      if (pars.length >= 18) {
+        return (nineLoop === "back") ? pars.slice(9,18) : pars.slice(0,9);
+      }
+      return pars.slice(0,9);
+    }
+
+    function pickDistanceArrayFromScorecard(sc, round){
+      if (!sc || !sc.distances_m || typeof sc.distances_m !== "object") return { teeName: null, distances: null };
+
+      const holes = Number(round?.holes) || 18;
+      const nineLoop = String(round?.nineLoop || "front").toLowerCase();
+
+      const teeNames = Object.keys(sc.distances_m || {});
+      if (!teeNames.length) return { teeName: null, distances: null };
+
+      // Pick first tee by default
+      const teeName = teeNames[0];
+      const arr = Array.isArray(sc.distances_m[teeName]) ? sc.distances_m[teeName].slice() : null;
+      if (!arr || !arr.length) return { teeName, distances: null };
+
+      if (holes === 18) return { teeName, distances: arr.slice(0,18) };
+
+      // holes == 9
+      if (arr.length === 9) return { teeName, distances: arr.slice(0,9) };
+      if (arr.length >= 18) {
+        return { teeName, distances: (nineLoop === "back") ? arr.slice(9,18) : arr.slice(0,9) };
+      }
+      return { teeName, distances: arr.slice(0,9) };
+    }
+
+    async function getScorecardMetaForRound(round){
       const st = String(round?.state || "").toUpperCase();
-      const holes = Number(round?.holes || 18);
-      const course = String(round?.course || "").trim();
-      const layout = String(round?.layout || "").trim();
-      const nineLoop = String(round?.nineLoop || "").trim().toLowerCase(); // may not exist
+      const holes = Number(round?.holes) || 18;
+      const nineLoop = String(round?.nineLoop || "");
+      const key = `${st}|${holes}|${cleanCourseNameForMatch(round?.course || "")}|${norm(round?.layout || "")}|${nineLoop}`;
 
-      const courseBase = stripParenBits(course);
-      const layoutN = norm(layout);
+      if (scorecardMetaCache.has(key)) return scorecardMetaCache.get(key);
 
-      const candidates = (scorecards || []).filter(sc => {
-        if (String(sc.state || "").toUpperCase() !== st) return false;
-        const scCourse = String(sc.course || sc.name || "").trim();
-        const scBase = stripParenBits(scCourse);
-        return includesEither(scBase, courseBase);
-      });
+      const scorecards = await loadScorecardsForState(st);
+      const entry = pickBestScorecardEntry(scorecards, round);
 
-      if (!candidates.length) return null;
+      const pars = getParsFromScorecard(entry, round);
+      const { teeName, distances } = pickDistanceArrayFromScorecard(entry, round);
 
-      // prefer holes match
-      let c2 = candidates.filter(sc => Number(sc.holes || 0) === holes);
-      if (!c2.length) c2 = candidates;
-
-      // prefer loop match when 9
-      if (holes === 9 && nineLoop){
-        const want = nineLoop === "back" ? "back" : "front";
-        const loopHits = c2.filter(sc => norm(sc.course || "").includes(want));
-        if (loopHits.length) c2 = loopHits;
-      }
-
-      // prefer layout match
-      if (layoutN){
-        const layoutHits = c2.filter(sc => {
-          const scLayout = norm(sc.layout || "");
-          const scCourse = norm(sc.course || "");
-          return (scLayout && scLayout === layoutN) || (scCourse && scCourse.includes(layoutN));
-        });
-        if (layoutHits.length) c2 = layoutHits;
-      }
-
-      // prefer ones that actually have distances
-      const withDist = c2.filter(sc => sc.distances_m && getTeesFromDistances(sc.distances_m).length);
-      if (withDist.length) c2 = withDist;
-
-      return c2[0] || null;
-    }
-
-    function deriveNineFromEighteen(dist18, which){
-      // dist18: { tee: [18] }
-      const out = {};
-      if (!dist18 || typeof dist18 !== "object") return out;
-      const start = which === "back" ? 9 : 0;
-      const end = which === "back" ? 18 : 9;
-      for (const tee of Object.keys(dist18)){
-        const arr = dist18[tee];
-        if (Array.isArray(arr) && arr.length >= 18){
-          out[tee] = arr.slice(start, end);
-        }
-      }
-      return out;
-    }
-
-    async function setupDistancesForRound(round){
-      currentDistances = null;
-      currentSelectedTee = "";
-      if (teeSelect) teeSelect.style.display = "none";
-      if (tableWrap) tableWrap.classList.add("distHidden");
-
-      if (!round || !round.course || !round.state) return;
-
-      const scorecards = await loadScorecardsForState(round.state);
-      if (!scorecards.length) return;
-
-      const entry = findBestScorecardEntry(scorecards, round);
-      if (!entry) return;
-
-      const holes = Number(round.holes || entry.holes || 18);
-
-      let dist = entry.distances_m || null;
-
-      // If 9-hole round but only 18-hole distances exist in entry, try slice
-      if ((!dist || !getTeesFromDistances(dist).length) && holes === 9){
-        const maybe18 = (Number(entry.holes || 0) === 18) ? (entry.distances_m || null) : null;
-        if (maybe18 && getTeesFromDistances(maybe18).length){
-          const which = String(round.nineLoop || "front").toLowerCase() === "back" ? "back" : "front";
-          dist = deriveNineFromEighteen(maybe18, which);
-        }
-      }
-
-      const tees = getTeesFromDistances(dist);
-      if (!tees.length) return;
-
-      currentDistances = {
-        holes,
-        tees,
-        byTee: dist
-      };
-
-      // keep previous tee if still exists
-      const preferred = currentSelectedTee && tees.includes(currentSelectedTee) ? currentSelectedTee : pickDefaultTee(tees);
-      currentSelectedTee = preferred;
-
-      // populate dropdown
-      teeSelect.innerHTML = "";
-      for (const t of tees){
-        const opt = document.createElement("option");
-        opt.value = t;
-        opt.textContent = t;
-        teeSelect.appendChild(opt);
-      }
-      teeSelect.value = preferred;
-      teeSelect.style.display = "inline-block";
-
-      // show distance column
-      if (tableWrap) tableWrap.classList.remove("distHidden");
-
-      // render values
-      updateDistanceColumn();
-    }
-
-    function updateDistanceColumn(){
-      if (!currentRound) return;
-      const holesCount = Number(currentRound?.holes) || 18;
-
-      const has = currentDistances && currentSelectedTee && currentDistances.byTee && Array.isArray(currentDistances.byTee[currentSelectedTee]);
-      const arr = has ? currentDistances.byTee[currentSelectedTee] : null;
-
-      for (let i=1; i<=holesCount; i++){
-        const td = scoreBody.querySelector(`td[data-dist-hole="${i}"]`);
-        if (!td) continue;
-        if (!arr || typeof arr[i-1] === "undefined" || arr[i-1] === null){
-          td.textContent = "—";
-        } else {
-          td.textContent = String(arr[i-1]);
-        }
-      }
-    }
-
-    if (teeSelect){
-      teeSelect.addEventListener("change", () => {
-        currentSelectedTee = String(teeSelect.value || "").trim();
-        updateDistanceColumn();
-      });
+      const meta = { pars, distances, teeName };
+      scorecardMetaCache.set(key, meta);
+      return meta;
     }
 
     // -----------------------------
@@ -1006,10 +913,6 @@
     }
 
     function getHolePlayerValue(holeObj, field, playerIndex){
-      // field: "strokes" | "putts"
-      // We support:
-      // - hole.strokes / hole.putts (player1)
-      // - hole.strokes_by_player / hole.putts_by_player (object like {"1":4,"2":5})
       const pNum = String(playerIndex + 1);
 
       const by = holeObj && holeObj[`${field}_by_player`];
@@ -1024,12 +927,6 @@
       }
 
       return null;
-    }
-
-    function setHolePlayerValue(outHoleObj, field, playerIndex, value){
-      const key = `${field}_by_player`;
-      if (!outHoleObj[key] || typeof outHoleObj[key] !== "object") outHoleObj[key] = {};
-      outHoleObj[key][String(playerIndex + 1)] = value;
     }
 
     // -----------------------------
@@ -1068,7 +965,6 @@
         item.className = "roundItem";
         item.dataset.id = r.id;
 
-        // show Player 1 score on the list
         const totalsP1 = calcTotalsForPlayer(r.holesData || [], 0);
         const scoreLabel = (totalsP1.strokes != null) ? totalsP1.strokes : "—";
         const toParLabel = (totalsP1.toPar != null)
@@ -1098,31 +994,30 @@
     // -----------------------------
     // Scorecard rendering
     // -----------------------------
-    function buildScoreHead(playersCount){
+    function buildScoreHead(playersCount, teeLabel){
       const pc = clamp(playersCount, 1, 4);
 
-      // Header row 1
+      // ✅ FIX: scoreHead is already <thead>, so do NOT nest another <thead> inside it.
       let th1 = `<tr>
         <th rowspan="2">Hole</th>
         <th rowspan="2">Par</th>
-        <th rowspan="2" class="distCol">Dist (m)</th>
+        <th rowspan="2">Dist <span class="distMuted">(m${teeLabel ? " • " + escapeHtml(teeLabel) : ""})</span></th>
       `;
       for (let p=1; p<=pc; p++){
         th1 += `<th colspan="2">P${p}</th>`;
       }
       th1 += `</tr>`;
 
-      // Header row 2
       let th2 = `<tr>`;
       for (let p=1; p<=pc; p++){
         th2 += `<th>Strokes</th><th>Putts</th>`;
       }
       th2 += `</tr>`;
 
-      scoreHead.innerHTML = `<thead>${th1}${th2}</thead>`;
+      scoreHead.innerHTML = th1 + th2;
     }
 
-    function renderScorecard(round){
+    async function renderScorecard(round){
       currentRound = round;
       currentRoundId = round?.id || null;
 
@@ -1137,10 +1032,6 @@
         totalsGrid.innerHTML = "";
         scoreHead.innerHTML = "";
         scoreBody.innerHTML = "";
-        if (teeSelect) teeSelect.style.display = "none";
-        if (tableWrap) tableWrap.classList.add("distHidden");
-        currentDistances = null;
-        currentSelectedTee = "";
         return;
       }
 
@@ -1151,6 +1042,12 @@
 
       const pc = getPlayersCountFromRound(round);
 
+      // ✅ load pars + distances from your scorecards file (WA)
+      const meta = await getScorecardMetaForRound(round);
+      const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
+      const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
+      const teeName = meta?.teeName || "";
+
       scTitleEl.textContent = round.course || "Round";
       scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
 
@@ -1158,9 +1055,10 @@
         <span class="pill">${escapeHtml(round.par_mode || "")}</span>
         <span class="pill">Players: ${pc}</span>
         <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
+        <span class="pill">${teeName ? ("Tee: " + escapeHtml(teeName)) : "Tee: —"}</span>
       `;
 
-      buildScoreHead(pc);
+      buildScoreHead(pc, teeName);
       scoreBody.innerHTML = "";
 
       const holesCount = Number(round.holes) || 18;
@@ -1169,11 +1067,21 @@
       const map = new Map();
       for (const h of holesData) map.set(Number(h.hole_number), h);
 
+      // If published pars mode and round is blank, auto-fill from scorecards meta (display-only until saved)
+      const isPublishedMode = String(round.par_mode || "").toLowerCase() === "published";
+
       for (let i=1; i<=holesCount; i++){
         const existing = map.get(i) || { hole_number: i, par: null };
+
+        let parValue = existing.par;
+        if ((parValue === null || typeof parValue === "undefined" || parValue === "") && isPublishedMode && metaPars && Number.isFinite(Number(metaPars[i-1]))) {
+          parValue = Number(metaPars[i-1]);
+        }
+
+        const distVal = (metaDists && Number.isFinite(Number(metaDists[i-1]))) ? Number(metaDists[i-1]) : null;
+
         const tr = document.createElement("tr");
 
-        // build player columns
         let playerTds = "";
         for (let pi=0; pi<pc; pi++){
           const s = getHolePlayerValue(existing, "strokes", pi);
@@ -1195,8 +1103,8 @@
 
         tr.innerHTML = `
           <td>Hole ${i}</td>
-          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${existing.par ?? ""}" placeholder="—"></td>
-          <td class="distCol" data-dist-hole="${i}">—</td>
+          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${parValue ?? ""}" placeholder="—"></td>
+          <td class="distCell">${distVal != null ? distVal : `<span class="distMuted">—</span>`}</td>
           ${playerTds}
         `;
 
@@ -1208,9 +1116,6 @@
       });
 
       updateTotalsFromTable();
-
-      // ✅ NEW: apply distances after table exists
-      setupDistancesForRound(round);
     }
 
     function readTableHoles(){
@@ -1222,7 +1127,6 @@
         byHole.set(i, { hole_number: i, par: null, strokes_by_player: {}, putts_by_player: {} });
       }
 
-      // Par
       for (let i=1;i<=holesCount;i++){
         const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
         if (parInp){
@@ -1232,7 +1136,6 @@
         }
       }
 
-      // Player fields
       const inputs = scoreBody.querySelectorAll("input[data-player]");
       inputs.forEach(inp => {
         const hole = Number(inp.dataset.hole);
@@ -1250,13 +1153,11 @@
         if (field === "putts") byHole.get(hole).putts_by_player[String(player)] = val;
       });
 
-      // For backward compat, mirror Player 1 into strokes/putts too
       for (let i=1;i<=holesCount;i++){
         const h = byHole.get(i);
         h.strokes = (h.strokes_by_player && typeof h.strokes_by_player === "object") ? (h.strokes_by_player["1"] ?? null) : null;
         h.putts = (h.putts_by_player && typeof h.putts_by_player === "object") ? (h.putts_by_player["1"] ?? null) : null;
 
-        // clean unused players beyond pc (optional)
         for (let p=pc+1; p<=4; p++){
           delete h.strokes_by_player[String(p)];
           delete h.putts_by_player[String(p)];
@@ -1275,7 +1176,6 @@
       totalsGrid.innerHTML = "";
 
       for (let pi=0; pi<pc; pi++){
-        // build a temporary shape for totals calc
         const holesForCalc = holesRows.map(h => ({
           hole_number: h.hole_number,
           par: h.par,
@@ -1316,7 +1216,7 @@
       const round = data.round || data;
       const holesArr = data.holes || data.holesData || round.holesData || round.holes || [];
       round.holesData = holesArr || [];
-      renderScorecard(round);
+      await renderScorecard(round);
     }
 
     async function createRound(){
@@ -1393,7 +1293,7 @@
 
       currentRoundId = null;
       currentRound = null;
-      renderScorecard(null);
+      await renderScorecard(null);
       await safeFetchRounds();
     }
 
