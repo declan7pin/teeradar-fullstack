@@ -328,6 +328,35 @@
       align-items:center;
       margin-top:12px;
     }
+
+    /* ✅ distances */
+    .distHidden .distCol{ display:none !important; }
+    .teeWrap{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .teeWrap .teeLabel{
+      font-weight:900;
+      color:#fff;
+      background:rgba(255,255,255,.14);
+      border:1px solid rgba(255,255,255,.22);
+      padding:7px 10px;
+      border-radius:999px;
+      font-size:.85rem;
+      white-space:nowrap;
+    }
+    .teeSelect{
+      width:auto;
+      min-width:140px;
+      padding:9px 10px;
+      border-radius:10px;
+      border:1px solid var(--border);
+      font-weight:900;
+      background:#fff;
+      color:var(--text);
+    }
   </style>
 </head>
 <body>
@@ -465,6 +494,9 @@
               <div id="scPills"></div>
             </div>
             <div class="rightActions">
+              <!-- ✅ NEW: tee selector (auto-hides if no distances) -->
+              <select id="teeSelect" class="teeSelect" style="display:none;" aria-label="Select tee"></select>
+
               <button class="btn2 secondary" id="saveAllBtn" type="button" disabled>Save</button>
               <button class="btn2 danger" id="deleteRoundBtn" type="button" disabled>Delete</button>
             </div>
@@ -478,7 +510,7 @@
           </div>
 
           <div id="scorecardWrap" style="display:none;">
-            <div class="tableWrap">
+            <div class="tableWrap" id="tableWrap">
               <table id="scoreTable">
                 <thead id="scoreHead"></thead>
                 <tbody id="scoreBody"></tbody>
@@ -556,6 +588,11 @@
     let coursesLoaded = false;
     let selectedCourseKey = "";
 
+    // ✅ distances cache/state
+    const scorecardsCacheByState = new Map(); // state -> array
+    let currentDistances = null; // { tees: string[], byTee: {tee: number[]}, holes: number }
+    let currentSelectedTee = "";
+
     // -----------------------------
     // UI refs
     // -----------------------------
@@ -598,6 +635,10 @@
     const rightToast = document.getElementById("rightToast");
 
     const courseAutoList = document.getElementById("courseAutoList");
+
+    // ✅ NEW refs
+    const teeSelect = document.getElementById("teeSelect");
+    const tableWrap = document.getElementById("tableWrap");
 
     // -----------------------------
     // Helpers
@@ -739,6 +780,224 @@
     }
 
     // -----------------------------
+    // ✅ Scorecards + distances helpers
+    // -----------------------------
+    function stripParenBits(s){
+      // helps match: "Wembley Golf Course (18 holes - Old Course)" vs "Wembley Golf Course"
+      return String(s || "").replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+    }
+
+    function includesEither(a,b){
+      const A = norm(a), B = norm(b);
+      if (!A || !B) return false;
+      return A.includes(B) || B.includes(A);
+    }
+
+    async function fetchFirstJson(urls){
+      for (const u of urls){
+        try{
+          const res = await fetch(u, { cache: "no-store" });
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (Array.isArray(data)) return data;
+          if (data && Array.isArray(data.scorecards)) return data.scorecards;
+        }catch(e){
+          // try next
+        }
+      }
+      return null;
+    }
+
+    async function loadScorecardsForState(state){
+      const st = String(state || "").toUpperCase();
+      if (scorecardsCacheByState.has(st)) return scorecardsCacheByState.get(st);
+
+      const lower = st.toLowerCase();
+
+      // ✅ try a few common locations (does not break if some 404)
+      const urls = [
+        `/data/scorecards_${st}.json`,
+        `/data/${lower}_scorecards.json`,
+        `/${lower}_scorecards.json`,
+        `/data/${lower}_scorecards_final_format_with_distances.json`,
+        `/${lower}_scorecards_final_format_with_distances.json`
+      ];
+
+      // WA convenience (matches your file naming vibe)
+      if (st === "WA") {
+        urls.unshift(
+          `/data/wa_scorecards_final_format_with_distances.json`,
+          `/wa_scorecards_final_format_with_distances.json`
+        );
+      }
+
+      const arr = await fetchFirstJson(urls);
+      const out = Array.isArray(arr) ? arr : [];
+      scorecardsCacheByState.set(st, out);
+      return out;
+    }
+
+    function getTeesFromDistances(dist){
+      if (!dist || typeof dist !== "object") return [];
+      return Object.keys(dist).filter(k => Array.isArray(dist[k]) && dist[k].length);
+    }
+
+    function pickDefaultTee(tees){
+      // prefer common order
+      const pref = ["Black","Championship","Blue","White","Green","Yellow","Red"];
+      for (const p of pref){
+        const hit = tees.find(t => norm(t) === norm(p));
+        if (hit) return hit;
+      }
+      return tees[0] || "";
+    }
+
+    function findBestScorecardEntry(scorecards, round){
+      const st = String(round?.state || "").toUpperCase();
+      const holes = Number(round?.holes || 18);
+      const course = String(round?.course || "").trim();
+      const layout = String(round?.layout || "").trim();
+      const nineLoop = String(round?.nineLoop || "").trim().toLowerCase(); // may not exist
+
+      const courseBase = stripParenBits(course);
+      const layoutN = norm(layout);
+
+      const candidates = (scorecards || []).filter(sc => {
+        if (String(sc.state || "").toUpperCase() !== st) return false;
+        const scCourse = String(sc.course || sc.name || "").trim();
+        const scBase = stripParenBits(scCourse);
+        return includesEither(scBase, courseBase);
+      });
+
+      if (!candidates.length) return null;
+
+      // prefer holes match
+      let c2 = candidates.filter(sc => Number(sc.holes || 0) === holes);
+      if (!c2.length) c2 = candidates;
+
+      // prefer loop match when 9
+      if (holes === 9 && nineLoop){
+        const want = nineLoop === "back" ? "back" : "front";
+        const loopHits = c2.filter(sc => norm(sc.course || "").includes(want));
+        if (loopHits.length) c2 = loopHits;
+      }
+
+      // prefer layout match
+      if (layoutN){
+        const layoutHits = c2.filter(sc => {
+          const scLayout = norm(sc.layout || "");
+          const scCourse = norm(sc.course || "");
+          return (scLayout && scLayout === layoutN) || (scCourse && scCourse.includes(layoutN));
+        });
+        if (layoutHits.length) c2 = layoutHits;
+      }
+
+      // prefer ones that actually have distances
+      const withDist = c2.filter(sc => sc.distances_m && getTeesFromDistances(sc.distances_m).length);
+      if (withDist.length) c2 = withDist;
+
+      return c2[0] || null;
+    }
+
+    function deriveNineFromEighteen(dist18, which){
+      // dist18: { tee: [18] }
+      const out = {};
+      if (!dist18 || typeof dist18 !== "object") return out;
+      const start = which === "back" ? 9 : 0;
+      const end = which === "back" ? 18 : 9;
+      for (const tee of Object.keys(dist18)){
+        const arr = dist18[tee];
+        if (Array.isArray(arr) && arr.length >= 18){
+          out[tee] = arr.slice(start, end);
+        }
+      }
+      return out;
+    }
+
+    async function setupDistancesForRound(round){
+      currentDistances = null;
+      currentSelectedTee = "";
+      if (teeSelect) teeSelect.style.display = "none";
+      if (tableWrap) tableWrap.classList.add("distHidden");
+
+      if (!round || !round.course || !round.state) return;
+
+      const scorecards = await loadScorecardsForState(round.state);
+      if (!scorecards.length) return;
+
+      const entry = findBestScorecardEntry(scorecards, round);
+      if (!entry) return;
+
+      const holes = Number(round.holes || entry.holes || 18);
+
+      let dist = entry.distances_m || null;
+
+      // If 9-hole round but only 18-hole distances exist in entry, try slice
+      if ((!dist || !getTeesFromDistances(dist).length) && holes === 9){
+        const maybe18 = (Number(entry.holes || 0) === 18) ? (entry.distances_m || null) : null;
+        if (maybe18 && getTeesFromDistances(maybe18).length){
+          const which = String(round.nineLoop || "front").toLowerCase() === "back" ? "back" : "front";
+          dist = deriveNineFromEighteen(maybe18, which);
+        }
+      }
+
+      const tees = getTeesFromDistances(dist);
+      if (!tees.length) return;
+
+      currentDistances = {
+        holes,
+        tees,
+        byTee: dist
+      };
+
+      // keep previous tee if still exists
+      const preferred = currentSelectedTee && tees.includes(currentSelectedTee) ? currentSelectedTee : pickDefaultTee(tees);
+      currentSelectedTee = preferred;
+
+      // populate dropdown
+      teeSelect.innerHTML = "";
+      for (const t of tees){
+        const opt = document.createElement("option");
+        opt.value = t;
+        opt.textContent = t;
+        teeSelect.appendChild(opt);
+      }
+      teeSelect.value = preferred;
+      teeSelect.style.display = "inline-block";
+
+      // show distance column
+      if (tableWrap) tableWrap.classList.remove("distHidden");
+
+      // render values
+      updateDistanceColumn();
+    }
+
+    function updateDistanceColumn(){
+      if (!currentRound) return;
+      const holesCount = Number(currentRound?.holes) || 18;
+
+      const has = currentDistances && currentSelectedTee && currentDistances.byTee && Array.isArray(currentDistances.byTee[currentSelectedTee]);
+      const arr = has ? currentDistances.byTee[currentSelectedTee] : null;
+
+      for (let i=1; i<=holesCount; i++){
+        const td = scoreBody.querySelector(`td[data-dist-hole="${i}"]`);
+        if (!td) continue;
+        if (!arr || typeof arr[i-1] === "undefined" || arr[i-1] === null){
+          td.textContent = "—";
+        } else {
+          td.textContent = String(arr[i-1]);
+        }
+      }
+    }
+
+    if (teeSelect){
+      teeSelect.addEventListener("change", () => {
+        currentSelectedTee = String(teeSelect.value || "").trim();
+        updateDistanceColumn();
+      });
+    }
+
+    // -----------------------------
     // Multi-player helpers
     // -----------------------------
     function getPlayersCountFromRound(r){
@@ -846,6 +1105,7 @@
       let th1 = `<tr>
         <th rowspan="2">Hole</th>
         <th rowspan="2">Par</th>
+        <th rowspan="2" class="distCol">Dist (m)</th>
       `;
       for (let p=1; p<=pc; p++){
         th1 += `<th colspan="2">P${p}</th>`;
@@ -877,6 +1137,10 @@
         totalsGrid.innerHTML = "";
         scoreHead.innerHTML = "";
         scoreBody.innerHTML = "";
+        if (teeSelect) teeSelect.style.display = "none";
+        if (tableWrap) tableWrap.classList.add("distHidden");
+        currentDistances = null;
+        currentSelectedTee = "";
         return;
       }
 
@@ -932,6 +1196,7 @@
         tr.innerHTML = `
           <td>Hole ${i}</td>
           <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${existing.par ?? ""}" placeholder="—"></td>
+          <td class="distCol" data-dist-hole="${i}">—</td>
           ${playerTds}
         `;
 
@@ -943,6 +1208,9 @@
       });
 
       updateTotalsFromTable();
+
+      // ✅ NEW: apply distances after table exists
+      setupDistancesForRound(round);
     }
 
     function readTableHoles(){
