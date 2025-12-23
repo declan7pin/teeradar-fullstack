@@ -485,25 +485,26 @@ app.get("/api/scorecards/:state", (req, res) => {
 
     const { data, foundPath, candidates, errors } = _readScorecardsForState(st);
 
-    if (!Array.isArray(data)) {
-      return res.status(404).json({
-        error: "scorecards file not found",
-        state: st,
-        expectedExamples: [
-          "backend/data/scorecards/scorecards-wa.json",
-          "public/data/scorecards/scorecards-wa.json",
-        ],
-        tried: candidates, // full paths (so you can see exactly what Render tried)
-        debug: {
-          __dirname,
-          cwd: process.cwd(),
-          backendDataDir: _safeListDir(path.join(__dirname, "data")),
-          backendScorecardsDir: _safeListDir(path.join(__dirname, "data", "scorecards")),
-          publicDataDir: _safeListDir(path.join(__dirname, "..", "public", "data")),
-          publicScorecardsDir: _safeListDir(path.join(__dirname, "..", "public", "data", "scorecards")),
-        },
-      });
-    }
+if (!Array.isArray(data)) {
+  return res.status(404).json({
+    error: "scorecards file not found",
+    state: st,
+    expectedExamples: [
+      "backend/data/scorecards/scorecards-wa.json",
+      "public/data/scorecards/scorecards-wa.json",
+    ],
+    tried: candidates,
+    parseErrors: errors, // ✅ ADD THIS LINE
+    debug: {
+      __dirname,
+      cwd: process.cwd(),
+      backendDataDir: _safeListDir(path.join(__dirname, "data")),
+      backendScorecardsDir: _safeListDir(path.join(__dirname, "data", "scorecards")),
+      publicDataDir: _safeListDir(path.join(__dirname, "..", "public", "data")),
+      publicScorecardsDir: _safeListDir(path.join(__dirname, "..", "public", "data", "scorecards")),
+    },
+  });
+}
 
     if (foundPath) {
       console.log(`✅ scorecards loaded for ${st} from ${foundPath}`);
