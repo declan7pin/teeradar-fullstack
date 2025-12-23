@@ -389,13 +389,58 @@ app.get("/api/scorecards/:state", (req, res) => {
     const st = String(req.params.state || "").trim().toUpperCase();
     if (!st) return res.status(400).json({ error: "state required" });
 
-    const file = path.join(__dirname, "data", "scorecards", `scorecards-${st.toLowerCase()}.json`);
-    if (!fs.existsSync(file)) {
-      return res.status(404).json({ error: "scorecards file not found", file: `scorecards-${st.toLowerCase()}.json` });
+    // ✅ Render/Linux safe: try multiple likely locations (backend + public) and filename styles
+    const candidates = [
+      path.join(__dirname, "data", "scorecards", `scorecards-${st.toLowerCase()}.json`),
+      path.join(__dirname, "data", "scorecards", `scorecards-${st}.json`),
+      path.join(__dirname, "data", "scorecards", `scorecards_${st.toLowerCase()}.json`),
+      path.join(__dirname, "data", "scorecards", `scorecards_${st}.json`),
+
+      // If you store it in /public for guaranteed deployment:
+      path.join(__dirname, "..", "public", "data", "scorecards", `scorecards-${st.toLowerCase()}.json`),
+      path.join(__dirname, "..", "public", "data", `scorecards-${st.toLowerCase()}.json`),
+      path.join(__dirname, "..", "public", "scorecards", `scorecards-${st.toLowerCase()}.json`),
+    ];
+
+    let parsed = null;
+    let foundPath = "";
+
+    for (const p of candidates) {
+      try {
+        if (!fs.existsSync(p)) continue;
+
+        const raw = fs.readFileSync(p, "utf8");
+        const j = JSON.parse(raw);
+
+        // Accept either an array OR { scorecards: [...] }
+        if (Array.isArray(j)) {
+          parsed = j;
+          foundPath = p;
+          break;
+        }
+        if (j && Array.isArray(j.scorecards)) {
+          parsed = j.scorecards;
+          foundPath = p;
+          break;
+        }
+      } catch {
+        // try next candidate
+      }
     }
 
-    const data = JSON.parse(fs.readFileSync(file, "utf8"));
-    return res.json(Array.isArray(data) ? data : []);
+    if (!Array.isArray(parsed)) {
+      return res.status(404).json({
+        error: "scorecards file not found",
+        file: `scorecards-${st.toLowerCase()}.json`,
+        tried: candidates.map((p) => path.basename(p)),
+      });
+    }
+
+    if (foundPath) {
+      console.log(`✅ scorecards loaded for ${st} from ${foundPath}`);
+    }
+
+    return res.json(parsed);
   } catch (err) {
     console.error("scorecards route error", err);
     return res.status(500).json({ error: "failed to load scorecards" });
@@ -1472,7 +1517,7 @@ app.get("/api/analytics/users", async (req, res) => {
 
     res.json({ users });
   } catch (err) {
-    console.error("analytics users error:", err);
+    console.error("analytics users error", err);
     res.status(500).json({ error: "internal error" });
   }
 });
