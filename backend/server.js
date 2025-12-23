@@ -389,56 +389,103 @@ app.post(
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
 
+/* ✅✅✅ ONLY ADDITION (needed): more robust scorecards file discovery (Render-safe) ✅✅✅ */
+function _buildScorecardsCandidates(st) {
+  const s = String(st || "").trim().toUpperCase();
+  const variants = [
+    `scorecards-${s.toLowerCase()}.json`,
+    `scorecards-${s}.json`,
+    `scorecards_${s.toLowerCase()}.json`,
+    `scorecards_${s}.json`,
+  ];
+
+  const out = [];
+
+  // backend locations
+  for (const fn of variants) {
+    out.push(path.join(__dirname, "data", "scorecards", fn));
+    out.push(path.join(__dirname, "data", fn));
+    out.push(path.join(__dirname, fn));
+  }
+
+  // public locations
+  for (const fn of variants) {
+    out.push(path.join(__dirname, "..", "public", "data", "scorecards", fn));
+    out.push(path.join(__dirname, "..", "public", "scorecards", fn));
+    out.push(path.join(__dirname, "..", "public", "data", fn));
+  }
+
+  // cwd fallbacks (Render working dir can differ)
+  for (const fn of variants) {
+    out.push(path.join(process.cwd(), "backend", "data", "scorecards", fn));
+    out.push(path.join(process.cwd(), "backend", "data", fn));
+    out.push(path.join(process.cwd(), "data", "scorecards", fn));
+    out.push(path.join(process.cwd(), "data", fn));
+    out.push(path.join(process.cwd(), "public", "data", "scorecards", fn));
+    out.push(path.join(process.cwd(), "public", "data", fn));
+  }
+
+  // de-dupe
+  return Array.from(new Set(out));
+}
+
+function _safeListDir(p) {
+  try {
+    if (!fs.existsSync(p)) return null;
+    return fs.readdirSync(p).slice(0, 80);
+  } catch {
+    return null;
+  }
+}
+
+function _readScorecardsForState(st) {
+  const candidates = _buildScorecardsCandidates(st);
+
+  for (const p of candidates) {
+    try {
+      if (!fs.existsSync(p)) continue;
+      const raw = fs.readFileSync(p, "utf8");
+      const j = JSON.parse(raw);
+      if (Array.isArray(j)) return { data: j, foundPath: p, candidates };
+      if (j && Array.isArray(j.scorecards)) return { data: j.scorecards, foundPath: p, candidates };
+    } catch {
+      // try next
+    }
+  }
+
+  return {
+    data: null,
+    foundPath: "",
+    candidates,
+  };
+}
+/* ✅✅✅ END ONLY ADDITION ✅✅✅ */
+
 /* ✅✅✅ ONLY ADDITION (needed): expose backend scorecards JSON to frontend ✅✅✅ */
 app.get("/api/scorecards/:state", (req, res) => {
   try {
     const st = String(req.params.state || "").trim().toUpperCase();
     if (!st) return res.status(400).json({ error: "state required" });
 
-    // ✅ Render/Linux safe: try multiple likely locations (backend + public) and filename styles
-    const candidates = [
-      path.join(__dirname, "data", "scorecards", `scorecards-${st.toLowerCase()}.json`),
-      path.join(__dirname, "data", "scorecards", `scorecards-${st}.json`),
-      path.join(__dirname, "data", "scorecards", `scorecards_${st.toLowerCase()}.json`),
-      path.join(__dirname, "data", "scorecards", `scorecards_${st}.json`),
+    const { data, foundPath, candidates } = _readScorecardsForState(st);
 
-      // If you store it in /public for guaranteed deployment:
-      path.join(__dirname, "..", "public", "data", "scorecards", `scorecards-${st.toLowerCase()}.json`),
-      path.join(__dirname, "..", "public", "data", `scorecards-${st.toLowerCase()}.json`),
-      path.join(__dirname, "..", "public", "scorecards", `scorecards-${st.toLowerCase()}.json`),
-    ];
-
-    let parsed = null;
-    let foundPath = "";
-
-    for (const p of candidates) {
-      try {
-        if (!fs.existsSync(p)) continue;
-
-        const raw = fs.readFileSync(p, "utf8");
-        const j = JSON.parse(raw);
-
-        // Accept either an array OR { scorecards: [...] }
-        if (Array.isArray(j)) {
-          parsed = j;
-          foundPath = p;
-          break;
-        }
-        if (j && Array.isArray(j.scorecards)) {
-          parsed = j.scorecards;
-          foundPath = p;
-          break;
-        }
-      } catch {
-        // try next candidate
-      }
-    }
-
-    if (!Array.isArray(parsed)) {
+    if (!Array.isArray(data)) {
       return res.status(404).json({
         error: "scorecards file not found",
-        file: `scorecards-${st.toLowerCase()}.json`,
-        tried: candidates.map((p) => path.basename(p)),
+        state: st,
+        expectedExamples: [
+          "backend/data/scorecards/scorecards-wa.json",
+          "public/data/scorecards/scorecards-wa.json",
+        ],
+        tried: candidates, // full paths (so you can see exactly what Render tried)
+        debug: {
+          __dirname,
+          cwd: process.cwd(),
+          backendDataDir: _safeListDir(path.join(__dirname, "data")),
+          backendScorecardsDir: _safeListDir(path.join(__dirname, "data", "scorecards")),
+          publicDataDir: _safeListDir(path.join(__dirname, "..", "public", "data")),
+          publicScorecardsDir: _safeListDir(path.join(__dirname, "..", "public", "data", "scorecards")),
+        },
       });
     }
 
@@ -446,7 +493,7 @@ app.get("/api/scorecards/:state", (req, res) => {
       console.log(`✅ scorecards loaded for ${st} from ${foundPath}`);
     }
 
-    return res.json(parsed);
+    return res.json(data);
   } catch (err) {
     console.error("scorecards route error", err);
     return res.status(500).json({ error: "failed to load scorecards" });
@@ -556,7 +603,7 @@ app.get("/api/preferences", async (req, res) => {
 
     return res.json({ ok: true, found: true, preferences: rows[0] });
   } catch (err) {
-    console.error("/api/preferences GET error:", err);
+    console.error("/api/preferences GET error", err);
     return res.status(500).json({ ok: false, error: "internal error" });
   }
 });
@@ -1215,26 +1262,14 @@ function _pickDefaultTee(distances_m) {
 }
 
 // Load scorecards by state (start with WA, add others later)
-const scorecardsWACandidates = [
-  path.join(__dirname, "data", "scorecards", "scorecards-wa.json"),
-  path.join(__dirname, "data", "scorecards", "scorecards-WA.json"),
-  path.join(__dirname, "..", "public", "data", "scorecards", "scorecards-wa.json"),
-  path.join(__dirname, "..", "public", "scorecards", "scorecards-wa.json"),
-  path.join(__dirname, "..", "public", "data", "scorecards-wa.json"),
-];
-
 let scorecardsWA = null;
-for (const p of scorecardsWACandidates) {
-  const j = _safeReadJsonIfExists(p);
-  if (Array.isArray(j)) {
-    scorecardsWA = j;
-    console.log("✅ WA scorecards loaded from:", p);
-    break;
-  }
-  if (j && Array.isArray(j.scorecards)) {
-    scorecardsWA = j.scorecards;
-    console.log("✅ WA scorecards loaded from:", p);
-    break;
+{
+  const { data, foundPath } = _readScorecardsForState("WA");
+  if (Array.isArray(data)) {
+    scorecardsWA = data;
+    console.log("✅ WA scorecards loaded from:", foundPath);
+  } else {
+    console.log("⚠️ WA scorecards not found on disk at boot (will still work if you later add the file and redeploy).");
   }
 }
 
@@ -1578,7 +1613,7 @@ app.get("/api/analytics/users", async (req, res) => {
 
     res.json({ users });
   } catch (err) {
-    console.error("analytics users error", err);
+    console.error("analytics users error:", err);
     res.status(500).json({ error: "internal error" });
   }
 });
