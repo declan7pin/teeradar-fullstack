@@ -383,6 +383,26 @@ app.post(
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
 
+/* ✅✅✅ ONLY ADDITION (needed): expose backend scorecards JSON to frontend ✅✅✅ */
+app.get("/api/scorecards/:state", (req, res) => {
+  try {
+    const st = String(req.params.state || "").trim().toUpperCase();
+    if (!st) return res.status(400).json({ error: "state required" });
+
+    const file = path.join(__dirname, "data", "scorecards", `scorecards-${st.toLowerCase()}.json`);
+    if (!fs.existsSync(file)) {
+      return res.status(404).json({ error: "scorecards file not found", file: `scorecards-${st.toLowerCase()}.json` });
+    }
+
+    const data = JSON.parse(fs.readFileSync(file, "utf8"));
+    return res.json(Array.isArray(data) ? data : []);
+  } catch (err) {
+    console.error("scorecards route error", err);
+    return res.status(500).json({ error: "failed to load scorecards" });
+  }
+});
+/* ✅✅✅ END ONLY ADDITION ✅✅✅ */
+
 app.use("/api/auth", authRouter);
 
 // ✅ NEW: mount rounds router
