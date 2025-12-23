@@ -441,24 +441,30 @@ function _safeListDir(p) {
 function _readScorecardsForState(st) {
   const candidates = _buildScorecardsCandidates(st);
 
+  const errors = [];
+
   for (const p of candidates) {
     try {
       if (!fs.existsSync(p)) continue;
 
       const raw = fs.readFileSync(p, "utf8");
 
-      // ✅ fix non-JSON booleans if any slipped in
+      // handle BOM + common non-JSON booleans
       const fixed = raw
-        .replace(/\bTrue\b/g, "true")
+        .replace(/^\uFEFF/, "")          // ✅ strip UTF-8 BOM if present
+        .replace(/\bTrue\b/g, "true")    // ✅ python-style bools
         .replace(/\bFalse\b/g, "false");
 
       const j = JSON.parse(fixed);
 
-      if (Array.isArray(j)) return { data: j, foundPath: p, candidates };
+      if (Array.isArray(j)) return { data: j, foundPath: p, candidates, errors };
       if (j && Array.isArray(j.scorecards))
-        return { data: j.scorecards, foundPath: p, candidates };
-    } catch {
-      // try next
+        return { data: j.scorecards, foundPath: p, candidates, errors };
+    } catch (e) {
+      errors.push({
+        path: p,
+        message: String(e?.message || e),
+      });
     }
   }
 
@@ -466,6 +472,7 @@ function _readScorecardsForState(st) {
     data: null,
     foundPath: "",
     candidates,
+    errors,
   };
 }
 /* ✅✅✅ END ONLY ADDITION ✅✅✅ */
