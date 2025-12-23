@@ -359,7 +359,6 @@ app.post(
       case "checkout.session.completed": {
         const session = event.data.object;
         console.log("✅ Stripe checkout completed for:", session.customer_email);
-        // TODO: later sync to DB if you like
         break;
       }
       case "customer.subscription.deleted": {
@@ -389,14 +388,11 @@ app.get("/api/scorecards/:state", (req, res) => {
     const st = String(req.params.state || "").trim().toUpperCase();
     if (!st) return res.status(400).json({ error: "state required" });
 
-    // ✅ Render/Linux safe: try multiple likely locations (backend + public) and filename styles
     const candidates = [
       path.join(__dirname, "data", "scorecards", `scorecards-${st.toLowerCase()}.json`),
       path.join(__dirname, "data", "scorecards", `scorecards-${st}.json`),
       path.join(__dirname, "data", "scorecards", `scorecards_${st.toLowerCase()}.json`),
       path.join(__dirname, "data", "scorecards", `scorecards_${st}.json`),
-
-      // If you store it in /public for guaranteed deployment:
       path.join(__dirname, "..", "public", "data", "scorecards", `scorecards-${st.toLowerCase()}.json`),
       path.join(__dirname, "..", "public", "data", `scorecards-${st.toLowerCase()}.json`),
       path.join(__dirname, "..", "public", "scorecards", `scorecards-${st.toLowerCase()}.json`),
@@ -408,11 +404,9 @@ app.get("/api/scorecards/:state", (req, res) => {
     for (const p of candidates) {
       try {
         if (!fs.existsSync(p)) continue;
-
         const raw = fs.readFileSync(p, "utf8");
         const j = JSON.parse(raw);
 
-        // Accept either an array OR { scorecards: [...] }
         if (Array.isArray(j)) {
           parsed = j;
           foundPath = p;
@@ -450,11 +444,8 @@ app.get("/api/scorecards/:state", (req, res) => {
 
 app.use("/api/auth", authRouter);
 
-// ✅ NEW: mount rounds router
-app.use("/api/rounds", roundsRouter);
-
 // -------------------------------------------------
-// ✅ NEW: /api/me (for bookings page to read home state)
+// ✅ /api/me (for bookings page to read home state)
 // -------------------------------------------------
 app.get("/api/me", async (req, res) => {
   try {
@@ -490,7 +481,7 @@ app.get("/api/me", async (req, res) => {
       email: row.email,
       homeCourse: row.home_course || null,
       homeCourseId: row.home_course_id || null,
-      homeCourseState: row.home_state || row.home_course_state || null, // ✅ FIXED
+      homeCourseState: row.home_state || row.home_course_state || null,
     });
   } catch (err) {
     console.error("/api/me error:", err);
@@ -499,8 +490,7 @@ app.get("/api/me", async (req, res) => {
 });
 
 // -------------------------------------------------
-// ✅ NEW: GET account preferences (Option 2 response shape)
-// Fixes account.html hydrate: /api/account/preferences?email=...
+// ✅ GET account preferences
 // -------------------------------------------------
 app.get("/api/account/preferences", async (req, res) => {
   try {
@@ -528,7 +518,7 @@ app.get("/api/account/preferences", async (req, res) => {
   }
 });
 
-// ✅ Optional alias (handy if you ever want /api/preferences)
+// ✅ Optional alias
 app.get("/api/preferences", async (req, res) => {
   try {
     const email = (req.query.email || "").toString().trim().toLowerCase();
@@ -556,618 +546,7 @@ app.get("/api/preferences", async (req, res) => {
 });
 
 // -------------------------------------------------
-// ✅ NEW: My Rounds (logged-in only)
-// -------------------------------------------------
-
-// List my rounds (latest first)
-app.get("/api/rounds", requireAuth, async (req, res) => {
-  try {
-    const userId = Number(req.user?.id);
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(401).json({ ok: false, error: "Invalid user" });
-    }
-
-    const { rows } = await db.query(
-      `
-      SELECT id, course, layout, state, holes, par_mode, created_at
-      FROM rounds
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      LIMIT 200;
-      `,
-      [userId]
-    );
-
-    return res.json({ ok: true, rounds: rows || [] });
-  } catch (err) {
-    console.error("/api/rounds GET error:", err);
-    return res.status(500).json({ ok: false, error: "internal error" });
-  }
-});
-
-// Create a round + create blank holes (pars optional, putts supported)
-app.post("/api/rounds", requireAuth, async (req, res) => {
-  try {
-    const userId = Number(req.user?.id);
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(401).json({ ok: false, error: "Invalid user" });
-    }
-
-    const {
-      course,
-      layout = null,
-      state = null,
-      holes = 18,
-      pars = null,        // optional array (length 9/18) or null
-      par_mode = "PUBLISHED", // "PUBLISHED" or "USER"
-    } = req.body || {};
-
-    const courseName = (course || "").toString().trim();
-    const holesCount = Number(holes);
-
-    if (!courseName) {
-      return res.status(400).json({ ok: false, error: "course is required" });
-    }
-
-    if (![9, 18].includes(holesCount)) {
-      return res.status(400).json({ ok: false, error: "holes must be 9 or 18" });
-    }
-
-    const parMode = (par_mode || "").toString().trim().toUpperCase() || "PUBLISHED";
-
-    const parsedPars = Array.isArray(pars)
-      ? pars.map((p) => (p === null || typeof p === "undefined" || p === "" ? null : Number(p)))
-      : null;
-
-    // If pars provided, enforce correct length
-    if (parsedPars && parsedPars.length !== holesCount) {
-      return res.status(400).json({
-        ok: false,
-        error: `pars must have length ${holesCount} (or be null)`,
-      });
-    }
-
-    // ✅ NEW (only what’s needed): persist players_count (used by your my-rounds.html)
-    const playersCount =
-      typeof req.body?.players_count === "undefined" || req.body?.players_count === null || req.body?.players_count === ""
-        ? 1
-        : Number(req.body.players_count);
-
-    // Create round
-    const roundInsert = await db.query(
-      `
-      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, players_count, created_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,now())
-      RETURNING id, course, layout, state, holes, par_mode, players_count, created_at;
-      `,
-      [userId, courseName, layout, state, holesCount, parMode, Number.isFinite(playersCount) ? playersCount : 1]
-    );
-
-    const round = roundInsert.rows[0];
-
-    // Create round holes rows (strokes/putts start null)
-    const values = [];
-    const params = [];
-    let idx = 1;
-
-    for (let i = 1; i <= holesCount; i++) {
-      const parVal = parsedPars ? parsedPars[i - 1] : null;
-
-      values.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
-      params.push(round.id, i, parVal, null, null);
-    }
-
-    await db.query(
-      `
-      INSERT INTO round_holes (round_id, hole_number, par, strokes, putts)
-      VALUES ${values.join(", ")}
-      `,
-      params
-    );
-
-    return res.json({ ok: true, round });
-  } catch (err) {
-    console.error("/api/rounds POST error:", err);
-    return res.status(500).json({ ok: false, error: "internal error", detail: err.message });
-  }
-});
-
-// Get a round (and its holes) – must be my round
-app.get("/api/rounds/:id", requireAuth, async (req, res) => {
-  try {
-    const userId = Number(req.user?.id);
-    const roundId = Number(req.params.id);
-
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(401).json({ ok: false, error: "Invalid user" });
-    }
-    if (!Number.isInteger(roundId) || roundId <= 0) {
-      return res.status(400).json({ ok: false, error: "Invalid round id" });
-    }
-
-    const roundRes = await db.query(
-      `
-      SELECT id, user_id, course, layout, state, holes, par_mode, players_count, created_at
-      FROM rounds
-      WHERE id = $1
-      LIMIT 1;
-      `,
-      [roundId]
-    );
-
-    if (!roundRes.rows.length) {
-      return res.status(404).json({ ok: false, error: "Round not found" });
-    }
-
-    const round = roundRes.rows[0];
-
-    if (Number(round.user_id) !== userId) {
-      return res.status(403).json({ ok: false, error: "Forbidden" });
-    }
-
-    // ✅ NEW (only what’s needed): return JSONB multi-player fields too
-    const holesRes = await db.query(
-      `
-      SELECT hole_number, par, strokes, putts, strokes_by_player, putts_by_player
-      FROM round_holes
-      WHERE round_id = $1
-      ORDER BY hole_number ASC;
-      `,
-      [roundId]
-    );
-
-    return res.json({ ok: true, round, holes: holesRes.rows || [] });
-  } catch (err) {
-    console.error("/api/rounds/:id GET error:", err);
-    return res.status(500).json({ ok: false, error: "internal error" });
-  }
-});
-
-/* ✅✅✅ ONLY ADDITION (needed): bulk save + delete endpoints (my-rounds.html uses PUT + DELETE) ✅✅✅ */
-
-// Bulk save all holes (supports multi-player JSON columns)
-app.put("/api/rounds/:id", requireAuth, async (req, res) => {
-  try {
-    const userId = Number(req.user?.id);
-    const roundId = Number(req.params.id);
-
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(401).json({ ok: false, error: "Invalid user" });
-    }
-    if (!Number.isInteger(roundId) || roundId <= 0) {
-      return res.status(400).json({ ok: false, error: "Invalid round id" });
-    }
-
-    // Ensure round belongs to user
-    const own = await db.query(
-      `SELECT id FROM rounds WHERE id = $1 AND user_id = $2 LIMIT 1;`,
-      [roundId, userId]
-    );
-    if (!own.rows.length) {
-      return res.status(403).json({ ok: false, error: "Forbidden" });
-    }
-
-    const { holes = [], players_count } = req.body || {};
-    const cleanHoles = Array.isArray(holes) ? holes : [];
-
-    // Optional: persist players_count if sent
-    const pc =
-      typeof players_count === "undefined" || players_count === null || players_count === ""
-        ? null
-        : Number(players_count);
-
-    if (pc && Number.isFinite(pc)) {
-      await db.query(`UPDATE rounds SET players_count = $2 WHERE id = $1;`, [roundId, pc]);
-    }
-
-    let updated = 0;
-
-    for (const h of cleanHoles) {
-      const holeNumber = Number(h?.hole_number);
-      if (!Number.isFinite(holeNumber) || holeNumber <= 0) continue;
-
-      const parVal =
-        h?.par === null || typeof h?.par === "undefined" || h?.par === ""
-          ? null
-          : Number(h.par);
-
-      const strokesVal =
-        h?.strokes === null || typeof h?.strokes === "undefined" || h?.strokes === ""
-          ? null
-          : Number(h.strokes);
-
-      const puttsVal =
-        h?.putts === null || typeof h?.putts === "undefined" || h?.putts === ""
-          ? null
-          : Number(h.putts);
-
-      const strokesBy =
-        h?.strokes_by_player && typeof h.strokes_by_player === "object"
-          ? h.strokes_by_player
-          : {};
-
-      const puttsBy =
-        h?.putts_by_player && typeof h.putts_by_player === "object"
-          ? h.putts_by_player
-          : {};
-
-      const r = await db.query(
-        `
-        INSERT INTO round_holes (round_id, hole_number, par, strokes, putts, strokes_by_player, putts_by_player)
-        VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)
-        ON CONFLICT (round_id, hole_number) DO UPDATE SET
-          par = EXCLUDED.par,
-          strokes = EXCLUDED.strokes,
-          putts = EXCLUDED.putts,
-          strokes_by_player = EXCLUDED.strokes_by_player,
-          putts_by_player = EXCLUDED.putts_by_player
-        RETURNING id;
-        `,
-        [
-          roundId,
-          holeNumber,
-          Number.isFinite(parVal) ? parVal : null,
-          Number.isFinite(strokesVal) ? strokesVal : null,
-          Number.isFinite(puttsVal) ? puttsVal : null,
-          JSON.stringify(strokesBy || {}),
-          JSON.stringify(puttsBy || {}),
-        ]
-      );
-
-      if (r.rows.length) updated++;
-    }
-
-    return res.json({ ok: true, updated });
-  } catch (err) {
-    console.error("/api/rounds/:id PUT error:", err);
-    return res.status(500).json({ ok: false, error: "internal error", detail: err.message });
-  }
-});
-
-// Delete a round (must be my round)
-app.delete("/api/rounds/:id", requireAuth, async (req, res) => {
-  try {
-    const userId = Number(req.user?.id);
-    const roundId = Number(req.params.id);
-
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(401).json({ ok: false, error: "Invalid user" });
-    }
-    if (!Number.isInteger(roundId) || roundId <= 0) {
-      return res.status(400).json({ ok: false, error: "Invalid round id" });
-    }
-
-    const result = await db.query(
-      `DELETE FROM rounds WHERE id = $1 AND user_id = $2;`,
-      [roundId, userId]
-    );
-
-    if (!result.rowCount) {
-      return res.status(404).json({ ok: false, error: "Round not found" });
-    }
-
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error("/api/rounds/:id DELETE error:", err);
-    return res.status(500).json({ ok: false, error: "internal error", detail: err.message });
-  }
-});
-
-/* ✅✅✅ END ONLY ADDITION ✅✅✅ */
-
-// Update a single hole (strokes + putts + optional par) – must be my round
-app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
-  try {
-    const userId = Number(req.user?.id);
-    const roundId = Number(req.params.id);
-    const holeNumber = Number(req.params.holeNumber);
-
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(401).json({ ok: false, error: "Invalid user" });
-    }
-    if (!Number.isInteger(roundId) || roundId <= 0) {
-      return res.status(400).json({ ok: false, error: "Invalid round id" });
-    }
-    if (!Number.isInteger(holeNumber) || holeNumber <= 0) {
-      return res.status(400).json({ ok: false, error: "Invalid hole number" });
-    }
-
-    // Ensure round belongs to user
-    const own = await db.query(
-      `SELECT id FROM rounds WHERE id = $1 AND user_id = $2 LIMIT 1;`,
-      [roundId, userId]
-    );
-    if (!own.rows.length) {
-      return res.status(403).json({ ok: false, error: "Forbidden" });
-    }
-
-    const { strokes, putts, par } = req.body || {};
-
-    const strokesVal =
-      strokes === null || typeof strokes === "undefined" || strokes === ""
-        ? null
-        : Number(strokes);
-
-    const puttsVal =
-      putts === null || typeof putts === "undefined" || putts === ""
-        ? null
-        : Number(putts);
-
-    const parVal =
-      par === null || typeof par === "undefined" || par === ""
-        ? undefined
-        : Number(par);
-
-    if (strokesVal !== null && !Number.isFinite(strokesVal)) {
-      return res.status(400).json({ ok: false, error: "strokes must be a number or null" });
-    }
-    if (puttsVal !== null && !Number.isFinite(puttsVal)) {
-      return res.status(400).json({ ok: false, error: "putts must be a number or null" });
-    }
-    if (typeof parVal !== "undefined" && !Number.isFinite(parVal)) {
-      return res.status(400).json({ ok: false, error: "par must be a number or omitted" });
-    }
-
-    const result = await db.query(
-      `
-      UPDATE round_holes
-      SET
-        strokes = $3,
-        putts = $4,
-        par = COALESCE($5, par)
-      WHERE round_id = $1 AND hole_number = $2
-      RETURNING hole_number, par, strokes, putts;
-      `,
-      [roundId, holeNumber, strokesVal, puttsVal, typeof parVal === "undefined" ? null : parVal]
-    );
-
-    if (!result.rows.length) {
-      return res.status(404).json({ ok: false, error: "Hole not found" });
-    }
-
-    return res.json({ ok: true, hole: result.rows[0] });
-  } catch (err) {
-    console.error("/api/rounds/:id/hole/:holeNumber PATCH error:", err);
-    return res.status(500).json({ ok: false, error: "internal error" });
-  }
-});
-
-// 🔔 Alerts API
-app.use("/api/alerts", alertsRouter);
-
-// ✅ NEW: fallback endpoints for the "logged-in popup" unread/viewed flow
-// These are safe even if alertsRoutes.js already implements them (Express will route to the first match).
-app.get("/api/alerts/unread", async (req, res) => {
-  try {
-    const email = (req.query.email || "").toString().trim().toLowerCase();
-    if (!email) return res.status(400).json({ ok: false, error: "email is required" });
-
-    const { rows } = await db.query(
-      `
-      SELECT id, email, course_name, course_id, state, date, slots, created_at
-      FROM alert_hits
-      WHERE email = $1 AND read_at IS NULL
-      ORDER BY created_at DESC
-      LIMIT 100
-      `,
-      [email]
-    );
-
-    // Return in the shape the frontend expects
-    const hits = rows.map((r) => ({
-      id: r.id,
-      email: r.email,
-      course_name: r.course_name,
-      course_id: r.course_id,
-      state: r.state,
-      date: r.date,
-      slots: r.slots || [],
-      created_at: r.created_at,
-    }));
-
-    res.json({ ok: true, hits });
-  } catch (err) {
-    console.error("/api/alerts/unread error:", err);
-    res.status(500).json({ ok: false, error: "internal error", detail: err.message });
-  }
-});
-
-app.post("/api/alerts/mark-read", async (req, res) => {
-  try {
-    const { email, ids = [] } = req.body || {};
-    const trimmedEmail = (email || "").toString().trim().toLowerCase();
-    if (!trimmedEmail) {
-      return res.status(400).json({ ok: false, error: "email is required" });
-    }
-
-    const cleanIds = Array.isArray(ids)
-      ? ids.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
-      : [];
-
-    if (!cleanIds.length) {
-      return res.json({ ok: true, updated: 0 });
-    }
-
-    const result = await db.query(
-      `
-      UPDATE alert_hits
-      SET read_at = now()
-      WHERE email = $1
-        AND id = ANY($2::bigint[])
-      `,
-      [trimmedEmail, cleanIds]
-    );
-
-    res.json({ ok: true, updated: result.rowCount || 0 });
-  } catch (err) {
-    console.error("/api/alerts/mark-read error", err);
-    res.status(500).json({ ok: false, error: "internal error", detail: err.message });
-  }
-});
-
-// -------------------------------------------------
-// Stripe Checkout – create subscription session
-// -------------------------------------------------
-app.post("/api/subscribe", async (req, res) => {
-  try {
-    const { plan, email } = req.body || {};
-    const priceId = PRICE_IDS[plan];
-
-    if (!priceId) {
-      return res.status(400).json({ error: "Invalid subscription plan" });
-    }
-
-    const customerEmail =
-      email && email.toString().trim() !== ""
-        ? email.toString().trim().toLowerCase()
-        : undefined;
-
-    const successUrl =
-      process.env.STRIPE_SUCCESS_URL ||
-      `${SITE_URL}/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1`;
-    const cancelUrl =
-      process.env.STRIPE_CANCEL_URL ||
-      `${SITE_URL}/subscribe-cancel.html`;
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      payment_method_types: ["card"],
-      customer_email: customerEmail,
-      allow_promotion_codes: true,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-    });
-
-    res.json({ url: session.url });
-  } catch (err) {
-    console.error("Stripe checkout error:", err);
-    res
-      .status(500)
-      .json({ error: "Stripe checkout failed", detail: err.message });
-  }
-});
-
-// -------------------------------------------------
-// ✅ Billing portal – open Stripe customer portal
-// -------------------------------------------------
-app.post("/api/billing/portal", async (req, res) => {
-  try {
-    // ✅ email can come from body OR Bearer token (account.html currently sends only returnUrl)
-    const trimmedEmail = getEmailFromRequest(req);
-
-    const { returnUrl } = req.body || {};
-
-    if (!trimmedEmail) {
-      return res.status(400).json({ error: "email is required" });
-    }
-
-    // 1) Find Stripe customer by email
-    const customers = await stripe.customers.list({
-      email: trimmedEmail,
-      limit: 1,
-    });
-
-    if (!customers.data.length) {
-      console.log("No Stripe customer for email:", trimmedEmail);
-      return res
-        .status(404)
-        .json({ error: "no_stripe_customer_for_email" });
-    }
-
-    const customer = customers.data[0];
-
-    // 2) Create billing portal session
-    const session = await stripe.billingPortal.sessions.create({
-      customer: customer.id,
-      return_url:
-        returnUrl ||
-        `${SITE_URL}/account.html`,
-    });
-
-    res.json({ url: session.url });
-  } catch (err) {
-    console.error("billing portal error", err);
-    res.status(500).json({ error: "billing_portal_failed", detail: err.message });
-  }
-});
-
-// -------------------------------------------------
-// 🔎 Account plan lookup (Stripe is source of truth)
-// -------------------------------------------------
-app.get("/api/account/plan", async (req, res) => {
-  try {
-    const email = (req.query.email || "").toString().trim().toLowerCase();
-    if (!email) {
-      return res.status(400).json({ error: "email is required" });
-    }
-
-    // 1) Find customer by email
-    const customers = await stripe.customers.list({
-      email,
-      limit: 1,
-    });
-
-    if (!customers.data.length) {
-      return res.json({
-        plan: "FREE",
-        maxFavs: 3,
-        reason: "no_stripe_customer",
-      });
-    }
-
-    const customer = customers.data[0];
-
-    // 2) Find active subscription for that customer
-    const subs = await stripe.subscriptions.list({
-      customer: customer.id,
-      status: "active",
-      limit: 1,
-      expand: ["data.items.data.price"],
-    });
-
-    if (!subs.data.length) {
-      return res.json({
-        plan: "FREE",
-        maxFavs: 3,
-        reason: "no_active_subscription",
-      });
-    }
-
-    const sub = subs.data[0];
-    const firstItem = sub.items.data[0];
-    const priceId = firstItem?.price?.id;
-
-    if (!priceId || !PRICE_TO_PLAN[priceId]) {
-      return res.json({
-        plan: "BASIC",
-        maxFavs: 3,
-        reason: "unknown_price",
-        priceId,
-      });
-    }
-
-    const { plan, maxFavs } = PRICE_TO_PLAN[priceId];
-
-    return res.json({
-      plan,
-      maxFavs,
-      priceId,
-    });
-  } catch (err) {
-    console.error("account/plan error:", err);
-    res.status(500).json({ error: "plan_lookup_failed", detail: err.message });
-  }
-});
-
-// -------------------------------------------------
-// ✅ Save account preferences (for favourites + scan settings)
-// ✅ FIX: also persist home course into users table so /api/me returns the new value
+// ✅ Save account preferences
 // -------------------------------------------------
 app.post("/api/account/preferences", async (req, res) => {
   try {
@@ -1180,9 +559,7 @@ app.post("/api/account/preferences", async (req, res) => {
       latest,
       holes,
       partySize,
-      alertFrequency, // 🔹 NEW
-
-      // ✅ NEW: home course fields (sent by account page)
+      alertFrequency,
       homeCourse,
       homeCourseId,
       homeCourseState,
@@ -1235,12 +612,9 @@ app.post("/api/account/preferences", async (req, res) => {
       ]
     );
 
-    // ✅ NEW: persist home course to users table (source of truth for /api/me)
-    // Prefer explicit homeCourseState, fall back to homeState
     const finalHomeCourseState =
       (homeCourseState || homeState || null);
 
-    // ✅ FIX: do NOT wipe existing home course fields if user saves prefs without selecting one
     await db.query(
       `
       UPDATE users
@@ -1296,19 +670,12 @@ console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
 // -------------------------------------------------
-// ✅ NEW: Load scorecards (published pars + distances) and attach to /api/courses
-// FIXES: course name mismatches like "Whaleback Golf Course (18 holes)"
+// ✅ Load scorecards (robust) and attach to /api/courses
 // -------------------------------------------------
 function _normCourseName(s) {
   let x = String(s || "").trim().toLowerCase();
-
-  // remove trailing "(...)" like "(18 holes)", "(9)", "(back 9)" etc
   x = x.replace(/\s*\([^)]*\)\s*$/, "");
-
-  // also remove trailing "18 holes" / "9 holes" if typed without brackets
   x = x.replace(/\s*\b(18|9)\s*holes?\b\s*$/, "");
-
-  // cleanup spacing
   x = x.replace(/\s{2,}/g, " ").trim();
   return x;
 }
@@ -1327,17 +694,85 @@ function _pickDefaultTee(distances_m) {
   if (!distances_m || typeof distances_m !== "object") return null;
   const tees = Object.keys(distances_m);
   if (!tees.length) return null;
-  // prefer White > Yellow > Blue > Red > first
   const preferred = ["White", "Yellow", "Blue", "Red"];
   for (const t of preferred) if (tees.includes(t)) return t;
   return tees[0];
 }
 
-// Load scorecards by state (start with WA, add others later)
-const scorecardsWAPath = path.join(__dirname, "data", "scorecards", "scorecards-wa.json");
-const scorecardsWA = _safeReadJsonIfExists(scorecardsWAPath);
+// ✅ NEW: load scorecards from multiple locations + accept multiple schemas
+function _loadScorecardsForState(stateCode) {
+  const st = String(stateCode || "").trim().toUpperCase();
+  if (!st) return [];
+
+  const candidates = [
+    // backend
+    path.join(__dirname, "data", "scorecards", `scorecards-${st.toLowerCase()}.json`),
+    path.join(__dirname, "data", "scorecards", `scorecards-${st}.json`),
+    path.join(__dirname, "data", "scorecards", `scorecards_${st.toLowerCase()}.json`),
+    path.join(__dirname, "data", "scorecards", `scorecards_${st}.json`),
+
+    // public
+    path.join(__dirname, "..", "public", "data", "scorecards", `scorecards-${st.toLowerCase()}.json`),
+    path.join(__dirname, "..", "public", "data", `scorecards-${st.toLowerCase()}.json`),
+    path.join(__dirname, "..", "public", "scorecards", `scorecards-${st.toLowerCase()}.json`),
+  ];
+
+  let raw = null;
+  let found = "";
+  for (const p of candidates) {
+    const j = _safeReadJsonIfExists(p);
+    if (!j) continue;
+    raw = j;
+    found = p;
+    break;
+  }
+
+  if (!raw) return [];
+
+  let arr = [];
+  if (Array.isArray(raw)) arr = raw;
+  else if (raw && Array.isArray(raw.scorecards)) arr = raw.scorecards;
+  else arr = [];
+
+  if (found) console.log(`✅ scorecards candidate for ${st}: ${found}`);
+
+  // normalize entries so enrichment works even if state/holes fields are missing
+  return arr
+    .map((sc) => {
+      const courseName = sc.course || sc.name || sc.title || "";
+      const pars = Array.isArray(sc.pars) ? sc.pars : (Array.isArray(sc.par) ? sc.par : null);
+
+      // infer holes if missing
+      const holes =
+        Number(sc.holes) ||
+        (Array.isArray(pars) ? pars.length : null) ||
+        null;
+
+      // normalize distances structure names
+      const distances_m = sc.distances_m || sc.distancesByTee || sc.distances || null;
+
+      return {
+        ...sc,
+        course: courseName,
+        state: (sc.state ? String(sc.state).toUpperCase() : st),
+        holes: holes,
+        pars: pars,
+        distances_m: distances_m,
+      };
+    })
+    .filter((x) => x.course && x.state && x.holes);
+}
+
+// Load scorecards (you can add more states any time)
 const scorecardsAll = []
-  .concat(Array.isArray(scorecardsWA) ? scorecardsWA : []);
+  .concat(_loadScorecardsForState("WA"))
+  .concat(_loadScorecardsForState("NT"))
+  .concat(_loadScorecardsForState("QLD"))
+  .concat(_loadScorecardsForState("NSW"))
+  .concat(_loadScorecardsForState("VIC"))
+  .concat(_loadScorecardsForState("SA"))
+  .concat(_loadScorecardsForState("TAS"))
+  .concat(_loadScorecardsForState("ACT"));
 
 // Build index: course|state|holes -> [scorecardEntries]
 const scorecardIndex = new Map();
@@ -1352,7 +787,7 @@ for (const sc of scorecardsAll) {
   scorecardIndex.get(k).push(sc);
 }
 
-// Create enriched version of the courses list (keep original intact)
+// Create enriched version of the courses list
 const coursesEnriched = courses.map((c) => {
   const courseName = c.name || c.course || "";
   const st = (c.state || "").toString().toUpperCase();
@@ -1360,15 +795,12 @@ const coursesEnriched = courses.map((c) => {
 
   if (!courseName || !st || !holes) return c;
 
-  // IMPORTANT: normalize "Whaleback Golf Course (18 holes)" style names
   const k = `${_courseKey(courseName, st)}|${holes}`;
   const list = scorecardIndex.get(k) || [];
 
-  // Only auto-attach when unambiguous (exactly 1 match with correct-length pars)
   if (list.length === 1 && Array.isArray(list[0].pars) && list[0].pars.length === holes) {
     const sc = list[0];
 
-    // distances: expose default tee distances (if present)
     const teeDefault = _pickDefaultTee(sc.distances_m);
     const distancesDefault =
       teeDefault && sc.distances_m && Array.isArray(sc.distances_m[teeDefault])
@@ -1403,7 +835,6 @@ const coursesEnriched = courses.map((c) => {
 
     return {
       ...c,
-      // doesn't break anything; lets frontend ask user which layout later
       availableLayouts: Array.from(new Set(layouts)),
       hasMultipleScorecards: true,
     };
@@ -1423,7 +854,6 @@ app.get("/health", (req, res) => {
 // Course List
 // -------------------------------------------------
 app.get("/api/courses", (req, res) => {
-  // ✅ return enriched courses (includes pars18/pars9 + distances18/distances9 where available + unambiguous)
   res.json(coursesEnriched);
 });
 
@@ -1540,6 +970,499 @@ app.post("/api/search", async (req, res) => {
 });
 
 // -------------------------------------------------
+// ✅ My Rounds (logged-in only)  — FIXED & COMPLETED
+// -------------------------------------------------
+
+// List my rounds (latest first)
+app.get("/api/rounds", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+
+    const { rows } = await db.query(
+      `
+      SELECT id, course, layout, state, holes, par_mode, created_at, players_count
+      FROM rounds
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 200;
+      `,
+      [userId]
+    );
+
+    return res.json({ ok: true, rounds: rows || [] });
+  } catch (err) {
+    console.error("/api/rounds GET error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// Create a round + create blank holes (pars optional)
+app.post("/api/rounds", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+
+    const {
+      course,
+      layout = null,
+      state = null,
+      holes = 18,
+      pars = null,
+      par_mode = "PUBLISHED",
+      players_count = 1,
+    } = req.body || {};
+
+    const courseName = (course || "").toString().trim();
+    const holesCount = Number(holes);
+
+    if (!courseName) {
+      return res.status(400).json({ ok: false, error: "course is required" });
+    }
+
+    if (![9, 18].includes(holesCount)) {
+      return res.status(400).json({ ok: false, error: "holes must be 9 or 18" });
+    }
+
+    const parMode = (par_mode || "").toString().trim().toUpperCase() || "PUBLISHED";
+    const pc = Math.max(1, Math.min(4, Number(players_count) || 1));
+
+    const parsedPars = Array.isArray(pars)
+      ? pars.map((p) => (p === null || typeof p === "undefined" || p === "" ? null : Number(p)))
+      : null;
+
+    if (parsedPars && parsedPars.length !== holesCount) {
+      return res.status(400).json({
+        ok: false,
+        error: `pars must have length ${holesCount} (or be null)`,
+      });
+    }
+
+    const roundInsert = await db.query(
+      `
+      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, created_at, players_count)
+      VALUES ($1,$2,$3,$4,$5,$6,now(),$7)
+      RETURNING id, course, layout, state, holes, par_mode, created_at, players_count;
+      `,
+      [userId, courseName, layout, state, holesCount, parMode, pc]
+    );
+
+    const round = roundInsert.rows[0];
+
+    const values = [];
+    const params = [];
+    let idx = 1;
+
+    for (let i = 1; i <= holesCount; i++) {
+      const parVal = parsedPars ? parsedPars[i - 1] : null;
+      values.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
+      params.push(round.id, i, parVal, null, null, "{}" , "{}");
+    }
+
+    await db.query(
+      `
+      INSERT INTO round_holes (round_id, hole_number, par, strokes, putts, strokes_by_player, putts_by_player)
+      VALUES ${values.join(", ")}
+      `,
+      params
+    );
+
+    return res.json({ ok: true, round });
+  } catch (err) {
+    console.error("/api/rounds POST error:", err);
+    return res.status(500).json({ ok: false, error: "internal error", detail: err.message });
+  }
+});
+
+// Get a round (and its holes) – must be my round
+app.get("/api/rounds/:id", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+    if (!Number.isInteger(roundId) || roundId <= 0) {
+      return res.status(400).json({ ok: false, error: "Invalid round id" });
+    }
+
+    const roundRes = await db.query(
+      `
+      SELECT id, user_id, course, layout, state, holes, par_mode, created_at, players_count
+      FROM rounds
+      WHERE id = $1
+      LIMIT 1;
+      `,
+      [roundId]
+    );
+
+    if (!roundRes.rows.length) {
+      return res.status(404).json({ ok: false, error: "Round not found" });
+    }
+
+    const round = roundRes.rows[0];
+
+    if (Number(round.user_id) !== userId) {
+      return res.status(403).json({ ok: false, error: "Forbidden" });
+    }
+
+    const holesRes = await db.query(
+      `
+      SELECT hole_number, par, strokes, putts, strokes_by_player, putts_by_player
+      FROM round_holes
+      WHERE round_id = $1
+      ORDER BY hole_number ASC;
+      `,
+      [roundId]
+    );
+
+    return res.json({ ok: true, round, holes: holesRes.rows || [] });
+  } catch (err) {
+    console.error("/api/rounds/:id GET error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// ✅ NEW: Save entire scorecard (my-rounds.html uses PUT /api/rounds/:id)
+app.put("/api/rounds/:id", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+    if (!Number.isInteger(roundId) || roundId <= 0) {
+      return res.status(400).json({ ok: false, error: "Invalid round id" });
+    }
+
+    const own = await db.query(
+      `SELECT id FROM rounds WHERE id = $1 AND user_id = $2 LIMIT 1;`,
+      [roundId, userId]
+    );
+    if (!own.rows.length) {
+      return res.status(403).json({ ok: false, error: "Forbidden" });
+    }
+
+    const { holes = [] } = req.body || {};
+    if (!Array.isArray(holes) || !holes.length) {
+      return res.json({ ok: true, updated: 0 });
+    }
+
+    let updated = 0;
+
+    for (const h of holes) {
+      const holeNumber = Number(h?.hole_number);
+      if (!Number.isInteger(holeNumber) || holeNumber <= 0) continue;
+
+      const parVal = (h.par === "" || h.par === null || typeof h.par === "undefined") ? null : Number(h.par);
+      const strokesVal = (h.strokes === "" || h.strokes === null || typeof h.strokes === "undefined") ? null : Number(h.strokes);
+      const puttsVal = (h.putts === "" || h.putts === null || typeof h.putts === "undefined") ? null : Number(h.putts);
+
+      const strokesBy = (h.strokes_by_player && typeof h.strokes_by_player === "object") ? h.strokes_by_player : {};
+      const puttsBy = (h.putts_by_player && typeof h.putts_by_player === "object") ? h.putts_by_player : {};
+
+      const r = await db.query(
+        `
+        UPDATE round_holes
+        SET
+          par = $3,
+          strokes = $4,
+          putts = $5,
+          strokes_by_player = $6::jsonb,
+          putts_by_player   = $7::jsonb
+        WHERE round_id = $1 AND hole_number = $2
+        `,
+        [
+          roundId,
+          holeNumber,
+          Number.isFinite(parVal) ? parVal : null,
+          Number.isFinite(strokesVal) ? strokesVal : null,
+          Number.isFinite(puttsVal) ? puttsVal : null,
+          JSON.stringify(strokesBy || {}),
+          JSON.stringify(puttsBy || {}),
+        ]
+      );
+
+      updated += (r.rowCount || 0);
+    }
+
+    return res.json({ ok: true, updated });
+  } catch (err) {
+    console.error("/api/rounds/:id PUT error:", err);
+    return res.status(500).json({ ok: false, error: "internal error", detail: err.message });
+  }
+});
+
+// ✅ NEW: Delete round (my-rounds.html uses DELETE /api/rounds/:id)
+app.delete("/api/rounds/:id", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+    if (!Number.isInteger(roundId) || roundId <= 0) {
+      return res.status(400).json({ ok: false, error: "Invalid round id" });
+    }
+
+    const result = await db.query(
+      `DELETE FROM rounds WHERE id = $1 AND user_id = $2`,
+      [roundId, userId]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ ok: false, error: "Round not found" });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("/api/rounds/:id DELETE error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// Update a single hole (kept)
+app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
+    const holeNumber = Number(req.params.holeNumber);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+    if (!Number.isInteger(roundId) || roundId <= 0) {
+      return res.status(400).json({ ok: false, error: "Invalid round id" });
+    }
+    if (!Number.isInteger(holeNumber) || holeNumber <= 0) {
+      return res.status(400).json({ ok: false, error: "Invalid hole number" });
+    }
+
+    const own = await db.query(
+      `SELECT id FROM rounds WHERE id = $1 AND user_id = $2 LIMIT 1;`,
+      [roundId, userId]
+    );
+    if (!own.rows.length) {
+      return res.status(403).json({ ok: false, error: "Forbidden" });
+    }
+
+    const { strokes, putts, par } = req.body || {};
+
+    const strokesVal =
+      strokes === null || typeof strokes === "undefined" || strokes === ""
+        ? null
+        : Number(strokes);
+
+    const puttsVal =
+      putts === null || typeof putts === "undefined" || putts === ""
+        ? null
+        : Number(putts);
+
+    const parVal =
+      par === null || typeof par === "undefined" || par === ""
+        ? undefined
+        : Number(par);
+
+    if (strokesVal !== null && !Number.isFinite(strokesVal)) {
+      return res.status(400).json({ ok: false, error: "strokes must be a number or null" });
+    }
+    if (puttsVal !== null && !Number.isFinite(puttsVal)) {
+      return res.status(400).json({ ok: false, error: "putts must be a number or null" });
+    }
+    if (typeof parVal !== "undefined" && !Number.isFinite(parVal)) {
+      return res.status(400).json({ ok: false, error: "par must be a number or omitted" });
+    }
+
+    const result = await db.query(
+      `
+      UPDATE round_holes
+      SET
+        strokes = $3,
+        putts = $4,
+        par = COALESCE($5, par)
+      WHERE round_id = $1 AND hole_number = $2
+      RETURNING hole_number, par, strokes, putts;
+      `,
+      [roundId, holeNumber, strokesVal, puttsVal, typeof parVal === "undefined" ? null : parVal]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ ok: false, error: "Hole not found" });
+    }
+
+    return res.json({ ok: true, hole: result.rows[0] });
+  } catch (err) {
+    console.error("/api/rounds/:id/hole/:holeNumber PATCH error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// ✅ IMPORTANT: mount roundsRouter AFTER the inline handlers so it cannot hijack /api/rounds
+app.use("/api/rounds", roundsRouter);
+
+// 🔔 Alerts API
+app.use("/api/alerts", alertsRouter);
+
+// -------------------------------------------------
+// Stripe Checkout – create subscription session
+// -------------------------------------------------
+app.post("/api/subscribe", async (req, res) => {
+  try {
+    const { plan, email } = req.body || {};
+    const priceId = PRICE_IDS[plan];
+
+    if (!priceId) {
+      return res.status(400).json({ error: "Invalid subscription plan" });
+    }
+
+    const customerEmail =
+      email && email.toString().trim() !== ""
+        ? email.toString().trim().toLowerCase()
+        : undefined;
+
+    const successUrl =
+      process.env.STRIPE_SUCCESS_URL ||
+      `${SITE_URL}/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1`;
+    const cancelUrl =
+      process.env.STRIPE_CANCEL_URL ||
+      `${SITE_URL}/subscribe-cancel.html`;
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      payment_method_types: ["card"],
+      customer_email: customerEmail,
+      allow_promotion_codes: true,
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error("Stripe checkout error:", err);
+    res
+      .status(500)
+      .json({ error: "Stripe checkout failed", detail: err.message });
+  }
+});
+
+// -------------------------------------------------
+// ✅ Billing portal – open Stripe customer portal
+// -------------------------------------------------
+app.post("/api/billing/portal", async (req, res) => {
+  try {
+    const trimmedEmail = getEmailFromRequest(req);
+    const { returnUrl } = req.body || {};
+
+    if (!trimmedEmail) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    const customers = await stripe.customers.list({
+      email: trimmedEmail,
+      limit: 1,
+    });
+
+    if (!customers.data.length) {
+      console.log("No Stripe customer for email:", trimmedEmail);
+      return res
+        .status(404)
+        .json({ error: "no_stripe_customer_for_email" });
+    }
+
+    const customer = customers.data[0];
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customer.id,
+      return_url: returnUrl || `${SITE_URL}/account.html`,
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error("billing portal error", err);
+    res.status(500).json({ error: "billing_portal_failed", detail: err.message });
+  }
+});
+
+// -------------------------------------------------
+// 🔎 Account plan lookup (Stripe is source of truth)
+// -------------------------------------------------
+app.get("/api/account/plan", async (req, res) => {
+  try {
+    const email = (req.query.email || "").toString().trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    const customers = await stripe.customers.list({
+      email,
+      limit: 1,
+    });
+
+    if (!customers.data.length) {
+      return res.json({
+        plan: "FREE",
+        maxFavs: 3,
+        reason: "no_stripe_customer",
+      });
+    }
+
+    const customer = customers.data[0];
+
+    const subs = await stripe.subscriptions.list({
+      customer: customer.id,
+      status: "active",
+      limit: 1,
+      expand: ["data.items.data.price"],
+    });
+
+    if (!subs.data.length) {
+      return res.json({
+        plan: "FREE",
+        maxFavs: 3,
+        reason: "no_active_subscription",
+      });
+    }
+
+    const sub = subs.data[0];
+    const firstItem = sub.items.data[0];
+    const priceId = firstItem?.price?.id;
+
+    if (!priceId || !PRICE_TO_PLAN[priceId]) {
+      return res.json({
+        plan: "BASIC",
+        maxFavs: 3,
+        reason: "unknown_price",
+        priceId,
+      });
+    }
+
+    const { plan, maxFavs } = PRICE_TO_PLAN[priceId];
+
+    return res.json({
+      plan,
+      maxFavs,
+      priceId,
+    });
+  } catch (err) {
+    console.error("account/plan error:", err);
+    res.status(500).json({ error: "plan_lookup_failed", detail: err.message });
+  }
+});
+
+// -------------------------------------------------
 // Analytics Event Ingest
 // -------------------------------------------------
 app.post("/api/analytics/event", async (req, res) => {
@@ -1633,8 +1556,6 @@ app.get("/api/analytics/users", async (req, res) => {
       created_at: u.created_at,
       last_seen_at: u.last_login || u.created_at || null,
       home_course: u.home_course || null,
-
-      // existing preference fields
       home_state: u.home_state || null,
       favourites: u.favourites || null,
       preferred_days: u.preferred_days || null,
@@ -1643,8 +1564,6 @@ app.get("/api/analytics/users", async (req, res) => {
       preferred_holes: u.preferred_holes,
       preferred_party_size: u.preferred_party_size,
       alert_frequency: u.alert_frequency || null,
-
-      // 🔹 NEW: aliases specifically for the analytics "Alert settings" card
       alert_days: u.preferred_days || null,
       alert_time_range:
         u.preferred_earliest && u.preferred_latest
@@ -1767,7 +1686,6 @@ app.listen(PORT, () => {
 startAlertWorker();
 
 // ✅ ADDED: run alert ticks frequently so per-user frequency (6h/12h/etc) actually works
-// (frequency gating is already handled inside alertWorker.js via alert_last_sent)
 let __alertTickRunning = false;
 
 async function runAlertTickSafe() {
@@ -1782,10 +1700,8 @@ async function runAlertTickSafe() {
   }
 }
 
-// Default every 5 minutes, configurable via env
 const ALERT_TICK_INTERVAL_MS =
   Number(process.env.ALERT_TICK_INTERVAL_MS) || 5 * 60 * 1000;
 
-// Run shortly after boot, then on interval
 setTimeout(runAlertTickSafe, 20000);
 setInterval(runAlertTickSafe, ALERT_TICK_INTERVAL_MS);
