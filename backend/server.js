@@ -627,14 +627,20 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
       });
     }
 
+    // ✅ NEW (only what’s needed): persist players_count (used by your my-rounds.html)
+    const playersCount =
+      typeof req.body?.players_count === "undefined" || req.body?.players_count === null || req.body?.players_count === ""
+        ? 1
+        : Number(req.body.players_count);
+
     // Create round
     const roundInsert = await db.query(
       `
-      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, created_at)
-      VALUES ($1,$2,$3,$4,$5,$6,now())
-      RETURNING id, course, layout, state, holes, par_mode, created_at;
+      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, players_count, created_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,now())
+      RETURNING id, course, layout, state, holes, par_mode, players_count, created_at;
       `,
-      [userId, courseName, layout, state, holesCount, parMode]
+      [userId, courseName, layout, state, holesCount, parMode, Number.isFinite(playersCount) ? playersCount : 1]
     );
 
     const round = roundInsert.rows[0];
@@ -681,7 +687,7 @@ app.get("/api/rounds/:id", requireAuth, async (req, res) => {
 
     const roundRes = await db.query(
       `
-      SELECT id, user_id, course, layout, state, holes, par_mode, created_at
+      SELECT id, user_id, course, layout, state, holes, par_mode, players_count, created_at
       FROM rounds
       WHERE id = $1
       LIMIT 1;
@@ -699,9 +705,10 @@ app.get("/api/rounds/:id", requireAuth, async (req, res) => {
       return res.status(403).json({ ok: false, error: "Forbidden" });
     }
 
+    // ✅ NEW (only what’s needed): return JSONB multi-player fields too
     const holesRes = await db.query(
       `
-      SELECT hole_number, par, strokes, putts
+      SELECT hole_number, par, strokes, putts, strokes_by_player, putts_by_player
       FROM round_holes
       WHERE round_id = $1
       ORDER BY hole_number ASC;
@@ -715,6 +722,138 @@ app.get("/api/rounds/:id", requireAuth, async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal error" });
   }
 });
+
+/* ✅✅✅ ONLY ADDITION (needed): bulk save + delete endpoints (my-rounds.html uses PUT + DELETE) ✅✅✅ */
+
+// Bulk save all holes (supports multi-player JSON columns)
+app.put("/api/rounds/:id", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+    if (!Number.isInteger(roundId) || roundId <= 0) {
+      return res.status(400).json({ ok: false, error: "Invalid round id" });
+    }
+
+    // Ensure round belongs to user
+    const own = await db.query(
+      `SELECT id FROM rounds WHERE id = $1 AND user_id = $2 LIMIT 1;`,
+      [roundId, userId]
+    );
+    if (!own.rows.length) {
+      return res.status(403).json({ ok: false, error: "Forbidden" });
+    }
+
+    const { holes = [], players_count } = req.body || {};
+    const cleanHoles = Array.isArray(holes) ? holes : [];
+
+    // Optional: persist players_count if sent
+    const pc =
+      typeof players_count === "undefined" || players_count === null || players_count === ""
+        ? null
+        : Number(players_count);
+
+    if (pc && Number.isFinite(pc)) {
+      await db.query(`UPDATE rounds SET players_count = $2 WHERE id = $1;`, [roundId, pc]);
+    }
+
+    let updated = 0;
+
+    for (const h of cleanHoles) {
+      const holeNumber = Number(h?.hole_number);
+      if (!Number.isFinite(holeNumber) || holeNumber <= 0) continue;
+
+      const parVal =
+        h?.par === null || typeof h?.par === "undefined" || h?.par === ""
+          ? null
+          : Number(h.par);
+
+      const strokesVal =
+        h?.strokes === null || typeof h?.strokes === "undefined" || h?.strokes === ""
+          ? null
+          : Number(h.strokes);
+
+      const puttsVal =
+        h?.putts === null || typeof h?.putts === "undefined" || h?.putts === ""
+          ? null
+          : Number(h.putts);
+
+      const strokesBy =
+        h?.strokes_by_player && typeof h.strokes_by_player === "object"
+          ? h.strokes_by_player
+          : {};
+
+      const puttsBy =
+        h?.putts_by_player && typeof h.putts_by_player === "object"
+          ? h.putts_by_player
+          : {};
+
+      const r = await db.query(
+        `
+        INSERT INTO round_holes (round_id, hole_number, par, strokes, putts, strokes_by_player, putts_by_player)
+        VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)
+        ON CONFLICT (round_id, hole_number) DO UPDATE SET
+          par = EXCLUDED.par,
+          strokes = EXCLUDED.strokes,
+          putts = EXCLUDED.putts,
+          strokes_by_player = EXCLUDED.strokes_by_player,
+          putts_by_player = EXCLUDED.putts_by_player
+        RETURNING id;
+        `,
+        [
+          roundId,
+          holeNumber,
+          Number.isFinite(parVal) ? parVal : null,
+          Number.isFinite(strokesVal) ? strokesVal : null,
+          Number.isFinite(puttsVal) ? puttsVal : null,
+          JSON.stringify(strokesBy || {}),
+          JSON.stringify(puttsBy || {}),
+        ]
+      );
+
+      if (r.rows.length) updated++;
+    }
+
+    return res.json({ ok: true, updated });
+  } catch (err) {
+    console.error("/api/rounds/:id PUT error:", err);
+    return res.status(500).json({ ok: false, error: "internal error", detail: err.message });
+  }
+});
+
+// Delete a round (must be my round)
+app.delete("/api/rounds/:id", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+    if (!Number.isInteger(roundId) || roundId <= 0) {
+      return res.status(400).json({ ok: false, error: "Invalid round id" });
+    }
+
+    const result = await db.query(
+      `DELETE FROM rounds WHERE id = $1 AND user_id = $2;`,
+      [roundId, userId]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ ok: false, error: "Round not found" });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("/api/rounds/:id DELETE error:", err);
+    return res.status(500).json({ ok: false, error: "internal error", detail: err.message });
+  }
+});
+
+/* ✅✅✅ END ONLY ADDITION ✅✅✅ */
 
 // Update a single hole (strokes + putts + optional par) – must be my round
 app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
