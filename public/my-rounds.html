@@ -554,49 +554,6 @@
       return data;
     }
 
-    /* ✅✅✅ ONLY ADDITION (needed): save/delete compatibility with different backends ✅✅✅ */
-    function isMethodNotAllowedOrMissing(err){
-      const s = Number(err?.status);
-      return s === 404 || s === 405;
-    }
-
-    async function tryBulkSave(roundId, holesRows){
-      // Try bulk endpoint first (roundsRoutes.js may implement it)
-      return await api(`/api/rounds/${encodeURIComponent(roundId)}`, {
-        method:"PUT",
-        body: JSON.stringify({ holes: holesRows })
-      });
-    }
-
-    async function fallbackPatchPerHole(roundId, holesRows){
-      // Fallback: PATCH each hole (works with server.js "/api/rounds/:id/hole/:holeNumber")
-      // Includes multi-player JSON fields too (backend can ignore if unsupported)
-      for (const h of holesRows || []) {
-        const holeNo = Number(h?.hole_number);
-        if (!Number.isFinite(holeNo) || holeNo <= 0) continue;
-
-        const payload = {
-          par: h.par,
-          strokes: h.strokes,
-          putts: h.putts,
-          strokes_by_player: h.strokes_by_player || {},
-          putts_by_player: h.putts_by_player || {},
-        };
-
-        await api(`/api/rounds/${encodeURIComponent(roundId)}/hole/${encodeURIComponent(holeNo)}`, {
-          method:"PATCH",
-          body: JSON.stringify(payload)
-        });
-      }
-      return { ok: true };
-    }
-
-    async function tryDeleteRound(roundId){
-      // Try delete endpoint (roundsRoutes.js may implement it)
-      return await api(`/api/rounds/${encodeURIComponent(roundId)}`, { method:"DELETE" });
-    }
-    /* ✅✅✅ END ONLY ADDITION ✅✅✅ */
-
     // -----------------------------
     // State
     // -----------------------------
@@ -609,8 +566,9 @@
     let coursesLoaded = false;
     let selectedCourseKey = "";
 
-    // ✅ published meta cache (pars + distances) from /api/courses
-    const publishedMetaCache = new Map(); // key -> { pars, distances, teeName }
+    // ✅ NEW: scorecards cache (THIS IS THE FIX — pull from scorecards-wa directly)
+    const scorecardsByState = new Map(); // st -> array
+    const scorecardIndexByState = new Map(); // st -> Map(key -> array of scorecards)
 
     // -----------------------------
     // UI refs
@@ -675,9 +633,9 @@
     }
 
     function cleanCourseNameForMatch(name){
-      // ✅ UPDATED: also remove trailing "(18 holes)" / "(18)" / "18 holes" etc for matching
+      // ✅ removes "(18 holes)" / "(18)" / "18 holes" etc for matching
       let s = String(name || "").trim().toLowerCase();
-      s = s.replace(/\s*\([^)]*\)\s*$/, "");        // remove trailing ( ... )
+      s = s.replace(/\s*\([^)]*\)\s*$/, "");           // remove trailing ( ... )
       s = s.replace(/\s*\b(18|9)\s*holes?\b\s*$/, ""); // remove trailing "18 holes"
       s = s.replace(/\s+/g, " ").trim();
       return s;
@@ -695,32 +653,42 @@
       }
     }
 
-    function pickParsFromCourseObj(courseObj, holes, nineLoop){
-      const h = Number(holes) || 18;
-      const loop = String(nineLoop || "front").toLowerCase();
-      const c = courseObj || {};
+    // ✅ NEW: load scorecards for a state from backend (scorecards-wa.json etc)
+    async function loadScorecardsStateOnce(st){
+      const state = String(st || "").trim().toUpperCase();
+      if (!state) return [];
+      if (scorecardsByState.has(state)) return scorecardsByState.get(state);
 
-      if (h === 9 && Array.isArray(c.pars9)) return c.pars9.slice(0, 9);
-      if (h === 18 && Array.isArray(c.pars18)) return c.pars18.slice(0, 18);
+      try{
+        const res = await fetch(`/api/scorecards/${encodeURIComponent(state)}`);
+        const data = await res.json();
+        const arr = Array.isArray(data) ? data : (data && Array.isArray(data.scorecards) ? data.scorecards : []);
+        scorecardsByState.set(state, arr);
 
-      // support generic "pars" arrays too
-      if (Array.isArray(c.pars)) {
-        const arr = c.pars.slice();
-        if (h === 18) return arr.slice(0,18);
-        if (h === 9) {
-          if (arr.length === 9) return arr.slice(0,9);
-          if (arr.length >= 18) return (loop === "back") ? arr.slice(9,18) : arr.slice(0,9);
-          return arr.slice(0,9);
+        // build index for fast lookup
+        const idx = new Map(); // key -> array
+        for (const sc of arr){
+          const courseNm = sc.course || sc.name || "";
+          const holes = Number(sc.holes) || null;
+          const layout = String(sc.layout || "").trim().toLowerCase(); // optional
+          if (!courseNm || !holes) continue;
+
+          const base = `${cleanCourseNameForMatch(courseNm)}|${holes}`;
+          const k1 = base + `|${layout || ""}`; // layout-specific key
+          const k2 = base + `|`;                // fallback key (no layout)
+          if (!idx.has(k1)) idx.set(k1, []);
+          idx.get(k1).push(sc);
+          if (!idx.has(k2)) idx.set(k2, []);
+          idx.get(k2).push(sc);
         }
-      }
+        scorecardIndexByState.set(state, idx);
 
-      // support keyed object pars["9"] / pars["18"]
-      if (c.pars && typeof c.pars === "object" && !Array.isArray(c.pars)) {
-        const arr = c.pars[String(h)];
-        if (Array.isArray(arr)) return arr.slice(0, h);
+        return arr;
+      }catch{
+        scorecardsByState.set(state, []);
+        scorecardIndexByState.set(state, new Map());
+        return [];
       }
-
-      return null;
     }
 
     function pickTeeNameFromDistancesObj(distObj){
@@ -732,79 +700,62 @@
       return tees[0];
     }
 
-    function pickDistancesFromCourseObj(courseObj, holes, nineLoop){
-      const h = Number(holes) || 18;
-      const loop = String(nineLoop || "front").toLowerCase();
-      const c = courseObj || {};
+    // ✅ NEW: get published pars + distances directly from scorecards json
+    async function getPublishedMetaFromScorecards(roundLike){
+      const course = roundLike?.course || "";
+      const state = String(roundLike?.state || "").trim().toUpperCase();
+      const holes = Number(roundLike?.holes) || 18;
+      const layout = String(roundLike?.layout || "").trim().toLowerCase();
+      const nineLoop = String(roundLike?.nineLoop || "").trim().toLowerCase();
 
-      // if backend enriched with distances18/distances9
-      if (h === 18 && Array.isArray(c.distances18)) return { teeName: c.teeDefault || "", distances: c.distances18.slice(0,18) };
-      if (h === 9 && Array.isArray(c.distances9)) return { teeName: c.teeDefault || "", distances: c.distances9.slice(0,9) };
+      await loadScorecardsStateOnce(state);
+      const idx = scorecardIndexByState.get(state) || new Map();
 
-      // if backend passes through scorecard shape
-      const distObj = c.distances_m || c.distancesByTee;
-      if (distObj && typeof distObj === "object") {
-        const teeName = c.teeDefault || pickTeeNameFromDistancesObj(distObj);
-        const arr = Array.isArray(distObj[teeName]) ? distObj[teeName].slice() : null;
-        if (!arr || !arr.length) return { teeName, distances: null };
+      const base = `${cleanCourseNameForMatch(course)}|${holes}`;
+      const kLayout = base + `|${layout || ""}`;
+      const kFallback = base + `|`;
 
-        if (h === 18) return { teeName, distances: arr.slice(0,18) };
-        if (h === 9) {
-          if (arr.length === 9) return { teeName, distances: arr.slice(0,9) };
-          if (arr.length >= 18) return { teeName, distances: (loop === "back") ? arr.slice(9,18) : arr.slice(0,9) };
-          return { teeName, distances: arr.slice(0,9) };
+      let list = idx.get(kLayout) || [];
+      if (!list.length) list = idx.get(kFallback) || [];
+
+      // If still nothing, last resort: try name match ignoring state issues (rare)
+      if (!list.length){
+        // brute search within loaded state scorecards
+        const arr = scorecardsByState.get(state) || [];
+        list = arr.filter(sc => cleanCourseNameForMatch(sc.course || sc.name || "") === cleanCourseNameForMatch(course)
+                             && Number(sc.holes) === holes);
+      }
+
+      // If multiple, just take the first (you want it to “just put it in there”)
+      const sc = list.length ? list[0] : null;
+
+      let pars = null;
+      if (sc && Array.isArray(sc.pars)) {
+        if (holes === 18) pars = sc.pars.slice(0, 18);
+        if (holes === 9) {
+          if (sc.pars.length === 9) pars = sc.pars.slice(0, 9);
+          else if (sc.pars.length >= 18) pars = (nineLoop === "back") ? sc.pars.slice(9,18) : sc.pars.slice(0,9);
+          else pars = sc.pars.slice(0, 9);
         }
       }
 
-      return { teeName: "", distances: null };
-    }
+      let teeName = "";
+      let distances = null;
+      const distObj = sc && (sc.distances_m || sc.distancesByTee);
+      if (distObj && typeof distObj === "object") {
+        teeName = pickTeeNameFromDistancesObj(distObj);
+        const arr = Array.isArray(distObj[teeName]) ? distObj[teeName].slice() : null;
+        if (arr && arr.length) {
+          if (holes === 18) distances = arr.slice(0,18);
+          if (holes === 9) {
+            if (arr.length === 9) distances = arr.slice(0,9);
+            else if (arr.length >= 18) distances = (nineLoop === "back") ? arr.slice(9,18) : arr.slice(0,9);
+            else distances = arr.slice(0,9);
+          }
+        }
+      }
 
-    function findBestCourseObj(courseName, state, holes){
-      const st = String(state || "").toUpperCase().trim();
-      const wanted = cleanCourseNameForMatch(courseName);
-      const h = Number(holes) || 18;
-
-      // strict match: name+state+holes (using normalized name)
-      const strict = coursesCache.find(c => {
-        const cn = cleanCourseNameForMatch(c.name || c.course || c.title || "");
-        const cs = String(c.state || "").toUpperCase().trim();
-        const ch = Number(c.holes);
-        return cn === wanted && cs === st && ch === h;
-      });
-      if (strict) return strict;
-
-      // relaxed match: normalized name + state (ignore holes)
-      const relaxed = coursesCache.find(c => {
-        const cn = cleanCourseNameForMatch(c.name || c.course || c.title || "");
-        const cs = String(c.state || "").toUpperCase().trim();
-        return cn === wanted && cs === st;
-      });
-      if (relaxed) return relaxed;
-
-      // last fallback: normalized name anywhere
-      const any = coursesCache.find(c => cleanCourseNameForMatch(c.name || c.course || c.title || "") === wanted);
-      return any || null;
-    }
-
-    async function getPublishedMetaFromCourses(roundLike){
-      await loadCoursesOnce();
-
-      const course = roundLike?.course || "";
-      const state = roundLike?.state || "";
-      const holes = Number(roundLike?.holes) || 18;
-      const nineLoop = String(roundLike?.nineLoop || (holes === 9 ? (nineLoopEl?.value || "front") : "") || "");
-
-      const key = `${String(state||"").toUpperCase()}|${holes}|${cleanCourseNameForMatch(course)}|${String(nineLoop||"").toLowerCase()}`;
-      if (publishedMetaCache.has(key)) return publishedMetaCache.get(key);
-
-      const courseObj = findBestCourseObj(course, state, holes);
-
-      const pars = pickParsFromCourseObj(courseObj, holes, nineLoop);
-      const { teeName, distances } = pickDistancesFromCourseObj(courseObj, holes, nineLoop);
-
-      const meta = { pars, distances, teeName };
-      publishedMetaCache.set(key, meta);
-      return meta;
+      return { pars, distances, teeName };
     }
 
     function hideCourseAutocomplete(){
@@ -988,7 +939,6 @@
     function buildScoreHead(playersCount, teeLabel){
       const pc = clamp(playersCount, 1, 4);
 
-      // ✅ FIX: scoreHead is already <thead>, so do NOT nest another <thead> inside it.
       let th1 = `<tr>
         <th rowspan="2">Hole</th>
         <th rowspan="2">Par</th>
@@ -1033,8 +983,8 @@
 
       const pc = getPlayersCountFromRound(round);
 
-      // ✅ UPDATED: pull pars + distances from /api/courses enrichment (not from public JSON files)
-      const meta = await getPublishedMetaFromCourses(round);
+      // ✅ FIX: pull pars + distances from scorecards-<state>.json directly
+      const meta = await getPublishedMetaFromScorecards(round);
       const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
       const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
       const teeName = meta?.teeName || "";
@@ -1058,7 +1008,6 @@
       const map = new Map();
       for (const h of holesData) map.set(Number(h.hole_number), h);
 
-      // If published pars mode and round is blank, auto-fill from meta (display-only until saved)
       const isPublishedMode = String(round.par_mode || "").toLowerCase() === "published" || String(round.par_mode || "").toUpperCase() === "PUBLISHED";
 
       for (let i=1; i<=holesCount; i++){
@@ -1217,7 +1166,7 @@
       const layout = String(layoutEl.value || "").trim();
       const par_mode = String(parModeEl.value || "published").trim();
       const notes = String(notesEl.value || "").trim();
-      const players_count = clamp(playersEl?.value || 1, 1, 4); // ✅ NEW
+      const players_count = clamp(playersEl?.value || 1, 1, 4);
 
       const nineLoop = (holes === 9) ? String(nineLoopEl?.value || "front").trim().toLowerCase() : null;
 
@@ -1226,10 +1175,10 @@
         return;
       }
 
-      // ✅ UPDATED: send correct field name to backend: pars (not publishedPars)
+      // ✅ pull pars from scorecards-<state>.json directly
       let pars = null;
       if (par_mode === "published") {
-        const meta = await getPublishedMetaFromCourses({ course, state, holes, nineLoop, layout });
+        const meta = await getPublishedMetaFromScorecards({ course, state, holes, nineLoop, layout });
         pars = Array.isArray(meta?.pars) ? meta.pars : null;
       }
 
@@ -1238,11 +1187,11 @@
         state,
         holes,
         layout: layout || null,
-        par_mode: (par_mode === "published") ? "PUBLISHED" : "USER", // ✅ backend expects PUBLISHED/USER
+        par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
         notes: notes || null,
-        players_count, // ✅ NEW
+        players_count,
         ...(holes === 9 ? { nineLoop } : {}),
-        ...(pars ? { pars } : {}) // ✅ backend reads req.body.pars
+        ...(pars ? { pars } : {})
       };
 
       const data = await api("/api/rounds", { method:"POST", body: JSON.stringify(payload) });
@@ -1260,17 +1209,12 @@
       if (!currentRoundId) return;
 
       const holesRows = readTableHoles();
+      const payload = { holes: holesRows };
 
-      // ✅ NEW: try bulk save first, fallback to PATCH-per-hole
-      try {
-        await tryBulkSave(currentRoundId, holesRows);
-      } catch (err) {
-        if (isMethodNotAllowedOrMissing(err)) {
-          await fallbackPatchPerHole(currentRoundId, holesRows);
-        } else {
-          throw err;
-        }
-      }
+      await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, {
+        method:"PUT",
+        body: JSON.stringify(payload)
+      });
 
       setToast(rightToast, "Saved.", true);
       await safeFetchRounds();
@@ -1279,15 +1223,7 @@
     async function deleteRound(){
       if (!currentRoundId) return;
 
-      // ✅ NEW: try DELETE, and if backend doesn't support it, show a clear message
-      try {
-        await tryDeleteRound(currentRoundId);
-      } catch (err) {
-        if (isMethodNotAllowedOrMissing(err)) {
-          throw new Error("Delete endpoint not enabled on backend yet (needs DELETE /api/rounds/:id).");
-        }
-        throw err;
-      }
+      await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, { method:"DELETE" });
 
       setToast(rightToast, "Round deleted.", true);
 
