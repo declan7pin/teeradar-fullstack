@@ -504,7 +504,7 @@ app.get("/api/rounds", requireAuth, async (req, res) => {
 
     const { rows } = await db.query(
       `
-      SELECT id, course, layout, state, holes, par_mode, created_at
+      SELECT id, course, layout, state, holes, par_mode, created_at, players_count
       FROM rounds
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -533,12 +533,15 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
       layout = null,
       state = null,
       holes = 18,
-      pars = null,        // optional array (length 9/18) or null
-      par_mode = "PUBLISHED", // "PUBLISHED" or "USER"
+      pars = null,            // optional array (length 9/18) or null
+      publishedPars = null,   // ✅ accept frontend key too (no breaking change)
+      par_mode = "PUBLISHED", // "PUBLISHED" or "USER" (frontend may send "published"/"blank")
+      players_count = 1,
     } = req.body || {};
 
     const courseName = (course || "").toString().trim();
     const holesCount = Number(holes);
+    const st = (state || "").toString().trim().toUpperCase() || null;
 
     if (!courseName) {
       return res.status(400).json({ ok: false, error: "course is required" });
@@ -548,13 +551,28 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: "holes must be 9 or 18" });
     }
 
-    const parMode = (par_mode || "").toString().trim().toUpperCase() || "PUBLISHED";
+    // Normalize par_mode from frontend
+    const pmRaw = (par_mode || "").toString().trim().toUpperCase();
+    const parMode =
+      pmRaw === "BLANK" ? "USER" :
+      pmRaw === "PUBLISHED" ? "PUBLISHED" :
+      pmRaw === "PUBLISHED_PARS" ? "PUBLISHED" :
+      pmRaw === "USER" ? "USER" :
+      // frontend currently uses "published"/"blank"
+      pmRaw === "PUBLISHED" ? "PUBLISHED" :
+      (pmRaw === "PUBLISHED".toUpperCase() ? "PUBLISHED" : pmRaw);
 
-    const parsedPars = Array.isArray(pars)
-      ? pars.map((p) => (p === null || typeof p === "undefined" || p === "" ? null : Number(p)))
+    const pc = Number(players_count);
+    const playersCount =
+      Number.isFinite(pc) ? Math.max(1, Math.min(4, pc)) : 1;
+
+    // Prefer pars, fallback to publishedPars
+    let parsInput = Array.isArray(pars) ? pars : (Array.isArray(publishedPars) ? publishedPars : null);
+
+    let parsedPars = Array.isArray(parsInput)
+      ? parsInput.map((p) => (p === null || typeof p === "undefined" || p === "" ? null : Number(p)))
       : null;
 
-    // If pars provided, enforce correct length
     if (parsedPars && parsedPars.length !== holesCount) {
       return res.status(400).json({
         ok: false,
@@ -562,14 +580,22 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
       });
     }
 
+    // ✅ If no pars provided, and user chose "published", try hydrate from scorecards (WA)
+    if (!parsedPars && String(parMode || "").toUpperCase() === "PUBLISHED") {
+      const sc = getBestScorecard(courseName, st, holesCount, layout);
+      if (sc && Array.isArray(sc.pars) && sc.pars.length === holesCount) {
+        parsedPars = sc.pars.map((p) => (p === null || typeof p === "undefined" || p === "" ? null : Number(p)));
+      }
+    }
+
     // Create round
     const roundInsert = await db.query(
       `
-      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, created_at)
-      VALUES ($1,$2,$3,$4,$5,$6,now())
-      RETURNING id, course, layout, state, holes, par_mode, created_at;
+      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, created_at, players_count)
+      VALUES ($1,$2,$3,$4,$5,$6,now(),$7)
+      RETURNING id, course, layout, state, holes, par_mode, created_at, players_count;
       `,
-      [userId, courseName, layout, state, holesCount, parMode]
+      [userId, courseName, layout, st, holesCount, String(parMode || "PUBLISHED").toUpperCase(), playersCount]
     );
 
     const round = roundInsert.rows[0];
@@ -616,7 +642,7 @@ app.get("/api/rounds/:id", requireAuth, async (req, res) => {
 
     const roundRes = await db.query(
       `
-      SELECT id, user_id, course, layout, state, holes, par_mode, created_at
+      SELECT id, user_id, course, layout, state, holes, par_mode, created_at, players_count
       FROM rounds
       WHERE id = $1
       LIMIT 1;
@@ -636,7 +662,7 @@ app.get("/api/rounds/:id", requireAuth, async (req, res) => {
 
     const holesRes = await db.query(
       `
-      SELECT hole_number, par, strokes, putts
+      SELECT hole_number, par, strokes, putts, strokes_by_player, putts_by_player
       FROM round_holes
       WHERE round_id = $1
       ORDER BY hole_number ASC;
@@ -644,7 +670,58 @@ app.get("/api/rounds/:id", requireAuth, async (req, res) => {
       [roundId]
     );
 
-    return res.json({ ok: true, round, holes: holesRes.rows || [] });
+    // ✅ Hydrate missing pars + distances from scorecards (WA) without writing to DB
+    const courseName = (round.course || "").toString().trim();
+    const st = (round.state || "").toString().trim().toUpperCase();
+    const holesCount = Number(round.holes) || 18;
+    const sc = getBestScorecard(courseName, st, holesCount, round.layout);
+
+    let defaultTee = null;
+    let distancesArr = null;
+
+    if (sc && sc.distances_m && typeof sc.distances_m === "object") {
+      const keys = Object.keys(sc.distances_m || {});
+      defaultTee = keys.includes("White") ? "White" : (keys[0] || null);
+      if (defaultTee && Array.isArray(sc.distances_m[defaultTee])) {
+        distancesArr = sc.distances_m[defaultTee].slice(0, holesCount);
+      }
+    }
+
+    const outHoles = (holesRes.rows || []).map((h) => ({ ...h }));
+
+    if (sc && Array.isArray(sc.pars) && sc.pars.length === holesCount) {
+      for (let i = 0; i < outHoles.length; i++) {
+        if (outHoles[i].par === null || typeof outHoles[i].par === "undefined") {
+          const p = sc.pars[i];
+          const pn = (p === null || typeof p === "undefined" || p === "") ? null : Number(p);
+          outHoles[i].par = Number.isFinite(pn) ? pn : null;
+        }
+      }
+    }
+
+    if (distancesArr && distancesArr.length) {
+      for (let i = 0; i < outHoles.length; i++) {
+        const d = distancesArr[i];
+        const dn = (d === null || typeof d === "undefined" || d === "") ? null : Number(d);
+        outHoles[i].distance_m = Number.isFinite(dn) ? dn : null;
+      }
+    } else {
+      for (let i = 0; i < outHoles.length; i++) {
+        outHoles[i].distance_m = null;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      round,
+      holes: outHoles,
+      published: sc
+        ? {
+            teeDefault: defaultTee,
+            availableTees: sc.distances_m ? Object.keys(sc.distances_m) : [],
+          }
+        : null,
+    });
   } catch (err) {
     console.error("/api/rounds/:id GET error:", err);
     return res.status(500).json({ ok: false, error: "internal error" });
@@ -1092,8 +1169,7 @@ console.log(`Loaded ${courses.length} courses.`);
 console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
 // -------------------------------------------------
-// ✅ NEW: Load scorecards (published pars) and attach to /api/courses
-// This fixes My Rounds par auto-fill without breaking booking.
+// ✅ NEW: Load scorecards (published pars + distances) and attach to /api/courses
 // -------------------------------------------------
 function _norm(s) {
   return String(s || "").trim().toLowerCase();
@@ -1110,7 +1186,7 @@ function _safeReadJsonIfExists(p) {
   }
 }
 
-// Load scorecards by state (start with WA, add others later)
+// ✅ FIXED PATH: user stores WA scorecards here:
 const scorecardsWAPath = path.join(__dirname, "data", "scorecards", "scorecards-wa.json");
 const scorecardsWA = _safeReadJsonIfExists(scorecardsWAPath);
 const scorecardsAll = []
@@ -1129,6 +1205,24 @@ for (const sc of scorecardsAll) {
   scorecardIndex.get(k).push(sc);
 }
 
+// ✅ helper: pick best scorecard (layout-aware if possible)
+function getBestScorecard(courseName, state, holes, layout = null) {
+  if (!courseName || !state || !holes) return null;
+  const k = `${_courseKey(courseName, state)}|${Number(holes)}`;
+  const list = scorecardIndex.get(k) || [];
+  if (!list.length) return null;
+
+  // If layout provided, try exact match first
+  const want = String(layout || "").trim().toLowerCase();
+  if (want) {
+    const byLayout = list.find(x => String(x.layout || "").trim().toLowerCase() === want);
+    if (byLayout) return byLayout;
+  }
+
+  // Otherwise return first
+  return list[0];
+}
+
 // Create enriched version of the courses list (keep original intact)
 const coursesEnriched = courses.map((c) => {
   const courseName = c.name || c.course || "";
@@ -1140,12 +1234,35 @@ const coursesEnriched = courses.map((c) => {
   const k = `${_courseKey(courseName, st)}|${holes}`;
   const list = scorecardIndex.get(k) || [];
 
-  // Only auto-attach pars when unambiguous (exactly 1 match with a pars array)
-  // If multiple layouts exist, we expose them but DO NOT guess.
-  if (list.length === 1 && Array.isArray(list[0].pars) && list[0].pars.length === holes) {
-    if (holes === 18) return { ...c, pars18: list[0].pars };
-    if (holes === 9) return { ...c, pars9: list[0].pars };
-    return c;
+  // Only auto-attach pars/distances when unambiguous
+  if (list.length === 1) {
+    const one = list[0];
+
+    // Pars
+    let out = { ...c };
+    if (Array.isArray(one.pars) && one.pars.length === holes) {
+      if (holes === 18) out.pars18 = one.pars;
+      if (holes === 9) out.pars9 = one.pars;
+    }
+
+    // Distances (pick default tee)
+    if (one.distances_m && typeof one.distances_m === "object") {
+      const tees = Object.keys(one.distances_m || {});
+      const teeDefault = tees.includes("White") ? "White" : (tees[0] || null);
+      const distArr = teeDefault && Array.isArray(one.distances_m[teeDefault])
+        ? one.distances_m[teeDefault].slice(0, holes)
+        : null;
+
+      if (distArr && distArr.length === holes) {
+        if (holes === 18) out.distances18 = distArr;
+        if (holes === 9) out.distances9 = distArr;
+      }
+
+      out.teeDefault = teeDefault;
+      out.availableTees = tees;
+    }
+
+    return out;
   }
 
   if (list.length > 1) {
@@ -1153,11 +1270,18 @@ const coursesEnriched = courses.map((c) => {
       .map((x) => (x.layout || "").toString().trim())
       .filter((x) => x.length > 0);
 
+    const teesAll = new Set();
+    list.forEach((x) => {
+      if (x.distances_m && typeof x.distances_m === "object") {
+        Object.keys(x.distances_m).forEach((t) => teesAll.add(t));
+      }
+    });
+
     return {
       ...c,
-      // doesn't break anything; lets frontend ask user which layout later
       availableLayouts: Array.from(new Set(layouts)),
       hasMultipleScorecards: true,
+      availableTees: Array.from(teesAll),
     };
   }
 
@@ -1175,29 +1299,7 @@ app.get("/health", (req, res) => {
 // Course List
 // -------------------------------------------------
 app.get("/api/courses", (req, res) => {
-  // ✅ return enriched courses (includes pars18/pars9 where available + unambiguous)
   res.json(coursesEnriched);
-});
-
-// -------------------------------------------------
-// ✅ NEW: Scorecards API (pars + distances for My Rounds)
-// GET /api/scorecards?state=WA
-// -------------------------------------------------
-app.get("/api/scorecards", (req, res) => {
-  try {
-    const st = String(req.query.state || "WA").trim().toUpperCase();
-
-    // Currently we only load WA here (scorecards-wa.json)
-    if (st === "WA") {
-      return res.json(Array.isArray(scorecardsWA) ? scorecardsWA : []);
-    }
-
-    // Future states can be added later without breaking anything
-    return res.json([]);
-  } catch (err) {
-    console.error("/api/scorecards error:", err);
-    return res.status(500).json({ error: "Failed to load scorecards" });
-  }
 });
 
 // -------------------------------------------------
