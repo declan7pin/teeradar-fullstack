@@ -483,7 +483,7 @@ app.get("/api/scorecards/:state", (req, res) => {
     const st = String(req.params.state || "").trim().toUpperCase();
     if (!st) return res.status(400).json({ error: "state required" });
 
-    const { data, foundPath, candidates } = _readScorecardsForState(st);
+    const { data, foundPath, candidates, errors } = _readScorecardsForState(st);
 
     if (!Array.isArray(data)) {
       return res.status(404).json({
