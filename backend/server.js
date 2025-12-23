@@ -444,10 +444,19 @@ function _readScorecardsForState(st) {
   for (const p of candidates) {
     try {
       if (!fs.existsSync(p)) continue;
+
       const raw = fs.readFileSync(p, "utf8");
-      const j = JSON.parse(raw);
+
+      // ✅ fix non-JSON booleans if any slipped in
+      const fixed = raw
+        .replace(/\bTrue\b/g, "true")
+        .replace(/\bFalse\b/g, "false");
+
+      const j = JSON.parse(fixed);
+
       if (Array.isArray(j)) return { data: j, foundPath: p, candidates };
-      if (j && Array.isArray(j.scorecards)) return { data: j.scorecards, foundPath: p, candidates };
+      if (j && Array.isArray(j.scorecards))
+        return { data: j.scorecards, foundPath: p, candidates };
     } catch {
       // try next
     }
