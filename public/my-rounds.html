@@ -554,6 +554,49 @@
       return data;
     }
 
+    /* ✅✅✅ ONLY ADDITION (needed): save/delete compatibility with different backends ✅✅✅ */
+    function isMethodNotAllowedOrMissing(err){
+      const s = Number(err?.status);
+      return s === 404 || s === 405;
+    }
+
+    async function tryBulkSave(roundId, holesRows){
+      // Try bulk endpoint first (roundsRoutes.js may implement it)
+      return await api(`/api/rounds/${encodeURIComponent(roundId)}`, {
+        method:"PUT",
+        body: JSON.stringify({ holes: holesRows })
+      });
+    }
+
+    async function fallbackPatchPerHole(roundId, holesRows){
+      // Fallback: PATCH each hole (works with server.js "/api/rounds/:id/hole/:holeNumber")
+      // Includes multi-player JSON fields too (backend can ignore if unsupported)
+      for (const h of holesRows || []) {
+        const holeNo = Number(h?.hole_number);
+        if (!Number.isFinite(holeNo) || holeNo <= 0) continue;
+
+        const payload = {
+          par: h.par,
+          strokes: h.strokes,
+          putts: h.putts,
+          strokes_by_player: h.strokes_by_player || {},
+          putts_by_player: h.putts_by_player || {},
+        };
+
+        await api(`/api/rounds/${encodeURIComponent(roundId)}/hole/${encodeURIComponent(holeNo)}`, {
+          method:"PATCH",
+          body: JSON.stringify(payload)
+        });
+      }
+      return { ok: true };
+    }
+
+    async function tryDeleteRound(roundId){
+      // Try delete endpoint (roundsRoutes.js may implement it)
+      return await api(`/api/rounds/${encodeURIComponent(roundId)}`, { method:"DELETE" });
+    }
+    /* ✅✅✅ END ONLY ADDITION ✅✅✅ */
+
     // -----------------------------
     // State
     // -----------------------------
@@ -1217,12 +1260,17 @@
       if (!currentRoundId) return;
 
       const holesRows = readTableHoles();
-      const payload = { holes: holesRows };
 
-      await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, {
-        method:"PUT",
-        body: JSON.stringify(payload)
-      });
+      // ✅ NEW: try bulk save first, fallback to PATCH-per-hole
+      try {
+        await tryBulkSave(currentRoundId, holesRows);
+      } catch (err) {
+        if (isMethodNotAllowedOrMissing(err)) {
+          await fallbackPatchPerHole(currentRoundId, holesRows);
+        } else {
+          throw err;
+        }
+      }
 
       setToast(rightToast, "Saved.", true);
       await safeFetchRounds();
@@ -1231,7 +1279,15 @@
     async function deleteRound(){
       if (!currentRoundId) return;
 
-      await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, { method:"DELETE" });
+      // ✅ NEW: try DELETE, and if backend doesn't support it, show a clear message
+      try {
+        await tryDeleteRound(currentRoundId);
+      } catch (err) {
+        if (isMethodNotAllowedOrMissing(err)) {
+          throw new Error("Delete endpoint not enabled on backend yet (needs DELETE /api/rounds/:id).");
+        }
+        throw err;
+      }
 
       setToast(rightToast, "Round deleted.", true);
 
