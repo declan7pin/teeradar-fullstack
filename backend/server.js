@@ -1180,6 +1180,27 @@ app.get("/api/courses", (req, res) => {
 });
 
 // -------------------------------------------------
+// ✅ NEW: Scorecards API (pars + distances for My Rounds)
+// GET /api/scorecards?state=WA
+// -------------------------------------------------
+app.get("/api/scorecards", (req, res) => {
+  try {
+    const st = String(req.query.state || "WA").trim().toUpperCase();
+
+    // Currently we only load WA here (scorecards-wa.json)
+    if (st === "WA") {
+      return res.json(Array.isArray(scorecardsWA) ? scorecardsWA : []);
+    }
+
+    // Future states can be added later without breaking anything
+    return res.json([]);
+  } catch (err) {
+    console.error("/api/scorecards error:", err);
+    return res.status(500).json({ error: "Failed to load scorecards" });
+  }
+});
+
+// -------------------------------------------------
 // Search (state filter + state-aware cache)
 // -------------------------------------------------
 app.post("/api/search", async (req, res) => {
