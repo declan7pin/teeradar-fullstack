@@ -1111,7 +1111,7 @@ function _safeReadJsonIfExists(p) {
 }
 
 // Load scorecards by state (start with WA, add others later)
-const scorecardsWAPath = path.join(__dirname, "data", "scorecards-wa.json");
+const scorecardsWAPath = path.join(__dirname, "data", "scorecards", "scorecards-wa.json");
 const scorecardsWA = _safeReadJsonIfExists(scorecardsWAPath);
 const scorecardsAll = []
   .concat(Array.isArray(scorecardsWA) ? scorecardsWA : []);
