@@ -220,7 +220,7 @@
       width:100%;
       border-collapse:separate;
       border-spacing:0;
-      min-width:980px; /* ✅ was 860, now includes distance column */
+      min-width:980px;
     }
     th, td{
       padding:10px 10px;
@@ -320,7 +320,6 @@
       margin-top:2px;
     }
 
-    /* ✅ compact totals grid for multi-player */
     .totalsGrid{
       display:flex;
       gap:10px;
@@ -329,7 +328,6 @@
       margin-top:12px;
     }
 
-    /* ✅ distance cell style */
     .distCell{
       font-weight:900;
       color:#0f172a;
@@ -399,7 +397,6 @@
             </div>
           </div>
 
-          <!-- ✅ front/back selector (only when 9 holes) -->
           <div id="nineLoopWrap" style="display:none;">
             <label for="nineLoop">9 holes (front or back?)</label>
             <select id="nineLoop">
@@ -425,7 +422,6 @@
             </div>
           </div>
 
-          <!-- ✅ NEW: Players selector -->
           <div class="row">
             <div>
               <label for="players">Players</label>
@@ -440,7 +436,6 @@
               </div>
             </div>
             <div>
-              <!-- ✅ NEW: Tee selector (for distances) -->
               <label for="tee">Tee</label>
               <select id="tee">
                 <option value="">—</option>
@@ -504,7 +499,6 @@
               </table>
             </div>
 
-            <!-- ✅ NEW: per-player totals -->
             <div class="totalsGrid" id="totalsGrid"></div>
 
             <div class="muted" style="margin-top:10px; font-weight:800;">
@@ -522,9 +516,6 @@
   </main>
 
   <script>
-    // -----------------------------
-    // Auth helpers
-    // -----------------------------
     function getToken() {
       const keys = ["teeradar_jwt", "teeradar_token", "token", "authToken", "jwt", "access_token"];
       for (const k of keys) {
@@ -563,25 +554,17 @@
       return data;
     }
 
-    // -----------------------------
-    // State
-    // -----------------------------
     let currentRoundId = null;
     let currentRound = null;
     let roundsCache = [];
 
-    // course cache (optional)
     let coursesCache = [];
     let coursesLoaded = false;
     let selectedCourseKey = "";
 
-    // ✅ NEW: scorecards cache (THIS IS THE FIX — pull from scorecards-wa directly)
-    const scorecardsByState = new Map(); // st -> array
-    const scorecardIndexByState = new Map(); // st -> Map(key -> array of scorecards)
+    const scorecardsByState = new Map();
+    const scorecardIndexByState = new Map();
 
-    // -----------------------------
-    // UI refs
-    // -----------------------------
     const authGate = document.getElementById("authGate");
     const appEl = document.getElementById("app");
 
@@ -591,8 +574,8 @@
     const layoutEl = document.getElementById("layout");
     const parModeEl = document.getElementById("parMode");
     const notesEl = document.getElementById("notes");
-    const playersEl = document.getElementById("players"); // ✅ NEW
-    const teeEl = document.getElementById("tee"); // ✅ NEW
+    const playersEl = document.getElementById("players");
+    const teeEl = document.getElementById("tee"); // ✅ top selector
 
     const nineLoopWrap = document.getElementById("nineLoopWrap");
     const nineLoopEl = document.getElementById("nineLoop");
@@ -612,8 +595,8 @@
     const scorecardWrap = document.getElementById("scorecardWrap");
     const scoreBody = document.getElementById("scoreBody");
 
-    const scoreHead = document.getElementById("scoreHead"); // ✅ NEW
-    const totalsGrid = document.getElementById("totalsGrid"); // ✅ NEW
+    const scoreHead = document.getElementById("scoreHead");
+    const totalsGrid = document.getElementById("totalsGrid");
 
     const saveAllBtn = document.getElementById("saveAllBtn");
     const deleteRoundBtn = document.getElementById("deleteRoundBtn");
@@ -623,9 +606,6 @@
 
     const courseAutoList = document.getElementById("courseAutoList");
 
-    // -----------------------------
-    // Helpers
-    // -----------------------------
     function norm(s){ return String(s || "").trim().toLowerCase(); }
     function clamp(n, a, b){ n = Number(n); if (!Number.isFinite(n)) return a; return Math.max(a, Math.min(b, n)); }
 
@@ -643,10 +623,9 @@
     }
 
     function cleanCourseNameForMatch(name){
-      // ✅ removes "(18 holes)" / "(18)" / "18 holes" etc for matching
       let s = String(name || "").trim().toLowerCase();
-      s = s.replace(/\s*\([^)]*\)\s*$/, "");           // remove trailing ( ... )
-      s = s.replace(/\s*\b(18|9)\s*holes?\b\s*$/, ""); // remove trailing "18 holes"
+      s = s.replace(/\s*\([^)]*\)\s*$/, "");
+      s = s.replace(/\s*\b(18|9)\s*holes?\b\s*$/, "");
       s = s.replace(/\s+/g, " ").trim();
       return s;
     }
@@ -663,7 +642,6 @@
       }
     }
 
-    // ✅ NEW: load scorecards for a state from backend (scorecards-wa.json etc)
     async function loadScorecardsStateOnce(st){
       const state = String(st || "").trim().toUpperCase();
       if (!state) return [];
@@ -675,17 +653,16 @@
         const arr = Array.isArray(data) ? data : (data && Array.isArray(data.scorecards) ? data.scorecards : []);
         scorecardsByState.set(state, arr);
 
-        // build index for fast lookup
-        const idx = new Map(); // key -> array
+        const idx = new Map();
         for (const sc of arr){
           const courseNm = sc.course || sc.name || "";
           const holes = Number(sc.holes) || null;
-          const layout = String(sc.layout || "").trim().toLowerCase(); // optional
+          const layout = String(sc.layout || "").trim().toLowerCase();
           if (!courseNm || !holes) continue;
 
           const base = `${cleanCourseNameForMatch(courseNm)}|${holes}`;
-          const k1 = base + `|${layout || ""}`; // layout-specific key
-          const k2 = base + `|`;                // fallback key (no layout)
+          const k1 = base + `|${layout || ""}`;
+          const k2 = base + `|`;
           if (!idx.has(k1)) idx.set(k1, []);
           idx.get(k1).push(sc);
           if (!idx.has(k2)) idx.set(k2, []);
@@ -752,7 +729,6 @@
       setTeeSelectOptions(tees, chosen);
     }
 
-    // ✅ NEW: get published pars + distances directly from scorecards json
     async function getPublishedMetaFromScorecards(roundLike){
       const course = roundLike?.course || "";
       const state = String(roundLike?.state || "").trim().toUpperCase();
@@ -771,18 +747,15 @@
       let list = idx.get(kLayout) || [];
       if (!list.length) list = idx.get(kFallback) || [];
 
-      // ✅ FIX: if 9-hole round but only 18-hole scorecard exists, fall back to 18 and slice
-      let usedHolesForMatch = holes;
+      // ✅ if 9-hole round but only 18-hole scorecard exists, fall back to 18 and slice
       if (!list.length && holes === 9) {
         const base18 = `${cleanCourseNameForMatch(course)}|18`;
         const kLayout18 = base18 + `|${layout || ""}`;
         const kFallback18 = base18 + `|`;
         list = (idx.get(kLayout18) || []);
         if (!list.length) list = (idx.get(kFallback18) || []);
-        if (list.length) usedHolesForMatch = 18;
       }
 
-      // If still nothing, last resort: try name match within loaded state scorecards
       if (!list.length){
         const arr = scorecardsByState.get(state) || [];
         list = arr.filter(sc => cleanCourseNameForMatch(sc.course || sc.name || "") === cleanCourseNameForMatch(course)
@@ -792,7 +765,6 @@
         const arr = scorecardsByState.get(state) || [];
         list = arr.filter(sc => cleanCourseNameForMatch(sc.course || sc.name || "") === cleanCourseNameForMatch(course)
                              && Number(sc.holes) === 18);
-        if (list.length) usedHolesForMatch = 18;
       }
 
       const sc = list.length ? list[0] : null;
@@ -813,7 +785,6 @@
       let teeName = "";
       let distances = null;
 
-      // Prefer distances_m/distancesByTee (18 or 9 arrays by tee)
       const distObj = sc && (sc.distances_m || sc.distancesByTee);
       if (distObj && typeof distObj === "object") {
         teeName = (requestedTee && Array.isArray(distObj[requestedTee])) ? requestedTee : pickTeeNameFromDistancesObj(distObj);
@@ -829,7 +800,6 @@
         }
       }
 
-      // If no distances but there are 9-hole distance options, use them
       if ((!distances || !distances.length) && sc && holes === 9 && sc.distance_options_9 && typeof sc.distance_options_9 === "object") {
         const opt = sc.distance_options_9;
         const optTee = (requestedTee && Array.isArray(opt[requestedTee])) ? requestedTee : pickTeeNameFromDistancesObj(opt);
@@ -838,7 +808,7 @@
         if (arr9 && arr9.length) distances = arr9;
       }
 
-      return { pars, distances, teeName, tees, usedHolesForMatch };
+      return { pars, distances, teeName, tees };
     }
 
     function hideCourseAutocomplete(){
@@ -935,9 +905,6 @@
       }
     }
 
-    // -----------------------------
-    // Multi-player helpers
-    // -----------------------------
     function getPlayersCountFromRound(r){
       const pc = Number(r?.players_count ?? r?.players ?? 1);
       return clamp(pc, 1, 4);
@@ -960,9 +927,6 @@
       return null;
     }
 
-    // -----------------------------
-    // Round list
-    // -----------------------------
     function calcTotalsForPlayer(holesData, playerIndex){
       let par=0, strokes=0, putts=0;
       let parCount=0, strokesCount=0, puttsCount=0;
@@ -1022,9 +986,6 @@
       }
     }
 
-    // -----------------------------
-    // Scorecard rendering
-    // -----------------------------
     function buildScoreHead(playersCount, teeLabel){
       const pc = clamp(playersCount, 1, 4);
 
@@ -1072,12 +1033,18 @@
 
       const pc = getPlayersCountFromRound(round);
 
-      // ✅ FIX: pull pars + distances from scorecards-<state>.json directly (+ tee support + 9-hole fallback to 18)
       const meta = await getPublishedMetaFromScorecards(round);
       const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
       const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
       const tees = Array.isArray(meta?.tees) ? meta.tees : [];
       const teeName = meta?.teeName || "";
+
+      // ✅ keep TOP tee selector synced to round
+      if (teeEl) {
+        const wanted = String(round.tee || "").trim() || teeName || "";
+        setTeeSelectOptions(tees, wanted);
+        if (wanted) round.tee = wanted; // make sure rerender uses same tee
+      }
 
       scTitleEl.textContent = round.course || "Round";
       scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
@@ -1101,15 +1068,20 @@
         if (desired && tees.includes(desired)) teeEdit.value = desired;
         else if (teeName && tees.includes(teeName)) teeEdit.value = teeName;
         else if (tees.length) teeEdit.value = tees[0];
+
+        // ✅ when scorecard tee changes, sync TOP tee too
+        if (teeEl && teeEdit.value) teeEl.value = teeEdit.value;
+
         teeEdit.addEventListener("change", async () => {
           const v = String(teeEdit.value || "").trim();
           if (!currentRound) return;
           currentRound.tee = v || null;
+          if (teeEl) teeEl.value = v || "";
           await renderScorecard(currentRound);
         });
       }
 
-      buildScoreHead(pc, (teeEdit && teeEdit.value) ? teeEdit.value : teeName);
+      buildScoreHead(pc, (teeEdit && teeEdit.value) ? teeEdit.value : (teeEl?.value || teeName));
       scoreBody.innerHTML = "";
 
       const holesCount = Number(round.holes) || 18;
@@ -1190,7 +1162,7 @@
       inputs.forEach(inp => {
         const hole = Number(inp.dataset.hole);
         const field = String(inp.dataset.field || "");
-        const player = Number(inp.dataset.player); // 1..4
+        const player = Number(inp.dataset.player);
         if (!Number.isFinite(hole) || !byHole.has(hole)) return;
         if (![ "strokes", "putts" ].includes(field)) return;
         if (!Number.isFinite(player) || player < 1 || player > 4) return;
@@ -1248,9 +1220,6 @@
       }
     }
 
-    // -----------------------------
-    // API calls
-    // -----------------------------
     async function fetchRounds(){
       const data = await api("/api/rounds", { method:"GET" });
       const rounds = (data && data.rounds) ? data.rounds : [];
@@ -1277,7 +1246,7 @@
       const par_mode = String(parModeEl.value || "published").trim();
       const notes = String(notesEl.value || "").trim();
       const players_count = clamp(playersEl?.value || 1, 1, 4);
-      const tee = String(teeEl?.value || "").trim(); // ✅ NEW
+      const tee = String(teeEl?.value || "").trim();
 
       const nineLoop = (holes === 9) ? String(nineLoopEl?.value || "front").trim().toLowerCase() : null;
 
@@ -1286,7 +1255,6 @@
         return;
       }
 
-      // ✅ pull pars from scorecards-<state>.json directly
       let pars = null;
       if (par_mode === "published") {
         const meta = await getPublishedMetaFromScorecards({ course, state, holes, nineLoop, layout, tee });
@@ -1301,7 +1269,7 @@
         par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
         notes: notes || null,
         players_count,
-        tee: tee || null, // ✅ NEW
+        tee: tee || null,
         ...(holes === 9 ? { nineLoop } : {}),
         ...(pars ? { pars } : {})
       };
@@ -1323,7 +1291,6 @@
       const holesRows = readTableHoles();
       const payload = { holes: holesRows };
 
-      // ✅ also send tee if selected in the scorecard header
       const teeEdit = document.getElementById("teeEdit");
       if (teeEdit) payload.tee = String(teeEdit.value || "").trim() || null;
 
@@ -1349,9 +1316,6 @@
       await safeFetchRounds();
     }
 
-    // -----------------------------
-    // Safe wrappers
-    // -----------------------------
     async function safeFetchRounds(){
       try{
         await fetchRounds();
@@ -1367,9 +1331,6 @@
       }
     }
 
-    // -----------------------------
-    // Init + events
-    // -----------------------------
     function logout(){
       ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"].forEach(k => localStorage.removeItem(k));
       setToast(leftToast, "Logged out.", true);
@@ -1379,6 +1340,7 @@
     logoutBtn.addEventListener("click", logout);
     createRoundBtn.addEventListener("click", createRound);
     refreshBtn.addEventListener("click", safeFetchRounds);
+
     saveAllBtn.addEventListener("click", async () => {
       try{
         await saveRoundAll();
@@ -1386,6 +1348,7 @@
         setToast(rightToast, "Save failed: " + (err.message || "error"), false);
       }
     });
+
     deleteRoundBtn.addEventListener("click", async () => {
       const ok = confirm("Delete this round? This cannot be undone.");
       if (!ok) return;
@@ -1413,9 +1376,15 @@
       await refreshTeeOptionsFromForm();
     });
 
+    // ✅ KEY FIX: when TOP tee changes, update scorecard tee immediately
     teeEl.addEventListener("change", async () => {
-      // keep distances aligned to tee selection (no other side effects)
-      await refreshTeeOptionsFromForm();
+      const v = String(teeEl.value || "").trim();
+      if (currentRoundId && currentRound) {
+        currentRound.tee = v || null;
+        await renderScorecard(currentRound);
+      } else {
+        await refreshTeeOptionsFromForm();
+      }
     });
 
     (async function init(){
