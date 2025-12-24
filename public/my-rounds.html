@@ -339,16 +339,14 @@
       font-weight:800;
     }
 
-    /* ✅ small select inside pills */
+    /* ✅ small tee select in pills */
     .pill select{
-      border:1px solid var(--border);
-      border-radius:10px;
+      width:auto;
       padding:6px 8px;
+      border-radius:10px;
+      border:1px solid var(--border);
       font-weight:900;
       background:#fff;
-      color:var(--text);
-      width:auto;
-      min-width:130px;
     }
   </style>
 </head>
@@ -411,7 +409,16 @@
             </div>
           </div>
 
-          <!-- ✅ front/back selector (only when 9 holes AND not multi-nine mode) -->
+          <!-- ✅ NEW: Multi-nine selector for 9 holes (only when course has multiple 9s) -->
+          <div id="nineNameWrap" style="display:none;">
+            <label for="nineName">Which 9?</label>
+            <select id="nineName"></select>
+            <div class="muted" style="margin-top:6px;font-weight:800;">
+              This course has multiple 9-hole layouts. Select the 9 you are playing.
+            </div>
+          </div>
+
+          <!-- ✅ existing front/back selector (fallback when 9 holes and only an 18-hole scorecard exists) -->
           <div id="nineLoopWrap" style="display:none;">
             <label for="nineLoop">9 holes (front or back?)</label>
             <select id="nineLoop">
@@ -419,32 +426,25 @@
               <option value="back">Back 9</option>
             </select>
             <div class="muted" style="margin-top:6px;font-weight:800;">
-              If the course only has an 18-hole scorecard saved, this picks which 9 pars to use.
+              If the course only has an 18-hole scorecard saved, this picks which 9 pars/distances to use.
             </div>
           </div>
 
-          <!-- ✅ NEW: multi-nine selector (for courses with 27+ holes in published scorecards) -->
-          <div id="multiNineWrap" style="display:none;">
-            <div class="muted" style="margin-top:10px;font-weight:800;">
-              This course has multiple “nines”. Select which 9s you’re playing.
-            </div>
-
-            <div id="multiNine18" style="display:none;">
-              <div class="row">
-                <div>
-                  <label for="nineA">Front 9</label>
-                  <select id="nineA"></select>
-                </div>
-                <div>
-                  <label for="nineB">Back 9</label>
-                  <select id="nineB"></select>
-                </div>
+          <!-- ✅ NEW: Multi-nine selector for 18 holes -->
+          <div id="eighteenNinesWrap" style="display:none;">
+            <label>18 holes (select front + back 9)</label>
+            <div class="row">
+              <div>
+                <label for="frontNine" style="margin-top:0;">Front 9</label>
+                <select id="frontNine"></select>
+              </div>
+              <div>
+                <label for="backNine" style="margin-top:0;">Back 9</label>
+                <select id="backNine"></select>
               </div>
             </div>
-
-            <div id="multiNine9" style="display:none;">
-              <label for="nineIndex">Which 9?</label>
-              <select id="nineIndex"></select>
+            <div class="muted" style="margin-top:6px;font-weight:800;">
+              This course has multiple 9-hole layouts. Choose which 9s make up your 18.
             </div>
           </div>
 
@@ -462,7 +462,6 @@
             </div>
           </div>
 
-          <!-- ✅ Players + Tee -->
           <div class="row">
             <div>
               <label for="players">Players</label>
@@ -477,9 +476,10 @@
               </div>
             </div>
             <div>
-              <label for="teeSelect">Tee</label>
-              <select id="teeSelect">
-                <option value="">Auto</option>
+              <!-- ✅ NEW: Tee selector in the create form -->
+              <label for="tee">Tee</label>
+              <select id="tee">
+                <option value="">Auto (published default)</option>
               </select>
               <div class="muted" style="margin-top:6px;font-weight:800;">
                 Select a tee colour to show distances.
@@ -550,7 +550,7 @@
       </div>
 
       <div class="notice" style="margin-top:16px;">
-        <strong>Important:</strong> Multi-player rounds require backend support (players_count + JSON per-hole fields).  
+        <strong>Important:</strong> Multi-player rounds require backend support (players_count + JSON per-hole fields).
         If Save doesn't persist multi-player columns, update backend files below.
       </div>
     </div>
@@ -605,12 +605,10 @@
     let currentRound = null;
     let roundsCache = [];
 
-    // course cache (optional)
     let coursesCache = [];
     let coursesLoaded = false;
     let selectedCourseKey = "";
 
-    // ✅ scorecards cache
     const scorecardsByState = new Map(); // st -> array
     const scorecardIndexByState = new Map(); // st -> Map(key -> array of scorecards)
 
@@ -627,18 +625,17 @@
     const parModeEl = document.getElementById("parMode");
     const notesEl = document.getElementById("notes");
     const playersEl = document.getElementById("players");
-
-    const teeSelectEl = document.getElementById("teeSelect");
+    const teeEl = document.getElementById("tee");
 
     const nineLoopWrap = document.getElementById("nineLoopWrap");
     const nineLoopEl = document.getElementById("nineLoop");
 
-    const multiNineWrap = document.getElementById("multiNineWrap");
-    const multiNine18 = document.getElementById("multiNine18");
-    const multiNine9 = document.getElementById("multiNine9");
-    const nineAEl = document.getElementById("nineA");
-    const nineBEl = document.getElementById("nineB");
-    const nineIndexEl = document.getElementById("nineIndex");
+    // ✅ NEW multi-nine UI
+    const nineNameWrap = document.getElementById("nineNameWrap");
+    const nineNameEl = document.getElementById("nineName");
+    const eighteenNinesWrap = document.getElementById("eighteenNinesWrap");
+    const frontNineEl = document.getElementById("frontNine");
+    const backNineEl = document.getElementById("backNine");
 
     const createRoundBtn = document.getElementById("createRoundBtn");
     const refreshBtn = document.getElementById("refreshBtn");
@@ -716,7 +713,7 @@
         const arr = Array.isArray(data) ? data : (data && Array.isArray(data.scorecards) ? data.scorecards : []);
         scorecardsByState.set(state, arr);
 
-        const idx = new Map();
+        const idx = new Map(); // key -> array
         for (const sc of arr){
           const courseNm = sc.course || sc.name || "";
           const holes = Number(sc.holes) || null;
@@ -750,51 +747,230 @@
       return tees[0];
     }
 
-    function getAllTeeNames(distObj){
+    function listTeeNamesFromDistancesObj(distObj){
       if (!distObj || typeof distObj !== "object") return [];
-      const tees = Object.keys(distObj).filter(k => Array.isArray(distObj[k]));
-      // stable-ish ordering: White/Yellow/Blue/Red first, then others
-      const preferred = ["White","Yellow","Blue","Red","Green","Black"];
+      return Object.keys(distObj);
+    }
+
+    function setTeeSelectOptions(teeNames){
+      if (!teeEl) return;
+      const keep = teeEl.value || "";
+      teeEl.innerHTML = `<option value="">Auto (published default)</option>`;
+      (teeNames || []).forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t;
+        opt.textContent = t;
+        teeEl.appendChild(opt);
+      });
+      // keep selection if possible
+      if (keep && teeNames.includes(keep)) teeEl.value = keep;
+    }
+
+    // ✅ NEW: find all 9-hole layouts for a course in a state
+    async function getNineLayoutsForCourse(state, course){
+      const st = String(state || "").trim().toUpperCase();
+      const nm = cleanCourseNameForMatch(course || "");
+      if (!st || !nm) return [];
+
+      await loadScorecardsStateOnce(st);
+      const arr = scorecardsByState.get(st) || [];
+
+      const nines = arr
+        .filter(sc =>
+          cleanCourseNameForMatch(sc.course || sc.name || "") === nm &&
+          Number(sc.holes) === 9
+        )
+        .map(sc => String(sc.layout || "").trim())
+        .filter(Boolean);
+
+      // unique, stable
+      const seen = new Set();
       const out = [];
-      for (const t of preferred) if (tees.includes(t)) out.push(t);
-      for (const t of tees) if (!out.includes(t)) out.push(t);
+      for (const x of nines){
+        const k = x.toLowerCase();
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(x);
+      }
       return out;
     }
 
-    function countNinesFromScorecard(sc){
-      if (!sc) return 0;
-      const parLen = Array.isArray(sc.pars) ? sc.pars.length : 0;
+    function fillSelectOptions(selectEl, items){
+      if (!selectEl) return;
+      const current = selectEl.value || "";
+      selectEl.innerHTML = "";
+      (items || []).forEach(it => {
+        const opt = document.createElement("option");
+        opt.value = it;
+        opt.textContent = it;
+        selectEl.appendChild(opt);
+      });
+      if (current && (items || []).includes(current)) selectEl.value = current;
+    }
 
-      const distObj = sc.distances_m || sc.distancesByTee;
-      let maxDistLen = 0;
-      if (distObj && typeof distObj === "object"){
-        for (const k of Object.keys(distObj)){
-          const a = distObj[k];
-          if (Array.isArray(a)) maxDistLen = Math.max(maxDistLen, a.length);
+    async function refreshMultiNineUI(){
+      const course = String(courseEl.value || "").trim();
+      const state = String(stateEl.value || "").trim().toUpperCase();
+      const holes = Number(holesEl.value || 18);
+
+      // default hide
+      if (nineNameWrap) nineNameWrap.style.display = "none";
+      if (eighteenNinesWrap) eighteenNinesWrap.style.display = "none";
+
+      // Load tees for this course (from ANY matching scorecard we can find)
+      // (Keeps your UI updated even before round is created)
+      try{
+        await loadScorecardsStateOnce(state);
+        const arr = scorecardsByState.get(state) || [];
+        const nm = cleanCourseNameForMatch(course);
+        const firstMatch = arr.find(sc => cleanCourseNameForMatch(sc.course || sc.name || "") === nm && sc.distances_m && typeof sc.distances_m === "object");
+        const tees = firstMatch ? listTeeNamesFromDistancesObj(firstMatch.distances_m) : [];
+        setTeeSelectOptions(tees);
+      }catch{
+        setTeeSelectOptions([]);
+      }
+
+      // Multi-nine logic
+      const nineLayouts = await getNineLayoutsForCourse(state, course);
+
+      if (holes === 9){
+        // if multiple 9s exist -> show which 9
+        if (nineLayouts.length >= 2){
+          fillSelectOptions(nineNameEl, nineLayouts);
+          if (nineNameWrap) nineNameWrap.style.display = "block";
+          // hide legacy front/back picker
+          if (nineLoopWrap) nineLoopWrap.style.display = "none";
+        } else {
+          // fallback: show front/back picker
+          if (nineNameWrap) nineNameWrap.style.display = "none";
+          if (nineLoopWrap) nineLoopWrap.style.display = "block";
+        }
+      } else {
+        // holes === 18
+        if (nineLayouts.length >= 2){
+          fillSelectOptions(frontNineEl, nineLayouts);
+          fillSelectOptions(backNineEl, nineLayouts);
+          if (eighteenNinesWrap) eighteenNinesWrap.style.display = "block";
+        }
+        // no 9-hole layouts -> no extra UI, user can use optional layout input as before
+        if (nineLoopWrap) nineLoopWrap.style.display = "none";
+        if (nineNameWrap) nineNameWrap.style.display = "none";
+      }
+    }
+
+    // ✅ UPDATED: get published pars + distances, supporting:
+    // - tee selection (roundLike.tee)
+    // - multi-nine 18 holes: concat front+back from 9-hole layouts
+    // - multi-nine 9 holes: pick chosen 9-hole layout
+    async function getPublishedMetaFromScorecards(roundLike){
+      const course = roundLike?.course || "";
+      const state = String(roundLike?.state || "").trim().toUpperCase();
+      const holes = Number(roundLike?.holes) || 18;
+      const layout = String(roundLike?.layout || "").trim().toLowerCase();
+      const nineLoop = String(roundLike?.nineLoop || "").trim().toLowerCase();
+
+      const teeWanted = String(roundLike?.tee || roundLike?.teeName || "").trim();
+
+      const frontNineLayout = String(roundLike?.frontNine || roundLike?.front_nine || roundLike?.front9_layout || "").trim();
+      const backNineLayout  = String(roundLike?.backNine  || roundLike?.back_nine  || roundLike?.back9_layout  || "").trim();
+      const nineNameLayout  = String(roundLike?.nineName  || roundLike?.nine_layout || "").trim();
+
+      await loadScorecardsStateOnce(state);
+      const arr = scorecardsByState.get(state) || [];
+      const idx = scorecardIndexByState.get(state) || new Map();
+
+      const nm = cleanCourseNameForMatch(course);
+
+      function readFromScorecard(sc, holesCount, nineLoopLocal){
+        let pars = null;
+        if (sc && Array.isArray(sc.pars)) {
+          if (holesCount === 18) pars = sc.pars.slice(0, 18);
+          if (holesCount === 9) {
+            if (sc.pars.length === 9) pars = sc.pars.slice(0, 9);
+            else if (sc.pars.length >= 18) pars = (nineLoopLocal === "back") ? sc.pars.slice(9,18) : sc.pars.slice(0,9);
+            else pars = sc.pars.slice(0, 9);
+          }
+        }
+
+        let teeName = "";
+        let distances = null;
+        const distObj = sc && (sc.distances_m || sc.distancesByTee);
+        if (distObj && typeof distObj === "object") {
+          if (teeWanted && Array.isArray(distObj[teeWanted])) {
+            teeName = teeWanted;
+          } else {
+            teeName = pickTeeNameFromDistancesObj(distObj);
+          }
+
+          const dArr = Array.isArray(distObj[teeName]) ? distObj[teeName].slice() : null;
+          if (dArr && dArr.length) {
+            if (holesCount === 18) distances = dArr.slice(0,18);
+            if (holesCount === 9) {
+              if (dArr.length === 9) distances = dArr.slice(0,9);
+              else if (dArr.length >= 18) distances = (nineLoopLocal === "back") ? dArr.slice(9,18) : dArr.slice(0,9);
+              else distances = dArr.slice(0,9);
+            }
+          }
+        }
+        return { pars, distances, teeName };
+      }
+
+      // ✅ Multi-nine 9 holes: pick specific 9-hole layout if available
+      if (holes === 9 && nineNameLayout){
+        const sc9 = arr.find(sc =>
+          cleanCourseNameForMatch(sc.course || sc.name || "") === nm &&
+          Number(sc.holes) === 9 &&
+          String(sc.layout || "").trim().toLowerCase() === nineNameLayout.trim().toLowerCase()
+        );
+        if (sc9){
+          return readFromScorecard(sc9, 9, "front");
         }
       }
 
-      const maxLen = Math.max(parLen, maxDistLen);
-      return Math.floor(maxLen / 9);
-    }
+      // ✅ Multi-nine 18 holes: concat selected front+back 9s if available
+      if (holes === 18 && frontNineLayout && backNineLayout){
+        const scFront = arr.find(sc =>
+          cleanCourseNameForMatch(sc.course || sc.name || "") === nm &&
+          Number(sc.holes) === 9 &&
+          String(sc.layout || "").trim().toLowerCase() === frontNineLayout.trim().toLowerCase()
+        );
+        const scBack = arr.find(sc =>
+          cleanCourseNameForMatch(sc.course || sc.name || "") === nm &&
+          Number(sc.holes) === 9 &&
+          String(sc.layout || "").trim().toLowerCase() === backNineLayout.trim().toLowerCase()
+        );
 
-    function sliceNine(arr, nineIndex){
-      if (!Array.isArray(arr)) return null;
-      const i = Number(nineIndex);
-      if (!Number.isFinite(i) || i < 0) return null;
-      const start = i * 9;
-      return arr.slice(start, start + 9);
-    }
+        if (scFront && scBack){
+          const m1 = readFromScorecard(scFront, 9, "front");
+          const m2 = readFromScorecard(scBack, 9, "front");
 
-    function buildNineOptions(selectEl, nineCount){
-      if (!selectEl) return;
-      selectEl.innerHTML = "";
-      for (let i=0; i<nineCount; i++){
-        const opt = document.createElement("option");
-        opt.value = String(i);
-        opt.textContent = `Nine ${i+1}`;
-        selectEl.appendChild(opt);
+          const pars = (Array.isArray(m1.pars) && Array.isArray(m2.pars)) ? m1.pars.concat(m2.pars) : null;
+          const distances = (Array.isArray(m1.distances) && Array.isArray(m2.distances)) ? m1.distances.concat(m2.distances) : null;
+
+          // tee name: prefer explicit, else front tee name, else back tee name
+          const teeName = teeWanted || m1.teeName || m2.teeName || "";
+
+          return { pars, distances, teeName };
+        }
       }
+
+      // ✅ Existing behavior: match on holes + layout in index
+      const base = `${nm}|${holes}`;
+      const kLayout = base + `|${layout || ""}`;
+      const kFallback = base + `|`;
+
+      let list = idx.get(kLayout) || [];
+      if (!list.length) list = idx.get(kFallback) || [];
+
+      if (!list.length){
+        list = arr.filter(sc => cleanCourseNameForMatch(sc.course || sc.name || "") === nm
+                             && Number(sc.holes) === holes);
+      }
+
+      const sc = list.length ? list[0] : null;
+
+      // If holes=9 but only 18-hole scorecard exists, still slice front/back with nineLoop
+      return readFromScorecard(sc, holes, nineLoop);
     }
 
     function hideCourseAutocomplete(){
@@ -819,7 +995,7 @@
 
         div.innerHTML = `${escapeHtml(label)}${meta ? `<small>${escapeHtml(meta)}</small>` : ""}`;
 
-        div.addEventListener("click", () => {
+        div.addEventListener("click", async () => {
           const nm = c.name || c.course || c.title || "";
           const st2 = (c.state || "").toUpperCase();
 
@@ -828,7 +1004,7 @@
 
           selectedCourseKey = courseKey(nm, st2 || stateEl.value);
           hideCourseAutocomplete();
-          updateCreateFormMetaUI().catch(()=>{});
+          await refreshMultiNineUI();
         });
 
         courseAutoList.appendChild(div);
@@ -864,36 +1040,14 @@
         showCourseAutocomplete(matches);
       });
 
-      courseEl.addEventListener("blur", () => {
-        setTimeout(() => hideCourseAutocomplete(), 120);
-        setTimeout(() => updateCreateFormMetaUI().catch(()=>{}), 140);
-      });
-
       document.addEventListener("click", (e) => {
         if (e.target === courseEl) return;
         if (courseAutoList.contains(e.target)) return;
         hideCourseAutocomplete();
       });
-    }
 
-    function syncNineLoopVisibility(){
-      const holesNow = Number(holesEl?.value || 18);
-      const isNine = holesNow === 9;
-
-      // nineLoopWrap only shown if 9 holes AND not multi-nine mode
-      if (nineLoopWrap) nineLoopWrap.style.display = "none";
-      if (multiNineWrap) multiNineWrap.style.display = "none";
-      if (multiNine18) multiNine18.style.display = "none";
-      if (multiNine9) multiNine9.style.display = "none";
-
-      // multi-nine decision happens in updateCreateFormMetaUI()
-      if (isNine) {
-        // default: show front/back; updateCreateFormMetaUI may override to multi-nine
-        if (nineLoopWrap) nineLoopWrap.style.display = "block";
-      } else {
-        // 18 holes: multi-nine may show front/back nine selectors
-        if (nineLoopWrap) nineLoopWrap.style.display = "none";
-      }
+      // ✅ update multi-nine UI when user edits manually (not via autocomplete click)
+      courseEl.addEventListener("blur", () => refreshMultiNineUI());
     }
 
     function formatDate(d) {
@@ -930,221 +1084,6 @@
       return null;
     }
 
-    // -----------------------------
-    // ✅ Meta: published pars + distances with tee + multi-nine
-    // -----------------------------
-    async function getPublishedMetaFromScorecards(roundLike){
-      const course = roundLike?.course || "";
-      const state = String(roundLike?.state || "").trim().toUpperCase();
-      const holes = Number(roundLike?.holes) || 18;
-      const layout = String(roundLike?.layout || "").trim().toLowerCase();
-
-      const nineLoop = String(roundLike?.nineLoop || "").trim().toLowerCase(); // front/back (for 9 from 18)
-      const teeWanted = String(roundLike?.tee || "").trim(); // exact tee name if provided
-
-      // multi-nine selections
-      const nineA = (roundLike?.nineA != null) ? Number(roundLike.nineA) : null;      // 0-based
-      const nineB = (roundLike?.nineB != null) ? Number(roundLike.nineB) : null;      // 0-based
-      const nineIndex = (roundLike?.nineIndex != null) ? Number(roundLike.nineIndex) : null; // 0-based
-
-      await loadScorecardsStateOnce(state);
-      const idx = scorecardIndexByState.get(state) || new Map();
-
-      const base = `${cleanCourseNameForMatch(course)}|${holes}`;
-      const kLayout = base + `|${layout || ""}`;
-      const kFallback = base + `|`;
-
-      let list = idx.get(kLayout) || [];
-      if (!list.length) list = idx.get(kFallback) || [];
-
-      if (!list.length){
-        const arr = scorecardsByState.get(state) || [];
-        list = arr.filter(sc => cleanCourseNameForMatch(sc.course || sc.name || "") === cleanCourseNameForMatch(course)
-                             && Number(sc.holes) === holes);
-      }
-
-      const sc = list.length ? list[0] : null;
-
-      // tee info
-      const distObj = sc && (sc.distances_m || sc.distancesByTee);
-      const teeOptions = getAllTeeNames(distObj);
-      let teeName = teeWanted && teeOptions.includes(teeWanted) ? teeWanted : "";
-      if (!teeName) teeName = pickTeeNameFromDistancesObj(distObj);
-
-      // multi-nine info
-      const nineCount = countNinesFromScorecard(sc); // number of 9-hole blocks available
-      const isMultiNine = nineCount >= 3;
-
-      // pars base
-      let parsBase = (sc && Array.isArray(sc.pars)) ? sc.pars.slice() : null;
-
-      // distances base for selected tee
-      let distBase = null;
-      if (distObj && teeName && Array.isArray(distObj[teeName])) distBase = distObj[teeName].slice();
-
-      // slice helpers
-      function getNineSliceFromBase(arr, which){
-        const s = sliceNine(arr, which);
-        return (s && s.length === 9) ? s : null;
-      }
-
-      function pickPars(){
-        if (!parsBase || !parsBase.length) return null;
-
-        if (holes === 18){
-          // multi-nine: use nineA + nineB if valid
-          if (isMultiNine && Number.isFinite(nineA) && Number.isFinite(nineB)){
-            const a = getNineSliceFromBase(parsBase, nineA);
-            const b = getNineSliceFromBase(parsBase, nineB);
-            if (a && b) return a.concat(b);
-          }
-          return parsBase.slice(0, 18);
-        }
-
-        if (holes === 9){
-          // multi-nine: use nineIndex if valid
-          if (isMultiNine && Number.isFinite(nineIndex)){
-            const n = getNineSliceFromBase(parsBase, nineIndex);
-            if (n) return n;
-          }
-
-          // fallback: if file has exactly 9, use it
-          if (parsBase.length === 9) return parsBase.slice(0, 9);
-
-          // fallback: if file has 18+, use front/back choice
-          if (parsBase.length >= 18){
-            return (nineLoop === "back") ? parsBase.slice(9,18) : parsBase.slice(0,9);
-          }
-
-          return parsBase.slice(0, 9);
-        }
-
-        return null;
-      }
-
-      function pickDistances(){
-        if (!distBase || !distBase.length) return null;
-
-        if (holes === 18){
-          if (isMultiNine && Number.isFinite(nineA) && Number.isFinite(nineB)){
-            const a = getNineSliceFromBase(distBase, nineA);
-            const b = getNineSliceFromBase(distBase, nineB);
-            if (a && b) return a.concat(b);
-          }
-          return distBase.slice(0,18);
-        }
-
-        if (holes === 9){
-          if (isMultiNine && Number.isFinite(nineIndex)){
-            const n = getNineSliceFromBase(distBase, nineIndex);
-            if (n) return n;
-          }
-
-          if (distBase.length === 9) return distBase.slice(0,9);
-          if (distBase.length >= 18){
-            return (nineLoop === "back") ? distBase.slice(9,18) : distBase.slice(0,9);
-          }
-          return distBase.slice(0,9);
-        }
-
-        return null;
-      }
-
-      const pars = pickPars();
-      const distances = pickDistances();
-
-      return {
-        pars,
-        distances,
-        teeName,
-        teeOptions,
-        isMultiNine,
-        nineCount
-      };
-    }
-
-    async function updateCreateFormMetaUI(){
-      // populate Tee options + show/hide multi-nine selectors based on selected course/state/holes/layout
-      const course = String(courseEl.value || "").trim();
-      const state = String(stateEl.value || "WA").trim().toUpperCase();
-      const holes = Number(holesEl.value || 18);
-      const layout = String(layoutEl.value || "").trim();
-
-      // reset tee list to Auto only if no course
-      if (!course){
-        if (teeSelectEl){
-          const v = teeSelectEl.value;
-          teeSelectEl.innerHTML = `<option value="">Auto</option>`;
-          teeSelectEl.value = v && v !== "" ? v : "";
-        }
-        if (multiNineWrap) multiNineWrap.style.display = "none";
-        if (multiNine18) multiNine18.style.display = "none";
-        if (multiNine9) multiNine9.style.display = "none";
-        syncNineLoopVisibility();
-        return;
-      }
-
-      const teeWanted = String(teeSelectEl?.value || "").trim();
-      const meta = await getPublishedMetaFromScorecards({ course, state, holes, layout, tee: teeWanted });
-
-      // tee options
-      if (teeSelectEl){
-        const prev = String(teeSelectEl.value || "");
-        teeSelectEl.innerHTML = `<option value="">Auto</option>`;
-        const tees = Array.isArray(meta.teeOptions) ? meta.teeOptions : [];
-        for (const t of tees){
-          const opt = document.createElement("option");
-          opt.value = t;
-          opt.textContent = t;
-          teeSelectEl.appendChild(opt);
-        }
-        // keep selection if possible
-        if (prev && tees.includes(prev)) teeSelectEl.value = prev;
-        else teeSelectEl.value = ""; // Auto
-      }
-
-      // multi-nine selectors
-      const isMultiNine = !!meta.isMultiNine;
-      const nineCount = Number(meta.nineCount) || 0;
-
-      // default loop UI
-      syncNineLoopVisibility();
-
-      if (isMultiNine && nineCount >= 3){
-        if (multiNineWrap) multiNineWrap.style.display = "block";
-        if (holes === 18){
-          if (multiNine18) multiNine18.style.display = "block";
-          if (multiNine9) multiNine9.style.display = "none";
-          if (nineAEl && nineBEl){
-            buildNineOptions(nineAEl, nineCount);
-            buildNineOptions(nineBEl, nineCount);
-            // default: 1st + 2nd nine
-            if (!nineAEl.value) nineAEl.value = "0";
-            if (!nineBEl.value) nineBEl.value = (nineCount >= 2) ? "1" : "0";
-          }
-          if (nineLoopWrap) nineLoopWrap.style.display = "none";
-        } else if (holes === 9){
-          if (multiNine18) multiNine18.style.display = "none";
-          if (multiNine9) multiNine9.style.display = "block";
-          if (nineIndexEl){
-            buildNineOptions(nineIndexEl, nineCount);
-            if (!nineIndexEl.value) nineIndexEl.value = "0";
-          }
-          if (nineLoopWrap) nineLoopWrap.style.display = "none";
-        } else {
-          if (multiNine18) multiNine18.style.display = "none";
-          if (multiNine9) multiNine9.style.display = "none";
-        }
-      } else {
-        if (multiNineWrap) multiNineWrap.style.display = "none";
-        if (multiNine18) multiNine18.style.display = "none";
-        if (multiNine9) multiNine9.style.display = "none";
-      }
-    }
-
-    // -----------------------------
-    // Round list
-    // -----------------------------
     function calcTotalsForPlayer(holesData, playerIndex){
       let par=0, strokes=0, putts=0;
       let parCount=0, strokesCount=0, puttsCount=0;
@@ -1204,9 +1143,6 @@
       }
     }
 
-    // -----------------------------
-    // Scorecard rendering
-    // -----------------------------
     function buildScoreHead(playersCount, teeLabel){
       const pc = clamp(playersCount, 1, 4);
 
@@ -1227,6 +1163,148 @@
       th2 += `</tr>`;
 
       scoreHead.innerHTML = th1 + th2;
+    }
+
+    async function renderScorecard(round){
+      currentRound = round;
+      currentRoundId = round?.id || null;
+
+      if (!round || !currentRoundId) {
+        scorecardEmpty.style.display = "block";
+        scorecardWrap.style.display = "none";
+        saveAllBtn.disabled = true;
+        deleteRoundBtn.disabled = true;
+        scTitleEl.textContent = "Scorecard";
+        scSubEl.textContent = "Select a round to begin.";
+        scPillsEl.innerHTML = "";
+        totalsGrid.innerHTML = "";
+        scoreHead.innerHTML = "";
+        scoreBody.innerHTML = "";
+        return;
+      }
+
+      scorecardEmpty.style.display = "none";
+      scorecardWrap.style.display = "block";
+      saveAllBtn.disabled = false;
+      deleteRoundBtn.disabled = false;
+
+      const pc = getPlayersCountFromRound(round);
+
+      // ✅ keep create-form tee selector in sync with the selected round (if possible)
+      if (teeEl) {
+        const teeSaved = String(round.tee || "").trim();
+        if (teeSaved) teeEl.value = teeSaved;
+      }
+
+      const meta = await getPublishedMetaFromScorecards(round);
+      const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
+      const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
+      const teeName = meta?.teeName || "";
+
+      scTitleEl.textContent = round.course || "Round";
+      scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
+
+      // ✅ Tee dropdown in pills updates distances immediately
+      scPillsEl.innerHTML = `
+        <span class="pill">${escapeHtml(round.par_mode || "")}</span>
+        <span class="pill">Players: ${pc}</span>
+        <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
+        <span class="pill">
+          Tee:
+          <select id="scTeeSelect">
+            <option value="">Auto</option>
+          </select>
+        </span>
+      `;
+
+      // fill tee options from scorecards for this course
+      try{
+        const st = String(round.state || "").toUpperCase();
+        await loadScorecardsStateOnce(st);
+        const arr = scorecardsByState.get(st) || [];
+        const nm = cleanCourseNameForMatch(round.course || "");
+        const any = arr.find(sc => cleanCourseNameForMatch(sc.course || sc.name || "") === nm && sc.distances_m && typeof sc.distances_m === "object");
+        const tees = any ? listTeeNamesFromDistancesObj(any.distances_m) : [];
+        const scTeeSelect = document.getElementById("scTeeSelect");
+        if (scTeeSelect){
+          scTeeSelect.innerHTML = `<option value="">Auto</option>`;
+          tees.forEach(t => {
+            const opt = document.createElement("option");
+            opt.value = t;
+            opt.textContent = t;
+            scTeeSelect.appendChild(opt);
+          });
+
+          const wanted = String(round.tee || "").trim() || "";
+          if (wanted && tees.includes(wanted)) scTeeSelect.value = wanted;
+          else scTeeSelect.value = "";
+
+          scTeeSelect.addEventListener("change", async () => {
+            const v = String(scTeeSelect.value || "").trim();
+            currentRound.tee = v || null;
+            if (teeEl) teeEl.value = v || "";
+            await renderScorecard(currentRound);
+          });
+        }
+      }catch{/* ignore */ }
+
+      buildScoreHead(pc, teeName);
+      scoreBody.innerHTML = "";
+
+      const holesCount = Number(round.holes) || 18;
+      const holesData = Array.isArray(round.holesData) ? round.holesData : [];
+
+      const map = new Map();
+      for (const h of holesData) map.set(Number(h.hole_number), h);
+
+      const isPublishedMode = String(round.par_mode || "").toLowerCase() === "published" || String(round.par_mode || "").toUpperCase() === "PUBLISHED";
+
+      for (let i=1; i<=holesCount; i++){
+        const existing = map.get(i) || { hole_number: i, par: null };
+
+        let parValue = existing.par;
+        if ((parValue === null || typeof parValue === "undefined" || parValue === "") && isPublishedMode && metaPars && Number.isFinite(Number(metaPars[i-1]))) {
+          parValue = Number(metaPars[i-1]);
+        }
+
+        const distVal = (metaDists && Number.isFinite(Number(metaDists[i-1]))) ? Number(metaDists[i-1]) : null;
+
+        const tr = document.createElement("tr");
+
+        let playerTds = "";
+        for (let pi=0; pi<pc; pi++){
+          const s = getHolePlayerValue(existing, "strokes", pi);
+          const u = getHolePlayerValue(existing, "putts", pi);
+
+          playerTds += `
+            <td>
+              <input class="mini" inputmode="numeric" pattern="[0-9]*"
+                data-field="strokes" data-hole="${i}" data-player="${pi+1}"
+                value="${s ?? ""}" placeholder="—">
+            </td>
+            <td>
+              <input class="mini" inputmode="numeric" pattern="[0-9]*"
+                data-field="putts" data-hole="${i}" data-player="${pi+1}"
+                value="${u ?? ""}" placeholder="—">
+            </td>
+          `;
+        }
+
+        tr.innerHTML = `
+          <td>Hole ${i}</td>
+          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${parValue ?? ""}" placeholder="—"></td>
+          <td class="distCell">${distVal != null ? distVal : `<span class="distMuted">—</span>`}</td>
+          ${playerTds}
+        `;
+
+        scoreBody.appendChild(tr);
+      }
+
+      scoreBody.querySelectorAll("input").forEach((inp) => {
+        inp.addEventListener("input", () => updateTotalsFromTable());
+      });
+
+      updateTotalsFromTable();
     }
 
     function readTableHoles(){
@@ -1309,248 +1387,6 @@
       }
     }
 
-    async function rerenderScorecardPreserveInputs(patch = {}){
-      if (!currentRound) return;
-      const holesRows = readTableHoles();
-      currentRound.holesData = holesRows;
-      const next = { ...currentRound, ...patch, holesData: holesRows };
-      await renderScorecard(next);
-    }
-
-    async function renderScorecard(round){
-      currentRound = round;
-      currentRoundId = round?.id || null;
-
-      if (!round || !currentRoundId) {
-        scorecardEmpty.style.display = "block";
-        scorecardWrap.style.display = "none";
-        saveAllBtn.disabled = true;
-        deleteRoundBtn.disabled = true;
-        scTitleEl.textContent = "Scorecard";
-        scSubEl.textContent = "Select a round to begin.";
-        scPillsEl.innerHTML = "";
-        totalsGrid.innerHTML = "";
-        scoreHead.innerHTML = "";
-        scoreBody.innerHTML = "";
-        return;
-      }
-
-      scorecardEmpty.style.display = "none";
-      scorecardWrap.style.display = "block";
-      saveAllBtn.disabled = false;
-      deleteRoundBtn.disabled = false;
-
-      const pc = getPlayersCountFromRound(round);
-
-      // ✅ read tee / multi-nine selections from round (if present)
-      const tee = String(round.tee || "").trim();
-      const nineA = (round.nineA != null) ? Number(round.nineA) : null;
-      const nineB = (round.nineB != null) ? Number(round.nineB) : null;
-      const nineIndex = (round.nineIndex != null) ? Number(round.nineIndex) : null;
-
-      // ✅ pull meta from scorecards directly
-      const meta = await getPublishedMetaFromScorecards({
-        course: round.course,
-        state: round.state,
-        holes: round.holes,
-        layout: round.layout,
-        nineLoop: round.nineLoop,
-        tee,
-        nineA,
-        nineB,
-        nineIndex
-      });
-
-      const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
-      const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
-      const teeName = meta?.teeName || "";
-      const teeOptions = Array.isArray(meta?.teeOptions) ? meta.teeOptions : [];
-      const isMultiNine = !!meta?.isMultiNine;
-      const nineCount = Number(meta?.nineCount) || 0;
-
-      scTitleEl.textContent = round.course || "Round";
-      scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
-
-      // ✅ Scorecard pills with LIVE tee selector + multi-nine selectors
-      const holesNow = Number(round.holes) || 18;
-
-      let pillsHtml = `
-        <span class="pill">${escapeHtml(round.par_mode || "")}</span>
-        <span class="pill">Players: ${pc}</span>
-        <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
-        <span class="pill">
-          Tee:
-          <select id="scTeeSelect">
-            <option value="">Auto</option>
-            ${teeOptions.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("")}
-          </select>
-        </span>
-      `;
-
-      if (isMultiNine && nineCount >= 3){
-        if (holesNow === 18){
-          pillsHtml += `
-            <span class="pill">
-              Front 9:
-              <select id="scNineA">${Array.from({length:nineCount}).map((_,i)=>`<option value="${i}">Nine ${i+1}</option>`).join("")}</select>
-            </span>
-            <span class="pill">
-              Back 9:
-              <select id="scNineB">${Array.from({length:nineCount}).map((_,i)=>`<option value="${i}">Nine ${i+1}</option>`).join("")}</select>
-            </span>
-          `;
-        } else if (holesNow === 9){
-          pillsHtml += `
-            <span class="pill">
-              Which 9:
-              <select id="scNineIndex">${Array.from({length:nineCount}).map((_,i)=>`<option value="${i}">Nine ${i+1}</option>`).join("")}</select>
-            </span>
-          `;
-        }
-      } else {
-        // if 9-hole round and not multi-nine, show front/back pill
-        if (holesNow === 9){
-          pillsHtml += `
-            <span class="pill">
-              9 holes:
-              <select id="scNineLoop">
-                <option value="front">Front 9</option>
-                <option value="back">Back 9</option>
-              </select>
-            </span>
-          `;
-        }
-      }
-
-      scPillsEl.innerHTML = pillsHtml;
-
-      // set defaults/values on scorecard selectors
-      const scTeeSelect = document.getElementById("scTeeSelect");
-      if (scTeeSelect){
-        scTeeSelect.value = tee || ""; // if round has tee, use it; else Auto
-      }
-
-      const scNineA = document.getElementById("scNineA");
-      const scNineB = document.getElementById("scNineB");
-      const scNineIndex = document.getElementById("scNineIndex");
-      const scNineLoop = document.getElementById("scNineLoop");
-
-      if (scNineA && scNineB && isMultiNine){
-        scNineA.value = Number.isFinite(nineA) ? String(nineA) : "0";
-        scNineB.value = Number.isFinite(nineB) ? String(nineB) : (nineCount >= 2 ? "1" : "0");
-      }
-      if (scNineIndex && isMultiNine){
-        scNineIndex.value = Number.isFinite(nineIndex) ? String(nineIndex) : "0";
-      }
-      if (scNineLoop && !isMultiNine && holesNow === 9){
-        scNineLoop.value = (String(round.nineLoop || "front").toLowerCase() === "back") ? "back" : "front";
-      }
-
-      // ✅ make “tee up top” match the loaded round tee (so they stay in sync)
-      if (teeSelectEl){
-        const hasOption = Array.from(teeSelectEl.options).some(o => o.value === (tee || ""));
-        if (hasOption) teeSelectEl.value = tee || "";
-      }
-
-      buildScoreHead(pc, teeName);
-      scoreBody.innerHTML = "";
-
-      const holesCount = holesNow;
-      const holesData = Array.isArray(round.holesData) ? round.holesData : [];
-
-      const map = new Map();
-      for (const h of holesData) map.set(Number(h.hole_number), h);
-
-      const isPublishedMode = String(round.par_mode || "").toLowerCase() === "published" || String(round.par_mode || "").toUpperCase() === "PUBLISHED";
-
-      for (let i=1; i<=holesCount; i++){
-        const existing = map.get(i) || { hole_number: i, par: null };
-
-        let parValue = existing.par;
-        if ((parValue === null || typeof parValue === "undefined" || parValue === "") && isPublishedMode && metaPars && Number.isFinite(Number(metaPars[i-1]))) {
-          parValue = Number(metaPars[i-1]);
-        }
-
-        const distVal = (metaDists && Number.isFinite(Number(metaDists[i-1]))) ? Number(metaDists[i-1]) : null;
-
-        const tr = document.createElement("tr");
-
-        let playerTds = "";
-        for (let pi=0; pi<pc; pi++){
-          const s = getHolePlayerValue(existing, "strokes", pi);
-          const u = getHolePlayerValue(existing, "putts", pi);
-
-          playerTds += `
-            <td>
-              <input class="mini" inputmode="numeric" pattern="[0-9]*"
-                data-field="strokes" data-hole="${i}" data-player="${pi+1}"
-                value="${s ?? ""}" placeholder="—">
-            </td>
-            <td>
-              <input class="mini" inputmode="numeric" pattern="[0-9]*"
-                data-field="putts" data-hole="${i}" data-player="${pi+1}"
-                value="${u ?? ""}" placeholder="—">
-            </td>
-          `;
-        }
-
-        tr.innerHTML = `
-          <td>Hole ${i}</td>
-          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${parValue ?? ""}" placeholder="—"></td>
-          <td class="distCell">${distVal != null ? distVal : `<span class="distMuted">—</span>`}</td>
-          ${playerTds}
-        `;
-
-        scoreBody.appendChild(tr);
-      }
-
-      scoreBody.querySelectorAll("input").forEach((inp) => {
-        inp.addEventListener("input", () => updateTotalsFromTable());
-      });
-
-      // ✅ LIVE tee/nine changes on the scorecard
-      if (scTeeSelect){
-        scTeeSelect.addEventListener("change", async () => {
-          const newTee = String(scTeeSelect.value || "").trim();
-          // keep top tee in sync
-          if (teeSelectEl){
-            const hasOption = Array.from(teeSelectEl.options).some(o => o.value === newTee);
-            if (hasOption) teeSelectEl.value = newTee;
-            else teeSelectEl.value = ""; // Auto
-          }
-          await rerenderScorecardPreserveInputs({ tee: newTee || null });
-        });
-      }
-
-      if (scNineA && scNineB){
-        const onChange = async () => {
-          await rerenderScorecardPreserveInputs({
-            nineA: Number(scNineA.value),
-            nineB: Number(scNineB.value)
-          });
-        };
-        scNineA.addEventListener("change", onChange);
-        scNineB.addEventListener("change", onChange);
-      }
-
-      if (scNineIndex){
-        scNineIndex.addEventListener("change", async () => {
-          await rerenderScorecardPreserveInputs({ nineIndex: Number(scNineIndex.value) });
-        });
-      }
-
-      if (scNineLoop){
-        scNineLoop.addEventListener("change", async () => {
-          await rerenderScorecardPreserveInputs({ nineLoop: String(scNineLoop.value || "front") });
-        });
-      }
-
-      updateTotalsFromTable();
-    }
-
-    // -----------------------------
-    // API calls
-    // -----------------------------
     async function fetchRounds(){
       const data = await api("/api/rounds", { method:"GET" });
       const rounds = (data && data.rounds) ? data.rounds : [];
@@ -1573,41 +1409,45 @@
       const course = String(courseEl.value || "").trim();
       const state = String(stateEl.value || "WA").trim().toUpperCase();
       const holes = Number(holesEl.value || 18);
-      const layout = String(layoutEl.value || "").trim();
+      const layoutTyped = String(layoutEl.value || "").trim();
       const par_mode = String(parModeEl.value || "published").trim();
       const notes = String(notesEl.value || "").trim();
       const players_count = clamp(playersEl?.value || 1, 1, 4);
 
-      const tee = String(teeSelectEl?.value || "").trim() || null;
-
-      // selections
-      const nineLoop = (holes === 9) ? String(nineLoopEl?.value || "front").trim().toLowerCase() : null;
-
-      // multi-nine
-      const useMultiNine = (multiNineWrap && multiNineWrap.style.display !== "none");
-      let nineA = null, nineB = null, nineIndex = null;
-
-      if (useMultiNine){
-        if (holes === 18){
-          nineA = Number(nineAEl?.value || 0);
-          nineB = Number(nineBEl?.value || 1);
-        } else if (holes === 9){
-          nineIndex = Number(nineIndexEl?.value || 0);
-        }
-      }
+      const tee = String(teeEl?.value || "").trim() || null;
 
       if (!course) {
         setToast(leftToast, "Please enter a course name.", false);
         return;
       }
 
-      // pull pars from scorecards directly
+      // ✅ read UI selections
+      const nineLayouts = await getNineLayoutsForCourse(state, course);
+
+      const nineLoop = (holes === 9) ? String(nineLoopEl?.value || "front").trim().toLowerCase() : null;
+
+      const nineName = (holes === 9 && nineLayouts.length >= 2) ? String(nineNameEl?.value || "").trim() : null;
+      const frontNine = (holes === 18 && nineLayouts.length >= 2) ? String(frontNineEl?.value || "").trim() : null;
+      const backNine  = (holes === 18 && nineLayouts.length >= 2) ? String(backNineEl?.value || "").trim() : null;
+
+      // ✅ choose round "layout" field without changing backend schema:
+      // - if multi-nine 18 -> store "Front / Back" in layout
+      // - if multi-nine 9 -> store the selected 9 name in layout
+      // - else keep user typed layout
+      let layout = layoutTyped || null;
+      if (holes === 18 && frontNine && backNine) layout = `${frontNine} / ${backNine}`;
+      if (holes === 9 && nineName) layout = nineName;
+
       let pars = null;
       if (par_mode === "published") {
         const meta = await getPublishedMetaFromScorecards({
-          course, state, holes, layout,
-          tee: tee || "",
-          ...(useMultiNine ? { nineA, nineB, nineIndex } : { nineLoop })
+          course, state, holes,
+          layout: layout || "",
+          nineLoop,
+          tee,
+          nineName,
+          frontNine,
+          backNine
         });
         pars = Array.isArray(meta?.pars) ? meta.pars : null;
       }
@@ -1616,14 +1456,15 @@
         course,
         state,
         holes,
-        layout: layout || null,
+        layout,
         par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
         notes: notes || null,
         players_count,
-        ...(tee ? { tee } : {}),
-        ...(holes === 9 && !useMultiNine ? { nineLoop } : {}),
-        ...(useMultiNine && holes === 18 ? { nineA, nineB } : {}),
-        ...(useMultiNine && holes === 9 ? { nineIndex } : {}),
+        tee,
+        ...(holes === 9 ? { nineLoop } : {}),
+        ...(nineName ? { nineName } : {}),
+        ...(frontNine ? { frontNine } : {}),
+        ...(backNine ? { backNine } : {}),
         ...(pars ? { pars } : {})
       };
 
@@ -1666,9 +1507,6 @@
       await safeFetchRounds();
     }
 
-    // -----------------------------
-    // Safe wrappers
-    // -----------------------------
     async function safeFetchRounds(){
       try{
         await fetchRounds();
@@ -1684,9 +1522,6 @@
       }
     }
 
-    // -----------------------------
-    // Init + events
-    // -----------------------------
     function logout(){
       ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"].forEach(k => localStorage.removeItem(k));
       setToast(leftToast, "Logged out.", true);
@@ -1704,7 +1539,6 @@
         setToast(rightToast, "Save failed: " + (err.message || "error"), false);
       }
     });
-
     deleteRoundBtn.addEventListener("click", async () => {
       const ok = confirm("Delete this round? This cannot be undone.");
       if (!ok) return;
@@ -1715,43 +1549,18 @@
       }
     });
 
-    holesEl.addEventListener("change", async () => {
-      syncNineLoopVisibility();
-      await updateCreateFormMetaUI().catch(()=>{});
-    });
-
-    stateEl.addEventListener("change", async () => {
-      await updateCreateFormMetaUI().catch(()=>{});
-    });
-
-    layoutEl.addEventListener("input", async () => {
-      // light debounce
-      clearTimeout(window.__layoutTimer);
-      window.__layoutTimer = setTimeout(() => updateCreateFormMetaUI().catch(()=>{}), 180);
-    });
-
-    teeSelectEl.addEventListener("change", async () => {
-      // ✅ If a round is open, changing tee “up top” updates scorecard tee too
-      if (currentRoundId && currentRound){
-        await rerenderScorecardPreserveInputs({ tee: String(teeSelectEl.value || "").trim() || null });
+    holesEl.addEventListener("change", () => refreshMultiNineUI());
+    stateEl.addEventListener("change", () => refreshMultiNineUI());
+    teeEl.addEventListener("change", async () => {
+      // ✅ if a round is loaded, update tee and rerender distances immediately
+      if (currentRound && currentRoundId){
+        currentRound.tee = String(teeEl.value || "").trim() || null;
+        await renderScorecard(currentRound);
       }
     });
-
-    nineAEl?.addEventListener("change", async () => {
-      if (currentRoundId && currentRound && Number(currentRound?.holes) === 18){
-        await rerenderScorecardPreserveInputs({ nineA: Number(nineAEl.value), nineB: Number(nineBEl.value) });
-      }
-    });
-    nineBEl?.addEventListener("change", async () => {
-      if (currentRoundId && currentRound && Number(currentRound?.holes) === 18){
-        await rerenderScorecardPreserveInputs({ nineA: Number(nineAEl.value), nineB: Number(nineBEl.value) });
-      }
-    });
-    nineIndexEl?.addEventListener("change", async () => {
-      if (currentRoundId && currentRound && Number(currentRound?.holes) === 9){
-        await rerenderScorecardPreserveInputs({ nineIndex: Number(nineIndexEl.value) });
-      }
-    });
+    if (nineNameEl) nineNameEl.addEventListener("change", () => refreshMultiNineUI());
+    if (frontNineEl) frontNineEl.addEventListener("change", () => refreshMultiNineUI());
+    if (backNineEl) backNineEl.addEventListener("change", () => refreshMultiNineUI());
 
     (async function init(){
       const token = getToken();
@@ -1765,9 +1574,8 @@
       appEl.style.display = "block";
 
       initCourseAutocomplete();
-      syncNineLoopVisibility();
 
-      await updateCreateFormMetaUI().catch(()=>{});
+      await refreshMultiNineUI();
       await safeFetchRounds();
     })();
   </script>
