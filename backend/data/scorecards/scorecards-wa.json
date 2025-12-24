@@ -1044,28 +1044,6 @@
       null,
       null,
     ],
-    "front9_pars": [
-      4,
-      3,
-      4,
-      3,
-      5,
-      4,
-      4,
-      5,
-      4
-    ],
-    "back9_pars": [
-      5,
-      4,
-      3,
-      4,
-      3,
-      4,
-      4,
-      3,
-      5
-    ],
     "loop_supported": true,
     "distances_m": {
       "Blue": [
@@ -1077,7 +1055,104 @@
         396,
         358,
         460,
-        410,
+        410
+      ],
+      "Red": [
+        292,
+        133,
+        315,
+        114,
+        437,
+        335,
+        312,
+        395,
+        345
+      ]
+    }
+  },
+  {
+    "course": "Collier Park Golf Course",
+    "state": "WA",
+    "layout": "Pines",
+    "holes": 9,
+    "pars": [
+      4,
+      4,
+      3,
+      4,
+      5,
+      4,
+      3,
+      5,
+      4,
+    ],
+    "putts": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ],
+    "loop_supported": true,
+    "distances_m": {
+      "Blue": [
+        388,
+        366,
+        173,
+        325,
+        482,
+        362,
+        203,
+        462,
+        342
+      ],
+      "Red": [
+        349,
+        317,
+        123,
+        291,
+        419,
+        297,
+        156,
+        421,
+        307
+      ]
+    }
+  },
+  {
+    "course": "Collier Park Golf Course",
+    "state": "WA",
+    "layout": "Lake",
+    "holes": 9,
+    "pars": [
+      5,
+      4,
+      3,
+      4,
+      3,
+      4,
+      4,
+      3,
+      5,
+    ],
+    "putts": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ],
+    "loop_supported": true,
+    "distances_m": {
+      "Blue": [
         466,
         369,
         161,
@@ -1089,15 +1164,6 @@
         493
       ],
       "Red": [
-        292,
-        133,
-        315,
-        114,
-        437,
-        335,
-        312,
-        395,
-        345,
         398,
         315,
         121,
