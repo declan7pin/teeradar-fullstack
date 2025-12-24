@@ -449,11 +449,12 @@ function _readScorecardsForState(st) {
 
       const raw = fs.readFileSync(p, "utf8");
 
-      // handle BOM + common non-JSON booleans
+      // handle BOM + common non-JSON booleans + ✅ trailing commas
       const fixed = raw
-        .replace(/^\uFEFF/, "")          // ✅ strip UTF-8 BOM if present
-        .replace(/\bTrue\b/g, "true")    // ✅ python-style bools
-        .replace(/\bFalse\b/g, "false");
+        .replace(/^\uFEFF/, "")                 // ✅ strip UTF-8 BOM if present
+        .replace(/\bTrue\b/g, "true")           // ✅ python-style bools
+        .replace(/\bFalse\b/g, "false")
+        .replace(/,\s*([}\]])/g, "$1");         // ✅ REMOVE trailing commas before } or ]
 
       const j = JSON.parse(fixed);
 
@@ -485,26 +486,26 @@ app.get("/api/scorecards/:state", (req, res) => {
 
     const { data, foundPath, candidates, errors } = _readScorecardsForState(st);
 
-if (!Array.isArray(data)) {
-  return res.status(404).json({
-    error: "scorecards file not found",
-    state: st,
-    expectedExamples: [
-      "backend/data/scorecards/scorecards-wa.json",
-      "public/data/scorecards/scorecards-wa.json",
-    ],
-    tried: candidates,
-    parseErrors: errors, // ✅ ADD THIS LINE
-    debug: {
-      __dirname,
-      cwd: process.cwd(),
-      backendDataDir: _safeListDir(path.join(__dirname, "data")),
-      backendScorecardsDir: _safeListDir(path.join(__dirname, "data", "scorecards")),
-      publicDataDir: _safeListDir(path.join(__dirname, "..", "public", "data")),
-      publicScorecardsDir: _safeListDir(path.join(__dirname, "..", "public", "data", "scorecards")),
-    },
-  });
-}
+    if (!Array.isArray(data)) {
+      return res.status(404).json({
+        error: "scorecards file not found",
+        state: st,
+        expectedExamples: [
+          "backend/data/scorecards/scorecards-wa.json",
+          "public/data/scorecards/scorecards-wa.json",
+        ],
+        tried: candidates,
+        parseErrors: errors, // ✅ ADD THIS LINE
+        debug: {
+          __dirname,
+          cwd: process.cwd(),
+          backendDataDir: _safeListDir(path.join(__dirname, "data")),
+          backendScorecardsDir: _safeListDir(path.join(__dirname, "data", "scorecards")),
+          publicDataDir: _safeListDir(path.join(__dirname, "..", "public", "data")),
+          publicScorecardsDir: _safeListDir(path.join(__dirname, "..", "public", "data", "scorecards")),
+        },
+      });
+    }
 
     if (foundPath) {
       console.log(`✅ scorecards loaded for ${st} from ${foundPath}`);
