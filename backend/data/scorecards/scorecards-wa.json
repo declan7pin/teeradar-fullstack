@@ -1018,41 +1018,98 @@
     }
   },
   {
-  "course": "Collier Park Golf Course",
-  "state": "WA",
-  "layout": "Pines",
-  "holes": 9,
-  "pars": [4, 4, 3, 4, 5, 4, 3, 5, 4],
-  "distances_m": {
-    "Blue": [388, 366, 173, 325, 482, 362, 203, 462, 342],
-    "Red": [349, 317, 123, 291, 419, 297, 156, 421, 307]
+    "course": "Collier Park Golf Course",
+    "state": "WA",
+    "layout": "Island",
+    "holes": 9,
+    "pars": [
+      4,
+      3,
+      4,
+      3,
+      5,
+      4,
+      4,
+      5,
+      4,
+    ],
+    "putts": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ],
+    "front9_pars": [
+      4,
+      3,
+      4,
+      3,
+      5,
+      4,
+      4,
+      5,
+      4
+    ],
+    "back9_pars": [
+      5,
+      4,
+      3,
+      4,
+      3,
+      4,
+      4,
+      3,
+      5
+    ],
+    "loop_supported": true,
+    "distances_m": {
+      "Blue": [
+        349,
+        154,
+        377,
+        161,
+        494,
+        396,
+        358,
+        460,
+        410,
+        466,
+        369,
+        161,
+        389,
+        152,
+        328,
+        343,
+        148,
+        493
+      ],
+      "Red": [
+        292,
+        133,
+        315,
+        114,
+        437,
+        335,
+        312,
+        395,
+        345,
+        398,
+        315,
+        121,
+        324,
+        104,
+        269,
+        294,
+        104,
+        429
+      ]
+    }
   },
-  "putts": [null, null, null, null, null, null, null, null, null]
-},
-{
-  "course": "Collier Park Golf Course",
-  "state": "WA",
-  "layout": "Lakes",
-  "holes": 9,
-  "pars": [5, 4, 3, 4, 3, 4, 4, 3, 5],
-  "distances_m": {
-    "Blue": [466, 369, 161, 389, 152, 328, 343, 148, 493],
-    "Red": [398, 315, 121, 324, 104, 269, 294, 104, 429]
-  },
-  "putts": [null, null, null, null, null, null, null, null, null]
-},
-{
-  "course": "Collier Park Golf Course",
-  "state": "WA",
-  "layout": "Island",
-  "holes": 9,
-  "pars": [4, 3, 4, 3, 5, 4, 4, 5, 4],
-  "distances_m": {
-    "Blue": [349, 154, 377, 161, 494, 396, 358, 460, 410],
-    "Red": [292, 133, 315, 114, 437, 335, 312, 395, 345]
-  },
-  "putts": [null, null, null, null, null, null, null, null, null]
-}
   {
     "course": "Whaleback Golf Course",
     "state": "WA",
