@@ -345,11 +345,19 @@
     <div class="brand">
       TeeRadar <small>My Rounds</small>
     </div>
-    <div class="navbtns">
-      <a class="btn secondary" href="/book.html">Back to Book</a>
-      <a class="btn secondary" href="/account.html">Account</a>
-      <button class="btn danger" id="logoutBtn" type="button">Logout</button>
-    </div>
+<div class="navbtns">
+  <a class="btn secondary" href="/book.html">Back to Book</a>
+  <a class="btn secondary" href="/account.html">Account</a>
+
+  <!-- ✅ ADD THIS -->
+  <a class="btn secondary"
+     href="/my-stats.html"
+     onclick="sessionStorage.setItem('fromMyRounds','1')">
+     My Stats
+  </a>
+
+  <button class="btn danger" id="logoutBtn" type="button">Logout</button>
+</div>
   </header>
 
   <main>
