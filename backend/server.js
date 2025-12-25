@@ -1723,6 +1723,26 @@ ${details}
     res.status(500).json({ ok: false, error: "Email failed to send" });
   }
 });
+// -------------------------------------------------
+// 🔎 DEBUG: confirm rounds are stored in DB
+// -------------------------------------------------
+app.get("/api/debug/rounds-db", async (req, res) => {
+  try {
+    const r = await db.query(`SELECT COUNT(*)::int AS rounds FROM rounds;`);
+    const h = await db.query(`SELECT COUNT(*)::int AS holes FROM round_holes;`);
+
+    res.json({
+      ok: true,
+      dbType: process.env.DATABASE_URL ? "Postgres (DATABASE_URL)" : "Postgres (env vars)",
+      rounds: r.rows[0].rounds,
+      holes: h.rows[0].holes,
+      host: process.env.PGHOST || null,
+      database: process.env.PGDATABASE || null,
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // -------------------------------------------------
 // Frontend fallback
