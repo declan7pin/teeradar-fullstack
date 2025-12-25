@@ -27,13 +27,8 @@
       color:var(--text);
     }
     .wrap{max-width:1100px;margin:0 auto;padding:18px 14px 28px}
-    header{
-      display:flex;align-items:center;justify-content:space-between;gap:10px;
-      margin:8px 0 14px;
-    }
-    .title{
-      display:flex;flex-direction:column;gap:2px;
-    }
+    header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0 14px}
+    .title{display:flex;flex-direction:column;gap:2px}
     h1{margin:0;font-size:20px}
     .sub{color:var(--muted);font-size:13px}
     .actions{display:flex;gap:10px;flex-wrap:wrap}
@@ -51,20 +46,15 @@
       gap:8px;
       cursor:pointer;
     }
-    .btn.primary{
-      background:var(--teal);
-      border-color:var(--teal);
-      color:white;
-    }
+    .btn.primary{background:var(--teal);border-color:var(--teal);color:white}
     .btn:hover{filter:brightness(0.98)}
+
     .grid{
       display:grid;
       grid-template-columns: 1.2fr 0.8fr;
       gap:12px;
     }
-    @media (max-width: 960px){
-      .grid{grid-template-columns:1fr}
-    }
+    @media (max-width: 960px){ .grid{grid-template-columns:1fr} }
 
     .card{
       background:var(--card);
@@ -72,54 +62,30 @@
       border-radius:16px;
       padding:14px;
     }
-    .card h2{
-      margin:0 0 10px;
-      font-size:16px;
-    }
-    .tabs{
-      display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0;
-    }
+    .card h2{margin:0 0 10px;font-size:16px}
+
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0}
     .tab{
-      padding:8px 10px;
-      border-radius:999px;
-      border:1px solid var(--border);
-      background:#fff;
-      color:var(--text);
-      font-weight:700;
-      font-size:13px;
-      cursor:pointer;
+      padding:8px 10px;border-radius:999px;border:1px solid var(--border);
+      background:#fff;color:var(--text);font-weight:800;font-size:13px;cursor:pointer;
     }
-    .tab.active{
-      background:var(--pill);
-      border-color:#bfecee;
-      color:var(--teal-dark);
-    }
+    .tab.active{background:var(--pill);border-color:#bfecee;color:var(--teal-dark)}
+
     .kpis{
       display:grid;
       grid-template-columns: repeat(3, 1fr);
       gap:10px;
       margin-top:12px;
     }
-    @media (max-width: 720px){
-      .kpis{grid-template-columns:1fr}
-    }
-    .kpi{
-      border:1px solid var(--border);
-      border-radius:14px;
-      padding:12px;
-      background:#fff;
-    }
-    .kpi .label{color:var(--muted);font-size:12px;font-weight:700}
+    @media (max-width: 720px){ .kpis{grid-template-columns:1fr} }
+    .kpi{border:1px solid var(--border);border-radius:14px;padding:12px;background:#fff}
+    .kpi .label{color:var(--muted);font-size:12px;font-weight:800}
     .kpi .value{font-size:22px;font-weight:900;margin-top:2px}
     .kpi .hint{color:var(--muted);font-size:12px;margin-top:6px}
 
     .row{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:10px;
-      padding:10px 0;
-      border-top:1px dashed var(--border);
+      display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
+      padding:10px 0;border-top:1px dashed var(--border);
     }
     .row:first-child{border-top:none;padding-top:0}
     .row .left{display:flex;flex-direction:column;gap:2px}
@@ -131,37 +97,21 @@
       background:var(--pill);
       border:1px solid #bfecee;
       color:var(--teal-dark);
-      font-weight:800;font-size:12px;
+      font-weight:900;font-size:12px;
       width:max-content;
     }
-    .danger{color:var(--danger);font-weight:800}
-    .ok{color:var(--ok);font-weight:800}
-    .mini{
-      font-size:12px;color:var(--muted);
-    }
+    .danger{color:var(--danger);font-weight:900}
+    .ok{color:var(--ok);font-weight:900}
+    .mini{font-size:12px;color:var(--muted)}
 
-    table{
-      width:100%;
-      border-collapse:collapse;
-      font-size:13px;
-      margin-top:8px;
-    }
-    th, td{
-      text-align:left;
-      padding:10px 8px;
-      border-top:1px solid var(--border);
-      vertical-align:top;
-    }
+    table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+    th, td{ text-align:left; padding:10px 8px; border-top:1px solid var(--border); vertical-align:top; }
     th{color:var(--muted);font-size:12px}
     .nowrap{white-space:nowrap}
-    .empty{
-      padding:12px;
-      border:1px dashed var(--border);
-      border-radius:14px;
-      background:#fff;
-      color:var(--muted);
-      font-weight:700;
-    }
+    .empty{padding:12px;border:1px dashed var(--border);border-radius:14px;background:#fff;color:var(--muted);font-weight:800}
+    .sectionTitle{margin-top:14px;font-size:14px;font-weight:900;color:var(--text)}
+    .twoCol{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width: 900px){ .twoCol{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
@@ -202,10 +152,42 @@
 
           <div class="row">
             <div class="left">
+              <div style="font-weight:900">GIR</div>
+              <div class="mini">Green hit in ≤ (par − 2) strokes to green (putts don’t matter)</div>
+            </div>
+            <div class="right" id="girLine">—</div>
+          </div>
+
+          <div class="row">
+            <div class="left">
               <div style="font-weight:900">Favourite hole</div>
               <div class="mini">Best average hole at a course across multiple rounds</div>
             </div>
             <div class="right" id="favHole">—</div>
+          </div>
+
+          <div class="row">
+            <div class="left">
+              <div style="font-weight:900">Hardest hole</div>
+              <div class="mini">Highest average vs par at a course/hole (multiple rounds)</div>
+            </div>
+            <div class="right" id="hardHole">—</div>
+          </div>
+
+          <div class="row">
+            <div class="left">
+              <div style="font-weight:900">Best course</div>
+              <div class="mini">Lowest avg vs par (fallback: avg score if par missing)</div>
+            </div>
+            <div class="right" id="bestCourse">—</div>
+          </div>
+
+          <div class="row">
+            <div class="left">
+              <div style="font-weight:900">Most played course</div>
+              <div class="mini">Where you’ve logged the most rounds</div>
+            </div>
+            <div class="right" id="mostPlayed">—</div>
           </div>
 
           <div class="row">
@@ -218,10 +200,34 @@
 
           <div class="row">
             <div class="left">
-              <div style="font-weight:900">3-putt rate</div>
-              <div class="mini">3+ putts ÷ holes with putt data</div>
+              <div style="font-weight:900">Putting split</div>
+              <div class="mini">1-putt / 2-putt / 3-putt+</div>
             </div>
-            <div class="right" id="threePuttRate">—</div>
+            <div class="right" id="puttSplit">—</div>
+          </div>
+
+          <div class="row">
+            <div class="left">
+              <div style="font-weight:900">Front vs back</div>
+              <div class="mini">18-hole rounds: avg front 9 vs back 9</div>
+            </div>
+            <div class="right" id="frontBack">—</div>
+          </div>
+
+          <div class="row">
+            <div class="left">
+              <div style="font-weight:900">Consistency</div>
+              <div class="mini">Std dev of total scores (lower = more consistent)</div>
+            </div>
+            <div class="right" id="consistency">—</div>
+          </div>
+
+          <div class="row">
+            <div class="left">
+              <div style="font-weight:900">Trend</div>
+              <div class="mini">Last 5 avg score vs previous 5 (needs 10 rounds)</div>
+            </div>
+            <div class="right" id="trend">—</div>
           </div>
         </div>
       </div>
@@ -233,78 +239,132 @@
 
         <h2 style="margin-top:16px">Breakdown</h2>
         <table>
-          <thead>
-            <tr>
-              <th>Result</th>
-              <th class="nowrap">Count</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Result</th><th class="nowrap">Count</th></tr></thead>
           <tbody id="breakdownBody"></tbody>
+        </table>
+
+        <div class="sectionTitle">Putting breakdown</div>
+        <table>
+          <thead><tr><th>Putts</th><th class="nowrap">Count</th></tr></thead>
+          <tbody id="puttingBody"></tbody>
+        </table>
+
+        <div class="sectionTitle">Scoring distribution</div>
+        <table>
+          <thead><tr><th>Outcome</th><th class="nowrap">Count</th></tr></thead>
+          <tbody id="scoringBody"></tbody>
         </table>
       </div>
     </div>
 
     <div class="card" style="margin-top:12px">
-      <h2>Extra stats (useful for golfers)</h2>
-      <div class="mini">These are calculated from what you’re already tracking today (shots + putts + pars).</div>
+      <h2>Extra stats</h2>
+      <div class="mini">Calculated from strokes + putts + pars you already track.</div>
       <table>
         <thead>
-          <tr>
-            <th>Metric</th>
-            <th>Value</th>
-            <th>Why it matters</th>
-          </tr>
+          <tr><th>Metric</th><th>Value</th><th>Why it matters</th></tr>
         </thead>
         <tbody id="extrasBody"></tbody>
       </table>
     </div>
 
+    <div class="twoCol" style="margin-top:12px">
+      <div class="card">
+        <h2>Top courses (this range)</h2>
+        <div class="mini">Ranked best → worst by avg vs par (fallback: avg score).</div>
+        <table>
+          <thead><tr><th>Course</th><th class="nowrap">Avg</th><th class="nowrap">Rounds</th></tr></thead>
+          <tbody id="topCoursesBody"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Streaks & stretches</h2>
+        <div class="mini">Uses holes with par data.</div>
+        <div style="margin-top:8px" id="streaksBox"></div>
+      </div>
+    </div>
+
+    <div class="twoCol" style="margin-top:12px">
+      <div class="card">
+        <h2>Best holes (Top 5)</h2>
+        <div class="mini">Lowest average score (needs 2+ plays).</div>
+        <table>
+          <thead><tr><th>Hole</th><th class="nowrap">Avg</th><th class="nowrap">Plays</th></tr></thead>
+          <tbody id="bestHolesBody"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Hardest holes (Top 5)</h2>
+        <div class="mini">Highest average vs par (needs 2+ plays).</div>
+        <table>
+          <thead><tr><th>Hole</th><th class="nowrap">Vs Par</th><th class="nowrap">Plays</th></tr></thead>
+          <tbody id="hardHolesBody"></tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
   <script>
-    // --- soft-gate: only accessible from my-rounds page (or user gets bounced back) ---
+    // --- soft-gate: only accessible from my-rounds page ---
     (function gate(){
       const ok = sessionStorage.getItem("fromMyRounds") === "1";
-      if (!ok) {
-        window.location.replace("/my-rounds.html");
-        return;
-      }
-      // keep it 1 session only
+      if (!ok) { window.location.replace("/my-rounds.html"); return; }
       sessionStorage.removeItem("fromMyRounds");
     })();
 
     // ---------- Helpers ----------
-    function safeNum(x){
-      const n = Number(x);
-      return Number.isFinite(n) ? n : null;
+    function safeNum(x){ const n = Number(x); return Number.isFinite(n) ? n : null; }
+    function fmt1(n){ if (!Number.isFinite(n)) return "—"; return (Math.round(n*10)/10).toFixed(1); }
+    function fmtPct(n){ if (!Number.isFinite(n)) return "—"; return Math.round(n) + "%"; }
+    function parseDateMaybe(v){ if (!v) return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; }
+    function sumNums(arr){ let s=0, any=false; for (const v of arr){ if (Number.isFinite(v)){ s+=v; any=true; } } return any ? s : null; }
+    function mean(arr){ const xs = arr.filter(Number.isFinite); if (!xs.length) return null; return xs.reduce((a,b)=>a+b,0)/xs.length; }
+    function stddev(arr){
+      const m = mean(arr); if (m === null) return null;
+      const xs = arr.filter(Number.isFinite);
+      if (xs.length < 2) return 0;
+      const v = xs.reduce((s,x)=> s + Math.pow(x-m,2), 0) / (xs.length - 1);
+      return Math.sqrt(v);
     }
-    function fmt1(n){
-      if (!Number.isFinite(n)) return "—";
-      return (Math.round(n * 10) / 10).toFixed(1);
+    function cryptoRandomId(){
+      try{
+        const a = new Uint8Array(8); crypto.getRandomValues(a);
+        return Array.from(a).map(x=>x.toString(16).padStart(2,"0")).join("");
+      }catch(e){ return "r_" + Math.random().toString(36).slice(2); }
     }
-    function fmtPct(n){
-      if (!Number.isFinite(n)) return "—";
-      return Math.round(n) + "%";
+    function inRange(round, range){
+      const now = new Date();
+      if (range === "last5") return true;
+      if (range === "30d"){ const d=new Date(now); d.setDate(d.getDate()-30); return round.date.getTime() >= d.getTime(); }
+      if (range === "1y"){ const d=new Date(now); d.setFullYear(d.getFullYear()-1); return round.date.getTime() >= d.getTime(); }
+      return true;
     }
-    function parseDateMaybe(v){
-      if (!v) return null;
-      // accept ISO string, timestamp, or YYYY-MM-DD
-      const d = new Date(v);
-      if (!isNaN(d.getTime())) return d;
-      return null;
+    function dateLabel(d){
+      if (!(d instanceof Date) || isNaN(d.getTime())) return "Unknown date";
+      const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), da=String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${da}`;
+    }
+    function escapeHtml(str){
+      return String(str ?? "")
+        .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;").replaceAll("'","&#039;");
     }
 
-    // Try to load rounds from common localStorage keys and schemas.
-    // You can lock this to your real key once you confirm it.
+    // ✅ GIR based on your rule:
+    // strokes_to_green = total_strokes - putts
+    // GIR if strokes_to_green <= par - 2 (putts do NOT matter)
+    function isGIR(par, strokes, putts){
+      par = Number(par); strokes = Number(strokes); putts = Number(putts);
+      if (!Number.isFinite(par) || !Number.isFinite(strokes) || !Number.isFinite(putts)) return null; // unknown
+      return (strokes - putts) <= (par - 2);
+    }
+
+    // ---------- Load rounds ----------
     function loadAllRounds(){
-      const keysToTry = [
-        "teeradar_rounds",
-        "myRounds",
-        "rounds",
-        "teeRadarRounds",
-        "scorecardRounds"
-      ];
-
+      const keysToTry = ["teeradar_rounds","myRounds","rounds","teeRadarRounds","scorecardRounds"];
       for (const k of keysToTry){
         const raw = localStorage.getItem(k);
         if (!raw) continue;
@@ -314,8 +374,6 @@
           if (rounds.length) return rounds;
         }catch(e){}
       }
-
-      // also try: single object store { rounds: [...] }
       const rawAny = localStorage.getItem("teeradar") || localStorage.getItem("TeeRadar");
       if (rawAny){
         try{
@@ -324,12 +382,9 @@
           if (rounds.length) return rounds;
         }catch(e){}
       }
-
       return [];
     }
 
-    // Normalize various possible schemas into:
-    // { id, date: Date, course, holes:[{hole, par, shots, putts}], totalShots, totalPutts, totalPar, totalScore }
     function normalizeRounds(data){
       let arr = [];
       if (Array.isArray(data)) arr = data;
@@ -339,13 +394,19 @@
 
       const out = [];
       for (const r of arr){
-        const date = parseDateMaybe(r.date || r.playedAt || r.createdAt || r.at);
+        const date = parseDateMaybe(r.date || r.playedAt || r.createdAt || r.at || r.created_at);
         const course = (r.course || r.courseName || r.name || "").toString().trim() || "Unknown course";
 
-        // holes could be r.holes, r.scorecard, or arrays like r.shots / r.putts / r.pars
         let holes = [];
 
-        if (Array.isArray(r.holes)){
+        if (Array.isArray(r.holesData)){
+          holes = r.holesData.map((h, idx) => ({
+            hole: safeNum(h.hole ?? h.hole_number ?? (idx+1)) ?? (idx+1),
+            par: safeNum(h.par),
+            shots: safeNum(h.shots ?? h.strokes ?? h.score ?? (h.strokes_by_player ? h.strokes_by_player["1"] : null)),
+            putts: safeNum(h.putts ?? (h.putts_by_player ? h.putts_by_player["1"] : null))
+          }));
+        } else if (Array.isArray(r.holes)){
           holes = r.holes.map((h, idx) => ({
             hole: safeNum(h.hole ?? (idx+1)) ?? (idx+1),
             par: safeNum(h.par),
@@ -374,13 +435,13 @@
           }
         }
 
-        // totals (fallback: calculate)
         const totalShots = safeNum(r.totalShots) ?? sumNums(holes.map(h => h.shots));
         const totalPutts = safeNum(r.totalPutts) ?? sumNums(holes.map(h => h.putts));
         const totalPar   = safeNum(r.totalPar) ?? sumNums(holes.map(h => h.par));
-        const totalScore = safeNum(r.totalScore) ?? totalShots; // score == shots
+        const totalScore = safeNum(r.totalScore) ?? totalShots;
 
-        // accept only if it has at least something
+        const holesCount = safeNum(r.holes) ?? safeNum(r.holesCount) ?? safeNum(r.holes_played) ?? (Array.isArray(holes) ? holes.length : null);
+
         const hasAny = (totalShots !== null) || (totalPutts !== null) || holes.some(h => h.shots !== null || h.putts !== null);
         if (!hasAny) continue;
 
@@ -389,6 +450,7 @@
           date: date || new Date(0),
           course,
           holes,
+          holesCount: holesCount ?? (holes.length || null),
           totalShots: totalShots ?? 0,
           totalPutts: totalPutts ?? 0,
           totalPar: totalPar ?? null,
@@ -396,56 +458,8 @@
         });
       }
 
-      // newest first
       out.sort((a,b)=> b.date.getTime() - a.date.getTime());
       return out;
-    }
-
-    function sumNums(arr){
-      let s = 0;
-      let any = false;
-      for (const v of arr){
-        if (Number.isFinite(v)){
-          s += v;
-          any = true;
-        }
-      }
-      return any ? s : null;
-    }
-
-    function cryptoRandomId(){
-      try{
-        const a = new Uint8Array(8);
-        crypto.getRandomValues(a);
-        return Array.from(a).map(x=>x.toString(16).padStart(2,"0")).join("");
-      }catch(e){
-        return "r_" + Math.random().toString(36).slice(2);
-      }
-    }
-
-    function inRange(round, range){
-      const now = new Date();
-      if (range === "last5") return true; // handled by slicing after sorting
-      if (range === "30d"){
-        const d = new Date(now);
-        d.setDate(d.getDate() - 30);
-        return round.date.getTime() >= d.getTime();
-      }
-      if (range === "1y"){
-        const d = new Date(now);
-        d.setFullYear(d.getFullYear() - 1);
-        return round.date.getTime() >= d.getTime();
-      }
-      return true;
-    }
-
-    function dateLabel(d){
-      if (!(d instanceof Date) || isNaN(d.getTime())) return "Unknown date";
-      // YYYY-MM-DD
-      const y = d.getFullYear();
-      const m = String(d.getMonth()+1).padStart(2,"0");
-      const da = String(d.getDate()).padStart(2,"0");
-      return `${y}-${m}-${da}`;
     }
 
     // ---------- Stats ----------
@@ -459,103 +473,301 @@
       const bestRound = scores.length ? Math.min(...scores) : null;
       const worstRound = scores.length ? Math.max(...scores) : null;
 
-      // Hole-level aggregates
-      let holesWithData = 0;
-      let threePutts = 0;
+      // hole results
+      let birdies=0, pars=0, bogeyPlus=0;
 
-      // breakdown relative to par if we have par data: birdie/par/bogey+
-      let birdies = 0, pars = 0, bogeyPlus = 0;
+      // scoring distribution
+      let eaglePlus=0, birdie=0, parCt=0, bogey=0, doublePlus=0;
 
-      // par type averages
-      const parType = {
-        3: {shots:0, holes:0},
-        4: {shots:0, holes:0},
-        5: {shots:0, holes:0},
+      // putting
+      let threePutts=0, holesWithPutts=0;
+      let oneP=0, twoP=0, threeP=0;
+
+      // GIR
+      let girMade=0, girOpp=0;
+      const girByPar = {
+        3: { made: 0, opp: 0 },
+        4: { made: 0, opp: 0 },
+        5: { made: 0, opp: 0 },
       };
 
-      // favourite hole: key = course|holeNumber, average shots (need multiple occurrences)
-      const holeMap = new Map(); // key -> {sum, n}
+      // par type averages
+      const parType = {3:{shots:0,holes:0},4:{shots:0,holes:0},5:{shots:0,holes:0}};
+
+      // favourite hole / best holes
+      const holeMap = new Map(); // key -> {sum, n, course, hole}
+
+      // hardest hole by diff vs par
+      const holeDiffMap = new Map(); // key -> {sumDiff, n, course, hole}
+
+      // course aggregates
+      const courseMap = new Map(); // course -> {rounds,sumScore,nScore,sumDiff,nDiff}
+
+      // streaks & stretches need per-round ordered holes
+      let bestParOrBetterStreak = 0;
+      let bestBogeyPlusStreak = 0;
+
+      let best3Stretch = null; // {label, avgDiff}
+      let worst3Stretch = null;
+
+      let start13 = []; // per round diff on holes 1-3
+      let finish1618 = []; // per round diff on holes 16-18
+
+      // front/back avg strokes (18s)
+      let frontSum=0, frontN=0, backSum=0, backN=0;
+
       for (const r of rounds){
-        for (const h of (r.holes || [])){
+        const c = r.course || "Unknown course";
+        const ce = courseMap.get(c) || {course:c, rounds:0, sumScore:0, nScore:0, sumDiff:0, nDiff:0};
+        ce.rounds += 1;
+        if (Number.isFinite(r.totalScore)){ ce.sumScore += r.totalScore; ce.nScore += 1; }
+        if (Number.isFinite(r.totalPar) && Number.isFinite(r.totalScore)){ ce.sumDiff += (r.totalScore - r.totalPar); ce.nDiff += 1; }
+        courseMap.set(c, ce);
+
+        const hs = (r.holes || []);
+        const hc = Number(r.holesCount || hs.length || 0);
+
+        // front/back (18)
+        if (hc >= 18){
+          const front = sumNums(hs.slice(0,9).map(x => safeNum(x.shots)));
+          const back  = sumNums(hs.slice(9,18).map(x => safeNum(x.shots)));
+          if (Number.isFinite(front)){ frontSum += front; frontN++; }
+          if (Number.isFinite(back)){ backSum += back; backN++; }
+        }
+
+        // per-round streaks + stretches
+        let curGood=0, curBad=0;
+
+        // per-round 3-hole stretch by diff vs par
+        const diffs = [];
+        for (let i=0; i<hs.length; i++){
+          const h = hs[i];
           const shots = safeNum(h.shots);
           const putts = safeNum(h.putts);
           const par = safeNum(h.par);
-          if (shots !== null || putts !== null) holesWithData++;
+          const holeNo = safeNum(h.hole) ?? (i+1);
 
-          if (putts !== null && putts >= 3) threePutts++;
+          // putting
+          if (Number.isFinite(putts)){
+            holesWithPutts++;
+            if (putts >= 3) threePutts++;
+            if (putts <= 1) oneP++;
+            else if (putts === 2) twoP++;
+            else threeP++;
+          }
 
+          // GIR (needs par+shots+putts)
+          if ((par === 3 || par === 4 || par === 5) && shots !== null && putts !== null){
+            const gir = isGIR(par, shots, putts);
+            if (gir !== null){
+              girOpp++;
+              girByPar[par].opp++;
+              if (gir){
+                girMade++;
+                girByPar[par].made++;
+              }
+            }
+          }
+
+          // hole-type averages + results
           if (shots !== null && par !== null){
             const diff = shots - par;
+
+            // simple breakdown
             if (diff <= -1) birdies++;
             else if (diff === 0) pars++;
             else bogeyPlus++;
+
+            // scoring distribution buckets
+            if (diff <= -2) eaglePlus++;
+            else if (diff === -1) birdie++;
+            else if (diff === 0) parCt++;
+            else if (diff === 1) bogey++;
+            else doublePlus++;
+
+            if (par === 3 || par === 4 || par === 5){
+              parType[par].shots += shots;
+              parType[par].holes += 1;
+            }
+
+            // streaks
+            if (diff <= 0){
+              curGood++;
+              bestParOrBetterStreak = Math.max(bestParOrBetterStreak, curGood);
+            } else {
+              curGood = 0;
+            }
+            if (diff >= 1){
+              curBad++;
+              bestBogeyPlusStreak = Math.max(bestBogeyPlusStreak, curBad);
+            } else {
+              curBad = 0;
+            }
+
+            diffs.push({ idx:i, hole: holeNo, diff });
+
+            // start/finish (18 holes only)
+            if (hc >= 18){
+              if (i <= 2) start13.push(diff);
+              if (i >= 15 && i <= 17) finish1618.push(diff);
+            }
+
+            // hardest hole by diff
+            const k = `${c}||${holeNo}`;
+            const dcur = holeDiffMap.get(k) || {sumDiff:0,n:0,course:c,hole:holeNo};
+            dcur.sumDiff += diff;
+            dcur.n += 1;
+            holeDiffMap.set(k, dcur);
           }
 
-          if (shots !== null && par !== null && (par === 3 || par === 4 || par === 5)){
-            parType[par].shots += shots;
-            parType[par].holes += 1;
-          }
-
+          // favourite/best holes by avg shots
           if (shots !== null){
-            const holeNo = safeNum(h.hole) ?? null;
-            if (holeNo !== null){
-              const key = `${r.course}||${holeNo}`;
-              const cur = holeMap.get(key) || { sum:0, n:0, course:r.course, hole:holeNo };
-              cur.sum += shots;
-              cur.n += 1;
-              holeMap.set(key, cur);
+            const k2 = `${c}||${holeNo}`;
+            const cur = holeMap.get(k2) || {sum:0,n:0,course:c,hole:holeNo};
+            cur.sum += shots;
+            cur.n += 1;
+            holeMap.set(k2, cur);
+          }
+        }
+
+        // best/worst 3-hole stretch (within round, requires consecutive holes where par+shots existed)
+        if (diffs.length >= 3){
+          const diffByIdx = new Map(diffs.map(x => [x.idx, x.diff]));
+          for (let i=0; i<hs.length-2; i++){
+            if (!diffByIdx.has(i) || !diffByIdx.has(i+1) || !diffByIdx.has(i+2)) continue;
+            const dsum = diffByIdx.get(i) + diffByIdx.get(i+1) + diffByIdx.get(i+2);
+            const avgDiff = dsum / 3;
+            const label = `${c} (holes ${i+1}-${i+3}) • ${dateLabel(r.date)}`;
+
+            if (!best3Stretch || avgDiff < best3Stretch.avgDiff){
+              best3Stretch = { label, avgDiff };
+            }
+            if (!worst3Stretch || avgDiff > worst3Stretch.avgDiff){
+              worst3Stretch = { label, avgDiff };
             }
           }
         }
       }
 
-      // Favourite hole = best (lowest avg) among holes with n >= 2 (multiple rounds)
+      // favourite hole (lowest avg shots, needs 2+ plays)
       let fav = null;
       for (const v of holeMap.values()){
         if (v.n < 2) continue;
         const avg = v.sum / v.n;
-        if (!fav || avg < fav.avg){
-          fav = { ...v, avg };
-        }
+        if (!fav || avg < fav.avg) fav = {...v, avg};
       }
 
-      // total vs par
+      // hardest hole (highest avg diff, needs 2+ plays)
+      let hard = null;
+      for (const v of holeDiffMap.values()){
+        if (v.n < 2) continue;
+        const avgDiff = v.sumDiff / v.n;
+        if (!hard || avgDiff > hard.avgDiff) hard = {...v, avgDiff};
+      }
+
+      // top 5 best holes by avg shots
+      const bestHoles = Array.from(holeMap.values())
+        .filter(v => v.n >= 2)
+        .map(v => ({...v, avg: v.sum / v.n}))
+        .sort((a,b)=> a.avg - b.avg)
+        .slice(0,5);
+
+      // top 5 hardest holes by avg diff
+      const hardHoles = Array.from(holeDiffMap.values())
+        .filter(v => v.n >= 2)
+        .map(v => ({...v, avgDiff: v.sumDiff / v.n}))
+        .sort((a,b)=> b.avgDiff - a.avgDiff)
+        .slice(0,5);
+
+      // totals vs par
       const totalPar = rounds.map(r => r.totalPar).filter(Number.isFinite).reduce((a,b)=>a+b, 0);
       const totalScore = scores.reduce((a,b)=>a+b, 0);
       const vsPar = (totalPar > 0 && scores.length) ? (totalScore - totalPar) : null;
 
-      // 3-putt rate based on holes that actually have putt data
-      const holesWithPutts = rounds.reduce((cnt,r)=> cnt + (r.holes||[]).filter(h => Number.isFinite(h.putts)).length, 0);
-      const threePuttRate = holesWithPutts ? (threePutts / holesWithPutts) : null;
+      // front/back averages
+      const frontAvg = frontN ? (frontSum/frontN) : null;
+      const backAvg  = backN ? (backSum/backN) : null;
 
+      // best course + most played + top courses list
+      let mostPlayed = null;
+      let bestCourse = null;
+
+      const topCourses = Array.from(courseMap.values()).map(c => {
+        const avgDiff = c.nDiff ? (c.sumDiff / c.nDiff) : null;
+        const avgScore = c.nScore ? (c.sumScore / c.nScore) : null;
+        const hasDiff = c.nDiff >= 2;
+        const metric = hasDiff ? avgDiff : avgScore; // lower is better
+        const kind = hasDiff ? "diff" : "score";
+        return { course:c.course, rounds:c.rounds, avgDiff, avgScore, metric, kind };
+      }).filter(x => x.metric !== null)
+        .sort((a,b)=> a.metric - b.metric);
+
+      for (const c of courseMap.values()){
+        if (!mostPlayed || c.rounds > mostPlayed.rounds) mostPlayed = c;
+
+        let metric = null;
+        let kind = "";
+        if (c.nDiff >= 2){ metric = c.sumDiff / c.nDiff; kind = "diff"; }
+        else if (c.nScore >= 2){ metric = c.sumScore / c.nScore; kind = "score"; }
+
+        if (metric === null) continue;
+        if (!bestCourse || metric < bestCourse.metric){
+          bestCourse = { course:c.course, metric, kind, rounds:c.rounds };
+        }
+      }
+
+      // consistency + trend
+      const consistency = stddev(scores);
+
+      let trend = null;
+      if (scores.length >= 10){
+        const last5 = scores.slice(0,5);
+        const prev5 = scores.slice(5,10);
+        const a = mean(last5);
+        const b = mean(prev5);
+        if (a !== null && b !== null){
+          trend = { last5:a, prev5:b, delta:(a-b) };
+        }
+      }
+
+      const threePuttRate = holesWithPutts ? (threePutts / holesWithPutts) : null;
       const par3Avg = parType[3].holes ? (parType[3].shots / parType[3].holes) : null;
       const par4Avg = parType[4].holes ? (parType[4].shots / parType[4].holes) : null;
       const par5Avg = parType[5].holes ? (parType[5].shots / parType[5].holes) : null;
 
+      // start/finish averages (diff)
+      const startAvg = mean(start13);
+      const finishAvg = mean(finish1618);
+
+      // GIR pct
+      const girPct = girOpp ? (girMade / girOpp) : null;
+      const gir3 = girByPar[3].opp ? (girByPar[3].made / girByPar[3].opp) : null;
+      const gir4 = girByPar[4].opp ? (girByPar[4].made / girByPar[4].opp) : null;
+      const gir5 = girByPar[5].opp ? (girByPar[5].made / girByPar[5].opp) : null;
+
       return {
-        totalRounds,
-        totalShots,
-        totalPutts,
-        avgRound,
-        bestRound,
-        worstRound,
-        birdies,
-        pars,
-        bogeyPlus,
-        par3Avg, par4Avg, par5Avg,
-        fav,
-        vsPar,
-        threePutts,
-        holesWithPutts,
-        threePuttRate
+        totalRounds,totalShots,totalPutts,avgRound,bestRound,worstRound,
+        birdies,pars,bogeyPlus,
+        eaglePlus,birdie,parCt,bogey,doublePlus,
+        par3Avg,par4Avg,par5Avg,
+        fav,hard,vsPar,
+        oneP,twoP,threeP,
+        threePutts,holesWithPutts,threePuttRate,
+        frontAvg,backAvg,
+        mostPlayed,bestCourse,topCourses,
+        bestHoles,hardHoles,
+        consistency,trend,
+        bestParOrBetterStreak,bestBogeyPlusStreak,
+        best3Stretch,worst3Stretch,
+        startAvg,finishAvg,
+        girMade,girOpp,girPct,gir3,gir4,gir5
       };
     }
 
+    // ---------- UI setters ----------
     function buildRecent(rounds){
-      if (!rounds.length){
-        return `<div class="empty">No rounds found for this range yet.</div>`;
-      }
-      const rows = rounds.slice(0,5).map(r => {
+      if (!rounds.length) return `<div class="empty">No rounds found for this range yet.</div>`;
+      return `<div>` + rounds.slice(0,5).map(r => {
         const score = Number.isFinite(r.totalScore) ? r.totalScore : "—";
         const putts = Number.isFinite(r.totalPutts) ? r.totalPutts : "—";
         return `
@@ -570,17 +782,7 @@
             </div>
           </div>
         `;
-      }).join("");
-      return `<div>${rows}</div>`;
-    }
-
-    function escapeHtml(str){
-      return String(str ?? "")
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
+      }).join("") + `</div>`;
     }
 
     function setKpis(stats){
@@ -592,9 +794,7 @@
         { label: "Best round", value: stats.bestRound !== null ? stats.bestRound : "—", hint: "Lowest score in range" },
         { label: "Worst round", value: stats.worstRound !== null ? stats.worstRound : "—", hint: "Highest score in range" },
       ];
-
-      const kpis = document.getElementById("kpis");
-      kpis.innerHTML = items.map(x => `
+      document.getElementById("kpis").innerHTML = items.map(x => `
         <div class="kpi">
           <div class="label">${escapeHtml(x.label)}</div>
           <div class="value">${escapeHtml(x.value)}</div>
@@ -603,9 +803,92 @@
       `).join("");
     }
 
+    function setParAverages(stats){
+      document.getElementById("parAverages").textContent =
+        `P3: ${stats.par3Avg !== null ? fmt1(stats.par3Avg) : "—"}  |  ` +
+        `P4: ${stats.par4Avg !== null ? fmt1(stats.par4Avg) : "—"}  |  ` +
+        `P5: ${stats.par5Avg !== null ? fmt1(stats.par5Avg) : "—"}`;
+    }
+
+    function setGIR(stats){
+      const el = document.getElementById("girLine");
+      if (!stats.girOpp){
+        el.textContent = "—";
+        return;
+      }
+      const total = stats.girPct !== null ? fmtPct(stats.girPct*100) : "—";
+      const p3 = stats.gir3 !== null ? fmtPct(stats.gir3*100) : "—";
+      const p4 = stats.gir4 !== null ? fmtPct(stats.gir4*100) : "—";
+      const p5 = stats.gir5 !== null ? fmtPct(stats.gir5*100) : "—";
+      el.textContent = `${total} (P3 ${p3} • P4 ${p4} • P5 ${p5})`;
+    }
+
+    function setFavHole(stats){
+      const el = document.getElementById("favHole");
+      if (!stats.fav){ el.textContent="—"; return; }
+      el.textContent = `${stats.fav.course} — Hole ${stats.fav.hole} (${fmt1(stats.fav.avg)} avg over ${stats.fav.n} plays)`;
+    }
+
+    function setHardHole(stats){
+      const el = document.getElementById("hardHole");
+      if (!stats.hard){ el.textContent="—"; return; }
+      const sign = stats.hard.avgDiff > 0 ? "+" : "";
+      el.textContent = `${stats.hard.course} — Hole ${stats.hard.hole} (${sign}${fmt1(stats.hard.avgDiff)} vs par over ${stats.hard.n} plays)`;
+    }
+
+    function setBestCourse(stats){
+      const el = document.getElementById("bestCourse");
+      if (!stats.bestCourse){ el.textContent="—"; return; }
+      const sign = stats.bestCourse.metric > 0 ? "+" : "";
+      if (stats.bestCourse.kind === "diff"){
+        el.textContent = `${stats.bestCourse.course} (${sign}${fmt1(stats.bestCourse.metric)} avg vs par, ${stats.bestCourse.rounds} rounds)`;
+      } else {
+        el.textContent = `${stats.bestCourse.course} (${fmt1(stats.bestCourse.metric)} avg score, ${stats.bestCourse.rounds} rounds)`;
+      }
+    }
+
+    function setMostPlayed(stats){
+      const el = document.getElementById("mostPlayed");
+      if (!stats.mostPlayed){ el.textContent="—"; return; }
+      el.textContent = `${stats.mostPlayed.course} (${stats.mostPlayed.rounds} rounds)`;
+    }
+
+    function setVsPar(stats){
+      const el = document.getElementById("vsPar");
+      if (stats.vsPar === null){ el.textContent="—"; return; }
+      const sign = stats.vsPar > 0 ? "+" : "";
+      el.innerHTML = `<span class="${stats.vsPar <= 0 ? "ok" : "danger"}">${sign}${stats.vsPar}</span>`;
+    }
+
+    function setPuttSplit(stats){
+      const el = document.getElementById("puttSplit");
+      const total = stats.oneP + stats.twoP + stats.threeP;
+      if (!total){ el.textContent="—"; return; }
+      el.textContent = `1P ${stats.oneP} • 2P ${stats.twoP} • 3P+ ${stats.threeP}`;
+    }
+
+    function setFrontBack(stats){
+      const el = document.getElementById("frontBack");
+      if (stats.frontAvg === null && stats.backAvg === null){ el.textContent="—"; return; }
+      el.textContent = `Front: ${stats.frontAvg !== null ? fmt1(stats.frontAvg) : "—"}  |  Back: ${stats.backAvg !== null ? fmt1(stats.backAvg) : "—"}`;
+    }
+
+    function setConsistency(stats){
+      const el = document.getElementById("consistency");
+      el.textContent = (stats.consistency === null) ? "—" : fmt1(stats.consistency);
+    }
+
+    function setTrend(stats){
+      const el = document.getElementById("trend");
+      if (!stats.trend){ el.textContent="—"; return; }
+      const d = stats.trend.delta;
+      const improving = d < 0;
+      const sign = d > 0 ? "+" : "";
+      el.innerHTML = `<span class="${improving ? "ok" : "danger"}">${fmt1(stats.trend.last5)} vs ${fmt1(stats.trend.prev5)} (${sign}${fmt1(d)})</span>`;
+    }
+
     function setBreakdown(stats){
-      const body = document.getElementById("breakdownBody");
-      body.innerHTML = `
+      document.getElementById("breakdownBody").innerHTML = `
         <tr><td>Birdies or better</td><td class="nowrap"><strong>${stats.birdies}</strong></td></tr>
         <tr><td>Pars</td><td class="nowrap"><strong>${stats.pars}</strong></td></tr>
         <tr><td>Bogey+</td><td class="nowrap"><strong>${stats.bogeyPlus}</strong></td></tr>
@@ -613,40 +896,47 @@
       `;
     }
 
+    function setPutting(stats){
+      document.getElementById("puttingBody").innerHTML = `
+        <tr><td>1-putt</td><td class="nowrap"><strong>${stats.oneP}</strong></td></tr>
+        <tr><td>2-putt</td><td class="nowrap"><strong>${stats.twoP}</strong></td></tr>
+        <tr><td>3-putt+</td><td class="nowrap"><strong>${stats.threeP}</strong></td></tr>
+      `;
+    }
+
+    function setScoringDistribution(stats){
+      document.getElementById("scoringBody").innerHTML = `
+        <tr><td>Eagle+</td><td class="nowrap"><strong>${stats.eaglePlus}</strong></td></tr>
+        <tr><td>Birdie</td><td class="nowrap"><strong>${stats.birdie}</strong></td></tr>
+        <tr><td>Par</td><td class="nowrap"><strong>${stats.parCt}</strong></td></tr>
+        <tr><td>Bogey</td><td class="nowrap"><strong>${stats.bogey}</strong></td></tr>
+        <tr><td>Double+</td><td class="nowrap"><strong>${stats.doublePlus}</strong></td></tr>
+      `;
+    }
+
     function setExtras(stats){
-      const birdieRate = (stats.birdies + stats.pars + stats.bogeyPlus) ? (stats.birdies / (stats.birdies + stats.pars + stats.bogeyPlus)) : null;
-      const parRate = (stats.birdies + stats.pars + stats.bogeyPlus) ? (stats.pars / (stats.birdies + stats.pars + stats.bogeyPlus)) : null;
+      const holeResultsTotal = (stats.eaglePlus + stats.birdie + stats.parCt + stats.bogey + stats.doublePlus);
+      const birdieRate = holeResultsTotal ? ((stats.eaglePlus + stats.birdie) / holeResultsTotal) : null;
+      const parOrBetterRate = holeResultsTotal ? ((stats.eaglePlus + stats.birdie + stats.parCt) / holeResultsTotal) : null;
 
       const extras = [
-        {
-          name: "Birdie rate",
-          value: birdieRate !== null ? fmtPct(birdieRate * 100) : "—",
-          why: "Tracks scoring upside (how often you beat par)."
+        { name:"GIR", value: stats.girPct !== null ? fmtPct(stats.girPct*100) : "—", why:"Hit green in ≤ (par−2) strokes to green (putts don’t matter)." },
+        { name:"GIR (P3 / P4 / P5)", value:
+            (stats.gir3!==null?fmtPct(stats.gir3*100):"—") + " / " +
+            (stats.gir4!==null?fmtPct(stats.gir4*100):"—") + " / " +
+            (stats.gir5!==null?fmtPct(stats.gir5*100):"—"),
+          why:"Shows which hole types you’re hitting greens on."
         },
-        {
-          name: "Par rate",
-          value: parRate !== null ? fmtPct(parRate * 100) : "—",
-          why: "A great “consistency” metric as you improve."
-        },
-        {
-          name: "Putts per round",
-          value: stats.totalRounds ? fmt1(stats.totalPutts / stats.totalRounds) : "—",
-          why: "Quick snapshot of putting performance."
-        },
-        {
-          name: "Shots per round",
-          value: stats.totalRounds ? fmt1(stats.totalShots / stats.totalRounds) : "—",
-          why: "Shows overall scoring trend independent of par data."
-        },
-        {
-          name: "3-putt rate",
-          value: stats.threePuttRate !== null ? fmtPct(stats.threePuttRate * 100) : "—",
-          why: "One of the easiest places to save strokes fast."
-        }
+        { name:"Birdie+ rate", value: birdieRate !== null ? fmtPct(birdieRate*100) : "—", why:"Shows upside (how often you beat par)." },
+        { name:"Par-or-better rate", value: parOrBetterRate !== null ? fmtPct(parOrBetterRate*100) : "—", why:"Great all-round consistency indicator." },
+        { name:"Putts per round", value: stats.totalRounds ? fmt1(stats.totalPutts / stats.totalRounds) : "—", why:"Quick snapshot of putting." },
+        { name:"Shots per round", value: stats.totalRounds ? fmt1(stats.totalShots / stats.totalRounds) : "—", why:"Overall scoring trend." },
+        { name:"3-putt rate", value: stats.threePuttRate !== null ? fmtPct(stats.threePuttRate*100) : "—", why:"Fastest way to save shots." },
+        { name:"Start (1–3) avg vs par", value: stats.startAvg !== null ? fmt1(stats.startAvg) : "—", why:"How you begin (18s only)." },
+        { name:"Finish (16–18) avg vs par", value: stats.finishAvg !== null ? fmt1(stats.finishAvg) : "—", why:"Closing strength (18s only)." }
       ];
 
-      const body = document.getElementById("extrasBody");
-      body.innerHTML = extras.map(x => `
+      document.getElementById("extrasBody").innerHTML = extras.map(x => `
         <tr>
           <td><strong>${escapeHtml(x.name)}</strong></td>
           <td class="nowrap">${escapeHtml(x.value)}</td>
@@ -655,42 +945,80 @@
       `).join("");
     }
 
-    function setParAverages(stats){
-      const el = document.getElementById("parAverages");
-      const parts = [
-        `P3: ${stats.par3Avg !== null ? fmt1(stats.par3Avg) : "—"}`,
-        `P4: ${stats.par4Avg !== null ? fmt1(stats.par4Avg) : "—"}`,
-        `P5: ${stats.par5Avg !== null ? fmt1(stats.par5Avg) : "—"}`
-      ];
-      el.textContent = parts.join("  |  ");
-    }
-
-    function setFavHole(stats){
-      const el = document.getElementById("favHole");
-      if (!stats.fav){
-        el.textContent = "—";
+    function setTopCourses(stats){
+      const body = document.getElementById("topCoursesBody");
+      if (!stats.topCourses || !stats.topCourses.length){
+        body.innerHTML = `<tr><td colspan="3" class="muted">—</td></tr>`;
         return;
       }
-      el.textContent = `${stats.fav.course} — Hole ${stats.fav.hole} (${fmt1(stats.fav.avg)} avg over ${stats.fav.n} rounds)`;
+
+      body.innerHTML = stats.topCourses.slice(0,10).map(c => {
+        const val = (c.kind === "diff")
+          ? ((c.metric > 0 ? "+" : "") + fmt1(c.metric) + " vs par")
+          : (fmt1(c.metric) + " score");
+        return `
+          <tr>
+            <td><strong>${escapeHtml(c.course)}</strong></td>
+            <td class="nowrap">${escapeHtml(val)}</td>
+            <td class="nowrap">${c.rounds}</td>
+          </tr>
+        `;
+      }).join("");
     }
 
-    function setVsPar(stats){
-      const el = document.getElementById("vsPar");
-      if (stats.vsPar === null){
-        el.textContent = "—";
+    function setBestHoles(stats){
+      const body = document.getElementById("bestHolesBody");
+      if (!stats.bestHoles || !stats.bestHoles.length){
+        body.innerHTML = `<tr><td colspan="3" class="muted">—</td></tr>`;
         return;
       }
-      const sign = stats.vsPar > 0 ? "+" : "";
-      el.innerHTML = `<span class="${stats.vsPar <= 0 ? "ok" : "danger"}">${sign}${stats.vsPar}</span>`;
+      body.innerHTML = stats.bestHoles.map(h => `
+        <tr>
+          <td><strong>${escapeHtml(h.course)}</strong><div class="mini">Hole ${h.hole}</div></td>
+          <td class="nowrap">${fmt1(h.avg)}</td>
+          <td class="nowrap">${h.n}</td>
+        </tr>
+      `).join("");
     }
 
-    function setThreePuttRate(stats){
-      const el = document.getElementById("threePuttRate");
-      if (stats.threePuttRate === null){
-        el.textContent = "—";
+    function setHardHoles(stats){
+      const body = document.getElementById("hardHolesBody");
+      if (!stats.hardHoles || !stats.hardHoles.length){
+        body.innerHTML = `<tr><td colspan="3" class="muted">—</td></tr>`;
         return;
       }
-      el.textContent = `${fmtPct(stats.threePuttRate * 100)} (${stats.threePutts}/${stats.holesWithPutts || 0})`;
+      body.innerHTML = stats.hardHoles.map(h => `
+        <tr>
+          <td><strong>${escapeHtml(h.course)}</strong><div class="mini">Hole ${h.hole}</div></td>
+          <td class="nowrap">${(h.avgDiff > 0 ? "+" : "") + fmt1(h.avgDiff)}</td>
+          <td class="nowrap">${h.n}</td>
+        </tr>
+      `).join("");
+    }
+
+    function setStreaks(stats){
+      const box = document.getElementById("streaksBox");
+      const bestStretch = stats.best3Stretch ? `${escapeHtml(stats.best3Stretch.label)} (${fmt1(stats.best3Stretch.avgDiff)} avg vs par)` : "—";
+      const worstStretch = stats.worst3Stretch ? `${escapeHtml(stats.worst3Stretch.label)} (${(stats.worst3Stretch.avgDiff > 0 ? "+" : "") + fmt1(stats.worst3Stretch.avgDiff)} avg vs par)` : "—";
+
+      box.innerHTML = `
+        <div class="row">
+          <div class="left"><div style="font-weight:900">Longest par-or-better streak</div><div class="mini">Consecutive holes (diff ≤ 0)</div></div>
+          <div class="right">${stats.bestParOrBetterStreak || 0}</div>
+        </div>
+        <div class="row">
+          <div class="left"><div style="font-weight:900">Longest bogey+ streak</div><div class="mini">Consecutive holes (diff ≥ 1)</div></div>
+          <div class="right">${stats.bestBogeyPlusStreak || 0}</div>
+        </div>
+        <div class="row">
+          <div class="left"><div style="font-weight:900">Best 3-hole stretch</div><div class="mini">Lowest avg vs par</div></div>
+          <div class="right">${bestStretch}</div>
+        </div>
+        <div class="row">
+          <div class="left"><div style="font-weight:900">Worst 3-hole stretch</div><div class="mini">Highest avg vs par</div></div>
+          <div class="right">${worstStretch}</div>
+        </div>
+      `;
     }
 
     // ---------- Render ----------
@@ -698,32 +1026,38 @@
     let currentRange = "last5";
 
     function applyRange(){
-      let rounds = ALL.slice();
+      let rounds = ALL.slice().filter(r => inRange(r, currentRange));
+      if (currentRange === "last5") rounds = rounds.slice(0,5);
 
-      // filter by date for 30d / 1y
-      rounds = rounds.filter(r => inRange(r, currentRange));
-
-      // for last5: take most recent 5
-      if (currentRange === "last5"){
-        rounds = rounds.slice(0,5);
-      }
-
-      // update pill
-      const pill = document.getElementById("rangePill");
-      pill.textContent =
+      document.getElementById("rangePill").textContent =
         currentRange === "last5" ? "Range: Last 5 rounds" :
         currentRange === "30d" ? "Range: Last 30 days" :
         "Range: Last year";
 
-      // compute + render
       const stats = computeStats(rounds);
+
       setKpis(stats);
       setParAverages(stats);
+      setGIR(stats);
       setFavHole(stats);
+      setHardHole(stats);
+      setBestCourse(stats);
+      setMostPlayed(stats);
       setVsPar(stats);
-      setThreePuttRate(stats);
+      setPuttSplit(stats);
+      setFrontBack(stats);
+      setConsistency(stats);
+      setTrend(stats);
+
       setBreakdown(stats);
+      setPutting(stats);
+      setScoringDistribution(stats);
       setExtras(stats);
+
+      setTopCourses(stats);
+      setBestHoles(stats);
+      setHardHoles(stats);
+      setStreaks(stats);
 
       document.getElementById("recent").innerHTML = buildRecent(rounds);
     }
@@ -733,7 +1067,6 @@
       applyRange();
     }
 
-    // tabs
     document.querySelectorAll(".tab").forEach(btn => {
       btn.addEventListener("click", () => {
         document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
