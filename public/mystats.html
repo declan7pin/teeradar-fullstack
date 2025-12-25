@@ -362,8 +362,96 @@
       return (strokes - putts) <= (par - 2);
     }
 
+    /* ✅✅✅ ONLY ADDITIONS (needed): load rounds from backend (Postgres) using JWT token ✅✅✅ */
+    function getToken(){
+      const keys = ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"];
+      for (const k of keys){
+        const v = localStorage.getItem(k);
+        if (v && String(v).trim().length > 10) return String(v).trim();
+      }
+      return "";
+    }
+
+    async function api(path, options = {}){
+      const token = getToken();
+      const headers = Object.assign({}, options.headers || {});
+      headers["Content-Type"] = headers["Content-Type"] || "application/json";
+      if (token) headers["Authorization"] = "Bearer " + token;
+
+      const res = await fetch(path, { ...options, headers });
+      let data = null;
+      try { data = await res.json(); } catch {}
+      if (!res.ok){
+        const msg = (data && (data.error || data.detail)) ? (data.error || data.detail) : (res.status + " " + res.statusText);
+        const err = new Error(msg);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    }
+
+    async function loadRoundsFromBackend(){
+      // list rounds (headers)
+      const list = await api("/api/rounds", { method:"GET" });
+      const rounds = (list && Array.isArray(list.rounds)) ? list.rounds : [];
+      const out = [];
+
+      for (const r of rounds){
+        try{
+          // get holes for each round
+          const det = await api(`/api/rounds/${encodeURIComponent(r.id)}`, { method:"GET" });
+          const round = det.round || det;
+          const holesArr = Array.isArray(det.holes) ? det.holes : [];
+
+          const holes = holesArr.map((h, idx) => ({
+            hole: safeNum(h.hole_number ?? h.hole ?? (idx+1)) ?? (idx+1),
+            par: safeNum(h.par),
+            shots: safeNum(h.strokes ?? h.shots ?? h.score),
+            putts: safeNum(h.putts)
+          }));
+
+          const totalShots = sumNums(holes.map(h => h.shots));
+          const totalPutts = sumNums(holes.map(h => h.putts));
+          const totalPar = sumNums(holes.map(h => h.par));
+          const totalScore = totalShots;
+
+          out.push({
+            id: round.id || r.id || cryptoRandomId(),
+            date: parseDateMaybe(round.created_at || round.date || round.playedAt || round.at) || new Date(0),
+            course: (round.course || r.course || "Unknown course").toString().trim() || "Unknown course",
+            holes,
+            holesCount: safeNum(round.holes) ?? safeNum(r.holes) ?? holes.length ?? null,
+            totalShots: totalShots ?? 0,
+            totalPutts: totalPutts ?? 0,
+            totalPar: totalPar ?? null,
+            totalScore: totalScore ?? null
+          });
+        }catch(e){
+          // keep going if one round fails
+          console.warn("mystats: failed to load round detail", r && r.id, e);
+        }
+      }
+
+      out.sort((a,b)=> b.date.getTime() - a.date.getTime());
+      return out;
+    }
+    /* ✅✅✅ END ONLY ADDITIONS ✅✅✅ */
+
     // ---------- Load rounds ----------
-    function loadAllRounds(){
+    async function loadAllRounds(){
+      /* ✅✅✅ ONLY CHANGE (needed): prefer backend rounds; fallback to localStorage if not logged in ✅✅✅ */
+      try{
+        const token = getToken();
+        if (token){
+          const backendRounds = await loadRoundsFromBackend();
+          if (backendRounds.length) return backendRounds;
+        }
+      }catch(e){
+        console.warn("mystats: backend rounds load failed, falling back to localStorage", e);
+      }
+      /* ✅✅✅ END ONLY CHANGE ✅✅✅ */
+
       const keysToTry = ["teeradar_rounds","myRounds","rounds","teeRadarRounds","scorecardRounds"];
       for (const k of keysToTry){
         const raw = localStorage.getItem(k);
@@ -1062,9 +1150,11 @@
       document.getElementById("recent").innerHTML = buildRecent(rounds);
     }
 
-    function refresh(){
-      ALL = loadAllRounds();
+    async function refresh(){
+      /* ✅✅✅ ONLY CHANGE (needed): async load rounds (backend first, then local) ✅✅✅ */
+      ALL = await loadAllRounds();
       applyRange();
+      /* ✅✅✅ END ONLY CHANGE ✅✅✅ */
     }
 
     document.querySelectorAll(".tab").forEach(btn => {
@@ -1078,7 +1168,9 @@
 
     document.getElementById("refreshBtn").addEventListener("click", refresh);
 
+    /* ✅✅✅ ONLY CHANGE (needed): initial refresh is async ✅✅✅ */
     refresh();
+    /* ✅✅✅ END ONLY CHANGE ✅✅✅ */
   </script>
 </body>
 </html>
