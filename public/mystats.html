@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TeeRadar — My Stats</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+
+  <style>
+    :root{
+      --teal:#00796b;
+      --teal-dark:#005e55;
+      --bg:#f4f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e2e8f0;
+      --danger:#b91c1c;
+      --ok:#16a34a;
+      --pill:#ecfeff;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+    .wrap{max-width:1100px;margin:0 auto;padding:18px 14px 28px}
+    header{
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
+      margin:8px 0 14px;
+    }
+    .title{
+      display:flex;flex-direction:column;gap:2px;
+    }
+    h1{margin:0;font-size:20px}
+    .sub{color:var(--muted);font-size:13px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap}
+    .btn{
+      border:1px solid var(--border);
+      background:var(--card);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      text-decoration:none;
+      font-weight:600;
+      font-size:14px;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      cursor:pointer;
+    }
+    .btn.primary{
+      background:var(--teal);
+      border-color:var(--teal);
+      color:white;
+    }
+    .btn:hover{filter:brightness(0.98)}
+    .grid{
+      display:grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap:12px;
+    }
+    @media (max-width: 960px){
+      .grid{grid-template-columns:1fr}
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px;
+    }
+    .card h2{
+      margin:0 0 10px;
+      font-size:16px;
+    }
+    .tabs{
+      display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0;
+    }
+    .tab{
+      padding:8px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#fff;
+      color:var(--text);
+      font-weight:700;
+      font-size:13px;
+      cursor:pointer;
+    }
+    .tab.active{
+      background:var(--pill);
+      border-color:#bfecee;
+      color:var(--teal-dark);
+    }
+    .kpis{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:10px;
+      margin-top:12px;
+    }
+    @media (max-width: 720px){
+      .kpis{grid-template-columns:1fr}
+    }
+    .kpi{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      background:#fff;
+    }
+    .kpi .label{color:var(--muted);font-size:12px;font-weight:700}
+    .kpi .value{font-size:22px;font-weight:900;margin-top:2px}
+    .kpi .hint{color:var(--muted);font-size:12px;margin-top:6px}
+
+    .row{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 0;
+      border-top:1px dashed var(--border);
+    }
+    .row:first-child{border-top:none;padding-top:0}
+    .row .left{display:flex;flex-direction:column;gap:2px}
+    .row .right{font-weight:900}
+    .muted{color:var(--muted)}
+    .pill{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:6px 10px;border-radius:999px;
+      background:var(--pill);
+      border:1px solid #bfecee;
+      color:var(--teal-dark);
+      font-weight:800;font-size:12px;
+      width:max-content;
+    }
+    .danger{color:var(--danger);font-weight:800}
+    .ok{color:var(--ok);font-weight:800}
+    .mini{
+      font-size:12px;color:var(--muted);
+    }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+      margin-top:8px;
+    }
+    th, td{
+      text-align:left;
+      padding:10px 8px;
+      border-top:1px solid var(--border);
+      vertical-align:top;
+    }
+    th{color:var(--muted);font-size:12px}
+    .nowrap{white-space:nowrap}
+    .empty{
+      padding:12px;
+      border:1px dashed var(--border);
+      border-radius:14px;
+      background:#fff;
+      color:var(--muted);
+      font-weight:700;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">
+        <h1>My Stats</h1>
+        <div class="sub">Your performance trends across recent rounds.</div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="/my-rounds.html">← Back to My Rounds</a>
+        <button class="btn primary" id="refreshBtn">Refresh</button>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="pill" id="rangePill">Range: Last 5 rounds</div>
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-range="last5">Last 5 rounds</button>
+        <button class="tab" data-range="30d">Last 30 days</button>
+        <button class="tab" data-range="1y">Last year</button>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:12px">
+      <div class="card">
+        <h2>Key stats</h2>
+        <div class="kpis" id="kpis"></div>
+
+        <div style="margin-top:14px">
+          <div class="row">
+            <div class="left">
+              <div style="font-weight:900">Average on par 3 / 4 / 5</div>
+              <div class="mini">Average score per hole type (lower is better)</div>
+            </div>
+            <div class="right" id="parAverages">—</div>
+          </div>
+
+          <div class="row">
+            <div class="left">
+              <div style="font-weight:900">Favourite hole</div>
+              <div class="mini">Best average hole at a course across multiple rounds</div>
+            </div>
+            <div class="right" id="favHole">—</div>
+          </div>
+
+          <div class="row">
+            <div class="left">
+              <div style="font-weight:900">Score vs par (total)</div>
+              <div class="mini">Sum of (score − par) across all holes included</div>
+            </div>
+            <div class="right" id="vsPar">—</div>
+          </div>
+
+          <div class="row">
+            <div class="left">
+              <div style="font-weight:900">3-putt rate</div>
+              <div class="mini">3+ putts ÷ holes with putt data</div>
+            </div>
+            <div class="right" id="threePuttRate">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Recent rounds</h2>
+        <div class="mini">Most recent rounds within the selected range.</div>
+        <div id="recent"></div>
+
+        <h2 style="margin-top:16px">Breakdown</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Result</th>
+              <th class="nowrap">Count</th>
+            </tr>
+          </thead>
+          <tbody id="breakdownBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h2>Extra stats (useful for golfers)</h2>
+      <div class="mini">These are calculated from what you’re already tracking today (shots + putts + pars).</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Value</th>
+            <th>Why it matters</th>
+          </tr>
+        </thead>
+        <tbody id="extrasBody"></tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script>
+    // --- soft-gate: only accessible from my-rounds page (or user gets bounced back) ---
+    (function gate(){
+      const ok = sessionStorage.getItem("fromMyRounds") === "1";
+      if (!ok) {
+        window.location.replace("/my-rounds.html");
+        return;
+      }
+      // keep it 1 session only
+      sessionStorage.removeItem("fromMyRounds");
+    })();
+
+    // ---------- Helpers ----------
+    function safeNum(x){
+      const n = Number(x);
+      return Number.isFinite(n) ? n : null;
+    }
+    function fmt1(n){
+      if (!Number.isFinite(n)) return "—";
+      return (Math.round(n * 10) / 10).toFixed(1);
+    }
+    function fmtPct(n){
+      if (!Number.isFinite(n)) return "—";
+      return Math.round(n) + "%";
+    }
+    function parseDateMaybe(v){
+      if (!v) return null;
+      // accept ISO string, timestamp, or YYYY-MM-DD
+      const d = new Date(v);
+      if (!isNaN(d.getTime())) return d;
+      return null;
+    }
+
+    // Try to load rounds from common localStorage keys and schemas.
+    // You can lock this to your real key once you confirm it.
+    function loadAllRounds(){
+      const keysToTry = [
+        "teeradar_rounds",
+        "myRounds",
+        "rounds",
+        "teeRadarRounds",
+        "scorecardRounds"
+      ];
+
+      for (const k of keysToTry){
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+        try{
+          const data = JSON.parse(raw);
+          const rounds = normalizeRounds(data);
+          if (rounds.length) return rounds;
+        }catch(e){}
+      }
+
+      // also try: single object store { rounds: [...] }
+      const rawAny = localStorage.getItem("teeradar") || localStorage.getItem("TeeRadar");
+      if (rawAny){
+        try{
+          const data = JSON.parse(rawAny);
+          const rounds = normalizeRounds(data);
+          if (rounds.length) return rounds;
+        }catch(e){}
+      }
+
+      return [];
+    }
+
+    // Normalize various possible schemas into:
+    // { id, date: Date, course, holes:[{hole, par, shots, putts}], totalShots, totalPutts, totalPar, totalScore }
+    function normalizeRounds(data){
+      let arr = [];
+      if (Array.isArray(data)) arr = data;
+      else if (data && Array.isArray(data.rounds)) arr = data.rounds;
+      else if (data && Array.isArray(data.items)) arr = data.items;
+      else return [];
+
+      const out = [];
+      for (const r of arr){
+        const date = parseDateMaybe(r.date || r.playedAt || r.createdAt || r.at);
+        const course = (r.course || r.courseName || r.name || "").toString().trim() || "Unknown course";
+
+        // holes could be r.holes, r.scorecard, or arrays like r.shots / r.putts / r.pars
+        let holes = [];
+
+        if (Array.isArray(r.holes)){
+          holes = r.holes.map((h, idx) => ({
+            hole: safeNum(h.hole ?? (idx+1)) ?? (idx+1),
+            par: safeNum(h.par),
+            shots: safeNum(h.shots ?? h.strokes ?? h.score),
+            putts: safeNum(h.putts)
+          }));
+        } else if (Array.isArray(r.scorecard)){
+          holes = r.scorecard.map((h, idx) => ({
+            hole: safeNum(h.hole ?? (idx+1)) ?? (idx+1),
+            par: safeNum(h.par),
+            shots: safeNum(h.shots ?? h.strokes ?? h.score),
+            putts: safeNum(h.putts)
+          }));
+        } else {
+          const pars = Array.isArray(r.pars) ? r.pars : [];
+          const shots = Array.isArray(r.shots) ? r.shots : (Array.isArray(r.strokes) ? r.strokes : (Array.isArray(r.scores) ? r.scores : []));
+          const putts = Array.isArray(r.putts) ? r.putts : [];
+          const maxLen = Math.max(pars.length, shots.length, putts.length);
+          if (maxLen > 0){
+            holes = Array.from({length:maxLen}).map((_, i) => ({
+              hole: i+1,
+              par: safeNum(pars[i]),
+              shots: safeNum(shots[i]),
+              putts: safeNum(putts[i])
+            }));
+          }
+        }
+
+        // totals (fallback: calculate)
+        const totalShots = safeNum(r.totalShots) ?? sumNums(holes.map(h => h.shots));
+        const totalPutts = safeNum(r.totalPutts) ?? sumNums(holes.map(h => h.putts));
+        const totalPar   = safeNum(r.totalPar) ?? sumNums(holes.map(h => h.par));
+        const totalScore = safeNum(r.totalScore) ?? totalShots; // score == shots
+
+        // accept only if it has at least something
+        const hasAny = (totalShots !== null) || (totalPutts !== null) || holes.some(h => h.shots !== null || h.putts !== null);
+        if (!hasAny) continue;
+
+        out.push({
+          id: r.id || r.roundId || cryptoRandomId(),
+          date: date || new Date(0),
+          course,
+          holes,
+          totalShots: totalShots ?? 0,
+          totalPutts: totalPutts ?? 0,
+          totalPar: totalPar ?? null,
+          totalScore: totalScore ?? totalShots ?? null
+        });
+      }
+
+      // newest first
+      out.sort((a,b)=> b.date.getTime() - a.date.getTime());
+      return out;
+    }
+
+    function sumNums(arr){
+      let s = 0;
+      let any = false;
+      for (const v of arr){
+        if (Number.isFinite(v)){
+          s += v;
+          any = true;
+        }
+      }
+      return any ? s : null;
+    }
+
+    function cryptoRandomId(){
+      try{
+        const a = new Uint8Array(8);
+        crypto.getRandomValues(a);
+        return Array.from(a).map(x=>x.toString(16).padStart(2,"0")).join("");
+      }catch(e){
+        return "r_" + Math.random().toString(36).slice(2);
+      }
+    }
+
+    function inRange(round, range){
+      const now = new Date();
+      if (range === "last5") return true; // handled by slicing after sorting
+      if (range === "30d"){
+        const d = new Date(now);
+        d.setDate(d.getDate() - 30);
+        return round.date.getTime() >= d.getTime();
+      }
+      if (range === "1y"){
+        const d = new Date(now);
+        d.setFullYear(d.getFullYear() - 1);
+        return round.date.getTime() >= d.getTime();
+      }
+      return true;
+    }
+
+    function dateLabel(d){
+      if (!(d instanceof Date) || isNaN(d.getTime())) return "Unknown date";
+      // YYYY-MM-DD
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,"0");
+      const da = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${da}`;
+    }
+
+    // ---------- Stats ----------
+    function computeStats(rounds){
+      const totalRounds = rounds.length;
+      const totalShots = rounds.reduce((s,r)=> s + (Number.isFinite(r.totalShots)?r.totalShots:0), 0);
+      const totalPutts = rounds.reduce((s,r)=> s + (Number.isFinite(r.totalPutts)?r.totalPutts:0), 0);
+
+      const scores = rounds.map(r => r.totalScore).filter(Number.isFinite);
+      const avgRound = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length) : null;
+      const bestRound = scores.length ? Math.min(...scores) : null;
+      const worstRound = scores.length ? Math.max(...scores) : null;
+
+      // Hole-level aggregates
+      let holesWithData = 0;
+      let threePutts = 0;
+
+      // breakdown relative to par if we have par data: birdie/par/bogey+
+      let birdies = 0, pars = 0, bogeyPlus = 0;
+
+      // par type averages
+      const parType = {
+        3: {shots:0, holes:0},
+        4: {shots:0, holes:0},
+        5: {shots:0, holes:0},
+      };
+
+      // favourite hole: key = course|holeNumber, average shots (need multiple occurrences)
+      const holeMap = new Map(); // key -> {sum, n}
+      for (const r of rounds){
+        for (const h of (r.holes || [])){
+          const shots = safeNum(h.shots);
+          const putts = safeNum(h.putts);
+          const par = safeNum(h.par);
+          if (shots !== null || putts !== null) holesWithData++;
+
+          if (putts !== null && putts >= 3) threePutts++;
+
+          if (shots !== null && par !== null){
+            const diff = shots - par;
+            if (diff <= -1) birdies++;
+            else if (diff === 0) pars++;
+            else bogeyPlus++;
+          }
+
+          if (shots !== null && par !== null && (par === 3 || par === 4 || par === 5)){
+            parType[par].shots += shots;
+            parType[par].holes += 1;
+          }
+
+          if (shots !== null){
+            const holeNo = safeNum(h.hole) ?? null;
+            if (holeNo !== null){
+              const key = `${r.course}||${holeNo}`;
+              const cur = holeMap.get(key) || { sum:0, n:0, course:r.course, hole:holeNo };
+              cur.sum += shots;
+              cur.n += 1;
+              holeMap.set(key, cur);
+            }
+          }
+        }
+      }
+
+      // Favourite hole = best (lowest avg) among holes with n >= 2 (multiple rounds)
+      let fav = null;
+      for (const v of holeMap.values()){
+        if (v.n < 2) continue;
+        const avg = v.sum / v.n;
+        if (!fav || avg < fav.avg){
+          fav = { ...v, avg };
+        }
+      }
+
+      // total vs par
+      const totalPar = rounds.map(r => r.totalPar).filter(Number.isFinite).reduce((a,b)=>a+b, 0);
+      const totalScore = scores.reduce((a,b)=>a+b, 0);
+      const vsPar = (totalPar > 0 && scores.length) ? (totalScore - totalPar) : null;
+
+      // 3-putt rate based on holes that actually have putt data
+      const holesWithPutts = rounds.reduce((cnt,r)=> cnt + (r.holes||[]).filter(h => Number.isFinite(h.putts)).length, 0);
+      const threePuttRate = holesWithPutts ? (threePutts / holesWithPutts) : null;
+
+      const par3Avg = parType[3].holes ? (parType[3].shots / parType[3].holes) : null;
+      const par4Avg = parType[4].holes ? (parType[4].shots / parType[4].holes) : null;
+      const par5Avg = parType[5].holes ? (parType[5].shots / parType[5].holes) : null;
+
+      return {
+        totalRounds,
+        totalShots,
+        totalPutts,
+        avgRound,
+        bestRound,
+        worstRound,
+        birdies,
+        pars,
+        bogeyPlus,
+        par3Avg, par4Avg, par5Avg,
+        fav,
+        vsPar,
+        threePutts,
+        holesWithPutts,
+        threePuttRate
+      };
+    }
+
+    function buildRecent(rounds){
+      if (!rounds.length){
+        return `<div class="empty">No rounds found for this range yet.</div>`;
+      }
+      const rows = rounds.slice(0,5).map(r => {
+        const score = Number.isFinite(r.totalScore) ? r.totalScore : "—";
+        const putts = Number.isFinite(r.totalPutts) ? r.totalPutts : "—";
+        return `
+          <div class="row">
+            <div class="left">
+              <div style="font-weight:900">${escapeHtml(r.course)}</div>
+              <div class="mini">${dateLabel(r.date)}</div>
+            </div>
+            <div class="right" style="text-align:right">
+              <div>${score}</div>
+              <div class="mini muted">Putts: ${putts}</div>
+            </div>
+          </div>
+        `;
+      }).join("");
+      return `<div>${rows}</div>`;
+    }
+
+    function escapeHtml(str){
+      return String(str ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function setKpis(stats){
+      const items = [
+        { label: "Rounds", value: stats.totalRounds, hint: "Rounds included in this range" },
+        { label: "Total shots", value: stats.totalShots, hint: "Sum of all strokes recorded" },
+        { label: "Total putts", value: stats.totalPutts, hint: "Sum of all putts recorded" },
+        { label: "Avg per round", value: stats.avgRound !== null ? fmt1(stats.avgRound) : "—", hint: "Average total score" },
+        { label: "Best round", value: stats.bestRound !== null ? stats.bestRound : "—", hint: "Lowest score in range" },
+        { label: "Worst round", value: stats.worstRound !== null ? stats.worstRound : "—", hint: "Highest score in range" },
+      ];
+
+      const kpis = document.getElementById("kpis");
+      kpis.innerHTML = items.map(x => `
+        <div class="kpi">
+          <div class="label">${escapeHtml(x.label)}</div>
+          <div class="value">${escapeHtml(x.value)}</div>
+          <div class="hint">${escapeHtml(x.hint)}</div>
+        </div>
+      `).join("");
+    }
+
+    function setBreakdown(stats){
+      const body = document.getElementById("breakdownBody");
+      body.innerHTML = `
+        <tr><td>Birdies or better</td><td class="nowrap"><strong>${stats.birdies}</strong></td></tr>
+        <tr><td>Pars</td><td class="nowrap"><strong>${stats.pars}</strong></td></tr>
+        <tr><td>Bogey+</td><td class="nowrap"><strong>${stats.bogeyPlus}</strong></td></tr>
+        <tr><td>3-putts (count)</td><td class="nowrap"><strong>${stats.threePutts}</strong></td></tr>
+      `;
+    }
+
+    function setExtras(stats){
+      const birdieRate = (stats.birdies + stats.pars + stats.bogeyPlus) ? (stats.birdies / (stats.birdies + stats.pars + stats.bogeyPlus)) : null;
+      const parRate = (stats.birdies + stats.pars + stats.bogeyPlus) ? (stats.pars / (stats.birdies + stats.pars + stats.bogeyPlus)) : null;
+
+      const extras = [
+        {
+          name: "Birdie rate",
+          value: birdieRate !== null ? fmtPct(birdieRate * 100) : "—",
+          why: "Tracks scoring upside (how often you beat par)."
+        },
+        {
+          name: "Par rate",
+          value: parRate !== null ? fmtPct(parRate * 100) : "—",
+          why: "A great “consistency” metric as you improve."
+        },
+        {
+          name: "Putts per round",
+          value: stats.totalRounds ? fmt1(stats.totalPutts / stats.totalRounds) : "—",
+          why: "Quick snapshot of putting performance."
+        },
+        {
+          name: "Shots per round",
+          value: stats.totalRounds ? fmt1(stats.totalShots / stats.totalRounds) : "—",
+          why: "Shows overall scoring trend independent of par data."
+        },
+        {
+          name: "3-putt rate",
+          value: stats.threePuttRate !== null ? fmtPct(stats.threePuttRate * 100) : "—",
+          why: "One of the easiest places to save strokes fast."
+        }
+      ];
+
+      const body = document.getElementById("extrasBody");
+      body.innerHTML = extras.map(x => `
+        <tr>
+          <td><strong>${escapeHtml(x.name)}</strong></td>
+          <td class="nowrap">${escapeHtml(x.value)}</td>
+          <td class="muted">${escapeHtml(x.why)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function setParAverages(stats){
+      const el = document.getElementById("parAverages");
+      const parts = [
+        `P3: ${stats.par3Avg !== null ? fmt1(stats.par3Avg) : "—"}`,
+        `P4: ${stats.par4Avg !== null ? fmt1(stats.par4Avg) : "—"}`,
+        `P5: ${stats.par5Avg !== null ? fmt1(stats.par5Avg) : "—"}`
+      ];
+      el.textContent = parts.join("  |  ");
+    }
+
+    function setFavHole(stats){
+      const el = document.getElementById("favHole");
+      if (!stats.fav){
+        el.textContent = "—";
+        return;
+      }
+      el.textContent = `${stats.fav.course} — Hole ${stats.fav.hole} (${fmt1(stats.fav.avg)} avg over ${stats.fav.n} rounds)`;
+    }
+
+    function setVsPar(stats){
+      const el = document.getElementById("vsPar");
+      if (stats.vsPar === null){
+        el.textContent = "—";
+        return;
+      }
+      const sign = stats.vsPar > 0 ? "+" : "";
+      el.innerHTML = `<span class="${stats.vsPar <= 0 ? "ok" : "danger"}">${sign}${stats.vsPar}</span>`;
+    }
+
+    function setThreePuttRate(stats){
+      const el = document.getElementById("threePuttRate");
+      if (stats.threePuttRate === null){
+        el.textContent = "—";
+        return;
+      }
+      el.textContent = `${fmtPct(stats.threePuttRate * 100)} (${stats.threePutts}/${stats.holesWithPutts || 0})`;
+    }
+
+    // ---------- Render ----------
+    let ALL = [];
+    let currentRange = "last5";
+
+    function applyRange(){
+      let rounds = ALL.slice();
+
+      // filter by date for 30d / 1y
+      rounds = rounds.filter(r => inRange(r, currentRange));
+
+      // for last5: take most recent 5
+      if (currentRange === "last5"){
+        rounds = rounds.slice(0,5);
+      }
+
+      // update pill
+      const pill = document.getElementById("rangePill");
+      pill.textContent =
+        currentRange === "last5" ? "Range: Last 5 rounds" :
+        currentRange === "30d" ? "Range: Last 30 days" :
+        "Range: Last year";
+
+      // compute + render
+      const stats = computeStats(rounds);
+      setKpis(stats);
+      setParAverages(stats);
+      setFavHole(stats);
+      setVsPar(stats);
+      setThreePuttRate(stats);
+      setBreakdown(stats);
+      setExtras(stats);
+
+      document.getElementById("recent").innerHTML = buildRecent(rounds);
+    }
+
+    function refresh(){
+      ALL = loadAllRounds();
+      applyRange();
+    }
+
+    // tabs
+    document.querySelectorAll(".tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentRange = btn.getAttribute("data-range") || "last5";
+        applyRange();
+      });
+    });
+
+    document.getElementById("refreshBtn").addEventListener("click", refresh);
+
+    refresh();
+  </script>
+</body>
+</html>
