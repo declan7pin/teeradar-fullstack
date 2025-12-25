@@ -129,6 +129,14 @@
 
     <div class="card">
       <div class="pill" id="rangePill">Range: Last 5 rounds</div>
+
+      <!-- ✅ ADDED: 9 vs 18 toggle (only) -->
+      <div class="tabs" role="tablist" style="margin-top:10px">
+        <button class="tab active" data-holes="all">All rounds</button>
+        <button class="tab" data-holes="9">9 holes</button>
+        <button class="tab" data-holes="18">18 holes</button>
+      </div>
+
       <div class="tabs" role="tablist">
         <button class="tab active" data-range="last5">Last 5 rounds</button>
         <button class="tab" data-range="30d">Last 30 days</button>
@@ -858,11 +866,13 @@
       return `<div>` + rounds.slice(0,5).map(r => {
         const score = Number.isFinite(r.totalScore) ? r.totalScore : "—";
         const putts = Number.isFinite(r.totalPutts) ? r.totalPutts : "—";
+        const hc = Number(r.holesCount || (r.holes ? r.holes.length : 0) || 0);
+        const label = hc >= 18 ? "18" : (hc > 0 ? String(hc) : "—");
         return `
           <div class="row">
             <div class="left">
               <div style="font-weight:900">${escapeHtml(r.course)}</div>
-              <div class="mini">${dateLabel(r.date)}</div>
+              <div class="mini">${dateLabel(r.date)} • ${label} holes</div>
             </div>
             <div class="right" style="text-align:right">
               <div>${score}</div>
@@ -1113,14 +1123,36 @@
     let ALL = [];
     let currentRange = "last5";
 
+    // ✅ ADDED: holes filter state (only)
+    let currentHoles = "all"; // all | 9 | 18
+
+    // ✅ ADDED: helper for holes classification (only)
+    function holesCountFor(r){
+      const hc = Number(r.holesCount || (r.holes ? r.holes.length : 0) || 0);
+      return Number.isFinite(hc) ? hc : 0;
+    }
+    function matchesHolesFilter(r){
+      if (currentHoles === "all") return true;
+      const hc = holesCountFor(r);
+      if (currentHoles === "18") return hc >= 18;
+      if (currentHoles === "9") return hc > 0 && hc <= 9;
+      return true;
+    }
+    function holesLabel(){
+      return currentHoles === "all" ? "All rounds" : (currentHoles === "9" ? "9 holes" : "18 holes");
+    }
+
     function applyRange(){
-      let rounds = ALL.slice().filter(r => inRange(r, currentRange));
+      // ✅ CHANGED (only): apply holes filter first
+      let rounds = ALL.slice().filter(r => matchesHolesFilter(r)).filter(r => inRange(r, currentRange));
       if (currentRange === "last5") rounds = rounds.slice(0,5);
 
-      document.getElementById("rangePill").textContent =
-        currentRange === "last5" ? "Range: Last 5 rounds" :
-        currentRange === "30d" ? "Range: Last 30 days" :
-        "Range: Last year";
+      // ✅ CHANGED (only): include holes label in pill
+      const rangeText =
+        currentRange === "last5" ? "Last 5 rounds" :
+        currentRange === "30d" ? "Last 30 days" :
+        "Last year";
+      document.getElementById("rangePill").textContent = `Range: ${rangeText} • ${holesLabel()}`;
 
       const stats = computeStats(rounds);
 
@@ -1157,11 +1189,22 @@
       /* ✅✅✅ END ONLY CHANGE ✅✅✅ */
     }
 
-    document.querySelectorAll(".tab").forEach(btn => {
+    // ✅ CHANGED (only): scope range tab listeners to data-range
+    document.querySelectorAll(".tab[data-range]").forEach(btn => {
       btn.addEventListener("click", () => {
-        document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab[data-range]").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
         currentRange = btn.getAttribute("data-range") || "last5";
+        applyRange();
+      });
+    });
+
+    // ✅ ADDED: holes toggle listeners (only)
+    document.querySelectorAll(".tab[data-holes]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab[data-holes]").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentHoles = btn.getAttribute("data-holes") || "all";
         applyRange();
       });
     });
