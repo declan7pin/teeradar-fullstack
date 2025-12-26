@@ -78,9 +78,10 @@ export async function recordEvent(typeOrObj, payload = {}) {
       p.round_id ??
       null;
 
-    const roundId = roundIdRaw === null || typeof roundIdRaw === "undefined" || roundIdRaw === ""
-      ? null
-      : Number(roundIdRaw);
+    const roundId =
+      roundIdRaw === null || typeof roundIdRaw === "undefined" || roundIdRaw === ""
+        ? null
+        : Number(roundIdRaw);
 
     const timestamp = at || new Date().toISOString();
 
@@ -98,6 +99,42 @@ export async function recordEvent(typeOrObj, payload = {}) {
   } catch (err) {
     console.error("Postgres analytics insert failed:", err);
   }
+}
+
+/**
+ * ✅ NEW: Top played courses based on round_played events
+ * Returns: [{ courseName, rounds }]
+ */
+export async function getTopPlayedCourses(limit = 10, days = null) {
+  await ensureAnalyticsTable();
+
+  const params = [limit];
+  let whereTime = "";
+
+  if (Number.isFinite(Number(days)) && Number(days) > 0) {
+    params.push(Number(days));
+    whereTime = `AND occurred_at >= NOW() - ($2 * INTERVAL '1 day')`;
+  }
+
+  const { rows } = await db.query(
+    `
+    SELECT
+      course_name AS "courseName",
+      COUNT(DISTINCT round_id)::int AS "rounds"
+    FROM analytics
+    WHERE type = 'round_played'
+      AND round_id IS NOT NULL
+      AND course_name IS NOT NULL
+      AND course_name <> ''
+      ${whereTime}
+    GROUP BY course_name
+    ORDER BY COUNT(DISTINCT round_id) DESC
+    LIMIT $1
+    `,
+    params
+  );
+
+  return rows;
 }
 
 /**
@@ -146,6 +183,10 @@ export async function getAnalyticsSummary() {
        AND round_id IS NOT NULL
        AND occurred_at >= NOW() - INTERVAL '7 days'`
   );
+
+  // ✅ NEW: course counts for rounds played
+  summary.topPlayedCourses = await getTopPlayedCourses(10);
+  summary.topPlayedCourses30d = await getTopPlayedCourses(10, 30);
 
   // New users last 7 days
   summary.newUsers7d = await count(
