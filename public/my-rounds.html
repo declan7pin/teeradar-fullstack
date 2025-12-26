@@ -596,6 +596,45 @@
     }
 
     // -----------------------------
+    // ✅ Analytics (minimal + safe)
+    // -----------------------------
+    async function logAnalyticsEvent(type, payload = {}) {
+      try {
+        const token = getToken();
+        await fetch("/api/analytics/event", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": "Bearer " + token } : {})
+          },
+          body: JSON.stringify({ type, ...payload }),
+        });
+      } catch {
+        // never break UX if analytics is down
+      }
+    }
+
+    function hasAnyStrokesEntered(holesRows) {
+      try {
+        return (holesRows || []).some(h => {
+          const s1 = (h && typeof h === "object")
+            ? (h.strokes ?? (h.strokes_by_player && h.strokes_by_player["1"]))
+            : null;
+          return Number.isFinite(Number(s1));
+        });
+      } catch {
+        return false;
+      }
+    }
+
+    function markRoundPlayedLogged(roundId) {
+      try { localStorage.setItem(`round_played_logged_${roundId}`, "1"); } catch {}
+    }
+    function wasRoundPlayedLogged(roundId) {
+      try { return localStorage.getItem(`round_played_logged_${roundId}`) === "1"; } catch { return false; }
+    }
+
+    // -----------------------------
     // State
     // -----------------------------
     let currentRoundId = null;
@@ -1632,6 +1671,13 @@
       await safeFetchRounds();
       if (newId) {
         await safeLoadRound(newId);
+
+        // ✅ optional: record round_created (doesn't affect roundsPlayed)
+        await logAnalyticsEvent("round_created", {
+          roundId: Number(newId),
+          courseName: course || null,
+          at: new Date().toISOString(),
+        });
       }
     }
 
@@ -1645,6 +1691,23 @@
         method:"PUT",
         body: JSON.stringify(payload)
       });
+
+      // ✅ Record "round_played" once per round (needed for Rounds Played card)
+      // Only logs if at least 1 strokes value is entered.
+      const rid = Number(currentRoundId);
+      if (Number.isFinite(rid) && rid > 0) {
+        const already = wasRoundPlayedLogged(rid);
+        const hasStrokes = hasAnyStrokesEntered(holesRows);
+
+        if (!already && hasStrokes) {
+          await logAnalyticsEvent("round_played", {
+            roundId: rid,
+            courseName: (currentRound && currentRound.course) ? String(currentRound.course) : null,
+            at: new Date().toISOString(),
+          });
+          markRoundPlayedLogged(rid);
+        }
+      }
 
       setToast(rightToast, "Saved.", true);
       await safeFetchRounds();
