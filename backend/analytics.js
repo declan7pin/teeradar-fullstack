@@ -20,21 +20,25 @@ async function ensureAnalyticsTable() {
       );
     `);
 
+    // ✅ add round_id for dedupe (doesn't break existing rows)
     await db.query(`
       ALTER TABLE analytics
       ADD COLUMN IF NOT EXISTS round_id BIGINT;
     `);
 
+    // ✅ add plan for alert/subscription segmentation (safe)
     await db.query(`
       ALTER TABLE analytics
       ADD COLUMN IF NOT EXISTS plan TEXT;
     `);
 
+    // ✅ add meta JSON for future-proofing (safe)
     await db.query(`
       ALTER TABLE analytics
       ADD COLUMN IF NOT EXISTS meta JSONB;
     `);
 
+    // helpful indexes (safe)
     await db.query(`
       CREATE INDEX IF NOT EXISTS idx_analytics_type_time
       ON analytics (type, occurred_at DESC);
@@ -76,7 +80,7 @@ function safeJson(val) {
   }
 }
 
-// Alert event type aliases (backend tolerant to different strings)
+// Event type aliases for alerts (tolerant to string variants)
 const ALERT_SENT_TYPES = ["alert_sent", "alert_email_sent", "alerts_sent"];
 const ALERT_HIT_TYPES = ["alert_hit", "alert_match", "alerts_hit"];
 
@@ -91,6 +95,7 @@ export async function recordEvent(typeOrObj, payload = {}) {
   try {
     await ensureAnalyticsTable();
 
+    // --- backwards compatible parsing ---
     let type = "";
     let p = {};
 
@@ -145,7 +150,8 @@ export async function recordEvent(typeOrObj, payload = {}) {
       p.details ??
       null;
 
-    const meta = safeJson(metaRaw);
+    const metaObj = safeJson(metaRaw);
+    const metaJson = metaObj ? JSON.stringify(metaObj) : null;
 
     const timestamp = at || new Date().toISOString();
 
@@ -159,11 +165,12 @@ export async function recordEvent(typeOrObj, payload = {}) {
         timestamp,
         Number.isFinite(roundId) ? roundId : null,
         plan,
-        meta ? meta : null,
+        metaJson,
       ]
     );
   } catch (err) {
-    console.error("Postgres analytics insert failed:", err);
+    // MUST NEVER break pages — swallow but log
+    console.error("Postgres analytics insert failed:", err?.message || err);
   }
 }
 
@@ -203,12 +210,10 @@ export async function getTopPlayedCourses(limit = 10, days = null) {
   return rows;
 }
 
-// -----------------------------
-// ALERTS analytics helpers
-// -----------------------------
+// ---------------- ALERT helpers (non-fatal) ----------------
+
 async function getTopAlertCourses7d(limit = 10) {
   await ensureAnalyticsTable();
-
   const { rows } = await db.query(
     `
     SELECT
@@ -225,13 +230,11 @@ async function getTopAlertCourses7d(limit = 10) {
     `,
     [ALERT_HIT_TYPES, limit]
   );
-
   return rows;
 }
 
 async function getAlertsByPlan7d() {
   await ensureAnalyticsTable();
-
   const { rows } = await db.query(
     `
     SELECT
@@ -251,7 +254,6 @@ async function getAlertsByPlan7d() {
     const key = String(r.plan || "UNKNOWN").toUpperCase();
     out[key] = (out[key] || 0) + (Number(r.count) || 0);
   });
-
   return out;
 }
 
@@ -312,7 +314,7 @@ export async function getAnalyticsSummary() {
     return rows.length ? Number(rows[0].n) || 0 : 0;
   }
 
-  // ----- existing metrics -----
+  // ----- existing metrics (DO NOT BREAK) -----
 
   summary.homeViews = await count(
     `SELECT COUNT(*)::int AS n FROM analytics WHERE type = 'home_view'`
@@ -353,7 +355,6 @@ export async function getAnalyticsSummary() {
      FROM analytics
      WHERE occurred_at >= NOW() - INTERVAL '7 days'`
   );
-
   summary.newUsers = summary.newUsers7d;
 
   summary.usersAllTime = await count(
@@ -402,64 +403,31 @@ export async function getAnalyticsSummary() {
   summary.searchToBookingRate =
     summary.searches > 0 ? summary.bookingClicks / summary.searches : 0;
 
-  // Aliases that the frontend expects (existing)
+  // Aliases your frontend already uses
   summary.homePageViews = summary.homeViews;
   summary.courseBookingClicks = summary.bookingClicks;
   summary.conversionHomeToBooking = summary.homeToBookingRate;
   summary.conversionSearchToBooking = summary.searchToBookingRate;
-
   summary.rounds = summary.roundsPlayed;
 
-  summary.repeatBookers = await count(
-    `
-    SELECT COUNT(*)::int AS n
-    FROM (
-      SELECT user_id
-      FROM analytics
-      WHERE type IN ('booking_click','course_booking_click')
-        AND user_id IS NOT NULL
-        AND user_id <> ''
-      GROUP BY user_id
-      HAVING COUNT(*) > 1
-    ) AS sub
-    `
-  );
-
-  {
-    const { rows } = await db.query(
-      `
-      SELECT
-        to_char(date_trunc('hour', occurred_at), 'HH24') AS hour,
-        COUNT(*)::int AS clicks
-      FROM analytics
-      WHERE type IN ('booking_click','course_booking_click')
-      GROUP BY hour
-      ORDER BY clicks DESC
-      LIMIT 1
-      `
-    );
-
-    summary.peakBookingHour = rows.length
-      ? { hour: rows[0].hour, clicks: rows[0].clicks }
-      : null;
-  }
-
+  // Attach course-level metrics
   summary.topCourses = await getTopCourses(10);
   summary.topSearchedCourses = await getTopSearchedCourses(10);
   summary.demandRank = await getDemandRanking(10);
 
   // =========================
-  // ✅ ALERTS (ALWAYS RETURN KEYS)
+  // ✅ ALERTS (NON-FATAL)
   // =========================
-  let alertsSent7d = 0;
-  let alertHits7d = 0;
-  let hitRate7d = 0;
-  let avgTimeToHitMins = 0;
-  let alertsByPlan = { BASIC: 0, PRO: 0, FREE: 0, TRIAL: 0, UNKNOWN: 0 };
-  let topAlertCourses = [];
+  // Defaults so UI never breaks
+  summary.alertsSent7d = 0;
+  summary.alertHits7d = 0;
+  summary.hitRate7d = 0;
+  summary.avgTimeToHitMins = 0;
+  summary.alertsByPlan = { BASIC: 0, PRO: 0, FREE: 0, TRIAL: 0, UNKNOWN: 0 };
+  summary.topAlertCourses = [];
 
   try {
-    alertsSent7d = await count(
+    summary.alertsSent7d = await count(
       `SELECT COUNT(*)::int AS n
        FROM analytics
        WHERE type = ANY($1::text[])
@@ -467,7 +435,7 @@ export async function getAnalyticsSummary() {
       [ALERT_SENT_TYPES]
     );
 
-    alertHits7d = await count(
+    summary.alertHits7d = await count(
       `SELECT COUNT(*)::int AS n
        FROM analytics
        WHERE type = ANY($1::text[])
@@ -475,37 +443,29 @@ export async function getAnalyticsSummary() {
       [ALERT_HIT_TYPES]
     );
 
-    hitRate7d = alertsSent7d > 0 ? alertHits7d / alertsSent7d : 0;
+    summary.hitRate7d =
+      summary.alertsSent7d > 0 ? summary.alertHits7d / summary.alertsSent7d : 0;
 
-    avgTimeToHitMins = await getAvgTimeToHitMins7d();
-    alertsByPlan = await getAlertsByPlan7d();
-    topAlertCourses = await getTopAlertCourses7d(10);
+    summary.avgTimeToHitMins = await getAvgTimeToHitMins7d();
+    summary.alertsByPlan = await getAlertsByPlan7d();
+    summary.topAlertCourses = await getTopAlertCourses7d(10);
   } catch (e) {
-    console.error("⚠️ Alerts analytics block failed (non-fatal):", e?.message || e);
+    console.error("⚠️ Alerts analytics failed (ignored):", e?.message || e);
   }
 
-  // Base keys
-  summary.alertsSent7d = alertsSent7d;
-  summary.alertHits7d = alertHits7d;
-  summary.hitRate7d = hitRate7d;
-  summary.avgTimeToHitMins = avgTimeToHitMins;
-  summary.alertsByPlan = alertsByPlan;
-  summary.topAlertCourses = topAlertCourses;
+  // ✅ extra aliases for different analytics.html versions
+  summary.alertsSent = summary.alertsSent7d;
+  summary.alertHits = summary.alertHits7d;
+  summary.hitRate = summary.hitRate7d;
+  summary.avgTimeToHit = summary.avgTimeToHitMins;
 
-  // ✅ Extra aliases so the frontend stops saying “Not configured”
-  // (covers different versions of analytics.html)
-  summary.alertsSent = alertsSent7d;
-  summary.alertHits = alertHits7d;
-  summary.hitRate = hitRate7d;
-  summary.avgTimeToHit = avgTimeToHitMins;
+  summary.alertsSent7Days = summary.alertsSent7d;
+  summary.alertHits7Days = summary.alertHits7d;
+  summary.hitRate7Days = summary.hitRate7d;
+  summary.avgTimeToHitMinutes = summary.avgTimeToHitMins;
 
-  summary.alertsSent7Days = alertsSent7d;
-  summary.alertHits7Days = alertHits7d;
-  summary.hitRate7Days = hitRate7d;
-  summary.avgTimeToHitMinutes = avgTimeToHitMins;
-
-  summary.alertsByPlan7d = alertsByPlan;
-  summary.topAlertCourses7d = topAlertCourses;
+  summary.alertsByPlan7d = summary.alertsByPlan;
+  summary.topAlertCourses7d = summary.topAlertCourses;
 
   return summary;
 }
