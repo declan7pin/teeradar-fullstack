@@ -14,12 +14,6 @@
       --muted: #64748b;
       --border: #e2e8f0;
       --pill: #dcfce7;
-      --warn: #fef3c7;
-      --warnText: #92400e;
-      --bad: #fee2e2;
-      --badText: #991b1b;
-      --ok: #dcfce7;
-      --okText: #166534;
     }
     *{box-sizing:border-box;}
     html,body{
@@ -110,7 +104,6 @@
       gap:8px;
       font-size:12px;
       margin-bottom:8px;
-      flex-wrap:wrap;
     }
     .pill-live{
       background:#dcfce7;
@@ -128,26 +121,6 @@
       border-radius:50%;
       background:#22c55e;
       box-shadow:0 0 0 3px rgba(34,197,94,0.35);
-    }
-    .pill-note{
-      background:#e0f2fe;
-      border-radius:999px;
-      padding:4px 10px;
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      color:#1d4ed8;
-      font-weight:600;
-    }
-    .pill-warn{
-      background:var(--warn);
-      color:var(--warnText);
-      border-radius:999px;
-      padding:4px 10px;
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      font-weight:600;
     }
 
     h1{
@@ -191,14 +164,6 @@
       color:var(--muted);
     }
 
-    .section-title{
-      font-size:12px;
-      color:var(--muted);
-      text-transform:uppercase;
-      letter-spacing:.12em;
-      margin:18px 0 10px;
-    }
-
     .user-overview{
       margin-top:6px;
     }
@@ -235,22 +200,17 @@
       font-size:13px;
     }
     .top-courses-list li{
-      padding:6px 0;
+      padding:4px 0;
       border-bottom:1px dashed #e5e7eb;
       display:flex;
       justify-content:space-between;
-      gap:12px;
+      gap:8px;
     }
     .top-courses-list span.label{
       font-weight:500;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-      max-width:72%;
     }
     .top-courses-list span.value{
       color:var(--muted);
-      white-space:nowrap;
     }
 
     .users-table{
@@ -304,47 +264,6 @@
       cursor:pointer;
     }
 
-    .filters-row{
-      display:flex;
-      flex-wrap:wrap;
-      gap:8px;
-      margin-top:10px;
-      align-items:center;
-    }
-    .filters-row input, .filters-row select{
-      border:1px solid var(--border);
-      border-radius:10px;
-      padding:8px 10px;
-      font-size:12px;
-      outline:none;
-      background:#fff;
-      min-width:160px;
-    }
-    .filters-row button{
-      border:1px solid var(--border);
-      border-radius:10px;
-      padding:8px 10px;
-      font-size:12px;
-      cursor:pointer;
-      background:#fff;
-    }
-
-    .status-pill{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding:4px 10px;
-      border-radius:999px;
-      font-size:11px;
-      font-weight:700;
-      border:1px solid var(--border);
-      background:#fff;
-      color:var(--muted);
-    }
-    .status-ok{ background:var(--ok); color:var(--okText); border-color:#bbf7d0; }
-    .status-warn{ background:var(--warn); color:var(--warnText); border-color:#fde68a; }
-    .status-bad{ background:var(--bad); color:var(--badText); border-color:#fecaca; }
-
     @media (min-width: 768px) {
       .cards-grid{
         grid-template-columns:repeat(3,minmax(0,1fr));
@@ -376,12 +295,6 @@
       <span class="pill-dot"></span>
       <span>Realtime, in-memory</span>
     </div>
-    <div class="pill-note" id="pillBackendMode" style="display:none;">
-      <span>Backend summary</span>
-    </div>
-    <div class="pill-warn" id="pillMissingData" style="display:none;">
-      <span>Some admin modules not configured</span>
-    </div>
   </div>
 
   <h1>Analytics dashboard</h1>
@@ -389,9 +302,6 @@
     Live tee-time engagement across Western Australia.
   </p>
 
-  <!-- ===========================================================
-       1) Core metrics + Funnel
-       =========================================================== -->
   <section class="cards-grid" aria-label="Key metrics">
     <article class="card">
       <div class="card-label">Home page views</div>
@@ -442,25 +352,6 @@
       <div id="metricPeakHour" class="card-value">–</div>
       <div class="card-hint">Busiest hour by booking clicks</div>
     </article>
-
-    <!-- ✅ Funnel cards (best-effort from existing fields) -->
-    <article class="card">
-      <div class="card-label">Funnel: Home → Search</div>
-      <div id="metricFunnelHomeSearch" class="card-value">0%</div>
-      <div class="card-hint">Searches ÷ home views</div>
-    </article>
-
-    <article class="card">
-      <div class="card-label">Funnel: Search → Booking</div>
-      <div id="metricFunnelSearchBooking" class="card-value">0%</div>
-      <div class="card-hint">Booking clicks ÷ searches</div>
-    </article>
-
-    <article class="card">
-      <div class="card-label">Funnel: Home → Booking</div>
-      <div id="metricFunnelHomeBooking" class="card-value">0%</div>
-      <div class="card-hint">Booking clicks ÷ home views</div>
-    </article>
   </section>
 
   <section class="card user-overview">
@@ -483,12 +374,7 @@
     <div class="muted-note" id="summaryUpdated">Loading analytics…</div>
   </section>
 
-  <!-- ===========================================================
-       2) Course insights
-       =========================================================== -->
-  <div class="section-title">Course insights</div>
-
-  <section class="card" style="margin-top:10px;">
+  <section class="card" style="margin-top:14px;">
     <div class="card-label">Most-clicked courses</div>
     <ul id="topCoursesList" class="top-courses-list">
       <li><span class="label">No clicks yet</span><span class="value">—</span></li>
@@ -517,200 +403,14 @@
     </ul>
   </section>
 
-  <!-- ===========================================================
-       3) Alerts performance (best-effort placeholders unless backend provides fields)
-       =========================================================== -->
-  <div class="section-title">Alerts performance</div>
-
-  <section class="cards-grid" aria-label="Alerts performance">
-    <article class="card">
-      <div class="card-label">Alerts sent (7d)</div>
-      <div id="metricAlertsSent7d" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: alertsSent7d</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Alert hits (7d)</div>
-      <div id="metricAlertHits7d" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: alertHits7d</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Hit rate (7d)</div>
-      <div id="metricAlertHitRate7d" class="card-value">—</div>
-      <div class="card-hint">Hits ÷ scans (or hits ÷ sent)</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Avg time-to-hit</div>
-      <div id="metricAlertTimeToHit" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: avgTimeToHitMins</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Alerts by plan</div>
-      <div id="metricAlertsByPlan" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: alertsByPlan</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Top alert courses (7d)</div>
-      <div id="metricTopAlertCourse" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: topAlertCourses</div>
-    </article>
-  </section>
-
   <section class="card" style="margin-top:14px;">
-    <div class="card-label">Top alert-triggering courses</div>
-    <div class="muted-note">Shows where subscribers are getting value</div>
-    <ul id="topAlertCoursesList" class="top-courses-list">
-      <li><span class="label">Not configured</span><span class="value">—</span></li>
-    </ul>
-  </section>
-
-  <!-- ===========================================================
-       4) Subscription + revenue health (best-effort placeholders)
-       =========================================================== -->
-  <div class="section-title">Subscription & revenue</div>
-
-  <section class="cards-grid" aria-label="Subscription health">
-    <article class="card">
-      <div class="card-label">Active subscribers</div>
-      <div id="metricSubsActive" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: subscribersActive</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Basic / Pro</div>
-      <div id="metricSubsSplit" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: subscribersByPlan</div>
-    </article>
-    <article class="card">
-      <div class="card-label">MRR</div>
-      <div id="metricMRR" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: mrr</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Trials → paid</div>
-      <div id="metricTrialConv" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: trialToPaidRate</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Churn (30d)</div>
-      <div id="metricChurn30d" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: churn30d</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Coupon usage</div>
-      <div id="metricCouponUsage" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: couponUsage</div>
-    </article>
-  </section>
-
-  <section class="card" style="margin-top:14px;">
-    <div class="card-label">Top “upgrade” candidates</div>
-    <div class="muted-note">Free users with high engagement (best-effort placeholder)</div>
-    <ul id="upgradeCandidatesList" class="top-courses-list">
-      <li><span class="label">Not configured</span><span class="value">—</span></li>
-    </ul>
-  </section>
-
-  <!-- ===========================================================
-       5) Scraper / system health (best-effort placeholders)
-       =========================================================== -->
-  <div class="section-title">System health</div>
-
-  <section class="cards-grid" aria-label="Scraper health">
-    <article class="card">
-      <div class="card-label">Scrape success rate</div>
-      <div id="metricScrapeSuccess" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: scrapeSuccessRate</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Avg scrape duration</div>
-      <div id="metricScrapeDuration" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: avgScrapeMs</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Cache freshness</div>
-      <div id="metricCacheFreshness" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: cacheAgeSeconds</div>
-    </article>
-  </section>
-
-  <section class="card" style="margin-top:14px;">
-    <div class="card-label">Failures / stale courses</div>
-    <div class="muted-note">Last error per course or provider (placeholder unless backend provides)</div>
-    <ul id="scrapeFailuresList" class="top-courses-list">
-      <li><span class="label">Not configured</span><span class="value">—</span></li>
-    </ul>
-  </section>
-
-  <!-- ===========================================================
-       6) Feature usage (best-effort placeholders)
-       =========================================================== -->
-  <div class="section-title">Feature usage</div>
-
-  <section class="cards-grid" aria-label="Feature usage">
-    <article class="card">
-      <div class="card-label">Most-used filters</div>
-      <div id="metricTopFilters" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: topFilters</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Home course selections</div>
-      <div id="metricHomeCourseSet" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: homeCourseSetCount</div>
-    </article>
-    <article class="card">
-      <div class="card-label">Scorecards started / completed</div>
-      <div id="metricScorecards" class="card-value">—</div>
-      <div class="card-hint">Requires backend fields: roundsCreated, roundsCompleted</div>
-    </article>
-  </section>
-
-  <section class="card" style="margin-top:14px;">
-    <div class="card-label">Notes</div>
-    <div class="muted-note">
-      Some sections show <strong>Not configured</strong> until the backend exposes fields on <code>/api/analytics</code>.
-      This file is safe to deploy now — it won’t break if fields are missing.
-    </div>
-  </section>
-
-  <!-- ===========================================================
-       7) User management (existing) + filters/search (added)
-       =========================================================== -->
-  <div class="section-title">User management</div>
-
-  <section class="card" style="margin-top:10px;">
     <div class="card-label">Registered users</div>
-
-    <!-- ✅ Added: client-side filters -->
-    <div class="filters-row" aria-label="User filters">
-      <input id="userSearch" type="text" placeholder="Search email / home state / favourite…" />
-      <select id="userPlanFilter">
-        <option value="">All plans</option>
-        <option value="Pro">Pro</option>
-        <option value="Basic">Basic</option>
-        <option value="Unsubscribed">Unsubscribed</option>
-      </select>
-      <select id="userHomeStateFilter">
-        <option value="">All home states</option>
-        <option value="WA">WA</option>
-        <option value="QLD">QLD</option>
-        <option value="NT">NT</option>
-        <option value="NSW">NSW</option>
-        <option value="VIC">VIC</option>
-        <option value="SA">SA</option>
-        <option value="TAS">TAS</option>
-        <option value="ACT">ACT</option>
-      </select>
-      <button id="btnClearUserFilters" type="button">Clear</button>
-      <span class="status-pill" id="userFilterCount" style="margin-left:auto;">0 shown</span>
-    </div>
-    <!-- ✅ end added -->
-
     <div id="usersEmpty" class="users-empty" style="display:none;">
       No registered users yet.
     </div>
     <div id="usersError" class="users-empty" style="display:none;color:#b91c1c;">
       Error loading users.
     </div>
-
     <div style="overflow-x:auto;">
       <table id="usersTable" class="users-table" style="display:none;">
         <thead>
@@ -730,7 +430,6 @@
     </div>
   </section>
 
-  <!-- detail card populated when you click a user row -->
   <section class="card" id="userDetailCard" style="margin-top:14px; display:none;">
     <div class="card-label">User details</div>
     <div class="muted-note" style="margin-bottom:6px;">
@@ -806,49 +505,6 @@
     return `${fmt(h)}–${fmt(next)}`;
   }
 
-  function setText(id, val) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = (val === null || typeof val === "undefined" || val === "") ? "—" : String(val);
-  }
-
-  function setPct(id, ratio) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const r = Number(ratio);
-    if (!Number.isFinite(r)) { el.textContent = "—"; return; }
-    const pct = (r * 100).toFixed(1).replace(/\.0$/, "");
-    el.textContent = pct + "%";
-  }
-
-  function moneyFmt(n) {
-    const x = Number(n);
-    if (!Number.isFinite(x)) return "—";
-    return "$" + x.toFixed(2).replace(/\.00$/, "");
-  }
-
-  function minsFmt(n) {
-    const x = Number(n);
-    if (!Number.isFinite(x)) return "—";
-    if (x < 60) return Math.round(x) + "m";
-    const h = Math.floor(x / 60);
-    const m = Math.round(x % 60);
-    return h + "h " + m + "m";
-  }
-
-  function markMissingModules(summary) {
-    // if key sections are missing, show warning pill
-    const needs = [
-      "alertsSent7d","alertHits7d","subscribersActive","mrr","scrapeSuccessRate"
-    ];
-    const missing = needs.some((k) => typeof summary?.[k] === "undefined");
-    const pill = document.getElementById("pillMissingData");
-    if (pill) pill.style.display = missing ? "inline-flex" : "none";
-
-    const mode = document.getElementById("pillBackendMode");
-    if (mode) mode.style.display = "inline-flex";
-  }
-
   async function loadAnalytics() {
     enforceAdmin();
 
@@ -860,16 +516,20 @@
       return;
     }
 
-    markMissingModules(summary);
-
-    const homeViewsVal = summary.homePageViews ?? summary.homeViews ?? 0;
-    const bookingClicksVal = summary.courseBookingClicks ?? summary.bookingClicks ?? 0;
-    const searchesVal = summary.searches ?? 0;
-    const newUsersVal = summary.newUsers ?? 0;
-
-    const usersAllTimeVal = summary.usersAllTime ?? 0;
-    const usersTodayVal = summary.usersToday ?? 0;
-    const usersWeekVal = summary.usersWeek ?? 0;
+    const homeViewsVal =
+      summary.homePageViews ?? summary.homeViews ?? 0;
+    const bookingClicksVal =
+      summary.courseBookingClicks ?? summary.bookingClicks ?? 0;
+    const searchesVal =
+      summary.searches ?? 0;
+    const newUsersVal =
+      summary.newUsers ?? 0;
+    const usersAllTimeVal =
+      summary.usersAllTime ?? 0;
+    const usersTodayVal =
+      summary.usersToday ?? 0;
+    const usersWeekVal =
+      summary.usersWeek ?? 0;
 
     document.getElementById("metricHomeViews").textContent = homeViewsVal;
     document.getElementById("metricBookingClicks").textContent = bookingClicksVal;
@@ -879,28 +539,34 @@
     document.getElementById("usersToday").textContent = usersTodayVal;
     document.getElementById("usersWeek").textContent = usersWeekVal;
 
-    // rounds played
-    const roundsPlayedVal = summary.roundsPlayed ?? summary.rounds ?? 0;
+    // ✅ FIXED: prefer all-time roundsPlayed first
+    const roundsPlayedVal =
+      summary.roundsPlayed ?? summary.rounds ?? summary.roundsPlayed7d ?? 0;
     const roundsEl = document.getElementById("metricRoundsPlayed");
     if (roundsEl) roundsEl.textContent = roundsPlayedVal;
 
-    // conversion rates
     let convHome = summary.conversionHomeToBooking;
-    if (convHome == null) convHome = homeViewsVal > 0 ? bookingClicksVal / homeViewsVal : 0;
+    if (convHome == null) {
+      convHome = homeViewsVal > 0 ? bookingClicksVal / homeViewsVal : 0;
+    }
 
     let convSearch = summary.conversionSearchToBooking;
-    if (convSearch == null) convSearch = searchesVal > 0 ? bookingClicksVal / searchesVal : 0;
+    if (convSearch == null) {
+      convSearch = searchesVal > 0 ? bookingClicksVal / searchesVal : 0;
+    }
 
-    setPct("metricConvHomeBooking", convHome);
-    setPct("metricConvSearchBooking", convSearch);
+    const convHomeEl = document.getElementById("metricConvHomeBooking");
+    if (convHomeEl) {
+      const pct = (convHome * 100).toFixed(1).replace(/\.0$/, "");
+      convHomeEl.textContent = pct + "%";
+    }
 
-    // Funnel cards
-    const homeToSearch = homeViewsVal > 0 ? (searchesVal / homeViewsVal) : 0;
-    setPct("metricFunnelHomeSearch", homeToSearch);
-    setPct("metricFunnelSearchBooking", searchesVal > 0 ? (bookingClicksVal / searchesVal) : 0);
-    setPct("metricFunnelHomeBooking", homeViewsVal > 0 ? (bookingClicksVal / homeViewsVal) : 0);
+    const convSearchEl = document.getElementById("metricConvSearchBooking");
+    if (convSearchEl) {
+      const pct = (convSearch * 100).toFixed(1).replace(/\.0$/, "");
+      convSearchEl.textContent = pct + "%";
+    }
 
-    // users summary
     const users30d = summary.users30d ?? summary.users_30d ?? 0;
     const returning7d = summary.returningUsers7d ?? summary.returning_users_7d ?? 0;
 
@@ -910,11 +576,10 @@
     const returning7dEl = document.getElementById("returning7d");
     if (returning7dEl) returning7dEl.textContent = returning7d;
 
-    // repeat bookers
     const repeatBookersVal = summary.repeatBookers ?? summary.repeat_bookers ?? 0;
-    setText("metricRepeatBookers", repeatBookersVal);
+    const repeatEl = document.getElementById("metricRepeatBookers");
+    if (repeatEl) repeatEl.textContent = repeatBookersVal;
 
-    // peak hour
     const peak = summary.peakBookingHour ?? summary.peak_booking_hour ?? null;
     const peakEl = document.getElementById("metricPeakHour");
     if (peakEl) {
@@ -925,12 +590,13 @@
       }
     }
 
-    // health sentence
     const healthEl = document.getElementById("healthSummary");
     if (healthEl) {
       let signupRateRaw = 0;
       const activeBase = users30d > 0 ? users30d : usersAllTimeVal;
-      if (activeBase > 0) signupRateRaw = newUsersVal / activeBase;
+      if (activeBase > 0) {
+        signupRateRaw = newUsersVal / activeBase;
+      }
       if (!Number.isFinite(signupRateRaw)) signupRateRaw = 0;
 
       const bookingClickRatePct = (convHome * 100).toFixed(1).replace(/\.0$/, "");
@@ -944,12 +610,13 @@
 
     updatedAt.textContent = "Last updated " + new Date().toLocaleString();
 
-    // Most-clicked courses
     const topList = document.getElementById("topCoursesList");
     topList.innerHTML = "";
+
     const top = summary.topCourses || [];
     if (top.length === 0) {
-      topList.innerHTML = `<li><span class="label">No course clicks yet</span><span class="value">—</span></li>`;
+      topList.innerHTML =
+        `<li><span class="label">No course clicks yet</span><span class="value">—</span></li>`;
     } else {
       top.forEach((row) => {
         topList.innerHTML += `
@@ -961,13 +628,13 @@
       });
     }
 
-    // Most-searched courses
     const topSearchList = document.getElementById("topSearchedCoursesList");
     if (topSearchList) {
       topSearchList.innerHTML = "";
       const topSearched = summary.topSearchedCourses || summary.top_searched_courses || [];
       if (!topSearched.length) {
-        topSearchList.innerHTML = `<li><span class="label">No searches yet</span><span class="value">—</span></li>`;
+        topSearchList.innerHTML =
+          `<li><span class="label">No searches yet</span><span class="value">—</span></li>`;
       } else {
         topSearched.forEach((row) => {
           topSearchList.innerHTML += `
@@ -980,13 +647,13 @@
       }
     }
 
-    // Demand ranking
     const demandList = document.getElementById("demandRankList");
     if (demandList) {
       demandList.innerHTML = "";
       const demand = summary.demandRank || summary.demand_rank || [];
       if (!demand.length) {
-        demandList.innerHTML = `<li><span class="label">No demand data yet</span><span class="value">—</span></li>`;
+        demandList.innerHTML =
+          `<li><span class="label">No demand data yet</span><span class="value">—</span></li>`;
       } else {
         demand.forEach((row) => {
           demandList.innerHTML += `
@@ -1001,7 +668,6 @@
       }
     }
 
-    // Top played courses
     const playedList = document.getElementById("topPlayedCoursesList");
     if (playedList) {
       const allTime = summary.topPlayedCourses || [];
@@ -1010,7 +676,8 @@
       playedList.innerHTML = "";
 
       if (!allTime.length && !last30d.length) {
-        playedList.innerHTML = `<li><span class="label">No rounds logged yet</span><span class="value">—</span></li>`;
+        playedList.innerHTML =
+          `<li><span class="label">No rounds logged yet</span><span class="value">—</span></li>`;
       } else {
         const map30 = new Map(last30d.map((r) => [r.courseName, r.rounds]));
         const names = new Set([
@@ -1029,142 +696,6 @@
           `;
         });
       }
-    }
-
-    // Alerts performance (placeholders unless backend provides)
-    setText("metricAlertsSent7d", summary.alertsSent7d);
-    setText("metricAlertHits7d", summary.alertHits7d);
-
-    // hit rate: prefer provided, else compute
-    let hitRate = summary.alertHitRate7d;
-    if (hitRate == null) {
-      const hits = Number(summary.alertHits7d);
-      const sent = Number(summary.alertsSent7d);
-      if (Number.isFinite(hits) && Number.isFinite(sent) && sent > 0) hitRate = hits / sent;
-    }
-    if (typeof hitRate === "number") setPct("metricAlertHitRate7d", hitRate);
-    else setText("metricAlertHitRate7d", "—");
-
-    const tth = summary.avgTimeToHitMins ?? summary.avg_time_to_hit_mins;
-    setText("metricAlertTimeToHit", (tth != null ? minsFmt(tth) : "—"));
-
-    const byPlan = summary.alertsByPlan;
-    if (byPlan && typeof byPlan === "object") {
-      const basic = byPlan.Basic ?? byPlan.basic ?? 0;
-      const pro = byPlan.Pro ?? byPlan.pro ?? 0;
-      const free = byPlan.Free ?? byPlan.free ?? 0;
-      setText("metricAlertsByPlan", `Pro ${pro} • Basic ${basic} • Free ${free}`);
-    } else {
-      setText("metricAlertsByPlan", "—");
-    }
-
-    const topAlertCourses = summary.topAlertCourses;
-    if (Array.isArray(topAlertCourses) && topAlertCourses.length) {
-      setText("metricTopAlertCourse", topAlertCourses[0]?.courseName || "—");
-      const list = document.getElementById("topAlertCoursesList");
-      if (list) {
-        list.innerHTML = "";
-        topAlertCourses.slice(0, 12).forEach((r) => {
-          list.innerHTML += `
-            <li>
-              <span class="label">${r.courseName}</span>
-              <span class="value">${r.hits ?? r.count ?? 0} hits</span>
-            </li>
-          `;
-        });
-      }
-    } else {
-      setText("metricTopAlertCourse", "—");
-    }
-
-    // Subs + revenue (placeholders unless backend provides)
-    setText("metricSubsActive", summary.subscribersActive);
-
-    const subsByPlan = summary.subscribersByPlan;
-    if (subsByPlan && typeof subsByPlan === "object") {
-      const basic = subsByPlan.Basic ?? subsByPlan.basic ?? 0;
-      const pro = subsByPlan.Pro ?? subsByPlan.pro ?? 0;
-      setText("metricSubsSplit", `Pro ${pro} • Basic ${basic}`);
-    } else {
-      setText("metricSubsSplit", "—");
-    }
-
-    const mrr = summary.mrr;
-    setText("metricMRR", mrr != null ? moneyFmt(mrr) : "—");
-
-    const trialRate = summary.trialToPaidRate ?? summary.trial_to_paid_rate;
-    if (typeof trialRate === "number") setPct("metricTrialConv", trialRate);
-    else setText("metricTrialConv", "—");
-
-    const churn = summary.churn30d ?? summary.churn_30d;
-    if (typeof churn === "number") setPct("metricChurn30d", churn);
-    else setText("metricChurn30d", "—");
-
-    const couponUsage = summary.couponUsage;
-    if (couponUsage && typeof couponUsage === "object") {
-      const entries = Object.entries(couponUsage).slice(0, 3).map(([k,v]) => `${k} ${v}`);
-      setText("metricCouponUsage", entries.join(" • ") || "—");
-    } else {
-      setText("metricCouponUsage", "—");
-    }
-
-    // System health (placeholders unless backend provides)
-    const ssr = summary.scrapeSuccessRate;
-    if (typeof ssr === "number") setPct("metricScrapeSuccess", ssr);
-    else setText("metricScrapeSuccess", "—");
-
-    const avgMs = summary.avgScrapeMs;
-    if (avgMs != null && Number.isFinite(Number(avgMs))) {
-      const ms = Number(avgMs);
-      setText("metricScrapeDuration", ms >= 1000 ? (Math.round(ms/100)/10) + "s" : Math.round(ms) + "ms");
-    } else {
-      setText("metricScrapeDuration", "—");
-    }
-
-    const cacheAge = summary.cacheAgeSeconds;
-    if (cacheAge != null && Number.isFinite(Number(cacheAge))) {
-      const s = Number(cacheAge);
-      if (s < 60) setText("metricCacheFreshness", Math.round(s) + "s");
-      else if (s < 3600) setText("metricCacheFreshness", Math.round(s/60) + "m");
-      else setText("metricCacheFreshness", Math.round(s/3600) + "h");
-    } else {
-      setText("metricCacheFreshness", "—");
-    }
-
-    const failures = summary.scrapeFailures;
-    const failList = document.getElementById("scrapeFailuresList");
-    if (failList) {
-      if (Array.isArray(failures) && failures.length) {
-        failList.innerHTML = "";
-        failures.slice(0, 12).forEach((f) => {
-          const name = f.course || f.courseName || f.provider || "Unknown";
-          const msg = f.error || f.message || f.lastError || "error";
-          failList.innerHTML += `
-            <li>
-              <span class="label">${name}</span>
-              <span class="value">${msg}</span>
-            </li>
-          `;
-        });
-      }
-    }
-
-    // Feature usage placeholders
-    const topFilters = summary.topFilters;
-    if (Array.isArray(topFilters) && topFilters.length) {
-      const first = topFilters[0];
-      setText("metricTopFilters", `${first.name || first.filter || "—"} (${first.count || 0})`);
-    } else {
-      setText("metricTopFilters", "—");
-    }
-    setText("metricHomeCourseSet", summary.homeCourseSetCount);
-
-    const rc = summary.roundsCreated;
-    const rdone = summary.roundsCompleted;
-    if (rc != null || rdone != null) {
-      setText("metricScorecards", `${rc ?? 0} started • ${rdone ?? 0} completed`);
-    } else {
-      setText("metricScorecards", "—");
     }
   }
 
@@ -1266,58 +797,6 @@
     );
   }
 
-  // ---- user filtering (client-side) ----
-  function applyUserFilters() {
-    const q = (document.getElementById("userSearch")?.value || "").trim().toLowerCase();
-    const plan = (document.getElementById("userPlanFilter")?.value || "").trim();
-    const hs = (document.getElementById("userHomeStateFilter")?.value || "").trim().toUpperCase();
-
-    const rows = Array.from(document.querySelectorAll("tr.user-row"));
-    let shown = 0;
-
-    rows.forEach((row) => {
-      const idx = Number(row.getAttribute("data-idx"));
-      const u = USERS_CACHE[idx] || {};
-      const fav = favouritesToString(u.favourites || u.favourite_courses);
-      const hay = [
-        u.email || "",
-        u.home_state || "",
-        fav || "",
-        normalisePlanLabel(u.plan) || ""
-      ].join(" ").toLowerCase();
-
-      const planLabel = normalisePlanLabel(u.plan);
-
-      const okQ = !q || hay.includes(q);
-      const okPlan = !plan || planLabel === plan;
-      const okHS = !hs || String(u.home_state || "").toUpperCase() === hs;
-
-      const ok = okQ && okPlan && okHS;
-      row.style.display = ok ? "" : "none";
-      if (ok) shown++;
-    });
-
-    const badge = document.getElementById("userFilterCount");
-    if (badge) badge.textContent = shown + " shown";
-  }
-
-  function wireUserFilters() {
-    const s = document.getElementById("userSearch");
-    const p = document.getElementById("userPlanFilter");
-    const h = document.getElementById("userHomeStateFilter");
-    const c = document.getElementById("btnClearUserFilters");
-
-    if (s) s.addEventListener("input", applyUserFilters);
-    if (p) p.addEventListener("change", applyUserFilters);
-    if (h) h.addEventListener("change", applyUserFilters);
-    if (c) c.addEventListener("click", () => {
-      if (s) s.value = "";
-      if (p) p.value = "";
-      if (h) h.value = "";
-      applyUserFilters();
-    });
-  }
-
   async function loadRegisteredUsers() {
     try {
       const res = await fetch("/api/analytics/users", {
@@ -1346,8 +825,6 @@
         empty.style.display = "block";
         errorEl.style.display = "none";
         document.getElementById("userDetailCard").style.display = "none";
-        const badge = document.getElementById("userFilterCount");
-        if (badge) badge.textContent = "0 shown";
         return;
       }
 
@@ -1385,10 +862,8 @@
         `;
       }).join("");
 
-      // row click → detail card
       document.querySelectorAll(".user-row").forEach((row) => {
         row.addEventListener("click", (e) => {
-          // ignore clicks on the Delete button
           if (e.target && e.target.classList.contains("user-delete-btn")) return;
           const idx = Number(row.getAttribute("data-idx"));
           const user = USERS_CACHE[idx];
@@ -1396,7 +871,6 @@
         });
       });
 
-      // delete buttons
       document.querySelectorAll(".user-delete-btn").forEach((btn) => {
         btn.addEventListener("click", async (event) => {
           event.stopPropagation();
@@ -1434,12 +908,7 @@
         });
       });
 
-      // pull live plan from Stripe for each user
       await refreshPlansForUsers(users);
-
-      // enable filters
-      wireUserFilters();
-      applyUserFilters();
 
     } catch (err) {
       console.error("Error loading registered users:", err);
