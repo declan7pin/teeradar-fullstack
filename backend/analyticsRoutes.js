@@ -9,13 +9,20 @@ import {
   deleteRegisteredUser,
 } from "./db/analyticsDb.js";
 
+/* ✅ ONLY ADDITIONS NEEDED: also write + read Postgres analytics (backend/analytics.js) */
+import {
+  recordEvent as recordPgEvent,
+  getAnalyticsSummary as getPgAnalyticsSummary,
+} from "./analytics.js";
+/* ✅ END ONLY ADDITIONS */
+
 const router = express.Router();
 
 /**
  * POST /api/analytics/event
  * Body: { type, at?, payload? }
  */
-router.post("/event", (req, res) => {
+router.post("/event", async (req, res) => {
   try {
     const { type, at, payload } = req.body || {};
 
@@ -23,7 +30,39 @@ router.post("/event", (req, res) => {
       return res.status(400).json({ error: "Missing event type" });
     }
 
+    // existing (SQLite) analytics
     logAnalyticsEvent({ type, at, payload });
+
+    // ✅ ALSO store to Postgres analytics (so rounds + everything are in one place)
+    try {
+      const userId =
+        payload?.userId ??
+        payload?.user_id ??
+        payload?.uid ??
+        null;
+
+      const courseName =
+        payload?.courseName ??
+        payload?.course_name ??
+        payload?.course ??
+        null;
+
+      const roundId =
+        payload?.roundId ??
+        payload?.round_id ??
+        null;
+
+      await recordPgEvent({
+        type,
+        userId,
+        courseName,
+        at,
+        roundId,
+      });
+    } catch (e) {
+      console.warn("Postgres analytics insert failed (non-fatal):", e?.message || e);
+    }
+
     return res.json({ ok: true });
   } catch (err) {
     console.error("Error logging analytics event", err);
@@ -32,32 +71,50 @@ router.post("/event", (req, res) => {
 });
 
 // shared handler for summary so we can serve both "/" and "/summary"
-function handleSummary(req, res) {
+async function handleSummary(req, res) {
   try {
-    const s = getAnalyticsSummary();
+    /* ✅ ONLY CHANGE NEEDED: prefer Postgres summary (includes rounds played + top played courses) */
+    let s = null;
+
+    try {
+      s = await getPgAnalyticsSummary();
+    } catch (e) {
+      console.warn("Falling back to analyticsDb summary:", e?.message || e);
+      s = getAnalyticsSummary(); // legacy fallback
+    }
 
     const response = {
       // backwards-compatible fields you already use
-      homePageViews: s.home_page_views,
-      courseBookingClicks: s.booking_clicks,
-      searches: s.searches,
-      newUsers: s.new_users,
-      homeViews: s.home_page_views,
-      bookingClicks: s.booking_clicks,
-      usersAllTime: s.unique_users,
-      usersToday: s.users_today,
-      usersWeek: s.users_week,
+      homePageViews: s.homePageViews ?? s.home_page_views ?? s.homeViews ?? 0,
+      courseBookingClicks:
+        s.courseBookingClicks ?? s.booking_clicks ?? s.bookingClicks ?? 0,
+      searches: s.searches ?? 0,
+      newUsers: s.newUsers ?? s.new_users ?? 0,
+      homeViews: s.homeViews ?? s.home_page_views ?? 0,
+      bookingClicks: s.bookingClicks ?? s.booking_clicks ?? 0,
+      usersAllTime: s.usersAllTime ?? s.unique_users ?? 0,
+      usersToday: s.usersToday ?? s.users_today ?? 0,
+      usersWeek: s.usersWeek ?? s.users_week ?? 0,
 
       // extra fields for new cards/metrics
-      users30d: s.users30d,
-      returningUsers7d: s.returning_users_7d,
-      repeatBookers: s.repeat_bookers,
-      peakBookingHour: s.peak_booking_hour,
+      users30d: s.users30d ?? 0,
+      returningUsers7d: s.returningUsers7d ?? s.returning_users_7d ?? 0,
+      repeatBookers: s.repeatBookers ?? s.repeat_bookers ?? 0,
+      peakBookingHour: s.peakBookingHour ?? s.peak_booking_hour ?? null,
 
-      topCourses: s.top_courses,
-      topSearchedCourses: s.top_searched_courses,
-      demandRank: s.demand_rank,
+      topCourses: s.topCourses ?? s.top_courses ?? [],
+      topSearchedCourses: s.topSearchedCourses ?? s.top_searched_courses ?? [],
+      demandRank: s.demandRank ?? s.demand_rank ?? [],
+
+      // ✅ NEW: rounds played analytics
+      roundsPlayed: s.roundsPlayed ?? s.rounds_played ?? s.rounds ?? 0,
+      roundsPlayed7d: s.roundsPlayed7d ?? s.rounds_played_7d ?? 0,
+
+      // ✅ NEW: most played courses (what you asked for)
+      topPlayedCourses: s.topPlayedCourses ?? [],
+      topPlayedCourses30d: s.topPlayedCourses30d ?? [],
     };
+    /* ✅ END ONLY CHANGE */
 
     return res.json(response);
   } catch (err) {
