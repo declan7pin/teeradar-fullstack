@@ -9,15 +9,23 @@ let initPromise = null;
 async function ensureAnalyticsTable() {
   if (initPromise) return initPromise;
 
-  initPromise = db.query(`
-    CREATE TABLE IF NOT EXISTS analytics (
-      id          SERIAL PRIMARY KEY,
-      type        TEXT NOT NULL,
-      user_id     TEXT,
-      course_name TEXT,
-      occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
+  initPromise = (async () => {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS analytics (
+        id          SERIAL PRIMARY KEY,
+        type        TEXT NOT NULL,
+        user_id     TEXT,
+        course_name TEXT,
+        occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    // ✅ add round_id for dedupe (doesn't break existing rows)
+    await db.query(`
+      ALTER TABLE analytics
+      ADD COLUMN IF NOT EXISTS round_id BIGINT;
+    `);
+  })();
 
   return initPromise;
 }
@@ -25,39 +33,33 @@ async function ensureAnalyticsTable() {
 /**
  * Record an analytics event into Postgres.
  *
- * type:        "home_view" | "search" | "booking_click" | "course_booking_click"
- * userId:      string (IP or generated ID)
- * courseName:  string (optional)
- * at:          timestamp string
+ * Supports BOTH:
+ *  1) recordEvent({ type, userId, courseName, at, roundId })   (legacy)
+ *  2) recordEvent("type", { userId, courseName, at, roundId }) (new)
  */
-export async function recordEvent({ type, userId, courseName, at }) {
+export async function recordEvent(typeOrObj, payload = {}) {
   try {
     await ensureAnalyticsTable();
 
-    const timestamp = at || new Date().toISOString();
+    // --- backwards compatible parsing ---
+    let type = "";
+    let p = {};
 
-    await db.query(
-      `INSERT INTO analytics (type, user_id, course_name, occurred_at)
-       VALUES ($1, $2, $3, $4)`,
-      [type, userId || null, courseName || null, timestamp]
-    );
-  } catch (err) {
-    console.error("Postgres analytics insert failed:", err);
-  }
-}
+    if (typeOrObj && typeof typeOrObj === "object" && !Array.isArray(typeOrObj)) {
+      // legacy style: recordEvent({ type, userId, courseName, at, roundId })
+      p = typeOrObj || {};
+      type = String(p.type || "").trim();
+    } else {
+      // new style: recordEvent("type", { ... })
+      type = String(typeOrObj || "").trim();
+      p = payload && typeof payload === "object" ? payload : {};
+    }
 
-/**
- * ✅ NEW (only add what's needed):
- * Convenience wrapper so other files can call:
- *   recordEvent("event_type", { user_id, course_name, ... })
- * while still using the existing Postgres table.
- */
-export async function recordEvent(type, payload = {}) {
-  try {
-    const p = payload && typeof payload === "object" ? payload : {};
+    if (!type) return;
+
     const at = p.at || p.occurred_at || null;
 
-    // accept either snake_case or camelCase
+    // accept snake_case or camelCase
     const userId =
       p.userId ??
       p.user_id ??
@@ -71,20 +73,32 @@ export async function recordEvent(type, payload = {}) {
       p.course ??
       null;
 
-    await ensureAnalyticsTable();
+    const roundIdRaw =
+      p.roundId ??
+      p.round_id ??
+      null;
+
+    const roundId = roundIdRaw === null || typeof roundIdRaw === "undefined" || roundIdRaw === ""
+      ? null
+      : Number(roundIdRaw);
 
     const timestamp = at || new Date().toISOString();
 
     await db.query(
-      `INSERT INTO analytics (type, user_id, course_name, occurred_at)
-       VALUES ($1, $2, $3, $4)`,
-      [String(type), userId || null, courseName || null, timestamp]
+      `INSERT INTO analytics (type, user_id, course_name, occurred_at, round_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        type,
+        userId || null,
+        courseName || null,
+        timestamp,
+        Number.isFinite(roundId) ? roundId : null,
+      ]
     );
   } catch (err) {
     console.error("Postgres analytics insert failed:", err);
   }
 }
-/* ✅ END ONLY ADDITIONS */
 
 /**
  * Return a summary of key metrics.
@@ -117,20 +131,21 @@ export async function getAnalyticsSummary() {
      WHERE type = 'search'`
   );
 
-  /* ✅ ONLY ADDITIONS (needed): rounds played metrics */
+  // ✅ rounds played (deduped by round_id)
   summary.roundsPlayed = await count(
-    `SELECT COUNT(*)::int AS n
+    `SELECT COUNT(DISTINCT round_id)::int AS n
      FROM analytics
-     WHERE type = 'round_played'`
+     WHERE type = 'round_played'
+       AND round_id IS NOT NULL`
   );
 
   summary.roundsPlayed7d = await count(
-    `SELECT COUNT(*)::int AS n
+    `SELECT COUNT(DISTINCT round_id)::int AS n
      FROM analytics
      WHERE type = 'round_played'
+       AND round_id IS NOT NULL
        AND occurred_at >= NOW() - INTERVAL '7 days'`
   );
-  /* ✅ END ONLY ADDITIONS */
 
   // New users last 7 days
   summary.newUsers7d = await count(
@@ -203,9 +218,8 @@ export async function getAnalyticsSummary() {
   summary.conversionHomeToBooking = summary.homeToBookingRate;
   summary.conversionSearchToBooking = summary.searchToBookingRate;
 
-  /* ✅ ONLY ADDITIONS (needed): optional aliases for dashboard */
+  // Optional alias
   summary.rounds = summary.roundsPlayed;
-  /* ✅ END ONLY ADDITIONS */
 
   // Repeat bookers: users with >1 booking_click / course_booking_click
   summary.repeatBookers = await count(
