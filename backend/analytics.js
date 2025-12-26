@@ -47,6 +47,46 @@ export async function recordEvent({ type, userId, courseName, at }) {
 }
 
 /**
+ * ✅ NEW (only add what's needed):
+ * Convenience wrapper so other files can call:
+ *   recordEvent("event_type", { user_id, course_name, ... })
+ * while still using the existing Postgres table.
+ */
+export async function recordEvent(type, payload = {}) {
+  try {
+    const p = payload && typeof payload === "object" ? payload : {};
+    const at = p.at || p.occurred_at || null;
+
+    // accept either snake_case or camelCase
+    const userId =
+      p.userId ??
+      p.user_id ??
+      p.user ??
+      p.uid ??
+      null;
+
+    const courseName =
+      p.courseName ??
+      p.course_name ??
+      p.course ??
+      null;
+
+    await ensureAnalyticsTable();
+
+    const timestamp = at || new Date().toISOString();
+
+    await db.query(
+      `INSERT INTO analytics (type, user_id, course_name, occurred_at)
+       VALUES ($1, $2, $3, $4)`,
+      [String(type), userId || null, courseName || null, timestamp]
+    );
+  } catch (err) {
+    console.error("Postgres analytics insert failed:", err);
+  }
+}
+/* ✅ END ONLY ADDITIONS */
+
+/**
  * Return a summary of key metrics.
  */
 export async function getAnalyticsSummary() {
@@ -76,6 +116,21 @@ export async function getAnalyticsSummary() {
      FROM analytics
      WHERE type = 'search'`
   );
+
+  /* ✅ ONLY ADDITIONS (needed): rounds played metrics */
+  summary.roundsPlayed = await count(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'round_played'`
+  );
+
+  summary.roundsPlayed7d = await count(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'round_played'
+       AND occurred_at >= NOW() - INTERVAL '7 days'`
+  );
+  /* ✅ END ONLY ADDITIONS */
 
   // New users last 7 days
   summary.newUsers7d = await count(
@@ -147,6 +202,10 @@ export async function getAnalyticsSummary() {
   summary.courseBookingClicks = summary.bookingClicks;
   summary.conversionHomeToBooking = summary.homeToBookingRate;
   summary.conversionSearchToBooking = summary.searchToBookingRate;
+
+  /* ✅ ONLY ADDITIONS (needed): optional aliases for dashboard */
+  summary.rounds = summary.roundsPlayed;
+  /* ✅ END ONLY ADDITIONS */
 
   // Repeat bookers: users with >1 booking_click / course_booking_click
   summary.repeatBookers = await count(
