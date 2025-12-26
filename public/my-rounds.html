@@ -600,24 +600,26 @@
     // ✅ IMPORTANT: send { type, at, payload } (matches your backend)
     // -----------------------------
     async function logAnalyticsEvent(type, payload = {}) {
-      try {
-        const token = getToken();
-        await fetch("/api/analytics/event", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { "Authorization": "Bearer " + token } : {})
-          },
-          body: JSON.stringify({
-            type,
-            at: new Date().toISOString(),
-            payload: payload || {}
-          }),
-        });
-      } catch {
-        // never break UX if analytics is down
-      }
-    }
+  try {
+    // ✅ MUST be { type, at, payload } for your backend
+    // ✅ Include BOTH roundId + round_id so the dashboard can dedupe either way
+    const safePayload = payload && typeof payload === "object" ? payload : {};
+    if (safePayload.roundId != null && safePayload.round_id == null) safePayload.round_id = safePayload.roundId;
+    if (safePayload.round_id != null && safePayload.roundId == null) safePayload.roundId = safePayload.round_id;
+
+    await api("/api/analytics/event", {
+      method: "POST",
+      body: JSON.stringify({
+        type,
+        at: new Date().toISOString(),
+        payload: safePayload
+      })
+    });
+  } catch (e) {
+    // keep silent so UX never breaks
+    console.warn("Analytics event failed:", type, e?.message || e);
+  }
+}
 
     function hasAnyStrokesEntered(holesRows) {
       try {
