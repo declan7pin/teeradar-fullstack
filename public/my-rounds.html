@@ -634,12 +634,14 @@
       }
     }
 
+    /* ✅ ONLY CHANGE NEEDED: make localStorage key + id handling work for UUID or numeric IDs */
     function markRoundPlayedLogged(roundId) {
-      try { localStorage.setItem(`round_played_logged_${roundId}`, "1"); } catch {}
+      try { localStorage.setItem(`round_played_logged_${String(roundId)}`, "1"); } catch {}
     }
     function wasRoundPlayedLogged(roundId) {
-      try { return localStorage.getItem(`round_played_logged_${roundId}`) === "1"; } catch { return false; }
+      try { return localStorage.getItem(`round_played_logged_${String(roundId)}`) === "1"; } catch { return false; }
     }
+    /* ✅ END ONLY CHANGE */
 
     // -----------------------------
     // State
@@ -1680,10 +1682,13 @@
         await safeLoadRound(newId);
 
         // ✅ optional: record round_created (doesn't affect roundsPlayed)
+        /* ✅ ONLY CHANGE NEEDED: don't Number() the id (it may be a UUID) */
         await logAnalyticsEvent("round_created", {
-          roundId: Number(newId),
+          roundId: String(newId),
+          round_id: String(newId),
           courseName: course || null
         });
+        /* ✅ END ONLY CHANGE */
       }
     }
 
@@ -1699,23 +1704,25 @@
       });
 
       // ✅ Record "round_played" once per round (needed for Rounds Played card)
-const rid = Number(currentRoundId);
-if (Number.isFinite(rid) && rid > 0) {
-  const already = wasRoundPlayedLogged(rid);
-  const hasStrokes = hasAnyStrokesEntered(holesRows);
+      // ✅ ONLY CHANGE NEEDED: use string id so UUID works (Number(uuid) => NaN)
+      const rid = String(currentRoundId || "").trim();
+      if (rid) {
+        const already = wasRoundPlayedLogged(rid);
+        const hasStrokes = hasAnyStrokesEntered(holesRows);
 
-  if (!already && hasStrokes) {
-    await logAnalyticsEvent("round_played", {
-      roundId: rid,
-      round_id: rid,                 // ✅ snake-case too (dashboard dedupe safety)
-      course: currentRound?.course || null,
-      courseName: currentRound?.course || null,
-      state: currentRound?.state || null,
-      holes: Number(currentRound?.holes) || null
-    });
-    markRoundPlayedLogged(rid);
-  }
-}
+        if (!already && hasStrokes) {
+          await logAnalyticsEvent("round_played", {
+            roundId: rid,
+            round_id: rid,                 // ✅ snake-case too (dashboard dedupe safety)
+            course: currentRound?.course || null,
+            courseName: currentRound?.course || null,
+            state: currentRound?.state || null,
+            holes: Number(currentRound?.holes) || null
+          });
+          markRoundPlayedLogged(rid);
+        }
+      }
+      // ✅ END ONLY CHANGE
 
       setToast(rightToast, "Saved.", true);
       await safeFetchRounds();
