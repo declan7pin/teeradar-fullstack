@@ -597,6 +597,7 @@
 
     // -----------------------------
     // ✅ Analytics (minimal + safe)
+    // ✅ IMPORTANT: send { type, at, payload } (matches your backend)
     // -----------------------------
     async function logAnalyticsEvent(type, payload = {}) {
       try {
@@ -607,7 +608,11 @@
             "Content-Type": "application/json",
             ...(token ? { "Authorization": "Bearer " + token } : {})
           },
-          body: JSON.stringify({ type, ...payload }),
+          body: JSON.stringify({
+            type,
+            at: new Date().toISOString(),
+            payload: payload || {}
+          }),
         });
       } catch {
         // never break UX if analytics is down
@@ -1675,8 +1680,7 @@
         // ✅ optional: record round_created (doesn't affect roundsPlayed)
         await logAnalyticsEvent("round_created", {
           roundId: Number(newId),
-          courseName: course || null,
-          at: new Date().toISOString(),
+          courseName: course || null
         });
       }
     }
@@ -1702,8 +1706,7 @@
         if (!already && hasStrokes) {
           await logAnalyticsEvent("round_played", {
             roundId: rid,
-            courseName: (currentRound && currentRound.course) ? String(currentRound.course) : null,
-            at: new Date().toISOString(),
+            courseName: (currentRound && currentRound.course) ? String(currentRound.course) : null
           });
           markRoundPlayedLogged(rid);
         }
