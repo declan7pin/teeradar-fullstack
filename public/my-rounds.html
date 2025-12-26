@@ -1699,20 +1699,23 @@
       });
 
       // ✅ Record "round_played" once per round (needed for Rounds Played card)
-      // Only logs if at least 1 strokes value is entered.
-      const rid = Number(currentRoundId);
-      if (Number.isFinite(rid) && rid > 0) {
-        const already = wasRoundPlayedLogged(rid);
-        const hasStrokes = hasAnyStrokesEntered(holesRows);
+const rid = Number(currentRoundId);
+if (Number.isFinite(rid) && rid > 0) {
+  const already = wasRoundPlayedLogged(rid);
+  const hasStrokes = hasAnyStrokesEntered(holesRows);
 
-        if (!already && hasStrokes) {
-          await logAnalyticsEvent("round_played", {
-            roundId: rid,
-            courseName: (currentRound && currentRound.course) ? String(currentRound.course) : null
-          });
-          markRoundPlayedLogged(rid);
-        }
-      }
+  if (!already && hasStrokes) {
+    await logAnalyticsEvent("round_played", {
+      roundId: rid,
+      round_id: rid,                 // ✅ snake-case too (dashboard dedupe safety)
+      course: currentRound?.course || null,
+      courseName: currentRound?.course || null,
+      state: currentRound?.state || null,
+      holes: Number(currentRound?.holes) || null
+    });
+    markRoundPlayedLogged(rid);
+  }
+}
 
       setToast(rightToast, "Saved.", true);
       await safeFetchRounds();
