@@ -19,48 +19,71 @@ import {
 const router = express.Router();
 
 /**
+ * IMPORTANT:
+ * Some pages send analytics fields at the top level:
+ * { type, at, userId, courseName, roundId }
+ * Others send:
+ * { type, at, payload: { userId, courseName, roundId } }
+ *
+ * We merge both into a single payload so NOTHING breaks.
+ */
+
+/**
  * POST /api/analytics/event
- * Body: { type, at?, payload? }
+ * Body: { type, at?, payload? } OR { type, at?, userId?, courseName?, roundId?, ... }
  */
 router.post("/event", async (req, res) => {
   try {
-    const { type, at, payload } = req.body || {};
+    const body = req.body || {};
+    const { type } = body;
 
     if (!type) {
       return res.status(400).json({ error: "Missing event type" });
     }
 
-    // ✅ FIX: support both { payload: {...} } and top-level fields (roundId, userId, courseName, etc)
-    // This prevents "round_played" being logged without roundId (which keeps roundsPlayed at 0).
+    const at = body.at || new Date().toISOString();
+
+    // ✅ Merge top-level fields into payload (keep backwards compatibility)
+    const incomingPayload =
+      body.payload && typeof body.payload === "object" ? body.payload : {};
+
     const mergedPayload = {
-      ...(payload && typeof payload === "object" ? payload : {}),
-      ...(req.body && typeof req.body === "object" ? req.body : {}),
+      ...incomingPayload,
+      ...body, // allows userId/courseName/roundId sent top-level
     };
-    // Avoid nesting payload inside itself
-    delete mergedPayload.payload;
+
+    // remove non-payload keys so payload stays clean
     delete mergedPayload.type;
     delete mergedPayload.at;
+    delete mergedPayload.payload;
 
-    // existing (SQLite) analytics
+    // ✅ Put the Render log back (so you can see events arriving)
+    console.log("\nIncoming analytics event:", {
+      type,
+      at,
+      ...mergedPayload,
+    });
+
+    // existing (SQLite) analytics (your old cards / views depend on this)
     logAnalyticsEvent({ type, at, payload: mergedPayload });
 
     // ✅ ALSO store to Postgres analytics (so rounds + everything are in one place)
     try {
       const userId =
-        mergedPayload?.userId ??
-        mergedPayload?.user_id ??
-        mergedPayload?.uid ??
+        mergedPayload.userId ??
+        mergedPayload.user_id ??
+        mergedPayload.uid ??
         null;
 
       const courseName =
-        mergedPayload?.courseName ??
-        mergedPayload?.course_name ??
-        mergedPayload?.course ??
+        mergedPayload.courseName ??
+        mergedPayload.course_name ??
+        mergedPayload.course ??
         null;
 
       const roundId =
-        mergedPayload?.roundId ??
-        mergedPayload?.round_id ??
+        mergedPayload.roundId ??
+        mergedPayload.round_id ??
         null;
 
       await recordPgEvent({
@@ -77,7 +100,7 @@ router.post("/event", async (req, res) => {
     return res.json({ ok: true });
   } catch (err) {
     console.error("Error logging analytics event", err);
-    return res.status(500).json({ error: "Failed to log analytics event" });
+    return res.status(500).json({ error: "Failed to log event" });
   }
 });
 
@@ -121,7 +144,7 @@ async function handleSummary(req, res) {
       roundsPlayed: s.roundsPlayed ?? s.rounds_played ?? s.rounds ?? 0,
       roundsPlayed7d: s.roundsPlayed7d ?? s.rounds_played_7d ?? 0,
 
-      // ✅ NEW: most played courses (what you asked for)
+      // ✅ NEW: most played courses
       topPlayedCourses: s.topPlayedCourses ?? [],
       topPlayedCourses30d: s.topPlayedCourses30d ?? [],
     };
