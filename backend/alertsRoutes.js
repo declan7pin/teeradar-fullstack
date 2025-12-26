@@ -5,7 +5,7 @@ import db from "./db.js";
 const router = express.Router();
 
 // ---------------------------------------------------------
-// Ensure table exists (same schema as alertWorker.js)
+// Ensure tables exist
 // ---------------------------------------------------------
 async function ensureUserAlertHitsTable() {
   try {
@@ -30,7 +30,26 @@ async function ensureUserAlertHitsTable() {
     console.error("❌ error ensuring user_alert_hits table (alertsRoutes):", err);
   }
 }
+
+// ✅ NEW: table used by analytics.js for "ALERTS SENT (7D)"
+async function ensureAlertEmailsSentTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS alert_emails_sent (
+        id SERIAL PRIMARY KEY,
+        email TEXT NOT NULL,
+        hit_count INTEGER DEFAULT 0,
+        sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    console.log("✅ alert_emails_sent table ready (alertsRoutes)");
+  } catch (err) {
+    console.error("❌ error ensuring alert_emails_sent table (alertsRoutes):", err);
+  }
+}
+
 ensureUserAlertHitsTable();
+ensureAlertEmailsSentTable();
 
 // ---------------------------------------------------------
 // ✅ NEW: GET preferences so account.html can re-hydrate fields
@@ -123,7 +142,9 @@ async function getFavouriteCourseNameSet(email) {
     const set = new Set();
     for (const f of favs) {
       const name =
-        (f && (f.name || f.courseName || f.course)) ? String(f.name || f.courseName || f.course) : "";
+        f && (f.name || f.courseName || f.course)
+          ? String(f.name || f.courseName || f.course)
+          : "";
       const trimmed = name.trim();
       if (trimmed) set.add(trimmed);
     }
