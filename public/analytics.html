@@ -323,6 +323,14 @@
       <div id="metricNewUsers" class="card-value">0</div>
     </article>
 
+    <!-- ✅ ADDED (only what’s needed): rounds played metric -->
+    <article class="card">
+      <div class="card-label">Rounds played</div>
+      <div id="metricRoundsPlayed" class="card-value">0</div>
+      <div class="card-hint">Deduped by round ID</div>
+    </article>
+    <!-- ✅ END ADDED -->
+
     <article class="card">
       <div class="card-label">Home → booking conversion</div>
       <div id="metricConvHomeBooking" class="card-value">0%</div>
@@ -388,6 +396,16 @@
       <li><span class="label">No demand data yet</span><span class="value">—</span></li>
     </ul>
   </section>
+
+  <!-- ✅ ADDED (only what’s needed): top played courses -->
+  <section class="card" style="margin-top:14px;">
+    <div class="card-label">Most-played courses</div>
+    <div class="muted-note">All time • Last 30 days</div>
+    <ul id="topPlayedCoursesList" class="top-courses-list">
+      <li><span class="label">No rounds logged yet</span><span class="value">—</span></li>
+    </ul>
+  </section>
+  <!-- ✅ END ADDED -->
 
   <section class="card" style="margin-top:14px;">
     <div class="card-label">Registered users</div>
@@ -526,6 +544,13 @@
     document.getElementById("usersToday").textContent = usersTodayVal;
     document.getElementById("usersWeek").textContent = usersWeekVal;
 
+    // ✅ ADDED (only what’s needed): rounds played
+    const roundsPlayedVal =
+      summary.roundsPlayed ?? summary.roundsPlayed7d ?? summary.rounds ?? 0;
+    const roundsEl = document.getElementById("metricRoundsPlayed");
+    if (roundsEl) roundsEl.textContent = roundsPlayedVal;
+    // ✅ END ADDED
+
     let convHome = summary.conversionHomeToBooking;
     if (convHome == null) {
       convHome = homeViewsVal > 0 ? bookingClicksVal / homeViewsVal : 0;
@@ -648,6 +673,38 @@
         });
       }
     }
+
+    // ✅ ADDED (only what’s needed): render top played courses (all time + last 30d)
+    const playedList = document.getElementById("topPlayedCoursesList");
+    if (playedList) {
+      const allTime = summary.topPlayedCourses || [];
+      const last30d = summary.topPlayedCourses30d || [];
+
+      playedList.innerHTML = "";
+
+      if (!allTime.length && !last30d.length) {
+        playedList.innerHTML =
+          `<li><span class="label">No rounds logged yet</span><span class="value">—</span></li>`;
+      } else {
+        const map30 = new Map(last30d.map((r) => [r.courseName, r.rounds]));
+        const names = new Set([
+          ...allTime.map((r) => r.courseName),
+          ...last30d.map((r) => r.courseName),
+        ]);
+
+        Array.from(names).slice(0, 12).forEach((name) => {
+          const at = (allTime.find((r) => r.courseName === name) || {}).rounds ?? 0;
+          const d30 = map30.get(name) ?? 0;
+          playedList.innerHTML += `
+            <li>
+              <span class="label">${name}</span>
+              <span class="value">${at} total • ${d30} (30d)</span>
+            </li>
+          `;
+        });
+      }
+    }
+    // ✅ END ADDED
   }
 
   // ---------- Registered users + detail card + plan lookup ----------
