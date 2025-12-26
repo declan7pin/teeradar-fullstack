@@ -5,9 +5,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import db from "./db.js";
 import { requireAuth } from "./auth.js";
-/* ✅ ONLY ADDITION (needed): record analytics events */
+
+// ✅ ADDED: record round_played into Postgres analytics
 import { recordEvent } from "./analytics.js";
-/* ✅ END ONLY ADDITION */
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -169,6 +169,44 @@ function cleanPlayerMap(obj) {
     if (Number.isFinite(n)) out[String(i)] = n;
   }
   return out;
+}
+
+// -------------------------------------------------
+// ✅ NEW: "complete" heuristic to count a round as played
+// - We mark as played if ALL holes have a numeric strokes value for Player 1.
+// - This prevents logging while someone is mid-round.
+// - Deduped in analytics by round_id anyway.
+// -------------------------------------------------
+function isCompleteFromPayload(holesArr, holesCount) {
+  if (!Array.isArray(holesArr)) return false;
+  if (!Number.isFinite(Number(holesCount))) return false;
+
+  // Must contain at least the right number of holes (or more)
+  if (holesArr.length < Number(holesCount)) return false;
+
+  // Build a map hole_number -> strokes for player 1
+  const strokesByHole = new Map();
+
+  for (const h of holesArr) {
+    const holeNum = Number(h?.hole_number ?? h?.hole ?? h?.number);
+    if (!Number.isFinite(holeNum) || holeNum <= 0) continue;
+
+    const strokesMap = cleanPlayerMap(h?.strokes_by_player || h?.strokesByPlayer || {});
+    let strokesVal =
+      (typeof strokesMap["1"] !== "undefined") ? strokesMap["1"] :
+      (h?.strokes === null || typeof h?.strokes === "undefined" || h?.strokes === ""
+        ? null
+        : Number(h.strokes));
+
+    strokesByHole.set(holeNum, Number.isFinite(Number(strokesVal)) ? Number(strokesVal) : null);
+  }
+
+  for (let i = 1; i <= Number(holesCount); i++) {
+    const v = strokesByHole.get(i);
+    if (!Number.isFinite(v)) return false;
+  }
+
+  return true;
 }
 
 // -------------------------------------------------
@@ -344,22 +382,6 @@ router.post("/", requireAuth, async (req, res) => {
       [round.id]
     );
 
-    /* ✅ ONLY ADDITION (needed): analytics event for "rounds played" */
-    try {
-      await recordEvent("round_played", {
-        round_id: round.id,
-        holes: holesNum,
-        course: round.course,
-        state: round.state,
-        layout: round.layout,
-        players_count: round.players_count,
-        scorecard_used: !!pars,
-      });
-    } catch (e) {
-      console.warn("analytics: failed to record round_played", e?.message || e);
-    }
-    /* ✅ END ONLY ADDITION */
-
     return res.json({
       ok: true,
       round,
@@ -508,6 +530,25 @@ router.put("/:id", requireAuth, async (req, res) => {
     await db.query("COMMIT");
 
     const data = await getRoundWithHoles(roundId);
+
+    // ✅ ADDED: if the payload looks "complete", record round_played once (deduped by round_id)
+    try {
+      const holesCount = Number(data?.round?.holes);
+      const complete = isCompleteFromPayload(holes, holesCount);
+
+      if (complete) {
+        await recordEvent({
+          type: "round_played",
+          userId: String(userId),
+          courseName: data?.round?.course || null,
+          roundId: Number(roundId),
+        });
+      }
+    } catch (e) {
+      console.warn("round_played analytics failed:", e?.message || e);
+    }
+    // ✅ END ADDED
+
     return res.json({ ok: true, round: data.round, holes: data.holes });
   } catch (err) {
     try { await db.query("ROLLBACK"); } catch {}
