@@ -5,6 +5,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import db from "./db.js";
 import { requireAuth } from "./auth.js";
+/* ✅ ONLY ADDITION (needed): record analytics events */
+import { recordEvent } from "./analytics.js";
+/* ✅ END ONLY ADDITION */
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -340,6 +343,22 @@ router.post("/", requireAuth, async (req, res) => {
       `,
       [round.id]
     );
+
+    /* ✅ ONLY ADDITION (needed): analytics event for "rounds played" */
+    try {
+      await recordEvent("round_played", {
+        round_id: round.id,
+        holes: holesNum,
+        course: round.course,
+        state: round.state,
+        layout: round.layout,
+        players_count: round.players_count,
+        scorecard_used: !!pars,
+      });
+    } catch (e) {
+      console.warn("analytics: failed to record round_played", e?.message || e);
+    }
+    /* ✅ END ONLY ADDITION */
 
     return res.json({
       ok: true,
