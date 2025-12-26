@@ -7,6 +7,9 @@ import db from "./db.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 import { Resend } from "resend"; // ✅ use Resend instead of nodemailer
 
+// ✅ ADDED: analytics event logger (used by analytics dashboard)
+import { recordEvent } from "./analytics.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -69,6 +72,40 @@ async function ensureUserAlertHitsTable() {
   }
 }
 ensureUserAlertHitsTable();
+
+// ---------------------------------------------------------
+// ✅ ADDED: schema helpers (safe plan pickup, no breaking changes)
+// ---------------------------------------------------------
+let _schemaCache = null;
+
+async function getSchemaFlags() {
+  if (_schemaCache) return _schemaCache;
+
+  async function columnExists(tableName, columnName) {
+    try {
+      const { rows } = await db.query(
+        `
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = $1
+          AND column_name = $2
+        LIMIT 1
+        `,
+        [tableName, columnName]
+      );
+      return rows.length > 0;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  const usersHasPlan = await columnExists("users", "plan");
+  const prefsHasPlan = await columnExists("user_preferences", "plan");
+
+  _schemaCache = { usersHasPlan, prefsHasPlan };
+  return _schemaCache;
+}
 
 // ---------------------------------------------------------
 // Alert email helpers
@@ -201,9 +238,12 @@ function buildBookingLinkForDate(course, date) {
  * Send ONE email that includes ALL favourites with availability for this tick.
  * If none found, still send a "no matches" email (digest/heartbeat).
  * Also updates user_preferences.alert_last_sent when it sends.
+ *
+ * ✅ WIRED: logs analytics event "alert_sent" only if email succeeds
  */
 async function sendAlertEmailSummaryForUser({
   email,
+  plan,
   hits,
   earliest,
   latest,
@@ -304,6 +344,22 @@ async function sendAlertEmailSummaryForUser({
       [email]
     );
 
+    // ✅ WIRED: analytics "alert_sent" (counts emails sent)
+    // We store hitsCount so you can debug in meta later.
+    await recordEvent("alert_sent", {
+      userId: email,
+      courseName: safeHits.length > 0 ? "MULTI" : null,
+      plan: plan || null,
+      at: new Date().toISOString(),
+      meta: {
+        hitsCount: safeHits.length,
+        earliest,
+        latest,
+        holes: userHoles || null,
+        partySize: partySize || null,
+      },
+    });
+
     console.log(
       `📧 Summary alert email sent to ${email} (${safeHits.length} hit(s))`
     );
@@ -318,9 +374,12 @@ async function sendAlertEmailSummaryForUser({
 /**
  * Send a single alert email for a user / course / date.
  * Also updates user_preferences.alert_last_sent when it sends.
+ *
+ * ✅ WIRED: logs analytics event "alert_sent" only if email succeeds
  */
 async function sendAlertEmailForHit({
   email,
+  plan,
   course,
   date,
   count,
@@ -399,6 +458,15 @@ TeeRadar
       `,
       [email]
     );
+
+    // ✅ WIRED: analytics "alert_sent"
+    await recordEvent("alert_sent", {
+      userId: email,
+      courseName: course?.name || null,
+      plan: plan || null,
+      at: new Date().toISOString(),
+      meta: { date, count, earliest, latest, holes: userHoles || null, partySize: partySize || null },
+    });
 
     console.log(`📧 Alert email sent to ${email} for ${course.name} on ${date}`);
   } catch (err) {
@@ -527,11 +595,20 @@ async function runAlertTick() {
   console.log("🔔 Alert tick starting…");
 
   try {
+    const schema = await getSchemaFlags();
+
+    // Build plan select safely (won't break if column doesn't exist)
+    const planSelect =
+      schema.usersHasPlan
+        ? "u.plan AS plan"
+        : (schema.prefsHasPlan ? "p.plan AS plan" : "NULL::text AS plan");
+
     // Pull users + preferences
     const { rows } = await db.query(`
       SELECT
         u.email,
         u.home_course,
+        ${planSelect},
         p.home_state,
         p.favourites,
         p.preferred_days,
@@ -558,6 +635,7 @@ async function runAlertTick() {
 
     for (const row of rows) {
       const email = (row.email || "").toLowerCase();
+      const plan = row.plan || null; // may be null if you haven't stored plan in DB
       const favourites = row.favourites || [];
       const preferredDays = row.preferred_days || [];
       const earliest = row.preferred_earliest || "06:00";
@@ -687,6 +765,23 @@ async function runAlertTick() {
                 );
               }
 
+              // ✅ WIRED: analytics "alert_hit" (availability found)
+              await recordEvent("alert_hit", {
+                userId: email,
+                courseName: course.name,
+                plan: plan || null,
+                at: new Date().toISOString(),
+                meta: {
+                  date,
+                  count,
+                  provider: course.provider || null,
+                  earliest,
+                  latest,
+                  holes: userHoles || null,
+                  partySize: partySize || null,
+                },
+              });
+
               // ✅ Add to the email summary list (date-correct URL)
               const bookingLink =
                 buildBookingLinkForDate(course, date) ||
@@ -718,6 +813,7 @@ async function runAlertTick() {
       if (emailsAllowed && canSendEmailForUser) {
         await sendAlertEmailSummaryForUser({
           email,
+          plan,
           hits: emailHits,
           earliest,
           latest,
