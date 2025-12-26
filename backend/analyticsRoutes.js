@@ -30,26 +30,37 @@ router.post("/event", async (req, res) => {
       return res.status(400).json({ error: "Missing event type" });
     }
 
+    // ✅ FIX: support both { payload: {...} } and top-level fields (roundId, userId, courseName, etc)
+    // This prevents "round_played" being logged without roundId (which keeps roundsPlayed at 0).
+    const mergedPayload = {
+      ...(payload && typeof payload === "object" ? payload : {}),
+      ...(req.body && typeof req.body === "object" ? req.body : {}),
+    };
+    // Avoid nesting payload inside itself
+    delete mergedPayload.payload;
+    delete mergedPayload.type;
+    delete mergedPayload.at;
+
     // existing (SQLite) analytics
-    logAnalyticsEvent({ type, at, payload });
+    logAnalyticsEvent({ type, at, payload: mergedPayload });
 
     // ✅ ALSO store to Postgres analytics (so rounds + everything are in one place)
     try {
       const userId =
-        payload?.userId ??
-        payload?.user_id ??
-        payload?.uid ??
+        mergedPayload?.userId ??
+        mergedPayload?.user_id ??
+        mergedPayload?.uid ??
         null;
 
       const courseName =
-        payload?.courseName ??
-        payload?.course_name ??
-        payload?.course ??
+        mergedPayload?.courseName ??
+        mergedPayload?.course_name ??
+        mergedPayload?.course ??
         null;
 
       const roundId =
-        payload?.roundId ??
-        payload?.round_id ??
+        mergedPayload?.roundId ??
+        mergedPayload?.round_id ??
         null;
 
       await recordPgEvent({
@@ -66,7 +77,7 @@ router.post("/event", async (req, res) => {
     return res.json({ ok: true });
   } catch (err) {
     console.error("Error logging analytics event", err);
-    return res.status(500).json({ error: "Failed to log event" });
+    return res.status(500).json({ error: "Failed to log analytics event" });
   }
 });
 
