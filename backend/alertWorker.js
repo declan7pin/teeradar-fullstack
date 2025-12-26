@@ -108,6 +108,27 @@ async function getSchemaFlags() {
 }
 
 // ---------------------------------------------------------
+// ✅ ADDED: JSONB normalisers (fixes favourites/preferred_days being returned as strings)
+// ---------------------------------------------------------
+function normaliseJsonArray(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+
+  // Postgres JSONB sometimes arrives as a string depending on driver/config
+  if (typeof val === "string") {
+    try {
+      const parsed = JSON.parse(val);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  // Sometimes JSONB can come back as an object wrapper — we only accept arrays
+  return [];
+}
+
+// ---------------------------------------------------------
 // Alert email helpers
 // ---------------------------------------------------------
 
@@ -345,7 +366,6 @@ async function sendAlertEmailSummaryForUser({
     );
 
     // ✅ WIRED: analytics "alert_sent" (counts emails sent)
-    // We store hitsCount so you can debug in meta later.
     await recordEvent("alert_sent", {
       userId: email,
       courseName: safeHits.length > 0 ? "MULTI" : null,
@@ -465,7 +485,14 @@ TeeRadar
       courseName: course?.name || null,
       plan: plan || null,
       at: new Date().toISOString(),
-      meta: { date, count, earliest, latest, holes: userHoles || null, partySize: partySize || null },
+      meta: {
+        date,
+        count,
+        earliest,
+        latest,
+        holes: userHoles || null,
+        partySize: partySize || null,
+      },
     });
 
     console.log(`📧 Alert email sent to ${email} for ${course.name} on ${date}`);
@@ -635,9 +662,12 @@ async function runAlertTick() {
 
     for (const row of rows) {
       const email = (row.email || "").toLowerCase();
-      const plan = row.plan || null; // may be null if you haven't stored plan in DB
-      const favourites = row.favourites || [];
-      const preferredDays = row.preferred_days || [];
+      const plan = row.plan || null;
+
+      // ✅ FIX: normalise JSONB/string values to arrays so users don't get skipped
+      const favourites = normaliseJsonArray(row.favourites);
+      const preferredDays = normaliseJsonArray(row.preferred_days);
+
       const earliest = row.preferred_earliest || "06:00";
       const latest = row.preferred_latest || "17:00";
       const holes = row.preferred_holes || "";
