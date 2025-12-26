@@ -20,25 +20,21 @@ async function ensureAnalyticsTable() {
       );
     `);
 
-    // ✅ add round_id for dedupe (doesn't break existing rows)
     await db.query(`
       ALTER TABLE analytics
       ADD COLUMN IF NOT EXISTS round_id BIGINT;
     `);
 
-    // ✅ add plan for alert/subscription segmentation (safe)
     await db.query(`
       ALTER TABLE analytics
       ADD COLUMN IF NOT EXISTS plan TEXT;
     `);
 
-    // ✅ add meta JSON for future-proofing (safe)
     await db.query(`
       ALTER TABLE analytics
       ADD COLUMN IF NOT EXISTS meta JSONB;
     `);
 
-    // helpful indexes (safe)
     await db.query(`
       CREATE INDEX IF NOT EXISTS idx_analytics_type_time
       ON analytics (type, occurred_at DESC);
@@ -80,7 +76,7 @@ function safeJson(val) {
   }
 }
 
-// Event type aliases for alerts (so your system still works even if you log slightly different strings)
+// Alert event type aliases (backend tolerant to different strings)
 const ALERT_SENT_TYPES = ["alert_sent", "alert_email_sent", "alerts_sent"];
 const ALERT_HIT_TYPES = ["alert_hit", "alert_match", "alerts_hit"];
 
@@ -95,7 +91,6 @@ export async function recordEvent(typeOrObj, payload = {}) {
   try {
     await ensureAnalyticsTable();
 
-    // --- backwards compatible parsing ---
     let type = "";
     let p = {};
 
@@ -111,7 +106,6 @@ export async function recordEvent(typeOrObj, payload = {}) {
 
     const at = p.at || p.occurred_at || null;
 
-    // accept snake_case or camelCase
     const userId =
       p.userId ??
       p.user_id ??
@@ -155,7 +149,6 @@ export async function recordEvent(typeOrObj, payload = {}) {
 
     const timestamp = at || new Date().toISOString();
 
-    // ✅ IMPORTANT: store meta as JSONB properly (do NOT stringify; cast param to jsonb)
     await db.query(
       `INSERT INTO analytics (type, user_id, course_name, occurred_at, round_id, plan, meta)
        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
@@ -210,7 +203,9 @@ export async function getTopPlayedCourses(limit = 10, days = null) {
   return rows;
 }
 
-// ✅ Alerts: top courses (7d) based on alert hit events
+// -----------------------------
+// ALERTS analytics helpers
+// -----------------------------
 async function getTopAlertCourses7d(limit = 10) {
   await ensureAnalyticsTable();
 
@@ -234,7 +229,6 @@ async function getTopAlertCourses7d(limit = 10) {
   return rows;
 }
 
-// ✅ Alerts: alerts by plan (7d) based on sent events
 async function getAlertsByPlan7d() {
   await ensureAnalyticsTable();
 
@@ -261,7 +255,6 @@ async function getAlertsByPlan7d() {
   return out;
 }
 
-// ✅ Alerts: avg time from alert_sent -> alert_hit (minutes), within 7d
 async function getAvgTimeToHitMins7d() {
   await ensureAnalyticsTable();
 
@@ -319,7 +312,7 @@ export async function getAnalyticsSummary() {
     return rows.length ? Number(rows[0].n) || 0 : 0;
   }
 
-  // ----- existing metrics (keep working no matter what) -----
+  // ----- existing metrics -----
 
   summary.homeViews = await count(
     `SELECT COUNT(*)::int AS n FROM analytics WHERE type = 'home_view'`
@@ -337,7 +330,6 @@ export async function getAnalyticsSummary() {
      WHERE type = 'search'`
   );
 
-  // ✅ rounds played (deduped by round_id)
   summary.roundsPlayed = await count(
     `SELECT COUNT(DISTINCT round_id)::int AS n
      FROM analytics
@@ -410,6 +402,7 @@ export async function getAnalyticsSummary() {
   summary.searchToBookingRate =
     summary.searches > 0 ? summary.bookingClicks / summary.searches : 0;
 
+  // Aliases that the frontend expects (existing)
   summary.homePageViews = summary.homeViews;
   summary.courseBookingClicks = summary.bookingClicks;
   summary.conversionHomeToBooking = summary.homeToBookingRate;
@@ -451,16 +444,22 @@ export async function getAnalyticsSummary() {
       : null;
   }
 
-  // Attach course-level metrics to the summary
   summary.topCourses = await getTopCourses(10);
   summary.topSearchedCourses = await getTopSearchedCourses(10);
   summary.demandRank = await getDemandRanking(10);
 
   // =========================
-  // ✅ ALERTS (DO NOT BREAK DASHBOARD)
+  // ✅ ALERTS (ALWAYS RETURN KEYS)
   // =========================
+  let alertsSent7d = 0;
+  let alertHits7d = 0;
+  let hitRate7d = 0;
+  let avgTimeToHitMins = 0;
+  let alertsByPlan = { BASIC: 0, PRO: 0, FREE: 0, TRIAL: 0, UNKNOWN: 0 };
+  let topAlertCourses = [];
+
   try {
-    summary.alertsSent7d = await count(
+    alertsSent7d = await count(
       `SELECT COUNT(*)::int AS n
        FROM analytics
        WHERE type = ANY($1::text[])
@@ -468,7 +467,7 @@ export async function getAnalyticsSummary() {
       [ALERT_SENT_TYPES]
     );
 
-    summary.alertHits7d = await count(
+    alertHits7d = await count(
       `SELECT COUNT(*)::int AS n
        FROM analytics
        WHERE type = ANY($1::text[])
@@ -476,21 +475,37 @@ export async function getAnalyticsSummary() {
       [ALERT_HIT_TYPES]
     );
 
-    summary.hitRate7d =
-      summary.alertsSent7d > 0 ? summary.alertHits7d / summary.alertsSent7d : 0;
+    hitRate7d = alertsSent7d > 0 ? alertHits7d / alertsSent7d : 0;
 
-    summary.avgTimeToHitMins = await getAvgTimeToHitMins7d();
-    summary.alertsByPlan = await getAlertsByPlan7d();
-    summary.topAlertCourses = await getTopAlertCourses7d(10);
+    avgTimeToHitMins = await getAvgTimeToHitMins7d();
+    alertsByPlan = await getAlertsByPlan7d();
+    topAlertCourses = await getTopAlertCourses7d(10);
   } catch (e) {
     console.error("⚠️ Alerts analytics block failed (non-fatal):", e?.message || e);
-    summary.alertsSent7d = 0;
-    summary.alertHits7d = 0;
-    summary.hitRate7d = 0;
-    summary.avgTimeToHitMins = 0;
-    summary.alertsByPlan = { BASIC: 0, PRO: 0, FREE: 0, TRIAL: 0, UNKNOWN: 0 };
-    summary.topAlertCourses = [];
   }
+
+  // Base keys
+  summary.alertsSent7d = alertsSent7d;
+  summary.alertHits7d = alertHits7d;
+  summary.hitRate7d = hitRate7d;
+  summary.avgTimeToHitMins = avgTimeToHitMins;
+  summary.alertsByPlan = alertsByPlan;
+  summary.topAlertCourses = topAlertCourses;
+
+  // ✅ Extra aliases so the frontend stops saying “Not configured”
+  // (covers different versions of analytics.html)
+  summary.alertsSent = alertsSent7d;
+  summary.alertHits = alertHits7d;
+  summary.hitRate = hitRate7d;
+  summary.avgTimeToHit = avgTimeToHitMins;
+
+  summary.alertsSent7Days = alertsSent7d;
+  summary.alertHits7Days = alertHits7d;
+  summary.hitRate7Days = hitRate7d;
+  summary.avgTimeToHitMinutes = avgTimeToHitMins;
+
+  summary.alertsByPlan7d = alertsByPlan;
+  summary.topAlertCourses7d = topAlertCourses;
 
   return summary;
 }
