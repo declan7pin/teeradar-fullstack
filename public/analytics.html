@@ -134,6 +134,15 @@
       color:var(--muted);
     }
 
+    .section-title{
+      margin:22px 0 10px;
+      font-size:14px;
+      font-weight:800;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      color:#0f172a;
+    }
+
     .cards-grid{
       display:grid;
       grid-template-columns:1fr;
@@ -162,16 +171,6 @@
     .card-hint{
       font-size:11px;
       color:var(--muted);
-    }
-
-    .section-title{
-      margin:22px 0 10px;
-      font-weight:800;
-      letter-spacing:-0.02em;
-      font-size:14px;
-      color:#0f172a;
-      opacity:.9;
-      text-transform:uppercase;
     }
 
     .user-overview{
@@ -308,11 +307,7 @@
   </div>
 
   <h1>Analytics dashboard</h1>
-  <p class="page-sub">
-    Live tee-time engagement across Western Australia.
-  </p>
-
-  <div class="section-title">Engagement</div>
+  <p class="page-sub">Live tee-time engagement across Western Australia.</p>
 
   <section class="cards-grid" aria-label="Key metrics">
     <article class="card">
@@ -366,93 +361,6 @@
     </article>
   </section>
 
-  <div class="section-title">Alerts</div>
-
-  <section class="cards-grid" aria-label="Alert metrics">
-    <article class="card">
-      <div class="card-label">Alerts sent (7d)</div>
-      <div id="metricAlertsSent7d" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: alertsSent7d</div>
-    </article>
-
-    <article class="card">
-      <div class="card-label">Alert hits (7d)</div>
-      <div id="metricAlertHits7d" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: alertHits7d</div>
-    </article>
-
-    <article class="card">
-      <div class="card-label">Hit rate (7d)</div>
-      <div id="metricAlertHitRate7d" class="card-value">—</div>
-      <div class="card-hint">Hits ÷ sent</div>
-    </article>
-
-    <article class="card">
-      <div class="card-label">Avg time-to-hit</div>
-      <div id="metricAvgTimeToHit" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: avgTimeToHitMins</div>
-    </article>
-
-    <article class="card">
-      <div class="card-label">Alerts by plan</div>
-      <div id="metricAlertsByPlan" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: alertsByPlan</div>
-    </article>
-
-    <article class="card">
-      <div class="card-label">Top alert courses (7d)</div>
-      <div id="metricTopAlertCourses7d" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: topAlertCourses</div>
-    </article>
-  </section>
-
-  <section class="card" style="margin-top:14px;">
-    <div class="card-label">Top alert courses (7d)</div>
-    <ul id="topAlertCoursesList" class="top-courses-list">
-      <li><span class="label">Not configured</span><span class="value">—</span></li>
-    </ul>
-  </section>
-
-  <div class="section-title">Subscriptions</div>
-
-  <section class="cards-grid" aria-label="Subscription metrics">
-    <article class="card">
-      <div class="card-label">Subscribers active</div>
-      <div id="metricSubscribersActive" class="card-value">0</div>
-      <div class="card-hint">Derived from registered users + plan lookup</div>
-    </article>
-
-    <article class="card">
-      <div class="card-label">Basic / Pro</div>
-      <div id="metricSubscribersByPlan" class="card-value">0 / 0</div>
-      <div class="card-hint">Derived from registered users + plan lookup</div>
-    </article>
-
-    <article class="card">
-      <div class="card-label">MRR (estimate)</div>
-      <div id="metricMRR" class="card-value">$0</div>
-      <div class="card-hint">Edit BASIC_MRR / PRO_MRR in code</div>
-    </article>
-
-    <article class="card">
-      <div class="card-label">Trials → paid</div>
-      <div id="metricTrialToPaid" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: trialToPaidRate</div>
-    </article>
-
-    <article class="card">
-      <div class="card-label">Churn (30d)</div>
-      <div id="metricChurn30d" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: churn30d</div>
-    </article>
-
-    <article class="card">
-      <div class="card-label">Coupon usage</div>
-      <div id="metricCouponUsage" class="card-value">—</div>
-      <div class="card-hint">Requires backend field: couponUsage</div>
-    </article>
-  </section>
-
   <section class="card user-overview">
     <div class="card-label">User overview</div>
     <div class="pill-switch">
@@ -500,6 +408,91 @@
     <ul id="topPlayedCoursesList" class="top-courses-list">
       <li><span class="label">No rounds logged yet</span><span class="value">—</span></li>
     </ul>
+  </section>
+
+  <div class="section-title">Alerts</div>
+  <section class="cards-grid" aria-label="Alerts metrics">
+    <article class="card">
+      <div class="card-label">Alerts sent (7d)</div>
+      <div id="metricAlertsSent7d" class="card-value">—</div>
+      <div class="card-hint">Emails delivered to users</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Alert hits (7d)</div>
+      <div id="metricAlertHits7d" class="card-value">—</div>
+      <div class="card-hint">Availability found matching alert rules</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Hit rate (7d)</div>
+      <div id="metricHitRate7d" class="card-value">—</div>
+      <div class="card-hint">Hits ÷ sent</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Avg time-to-hit</div>
+      <div id="metricAvgTimeToHit" class="card-value">—</div>
+      <div class="card-hint">Minutes</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Alerts by plan</div>
+      <div id="metricAlertsByPlan" class="card-value">—</div>
+      <div class="card-hint">Basic / Pro</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Top alert courses (7d)</div>
+      <div id="metricTopAlertCourses" class="card-value">—</div>
+      <div class="card-hint">Based on hits</div>
+    </article>
+  </section>
+
+  <section class="card" style="margin-top:14px;">
+    <div class="card-label">Top alert courses (7d)</div>
+    <ul id="topAlertCoursesList" class="top-courses-list">
+      <li><span class="label">Not configured</span><span class="value">—</span></li>
+    </ul>
+  </section>
+
+  <div class="section-title">Subscriptions</div>
+  <section class="cards-grid" aria-label="Subscription metrics">
+    <article class="card">
+      <div class="card-label">Subscribers active</div>
+      <div id="metricSubscribersActive" class="card-value">—</div>
+      <div class="card-hint">Derived from registered users + plan lookup</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Basic / Pro</div>
+      <div id="metricSubscribersByPlan" class="card-value">—</div>
+      <div class="card-hint">Derived from registered users + plan lookup</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">MRR (estimate)</div>
+      <div id="metricMRR" class="card-value">—</div>
+      <div class="card-hint">Configured in code</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Trials → paid</div>
+      <div id="metricTrialToPaid" class="card-value">—</div>
+      <div class="card-hint">Only if backend provides trial data</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Churn (30d)</div>
+      <div id="metricChurn30d" class="card-value">—</div>
+      <div class="card-hint">Only if backend provides churn data</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Coupon usage</div>
+      <div id="metricCouponUsage" class="card-value">—</div>
+      <div class="card-hint">Only if backend provides coupon data</div>
+    </article>
   </section>
 
   <section class="card" style="margin-top:14px;">
@@ -558,10 +551,10 @@
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 
-  // ---- Subscription pricing (MRR estimate) ----
-  // Set these to your real monthly prices (AUD) when ready.
+  // ======= Subscription config (edit these) =======
+  // Put your actual monthly price here (in dollars)
   const BASIC_MRR = 0; // e.g. 9.99
-  const PRO_MRR   = 0; // e.g. 19.99
+  const PRO_MRR = 0;   // e.g. 19.99
 
   function isAdminEmail(email) {
     return (email || "").trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
@@ -580,11 +573,36 @@
     }
   }
 
+  function getAny(obj, keys, fallback = null) {
+    for (const k of keys) {
+      if (obj && Object.prototype.hasOwnProperty.call(obj, k) && obj[k] != null) return obj[k];
+    }
+    return fallback;
+  }
+
+  function toInt(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.trunc(n) : 0;
+  }
+
+  function toFloat(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function fmtPct(n) {
+    if (!Number.isFinite(n)) return "—";
+    return (n * 100).toFixed(1).replace(/\.0$/, "") + "%";
+  }
+
+  function fmtMoney(n) {
+    if (!Number.isFinite(n)) return "—";
+    return "$" + n.toFixed(0);
+  }
+
   async function fetchAnalyticsSummary() {
     try {
-      const res = await fetch("/api/analytics", {
-        headers: { "Accept": "application/json" }
-      });
+      const res = await fetch("/api/analytics", { headers: { "Accept": "application/json" } });
       if (!res.ok) return null;
       return await res.json();
     } catch (err) {
@@ -609,22 +627,112 @@
     return `${fmt(h)}–${fmt(next)}`;
   }
 
-  function safeSetText(id, val) {
+  function setText(id, txt) {
     const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = val;
+    if (el) el.textContent = txt;
   }
 
-  function toPct(val) {
-    const n = Number(val);
-    if (!Number.isFinite(n)) return "—";
-    return (n * 100).toFixed(1).replace(/\.0$/, "") + "%";
-  }
+  function wireAlerts(summary) {
+    // Accept multiple alias styles
+    const alertsSent7d = toInt(getAny(summary, ["alertsSent7d","alerts_sent_7d","alerts_sent7d","alertsSent"], null));
+    const alertHits7d = toInt(getAny(summary, ["alertHits7d","alert_hits_7d","alert_hits7d","alertHits"], null));
+    const avgTimeToHitMins = toFloat(getAny(summary, ["avgTimeToHitMins","avg_time_to_hit_mins","avgTimeToHit"], null));
 
-  function money(n) {
-    const x = Number(n);
-    if (!Number.isFinite(x)) return "$0";
-    return "$" + x.toFixed(2).replace(/\.00$/, "");
+    // Alerts by plan can be object OR array OR string
+    const alertsByPlan = getAny(summary, ["alertsByPlan","alerts_by_plan"], null);
+
+    // Top alert courses (7d)
+    const topAlertCourses = getAny(summary, ["topAlertCourses","top_alert_courses","topAlertCourses7d","top_alert_courses_7d"], null);
+
+    // Render cards
+    setText("metricAlertsSent7d", alertsSent7d ? String(alertsSent7d) : "Not configured");
+    setText("metricAlertHits7d", alertHits7d ? String(alertHits7d) : "Not configured");
+
+    // Hit rate derived if possible
+    let hitRate = null;
+    if (alertsSent7d > 0 && alertHits7d >= 0) {
+      hitRate = alertHits7d / alertsSent7d;
+      setText("metricHitRate7d", fmtPct(hitRate));
+    } else {
+      // maybe backend provides hitRate7d directly
+      const hitRate7dRaw = getAny(summary, ["hitRate7d","hit_rate_7d","hit_rate7d"], null);
+      if (hitRate7dRaw != null) setText("metricHitRate7d", fmtPct(toFloat(hitRate7dRaw)));
+      else setText("metricHitRate7d", "Not configured");
+    }
+
+    if (avgTimeToHitMins > 0) setText("metricAvgTimeToHit", avgTimeToHitMins.toFixed(0) + "m");
+    else {
+      const raw = getAny(summary, ["avgTimeToHitMins","avg_time_to_hit_mins"], null);
+      setText("metricAvgTimeToHit", raw != null ? String(raw) : "Not configured");
+    }
+
+    // Alerts by plan display
+    let byPlanText = "Not configured";
+    if (alertsByPlan) {
+      if (typeof alertsByPlan === "string") {
+        byPlanText = alertsByPlan;
+      } else if (Array.isArray(alertsByPlan)) {
+        // [{plan:"Basic", count: 12}] etc
+        const basic = alertsByPlan.find(x => String(x.plan||x.name||"").toLowerCase().includes("basic"));
+        const pro = alertsByPlan.find(x => String(x.plan||x.name||"").toLowerCase().includes("pro"));
+        const b = basic ? (basic.count ?? basic.alerts ?? basic.n ?? 0) : 0;
+        const p = pro ? (pro.count ?? pro.alerts ?? pro.n ?? 0) : 0;
+        byPlanText = `${b} / ${p}`;
+      } else if (typeof alertsByPlan === "object") {
+        // { basic: 12, pro: 4 } or similar
+        const b = alertsByPlan.basic ?? alertsByPlan.BASIC ?? alertsByPlan.freeBasic ?? 0;
+        const p = alertsByPlan.pro ?? alertsByPlan.PRO ?? 0;
+        byPlanText = `${toInt(b)} / ${toInt(p)}`;
+      }
+    }
+    setText("metricAlertsByPlan", byPlanText);
+
+    // Small headline card “Top alert courses (7d)”
+    if (topAlertCourses && Array.isArray(topAlertCourses) && topAlertCourses.length) {
+      const top1 = topAlertCourses[0];
+      const name = top1.courseName || top1.course || top1.name || "—";
+      const hits = top1.hits ?? top1.count ?? top1.n ?? "—";
+      setText("metricTopAlertCourses", `${name} (${hits})`);
+    } else {
+      setText("metricTopAlertCourses", "Not configured");
+    }
+
+    // List render
+    const listEl = document.getElementById("topAlertCoursesList");
+    if (listEl) {
+      listEl.innerHTML = "";
+      if (!topAlertCourses || !Array.isArray(topAlertCourses) || !topAlertCourses.length) {
+        listEl.innerHTML = `<li><span class="label">Not configured</span><span class="value">—</span></li>`;
+      } else {
+        topAlertCourses.slice(0, 12).forEach((row) => {
+          const name = row.courseName || row.course || row.name || "—";
+          const hits = row.hits ?? row.count ?? row.n ?? 0;
+          listEl.innerHTML += `
+            <li>
+              <span class="label">${name}</span>
+              <span class="value">${hits} hits</span>
+            </li>
+          `;
+        });
+      }
+    }
+
+    // Optional backend fields (wire if present)
+    const trialToPaid = getAny(summary, ["trialToPaidRate","trial_to_paid_rate","trialToPaid"], null);
+    if (trialToPaid != null) setText("metricTrialToPaid", fmtPct(toFloat(trialToPaid)));
+    else setText("metricTrialToPaid", "—");
+
+    const churn30d = getAny(summary, ["churn30d","churn_30d"], null);
+    if (churn30d != null) setText("metricChurn30d", fmtPct(toFloat(churn30d)));
+    else setText("metricChurn30d", "—");
+
+    const couponUsage = getAny(summary, ["couponUsage","coupon_usage"], null);
+    if (couponUsage != null) {
+      if (typeof couponUsage === "number") setText("metricCouponUsage", String(couponUsage));
+      else setText("metricCouponUsage", String(couponUsage));
+    } else {
+      setText("metricCouponUsage", "—");
+    }
   }
 
   async function loadAnalytics() {
@@ -638,48 +746,52 @@
       return;
     }
 
-    const homeViewsVal = summary.homePageViews ?? summary.homeViews ?? 0;
-    const bookingClicksVal = summary.courseBookingClicks ?? summary.bookingClicks ?? 0;
-    const searchesVal = summary.searches ?? 0;
-    const newUsersVal = summary.newUsers ?? 0;
-    const usersAllTimeVal = summary.usersAllTime ?? 0;
-    const usersTodayVal = summary.usersToday ?? 0;
-    const usersWeekVal = summary.usersWeek ?? 0;
+    const homeViewsVal = toInt(getAny(summary, ["homePageViews","homeViews","home_page_views"], 0));
+    const bookingClicksVal = toInt(getAny(summary, ["courseBookingClicks","bookingClicks","booking_clicks"], 0));
+    const searchesVal = toInt(getAny(summary, ["searches"], 0));
+    const newUsersVal = toInt(getAny(summary, ["newUsers","new_users"], 0));
+    const usersAllTimeVal = toInt(getAny(summary, ["usersAllTime","unique_users"], 0));
+    const usersTodayVal = toInt(getAny(summary, ["usersToday","users_today"], 0));
+    const usersWeekVal = toInt(getAny(summary, ["usersWeek","users_week"], 0));
 
-    safeSetText("metricHomeViews", homeViewsVal);
-    safeSetText("metricBookingClicks", bookingClicksVal);
-    safeSetText("metricSearches", searchesVal);
-    safeSetText("metricNewUsers", newUsersVal);
-    safeSetText("usersAllTime", usersAllTimeVal);
-    safeSetText("usersToday", usersTodayVal);
-    safeSetText("usersWeek", usersWeekVal);
+    setText("metricHomeViews", String(homeViewsVal));
+    setText("metricBookingClicks", String(bookingClicksVal));
+    setText("metricSearches", String(searchesVal));
+    setText("metricNewUsers", String(newUsersVal));
+    setText("usersAllTime", String(usersAllTimeVal));
+    setText("usersToday", String(usersTodayVal));
+    setText("usersWeek", String(usersWeekVal));
 
-    // rounds played (prefer all-time)
-    const roundsPlayedVal = summary.roundsPlayed ?? summary.rounds ?? summary.roundsPlayed7d ?? 0;
-    safeSetText("metricRoundsPlayed", roundsPlayedVal);
+    // Rounds played (prefer all-time first)
+    const roundsPlayedVal = toInt(getAny(summary, ["roundsPlayed","rounds","rounds_played"], null)) ||
+                           toInt(getAny(summary, ["roundsPlayed7d","rounds_played_7d"], 0));
+    setText("metricRoundsPlayed", String(roundsPlayedVal));
 
-    let convHome = summary.conversionHomeToBooking;
+    // Conversions
+    let convHome = getAny(summary, ["conversionHomeToBooking","homeToBookingRate","home_to_booking_rate"], null);
     if (convHome == null) convHome = homeViewsVal > 0 ? bookingClicksVal / homeViewsVal : 0;
+    setText("metricConvHomeBooking", fmtPct(toFloat(convHome)));
 
-    let convSearch = summary.conversionSearchToBooking;
+    let convSearch = getAny(summary, ["conversionSearchToBooking","searchToBookingRate","search_to_booking_rate"], null);
     if (convSearch == null) convSearch = searchesVal > 0 ? bookingClicksVal / searchesVal : 0;
+    setText("metricConvSearchBooking", fmtPct(toFloat(convSearch)));
 
-    safeSetText("metricConvHomeBooking", toPct(convHome));
-    safeSetText("metricConvSearchBooking", toPct(convSearch));
+    // 30d + returning
+    const users30d = toInt(getAny(summary, ["users30d","users_30d"], 0));
+    const returning7d = toInt(getAny(summary, ["returningUsers7d","returning_users_7d"], 0));
+    setText("users30d", String(users30d));
+    setText("returning7d", String(returning7d));
 
-    const users30d = summary.users30d ?? summary.users_30d ?? 0;
-    const returning7d = summary.returningUsers7d ?? summary.returning_users_7d ?? 0;
-    safeSetText("users30d", users30d);
-    safeSetText("returning7d", returning7d);
+    // Repeat bookers
+    const repeatBookersVal = toInt(getAny(summary, ["repeatBookers","repeat_bookers"], 0));
+    setText("metricRepeatBookers", String(repeatBookersVal));
 
-    const repeatBookersVal = summary.repeatBookers ?? summary.repeat_bookers ?? 0;
-    safeSetText("metricRepeatBookers", repeatBookersVal);
-
-    const peak = summary.peakBookingHour ?? summary.peak_booking_hour ?? null;
+    // Peak hour
+    const peak = getAny(summary, ["peakBookingHour","peak_booking_hour"], null);
     if (peak && peak.hour != null) {
-      safeSetText("metricPeakHour", `${formatHourRange(peak.hour)} (${peak.clicks} clicks)`);
+      setText("metricPeakHour", `${formatHourRange(peak.hour)} (${peak.clicks} clicks)`);
     } else {
-      safeSetText("metricPeakHour", "–");
+      setText("metricPeakHour", "–");
     }
 
     // Health summary
@@ -690,7 +802,7 @@
       if (activeBase > 0) signupRateRaw = newUsersVal / activeBase;
       if (!Number.isFinite(signupRateRaw)) signupRateRaw = 0;
 
-      const bookingClickRatePct = (convHome * 100).toFixed(1).replace(/\.0$/, "");
+      const bookingClickRatePct = (toFloat(convHome) * 100).toFixed(1).replace(/\.0$/, "");
       const signupRatePct = (signupRateRaw * 100).toFixed(1).replace(/\.0$/, "");
 
       healthEl.textContent =
@@ -701,29 +813,31 @@
 
     updatedAt.textContent = "Last updated " + new Date().toLocaleString();
 
-    // Most-clicked courses
+    // Top clicked courses
     const topList = document.getElementById("topCoursesList");
-    topList.innerHTML = "";
-    const top = summary.topCourses || [];
-    if (top.length === 0) {
-      topList.innerHTML = `<li><span class="label">No course clicks yet</span><span class="value">—</span></li>`;
-    } else {
-      top.forEach((row) => {
-        topList.innerHTML += `
-          <li>
-            <span class="label">${row.courseName}</span>
-            <span class="value">${row.clicks} clicks</span>
-          </li>
-        `;
-      });
+    if (topList) {
+      topList.innerHTML = "";
+      const top = getAny(summary, ["topCourses","top_courses"], []);
+      if (!top || !top.length) {
+        topList.innerHTML = `<li><span class="label">No course clicks yet</span><span class="value">—</span></li>`;
+      } else {
+        top.forEach((row) => {
+          topList.innerHTML += `
+            <li>
+              <span class="label">${row.courseName}</span>
+              <span class="value">${row.clicks} clicks</span>
+            </li>
+          `;
+        });
+      }
     }
 
-    // Most-searched courses
+    // Top searched courses
     const topSearchList = document.getElementById("topSearchedCoursesList");
     if (topSearchList) {
       topSearchList.innerHTML = "";
-      const topSearched = summary.topSearchedCourses || summary.top_searched_courses || [];
-      if (!topSearched.length) {
+      const topSearched = getAny(summary, ["topSearchedCourses","top_searched_courses"], []);
+      if (!topSearched || !topSearched.length) {
         topSearchList.innerHTML = `<li><span class="label">No searches yet</span><span class="value">—</span></li>`;
       } else {
         topSearched.forEach((row) => {
@@ -741,41 +855,39 @@
     const demandList = document.getElementById("demandRankList");
     if (demandList) {
       demandList.innerHTML = "";
-      const demand = summary.demandRank || summary.demand_rank || [];
-      if (!demand.length) {
+      const demand = getAny(summary, ["demandRank","demand_rank"], []);
+      if (!demand || !demand.length) {
         demandList.innerHTML = `<li><span class="label">No demand data yet</span><span class="value">—</span></li>`;
       } else {
         demand.forEach((row) => {
           demandList.innerHTML += `
             <li>
               <span class="label">${row.courseName}</span>
-              <span class="value">
-                ${row.score} pts · ${row.clicks} clicks · ${row.searches} searches
-              </span>
+              <span class="value">${row.score} pts · ${row.clicks} clicks · ${row.searches} searches</span>
             </li>
           `;
         });
       }
     }
 
-    // Most-played courses (already supported by your backend changes)
+    // Played courses (all time + last 30d)
     const playedList = document.getElementById("topPlayedCoursesList");
     if (playedList) {
-      const allTime = summary.topPlayedCourses || [];
-      const last30d = summary.topPlayedCourses30d || [];
+      const allTime = getAny(summary, ["topPlayedCourses","top_played_courses"], []);
+      const last30d = getAny(summary, ["topPlayedCourses30d","top_played_courses_30d"], []);
       playedList.innerHTML = "";
 
-      if (!allTime.length && !last30d.length) {
+      if ((!allTime || !allTime.length) && (!last30d || !last30d.length)) {
         playedList.innerHTML = `<li><span class="label">No rounds logged yet</span><span class="value">—</span></li>`;
       } else {
-        const map30 = new Map(last30d.map((r) => [r.courseName, r.rounds]));
+        const map30 = new Map((last30d || []).map((r) => [r.courseName, r.rounds]));
         const names = new Set([
-          ...allTime.map((r) => r.courseName),
-          ...last30d.map((r) => r.courseName),
+          ...(allTime || []).map((r) => r.courseName),
+          ...(last30d || []).map((r) => r.courseName),
         ]);
 
         Array.from(names).slice(0, 12).forEach((name) => {
-          const at = (allTime.find((r) => r.courseName === name) || {}).rounds ?? 0;
+          const at = ((allTime || []).find((r) => r.courseName === name) || {}).rounds ?? 0;
           const d30 = map30.get(name) ?? 0;
           playedList.innerHTML += `
             <li>
@@ -787,67 +899,8 @@
       }
     }
 
-    // ---------------- Alerts wiring (reads fields if backend provides them) ----------------
-    const alertsSent7d = summary.alertsSent7d ?? summary.alerts_sent_7d ?? null;
-    const alertHits7d = summary.alertHits7d ?? summary.alert_hits_7d ?? null;
-    const avgTimeToHitMins = summary.avgTimeToHitMins ?? summary.avg_time_to_hit_mins ?? null;
-
-    if (alertsSent7d != null) safeSetText("metricAlertsSent7d", alertsSent7d);
-    if (alertHits7d != null) safeSetText("metricAlertHits7d", alertHits7d);
-
-    // hit rate (derive if possible)
-    if (alertsSent7d != null && alertHits7d != null) {
-      const rate = Number(alertsSent7d) > 0 ? Number(alertHits7d) / Number(alertsSent7d) : 0;
-      safeSetText("metricAlertHitRate7d", toPct(rate));
-    }
-
-    if (avgTimeToHitMins != null) {
-      const mins = Number(avgTimeToHitMins);
-      safeSetText("metricAvgTimeToHit", Number.isFinite(mins) ? `${mins.toFixed(1).replace(/\.0$/, "")} min` : "—");
-    }
-
-    const alertsByPlan = summary.alertsByPlan ?? summary.alerts_by_plan ?? null;
-    if (alertsByPlan && typeof alertsByPlan === "object") {
-      const basic = alertsByPlan.basic ?? alertsByPlan.BASIC ?? 0;
-      const pro = alertsByPlan.pro ?? alertsByPlan.PRO ?? 0;
-      safeSetText("metricAlertsByPlan", `${basic} / ${pro}`);
-    }
-
-    const topAlertCourses = summary.topAlertCourses ?? summary.top_alert_courses ?? [];
-    // small headline number
-    if (Array.isArray(topAlertCourses) && topAlertCourses.length) {
-      safeSetText("metricTopAlertCourses7d", topAlertCourses[0]?.hits ?? topAlertCourses[0]?.count ?? "—");
-    }
-
-    // list render
-    const alertList = document.getElementById("topAlertCoursesList");
-    if (alertList) {
-      alertList.innerHTML = "";
-      if (!Array.isArray(topAlertCourses) || !topAlertCourses.length) {
-        alertList.innerHTML = `<li><span class="label">Not configured</span><span class="value">—</span></li>`;
-      } else {
-        topAlertCourses.slice(0, 12).forEach((row) => {
-          const name = row.courseName ?? row.course_name ?? "Unknown";
-          const hits = row.hits ?? row.count ?? 0;
-          alertList.innerHTML += `
-            <li>
-              <span class="label">${name}</span>
-              <span class="value">${hits} hits</span>
-            </li>
-          `;
-        });
-      }
-    }
-
-    // ---------------- Subscription wiring (backend optional; client-side derived is default) ----------------
-    const trialToPaidRate = summary.trialToPaidRate ?? summary.trial_to_paid_rate ?? null;
-    if (trialToPaidRate != null) safeSetText("metricTrialToPaid", toPct(trialToPaidRate));
-
-    const churn30d = summary.churn30d ?? summary.churn_30d ?? null;
-    if (churn30d != null) safeSetText("metricChurn30d", toPct(churn30d));
-
-    const couponUsage = summary.couponUsage ?? summary.coupon_usage ?? null;
-    if (couponUsage != null) safeSetText("metricCouponUsage", String(couponUsage));
+    // Alerts section (wired to summary fields if present)
+    wireAlerts(summary);
   }
 
   // ---------- Registered users + detail card + plan lookup ----------
@@ -887,20 +940,9 @@
     if (p === "PRO") return "Pro";
     if (p === "BASIC") return "Basic";
     if (p === "FREE") return "Unsubscribed";
+    // handle "trial" etc gracefully
+    if (p.includes("TRIAL")) return "Trial";
     return plan;
-  }
-
-  function computeSubscriptionStatsFromUsers() {
-    const plans = USERS_CACHE.map((u) => normalisePlanLabel(u.plan));
-    const basic = plans.filter((p) => p === "Basic").length;
-    const pro = plans.filter((p) => p === "Pro").length;
-    const active = basic + pro;
-
-    safeSetText("metricSubscribersActive", active);
-    safeSetText("metricSubscribersByPlan", `${basic} / ${pro}`);
-
-    const mrr = (basic * BASIC_MRR) + (pro * PRO_MRR);
-    safeSetText("metricMRR", money(mrr));
   }
 
   function showUserDetail(u) {
@@ -929,6 +971,26 @@
     card.style.display = "block";
   }
 
+  function computeSubscriptionMetrics() {
+    // Count only after we’ve refreshed plans
+    let basic = 0;
+    let pro = 0;
+
+    USERS_CACHE.forEach((u) => {
+      const p = normalisePlanLabel(u.plan);
+      if (p === "Basic") basic += 1;
+      if (p === "Pro") pro += 1;
+    });
+
+    const active = basic + pro;
+
+    setText("metricSubscribersActive", String(active));
+    setText("metricSubscribersByPlan", `${basic} / ${pro}`);
+
+    const mrr = (basic * BASIC_MRR) + (pro * PRO_MRR);
+    setText("metricMRR", fmtMoney(mrr));
+  }
+
   async function refreshPlansForUsers(users) {
     await Promise.all(
       users.map(async (u, idx) => {
@@ -940,7 +1002,6 @@
           );
           if (!res.ok) return;
           const data = await res.json();
-
           const plan = normalisePlanLabel(data.plan);
           USERS_CACHE[idx].plan = plan;
 
@@ -954,9 +1015,6 @@
         }
       })
     );
-
-    // ✅ after plan lookups complete, compute subscriptions
-    computeSubscriptionStatsFromUsers();
   }
 
   async function loadRegisteredUsers() {
@@ -972,9 +1030,11 @@
 
       if (!res.ok) {
         console.warn("Failed to load users:", res.status);
-        table.style.display = "none";
-        empty.style.display = "none";
-        errorEl.style.display = "block";
+        if (table) table.style.display = "none";
+        if (empty) empty.style.display = "none";
+        if (errorEl) errorEl.style.display = "block";
+        // still compute subs (will be 0)
+        computeSubscriptionMetrics();
         return;
       }
 
@@ -983,47 +1043,51 @@
       USERS_CACHE = users;
 
       if (!users.length) {
-        table.style.display = "none";
-        empty.style.display = "block";
-        errorEl.style.display = "none";
-        document.getElementById("userDetailCard").style.display = "none";
-        computeSubscriptionStatsFromUsers();
+        if (table) table.style.display = "none";
+        if (empty) empty.style.display = "block";
+        if (errorEl) errorEl.style.display = "none";
+        const detail = document.getElementById("userDetailCard");
+        if (detail) detail.style.display = "none";
+        // subs should be 0
+        computeSubscriptionMetrics();
         return;
       }
 
-      empty.style.display = "none";
-      errorEl.style.display = "none";
-      table.style.display = "table";
+      if (empty) empty.style.display = "none";
+      if (errorEl) errorEl.style.display = "none";
+      if (table) table.style.display = "table";
 
-      tbody.innerHTML = users.map((u, idx) => {
-        const created = u.created_at || u.createdAt || "";
-        const lastSeen = u.last_seen_at || u.lastLogin || "";
-        const favDisplay = favouritesToString(u.favourites || u.favourite_courses);
-        const homeState = u.home_state || "";
-        const planLabel = normalisePlanLabel(u.plan);
+      if (tbody) {
+        tbody.innerHTML = users.map((u, idx) => {
+          const created = u.created_at || u.createdAt || "";
+          const lastSeen = u.last_seen_at || u.lastLogin || "";
+          const favDisplay = favouritesToString(u.favourites || u.favourite_courses);
+          const homeState = u.home_state || "";
+          const planLabel = normalisePlanLabel(u.plan);
 
-        return `
-          <tr class="user-row" data-idx="${idx}">
-            <td>${u.id}</td>
-            <td><span class="user-email-pill">${u.email}</span></td>
-            <td data-col="plan">${planLabel}</td>
-            <td>${homeState}</td>
-            <td>${favDisplay || ""}</td>
-            <td>${created ? new Date(created).toLocaleString() : ""}</td>
-            <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
-            <td>
-              <button
-                type="button"
-                class="user-delete-btn"
-                data-user-id="${u.id}"
-                data-user-email="${u.email}"
-              >
-                Delete
-              </button>
-            </td>
-          </tr>
-        `;
-      }).join("");
+          return `
+            <tr class="user-row" data-idx="${idx}">
+              <td>${u.id}</td>
+              <td><span class="user-email-pill">${u.email}</span></td>
+              <td data-col="plan">${planLabel}</td>
+              <td>${homeState}</td>
+              <td>${favDisplay || ""}</td>
+              <td>${created ? new Date(created).toLocaleString() : ""}</td>
+              <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
+              <td>
+                <button
+                  type="button"
+                  class="user-delete-btn"
+                  data-user-id="${u.id}"
+                  data-user-email="${u.email}"
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join("");
+      }
 
       document.querySelectorAll(".user-row").forEach((row) => {
         row.addEventListener("click", (e) => {
@@ -1068,20 +1132,21 @@
         });
       });
 
-      // compute subscriptions immediately (may be Unsubscribed until plan lookup finishes)
-      computeSubscriptionStatsFromUsers();
-
-      // pull live plan from Stripe for each user, then recompute
+      // pull live plan from Stripe for each user
       await refreshPlansForUsers(users);
+
+      // ✅ NOW compute subscription cards using refreshed plans
+      computeSubscriptionMetrics();
 
     } catch (err) {
       console.error("Error loading registered users:", err);
       const table = document.getElementById("usersTable");
       const empty = document.getElementById("usersEmpty");
       const errorEl = document.getElementById("usersError");
-      table.style.display = "none";
-      empty.style.display = "none";
-      errorEl.style.display = "block";
+      if (table) table.style.display = "none";
+      if (empty) empty.style.display = "none";
+      if (errorEl) errorEl.style.display = "block";
+      computeSubscriptionMetrics();
     }
   }
 
