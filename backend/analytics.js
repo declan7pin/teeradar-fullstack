@@ -26,6 +26,12 @@ async function ensureAnalyticsTable() {
       ADD COLUMN IF NOT EXISTS round_id BIGINT;
     `);
 
+    // ✅ NEW: support UUID/string round ids as well (safe)
+    await db.query(`
+      ALTER TABLE analytics
+      ADD COLUMN IF NOT EXISTS round_key TEXT;
+    `);
+
     // ✅ add plan for alert/subscription segmentation (safe)
     await db.query(`
       ALTER TABLE analytics
@@ -52,6 +58,12 @@ async function ensureAnalyticsTable() {
     await db.query(`
       CREATE INDEX IF NOT EXISTS idx_analytics_round_id
       ON analytics (round_id);
+    `);
+
+    // ✅ NEW: index for string round ids
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_analytics_round_key
+      ON analytics (round_key);
     `);
   })();
 
@@ -129,10 +141,18 @@ export async function recordEvent(typeOrObj, payload = {}) {
       p.round_id ??
       null;
 
-    const roundId =
-      roundIdRaw === null || typeof roundIdRaw === "undefined" || roundIdRaw === ""
-        ? null
-        : Number(roundIdRaw);
+    // ✅ support both numeric ids AND UUID/string ids
+    const roundRawStr =
+      roundIdRaw === null || typeof roundIdRaw === "undefined" ? "" : String(roundIdRaw).trim();
+
+    const roundIdNum =
+      roundRawStr ? Number(roundRawStr) : null;
+
+    const round_id =
+      Number.isFinite(roundIdNum) ? roundIdNum : null;
+
+    const round_key =
+      roundRawStr && !Number.isFinite(roundIdNum) ? roundRawStr.slice(0, 128) : null;
 
     const planRaw =
       p.plan ??
@@ -156,14 +176,15 @@ export async function recordEvent(typeOrObj, payload = {}) {
     const timestamp = at || new Date().toISOString();
 
     await db.query(
-      `INSERT INTO analytics (type, user_id, course_name, occurred_at, round_id, plan, meta)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+      `INSERT INTO analytics (type, user_id, course_name, occurred_at, round_id, round_key, plan, meta)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
       [
         type,
         userId || null,
         courseName || null,
         timestamp,
-        Number.isFinite(roundId) ? roundId : null,
+        round_id,
+        round_key,
         plan,
         metaJson,
       ]
@@ -193,15 +214,15 @@ export async function getTopPlayedCourses(limit = 10, days = null) {
     `
     SELECT
       course_name AS "courseName",
-      COUNT(DISTINCT round_id)::int AS "rounds"
+      COUNT(DISTINCT COALESCE(round_key, round_id::text))::int AS "rounds"
     FROM analytics
     WHERE type = 'round_played'
-      AND round_id IS NOT NULL
+      AND COALESCE(round_key, round_id::text) IS NOT NULL
       AND course_name IS NOT NULL
       AND course_name <> ''
       ${whereTime}
     GROUP BY course_name
-    ORDER BY COUNT(DISTINCT round_id) DESC
+    ORDER BY COUNT(DISTINCT COALESCE(round_key, round_id::text)) DESC
     LIMIT $1
     `,
     params
@@ -333,17 +354,17 @@ export async function getAnalyticsSummary() {
   );
 
   summary.roundsPlayed = await count(
-    `SELECT COUNT(DISTINCT round_id)::int AS n
+    `SELECT COUNT(DISTINCT COALESCE(round_key, round_id::text))::int AS n
      FROM analytics
      WHERE type = 'round_played'
-       AND round_id IS NOT NULL`
+       AND COALESCE(round_key, round_id::text) IS NOT NULL`
   );
 
   summary.roundsPlayed7d = await count(
-    `SELECT COUNT(DISTINCT round_id)::int AS n
+    `SELECT COUNT(DISTINCT COALESCE(round_key, round_id::text))::int AS n
      FROM analytics
      WHERE type = 'round_played'
-       AND round_id IS NOT NULL
+       AND COALESCE(round_key, round_id::text) IS NOT NULL
        AND occurred_at >= NOW() - INTERVAL '7 days'`
   );
 
