@@ -164,6 +164,16 @@
       color:var(--muted);
     }
 
+    .section-title{
+      margin:22px 0 10px;
+      font-weight:800;
+      letter-spacing:-0.02em;
+      font-size:14px;
+      color:#0f172a;
+      opacity:.9;
+      text-transform:uppercase;
+    }
+
     .user-overview{
       margin-top:6px;
     }
@@ -302,6 +312,8 @@
     Live tee-time engagement across Western Australia.
   </p>
 
+  <div class="section-title">Engagement</div>
+
   <section class="cards-grid" aria-label="Key metrics">
     <article class="card">
       <div class="card-label">Home page views</div>
@@ -351,6 +363,93 @@
       <div class="card-label">Peak booking hour</div>
       <div id="metricPeakHour" class="card-value">–</div>
       <div class="card-hint">Busiest hour by booking clicks</div>
+    </article>
+  </section>
+
+  <div class="section-title">Alerts</div>
+
+  <section class="cards-grid" aria-label="Alert metrics">
+    <article class="card">
+      <div class="card-label">Alerts sent (7d)</div>
+      <div id="metricAlertsSent7d" class="card-value">—</div>
+      <div class="card-hint">Requires backend field: alertsSent7d</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Alert hits (7d)</div>
+      <div id="metricAlertHits7d" class="card-value">—</div>
+      <div class="card-hint">Requires backend field: alertHits7d</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Hit rate (7d)</div>
+      <div id="metricAlertHitRate7d" class="card-value">—</div>
+      <div class="card-hint">Hits ÷ sent</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Avg time-to-hit</div>
+      <div id="metricAvgTimeToHit" class="card-value">—</div>
+      <div class="card-hint">Requires backend field: avgTimeToHitMins</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Alerts by plan</div>
+      <div id="metricAlertsByPlan" class="card-value">—</div>
+      <div class="card-hint">Requires backend field: alertsByPlan</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Top alert courses (7d)</div>
+      <div id="metricTopAlertCourses7d" class="card-value">—</div>
+      <div class="card-hint">Requires backend field: topAlertCourses</div>
+    </article>
+  </section>
+
+  <section class="card" style="margin-top:14px;">
+    <div class="card-label">Top alert courses (7d)</div>
+    <ul id="topAlertCoursesList" class="top-courses-list">
+      <li><span class="label">Not configured</span><span class="value">—</span></li>
+    </ul>
+  </section>
+
+  <div class="section-title">Subscriptions</div>
+
+  <section class="cards-grid" aria-label="Subscription metrics">
+    <article class="card">
+      <div class="card-label">Subscribers active</div>
+      <div id="metricSubscribersActive" class="card-value">0</div>
+      <div class="card-hint">Derived from registered users + plan lookup</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Basic / Pro</div>
+      <div id="metricSubscribersByPlan" class="card-value">0 / 0</div>
+      <div class="card-hint">Derived from registered users + plan lookup</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">MRR (estimate)</div>
+      <div id="metricMRR" class="card-value">$0</div>
+      <div class="card-hint">Edit BASIC_MRR / PRO_MRR in code</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Trials → paid</div>
+      <div id="metricTrialToPaid" class="card-value">—</div>
+      <div class="card-hint">Requires backend field: trialToPaidRate</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Churn (30d)</div>
+      <div id="metricChurn30d" class="card-value">—</div>
+      <div class="card-hint">Requires backend field: churn30d</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Coupon usage</div>
+      <div id="metricCouponUsage" class="card-value">—</div>
+      <div class="card-hint">Requires backend field: couponUsage</div>
     </article>
   </section>
 
@@ -459,6 +558,11 @@
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 
+  // ---- Subscription pricing (MRR estimate) ----
+  // Set these to your real monthly prices (AUD) when ready.
+  const BASIC_MRR = 0; // e.g. 9.99
+  const PRO_MRR   = 0; // e.g. 19.99
+
   function isAdminEmail(email) {
     return (email || "").trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
   }
@@ -505,6 +609,24 @@
     return `${fmt(h)}–${fmt(next)}`;
   }
 
+  function safeSetText(id, val) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+  }
+
+  function toPct(val) {
+    const n = Number(val);
+    if (!Number.isFinite(n)) return "—";
+    return (n * 100).toFixed(1).replace(/\.0$/, "") + "%";
+  }
+
+  function money(n) {
+    const x = Number(n);
+    if (!Number.isFinite(x)) return "$0";
+    return "$" + x.toFixed(2).replace(/\.00$/, "");
+  }
+
   async function loadAnalytics() {
     enforceAdmin();
 
@@ -516,87 +638,56 @@
       return;
     }
 
-    const homeViewsVal =
-      summary.homePageViews ?? summary.homeViews ?? 0;
-    const bookingClicksVal =
-      summary.courseBookingClicks ?? summary.bookingClicks ?? 0;
-    const searchesVal =
-      summary.searches ?? 0;
-    const newUsersVal =
-      summary.newUsers ?? 0;
-    const usersAllTimeVal =
-      summary.usersAllTime ?? 0;
-    const usersTodayVal =
-      summary.usersToday ?? 0;
-    const usersWeekVal =
-      summary.usersWeek ?? 0;
+    const homeViewsVal = summary.homePageViews ?? summary.homeViews ?? 0;
+    const bookingClicksVal = summary.courseBookingClicks ?? summary.bookingClicks ?? 0;
+    const searchesVal = summary.searches ?? 0;
+    const newUsersVal = summary.newUsers ?? 0;
+    const usersAllTimeVal = summary.usersAllTime ?? 0;
+    const usersTodayVal = summary.usersToday ?? 0;
+    const usersWeekVal = summary.usersWeek ?? 0;
 
-    document.getElementById("metricHomeViews").textContent = homeViewsVal;
-    document.getElementById("metricBookingClicks").textContent = bookingClicksVal;
-    document.getElementById("metricSearches").textContent = searchesVal;
-    document.getElementById("metricNewUsers").textContent = newUsersVal;
-    document.getElementById("usersAllTime").textContent = usersAllTimeVal;
-    document.getElementById("usersToday").textContent = usersTodayVal;
-    document.getElementById("usersWeek").textContent = usersWeekVal;
+    safeSetText("metricHomeViews", homeViewsVal);
+    safeSetText("metricBookingClicks", bookingClicksVal);
+    safeSetText("metricSearches", searchesVal);
+    safeSetText("metricNewUsers", newUsersVal);
+    safeSetText("usersAllTime", usersAllTimeVal);
+    safeSetText("usersToday", usersTodayVal);
+    safeSetText("usersWeek", usersWeekVal);
 
-    // ✅ FIXED: prefer all-time roundsPlayed first
-    const roundsPlayedVal =
-      summary.roundsPlayed ?? summary.rounds ?? summary.roundsPlayed7d ?? 0;
-    const roundsEl = document.getElementById("metricRoundsPlayed");
-    if (roundsEl) roundsEl.textContent = roundsPlayedVal;
+    // rounds played (prefer all-time)
+    const roundsPlayedVal = summary.roundsPlayed ?? summary.rounds ?? summary.roundsPlayed7d ?? 0;
+    safeSetText("metricRoundsPlayed", roundsPlayedVal);
 
     let convHome = summary.conversionHomeToBooking;
-    if (convHome == null) {
-      convHome = homeViewsVal > 0 ? bookingClicksVal / homeViewsVal : 0;
-    }
+    if (convHome == null) convHome = homeViewsVal > 0 ? bookingClicksVal / homeViewsVal : 0;
 
     let convSearch = summary.conversionSearchToBooking;
-    if (convSearch == null) {
-      convSearch = searchesVal > 0 ? bookingClicksVal / searchesVal : 0;
-    }
+    if (convSearch == null) convSearch = searchesVal > 0 ? bookingClicksVal / searchesVal : 0;
 
-    const convHomeEl = document.getElementById("metricConvHomeBooking");
-    if (convHomeEl) {
-      const pct = (convHome * 100).toFixed(1).replace(/\.0$/, "");
-      convHomeEl.textContent = pct + "%";
-    }
-
-    const convSearchEl = document.getElementById("metricConvSearchBooking");
-    if (convSearchEl) {
-      const pct = (convSearch * 100).toFixed(1).replace(/\.0$/, "");
-      convSearchEl.textContent = pct + "%";
-    }
+    safeSetText("metricConvHomeBooking", toPct(convHome));
+    safeSetText("metricConvSearchBooking", toPct(convSearch));
 
     const users30d = summary.users30d ?? summary.users_30d ?? 0;
     const returning7d = summary.returningUsers7d ?? summary.returning_users_7d ?? 0;
-
-    const users30dEl = document.getElementById("users30d");
-    if (users30dEl) users30dEl.textContent = users30d;
-
-    const returning7dEl = document.getElementById("returning7d");
-    if (returning7dEl) returning7dEl.textContent = returning7d;
+    safeSetText("users30d", users30d);
+    safeSetText("returning7d", returning7d);
 
     const repeatBookersVal = summary.repeatBookers ?? summary.repeat_bookers ?? 0;
-    const repeatEl = document.getElementById("metricRepeatBookers");
-    if (repeatEl) repeatEl.textContent = repeatBookersVal;
+    safeSetText("metricRepeatBookers", repeatBookersVal);
 
     const peak = summary.peakBookingHour ?? summary.peak_booking_hour ?? null;
-    const peakEl = document.getElementById("metricPeakHour");
-    if (peakEl) {
-      if (peak && peak.hour != null) {
-        peakEl.textContent = `${formatHourRange(peak.hour)} (${peak.clicks} clicks)`;
-      } else {
-        peakEl.textContent = "–";
-      }
+    if (peak && peak.hour != null) {
+      safeSetText("metricPeakHour", `${formatHourRange(peak.hour)} (${peak.clicks} clicks)`);
+    } else {
+      safeSetText("metricPeakHour", "–");
     }
 
+    // Health summary
     const healthEl = document.getElementById("healthSummary");
     if (healthEl) {
       let signupRateRaw = 0;
       const activeBase = users30d > 0 ? users30d : usersAllTimeVal;
-      if (activeBase > 0) {
-        signupRateRaw = newUsersVal / activeBase;
-      }
+      if (activeBase > 0) signupRateRaw = newUsersVal / activeBase;
       if (!Number.isFinite(signupRateRaw)) signupRateRaw = 0;
 
       const bookingClickRatePct = (convHome * 100).toFixed(1).replace(/\.0$/, "");
@@ -610,13 +701,12 @@
 
     updatedAt.textContent = "Last updated " + new Date().toLocaleString();
 
+    // Most-clicked courses
     const topList = document.getElementById("topCoursesList");
     topList.innerHTML = "";
-
     const top = summary.topCourses || [];
     if (top.length === 0) {
-      topList.innerHTML =
-        `<li><span class="label">No course clicks yet</span><span class="value">—</span></li>`;
+      topList.innerHTML = `<li><span class="label">No course clicks yet</span><span class="value">—</span></li>`;
     } else {
       top.forEach((row) => {
         topList.innerHTML += `
@@ -628,13 +718,13 @@
       });
     }
 
+    // Most-searched courses
     const topSearchList = document.getElementById("topSearchedCoursesList");
     if (topSearchList) {
       topSearchList.innerHTML = "";
       const topSearched = summary.topSearchedCourses || summary.top_searched_courses || [];
       if (!topSearched.length) {
-        topSearchList.innerHTML =
-          `<li><span class="label">No searches yet</span><span class="value">—</span></li>`;
+        topSearchList.innerHTML = `<li><span class="label">No searches yet</span><span class="value">—</span></li>`;
       } else {
         topSearched.forEach((row) => {
           topSearchList.innerHTML += `
@@ -647,13 +737,13 @@
       }
     }
 
+    // Demand rank
     const demandList = document.getElementById("demandRankList");
     if (demandList) {
       demandList.innerHTML = "";
       const demand = summary.demandRank || summary.demand_rank || [];
       if (!demand.length) {
-        demandList.innerHTML =
-          `<li><span class="label">No demand data yet</span><span class="value">—</span></li>`;
+        demandList.innerHTML = `<li><span class="label">No demand data yet</span><span class="value">—</span></li>`;
       } else {
         demand.forEach((row) => {
           demandList.innerHTML += `
@@ -668,16 +758,15 @@
       }
     }
 
+    // Most-played courses (already supported by your backend changes)
     const playedList = document.getElementById("topPlayedCoursesList");
     if (playedList) {
       const allTime = summary.topPlayedCourses || [];
       const last30d = summary.topPlayedCourses30d || [];
-
       playedList.innerHTML = "";
 
       if (!allTime.length && !last30d.length) {
-        playedList.innerHTML =
-          `<li><span class="label">No rounds logged yet</span><span class="value">—</span></li>`;
+        playedList.innerHTML = `<li><span class="label">No rounds logged yet</span><span class="value">—</span></li>`;
       } else {
         const map30 = new Map(last30d.map((r) => [r.courseName, r.rounds]));
         const names = new Set([
@@ -697,6 +786,68 @@
         });
       }
     }
+
+    // ---------------- Alerts wiring (reads fields if backend provides them) ----------------
+    const alertsSent7d = summary.alertsSent7d ?? summary.alerts_sent_7d ?? null;
+    const alertHits7d = summary.alertHits7d ?? summary.alert_hits_7d ?? null;
+    const avgTimeToHitMins = summary.avgTimeToHitMins ?? summary.avg_time_to_hit_mins ?? null;
+
+    if (alertsSent7d != null) safeSetText("metricAlertsSent7d", alertsSent7d);
+    if (alertHits7d != null) safeSetText("metricAlertHits7d", alertHits7d);
+
+    // hit rate (derive if possible)
+    if (alertsSent7d != null && alertHits7d != null) {
+      const rate = Number(alertsSent7d) > 0 ? Number(alertHits7d) / Number(alertsSent7d) : 0;
+      safeSetText("metricAlertHitRate7d", toPct(rate));
+    }
+
+    if (avgTimeToHitMins != null) {
+      const mins = Number(avgTimeToHitMins);
+      safeSetText("metricAvgTimeToHit", Number.isFinite(mins) ? `${mins.toFixed(1).replace(/\.0$/, "")} min` : "—");
+    }
+
+    const alertsByPlan = summary.alertsByPlan ?? summary.alerts_by_plan ?? null;
+    if (alertsByPlan && typeof alertsByPlan === "object") {
+      const basic = alertsByPlan.basic ?? alertsByPlan.BASIC ?? 0;
+      const pro = alertsByPlan.pro ?? alertsByPlan.PRO ?? 0;
+      safeSetText("metricAlertsByPlan", `${basic} / ${pro}`);
+    }
+
+    const topAlertCourses = summary.topAlertCourses ?? summary.top_alert_courses ?? [];
+    // small headline number
+    if (Array.isArray(topAlertCourses) && topAlertCourses.length) {
+      safeSetText("metricTopAlertCourses7d", topAlertCourses[0]?.hits ?? topAlertCourses[0]?.count ?? "—");
+    }
+
+    // list render
+    const alertList = document.getElementById("topAlertCoursesList");
+    if (alertList) {
+      alertList.innerHTML = "";
+      if (!Array.isArray(topAlertCourses) || !topAlertCourses.length) {
+        alertList.innerHTML = `<li><span class="label">Not configured</span><span class="value">—</span></li>`;
+      } else {
+        topAlertCourses.slice(0, 12).forEach((row) => {
+          const name = row.courseName ?? row.course_name ?? "Unknown";
+          const hits = row.hits ?? row.count ?? 0;
+          alertList.innerHTML += `
+            <li>
+              <span class="label">${name}</span>
+              <span class="value">${hits} hits</span>
+            </li>
+          `;
+        });
+      }
+    }
+
+    // ---------------- Subscription wiring (backend optional; client-side derived is default) ----------------
+    const trialToPaidRate = summary.trialToPaidRate ?? summary.trial_to_paid_rate ?? null;
+    if (trialToPaidRate != null) safeSetText("metricTrialToPaid", toPct(trialToPaidRate));
+
+    const churn30d = summary.churn30d ?? summary.churn_30d ?? null;
+    if (churn30d != null) safeSetText("metricChurn30d", toPct(churn30d));
+
+    const couponUsage = summary.couponUsage ?? summary.coupon_usage ?? null;
+    if (couponUsage != null) safeSetText("metricCouponUsage", String(couponUsage));
   }
 
   // ---------- Registered users + detail card + plan lookup ----------
@@ -739,6 +890,19 @@
     return plan;
   }
 
+  function computeSubscriptionStatsFromUsers() {
+    const plans = USERS_CACHE.map((u) => normalisePlanLabel(u.plan));
+    const basic = plans.filter((p) => p === "Basic").length;
+    const pro = plans.filter((p) => p === "Pro").length;
+    const active = basic + pro;
+
+    safeSetText("metricSubscribersActive", active);
+    safeSetText("metricSubscribersByPlan", `${basic} / ${pro}`);
+
+    const mrr = (basic * BASIC_MRR) + (pro * PRO_MRR);
+    safeSetText("metricMRR", money(mrr));
+  }
+
   function showUserDetail(u) {
     const card = document.getElementById("userDetailCard");
     if (!card || !u) return;
@@ -751,22 +915,16 @@
     document.getElementById("detailHomeState").textContent = u.home_state || "Not set";
     document.getElementById("detailFavs").textContent = favString || "None yet";
 
-    document.getElementById("detailDays").textContent =
-      u.alert_days || "Not set";
-    document.getElementById("detailTimeRange").textContent =
-      u.alert_time_range || "Not set";
-    document.getElementById("detailHoles").textContent =
-      u.alert_holes != null ? u.alert_holes : "Any";
-    document.getElementById("detailPlayers").textContent =
-      u.alert_players != null ? u.alert_players : "Any";
+    document.getElementById("detailDays").textContent = u.alert_days || "Not set";
+    document.getElementById("detailTimeRange").textContent = u.alert_time_range || "Not set";
+    document.getElementById("detailHoles").textContent = u.alert_holes != null ? u.alert_holes : "Any";
+    document.getElementById("detailPlayers").textContent = u.alert_players != null ? u.alert_players : "Any";
 
     const created = u.created_at || u.createdAt || "";
     const lastSeen = u.last_seen_at || u.lastLogin || "";
 
-    document.getElementById("detailCreatedAt").textContent =
-      created ? new Date(created).toLocaleString() : "—";
-    document.getElementById("detailLastSeen").textContent =
-      lastSeen ? new Date(lastSeen).toLocaleString() : "—";
+    document.getElementById("detailCreatedAt").textContent = created ? new Date(created).toLocaleString() : "—";
+    document.getElementById("detailLastSeen").textContent = lastSeen ? new Date(lastSeen).toLocaleString() : "—";
 
     card.style.display = "block";
   }
@@ -782,6 +940,7 @@
           );
           if (!res.ok) return;
           const data = await res.json();
+
           const plan = normalisePlanLabel(data.plan);
           USERS_CACHE[idx].plan = plan;
 
@@ -795,6 +954,9 @@
         }
       })
     );
+
+    // ✅ after plan lookups complete, compute subscriptions
+    computeSubscriptionStatsFromUsers();
   }
 
   async function loadRegisteredUsers() {
@@ -825,6 +987,7 @@
         empty.style.display = "block";
         errorEl.style.display = "none";
         document.getElementById("userDetailCard").style.display = "none";
+        computeSubscriptionStatsFromUsers();
         return;
       }
 
@@ -888,16 +1051,13 @@
           btn.textContent = "Deleting…";
 
           try {
-            const res = await fetch(`/api/analytics/users/${id}`, {
-              method: "DELETE",
-            });
+            const res = await fetch(`/api/analytics/users/${id}`, { method: "DELETE" });
             if (!res.ok) {
               alert("Failed to delete user. Please try again.");
               btn.disabled = false;
               btn.textContent = originalText;
               return;
             }
-
             await loadRegisteredUsers();
           } catch (err) {
             console.error("delete user error:", err);
@@ -908,6 +1068,10 @@
         });
       });
 
+      // compute subscriptions immediately (may be Unsubscribed until plan lookup finishes)
+      computeSubscriptionStatsFromUsers();
+
+      // pull live plan from Stripe for each user, then recompute
       await refreshPlansForUsers(users);
 
     } catch (err) {
