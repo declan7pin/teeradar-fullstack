@@ -278,16 +278,16 @@
 
       <div class="grid" style="margin-top:12px">
         <div class="field sm6">
-          <label for="bName">Name</label>
-          <input id="bName" placeholder="Your name" />
+          <label for="bName">Full name (first + last)</label>
+          <input id="bName" placeholder="e.g. Declan Pin" autocomplete="name" required />
         </div>
         <div class="field sm6">
-          <label for="bEmail">Email (optional)</label>
-          <input id="bEmail" type="email" placeholder="you@email.com" />
+          <label for="bEmail">Email</label>
+          <input id="bEmail" type="email" placeholder="you@email.com" autocomplete="email" required />
         </div>
         <div class="field sm6">
           <label for="bPhone">Phone (optional)</label>
-          <input id="bPhone" placeholder="04xx xxx xxx" />
+          <input id="bPhone" placeholder="04xx xxx xxx" autocomplete="tel" />
         </div>
       </div>
 
@@ -306,6 +306,19 @@
 
   const slug = location.pathname.split("/").pop().toLowerCase();
   let course = { slug, name: "Course", notes: "" };
+
+  // ✅ NEW: basic validators (match backend requirements)
+  function isValidEmail(email){
+    const e = String(email || "").trim();
+    // simple + reliable-enough for UI (backend enforces too)
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  }
+  function isFullName(name){
+    const n = String(name || "").trim().replace(/\s+/g, " ");
+    if (!n) return false;
+    const parts = n.split(" ").filter(Boolean);
+    return parts.length >= 2 && parts[0].length >= 2 && parts[1].length >= 2;
+  }
 
   // default date = today (local)
   const today = new Date();
@@ -474,12 +487,20 @@
     const holes = Number($("holes").value);
     const players = Number($("players").value);
 
-    const name = ($("bName").value || "").trim();
+    const nameRaw = ($("bName").value || "").trim();
+    const name = nameRaw.replace(/\s+/g, " ");
     const email = ($("bEmail").value || "").trim();
     const phone = ($("bPhone").value || "").trim();
 
-    if (!name) {
-      $("modalSub").textContent = "❌ Name is required.";
+    // ✅ NEW: require full name (first + last)
+    if (!isFullName(name)) {
+      $("modalSub").textContent = "❌ Please enter your first and last name.";
+      return;
+    }
+
+    // ✅ NEW: require email
+    if (!isValidEmail(email)) {
+      $("modalSub").textContent = "❌ Please enter a valid email address.";
       return;
     }
 
