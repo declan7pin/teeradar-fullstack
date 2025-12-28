@@ -9,10 +9,28 @@ const router = express.Router();
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 
 // ✅ Booking email (Resend)
-const bookingFrom = String(process.env.BOOKING_EMAIL_FROM || "").trim();
+// Support multiple env keys so Render naming mismatches don't break bookings.
+const bookingFromRaw = String(
+  process.env.BOOKING_EMAIL_FROM ||
+    process.env.BOOKING_FROM_EMAIL ||
+    process.env.BOOKING_FROM ||
+    ""
+).trim();
+
+const bookingFromName = String(process.env.BOOKING_EMAIL_FROM_NAME || "TeeRadar Bookings").trim();
+
 const bookingBcc = String(process.env.BOOKING_EMAIL_BCC || "").trim(); // optional
 const resendApiKey = String(process.env.RESEND_API_KEY || "").trim();
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
+
+// ✅ Startup visibility (helps confirm Render is injecting env vars into THIS service)
+console.log("📧 booking email env check:", {
+  hasResendKey: !!resendApiKey,
+  BOOKING_EMAIL_FROM_set: !!String(process.env.BOOKING_EMAIL_FROM || "").trim(),
+  BOOKING_FROM_EMAIL_set: !!String(process.env.BOOKING_FROM_EMAIL || "").trim(),
+  BOOKING_FROM_set: !!String(process.env.BOOKING_FROM || "").trim(),
+  bookingFromRaw_preview: bookingFromRaw ? bookingFromRaw : null,
+});
 
 // -----------------------------
 // Helpers
@@ -81,8 +99,31 @@ function fmtMoney(cents) {
   return `$${n.toFixed(2)}`;
 }
 
+// ✅ Build Resend "from" safely.
+// Accepts either:
+// - "Name <email@domain>"
+// - "email@domain"
+// We convert plain email into "TeeRadar Bookings <email@domain>"
+function buildFrom() {
+  const raw = String(bookingFromRaw || "").trim();
+  if (!raw) return "";
+  if (raw.includes("<") && raw.includes(">")) return raw; // already in Name <email> format
+  if (isLikelyEmail(raw)) return `${bookingFromName} <${raw}>`;
+  return raw; // last resort (could be invalid, but avoids false "not set")
+}
+
 // ✅ Send booking email via Resend (safe)
-async function sendBookingEmail({ to, courseName, date, time, holes, players, reference, pricePerPlayerCents, totalCents }) {
+async function sendBookingEmail({
+  to,
+  courseName,
+  date,
+  time,
+  holes,
+  players,
+  reference,
+  pricePerPlayerCents,
+  totalCents,
+}) {
   // default response
   const result = { emailOk: false, emailReason: "" };
 
@@ -90,10 +131,13 @@ async function sendBookingEmail({ to, courseName, date, time, holes, players, re
     result.emailReason = "RESEND_API_KEY_not_set";
     return result;
   }
-  if (!bookingFrom) {
+
+  const from = buildFrom();
+  if (!from) {
     result.emailReason = "BOOKING_EMAIL_FROM_not_set";
     return result;
   }
+
   if (!isLikelyEmail(to)) {
     result.emailReason = "invalid_to_email";
     return result;
@@ -124,7 +168,7 @@ async function sendBookingEmail({ to, courseName, date, time, holes, players, re
 
   try {
     const payload = {
-      from: bookingFrom,
+      from,
       to,
       subject,
       html,
@@ -662,8 +706,6 @@ router.get("/availability", async (req, res) => {
 // -----------------------------
 // Public: create booking + send email
 // -----------------------------
-// POST /api/book/book
-// Body: { slug, date, time, holes, players, name, email, phone? }
 router.post("/book", async (req, res) => {
   try {
     const slug = normSlug(req.body?.slug);
@@ -783,7 +825,7 @@ router.post("/book", async (req, res) => {
       ]
     );
 
-    // ✅ Send confirmation email (non-blocking logic but awaited so you can see reason in response)
+    // Send confirmation email (awaited so you can see reason)
     const emailResult = await sendBookingEmail({
       to: golfer_email,
       courseName: c.rows[0].name,
@@ -801,6 +843,7 @@ router.post("/book", async (req, res) => {
       to: golfer_email,
       emailOk: emailResult.emailOk,
       emailReason: emailResult.emailReason || null,
+      fromUsed: buildFrom() || null,
     });
 
     res.json({
