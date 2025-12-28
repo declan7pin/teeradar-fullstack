@@ -8,9 +8,10 @@ const router = express.Router();
 
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 
-// ✅ Email (Resend) — optional but recommended
+// ✅ NEW: booking confirmation email (Resend)
 const RESEND_API_KEY = (process.env.RESEND_API_KEY || "").trim();
-const BOOKING_FROM_EMAIL = (process.env.BOOKING_FROM_EMAIL || "").trim(); // e.g. "TeeRadar <bookings@yourdomain.com>"
+const BOOKING_EMAIL_FROM = (process.env.BOOKING_EMAIL_FROM || "").trim();
+
 const resend =
   RESEND_API_KEY && RESEND_API_KEY.trim()
     ? new Resend(RESEND_API_KEY.trim())
@@ -78,7 +79,7 @@ function hasFirstAndLastName(fullName) {
   return parts.length >= 2;
 }
 
-// ✅ Send booking confirmation email (best-effort)
+// ✅ NEW: send booking confirmation email (safe: never throws to user)
 async function sendBookingConfirmationEmail({
   toEmail,
   golferName,
@@ -87,88 +88,82 @@ async function sendBookingConfirmationEmail({
   time,
   holes,
   players,
-  pricePerPlayerCents,
-  totalCents,
   reference,
+  total,
+  pricePerPlayer,
 }) {
-  if (!resend || !RESEND_API_KEY) return { ok: false, reason: "resend_not_configured" };
-  if (!BOOKING_FROM_EMAIL) return { ok: false, reason: "BOOKING_FROM_EMAIL_not_set" };
-  if (!toEmail || !isLikelyEmail(toEmail)) return { ok: false, reason: "invalid_email" };
-
-  const fmtMoney = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
-
-  const subject = `Booking confirmed — ${courseName} (${date} ${time})`;
-
-  // Keep it simple + deliverable (no external links required)
-  const text =
-    `Hi ${golferName},\n\n` +
-    `✅ Your TeeRadar booking is confirmed.\n\n` +
-    `Course: ${courseName}\n` +
-    `Date: ${date}\n` +
-    `Time: ${time}\n` +
-    `Holes: ${holes}\n` +
-    `Players: ${players}\n` +
-    `Price per player: ${fmtMoney(pricePerPlayerCents)}\n` +
-    `Total: ${fmtMoney(totalCents)}\n` +
-    `Reference: ${reference}\n\n` +
-    `If you didn’t make this booking, reply to this email.\n\n` +
-    `— TeeRadar`;
-
-  const html =
-    `<p>Hi ${String(golferName || "").replace(/</g, "&lt;").replace(/>/g, "&gt;")},</p>` +
-    `<p><b>✅ Your TeeRadar booking is confirmed.</b></p>` +
-    `<table style="border-collapse:collapse;">` +
-    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Course</td><td style="padding:4px 0;">${String(
-      courseName || ""
-    )
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")}</td></tr>` +
-    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Date</td><td style="padding:4px 0;">${String(
-      date || ""
-    )
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")}</td></tr>` +
-    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Time</td><td style="padding:4px 0;">${String(
-      time || ""
-    )
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")}</td></tr>` +
-    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Holes</td><td style="padding:4px 0;">${Number(
-      holes || 0
-    )}</td></tr>` +
-    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Players</td><td style="padding:4px 0;">${Number(
-      players || 0
-    )}</td></tr>` +
-    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Price per player</td><td style="padding:4px 0;">${fmtMoney(
-      pricePerPlayerCents
-    )}</td></tr>` +
-    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Total</td><td style="padding:4px 0;"><b>${fmtMoney(
-      totalCents
-    )}</b></td></tr>` +
-    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Reference</td><td style="padding:4px 0;"><b>${String(
-      reference || ""
-    )
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")}</b></td></tr>` +
-    `</table>` +
-    `<p style="color:#64748b;font-size:12px;margin-top:14px;">If you didn’t make this booking, reply to this email.</p>` +
-    `<p style="color:#64748b;font-size:12px;">— TeeRadar</p>`;
-
   try {
-    const out = await resend.emails.send({
-      from: BOOKING_FROM_EMAIL,
+    if (!toEmail || !isLikelyEmail(toEmail)) return { ok: false, reason: "invalid_email" };
+    if (!resend) return { ok: false, reason: "resend_not_configured" };
+    if (!BOOKING_EMAIL_FROM) return { ok: false, reason: "BOOKING_EMAIL_FROM_not_set" };
+
+    const subject = `Booking confirmed — ${courseName} (${date} ${time})`;
+
+    const text =
+`Hi ${golferName},
+
+Your booking is confirmed.
+
+Course: ${courseName}
+Date: ${date}
+Time: ${time}
+Holes: ${holes}
+Players: ${players}
+Price per player: $${Number(pricePerPlayer || 0).toFixed(2)}
+Total: $${Number(total || 0).toFixed(2)}
+
+Reference: ${reference}
+
+Thanks,
+TeeRadar`;
+
+    const html =
+      `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.45;color:#0f172a">
+        <h2 style="margin:0 0 8px">✅ Booking confirmed</h2>
+        <p style="margin:0 0 12px">Hi <b>${escapeHtml(golferName || "")}</b>, your booking is confirmed.</p>
+        <table style="border-collapse:collapse;width:100%;max-width:520px">
+          ${row("Course", courseName)}
+          ${row("Date", date)}
+          ${row("Time", time)}
+          ${row("Holes", String(holes))}
+          ${row("Players", String(players))}
+          ${row("Price per player", `$${Number(pricePerPlayer || 0).toFixed(2)}`)}
+          ${row("Total", `<b>$${Number(total || 0).toFixed(2)}</b>`)}
+          ${row("Reference", `<b>${escapeHtml(reference)}</b>`)}
+        </table>
+        <p style="margin:14px 0 0;color:#64748b;font-size:12px">
+          Keep this email for your records.
+        </p>
+      </div>`;
+
+    await resend.emails.send({
+      from: BOOKING_EMAIL_FROM,
       to: [toEmail],
       subject,
       text,
       html,
     });
 
-    // Resend returns an id when accepted
-    return { ok: true, id: out?.data?.id || null };
+    return { ok: true };
   } catch (e) {
-    console.error("❌ booking confirmation email failed", e);
+    console.error("sendBookingConfirmationEmail error", e);
     return { ok: false, reason: "send_failed" };
   }
+}
+
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+function row(k, v) {
+  return `<tr>
+    <td style="padding:8px 10px;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;font-size:12px;width:140px">${escapeHtml(k)}</td>
+    <td style="padding:8px 10px;border:1px solid #e2e8f0;font-size:13px">${v}</td>
+  </tr>`;
 }
 
 // -----------------------------
@@ -220,13 +215,13 @@ async function ensureBookingTables() {
     );
   `);
 
-  // ✅ track how many players have booked into the tee time (0..max_players)
+  // track how many players have booked into the tee time (0..max_players)
   await db.query(`
     ALTER TABLE booking_times
     ADD COLUMN IF NOT EXISTS booked_players INTEGER NOT NULL DEFAULT 0;
   `);
 
-  // ✅ safety clamp (if any old rows were null)
+  // safety clamp (if any old rows were null)
   await db.query(`
     UPDATE booking_times
     SET booked_players = 0
@@ -347,9 +342,8 @@ router.post("/admin/courses", requirePlatformAdmin, async (req, res) => {
 });
 
 // -----------------------------
-// ✅ Admin: Delete a course (cascades tee times + bookings)
+// Admin: Delete a course (cascades tee times + bookings)
 // -----------------------------
-// DELETE /api/book/admin/courses/:slug
 router.delete("/admin/courses/:slug", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.params.slug);
@@ -366,9 +360,8 @@ router.delete("/admin/courses/:slug", requirePlatformAdmin, async (req, res) => 
 });
 
 // -----------------------------
-// ✅ Admin: Delete tee times for a course (all, or by date/holes)
+// Admin: Delete tee times for a course (all, or by date/holes)
 // -----------------------------
-// DELETE /api/book/admin/times?slug=hillview&date=YYYY-MM-DD&holes=18
 router.delete("/admin/times", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.query.slug);
@@ -410,13 +403,12 @@ router.delete("/admin/times", requirePlatformAdmin, async (req, res) => {
 });
 
 // -----------------------------
-// ✅ Admin: Bulk-generate tee times (endpoint used by book-admin.html)
+// Admin: Bulk-generate tee times
 // -----------------------------
-// POST /api/book/admin/generate-times
 router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(_pickAny(req.body, ["slug"], ""));
-    const playDate = String(_pickAny(req.body, ["playDate", "date"], "") || "").trim(); // YYYY-MM-DD
+    const playDate = String(_pickAny(req.body, ["playDate", "date"], "") || "").trim();
 
     const start = String(_pickAny(req.body, ["start"], "06:00") || "06:00").trim();
     const end = String(_pickAny(req.body, ["end"], "17:00") || "17:00").trim();
@@ -514,13 +506,11 @@ router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
   }
 });
 
-// -----------------------------
-// Admin: Bulk-generate tee times (legacy endpoint - keep)
-// -----------------------------
+// legacy keep
 router.post("/admin/times/generate", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.body?.slug);
-    const date = String(req.body?.date || "").trim(); // YYYY-MM-DD
+    const date = String(req.body?.date || "").trim();
     const start = String(req.body?.start || "06:00").trim();
     const end = String(req.body?.end || "17:00").trim();
     const intervalMinutes = Number(req.body?.intervalMinutes || 8);
@@ -693,22 +683,20 @@ router.get("/availability", async (req, res) => {
 });
 
 // -----------------------------
-// Public: create booking
+// Public: create booking + email confirmation
 // -----------------------------
-// POST /api/book/book
-// Body: { slug, date, time, holes, players, name, email, phone? }
 router.post("/book", async (req, res) => {
   try {
     const slug = normSlug(req.body?.slug);
     const date = String(req.body?.date || "").trim();
-    const time = String(req.body?.time || "").trim(); // "HH:MM"
+    const time = String(req.body?.time || "").trim();
     const holes = Number(req.body?.holes || 18);
     const players = Number(req.body?.players || 2);
 
-    // ✅ REQUIRED: first + last name + email
+    // REQUIRED: first + last name + email
     const golfer_name = req.body?.name ? String(req.body.name).trim() : "";
     const golfer_email = req.body?.email ? String(req.body.email).trim().toLowerCase() : "";
-    // ✅ OPTIONAL: phone
+    // OPTIONAL: phone
     const golfer_phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
@@ -718,7 +706,6 @@ router.post("/book", async (req, res) => {
     if (!Number.isFinite(players) || players < 1 || players > 4)
       return res.status(400).json({ ok: false, error: "players_invalid" });
 
-    // ✅ enforce first + last name + email
     if (!hasFirstAndLastName(golfer_name)) {
       return res.status(400).json({ ok: false, error: "name_required_first_last" });
     }
@@ -732,15 +719,13 @@ router.post("/book", async (req, res) => {
       return res.status(404).json({ ok: false, error: "course_not_found" });
     }
     const courseId = c.rows[0].id;
+    const courseName = c.rows[0].name || slug;
 
-    // Optional fee model (you can change later)
     const feePerPlayerCents = Number(process.env.BOOKING_FEE_PER_PLAYER_CENTS || 0);
     const bookingFeeCents = feePerPlayerCents * players;
 
-    // Create reference
     const reference = makeRef("TR");
 
-    // ✅ Atomic: increment booked_players if capacity exists; set BOOKED only when full
     const upd = await db.query(
       `
       UPDATE booking_times
@@ -792,7 +777,6 @@ router.post("/book", async (req, res) => {
     const pricePerPlayerCents = Number(timeRow.price_per_player_cents || 0);
     const totalCents = pricePerPlayerCents * players;
 
-    // Insert booking record
     await db.query(
       `
       INSERT INTO booking_bookings
@@ -819,24 +803,24 @@ router.post("/book", async (req, res) => {
       ]
     );
 
-    // ✅ Send confirmation email (best-effort; booking still succeeds even if email fails)
+    // ✅ Send confirmation email (best-effort)
     const emailResult = await sendBookingConfirmationEmail({
       toEmail: golfer_email,
       golferName: golfer_name,
-      courseName: c.rows[0].name,
+      courseName,
       date,
       time,
       holes,
       players,
-      pricePerPlayerCents,
-      totalCents,
       reference,
+      total: totalCents / 100,
+      pricePerPlayer: pricePerPlayerCents / 100,
     });
 
     res.json({
       ok: true,
       reference,
-      course: c.rows[0].name,
+      course: courseName,
       date,
       time,
       holes,
