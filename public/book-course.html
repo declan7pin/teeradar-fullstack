@@ -350,18 +350,38 @@
       return;
     }
 
+    const wantPlayers = Number($("players").value);
+
     list.forEach((t) => {
       const div = document.createElement("div");
       div.className = "timeCard";
 
       const price = Number(t.pricePerPlayer || 0);
+      const maxPlayers = Number(t.maxPlayers || 0);
+      const bookedPlayers = Number(t.bookedPlayers || 0);
+      const remaining = (typeof t.remaining !== "undefined")
+        ? Number(t.remaining || 0)
+        : Math.max(0, maxPlayers - bookedPlayers);
+
+      const remainingText =
+        Number.isFinite(remaining) && remaining >= 0
+          ? `🧍 ${remaining} spot${remaining === 1 ? "" : "s"} left`
+          : "";
+
+      const fitsText =
+        Number.isFinite(remaining)
+          ? `✅ fits ${Math.min(wantPlayers, remaining)} of ${wantPlayers}`
+          : "";
+
       div.innerHTML = `
         <div class="timeTop">
           <div>
             <div class="time">⏰ ${t.time}</div>
             <div class="meta">
-              <span>👥 up to ${t.maxPlayers}</span>
+              <span>👥 up to ${maxPlayers}</span>
               <span>⛳ ${t.holes} holes</span>
+              ${remainingText ? `<span>${remainingText}</span>` : ""}
+              ${fitsText ? `<span>${fitsText}</span>` : ""}
             </div>
           </div>
           <div class="price">$${price.toFixed(0)} / player</div>
@@ -490,7 +510,7 @@
       $("modalWrap").style.display = "none";
       setStatus(`✅ Booking confirmed. Reference: ${data.reference}`, "ok");
 
-      // Refresh availability (the slot should now be BOOKED)
+      // Refresh availability (time may still exist if it has remaining capacity)
       await fetchAvailability();
     } catch (e) {
       $("modalSub").textContent = "❌ " + (e.message || "Booking failed");
