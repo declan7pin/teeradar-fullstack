@@ -8,6 +8,12 @@ import nodemailer from "nodemailer";
 import Stripe from "stripe"; // ✅ Stripe
 import jwt from "jsonwebtoken"; // ✅ NEW (only used to read email from Bearer token)
 
+// ✅ NEW: cookies (needed for booking admin auth cookie)
+import cookieParser from "cookie-parser";
+
+// ✅ NEW: booking routes
+import bookingRoutes from "./bookingRoutes.js";
+
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
 // Analytics (Postgres)
@@ -387,6 +393,10 @@ app.post(
 );
 
 app.use(express.json());
+
+// ✅ NEW: cookies (needed for booking admin auth cookie)
+app.use(cookieParser());
+
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 /* ✅✅✅ ONLY ADDITION (needed): more robust scorecards file discovery (Render-safe) ✅✅✅ */
@@ -523,6 +533,9 @@ app.use("/api/auth", authRouter);
 
 // ✅ NEW: mount rounds router
 app.use("/api/rounds", roundsRouter);
+
+// ✅ NEW: booking API router
+app.use("/api/book", bookingRoutes);
 
 // -------------------------------------------------
 // ✅ NEW: /api/me (for bookings page to read home state)
@@ -1742,6 +1755,17 @@ app.get("/api/debug/rounds-db", async (req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// -------------------------------------------------
+// ✅ NEW: Booking pages (must be BEFORE frontend fallback)
+// -------------------------------------------------
+app.get("/book/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "book-admin.html"));
+});
+
+app.get("/book/:slug", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "book-course.html"));
 });
 
 // -------------------------------------------------
