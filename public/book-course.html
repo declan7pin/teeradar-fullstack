@@ -264,7 +264,7 @@
   <!-- Confirm modal -->
   <div class="modalWrap" id="modalWrap">
     <div class="modal">
-      <h3>Confirm booking</h3>
+      <h3 id="modalTitle">Confirm booking</h3>
       <div class="sub" id="modalSub">Enter your details to confirm.</div>
 
       <div class="kv">
@@ -276,14 +276,14 @@
         <div class="k">Price</div><div id="mPrice"></div>
       </div>
 
-      <div class="grid" style="margin-top:12px">
+      <div class="grid" id="detailsGrid" style="margin-top:12px">
         <div class="field sm6">
           <label for="bName">Full name (first + last)</label>
-          <input id="bName" placeholder="e.g. Declan Pin" autocomplete="name" required />
+          <input id="bName" placeholder="e.g. John Smith" autocomplete="name" required />
         </div>
         <div class="field sm6">
           <label for="bEmail">Email</label>
-          <input id="bEmail" type="email" placeholder="you@email.com" autocomplete="email" required />
+          <input id="bEmail" type="email" placeholder="john.smith@example.com" autocomplete="email" required />
         </div>
         <div class="field sm6">
           <label for="bPhone">Phone (optional)</label>
@@ -307,10 +307,9 @@
   const slug = location.pathname.split("/").pop().toLowerCase();
   let course = { slug, name: "Course", notes: "" };
 
-  // ✅ NEW: basic validators (match backend requirements)
+  // basic validators (match backend requirements)
   function isValidEmail(email){
     const e = String(email || "").trim();
-    // simple + reliable-enough for UI (backend enforces too)
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
   }
   function isFullName(name){
@@ -456,8 +455,21 @@
 
   let selectedSlot = null;
 
+  function resetModalToForm() {
+    $("modalTitle").textContent = "Confirm booking";
+    $("detailsGrid").style.display = "";
+    $("cancelBtn").style.display = "";
+    $("confirmBtn").textContent = "Confirm booking";
+    $("confirmBtn").disabled = false;
+
+    $("modalSub").textContent = "Enter your details to confirm.";
+    $("modalFoot").textContent = "You’ll receive a reference after confirming.";
+  }
+
   function openModal(slot) {
     selectedSlot = slot;
+
+    resetModalToForm();
 
     $("mCourse").textContent = course.name || slug;
     $("mDate").textContent = $("date").value;
@@ -468,16 +480,37 @@
     const price = Number(slot.pricePerPlayer || 0);
     $("mPrice").textContent = `$${price.toFixed(0)} per player`;
 
-    $("modalSub").textContent = "Enter your details to confirm.";
-    $("modalFoot").textContent = "You’ll receive a reference after confirming.";
-    $("confirmBtn").textContent = "Confirm booking";
-    $("confirmBtn").disabled = false;
-
     $("bName").value = "";
     $("bEmail").value = "";
     $("bPhone").value = "";
 
     $("modalWrap").style.display = "flex";
+  }
+
+  function showBookingConfirmation(data, name, email) {
+    $("modalTitle").textContent = "✅ Booking confirmed";
+    $("detailsGrid").style.display = "none"; // hide inputs after success
+
+    const emailMsg = data && data.emailSent
+      ? `📧 Confirmation email sent to ${email}`
+      : `📧 Email not sent (check server email settings)`;
+
+    $("modalSub").innerHTML =
+      `Reference: <b>${data.reference}</b><br/>` +
+      `${emailMsg}`;
+
+    $("modalFoot").textContent = "You can screenshot this reference for your records.";
+
+    $("confirmBtn").textContent = "Close";
+    $("confirmBtn").disabled = false;
+    $("cancelBtn").style.display = "none";
+
+    // make confirm act as close now
+    $("confirmBtn").onclick = () => {
+      $("modalWrap").style.display = "none";
+      // restore confirm handler for next open
+      $("confirmBtn").onclick = confirmBooking;
+    };
   }
 
   async function confirmBooking() {
@@ -492,13 +525,11 @@
     const email = ($("bEmail").value || "").trim();
     const phone = ($("bPhone").value || "").trim();
 
-    // ✅ NEW: require full name (first + last)
     if (!isFullName(name)) {
       $("modalSub").textContent = "❌ Please enter your first and last name.";
       return;
     }
 
-    // ✅ NEW: require email
     if (!isValidEmail(email)) {
       $("modalSub").textContent = "❌ Please enter a valid email address.";
       return;
@@ -528,7 +559,10 @@
         throw new Error((data && data.error) ? data.error : ("HTTP " + res.status));
       }
 
-      $("modalWrap").style.display = "none";
+      // Show confirmation popup (in-modal)
+      showBookingConfirmation(data, name, email);
+
+      // Also show page status
       setStatus(`✅ Booking confirmed. Reference: ${data.reference}`, "ok");
 
       // Refresh availability (time may still exist if it has remaining capacity)
