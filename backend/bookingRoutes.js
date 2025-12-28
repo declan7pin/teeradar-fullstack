@@ -8,7 +8,7 @@ const router = express.Router();
 
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 
-// ✅ NEW: booking confirmation email (Resend)
+// ✅ Booking confirmation email (Resend)
 const RESEND_API_KEY = (process.env.RESEND_API_KEY || "").trim();
 const BOOKING_EMAIL_FROM = (process.env.BOOKING_EMAIL_FROM || "").trim();
 
@@ -79,7 +79,22 @@ function hasFirstAndLastName(fullName) {
   return parts.length >= 2;
 }
 
-// ✅ NEW: send booking confirmation email (safe: never throws to user)
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+function row(k, v) {
+  return `<tr>
+    <td style="padding:8px 10px;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;font-size:12px;width:140px">${escapeHtml(k)}</td>
+    <td style="padding:8px 10px;border:1px solid #e2e8f0;font-size:13px">${v}</td>
+  </tr>`;
+}
+
+// ✅ NEW: send booking confirmation email (best-effort + logs reasons)
 async function sendBookingConfirmationEmail({
   toEmail,
   golferName,
@@ -93,9 +108,20 @@ async function sendBookingConfirmationEmail({
   pricePerPlayer,
 }) {
   try {
-    if (!toEmail || !isLikelyEmail(toEmail)) return { ok: false, reason: "invalid_email" };
-    if (!resend) return { ok: false, reason: "resend_not_configured" };
-    if (!BOOKING_EMAIL_FROM) return { ok: false, reason: "BOOKING_EMAIL_FROM_not_set" };
+    if (!toEmail || !isLikelyEmail(toEmail)) {
+      console.warn("📧 booking email not sent: invalid_email", { toEmail });
+      return { ok: false, reason: "invalid_email" };
+    }
+
+    if (!resend) {
+      console.warn("📧 booking email not sent: RESEND_API_KEY not set");
+      return { ok: false, reason: "resend_not_configured" };
+    }
+
+    if (!BOOKING_EMAIL_FROM) {
+      console.warn("📧 booking email not sent: BOOKING_EMAIL_FROM not set");
+      return { ok: false, reason: "BOOKING_EMAIL_FROM_not_set" };
+    }
 
     const subject = `Booking confirmed — ${courseName} (${date} ${time})`;
 
@@ -122,9 +148,9 @@ TeeRadar`;
         <h2 style="margin:0 0 8px">✅ Booking confirmed</h2>
         <p style="margin:0 0 12px">Hi <b>${escapeHtml(golferName || "")}</b>, your booking is confirmed.</p>
         <table style="border-collapse:collapse;width:100%;max-width:520px">
-          ${row("Course", courseName)}
-          ${row("Date", date)}
-          ${row("Time", time)}
+          ${row("Course", escapeHtml(courseName))}
+          ${row("Date", escapeHtml(date))}
+          ${row("Time", escapeHtml(time))}
           ${row("Holes", String(holes))}
           ${row("Players", String(players))}
           ${row("Price per player", `$${Number(pricePerPlayer || 0).toFixed(2)}`)}
@@ -136,7 +162,7 @@ TeeRadar`;
         </p>
       </div>`;
 
-    await resend.emails.send({
+    const resp = await resend.emails.send({
       from: BOOKING_EMAIL_FROM,
       to: [toEmail],
       subject,
@@ -144,26 +170,17 @@ TeeRadar`;
       html,
     });
 
-    return { ok: true };
+    console.log("📧 booking email sent", {
+      toEmail,
+      reference,
+      resendId: resp?.data?.id || null,
+    });
+
+    return { ok: true, id: resp?.data?.id || null };
   } catch (e) {
-    console.error("sendBookingConfirmationEmail error", e);
+    console.error("📧 booking email send_failed", e);
     return { ok: false, reason: "send_failed" };
   }
-}
-
-function escapeHtml(s) {
-  return String(s || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-function row(k, v) {
-  return `<tr>
-    <td style="padding:8px 10px;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;font-size:12px;width:140px">${escapeHtml(k)}</td>
-    <td style="padding:8px 10px;border:1px solid #e2e8f0;font-size:13px">${v}</td>
-  </tr>`;
 }
 
 // -----------------------------
@@ -194,20 +211,20 @@ async function ensureBookingTables() {
     );
   `);
 
-  // Tee time availability (the key piece)
+  // Tee time availability
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_times (
       id BIGSERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
 
       play_date DATE NOT NULL,
-      tee_time TEXT NOT NULL,                 -- "HH:MM"
-      holes INTEGER NOT NULL,                 -- 9 or 18
+      tee_time TEXT NOT NULL,
+      holes INTEGER NOT NULL,
       max_players INTEGER NOT NULL DEFAULT 4,
 
       price_per_player_cents INTEGER NOT NULL DEFAULT 0,
 
-      status TEXT NOT NULL DEFAULT 'AVAILABLE',  -- AVAILABLE | BLOCKED | BOOKED
+      status TEXT NOT NULL DEFAULT 'AVAILABLE',
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now(),
 
@@ -215,13 +232,11 @@ async function ensureBookingTables() {
     );
   `);
 
-  // track how many players have booked into the tee time (0..max_players)
   await db.query(`
     ALTER TABLE booking_times
     ADD COLUMN IF NOT EXISTS booked_players INTEGER NOT NULL DEFAULT 0;
   `);
 
-  // safety clamp (if any old rows were null)
   await db.query(`
     UPDATE booking_times
     SET booked_players = 0
@@ -250,10 +265,10 @@ async function ensureBookingTables() {
 
       price_per_player_cents INTEGER NOT NULL,
       total_cents INTEGER NOT NULL,
-      booking_fee_cents INTEGER NOT NULL DEFAULT 0, -- your fee (optional)
+      booking_fee_cents INTEGER NOT NULL DEFAULT 0,
 
       reference TEXT UNIQUE NOT NULL,
-      status TEXT NOT NULL DEFAULT 'CONFIRMED', -- CONFIRMED | CANCELLED
+      status TEXT NOT NULL DEFAULT 'CONFIRMED',
 
       created_at TIMESTAMPTZ DEFAULT now()
     );
@@ -342,7 +357,7 @@ router.post("/admin/courses", requirePlatformAdmin, async (req, res) => {
 });
 
 // -----------------------------
-// Admin: Delete a course (cascades tee times + bookings)
+// Admin: Delete a course (cascades)
 // -----------------------------
 router.delete("/admin/courses/:slug", requirePlatformAdmin, async (req, res) => {
   try {
@@ -360,7 +375,7 @@ router.delete("/admin/courses/:slug", requirePlatformAdmin, async (req, res) => 
 });
 
 // -----------------------------
-// Admin: Delete tee times for a course (all, or by date/holes)
+// Admin: Delete tee times
 // -----------------------------
 router.delete("/admin/times", requirePlatformAdmin, async (req, res) => {
   try {
@@ -683,7 +698,7 @@ router.get("/availability", async (req, res) => {
 });
 
 // -----------------------------
-// Public: create booking + email confirmation
+// Public: create booking + send confirmation email
 // -----------------------------
 router.post("/book", async (req, res) => {
   try {
@@ -693,10 +708,8 @@ router.post("/book", async (req, res) => {
     const holes = Number(req.body?.holes || 18);
     const players = Number(req.body?.players || 2);
 
-    // REQUIRED: first + last name + email
     const golfer_name = req.body?.name ? String(req.body.name).trim() : "";
     const golfer_email = req.body?.email ? String(req.body.email).trim().toLowerCase() : "";
-    // OPTIONAL: phone
     const golfer_phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
@@ -726,6 +739,7 @@ router.post("/book", async (req, res) => {
 
     const reference = makeRef("TR");
 
+    // Atomic: increment booked_players
     const upd = await db.query(
       `
       UPDATE booking_times
@@ -777,6 +791,7 @@ router.post("/book", async (req, res) => {
     const pricePerPlayerCents = Number(timeRow.price_per_player_cents || 0);
     const totalCents = pricePerPlayerCents * players;
 
+    // Insert booking record
     await db.query(
       `
       INSERT INTO booking_bookings
@@ -803,7 +818,7 @@ router.post("/book", async (req, res) => {
       ]
     );
 
-    // ✅ Send confirmation email (best-effort)
+    // ✅ Send email (best-effort)
     const emailResult = await sendBookingConfirmationEmail({
       toEmail: golfer_email,
       golferName: golfer_name,
@@ -815,6 +830,13 @@ router.post("/book", async (req, res) => {
       reference,
       total: totalCents / 100,
       pricePerPlayer: pricePerPlayerCents / 100,
+    });
+
+    console.log("✅ booking created", {
+      reference,
+      to: golfer_email,
+      emailOk: !!emailResult.ok,
+      emailReason: emailResult.ok ? null : emailResult.reason,
     });
 
     res.json({
@@ -833,6 +855,7 @@ router.post("/book", async (req, res) => {
       maxPlayers: timeRow.max_players,
       remaining: Math.max(0, Number(timeRow.max_players || 0) - Number(timeRow.booked_players || 0)),
       emailSent: !!emailResult.ok,
+      emailReason: emailResult.ok ? null : emailResult.reason, // ✅ NEW: helps debug
     });
   } catch (e) {
     console.error("book POST", e);
