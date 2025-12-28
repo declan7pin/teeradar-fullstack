@@ -17,6 +17,12 @@
     .muted{color:#64748b;font-size:13px}
     .list{margin:0;padding-left:18px}
     code{background:#f1f5f9;padding:2px 6px;border-radius:8px}
+    .pill{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;font-size:12px;background:#ecfeff;color:#0f766e;border:1px solid #a7f3d0}
+    .mini{font-size:12px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+    .actions a, .actions button{font-size:13px}
+    button.small{padding:8px 10px;border-radius:10px}
+    button.danger{background:#b91c1c}
   </style>
 </head>
 <body>
@@ -61,6 +67,64 @@
       <div id="courseMsg" class="muted" style="margin-top:10px;"></div>
     </div>
 
+    <!-- ✅ NEW: Generate tee times -->
+    <div class="card">
+      <h3>Generate Tee Times</h3>
+      <p class="muted">Creates a batch of <code>booking_times</code> rows for a course. Use this to seed Hillview / Marri Park.</p>
+
+      <div class="row">
+        <div>
+          <label class="muted">Course Slug</label>
+          <input id="gSlug" placeholder="hillview  or  marri-park" />
+        </div>
+        <div>
+          <label class="muted">Play Date</label>
+          <input id="gDate" type="date" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label class="muted">Start time</label>
+          <input id="gStart" placeholder="06:00" value="06:00" />
+        </div>
+        <div>
+          <label class="muted">End time</label>
+          <input id="gEnd" placeholder="17:00" value="17:00" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label class="muted">Interval (minutes)</label>
+          <input id="gInterval" type="number" min="1" step="1" value="10" />
+        </div>
+        <div>
+          <label class="muted">Holes</label>
+          <input id="gHoles" type="number" min="1" step="1" value="18" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label class="muted">Max players</label>
+          <input id="gMaxPlayers" type="number" min="1" step="1" value="4" />
+        </div>
+        <div>
+          <label class="muted">Price per player (cents)</label>
+          <input id="gPrice" type="number" min="0" step="1" value="0" />
+        </div>
+      </div>
+
+      <div style="margin-top:10px">
+        <button id="genBtn">Generate Times</button>
+        <button id="previewBtn" class="secondary">Preview (no write)</button>
+      </div>
+
+      <div id="genMsg" class="muted" style="margin-top:10px;"></div>
+      <div id="previewBox" class="muted mini" style="margin-top:8px;"></div>
+    </div>
+
     <div class="card">
       <h3>Create Course Admin User</h3>
       <p class="muted">This creates a login for that course only (we store PBKDF2 hash in DB).</p>
@@ -101,6 +165,34 @@
 
   const $ = (id) => document.getElementById(id);
 
+  // ✅ NEW: local preview generator (no backend needed)
+  function pad2(n){ return String(n).padStart(2,"0"); }
+  function toMins(hhmm){
+    const m = String(hhmm || "").match(/^(\d{1,2}):(\d{2})$/);
+    if(!m) return null;
+    const hh = Number(m[1]), mm = Number(m[2]);
+    if(!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+    if(hh<0 || hh>23 || mm<0 || mm>59) return null;
+    return hh*60+mm;
+  }
+  function fromMins(mins){
+    const hh = Math.floor(mins/60), mm = mins%60;
+    return `${pad2(hh)}:${pad2(mm)}`;
+  }
+  function buildTimes(start, end, interval){
+    const s = toMins(start);
+    const e = toMins(end);
+    const step = Number(interval);
+    if(s===null || e===null || !Number.isFinite(step) || step<=0) return { ok:false, error:"Invalid time or interval" };
+    if(e<=s) return { ok:false, error:"End time must be after start time" };
+    const out=[];
+    for(let t=s; t<=e; t+=step){
+      out.push(fromMins(t));
+      if(out.length>600) break;
+    }
+    return { ok:true, times: out };
+  }
+
   $("loginBtn").onclick = async () => {
     $("loginMsg").textContent = "Logging in...";
     try {
@@ -133,6 +225,10 @@
         })
       });
       $("courseMsg").textContent = "✅ Saved: " + out.course.slug + " — opens at /book/" + out.course.slug;
+
+      // ✅ convenience: auto-fill generator slug
+      $("gSlug").value = out.course.slug;
+
       await refresh();
     } catch (e) {
       $("courseMsg").textContent = "❌ " + e.message;
@@ -156,6 +252,74 @@
     }
   };
 
+  // ✅ NEW: preview (no write)
+  $("previewBtn").onclick = async () => {
+    $("genMsg").textContent = "";
+    $("previewBox").textContent = "";
+    const start = $("gStart").value || "06:00";
+    const end = $("gEnd").value || "17:00";
+    const interval = $("gInterval").value || 10;
+
+    const out = buildTimes(start, end, interval);
+    if(!out.ok){
+      $("previewBox").textContent = "❌ " + out.error;
+      return;
+    }
+
+    const times = out.times;
+    const slug = ($("gSlug").value || "").trim();
+    const date = $("gDate").value || "(choose date)";
+    $("previewBox").innerHTML =
+      `Preview for <code>${slug || "course-slug"}</code> on <code>${date}</code>: ` +
+      `<span class="pill">${times.length} times</span><br/>` +
+      `<code>${times.slice(0, 20).join("</code> <code>")}${times.length>20 ? "</code> …" : "</code>"}`;
+  };
+
+  // ✅ NEW: generate times (writes to DB via backend)
+  $("genBtn").onclick = async () => {
+    $("genMsg").textContent = "Generating...";
+    $("previewBox").textContent = "";
+    try {
+      const slug = ($("gSlug").value || "").trim();
+      const playDate = ($("gDate").value || "").trim();
+      const start = ($("gStart").value || "06:00").trim();
+      const end = ($("gEnd").value || "17:00").trim();
+      const intervalMins = Number($("gInterval").value || 10);
+      const holes = Number($("gHoles").value || 18);
+      const maxPlayers = Number($("gMaxPlayers").value || 4);
+      const pricePerPlayerCents = Number($("gPrice").value || 0);
+
+      if (!slug) throw new Error("course slug is required");
+      if (!playDate) throw new Error("play date is required");
+
+      // quick front-end validation
+      const prev = buildTimes(start, end, intervalMins);
+      if(!prev.ok) throw new Error(prev.error);
+
+      // 🔥 This expects your backend route from Step 2:
+      // POST /api/book/admin/generate-times
+      const out = await j("/api/book/admin/generate-times", {
+        method: "POST",
+        body: JSON.stringify({
+          slug,
+          playDate,
+          start,
+          end,
+          intervalMins,
+          holes,
+          maxPlayers,
+          pricePerPlayerCents
+        })
+      });
+
+      $("genMsg").textContent =
+        `✅ Generated ${out.inserted || 0} times (${out.skipped || 0} skipped). Open: /book/${slug}`;
+      await refresh();
+    } catch (e) {
+      $("genMsg").textContent = "❌ " + e.message;
+    }
+  };
+
   $("refreshBtn").onclick = refresh;
 
   async function refresh() {
@@ -165,15 +329,42 @@
       const out = await j("/api/book/admin/courses");
       (out.courses || []).forEach(c => {
         const li = document.createElement("li");
-        li.innerHTML = `<b>${c.name}</b> — <code>${c.slug}</code> — <a href="/book/${c.slug}">open</a>`;
+        li.innerHTML =
+          `<b>${c.name}</b> — <code>${c.slug}</code> — <a href="/book/${c.slug}">open</a>` +
+          `<div class="actions">` +
+          `<button class="small secondary" data-fill="${c.slug}">Use for generator</button>` +
+          `</div>`;
         ul.appendChild(li);
       });
+
+      // ✅ hook up fill buttons
+      ul.querySelectorAll("button[data-fill]").forEach(btn => {
+        btn.onclick = () => {
+          $("gSlug").value = btn.getAttribute("data-fill") || "";
+          $("aSlug").value = $("gSlug").value;
+          $("cSlug").value = $("gSlug").value;
+          $("previewBox").textContent = "";
+          $("genMsg").textContent = "";
+        };
+      });
+
     } catch (e) {
       const li = document.createElement("li");
       li.textContent = "❌ " + e.message + " (login first)";
       ul.appendChild(li);
     }
   }
+
+  // auto-set date to today (local)
+  (function(){
+    try{
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,"0");
+      const dd = String(d.getDate()).padStart(2,"0");
+      $("gDate").value = `${yyyy}-${mm}-${dd}`;
+    }catch{}
+  })();
 
   refresh();
 </script>
