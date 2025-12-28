@@ -47,6 +47,14 @@ function requirePlatformAdmin(req, res, next) {
   return next();
 }
 
+// ✅ NEW: accept both the old and new admin generator payload shapes
+function _pickAny(obj, keys, fallback = undefined) {
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty.call(obj || {}, k)) return obj[k];
+  }
+  return fallback;
+}
+
 // -----------------------------
 // One-time table creation (safe)
 // -----------------------------
@@ -210,7 +218,119 @@ router.post("/admin/courses", requirePlatformAdmin, async (req, res) => {
 });
 
 // -----------------------------
-// Admin: Bulk-generate tee times
+// ✅ NEW: Admin: Bulk-generate tee times (endpoint used by book-admin.html)
+// -----------------------------
+// POST /api/book/admin/generate-times
+// Body: {
+//   slug, playDate, start, end, intervalMins, holes, maxPlayers, pricePerPlayerCents
+// }
+// Also accepts your older shape: { slug, date, intervalMinutes, ... } etc.
+router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(_pickAny(req.body, ["slug"], ""));
+    const playDate = String(_pickAny(req.body, ["playDate", "date"], "") || "").trim(); // YYYY-MM-DD
+
+    const start = String(_pickAny(req.body, ["start"], "06:00") || "06:00").trim();
+    const end = String(_pickAny(req.body, ["end"], "17:00") || "17:00").trim();
+
+    const intervalMinsRaw = _pickAny(req.body, ["intervalMins", "intervalMinutes"], 10);
+    const intervalMins = Number(intervalMinsRaw);
+
+    const holes = Number(_pickAny(req.body, ["holes"], 18));
+    const maxPlayers = Number(_pickAny(req.body, ["maxPlayers"], 4));
+    const pricePerPlayerCents = Number(_pickAny(req.body, ["pricePerPlayerCents"], 0));
+
+    // status optional (default AVAILABLE). Allow BLOCKED too.
+    const status = String(_pickAny(req.body, ["status"], "AVAILABLE") || "AVAILABLE").trim().toUpperCase();
+
+    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+    if (!playDate) return res.status(400).json({ ok: false, error: "date_required" });
+
+    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_must_be_9_or_18" });
+
+    if (!Number.isFinite(intervalMins) || intervalMins < 1 || intervalMins > 60)
+      return res.status(400).json({ ok: false, error: "interval_invalid" });
+
+    if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4)
+      return res.status(400).json({ ok: false, error: "maxPlayers_invalid" });
+
+    if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0 || pricePerPlayerCents > 10000000)
+      return res.status(400).json({ ok: false, error: "price_invalid" });
+
+    if (!["AVAILABLE", "BLOCKED"].includes(status))
+      return res.status(400).json({ ok: false, error: "status_invalid" });
+
+    const sM = toMinutes(start);
+    const eM = toMinutes(end);
+    if (sM === null || eM === null || eM <= sM) {
+      return res.status(400).json({ ok: false, error: "time_range_invalid" });
+    }
+
+    const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+    const courseId = c.rows[0].id;
+
+    const times = [];
+    for (let m = sM; m <= eM; m += intervalMins) times.push(fromMinutes(m));
+
+    // Upsert each time; count inserted vs skipped (conflict) and keep BOOKED as BOOKED
+    let inserted = 0;
+    let skipped = 0;
+
+    for (const t of times) {
+      // if exists, treat as skipped; otherwise inserted
+      const exists = await db.query(
+        `
+        SELECT 1
+        FROM booking_times
+        WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+        LIMIT 1;
+        `,
+        [courseId, playDate, t, holes]
+      );
+
+      const isExisting = !!exists.rows.length;
+
+      await db.query(
+        `
+        INSERT INTO booking_times
+          (course_id, play_date, tee_time, holes, max_players, price_per_player_cents, status, updated_at)
+        VALUES
+          ($1, $2::date, $3, $4, $5, $6, $7, now())
+        ON CONFLICT (course_id, play_date, tee_time, holes)
+        DO UPDATE SET
+          max_players = EXCLUDED.max_players,
+          price_per_player_cents = EXCLUDED.price_per_player_cents,
+          status = CASE
+            WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
+            ELSE EXCLUDED.status
+          END,
+          updated_at = now()
+        `,
+        [courseId, playDate, t, holes, maxPlayers, pricePerPlayerCents, status]
+      );
+
+      if (isExisting) skipped += 1;
+      else inserted += 1;
+    }
+
+    res.json({
+      ok: true,
+      slug,
+      date: playDate,
+      holes,
+      generated: times.length,
+      inserted,
+      skipped,
+    });
+  } catch (e) {
+    console.error("admin/generate-times", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// -----------------------------
+// Admin: Bulk-generate tee times (legacy endpoint - keep)
 // -----------------------------
 // POST /api/book/admin/times/generate
 // Body: { slug, date, start, end, intervalMinutes, holes, maxPlayers, pricePerPlayerCents, status? }
