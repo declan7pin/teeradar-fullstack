@@ -2,10 +2,19 @@
 import express from "express";
 import crypto from "crypto";
 import db from "./db.js";
+import { Resend } from "resend";
 
 const router = express.Router();
 
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
+
+// ✅ Email (Resend) — optional but recommended
+const RESEND_API_KEY = (process.env.RESEND_API_KEY || "").trim();
+const BOOKING_FROM_EMAIL = (process.env.BOOKING_FROM_EMAIL || "").trim(); // e.g. "TeeRadar <bookings@yourdomain.com>"
+const resend =
+  RESEND_API_KEY && RESEND_API_KEY.trim()
+    ? new Resend(RESEND_API_KEY.trim())
+    : null;
 
 // -----------------------------
 // Helpers
@@ -47,7 +56,7 @@ function requirePlatformAdmin(req, res, next) {
   return next();
 }
 
-// ✅ NEW: accept both the old and new admin generator payload shapes
+// ✅ accept both the old and new admin generator payload shapes
 function _pickAny(obj, keys, fallback = undefined) {
   for (const k of keys) {
     if (Object.prototype.hasOwnProperty.call(obj || {}, k)) return obj[k];
@@ -55,7 +64,7 @@ function _pickAny(obj, keys, fallback = undefined) {
   return fallback;
 }
 
-// ✅ NEW: require first + last name (simple check) and a valid-ish email
+// ✅ require first + last name (simple check) and a valid-ish email
 function isLikelyEmail(s) {
   const v = String(s || "").trim();
   if (!v) return false;
@@ -67,6 +76,99 @@ function hasFirstAndLastName(fullName) {
   if (!v) return false;
   const parts = v.split(/\s+/).filter(Boolean);
   return parts.length >= 2;
+}
+
+// ✅ Send booking confirmation email (best-effort)
+async function sendBookingConfirmationEmail({
+  toEmail,
+  golferName,
+  courseName,
+  date,
+  time,
+  holes,
+  players,
+  pricePerPlayerCents,
+  totalCents,
+  reference,
+}) {
+  if (!resend || !RESEND_API_KEY) return { ok: false, reason: "resend_not_configured" };
+  if (!BOOKING_FROM_EMAIL) return { ok: false, reason: "BOOKING_FROM_EMAIL_not_set" };
+  if (!toEmail || !isLikelyEmail(toEmail)) return { ok: false, reason: "invalid_email" };
+
+  const fmtMoney = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
+
+  const subject = `Booking confirmed — ${courseName} (${date} ${time})`;
+
+  // Keep it simple + deliverable (no external links required)
+  const text =
+    `Hi ${golferName},\n\n` +
+    `✅ Your TeeRadar booking is confirmed.\n\n` +
+    `Course: ${courseName}\n` +
+    `Date: ${date}\n` +
+    `Time: ${time}\n` +
+    `Holes: ${holes}\n` +
+    `Players: ${players}\n` +
+    `Price per player: ${fmtMoney(pricePerPlayerCents)}\n` +
+    `Total: ${fmtMoney(totalCents)}\n` +
+    `Reference: ${reference}\n\n` +
+    `If you didn’t make this booking, reply to this email.\n\n` +
+    `— TeeRadar`;
+
+  const html =
+    `<p>Hi ${String(golferName || "").replace(/</g, "&lt;").replace(/>/g, "&gt;")},</p>` +
+    `<p><b>✅ Your TeeRadar booking is confirmed.</b></p>` +
+    `<table style="border-collapse:collapse;">` +
+    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Course</td><td style="padding:4px 0;">${String(
+      courseName || ""
+    )
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")}</td></tr>` +
+    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Date</td><td style="padding:4px 0;">${String(
+      date || ""
+    )
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")}</td></tr>` +
+    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Time</td><td style="padding:4px 0;">${String(
+      time || ""
+    )
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")}</td></tr>` +
+    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Holes</td><td style="padding:4px 0;">${Number(
+      holes || 0
+    )}</td></tr>` +
+    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Players</td><td style="padding:4px 0;">${Number(
+      players || 0
+    )}</td></tr>` +
+    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Price per player</td><td style="padding:4px 0;">${fmtMoney(
+      pricePerPlayerCents
+    )}</td></tr>` +
+    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Total</td><td style="padding:4px 0;"><b>${fmtMoney(
+      totalCents
+    )}</b></td></tr>` +
+    `<tr><td style="padding:4px 10px 4px 0;color:#64748b;">Reference</td><td style="padding:4px 0;"><b>${String(
+      reference || ""
+    )
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")}</b></td></tr>` +
+    `</table>` +
+    `<p style="color:#64748b;font-size:12px;margin-top:14px;">If you didn’t make this booking, reply to this email.</p>` +
+    `<p style="color:#64748b;font-size:12px;">— TeeRadar</p>`;
+
+  try {
+    const out = await resend.emails.send({
+      from: BOOKING_FROM_EMAIL,
+      to: [toEmail],
+      subject,
+      text,
+      html,
+    });
+
+    // Resend returns an id when accepted
+    return { ok: true, id: out?.data?.id || null };
+  } catch (e) {
+    console.error("❌ booking confirmation email failed", e);
+    return { ok: false, reason: "send_failed" };
+  }
 }
 
 // -----------------------------
@@ -717,6 +819,20 @@ router.post("/book", async (req, res) => {
       ]
     );
 
+    // ✅ Send confirmation email (best-effort; booking still succeeds even if email fails)
+    const emailResult = await sendBookingConfirmationEmail({
+      toEmail: golfer_email,
+      golferName: golfer_name,
+      courseName: c.rows[0].name,
+      date,
+      time,
+      holes,
+      players,
+      pricePerPlayerCents,
+      totalCents,
+      reference,
+    });
+
     res.json({
       ok: true,
       reference,
@@ -732,6 +848,7 @@ router.post("/book", async (req, res) => {
       bookedPlayers: timeRow.booked_players,
       maxPlayers: timeRow.max_players,
       remaining: Math.max(0, Number(timeRow.max_players || 0) - Number(timeRow.booked_players || 0)),
+      emailSent: !!emailResult.ok,
     });
   } catch (e) {
     console.error("book POST", e);
