@@ -4,51 +4,440 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TeeRadar Booking — Course</title>
+  <title>TeeRadar Booking</title>
+
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;background:#f4f7fb;color:#0f172a}
-    .wrap{max-width:900px;margin:24px auto;padding:0 16px}
-    .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px}
-    .muted{color:#64748b;font-size:13px}
-    code{background:#f1f5f9;padding:2px 6px;border-radius:8px}
+    :root{
+      --teal:#00796b;
+      --teal-dark:#005e55;
+      --bg:#f4f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e2e8f0;
+      --danger:#b91c1c;
+      --ok:#16a34a;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+    .wrap{max-width:980px;margin:20px auto;padding:0 14px 28px}
+    .topbar{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+      margin-bottom:12px;
+    }
+    .brand{
+      display:flex;align-items:center;gap:10px;
+      font-weight:800;
+      color:var(--teal);
+      letter-spacing:.2px;
+    }
+    .pill{
+      font-size:12px;color:var(--teal-dark);
+      background:#ecfeff;border:1px solid #a5f3fc;
+      padding:6px 10px;border-radius:999px;
+      white-space:nowrap;
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:14px;
+      margin-bottom:12px;
+      box-shadow:0 1px 0 rgba(15,23,42,.02);
+    }
+    h1{font-size:20px;margin:0 0 4px}
+    .sub{color:var(--muted);font-size:13px;line-height:1.35}
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(12,1fr);
+      gap:10px;
+      margin-top:12px;
+    }
+    .field{grid-column:span 6}
+    @media (min-width:720px){
+      .field.sm3{grid-column:span 3}
+      .field.sm4{grid-column:span 4}
+      .field.sm6{grid-column:span 6}
+    }
+    label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px}
+    input, select{
+      width:100%;
+      padding:11px 12px;
+      border:1px solid #cbd5e1;
+      border-radius:12px;
+      background:#fff;
+      font:inherit;
+      outline:none;
+    }
+    input:focus, select:focus{
+      border-color:#38bdf8;
+      box-shadow:0 0 0 3px rgba(56,189,248,.25);
+    }
+    .actions{
+      display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px
+    }
+    .btn{
+      border:0;border-radius:12px;
+      padding:11px 14px;
+      background:var(--teal);
+      color:#fff;
+      font-weight:700;
+      cursor:pointer;
+    }
+    .btn:hover{background:var(--teal-dark)}
+    .btn.secondary{
+      background:#475569;
+    }
+    .btn.secondary:hover{background:#334155}
+    .note{font-size:12px;color:var(--muted)}
+    .status{margin-top:10px;font-size:13px}
+    .status.ok{color:var(--ok)}
+    .status.err{color:var(--danger)}
+
+    /* time results */
+    .timesHeader{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+      margin-bottom:10px;
+    }
+    .timesHeader h2{font-size:16px;margin:0}
+    .count{color:var(--muted);font-size:12px}
+    .timesGrid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:10px;
+    }
+    @media (min-width:720px){
+      .timesGrid{grid-template-columns:1fr 1fr}
+    }
+    .timeCard{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      background:#fff;
+      display:flex;flex-direction:column;gap:8px;
+    }
+    .timeTop{
+      display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    }
+    .time{
+      font-size:18px;font-weight:800;
+      letter-spacing:.2px;
+    }
+    .meta{
+      display:flex;gap:10px;flex-wrap:wrap;
+      color:var(--muted);font-size:12px;
+    }
+    .price{
+      font-weight:800;
+      color:#0f172a;
+      white-space:nowrap;
+    }
+    .bookBtn{
+      margin-top:2px;
+      width:100%;
+      border:1px solid #0f172a10;
+      background:#f8fafc;
+      color:#0f172a;
+      border-radius:12px;
+      padding:10px 12px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .bookBtn:hover{
+      background:#eef2f7;
+    }
+
+    /* modal */
+    .modalWrap{
+      position:fixed;inset:0;
+      background:rgba(15,23,42,.45);
+      display:none;
+      align-items:center;justify-content:center;
+      padding:16px;
+    }
+    .modal{
+      width:min(520px, 100%);
+      background:#fff;border-radius:16px;
+      border:1px solid var(--border);
+      padding:14px;
+    }
+    .modal h3{margin:0 0 6px;font-size:16px}
+    .kv{
+      display:grid;grid-template-columns:120px 1fr;
+      gap:6px 10px;
+      font-size:13px;
+      margin-top:10px;
+    }
+    .k{color:var(--muted)}
+    .modalActions{display:flex;gap:10px;margin-top:14px}
+    .modalActions .btn{flex:1}
+    .foot{
+      margin-top:10px;
+      font-size:11px;color:var(--muted);
+      line-height:1.35;
+    }
+    a{color:var(--teal);text-decoration:none}
   </style>
 </head>
+
 <body>
   <div class="wrap">
+    <div class="topbar">
+      <div class="brand">TeeRadar Booking</div>
+      <div class="pill">Independent booking platform</div>
+    </div>
+
     <div class="card">
-      <h2 id="name">Loading…</h2>
-      <div id="notes" class="muted"></div>
-      <p class="muted" style="margin-top:12px">
-        Slug: <code id="slug"></code>
-      </p>
-      <p class="muted">
-        Next step: add times + bookings (we’ll do that after Hillview/Marri Park are created).
-      </p>
+      <h1 id="courseName">Loading course…</h1>
+      <div class="sub" id="courseSub">Public bookings powered by TeeRadar.</div>
+
+      <div class="grid">
+        <div class="field sm3">
+          <label for="date">Date</label>
+          <input id="date" type="date" />
+        </div>
+
+        <div class="field sm3">
+          <label for="players">Players</label>
+          <select id="players">
+            <option value="1">1 player</option>
+            <option value="2" selected>2 players</option>
+            <option value="3">3 players</option>
+            <option value="4">4 players</option>
+          </select>
+        </div>
+
+        <div class="field sm3">
+          <label for="holes">Holes</label>
+          <select id="holes">
+            <option value="18" selected>18 holes</option>
+            <option value="9">9 holes</option>
+          </select>
+        </div>
+
+        <div class="field sm3">
+          <label for="start">Time from</label>
+          <input id="start" type="time" value="06:00" />
+        </div>
+
+        <div class="field sm3">
+          <label for="end">Time to</label>
+          <input id="end" type="time" value="17:00" />
+        </div>
+
+        <div class="field sm6">
+          <label class="muted">Note</label>
+          <div class="note">
+            This is the UI template only (Step 1). In Step 2 we’ll wire it to real tee times + bookings.
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="findBtn">Find available times</button>
+        <button class="btn secondary" id="resetBtn">Reset</button>
+        <div class="note" id="hint"></div>
+      </div>
+
+      <div id="status" class="status"></div>
+    </div>
+
+    <div class="card">
+      <div class="timesHeader">
+        <h2>Available times</h2>
+        <div class="count" id="count">0 shown</div>
+      </div>
+      <div class="timesGrid" id="times"></div>
+
+      <div class="foot">
+        TeeRadar is an independent booking platform and is not affiliated with MiClub, Quick18, or other providers.
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm modal -->
+  <div class="modalWrap" id="modalWrap">
+    <div class="modal">
+      <h3>Confirm booking</h3>
+      <div class="sub">This is a preview step (no real booking yet).</div>
+
+      <div class="kv">
+        <div class="k">Course</div><div id="mCourse"></div>
+        <div class="k">Date</div><div id="mDate"></div>
+        <div class="k">Time</div><div id="mTime"></div>
+        <div class="k">Players</div><div id="mPlayers"></div>
+        <div class="k">Holes</div><div id="mHoles"></div>
+        <div class="k">Price</div><div id="mPrice"></div>
+      </div>
+
+      <div class="modalActions">
+        <button class="btn" id="confirmBtn">Confirm (preview)</button>
+        <button class="btn secondary" id="cancelBtn">Cancel</button>
+      </div>
+      <div class="foot">
+        Step 2 will store bookings + generate a reference + notify the course.
+      </div>
     </div>
   </div>
 
 <script>
-  async function j(url) {
-    const res = await fetch(url);
-    const data = await res.json().catch(()=> ({}));
-    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
-    return data;
-  }
+  const $ = (id) => document.getElementById(id);
 
   const slug = location.pathname.split("/").pop().toLowerCase();
-  document.getElementById("slug").textContent = slug;
+  let course = { slug, name: "Course", notes: "" };
 
-  (async () => {
+  // default date = today (local)
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth()+1).padStart(2,"0");
+  const dd = String(today.getDate()).padStart(2,"0");
+  $("date").value = `${yyyy}-${mm}-${dd}`;
+
+  // Load course info (if it exists in DB)
+  async function loadCourse() {
     try {
-      const out = await j("/api/book/course/" + encodeURIComponent(slug));
-      document.getElementById("name").textContent = out.course.name;
-      document.getElementById("notes").textContent = out.course.notes || "";
-      document.title = "TeeRadar Booking — " + out.course.name;
-    } catch (e) {
-      document.getElementById("name").textContent = "Course not found";
-      document.getElementById("notes").textContent = "Create it in /book/admin first.";
+      const res = await fetch("/api/book/course/" + encodeURIComponent(slug));
+      const data = await res.json();
+      if (res.ok && data && data.ok && data.course) {
+        course = data.course;
+      }
+    } catch {}
+    $("courseName").textContent = course.name || "Course";
+    $("courseSub").textContent = course.notes
+      ? course.notes
+      : "Public bookings powered by TeeRadar.";
+    document.title = "TeeRadar Booking — " + (course.name || slug);
+  }
+
+  function fmtTime(t){ return t; }
+
+  // STEP 1 ONLY: mock availability generator (so UI feels real)
+  function buildMockTimes({ earliest, latest, players, holes }) {
+    // create times every 8 minutes between earliest & latest (sample)
+    const out = [];
+    const [sh, sm] = earliest.split(":").map(Number);
+    const [eh, em] = latest.split(":").map(Number);
+    let startM = sh * 60 + sm;
+    const endM = eh * 60 + em;
+
+    // sanity
+    if (!Number.isFinite(startM) || !Number.isFinite(endM) || endM <= startM) return out;
+
+    const step = 8;
+    for (let m = startM; m <= endM; m += step) {
+      // randomly hide some so it looks like real availability
+      if (Math.random() < 0.35) continue;
+
+      const h = String(Math.floor(m / 60)).padStart(2,"0");
+      const mi = String(m % 60).padStart(2,"0");
+
+      const base = holes === 18 ? 28 : 18; // placeholder
+      const weekendBoost = 4; // placeholder
+      const price = base + (Math.random() < 0.25 ? weekendBoost : 0);
+
+      out.push({
+        time: `${h}:${mi}`,
+        maxPlayers: 4,
+        players,
+        holes,
+        pricePerPlayer: price
+      });
+
+      if (out.length >= 18) break; // keep list short
     }
-  })();
+    return out;
+  }
+
+  function renderTimes(list) {
+    const wrap = $("times");
+    wrap.innerHTML = "";
+    $("count").textContent = (list.length || 0) + " shown";
+
+    if (!list.length) {
+      wrap.innerHTML = `<div class="sub">No times to show (try a wider time range).</div>`;
+      return;
+    }
+
+    list.forEach((t) => {
+      const div = document.createElement("div");
+      div.className = "timeCard";
+      div.innerHTML = `
+        <div class="timeTop">
+          <div>
+            <div class="time">⏰ ${t.time}</div>
+            <div class="meta">
+              <span>👥 up to ${t.maxPlayers}</span>
+              <span>⛳ ${t.holes} holes</span>
+              <span>✅ fits ${t.players} players</span>
+            </div>
+          </div>
+          <div class="price">$${Number(t.pricePerPlayer).toFixed(0)} / player</div>
+        </div>
+        <button class="bookBtn">Book this time</button>
+      `;
+      div.querySelector(".bookBtn").onclick = () => openModal(t);
+      wrap.appendChild(div);
+    });
+  }
+
+  function setStatus(msg, type) {
+    const el = $("status");
+    el.textContent = msg || "";
+    el.className = "status " + (type || "");
+  }
+
+  function openModal(slot) {
+    $("mCourse").textContent = course.name || slug;
+    $("mDate").textContent = $("date").value;
+    $("mTime").textContent = slot.time;
+    $("mPlayers").textContent = $("players").value;
+    $("mHoles").textContent = $("holes").value;
+    $("mPrice").textContent = `$${Number(slot.pricePerPlayer).toFixed(0)} per player (preview)`;
+    $("modalWrap").style.display = "flex";
+
+    $("confirmBtn").onclick = () => {
+      $("modalWrap").style.display = "none";
+      setStatus("✅ Preview confirmed. Step 2 will actually create the booking + reference + notify the course.", "ok");
+    };
+  }
+
+  $("cancelBtn").onclick = () => $("modalWrap").style.display = "none";
+  $("modalWrap").addEventListener("click", (e) => {
+    if (e.target === $("modalWrap")) $("modalWrap").style.display = "none";
+  });
+
+  $("findBtn").onclick = () => {
+    const date = $("date").value;
+    const players = Number($("players").value);
+    const holes = Number($("holes").value);
+    const earliest = $("start").value || "06:00";
+    const latest = $("end").value || "17:00";
+
+    if (!date) return setStatus("❌ Please choose a date.", "err");
+
+    setStatus("Searching… (mock data for Step 1)", "");
+    const list = buildMockTimes({ earliest, latest, players, holes });
+    renderTimes(list);
+    setStatus(list.length ? "✅ Times shown (mock). Next step: wire to real availability + bookings." : "No times found in this window (mock).", list.length ? "ok" : "");
+  };
+
+  $("resetBtn").onclick = () => {
+    $("players").value = "2";
+    $("holes").value = "18";
+    $("start").value = "06:00";
+    $("end").value = "17:00";
+    setStatus("");
+    renderTimes([]);
+  };
+
+  loadCourse();
+  renderTimes([]);
 </script>
 </body>
 </html>
