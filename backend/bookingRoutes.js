@@ -231,6 +231,72 @@ router.post("/admin/courses", requirePlatformAdmin, async (req, res) => {
 });
 
 // -----------------------------
+// ✅ NEW: Admin: Delete a course (cascades tee times + bookings)
+// -----------------------------
+// DELETE /api/book/admin/courses/:slug
+router.delete("/admin/courses/:slug", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.params.slug);
+    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+
+    const r = await db.query(`DELETE FROM booking_courses WHERE slug=$1;`, [slug]);
+    if (!r.rowCount) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    res.json({ ok: true, deleted: slug });
+  } catch (e) {
+    console.error("admin/courses DELETE", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// -----------------------------
+// ✅ NEW: Admin: Delete tee times for a course (all, or by date/holes)
+// -----------------------------
+// DELETE /api/book/admin/times?slug=hillview&date=YYYY-MM-DD&holes=18
+// - slug required
+// - date optional (if omitted, deletes ALL tee times for course)
+// - holes optional (if provided, filters)
+router.delete("/admin/times", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.query.slug);
+    const date = req.query.date ? String(req.query.date).trim() : "";
+    const holes = req.query.holes ? Number(req.query.holes) : null;
+
+    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+    if (holes !== null && ![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+
+    const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+    const courseId = c.rows[0].id;
+
+    const params = [courseId];
+    let q = `DELETE FROM booking_times WHERE course_id = $1`;
+
+    if (date) {
+      params.push(date);
+      q += ` AND play_date = $${params.length}::date`;
+    }
+    if (holes !== null) {
+      params.push(holes);
+      q += ` AND holes = $${params.length}`;
+    }
+
+    const r = await db.query(q + `;`, params);
+
+    res.json({
+      ok: true,
+      slug,
+      date: date || null,
+      holes: holes !== null ? holes : null,
+      deletedTimes: r.rowCount || 0,
+    });
+  } catch (e) {
+    console.error("admin/times DELETE", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// -----------------------------
 // ✅ NEW: Admin: Bulk-generate tee times (endpoint used by book-admin.html)
 // -----------------------------
 // POST /api/book/admin/generate-times
@@ -306,9 +372,9 @@ router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
       await db.query(
         `
         INSERT INTO booking_times
-          (course_id, play_date, tee_time, holes, max_players, price_per_player_cents, status, updated_at)
+          (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, updated_at)
         VALUES
-          ($1, $2::date, $3, $4, $5, $6, $7, now())
+          ($1, $2::date, $3, $4, $5, 0, $6, $7, now())
         ON CONFLICT (course_id, play_date, tee_time, holes)
         DO UPDATE SET
           max_players = EXCLUDED.max_players,
@@ -386,9 +452,9 @@ router.post("/admin/times/generate", requirePlatformAdmin, async (req, res) => {
       const r = await db.query(
         `
         INSERT INTO booking_times
-          (course_id, play_date, tee_time, holes, max_players, price_per_player_cents, status, updated_at)
+          (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, updated_at)
         VALUES
-          ($1, $2::date, $3, $4, $5, $6, $7, now())
+          ($1, $2::date, $3, $4, $5, 0, $6, $7, now())
         ON CONFLICT (course_id, play_date, tee_time, holes)
         DO UPDATE SET
           max_players = EXCLUDED.max_players,
@@ -514,7 +580,7 @@ router.get("/availability", async (req, res) => {
       bookedPlayers: r.booked_players,
       remaining: Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0)),
       pricePerPlayerCents: r.price_per_player_cents,
-      pricePerPlayer: (Number(r.price_per_player_cents || 0) / 100),
+      pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
     }));
 
     res.json({ ok: true, slots });
@@ -567,9 +633,9 @@ router.post("/book", async (req, res) => {
       `
       UPDATE booking_times
       SET
-        booked_players = booked_players + $6,
+        booked_players = booked_players + $5,
         status = CASE
-          WHEN (booked_players + $6) >= max_players THEN 'BOOKED'
+          WHEN (booked_players + $5) >= max_players THEN 'BOOKED'
           ELSE status
         END,
         updated_at = now()
@@ -578,10 +644,10 @@ router.post("/book", async (req, res) => {
         AND tee_time = $3
         AND holes = $4
         AND status = 'AVAILABLE'
-        AND (max_players - booked_players) >= $6
+        AND (max_players - booked_players) >= $5
       RETURNING id, max_players, booked_players, price_per_player_cents, status;
       `,
-      [courseId, date, time, holes, null, players]
+      [courseId, date, time, holes, players]
     );
 
     if (!upd.rows.length) {
