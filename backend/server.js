@@ -344,6 +344,85 @@ async function ensureRoundsTables() {
 }
 ensureRoundsTables();
 
+/* ✅✅✅ ONLY ADDITION (needed): ensure booking tables exist (so admin can create courses + generate times) ✅✅✅ */
+async function ensureBookingTables() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS booking_courses (
+        id SERIAL PRIMARY KEY,
+        slug TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS booking_course_users (
+        id SERIAL PRIMARY KEY,
+        course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
+        email TEXT NOT NULL,
+        salt_hex TEXT NOT NULL,
+        hash_hex TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT now(),
+        UNIQUE(course_id, email)
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS booking_times (
+        id BIGSERIAL PRIMARY KEY,
+        course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
+        play_date DATE NOT NULL,
+        tee_time TEXT NOT NULL,
+        holes INTEGER NOT NULL,
+        max_players INTEGER NOT NULL DEFAULT 4,
+        price_per_player_cents INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'AVAILABLE',
+        created_at TIMESTAMPTZ DEFAULT now(),
+        updated_at TIMESTAMPTZ DEFAULT now(),
+        UNIQUE(course_id, play_date, tee_time, holes)
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS booking_times_lookup_idx
+      ON booking_times (course_id, play_date, holes, status, tee_time);
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS booking_bookings (
+        id BIGSERIAL PRIMARY KEY,
+        course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
+        play_date DATE NOT NULL,
+        tee_time TEXT NOT NULL,
+        holes INTEGER NOT NULL,
+        players INTEGER NOT NULL,
+        golfer_name TEXT,
+        golfer_email TEXT,
+        golfer_phone TEXT,
+        price_per_player_cents INTEGER NOT NULL,
+        total_cents INTEGER NOT NULL,
+        booking_fee_cents INTEGER NOT NULL DEFAULT 0,
+        reference TEXT UNIQUE NOT NULL,
+        status TEXT NOT NULL DEFAULT 'CONFIRMED',
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS booking_bookings_course_date_idx
+      ON booking_bookings (course_id, play_date);
+    `);
+
+    console.log("✅ booking tables ready");
+  } catch (err) {
+    console.error("❌ error ensuring booking tables:", err);
+  }
+}
+ensureBookingTables();
+/* ✅✅✅ END ONLY ADDITION ✅✅✅ */
+
 app.use(cors());
 
 // -------------------------------------------------
@@ -1554,7 +1633,7 @@ app.post("/api/analytics/event", async (req, res) => {
     await recordEvent({ type, userId, courseName, at });
     res.json({ ok: true });
   } catch (err) {
-    console.error("analytics error", err);
+    console.error("analytics error:", err);
     res.status(500).json({ error: "analytics error", detail: err.message });
   }
 });
@@ -1669,7 +1748,7 @@ app.delete("/api/analytics/users/:id", async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("delete user error", err);
+    console.error("delete user error:", err);
     res.status(500).json({ error: "internal error" });
   }
 });
@@ -1736,6 +1815,7 @@ ${details}
     res.status(500).json({ ok: false, error: "Email failed to send" });
   }
 });
+
 // -------------------------------------------------
 // 🔎 DEBUG: confirm rounds are stored in DB
 // -------------------------------------------------
