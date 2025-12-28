@@ -1,204 +1,53 @@
-<!DOCTYPE html>
+<!-- public/book-course.html -->
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>TeeRadar — Book</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar Booking — Course</title>
   <style>
-    :root { --teal:#00796b; --bg:#f4f7fb; --card:#fff; --text:#0f172a; --muted:#64748b; --border:#e2e8f0; }
-    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--text); }
-    .wrap{ max-width:980px; margin:0 auto; padding:18px; }
-    .card{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin:12px 0; }
-    h1{ margin:6px 0 2px; font-size:20px; }
-    .muted{ color:var(--muted); font-size:13px; }
-    input, select, button{ font:inherit; padding:10px 12px; border-radius:10px; border:1px solid var(--border); }
-    button{ background:var(--teal); color:#fff; border:none; cursor:pointer; }
-    .grid{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
-    @media (max-width:700px){ .grid{ grid-template-columns:1fr; } }
-    .slot{ display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border:1px solid var(--border); border-radius:12px; margin:8px 0; }
-    .slot small{ color:var(--muted); }
-    .slot button{ padding:8px 10px; }
-    .slot.disabled{ opacity:.55; }
-    .err{ color:#b91c1c; font-size:13px; }
-    .ok{ color:#166534; font-size:13px; }
+    body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;background:#f4f7fb;color:#0f172a}
+    .wrap{max-width:900px;margin:24px auto;padding:0 16px}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px}
+    .muted{color:#64748b;font-size:13px}
+    code{background:#f1f5f9;padding:2px 6px;border-radius:8px}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1 id="title">Book</h1>
-      <p class="muted" id="subtitle"></p>
-
-      <div class="grid">
-        <div>
-          <label class="muted">Date</label><br/>
-          <input id="date" type="date" />
-        </div>
-        <div>
-          <label class="muted">Players</label><br/>
-          <select id="players">
-            <option value="1">1 player</option>
-            <option value="2" selected>2 players</option>
-            <option value="3">3 players</option>
-            <option value="4">4 players</option>
-            <option value="5">5 players</option>
-            <option value="6">6 players</option>
-            <option value="7">7 players</option>
-            <option value="8">8 players</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="height:10px"></div>
-
-      <button id="loadBtn">Load times</button>
-      <p id="msg" class="muted"></p>
-    </div>
-
-    <div class="card" id="slotsCard" style="display:none">
-      <h1 style="font-size:16px">Available times</h1>
-      <div id="slots"></div>
-    </div>
-
-    <div class="card" id="formCard" style="display:none">
-      <h1 style="font-size:16px">Confirm booking</h1>
-      <p class="muted" id="chosen"></p>
-
-      <div class="grid">
-        <input id="name" placeholder="Full name *" />
-        <input id="phone" placeholder="Phone (optional)" />
-        <input id="email" placeholder="Email (optional)" />
-        <div style="display:flex;align-items:center;gap:10px">
-          <button id="confirmBtn">Confirm booking</button>
-          <span id="formMsg" class="muted"></span>
-        </div>
-      </div>
-      <p class="err" id="formErr"></p>
-      <p class="ok" id="formOk"></p>
+      <h2 id="name">Loading…</h2>
+      <div id="notes" class="muted"></div>
+      <p class="muted" style="margin-top:12px">
+        Slug: <code id="slug"></code>
+      </p>
+      <p class="muted">
+        Next step: add times + bookings (we’ll do that after Hillview/Marri Park are created).
+      </p>
     </div>
   </div>
 
 <script>
-  const $ = (id) => document.getElementById(id);
-
-  function todayISO() {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth()+1).padStart(2,'0');
-    const dd = String(d.getDate()).padStart(2,'0');
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  function getCourseSlugFromUrl() {
-    const parts = location.pathname.split("/").filter(Boolean);
-    // /book/:slug
-    return parts[1] || "";
-  }
-
-  async function api(path, opts={}) {
-    const res = await fetch(path, {
-      headers: { "Content-Type": "application/json" },
-      ...opts
-    });
+  async function j(url) {
+    const res = await fetch(url);
     const data = await res.json().catch(()=> ({}));
-    if (!res.ok) throw new Error(data.error || "Request failed");
+    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
     return data;
   }
 
-  let courseSlug = getCourseSlugFromUrl();
-  let selectedTime = null;
-
-  async function loadCourse() {
-    const r = await api(`/api/book/course/${encodeURIComponent(courseSlug)}`);
-    $("title").textContent = `Book — ${r.course.name}`;
-    $("subtitle").textContent = r.course.phone ? `Phone: ${r.course.phone}` : "Select a date to see available times.";
-  }
-
-  async function loadTimes() {
-    $("msg").textContent = "Loading…";
-    $("slots").innerHTML = "";
-    $("slotsCard").style.display = "none";
-    $("formCard").style.display = "none";
-    $("formErr").textContent = "";
-    $("formOk").textContent = "";
-    selectedTime = null;
-
-    const date = $("date").value || todayISO();
-    const r = await api(`/api/book/course/${encodeURIComponent(courseSlug)}/availability?date=${encodeURIComponent(date)}`);
-
-    if (!r.availability.length) {
-      $("msg").textContent = "No tee times configured for this date yet.";
-      return;
-    }
-
-    $("msg").textContent = `Showing ${r.availability.length} time(s) for ${date}.`;
-    $("slotsCard").style.display = "block";
-
-    for (const s of r.availability) {
-      const div = document.createElement("div");
-      div.className = "slot" + (!s.can_book ? " disabled" : "");
-      div.innerHTML = `
-        <div>
-          <div><strong>${s.time}</strong></div>
-          <small>${s.remaining_players} player(s) left${s.is_blocked ? " • blocked" : ""}</small>
-        </div>
-        <div>
-          <button ${s.can_book ? "" : "disabled"} data-time="${s.time}">Select</button>
-        </div>
-      `;
-      $("slots").appendChild(div);
-    }
-
-    document.querySelectorAll("button[data-time]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        selectedTime = btn.getAttribute("data-time");
-        $("formCard").style.display = "block";
-        $("chosen").textContent = `Selected: ${$("date").value || todayISO()} at ${selectedTime} • ${$("players").value} player(s)`;
-        $("formErr").textContent = "";
-        $("formOk").textContent = "";
-        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-      });
-    });
-  }
-
-  async function confirmBooking() {
-    $("formErr").textContent = "";
-    $("formOk").textContent = "";
-    $("formMsg").textContent = "Booking…";
-
-    try {
-      if (!selectedTime) throw new Error("Please select a time first.");
-      const payload = {
-        courseSlug,
-        date: $("date").value || todayISO(),
-        time: selectedTime,
-        players: Number($("players").value),
-        name: $("name").value,
-        phone: $("phone").value,
-        email: $("email").value
-      };
-
-      const r = await api("/api/book/create", { method:"POST", body: JSON.stringify(payload) });
-      $("formOk").textContent = `Booked! ${r.booking.course} • ${r.booking.date} ${r.booking.time} • ${r.booking.players} player(s).`;
-      $("formMsg").textContent = "";
-      await loadTimes();
-    } catch (e) {
-      $("formErr").textContent = e.message;
-      $("formMsg").textContent = "";
-    }
-  }
-
-  $("date").value = todayISO();
-  $("loadBtn").addEventListener("click", loadTimes);
-  $("confirmBtn").addEventListener("click", confirmBooking);
+  const slug = location.pathname.split("/").pop().toLowerCase();
+  document.getElementById("slug").textContent = slug;
 
   (async () => {
-    if (!courseSlug) {
-      $("title").textContent = "Book — course not found";
-      $("subtitle").textContent = "Missing course slug in URL.";
-      return;
+    try {
+      const out = await j("/api/book/course/" + encodeURIComponent(slug));
+      document.getElementById("name").textContent = out.course.name;
+      document.getElementById("notes").textContent = out.course.notes || "";
+      document.title = "TeeRadar Booking — " + out.course.name;
+    } catch (e) {
+      document.getElementById("name").textContent = "Course not found";
+      document.getElementById("notes").textContent = "Create it in /book/admin first.";
     }
-    await loadCourse();
   })();
 </script>
 </body>
