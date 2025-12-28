@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TeeRadar — Course Booking Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --teal:#00796b; --bg:#f4f7fb; --card:#fff; --text:#0f172a; --muted:#64748b; --border:#e2e8f0; }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--text); }
+    .wrap{ max-width:900px; margin:0 auto; padding:18px; }
+    .card{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin:12px 0; }
+    h1{ margin:6px 0 2px; font-size:20px; }
+    .muted{ color:var(--muted); font-size:13px; }
+    input, button{ font:inherit; padding:10px 12px; border-radius:10px; border:1px solid var(--border); }
+    button{ background:var(--teal); color:#fff; border:none; cursor:pointer; }
+    button.secondary{ background:#fff; color:var(--teal); border:1px solid var(--border); }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .row > *{ flex:1; min-width:180px; }
+    table{ width:100%; border-collapse:collapse; }
+    th, td{ text-align:left; padding:10px 8px; border-bottom:1px solid var(--border); font-size:14px; }
+    .pill{ display:inline-block; padding:3px 8px; border-radius:999px; background:#ecfeff; border:1px solid var(--border); font-size:12px; }
+    .err{ color:#b91c1c; font-size:13px; }
+    .ok{ color:#166534; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" id="loginCard">
+      <h1>Course Admin Login</h1>
+      <p class="muted">Log in to manage your tee sheet and bookings (your course only).</p>
+      <div class="row">
+        <input id="email" placeholder="Email" />
+        <input id="password" type="password" placeholder="Password" />
+        <button id="loginBtn">Log in</button>
+      </div>
+      <p id="loginMsg" class="err"></p>
+    </div>
+
+    <div class="card" id="adminCard" style="display:none">
+      <div class="row">
+        <div>
+          <h1 id="courseName">Course</h1>
+          <div class="muted">You are signed in. <span class="pill" id="rolePill"></span></div>
+        </div>
+        <div style="flex:0; min-width:160px">
+          <button class="secondary" id="logoutBtn">Log out</button>
+        </div>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:14px 0">
+
+      <div class="row">
+        <input id="date" type="date" />
+        <button id="loadBtn">Load bookings</button>
+      </div>
+
+      <div style="height:10px"></div>
+
+      <div class="card" style="margin:0">
+        <h1 style="font-size:16px">Bookings</h1>
+        <p class="muted" id="statusMsg"></p>
+        <div style="overflow:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Players</th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="bookingsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function todayISO() {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const dd = String(d.getDate()).padStart(2,'0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  async function api(path, opts={}) {
+    const res = await fetch(path, {
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      ...opts
+    });
+    const data = await res.json().catch(()=> ({}));
+    if (!res.ok) throw new Error(data.error || "Request failed");
+    return data;
+  }
+
+  async function checkMe() {
+    try {
+      const me = await api("/api/book/admin/me");
+      $("loginCard").style.display = "none";
+      $("adminCard").style.display = "block";
+      $("courseName").textContent = me.course.name;
+      $("rolePill").textContent = me.role;
+      $("date").value = todayISO();
+      await loadBookings();
+    } catch {
+      $("loginCard").style.display = "block";
+      $("adminCard").style.display = "none";
+    }
+  }
+
+  async function login() {
+    $("loginMsg").textContent = "";
+    try {
+      await api("/api/book/admin/login", {
+        method:"POST",
+        body: JSON.stringify({ email: $("email").value, password: $("password").value })
+      });
+      await checkMe();
+    } catch (e) {
+      $("loginMsg").textContent = e.message;
+    }
+  }
+
+  async function logout() {
+    await api("/api/book/admin/logout", { method:"POST", body:"{}" });
+    $("email").value = "";
+    $("password").value = "";
+    await checkMe();
+  }
+
+  async function loadBookings() {
+    $("statusMsg").textContent = "Loading…";
+    const date = $("date").value || todayISO();
+    try {
+      const r = await api(`/api/book/admin/bookings?date=${encodeURIComponent(date)}`);
+      const tbody = $("bookingsBody");
+      tbody.innerHTML = "";
+      if (!r.bookings.length) {
+        tbody.innerHTML = `<tr><td colspan="6" class="muted">No bookings for ${date}.</td></tr>`;
+      } else {
+        for (const b of r.bookings) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${b.slot_time}</td>
+            <td>${b.players}</td>
+            <td>${escapeHtml(b.contact_name || "")}</td>
+            <td>${escapeHtml(b.contact_phone || "")}</td>
+            <td>${escapeHtml(b.status)}</td>
+            <td>
+              ${b.status === "confirmed" ? `<button data-id="${b.id}" class="secondary" style="padding:6px 10px">Cancel</button>` : ""}
+            </td>
+          `;
+          tbody.appendChild(tr);
+        }
+      }
+      $("statusMsg").textContent = `Loaded ${r.bookings.length} booking(s) for ${date}.`;
+      bindCancelButtons();
+    } catch (e) {
+      $("statusMsg").textContent = e.message;
+    }
+  }
+
+  function bindCancelButtons() {
+    document.querySelectorAll("button[data-id]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-id");
+        btn.disabled = true;
+        try {
+          await api("/api/book/admin/booking/cancel", {
+            method:"POST",
+            body: JSON.stringify({ bookingId: Number(id) })
+          });
+          await loadBookings();
+        } catch (e) {
+          alert(e.message);
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
+
+  $("loginBtn").addEventListener("click", login);
+  $("logoutBtn").addEventListener("click", logout);
+  $("loadBtn").addEventListener("click", loadBookings);
+
+  checkMe();
+</script>
+</body>
+</html>
