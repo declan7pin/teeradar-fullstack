@@ -104,6 +104,19 @@ async function ensureBookingTables() {
     );
   `);
 
+  // ✅ NEW: track how many players have booked into the tee time (0..max_players)
+  await db.query(`
+    ALTER TABLE booking_times
+    ADD COLUMN IF NOT EXISTS booked_players INTEGER NOT NULL DEFAULT 0;
+  `);
+
+  // ✅ NEW: safety clamp (if any old rows were null)
+  await db.query(`
+    UPDATE booking_times
+    SET booked_players = 0
+    WHERE booked_players IS NULL;
+  `);
+
   await db.query(`
     CREATE INDEX IF NOT EXISTS booking_times_lookup_idx
     ON booking_times (course_id, play_date, holes, status, tee_time);
@@ -278,7 +291,6 @@ router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
     let skipped = 0;
 
     for (const t of times) {
-      // if exists, treat as skipped; otherwise inserted
       const exists = await db.query(
         `
         SELECT 1
@@ -415,7 +427,7 @@ router.get("/admin/times", requirePlatformAdmin, async (req, res) => {
 
     const params = [courseId, date];
     let q = `
-      SELECT id, play_date, tee_time, holes, max_players, price_per_player_cents, status
+      SELECT id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status
       FROM booking_times
       WHERE course_id = $1 AND play_date = $2::date
     `;
@@ -480,7 +492,7 @@ router.get("/availability", async (req, res) => {
 
     const { rows } = await db.query(
       `
-      SELECT tee_time, max_players, holes, price_per_player_cents
+      SELECT tee_time, max_players, booked_players, holes, price_per_player_cents
       FROM booking_times
       WHERE course_id = $1
         AND play_date = $2::date
@@ -488,7 +500,7 @@ router.get("/availability", async (req, res) => {
         AND status = 'AVAILABLE'
         AND (substring(tee_time,1,2)::int*60 + substring(tee_time,4,2)::int) >= $4
         AND (substring(tee_time,1,2)::int*60 + substring(tee_time,4,2)::int) <= $5
-        AND max_players >= $6
+        AND (max_players - booked_players) >= $6
       ORDER BY tee_time ASC
       LIMIT 200;
       `,
@@ -499,6 +511,8 @@ router.get("/availability", async (req, res) => {
       time: r.tee_time,
       holes: r.holes,
       maxPlayers: r.max_players,
+      bookedPlayers: r.booked_players,
+      remaining: Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0)),
       pricePerPlayerCents: r.price_per_player_cents,
       pricePerPlayer: (Number(r.price_per_player_cents || 0) / 100),
     }));
@@ -511,12 +525,11 @@ router.get("/availability", async (req, res) => {
 });
 
 // -----------------------------
-// Public: create booking (transaction-safe)
+// Public: create booking (transaction-safe without db.connect)
 // -----------------------------
 // POST /api/book/book
 // Body: { slug, date, time, holes, players, name?, email?, phone? }
 router.post("/book", async (req, res) => {
-  const client = await db.connect();
   try {
     const slug = normSlug(req.body?.slug);
     const date = String(req.body?.date || "").trim();
@@ -535,59 +548,75 @@ router.post("/book", async (req, res) => {
     if (!Number.isFinite(players) || players < 1 || players > 4)
       return res.status(400).json({ ok: false, error: "players_invalid" });
 
-    await client.query("BEGIN");
-
-    const c = await client.query(`SELECT id, slug, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+    // Find course
+    const c = await db.query(`SELECT id, slug, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
     if (!c.rows.length) {
-      await client.query("ROLLBACK");
       return res.status(404).json({ ok: false, error: "course_not_found" });
     }
     const courseId = c.rows[0].id;
 
-    // Lock the time row to prevent race conditions
-    const t = await client.query(
-      `
-      SELECT id, status, max_players, price_per_player_cents
-      FROM booking_times
-      WHERE course_id = $1
-        AND play_date = $2::date
-        AND tee_time = $3
-        AND holes = $4
-      FOR UPDATE
-      `,
-      [courseId, date, time, holes]
-    );
-
-    if (!t.rows.length) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ ok: false, error: "time_not_found" });
-    }
-
-    const row = t.rows[0];
-
-    if (row.status !== "AVAILABLE") {
-      await client.query("ROLLBACK");
-      return res.status(409).json({ ok: false, error: "time_not_available" });
-    }
-
-    if (Number(row.max_players) < players) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({ ok: false, error: "not_enough_capacity" });
-    }
-
-    const pricePerPlayerCents = Number(row.price_per_player_cents || 0);
-    const totalCents = pricePerPlayerCents * players;
-
     // Optional fee model (you can change later)
-    // e.g. 5 cents per player = 5
     const feePerPlayerCents = Number(process.env.BOOKING_FEE_PER_PLAYER_CENTS || 0);
     const bookingFeeCents = feePerPlayerCents * players;
 
     // Create reference
     const reference = makeRef("TR");
 
-    // Insert booking
-    await client.query(
+    // ✅ Atomic: increment booked_players if capacity exists; set BOOKED only when full
+    const upd = await db.query(
+      `
+      UPDATE booking_times
+      SET
+        booked_players = booked_players + $6,
+        status = CASE
+          WHEN (booked_players + $6) >= max_players THEN 'BOOKED'
+          ELSE status
+        END,
+        updated_at = now()
+      WHERE course_id = $1
+        AND play_date = $2::date
+        AND tee_time = $3
+        AND holes = $4
+        AND status = 'AVAILABLE'
+        AND (max_players - booked_players) >= $6
+      RETURNING id, max_players, booked_players, price_per_player_cents, status;
+      `,
+      [courseId, date, time, holes, null, players]
+    );
+
+    if (!upd.rows.length) {
+      // Determine why (not found vs not available vs capacity)
+      const chk = await db.query(
+        `
+        SELECT status, max_players, booked_players
+        FROM booking_times
+        WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+        LIMIT 1;
+        `,
+        [courseId, date, time, holes]
+      );
+
+      if (!chk.rows.length) return res.status(404).json({ ok: false, error: "time_not_found" });
+
+      const r = chk.rows[0];
+      if (String(r.status || "").toUpperCase() !== "AVAILABLE") {
+        return res.status(409).json({ ok: false, error: "time_not_available" });
+      }
+
+      const remaining = Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0));
+      if (remaining < players) {
+        return res.status(409).json({ ok: false, error: "not_enough_capacity", remaining });
+      }
+
+      return res.status(409).json({ ok: false, error: "time_not_available" });
+    }
+
+    const timeRow = upd.rows[0];
+    const pricePerPlayerCents = Number(timeRow.price_per_player_cents || 0);
+    const totalCents = pricePerPlayerCents * players;
+
+    // Insert booking record
+    await db.query(
       `
       INSERT INTO booking_bookings
         (course_id, play_date, tee_time, holes, players,
@@ -613,18 +642,6 @@ router.post("/book", async (req, res) => {
       ]
     );
 
-    // Mark the time as booked (MVP: 1 booking per time)
-    await client.query(
-      `
-      UPDATE booking_times
-      SET status = 'BOOKED', updated_at = now()
-      WHERE id = $1
-      `,
-      [row.id]
-    );
-
-    await client.query("COMMIT");
-
     res.json({
       ok: true,
       reference,
@@ -636,13 +653,14 @@ router.post("/book", async (req, res) => {
       total: totalCents / 100,
       pricePerPlayer: pricePerPlayerCents / 100,
       bookingFee: bookingFeeCents / 100,
+      status: timeRow.status,
+      bookedPlayers: timeRow.booked_players,
+      maxPlayers: timeRow.max_players,
+      remaining: Math.max(0, Number(timeRow.max_players || 0) - Number(timeRow.booked_players || 0)),
     });
   } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
     console.error("book POST", e);
     res.status(500).json({ ok: false, error: "internal_error" });
-  } finally {
-    client.release();
   }
 });
 
