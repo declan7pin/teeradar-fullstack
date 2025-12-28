@@ -125,6 +125,38 @@
       <div id="previewBox" class="muted mini" style="margin-top:8px;"></div>
     </div>
 
+    <!-- ✅ NEW: Delete course / tee times -->
+    <div class="card">
+      <h3>Delete Course / Tee Times</h3>
+      <p class="muted">Danger zone. Deletes cannot be undone.</p>
+
+      <div class="row">
+        <div>
+          <label class="muted">Course Slug</label>
+          <input id="dSlug" placeholder="hillview  or  marri-park" />
+        </div>
+        <div>
+          <label class="muted">Play Date (optional)</label>
+          <input id="dDate" type="date" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label class="muted">Holes (optional)</label>
+          <input id="dHoles" type="number" min="1" step="1" placeholder="18" />
+        </div>
+        <div></div>
+      </div>
+
+      <div style="margin-top:10px">
+        <button id="delTimesBtn" class="danger">Delete Tee Times</button>
+        <button id="delCourseBtn" class="danger">Delete Course</button>
+      </div>
+
+      <div id="delMsg" class="muted" style="margin-top:10px;"></div>
+    </div>
+
     <div class="card">
       <h3>Create Course Admin User</h3>
       <p class="muted">This creates a login for that course only (we store PBKDF2 hash in DB).</p>
@@ -320,6 +352,53 @@
     }
   };
 
+  // ✅ NEW: delete tee times (by slug, optional date/holes)
+  $("delTimesBtn").onclick = async () => {
+    $("delMsg").textContent = "";
+    try {
+      const slug = ($("dSlug").value || "").trim();
+      const date = ($("dDate").value || "").trim();
+      const holesRaw = ($("dHoles").value || "").trim();
+
+      if (!slug) throw new Error("course slug is required");
+
+      const msg =
+        `Delete tee times for "${slug}"` +
+        (date ? ` on ${date}` : " (ALL DATES)") +
+        (holesRaw ? ` (${holesRaw} holes)` : "") +
+        `? This cannot be undone.`;
+
+      if (!confirm(msg)) return;
+
+      const qs = new URLSearchParams({ slug });
+      if (date) qs.set("date", date);
+      if (holesRaw) qs.set("holes", holesRaw);
+
+      const out = await j("/api/book/admin/times?" + qs.toString(), { method: "DELETE" });
+      $("delMsg").textContent = `✅ Deleted ${out.deleted || out.deletedTimes || 0} tee times`;
+      await refresh();
+    } catch (e) {
+      $("delMsg").textContent = "❌ " + e.message;
+    }
+  };
+
+  // ✅ NEW: delete course (cascades tee times + bookings)
+  $("delCourseBtn").onclick = async () => {
+    $("delMsg").textContent = "";
+    try {
+      const slug = ($("dSlug").value || "").trim();
+      if (!slug) throw new Error("course slug is required");
+
+      if (!confirm(`DELETE COURSE "${slug}" and ALL related tee times + bookings? This cannot be undone.`)) return;
+
+      const out = await j("/api/book/admin/courses/" + encodeURIComponent(slug), { method: "DELETE" });
+      $("delMsg").textContent = `✅ Deleted course ${slug}`;
+      await refresh();
+    } catch (e) {
+      $("delMsg").textContent = "❌ " + e.message;
+    }
+  };
+
   $("refreshBtn").onclick = refresh;
 
   async function refresh() {
@@ -333,6 +412,7 @@
           `<b>${c.name}</b> — <code>${c.slug}</code> — <a href="/book/${c.slug}">open</a>` +
           `<div class="actions">` +
           `<button class="small secondary" data-fill="${c.slug}">Use for generator</button>` +
+          `<button class="small danger" data-delcourse="${c.slug}">Delete course</button>` +
           `</div>`;
         ul.appendChild(li);
       });
@@ -340,11 +420,35 @@
       // ✅ hook up fill buttons
       ul.querySelectorAll("button[data-fill]").forEach(btn => {
         btn.onclick = () => {
-          $("gSlug").value = btn.getAttribute("data-fill") || "";
-          $("aSlug").value = $("gSlug").value;
-          $("cSlug").value = $("gSlug").value;
+          const s = btn.getAttribute("data-fill") || "";
+          $("gSlug").value = s;
+          $("aSlug").value = s;
+          $("cSlug").value = s;
+
+          // ✅ also fill delete box
+          $("dSlug").value = s;
+
           $("previewBox").textContent = "";
           $("genMsg").textContent = "";
+          $("delMsg").textContent = "";
+        };
+      });
+
+      // ✅ quick delete from list
+      ul.querySelectorAll("button[data-delcourse]").forEach(btn => {
+        btn.onclick = async () => {
+          const s = btn.getAttribute("data-delcourse") || "";
+          if (!s) return;
+
+          if (!confirm(`DELETE COURSE "${s}" and ALL related tee times + bookings? This cannot be undone.`)) return;
+
+          try{
+            await j("/api/book/admin/courses/" + encodeURIComponent(s), { method:"DELETE" });
+            $("delMsg").textContent = `✅ Deleted course ${s}`;
+            await refresh();
+          }catch(e){
+            $("delMsg").textContent = "❌ " + e.message;
+          }
         };
       });
 
@@ -355,14 +459,16 @@
     }
   }
 
-  // auto-set date to today (local)
+  // auto-set dates to today (local)
   (function(){
     try{
       const d = new Date();
       const yyyy = d.getFullYear();
       const mm = String(d.getMonth()+1).padStart(2,"0");
       const dd = String(d.getDate()).padStart(2,"0");
-      $("gDate").value = `${yyyy}-${mm}-${dd}`;
+      const today = `${yyyy}-${mm}-${dd}`;
+      $("gDate").value = today;
+      $("dDate").value = today;
     }catch{}
   })();
 
