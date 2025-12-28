@@ -234,7 +234,7 @@
         <div class="field sm6">
           <label class="muted">Note</label>
           <div class="note">
-            This is the UI template only (Step 1). In Step 2 we’ll wire it to real tee times + bookings.
+            Live availability + bookings powered by TeeRadar.
           </div>
         </div>
       </div>
@@ -265,7 +265,7 @@
   <div class="modalWrap" id="modalWrap">
     <div class="modal">
       <h3>Confirm booking</h3>
-      <div class="sub">This is a preview step (no real booking yet).</div>
+      <div class="sub" id="modalSub">Enter your details to confirm.</div>
 
       <div class="kv">
         <div class="k">Course</div><div id="mCourse"></div>
@@ -276,12 +276,27 @@
         <div class="k">Price</div><div id="mPrice"></div>
       </div>
 
+      <div class="grid" style="margin-top:12px">
+        <div class="field sm6">
+          <label for="bName">Name</label>
+          <input id="bName" placeholder="Your name" />
+        </div>
+        <div class="field sm6">
+          <label for="bEmail">Email (optional)</label>
+          <input id="bEmail" type="email" placeholder="you@email.com" />
+        </div>
+        <div class="field sm6">
+          <label for="bPhone">Phone (optional)</label>
+          <input id="bPhone" placeholder="04xx xxx xxx" />
+        </div>
+      </div>
+
       <div class="modalActions">
-        <button class="btn" id="confirmBtn">Confirm (preview)</button>
+        <button class="btn" id="confirmBtn">Confirm booking</button>
         <button class="btn secondary" id="cancelBtn">Cancel</button>
       </div>
-      <div class="foot">
-        Step 2 will store bookings + generate a reference + notify the course.
+      <div class="foot" id="modalFoot">
+        You’ll receive a reference after confirming.
       </div>
     </div>
   </div>
@@ -315,43 +330,14 @@
     document.title = "TeeRadar Booking — " + (course.name || slug);
   }
 
-  function fmtTime(t){ return t; }
+  function setStatus(msg, type) {
+    const el = $("status");
+    el.textContent = msg || "";
+    el.className = "status " + (type || "");
+  }
 
-  // STEP 1 ONLY: mock availability generator (so UI feels real)
-  function buildMockTimes({ earliest, latest, players, holes }) {
-    // create times every 8 minutes between earliest & latest (sample)
-    const out = [];
-    const [sh, sm] = earliest.split(":").map(Number);
-    const [eh, em] = latest.split(":").map(Number);
-    let startM = sh * 60 + sm;
-    const endM = eh * 60 + em;
-
-    // sanity
-    if (!Number.isFinite(startM) || !Number.isFinite(endM) || endM <= startM) return out;
-
-    const step = 8;
-    for (let m = startM; m <= endM; m += step) {
-      // randomly hide some so it looks like real availability
-      if (Math.random() < 0.35) continue;
-
-      const h = String(Math.floor(m / 60)).padStart(2,"0");
-      const mi = String(m % 60).padStart(2,"0");
-
-      const base = holes === 18 ? 28 : 18; // placeholder
-      const weekendBoost = 4; // placeholder
-      const price = base + (Math.random() < 0.25 ? weekendBoost : 0);
-
-      out.push({
-        time: `${h}:${mi}`,
-        maxPlayers: 4,
-        players,
-        holes,
-        pricePerPlayer: price
-      });
-
-      if (out.length >= 18) break; // keep list short
-    }
-    return out;
+  function setHint(msg) {
+    $("hint").textContent = msg || "";
   }
 
   function renderTimes(list) {
@@ -360,13 +346,15 @@
     $("count").textContent = (list.length || 0) + " shown";
 
     if (!list.length) {
-      wrap.innerHTML = `<div class="sub">No times to show (try a wider time range).</div>`;
+      wrap.innerHTML = `<div class="sub">No times available in this window.</div>`;
       return;
     }
 
     list.forEach((t) => {
       const div = document.createElement("div");
       div.className = "timeCard";
+
+      const price = Number(t.pricePerPlayer || 0);
       div.innerHTML = `
         <div class="timeTop">
           <div>
@@ -374,10 +362,9 @@
             <div class="meta">
               <span>👥 up to ${t.maxPlayers}</span>
               <span>⛳ ${t.holes} holes</span>
-              <span>✅ fits ${t.players} players</span>
             </div>
           </div>
-          <div class="price">$${Number(t.pricePerPlayer).toFixed(0)} / player</div>
+          <div class="price">$${price.toFixed(0)} / player</div>
         </div>
         <button class="bookBtn">Book this time</button>
       `;
@@ -386,25 +373,129 @@
     });
   }
 
-  function setStatus(msg, type) {
-    const el = $("status");
-    el.textContent = msg || "";
-    el.className = "status " + (type || "");
+  async function fetchAvailability() {
+    const date = $("date").value;
+    const players = Number($("players").value);
+    const holes = Number($("holes").value);
+    const earliest = $("start").value || "06:00";
+    const latest = $("end").value || "17:00";
+
+    if (!date) {
+      setStatus("❌ Please choose a date.", "err");
+      return;
+    }
+
+    setStatus("Searching…", "");
+    setHint("");
+
+    try {
+      const qs = new URLSearchParams({
+        slug,
+        date,
+        holes: String(holes),
+        players: String(players),
+        earliest,
+        latest
+      });
+
+      const res = await fetch("/api/book/availability?" + qs.toString());
+      const data = await res.json().catch(()=> ({}));
+
+      if (!res.ok || !data || !data.ok) {
+        throw new Error((data && data.error) ? data.error : ("HTTP " + res.status));
+      }
+
+      const slots = Array.isArray(data.slots) ? data.slots : [];
+      renderTimes(slots);
+
+      if (slots.length) {
+        setStatus("✅ Times loaded.", "ok");
+      } else {
+        setStatus("No times available in this window.", "");
+        setHint("Tip: widen your time range or try another date.");
+      }
+    } catch (e) {
+      renderTimes([]);
+      setStatus("❌ " + (e.message || "Failed to load availability"), "err");
+      setHint("If this is your first setup: create the course in /book/admin and generate times for the selected date.");
+    }
   }
 
+  let selectedSlot = null;
+
   function openModal(slot) {
+    selectedSlot = slot;
+
     $("mCourse").textContent = course.name || slug;
     $("mDate").textContent = $("date").value;
     $("mTime").textContent = slot.time;
     $("mPlayers").textContent = $("players").value;
     $("mHoles").textContent = $("holes").value;
-    $("mPrice").textContent = `$${Number(slot.pricePerPlayer).toFixed(0)} per player (preview)`;
-    $("modalWrap").style.display = "flex";
 
-    $("confirmBtn").onclick = () => {
+    const price = Number(slot.pricePerPlayer || 0);
+    $("mPrice").textContent = `$${price.toFixed(0)} per player`;
+
+    $("modalSub").textContent = "Enter your details to confirm.";
+    $("modalFoot").textContent = "You’ll receive a reference after confirming.";
+    $("confirmBtn").textContent = "Confirm booking";
+    $("confirmBtn").disabled = false;
+
+    $("bName").value = "";
+    $("bEmail").value = "";
+    $("bPhone").value = "";
+
+    $("modalWrap").style.display = "flex";
+  }
+
+  async function confirmBooking() {
+    if (!selectedSlot) return;
+
+    const date = $("date").value;
+    const holes = Number($("holes").value);
+    const players = Number($("players").value);
+
+    const name = ($("bName").value || "").trim();
+    const email = ($("bEmail").value || "").trim();
+    const phone = ($("bPhone").value || "").trim();
+
+    if (!name) {
+      $("modalSub").textContent = "❌ Name is required.";
+      return;
+    }
+
+    $("modalSub").textContent = "Booking…";
+    $("confirmBtn").disabled = true;
+
+    try {
+      const res = await fetch("/api/book/book", {
+        method: "POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({
+          slug,
+          date,
+          time: selectedSlot.time,
+          holes,
+          players,
+          name,
+          email,
+          phone
+        })
+      });
+
+      const data = await res.json().catch(()=> ({}));
+      if (!res.ok || !data || !data.ok) {
+        throw new Error((data && data.error) ? data.error : ("HTTP " + res.status));
+      }
+
       $("modalWrap").style.display = "none";
-      setStatus("✅ Preview confirmed. Step 2 will actually create the booking + reference + notify the course.", "ok");
-    };
+      setStatus(`✅ Booking confirmed. Reference: ${data.reference}`, "ok");
+
+      // Refresh availability (the slot should now be BOOKED)
+      await fetchAvailability();
+    } catch (e) {
+      $("modalSub").textContent = "❌ " + (e.message || "Booking failed");
+      $("confirmBtn").disabled = false;
+    }
   }
 
   $("cancelBtn").onclick = () => $("modalWrap").style.display = "none";
@@ -412,20 +503,7 @@
     if (e.target === $("modalWrap")) $("modalWrap").style.display = "none";
   });
 
-  $("findBtn").onclick = () => {
-    const date = $("date").value;
-    const players = Number($("players").value);
-    const holes = Number($("holes").value);
-    const earliest = $("start").value || "06:00";
-    const latest = $("end").value || "17:00";
-
-    if (!date) return setStatus("❌ Please choose a date.", "err");
-
-    setStatus("Searching… (mock data for Step 1)", "");
-    const list = buildMockTimes({ earliest, latest, players, holes });
-    renderTimes(list);
-    setStatus(list.length ? "✅ Times shown (mock). Next step: wire to real availability + bookings." : "No times found in this window (mock).", list.length ? "ok" : "");
-  };
+  $("findBtn").onclick = fetchAvailability;
 
   $("resetBtn").onclick = () => {
     $("players").value = "2";
@@ -433,8 +511,11 @@
     $("start").value = "06:00";
     $("end").value = "17:00";
     setStatus("");
+    setHint("");
     renderTimes([]);
   };
+
+  $("confirmBtn").onclick = confirmBooking;
 
   loadCourse();
   renderTimes([]);
