@@ -501,7 +501,12 @@ app.use(express.json());
 app.use(cookieParser());
 
 // ✅✅✅ ADD (needed): mount booking views router (bookings lists for admin + course admins) ✅✅✅
-app.use(bookingViewsRouter);
+app.use((req, res, next) => {
+  // attach super-admin helper for booking views
+  req.isSuperAdmin = (email) => isSuperAdmin(email);
+  next();
+});
+app.use(bookingViewsRouter);;
 // ✅✅✅ END ADD ✅✅✅
 
 app.use(express.static(path.join(__dirname, "..", "public")));
