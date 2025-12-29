@@ -3,15 +3,20 @@ import express from "express";
 import crypto from "crypto";
 import db from "./db.js";
 import { Resend } from "resend";
+import cookieParser from "cookie-parser"; // ✅ ADD
 
 const router = express.Router();
 
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 
-// ✅ ensure JSON bodies work for ALL routes in this router
+// ✅ ADD (needed): ensure JSON bodies work for ALL routes in this router
 router.use(express.json());
 
+// ✅ ADD (needed): read cookies for admin auth
+router.use(cookieParser());
+
 // ✅ Booking email (Resend)
+// Support multiple env keys so Render naming mismatches don't break bookings.
 const bookingFromRaw = String(
   process.env.BOOKING_EMAIL_FROM ||
     process.env.BOOKING_FROM_EMAIL ||
@@ -20,11 +25,12 @@ const bookingFromRaw = String(
 ).trim();
 
 const bookingFromName = String(process.env.BOOKING_EMAIL_FROM_NAME || "TeeRadar Bookings").trim();
+
 const bookingBcc = String(process.env.BOOKING_EMAIL_BCC || "").trim(); // optional
 const resendApiKey = String(process.env.RESEND_API_KEY || "").trim();
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
-// ✅ Startup visibility
+// ✅ Startup visibility (helps confirm Render is injecting env vars into THIS service)
 console.log("📧 booking email env check:", {
   hasResendKey: !!resendApiKey,
   BOOKING_EMAIL_FROM_set: !!String(process.env.BOOKING_EMAIL_FROM || "").trim(),
@@ -57,6 +63,7 @@ function fromMinutes(mins) {
 }
 
 function makeRef(prefix = "TR") {
+  // e.g. TR-8F2KQ9
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let out = "";
   for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
@@ -72,6 +79,7 @@ function requirePlatformAdmin(req, res, next) {
   return next();
 }
 
+// ✅ accept both the old and new admin generator payload shapes
 function _pickAny(obj, keys, fallback = undefined) {
   for (const k of keys) {
     if (Object.prototype.hasOwnProperty.call(obj || {}, k)) return obj[k];
@@ -79,13 +87,13 @@ function _pickAny(obj, keys, fallback = undefined) {
   return fallback;
 }
 
+// ✅ require first + last name (simple check) and a valid-ish email
 function isLikelyEmail(s) {
   const v = String(s || "").trim();
   if (!v) return false;
   if (v.length > 254) return false;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
-
 function hasFirstAndLastName(fullName) {
   const v = String(fullName || "").trim();
   if (!v) return false;
@@ -98,14 +106,20 @@ function fmtMoney(cents) {
   return `$${n.toFixed(2)}`;
 }
 
+// ✅ Build Resend "from" safely.
+// Accepts either:
+// - "Name <email@domain>"
+// - "email@domain"
+// We convert plain email into "TeeRadar Bookings <email@domain>"
 function buildFrom() {
   const raw = String(bookingFromRaw || "").trim();
   if (!raw) return "";
-  if (raw.includes("<") && raw.includes(">")) return raw;
+  if (raw.includes("<") && raw.includes(">")) return raw; // already in Name <email> format
   if (isLikelyEmail(raw)) return `${bookingFromName} <${raw}>`;
-  return raw;
+  return raw; // last resort
 }
 
+// ✅ Send booking email via Resend (safe)
 async function sendBookingEmail({
   to,
   courseName,
@@ -175,7 +189,7 @@ async function sendBookingEmail({
 }
 
 // -----------------------------
-// ✅ Course admin auth helpers (PBKDF2 + cookies)
+// ✅ ADD (needed): Course admin auth helpers (PBKDF2 + cookies)
 // -----------------------------
 function hashPassword(password, saltHex = null) {
   const salt = saltHex ? Buffer.from(saltHex, "hex") : crypto.randomBytes(16);
@@ -224,18 +238,14 @@ async function ensureBookingTables() {
     CREATE TABLE IF NOT EXISTS booking_times (
       id BIGSERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
-
       play_date DATE NOT NULL,
       tee_time TEXT NOT NULL,
       holes INTEGER NOT NULL,
       max_players INTEGER NOT NULL DEFAULT 4,
-
       price_per_player_cents INTEGER NOT NULL DEFAULT 0,
-
       status TEXT NOT NULL DEFAULT 'AVAILABLE',
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now(),
-
       UNIQUE(course_id, play_date, tee_time, holes)
     );
   `);
@@ -260,31 +270,20 @@ async function ensureBookingTables() {
     CREATE TABLE IF NOT EXISTS booking_bookings (
       id BIGSERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
-
       play_date DATE NOT NULL,
       tee_time TEXT NOT NULL,
       holes INTEGER NOT NULL,
-
       players INTEGER NOT NULL,
       golfer_name TEXT,
       golfer_email TEXT,
       golfer_phone TEXT,
-
       price_per_player_cents INTEGER NOT NULL,
       total_cents INTEGER NOT NULL,
       booking_fee_cents INTEGER NOT NULL DEFAULT 0,
-
       reference TEXT UNIQUE NOT NULL,
       status TEXT NOT NULL DEFAULT 'CONFIRMED',
-
       created_at TIMESTAMPTZ DEFAULT now()
     );
-  `);
-
-  // ✅ ADD: paid flag (defaults false)
-  await db.query(`
-    ALTER TABLE booking_bookings
-    ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;
   `);
 
   await db.query(`
@@ -325,8 +324,9 @@ router.post("/admin/logout", (req, res) => {
 });
 
 // -----------------------------
-// Course admin create/login/logout + views
+// ✅ ADD (needed): Course admin create/login/logout + bookings view
 // -----------------------------
+
 router.post("/admin/course-admin", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.body?.slug);
@@ -417,135 +417,6 @@ router.post("/course-admin/logout", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ✅ NEW: MiClub-style grid data for course admin (time + 4 slots + paid)
-router.get("/course-admin/grid", requireCourseAdmin, async (req, res) => {
-  try {
-    const slug = req.courseAdmin.slug;
-    const date = String(req.query.date || "").trim();
-    const holes = req.query.holes ? Number(req.query.holes) : 18;
-
-    if (!date) return res.status(400).json({ ok: false, error: "date_required" });
-    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
-
-    const c = await db.query(`SELECT id, slug, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
-    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
-    const courseId = c.rows[0].id;
-
-    // times for that day/holes
-    const tRes = await db.query(
-      `
-      SELECT tee_time, max_players, booked_players, status, price_per_player_cents
-      FROM booking_times
-      WHERE course_id=$1 AND play_date=$2::date AND holes=$3
-      ORDER BY tee_time ASC
-      `,
-      [courseId, date, holes]
-    );
-    const times = tRes.rows || [];
-
-    // bookings for that day/holes
-    const bRes = await db.query(
-      `
-      SELECT id, tee_time, players, golfer_name, paid, created_at
-      FROM booking_bookings
-      WHERE course_id=$1 AND play_date=$2::date AND holes=$3
-      ORDER BY tee_time ASC, created_at ASC, id ASC
-      `,
-      [courseId, date, holes]
-    );
-    const bookings = bRes.rows || [];
-
-    // group bookings by tee_time
-    const byTime = new Map();
-    for (const b of bookings) {
-      const key = String(b.tee_time || "");
-      if (!byTime.has(key)) byTime.set(key, []);
-      byTime.get(key).push({
-        id: b.id,
-        name: String(b.golfer_name || "").trim() || "Booking",
-        players: Number(b.players || 1),
-        paid: !!b.paid,
-      });
-    }
-
-    // build 4-slot rows (MiClub-ish)
-    const outRows = times.map((t) => {
-      const teeTime = String(t.tee_time || "");
-      const maxPlayers = Math.min(4, Number(t.max_players || 4) || 4);
-
-      const slots = [];
-      const list = byTime.get(teeTime) || [];
-
-      // expand bookings into individual slots (repeat name per player)
-      for (const bk of list) {
-        const p = Math.max(1, Math.min(4, Number(bk.players || 1)));
-        for (let i = 0; i < p; i++) {
-          if (slots.length >= 4) break;
-          slots.push({ booking_id: bk.id, name: bk.name, paid: bk.paid });
-        }
-        if (slots.length >= 4) break;
-      }
-
-      while (slots.length < 4) slots.push({ booking_id: null, name: "", paid: false });
-
-      return {
-        tee_time: teeTime,
-        holes,
-        max_players: maxPlayers,
-        booked_players: Number(t.booked_players || 0),
-        status: String(t.status || ""),
-        price_per_player_cents: Number(t.price_per_player_cents || 0),
-        slots,
-      };
-    });
-
-    res.json({
-      ok: true,
-      course: { slug: c.rows[0].slug, name: c.rows[0].name },
-      date,
-      holes,
-      rows: outRows,
-    });
-  } catch (e) {
-    console.error("course-admin/grid GET", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-// ✅ NEW: toggle paid/unpaid (course admin only)
-router.post("/course-admin/paid", requireCourseAdmin, async (req, res) => {
-  try {
-    const slug = req.courseAdmin.slug;
-    const bookingId = Number(req.body?.bookingId);
-    const paid = !!req.body?.paid;
-
-    if (!Number.isFinite(bookingId) || bookingId <= 0) {
-      return res.status(400).json({ ok: false, error: "bookingId_invalid" });
-    }
-
-    const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
-    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
-    const courseId = c.rows[0].id;
-
-    // ensure booking belongs to this course
-    const chk = await db.query(
-      `SELECT id FROM booking_bookings WHERE id=$1 AND course_id=$2 LIMIT 1;`,
-      [bookingId, courseId]
-    );
-    if (!chk.rows.length) return res.status(404).json({ ok: false, error: "booking_not_found" });
-
-    await db.query(`UPDATE booking_bookings SET paid=$1 WHERE id=$2;`, [paid, bookingId]);
-
-    res.json({ ok: true, bookingId, paid });
-  } catch (e) {
-    console.error("course-admin/paid POST", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-// -----------------------------
-// Platform admin: view bookings (slug + optional date) (kept)
-// -----------------------------
 router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.query.slug);
@@ -572,8 +443,7 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
           b.golfer_phone AS phone,
           b.status,
           b.reference,
-          b.created_at,
-          b.paid
+          b.created_at
         FROM booking_bookings b
         WHERE b.course_id = $2 AND b.play_date = $3::date
         ORDER BY b.tee_time ASC, b.created_at DESC
@@ -595,8 +465,7 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
           b.golfer_phone AS phone,
           b.status,
           b.reference,
-          b.created_at,
-          b.paid
+          b.created_at
         FROM booking_bookings b
         WHERE b.course_id = $2
         ORDER BY b.play_date DESC, b.tee_time ASC, b.created_at DESC
@@ -614,9 +483,70 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
   }
 });
 
-// -----------------------------
-// Admin: Create/Update course
-// -----------------------------
+router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = req.courseAdmin.slug;
+    const date = String(req.query.date || "").trim();
+
+    const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+    if (!c.rows.length) return res.json({ ok: true, bookings: [], course_slug: slug });
+    const courseId = c.rows[0].id;
+
+    let rows = [];
+    if (date) {
+      const r = await db.query(
+        `
+        SELECT
+          $1::text AS course_slug,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name AS name,
+          b.golfer_email AS email,
+          b.golfer_phone AS phone,
+          b.status,
+          b.reference,
+          b.created_at
+        FROM booking_bookings b
+        WHERE b.course_id = $2 AND b.play_date = $3::date
+        ORDER BY b.tee_time ASC, b.created_at DESC
+        `,
+        [slug, courseId, date]
+      );
+      rows = r.rows || [];
+    } else {
+      const r = await db.query(
+        `
+        SELECT
+          $1::text AS course_slug,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name AS name,
+          b.golfer_email AS email,
+          b.golfer_phone AS phone,
+          b.status,
+          b.reference,
+          b.created_at
+        FROM booking_bookings b
+        WHERE b.course_id = $2
+        ORDER BY b.play_date DESC, b.tee_time ASC, b.created_at DESC
+        LIMIT 500
+        `,
+        [slug, courseId]
+      );
+      rows = r.rows || [];
+    }
+
+    res.json({ ok: true, bookings: rows, course_slug: slug });
+  } catch (e) {
+    console.error("course-admin/bookings GET", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
 router.get("/admin/courses", requirePlatformAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(
@@ -635,7 +565,9 @@ router.post("/admin/courses", requirePlatformAdmin, async (req, res) => {
     const name = String(req.body?.name || "").trim();
     const notes = req.body?.notes ? String(req.body.notes).trim() : null;
 
-    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+    if (!slug || !isValidSlug(slug)) {
+      return res.status(400).json({ ok: false, error: "slug_invalid" });
+    }
     if (!name) return res.status(400).json({ ok: false, error: "name_required" });
 
     const r = await db.query(
@@ -657,9 +589,6 @@ router.post("/admin/courses", requirePlatformAdmin, async (req, res) => {
   }
 });
 
-// -----------------------------
-// Admin: Delete a course
-// -----------------------------
 router.delete("/admin/courses/:slug", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.params.slug);
@@ -675,9 +604,6 @@ router.delete("/admin/courses/:slug", requirePlatformAdmin, async (req, res) => 
   }
 });
 
-// -----------------------------
-// Admin: Delete tee times for a course
-// -----------------------------
 router.delete("/admin/times", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.query.slug);
@@ -705,16 +631,19 @@ router.delete("/admin/times", requirePlatformAdmin, async (req, res) => {
 
     const r = await db.query(q + `;`, params);
 
-    res.json({ ok: true, slug, date: date || null, holes: holes !== null ? holes : null, deletedTimes: r.rowCount || 0 });
+    res.json({
+      ok: true,
+      slug,
+      date: date || null,
+      holes: holes !== null ? holes : null,
+      deletedTimes: r.rowCount || 0,
+    });
   } catch (e) {
     console.error("admin/times DELETE", e);
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
-// -----------------------------
-// Admin: Bulk-generate tee times
-// -----------------------------
 router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(_pickAny(req.body, ["slug"], ""));
@@ -749,7 +678,9 @@ router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
 
     const sM = toMinutes(start);
     const eM = toMinutes(end);
-    if (sM === null || eM === null || eM <= sM) return res.status(400).json({ ok: false, error: "time_range_invalid" });
+    if (sM === null || eM === null || eM <= sM) {
+      return res.status(400).json({ ok: false, error: "time_range_invalid" });
+    }
 
     const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
     if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
@@ -763,7 +694,12 @@ router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
 
     for (const t of times) {
       const exists = await db.query(
-        `SELECT 1 FROM booking_times WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 LIMIT 1;`,
+        `
+        SELECT 1
+        FROM booking_times
+        WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+        LIMIT 1;
+        `,
         [courseId, playDate, t, holes]
       );
 
@@ -792,7 +728,15 @@ router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
       else inserted += 1;
     }
 
-    res.json({ ok: true, slug, date: playDate, holes, generated: times.length, inserted, skipped });
+    res.json({
+      ok: true,
+      slug,
+      date: playDate,
+      holes,
+      generated: times.length,
+      inserted,
+      skipped,
+    });
   } catch (e) {
     console.error("admin/generate-times", e);
     res.status(500).json({ ok: false, error: "internal_error" });
@@ -863,7 +807,6 @@ router.post("/admin/times/generate", requirePlatformAdmin, async (req, res) => {
   }
 });
 
-// Admin: list times (for a day)
 router.get("/admin/times", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.query.slug);
@@ -897,13 +840,13 @@ router.get("/admin/times", requirePlatformAdmin, async (req, res) => {
   }
 });
 
-// -----------------------------
-// Public: course info
-// -----------------------------
 router.get("/course/:slug", async (req, res) => {
   try {
     const slug = normSlug(req.params.slug);
-    const { rows } = await db.query(`SELECT id, slug, name, notes FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+    const { rows } = await db.query(
+      `SELECT id, slug, name, notes FROM booking_courses WHERE slug=$1 LIMIT 1;`,
+      [slug]
+    );
     if (!rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
     res.json({ ok: true, course: rows[0] });
   } catch (e) {
@@ -912,9 +855,6 @@ router.get("/course/:slug", async (req, res) => {
   }
 });
 
-// -----------------------------
-// Public: search availability
-// -----------------------------
 router.get("/availability", async (req, res) => {
   try {
     const slug = normSlug(req.query.slug);
@@ -972,9 +912,6 @@ router.get("/availability", async (req, res) => {
   }
 });
 
-// -----------------------------
-// Public: create booking + send email
-// -----------------------------
 router.post("/book", async (req, res) => {
   try {
     const slug = normSlug(req.body?.slug);
@@ -994,11 +931,17 @@ router.post("/book", async (req, res) => {
     if (!Number.isFinite(players) || players < 1 || players > 4)
       return res.status(400).json({ ok: false, error: "players_invalid" });
 
-    if (!hasFirstAndLastName(golfer_name)) return res.status(400).json({ ok: false, error: "name_required_first_last" });
-    if (!isLikelyEmail(golfer_email)) return res.status(400).json({ ok: false, error: "email_required_valid" });
+    if (!hasFirstAndLastName(golfer_name)) {
+      return res.status(400).json({ ok: false, error: "name_required_first_last" });
+    }
+    if (!isLikelyEmail(golfer_email)) {
+      return res.status(400).json({ ok: false, error: "email_required_valid" });
+    }
 
     const c = await db.query(`SELECT id, slug, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
-    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+    if (!c.rows.length) {
+      return res.status(404).json({ ok: false, error: "course_not_found" });
+    }
     const courseId = c.rows[0].id;
 
     const feePerPlayerCents = Number(process.env.BOOKING_FEE_PER_PLAYER_CENTS || 0);
@@ -1029,16 +972,26 @@ router.post("/book", async (req, res) => {
 
     if (!upd.rows.length) {
       const chk = await db.query(
-        `SELECT status, max_players, booked_players FROM booking_times WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 LIMIT 1;`,
+        `
+        SELECT status, max_players, booked_players
+        FROM booking_times
+        WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+        LIMIT 1;
+        `,
         [courseId, date, time, holes]
       );
+
       if (!chk.rows.length) return res.status(404).json({ ok: false, error: "time_not_found" });
 
       const r = chk.rows[0];
-      if (String(r.status || "").toUpperCase() !== "AVAILABLE") return res.status(409).json({ ok: false, error: "time_not_available" });
+      if (String(r.status || "").toUpperCase() !== "AVAILABLE") {
+        return res.status(409).json({ ok: false, error: "time_not_available" });
+      }
 
       const remaining = Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0));
-      if (remaining < players) return res.status(409).json({ ok: false, error: "not_enough_capacity", remaining });
+      if (remaining < players) {
+        return res.status(409).json({ ok: false, error: "not_enough_capacity", remaining });
+      }
 
       return res.status(409).json({ ok: false, error: "time_not_available" });
     }
@@ -1053,9 +1006,9 @@ router.post("/book", async (req, res) => {
         (course_id, play_date, tee_time, holes, players,
          golfer_name, golfer_email, golfer_phone,
          price_per_player_cents, total_cents, booking_fee_cents,
-         reference, status, paid)
+         reference, status)
       VALUES
-        ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'CONFIRMED', false)
+        ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'CONFIRMED')
       `,
       [
         courseId,
