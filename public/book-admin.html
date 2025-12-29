@@ -31,6 +31,23 @@
     th{background:#f8fafc;font-weight:800;position:sticky;top:0;z-index:1}
     tr:last-child td{border-bottom:none}
     .right{text-align:right}
+
+    /* ✅ ADD: MiClub-style daily sheet grid */
+    .sheetWrap{overflow:auto;border:1px solid #e2e8f0;border-radius:12px;background:#fff;margin-top:10px}
+    .sheetTable{width:100%;border-collapse:separate;border-spacing:0;min-width:980px}
+    .sheetTable th,.sheetTable td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;font-size:13px;vertical-align:top}
+    .sheetTable th{background:#f8fafc;font-weight:900;position:sticky;top:0;z-index:1}
+    .sheetTime{font-weight:900;white-space:nowrap}
+    .slotBox{border:1px solid #e2e8f0;border-radius:12px;background:#fff;padding:8px}
+    .slotTop{display:flex;gap:8px;align-items:center;justify-content:space-between}
+    .slotName{font-weight:800}
+    .slotMeta{margin-top:6px;color:#64748b;font-size:12px;display:flex;gap:10px;flex-wrap:wrap}
+    .slotEmpty{color:#94a3b8;font-size:12px}
+    .paidWrap{display:flex;gap:8px;align-items:center;font-size:12px;color:#0f172a}
+    .paidWrap input{width:auto;padding:0;border:0}
+    .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid #e2e8f0;background:#f8fafc;color:#0f172a}
+    .badge.ok{background:#ecfeff;border-color:#a7f3d0;color:#0f766e}
+    .badge.warn{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
   </style>
 </head>
 <body>
@@ -207,6 +224,8 @@
       <div class="actions">
         <button id="viewTimesBtn" class="secondary small">View tee times</button>
         <button id="viewBookingsBtn" class="secondary small">View bookings</button>
+        <!-- ✅ ADD: MiClub-style daily sheet button -->
+        <button id="viewSheetBtn" class="secondary small">Daily sheet (MiClub)</button>
       </div>
 
       <div id="viewMsg" class="muted" style="margin-top:10px;"></div>
@@ -255,6 +274,29 @@
           </table>
         </div>
       </div>
+
+      <!-- ✅ ADD: MiClub-style daily sheet -->
+      <div id="sheetBox" style="display:none;">
+        <div class="muted" style="margin-top:12px;font-weight:700;">
+          Daily sheet <span class="pill" id="sheetPill"></span>
+        </div>
+        <div class="muted mini" id="sheetHint" style="margin-top:6px;"></div>
+        <div class="sheetWrap">
+          <table class="sheetTable">
+            <thead>
+              <tr>
+                <th style="width:90px;">Time</th>
+                <th>Slot 1</th>
+                <th>Slot 2</th>
+                <th>Slot 3</th>
+                <th>Slot 4</th>
+              </tr>
+            </thead>
+            <tbody id="sheetBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- ✅ END ADD -->
     </div>
     <!-- ✅ END ADD -->
 
@@ -498,7 +540,13 @@
     $("bookingsBody").innerHTML = "";
     $("timesBox").style.display = "none";
     $("bookingsBox").style.display = "none";
+
+    /* ✅ ADD */
+    $("sheetBody").innerHTML = "";
+    $("sheetBox").style.display = "none";
+    /* ✅ END ADD */
   }
+
   async function viewTimes(){
     clearViewBoxes();
     const slug = ($("vSlug").value || "").trim();
@@ -543,6 +591,7 @@
       $("viewMsg").textContent = "❌ " + e.message;
     }
   }
+
   async function viewBookings(){
     clearViewBoxes();
     const slug = ($("vSlug").value || "").trim();
@@ -586,8 +635,166 @@
     }
   }
 
+  /* ✅ ADD: MiClub-style daily sheet (Time + 4 slots + Paid checkbox) */
+  function _escape(s){
+    return String(s ?? "")
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#039;");
+  }
+
+  function buildSlotCell(item, slotIndex){
+    if (!item){
+      return `<div class="slotBox"><div class="slotEmpty">—</div></div>`;
+    }
+
+    const name = _escape(item.name || "");
+    const email = _escape(item.email || "");
+    const phone = _escape(item.phone || "");
+    const ref = _escape(item.reference || "");
+    const paid = !!item.paid;
+
+    const paidId = `paid_${ref}_${slotIndex}`;
+    const badge = paid ? `<span class="badge ok">PAID</span>` : `<span class="badge warn">UNPAID</span>`;
+
+    return `
+      <div class="slotBox">
+        <div class="slotTop">
+          <div class="slotName">${name || "Booking"}</div>
+          ${badge}
+        </div>
+        <div class="slotMeta">
+          ${email ? `<span>${email}</span>` : ""}
+          ${phone ? `<span>${phone}</span>` : ""}
+          ${ref ? `<span><code>${ref}</code></span>` : ""}
+        </div>
+        <div style="margin-top:8px">
+          <label class="paidWrap" for="${paidId}">
+            <input
+              id="${paidId}"
+              type="checkbox"
+              data-ref="${ref}"
+              ${paid ? "checked" : ""}
+            />
+            Paid
+          </label>
+          <div class="mini muted" data-paidmsg="${ref}"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function groupBookingsToSheet(timesRows, bookingsRows){
+    const byTime = new Map();
+
+    (bookingsRows || []).forEach(b => {
+      const time = String(b.tee_time || b.time || "");
+      const players = Math.max(1, Number(b.players || 1));
+      for (let i=0;i<players;i++){
+        if (!byTime.has(time)) byTime.set(time, []);
+        byTime.get(time).push({
+          reference: b.reference || "",
+          name: b.name || b.golfer_name || "",
+          email: b.email || b.golfer_email || "",
+          phone: b.phone || b.golfer_phone || "",
+          paid: !!b.paid
+        });
+      }
+    });
+
+    const out = [];
+    (timesRows || []).forEach(t => {
+      const time = String(t.tee_time || t.time || "");
+      const arr = (byTime.get(time) || []).slice(0, 4); // show 4 slots
+      const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
+      out.push({ time, slots });
+    });
+
+    return out;
+  }
+
+  async function viewSheet(){
+    clearViewBoxes();
+
+    const slug = ($("vSlug").value || "").trim();
+    const date = ($("vDate").value || "").trim();
+
+    if (!slug) { $("viewMsg").textContent = "❌ course slug is required"; return; }
+    if (!date) { $("viewMsg").textContent = "❌ play date is required for daily sheet"; return; }
+
+    $("viewMsg").textContent = "Loading daily sheet...";
+    try{
+      const timesOut = await j("/api/book/admin/times?" + new URLSearchParams({ slug, date }).toString(), { method:"GET" });
+      const timesRows = (timesOut && timesOut.times) || [];
+
+      const bookingsOut = await j("/api/book/admin/bookings?" + new URLSearchParams({ slug, date }).toString(), { method:"GET" });
+      const bookingsRows = (bookingsOut && bookingsOut.bookings) || [];
+
+      if (!Array.isArray(timesRows) || !timesRows.length){
+        $("viewMsg").textContent = "✅ No tee times found for that date (generate first).";
+        return;
+      }
+
+      const sheet = groupBookingsToSheet(timesRows, bookingsRows);
+
+      $("sheetPill").textContent = `${slug} • ${date}`;
+      $("sheetHint").textContent = "Names fill into the 4 slots for each time. Tick Paid to mark payment.";
+
+      const tb = $("sheetBody");
+      tb.innerHTML = "";
+
+      sheet.forEach(row => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="sheetTime">${_escape(row.time)}</td>
+          <td>${buildSlotCell(row.slots[0], 1)}</td>
+          <td>${buildSlotCell(row.slots[1], 2)}</td>
+          <td>${buildSlotCell(row.slots[2], 3)}</td>
+          <td>${buildSlotCell(row.slots[3], 4)}</td>
+        `;
+        tb.appendChild(tr);
+      });
+
+      // hook paid toggles
+      tb.querySelectorAll('input[type="checkbox"][data-ref]').forEach(cb => {
+        cb.onchange = async () => {
+          const ref = cb.getAttribute("data-ref") || "";
+          const paid = cb.checked;
+
+          const msgEl = tb.querySelector(`[data-paidmsg="${CSS.escape(ref)}"]`);
+          if (msgEl) msgEl.textContent = "Saving...";
+          try{
+            // expects backend endpoint:
+            // POST /api/book/admin/booking-paid  { reference, paid }
+            await j("/api/book/admin/booking-paid", {
+              method:"POST",
+              body: JSON.stringify({ reference: ref, paid })
+            });
+            if (msgEl) msgEl.textContent = "✅ saved";
+          }catch(e){
+            cb.checked = !cb.checked; // revert
+            if (msgEl) msgEl.textContent = "❌ " + e.message;
+          }
+        };
+      });
+
+      $("sheetBox").style.display = "block";
+      $("viewMsg").textContent = `✅ Loaded daily sheet (${timesRows.length} tee times, ${bookingsRows.length} bookings)`;
+    }catch(e){
+      $("viewMsg").textContent = "❌ " + e.message;
+    }
+  }
+  /* ✅ END ADD */
+
   $("viewTimesBtn").onclick = viewTimes;
   $("viewBookingsBtn").onclick = viewBookings;
+
+  /* ✅ ADD */
+  $("viewSheetBtn").onclick = viewSheet;
+  /* ✅ END ADD */
+
   /* ✅ END ADD */
 
   $("refreshBtn").onclick = refresh;
