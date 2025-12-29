@@ -8,6 +8,9 @@ const router = express.Router();
 
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 
+// ✅ ADD (needed): ensure JSON bodies work for ALL routes in this router
+router.use(express.json());
+
 // ✅ Booking email (Resend)
 // Support multiple env keys so Render naming mismatches don't break bookings.
 const bookingFromRaw = String(
@@ -192,6 +195,26 @@ async function sendBookingEmail({
 }
 
 // -----------------------------
+// ✅ ADD (needed): Course admin auth helpers (PBKDF2 + cookies)
+// -----------------------------
+function hashPassword(password, saltHex = null) {
+  const salt = saltHex ? Buffer.from(saltHex, "hex") : crypto.randomBytes(16);
+  const derived = crypto.pbkdf2Sync(String(password), salt, 100000, 32, "sha256");
+  return { saltHex: salt.toString("hex"), hashHex: derived.toString("hex") };
+}
+function verifyPassword(password, saltHex, hashHex) {
+  const { hashHex: test } = hashPassword(password, saltHex);
+  return crypto.timingSafeEqual(Buffer.from(test, "hex"), Buffer.from(hashHex, "hex"));
+}
+function requireCourseAdmin(req, res, next) {
+  const slug = String(req.cookies?.tr_course_admin_slug || "");
+  const email = String(req.cookies?.tr_course_admin_email || "");
+  if (!slug || !email) return res.status(401).json({ ok: false, error: "not_course_admin" });
+  req.courseAdmin = { slug, email };
+  return next();
+}
+
+// -----------------------------
 // One-time table creation (safe)
 // -----------------------------
 async function ensureBookingTables() {
@@ -317,6 +340,235 @@ router.post("/admin/login", (req, res) => {
 router.post("/admin/logout", (req, res) => {
   res.clearCookie("tr_book_admin", { path: "/" });
   res.json({ ok: true });
+});
+
+// -----------------------------
+// ✅ ADD (needed): Course admin create/login/logout + bookings view
+// -----------------------------
+
+// Platform admin: create/update course admin user (stores PBKDF2 hash in booking_course_users)
+router.post("/admin/course-admin", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.body?.slug);
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
+
+    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+    if (!isLikelyEmail(email)) return res.status(400).json({ ok: false, error: "email_invalid" });
+    if (password.length < 8) return res.status(400).json({ ok: false, error: "password_min_8" });
+
+    const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+    const courseId = c.rows[0].id;
+
+    const { saltHex, hashHex } = hashPassword(password);
+
+    await db.query(
+      `
+      INSERT INTO booking_course_users (course_id, email, salt_hex, hash_hex)
+      VALUES ($1,$2,$3,$4)
+      ON CONFLICT (course_id, email)
+      DO UPDATE SET
+        salt_hex = EXCLUDED.salt_hex,
+        hash_hex = EXCLUDED.hash_hex
+      `,
+      [courseId, email, saltHex, hashHex]
+    );
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("admin/course-admin POST", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// Course admin: login
+router.post("/course-admin/login", async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
+
+    if (!isLikelyEmail(email) || !password) {
+      return res.status(400).json({ ok: false, error: "missing_email_password" });
+    }
+
+    const { rows } = await db.query(
+      `
+      SELECT cu.course_id, cu.email, cu.salt_hex, cu.hash_hex, c.slug
+      FROM booking_course_users cu
+      JOIN booking_courses c ON c.id = cu.course_id
+      WHERE lower(cu.email) = $1
+      ORDER BY cu.id DESC
+      LIMIT 1;
+      `,
+      [email]
+    );
+
+    if (!rows.length) return res.status(401).json({ ok: false, error: "invalid_login" });
+
+    const u = rows[0];
+    const ok = verifyPassword(password, u.salt_hex, u.hash_hex);
+    if (!ok) return res.status(401).json({ ok: false, error: "invalid_login" });
+
+    res.cookie("tr_course_admin_slug", String(u.slug), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+    res.cookie("tr_course_admin_email", String(u.email), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+
+    res.json({ ok: true, slug: u.slug });
+  } catch (e) {
+    console.error("course-admin/login", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// Course admin: logout
+router.post("/course-admin/logout", async (req, res) => {
+  res.clearCookie("tr_course_admin_slug", { path: "/" });
+  res.clearCookie("tr_course_admin_email", { path: "/" });
+  res.json({ ok: true });
+});
+
+// Platform admin: view bookings for a course (slug + optional date)
+router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.query.slug);
+    const date = String(req.query.date || "").trim();
+
+    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+
+    const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+    if (!c.rows.length) return res.json({ ok: true, bookings: [] });
+    const courseId = c.rows[0].id;
+
+    let rows = [];
+    if (date) {
+      const r = await db.query(
+        `
+        SELECT
+          $1::text AS course_slug,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name AS name,
+          b.golfer_email AS email,
+          b.golfer_phone AS phone,
+          b.status,
+          b.reference,
+          b.created_at
+        FROM booking_bookings b
+        WHERE b.course_id = $2 AND b.play_date = $3::date
+        ORDER BY b.tee_time ASC, b.created_at DESC
+        `,
+        [slug, courseId, date]
+      );
+      rows = r.rows || [];
+    } else {
+      const r = await db.query(
+        `
+        SELECT
+          $1::text AS course_slug,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name AS name,
+          b.golfer_email AS email,
+          b.golfer_phone AS phone,
+          b.status,
+          b.reference,
+          b.created_at
+        FROM booking_bookings b
+        WHERE b.course_id = $2
+        ORDER BY b.play_date DESC, b.tee_time ASC, b.created_at DESC
+        LIMIT 500
+        `,
+        [slug, courseId]
+      );
+      rows = r.rows || [];
+    }
+
+    res.json({ ok: true, bookings: rows });
+  } catch (e) {
+    console.error("admin/bookings GET", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// Course admin: view bookings for their own course (optional date)
+router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = req.courseAdmin.slug;
+    const date = String(req.query.date || "").trim();
+
+    const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+    if (!c.rows.length) return res.json({ ok: true, bookings: [], course_slug: slug });
+    const courseId = c.rows[0].id;
+
+    let rows = [];
+    if (date) {
+      const r = await db.query(
+        `
+        SELECT
+          $1::text AS course_slug,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name AS name,
+          b.golfer_email AS email,
+          b.golfer_phone AS phone,
+          b.status,
+          b.reference,
+          b.created_at
+        FROM booking_bookings b
+        WHERE b.course_id = $2 AND b.play_date = $3::date
+        ORDER BY b.tee_time ASC, b.created_at DESC
+        `,
+        [slug, courseId, date]
+      );
+      rows = r.rows || [];
+    } else {
+      const r = await db.query(
+        `
+        SELECT
+          $1::text AS course_slug,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name AS name,
+          b.golfer_email AS email,
+          b.golfer_phone AS phone,
+          b.status,
+          b.reference,
+          b.created_at
+        FROM booking_bookings b
+        WHERE b.course_id = $2
+        ORDER BY b.play_date DESC, b.tee_time ASC, b.created_at DESC
+        LIMIT 500
+        `,
+        [slug, courseId]
+      );
+      rows = r.rows || [];
+    }
+
+    res.json({ ok: true, bookings: rows, course_slug: slug });
+  } catch (e) {
+    console.error("course-admin/bookings GET", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
 });
 
 // -----------------------------
