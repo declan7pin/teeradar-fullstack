@@ -36,6 +36,55 @@ console.log("📧 booking email env check:", {
 });
 
 // -----------------------------
+// ✅ ADD (needed): cookie helpers (works even if cookie-parser isn’t installed)
+// -----------------------------
+function getCookie(req, name) {
+  // prefer cookie-parser if present
+  const fromParser =
+    req.cookies && typeof req.cookies[name] !== "undefined"
+      ? String(req.cookies[name])
+      : "";
+  if (fromParser) return fromParser;
+
+  const h = String(req.headers.cookie || "");
+  if (!h) return "";
+  const parts = h.split(";").map((s) => s.trim());
+  for (const p of parts) {
+    const i = p.indexOf("=");
+    if (i === -1) continue;
+    const k = p.slice(0, i).trim();
+    const v = p.slice(i + 1).trim();
+    if (k === name) return decodeURIComponent(v);
+  }
+  return "";
+}
+
+function isHttps(req) {
+  if (req.secure) return true;
+  const xf = String(req.headers["x-forwarded-proto"] || "").toLowerCase();
+  return xf.includes("https");
+}
+
+function setAuthCookie(res, name, value, req) {
+  res.cookie(name, value, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isHttps(req), // ✅ FIX: don’t force secure=true on http/testing
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: "/",
+  });
+}
+
+function clearAuthCookie(res, name, req) {
+  res.clearCookie(name, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isHttps(req),
+    path: "/",
+  });
+}
+
+// -----------------------------
 // Helpers
 // -----------------------------
 function normSlug(s) {
@@ -70,7 +119,12 @@ function requirePlatformAdmin(req, res, next) {
   if (!ADMIN_SECRET) {
     return res.status(500).json({ ok: false, error: "BOOKING_ADMIN_SECRET not set" });
   }
-  const token = String(req.cookies?.tr_book_admin || "");
+
+  // ✅ FIX: accept both cookie names + read raw cookie header if cookie-parser isn’t installed
+  const token =
+    String(getCookie(req, "tr_book_admin") || "") ||
+    String(getCookie(req, "teeradar_booking_admin") || "");
+
   if (token !== "1") return res.status(401).json({ ok: false, error: "not_authorized" });
   return next();
 }
@@ -207,8 +261,8 @@ function verifyPassword(password, saltHex, hashHex) {
   return crypto.timingSafeEqual(Buffer.from(test, "hex"), Buffer.from(hashHex, "hex"));
 }
 function requireCourseAdmin(req, res, next) {
-  const slug = String(req.cookies?.tr_course_admin_slug || "");
-  const email = String(req.cookies?.tr_course_admin_email || "");
+  const slug = String(getCookie(req, "tr_course_admin_slug") || "");
+  const email = String(getCookie(req, "tr_course_admin_email") || "");
   if (!slug || !email) return res.status(401).json({ ok: false, error: "not_course_admin" });
   req.courseAdmin = { slug, email };
   return next();
@@ -326,19 +380,17 @@ router.post("/admin/login", (req, res) => {
     return res.status(401).json({ ok: false, error: "invalid_secret" });
   }
 
-  res.cookie("tr_book_admin", "1", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    path: "/",
-  });
+  // ✅ FIX: set BOTH cookies + secure based on request protocol (stops “not_authorized”)
+  setAuthCookie(res, "tr_book_admin", "1", req);
+  setAuthCookie(res, "teeradar_booking_admin", "1", req);
 
   res.json({ ok: true });
 });
 
 router.post("/admin/logout", (req, res) => {
-  res.clearCookie("tr_book_admin", { path: "/" });
+  // ✅ FIX: clear BOTH cookies consistently
+  clearAuthCookie(res, "tr_book_admin", req);
+  clearAuthCookie(res, "teeradar_booking_admin", req);
   res.json({ ok: true });
 });
 
@@ -410,20 +462,8 @@ router.post("/course-admin/login", async (req, res) => {
     const ok = verifyPassword(password, u.salt_hex, u.hash_hex);
     if (!ok) return res.status(401).json({ ok: false, error: "invalid_login" });
 
-    res.cookie("tr_course_admin_slug", String(u.slug), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/",
-    });
-    res.cookie("tr_course_admin_email", String(u.email), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/",
-    });
+    setAuthCookie(res, "tr_course_admin_slug", String(u.slug), req);
+    setAuthCookie(res, "tr_course_admin_email", String(u.email), req);
 
     res.json({ ok: true, slug: u.slug });
   } catch (e) {
@@ -434,8 +474,8 @@ router.post("/course-admin/login", async (req, res) => {
 
 // Course admin: logout
 router.post("/course-admin/logout", async (req, res) => {
-  res.clearCookie("tr_course_admin_slug", { path: "/" });
-  res.clearCookie("tr_course_admin_email", { path: "/" });
+  clearAuthCookie(res, "tr_course_admin_slug", req);
+  clearAuthCookie(res, "tr_course_admin_email", req);
   res.json({ ok: true });
 });
 
