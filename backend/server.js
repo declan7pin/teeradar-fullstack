@@ -14,6 +14,10 @@ import cookieParser from "cookie-parser";
 // ✅ NEW: booking routes
 import bookingRoutes from "./bookingRoutes.js";
 
+// ✅✅✅ ADD (needed): booking views (view booked tee times / bookings) ✅✅✅
+import bookingViewsRouter from "./bookingViews.js";
+// ✅✅✅ END ADD ✅✅✅
+
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
 // Analytics (Postgres)
@@ -495,6 +499,10 @@ app.use(express.json());
 
 // ✅ NEW: cookies (needed for booking admin auth cookie)
 app.use(cookieParser());
+
+// ✅✅✅ ADD (needed): mount booking views router (bookings lists for admin + course admins) ✅✅✅
+app.use(bookingViewsRouter);
+// ✅✅✅ END ADD ✅✅✅
 
 app.use(express.static(path.join(__dirname, "..", "public")));
 
