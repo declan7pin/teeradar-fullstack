@@ -303,11 +303,16 @@
     <div class="card">
       <h3>Courses</h3>
       <button id="refreshBtn" class="secondary">Refresh list</button>
+      <!-- ✅ ADD: message line so you can see "not authorized" clearly -->
+      <div id="coursesMsg" class="muted" style="margin-top:10px;"></div>
       <ul id="courses" class="list"></ul>
     </div>
   </div>
 
 <script>
+  /* ✅ ADD: persist admin session via localStorage secret (fixes “courses not showing after reload”) */
+  const ADMIN_SECRET_KEY = "teeradar_booking_admin_secret";
+
   async function j(url, opts) {
     /* ✅ ADD: credentials include so the admin session cookie is sent (fixes “did not save” / 404 auth issues) */
     const res = await fetch(url, {
@@ -321,6 +326,14 @@
   }
 
   const $ = (id) => document.getElementById(id);
+
+  /* ✅ ADD: load saved secret into input */
+  (function(){
+    try{
+      const s = localStorage.getItem(ADMIN_SECRET_KEY) || "";
+      if (s && $("secret")) $("secret").value = s;
+    }catch{}
+  })();
 
   // ✅ NEW: local preview generator (no backend needed)
   function pad2(n){ return String(n).padStart(2,"0"); }
@@ -353,7 +366,13 @@
   $("loginBtn").onclick = async () => {
     $("loginMsg").textContent = "Logging in...";
     try {
-      await j("/api/book/admin/login", { method:"POST", body: JSON.stringify({ secret: $("secret").value }) });
+      const secret = $("secret").value || "";
+      if (!secret.trim()) throw new Error("Missing admin secret");
+      await j("/api/book/admin/login", { method:"POST", body: JSON.stringify({ secret }) });
+
+      /* ✅ ADD: save secret so refresh() works after reload without retyping */
+      try { localStorage.setItem(ADMIN_SECRET_KEY, secret); } catch {}
+
       $("loginMsg").textContent = "✅ Logged in";
       await refresh();
     } catch (e) {
@@ -364,7 +383,14 @@
   $("logoutBtn").onclick = async () => {
     try {
       await j("/api/book/admin/logout", { method:"POST", body:"{}" });
+
+      /* ✅ ADD */
+      try { localStorage.removeItem(ADMIN_SECRET_KEY); } catch {}
+      /* ✅ END ADD */
+
       $("loginMsg").textContent = "Logged out";
+      if ($("coursesMsg")) $("coursesMsg").textContent = "Logged out";
+      $("courses").innerHTML = "";
     } catch (e) {
       $("loginMsg").textContent = "❌ " + e.message;
     }
@@ -795,16 +821,24 @@
   $("viewSheetBtn").onclick = viewSheet;
   /* ✅ END ADD */
 
-  /* ✅ END ADD */
-
   $("refreshBtn").onclick = refresh;
 
   async function refresh() {
     const ul = $("courses");
     ul.innerHTML = "";
+    if ($("coursesMsg")) $("coursesMsg").textContent = "Loading courses...";
     try {
       const out = await j("/api/book/admin/courses");
-      (out.courses || []).forEach(c => {
+
+      const list = (out.courses || []);
+      if (!Array.isArray(list) || !list.length){
+        if ($("coursesMsg")) $("coursesMsg").textContent = "✅ No courses yet (create one above).";
+        return;
+      }
+
+      if ($("coursesMsg")) $("coursesMsg").textContent = `✅ Loaded ${list.length} courses`;
+
+      list.forEach(c => {
         const li = document.createElement("li");
         li.innerHTML =
           `<b>${c.name}</b> — <code>${c.slug}</code> — <a href="/book/${c.slug}">open</a>` +
@@ -877,6 +911,7 @@
       });
 
     } catch (e) {
+      if ($("coursesMsg")) $("coursesMsg").textContent = "❌ " + e.message + " (login first)";
       const li = document.createElement("li");
       li.textContent = "❌ " + e.message + " (login first)";
       ul.appendChild(li);
@@ -899,6 +934,7 @@
     }catch{}
   })();
 
+  /* ✅ ADD: try refresh immediately; if it fails, you can just hit Login */
   refresh();
 </script>
 </body>
