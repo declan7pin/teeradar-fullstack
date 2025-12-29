@@ -338,6 +338,26 @@
       color:var(--muted);
       font-weight:800;
     }
+
+    /* ✅ NEW: player names inputs */
+    .namesGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top:10px;
+    }
+    @media (max-width:520px){
+      .namesGrid{grid-template-columns:1fr}
+    }
+    .nameHint{
+      margin-top:6px;
+      font-weight:800;
+      color:var(--muted);
+    }
+    .readonly{
+      opacity:.95;
+      background:#f8fafc !important;
+    }
   </style>
 </head>
 <body>
@@ -345,19 +365,18 @@
     <div class="brand">
       TeeRadar <small>My Rounds</small>
     </div>
-<div class="navbtns">
-  <a class="btn secondary" href="/book.html">Back to Book</a>
-  <a class="btn secondary" href="/account.html">Account</a>
+    <div class="navbtns">
+      <a class="btn secondary" href="/book.html">Back to Book</a>
+      <a class="btn secondary" href="/account.html">Account</a>
 
-  <!-- ✅ ADD THIS -->
-  <a class="btn secondary"
-     href="/mystats.html"
-     onclick="sessionStorage.setItem('fromMyRounds','1')">
-     My Stats
-  </a>
+      <a class="btn secondary"
+        href="/mystats.html"
+        onclick="sessionStorage.setItem('fromMyRounds','1')">
+        My Stats
+      </a>
 
-  <button class="btn danger" id="logoutBtn" type="button">Logout</button>
-</div>
+      <button class="btn danger" id="logoutBtn" type="button">Logout</button>
+    </div>
   </header>
 
   <main>
@@ -466,7 +485,7 @@
             </div>
           </div>
 
-          <!-- ✅ NEW: Players selector -->
+          <!-- ✅ Players selector -->
           <div class="row">
             <div>
               <label for="players">Players</label>
@@ -481,6 +500,15 @@
               </div>
             </div>
             <div></div>
+          </div>
+
+          <!-- ✅ NEW: Player names (P1 auto = logged-in user; others editable) -->
+          <div id="playerNamesWrap" style="display:none;">
+            <label>Player names</label>
+            <div class="namesGrid" id="namesGrid"></div>
+            <div class="nameHint">
+              P1 is always your account (auto-filled). Names are saved per-round in this browser.
+            </div>
           </div>
 
           <label for="notes">Notes (optional)</label>
@@ -536,7 +564,7 @@
               </table>
             </div>
 
-            <!-- ✅ NEW: per-player totals -->
+            <!-- ✅ per-player totals -->
             <div class="totalsGrid" id="totalsGrid"></div>
 
             <div class="muted" style="margin-top:10px; font-weight:800;">
@@ -564,6 +592,32 @@
         if (v && String(v).trim().length > 10) return String(v).trim();
       }
       return "";
+    }
+
+    // ✅ NEW: decode JWT payload safely (no verification needed client-side)
+    function decodeJwtPayload(token){
+      try{
+        const parts = String(token||"").split(".");
+        if (parts.length < 2) return null;
+        const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const pad = b64.length % 4 ? "=".repeat(4 - (b64.length % 4)) : "";
+        const json = atob(b64 + pad);
+        return JSON.parse(json);
+      }catch{
+        return null;
+      }
+    }
+
+    // ✅ NEW: get logged-in email/name from token
+    function getUserFromToken(){
+      const token = getToken();
+      const p = decodeJwtPayload(token) || {};
+      const email = String(p.email || p.userEmail || p.sub || "").trim().toLowerCase();
+      // prefer explicit name fields if present
+      const nice =
+        String(p.name || p.fullName || p.displayName || "").trim() ||
+        (email ? email.split("@")[0] : "");
+      return { email: email || "", name: nice || "" };
     }
 
     function setToast(el, msg, ok=true){
@@ -597,29 +651,25 @@
 
     // -----------------------------
     // ✅ Analytics (minimal + safe)
-    // ✅ IMPORTANT: send { type, at, payload } (matches your backend)
     // -----------------------------
     async function logAnalyticsEvent(type, payload = {}) {
-  try {
-    // ✅ MUST be { type, at, payload } for your backend
-    // ✅ Include BOTH roundId + round_id so the dashboard can dedupe either way
-    const safePayload = payload && typeof payload === "object" ? payload : {};
-    if (safePayload.roundId != null && safePayload.round_id == null) safePayload.round_id = safePayload.roundId;
-    if (safePayload.round_id != null && safePayload.roundId == null) safePayload.roundId = safePayload.round_id;
+      try {
+        const safePayload = payload && typeof payload === "object" ? payload : {};
+        if (safePayload.roundId != null && safePayload.round_id == null) safePayload.round_id = safePayload.roundId;
+        if (safePayload.round_id != null && safePayload.roundId == null) safePayload.roundId = safePayload.round_id;
 
-    await api("/api/analytics/event", {
-      method: "POST",
-      body: JSON.stringify({
-        type,
-        at: new Date().toISOString(),
-        payload: safePayload
-      })
-    });
-  } catch (e) {
-    // keep silent so UX never breaks
-    console.warn("Analytics event failed:", type, e?.message || e);
-  }
-}
+        await api("/api/analytics/event", {
+          method: "POST",
+          body: JSON.stringify({
+            type,
+            at: new Date().toISOString(),
+            payload: safePayload
+          })
+        });
+      } catch (e) {
+        console.warn("Analytics event failed:", type, e?.message || e);
+      }
+    }
 
     function hasAnyStrokesEntered(holesRows) {
       try {
@@ -634,14 +684,12 @@
       }
     }
 
-    /* ✅ ONLY CHANGE NEEDED: make localStorage key + id handling work for UUID or numeric IDs */
     function markRoundPlayedLogged(roundId) {
       try { localStorage.setItem(`round_played_logged_${String(roundId)}`, "1"); } catch {}
     }
     function wasRoundPlayedLogged(roundId) {
       try { return localStorage.getItem(`round_played_logged_${String(roundId)}`) === "1"; } catch { return false; }
     }
-    /* ✅ END ONLY CHANGE */
 
     // -----------------------------
     // State
@@ -664,6 +712,31 @@
     let uiNineSingle = "";
     let uiNineFront = "";
     let uiNineBack = "";
+
+    // ✅ NEW: player names (P1 is user and readonly)
+    const playerNames = ["","","",""]; // indexes 0..3 for P1..P4
+    function roundNamesKey(roundId){ return `round_player_names_${String(roundId)}`; }
+    function saveNamesForRound(roundId){
+      try{
+        const id = String(roundId||"").trim();
+        if (!id) return;
+        localStorage.setItem(roundNamesKey(id), JSON.stringify(playerNames));
+      }catch{}
+    }
+    function loadNamesForRound(roundId){
+      try{
+        const id = String(roundId||"").trim();
+        if (!id) return;
+        const raw = localStorage.getItem(roundNamesKey(id));
+        if (!raw) return;
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)){
+          for (let i=0;i<4;i++){
+            if (typeof arr[i] === "string") playerNames[i] = arr[i];
+          }
+        }
+      }catch{}
+    }
 
     // -----------------------------
     // UI refs
@@ -718,6 +791,10 @@
 
     const courseAutoList = document.getElementById("courseAutoList");
 
+    // ✅ NEW refs
+    const playerNamesWrap = document.getElementById("playerNamesWrap");
+    const namesGrid = document.getElementById("namesGrid");
+
     // -----------------------------
     // Helpers
     // -----------------------------
@@ -745,20 +822,11 @@
       return s;
     }
 
-    // ✅ NEW: stronger normaliser so "Collier Park Golf Course (18 holes)" matches "Collier Park Golf Course"
     function normalizeCourseForMatch(name){
       let s = String(name || "").toLowerCase().trim();
-
-      // remove trailing parentheses blocks (common in your UI)
       s = s.replace(/\s*\([^)]*\)\s*$/g, " ");
-
-      // remove "9 holes/18 holes" anywhere
       s = s.replace(/\b(9|18)\s*holes?\b/g, " ");
-
-      // remove common venue words that differ between sources
       s = s.replace(/\b(golf\s*course|golf\s*club|golf\s*complex|golf\s*links|golf)\b/g, " ");
-
-      // normalize punctuation/spaces
       s = s.replace(/[^a-z0-9\s]/g, " ");
       s = s.replace(/\s+/g, " ").trim();
       return s;
@@ -769,24 +837,18 @@
       const B = normalizeCourseForMatch(b);
       if (!A || !B) return false;
       if (A === B) return true;
-
-      // allow contains match when one side has extra descriptors
       if (A.length >= 6 && B.length >= 6){
         if (A.includes(B) || B.includes(A)) return true;
       }
       return false;
     }
 
-    // ✅ NEW: derive a *unique* 9-name label from the scorecard course text
-    // Works with: "Collier Park Golf Course (Pines - 9 holes)" even if layout="9 Holes"
     function nineLabelFromScorecard(sc){
       const raw = String(sc?.course || sc?.name || "").trim();
       const m = raw.match(/\(([^)]+)\)\s*$/);
       let label = m ? String(m[1] || "").trim() : "";
       if (!label) label = String(sc?.layout || "").trim();
       if (!label) label = raw;
-
-      // clean common suffixes
       label = label.replace(/\b(9|18)\s*holes?\b/ig, "").replace(/\s*-\s*$/g, "").trim();
       label = label.replace(/\s+/g, " ").trim();
       return label;
@@ -855,8 +917,6 @@
       return Object.keys(distObj).filter(k => Array.isArray(distObj[k]) && distObj[k].length);
     }
 
-    // ✅ UPDATED: returns unique 9 labels (Pines/Lakes/Island etc), NOT sc.layout
-    // ✅ FIXED: uses tolerant course name matching
     function find9LayoutsForCourse(state, course){
       const st = String(state || "").toUpperCase();
       const arr = scorecardsByState.get(st) || [];
@@ -864,10 +924,8 @@
       const labels = new Map(); // lower -> display
       for (const sc of arr){
         if (Number(sc.holes) !== 9) continue;
-
         const scName = sc.course || sc.name || "";
         if (!courseNamesMatch(scName, course)) continue;
-
         const lab = nineLabelFromScorecard(sc);
         if (!lab) continue;
         labels.set(lab.toLowerCase(), lab);
@@ -875,8 +933,6 @@
       return Array.from(labels.values()).sort((a,b)=>a.localeCompare(b));
     }
 
-    // ✅ UPDATED: match 9 by our derived label
-    // ✅ FIXED: uses tolerant course name matching
     function getScorecard9(state, course, nineLabel){
       const st = String(state || "").toUpperCase();
       const arr = scorecardsByState.get(st) || [];
@@ -885,10 +941,8 @@
 
       for (const sc of arr){
         if (Number(sc.holes) !== 9) continue;
-
         const scName = sc.course || sc.name || "";
         if (!courseNamesMatch(scName, course)) continue;
-
         const lab = nineLabelFromScorecard(sc).toLowerCase();
         if (lab === target) return sc;
       }
@@ -911,7 +965,6 @@
       }
     }
 
-    // ✅ NEW: for 18 holes prevent picking the same 9 twice
     function ensureDifferentFrontBack(layouts9){
       if (!Array.isArray(layouts9) || layouts9.length < 2) return;
       if (uiNineFront && uiNineBack && uiNineFront.toLowerCase() === uiNineBack.toLowerCase()){
@@ -1008,6 +1061,58 @@
     }
 
     // -----------------------------
+    // ✅ NEW: Player names UI (P1 always user)
+    // -----------------------------
+    function ensureP1IsUser(){
+      const u = getUserFromToken();
+      const display = (u.name || u.email || "").trim();
+      if (display) playerNames[0] = display;
+    }
+
+    function renderPlayerNamesUI(){
+      const pc = clamp(playersEl?.value || 1, 1, 4);
+
+      ensureP1IsUser();
+
+      if (!playerNamesWrap || !namesGrid) return;
+
+      playerNamesWrap.style.display = (pc >= 1) ? "block" : "none";
+      namesGrid.innerHTML = "";
+
+      for (let i=0; i<pc; i++){
+        const num = i+1;
+        const wrap = document.createElement("div");
+
+        const lab = document.createElement("label");
+        lab.textContent = `Player ${num} name`;
+        lab.style.margin = "0 0 6px 0";
+
+        const inp = document.createElement("input");
+        inp.placeholder = (num === 1) ? "Your name" : `Enter Player ${num} name`;
+        inp.value = playerNames[i] || "";
+        inp.dataset.player = String(num);
+
+        if (num === 1){
+          inp.readOnly = true;
+          inp.classList.add("readonly");
+          inp.title = "P1 is always your account";
+        } else {
+          inp.addEventListener("input", () => {
+            playerNames[i] = String(inp.value || "").trim();
+            // if a round is selected, save immediately to that round
+            if (currentRoundId) saveNamesForRound(currentRoundId);
+            // also refresh header labels
+            if (currentRoundId && currentRound) renderScorecard(currentRound);
+          });
+        }
+
+        wrap.appendChild(lab);
+        wrap.appendChild(inp);
+        namesGrid.appendChild(wrap);
+      }
+    }
+
+    // -----------------------------
     // ✅ Build the nines + tee dropdowns from scorecards
     // -----------------------------
     async function refreshNinesAndTeesUI(){
@@ -1025,7 +1130,6 @@
 
       const layouts9 = find9LayoutsForCourse(state, course);
 
-      // If the course has 9-hole layouts saved, show dropdowns
       if (layouts9.length){
         ninesWrap.style.display = "block";
         teeWrap.style.display = "block";
@@ -1043,11 +1147,10 @@
 
           setSelectOptions(nineFrontEl, layouts9, null);
 
-          // back options should exclude the selected front
           const frontLower = String(uiNineFront || "").toLowerCase();
           let backOptions = layouts9.slice();
           if (frontLower) backOptions = layouts9.filter(x => x.toLowerCase() !== frontLower);
-          if (backOptions.length === 0) backOptions = layouts9.slice(); // safety
+          if (backOptions.length === 0) backOptions = layouts9.slice();
           setSelectOptions(nineBackEl, backOptions, null);
 
           if (!uiNineFront || !layouts9.some(x => x.toLowerCase() === uiNineFront.toLowerCase())) uiNineFront = layouts9[0] || "";
@@ -1057,7 +1160,6 @@
 
           nineFrontEl.value = uiNineFront;
 
-          // rebuild back options after ensuring front
           const frontLower2 = String(uiNineFront || "").toLowerCase();
           let backOptions2 = layouts9.filter(x => x.toLowerCase() !== frontLower2);
           if (!backOptions2.length) backOptions2 = layouts9.slice();
@@ -1069,7 +1171,6 @@
           nineBackEl.value = uiNineBack;
         }
 
-        // tee options from selected 9(s)
         let tees = [];
         if (holes === 9){
           const sc9 = getScorecard9(state, course, uiNineSingle);
@@ -1083,7 +1184,6 @@
           tees = inter.length ? inter : Array.from(new Set([...a, ...b]));
         }
 
-        // if still none, fallback to anything found for that course/state
         if (!tees.length){
           const arr = scorecardsByState.get(state) || [];
           for (const sc of arr){
@@ -1102,23 +1202,19 @@
         }
         teeSelect.value = uiSelectedTee;
 
-        // Keep layout input in sync so backend stores the selection
         if (holes === 9){
           layoutEl.value = uiNineSingle || layoutEl.value;
         } else {
           layoutEl.value = (uiNineFront && uiNineBack) ? `${uiNineFront} - ${uiNineBack}` : layoutEl.value;
         }
 
-        // hide the old “front/back 9” helper if we're using explicit 9 dropdowns
         nineLoopWrap.style.display = "none";
       } else {
-        // no 9-layout scorecards found -> fallback to existing behaviour
         ninesWrap.style.display = "none";
         teeWrap.style.display = "none";
         syncNineLoopVisibility();
       }
 
-      // If a round is loaded, re-render distances immediately
       if (currentRoundId && currentRound) {
         await renderScorecard(currentRound);
       }
@@ -1139,7 +1235,6 @@
 
     nineFrontEl.addEventListener("change", async () => {
       uiNineFront = String(nineFrontEl.value || "").trim();
-      // force back to change if it would match front
       await refreshNinesAndTeesUI();
     });
 
@@ -1263,7 +1358,6 @@
         }
       }
 
-      // fallback (original behaviour): try 18-hole or 9-hole scorecard by name/layout
       const layout = String(roundLike?.layout || "").trim().toLowerCase();
       const nineLoop = String(roundLike?.nineLoop || "").trim().toLowerCase();
 
@@ -1347,6 +1441,14 @@
     // -----------------------------
     // Scorecard rendering
     // -----------------------------
+    function playerLabel(pIndex){
+      const n = String(playerNames[pIndex] || "").trim();
+      if (!n) return `P${pIndex+1}`;
+      // keep headers compact
+      const short = n.length > 14 ? (n.slice(0, 14) + "…") : n;
+      return `P${pIndex+1} • ${short}`;
+    }
+
     function buildScoreHead(playersCount, teeLabel){
       const pc = clamp(playersCount, 1, 4);
 
@@ -1356,7 +1458,7 @@
         <th rowspan="2">Dist <span class="distMuted">(m${teeLabel ? " • " + escapeHtml(teeLabel) : ""})</span></th>
       `;
       for (let p=1; p<=pc; p++){
-        th1 += `<th colspan="2">P${p}</th>`;
+        th1 += `<th colspan="2">${escapeHtml(playerLabel(p-1))}</th>`;
       }
       th1 += `</tr>`;
 
@@ -1373,6 +1475,9 @@
       currentRound = round;
       currentRoundId = round?.id || null;
 
+      // ✅ ensure P1 is user always
+      ensureP1IsUser();
+
       if (!round || !currentRoundId) {
         scorecardEmpty.style.display = "block";
         scorecardWrap.style.display = "none";
@@ -1386,6 +1491,11 @@
         scoreBody.innerHTML = "";
         return;
       }
+
+      // ✅ load per-round names from localStorage
+      loadNamesForRound(currentRoundId);
+      ensureP1IsUser();
+      renderPlayerNamesUI();
 
       scorecardEmpty.style.display = "none";
       scorecardWrap.style.display = "block";
@@ -1427,7 +1537,6 @@
 
           ensureDifferentFrontBack(layouts9);
 
-          // build front, then back excluding front
           setSelectOptions(nineFrontEl, layouts9, null);
           nineFrontEl.value = uiNineFront;
 
@@ -1598,9 +1707,10 @@
           ? "—"
           : (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+" + totals.toPar : "" + totals.toPar));
 
+        const label = playerLabel(pi);
         const pill = document.createElement("span");
         pill.className = "pill";
-        pill.textContent = `P${pi+1}: Strokes ${totals.strokes ?? "—"} • Putts ${totals.putts ?? "—"} • To Par ${toParLabel}`;
+        pill.textContent = `${label}: Strokes ${totals.strokes ?? "—"} • Putts ${totals.putts ?? "—"} • To Par ${toParLabel}`;
         totalsGrid.appendChild(pill);
       }
     }
@@ -1623,6 +1733,12 @@
       const round = data.round || data;
       const holesArr = data.holes || data.holesData || round.holesData || round.holes || [];
       round.holesData = holesArr || [];
+
+      // ✅ load + show names for this round
+      loadNamesForRound(round.id);
+      ensureP1IsUser();
+      renderPlayerNamesUI();
+
       await renderScorecard(round);
     }
 
@@ -1639,6 +1755,10 @@
         setToast(leftToast, "Please enter a course name.", false);
         return;
       }
+
+      // ✅ ensure names UI is synced + P1 user
+      ensureP1IsUser();
+      renderPlayerNamesUI();
 
       const hasNinesUI = ninesWrap && ninesWrap.style.display !== "none";
 
@@ -1679,21 +1799,24 @@
 
       await safeFetchRounds();
       if (newId) {
+        // ✅ save names for this new round locally
+        saveNamesForRound(newId);
+
         await safeLoadRound(newId);
 
-        // ✅ optional: record round_created (doesn't affect roundsPlayed)
-        /* ✅ ONLY CHANGE NEEDED: don't Number() the id (it may be a UUID) */
         await logAnalyticsEvent("round_created", {
           roundId: String(newId),
           round_id: String(newId),
           courseName: course || null
         });
-        /* ✅ END ONLY CHANGE */
       }
     }
 
     async function saveRoundAll(){
       if (!currentRoundId) return;
+
+      // ✅ save names per-round before saving scores (so it's never lost)
+      saveNamesForRound(currentRoundId);
 
       const holesRows = readTableHoles();
       const payload = { holes: holesRows };
@@ -1703,8 +1826,6 @@
         body: JSON.stringify(payload)
       });
 
-      // ✅ Record "round_played" once per round (needed for Rounds Played card)
-      // ✅ ONLY CHANGE NEEDED: use string id so UUID works (Number(uuid) => NaN)
       const rid = String(currentRoundId || "").trim();
       if (rid) {
         const already = wasRoundPlayedLogged(rid);
@@ -1713,7 +1834,7 @@
         if (!already && hasStrokes) {
           await logAnalyticsEvent("round_played", {
             roundId: rid,
-            round_id: rid,                 // ✅ snake-case too (dashboard dedupe safety)
+            round_id: rid,
             course: currentRound?.course || null,
             courseName: currentRound?.course || null,
             state: currentRound?.state || null,
@@ -1722,7 +1843,6 @@
           markRoundPlayedLogged(rid);
         }
       }
-      // ✅ END ONLY CHANGE
 
       setToast(rightToast, "Saved.", true);
       await safeFetchRounds();
@@ -1732,6 +1852,9 @@
       if (!currentRoundId) return;
 
       await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, { method:"DELETE" });
+
+      // ✅ clean up local names for this round
+      try { localStorage.removeItem(roundNamesKey(currentRoundId)); } catch {}
 
       setToast(rightToast, "Round deleted.", true);
 
@@ -1801,6 +1924,13 @@
       await refreshNinesAndTeesUI();
     });
 
+    // ✅ NEW: when players changes, show name inputs + re-render scorecard header if needed
+    playersEl.addEventListener("change", () => {
+      ensureP1IsUser();
+      renderPlayerNamesUI();
+      if (currentRoundId && currentRound) renderScorecard(currentRound);
+    });
+
     (async function init(){
       const token = getToken();
       if (!token) {
@@ -1808,6 +1938,10 @@
         appEl.style.display = "none";
         return;
       }
+
+      // ✅ set P1 from token at boot
+      ensureP1IsUser();
+      renderPlayerNamesUI();
 
       authGate.style.display = "none";
       appEl.style.display = "block";
