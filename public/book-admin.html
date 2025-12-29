@@ -23,6 +23,14 @@
     .actions a, .actions button{font-size:13px}
     button.small{padding:8px 10px;border-radius:10px}
     button.danger{background:#b91c1c}
+
+    /* ✅ ADD: tables for viewing times + bookings */
+    .tableWrap{overflow:auto;border:1px solid #e2e8f0;border-radius:12px;background:#fff;margin-top:10px}
+    table{width:100%;border-collapse:separate;border-spacing:0;min-width:760px}
+    th,td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;font-size:13px;white-space:nowrap}
+    th{background:#f8fafc;font-weight:800;position:sticky;top:0;z-index:1}
+    tr:last-child td{border-bottom:none}
+    .right{text-align:right}
   </style>
 </head>
 <body>
@@ -180,6 +188,74 @@
       <div id="adminMsg" class="muted" style="margin-top:10px;"></div>
     </div>
 
+    <!-- ✅ ADD: View tee times + bookings (admin) -->
+    <div class="card">
+      <h3>View Tee Times / Bookings</h3>
+      <p class="muted">View what’s been generated and what’s been booked (requires backend endpoints).</p>
+
+      <div class="row">
+        <div>
+          <label class="muted">Course Slug</label>
+          <input id="vSlug" placeholder="hillview  or  marri-park" />
+        </div>
+        <div>
+          <label class="muted">Play Date (optional)</label>
+          <input id="vDate" type="date" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="viewTimesBtn" class="secondary small">View tee times</button>
+        <button id="viewBookingsBtn" class="secondary small">View bookings</button>
+      </div>
+
+      <div id="viewMsg" class="muted" style="margin-top:10px;"></div>
+
+      <div id="timesBox" style="display:none;">
+        <div class="muted" style="margin-top:10px;font-weight:700;">Tee times</div>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Holes</th>
+                <th>Status</th>
+                <th class="right">Max</th>
+                <th class="right">Price (c)</th>
+              </tr>
+            </thead>
+            <tbody id="timesBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="bookingsBox" style="display:none;">
+        <div class="muted" style="margin-top:12px;font-weight:700;">Bookings</div>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Holes</th>
+                <th class="right">Players</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th class="right">Total (c)</th>
+                <th>Ref</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="bookingsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <!-- ✅ END ADD -->
+
     <div class="card">
       <h3>Courses</h3>
       <button id="refreshBtn" class="secondary">Refresh list</button>
@@ -189,7 +265,12 @@
 
 <script>
   async function j(url, opts) {
-    const res = await fetch(url, { headers:{ "Content-Type":"application/json" }, ...opts });
+    /* ✅ ADD: credentials include so the admin session cookie is sent (fixes “did not save” / 404 auth issues) */
+    const res = await fetch(url, {
+      headers:{ "Content-Type":"application/json" },
+      credentials: "include",
+      ...opts
+    });
     const data = await res.json().catch(()=> ({}));
     if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
     return data;
@@ -328,7 +409,7 @@
       const prev = buildTimes(start, end, intervalMins);
       if(!prev.ok) throw new Error(prev.error);
 
-      // 🔥 This expects your backend route from Step 2:
+      // 🔥 This expects your backend route:
       // POST /api/book/admin/generate-times
       const out = await j("/api/book/admin/generate-times", {
         method: "POST",
@@ -399,6 +480,103 @@
     }
   };
 
+  /* ✅ ADD: view helpers */
+  function fmtDT(s){
+    try{
+      const d = new Date(s);
+      if (String(d) === "Invalid Date") return s || "";
+      return d.toLocaleString();
+    }catch{ return s || ""; }
+  }
+  function clearViewBoxes(){
+    $("viewMsg").textContent = "";
+    $("timesBody").innerHTML = "";
+    $("bookingsBody").innerHTML = "";
+    $("timesBox").style.display = "none";
+    $("bookingsBox").style.display = "none";
+  }
+  async function viewTimes(){
+    clearViewBoxes();
+    const slug = ($("vSlug").value || "").trim();
+    const date = ($("vDate").value || "").trim();
+    if (!slug) { $("viewMsg").textContent = "❌ course slug is required"; return; }
+    $("viewMsg").textContent = "Loading tee times...";
+    try{
+      // expects: GET /api/book/admin/times?slug=...&date=... (date optional)
+      const qs = new URLSearchParams({ slug });
+      if (date) qs.set("date", date);
+      const out = await j("/api/book/admin/times?" + qs.toString(), { method:"GET" });
+
+      const rows = (out && (out.times || out.rows || out.data)) || [];
+      if (!Array.isArray(rows) || !rows.length){
+        $("viewMsg").textContent = "✅ No tee times found (try another date or generate first).";
+        return;
+      }
+      $("viewMsg").textContent = `✅ Loaded ${rows.length} tee times`;
+      $("timesBox").style.display = "block";
+      const tb = $("timesBody");
+      rows.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${(r.play_date || r.date || "")}</td>
+          <td>${(r.tee_time || r.time || "")}</td>
+          <td>${(r.holes ?? "")}</td>
+          <td>${(r.status || "")}</td>
+          <td class="right">${(r.max_players ?? "")}</td>
+          <td class="right">${(r.price_per_player_cents ?? "")}</td>
+        `;
+        tb.appendChild(tr);
+      });
+    }catch(e){
+      $("viewMsg").textContent = "❌ " + e.message;
+    }
+  }
+  async function viewBookings(){
+    clearViewBoxes();
+    const slug = ($("vSlug").value || "").trim();
+    const date = ($("vDate").value || "").trim();
+    if (!slug) { $("viewMsg").textContent = "❌ course slug is required"; return; }
+    $("viewMsg").textContent = "Loading bookings...";
+    try{
+      // expects: GET /api/book/admin/bookings?slug=...&date=... (date optional)
+      const qs = new URLSearchParams({ slug });
+      if (date) qs.set("date", date);
+      const out = await j("/api/book/admin/bookings?" + qs.toString(), { method:"GET" });
+
+      const rows = (out && (out.bookings || out.rows || out.data)) || [];
+      if (!Array.isArray(rows) || !rows.length){
+        $("viewMsg").textContent = "✅ No bookings found for this course/date yet.";
+        return;
+      }
+      $("viewMsg").textContent = `✅ Loaded ${rows.length} bookings`;
+      $("bookingsBox").style.display = "block";
+      const tb = $("bookingsBody");
+      rows.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${fmtDT(r.created_at || "")}</td>
+          <td>${(r.play_date || r.date || "")}</td>
+          <td>${(r.tee_time || r.time || "")}</td>
+          <td>${(r.holes ?? "")}</td>
+          <td class="right">${(r.players ?? "")}</td>
+          <td>${(r.golfer_name || "")}</td>
+          <td>${(r.golfer_email || "")}</td>
+          <td>${(r.golfer_phone || "")}</td>
+          <td class="right">${(r.total_cents ?? "")}</td>
+          <td><code>${(r.reference || "")}</code></td>
+          <td>${(r.status || "")}</td>
+        `;
+        tb.appendChild(tr);
+      });
+    }catch(e){
+      $("viewMsg").textContent = "❌ " + e.message;
+    }
+  }
+
+  $("viewTimesBtn").onclick = viewTimes;
+  $("viewBookingsBtn").onclick = viewBookings;
+  /* ✅ END ADD */
+
   $("refreshBtn").onclick = refresh;
 
   async function refresh() {
@@ -412,6 +590,8 @@
           `<b>${c.name}</b> — <code>${c.slug}</code> — <a href="/book/${c.slug}">open</a>` +
           `<div class="actions">` +
           `<button class="small secondary" data-fill="${c.slug}">Use for generator</button>` +
+          `<button class="small secondary" data-viewtimes="${c.slug}">View times</button>` +
+          `<button class="small secondary" data-viewbookings="${c.slug}">View bookings</button>` +
           `<button class="small danger" data-delcourse="${c.slug}">Delete course</button>` +
           `</div>`;
         ul.appendChild(li);
@@ -428,9 +608,33 @@
           // ✅ also fill delete box
           $("dSlug").value = s;
 
+          // ✅ also fill view box
+          $("vSlug").value = s;
+
           $("previewBox").textContent = "";
           $("genMsg").textContent = "";
           $("delMsg").textContent = "";
+          clearViewBoxes();
+        };
+      });
+
+      // ✅ quick view times from list
+      ul.querySelectorAll("button[data-viewtimes]").forEach(btn => {
+        btn.onclick = async () => {
+          const s = btn.getAttribute("data-viewtimes") || "";
+          if (!s) return;
+          $("vSlug").value = s;
+          await viewTimes();
+        };
+      });
+
+      // ✅ quick view bookings from list
+      ul.querySelectorAll("button[data-viewbookings]").forEach(btn => {
+        btn.onclick = async () => {
+          const s = btn.getAttribute("data-viewbookings") || "";
+          if (!s) return;
+          $("vSlug").value = s;
+          await viewBookings();
         };
       });
 
@@ -469,6 +673,9 @@
       const today = `${yyyy}-${mm}-${dd}`;
       $("gDate").value = today;
       $("dDate").value = today;
+
+      /* ✅ ADD: also set view date */
+      $("vDate").value = today;
     }catch{}
   })();
 
