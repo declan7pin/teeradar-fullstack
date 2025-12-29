@@ -487,13 +487,16 @@
     $("modalWrap").style.display = "flex";
   }
 
-  function showBookingConfirmation(data, name, email) {
+  function showBookingConfirmation(data, email) {
     $("modalTitle").textContent = "✅ Booking confirmed";
     $("detailsGrid").style.display = "none"; // hide inputs after success
 
-    const emailMsg = data && data.emailSent
+    /* ✅ ADD: match bookingRoutes response fields (emailOk/emailReason) */
+    const emailOk = !!(data && data.emailOk);
+    const reason = (data && data.emailReason) ? String(data.emailReason) : "";
+    const emailMsg = emailOk
       ? `📧 Confirmation email sent to ${email}`
-      : `📧 Email not sent (check server email settings)`;
+      : `📧 Email not sent${reason ? ` (${reason})` : ""}`;
 
     $("modalSub").innerHTML =
       `Reference: <b>${data.reference}</b><br/>` +
@@ -522,7 +525,7 @@
 
     const nameRaw = ($("bName").value || "").trim();
     const name = nameRaw.replace(/\s+/g, " ");
-    const email = ($("bEmail").value || "").trim();
+    const email = ($("bEmail").value || "").trim().toLowerCase();
     const phone = ($("bPhone").value || "").trim();
 
     if (!isFullName(name)) {
@@ -560,7 +563,7 @@
       }
 
       // Show confirmation popup (in-modal)
-      showBookingConfirmation(data, name, email);
+      showBookingConfirmation(data, email);
 
       // Also show page status
       setStatus(`✅ Booking confirmed. Reference: ${data.reference}`, "ok");
