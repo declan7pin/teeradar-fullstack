@@ -10,7 +10,7 @@ const router = express.Router();
 // -----------------------------
 function getCookie(req, name) {
   const h = req.headers.cookie || "";
-  const parts = h.split(";").map(s => s.trim());
+  const parts = h.split(";").map((s) => s.trim());
   for (const p of parts) {
     const i = p.indexOf("=");
     if (i === -1) continue;
@@ -29,7 +29,10 @@ function setCookie(res, name, value, opts = {}) {
   res.setHeader("Set-Cookie", pieces.join("; "));
 }
 function clearCookie(res, name) {
-  res.setHeader("Set-Cookie", `${name}=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly`);
+  res.setHeader(
+    "Set-Cookie",
+    `${name}=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly`
+  );
 }
 
 // -----------------------------
@@ -62,6 +65,19 @@ async function qExec(sql, params = []) {
 }
 
 // -----------------------------
+// SUPER ADMIN helper (provided by server.js middleware)
+// -----------------------------
+function _isSuperAdminReq(req, email) {
+  const fn = req && typeof req.isSuperAdmin === "function" ? req.isSuperAdmin : null;
+  if (!fn) return false;
+  try {
+    return !!fn(email);
+  } catch {
+    return false;
+  }
+}
+
+// -----------------------------
 // auth guards
 // -----------------------------
 function requireBookingAdmin(req, res, next) {
@@ -69,9 +85,18 @@ function requireBookingAdmin(req, res, next) {
   if (v !== "1") return res.status(401).json({ error: "Not logged in as booking admin" });
   next();
 }
+
 function requireCourseAdmin(req, res, next) {
   const slug = getCookie(req, "teeradar_course_admin_slug");
   const email = getCookie(req, "teeradar_course_admin_email");
+
+  // ✅✅✅ ADD (needed): super-admin bypass (no course-admin cookies required)
+  if (_isSuperAdminReq(req, email)) {
+    req.courseAdmin = { slug: "", email };
+    return next();
+  }
+  // ✅✅✅ END ADD
+
   if (!slug || !email) return res.status(401).json({ error: "Not logged in as course admin" });
   req.courseAdmin = { slug, email };
   next();
@@ -224,6 +249,15 @@ router.post("/api/book/course-admin/login", express.json(), async (req, res) => 
       [email]
     );
   }
+
+  // ✅✅✅ ADD (needed): allow super-admins to login without a DB row/password
+  // If email is in SUPER_ADMIN_EMAILS, we set cookie and allow access.
+  if (!admin && _isSuperAdminReq(req, email)) {
+    setCookie(res, "teeradar_course_admin_slug", "*", { maxAgeSeconds: 60 * 60 * 12 });
+    setCookie(res, "teeradar_course_admin_email", String(email), { maxAgeSeconds: 60 * 60 * 12 });
+    return res.json({ ok: true, slug: "*" });
+  }
+  // ✅✅✅ END ADD
 
   if (!admin) return res.status(401).json({ error: "Invalid login" });
 
@@ -386,22 +420,37 @@ router.get("/api/book/admin/bookings", requireBookingAdmin, async (req, res) => 
 
 // -----------------------------
 // View bookings (course admin only; locked to their slug)
+// ✅✅✅ ADD (needed): super-admin bypass to view ANY slug via query param (?slug=...)
 // -----------------------------
 router.get("/api/book/course-admin/bookings", requireCourseAdmin, async (req, res) => {
   await ensureBookingsTable();
 
   const url = new URL(req.url, `http://${req.headers.host}`);
   const date = String(url.searchParams.get("date") || "").trim();
-  const slug = req.courseAdmin.slug;
 
-  // ✅✅✅ ADD (needed): Postgres filters by course_id (not course_slug)
+  const cookieSlug = String(req.courseAdmin?.slug || "").trim();
+  const email = String(req.courseAdmin?.email || "").trim().toLowerCase();
+
+  const isSuper = _isSuperAdminReq(req, email);
+
+  // If super-admin, allow ?slug=... (otherwise lock to cookie slug)
+  const requestedSlug = String(url.searchParams.get("slug") || "").trim();
+  const slug = isSuper ? (requestedSlug || cookieSlug || "") : cookieSlug;
+
+  if (!slug || slug === "*") {
+    // For super-admin, force passing a slug so we don't accidentally return nothing/too much
+    if (isSuper) {
+      return res.status(400).json({ error: "Missing slug (super admin must pass ?slug=...)" });
+    }
+  }
+
+  // ✅✅✅ Postgres filters by course_id (not course_slug)
   let courseId = null;
   if (typeof db.query === "function") {
     const course = await qOne(`SELECT id FROM booking_courses WHERE slug = $1 LIMIT 1`, [slug]);
     if (!course) return res.json({ bookings: [], course_slug: slug });
     courseId = Number(course.id);
   }
-  // ✅✅✅ END ADD
 
   let rows = [];
   try {
@@ -471,7 +520,8 @@ router.get("/api/book/course-admin/bookings", requireCourseAdmin, async (req, re
     return res.status(500).json({ error: "Failed to load bookings", detail: String(e?.message || e) });
   }
 
-  return res.json({ bookings: rows, course_slug: slug });
+  return res.json({ bookings: rows, course_slug: slug, super_admin: isSuper });
 });
+// ✅✅✅ END ADD ✅✅✅
 
 export default router;
