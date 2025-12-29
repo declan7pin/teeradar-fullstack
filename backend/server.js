@@ -303,6 +303,24 @@ async function ensureRoundsTables() {
       WHERE players_count IS NULL;
     `);
 
+    // ✅✅✅ ADD (needed): store player names for P1–P4 (JSON array)
+    await db.query(`
+      ALTER TABLE rounds
+      ADD COLUMN IF NOT EXISTS player_names JSONB;
+    `);
+
+    await db.query(`
+      UPDATE rounds
+      SET player_names = COALESCE(player_names, '[]'::jsonb)
+      WHERE player_names IS NULL;
+    `);
+
+    await db.query(`
+      ALTER TABLE rounds
+      ALTER COLUMN player_names SET DEFAULT '[]'::jsonb;
+    `);
+    // ✅✅✅ END ADD
+
     await db.query(`
       ALTER TABLE round_holes
       ADD COLUMN IF NOT EXISTS strokes_by_player JSONB;
@@ -326,10 +344,12 @@ async function ensureRoundsTables() {
       ALTER COLUMN strokes_by_player SET DEFAULT '{}'::jsonb;
     `);
 
+    // ✅✅✅ ADD (needed): ensure putts_by_player default exists (prevents null inserts)
     await db.query(`
       ALTER TABLE round_holes
       ALTER COLUMN putts_by_player SET DEFAULT '{}'::jsonb;
     `);
+    // ✅✅✅ END ADD
 
     // ✅ NEW: store published hole distance (meters) so UI can render Dist(m)
     await db.query(`
@@ -732,7 +752,7 @@ app.get("/api/rounds", requireAuth, async (req, res) => {
 
     const { rows } = await db.query(
       `
-      SELECT id, course, layout, state, holes, par_mode, created_at
+      SELECT id, course, layout, state, holes, par_mode, players_count, player_names, created_at
       FROM rounds
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -763,6 +783,11 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
       holes = 18,
       pars = null,        // optional array (length 9/18) or null
       par_mode = "PUBLISHED", // "PUBLISHED" or "USER"
+
+      // ✅✅✅ ADD (needed): multi-player support (names + count)
+      playersCount = 1,
+      playerNames = null, // array of names (length 1–4), P1 should be user on frontend
+      // ✅✅✅ END ADD
     } = req.body || {};
 
     const courseName = (course || "").toString().trim();
@@ -803,14 +828,35 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
       });
     }
 
+    // ✅✅✅ ADD (needed): validate players + normalize names
+    const pc = Number(playersCount);
+    const safePlayersCount = Number.isFinite(pc) ? Math.max(1, Math.min(4, pc)) : 1;
+
+    const namesArr = Array.isArray(playerNames)
+      ? playerNames.map((x) => String(x || "").trim()).slice(0, 4)
+      : [];
+
+    // pad to players_count with empty strings (frontend can render blanks)
+    while (namesArr.length < safePlayersCount) namesArr.push("");
+    // ✅✅✅ END ADD
+
     // Create round
     const roundInsert = await db.query(
       `
-      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, created_at)
-      VALUES ($1,$2,$3,$4,$5,$6,now())
-      RETURNING id, course, layout, state, holes, par_mode, created_at;
+      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, players_count, player_names, created_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now())
+      RETURNING id, course, layout, state, holes, par_mode, players_count, player_names, created_at;
       `,
-      [userId, courseName, layout, state, holesCount, parMode]
+      [
+        userId,
+        courseName,
+        layout,
+        state,
+        holesCount,
+        parMode,
+        safePlayersCount,
+        JSON.stringify(namesArr),
+      ]
     );
 
     const round = roundInsert.rows[0];
@@ -858,7 +904,7 @@ app.get("/api/rounds/:id", requireAuth, async (req, res) => {
 
     const roundRes = await db.query(
       `
-      SELECT id, user_id, course, layout, state, holes, par_mode, created_at
+      SELECT id, user_id, course, layout, state, holes, par_mode, players_count, player_names, created_at
       FROM rounds
       WHERE id = $1
       LIMIT 1;
@@ -878,7 +924,7 @@ app.get("/api/rounds/:id", requireAuth, async (req, res) => {
 
     const holesRes = await db.query(
       `
-      SELECT hole_number, par, distance_m, strokes, putts
+      SELECT hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player
       FROM round_holes
       WHERE round_id = $1
       ORDER BY hole_number ASC;
@@ -919,7 +965,16 @@ app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
       return res.status(403).json({ ok: false, error: "Forbidden" });
     }
 
-    const { strokes, putts, par } = req.body || {};
+    const {
+      strokes,
+      putts,
+      par,
+
+      // ✅✅✅ ADD (needed): allow updating multi-player fields
+      strokesByPlayer, // object map, e.g. {"P1":4,"P2":5} or {"0":4,"1":5}
+      puttsByPlayer,
+      // ✅✅✅ END ADD
+    } = req.body || {};
 
     const strokesVal =
       strokes === null || typeof strokes === "undefined" || strokes === ""
@@ -946,17 +1001,39 @@ app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: "par must be a number or omitted" });
     }
 
+    // ✅✅✅ ADD (needed): normalize multi-player objects (or ignore)
+    const sbp =
+      strokesByPlayer && typeof strokesByPlayer === "object" && !Array.isArray(strokesByPlayer)
+        ? JSON.stringify(strokesByPlayer)
+        : null;
+
+    const pbp =
+      puttsByPlayer && typeof puttsByPlayer === "object" && !Array.isArray(puttsByPlayer)
+        ? JSON.stringify(puttsByPlayer)
+        : null;
+    // ✅✅✅ END ADD
+
     const result = await db.query(
       `
       UPDATE round_holes
       SET
         strokes = $3,
         putts = $4,
-        par = COALESCE($5, par)
+        par = COALESCE($5, par),
+        strokes_by_player = COALESCE($6::jsonb, strokes_by_player),
+        putts_by_player = COALESCE($7::jsonb, putts_by_player)
       WHERE round_id = $1 AND hole_number = $2
-      RETURNING hole_number, par, strokes, putts;
+      RETURNING hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player;
       `,
-      [roundId, holeNumber, strokesVal, puttsVal, typeof parVal === "undefined" ? null : parVal]
+      [
+        roundId,
+        holeNumber,
+        strokesVal,
+        puttsVal,
+        typeof parVal === "undefined" ? null : parVal,
+        sbp,
+        pbp,
+      ]
     );
 
     if (!result.rows.length) {
