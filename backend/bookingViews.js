@@ -91,6 +91,94 @@ function verifyPassword(password, saltHex, hashHex) {
 }
 
 // -----------------------------
+// tables (created if missing)
+// -----------------------------
+async function ensureCourseAdminsTable() {
+  // ✅✅✅ ADD (needed): Postgres-safe + keeps sqlite compatibility ✅✅✅
+  if (typeof db.query === "function") {
+    await qExec(`
+      CREATE TABLE IF NOT EXISTS booking_course_admins (
+        id SERIAL PRIMARY KEY,
+        course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
+        slug TEXT NOT NULL,
+        email TEXT NOT NULL,
+        salt_hex TEXT NOT NULL,
+        hash_hex TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT now(),
+        UNIQUE(course_id, email),
+        UNIQUE(email)
+      );
+    `);
+    return;
+  }
+
+  // sqlite
+  await qExec(`
+    CREATE TABLE IF NOT EXISTS booking_course_admins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      course_id INTEGER,
+      slug TEXT NOT NULL,
+      email TEXT NOT NULL,
+      salt_hex TEXT NOT NULL,
+      hash_hex TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+}
+
+async function ensureBookingsTable() {
+  // ✅✅✅ ADD (needed): Postgres-safe + keeps sqlite compatibility ✅✅✅
+  if (typeof db.query === "function") {
+    await qExec(`
+      CREATE TABLE IF NOT EXISTS booking_bookings (
+        id BIGSERIAL PRIMARY KEY,
+        course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
+        play_date DATE NOT NULL,
+        tee_time TEXT NOT NULL,
+        holes INTEGER NOT NULL,
+        players INTEGER NOT NULL,
+        golfer_name TEXT,
+        golfer_email TEXT,
+        golfer_phone TEXT,
+        price_per_player_cents INTEGER NOT NULL,
+        total_cents INTEGER NOT NULL,
+        booking_fee_cents INTEGER NOT NULL DEFAULT 0,
+        reference TEXT UNIQUE NOT NULL,
+        status TEXT NOT NULL DEFAULT 'CONFIRMED',
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+
+    await qExec(`
+      CREATE INDEX IF NOT EXISTS booking_bookings_course_date_idx
+      ON booking_bookings (course_id, play_date);
+    `);
+
+    return;
+  }
+
+  // sqlite (legacy/simple)
+  try {
+    await qExec(`
+      CREATE TABLE IF NOT EXISTS booking_bookings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        course_slug TEXT NOT NULL,
+        play_date TEXT NOT NULL,
+        tee_time TEXT NOT NULL,
+        holes INTEGER,
+        players INTEGER,
+        name TEXT,
+        email TEXT,
+        phone TEXT,
+        status TEXT DEFAULT 'BOOKED',
+        reference TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  } catch {}
+}
+
+// -----------------------------
 // Admin login/logout
 // -----------------------------
 router.post("/api/book/admin/login", express.json(), async (req, res) => {
@@ -116,17 +204,7 @@ router.post("/api/book/course-admin/login", express.json(), async (req, res) => 
   if (!email || !password) return res.status(400).json({ error: "Missing email/password" });
 
   // ensure table exists (safe)
-  try {
-    await qExec(`
-      CREATE TABLE IF NOT EXISTS booking_course_admins (
-        slug TEXT NOT NULL,
-        email TEXT NOT NULL,
-        salt_hex TEXT NOT NULL,
-        hash_hex TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-  } catch {}
+  try { await ensureCourseAdminsTable(); } catch {}
 
   let admin = null;
   try {
@@ -174,64 +252,46 @@ router.post("/api/book/admin/course-admin", requireBookingAdmin, express.json(),
   if (!email) return res.status(400).json({ error: "Missing email" });
   if (password.length < 8) return res.status(400).json({ error: "Password must be 8+ chars" });
 
-  try {
-    await qExec(`
-      CREATE TABLE IF NOT EXISTS booking_course_admins (
-        slug TEXT NOT NULL,
-        email TEXT NOT NULL,
-        salt_hex TEXT NOT NULL,
-        hash_hex TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-  } catch {}
+  try { await ensureCourseAdminsTable(); } catch {}
 
   const { saltHex, hashHex } = hashPassword(password);
+
+  // ✅✅✅ ADD (needed): resolve course_id on Postgres (booking_courses uses ids)
+  let courseId = null;
+  if (typeof db.query === "function") {
+    const course = await qOne(
+      `SELECT id, slug FROM booking_courses WHERE slug = $1 LIMIT 1`,
+      [slug]
+    );
+    if (!course) return res.status(400).json({ error: "Unknown course slug (create course first)" });
+    courseId = Number(course.id);
+  }
+  // ✅✅✅ END ADD
 
   // remove existing by email, then insert
   try { await qExec(`DELETE FROM booking_course_admins WHERE lower(email) = $1`, [email]); }
   catch { await qExec(`DELETE FROM booking_course_admins WHERE lower(email) = ?`, [email]); }
 
   try {
-    await qExec(
-      `INSERT INTO booking_course_admins (slug, email, salt_hex, hash_hex, created_at)
-       VALUES ($1,$2,$3,$4,$5)`,
-      [slug, email, saltHex, hashHex, new Date().toISOString()]
-    );
-  } catch {
-    await qExec(
-      `INSERT INTO booking_course_admins (slug, email, salt_hex, hash_hex, created_at)
-       VALUES (?,?,?,?,?)`,
-      [slug, email, saltHex, hashHex, new Date().toISOString()]
-    );
+    if (typeof db.query === "function") {
+      await qExec(
+        `INSERT INTO booking_course_admins (course_id, slug, email, salt_hex, hash_hex, created_at)
+         VALUES ($1,$2,$3,$4,$5,now())`,
+        [courseId, slug, email, saltHex, hashHex]
+      );
+    } else {
+      await qExec(
+        `INSERT INTO booking_course_admins (course_id, slug, email, salt_hex, hash_hex, created_at)
+         VALUES (?,?,?,?,?,?)`,
+        [courseId, slug, email, saltHex, hashHex, new Date().toISOString()]
+      );
+    }
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to save course admin", detail: String(e?.message || e) });
   }
 
   return res.json({ ok: true });
 });
-
-// -----------------------------
-// bookings table (created if missing)
-// -----------------------------
-async function ensureBookingsTable() {
-  try {
-    await qExec(`
-      CREATE TABLE IF NOT EXISTS booking_bookings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        course_slug TEXT NOT NULL,
-        play_date TEXT NOT NULL,
-        tee_time TEXT NOT NULL,
-        holes INTEGER,
-        players INTEGER,
-        name TEXT,
-        email TEXT,
-        phone TEXT,
-        status TEXT DEFAULT 'BOOKED',
-        reference TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-  } catch {}
-}
 
 // -----------------------------
 // View bookings (platform admin)
@@ -244,45 +304,81 @@ router.get("/api/book/admin/bookings", requireBookingAdmin, async (req, res) => 
   const date = String(url.searchParams.get("date") || "").trim();
   if (!slug) return res.status(400).json({ error: "Missing slug" });
 
+  // ✅✅✅ ADD (needed): Postgres filters by course_id (not course_slug)
+  let courseId = null;
+  if (typeof db.query === "function") {
+    const course = await qOne(`SELECT id FROM booking_courses WHERE slug = $1 LIMIT 1`, [slug]);
+    if (!course) return res.json({ bookings: [] });
+    courseId = Number(course.id);
+  }
+  // ✅✅✅ END ADD
+
   let rows = [];
   try {
-    if (date) {
-      rows = await qAll(
-        `SELECT course_slug, play_date, tee_time, holes, players, name, email, phone, status, reference, created_at
-         FROM booking_bookings
-         WHERE course_slug = $1 AND play_date = $2
-         ORDER BY tee_time ASC, created_at DESC`,
-        [slug, date]
-      );
+    if (typeof db.query === "function") {
+      if (date) {
+        rows = await qAll(
+          `SELECT
+             $1::text AS course_slug,
+             b.play_date::text AS play_date,
+             b.tee_time,
+             b.holes,
+             b.players,
+             b.golfer_name  AS name,
+             b.golfer_email AS email,
+             b.golfer_phone AS phone,
+             b.status,
+             b.reference,
+             b.created_at
+           FROM booking_bookings b
+           WHERE b.course_id = $2 AND b.play_date = $3::date
+           ORDER BY b.tee_time ASC, b.created_at DESC`,
+          [slug, courseId, date]
+        );
+      } else {
+        rows = await qAll(
+          `SELECT
+             $1::text AS course_slug,
+             b.play_date::text AS play_date,
+             b.tee_time,
+             b.holes,
+             b.players,
+             b.golfer_name  AS name,
+             b.golfer_email AS email,
+             b.golfer_phone AS phone,
+             b.status,
+             b.reference,
+             b.created_at
+           FROM booking_bookings b
+           WHERE b.course_id = $2
+           ORDER BY b.play_date DESC, b.tee_time ASC, b.created_at DESC
+           LIMIT 500`,
+          [slug, courseId]
+        );
+      }
     } else {
-      rows = await qAll(
-        `SELECT course_slug, play_date, tee_time, holes, players, name, email, phone, status, reference, created_at
-         FROM booking_bookings
-         WHERE course_slug = $1
-         ORDER BY play_date DESC, tee_time ASC, created_at DESC
-         LIMIT 500`,
-        [slug]
-      );
+      // sqlite legacy
+      if (date) {
+        rows = await qAll(
+          `SELECT course_slug, play_date, tee_time, holes, players, name, email, phone, status, reference, created_at
+           FROM booking_bookings
+           WHERE course_slug = ? AND play_date = ?
+           ORDER BY tee_time ASC, created_at DESC`,
+          [slug, date]
+        );
+      } else {
+        rows = await qAll(
+          `SELECT course_slug, play_date, tee_time, holes, players, name, email, phone, status, reference, created_at
+           FROM booking_bookings
+           WHERE course_slug = ?
+           ORDER BY play_date DESC, tee_time ASC, created_at DESC
+           LIMIT 500`,
+          [slug]
+        );
+      }
     }
-  } catch {
-    if (date) {
-      rows = await qAll(
-        `SELECT course_slug, play_date, tee_time, holes, players, name, email, phone, status, reference, created_at
-         FROM booking_bookings
-         WHERE course_slug = ? AND play_date = ?
-         ORDER BY tee_time ASC, created_at DESC`,
-        [slug, date]
-      );
-    } else {
-      rows = await qAll(
-        `SELECT course_slug, play_date, tee_time, holes, players, name, email, phone, status, reference, created_at
-         FROM booking_bookings
-         WHERE course_slug = ?
-         ORDER BY play_date DESC, tee_time ASC, created_at DESC
-         LIMIT 500`,
-        [slug]
-      );
-    }
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to load bookings", detail: String(e?.message || e) });
   }
 
   return res.json({ bookings: rows });
@@ -298,45 +394,81 @@ router.get("/api/book/course-admin/bookings", requireCourseAdmin, async (req, re
   const date = String(url.searchParams.get("date") || "").trim();
   const slug = req.courseAdmin.slug;
 
+  // ✅✅✅ ADD (needed): Postgres filters by course_id (not course_slug)
+  let courseId = null;
+  if (typeof db.query === "function") {
+    const course = await qOne(`SELECT id FROM booking_courses WHERE slug = $1 LIMIT 1`, [slug]);
+    if (!course) return res.json({ bookings: [], course_slug: slug });
+    courseId = Number(course.id);
+  }
+  // ✅✅✅ END ADD
+
   let rows = [];
   try {
-    if (date) {
-      rows = await qAll(
-        `SELECT course_slug, play_date, tee_time, holes, players, name, email, phone, status, reference, created_at
-         FROM booking_bookings
-         WHERE course_slug = $1 AND play_date = $2
-         ORDER BY tee_time ASC, created_at DESC`,
-        [slug, date]
-      );
+    if (typeof db.query === "function") {
+      if (date) {
+        rows = await qAll(
+          `SELECT
+             $1::text AS course_slug,
+             b.play_date::text AS play_date,
+             b.tee_time,
+             b.holes,
+             b.players,
+             b.golfer_name  AS name,
+             b.golfer_email AS email,
+             b.golfer_phone AS phone,
+             b.status,
+             b.reference,
+             b.created_at
+           FROM booking_bookings b
+           WHERE b.course_id = $2 AND b.play_date = $3::date
+           ORDER BY b.tee_time ASC, b.created_at DESC`,
+          [slug, courseId, date]
+        );
+      } else {
+        rows = await qAll(
+          `SELECT
+             $1::text AS course_slug,
+             b.play_date::text AS play_date,
+             b.tee_time,
+             b.holes,
+             b.players,
+             b.golfer_name  AS name,
+             b.golfer_email AS email,
+             b.golfer_phone AS phone,
+             b.status,
+             b.reference,
+             b.created_at
+           FROM booking_bookings b
+           WHERE b.course_id = $2
+           ORDER BY b.play_date DESC, b.tee_time ASC, b.created_at DESC
+           LIMIT 500`,
+          [slug, courseId]
+        );
+      }
     } else {
-      rows = await qAll(
-        `SELECT course_slug, play_date, tee_time, holes, players, name, email, phone, status, reference, created_at
-         FROM booking_bookings
-         WHERE course_slug = $1
-         ORDER BY play_date DESC, tee_time ASC, created_at DESC
-         LIMIT 500`,
-        [slug]
-      );
+      // sqlite legacy
+      if (date) {
+        rows = await qAll(
+          `SELECT course_slug, play_date, tee_time, holes, players, name, email, phone, status, reference, created_at
+           FROM booking_bookings
+           WHERE course_slug = ? AND play_date = ?
+           ORDER BY tee_time ASC, created_at DESC`,
+          [slug, date]
+        );
+      } else {
+        rows = await qAll(
+          `SELECT course_slug, play_date, tee_time, holes, players, name, email, phone, status, reference, created_at
+           FROM booking_bookings
+           WHERE course_slug = ?
+           ORDER BY play_date DESC, tee_time ASC, created_at DESC
+           LIMIT 500`,
+          [slug]
+        );
+      }
     }
-  } catch {
-    if (date) {
-      rows = await qAll(
-        `SELECT course_slug, play_date, tee_time, holes, players, name, email, phone, status, reference, created_at
-         FROM booking_bookings
-         WHERE course_slug = ? AND play_date = ?
-         ORDER BY tee_time ASC, created_at DESC`,
-        [slug, date]
-      );
-    } else {
-      rows = await qAll(
-        `SELECT course_slug, play_date, tee_time, holes, players, name, email, phone, status, reference, created_at
-         FROM booking_bookings
-         WHERE course_slug = ?
-         ORDER BY play_date DESC, tee_time ASC, created_at DESC
-         LIMIT 500`,
-        [slug]
-      );
-    }
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to load bookings", detail: String(e?.message || e) });
   }
 
   return res.json({ bookings: rows, course_slug: slug });
