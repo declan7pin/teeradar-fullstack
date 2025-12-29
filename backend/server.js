@@ -49,8 +49,6 @@ const PORT = process.env.PORT || 3000;
 
 // ✅ Live site base URL (use everywhere we generate links)
 const SITE_URL = "https://teeradar.com.au";
-// ✅ Live site base URL (use everywhere we generate links)
-const SITE_URL = "https://teeradar.com.au";
 
 // ✅ SUPER ADMIN emails (comma-separated in env)
 const SUPER_ADMINS = (process.env.SUPER_ADMIN_EMAILS || "")
