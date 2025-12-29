@@ -652,11 +652,12 @@ app.get("/api/scorecards/:state", (req, res) => {
 
 app.use("/api/auth", authRouter);
 
-// ✅ NEW: mount rounds router
-app.use("/api/rounds", roundsRouter);
-
 // ✅ NEW: booking API router
 app.use("/api/book", bookingRoutes);
+
+// ✅ NOTE: roundsRouter mounts routes that can collide with the inline /api/rounds handlers below.
+// Keeping inline /api/rounds as the source of truth here.
+// app.use("/api/rounds", roundsRouter);
 
 // -------------------------------------------------
 // ✅ NEW: /api/me (for bookings page to read home state)
