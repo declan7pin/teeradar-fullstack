@@ -517,7 +517,7 @@ app.use((req, res, next) => {
   req.isSuperAdmin = (email) => isSuperAdmin(email);
   next();
 });
-app.use(bookingViewsRouter);;
+app.use(bookingViewsRouter);
 // ✅✅✅ END ADD ✅✅✅
 
 app.use(express.static(path.join(__dirname, "..", "public")));
