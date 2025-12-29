@@ -222,6 +222,8 @@
                 <th>Holes</th>
                 <th>Status</th>
                 <th class="right">Max</th>
+                <th class="right">Booked</th>
+                <th class="right">Remaining</th>
                 <th class="right">Price (c)</th>
               </tr>
             </thead>
@@ -351,6 +353,8 @@
   $("createAdminBtn").onclick = async () => {
     $("adminMsg").textContent = "Saving...";
     try {
+      // ✅ IMPORTANT: match backend route we added in bookingRoutes.js
+      // POST /api/book/admin/course-admin
       await j("/api/book/admin/course-admin", {
         method:"POST",
         body: JSON.stringify({
@@ -456,7 +460,7 @@
       if (holesRaw) qs.set("holes", holesRaw);
 
       const out = await j("/api/book/admin/times?" + qs.toString(), { method: "DELETE" });
-      $("delMsg").textContent = `✅ Deleted ${out.deleted || out.deletedTimes || 0} tee times`;
+      $("delMsg").textContent = `✅ Deleted ${out.deletedTimes || 0} tee times`;
       await refresh();
     } catch (e) {
       $("delMsg").textContent = "❌ " + e.message;
@@ -472,7 +476,7 @@
 
       if (!confirm(`DELETE COURSE "${slug}" and ALL related tee times + bookings? This cannot be undone.`)) return;
 
-      const out = await j("/api/book/admin/courses/" + encodeURIComponent(slug), { method: "DELETE" });
+      await j("/api/book/admin/courses/" + encodeURIComponent(slug), { method: "DELETE" });
       $("delMsg").textContent = `✅ Deleted course ${slug}`;
       await refresh();
     } catch (e) {
@@ -499,15 +503,17 @@
     clearViewBoxes();
     const slug = ($("vSlug").value || "").trim();
     const date = ($("vDate").value || "").trim();
+
     if (!slug) { $("viewMsg").textContent = "❌ course slug is required"; return; }
+    if (!date) { $("viewMsg").textContent = "❌ play date is required to view tee times"; return; }
+
     $("viewMsg").textContent = "Loading tee times...";
     try{
-      // expects: GET /api/book/admin/times?slug=...&date=... (date optional)
-      const qs = new URLSearchParams({ slug });
-      if (date) qs.set("date", date);
+      // expects: GET /api/book/admin/times?slug=...&date=... (date required by backend)
+      const qs = new URLSearchParams({ slug, date });
       const out = await j("/api/book/admin/times?" + qs.toString(), { method:"GET" });
 
-      const rows = (out && (out.times || out.rows || out.data)) || [];
+      const rows = (out && out.times) || [];
       if (!Array.isArray(rows) || !rows.length){
         $("viewMsg").textContent = "✅ No tee times found (try another date or generate first).";
         return;
@@ -516,13 +522,19 @@
       $("timesBox").style.display = "block";
       const tb = $("timesBody");
       rows.forEach(r => {
+        const maxP = Number(r.max_players ?? 0);
+        const bookedP = Number(r.booked_players ?? 0);
+        const remaining = Math.max(0, maxP - bookedP);
+
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${(r.play_date || r.date || "")}</td>
-          <td>${(r.tee_time || r.time || "")}</td>
+          <td>${String(r.play_date || "")}</td>
+          <td>${String(r.tee_time || "")}</td>
           <td>${(r.holes ?? "")}</td>
-          <td>${(r.status || "")}</td>
+          <td>${String(r.status || "")}</td>
           <td class="right">${(r.max_players ?? "")}</td>
+          <td class="right">${(r.booked_players ?? "")}</td>
+          <td class="right">${remaining}</td>
           <td class="right">${(r.price_per_player_cents ?? "")}</td>
         `;
         tb.appendChild(tr);
@@ -543,7 +555,7 @@
       if (date) qs.set("date", date);
       const out = await j("/api/book/admin/bookings?" + qs.toString(), { method:"GET" });
 
-      const rows = (out && (out.bookings || out.rows || out.data)) || [];
+      const rows = (out && out.bookings) || [];
       if (!Array.isArray(rows) || !rows.length){
         $("viewMsg").textContent = "✅ No bookings found for this course/date yet.";
         return;
@@ -551,17 +563,18 @@
       $("viewMsg").textContent = `✅ Loaded ${rows.length} bookings`;
       $("bookingsBox").style.display = "block";
       const tb = $("bookingsBody");
+
       rows.forEach(r => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${fmtDT(r.created_at || "")}</td>
-          <td>${(r.play_date || r.date || "")}</td>
-          <td>${(r.tee_time || r.time || "")}</td>
+          <td>${(r.play_date || "")}</td>
+          <td>${(r.tee_time || "")}</td>
           <td>${(r.holes ?? "")}</td>
           <td class="right">${(r.players ?? "")}</td>
-          <td>${(r.golfer_name || "")}</td>
-          <td>${(r.golfer_email || "")}</td>
-          <td>${(r.golfer_phone || "")}</td>
+          <td>${(r.name || "")}</td>
+          <td>${(r.email || "")}</td>
+          <td>${(r.phone || "")}</td>
           <td class="right">${(r.total_cents ?? "")}</td>
           <td><code>${(r.reference || "")}</code></td>
           <td>${(r.status || "")}</td>
