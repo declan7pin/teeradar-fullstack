@@ -224,7 +224,6 @@
       <div class="actions">
         <button id="viewTimesBtn" class="secondary small">View tee times</button>
         <button id="viewBookingsBtn" class="secondary small">View bookings</button>
-        <!-- ✅ ADD: MiClub-style daily sheet button -->
         <button id="viewSheetBtn" class="secondary small">Daily sheet (MiClub)</button>
       </div>
 
@@ -275,7 +274,6 @@
         </div>
       </div>
 
-      <!-- ✅ ADD: MiClub-style daily sheet -->
       <div id="sheetBox" style="display:none;">
         <div class="muted" style="margin-top:12px;font-weight:700;">
           Daily sheet <span class="pill" id="sheetPill"></span>
@@ -296,23 +294,36 @@
           </table>
         </div>
       </div>
-      <!-- ✅ END ADD -->
     </div>
-    <!-- ✅ END ADD -->
 
     <div class="card">
       <h3>Courses</h3>
       <button id="refreshBtn" class="secondary">Refresh list</button>
-      <!-- ✅ ADD: message line so you can see "not authorized" clearly -->
       <div id="coursesMsg" class="muted" style="margin-top:10px;"></div>
       <ul id="courses" class="list"></ul>
     </div>
   </div>
 
 <script>
+  /* ✅ ADD (needed): persist secret so iPhone refresh loads courses */
+  const ADMIN_SECRET_KEY = "teeradar_booking_admin_secret";
+
+  function _getSecret(){
+    const inputVal = (document.getElementById("secret")?.value || "").trim();
+    if (inputVal) return inputVal;
+    try { return (localStorage.getItem(ADMIN_SECRET_KEY) || "").trim(); } catch { return ""; }
+  }
+  function _setSecret(s){
+    try { localStorage.setItem(ADMIN_SECRET_KEY, String(s || "").trim()); } catch {}
+  }
+  function _clearSecret(){
+    try { localStorage.removeItem(ADMIN_SECRET_KEY); } catch {}
+  }
+  /* ✅ END ADD */
+
   async function j(url, opts) {
-    /* ✅ CHANGE (needed): always send admin secret in header so server sees gotHeader=true */
-    const secret = (document.getElementById("secret")?.value || "").trim();
+    /* ✅ FIX (needed): always send admin secret in header (input OR saved) */
+    const secret = _getSecret();
 
     const headers = {
       "Content-Type": "application/json",
@@ -332,7 +343,15 @@
 
   const $ = (id) => document.getElementById(id);
 
-  // ✅ NEW: local preview generator (no backend needed)
+  /* ✅ ADD: auto-fill secret input from storage */
+  (function(){
+    try{
+      const s = (localStorage.getItem(ADMIN_SECRET_KEY) || "").trim();
+      if (s && $("secret")) $("secret").value = s;
+    }catch{}
+  })();
+  /* ✅ END ADD */
+
   function pad2(n){ return String(n).padStart(2,"0"); }
   function toMins(hhmm){
     const m = String(hhmm || "").match(/^(\d{1,2}):(\d{2})$/);
@@ -365,6 +384,11 @@
     try {
       const secret = $("secret").value || "";
       if (!secret.trim()) throw new Error("Missing admin secret");
+
+      /* ✅ ADD */
+      _setSecret(secret);
+      /* ✅ END ADD */
+
       await j("/api/book/admin/login", { method:"POST", body: JSON.stringify({ secret }) });
 
       $("loginMsg").textContent = "✅ Logged in";
@@ -377,6 +401,11 @@
   $("logoutBtn").onclick = async () => {
     try {
       await j("/api/book/admin/logout", { method:"POST", body:"{}" });
+
+      /* ✅ ADD */
+      _clearSecret();
+      if ($("secret")) $("secret").value = "";
+      /* ✅ END ADD */
 
       $("loginMsg").textContent = "Logged out";
       if ($("coursesMsg")) $("coursesMsg").textContent = "Logged out";
@@ -398,10 +427,7 @@
         })
       });
       $("courseMsg").textContent = "✅ Saved: " + out.course.slug + " — opens at /book/" + out.course.slug;
-
-      // ✅ convenience: auto-fill generator slug
       $("gSlug").value = out.course.slug;
-
       await refresh();
     } catch (e) {
       $("courseMsg").textContent = "❌ " + e.message;
@@ -411,8 +437,6 @@
   $("createAdminBtn").onclick = async () => {
     $("adminMsg").textContent = "Saving...";
     try {
-      // ✅ IMPORTANT: match backend route we added in bookingRoutes.js
-      // POST /api/book/admin/course-admin
       await j("/api/book/admin/course-admin", {
         method:"POST",
         body: JSON.stringify({
@@ -427,7 +451,6 @@
     }
   };
 
-  // ✅ NEW: preview (no write)
   $("previewBtn").onclick = async () => {
     $("genMsg").textContent = "";
     $("previewBox").textContent = "";
@@ -450,7 +473,6 @@
       `<code>${times.slice(0, 20).join("</code> <code>")}${times.length>20 ? "</code> …" : "</code>"}`;
   };
 
-  // ✅ NEW: generate times (writes to DB via backend)
   $("genBtn").onclick = async () => {
     $("genMsg").textContent = "Generating...";
     $("previewBox").textContent = "";
@@ -467,12 +489,9 @@
       if (!slug) throw new Error("course slug is required");
       if (!playDate) throw new Error("play date is required");
 
-      // quick front-end validation
       const prev = buildTimes(start, end, intervalMins);
       if(!prev.ok) throw new Error(prev.error);
 
-      // 🔥 This expects your backend route:
-      // POST /api/book/admin/generate-times
       const out = await j("/api/book/admin/generate-times", {
         method: "POST",
         body: JSON.stringify({
@@ -495,7 +514,6 @@
     }
   };
 
-  // ✅ NEW: delete tee times (by slug, optional date/holes)
   $("delTimesBtn").onclick = async () => {
     $("delMsg").textContent = "";
     try {
@@ -525,7 +543,6 @@
     }
   };
 
-  // ✅ NEW: delete course (cascades tee times + bookings)
   $("delCourseBtn").onclick = async () => {
     $("delMsg").textContent = "";
     try {
@@ -542,7 +559,6 @@
     }
   };
 
-  /* ✅ ADD: view helpers */
   function fmtDT(s){
     try{
       const d = new Date(s);
@@ -556,11 +572,8 @@
     $("bookingsBody").innerHTML = "";
     $("timesBox").style.display = "none";
     $("bookingsBox").style.display = "none";
-
-    /* ✅ ADD */
     $("sheetBody").innerHTML = "";
     $("sheetBox").style.display = "none";
-    /* ✅ END ADD */
   }
 
   async function viewTimes(){
@@ -573,7 +586,6 @@
 
     $("viewMsg").textContent = "Loading tee times...";
     try{
-      // expects: GET /api/book/admin/times?slug=...&date=... (date required by backend)
       const qs = new URLSearchParams({ slug, date });
       const out = await j("/api/book/admin/times?" + qs.toString(), { method:"GET" });
 
@@ -615,7 +627,6 @@
     if (!slug) { $("viewMsg").textContent = "❌ course slug is required"; return; }
     $("viewMsg").textContent = "Loading bookings...";
     try{
-      // expects: GET /api/book/admin/bookings?slug=...&date=... (date optional)
       const qs = new URLSearchParams({ slug });
       if (date) qs.set("date", date);
       const out = await j("/api/book/admin/bookings?" + qs.toString(), { method:"GET" });
@@ -651,7 +662,6 @@
     }
   }
 
-  /* ✅ ADD: MiClub-style daily sheet (Time + 4 slots + Paid checkbox) */
   function _escape(s){
     return String(s ?? "")
       .replace(/&/g,"&amp;")
@@ -723,7 +733,7 @@
     const out = [];
     (timesRows || []).forEach(t => {
       const time = String(t.tee_time || t.time || "");
-      const arr = (byTime.get(time) || []).slice(0, 4); // show 4 slots
+      const arr = (byTime.get(time) || []).slice(0, 4);
       const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
       out.push({ time, slots });
     });
@@ -773,7 +783,6 @@
         tb.appendChild(tr);
       });
 
-      // hook paid toggles
       tb.querySelectorAll('input[type="checkbox"][data-ref]').forEach(cb => {
         cb.onchange = async () => {
           const ref = cb.getAttribute("data-ref") || "";
@@ -782,15 +791,13 @@
           const msgEl = tb.querySelector(`[data-paidmsg="${CSS.escape(ref)}"]`);
           if (msgEl) msgEl.textContent = "Saving...";
           try{
-            // expects backend endpoint:
-            // POST /api/book/admin/booking-paid  { reference, paid }
             await j("/api/book/admin/booking-paid", {
               method:"POST",
               body: JSON.stringify({ reference: ref, paid })
             });
             if (msgEl) msgEl.textContent = "✅ saved";
           }catch(e){
-            cb.checked = !cb.checked; // revert
+            cb.checked = !cb.checked;
             if (msgEl) msgEl.textContent = "❌ " + e.message;
           }
         };
@@ -802,14 +809,10 @@
       $("viewMsg").textContent = "❌ " + e.message;
     }
   }
-  /* ✅ END ADD */
 
   $("viewTimesBtn").onclick = viewTimes;
   $("viewBookingsBtn").onclick = viewBookings;
-
-  /* ✅ ADD */
   $("viewSheetBtn").onclick = viewSheet;
-  /* ✅ END ADD */
 
   $("refreshBtn").onclick = refresh;
 
@@ -841,20 +844,14 @@
         ul.appendChild(li);
       });
 
-      // ✅ hook up fill buttons
       ul.querySelectorAll("button[data-fill]").forEach(btn => {
         btn.onclick = () => {
           const s = btn.getAttribute("data-fill") || "";
           $("gSlug").value = s;
           $("aSlug").value = s;
           $("cSlug").value = s;
-
-          // ✅ also fill delete box
           $("dSlug").value = s;
-
-          // ✅ also fill view box
           $("vSlug").value = s;
-
           $("previewBox").textContent = "";
           $("genMsg").textContent = "";
           $("delMsg").textContent = "";
@@ -862,7 +859,6 @@
         };
       });
 
-      // ✅ quick view times from list
       ul.querySelectorAll("button[data-viewtimes]").forEach(btn => {
         btn.onclick = async () => {
           const s = btn.getAttribute("data-viewtimes") || "";
@@ -872,7 +868,6 @@
         };
       });
 
-      // ✅ quick view bookings from list
       ul.querySelectorAll("button[data-viewbookings]").forEach(btn => {
         btn.onclick = async () => {
           const s = btn.getAttribute("data-viewbookings") || "";
@@ -882,7 +877,6 @@
         };
       });
 
-      // ✅ quick delete from list
       ul.querySelectorAll("button[data-delcourse]").forEach(btn => {
         btn.onclick = async () => {
           const s = btn.getAttribute("data-delcourse") || "";
@@ -908,7 +902,6 @@
     }
   }
 
-  // auto-set dates to today (local)
   (function(){
     try{
       const d = new Date();
@@ -918,13 +911,10 @@
       const today = `${yyyy}-${mm}-${dd}`;
       $("gDate").value = today;
       $("dDate").value = today;
-
-      /* ✅ ADD: also set view date */
       $("vDate").value = today;
     }catch{}
   })();
 
-  /* ✅ ADD: try refresh immediately; if it fails, you can just hit Login */
   refresh();
 </script>
 </body>
