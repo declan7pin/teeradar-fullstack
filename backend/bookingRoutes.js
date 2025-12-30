@@ -480,14 +480,14 @@ router.post("/course-admin/login", async (req, res) => {
     res.cookie("tr_course_admin_slug", String(u.slug), {
       httpOnly: true,
       sameSite: "lax",
-      secure: true,
+      secure: isHttps(req),
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/",
     });
     res.cookie("tr_course_admin_email", String(u.email), {
       httpOnly: true,
       sameSite: "lax",
-      secure: true,
+      secure: isHttps(req),
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/",
     });
@@ -498,7 +498,7 @@ const courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email });
 res.cookie("tr_course_admin_token", courseAdminToken, {
   httpOnly: true,
   sameSite: "none",
-  secure: true,
+  secure: isHttps(req),
   maxAge: 7 * 24 * 60 * 60 * 1000,
   path: "/",
 });
