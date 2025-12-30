@@ -31,6 +31,7 @@
     .row button{width:50%}
     .msg{margin-top:10px;font-size:13px;color:var(--muted)}
     a{color:var(--teal);text-decoration:none}
+    pre{white-space:pre-wrap;margin-top:10px;font-size:12px;color:#0f172a;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px;display:none}
   </style>
 </head>
 <body>
@@ -53,12 +54,14 @@
       </div>
 
       <div id="msg" class="msg"></div>
+      <pre id="debug"></pre>
     </div>
   </div>
 
 <script>
   // ✅ Keep token support as optional fallback, but DO NOT require it.
-  const ADMIN_TOKEN_KEY = "course_admin_token";
+  // IMPORTANT: This key must match course-admin.html (you currently use tr_course_admin_token there)
+  const ADMIN_TOKEN_KEY = "tr_course_admin_token";
 
   function getAdminToken(){
     try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ""; } catch { return ""; }
@@ -68,6 +71,15 @@
   }
   function clearAdminToken(){
     try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch {}
+  }
+
+  const $ = (id)=>document.getElementById(id);
+
+  function dbg(o){
+    const el = $("debug");
+    if(!el) return;
+    el.style.display = "block";
+    el.textContent = (typeof o === "string") ? o : JSON.stringify(o, null, 2);
   }
 
   async function j(url, opts){
@@ -84,18 +96,19 @@
       headers,
     });
 
-    const data = await res.json().catch(()=> ({}));
+    const text = await res.text();
+    let data = {};
+    try { data = JSON.parse(text); }
+    catch { data = { _nonJson: String(text || "").slice(0, 300) }; }
 
     // ✅ capture token if backend returns it (optional)
     if (data && (data.token || data.accessToken)) {
-      setAdminToken(data.token || data.accessToken);
+      setAdminToken(String(data.token || data.accessToken));
     }
 
     if(!res.ok) throw new Error(data.error || ("HTTP "+res.status));
     return data;
   }
-
-  const $ = (id)=>document.getElementById(id);
 
   $("goHomeBtn").onclick = ()=> location.href = "/";
 
@@ -105,29 +118,80 @@
       await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
     }catch{}
     clearAdminToken();
+    dbg({ step:"logout", tokenAfter: !!getAdminToken() });
     $("msg").textContent = "✅ Logged out";
   };
 
   $("loginBtn").onclick = async ()=>{
     $("msg").textContent = "Logging in...";
-    // ✅ Don't clear tokens on login attempt (optional fallback). Cookies will handle auth anyway.
+    dbg("Starting login...");
 
     try{
       const email = ($("email").value || "").trim();
       const password = $("pass").value || "";
       if(!email || !password) throw new Error("missing_email_password");
 
-      await j("/api/book/course-admin/login", {
+      // Call login
+      const loginRes = await fetch("/api/book/course-admin/login", {
         method:"POST",
+        credentials:"include",
+        headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ email, password })
       });
 
-      // ✅ DO NOT require a JS token.
-      // Cookies are httpOnly, so JS can't read them. Redirect regardless.
+      const loginText = await loginRes.text();
+      let loginData = {};
+      try { loginData = JSON.parse(loginText); }
+      catch { loginData = { _nonJson: String(loginText || "").slice(0, 300) }; }
+
+      // Save token if present (optional)
+      if (loginData && (loginData.token || loginData.accessToken)) {
+        setAdminToken(String(loginData.token || loginData.accessToken));
+      }
+
+      dbg({
+        step:"login_response",
+        status: loginRes.status,
+        ok: loginRes.ok,
+        data: loginData,
+        tokenSaved: !!getAdminToken(),
+        tokenPreview: (getAdminToken() || "").slice(0, 20) + (getAdminToken() ? "…" : "")
+      });
+
+      if(!loginRes.ok) throw new Error(loginData.error || ("HTTP "+loginRes.status));
+
+      // Immediately test /me (this tells us EXACTLY why you're being kicked out)
+      const meRes = await fetch("/api/book/course-admin/me", {
+        method:"GET",
+        credentials:"include",
+        headers:{
+          "Content-Type":"application/json",
+          ...(getAdminToken() ? { "Authorization":"Bearer " + getAdminToken() } : {})
+        }
+      });
+
+      const meText = await meRes.text();
+      let meData = {};
+      try { meData = JSON.parse(meText); }
+      catch { meData = { _nonJson: String(meText || "").slice(0, 300) }; }
+
+      dbg({
+        step:"me_response",
+        status: meRes.status,
+        ok: meRes.ok,
+        meData
+      });
+
+      if(!meRes.ok){
+        $("msg").textContent = "❌ Logged in but /me failed. See debug box.";
+        return;
+      }
+
       $("msg").textContent = "✅ Logged in";
       setTimeout(()=> location.href = "/course-admin.html", 250);
     }catch(e){
       $("msg").textContent = "❌ " + e.message;
+      dbg({ step:"error", message: String(e.message || e) });
     }
   };
 </script>
