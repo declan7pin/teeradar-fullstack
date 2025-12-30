@@ -57,23 +57,20 @@
   </div>
 
 <script>
-  // ✅ Use ONE token key everywhere (course-admin.html must use the same key)
-  const ADMIN_TOKEN_KEY = "tr_course_admin_token";
+  const ADMIN_TOKEN_KEY = "course_admin_token";
 
   function getAdminToken(){
     try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ""; } catch { return ""; }
   }
   function setAdminToken(t){
-    try { if(t) localStorage.setItem(ADMIN_TOKEN_KEY, t); } catch {}
+    try { if(t) localStorage.setItem(ADMIN_TOKEN_KEY, String(t)); } catch {}
   }
   function clearAdminToken(){
     try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch {}
   }
 
-  // ✅ JSON fetch helper (adds Bearer token automatically)
   async function j(url, opts){
     const token = getAdminToken();
-
     const headers = {
       "Content-Type": "application/json",
       ...(opts && opts.headers ? opts.headers : {}),
@@ -88,9 +85,9 @@
 
     const data = await res.json().catch(()=> ({}));
 
-    // ✅ if backend returns a token, store it (supports token or accessToken)
+    // capture token if backend returns it
     if (data && (data.token || data.accessToken)) {
-      setAdminToken(String(data.token || data.accessToken));
+      setAdminToken(data.token || data.accessToken);
     }
 
     if(!res.ok) throw new Error(data.error || ("HTTP "+res.status));
@@ -105,7 +102,7 @@
     $("msg").textContent = "Logging out...";
     try{
       await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
-    }catch(e){}
+    }catch{}
     clearAdminToken();
     $("msg").textContent = "✅ Logged out";
   };
@@ -124,8 +121,15 @@
         body: JSON.stringify({ email, password })
       });
 
-      // ✅ If backend didn't return a token, cookie auth might still work
-      // (but the token is what fixes iOS/Safari cookie drops)
+      // If login returned token, it’s stored above.
+      // Quick sanity check before redirect:
+      const tok = getAdminToken();
+      if(!tok){
+        // still allow redirect, but show a clear message
+        $("msg").textContent = "⚠️ Logged in but no token saved. Check console / storage.";
+        return;
+      }
+
       $("msg").textContent = "✅ Logged in";
       setTimeout(()=> location.href = "/course-admin.html", 250);
     }catch(e){
