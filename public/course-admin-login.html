@@ -1,0 +1,105 @@
+<!-- public/course-admin-login.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar — Course Admin Login</title>
+  <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+  <style>
+    :root{
+      --teal:#00796b;
+      --teal-dark:#005e55;
+      --bg:#f4f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e2e8f0;
+      --danger:#b91c1c;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:560px;margin:26px auto;padding:0 16px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+    h2{margin:0 0 6px}
+    .muted{color:var(--muted);font-size:13px}
+    label{display:block;margin-top:12px;font-size:13px;color:var(--muted)}
+    input{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:12px;font:inherit}
+    button{margin-top:14px;width:100%;padding:12px;border:0;border-radius:12px;background:var(--teal);color:#fff;font-weight:800;cursor:pointer}
+    button.secondary{background:#475569}
+    .row{display:flex;gap:10px;margin-top:10px}
+    .row button{width:50%}
+    .msg{margin-top:10px;font-size:13px;color:var(--muted)}
+    a{color:var(--teal);text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2>Course Admin Login</h2>
+      <div class="muted">For golf courses only. Log in to manage tee times, pricing, bookings + analytics.</div>
+
+      <label>Email</label>
+      <input id="email" placeholder="admin@yourcourse.com.au" autocomplete="email" />
+
+      <label>Password</label>
+      <input id="pass" type="password" placeholder="Your password" autocomplete="current-password" />
+
+      <button id="loginBtn">Log in</button>
+
+      <div class="row">
+        <button id="goHomeBtn" class="secondary" type="button">Back to site</button>
+        <button id="logoutBtn" class="secondary" type="button">Log out</button>
+      </div>
+
+      <div id="msg" class="msg"></div>
+    </div>
+  </div>
+
+<script>
+  async function j(url, opts){
+    const res = await fetch(url, {
+      headers: { "Content-Type":"application/json" },
+      credentials: "include",
+      ...opts
+    });
+    const data = await res.json().catch(()=> ({}));
+    if(!res.ok) throw new Error(data.error || ("HTTP "+res.status));
+    return data;
+  }
+  const $ = (id)=>document.getElementById(id);
+
+  $("goHomeBtn").onclick = ()=> location.href = "/";
+
+  $("logoutBtn").onclick = async ()=>{
+    $("msg").textContent = "Logging out...";
+    try{
+      await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
+      $("msg").textContent = "✅ Logged out";
+    }catch(e){
+      $("msg").textContent = "❌ " + e.message;
+    }
+  };
+
+  $("loginBtn").onclick = async ()=>{
+    $("msg").textContent = "Logging in...";
+    try{
+      const email = ($("email").value || "").trim();
+      const password = $("pass").value || "";
+      if(!email || !password) throw new Error("missing_email_password");
+
+      const out = await j("/api/book/course-admin/login", {
+        method:"POST",
+        body: JSON.stringify({ email, password })
+      });
+
+      $("msg").textContent = "✅ Logged in";
+      // redirect to dashboard
+      setTimeout(()=> location.href = "/course-admin.html", 300);
+    }catch(e){
+      $("msg").textContent = "❌ " + e.message;
+    }
+  };
+</script>
+</body>
+</html>
