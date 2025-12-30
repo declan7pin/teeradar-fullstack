@@ -456,7 +456,7 @@ async function ensureBookingTables() {
 ensureBookingTables();
 /* ✅✅✅ END ONLY ADDITION ✅✅✅ */
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 
 // -------------------------------------------------
 // Stripe Webhook – must be BEFORE express.json
