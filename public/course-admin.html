@@ -1,0 +1,794 @@
+<!-- public/course-admin.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar — Course Admin</title>
+  <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+  <style>
+    :root{
+      --teal:#00796b;
+      --teal-dark:#005e55;
+      --bg:#f4f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e2e8f0;
+      --danger:#b91c1c;
+      --ok:#16a34a;
+      --pill:#ecfeff;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--text)}
+    .top{
+      background:var(--teal);
+      color:#fff;
+      padding:12px 14px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      position:sticky;top:0;z-index:5;
+    }
+    .top .brand{font-weight:900;display:flex;align-items:center;gap:10px}
+    .top a{color:#fff;text-decoration:none;font-weight:800}
+    .wrap{max-width:980px;margin:18px auto;padding:0 16px}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:900px){ .grid{grid-template-columns:1.2fr .8fr} }
+
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+    h2{margin:0 0 6px}
+    h3{margin:0 0 8px}
+    .muted{color:var(--muted);font-size:13px}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .tabBtn{padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:#fff;cursor:pointer;font-weight:800}
+    .tabBtn.active{background:var(--pill);border-color:#a7f3d0;color:#0f766e}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    input,button,select{font:inherit}
+    input,select{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:12px}
+    button{padding:11px 12px;border:0;border-radius:12px;background:var(--teal);color:#fff;font-weight:900;cursor:pointer}
+    button.secondary{background:#475569}
+    button.danger{background:var(--danger)}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;background:var(--pill);border:1px solid #a7f3d0;color:#0f766e;font-weight:900}
+
+    /* tables */
+    .tableWrap{overflow:auto;border:1px solid var(--border);border-radius:14px;background:#fff;margin-top:10px}
+    table{width:100%;border-collapse:separate;border-spacing:0;min-width:860px}
+    th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;font-size:13px;white-space:nowrap}
+    th{background:#f8fafc;font-weight:900;position:sticky;top:0;z-index:1}
+    tr:last-child td{border-bottom:none}
+    .right{text-align:right}
+
+    /* MiClub sheet */
+    .sheetWrap{overflow:auto;border:1px solid var(--border);border-radius:14px;background:#fff;margin-top:10px}
+    .sheetTable{width:100%;border-collapse:separate;border-spacing:0;min-width:980px}
+    .sheetTable th,.sheetTable td{padding:10px;border-bottom:1px solid var(--border);text-align:left;font-size:13px;vertical-align:top}
+    .sheetTable th{background:#f8fafc;font-weight:900;position:sticky;top:0;z-index:1}
+    .sheetTime{font-weight:900;white-space:nowrap}
+    .slotBox{border:1px solid var(--border);border-radius:12px;background:#fff;padding:8px}
+    .slotTop{display:flex;gap:8px;align-items:center;justify-content:space-between}
+    .slotName{font-weight:900}
+    .slotMeta{margin-top:6px;color:var(--muted);font-size:12px;display:flex;gap:10px;flex-wrap:wrap}
+    .slotEmpty{color:#94a3b8;font-size:12px}
+    .paidWrap{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--text)}
+    .paidWrap input{width:auto;padding:0;border:0}
+    .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border);background:#f8fafc;color:var(--text)}
+    .badge.ok{background:var(--pill);border-color:#a7f3d0;color:#0f766e}
+    .badge.warn{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+
+    .kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+    @media(min-width:900px){ .kpis{grid-template-columns:repeat(4,1fr)} }
+    .kpi{border:1px solid var(--border);border-radius:14px;padding:12px;background:#fff}
+    .kpi .label{font-size:12px;color:var(--muted);font-weight:800}
+    .kpi .value{font-size:18px;font-weight:1000;margin-top:6px}
+    .kpi .sub{font-size:12px;color:var(--muted);margin-top:4px}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="brand">
+      <span>TeeRadar</span>
+      <span class="pill" id="coursePill">Course Admin</span>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center">
+      <a href="/" title="Back to TeeRadar">Back to site</a>
+      <a href="/course-admin-login.html" id="logoutLink" title="Logout">Logout</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <h2>Course Admin Dashboard</h2>
+      <div class="muted" id="whoami">Loading course…</div>
+
+      <div class="tabs">
+        <button class="tabBtn active" data-tab="times">Tee times & pricing</button>
+        <button class="tabBtn" data-tab="sheet">Daily sheet (MiClub)</button>
+        <button class="tabBtn" data-tab="analytics">Analytics</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <!-- TIMES TAB -->
+        <div class="card" id="tab_times">
+          <h3>Create / Edit Tee Times</h3>
+          <div class="muted">Generate a day of times, or update pricing for a date.</div>
+
+          <div class="row" style="margin-top:10px">
+            <div>
+              <label class="muted">Play Date</label>
+              <input id="tDate" type="date" />
+            </div>
+            <div>
+              <label class="muted">Holes</label>
+              <select id="tHoles">
+                <option value="18">18</option>
+                <option value="9">9</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <div>
+              <label class="muted">Start</label>
+              <input id="tStart" value="06:00" />
+            </div>
+            <div>
+              <label class="muted">End</label>
+              <input id="tEnd" value="17:00" />
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <div>
+              <label class="muted">Interval (mins)</label>
+              <input id="tInterval" type="number" min="1" step="1" value="10" />
+            </div>
+            <div>
+              <label class="muted">Max players</label>
+              <input id="tMax" type="number" min="1" max="4" step="1" value="4" />
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <div>
+              <label class="muted">Price per player (cents)</label>
+              <input id="tPrice" type="number" min="0" step="1" value="0" />
+            </div>
+            <div>
+              <label class="muted">Status</label>
+              <select id="tStatus">
+                <option value="AVAILABLE">AVAILABLE</option>
+                <option value="BLOCKED">BLOCKED</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="genTimesBtn">Generate times</button>
+            <button id="updatePriceBtn" class="secondary">Update price for date</button>
+            <button id="viewTimesBtn" class="secondary">View times</button>
+            <button id="deleteTimesBtn" class="danger">Delete times (date)</button>
+          </div>
+
+          <div class="muted" id="timesMsg" style="margin-top:10px"></div>
+
+          <div class="tableWrap" id="timesTableWrap" style="display:none">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Holes</th>
+                  <th>Status</th>
+                  <th class="right">Max</th>
+                  <th class="right">Booked</th>
+                  <th class="right">Remaining</th>
+                  <th class="right">Price (c)</th>
+                </tr>
+              </thead>
+              <tbody id="timesBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- SHEET TAB -->
+        <div class="card" id="tab_sheet" style="display:none">
+          <h3>Daily Sheet</h3>
+          <div class="muted">MiClub-style view. Tick Paid to mark payment.</div>
+
+          <div class="row" style="margin-top:10px">
+            <div>
+              <label class="muted">Play Date</label>
+              <input id="sDate" type="date" />
+            </div>
+            <div>
+              <label class="muted">Holes</label>
+              <select id="sHoles">
+                <option value="">All</option>
+                <option value="18">18</option>
+                <option value="9">9</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="loadSheetBtn" class="secondary">Load sheet</button>
+            <button id="loadBookingsBtn" class="secondary">View bookings list</button>
+          </div>
+
+          <div class="muted" id="sheetMsg" style="margin-top:10px"></div>
+
+          <div id="sheetBox" style="display:none">
+            <div class="muted" style="margin-top:10px;font-weight:900">
+              Daily sheet <span class="pill" id="sheetPill"></span>
+            </div>
+            <div class="sheetWrap">
+              <table class="sheetTable">
+                <thead>
+                  <tr>
+                    <th style="width:90px;">Time</th>
+                    <th>Slot 1</th>
+                    <th>Slot 2</th>
+                    <th>Slot 3</th>
+                    <th>Slot 4</th>
+                  </tr>
+                </thead>
+                <tbody id="sheetBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="tableWrap" id="bookingsTableWrap" style="display:none">
+            <table>
+              <thead>
+                <tr>
+                  <th>Created</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Holes</th>
+                  <th class="right">Players</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th class="right">Total (c)</th>
+                  <th>Ref</th>
+                  <th>Paid</th>
+                </tr>
+              </thead>
+              <tbody id="bookingsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ANALYTICS TAB -->
+        <div class="card" id="tab_analytics" style="display:none">
+          <h3>Analytics</h3>
+          <div class="muted">Totals + breakdown (9/18 + with/without cart) + popular tee-off time.</div>
+
+          <div class="row" style="margin-top:10px">
+            <div>
+              <label class="muted">From</label>
+              <input id="aFrom" type="date" />
+            </div>
+            <div>
+              <label class="muted">To</label>
+              <input id="aTo" type="date" />
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="loadAnalyticsBtn" class="secondary">Load</button>
+          </div>
+
+          <div class="kpis" id="kpis"></div>
+
+          <div class="tableWrap" id="popularWrap" style="display:none">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th class="right">Bookings</th>
+                  <th class="right">Players</th>
+                  <th class="right">Gross (c)</th>
+                </tr>
+              </thead>
+              <tbody id="popularBody"></tbody>
+            </table>
+          </div>
+
+          <div class="muted" id="analyticsMsg" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h3>Quick Actions</h3>
+          <div class="muted">If you’re seeing “not_course_admin”, you’re not logged in.</div>
+          <div class="actions">
+            <button id="checkBtn" class="secondary">Check login</button>
+            <button id="logoutBtn" class="danger">Logout</button>
+          </div>
+          <div class="muted" id="qaMsg" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  async function j(url, opts){
+    const res = await fetch(url, {
+      headers:{ "Content-Type":"application/json" },
+      credentials:"include",
+      ...opts
+    });
+    const data = await res.json().catch(()=> ({}));
+    if(!res.ok) throw new Error(data.error || ("HTTP "+res.status));
+    return data;
+  }
+  const $ = (id)=>document.getElementById(id);
+
+  function escapeHtml(s){
+    return String(s ?? "")
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#039;");
+  }
+  function fmtDT(s){
+    try{
+      const d = new Date(s);
+      if(String(d)==="Invalid Date") return s || "";
+      return d.toLocaleString();
+    }catch{ return s || ""; }
+  }
+  function todayISO(){
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  function mondayISO(){
+    const d = new Date();
+    const day = d.getDay(); // 0 Sun..6 Sat
+    const diff = (day === 0 ? -6 : 1 - day); // back to Mon
+    d.setDate(d.getDate() + diff);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  function monthStartISO(){
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    return `${yyyy}-${mm}-01`;
+  }
+  function yearStartISO(){
+    const d = new Date();
+    return `${d.getFullYear()}-01-01`;
+  }
+
+  function setTab(name){
+    document.querySelectorAll(".tabBtn").forEach(b=>{
+      b.classList.toggle("active", b.getAttribute("data-tab")===name);
+    });
+    $("tab_times").style.display = (name==="times") ? "block" : "none";
+    $("tab_sheet").style.display = (name==="sheet") ? "block" : "none";
+    $("tab_analytics").style.display = (name==="analytics") ? "block" : "none";
+  }
+  document.querySelectorAll(".tabBtn").forEach(btn=>{
+    btn.onclick = ()=> setTab(btn.getAttribute("data-tab"));
+  });
+
+  async function whoAmI(){
+    const out = await j("/api/book/course-admin/me", { method:"GET" });
+    $("whoami").textContent = `Logged in as ${out.email} • course: ${out.slug}`;
+    $("coursePill").textContent = out.slug;
+    $("sheetPill").textContent = out.slug;
+    return out;
+  }
+
+  // ----- TIMES -----
+  function renderTimes(rows){
+    const tb = $("timesBody");
+    tb.innerHTML = "";
+    rows.forEach(r=>{
+      const maxP = Number(r.max_players ?? 0);
+      const bookedP = Number(r.booked_players ?? 0);
+      const remaining = Math.max(0, maxP - bookedP);
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(r.play_date || "")}</td>
+        <td>${escapeHtml(r.tee_time || "")}</td>
+        <td>${escapeHtml(r.holes ?? "")}</td>
+        <td>${escapeHtml(r.status || "")}</td>
+        <td class="right">${escapeHtml(r.max_players ?? "")}</td>
+        <td class="right">${escapeHtml(r.booked_players ?? "")}</td>
+        <td class="right">${remaining}</td>
+        <td class="right">${escapeHtml(r.price_per_player_cents ?? "")}</td>
+      `;
+      tb.appendChild(tr);
+    });
+    $("timesTableWrap").style.display = rows.length ? "block" : "none";
+  }
+
+  $("genTimesBtn").onclick = async ()=>{
+    $("timesMsg").textContent = "Generating...";
+    try{
+      const playDate = ($("tDate").value || "").trim();
+      const holes = Number($("tHoles").value || 18);
+      const start = ($("tStart").value || "06:00").trim();
+      const end = ($("tEnd").value || "17:00").trim();
+      const intervalMins = Number($("tInterval").value || 10);
+      const maxPlayers = Number($("tMax").value || 4);
+      const pricePerPlayerCents = Number($("tPrice").value || 0);
+      const status = String($("tStatus").value || "AVAILABLE").trim();
+
+      if(!playDate) throw new Error("date_required");
+
+      const out = await j("/api/book/course-admin/generate-times", {
+        method:"POST",
+        body: JSON.stringify({ playDate, holes, start, end, intervalMins, maxPlayers, pricePerPlayerCents, status })
+      });
+
+      $("timesMsg").textContent = `✅ Generated ${out.inserted || 0} times (${out.skipped || 0} skipped)`;
+    }catch(e){
+      $("timesMsg").textContent = "❌ " + e.message;
+    }
+  };
+
+  $("updatePriceBtn").onclick = async ()=>{
+    $("timesMsg").textContent = "Updating price...";
+    try{
+      const playDate = ($("tDate").value || "").trim();
+      const holes = Number($("tHoles").value || 18);
+      const pricePerPlayerCents = Number($("tPrice").value || 0);
+      if(!playDate) throw new Error("date_required");
+
+      const out = await j("/api/book/course-admin/times/price", {
+        method:"POST",
+        body: JSON.stringify({ playDate, holes, pricePerPlayerCents })
+      });
+
+      $("timesMsg").textContent = `✅ Updated ${out.updated || 0} times`;
+    }catch(e){
+      $("timesMsg").textContent = "❌ " + e.message;
+    }
+  };
+
+  $("viewTimesBtn").onclick = async ()=>{
+    $("timesMsg").textContent = "Loading...";
+    try{
+      const date = ($("tDate").value || "").trim();
+      const holes = ($("tHoles").value || "").trim();
+      if(!date) throw new Error("date_required");
+
+      const qs = new URLSearchParams({ date });
+      if(holes) qs.set("holes", holes);
+      const out = await j("/api/book/course-admin/times?" + qs.toString(), { method:"GET" });
+
+      const rows = out.times || [];
+      $("timesMsg").textContent = rows.length ? `✅ Loaded ${rows.length} times` : "✅ No times for that date";
+      renderTimes(rows);
+    }catch(e){
+      $("timesMsg").textContent = "❌ " + e.message;
+      renderTimes([]);
+    }
+  };
+
+  $("deleteTimesBtn").onclick = async ()=>{
+    $("timesMsg").textContent = "";
+    try{
+      const date = ($("tDate").value || "").trim();
+      const holes = ($("tHoles").value || "").trim();
+      if(!date) throw new Error("date_required");
+
+      if(!confirm(`DELETE tee times for ${date} ${holes ? `(${holes} holes)` : ""}? This cannot be undone.`)) return;
+
+      const qs = new URLSearchParams({ date });
+      if(holes) qs.set("holes", holes);
+
+      const out = await j("/api/book/course-admin/times?" + qs.toString(), { method:"DELETE" });
+      $("timesMsg").textContent = `✅ Deleted ${out.deletedTimes || 0} times`;
+      renderTimes([]);
+    }catch(e){
+      $("timesMsg").textContent = "❌ " + e.message;
+    }
+  };
+
+  // ----- SHEET -----
+  function buildSlotCell(item, slotIndex){
+    if(!item){
+      return `<div class="slotBox"><div class="slotEmpty">—</div></div>`;
+    }
+    const name = escapeHtml(item.name || "");
+    const email = escapeHtml(item.email || "");
+    const phone = escapeHtml(item.phone || "");
+    const ref = escapeHtml(item.reference || "");
+    const paid = !!item.paid;
+    const paidId = `paid_${ref}_${slotIndex}`;
+    const badge = paid ? `<span class="badge ok">PAID</span>` : `<span class="badge warn">UNPAID</span>`;
+
+    return `
+      <div class="slotBox">
+        <div class="slotTop">
+          <div class="slotName">${name || "Booking"}</div>
+          ${badge}
+        </div>
+        <div class="slotMeta">
+          ${email ? `<span>${email}</span>` : ""}
+          ${phone ? `<span>${phone}</span>` : ""}
+          ${ref ? `<span><code>${ref}</code></span>` : ""}
+        </div>
+        <div style="margin-top:8px">
+          <label class="paidWrap" for="${paidId}">
+            <input id="${paidId}" type="checkbox" data-ref="${ref}" ${paid ? "checked" : ""} />
+            Paid
+          </label>
+          <div class="muted" style="font-size:12px" data-paidmsg="${ref}"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function groupBookingsToSheet(timesRows, bookingsRows){
+    const byTime = new Map();
+    (bookingsRows || []).forEach(b=>{
+      const time = String(b.tee_time || "");
+      const players = Math.max(1, Number(b.players || 1));
+      for(let i=0;i<players;i++){
+        if(!byTime.has(time)) byTime.set(time, []);
+        byTime.get(time).push({
+          reference: b.reference || "",
+          name: b.name || "",
+          email: b.email || "",
+          phone: b.phone || "",
+          paid: !!b.paid
+        });
+      }
+    });
+
+    const out = [];
+    (timesRows || []).forEach(t=>{
+      const time = String(t.tee_time || "");
+      const arr = (byTime.get(time) || []).slice(0,4);
+      out.push({ time, slots:[arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null] });
+    });
+    return out;
+  }
+
+  async function loadBookingsList(){
+    $("sheetMsg").textContent = "Loading bookings...";
+    $("bookingsTableWrap").style.display = "none";
+    try{
+      const date = ($("sDate").value || "").trim();
+      const qs = new URLSearchParams();
+      if(date) qs.set("date", date);
+
+      const out = await j("/api/book/course-admin/bookings?" + qs.toString(), { method:"GET" });
+      const rows = out.bookings || [];
+
+      const tb = $("bookingsBody");
+      tb.innerHTML = "";
+      rows.forEach(r=>{
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${escapeHtml(fmtDT(r.created_at || ""))}</td>
+          <td>${escapeHtml(r.play_date || "")}</td>
+          <td>${escapeHtml(r.tee_time || "")}</td>
+          <td>${escapeHtml(r.holes ?? "")}</td>
+          <td class="right">${escapeHtml(r.players ?? "")}</td>
+          <td>${escapeHtml(r.name || "")}</td>
+          <td>${escapeHtml(r.email || "")}</td>
+          <td>${escapeHtml(r.phone || "")}</td>
+          <td class="right">${escapeHtml(r.gross_cents ?? "")}</td>
+          <td><code>${escapeHtml(r.reference || "")}</code></td>
+          <td>${r.paid ? "✅" : "—"}</td>
+        `;
+        tb.appendChild(tr);
+      });
+
+      $("sheetMsg").textContent = rows.length ? `✅ Loaded ${rows.length} bookings` : "✅ No bookings yet";
+      $("bookingsTableWrap").style.display = "block";
+    }catch(e){
+      $("sheetMsg").textContent = "❌ " + e.message;
+    }
+  }
+
+  $("loadBookingsBtn").onclick = loadBookingsList;
+
+  $("loadSheetBtn").onclick = async ()=>{
+    $("sheetMsg").textContent = "Loading daily sheet...";
+    $("sheetBox").style.display = "none";
+    $("bookingsTableWrap").style.display = "none";
+
+    try{
+      const date = ($("sDate").value || "").trim();
+      const holes = ($("sHoles").value || "").trim();
+      if(!date) throw new Error("date_required");
+
+      const qsTimes = new URLSearchParams({ date });
+      if(holes) qsTimes.set("holes", holes);
+
+      const timesOut = await j("/api/book/course-admin/times?" + qsTimes.toString(), { method:"GET" });
+      const timesRows = timesOut.times || [];
+
+      const qsBookings = new URLSearchParams({ date });
+      const bookingsOut = await j("/api/book/course-admin/bookings?" + qsBookings.toString(), { method:"GET" });
+      const bookingsRows = bookingsOut.bookings || [];
+
+      if(!timesRows.length){
+        $("sheetMsg").textContent = "✅ No tee times found for that date (generate first).";
+        return;
+      }
+
+      const sheet = groupBookingsToSheet(timesRows, bookingsRows);
+      $("sheetPill").textContent = `${$("coursePill").textContent} • ${date}`;
+
+      const tb = $("sheetBody");
+      tb.innerHTML = "";
+      sheet.forEach(row=>{
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="sheetTime">${escapeHtml(row.time)}</td>
+          <td>${buildSlotCell(row.slots[0], 1)}</td>
+          <td>${buildSlotCell(row.slots[1], 2)}</td>
+          <td>${buildSlotCell(row.slots[2], 3)}</td>
+          <td>${buildSlotCell(row.slots[3], 4)}</td>
+        `;
+        tb.appendChild(tr);
+      });
+
+      // paid toggles
+      tb.querySelectorAll('input[type="checkbox"][data-ref]').forEach(cb=>{
+        cb.onchange = async ()=>{
+          const ref = cb.getAttribute("data-ref") || "";
+          const paid = cb.checked;
+          const msgEl = tb.querySelector(`[data-paidmsg="${CSS.escape(ref)}"]`);
+          if(msgEl) msgEl.textContent = "Saving...";
+          try{
+            await j("/api/book/course-admin/booking-paid", {
+              method:"POST",
+              body: JSON.stringify({ reference: ref, paid })
+            });
+            if(msgEl) msgEl.textContent = "✅ saved";
+          }catch(e){
+            cb.checked = !cb.checked;
+            if(msgEl) msgEl.textContent = "❌ " + e.message;
+          }
+        };
+      });
+
+      $("sheetBox").style.display = "block";
+      $("sheetMsg").textContent = `✅ Loaded sheet (${timesRows.length} tee times, ${bookingsRows.length} bookings)`;
+    }catch(e){
+      $("sheetMsg").textContent = "❌ " + e.message;
+    }
+  };
+
+  // ----- ANALYTICS -----
+  function renderKpis(summary){
+    const el = $("kpis");
+    el.innerHTML = "";
+
+    const cards = [
+      { label:"Bookings", value: summary.bookings_count ?? 0, sub:"count" },
+      { label:"Players", value: summary.players_sum ?? 0, sub:"sum" },
+      { label:"Gross (c)", value: summary.gross_cents_sum ?? 0, sub:"green fees + cart" },
+      { label:"Paid", value: summary.paid_count ?? 0, sub:"marked paid" },
+    ];
+
+    cards.forEach(c=>{
+      const d = document.createElement("div");
+      d.className = "kpi";
+      d.innerHTML = `<div class="label">${escapeHtml(c.label)}</div><div class="value">${escapeHtml(c.value)}</div><div class="sub">${escapeHtml(c.sub)}</div>`;
+      el.appendChild(d);
+    });
+
+    // breakdown cards (9/18 + cart/no cart)
+    const b = summary.breakdown || {};
+    const extra = [
+      { label:"18 holes", value: b.h18_bookings ?? 0, sub:"bookings" },
+      { label:"9 holes", value: b.h9_bookings ?? 0, sub:"bookings" },
+      { label:"With cart", value: b.cart_yes_bookings ?? 0, sub:"bookings" },
+      { label:"No cart", value: b.cart_no_bookings ?? 0, sub:"bookings" },
+    ];
+    extra.forEach(c=>{
+      const d = document.createElement("div");
+      d.className = "kpi";
+      d.innerHTML = `<div class="label">${escapeHtml(c.label)}</div><div class="value">${escapeHtml(c.value)}</div><div class="sub">${escapeHtml(c.sub)}</div>`;
+      el.appendChild(d);
+    });
+  }
+
+  function renderPopular(rows){
+    const tb = $("popularBody");
+    tb.innerHTML = "";
+    rows.forEach(r=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(r.tee_time || "")}</td>
+        <td class="right">${escapeHtml(r.bookings ?? 0)}</td>
+        <td class="right">${escapeHtml(r.players ?? 0)}</td>
+        <td class="right">${escapeHtml(r.gross_cents ?? 0)}</td>
+      `;
+      tb.appendChild(tr);
+    });
+    $("popularWrap").style.display = rows.length ? "block" : "none";
+  }
+
+  $("loadAnalyticsBtn").onclick = async ()=>{
+    $("analyticsMsg").textContent = "Loading...";
+    try{
+      const from = ($("aFrom").value || "").trim();
+      const to = ($("aTo").value || "").trim();
+      if(!from || !to) throw new Error("missing_from_to");
+
+      const out = await j("/api/book/course-admin/analytics/summary?" + new URLSearchParams({ from, to }).toString(), { method:"GET" });
+      renderKpis(out.summary || {});
+      const pop = await j("/api/book/course-admin/analytics/popular-times?" + new URLSearchParams({ from, to }).toString(), { method:"GET" });
+      renderPopular(pop.rows || []);
+      $("analyticsMsg").textContent = "✅ Loaded";
+    }catch(e){
+      $("analyticsMsg").textContent = "❌ " + e.message;
+      renderPopular([]);
+      $("kpis").innerHTML = "";
+    }
+  };
+
+  // Quick Actions
+  $("checkBtn").onclick = async ()=>{
+    $("qaMsg").textContent = "Checking...";
+    try{
+      const me = await j("/api/book/course-admin/me", { method:"GET" });
+      $("qaMsg").textContent = `✅ Logged in as ${me.email} (${me.slug})`;
+    }catch(e){
+      $("qaMsg").textContent = "❌ " + e.message;
+    }
+  };
+  $("logoutBtn").onclick = async ()=>{
+    $("qaMsg").textContent = "Logging out...";
+    try{
+      await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
+      location.href = "/course-admin-login.html";
+    }catch(e){
+      $("qaMsg").textContent = "❌ " + e.message;
+    }
+  };
+  $("logoutLink").onclick = async (ev)=>{
+    ev.preventDefault();
+    try{
+      await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
+    }catch{}
+    location.href = "/course-admin-login.html";
+  };
+
+  // init defaults
+  (function init(){
+    const t = todayISO();
+    $("tDate").value = t;
+    $("sDate").value = t;
+
+    // analytics default: this week
+    $("aFrom").value = mondayISO();
+    $("aTo").value = t;
+  })();
+
+  // boot
+  (async function(){
+    try{
+      await whoAmI();
+    }catch(e){
+      // not logged in
+      location.href = "/course-admin-login.html";
+    }
+  })();
+</script>
+</body>
+</html>
