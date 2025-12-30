@@ -536,6 +536,21 @@ app.get("/api/book/admin/_debug", (req, res) => {
     },
   });
 });
+// ✅✅✅ ADD (needed): mount booking views router (admin/course-admin views) ✅✅✅
+app.use((req, res, next) => {
+  // attach super-admin helper for booking views
+  req.isSuperAdmin = (email) => isSuperAdmin(email);
+
+  // attach booking-admin helper/flag for routers to use
+  req.isBookingAdmin = () => _isBookingAdminReq(req);
+  req.bookingAdmin = _isBookingAdminReq(req);
+
+  next();
+});
+
+app.use(bookingViewsRouter);
+// ✅✅✅ END ADD ✅✅✅
+
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 /* ✅✅✅ ONLY ADDITION (needed): more robust scorecards file discovery (Render-safe) ✅✅✅ */
