@@ -503,7 +503,12 @@ res.cookie("tr_course_admin_token", courseAdminToken, {
   path: "/",
 });
 // ✅✅✅ END ADD ✅✅✅
-
+console.log("✅ course-admin/login OK", {
+  email: u.email,
+  slug: u.slug,
+  isHttps: isHttps(req),
+  tokenLen: courseAdminToken ? courseAdminToken.length : 0,
+});
     res.json({ ok: true, slug: u.slug, token: courseAdminToken });
   } catch (e) {
     console.error("course-admin/login", e);
