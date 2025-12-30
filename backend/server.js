@@ -460,7 +460,25 @@ async function ensureBookingTables() {
 ensureBookingTables();
 /* ✅✅✅ END ONLY ADDITION ✅✅✅ */
 
-app.use(cors({ origin: true, credentials: true }));
+/* ✅✅✅ ONLY ADDITION (needed): FIX CORS for credentials/cookies (origin cannot be "true") ✅✅✅ */
+const ALLOWED_ORIGINS = [
+  "https://teeradar.com.au",
+  "https://www.teeradar.com.au",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // allow server-to-server/no-origin
+      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      return cb(new Error("CORS_not_allowed"));
+    },
+    credentials: true,
+  })
+);
+/* ✅✅✅ END ONLY ADDITION ✅✅✅ */
 
 // -------------------------------------------------
 // Stripe Webhook – must be BEFORE express.json
@@ -521,11 +539,11 @@ function _isBookingAdminReq(req) {
   if (expected && got && got === expected) return true;
 
   return (
-  req.cookies?.tr_book_admin === "1" ||   // ✅ ADD THIS
-  req.cookies?.booking_admin === "1" ||
-  req.cookies?.bookingAdmin === "1" ||
-  req.cookies?.booking_admin_auth === "1"
-);
+    req.cookies?.tr_book_admin === "1" ||   // ✅ ADD THIS
+    req.cookies?.booking_admin === "1" ||
+    req.cookies?.bookingAdmin === "1" ||
+    req.cookies?.booking_admin_auth === "1"
+  );
 }
 
 // ✅ DEBUG: confirm admin auth is being received (must be ABOVE app.get("*") fallback)
@@ -535,6 +553,7 @@ app.get("/api/book/admin/_debug", (req, res) => {
     gotHeader: !!req.headers["x-booking-admin-secret"],
     isBookingAdmin: _isBookingAdminReq(req),
     cookies: {
+      tr_book_admin: req.cookies?.tr_book_admin || null, // ✅ ADD THIS
       booking_admin: req.cookies?.booking_admin || null,
       bookingAdmin: req.cookies?.bookingAdmin || null,
       booking_admin_auth: req.cookies?.booking_admin_auth || null,
