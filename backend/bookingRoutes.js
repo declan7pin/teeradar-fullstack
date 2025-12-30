@@ -498,7 +498,7 @@ const courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email });
 res.cookie("tr_course_admin_token", courseAdminToken, {
   httpOnly: true,
   sameSite: "lax",
-  secure: true,
+  secure: isHttps(req),
   maxAge: 7 * 24 * 60 * 60 * 1000,
   path: "/",
 });
