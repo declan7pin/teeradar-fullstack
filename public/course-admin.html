@@ -319,12 +319,52 @@
   </div>
 
 <script>
+  // ✅ NEW: accept auth from either cookie session OR localStorage token
+  const COURSE_ADMIN_TOKEN_KEYS = [
+    "teeradar_course_admin_token",
+    "course_admin_token",
+    "teeradar_admin_token"
+  ];
+  const COURSE_ADMIN_EMAIL_KEYS = [
+    "teeradar_course_admin_email",
+    "course_admin_email"
+  ];
+
+  function getCourseAdminToken(){
+    try{
+      for(const k of COURSE_ADMIN_TOKEN_KEYS){
+        const v = localStorage.getItem(k);
+        if(v && String(v).trim()) return String(v).trim();
+      }
+    }catch(e){}
+    return "";
+  }
+  function clearCourseAdminAuth(){
+    try{
+      COURSE_ADMIN_TOKEN_KEYS.forEach(k=> localStorage.removeItem(k));
+      COURSE_ADMIN_EMAIL_KEYS.forEach(k=> localStorage.removeItem(k));
+    }catch(e){}
+  }
+
   async function j(url, opts){
+    const tok = getCourseAdminToken();
+
+    const headers = {
+      "Content-Type":"application/json",
+      ...(opts && opts.headers ? opts.headers : {})
+    };
+
+    // ✅ NEW: send Bearer token when available
+    if(tok){
+      headers["Authorization"] = "Bearer " + tok;
+    }
+
     const res = await fetch(url, {
-      headers:{ "Content-Type":"application/json" },
+      headers,
       credentials:"include",
       ...opts
     });
+
     const data = await res.json().catch(()=> ({}));
     if(!res.ok) throw new Error(data.error || ("HTTP "+res.status));
     return data;
@@ -756,16 +796,16 @@
     $("qaMsg").textContent = "Logging out...";
     try{
       await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
-      location.href = "/course-admin-login.html";
-    }catch(e){
-      $("qaMsg").textContent = "❌ " + e.message;
-    }
+    }catch(e){}
+    clearCourseAdminAuth(); // ✅ NEW
+    location.href = "/course-admin-login.html";
   };
   $("logoutLink").onclick = async (ev)=>{
     ev.preventDefault();
     try{
       await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
     }catch{}
+    clearCourseAdminAuth(); // ✅ NEW
     location.href = "/course-admin-login.html";
   };
 
@@ -785,7 +825,7 @@
     try{
       await whoAmI();
     }catch(e){
-      // not logged in
+      // not logged in (cookie not present AND token not working)
       location.href = "/course-admin-login.html";
     }
   })();
