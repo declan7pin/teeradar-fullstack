@@ -31,7 +31,17 @@
     .row button{width:50%}
     .msg{margin-top:10px;font-size:13px;color:var(--muted)}
     a{color:var(--teal);text-decoration:none}
-    pre{white-space:pre-wrap;margin-top:10px;font-size:12px;color:#0f172a;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px;display:none}
+    pre{
+      display:none;
+      white-space:pre-wrap;
+      margin-top:10px;
+      font-size:12px;
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+      border-radius:12px;
+      padding:10px;
+      color:#0f172a;
+    }
   </style>
 </head>
 <body>
@@ -59,139 +69,94 @@
   </div>
 
 <script>
-  // ✅ Keep token support as optional fallback, but DO NOT require it.
-  // IMPORTANT: This key must match course-admin.html (you currently use tr_course_admin_token there)
+  // ✅ Single source of truth token key (must match course-admin.html)
   const ADMIN_TOKEN_KEY = "tr_course_admin_token";
 
   function getAdminToken(){
     try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ""; } catch { return ""; }
   }
   function setAdminToken(t){
-    try { if(t) localStorage.setItem(ADMIN_TOKEN_KEY, String(t)); } catch {}
+    try { localStorage.setItem(ADMIN_TOKEN_KEY, String(t || "")); } catch {}
   }
   function clearAdminToken(){
     try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch {}
   }
 
-  const $ = (id)=>document.getElementById(id);
-
-  function dbg(o){
-    const el = $("debug");
+  function debug(o){
+    const el = document.getElementById("debug");
     if(!el) return;
     el.style.display = "block";
     el.textContent = (typeof o === "string") ? o : JSON.stringify(o, null, 2);
   }
 
   async function j(url, opts){
-    const token = getAdminToken();
-    const headers = {
-      "Content-Type": "application/json",
-      ...(opts && opts.headers ? opts.headers : {}),
-      ...(token ? { "Authorization": "Bearer " + token } : {}),
-    };
-
     const res = await fetch(url, {
       credentials: "include",
       ...opts,
-      headers,
+      headers: {
+        "Content-Type": "application/json",
+        ...(opts && opts.headers ? opts.headers : {})
+      }
     });
 
-    const text = await res.text();
+    const raw = await res.text();
     let data = {};
-    try { data = JSON.parse(text); }
-    catch { data = { _nonJson: String(text || "").slice(0, 300) }; }
+    try { data = JSON.parse(raw); } catch { data = { _nonJson: raw.slice(0,300) }; }
 
-    // ✅ capture token if backend returns it (optional)
-    if (data && (data.token || data.accessToken)) {
-      setAdminToken(String(data.token || data.accessToken));
+    if(!res.ok) {
+      const err = data && data.error ? data.error : ("HTTP "+res.status);
+      throw new Error(err);
     }
-
-    if(!res.ok) throw new Error(data.error || ("HTTP "+res.status));
     return data;
   }
+
+  const $ = (id)=>document.getElementById(id);
 
   $("goHomeBtn").onclick = ()=> location.href = "/";
 
   $("logoutBtn").onclick = async ()=>{
     $("msg").textContent = "Logging out...";
-    try{
-      await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
-    }catch{}
+    try{ await j("/api/book/course-admin/logout", { method:"POST", body:"{}" }); }catch{}
     clearAdminToken();
-    dbg({ step:"logout", tokenAfter: !!getAdminToken() });
     $("msg").textContent = "✅ Logged out";
+    debug({ tokenNow: getAdminToken() ? "present" : "missing" });
   };
 
   $("loginBtn").onclick = async ()=>{
     $("msg").textContent = "Logging in...";
-    dbg("Starting login...");
-
+    debug(""); // clear visible output
     try{
       const email = ($("email").value || "").trim();
       const password = $("pass").value || "";
       if(!email || !password) throw new Error("missing_email_password");
 
-      // Call login
-      const loginRes = await fetch("/api/book/course-admin/login", {
+      // ✅ Hard clear before login (avoid stale token)
+      clearAdminToken();
+
+      const out = await j("/api/book/course-admin/login", {
         method:"POST",
-        credentials:"include",
-        headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ email, password })
       });
 
-      const loginText = await loginRes.text();
-      let loginData = {};
-      try { loginData = JSON.parse(loginText); }
-      catch { loginData = { _nonJson: String(loginText || "").slice(0, 300) }; }
-
-      // Save token if present (optional)
-      if (loginData && (loginData.token || loginData.accessToken)) {
-        setAdminToken(String(loginData.token || loginData.accessToken));
+      // ✅ REQUIRE token for admin pages (don’t rely on cookies)
+      if(!out || !out.token){
+        debug({ step:"login_ok_but_no_token", out });
+        throw new Error("login_no_token_returned");
       }
 
-      dbg({
-        step:"login_response",
-        status: loginRes.status,
-        ok: loginRes.ok,
-        data: loginData,
-        tokenSaved: !!getAdminToken(),
-        tokenPreview: (getAdminToken() || "").slice(0, 20) + (getAdminToken() ? "…" : "")
+      setAdminToken(out.token);
+
+      debug({
+        step: "login_saved_token",
+        tokenPreview: String(out.token).slice(0, 20) + "…",
+        slug: out.slug || null
       });
-
-      if(!loginRes.ok) throw new Error(loginData.error || ("HTTP "+loginRes.status));
-
-      // Immediately test /me (this tells us EXACTLY why you're being kicked out)
-      const meRes = await fetch("/api/book/course-admin/me", {
-        method:"GET",
-        credentials:"include",
-        headers:{
-          "Content-Type":"application/json",
-          ...(getAdminToken() ? { "Authorization":"Bearer " + getAdminToken() } : {})
-        }
-      });
-
-      const meText = await meRes.text();
-      let meData = {};
-      try { meData = JSON.parse(meText); }
-      catch { meData = { _nonJson: String(meText || "").slice(0, 300) }; }
-
-      dbg({
-        step:"me_response",
-        status: meRes.status,
-        ok: meRes.ok,
-        meData
-      });
-
-      if(!meRes.ok){
-        $("msg").textContent = "❌ Logged in but /me failed. See debug box.";
-        return;
-      }
 
       $("msg").textContent = "✅ Logged in";
       setTimeout(()=> location.href = "/course-admin.html", 250);
     }catch(e){
       $("msg").textContent = "❌ " + e.message;
-      dbg({ step:"error", message: String(e.message || e) });
+      debug({ step:"login_error", msg: String(e.message || e), tokenNow: getAdminToken() ? "present" : "missing" });
     }
   };
 </script>
