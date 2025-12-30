@@ -319,56 +319,49 @@
   </div>
 
 <script>
-  // ✅ NEW: accept auth from either cookie session OR localStorage token
-  const COURSE_ADMIN_TOKEN_KEYS = [
-    "teeradar_course_admin_token",
-    "course_admin_token",
-    "teeradar_admin_token"
-  ];
-  const COURSE_ADMIN_EMAIL_KEYS = [
-    "teeradar_course_admin_email",
-    "course_admin_email"
-  ];
+  // ✅ Option A: token fallback (stores token in localStorage if backend returns it)
+  const ADMIN_TOKEN_KEY = "course_admin_token";
 
-  function getCourseAdminToken(){
-    try{
-      for(const k of COURSE_ADMIN_TOKEN_KEYS){
-        const v = localStorage.getItem(k);
-        if(v && String(v).trim()) return String(v).trim();
-      }
-    }catch(e){}
-    return "";
+  function getAdminToken(){
+    try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ""; } catch { return ""; }
   }
-  function clearCourseAdminAuth(){
-    try{
-      COURSE_ADMIN_TOKEN_KEYS.forEach(k=> localStorage.removeItem(k));
-      COURSE_ADMIN_EMAIL_KEYS.forEach(k=> localStorage.removeItem(k));
-    }catch(e){}
+  function setAdminToken(t){
+    try {
+      if (t) localStorage.setItem(ADMIN_TOKEN_KEY, t);
+    } catch {}
+  }
+  function clearAdminToken(){
+    try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch {}
   }
 
   async function j(url, opts){
-    const tok = getCourseAdminToken();
+    const token = getAdminToken();
 
     const headers = {
       "Content-Type":"application/json",
       ...(opts && opts.headers ? opts.headers : {})
     };
 
-    // ✅ NEW: send Bearer token when available
-    if(tok){
-      headers["Authorization"] = "Bearer " + tok;
-    }
+    // ✅ Send token as Bearer (backend must accept this OR cookies)
+    if (token) headers["Authorization"] = "Bearer " + token;
 
     const res = await fetch(url, {
-      headers,
       credentials:"include",
-      ...opts
+      ...opts,
+      headers
     });
 
     const data = await res.json().catch(()=> ({}));
+
+    // ✅ If backend ever returns a token, capture it
+    if (data && (data.token || data.accessToken)) {
+      setAdminToken(String(data.token || data.accessToken));
+    }
+
     if(!res.ok) throw new Error(data.error || ("HTTP "+res.status));
     return data;
   }
+
   const $ = (id)=>document.getElementById(id);
 
   function escapeHtml(s){
@@ -402,16 +395,6 @@
     const mm = String(d.getMonth()+1).padStart(2,"0");
     const dd = String(d.getDate()).padStart(2,"0");
     return `${yyyy}-${mm}-${dd}`;
-  }
-  function monthStartISO(){
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth()+1).padStart(2,"0");
-    return `${yyyy}-${mm}-01`;
-  }
-  function yearStartISO(){
-    const d = new Date();
-    return `${d.getFullYear()}-01-01`;
   }
 
   function setTab(name){
@@ -685,7 +668,6 @@
         tb.appendChild(tr);
       });
 
-      // paid toggles
       tb.querySelectorAll('input[type="checkbox"][data-ref]').forEach(cb=>{
         cb.onchange = async ()=>{
           const ref = cb.getAttribute("data-ref") || "";
@@ -731,7 +713,6 @@
       el.appendChild(d);
     });
 
-    // breakdown cards (9/18 + cart/no cart)
     const b = summary.breakdown || {};
     const extra = [
       { label:"18 holes", value: b.h18_bookings ?? 0, sub:"bookings" },
@@ -792,40 +773,39 @@
       $("qaMsg").textContent = "❌ " + e.message;
     }
   };
+
   $("logoutBtn").onclick = async ()=>{
     $("qaMsg").textContent = "Logging out...";
     try{
       await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
-    }catch(e){}
-    clearCourseAdminAuth(); // ✅ NEW
+    }catch{}
+    clearAdminToken();
     location.href = "/course-admin-login.html";
   };
+
   $("logoutLink").onclick = async (ev)=>{
     ev.preventDefault();
     try{
       await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
     }catch{}
-    clearCourseAdminAuth(); // ✅ NEW
+    clearAdminToken();
     location.href = "/course-admin-login.html";
   };
 
-  // init defaults
   (function init(){
     const t = todayISO();
     $("tDate").value = t;
     $("sDate").value = t;
-
-    // analytics default: this week
     $("aFrom").value = mondayISO();
     $("aTo").value = t;
   })();
 
-  // boot
   (async function(){
     try{
       await whoAmI();
     }catch(e){
-      // not logged in (cookie not present AND token not working)
+      // not logged in (cookie missing AND no bearer token)
+      clearAdminToken();
       location.href = "/course-admin-login.html";
     }
   })();
