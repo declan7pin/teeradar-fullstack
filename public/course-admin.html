@@ -53,7 +53,6 @@
     .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
     .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;background:var(--pill);border:1px solid #a7f3d0;color:#0f766e;font-weight:900}
 
-    /* tables */
     .tableWrap{overflow:auto;border:1px solid var(--border);border-radius:14px;background:#fff;margin-top:10px}
     table{width:100%;border-collapse:separate;border-spacing:0;min-width:860px}
     th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;font-size:13px;white-space:nowrap}
@@ -61,7 +60,6 @@
     tr:last-child td{border-bottom:none}
     .right{text-align:right}
 
-    /* MiClub sheet */
     .sheetWrap{overflow:auto;border:1px solid var(--border);border-radius:14px;background:#fff;margin-top:10px}
     .sheetTable{width:100%;border-collapse:separate;border-spacing:0;min-width:980px}
     .sheetTable th,.sheetTable td{padding:10px;border-bottom:1px solid var(--border);text-align:left;font-size:13px;vertical-align:top}
@@ -84,6 +82,18 @@
     .kpi .label{font-size:12px;color:var(--muted);font-weight:800}
     .kpi .value{font-size:18px;font-weight:1000;margin-top:6px}
     .kpi .sub{font-size:12px;color:var(--muted);margin-top:4px}
+
+    pre{
+      display:none;
+      white-space:pre-wrap;
+      margin-top:10px;
+      font-size:12px;
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+      border-radius:12px;
+      padding:10px;
+      color:#0f172a;
+    }
   </style>
 </head>
 <body>
@@ -307,41 +317,39 @@
       <div>
         <div class="card">
           <h3>Quick Actions</h3>
-          <div class="muted">If you’re seeing “not_course_admin”, you’re not logged in.</div>
+          <div class="muted">If you’re seeing “not_course_admin”, token isn’t being sent or is invalid.</div>
           <div class="actions">
             <button id="checkBtn" class="secondary">Check login</button>
             <button id="logoutBtn" class="danger">Logout</button>
           </div>
           <div class="muted" id="qaMsg" style="margin-top:10px"></div>
-        <pre id="debugBox" style="
-  display:none;
-  white-space:pre-wrap;
-  margin-top:10px;
-  font-size:12px;
-  background:#f8fafc;
-  border:1px solid #e2e8f0;
-  border-radius:12px;
-  padding:10px;
-"></pre>
+          <pre id="debugBox"></pre>
         </div>
       </div>
     </div>
   </div>
 
 <script>
-  // ✅ Option A: token fallback (stores token in localStorage if backend returns it)
-const ADMIN_TOKEN_KEY = "course_admin_token";
+  // ✅ Single source of truth token key (must match course-admin-login.html)
+  const ADMIN_TOKEN_KEY = "tr_course_admin_token";
 
   function getAdminToken(){
     try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ""; } catch { return ""; }
   }
   function setAdminToken(t){
-    try {
-      if (t) localStorage.setItem(ADMIN_TOKEN_KEY, t);
-    } catch {}
+    try { if(t) localStorage.setItem(ADMIN_TOKEN_KEY, String(t)); } catch {}
   }
   function clearAdminToken(){
     try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch {}
+  }
+
+  const $ = (id)=>document.getElementById(id);
+
+  function debug(o){
+    const el = $("debugBox");
+    if(!el) return;
+    el.style.display = "block";
+    el.textContent = (typeof o === "string") ? o : JSON.stringify(o, null, 2);
   }
 
   async function j(url, opts){
@@ -352,7 +360,7 @@ const ADMIN_TOKEN_KEY = "course_admin_token";
       ...(opts && opts.headers ? opts.headers : {})
     };
 
-    // ✅ Send token as Bearer (backend must accept this OR cookies)
+    // ✅ ALWAYS use Bearer token for admin
     if (token) headers["Authorization"] = "Bearer " + token;
 
     const res = await fetch(url, {
@@ -361,24 +369,15 @@ const ADMIN_TOKEN_KEY = "course_admin_token";
       headers
     });
 
-    const data = await res.json().catch(()=> ({}));
-
-    // ✅ If backend ever returns a token, capture it
-    if (data && (data.token || data.accessToken)) {
-      setAdminToken(String(data.token || data.accessToken));
-    }
+    const raw = await res.text();
+    let data = {};
+    try { data = JSON.parse(raw); }
+    catch { data = { _nonJson: raw.slice(0,300) }; }
 
     if(!res.ok) throw new Error(data.error || ("HTTP "+res.status));
     return data;
   }
 
-  const $ = (id)=>document.getElementById(id);
-function debug(o){
-  const el = $("debugBox");
-  if(!el) return;
-  el.style.display = "block";
-  el.textContent = (typeof o === "string") ? o : JSON.stringify(o, null, 2);
-}
   function escapeHtml(s){
     return String(s ?? "")
       .replace(/&/g,"&amp;")
@@ -403,8 +402,8 @@ function debug(o){
   }
   function mondayISO(){
     const d = new Date();
-    const day = d.getDay(); // 0 Sun..6 Sat
-    const diff = (day === 0 ? -6 : 1 - day); // back to Mon
+    const day = d.getDay();
+    const diff = (day === 0 ? -6 : 1 - day);
     d.setDate(d.getDate() + diff);
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth()+1).padStart(2,"0");
@@ -778,7 +777,6 @@ function debug(o){
     }
   };
 
-  // Quick Actions
   $("checkBtn").onclick = async ()=>{
     $("qaMsg").textContent = "Checking...";
     try{
@@ -786,23 +784,20 @@ function debug(o){
       $("qaMsg").textContent = `✅ Logged in as ${me.email} (${me.slug})`;
     }catch(e){
       $("qaMsg").textContent = "❌ " + e.message;
+      debug({ step:"check_failed", tokenPresent: !!getAdminToken(), tokenPreview: getAdminToken() ? getAdminToken().slice(0,20)+"…" : null });
     }
   };
 
   $("logoutBtn").onclick = async ()=>{
     $("qaMsg").textContent = "Logging out...";
-    try{
-      await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
-    }catch{}
+    try{ await j("/api/book/course-admin/logout", { method:"POST", body:"{}" }); }catch{}
     clearAdminToken();
     location.href = "/course-admin-login.html";
   };
 
   $("logoutLink").onclick = async (ev)=>{
     ev.preventDefault();
-    try{
-      await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
-    }catch{}
+    try{ await j("/api/book/course-admin/logout", { method:"POST", body:"{}" }); }catch{}
     clearAdminToken();
     location.href = "/course-admin-login.html";
   };
@@ -815,50 +810,17 @@ function debug(o){
     $("aTo").value = t;
   })();
 
-   (async function(){
-  try{
+  (async function(){
     const token = getAdminToken();
-
-    debug({
-      step: "init",
-      tokenPresent: !!token,
-      tokenPreview: token ? token.slice(0,20) + "…" : null,
-      cookiesEnabled: navigator.cookieEnabled
-    });
-
-    const res = await fetch("/api/book/course-admin/me", {
-      method: "GET",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { "Authorization": "Bearer " + token } : {})
-      }
-    });
-
-    const raw = await res.text();
-    let data = {};
-    try { data = JSON.parse(raw); }
-    catch { data = { _nonJson: raw.slice(0,300) }; }
-
-    debug({
-      step: "me_response",
-      status: res.status,
-      ok: res.ok,
-      data
-    });
-
-    if(!res.ok) throw new Error(data.error || "me_failed");
-
-    $("whoami").textContent = `Logged in as ${data.email} • course: ${data.slug}`;
-    $("coursePill").textContent = data.slug;
-    $("sheetPill").textContent = data.slug;
-
-  }catch(e){
-    debug({ step:"redirecting", reason: String(e.message || e) });
-    clearAdminToken();
-    setTimeout(()=> location.href = "/course-admin-login.html", 800);
-  }
-})();
+    debug({ step:"init", tokenPresent: !!token, tokenPreview: token ? token.slice(0,20)+"…" : null });
+    try{
+      await whoAmI();
+    }catch(e){
+      $("whoami").textContent = "❌ Not logged in (token missing or invalid). Go back to login.";
+      debug({ step:"me_failed", msg: String(e.message || e) });
+      // DON’T instantly redirect; let you see the debug box.
+    }
+  })();
 </script>
 </body>
 </html>
