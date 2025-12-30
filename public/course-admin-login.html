@@ -57,6 +57,7 @@
   </div>
 
 <script>
+  // ✅ Keep token support as optional fallback, but DO NOT require it.
   const ADMIN_TOKEN_KEY = "course_admin_token";
 
   function getAdminToken(){
@@ -85,7 +86,7 @@
 
     const data = await res.json().catch(()=> ({}));
 
-    // capture token if backend returns it
+    // ✅ capture token if backend returns it (optional)
     if (data && (data.token || data.accessToken)) {
       setAdminToken(data.token || data.accessToken);
     }
@@ -109,27 +110,20 @@
 
   $("loginBtn").onclick = async ()=>{
     $("msg").textContent = "Logging in...";
-    clearAdminToken();
+    // ✅ Don't clear tokens on login attempt (optional fallback). Cookies will handle auth anyway.
 
     try{
       const email = ($("email").value || "").trim();
       const password = $("pass").value || "";
       if(!email || !password) throw new Error("missing_email_password");
 
-      const out = await j("/api/book/course-admin/login", {
+      await j("/api/book/course-admin/login", {
         method:"POST",
         body: JSON.stringify({ email, password })
       });
 
-      // If login returned token, it’s stored above.
-      // Quick sanity check before redirect:
-      const tok = getAdminToken();
-      if(!tok){
-        // still allow redirect, but show a clear message
-        $("msg").textContent = "⚠️ Logged in but no token saved. Check console / storage.";
-        return;
-      }
-
+      // ✅ DO NOT require a JS token.
+      // Cookies are httpOnly, so JS can't read them. Redirect regardless.
       $("msg").textContent = "✅ Logged in";
       setTimeout(()=> location.href = "/course-admin.html", 250);
     }catch(e){
