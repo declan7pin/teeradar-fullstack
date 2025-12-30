@@ -57,46 +57,27 @@
   </div>
 
 <script>
-  const TOKEN_KEY = "teeradar_course_admin_token";
-  const EMAIL_KEY = "teeradar_course_admin_email";
-
-  function getToken(){
-    try { return (localStorage.getItem(TOKEN_KEY) || "").trim(); } catch(e){ return ""; }
+  const ADMIN_TOKEN_KEY = "course_admin_token";
+  function setAdminToken(t){
+    try { if(t) localStorage.setItem(ADMIN_TOKEN_KEY, t); } catch {}
   }
-  function setToken(v){
-    try {
-      if(v && String(v).trim()) localStorage.setItem(TOKEN_KEY, String(v).trim());
-      else localStorage.removeItem(TOKEN_KEY);
-    } catch(e){}
-  }
-  function setEmail(v){
-    try {
-      if(v && String(v).trim()) localStorage.setItem(EMAIL_KEY, String(v).trim().toLowerCase());
-      else localStorage.removeItem(EMAIL_KEY);
-    } catch(e){}
-  }
-  function clearAuth(){
-    try{
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(EMAIL_KEY);
-    }catch(e){}
+  function clearAdminToken(){
+    try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch {}
   }
 
   async function j(url, opts){
-    const tok = getToken();
-    const headers = {
-      "Content-Type":"application/json",
-      ...(opts && opts.headers ? opts.headers : {})
-    };
-    // ✅ send Bearer token when available (works even if cookies fail)
-    if(tok) headers["Authorization"] = "Bearer " + tok;
-
     const res = await fetch(url, {
-      headers,
+      headers: { "Content-Type":"application/json" },
       credentials: "include",
       ...opts
     });
     const data = await res.json().catch(()=> ({}));
+
+    // ✅ capture token if backend returns it
+    if (data && (data.token || data.accessToken)) {
+      setAdminToken(String(data.token || data.accessToken));
+    }
+
     if(!res.ok) throw new Error(data.error || ("HTTP "+res.status));
     return data;
   }
@@ -108,15 +89,15 @@
     $("msg").textContent = "Logging out...";
     try{
       await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
-    }catch(e){
-      // even if server logout fails, clear local token so you don’t get stuck
-    }
-    clearAuth();
+    }catch{}
+    clearAdminToken();
     $("msg").textContent = "✅ Logged out";
   };
 
   $("loginBtn").onclick = async ()=>{
     $("msg").textContent = "Logging in...";
+    clearAdminToken();
+
     try{
       const email = ($("email").value || "").trim();
       const password = $("pass").value || "";
@@ -127,27 +108,9 @@
         body: JSON.stringify({ email, password })
       });
 
-      // ✅ store token if backend returns one (supports common property names)
-      const tok =
-        (out && (out.token || out.jwt || out.accessToken || out.access_token)) || "";
-
-      if(tok) setToken(tok);
-      setEmail(email);
-
-      // ✅ verify session/token works BEFORE redirecting (prevents bounce loop)
-      try{
-        await j("/api/book/course-admin/me", { method:"GET" });
-      }catch(e){
-        // If cookie didn’t stick and token wasn’t returned/accepted, this will fail.
-        // Keep them on the login page with a clear message.
-        if(!tok){
-          throw new Error("login_ok_but_no_token_and_cookie_not_set");
-        }
-        throw e;
-      }
-
+      // ✅ If backend still doesn’t return token AND cookie fails, you’ll see your existing error
       $("msg").textContent = "✅ Logged in";
-      setTimeout(()=> location.href = "/course-admin.html", 200);
+      setTimeout(()=> location.href = "/course-admin.html", 250);
     }catch(e){
       $("msg").textContent = "❌ " + e.message;
     }
