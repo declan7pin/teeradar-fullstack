@@ -396,7 +396,7 @@ router.post("/admin/login", (req, res) => {
   res.cookie("tr_book_admin", "1", {
     httpOnly: true,
     sameSite: "lax",
-    secure: true,
+    secure: isHttps(req),
     maxAge: 7 * 24 * 60 * 60 * 1000,
     path: "/",
   });
