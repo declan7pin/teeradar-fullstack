@@ -56,7 +56,8 @@
       <label>Password</label>
       <input id="pass" type="password" placeholder="Your password" autocomplete="current-password" />
 
-      <button id="loginBtn">Log in</button>
+      <!-- ✅ type="button" prevents any accidental form-submit reloads -->
+      <button id="loginBtn" type="button">Log in</button>
 
       <div class="row">
         <button id="goHomeBtn" class="secondary" type="button">Back to site</button>
@@ -100,9 +101,8 @@
     });
 
     const raw = await res.text();
-let data = {};
-try { data = JSON.parse(raw); }
-catch { data = { _nonJson: raw.slice(0,300), _status: res.status, _url: url }; }
+    let data = {};
+    try { data = JSON.parse(raw); } catch { data = { _nonJson: raw.slice(0,300) }; }
 
     if(!res.ok) {
       const err = data && data.error ? data.error : ("HTTP "+res.status);
@@ -113,52 +113,75 @@ catch { data = { _nonJson: raw.slice(0,300), _status: res.status, _url: url }; }
 
   const $ = (id)=>document.getElementById(id);
 
-  $("goHomeBtn").onclick = ()=> location.href = "/";
-
-  $("logoutBtn").onclick = async ()=>{
-    $("msg").textContent = "Logging out...";
-    try{ await j("/api/book/course-admin/logout", { method:"POST", body:"{}" }); }catch{}
-    clearAdminToken();
-    $("msg").textContent = "✅ Logged out";
-    debug({ tokenNow: getAdminToken() ? "present" : "missing" });
-  };
-
-  $("loginBtn").onclick = async ()=>{
-    $("msg").textContent = "Logging in...";
-    debug(""); // clear visible output
+  // ✅ show any JS errors instead of "nothing happens"
+  window.addEventListener("error", (ev)=>{
     try{
-      const email = ($("email").value || "").trim();
-      const password = $("pass").value || "";
-      if(!email || !password) throw new Error("missing_email_password");
+      const msg = ev?.message || "script_error";
+      $("msg").textContent = "❌ " + msg;
+      debug({ step:"window_error", msg, filename: ev?.filename, lineno: ev?.lineno, colno: ev?.colno });
+    }catch{}
+  });
 
-      // ✅ Hard clear before login (avoid stale token)
+  window.addEventListener("unhandledrejection", (ev)=>{
+    try{
+      const msg = (ev && ev.reason && (ev.reason.message || String(ev.reason))) || "promise_rejection";
+      $("msg").textContent = "❌ " + msg;
+      debug({ step:"unhandledrejection", msg });
+    }catch{}
+  });
+
+  // ✅ Attach handlers after DOM is guaranteed ready
+  window.addEventListener("DOMContentLoaded", ()=>{
+    debug({ step:"dom_ready", origin: location.origin, tokenPresent: !!getAdminToken() });
+
+    $("goHomeBtn").addEventListener("click", ()=> location.href = "/");
+
+    $("logoutBtn").addEventListener("click", async ()=>{
+      $("msg").textContent = "Logging out...";
+      try{ await j("/api/book/course-admin/logout", { method:"POST", body:"{}" }); }catch{}
       clearAdminToken();
+      $("msg").textContent = "✅ Logged out";
+      debug({ tokenNow: getAdminToken() ? "present" : "missing" });
+    });
 
-      const out = await j("/api/booking/course-admin/login", {
-...
-await j("/api/booking/course-admin/logout", { method:"POST", body:"{}" });
+    $("loginBtn").addEventListener("click", async ()=>{
+      $("msg").textContent = "Logging in...";
+      debug(""); // clear visible output
+      try{
+        const email = ($("email").value || "").trim();
+        const password = $("pass").value || "";
+        if(!email || !password) throw new Error("missing_email_password");
 
-      // ✅ REQUIRE token for admin pages (don’t rely on cookies)
-      if(!out || !out.token){
-        debug({ step:"login_ok_but_no_token", out });
-        throw new Error("login_no_token_returned");
+        // ✅ Hard clear before login (avoid stale token)
+        clearAdminToken();
+
+        const out = await j("/api/book/course-admin/login", {
+          method:"POST",
+          body: JSON.stringify({ email, password })
+        });
+
+        // ✅ REQUIRE token for admin pages (don’t rely on cookies)
+        if(!out || !out.token){
+          debug({ step:"login_ok_but_no_token", out });
+          throw new Error("login_no_token_returned");
+        }
+
+        setAdminToken(out.token);
+
+        debug({
+          step: "login_saved_token",
+          tokenPreview: String(out.token).slice(0, 20) + "…",
+          slug: out.slug || null
+        });
+
+        $("msg").textContent = "✅ Logged in";
+        setTimeout(()=> location.href = "/course-admin.html", 250);
+      }catch(e){
+        $("msg").textContent = "❌ " + e.message;
+        debug({ step:"login_error", msg: String(e.message || e), tokenNow: getAdminToken() ? "present" : "missing" });
       }
-
-      setAdminToken(out.token);
-
-      debug({
-        step: "login_saved_token",
-        tokenPreview: String(out.token).slice(0, 20) + "…",
-        slug: out.slug || null
-      });
-
-      $("msg").textContent = "✅ Logged in";
-      setTimeout(()=> location.href = "/course-admin.html", 250);
-    }catch(e){
-      $("msg").textContent = "❌ " + e.message;
-      debug({ step:"login_error", msg: String(e.message || e), tokenNow: getAdminToken() ? "present" : "missing" });
-    }
-  };
+    });
+  });
 </script>
 </body>
 </html>
