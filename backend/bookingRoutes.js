@@ -247,7 +247,7 @@ function makeCourseAdminToken({ slug, email }) {
 
 function verifyCourseAdminToken(token) {
   try {
-    const secret = ADMIN_SECRET || "course_admin_fallback_secret";
+        const secret = COURSE_ADMIN_JWT_SECRET || ADMIN_SECRET || "course_admin_fallback_secret";
     const t = String(token || "");
     const parts = t.split(".");
     if (parts.length !== 2) return null;
