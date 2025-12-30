@@ -801,13 +801,19 @@ const ADMIN_TOKEN_KEY = "tr_course_admin_token";
     $("aTo").value = t;
   })();
 
-  (async function(){
+    (async function(){
     try{
       await whoAmI();
     }catch(e){
-      // not logged in (cookie missing AND no bearer token)
-      clearAdminToken();
-      location.href = "/course-admin-login.html";
+      // retry once (handles any timing/storage weirdness)
+      setTimeout(async ()=>{
+        try{
+          await whoAmI();
+        }catch(err){
+          clearAdminToken();
+          location.href = "/course-admin-login.html";
+        }
+      }, 300);
     }
   })();
 </script>
