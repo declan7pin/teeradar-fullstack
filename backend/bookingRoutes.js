@@ -262,9 +262,26 @@ function verifyCourseAdminToken(token) {
 }
 // ✅✅✅ END ADD ✅✅✅
 function requireCourseAdmin(req, res, next) {
+  // ✅ NEW: accept Bearer token first
+  const auth = String(req.headers.authorization || "");
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  const bearer = m ? m[1].trim() : "";
+
+  // ✅ token can come from bearer OR cookie
+  const token = bearer || String(req.cookies?.tr_course_admin_token || "");
+
+  const verified = token ? verifyCourseAdminToken(token) : null;
+
+  if (verified?.slug && verified?.email) {
+    req.courseAdmin = { slug: verified.slug, email: verified.email };
+    return next();
+  }
+
+  // ✅ fallback: old cookies (backwards compatible)
   const slug = String(req.cookies?.tr_course_admin_slug || "");
   const email = String(req.cookies?.tr_course_admin_email || "");
   if (!slug || !email) return res.status(401).json({ ok: false, error: "not_course_admin" });
+
   req.courseAdmin = { slug, email };
   return next();
 }
