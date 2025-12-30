@@ -511,6 +511,7 @@ res.cookie("tr_course_admin_token", courseAdminToken, {
 router.post("/course-admin/logout", async (req, res) => {
   res.clearCookie("tr_course_admin_slug", { path: "/" });
   res.clearCookie("tr_course_admin_email", { path: "/" });
+  res.clearCookie("tr_course_admin_token", { path: "/" }); // ✅ ADD
   res.json({ ok: true });
 });
 
