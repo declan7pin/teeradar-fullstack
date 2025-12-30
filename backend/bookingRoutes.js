@@ -553,7 +553,15 @@ router.post("/course-admin/login", async (req, res) => {
       tokenLen: courseAdminToken ? courseAdminToken.length : 0,
     });
 
-    res.json({ ok: true, slug: u.slug, token: courseAdminToken });
+    // ✅ FIX: return token in multiple keys so front-end never misses it
+    res.json({
+      ok: true,
+      slug: u.slug,
+      email: u.email,
+      token: courseAdminToken,
+      courseAdminToken: courseAdminToken,
+      accessToken: courseAdminToken,
+    });
   } catch (e) {
     console.error("course-admin/login", e);
     res.status(500).json({ ok: false, error: "internal_error" });
