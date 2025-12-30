@@ -460,25 +460,57 @@ async function ensureBookingTables() {
 ensureBookingTables();
 /* ✅✅✅ END ONLY ADDITION ✅✅✅ */
 
-/* ✅✅✅ ONLY ADDITION (needed): FIX CORS for credentials/cookies (origin cannot be "true") ✅✅✅ */
-const ALLOWED_ORIGINS = [
-  "https://teeradar.com.au",
+/* ✅✅✅ FIX (needed): Robust CORS allowlist (prevents CORS_not_allowed on Render + live site) ✅✅✅ */
+const EXTRA_CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const ALLOWED_ORIGINS = new Set([
+  SITE_URL,
   "https://www.teeradar.com.au",
-  "http://localhost:5173",
   "http://localhost:3000",
-];
+  "http://localhost:5173",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
+  ...EXTRA_CORS_ORIGINS,
+]);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // ✅ allow no-origin (server-to-server / some Safari flows)
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+
+  // ✅ allow Render preview/custom domains
+  try {
+    const u = new URL(origin);
+    const host = (u.hostname || "").toLowerCase();
+    if (host.endsWith(".onrender.com")) return true;
+  } catch {
+    // ignore
+  }
+  return false;
+}
 
 app.use(
   cors({
     origin: (origin, cb) => {
-      if (!origin) return cb(null, true); // allow server-to-server/no-origin
-      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      if (isAllowedOrigin(origin)) return cb(null, true);
       return cb(new Error("CORS_not_allowed"));
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Booking-Admin-Secret",
+      "x-booking-admin-secret",
+    ],
   })
 );
-/* ✅✅✅ END ONLY ADDITION ✅✅✅ */
+
+// ✅ make sure preflights return OK
+app.options("*", cors());
+/* ✅✅✅ END FIX ✅✅✅ */
 
 // -------------------------------------------------
 // Stripe Webhook – must be BEFORE express.json
@@ -505,7 +537,6 @@ app.post(
       case "checkout.session.completed": {
         const session = event.data.object;
         console.log("✅ Stripe checkout completed for:", session.customer_email);
-        // TODO: later sync to DB if you like
         break;
       }
       case "customer.subscription.deleted": {
@@ -539,7 +570,7 @@ function _isBookingAdminReq(req) {
   if (expected && got && got === expected) return true;
 
   return (
-    req.cookies?.tr_book_admin === "1" ||   // ✅ ADD THIS
+    req.cookies?.tr_book_admin === "1" || // ✅ ADD THIS
     req.cookies?.booking_admin === "1" ||
     req.cookies?.bookingAdmin === "1" ||
     req.cookies?.booking_admin_auth === "1"
@@ -553,22 +584,18 @@ app.get("/api/book/admin/_debug", (req, res) => {
     gotHeader: !!req.headers["x-booking-admin-secret"],
     isBookingAdmin: _isBookingAdminReq(req),
     cookies: {
-      tr_book_admin: req.cookies?.tr_book_admin || null, // ✅ ADD THIS
       booking_admin: req.cookies?.booking_admin || null,
       bookingAdmin: req.cookies?.bookingAdmin || null,
       booking_admin_auth: req.cookies?.booking_admin_auth || null,
     },
   });
 });
+
 // ✅✅✅ ADD (needed): mount booking views router (admin/course-admin views) ✅✅✅
 app.use((req, res, next) => {
-  // attach super-admin helper for booking views
   req.isSuperAdmin = (email) => isSuperAdmin(email);
-
-  // attach booking-admin helper/flag for routers to use
   req.isBookingAdmin = () => _isBookingAdminReq(req);
   req.bookingAdmin = _isBookingAdminReq(req);
-
   next();
 });
 
@@ -613,7 +640,6 @@ function _buildScorecardsCandidates(st) {
     out.push(path.join(process.cwd(), "public", "data", fn));
   }
 
-  // de-dupe
   return Array.from(new Set(out));
 }
 
@@ -637,12 +663,11 @@ function _readScorecardsForState(st) {
 
       const raw = fs.readFileSync(p, "utf8");
 
-      // handle BOM + common non-JSON booleans + ✅ trailing commas
       const fixed = raw
-        .replace(/^\uFEFF/, "")                 // ✅ strip UTF-8 BOM if present
-        .replace(/\bTrue\b/g, "true")           // ✅ python-style bools
+        .replace(/^\uFEFF/, "")
+        .replace(/\bTrue\b/g, "true")
         .replace(/\bFalse\b/g, "false")
-        .replace(/,\s*([}\]])/g, "$1");         // ✅ REMOVE trailing commas before } or ]
+        .replace(/,\s*([}\]])/g, "$1");
 
       const j = JSON.parse(fixed);
 
@@ -683,7 +708,7 @@ app.get("/api/scorecards/:state", (req, res) => {
           "public/data/scorecards/scorecards-wa.json",
         ],
         tried: candidates,
-        parseErrors: errors, // ✅ ADD THIS LINE
+        parseErrors: errors,
         debug: {
           __dirname,
           cwd: process.cwd(),
@@ -753,7 +778,7 @@ app.get("/api/me", async (req, res) => {
       email: row.email,
       homeCourse: row.home_course || null,
       homeCourseId: row.home_course_id || null,
-      homeCourseState: row.home_state || row.home_course_state || null, // ✅ FIXED
+      homeCourseState: row.home_state || row.home_course_state || null,
     });
   } catch (err) {
     console.error("/api/me error:", err);
@@ -861,13 +886,10 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
       layout = null,
       state = null,
       holes = 18,
-      pars = null,        // optional array (length 9/18) or null
-      par_mode = "PUBLISHED", // "PUBLISHED" or "USER"
-
-      // ✅✅✅ ADD (needed): multi-player support (names + count)
+      pars = null,
+      par_mode = "PUBLISHED",
       playersCount = 1,
-      playerNames = null, // array of names (length 1–4), P1 should be user on frontend
-      // ✅✅✅ END ADD
+      playerNames = null,
     } = req.body || {};
 
     const courseName = (course || "").toString().trim();
@@ -887,7 +909,6 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
       ? pars.map((p) => (p === null || typeof p === "undefined" || p === "" ? null : Number(p)))
       : null;
 
-    // ✅ If PUBLISHED and frontend didn’t send pars, pull them from scorecards automatically
     let publishedDistances = null;
 
     if ((!parsedPars || !parsedPars.length) && parMode === "PUBLISHED") {
@@ -900,7 +921,6 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
       }
     }
 
-    // If pars provided, enforce correct length
     if (parsedPars && parsedPars.length !== holesCount) {
       return res.status(400).json({
         ok: false,
@@ -908,7 +928,6 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
       });
     }
 
-    // ✅✅✅ ADD (needed): validate players + normalize names
     const pc = Number(playersCount);
     const safePlayersCount = Number.isFinite(pc) ? Math.max(1, Math.min(4, pc)) : 1;
 
@@ -916,11 +935,8 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
       ? playerNames.map((x) => String(x || "").trim()).slice(0, 4)
       : [];
 
-    // pad to players_count with empty strings (frontend can render blanks)
     while (namesArr.length < safePlayersCount) namesArr.push("");
-    // ✅✅✅ END ADD
 
-    // Create round
     const roundInsert = await db.query(
       `
       INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, players_count, player_names, created_at)
@@ -941,7 +957,6 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
 
     const round = roundInsert.rows[0];
 
-    // Create round holes rows (strokes/putts start null)
     const values = [];
     const params = [];
     let idx = 1;
@@ -1036,7 +1051,6 @@ app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: "Invalid hole number" });
     }
 
-    // Ensure round belongs to user
     const own = await db.query(
       `SELECT id FROM rounds WHERE id = $1 AND user_id = $2 LIMIT 1;`,
       [roundId, userId]
@@ -1045,16 +1059,7 @@ app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
       return res.status(403).json({ ok: false, error: "Forbidden" });
     }
 
-    const {
-      strokes,
-      putts,
-      par,
-
-      // ✅✅✅ ADD (needed): allow updating multi-player fields
-      strokesByPlayer, // object map, e.g. {"P1":4,"P2":5} or {"0":4,"1":5}
-      puttsByPlayer,
-      // ✅✅✅ END ADD
-    } = req.body || {};
+    const { strokes, putts, par, strokesByPlayer, puttsByPlayer } = req.body || {};
 
     const strokesVal =
       strokes === null || typeof strokes === "undefined" || strokes === ""
@@ -1081,7 +1086,6 @@ app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: "par must be a number or omitted" });
     }
 
-    // ✅✅✅ ADD (needed): normalize multi-player objects (or ignore)
     const sbp =
       strokesByPlayer && typeof strokesByPlayer === "object" && !Array.isArray(strokesByPlayer)
         ? JSON.stringify(strokesByPlayer)
@@ -1091,7 +1095,6 @@ app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
       puttsByPlayer && typeof puttsByPlayer === "object" && !Array.isArray(puttsByPlayer)
         ? JSON.stringify(puttsByPlayer)
         : null;
-    // ✅✅✅ END ADD
 
     const result = await db.query(
       `
@@ -1131,7 +1134,6 @@ app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
 app.use("/api/alerts", alertsRouter);
 
 // ✅ NEW: fallback endpoints for the "logged-in popup" unread/viewed flow
-// These are safe even if alertsRoutes.js already implements them (Express will route to the first match).
 app.get("/api/alerts/unread", async (req, res) => {
   try {
     const email = (req.query.email || "").toString().trim().toLowerCase();
@@ -1148,7 +1150,6 @@ app.get("/api/alerts/unread", async (req, res) => {
       [email]
     );
 
-    // Return in the shape the frontend expects
     const hits = rows.map((r) => ({
       id: r.id,
       email: r.email,
@@ -1229,12 +1230,7 @@ app.post("/api/subscribe", async (req, res) => {
       payment_method_types: ["card"],
       customer_email: customerEmail,
       allow_promotion_codes: true,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
     });
@@ -1242,9 +1238,7 @@ app.post("/api/subscribe", async (req, res) => {
     res.json({ url: session.url });
   } catch (err) {
     console.error("Stripe checkout error:", err);
-    res
-      .status(500)
-      .json({ error: "Stripe checkout failed", detail: err.message });
+    res.status(500).json({ error: "Stripe checkout failed", detail: err.message });
   }
 });
 
@@ -1253,16 +1247,13 @@ app.post("/api/subscribe", async (req, res) => {
 // -------------------------------------------------
 app.post("/api/billing/portal", async (req, res) => {
   try {
-    // ✅ email can come from body OR Bearer token (account.html currently sends only returnUrl)
     const trimmedEmail = getEmailFromRequest(req);
-
     const { returnUrl } = req.body || {};
 
     if (!trimmedEmail) {
       return res.status(400).json({ error: "email is required" });
     }
 
-    // 1) Find Stripe customer by email
     const customers = await stripe.customers.list({
       email: trimmedEmail,
       limit: 1,
@@ -1270,19 +1261,14 @@ app.post("/api/billing/portal", async (req, res) => {
 
     if (!customers.data.length) {
       console.log("No Stripe customer for email:", trimmedEmail);
-      return res
-        .status(404)
-        .json({ error: "no_stripe_customer_for_email" });
+      return res.status(404).json({ error: "no_stripe_customer_for_email" });
     }
 
     const customer = customers.data[0];
 
-    // 2) Create billing portal session
     const session = await stripe.billingPortal.sessions.create({
       customer: customer.id,
-      return_url:
-        returnUrl ||
-        `${SITE_URL}/account.html`,
+      return_url: returnUrl || `${SITE_URL}/account.html`,
     });
 
     res.json({ url: session.url });
@@ -1302,23 +1288,14 @@ app.get("/api/account/plan", async (req, res) => {
       return res.status(400).json({ error: "email is required" });
     }
 
-    // 1) Find customer by email
-    const customers = await stripe.customers.list({
-      email,
-      limit: 1,
-    });
+    const customers = await stripe.customers.list({ email, limit: 1 });
 
     if (!customers.data.length) {
-      return res.json({
-        plan: "FREE",
-        maxFavs: 3,
-        reason: "no_stripe_customer",
-      });
+      return res.json({ plan: "FREE", maxFavs: 3, reason: "no_stripe_customer" });
     }
 
     const customer = customers.data[0];
 
-    // 2) Find active subscription for that customer
     const subs = await stripe.subscriptions.list({
       customer: customer.id,
       status: "active",
@@ -1327,11 +1304,7 @@ app.get("/api/account/plan", async (req, res) => {
     });
 
     if (!subs.data.length) {
-      return res.json({
-        plan: "FREE",
-        maxFavs: 3,
-        reason: "no_active_subscription",
-      });
+      return res.json({ plan: "FREE", maxFavs: 3, reason: "no_active_subscription" });
     }
 
     const sub = subs.data[0];
@@ -1339,21 +1312,12 @@ app.get("/api/account/plan", async (req, res) => {
     const priceId = firstItem?.price?.id;
 
     if (!priceId || !PRICE_TO_PLAN[priceId]) {
-      return res.json({
-        plan: "BASIC",
-        maxFavs: 3,
-        reason: "unknown_price",
-        priceId,
-      });
+      return res.json({ plan: "BASIC", maxFavs: 3, reason: "unknown_price", priceId });
     }
 
     const { plan, maxFavs } = PRICE_TO_PLAN[priceId];
 
-    return res.json({
-      plan,
-      maxFavs,
-      priceId,
-    });
+    return res.json({ plan, maxFavs, priceId });
   } catch (err) {
     console.error("account/plan error:", err);
     res.status(500).json({ error: "plan_lookup_failed", detail: err.message });
@@ -1361,8 +1325,7 @@ app.get("/api/account/plan", async (req, res) => {
 });
 
 // -------------------------------------------------
-// ✅ Save account preferences (for favourites + scan settings)
-// ✅ FIX: also persist home course into users table so /api/me returns the new value
+// ✅ Save account preferences
 // -------------------------------------------------
 app.post("/api/account/preferences", async (req, res) => {
   try {
@@ -1375,9 +1338,7 @@ app.post("/api/account/preferences", async (req, res) => {
       latest,
       holes,
       partySize,
-      alertFrequency, // 🔹 NEW
-
-      // ✅ NEW: home course fields (sent by account page)
+      alertFrequency,
       homeCourse,
       homeCourseId,
       homeCourseState,
@@ -1388,22 +1349,14 @@ app.post("/api/account/preferences", async (req, res) => {
       return res.status(400).json({ error: "email is required" });
     }
 
-    const preferredDays =
-      Array.isArray(days) && days.length ? days : null;
+    const preferredDays = Array.isArray(days) && days.length ? days : null;
 
     await db.query(
       `
       INSERT INTO user_preferences (
-        email,
-        home_state,
-        favourites,
-        preferred_days,
-        preferred_earliest,
-        preferred_latest,
-        preferred_holes,
-        preferred_party_size,
-        alert_frequency,
-        updated_at
+        email, home_state, favourites, preferred_days,
+        preferred_earliest, preferred_latest, preferred_holes, preferred_party_size,
+        alert_frequency, updated_at
       )
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now())
       ON CONFLICT (email) DO UPDATE SET
@@ -1430,12 +1383,8 @@ app.post("/api/account/preferences", async (req, res) => {
       ]
     );
 
-    // ✅ NEW: persist home course to users table (source of truth for /api/me)
-    // Prefer explicit homeCourseState, fall back to homeState
-    const finalHomeCourseState =
-      (homeCourseState || homeState || null);
+    const finalHomeCourseState = (homeCourseState || homeState || null);
 
-    // ✅ FIX: do NOT wipe existing home course fields if user saves prefs without selecting one
     await db.query(
       `
       UPDATE users
@@ -1445,12 +1394,7 @@ app.post("/api/account/preferences", async (req, res) => {
         home_course_state = COALESCE(NULLIF($4, ''), home_course_state)
       WHERE email = $1
       `,
-      [
-        trimmedEmail,
-        (homeCourse || ""),
-        (homeCourseId || ""),
-        (finalHomeCourseState || ""),
-      ]
+      [trimmedEmail, (homeCourse || ""), (homeCourseId || ""), (finalHomeCourseState || "")]
     );
 
     res.json({ ok: true });
@@ -1469,7 +1413,6 @@ const PERTH_LNG = 115.8613;
 const coursesPath = path.join(__dirname, "data", "courses.json");
 const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 
-// ✅ FIX: coerce lat/lng to numbers (courses.json often stores them as strings)
 const courses = rawCourses.map((c) => {
   const latNum = Number(c.lat);
   const lngNum = Number(c.lng);
@@ -1492,43 +1435,26 @@ console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 
 // -------------------------------------------------
 // ✅ NEW: Load scorecards (published pars + distances) and attach to /api/courses
-// FIXES: course name mismatches like "Whaleback Golf Course (18 holes)"
 // -------------------------------------------------
 function _normCourseName(s) {
   let x = String(s || "").trim().toLowerCase();
-
-  // remove trailing "(...)" like "(18 holes)", "(9)", "(back 9)" etc
   x = x.replace(/\s*\([^)]*\)\s*$/, "");
-
-  // also remove trailing "18 holes" / "9 holes" if typed without brackets
   x = x.replace(/\s*\b(18|9)\s*holes?\b\s*$/, "");
-
-  // cleanup spacing
   x = x.replace(/\s{2,}/g, " ").trim();
   return x;
 }
 function _courseKey(course, state) {
   return `${_normCourseName(course)}|${String(state || "").trim().toUpperCase()}`;
 }
-function _safeReadJsonIfExists(p) {
-  try {
-    if (!fs.existsSync(p)) return null;
-    return JSON.parse(fs.readFileSync(p, "utf8"));
-  } catch {
-    return null;
-  }
-}
 function _pickDefaultTee(distances_m) {
   if (!distances_m || typeof distances_m !== "object") return null;
   const tees = Object.keys(distances_m);
   if (!tees.length) return null;
-  // prefer White > Yellow > Blue > Red > first
   const preferred = ["White", "Yellow", "Blue", "Red"];
   for (const t of preferred) if (tees.includes(t)) return t;
   return tees[0];
 }
 
-// Load scorecards by state (start with WA, add others later)
 let scorecardsWA = null;
 {
   const { data, foundPath } = _readScorecardsForState("WA");
@@ -1543,7 +1469,6 @@ let scorecardsWA = null;
 const scorecardsAll = []
   .concat(Array.isArray(scorecardsWA) ? scorecardsWA : []);
 
-// Build index: course|state|holes -> [scorecardEntries]
 const scorecardIndex = new Map();
 for (const sc of scorecardsAll) {
   const courseName = sc.course || sc.name || "";
@@ -1556,7 +1481,6 @@ for (const sc of scorecardsAll) {
   scorecardIndex.get(k).push(sc);
 }
 
-// ✅ NEW: helper used by rounds creation if frontend didn't send pars/distances
 function getPublishedParsAndDistances(courseName, state, holes) {
   const st = String(state || "").trim().toUpperCase();
   const h = Number(holes);
@@ -1576,7 +1500,6 @@ function getPublishedParsAndDistances(courseName, state, holes) {
   return { pars: sc.pars, distances };
 }
 
-// Create enriched version of the courses list (keep original intact)
 const coursesEnriched = courses.map((c) => {
   const courseName = c.name || c.course || "";
   const st = (c.state || "").toString().toUpperCase();
@@ -1584,15 +1507,12 @@ const coursesEnriched = courses.map((c) => {
 
   if (!courseName || !st || !holes) return c;
 
-  // IMPORTANT: normalize "Whaleback Golf Course (18 holes)" style names
   const k = `${_courseKey(courseName, st)}|${holes}`;
   const list = scorecardIndex.get(k) || [];
 
-  // Only auto-attach when unambiguous (exactly 1 match with correct-length pars)
   if (list.length === 1 && Array.isArray(list[0].pars) && list[0].pars.length === holes) {
     const sc = list[0];
 
-    // distances: expose default tee distances (if present)
     const teeDefault = _pickDefaultTee(sc.distances_m);
     const distancesDefault =
       teeDefault && sc.distances_m && Array.isArray(sc.distances_m[teeDefault])
@@ -1627,7 +1547,6 @@ const coursesEnriched = courses.map((c) => {
 
     return {
       ...c,
-      // doesn't break anything; lets frontend ask user which layout later
       availableLayouts: Array.from(new Set(layouts)),
       hasMultipleScorecards: true,
     };
@@ -1647,7 +1566,6 @@ app.get("/health", (req, res) => {
 // Course List
 // -------------------------------------------------
 app.get("/api/courses", (req, res) => {
-  // ✅ return enriched courses (includes pars18/pars9 + distances18/distances9 where available + unambiguous)
   res.json(coursesEnriched);
 });
 
@@ -1696,10 +1614,7 @@ app.post("/api/search", async (req, res) => {
     );
 
     const jobs = searchCourses.map(async (c) => {
-      const courseId = `${(c.state || "NA").toString().toUpperCase()}::${
-        c.id || c.name
-      }`;
-
+      const courseId = `${(c.state || "NA").toString().toUpperCase()}::${c.id || c.name}`;
       const provider = c.provider || "Other";
 
       const cached = getCachedSlots({
@@ -1857,8 +1772,6 @@ app.get("/api/analytics/users", async (req, res) => {
       created_at: u.created_at,
       last_seen_at: u.last_login || u.created_at || null,
       home_course: u.home_course || null,
-
-      // existing preference fields
       home_state: u.home_state || null,
       favourites: u.favourites || null,
       preferred_days: u.preferred_days || null,
@@ -1867,8 +1780,6 @@ app.get("/api/analytics/users", async (req, res) => {
       preferred_holes: u.preferred_holes,
       preferred_party_size: u.preferred_party_size,
       alert_frequency: u.alert_frequency || null,
-
-      // 🔹 NEW: aliases specifically for the analytics "Alert settings" card
       alert_days: u.preferred_days || null,
       alert_time_range:
         u.preferred_earliest && u.preferred_latest
@@ -2022,8 +1933,6 @@ app.listen(PORT, () => {
 // 🔔 Start alerts worker
 startAlertWorker();
 
-// ✅ ADDED: run alert ticks frequently so per-user frequency (6h/12h/etc) actually works
-// (frequency gating is already handled inside alertWorker.js via alert_last_sent)
 let __alertTickRunning = false;
 
 async function runAlertTickSafe() {
@@ -2038,10 +1947,8 @@ async function runAlertTickSafe() {
   }
 }
 
-// Default every 5 minutes, configurable via env
 const ALERT_TICK_INTERVAL_MS =
   Number(process.env.ALERT_TICK_INTERVAL_MS) || 5 * 60 * 1000;
 
-// Run shortly after boot, then on interval
 setTimeout(runAlertTickSafe, 20000);
 setInterval(runAlertTickSafe, ALERT_TICK_INTERVAL_MS);
