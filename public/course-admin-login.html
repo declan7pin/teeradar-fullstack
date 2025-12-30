@@ -133,10 +133,9 @@
       // ✅ Hard clear before login (avoid stale token)
       clearAdminToken();
 
-      const out = await j("/api/book/course-admin/login", {
-        method:"POST",
-        body: JSON.stringify({ email, password })
-      });
+      const out = await j("/api/booking/course-admin/login", {
+...
+await j("/api/booking/course-admin/logout", { method:"POST", body:"{}" });
 
       // ✅ REQUIRE token for admin pages (don’t rely on cookies)
       if(!out || !out.token){
