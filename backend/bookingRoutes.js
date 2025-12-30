@@ -489,7 +489,19 @@ router.post("/course-admin/login", async (req, res) => {
       path: "/",
     });
 
-    res.json({ ok: true, slug: u.slug });
+// ✅✅✅ ADD (needed): Option A token + cookie ✅✅✅
+const courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email });
+
+res.cookie("tr_course_admin_token", courseAdminToken, {
+  httpOnly: true,
+  sameSite: "none",
+  secure: true,
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: "/",
+});
+// ✅✅✅ END ADD ✅✅✅
+
+    res.json({ ok: true, slug: u.slug, token: courseAdminToken });
   } catch (e) {
     console.error("course-admin/login", e);
     res.status(500).json({ ok: false, error: "internal_error" });
