@@ -231,7 +231,7 @@ function _base64url(buf) {
 }
 
 function makeCourseAdminToken({ slug, email }) {
-  const secret = ADMIN_SECRET || "course_admin_fallback_secret";
+    const secret = COURSE_ADMIN_JWT_SECRET || ADMIN_SECRET || "course_admin_fallback_secret";
   const exp = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
   const payload = { slug: String(slug || ""), email: String(email || ""), exp };
   const payloadB64 = _base64url(JSON.stringify(payload));
