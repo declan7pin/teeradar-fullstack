@@ -521,10 +521,11 @@ function _isBookingAdminReq(req) {
   if (expected && got && got === expected) return true;
 
   return (
-    req.cookies?.booking_admin === "1" ||
-    req.cookies?.bookingAdmin === "1" ||
-    req.cookies?.booking_admin_auth === "1"
-  );
+  req.cookies?.tr_book_admin === "1" ||   // ✅ ADD THIS
+  req.cookies?.booking_admin === "1" ||
+  req.cookies?.bookingAdmin === "1" ||
+  req.cookies?.booking_admin_auth === "1"
+);
 }
 
 // ✅ DEBUG: confirm admin auth is being received (must be ABOVE app.get("*") fallback)
