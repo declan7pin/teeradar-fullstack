@@ -14,7 +14,22 @@ router.use(express.json());
 
 // ✅ ADD (needed): read cookies for admin auth
 router.use(cookieParser());
-
+// ✅ ADD: prove requests are hitting THIS router (Render logs)
+router.use((req, _res, next) => {
+  if (req.path.startsWith("/course-admin")) {
+    console.log("🟦 bookingRoutes hit", {
+      method: req.method,
+      path: req.path,
+      host: req.headers.host,
+      origin: req.headers.origin,
+      xfProto: req.headers["x-forwarded-proto"],
+      secure: req.secure,
+      hasCookieHeader: !!req.headers.cookie,
+      hasAuthHeader: !!req.headers.authorization,
+    });
+  }
+  next();
+});
 // ✅ Booking email (Resend)
 // Support multiple env keys so Render naming mismatches don't break bookings.
 const bookingFromRaw = String(
