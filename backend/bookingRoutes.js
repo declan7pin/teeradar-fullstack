@@ -42,6 +42,7 @@ router.use((req, _res, next) => {
   }
   next();
 });
+
 // ✅ Booking email (Resend)
 // Support multiple env keys so Render naming mismatches don't break bookings.
 const bookingFromRaw = String(
