@@ -373,7 +373,12 @@ const ADMIN_TOKEN_KEY = "course_admin_token";
   }
 
   const $ = (id)=>document.getElementById(id);
-
+function debug(o){
+  const el = $("debugBox");
+  if(!el) return;
+  el.style.display = "block";
+  el.textContent = (typeof o === "string") ? o : JSON.stringify(o, null, 2);
+}
   function escapeHtml(s){
     return String(s ?? "")
       .replace(/&/g,"&amp;")
