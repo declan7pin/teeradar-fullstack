@@ -45,6 +45,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// ✅ ADD THIS (Render/HTTPS proxy support so secure cookies can be set)
+app.set("trust proxy", 1);
+
 const PORT = process.env.PORT || 3000;
 
 // ✅ Live site base URL (use everywhere we generate links)
