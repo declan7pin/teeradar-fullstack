@@ -70,13 +70,41 @@ function makeRef(prefix = "TR") {
   return `${prefix}-${out}`;
 }
 
+/* ✅ ADD (needed): detect secure requests behind Render/proxies */
+function isSecureReq(req) {
+  if (req.secure) return true;
+  const xf = String(req.headers["x-forwarded-proto"] || "").toLowerCase();
+  return xf.includes("https");
+}
+
+/* ✅ CHANGE (needed): allow cookie OR header secret */
 function requirePlatformAdmin(req, res, next) {
   if (!ADMIN_SECRET) {
     return res.status(500).json({ ok: false, error: "BOOKING_ADMIN_SECRET not set" });
   }
+
+  // 1) cookie auth (existing)
   const token = String(req.cookies?.tr_book_admin || "");
-  if (token !== "1") return res.status(401).json({ ok: false, error: "not_authorized" });
-  return next();
+  if (token === "1") return next();
+
+  // 2) header auth (new)
+  const headerSecret =
+    String(req.headers["x-booking-admin-secret"] || "") ||
+    String(req.get?.("x-booking-admin-secret") || "");
+
+  if (String(headerSecret || "").trim() && String(headerSecret || "").trim() === ADMIN_SECRET) {
+    // auto-issue cookie so subsequent calls work normally
+    res.cookie("tr_book_admin", "1", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: isSecureReq(req),
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+    return next();
+  }
+
+  return res.status(401).json({ ok: false, error: "not_authorized" });
 }
 
 // ✅ accept both the old and new admin generator payload shapes
@@ -107,16 +135,12 @@ function fmtMoney(cents) {
 }
 
 // ✅ Build Resend "from" safely.
-// Accepts either:
-// - "Name <email@domain>"
-// - "email@domain"
-// We convert plain email into "TeeRadar Bookings <email@domain>"
 function buildFrom() {
   const raw = String(bookingFromRaw || "").trim();
   if (!raw) return "";
-  if (raw.includes("<") && raw.includes(">")) return raw; // already in Name <email> format
+  if (raw.includes("<") && raw.includes(">")) return raw;
   if (isLikelyEmail(raw)) return `${bookingFromName} <${raw}>`;
-  return raw; // last resort
+  return raw;
 }
 
 // ✅ Send booking email via Resend (safe)
@@ -307,10 +331,11 @@ router.post("/admin/login", (req, res) => {
     return res.status(401).json({ ok: false, error: "invalid_secret" });
   }
 
+  /* ✅ CHANGE (needed): secure based on request/proxy */
   res.cookie("tr_book_admin", "1", {
     httpOnly: true,
     sameSite: "lax",
-    secure: true,
+    secure: isSecureReq(req),
     maxAge: 7 * 24 * 60 * 60 * 1000,
     path: "/",
   });
@@ -392,14 +417,14 @@ router.post("/course-admin/login", async (req, res) => {
     res.cookie("tr_course_admin_slug", String(u.slug), {
       httpOnly: true,
       sameSite: "lax",
-      secure: true,
+      secure: isSecureReq(req),
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/",
     });
     res.cookie("tr_course_admin_email", String(u.email), {
       httpOnly: true,
       sameSite: "lax",
-      secure: true,
+      secure: isSecureReq(req),
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/",
     });
