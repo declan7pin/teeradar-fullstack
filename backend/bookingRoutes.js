@@ -524,6 +524,7 @@ router.post("/course-admin/logout", async (req, res) => {
 });
 
 router.get("/course-admin/me", requireCourseAdmin, async (req, res) => {
+  console.log("✅ course-admin/me OK", req.courseAdmin);
   res.json({ ok: true, slug: req.courseAdmin.slug, email: req.courseAdmin.email });
 });
 
