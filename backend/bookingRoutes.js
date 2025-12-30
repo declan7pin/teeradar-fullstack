@@ -14,6 +14,13 @@ router.use((req, res, next) => {
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 // ✅ NEW: dedicated secret for course-admin tokens (do NOT reuse BOOKING_ADMIN_SECRET)
 const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
+
+// ✅ ADD: visibility for course-admin token secret (Render env check)
+console.log("🔐 course admin jwt env check:", {
+  COURSE_ADMIN_JWT_SECRET_set: !!COURSE_ADMIN_JWT_SECRET,
+  COURSE_ADMIN_JWT_SECRET_len: COURSE_ADMIN_JWT_SECRET ? COURSE_ADMIN_JWT_SECRET.length : 0,
+});
+
 // ✅ ADD (needed): ensure JSON bodies work for ALL routes in this router
 router.use(express.json());
 
@@ -89,7 +96,7 @@ function makeRef(prefix = "TR") {
   for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
   return `${prefix}-${out}`;
 }
-function isHttps(req){
+function isHttps(req) {
   const xfProto = String(req.headers["x-forwarded-proto"] || "");
   return req.secure || xfProto.includes("https");
 }
@@ -225,6 +232,7 @@ function verifyPassword(password, saltHex, hashHex) {
   const { hashHex: test } = hashPassword(password, saltHex);
   return crypto.timingSafeEqual(Buffer.from(test, "hex"), Buffer.from(hashHex, "hex"));
 }
+
 // ✅✅✅ ADD (needed): stateless course-admin token (Option A) ✅✅✅
 function _base64url(buf) {
   return Buffer.from(buf)
@@ -234,8 +242,15 @@ function _base64url(buf) {
     .replace(/=+$/g, "");
 }
 
+// ✅ ADD: hard requirement for COURSE_ADMIN_JWT_SECRET (no fallback)
+function getCourseAdminSecret() {
+  const s = String(COURSE_ADMIN_JWT_SECRET || "").trim();
+  if (!s) throw new Error("COURSE_ADMIN_JWT_SECRET_not_set");
+  return s;
+}
+
 function makeCourseAdminToken({ slug, email }) {
-    const secret = COURSE_ADMIN_JWT_SECRET || ADMIN_SECRET || "course_admin_fallback_secret";
+  const secret = getCourseAdminSecret();
   const exp = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
   const payload = { slug: String(slug || ""), email: String(email || ""), exp };
   const payloadB64 = _base64url(JSON.stringify(payload));
@@ -251,7 +266,7 @@ function makeCourseAdminToken({ slug, email }) {
 
 function verifyCourseAdminToken(token) {
   try {
-        const secret = COURSE_ADMIN_JWT_SECRET || ADMIN_SECRET || "course_admin_fallback_secret";
+    const secret = getCourseAdminSecret();
     const t = String(token || "");
     const parts = t.split(".");
     if (parts.length !== 2) return null;
@@ -284,6 +299,7 @@ function verifyCourseAdminToken(token) {
   }
 }
 // ✅✅✅ END ADD ✅✅✅
+
 function requireCourseAdmin(req, res, next) {
   // ✅ NEW: accept Bearer token first
   const auth = String(req.headers.authorization || "");
@@ -512,23 +528,30 @@ router.post("/course-admin/login", async (req, res) => {
       path: "/",
     });
 
-// ✅✅✅ ADD (needed): Option A token + cookie ✅✅✅
-const courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email });
+    // ✅✅✅ Token + cookie (requires COURSE_ADMIN_JWT_SECRET) ✅✅✅
+    let courseAdminToken = "";
+    try {
+      courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email });
+    } catch (err) {
+      console.error("❌ course-admin/login token error", err);
+      return res.status(500).json({ ok: false, error: "COURSE_ADMIN_JWT_SECRET_not_set" });
+    }
 
-res.cookie("tr_course_admin_token", courseAdminToken, {
-  httpOnly: true,
-  sameSite: "lax",
-  secure: isHttps(req),
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: "/",
-});
-// ✅✅✅ END ADD ✅✅✅
-console.log("✅ course-admin/login OK", {
-  email: u.email,
-  slug: u.slug,
-  isHttps: isHttps(req),
-  tokenLen: courseAdminToken ? courseAdminToken.length : 0,
-});
+    res.cookie("tr_course_admin_token", courseAdminToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: isHttps(req),
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+
+    console.log("✅ course-admin/login OK", {
+      email: u.email,
+      slug: u.slug,
+      isHttps: isHttps(req),
+      tokenLen: courseAdminToken ? courseAdminToken.length : 0,
+    });
+
     res.json({ ok: true, slug: u.slug, token: courseAdminToken });
   } catch (e) {
     console.error("course-admin/login", e);
