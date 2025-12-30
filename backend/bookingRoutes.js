@@ -202,6 +202,65 @@ function verifyPassword(password, saltHex, hashHex) {
   const { hashHex: test } = hashPassword(password, saltHex);
   return crypto.timingSafeEqual(Buffer.from(test, "hex"), Buffer.from(hashHex, "hex"));
 }
+// ✅✅✅ ADD (needed): stateless course-admin token (Option A) ✅✅✅
+function _base64url(buf) {
+  return Buffer.from(buf)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function makeCourseAdminToken({ slug, email }) {
+  const secret = ADMIN_SECRET || "course_admin_fallback_secret";
+  const exp = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+  const payload = { slug: String(slug || ""), email: String(email || ""), exp };
+  const payloadB64 = _base64url(JSON.stringify(payload));
+  const sig = crypto
+    .createHmac("sha256", secret)
+    .update(payloadB64)
+    .digest("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+  return `${payloadB64}.${sig}`;
+}
+
+function verifyCourseAdminToken(token) {
+  try {
+    const secret = ADMIN_SECRET || "course_admin_fallback_secret";
+    const t = String(token || "");
+    const parts = t.split(".");
+    if (parts.length !== 2) return null;
+
+    const [payloadB64, sig] = parts;
+
+    const expectedSig = crypto
+      .createHmac("sha256", secret)
+      .update(payloadB64)
+      .digest("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) return null;
+
+    const payloadJson = Buffer.from(
+      payloadB64.replace(/-/g, "+").replace(/_/g, "/"),
+      "base64"
+    ).toString("utf8");
+
+    const payload = JSON.parse(payloadJson);
+
+    if (!payload?.slug || !payload?.email) return null;
+    if (!payload?.exp || Date.now() > Number(payload.exp)) return null;
+
+    return { slug: String(payload.slug), email: String(payload.email) };
+  } catch {
+    return null;
+  }
+}
+// ✅✅✅ END ADD ✅✅✅
 function requireCourseAdmin(req, res, next) {
   const slug = String(req.cookies?.tr_course_admin_slug || "");
   const email = String(req.cookies?.tr_course_admin_email || "");
