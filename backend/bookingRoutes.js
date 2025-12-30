@@ -69,7 +69,10 @@ function makeRef(prefix = "TR") {
   for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
   return `${prefix}-${out}`;
 }
-
+function isHttps(req){
+  const xfProto = String(req.headers["x-forwarded-proto"] || "");
+  return req.secure || xfProto.includes("https");
+}
 function requirePlatformAdmin(req, res, next) {
   if (!ADMIN_SECRET) {
     return res.status(500).json({ ok: false, error: "BOOKING_ADMIN_SECRET not set" });
