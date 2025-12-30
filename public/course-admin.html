@@ -320,7 +320,7 @@
 
 <script>
   // ✅ Option A: token fallback (stores token in localStorage if backend returns it)
-const ADMIN_TOKEN_KEY = "tr_course_admin_token";
+const ADMIN_TOKEN_KEY = "course_admin_token";
 
   function getAdminToken(){
     try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ""; } catch { return ""; }
