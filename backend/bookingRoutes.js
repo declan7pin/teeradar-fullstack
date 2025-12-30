@@ -8,7 +8,8 @@ import cookieParser from "cookie-parser"; // ✅ ADD
 const router = express.Router();
 
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
-
+// ✅ NEW: dedicated secret for course-admin tokens (do NOT reuse BOOKING_ADMIN_SECRET)
+const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
 // ✅ ADD (needed): ensure JSON bodies work for ALL routes in this router
 router.use(express.json());
 
