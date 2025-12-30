@@ -815,21 +815,50 @@ function debug(o){
     $("aTo").value = t;
   })();
 
-    (async function(){
-    try{
-      await whoAmI();
-    }catch(e){
-      // retry once (handles any timing/storage weirdness)
-      setTimeout(async ()=>{
-        try{
-          await whoAmI();
-        }catch(err){
-          clearAdminToken();
-          location.href = "/course-admin-login.html";
-        }
-      }, 300);
-    }
-  })();
+   (async function(){
+  try{
+    const token = getAdminToken();
+
+    debug({
+      step: "init",
+      tokenPresent: !!token,
+      tokenPreview: token ? token.slice(0,20) + "…" : null,
+      cookiesEnabled: navigator.cookieEnabled
+    });
+
+    const res = await fetch("/api/book/course-admin/me", {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": "Bearer " + token } : {})
+      }
+    });
+
+    const raw = await res.text();
+    let data = {};
+    try { data = JSON.parse(raw); }
+    catch { data = { _nonJson: raw.slice(0,300) }; }
+
+    debug({
+      step: "me_response",
+      status: res.status,
+      ok: res.ok,
+      data
+    });
+
+    if(!res.ok) throw new Error(data.error || "me_failed");
+
+    $("whoami").textContent = `Logged in as ${data.email} • course: ${data.slug}`;
+    $("coursePill").textContent = data.slug;
+    $("sheetPill").textContent = data.slug;
+
+  }catch(e){
+    debug({ step:"redirecting", reason: String(e.message || e) });
+    clearAdminToken();
+    setTimeout(()=> location.href = "/course-admin-login.html", 800);
+  }
+})();
 </script>
 </body>
 </html>
