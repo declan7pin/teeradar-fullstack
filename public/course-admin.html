@@ -320,7 +320,6 @@
 
 <script>
   // ✅ Option A: token fallback (stores token in localStorage if backend returns it)
-try { localStorage.removeItem("course_admin_token"); } catch {}
 const ADMIN_TOKEN_KEY = "tr_course_admin_token";
 
   function getAdminToken(){
