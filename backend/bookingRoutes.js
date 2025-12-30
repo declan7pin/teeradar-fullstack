@@ -6,6 +6,10 @@ import { Resend } from "resend";
 import cookieParser from "cookie-parser"; // ✅ ADD
 
 const router = express.Router();
+router.use((req, res, next) => {
+  console.log("📌 bookingRoutes hit:", req.method, req.originalUrl);
+  next();
+});
 
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 // ✅ NEW: dedicated secret for course-admin tokens (do NOT reuse BOOKING_ADMIN_SECRET)
