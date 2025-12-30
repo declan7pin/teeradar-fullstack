@@ -509,15 +509,33 @@ app.use(express.json());
 // ✅ NEW: cookies (needed for booking admin auth cookie)
 app.use(cookieParser());
 
-// ✅✅✅ ADD (needed): mount booking views router (bookings lists for admin + course admins) ✅✅✅
-app.use((req, res, next) => {
-  // attach super-admin helper for booking views
-  req.isSuperAdmin = (email) => isSuperAdmin(email);
-  next();
-});
-app.use(bookingViewsRouter);
-// ✅✅✅ END ADD ✅✅✅
+// ✅ Booking Admin: accept header auth as well as cookies (Safari can drop cookies)
+function _isBookingAdminReq(req) {
+  const expected = String(process.env.BOOKING_ADMIN_SECRET || "").trim();
+  const got = String(req.headers["x-booking-admin-secret"] || "").trim();
 
+  if (expected && got && got === expected) return true;
+
+  return (
+    req.cookies?.booking_admin === "1" ||
+    req.cookies?.bookingAdmin === "1" ||
+    req.cookies?.booking_admin_auth === "1"
+  );
+}
+
+// ✅ DEBUG: confirm admin auth is being received (must be ABOVE app.get("*") fallback)
+app.get("/api/book/admin/_debug", (req, res) => {
+  res.json({
+    ok: true,
+    gotHeader: !!req.headers["x-booking-admin-secret"],
+    isBookingAdmin: _isBookingAdminReq(req),
+    cookies: {
+      booking_admin: req.cookies?.booking_admin || null,
+      bookingAdmin: req.cookies?.bookingAdmin || null,
+      booking_admin_auth: req.cookies?.booking_admin_auth || null,
+    },
+  });
+});
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 /* ✅✅✅ ONLY ADDITION (needed): more robust scorecards file discovery (Render-safe) ✅✅✅ */
