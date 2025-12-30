@@ -57,7 +57,12 @@
   </div>
 
 <script>
-  const ADMIN_TOKEN_KEY = "course_admin_token";
+  // ✅ Use ONE token key everywhere (course-admin.html must use the same key)
+  const ADMIN_TOKEN_KEY = "tr_course_admin_token";
+
+  function getAdminToken(){
+    try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ""; } catch { return ""; }
+  }
   function setAdminToken(t){
     try { if(t) localStorage.setItem(ADMIN_TOKEN_KEY, t); } catch {}
   }
@@ -65,26 +70,25 @@
     try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch {}
   }
 
+  // ✅ JSON fetch helper (adds Bearer token automatically)
   async function j(url, opts){
-  const token = localStorage.getItem("tr_course_admin_token") || "";
-  const headers = {
-    "Content-Type": "application/json",
-    ...(opts && opts.headers ? opts.headers : {}),
-    ...(token ? { "Authorization": "Bearer " + token } : {}),
-  };
+    const token = getAdminToken();
 
-  const res = await fetch(url, {
-    credentials: "include",
-    ...opts,
-    headers,
-  });
+    const headers = {
+      "Content-Type": "application/json",
+      ...(opts && opts.headers ? opts.headers : {}),
+      ...(token ? { "Authorization": "Bearer " + token } : {}),
+    };
 
-  const data = await res.json().catch(()=> ({}));
-  if(!res.ok) throw new Error(data.error || ("HTTP "+res.status));
-  return data;
-}
+    const res = await fetch(url, {
+      credentials: "include",
+      ...opts,
+      headers,
+    });
 
-    // ✅ capture token if backend returns it
+    const data = await res.json().catch(()=> ({}));
+
+    // ✅ if backend returns a token, store it (supports token or accessToken)
     if (data && (data.token || data.accessToken)) {
       setAdminToken(String(data.token || data.accessToken));
     }
@@ -92,6 +96,7 @@
     if(!res.ok) throw new Error(data.error || ("HTTP "+res.status));
     return data;
   }
+
   const $ = (id)=>document.getElementById(id);
 
   $("goHomeBtn").onclick = ()=> location.href = "/";
@@ -100,7 +105,7 @@
     $("msg").textContent = "Logging out...";
     try{
       await j("/api/book/course-admin/logout", { method:"POST", body:"{}" });
-    }catch{}
+    }catch(e){}
     clearAdminToken();
     $("msg").textContent = "✅ Logged out";
   };
@@ -119,7 +124,8 @@
         body: JSON.stringify({ email, password })
       });
 
-      // ✅ If backend still doesn’t return token AND cookie fails, you’ll see your existing error
+      // ✅ If backend didn't return a token, cookie auth might still work
+      // (but the token is what fixes iOS/Safari cookie drops)
       $("msg").textContent = "✅ Logged in";
       setTimeout(()=> location.href = "/course-admin.html", 250);
     }catch(e){
