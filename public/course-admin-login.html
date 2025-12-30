@@ -66,12 +66,23 @@
   }
 
   async function j(url, opts){
-    const res = await fetch(url, {
-      headers: { "Content-Type":"application/json" },
-      credentials: "include",
-      ...opts
-    });
-    const data = await res.json().catch(()=> ({}));
+  const token = localStorage.getItem("tr_course_admin_token") || "";
+  const headers = {
+    "Content-Type": "application/json",
+    ...(opts && opts.headers ? opts.headers : {}),
+    ...(token ? { "Authorization": "Bearer " + token } : {}),
+  };
+
+  const res = await fetch(url, {
+    credentials: "include",
+    ...opts,
+    headers,
+  });
+
+  const data = await res.json().catch(()=> ({}));
+  if(!res.ok) throw new Error(data.error || ("HTTP "+res.status));
+  return data;
+}
 
     // ✅ capture token if backend returns it
     if (data && (data.token || data.accessToken)) {
