@@ -161,6 +161,7 @@ async function sendBookingEmail({
   pricePerPlayerCents,
   totalCents,
   cartCents,
+  hireClubsCents,
 }) {
   const result = { emailOk: false, emailReason: "" };
 
@@ -182,6 +183,15 @@ async function sendBookingEmail({
 
   const subject = `TeeRadar booking confirmed — ${reference}`;
 
+  const cartLine = `
+    <tr><td style="padding:6px 0;color:#64748b">Cart</td><td style="padding:6px 0">${fmtMoney(cartCents || 0)}</td></tr>
+  `;
+  const hireClubsLine = `
+    <tr><td style="padding:6px 0;color:#64748b">Hire clubs</td><td style="padding:6px 0">${fmtMoney(hireClubsCents || 0)}</td></tr>
+  `;
+
+  const extrasCents = Number(cartCents || 0) + Number(hireClubsCents || 0);
+
   const html = `
     <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.5;color:#0f172a">
       <h2 style="margin:0 0 10px">✅ Booking confirmed</h2>
@@ -194,8 +204,9 @@ async function sendBookingEmail({
         <tr><td style="padding:6px 0;color:#64748b">Players</td><td style="padding:6px 0">${players}</td></tr>
         <tr><td style="padding:6px 0;color:#64748b">Holes</td><td style="padding:6px 0">${holes}</td></tr>
         <tr><td style="padding:6px 0;color:#64748b">Price</td><td style="padding:6px 0">${fmtMoney(pricePerPlayerCents)} per player</td></tr>
-        <tr><td style="padding:6px 0;color:#64748b">Cart</td><td style="padding:6px 0">${fmtMoney(cartCents || 0)}</td></tr>
-        <tr><td style="padding:6px 0;color:#64748b">Total</td><td style="padding:6px 0"><b>${fmtMoney(totalCents + (cartCents || 0))}</b></td></tr>
+        ${cartLine}
+        ${hireClubsLine}
+        <tr><td style="padding:6px 0;color:#64748b">Total</td><td style="padding:6px 0"><b>${fmtMoney(totalCents + extrasCents)}</b></td></tr>
       </table>
 
       <p style="margin:14px 0 0;color:#64748b;font-size:12px">
@@ -417,13 +428,14 @@ async function ensureBookingTables() {
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_cart BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
-// ✅ ADD: add-ons pricing stored per course
-await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
-await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+  // ✅ ADD: add-ons pricing stored per course
+  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
 
-// ✅ ADD: hire clubs stored per booking
-await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_hire_clubs BOOLEAN NOT NULL DEFAULT false;`);
-await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+  // ✅ ADD: hire clubs stored per booking
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_hire_clubs BOOLEAN NOT NULL DEFAULT false;`);
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+
   await db.query(`
     CREATE INDEX IF NOT EXISTS booking_bookings_course_date_idx
     ON booking_bookings (course_id, play_date);
@@ -475,12 +487,12 @@ router.post("/admin/course-admin", requirePlatformAdmin, async (req, res) => {
     if (password.length < 8) return res.status(400).json({ ok: false, error: "password_min_8" });
 
     const c = await db.query(
-  `SELECT id, slug, name, cart_fee_cents, hire_clubs_fee_cents
-   FROM booking_courses
-   WHERE slug=$1
-   LIMIT 1;`,
-  [slug]
-);
+      `SELECT id, slug, name, cart_fee_cents, hire_clubs_fee_cents
+       FROM booking_courses
+       WHERE slug=$1
+       LIMIT 1;`,
+      [slug]
+    );
     if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
     const courseId = c.rows[0].id;
 
@@ -951,7 +963,9 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
         b.paid,
         b.has_cart,
         b.cart_fee_cents,
-        (b.total_cents + b.cart_fee_cents) AS gross_cents,
+        b.has_hire_clubs,
+        b.hire_clubs_fee_cents,
+        (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents) AS gross_cents,
         b.status,
         b.created_at
       FROM booking_bookings b
@@ -1175,7 +1189,9 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
         b.paid,
         b.has_cart,
         b.cart_fee_cents,
-        (b.total_cents + b.cart_fee_cents) AS gross_cents,
+        b.has_hire_clubs,
+        b.hire_clubs_fee_cents,
+        (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents) AS gross_cents,
         b.status,
         b.created_at
       FROM booking_bookings b
@@ -1238,7 +1254,7 @@ router.get("/course-admin/analytics/summary", requireCourseAdmin, async (req, re
       SELECT
         COUNT(*)::int AS bookings_count,
         COALESCE(SUM(players),0)::int AS players_sum,
-        COALESCE(SUM(total_cents + cart_fee_cents),0)::int AS gross_cents_sum,
+        COALESCE(SUM(total_cents + cart_fee_cents + hire_clubs_fee_cents),0)::int AS gross_cents_sum,
         COALESCE(SUM(CASE WHEN paid THEN 1 ELSE 0 END),0)::int AS paid_count
       FROM booking_bookings
       WHERE course_id=$1
@@ -1295,7 +1311,7 @@ router.get("/course-admin/analytics/popular-times", requireCourseAdmin, async (r
         tee_time,
         COUNT(*)::int AS bookings,
         COALESCE(SUM(players),0)::int AS players,
-        COALESCE(SUM(total_cents + cart_fee_cents),0)::int AS gross_cents
+        COALESCE(SUM(total_cents + cart_fee_cents + hire_clubs_fee_cents),0)::int AS gross_cents
       FROM booking_bookings
       WHERE course_id=$1
         AND play_date >= $2::date
@@ -1403,9 +1419,9 @@ router.post("/book", async (req, res) => {
     const golfer_email = req.body?.email ? String(req.body.email).trim().toLowerCase() : "";
     const golfer_phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
-    // ✅ ADD: cart selection (optional)
+    // ✅ ADD: cart / hire clubs selection (optional)
     const has_cart = !!req.body?.hasCart;
-const has_hire_clubs = !!req.body?.hasHireClubs; // ✅ NEW
+    const has_hire_clubs = !!req.body?.hasHireClubs; // ✅ NEW
 
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
@@ -1420,15 +1436,32 @@ const has_hire_clubs = !!req.body?.hasHireClubs; // ✅ NEW
     if (!isLikelyEmail(golfer_email)) {
       return res.status(400).json({ ok: false, error: "email_required_valid" });
     }
-    if (!Number.isFinite(cart_fee_cents) || cart_fee_cents < 0 || cart_fee_cents > 10000000) {
-      return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
-    }
 
-    const c = await db.query(`SELECT id, slug, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+    // ✅ FIX: load course add-on fees from DB (do NOT trust client values)
+    const c = await db.query(
+      `SELECT id, slug, name, cart_fee_cents, hire_clubs_fee_cents
+       FROM booking_courses
+       WHERE slug=$1
+       LIMIT 1;`,
+      [slug]
+    );
     if (!c.rows.length) {
       return res.status(404).json({ ok: false, error: "course_not_found" });
     }
     const courseId = c.rows[0].id;
+
+    const courseCartFeeCents = Number(c.rows[0].cart_fee_cents || 0);
+    const courseHireClubsFeeCents = Number(c.rows[0].hire_clubs_fee_cents || 0);
+
+    const cart_fee_cents = has_cart ? courseCartFeeCents : 0;
+    const hire_clubs_fee_cents = has_hire_clubs ? courseHireClubsFeeCents : 0;
+
+    if (!Number.isFinite(cart_fee_cents) || cart_fee_cents < 0 || cart_fee_cents > 10000000) {
+      return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
+    }
+    if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_clubs_fee_cents > 10000000) {
+      return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
+    }
 
     const feePerPlayerCents = Number(process.env.BOOKING_FEE_PER_PLAYER_CENTS || 0);
     const bookingFeeCents = feePerPlayerCents * players;
@@ -1492,9 +1525,11 @@ const has_hire_clubs = !!req.body?.hasHireClubs; // ✅ NEW
         (course_id, play_date, tee_time, holes, players,
          golfer_name, golfer_email, golfer_phone,
          price_per_player_cents, total_cents, booking_fee_cents,
-         reference, status, paid, has_cart, cart_fee_cents)
+         reference, status, paid,
+         has_cart, cart_fee_cents,
+         has_hire_clubs, hire_clubs_fee_cents)
       VALUES
-        ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'CONFIRMED',false,$13,$14)
+        ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'CONFIRMED',false,$13,$14,$15,$16)
       `,
       [
         courseId,
@@ -1511,6 +1546,8 @@ const has_hire_clubs = !!req.body?.hasHireClubs; // ✅ NEW
         reference,
         has_cart,
         cart_fee_cents,
+        has_hire_clubs,
+        hire_clubs_fee_cents,
       ]
     );
 
@@ -1525,6 +1562,7 @@ const has_hire_clubs = !!req.body?.hasHireClubs; // ✅ NEW
       pricePerPlayerCents,
       totalCents,
       cartCents: cart_fee_cents,
+      hireClubsCents: hire_clubs_fee_cents,
     });
 
     console.log("✅ booking created", {
@@ -1543,9 +1581,10 @@ const has_hire_clubs = !!req.body?.hasHireClubs; // ✅ NEW
       time,
       holes,
       players,
-      total: (totalCents + cart_fee_cents) / 100,
+      total: (totalCents + cart_fee_cents + hire_clubs_fee_cents) / 100,
       pricePerPlayer: pricePerPlayerCents / 100,
       cartFee: cart_fee_cents / 100,
+      hireClubsFee: hire_clubs_fee_cents / 100,
       bookingFee: bookingFeeCents / 100,
       status: timeRow.status,
       bookedPlayers: timeRow.booked_players,
