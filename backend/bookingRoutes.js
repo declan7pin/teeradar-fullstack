@@ -331,7 +331,7 @@ function requireCourseAdmin(req, res, next) {
     }
   }
 
-  // ✅ Normal mode (token/cookies) — kept for later when you re-enable login
+  // ✅ Normal mode (token/cookies)
   const auth = String(req.headers.authorization || "");
   const m = auth.match(/^Bearer\s+(.+)$/i);
   const bearer = m ? m[1].trim() : "";
@@ -343,6 +343,7 @@ function requireCourseAdmin(req, res, next) {
     return next();
   }
 
+  // ✅ fallback: old cookies
   const slug = String(req.cookies?.tr_course_admin_slug || "");
   const email = String(req.cookies?.tr_course_admin_email || "");
   if (!slug || !email) return res.status(401).json({ ok: false, error: "not_course_admin" });
@@ -350,17 +351,6 @@ function requireCourseAdmin(req, res, next) {
   req.courseAdmin = { slug, email };
   return next();
 }
-  }
-
-  // ✅ fallback: old cookies (backwards compatible)
-  const slug = String(req.cookies?.tr_course_admin_slug || "");
-  const email = String(req.cookies?.tr_course_admin_email || "");
-  if (!slug || !email) return res.status(401).json({ ok: false, error: "not_course_admin" });
-
-  req.courseAdmin = { slug, email };
-  return next();
-}
-
 // -----------------------------
 // One-time table creation (safe)
 // -----------------------------
