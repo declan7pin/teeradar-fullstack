@@ -187,11 +187,16 @@
 
     const ct = (res.headers.get("content-type") || "").toLowerCase();
     let data = {};
-    if (ct.includes("application/json")) data = await res.json().catch(()=> ({}));
-    else data = { error:"non_json_response", status: res.status, preview: (await res.text().catch(()=> "")).slice(0,200) };
+    if (ct.includes("application/json")) {
+  data = await res.json().catch(()=> ({}));
+} else {
+  const preview = (await res.text().catch(()=> "")).slice(0,200);
+  // IMPORTANT: treat non-JSON as an error even if HTTP 200
+  throw new Error("non_json_response — " + preview.replace(/\s+/g," ").slice(0,120));
+}
 
-    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
-    return data;
+if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+return data;
   }
 
   function fmtDT(s){
