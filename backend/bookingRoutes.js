@@ -313,11 +313,43 @@ function verifyCourseAdminToken(token) {
 }
 
 function requireCourseAdmin(req, res, next) {
-  // ✅ accept Bearer token first
+  // 🔓 BYPASS MODE (no token) — enabled only if env var is set
+  const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
+  if (bypassKey) {
+    const provided = String(req.headers["x-course-admin-key"] || "").trim();
+    if (provided && provided === bypassKey) {
+      const slug =
+        String(req.headers["x-course-slug"] || "").trim().toLowerCase() ||
+        String(req.query.slug || "").trim().toLowerCase();
+
+      if (!slug || !isValidSlug(slug)) {
+        return res.status(400).json({ ok: false, error: "slug_required" });
+      }
+
+      req.courseAdmin = { slug, email: "bypass@teeradar" };
+      return next();
+    }
+  }
+
+  // ✅ Normal mode (token/cookies) — kept for later when you re-enable login
   const auth = String(req.headers.authorization || "");
   const m = auth.match(/^Bearer\s+(.+)$/i);
   const bearer = m ? m[1].trim() : "";
+  const token = bearer || String(req.cookies?.tr_course_admin_token || "");
+  const verified = token ? verifyCourseAdminToken(token) : null;
 
+  if (verified?.slug && verified?.email) {
+    req.courseAdmin = { slug: verified.slug, email: verified.email };
+    return next();
+  }
+
+  const slug = String(req.cookies?.tr_course_admin_slug || "");
+  const email = String(req.cookies?.tr_course_admin_email || "");
+  if (!slug || !email) return res.status(401).json({ ok: false, error: "not_course_admin" });
+
+  req.courseAdmin = { slug, email };
+  return next();
+}
   // ✅ token can come from bearer OR cookie
   const token = bearer || String(req.cookies?.tr_course_admin_token || "");
 
