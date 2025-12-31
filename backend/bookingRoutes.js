@@ -474,7 +474,13 @@ router.post("/admin/course-admin", requirePlatformAdmin, async (req, res) => {
     if (!isLikelyEmail(email)) return res.status(400).json({ ok: false, error: "email_invalid" });
     if (password.length < 8) return res.status(400).json({ ok: false, error: "password_min_8" });
 
-    const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+    const c = await db.query(
+  `SELECT id, slug, name, cart_fee_cents, hire_clubs_fee_cents
+   FROM booking_courses
+   WHERE slug=$1
+   LIMIT 1;`,
+  [slug]
+);
     if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
     const courseId = c.rows[0].id;
 
