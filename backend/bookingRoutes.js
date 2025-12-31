@@ -12,13 +12,15 @@ router.use((req, res, next) => {
 });
 
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
-// ✅ NEW: dedicated secret for course-admin tokens (do NOT reuse BOOKING_ADMIN_SECRET)
+// ✅ NEW: dedicated secret for course-admin tokens (preferred)
 const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
 
 // ✅ ADD: visibility for course-admin token secret (Render env check)
 console.log("🔐 course admin jwt env check:", {
   COURSE_ADMIN_JWT_SECRET_set: !!COURSE_ADMIN_JWT_SECRET,
   COURSE_ADMIN_JWT_SECRET_len: COURSE_ADMIN_JWT_SECRET ? COURSE_ADMIN_JWT_SECRET.length : 0,
+  BOOKING_ADMIN_SECRET_set: !!ADMIN_SECRET,
+  BOOKING_ADMIN_SECRET_len: ADMIN_SECRET ? ADMIN_SECRET.length : 0,
 });
 
 // ✅ ADD (needed): ensure JSON bodies work for ALL routes in this router
@@ -26,6 +28,7 @@ router.use(express.json());
 
 // ✅ ADD (needed): read cookies for admin auth
 router.use(cookieParser());
+
 // ✅ ADD: prove requests are hitting THIS router (Render logs)
 router.use((req, _res, next) => {
   if (req.path.startsWith("/course-admin")) {
@@ -138,10 +141,6 @@ function fmtMoney(cents) {
 }
 
 // ✅ Build Resend "from" safely.
-// Accepts either:
-// - "Name <email@domain>"
-// - "email@domain"
-// We convert plain email into "TeeRadar Bookings <email@domain>"
 function buildFrom() {
   const raw = String(bookingFromRaw || "").trim();
   if (!raw) return "";
@@ -222,7 +221,7 @@ async function sendBookingEmail({
 }
 
 // -----------------------------
-// ✅ ADD (needed): Course admin auth helpers (PBKDF2 + cookies)
+// ✅ Course admin auth helpers (PBKDF2 + tokens)
 // -----------------------------
 function hashPassword(password, saltHex = null) {
   const salt = saltHex ? Buffer.from(saltHex, "hex") : crypto.randomBytes(16);
@@ -234,7 +233,7 @@ function verifyPassword(password, saltHex, hashHex) {
   return crypto.timingSafeEqual(Buffer.from(test, "hex"), Buffer.from(hashHex, "hex"));
 }
 
-// ✅✅✅ ADD (needed): stateless course-admin token (Option A) ✅✅✅
+// ✅✅✅ Stateless course-admin token (HMAC) ✅✅✅
 function _base64url(buf) {
   return Buffer.from(buf)
     .toString("base64")
@@ -243,11 +242,22 @@ function _base64url(buf) {
     .replace(/=+$/g, "");
 }
 
-// ✅ ADD: hard requirement for COURSE_ADMIN_JWT_SECRET (no fallback)
+// ✅ FIX: do NOT hard-fail when COURSE_ADMIN_JWT_SECRET missing.
+// Fallback to a derived secret based on BOOKING_ADMIN_SECRET so login works immediately.
+// (You can still set COURSE_ADMIN_JWT_SECRET later for cleaner separation.)
 function getCourseAdminSecret() {
-  const s = String(COURSE_ADMIN_JWT_SECRET || "").trim();
-  if (!s) throw new Error("COURSE_ADMIN_JWT_SECRET_not_set");
-  return s;
+  const preferred = String(COURSE_ADMIN_JWT_SECRET || "").trim();
+  if (preferred) return preferred;
+
+  // fallback (keeps prod working even if env var missing)
+  const fallbackBase = String(ADMIN_SECRET || "").trim();
+  if (!fallbackBase) {
+    // no secret available at all
+    throw new Error("COURSE_ADMIN_JWT_SECRET_not_set_and_BOOKING_ADMIN_SECRET_missing");
+  }
+
+  // derive a stable secret so tokens verify across restarts
+  return crypto.createHash("sha256").update(`course-admin:${fallbackBase}`).digest("hex");
 }
 
 function makeCourseAdminToken({ slug, email }) {
@@ -299,10 +309,9 @@ function verifyCourseAdminToken(token) {
     return null;
   }
 }
-// ✅✅✅ END ADD ✅✅✅
 
 function requireCourseAdmin(req, res, next) {
-  // ✅ NEW: accept Bearer token first
+  // ✅ accept Bearer token first
   const auth = String(req.headers.authorization || "");
   const m = auth.match(/^Bearer\s+(.+)$/i);
   const bearer = m ? m[1].trim() : "";
@@ -529,13 +538,13 @@ router.post("/course-admin/login", async (req, res) => {
       path: "/",
     });
 
-    // ✅✅✅ Token + cookie (requires COURSE_ADMIN_JWT_SECRET) ✅✅✅
+    // ✅ Token + cookie (will now fallback if COURSE_ADMIN_JWT_SECRET missing)
     let courseAdminToken = "";
     try {
       courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email });
     } catch (err) {
       console.error("❌ course-admin/login token error", err);
-      return res.status(500).json({ ok: false, error: "COURSE_ADMIN_JWT_SECRET_not_set" });
+      return res.status(500).json({ ok: false, error: "course_admin_token_failed" });
     }
 
     res.cookie("tr_course_admin_token", courseAdminToken, {
@@ -551,9 +560,10 @@ router.post("/course-admin/login", async (req, res) => {
       slug: u.slug,
       isHttps: isHttps(req),
       tokenLen: courseAdminToken ? courseAdminToken.length : 0,
+      usingDedicatedSecret: !!COURSE_ADMIN_JWT_SECRET,
     });
 
-    // ✅ FIX: return token in multiple keys so front-end never misses it
+    // ✅ return token in multiple keys so front-end never misses it
     res.json({
       ok: true,
       slug: u.slug,
