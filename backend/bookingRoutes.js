@@ -14,11 +14,15 @@ router.use((req, res, next) => {
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 // ✅ NEW: dedicated secret for course-admin tokens (preferred)
 const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
+// ✅ ALSO support normal JWT secret if you already have it set
+const JWT_SECRET_FALLBACK = (process.env.JWT_SECRET || "").trim();
 
 // ✅ ADD: visibility for course-admin token secret (Render env check)
 console.log("🔐 course admin jwt env check:", {
   COURSE_ADMIN_JWT_SECRET_set: !!COURSE_ADMIN_JWT_SECRET,
   COURSE_ADMIN_JWT_SECRET_len: COURSE_ADMIN_JWT_SECRET ? COURSE_ADMIN_JWT_SECRET.length : 0,
+  JWT_SECRET_set: !!JWT_SECRET_FALLBACK,
+  JWT_SECRET_len: JWT_SECRET_FALLBACK ? JWT_SECRET_FALLBACK.length : 0,
   BOOKING_ADMIN_SECRET_set: !!ADMIN_SECRET,
   BOOKING_ADMIN_SECRET_len: ADMIN_SECRET ? ADMIN_SECRET.length : 0,
 });
@@ -245,30 +249,26 @@ function verifyPassword(password, saltHex, hashHex) {
 }
 
 // ✅✅✅ Stateless course-admin token (HMAC) ✅✅✅
-function _base64url(buf) {
-  return Buffer.from(buf)
+function _base64url(input) {
+  return Buffer.from(input)
     .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/g, "");
 }
 
-// ✅ FIX: do NOT hard-fail when COURSE_ADMIN_JWT_SECRET missing.
-// Fallback to a derived secret based on BOOKING_ADMIN_SECRET so login works immediately.
-// (You can still set COURSE_ADMIN_JWT_SECRET later for cleaner separation.)
+// ✅ FIX: strong fallback chain so tokens always work on Render
 function getCourseAdminSecret() {
   const preferred = String(COURSE_ADMIN_JWT_SECRET || "").trim();
   if (preferred) return preferred;
 
-  // fallback (keeps prod working even if env var missing)
-  const fallbackBase = String(ADMIN_SECRET || "").trim();
-  if (!fallbackBase) {
-    // no secret available at all
-    throw new Error("COURSE_ADMIN_JWT_SECRET_not_set_and_BOOKING_ADMIN_SECRET_missing");
-  }
+  const jwt = String(JWT_SECRET_FALLBACK || "").trim();
+  if (jwt) return crypto.createHash("sha256").update(`course-admin:${jwt}`).digest("hex");
 
-  // derive a stable secret so tokens verify across restarts
-  return crypto.createHash("sha256").update(`course-admin:${fallbackBase}`).digest("hex");
+  const fallbackBase = String(ADMIN_SECRET || "").trim();
+  if (fallbackBase) return crypto.createHash("sha256").update(`course-admin:${fallbackBase}`).digest("hex");
+
+  throw new Error("COURSE_ADMIN_SECRET_missing");
 }
 
 function makeCourseAdminToken({ slug, email }) {
@@ -276,13 +276,7 @@ function makeCourseAdminToken({ slug, email }) {
   const exp = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
   const payload = { slug: String(slug || ""), email: String(email || ""), exp };
   const payloadB64 = _base64url(JSON.stringify(payload));
-  const sig = crypto
-    .createHmac("sha256", secret)
-    .update(payloadB64)
-    .digest("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
+  const sig = _base64url(crypto.createHmac("sha256", secret).update(payloadB64).digest());
   return `${payloadB64}.${sig}`;
 }
 
@@ -295,13 +289,10 @@ function verifyCourseAdminToken(token) {
 
     const [payloadB64, sig] = parts;
 
-    const expectedSig = crypto
-      .createHmac("sha256", secret)
-      .update(payloadB64)
-      .digest("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/g, "");
+    const expectedSig = _base64url(crypto.createHmac("sha256", secret).update(payloadB64).digest());
+
+    // ✅ FIX: avoid timingSafeEqual length crash
+    if (sig.length !== expectedSig.length) return null;
 
     if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) return null;
 
@@ -547,6 +538,7 @@ router.post("/course-admin/login", async (req, res) => {
     const ok = verifyPassword(password, u.salt_hex, u.hash_hex);
     if (!ok) return res.status(401).json({ ok: false, error: "invalid_login" });
 
+    // legacy cookies (fine to keep)
     res.cookie("tr_course_admin_slug", String(u.slug), {
       httpOnly: true,
       sameSite: "lax",
@@ -562,7 +554,7 @@ router.post("/course-admin/login", async (req, res) => {
       path: "/",
     });
 
-    // ✅ Token + cookie (will now fallback if COURSE_ADMIN_JWT_SECRET missing)
+    // ✅ Token (HMAC) — MUST exist for frontend
     let courseAdminToken = "";
     try {
       courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email });
@@ -579,23 +571,27 @@ router.post("/course-admin/login", async (req, res) => {
       path: "/",
     });
 
-    console.log("✅ course-admin/login OK", {
-      email: u.email,
-      slug: u.slug,
-      isHttps: isHttps(req),
-      tokenLen: courseAdminToken ? courseAdminToken.length : 0,
-      usingDedicatedSecret: !!COURSE_ADMIN_JWT_SECRET,
-    });
-
-    // ✅ return token in multiple keys so front-end never misses it
-    res.json({
+    const response = {
       ok: true,
       slug: u.slug,
       email: u.email,
       token: courseAdminToken,
       courseAdminToken: courseAdminToken,
       accessToken: courseAdminToken,
+    };
+
+    console.log("✅ course-admin/login OK", {
+      email: u.email,
+      slug: u.slug,
+      isHttps: isHttps(req),
+      tokenLen: courseAdminToken ? courseAdminToken.length : 0,
+      keysReturned: Object.keys(response),
+      usingDedicatedSecret: !!COURSE_ADMIN_JWT_SECRET,
+      usingJwtFallback: !!JWT_SECRET_FALLBACK && !COURSE_ADMIN_JWT_SECRET,
+      usingAdminFallback: !!ADMIN_SECRET && !COURSE_ADMIN_JWT_SECRET && !JWT_SECRET_FALLBACK,
     });
+
+    res.json(response);
   } catch (e) {
     console.error("course-admin/login", e);
     res.status(500).json({ ok: false, error: "internal_error" });
@@ -605,7 +601,7 @@ router.post("/course-admin/login", async (req, res) => {
 router.post("/course-admin/logout", async (req, res) => {
   res.clearCookie("tr_course_admin_slug", { path: "/" });
   res.clearCookie("tr_course_admin_email", { path: "/" });
-  res.clearCookie("tr_course_admin_token", { path: "/" }); // ✅ ADD
+  res.clearCookie("tr_course_admin_token", { path: "/" });
   res.json({ ok: true });
 });
 
