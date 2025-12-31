@@ -17,6 +17,19 @@ router.get("/__ping", (req, res) => {
     xfProto: req.headers["x-forwarded-proto"],
     path: req.originalUrl,
   });
+  router.use((req, res, next) => {
+  const t0 = Date.now();
+  res.on("finish", () => {
+    const ms = Date.now() - t0;
+    console.log("✅ bookingRoutes done:", {
+      method: req.method,
+      url: req.originalUrl,
+      status: res.statusCode,
+      ms,
+    });
+  });
+  next();
+});
   res.json({ ok: true, where: "bookingRoutes.js", at: new Date().toISOString() });
 });
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
