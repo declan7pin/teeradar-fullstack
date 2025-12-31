@@ -173,37 +173,37 @@
   function clearAuth(){ try { localStorage.removeItem(SLUG_KEY); localStorage.removeItem(BYPASS_KEY); } catch {} }
 
     async function j(url, opts = {}) {
-    const slug = getSlug();
-    const key = getKey();
-    if (!slug) throw new Error("slug_required");
-    if (!key) throw new Error("bypass_key_required");
+  const slug = getSlug();
+  const key = getKey();
+  if (!slug) throw new Error("slug_required");
+  if (!key) throw new Error("bypass_key_required");
 
-    // ✅ build headers FIRST, but ensure opts.headers can't overwrite them
-    const headers = {
-      "content-type": "application/json",
-      "x-course-admin-key": key,
-      "x-course-slug": slug,
-      ...(opts.headers || {}),
-    };
+  const headers = {
+    "content-type": "application/json",
+    "x-course-admin-key": key,
+    "x-course-slug": slug,
+    ...(opts.headers || {}),
+  };
 
-    const res = await fetch(url, {
-      ...opts,
-      headers,               // ✅ headers applied last so they always stick
-      credentials: "include" // ✅ safe even if you later use cookies
-    });
+  const res = await fetch(url, {
+    ...opts,
+    headers,
+    credentials: "include",   // ✅ important on iOS Safari
+    cache: "no-store",        // ✅ prevents stale/old 401 caching
+  });
 
-    const ct = (res.headers.get("content-type") || "").toLowerCase();
-    let data = {};
-    if (ct.includes("application/json")) {
-      data = await res.json().catch(() => ({}));
-    } else {
-      const preview = (await res.text().catch(() => "")).slice(0, 200);
-      throw new Error("non_json_response — " + preview.replace(/\s+/g, " ").slice(0, 120));
-    }
-
-    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
-    return data;
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  let data = {};
+  if (ct.includes("application/json")) {
+    data = await res.json().catch(() => ({}));
+  } else {
+    const preview = (await res.text().catch(() => "")).slice(0, 200);
+    throw new Error("non_json_response — " + preview.replace(/\s+/g, " ").slice(0, 120));
   }
+
+  if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+  return data;
+}
 
   function fmtDT(s){
     try{
