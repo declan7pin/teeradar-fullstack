@@ -344,8 +344,9 @@ return data;
       const date = ($("date").value || "").trim();
       if (!date) throw new Error("play_date_required");
 
-      const qs = new URLSearchParams({ slug: me.slug || "", date });
-      const out = await j("/api/book/admin/times?" + qs.toString(), { method:"GET" });
+      const qs = new URLSearchParams();
+if (date) qs.set("date", date);
+const out = await j("/api/book/course-admin/bookings?" + qs.toString(), { method:"GET" });
 
       const rows = (out && out.times) || [];
       if (!Array.isArray(rows) || !rows.length){
