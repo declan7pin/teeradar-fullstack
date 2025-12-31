@@ -45,6 +45,9 @@ router.use((req, _res, next) => {
       secure: req.secure,
       hasCookieHeader: !!req.headers.cookie,
       hasAuthHeader: !!req.headers.authorization,
+      // ✅ extra visibility for bypass headers
+      hasBypassKeyHeader: !!req.get("x-course-admin-key"),
+      hasSlugHeader: !!req.get("x-course-slug"),
     });
   }
   next();
@@ -312,17 +315,26 @@ function verifyCourseAdminToken(token) {
   }
 }
 
+/**
+ * ✅ FIXED: requireCourseAdmin
+ * - uses req.get() (case-insensitive header lookup)
+ * - supports bypass properly for ALL endpoints, not just /me
+ * - normalizes slug + validates
+ */
 function requireCourseAdmin(req, res, next) {
   // 🔓 BYPASS MODE (no token) — enabled only if env var is set
   const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
 
   if (bypassKey) {
-    const provided = String(req.headers["x-course-admin-key"] || "").trim();
+    // req.get() is case-insensitive and safest behind proxies/CDNs
+    const provided =
+      String(req.get("x-course-admin-key") || "").trim() ||
+      String(req.get("X-Course-Admin-Key") || "").trim();
 
     if (provided && provided === bypassKey) {
       const slug =
-        String(req.headers["x-course-slug"] || "").trim().toLowerCase() ||
-        String(req.query.slug || "").trim().toLowerCase();
+        normSlug(req.get("x-course-slug") || req.get("X-Course-Slug") || "") ||
+        normSlug(req.query.slug || "");
 
       if (!slug || !isValidSlug(slug)) {
         return res.status(400).json({ ok: false, error: "slug_required" });
@@ -341,18 +353,19 @@ function requireCourseAdmin(req, res, next) {
   const verified = token ? verifyCourseAdminToken(token) : null;
 
   if (verified?.slug && verified?.email) {
-    req.courseAdmin = { slug: verified.slug, email: verified.email };
+    req.courseAdmin = { slug: normSlug(verified.slug), email: String(verified.email).trim().toLowerCase() };
     return next();
   }
 
   // ✅ fallback: old cookies (backwards compatible)
-  const slug = String(req.cookies?.tr_course_admin_slug || "");
-  const email = String(req.cookies?.tr_course_admin_email || "");
+  const slug = normSlug(req.cookies?.tr_course_admin_slug || "");
+  const email = String(req.cookies?.tr_course_admin_email || "").trim().toLowerCase();
   if (!slug || !email) return res.status(401).json({ ok: false, error: "not_course_admin" });
 
   req.courseAdmin = { slug, email };
   return next();
 }
+
 // -----------------------------
 // One-time table creation (safe)
 // -----------------------------
