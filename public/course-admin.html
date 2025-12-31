@@ -471,7 +471,7 @@ const out = await j("/api/book/course-admin/bookings?" + qs.toString(), { method
           const msgEl = tb.querySelector(`[data-paidmsg="${CSS.escape(ref)}"]`);
           if (msgEl) msgEl.textContent = "Saving...";
           try{
-            await j("/api/book/admin/booking-paid", {
+            await j("/api/book/course-admin/booking-paid", {
               method:"POST",
               body: JSON.stringify({ reference: ref, paid })
             });
