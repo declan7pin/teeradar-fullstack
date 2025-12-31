@@ -188,15 +188,14 @@
     const ct = (res.headers.get("content-type") || "").toLowerCase();
     let data = {};
     if (ct.includes("application/json")) {
-  data = await res.json().catch(()=> ({}));
-} else {
-  const preview = (await res.text().catch(()=> "")).slice(0,200);
-  // IMPORTANT: treat non-JSON as an error even if HTTP 200
-  throw new Error("non_json_response — " + preview.replace(/\s+/g," ").slice(0,120));
-}
+      data = await res.json().catch(()=> ({}));
+    } else {
+      const preview = (await res.text().catch(()=> "")).slice(0,200);
+      throw new Error("non_json_response — " + preview.replace(/\s+/g," ").slice(0,120));
+    }
 
-if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
-return data;
+    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+    return data;
   }
 
   function fmtDT(s){
@@ -340,13 +339,11 @@ return data;
     clearView();
     $("viewMsg").textContent = "Loading tee times...";
     try{
-      const me = await getMe();
+      await getMe();
       const date = ($("date").value || "").trim();
       if (!date) throw new Error("play_date_required");
 
-      const qs = new URLSearchParams();
-if (date) qs.set("date", date);
-const out = await j("/api/book/course-admin/bookings?" + qs.toString(), { method:"GET" });
+      const out = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date), { method:"GET" });
 
       const rows = (out && out.times) || [];
       if (!Array.isArray(rows) || !rows.length){
@@ -384,13 +381,13 @@ const out = await j("/api/book/course-admin/bookings?" + qs.toString(), { method
     clearView();
     $("viewMsg").textContent = "Loading bookings...";
     try{
-      const me = await getMe();
+      await getMe();
       const date = ($("date").value || "").trim();
 
-      const qs = new URLSearchParams({ slug: me.slug || "" });
+      const qs = new URLSearchParams();
       if (date) qs.set("date", date);
 
-      const out = await j("/api/book/admin/bookings?" + qs.toString(), { method:"GET" });
+      const out = await j("/api/book/course-admin/bookings" + (qs.toString() ? ("?" + qs.toString()) : ""), { method:"GET" });
 
       const rows = (out && out.bookings) || [];
       if (!Array.isArray(rows) || !rows.length){
