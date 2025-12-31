@@ -432,10 +432,10 @@ const out = await j("/api/book/course-admin/bookings?" + qs.toString(), { method
       const date = ($("date").value || "").trim();
       if (!date) throw new Error("play_date_required");
 
-      const timesOut = await j("/api/book/admin/times?" + new URLSearchParams({ slug: me.slug || "", date }).toString(), { method:"GET" });
+      const timesOut = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date), { method:"GET" });
       const timesRows = (timesOut && timesOut.times) || [];
 
-      const bookingsOut = await j("/api/book/admin/bookings?" + new URLSearchParams({ slug: me.slug || "", date }).toString(), { method:"GET" });
+      const bookingsOut = await j("/api/book/course-admin/bookings?date=" + encodeURIComponent(date), { method:"GET" });
       const bookingsRows = (bookingsOut && bookingsOut.bookings) || [];
 
       if (!Array.isArray(timesRows) || !timesRows.length){
