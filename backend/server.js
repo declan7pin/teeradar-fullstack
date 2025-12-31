@@ -1869,7 +1869,18 @@ app.get("/book/admin", (req, res) => {
 app.get("/book/:slug", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "book-course.html"));
 });
+// ✅ Explicit admin pages (must be BEFORE frontend fallback)
+app.get("/book-admin.html", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "book-admin.html"));
+});
 
+app.get("/course-admin.html", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "course-admin.html"));
+});
+
+// ✅ Optional short URLs
+app.get("/book-admin", (req, res) => res.redirect("/book-admin.html"));
+app.get("/course-admin", (req, res) => res.redirect("/course-admin.html"));
 // -------------------------------------------------
 // Frontend fallback
 // -------------------------------------------------
