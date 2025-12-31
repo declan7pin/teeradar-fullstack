@@ -13,7 +13,6 @@
     input,textarea{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px}
     button{padding:10px 12px;border:0;border-radius:10px;background:#00796b;color:#fff;cursor:pointer}
     button.secondary{background:#475569}
-    button.danger{background:#b91c1c}
     .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .muted{color:#64748b;font-size:13px}
     code{background:#f1f5f9;padding:2px 6px;border-radius:8px}
@@ -50,23 +49,25 @@
 
     <div class="card">
       <h2>Course Admin</h2>
-      <p class="muted">Login with your course admin email/password. This page uses a Bearer token (saved in <code>localStorage</code>).</p>
+      <p class="muted">
+        Token/login removed. This page uses a bypass key + course slug (sent in headers).
+      </p>
 
       <div class="row">
         <div>
-          <label class="muted">Admin Email</label>
-          <input id="email" placeholder="admin@hillview.com.au" />
+          <label class="muted">Course Slug</label>
+          <input id="slug" placeholder="e.g. hillview-gc" />
         </div>
         <div>
-          <label class="muted">Password</label>
-          <input id="pass" type="password" placeholder="Course admin password" />
+          <label class="muted">Bypass Key</label>
+          <input id="key" type="password" placeholder="Set COURSE_ADMIN_BYPASS_KEY in Render" />
         </div>
       </div>
 
       <div class="actions">
-        <button id="loginBtn">Login</button>
-        <button id="meBtn" class="secondary">Check /me</button>
-        <button id="logoutBtn" class="secondary">Logout</button>
+        <button id="saveBtn">Save</button>
+        <button id="testBtn" class="secondary">Test /me</button>
+        <button id="clearBtn" class="secondary">Clear</button>
       </div>
 
       <div id="msg" class="muted" style="margin-top:10px;"></div>
@@ -75,7 +76,6 @@
 
     <div class="card">
       <h3>View Tee Times / Bookings</h3>
-      <p class="muted">Uses your course from <code>/api/book/course-admin/me</code>. Pick a date to view.</p>
 
       <div class="row">
         <div>
@@ -161,25 +161,27 @@
   </div>
 
 <script>
-  const TOKEN_KEY = "tr_course_admin_token";
+  const SLUG_KEY = "tr_course_admin_slug_bypass";
+  const BYPASS_KEY = "tr_course_admin_key_bypass";
 
   const $ = (id) => document.getElementById(id);
 
-  function _getToken(){
-    try { return (localStorage.getItem(TOKEN_KEY) || "").trim(); } catch { return ""; }
-  }
-  function _setToken(t){
-    try { localStorage.setItem(TOKEN_KEY, String(t || "").trim()); } catch {}
-  }
-  function _clearToken(){
-    try { localStorage.removeItem(TOKEN_KEY); } catch {}
-  }
+  function getSlug(){ try { return (localStorage.getItem(SLUG_KEY) || "").trim().toLowerCase(); } catch { return ""; } }
+  function getKey(){ try { return (localStorage.getItem(BYPASS_KEY) || "").trim(); } catch { return ""; } }
+  function setSlug(v){ try { localStorage.setItem(SLUG_KEY, String(v||"").trim().toLowerCase()); } catch {} }
+  function setKey(v){ try { localStorage.setItem(BYPASS_KEY, String(v||"").trim()); } catch {} }
+  function clearAuth(){ try { localStorage.removeItem(SLUG_KEY); localStorage.removeItem(BYPASS_KEY); } catch {} }
 
   async function j(url, opts) {
-    const token = _getToken();
+    const slug = getSlug();
+    const key = getKey();
+    if (!slug) throw new Error("slug_required");
+    if (!key) throw new Error("bypass_key_required");
+
     const headers = {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: "Bearer " + token } : {}),
+      "X-Course-Admin-Key": key,
+      "X-Course-Slug": slug,
       ...(opts && opts.headers ? opts.headers : {}),
     };
 
@@ -288,45 +290,32 @@
   }
 
   async function getMe(){
-    const out = await j("/api/book/course-admin/me", { method:"GET" });
+    // send slug also in query so it works even if you later remove header usage
+    const out = await j("/api/book/course-admin/me?slug=" + encodeURIComponent(getSlug()), { method:"GET" });
     $("who").textContent = `✅ ${out.slug || ""} — ${out.email || ""}`;
     return out;
   }
 
-  $("loginBtn").onclick = async () => {
-    $("msg").textContent = "Logging in...";
-    $("who").textContent = "";
-    try{
-      const email = String($("email").value || "").trim();
-      const password = String($("pass").value || "");
-      if (!email || !password) throw new Error("missing_email_password");
-
-      const out = await j("/api/book/course-admin/login", {
-        method:"POST",
-        body: JSON.stringify({ email, password })
-      });
-
-      const token = out.token || out.courseAdminToken || out.accessToken || "";
-      if (!token) throw new Error("login_no_token_returned");
-
-      _setToken(token);
-      $("msg").textContent = "✅ Logged in";
-      await getMe();
-    }catch(e){
-      $("msg").textContent = "❌ " + e.message;
-    }
+  $("saveBtn").onclick = () => {
+    const slug = String($("slug").value || "").trim().toLowerCase();
+    const key = String($("key").value || "").trim();
+    setSlug(slug);
+    setKey(key);
+    $("msg").textContent = "✅ Saved";
+    $("who").textContent = slug ? `Using: ${slug}` : "";
   };
 
-  $("logoutBtn").onclick = () => {
-    _clearToken();
-    $("msg").textContent = "Logged out";
+  $("clearBtn").onclick = () => {
+    clearAuth();
+    $("slug").value = "";
+    $("key").value = "";
+    $("msg").textContent = "Cleared";
     $("who").textContent = "";
     clearView();
   };
 
-  $("meBtn").onclick = async () => {
-    $("msg").textContent = "Checking /me...";
-    $("who").textContent = "";
+  $("testBtn").onclick = async () => {
+    $("msg").textContent = "Testing...";
     try{
       await getMe();
       $("msg").textContent = "✅ /me OK";
@@ -343,7 +332,7 @@
       const date = ($("date").value || "").trim();
       if (!date) throw new Error("play_date_required");
 
-      const out = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date), { method:"GET" });
+      const out = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
 
       const rows = (out && out.times) || [];
       if (!Array.isArray(rows) || !rows.length){
@@ -383,11 +372,10 @@
     try{
       await getMe();
       const date = ($("date").value || "").trim();
-
-      const qs = new URLSearchParams();
+      const qs = new URLSearchParams({ slug: getSlug() });
       if (date) qs.set("date", date);
 
-      const out = await j("/api/book/course-admin/bookings" + (qs.toString() ? ("?" + qs.toString()) : ""), { method:"GET" });
+      const out = await j("/api/book/course-admin/bookings?" + qs.toString(), { method:"GET" });
 
       const rows = (out && out.bookings) || [];
       if (!Array.isArray(rows) || !rows.length){
@@ -425,14 +413,13 @@
     clearView();
     $("viewMsg").textContent = "Loading daily sheet...";
     try{
-      const me = await getMe();
       const date = ($("date").value || "").trim();
       if (!date) throw new Error("play_date_required");
 
-      const timesOut = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date), { method:"GET" });
+      const timesOut = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
       const timesRows = (timesOut && timesOut.times) || [];
 
-      const bookingsOut = await j("/api/book/course-admin/bookings?date=" + encodeURIComponent(date), { method:"GET" });
+      const bookingsOut = await j("/api/book/course-admin/bookings?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
       const bookingsRows = (bookingsOut && bookingsOut.bookings) || [];
 
       if (!Array.isArray(timesRows) || !timesRows.length){
@@ -442,7 +429,7 @@
 
       const sheet = groupBookingsToSheet(timesRows, bookingsRows);
 
-      $("sheetPill").textContent = `${me.slug || ""} • ${date}`;
+      $("sheetPill").textContent = `${getSlug()} • ${date}`;
       $("sheetHint").textContent = "Names fill into the 4 slots for each time. Tick Paid to mark payment.";
 
       const tb = $("sheetBody");
@@ -502,11 +489,11 @@
     }catch{}
   })();
 
-  // if already logged in, show /me
-  (async function(){
-    try{
-      if (_getToken()) await getMe();
-    }catch{}
+  // load saved
+  (function(){
+    $("slug").value = getSlug();
+    $("key").value = getKey();
+    if (getSlug()) $("who").textContent = "Using: " + getSlug();
   })();
 </script>
 </body>
