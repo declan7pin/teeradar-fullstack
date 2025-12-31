@@ -1399,7 +1399,7 @@ router.post("/book", async (req, res) => {
 
     // ✅ ADD: cart selection (optional)
     const has_cart = !!req.body?.hasCart;
-    const cart_fee_cents = has_cart ? Number(req.body?.cartFeeCents || 0) : 0;
+const has_hire_clubs = !!req.body?.hasHireClubs; // ✅ NEW
 
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
