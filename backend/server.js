@@ -495,7 +495,7 @@ app.use(
   cors({
     origin: (origin, cb) => {
       if (isAllowedOrigin(origin)) return cb(null, true);
-      return cb(new Error("CORS_not_allowed"));
+      return cb(null, false);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
