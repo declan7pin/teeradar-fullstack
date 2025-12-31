@@ -10,7 +10,15 @@ router.use((req, res, next) => {
   console.log("📌 bookingRoutes hit:", req.method, req.originalUrl);
   next();
 });
-
+router.get("/__ping", (req, res) => {
+  console.log("✅ /api/bookings/__ping HIT", {
+    host: req.headers.host,
+    origin: req.headers.origin,
+    xfProto: req.headers["x-forwarded-proto"],
+    path: req.originalUrl,
+  });
+  res.json({ ok: true, where: "bookingRoutes.js", at: new Date().toISOString() });
+});
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 // ✅ NEW: dedicated secret for course-admin tokens (preferred)
 const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
