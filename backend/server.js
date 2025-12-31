@@ -460,11 +460,13 @@ async function ensureBookingTables() {
 ensureBookingTables();
 /* ✅✅✅ END ONLY ADDITION ✅✅✅ */
 
-/* ✅✅✅ FIX (needed): Robust CORS allowlist (prevents CORS_not_allowed on Render + live site) ✅✅✅ */
 const EXTRA_CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+
+// ✅ make SITE_URL configurable for Render testing
+const SITE_URL = (process.env.SITE_URL || "https://teeradar.com.au").trim();
 
 const ALLOWED_ORIGINS = new Set([
   SITE_URL,
@@ -477,40 +479,33 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 
 function isAllowedOrigin(origin) {
-  if (!origin) return true; // ✅ allow no-origin (server-to-server / some Safari flows)
+  if (!origin) return true; // allow curl/server-to-server
   if (ALLOWED_ORIGINS.has(origin)) return true;
 
-  // ✅ allow Render preview/custom domains
   try {
     const u = new URL(origin);
     const host = (u.hostname || "").toLowerCase();
-    if (host.endsWith(".onrender.com")) return true;
-  } catch {
-    // ignore
-  }
+    if (host.endsWith(".onrender.com")) return true; // ✅ allow render while testing
+  } catch {}
   return false;
 }
 
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      if (isAllowedOrigin(origin)) return cb(null, true);
-      return cb(null, false);
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Booking-Admin-Secret",
-      "x-booking-admin-secret",
-    ],
-  })
-);
+const corsOptions = {
+  origin: (origin, cb) => {
+    if (isAllowedOrigin(origin)) return cb(null, true);
+    return cb(null, false); // ✅ DON'T throw an Error
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Booking-Admin-Secret",
+    "x-booking-admin-secret",
+  ],
+};
 
-// ✅ make sure preflights return OK
-app.options("*", cors());
-/* ✅✅✅ END FIX ✅✅✅ */
+app.use(cors(corsOptions));
 
 // -------------------------------------------------
 // Stripe Webhook – must be BEFORE express.json
