@@ -1315,8 +1315,10 @@ router.get("/course/:slug", async (req, res) => {
   try {
     const slug = normSlug(req.params.slug);
     const { rows } = await db.query(
-      `SELECT id, slug, name, notes FROM booking_courses WHERE slug=$1 LIMIT 1;`,
-      [slug]
+      `SELECT id, slug, name, notes, cart_fee_cents, hire_clubs_fee_cents
+ FROM booking_courses
+ WHERE slug=$1
+ LIMIT 1;`
     );
     if (!rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
     res.json({ ok: true, course: rows[0] });
