@@ -73,6 +73,9 @@
   // ✅ Single source of truth token key (must match course-admin.html)
   const ADMIN_TOKEN_KEY = "tr_course_admin_token";
 
+  // ✅ Single source of truth API base (bookingRoutes are mounted at /api/book)
+  const API_BASE = "/api/book";
+
   function getAdminToken(){
     try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ""; } catch { return ""; }
   }
@@ -90,9 +93,11 @@
     el.textContent = (typeof o === "string") ? o : JSON.stringify(o, null, 2);
   }
 
+  // ✅ more robust JSON fetch: detects HTML / non-JSON and shows it
   async function j(url, opts){
     const res = await fetch(url, {
-      credentials: "include",
+      // ✅ token-only auth: do NOT rely on cookies (Safari can be flaky)
+      credentials: "omit",
       ...opts,
       headers: {
         "Content-Type": "application/json",
@@ -101,19 +106,38 @@
     });
 
     const raw = await res.text();
-    let data = {};
-    try { data = JSON.parse(raw); } catch { data = { _nonJson: raw.slice(0,300) }; }
+    const ct = String(res.headers.get("content-type") || "");
+
+    let data = null;
+    const looksLikeHtml = raw && raw.trim().startsWith("<!doctype html") || raw.trim().startsWith("<html");
+    const looksJson = ct.includes("application/json");
+
+    if (looksJson) {
+      try { data = JSON.parse(raw); } catch { data = { _parseError: true, _raw: raw.slice(0, 400) }; }
+    } else {
+      // try json anyway (some servers forget headers)
+      try { data = JSON.parse(raw); } catch {
+        data = {
+          _nonJson: true,
+          _contentType: ct || null,
+          _looksLikeHtml: !!looksLikeHtml,
+          _rawPreview: (raw || "").slice(0, 400)
+        };
+      }
+    }
 
     if(!res.ok) {
-      const err = data && data.error ? data.error : ("HTTP "+res.status);
-      throw new Error(err);
+      const err = (data && data.error) ? data.error : ("HTTP " + res.status);
+      const e = new Error(err);
+      e._debug = { status: res.status, url, data };
+      throw e;
     }
-    return data;
+
+    return data || {};
   }
 
   const $ = (id)=>document.getElementById(id);
 
-  // ✅ show any JS errors instead of "nothing happens"
   window.addEventListener("error", (ev)=>{
     try{
       const msg = ev?.message || "script_error";
@@ -126,59 +150,82 @@
     try{
       const msg = (ev && ev.reason && (ev.reason.message || String(ev.reason))) || "promise_rejection";
       $("msg").textContent = "❌ " + msg;
-      debug({ step:"unhandledrejection", msg });
+      debug({ step:"unhandledrejection", msg, reason: ev && ev.reason ? String(ev.reason) : null });
     }catch{}
   });
 
-  // ✅ Attach handlers after DOM is guaranteed ready
   window.addEventListener("DOMContentLoaded", ()=>{
-    debug({ step:"dom_ready", origin: location.origin, tokenPresent: !!getAdminToken() });
+    debug({
+      step:"dom_ready",
+      origin: location.origin,
+      apiBase: API_BASE,
+      tokenPresent: !!getAdminToken()
+    });
 
     $("goHomeBtn").addEventListener("click", ()=> location.href = "/");
 
     $("logoutBtn").addEventListener("click", async ()=>{
       $("msg").textContent = "Logging out...";
-      try{ await j("/api/book/course-admin/logout", { method:"POST", body:"{}" }); }catch{}
+      try{ await j(`${API_BASE}/course-admin/logout`, { method:"POST", body:"{}" }); }catch{}
       clearAdminToken();
       $("msg").textContent = "✅ Logged out";
-      debug({ tokenNow: getAdminToken() ? "present" : "missing" });
+      debug({ step:"logged_out", tokenNow: getAdminToken() ? "present" : "missing" });
     });
 
     $("loginBtn").addEventListener("click", async ()=>{
       $("msg").textContent = "Logging in...";
       debug(""); // clear visible output
+
       try{
         const email = ($("email").value || "").trim();
         const password = $("pass").value || "";
         if(!email || !password) throw new Error("missing_email_password");
 
-        // ✅ Hard clear before login (avoid stale token)
         clearAdminToken();
 
-        const out = await j("/api/book/course-admin/login", {
+        // ✅ LOGIN (correct mounted path)
+        const out = await j(`${API_BASE}/course-admin/login`, {
           method:"POST",
           body: JSON.stringify({ email, password })
         });
 
-        // ✅ REQUIRE token for admin pages (don’t rely on cookies)
-        if(!out || !out.token){
+        const token =
+          (out && (out.token || out.courseAdminToken || out.accessToken)) ? (out.token || out.courseAdminToken || out.accessToken) : "";
+
+        if(!token){
           debug({ step:"login_ok_but_no_token", out });
           throw new Error("login_no_token_returned");
         }
 
-        setAdminToken(out.token);
+        setAdminToken(token);
+
+        // ✅ PROVE TOKEN WORKS: call /me with Bearer token
+        const me = await j(`${API_BASE}/course-admin/me`, {
+          method:"GET",
+          headers: { Authorization: `Bearer ${token}` }
+        });
 
         debug({
-          step: "login_saved_token",
-          tokenPreview: String(out.token).slice(0, 20) + "…",
-          slug: out.slug || null
+          step: "login_saved_token_and_verified",
+          tokenPreview: String(token).slice(0, 20) + "…",
+          slug: me && me.slug ? me.slug : (out.slug || null),
+          email: me && me.email ? me.email : (out.email || null)
         });
 
         $("msg").textContent = "✅ Logged in";
         setTimeout(()=> location.href = "/course-admin.html", 250);
+
       }catch(e){
-        $("msg").textContent = "❌ " + e.message;
-        debug({ step:"login_error", msg: String(e.message || e), tokenNow: getAdminToken() ? "present" : "missing" });
+        $("msg").textContent = "❌ " + (e && e.message ? e.message : "login_failed");
+
+        // show extra debug if available
+        const extra = e && e._debug ? e._debug : null;
+        debug({
+          step:"login_error",
+          msg: String(e && e.message ? e.message : e),
+          tokenNow: getAdminToken() ? "present" : "missing",
+          extra
+        });
       }
     });
   });
