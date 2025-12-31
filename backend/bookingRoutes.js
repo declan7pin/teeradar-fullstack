@@ -350,14 +350,6 @@ function requireCourseAdmin(req, res, next) {
   req.courseAdmin = { slug, email };
   return next();
 }
-  // ✅ token can come from bearer OR cookie
-  const token = bearer || String(req.cookies?.tr_course_admin_token || "");
-
-  const verified = token ? verifyCourseAdminToken(token) : null;
-
-  if (verified?.slug && verified?.email) {
-    req.courseAdmin = { slug: verified.slug, email: verified.email };
-    return next();
   }
 
   // ✅ fallback: old cookies (backwards compatible)
