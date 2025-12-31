@@ -21,11 +21,7 @@ import bookingViewsRouter from "./bookingViews.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
 // Analytics (Postgres)
-import {
-  recordEvent,
-  getAnalyticsSummary,
-  getTopCourses,
-} from "./analytics.js";
+import { recordEvent, getAnalyticsSummary, getTopCourses } from "./analytics.js";
 
 // Cache + DB
 import db from "./db.js";
@@ -52,7 +48,8 @@ app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 
 // ✅ Live site base URL (use everywhere we generate links)
-const SITE_URL = "https://teeradar.com.au";
+// ✅ FIX: define SITE_URL only once (was duplicated later)
+const SITE_URL = (process.env.SITE_URL || "https://teeradar.com.au").trim();
 
 // ✅ SUPER ADMIN emails (comma-separated in env)
 const SUPER_ADMINS = (process.env.SUPER_ADMIN_EMAILS || "")
@@ -63,6 +60,7 @@ const SUPER_ADMINS = (process.env.SUPER_ADMIN_EMAILS || "")
 function isSuperAdmin(email) {
   return SUPER_ADMINS.includes(String(email || "").toLowerCase());
 }
+
 // ✅ Stripe init
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -87,7 +85,7 @@ for (const [key, priceId] of Object.entries(PRICE_IDS)) {
 
 // ✅ NEW: small helper to get email from body/query OR Bearer token
 function getEmailFromRequest(req) {
-  const fromBody = (req.body && req.body.email) ? String(req.body.email) : "";
+  const fromBody = req.body && req.body.email ? String(req.body.email) : "";
   const fromQuery = req.query && req.query.email ? String(req.query.email) : "";
   let email = (fromBody || fromQuery || "").trim().toLowerCase();
   if (email) return email;
@@ -115,7 +113,7 @@ function getEmailFromRequest(req) {
     // fall through to decode-only
   }
 
-  // Fallback: decode without verifying (lets billing portal work even if you haven't set JWT_SECRET)
+  // Fallback: decode without verifying
   try {
     const payload = jwt.decode(token);
     const tokenEmail =
@@ -177,7 +175,6 @@ async function ensureUserPreferencesTable() {
       );
     `);
 
-    // Ensure columns exist on older deployments
     await db.query(`
       ALTER TABLE user_preferences
       ADD COLUMN IF NOT EXISTS alert_frequency TEXT;
@@ -303,7 +300,6 @@ async function ensureRoundsTables() {
       ON round_holes(round_id);
     `);
 
-    // ✅ NEW (only adds what's needed): players + multi-player storage
     await db.query(`
       ALTER TABLE rounds
       ADD COLUMN IF NOT EXISTS players_count INTEGER;
@@ -320,7 +316,6 @@ async function ensureRoundsTables() {
       WHERE players_count IS NULL;
     `);
 
-    // ✅✅✅ ADD (needed): store player names for P1–P4 (JSON array)
     await db.query(`
       ALTER TABLE rounds
       ADD COLUMN IF NOT EXISTS player_names JSONB;
@@ -336,7 +331,6 @@ async function ensureRoundsTables() {
       ALTER TABLE rounds
       ALTER COLUMN player_names SET DEFAULT '[]'::jsonb;
     `);
-    // ✅✅✅ END ADD
 
     await db.query(`
       ALTER TABLE round_holes
@@ -361,14 +355,11 @@ async function ensureRoundsTables() {
       ALTER COLUMN strokes_by_player SET DEFAULT '{}'::jsonb;
     `);
 
-    // ✅✅✅ ADD (needed): ensure putts_by_player default exists (prevents null inserts)
     await db.query(`
       ALTER TABLE round_holes
       ALTER COLUMN putts_by_player SET DEFAULT '{}'::jsonb;
     `);
-    // ✅✅✅ END ADD
 
-    // ✅ NEW: store published hole distance (meters) so UI can render Dist(m)
     await db.query(`
       ALTER TABLE round_holes
       ADD COLUMN IF NOT EXISTS distance_m INTEGER;
@@ -460,13 +451,11 @@ async function ensureBookingTables() {
 ensureBookingTables();
 /* ✅✅✅ END ONLY ADDITION ✅✅✅ */
 
+/* ✅✅✅ FIX (needed): CORS + preflight, and do NOT duplicate SITE_URL ✅✅✅ */
 const EXTRA_CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
-
-// ✅ make SITE_URL configurable for Render testing
-const SITE_URL = (process.env.SITE_URL || "https://teeradar.com.au").trim();
 
 const ALLOWED_ORIGINS = new Set([
   SITE_URL,
@@ -485,7 +474,7 @@ function isAllowedOrigin(origin) {
   try {
     const u = new URL(origin);
     const host = (u.hostname || "").toLowerCase();
-    if (host.endsWith(".onrender.com")) return true; // ✅ allow render while testing
+    if (host.endsWith(".onrender.com")) return true; // allow render previews
   } catch {}
   return false;
 }
@@ -493,7 +482,7 @@ function isAllowedOrigin(origin) {
 const corsOptions = {
   origin: (origin, cb) => {
     if (isAllowedOrigin(origin)) return cb(null, true);
-    return cb(null, false); // ✅ DON'T throw an Error
+    return cb(null, false); // ✅ don't throw
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -506,51 +495,50 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+// ✅ IMPORTANT: preflight must be OK (some browsers will fail login without this)
+app.options("*", cors(corsOptions));
+/* ✅✅✅ END FIX ✅✅✅ */
 
 // -------------------------------------------------
 // Stripe Webhook – must be BEFORE express.json
 // -------------------------------------------------
-app.post(
-  "/api/webhook",
-  express.raw({ type: "application/json" }),
-  (req, res) => {
-    const sig = req.headers["stripe-signature"];
-    let event;
+app.post("/api/webhook", express.raw({ type: "application/json" }), (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  let event;
 
-    try {
-      event = stripe.webhooks.constructEvent(
-        req.body,
-        sig,
-        process.env.STRIPE_WEBHOOK_SECRET
-      );
-    } catch (err) {
-      console.error("❌ Stripe webhook error:", err.message);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object;
-        console.log("✅ Stripe checkout completed for:", session.customer_email);
-        break;
-      }
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object;
-        console.log("❌ Subscription cancelled:", subscription.id);
-        break;
-      }
-      case "invoice.payment_succeeded": {
-        const invoice = event.data.object;
-        console.log("💰 Payment succeeded for:", invoice.customer_email);
-        break;
-      }
-      default:
-        console.log(`ℹ️ Unhandled Stripe event type: ${event.type}`);
-    }
-
-    res.json({ received: true });
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error("❌ Stripe webhook error:", err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
   }
-);
+
+  switch (event.type) {
+    case "checkout.session.completed": {
+      const session = event.data.object;
+      console.log("✅ Stripe checkout completed for:", session.customer_email);
+      break;
+    }
+    case "customer.subscription.deleted": {
+      const subscription = event.data.object;
+      console.log("❌ Subscription cancelled:", subscription.id);
+      break;
+    }
+    case "invoice.payment_succeeded": {
+      const invoice = event.data.object;
+      console.log("💰 Payment succeeded for:", invoice.customer_email);
+      break;
+    }
+    default:
+      console.log(`ℹ️ Unhandled Stripe event type: ${event.type}`);
+  }
+
+  res.json({ received: true });
+});
 
 app.use(express.json());
 
@@ -565,7 +553,7 @@ function _isBookingAdminReq(req) {
   if (expected && got && got === expected) return true;
 
   return (
-    req.cookies?.tr_book_admin === "1" || // ✅ ADD THIS
+    req.cookies?.tr_book_admin === "1" ||
     req.cookies?.booking_admin === "1" ||
     req.cookies?.bookingAdmin === "1" ||
     req.cookies?.booking_admin_auth === "1"
@@ -649,7 +637,6 @@ function _safeListDir(p) {
 
 function _readScorecardsForState(st) {
   const candidates = _buildScorecardsCandidates(st);
-
   const errors = [];
 
   for (const p of candidates) {
@@ -677,12 +664,7 @@ function _readScorecardsForState(st) {
     }
   }
 
-  return {
-    data: null,
-    foundPath: "",
-    candidates,
-    errors,
-  };
+  return { data: null, foundPath: "", candidates, errors };
 }
 /* ✅✅✅ END ONLY ADDITION ✅✅✅ */
 
@@ -710,7 +692,9 @@ app.get("/api/scorecards/:state", (req, res) => {
           backendDataDir: _safeListDir(path.join(__dirname, "data")),
           backendScorecardsDir: _safeListDir(path.join(__dirname, "data", "scorecards")),
           publicDataDir: _safeListDir(path.join(__dirname, "..", "public", "data")),
-          publicScorecardsDir: _safeListDir(path.join(__dirname, "..", "public", "data", "scorecards")),
+          publicScorecardsDir: _safeListDir(
+            path.join(__dirname, "..", "public", "data", "scorecards")
+          ),
         },
       });
     }
@@ -783,7 +767,6 @@ app.get("/api/me", async (req, res) => {
 
 // -------------------------------------------------
 // ✅ NEW: GET account preferences (Option 2 response shape)
-// Fixes account.html hydrate: /api/account/preferences?email=...
 // -------------------------------------------------
 app.get("/api/account/preferences", async (req, res) => {
   try {
@@ -811,7 +794,7 @@ app.get("/api/account/preferences", async (req, res) => {
   }
 });
 
-// ✅ Optional alias (handy if you ever want /api/preferences)
+// ✅ Optional alias
 app.get("/api/preferences", async (req, res) => {
   try {
     const email = (req.query.email || "").toString().trim().toLowerCase();
@@ -842,7 +825,6 @@ app.get("/api/preferences", async (req, res) => {
 // ✅ NEW: My Rounds (logged-in only)
 // -------------------------------------------------
 
-// List my rounds (latest first)
 app.get("/api/rounds", requireAuth, async (req, res) => {
   try {
     const userId = Number(req.user?.id);
@@ -868,7 +850,6 @@ app.get("/api/rounds", requireAuth, async (req, res) => {
   }
 });
 
-// Create a round + create blank holes (pars optional, putts supported)
 app.post("/api/rounds", requireAuth, async (req, res) => {
   try {
     const userId = Number(req.user?.id);
@@ -979,7 +960,6 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
   }
 });
 
-// Get a round (and its holes) – must be my round
 app.get("/api/rounds/:id", requireAuth, async (req, res) => {
   try {
     const userId = Number(req.user?.id);
@@ -1029,7 +1009,6 @@ app.get("/api/rounds/:id", requireAuth, async (req, res) => {
   }
 });
 
-// Update a single hole (strokes + putts + optional par) – must be my round
 app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
   try {
     const userId = Number(req.user?.id);
@@ -1128,7 +1107,6 @@ app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
 // 🔔 Alerts API
 app.use("/api/alerts", alertsRouter);
 
-// ✅ NEW: fallback endpoints for the "logged-in popup" unread/viewed flow
 app.get("/api/alerts/unread", async (req, res) => {
   try {
     const email = (req.query.email || "").toString().trim().toLowerCase();
@@ -1216,9 +1194,7 @@ app.post("/api/subscribe", async (req, res) => {
     const successUrl =
       process.env.STRIPE_SUCCESS_URL ||
       `${SITE_URL}/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1`;
-    const cancelUrl =
-      process.env.STRIPE_CANCEL_URL ||
-      `${SITE_URL}/subscribe-cancel.html`;
+    const cancelUrl = process.env.STRIPE_CANCEL_URL || `${SITE_URL}/subscribe-cancel.html`;
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -1378,7 +1354,7 @@ app.post("/api/account/preferences", async (req, res) => {
       ]
     );
 
-    const finalHomeCourseState = (homeCourseState || homeState || null);
+    const finalHomeCourseState = homeCourseState || homeState || null;
 
     await db.query(
       `
@@ -1389,7 +1365,7 @@ app.post("/api/account/preferences", async (req, res) => {
         home_course_state = COALESCE(NULLIF($4, ''), home_course_state)
       WHERE email = $1
       `,
-      [trimmedEmail, (homeCourse || ""), (homeCourseId || ""), (finalHomeCourseState || "")]
+      [trimmedEmail, homeCourse || "", homeCourseId || "", finalHomeCourseState || ""]
     );
 
     res.json({ ok: true });
@@ -1457,12 +1433,13 @@ let scorecardsWA = null;
     scorecardsWA = data;
     console.log("✅ WA scorecards loaded from:", foundPath);
   } else {
-    console.log("⚠️ WA scorecards not found on disk at boot (will still work if you later add the file and redeploy).");
+    console.log(
+      "⚠️ WA scorecards not found on disk at boot (will still work if you later add the file and redeploy)."
+    );
   }
 }
 
-const scorecardsAll = []
-  .concat(Array.isArray(scorecardsWA) ? scorecardsWA : []);
+const scorecardsAll = [].concat(Array.isArray(scorecardsWA) ? scorecardsWA : []);
 
 const scorecardIndex = new Map();
 for (const sc of scorecardsAll) {
@@ -1581,9 +1558,7 @@ app.post("/api/search", async (req, res) => {
     if (!date) return res.status(400).json({ error: "date is required" });
 
     const holesValue =
-      holes === "" || holes === null || typeof holes === "undefined"
-        ? ""
-        : Number(holes);
+      holes === "" || holes === null || typeof holes === "undefined" ? "" : Number(holes);
 
     const stateCode = (state || "").toString().toUpperCase();
 
@@ -1599,14 +1574,10 @@ app.post("/api/search", async (req, res) => {
     console.log("Incoming /api/search", criteria);
 
     const searchCourses = stateCode
-      ? courses.filter(
-          (c) => (c.state || "").toString().toUpperCase() === stateCode
-        )
+      ? courses.filter((c) => (c.state || "").toString().toUpperCase() === stateCode)
       : courses;
 
-    console.log(
-      `Searching ${searchCourses.length} courses for state=${stateCode || "ALL"}`
-    );
+    console.log(`Searching ${searchCourses.length} courses for state=${stateCode || "ALL"}`);
 
     const jobs = searchCourses.map(async (c) => {
       const courseId = `${(c.state || "NA").toString().toUpperCase()}::${c.id || c.name}`;
@@ -1690,12 +1661,7 @@ app.post("/api/analytics/event", async (req, res) => {
       payload.courseTitle ||
       null;
 
-    console.log("Incoming analytics event:", {
-      type,
-      at,
-      userId,
-      courseName,
-    });
+    console.log("Incoming analytics event:", { type, at, userId, courseName });
 
     await recordEvent({ type, userId, courseName, at });
     res.json({ ok: true });
@@ -1833,17 +1799,13 @@ app.post("/api/contact", async (req, res) => {
   console.log("[contact env] pass present:", !!SMTP_PASS);
 
   if (!CONTACT_EMAIL || !SMTP_HOST || !SMTP_USER || !SMTP_PASS || !SMTP_PORT) {
-    return res
-      .status(500)
-      .json({ ok: false, error: "Email service not configured" });
+    return res.status(500).json({ ok: false, error: "Email service not configured" });
   }
 
   const { email, question, details } = req.body;
 
   if (!email || !question || !details) {
-    return res
-      .status(400)
-      .json({ ok: false, error: "Missing required fields" });
+    return res.status(400).json({ ok: false, error: "Missing required fields" });
   }
 
   try {
@@ -1851,10 +1813,7 @@ app.post("/api/contact", async (req, res) => {
       host: SMTP_HOST,
       port: Number(SMTP_PORT),
       secure: false,
-      auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS,
-      },
+      auth: { user: SMTP_USER, pass: SMTP_PASS },
     });
 
     await transporter.sendMail({
@@ -1942,8 +1901,7 @@ async function runAlertTickSafe() {
   }
 }
 
-const ALERT_TICK_INTERVAL_MS =
-  Number(process.env.ALERT_TICK_INTERVAL_MS) || 5 * 60 * 1000;
+const ALERT_TICK_INTERVAL_MS = Number(process.env.ALERT_TICK_INTERVAL_MS) || 5 * 60 * 1000;
 
 setTimeout(runAlertTickSafe, 20000);
 setInterval(runAlertTickSafe, ALERT_TICK_INTERVAL_MS);
