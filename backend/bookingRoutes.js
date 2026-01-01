@@ -4,7 +4,7 @@ import crypto from "crypto";
 import db from "./db.js";
 import { Resend } from "resend";
 import cookieParser from "cookie-parser"; // ✅ ADD
-
+import { recordEvent } from "./analytics.js";
 const router = express.Router();
 router.use((req, res, next) => {
   console.log("📌 bookingRoutes hit:", req.method, req.originalUrl);
