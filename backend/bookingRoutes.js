@@ -1467,7 +1467,46 @@ router.post("/book", async (req, res) => {
         hire_clubs_fee_cents,
       ]
     );
+// ✅✅✅ BOOKING ANALYTICS (server-side truth) ✅✅✅
+try {
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
+  const userId = golfer_email || ip || null;
 
+  const grossCents = totalCents + cart_fee_cents + hire_clubs_fee_cents;
+
+  // For the course (and platform totals)
+  await recordEvent({
+    type: "booking_created",
+    userId,
+    courseName: c.rows[0].name,
+    at: new Date().toISOString(),
+  });
+
+  // Optional: store richer booking payload in the same event stream
+  // (only if your analytics.js supports payload; if not, remove payload)
+  await recordEvent({
+    type: "booking_value",
+    userId,
+    courseName: c.rows[0].name,
+    at: new Date().toISOString(),
+    payload: {
+      slug,
+      date,
+      time,
+      holes,
+      players,
+      reference,
+      totalCents,
+      cart_fee_cents,
+      hire_clubs_fee_cents,
+      grossCents,
+      paid: false,
+    },
+  });
+} catch (err) {
+  console.error("❌ booking analytics failed:", err?.message || err);
+}
+// ✅✅✅ END BOOKING ANALYTICS ✅✅✅
     const emailResult = await sendBookingEmail({
       to: golfer_email,
       courseName: c.rows[0].name,
