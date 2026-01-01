@@ -17,7 +17,7 @@ import bookingRoutes from "./bookingRoutes.js";
 // ✅✅✅ ADD (needed): booking views (view booked tee times / bookings) ✅✅✅
 import bookingViewsRouter from "./bookingViews.js";
 // ✅✅✅ END ADD ✅✅✅
-
+import bookingAnalyticsRouter from "./bookingAnalyticsRoutes.js"
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
 // Analytics (Postgres)
