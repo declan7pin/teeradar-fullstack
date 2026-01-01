@@ -5,6 +5,7 @@ import db from "./db.js";
 import { Resend } from "resend";
 import cookieParser from "cookie-parser"; // ✅ ADD
 import { recordEvent } from "./analytics.js";
+
 const router = express.Router();
 router.use((req, res, next) => {
   console.log("📌 bookingRoutes hit:", req.method, req.originalUrl);
@@ -156,6 +157,15 @@ function buildFrom() {
   if (raw.includes("<") && raw.includes(">")) return raw; // already in Name <email> format
   if (isLikelyEmail(raw)) return `${bookingFromName} <${raw}>`;
   return raw; // last resort
+}
+
+// ✅ NEW: consistent client IP for analytics
+function getClientIp(req) {
+  return (
+    String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
+    req.ip ||
+    ""
+  );
 }
 
 // ✅ Send booking email via Resend (safe)
@@ -1052,6 +1062,66 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
   }
 });
 
+// ✅ NEW: Platform admin — booking analytics summary (funnel + revenue)
+router.get("/admin/analytics/summary", requirePlatformAdmin, async (req, res) => {
+  try {
+    const days = Number(req.query.days || 7);
+    const range = Number.isFinite(days) && days > 0 ? `${days} days` : "7 days";
+
+    const totals = await db.query(
+      `
+      SELECT
+        COUNT(*)::int AS bookings,
+        COALESCE(SUM((meta->>'grossCents')::bigint), 0)::bigint AS gross_cents
+      FROM analytics
+      WHERE type = 'booking_created'
+        AND occurred_at >= NOW() - $1::interval
+      `,
+      [range]
+    );
+
+    const topCourses = await db.query(
+      `
+      SELECT
+        course_name AS "courseName",
+        COUNT(*)::int AS "bookings",
+        COALESCE(SUM((meta->>'grossCents')::bigint), 0)::bigint AS "grossCents"
+      FROM analytics
+      WHERE type = 'booking_created'
+        AND occurred_at >= NOW() - $1::interval
+        AND course_name IS NOT NULL AND course_name <> ''
+      GROUP BY course_name
+      ORDER BY COUNT(*) DESC
+      LIMIT 10
+      `,
+      [range]
+    );
+
+    const funnel = await db.query(
+      `
+      SELECT
+        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_course_view' AND occurred_at >= NOW() - $1::interval) AS course_views,
+        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_availability_search' AND occurred_at >= NOW() - $1::interval) AS availability_searches,
+        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_created' AND occurred_at >= NOW() - $1::interval) AS bookings
+      `,
+      [range]
+    );
+
+    res.json({
+      ok: true,
+      days: days || 7,
+      bookings: totals.rows[0]?.bookings || 0,
+      grossCents: Number(totals.rows[0]?.gross_cents || 0),
+      gross: Number(totals.rows[0]?.gross_cents || 0) / 100,
+      funnel: funnel.rows[0] || { course_views: 0, availability_searches: 0, bookings: 0 },
+      topCourses: topCourses.rows || [],
+    });
+  } catch (e) {
+    console.error("admin booking analytics", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
 // -----------------------------
 // ✅ Course admin endpoints
 // -----------------------------
@@ -1059,6 +1129,57 @@ async function courseIdFromSlug(slug) {
   const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
   return c.rows.length ? c.rows[0].id : null;
 }
+
+// ✅ NEW: Course admin — booking analytics summary (scoped)
+router.get("/course-admin/analytics/summary", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = req.courseAdmin.slug;
+    const days = Number(req.query.days || 7);
+    const range = Number.isFinite(days) && days > 0 ? `${days} days` : "7 days";
+
+    const c = await db.query(`SELECT id, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const courseName = c.rows[0].name;
+
+    const totals = await db.query(
+      `
+      SELECT
+        COUNT(*)::int AS bookings,
+        COALESCE(SUM((meta->>'grossCents')::bigint), 0)::bigint AS gross_cents
+      FROM analytics
+      WHERE type='booking_created'
+        AND course_name=$1
+        AND occurred_at >= NOW() - $2::interval
+      `,
+      [courseName, range]
+    );
+
+    const funnel = await db.query(
+      `
+      SELECT
+        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_course_view' AND course_name=$1 AND occurred_at >= NOW() - $2::interval) AS course_views,
+        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_availability_search' AND course_name=$1 AND occurred_at >= NOW() - $2::interval) AS availability_searches,
+        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_created' AND course_name=$1 AND occurred_at >= NOW() - $2::interval) AS bookings
+      `,
+      [courseName, range]
+    );
+
+    res.json({
+      ok: true,
+      slug,
+      courseName,
+      days: days || 7,
+      bookings: totals.rows[0]?.bookings || 0,
+      grossCents: Number(totals.rows[0]?.gross_cents || 0),
+      gross: Number(totals.rows[0]?.gross_cents || 0) / 100,
+      funnel: funnel.rows[0] || { course_views: 0, availability_searches: 0, bookings: 0 },
+    });
+  } catch (e) {
+    console.error("course-admin booking analytics", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 
 // generate times (course admin)
 router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res) => {
@@ -1255,18 +1376,20 @@ router.get("/course/:slug", async (req, res) => {
     const slug = normSlug(req.params.slug);
     const { rows } = await db.query(
       `SELECT id, slug, name, notes, cart_fee_cents, hire_clubs_fee_cents
- FROM booking_courses
- WHERE slug=$1
- LIMIT 1;`
+       FROM booking_courses
+       WHERE slug=$1
+       LIMIT 1;`
     );
     if (!rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
     // ✅ analytics: booking course page viewed
-recordEvent({
-  type: "booking_course_view",
-  userId: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip,
-  courseName: rows[0].name,
-  meta: { slug },
-}).catch(() => {});
+    recordEvent({
+      type: "booking_course_view",
+      userId: getClientIp(req) || null,
+      courseName: rows[0].name,
+      meta: { slug },
+    }).catch(() => {});
+
     res.json({ ok: true, course: rows[0] });
   } catch (e) {
     console.error("course/:slug", e);
@@ -1296,6 +1419,14 @@ router.get("/availability", async (req, res) => {
     const c = await db.query(`SELECT id, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
     if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
     const courseId = c.rows[0].id;
+
+    // ✅ analytics: availability search
+    recordEvent({
+      type: "booking_availability_search",
+      userId: getClientIp(req) || null,
+      courseName: c.rows[0].name,
+      meta: { slug, date, holes, players, earliest, latest },
+    }).catch(() => {});
 
     const { rows } = await db.query(
       `
@@ -1474,46 +1605,37 @@ router.post("/book", async (req, res) => {
         hire_clubs_fee_cents,
       ]
     );
-// ✅✅✅ BOOKING ANALYTICS (server-side truth) ✅✅✅
-try {
-  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
-  const userId = golfer_email || ip || null;
 
-  const grossCents = totalCents + cart_fee_cents + hire_clubs_fee_cents;
+    // ✅✅✅ BOOKING ANALYTICS (server-side truth) ✅✅✅
+    try {
+      const ip = getClientIp(req);
+      const userId = golfer_email || ip || null;
+      const grossCents = Number(totalCents || 0) + Number(cart_fee_cents || 0) + Number(hire_clubs_fee_cents || 0);
 
-  // For the course (and platform totals)
-  await recordEvent({
-    type: "booking_created",
-    userId,
-    courseName: c.rows[0].name,
-    at: new Date().toISOString(),
-  });
+      await recordEvent({
+        type: "booking_created",
+        userId,
+        courseName: c.rows[0].name,
+        at: new Date().toISOString(),
+        meta: {
+          slug,
+          date,
+          time,
+          holes,
+          players,
+          reference,
+          totalCents,
+          cart_fee_cents,
+          hire_clubs_fee_cents,
+          grossCents,
+          paid: false,
+        },
+      });
+    } catch (err) {
+      console.error("❌ booking analytics failed:", err?.message || err);
+    }
+    // ✅✅✅ END BOOKING ANALYTICS ✅✅✅
 
-  // Optional: store richer booking payload in the same event stream
-  // (only if your analytics.js supports payload; if not, remove payload)
-  await recordEvent({
-    type: "booking_value",
-    userId,
-    courseName: c.rows[0].name,
-    at: new Date().toISOString(),
-    payload: {
-      slug,
-      date,
-      time,
-      holes,
-      players,
-      reference,
-      totalCents,
-      cart_fee_cents,
-      hire_clubs_fee_cents,
-      grossCents,
-      paid: false,
-    },
-  });
-} catch (err) {
-  console.error("❌ booking analytics failed:", err?.message || err);
-}
-// ✅✅✅ END BOOKING ANALYTICS ✅✅✅
     const emailResult = await sendBookingEmail({
       to: golfer_email,
       courseName: c.rows[0].name,
