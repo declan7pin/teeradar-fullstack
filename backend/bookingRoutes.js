@@ -10,28 +10,7 @@ router.use((req, res, next) => {
   console.log("📌 bookingRoutes hit:", req.method, req.originalUrl);
   next();
 });
-router.get("/__ping", (req, res) => {
-  console.log("✅ /api/bookings/__ping HIT", {
-    host: req.headers.host,
-    origin: req.headers.origin,
-    xfProto: req.headers["x-forwarded-proto"],
-    path: req.originalUrl,
-  });
-  router.use((req, res, next) => {
-  const t0 = Date.now();
-  res.on("finish", () => {
-    const ms = Date.now() - t0;
-    console.log("✅ bookingRoutes done:", {
-      method: req.method,
-      url: req.originalUrl,
-      status: res.statusCode,
-      ms,
-    });
-  });
-  next();
-});
-  res.json({ ok: true, where: "bookingRoutes.js", at: new Date().toISOString() });
-});
+
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 // ✅ NEW: dedicated secret for course-admin tokens (preferred)
 const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
@@ -338,21 +317,50 @@ function verifyCourseAdminToken(token) {
   }
 }
 
+// ✅ NEW: helper for bypass to work on BOTH fetch() and full page navigation
+function getBypassProvided(req) {
+  const key =
+    String(req.headers["x-course-admin-key"] || "").trim() ||
+    String(req.query.key || "").trim() ||
+    String(req.cookies?.tr_course_admin_bypass || "").trim();
+
+  const slug =
+    String(req.headers["x-course-slug"] || "").trim().toLowerCase() ||
+    String(req.query.slug || "").trim().toLowerCase() ||
+    String(req.cookies?.tr_course_admin_slug || "").trim().toLowerCase();
+
+  return { key, slug };
+}
+
 function requireCourseAdmin(req, res, next) {
-  // 🔓 BYPASS MODE (no token) — enabled only if env var is set
+  // 🔓 BYPASS MODE — enabled only if env var is set
   const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
 
   if (bypassKey) {
-    const provided = String(req.headers["x-course-admin-key"] || "").trim();
+    const { key: providedKey, slug } = getBypassProvided(req);
 
-    if (provided && provided === bypassKey) {
-      const slug =
-        String(req.headers["x-course-slug"] || "").trim().toLowerCase() ||
-        String(req.query.slug || "").trim().toLowerCase();
-
+    if (providedKey && providedKey === bypassKey) {
       if (!slug || !isValidSlug(slug)) {
         return res.status(400).json({ ok: false, error: "slug_required" });
       }
+
+      // ✅ CRITICAL FIX:
+      // When bypass works via fetch headers, set cookies so
+      // normal browser navigations (View bookings / Daily sheet) also work.
+      res.cookie("tr_course_admin_bypass", providedKey, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: isHttps(req),
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
+      res.cookie("tr_course_admin_slug", slug, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: isHttps(req),
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
 
       req.courseAdmin = { slug, email: "bypass@teeradar" };
       return next();
@@ -384,15 +392,12 @@ function requireCourseAdmin(req, res, next) {
 // One-time table creation (safe)
 // -----------------------------
 async function ensureBookingTables() {
-  // ✅ IMPORTANT: include add-on columns IN CREATE TABLE so older DBs don't break bookings queries
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_courses (
       id SERIAL PRIMARY KEY,
       slug TEXT UNIQUE NOT NULL,
       name TEXT NOT NULL,
       notes TEXT,
-      cart_fee_cents INTEGER NOT NULL DEFAULT 0,
-      hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
@@ -419,7 +424,6 @@ async function ensureBookingTables() {
       max_players INTEGER NOT NULL DEFAULT 4,
       price_per_player_cents INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'AVAILABLE',
-      booked_players INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now(),
       UNIQUE(course_id, play_date, tee_time, holes)
@@ -427,11 +431,21 @@ async function ensureBookingTables() {
   `);
 
   await db.query(`
+    ALTER TABLE booking_times
+    ADD COLUMN IF NOT EXISTS booked_players INTEGER NOT NULL DEFAULT 0;
+  `);
+
+  await db.query(`
+    UPDATE booking_times
+    SET booked_players = 0
+    WHERE booked_players IS NULL;
+  `);
+
+  await db.query(`
     CREATE INDEX IF NOT EXISTS booking_times_lookup_idx
     ON booking_times (course_id, play_date, holes, status, tee_time);
   `);
 
-  // ✅ IMPORTANT: include paid/cart/hire columns IN CREATE TABLE
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_bookings (
       id BIGSERIAL PRIMARY KEY,
@@ -448,26 +462,19 @@ async function ensureBookingTables() {
       booking_fee_cents INTEGER NOT NULL DEFAULT 0,
       reference TEXT UNIQUE NOT NULL,
       status TEXT NOT NULL DEFAULT 'CONFIRMED',
-      paid BOOLEAN NOT NULL DEFAULT false,
-      has_cart BOOLEAN NOT NULL DEFAULT false,
-      cart_fee_cents INTEGER NOT NULL DEFAULT 0,
-      has_hire_clubs BOOLEAN NOT NULL DEFAULT false,
-      hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
 
-  // ✅ keep ALTERs for existing databases created before these columns existed
-  await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS booked_players INTEGER NOT NULL DEFAULT 0;`);
-  await db.query(`UPDATE booking_times SET booked_players = 0 WHERE booked_players IS NULL;`);
-
+  // ✅ ADD: paid flag + cart tracking (needed for MiClub paid checkbox + analytics)
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_cart BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
-
+  // ✅ ADD: add-ons pricing stored per course
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
 
+  // ✅ ADD: hire clubs stored per booking
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_hire_clubs BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
 
@@ -646,6 +653,7 @@ router.post("/course-admin/logout", async (req, res) => {
   res.clearCookie("tr_course_admin_slug", { path: "/" });
   res.clearCookie("tr_course_admin_email", { path: "/" });
   res.clearCookie("tr_course_admin_token", { path: "/" });
+  res.clearCookie("tr_course_admin_bypass", { path: "/" }); // ✅ added
   res.json({ ok: true });
 });
 
@@ -654,16 +662,34 @@ router.get("/course-admin/me", requireCourseAdmin, async (req, res) => {
   res.json({ ok: true, slug: req.courseAdmin.slug, email: req.courseAdmin.email });
 });
 
+// ✅ NEW: debug route so it returns JSON (won't fall into SPA index.html)
+router.get("/course-admin/_debug", (req, res) => {
+  const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
+  const provided = getBypassProvided(req);
+  res.json({
+    ok: true,
+    router: "bookingRoutes",
+    bypassEnabled: !!bypassKey,
+    provided: {
+      hasKey: !!provided.key,
+      hasSlug: !!provided.slug,
+      slug: provided.slug || null,
+      from: {
+        headerKey: !!String(req.headers["x-course-admin-key"] || "").trim(),
+        queryKey: !!String(req.query.key || "").trim(),
+        cookieKey: !!String(req.cookies?.tr_course_admin_bypass || "").trim(),
+      },
+    },
+  });
+});
+
 // -----------------------------
 // ✅ Platform admin: courses + times + bookings (existing)
 // -----------------------------
 router.get("/admin/courses", requirePlatformAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT id, slug, name, notes, created_at, cart_fee_cents, hire_clubs_fee_cents
-       FROM booking_courses
-       ORDER BY id DESC
-       LIMIT 500;`
+      `SELECT id, slug, name, notes, created_at FROM booking_courses ORDER BY id DESC LIMIT 500;`
     );
     res.json({ ok: true, courses: rows || [] });
   } catch (e) {
@@ -690,7 +716,7 @@ router.post("/admin/courses", requirePlatformAdmin, async (req, res) => {
       ON CONFLICT (slug) DO UPDATE SET
         name = EXCLUDED.name,
         notes = EXCLUDED.notes
-      RETURNING id, slug, name, notes, created_at, cart_fee_cents, hire_clubs_fee_cents;
+      RETURNING id, slug, name, notes, created_at;
       `,
       [slug, name, notes]
     );
@@ -973,7 +999,7 @@ router.post("/admin/booking-paid", requirePlatformAdmin, async (req, res) => {
   }
 });
 
-// ✅ ADD: platform admin bookings (include paid + gross + total)
+// ✅ ADD: platform admin bookings (include paid + gross)
 router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.query.slug);
@@ -1008,8 +1034,7 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
         b.cart_fee_cents,
         b.has_hire_clubs,
         b.hire_clubs_fee_cents,
-        b.total_cents,
-        (b.total_cents + COALESCE(b.cart_fee_cents,0) + COALESCE(b.hire_clubs_fee_cents,0)) AS gross_cents,
+        (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents) AS gross_cents,
         b.status,
         b.created_at
       FROM booking_bookings b
@@ -1034,6 +1059,81 @@ async function courseIdFromSlug(slug) {
   const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
   return c.rows.length ? c.rows[0].id : null;
 }
+
+// generate times (course admin)
+router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = req.courseAdmin.slug;
+
+    const playDate = String(_pickAny(req.body, ["playDate", "date"], "") || "").trim();
+    const start = String(_pickAny(req.body, ["start"], "06:00") || "06:00").trim();
+    const end = String(_pickAny(req.body, ["end"], "17:00") || "17:00").trim();
+    const intervalMins = Number(_pickAny(req.body, ["intervalMins", "intervalMinutes"], 10));
+    const holes = Number(_pickAny(req.body, ["holes"], 18));
+    const maxPlayers = Number(_pickAny(req.body, ["maxPlayers"], 4));
+    const pricePerPlayerCents = Number(_pickAny(req.body, ["pricePerPlayerCents"], 0));
+    const status = String(_pickAny(req.body, ["status"], "AVAILABLE") || "AVAILABLE").trim().toUpperCase();
+
+    if (!playDate) return res.status(400).json({ ok: false, error: "date_required" });
+    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_must_be_9_or_18" });
+    if (!Number.isFinite(intervalMins) || intervalMins < 1 || intervalMins > 60)
+      return res.status(400).json({ ok: false, error: "interval_invalid" });
+    if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4)
+      return res.status(400).json({ ok: false, error: "maxPlayers_invalid" });
+    if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0 || pricePerPlayerCents > 10000000)
+      return res.status(400).json({ ok: false, error: "price_invalid" });
+    if (!["AVAILABLE", "BLOCKED"].includes(status))
+      return res.status(400).json({ ok: false, error: "status_invalid" });
+
+    const sM = toMinutes(start);
+    const eM = toMinutes(end);
+    if (sM === null || eM === null || eM <= sM) return res.status(400).json({ ok: false, error: "time_range_invalid" });
+
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const times = [];
+    for (let m = sM; m <= eM; m += intervalMins) times.push(fromMinutes(m));
+
+    let inserted = 0;
+    let skipped = 0;
+
+    for (const t of times) {
+      const exists = await db.query(
+        `SELECT 1 FROM booking_times WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 LIMIT 1;`,
+        [courseId, playDate, t, holes]
+      );
+      const isExisting = !!exists.rows.length;
+
+      await db.query(
+        `
+        INSERT INTO booking_times
+          (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, updated_at)
+        VALUES
+          ($1, $2::date, $3, $4, $5, 0, $6, $7, now())
+        ON CONFLICT (course_id, play_date, tee_time, holes)
+        DO UPDATE SET
+          max_players = EXCLUDED.max_players,
+          price_per_player_cents = EXCLUDED.price_per_player_cents,
+          status = CASE
+            WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
+            ELSE EXCLUDED.status
+          END,
+          updated_at = now()
+        `,
+        [courseId, playDate, t, holes, maxPlayers, pricePerPlayerCents, status]
+      );
+
+      if (isExisting) skipped++;
+      else inserted++;
+    }
+
+    res.json({ ok: true, slug, date: playDate, holes, generated: times.length, inserted, skipped });
+  } catch (e) {
+    console.error("course-admin/generate-times", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 
 // view times (course admin)
 router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
@@ -1100,8 +1200,7 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
         b.cart_fee_cents,
         b.has_hire_clubs,
         b.hire_clubs_fee_cents,
-        b.total_cents,
-        (b.total_cents + COALESCE(b.cart_fee_cents,0) + COALESCE(b.hire_clubs_fee_cents,0)) AS gross_cents,
+        (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents) AS gross_cents,
         b.status,
         b.created_at
       FROM booking_bookings b
@@ -1156,9 +1255,9 @@ router.get("/course/:slug", async (req, res) => {
     const slug = normSlug(req.params.slug);
     const { rows } = await db.query(
       `SELECT id, slug, name, notes, cart_fee_cents, hire_clubs_fee_cents
-       FROM booking_courses
-       WHERE slug=$1
-       LIMIT 1;`
+ FROM booking_courses
+ WHERE slug=$1
+ LIMIT 1;`
     );
     if (!rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
     res.json({ ok: true, course: rows[0] });
