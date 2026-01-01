@@ -82,6 +82,34 @@ for (const [key, priceId] of Object.entries(PRICE_IDS)) {
     PRICE_TO_PLAN[priceId] = { plan: "PRO", maxFavs: 10 };
   }
 }
+app.get("/api/analytics/debug", async (req, res) => {
+  try {
+    const total = await db.query(`SELECT COUNT(*)::int AS n FROM analytics;`);
+    const byType = await db.query(`
+      SELECT type, COUNT(*)::int AS n
+      FROM analytics
+      GROUP BY type
+      ORDER BY n DESC
+      LIMIT 50;
+    `);
+
+    const recent = await db.query(`
+      SELECT type, user_id, course_name, occurred_at
+      FROM analytics
+      ORDER BY occurred_at DESC, id DESC
+      LIMIT 25;
+    `);
+
+    res.json({
+      ok: true,
+      total: total.rows[0]?.n ?? 0,
+      byType: byType.rows,
+      recent: recent.rows,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 
 // ✅ NEW: small helper to get email from body/query OR Bearer token
 function getEmailFromRequest(req) {
