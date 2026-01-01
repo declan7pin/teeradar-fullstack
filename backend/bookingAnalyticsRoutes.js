@@ -1,0 +1,393 @@
+// backend/bookingAnalyticsRoutes.js
+import express from "express";
+import db from "./db.js";
+
+const router = express.Router();
+
+// -----------------------------
+// db wrappers (pg or sqlite)
+// -----------------------------
+async function qAll(sql, params = []) {
+  if (typeof db.query === "function") {
+    const r = await db.query(sql, params);
+    return r.rows || [];
+  }
+  if (typeof db.all === "function") {
+    return await db.all(sql, params);
+  }
+  throw new Error("DB adapter missing query/all");
+}
+async function qOne(sql, params = []) {
+  const rows = await qAll(sql, params);
+  return rows[0] || null;
+}
+async function qExec(sql, params = []) {
+  if (typeof db.query === "function") {
+    await db.query(sql, params);
+    return;
+  }
+  if (typeof db.run === "function") {
+    await db.run(sql, params);
+    return;
+  }
+  throw new Error("DB adapter missing query/run");
+}
+
+// -----------------------------
+// ensure table
+// -----------------------------
+async function ensureBookingAnalyticsTable() {
+  try {
+    if (typeof db.query === "function") {
+      await qExec(`
+        CREATE TABLE IF NOT EXISTS booking_analytics_events (
+          id BIGSERIAL PRIMARY KEY,
+          course_slug TEXT,
+          event_type TEXT NOT NULL,
+          occurred_at TIMESTAMPTZ DEFAULT now(),
+          session_id TEXT,
+          user_agent TEXT,
+          ip TEXT,
+          referrer TEXT,
+          path TEXT,
+          payload JSONB
+        );
+      `);
+
+      await qExec(`
+        CREATE INDEX IF NOT EXISTS booking_analytics_events_slug_time_idx
+        ON booking_analytics_events (course_slug, occurred_at);
+      `);
+
+      await qExec(`
+        CREATE INDEX IF NOT EXISTS booking_analytics_events_type_time_idx
+        ON booking_analytics_events (event_type, occurred_at);
+      `);
+    } else {
+      // sqlite fallback
+      await qExec(`
+        CREATE TABLE IF NOT EXISTS booking_analytics_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          course_slug TEXT,
+          event_type TEXT NOT NULL,
+          occurred_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          session_id TEXT,
+          user_agent TEXT,
+          ip TEXT,
+          referrer TEXT,
+          path TEXT,
+          payload TEXT
+        );
+      `);
+    }
+    console.log("✅ booking_analytics_events table ready");
+  } catch (e) {
+    console.error("❌ ensureBookingAnalyticsTable error:", e?.message || e);
+  }
+}
+ensureBookingAnalyticsTable();
+
+// -----------------------------
+// auth helpers (use server.js middleware if present)
+// -----------------------------
+function isBookingAdminReq(req) {
+  // server.js already sets req.isBookingAdmin() + req.bookingAdmin in your setup
+  try {
+    if (typeof req.isBookingAdmin === "function") return !!req.isBookingAdmin();
+    if (typeof req.bookingAdmin !== "undefined") return !!req.bookingAdmin;
+  } catch {}
+  return false;
+}
+
+function getCourseAdminSlugFromReq(req) {
+  // bookingViews.js sets req.courseAdmin when using requireCourseAdmin;
+  // BUT for analytics we’ll also accept bypass header.
+  const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
+  const providedBypass = String(req.headers["x-course-admin-key"] || "").trim();
+  if (bypassKey && providedBypass && providedBypass === bypassKey) {
+    const slug =
+      String(req.headers["x-course-slug"] || "").trim().toLowerCase() ||
+      String(req.query.slug || "").trim().toLowerCase();
+    return slug || "";
+  }
+
+  // if another middleware set it
+  const slug = String(req.courseAdmin?.slug || "").trim();
+  return slug;
+}
+
+function requireCourseAdminOrBypass(req, res, next) {
+  const slug = getCourseAdminSlugFromReq(req);
+  if (!slug) return res.status(401).json({ ok: false, error: "Not logged in as course admin" });
+  req._courseSlug = slug;
+  next();
+}
+
+function getClientIp(req) {
+  return (
+    req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() ||
+    req.ip ||
+    null
+  );
+}
+
+// -----------------------------
+// POST event (public booking page can call this)
+// -----------------------------
+router.post("/api/book/analytics/event", express.json(), async (req, res) => {
+  try {
+    const {
+      eventType,
+      courseSlug,
+      sessionId = null,
+      payload = null,
+      path: clientPath = null,
+    } = req.body || {};
+
+    const type = String(eventType || "").trim();
+    const slug = String(courseSlug || "").trim().toLowerCase();
+
+    if (!type) return res.status(400).json({ ok: false, error: "eventType is required" });
+
+    // Allow event without slug (platform events), but if provided enforce sane chars
+    if (slug && !/^[a-z0-9-]+$/.test(slug)) {
+      return res.status(400).json({ ok: false, error: "Invalid courseSlug" });
+    }
+
+    const ua = String(req.headers["user-agent"] || "");
+    const ref = String(req.headers["referer"] || "");
+    const ip = getClientIp(req);
+
+    if (typeof db.query === "function") {
+      await qExec(
+        `
+        INSERT INTO booking_analytics_events
+          (course_slug, event_type, occurred_at, session_id, user_agent, ip, referrer, path, payload)
+        VALUES
+          ($1,$2,now(),$3,$4,$5,$6,$7,$8::jsonb)
+        `,
+        [
+          slug || null,
+          type,
+          sessionId ? String(sessionId) : null,
+          ua || null,
+          ip,
+          ref || null,
+          clientPath || req.path || null,
+          payload ? JSON.stringify(payload) : null,
+        ]
+      );
+    } else {
+      await qExec(
+        `
+        INSERT INTO booking_analytics_events
+          (course_slug, event_type, occurred_at, session_id, user_agent, ip, referrer, path, payload)
+        VALUES
+          (?,?,?,?,?,?,?,?,?)
+        `,
+        [
+          slug || null,
+          type,
+          new Date().toISOString(),
+          sessionId ? String(sessionId) : null,
+          ua || null,
+          ip,
+          ref || null,
+          clientPath || req.path || null,
+          payload ? JSON.stringify(payload) : null,
+        ]
+      );
+    }
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("booking analytics event error:", e?.message || e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// -----------------------------
+// Course admin: summary (last N days)
+// -----------------------------
+router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypass, async (req, res) => {
+  try {
+    const slug = req._courseSlug;
+    const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
+
+    const views = await qOne(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM booking_analytics_events
+      WHERE course_slug = $1
+        AND event_type = 'course_page_view'
+        AND occurred_at >= now() - ($2::int || ' days')::interval
+      `,
+      [slug, days]
+    );
+
+    const times = await qOne(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM booking_analytics_events
+      WHERE course_slug = $1
+        AND event_type = 'times_view'
+        AND occurred_at >= now() - ($2::int || ' days')::interval
+      `,
+      [slug, days]
+    );
+
+    const started = await qOne(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM booking_analytics_events
+      WHERE course_slug = $1
+        AND event_type = 'booking_started'
+        AND occurred_at >= now() - ($2::int || ' days')::interval
+      `,
+      [slug, days]
+    );
+
+    const confirmed = await qOne(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM booking_analytics_events
+      WHERE course_slug = $1
+        AND event_type = 'booking_confirmed'
+        AND occurred_at >= now() - ($2::int || ' days')::interval
+      `,
+      [slug, days]
+    );
+
+    const revenue = await qOne(
+      `
+      SELECT COALESCE(SUM((payload->>'total_cents')::int),0)::int AS total_cents
+      FROM booking_analytics_events
+      WHERE course_slug = $1
+        AND event_type = 'booking_confirmed'
+        AND occurred_at >= now() - ($2::int || ' days')::interval
+      `,
+      [slug, days]
+    );
+
+    const v = Number(views?.n || 0);
+    const c = Number(confirmed?.n || 0);
+    const conversion = v > 0 ? c / v : 0;
+
+    return res.json({
+      ok: true,
+      courseSlug: slug,
+      days,
+      metrics: {
+        course_page_view: v,
+        times_view: Number(times?.n || 0),
+        booking_started: Number(started?.n || 0),
+        booking_confirmed: c,
+        revenue_cents: Number(revenue?.total_cents || 0),
+        conversion_rate: conversion,
+      },
+    });
+  } catch (e) {
+    console.error("course analytics summary error:", e?.message || e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// -----------------------------
+// Course admin: daily series (last N days)
+// -----------------------------
+router.get("/api/book/course-admin/analytics/daily", requireCourseAdminOrBypass, async (req, res) => {
+  try {
+    const slug = req._courseSlug;
+    const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
+
+    const rows = await qAll(
+      `
+      SELECT
+        to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') AS day,
+        event_type,
+        COUNT(*)::int AS n,
+        COALESCE(SUM(CASE WHEN event_type='booking_confirmed' THEN (payload->>'total_cents')::int ELSE 0 END),0)::int AS revenue_cents
+      FROM booking_analytics_events
+      WHERE course_slug = $1
+        AND occurred_at >= now() - ($2::int || ' days')::interval
+        AND event_type IN ('course_page_view','times_view','booking_started','booking_confirmed')
+      GROUP BY 1,2
+      ORDER BY 1 ASC
+      `,
+      [slug, days]
+    );
+
+    return res.json({ ok: true, courseSlug: slug, days, rows });
+  } catch (e) {
+    console.error("course analytics daily error:", e?.message || e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// -----------------------------
+// Platform admin: overall summary
+// -----------------------------
+router.get("/api/book/admin/analytics/summary", async (req, res) => {
+  try {
+    if (!isBookingAdminReq(req)) {
+      return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
+    }
+
+    const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
+    const slug = String(req.query.slug || "").trim().toLowerCase();
+
+    const whereSlug = slug ? `AND course_slug = $2` : ``;
+
+    const params = slug ? [days, slug] : [days];
+
+    const totals = await qOne(
+      `
+      SELECT
+        COUNT(*) FILTER (WHERE event_type='course_page_view')::int AS views,
+        COUNT(*) FILTER (WHERE event_type='times_view')::int AS times_view,
+        COUNT(*) FILTER (WHERE event_type='booking_started')::int AS started,
+        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS confirmed,
+        COALESCE(SUM(CASE WHEN event_type='booking_confirmed' THEN (payload->>'total_cents')::int ELSE 0 END),0)::int AS revenue_cents
+      FROM booking_analytics_events
+      WHERE occurred_at >= now() - ($1::int || ' days')::interval
+      ${whereSlug}
+      `,
+      params
+    );
+
+    const top = await qAll(
+      `
+      SELECT
+        course_slug,
+        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS bookings,
+        COALESCE(SUM(CASE WHEN event_type='booking_confirmed' THEN (payload->>'total_cents')::int ELSE 0 END),0)::int AS revenue_cents
+      FROM booking_analytics_events
+      WHERE occurred_at >= now() - ($1::int || ' days')::interval
+      ${whereSlug}
+      GROUP BY course_slug
+      ORDER BY revenue_cents DESC NULLS LAST, bookings DESC
+      LIMIT 20
+      `,
+      params
+    );
+
+    return res.json({
+      ok: true,
+      days,
+      filter: { courseSlug: slug || null },
+      metrics: {
+        course_page_view: Number(totals?.views || 0),
+        times_view: Number(totals?.times_view || 0),
+        booking_started: Number(totals?.started || 0),
+        booking_confirmed: Number(totals?.confirmed || 0),
+        revenue_cents: Number(totals?.revenue_cents || 0),
+      },
+      topCourses: top || [],
+    });
+  } catch (e) {
+    console.error("admin analytics summary error:", e?.message || e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+export default router;
