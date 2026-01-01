@@ -1248,7 +1248,7 @@ app.post("/api/billing/portal", async (req, res) => {
 
     res.json({ url: session.url });
   } catch (err) {
-    console.error("billing portal error", err);
+    console.error("billing portal error:", err);
     res.status(500).json({ error: "billing_portal_failed", detail: err.message });
   }
 });
@@ -1704,6 +1704,19 @@ app.get("/api/analytics", async (req, res) => {
   }
 });
 
+/* ✅✅✅ FIX (analytics page compatibility): alias /api/analytics/summary to the same handler ✅✅✅ */
+app.get("/api/analytics/summary", async (req, res) => {
+  try {
+    const summary = await getAnalyticsSummary();
+    const topCourses = await getTopCourses(10);
+    res.json(buildFlatSummary(summary, topCourses));
+  } catch (err) {
+    console.error("analytics summary(/summary) error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+/* ✅✅✅ END FIX ✅✅✅ */
+
 // -------------------------------------------------
 // Registered Users for Admin Dashboard
 // -------------------------------------------------
@@ -1885,6 +1898,16 @@ app.get("/course-admin.html", (req, res) => {
 // ✅ Optional short URLs
 app.get("/book-admin", (req, res) => res.redirect("/book-admin.html"));
 app.get("/course-admin", (req, res) => res.redirect("/course-admin.html"));
+
+/* ✅✅✅ FIX (analytics page): make /analytics work (otherwise it hits "*" and loads index) ✅✅✅ */
+app.get("/analytics", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "analytics.html"));
+});
+app.get("/analytics.html", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "analytics.html"));
+});
+/* ✅✅✅ END FIX ✅✅✅ */
+
 // -------------------------------------------------
 // Frontend fallback
 // -------------------------------------------------
