@@ -20,31 +20,12 @@ async function ensureAnalyticsTable() {
       );
     `);
 
-    // ✅ add round_id for dedupe (doesn't break existing rows)
-    await db.query(`
-      ALTER TABLE analytics
-      ADD COLUMN IF NOT EXISTS round_id BIGINT;
-    `);
+    // add-ons (safe)
+    await db.query(`ALTER TABLE analytics ADD COLUMN IF NOT EXISTS round_id BIGINT;`);
+    await db.query(`ALTER TABLE analytics ADD COLUMN IF NOT EXISTS round_key TEXT;`);
+    await db.query(`ALTER TABLE analytics ADD COLUMN IF NOT EXISTS plan TEXT;`);
+    await db.query(`ALTER TABLE analytics ADD COLUMN IF NOT EXISTS meta JSONB;`);
 
-    // ✅ NEW: support UUID/string round ids as well (safe)
-    await db.query(`
-      ALTER TABLE analytics
-      ADD COLUMN IF NOT EXISTS round_key TEXT;
-    `);
-
-    // ✅ add plan for alert/subscription segmentation (safe)
-    await db.query(`
-      ALTER TABLE analytics
-      ADD COLUMN IF NOT EXISTS plan TEXT;
-    `);
-
-    // ✅ add meta JSON for future-proofing (safe)
-    await db.query(`
-      ALTER TABLE analytics
-      ADD COLUMN IF NOT EXISTS meta JSONB;
-    `);
-
-    // helpful indexes (safe)
     await db.query(`
       CREATE INDEX IF NOT EXISTS idx_analytics_type_time
       ON analytics (type, occurred_at DESC);
@@ -55,16 +36,8 @@ async function ensureAnalyticsTable() {
       ON analytics (user_id, course_name, occurred_at DESC);
     `);
 
-    await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_analytics_round_id
-      ON analytics (round_id);
-    `);
-
-    // ✅ NEW: index for string round ids
-    await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_analytics_round_key
-      ON analytics (round_key);
-    `);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_analytics_round_id ON analytics (round_id);`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_analytics_round_key ON analytics (round_key);`);
   })();
 
   return initPromise;
@@ -92,7 +65,50 @@ function safeJson(val) {
   }
 }
 
-// Event type aliases for alerts (tolerant to string variants)
+// ✅ Normalise event types so dashboards never zero out due to naming drift
+function normaliseType(t) {
+  const x = String(t || "").trim().toLowerCase();
+  if (!x) return "";
+
+  // home views
+  if (["home_view", "home", "home-page-view", "home_page_view", "homepage_view", "homeview", "home_page_views"].includes(x)) {
+    return "home_view";
+  }
+
+  // searches
+  if (["search", "search_submit", "searches", "search_view", "search_run"].includes(x)) {
+    return "search";
+  }
+
+  // per-course search (optional)
+  if (["search_course", "course_search", "searched_course", "search-course"].includes(x)) {
+    return "search_course";
+  }
+
+  // booking clicks
+  if (["booking_click", "book_click", "booking", "bookingclick"].includes(x)) {
+    return "booking_click";
+  }
+
+  // course booking clicks
+  if (["course_booking_click", "course-booking-click", "course_booking", "course_bookingclick"].includes(x)) {
+    return "course_booking_click";
+  }
+
+  // rounds played
+  if (["round_played", "roundplayed", "played_round", "scorecard_saved", "round_saved"].includes(x)) {
+    return "round_played";
+  }
+
+  // alerts (leave as-is but keep consistent keys)
+  if (["alert_sent", "alert_email_sent", "alerts_sent"].includes(x)) return "alert_sent";
+  if (["alert_hit", "alert_match", "alerts_hit"].includes(x)) return "alert_hit";
+
+  // default: keep original trimmed, but cap length
+  return String(t).trim().slice(0, 64);
+}
+
+// Event type aliases for alerts (tolerant)
 const ALERT_SENT_TYPES = ["alert_sent", "alert_email_sent", "alerts_sent"];
 const ALERT_HIT_TYPES = ["alert_hit", "alert_match", "alerts_hit"];
 
@@ -107,7 +123,6 @@ export async function recordEvent(typeOrObj, payload = {}) {
   try {
     await ensureAnalyticsTable();
 
-    // --- backwards compatible parsing ---
     let type = "";
     let p = {};
 
@@ -119,57 +134,30 @@ export async function recordEvent(typeOrObj, payload = {}) {
       p = payload && typeof payload === "object" ? payload : {};
     }
 
+    type = normaliseType(type);
     if (!type) return;
 
     const at = p.at || p.occurred_at || null;
 
-    const userId =
-      p.userId ??
-      p.user_id ??
-      p.user ??
-      p.uid ??
-      null;
+    const userId = p.userId ?? p.user_id ?? p.user ?? p.uid ?? null;
 
-    const courseName =
-      p.courseName ??
-      p.course_name ??
-      p.course ??
-      null;
+    const courseName = p.courseName ?? p.course_name ?? p.course ?? null;
 
-    const roundIdRaw =
-      p.roundId ??
-      p.round_id ??
-      null;
+    const roundIdRaw = p.roundId ?? p.round_id ?? null;
 
-    // ✅ support both numeric ids AND UUID/string ids
     const roundRawStr =
       roundIdRaw === null || typeof roundIdRaw === "undefined" ? "" : String(roundIdRaw).trim();
 
-    const roundIdNum =
-      roundRawStr ? Number(roundRawStr) : null;
+    const roundIdNum = roundRawStr ? Number(roundRawStr) : null;
 
-    const round_id =
-      Number.isFinite(roundIdNum) ? roundIdNum : null;
-
-    const round_key =
-      roundRawStr && !Number.isFinite(roundIdNum) ? roundRawStr.slice(0, 128) : null;
+    const round_id = Number.isFinite(roundIdNum) ? roundIdNum : null;
+    const round_key = roundRawStr && !Number.isFinite(roundIdNum) ? roundRawStr.slice(0, 128) : null;
 
     const planRaw =
-      p.plan ??
-      p.plan_name ??
-      p.subscriptionPlan ??
-      p.subscription_plan ??
-      null;
-
+      p.plan ?? p.plan_name ?? p.subscriptionPlan ?? p.subscription_plan ?? null;
     const plan = normalisePlan(planRaw);
 
-    const metaRaw =
-      p.meta ??
-      p.payload ??
-      p.data ??
-      p.details ??
-      null;
-
+    const metaRaw = p.meta ?? p.payload ?? p.data ?? p.details ?? null;
     const metaObj = safeJson(metaRaw);
     const metaJson = metaObj ? JSON.stringify(metaObj) : null;
 
@@ -178,26 +166,15 @@ export async function recordEvent(typeOrObj, payload = {}) {
     await db.query(
       `INSERT INTO analytics (type, user_id, course_name, occurred_at, round_id, round_key, plan, meta)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
-      [
-        type,
-        userId || null,
-        courseName || null,
-        timestamp,
-        round_id,
-        round_key,
-        plan,
-        metaJson,
-      ]
+      [type, userId || null, courseName || null, timestamp, round_id, round_key, plan, metaJson]
     );
   } catch (err) {
-    // MUST NEVER break pages — swallow but log
     console.error("Postgres analytics insert failed:", err?.message || err);
   }
 }
 
 /**
- * ✅ Top played courses based on round_played events
- * Returns: [{ courseName, rounds }]
+ * Top played courses based on round_played events
  */
 export async function getTopPlayedCourses(limit = 10, days = null) {
   await ensureAnalyticsTable();
@@ -231,20 +208,16 @@ export async function getTopPlayedCourses(limit = 10, days = null) {
   return rows;
 }
 
-// ---------------- ALERT helpers (non-fatal) ----------------
-
+// ---------------- ALERT helpers ----------------
 async function getTopAlertCourses7d(limit = 10) {
   await ensureAnalyticsTable();
   const { rows } = await db.query(
     `
-    SELECT
-      course_name AS "courseName",
-      COUNT(*)::int AS "hits"
+    SELECT course_name AS "courseName", COUNT(*)::int AS "hits"
     FROM analytics
     WHERE type = ANY($1::text[])
       AND occurred_at >= NOW() - INTERVAL '7 days'
-      AND course_name IS NOT NULL
-      AND course_name <> ''
+      AND course_name IS NOT NULL AND course_name <> ''
     GROUP BY course_name
     ORDER BY COUNT(*) DESC
     LIMIT $2
@@ -258,9 +231,7 @@ async function getAlertsByPlan7d() {
   await ensureAnalyticsTable();
   const { rows } = await db.query(
     `
-    SELECT
-      COALESCE(plan, 'UNKNOWN') AS "plan",
-      COUNT(*)::int AS "count"
+    SELECT COALESCE(plan, 'UNKNOWN') AS "plan", COUNT(*)::int AS "count"
     FROM analytics
     WHERE type = ANY($1::text[])
       AND occurred_at >= NOW() - INTERVAL '7 days'
@@ -335,35 +306,36 @@ export async function getAnalyticsSummary() {
     return rows.length ? Number(rows[0].n) || 0 : 0;
   }
 
-  // ----- existing metrics (DO NOT BREAK) -----
-
+  // ✅ Count canonical types + common historical aliases (so old rows still show)
   summary.homeViews = await count(
-    `SELECT COUNT(*)::int AS n FROM analytics WHERE type = 'home_view'`
+    `SELECT COUNT(*)::int AS n FROM analytics
+     WHERE type IN ('home_view','home_page_view','homepage_view','homeView','home')`
   );
 
   summary.bookingClicks = await count(
-    `SELECT COUNT(*)::int AS n
-     FROM analytics
-     WHERE type IN ('booking_click','course_booking_click')`
+    `SELECT COUNT(*)::int AS n FROM analytics
+     WHERE type IN (
+       'booking_click','course_booking_click',
+       'booking','book_click','course_booking'
+     )`
   );
 
   summary.searches = await count(
-    `SELECT COUNT(*)::int AS n
-     FROM analytics
-     WHERE type = 'search'`
+    `SELECT COUNT(*)::int AS n FROM analytics
+     WHERE type IN ('search','search_submit','searches')`
   );
 
   summary.roundsPlayed = await count(
     `SELECT COUNT(DISTINCT COALESCE(round_key, round_id::text))::int AS n
      FROM analytics
-     WHERE type = 'round_played'
+     WHERE type IN ('round_played','round_saved','scorecard_saved')
        AND COALESCE(round_key, round_id::text) IS NOT NULL`
   );
 
   summary.roundsPlayed7d = await count(
     `SELECT COUNT(DISTINCT COALESCE(round_key, round_id::text))::int AS n
      FROM analytics
-     WHERE type = 'round_played'
+     WHERE type IN ('round_played','round_saved','scorecard_saved')
        AND COALESCE(round_key, round_id::text) IS NOT NULL
        AND occurred_at >= NOW() - INTERVAL '7 days'`
   );
@@ -378,9 +350,7 @@ export async function getAnalyticsSummary() {
   );
   summary.newUsers = summary.newUsers7d;
 
-  summary.usersAllTime = await count(
-    `SELECT COUNT(DISTINCT user_id)::int AS n FROM analytics`
-  );
+  summary.usersAllTime = await count(`SELECT COUNT(DISTINCT user_id)::int AS n FROM analytics`);
 
   summary.usersToday = await count(
     `SELECT COUNT(DISTINCT user_id)::int AS n
@@ -431,15 +401,11 @@ export async function getAnalyticsSummary() {
   summary.conversionSearchToBooking = summary.searchToBookingRate;
   summary.rounds = summary.roundsPlayed;
 
-  // Attach course-level metrics
   summary.topCourses = await getTopCourses(10);
   summary.topSearchedCourses = await getTopSearchedCourses(10);
   summary.demandRank = await getDemandRanking(10);
 
-  // =========================
-  // ✅ ALERTS (NON-FATAL)
-  // =========================
-  // Defaults so UI never breaks
+  // Alerts defaults (non-fatal)
   summary.alertsSent7d = 0;
   summary.alertHits7d = 0;
   summary.hitRate7d = 0;
@@ -449,16 +415,14 @@ export async function getAnalyticsSummary() {
 
   try {
     summary.alertsSent7d = await count(
-      `SELECT COUNT(*)::int AS n
-       FROM analytics
+      `SELECT COUNT(*)::int AS n FROM analytics
        WHERE type = ANY($1::text[])
          AND occurred_at >= NOW() - INTERVAL '7 days'`,
       [ALERT_SENT_TYPES]
     );
 
     summary.alertHits7d = await count(
-      `SELECT COUNT(*)::int AS n
-       FROM analytics
+      `SELECT COUNT(*)::int AS n FROM analytics
        WHERE type = ANY($1::text[])
          AND occurred_at >= NOW() - INTERVAL '7 days'`,
       [ALERT_HIT_TYPES]
@@ -474,7 +438,7 @@ export async function getAnalyticsSummary() {
     console.error("⚠️ Alerts analytics failed (ignored):", e?.message || e);
   }
 
-  // ✅ extra aliases for different analytics.html versions
+  // extra aliases for different analytics.html versions
   summary.alertsSent = summary.alertsSent7d;
   summary.alertHits = summary.alertHits7d;
   summary.hitRate = summary.hitRate7d;
@@ -498,12 +462,11 @@ export async function getTopCourses(limit = 10) {
   await ensureAnalyticsTable();
 
   const { rows } = await db.query(
-    `SELECT
-        course_name AS "courseName",
-        COUNT(*)::int AS "clicks"
+    `SELECT course_name AS "courseName", COUNT(*)::int AS "clicks"
      FROM analytics
      WHERE course_name IS NOT NULL
-       AND type IN ('booking_click','course_booking_click')
+       AND course_name <> ''
+       AND type IN ('booking_click','course_booking_click','booking','book_click','course_booking')
      GROUP BY course_name
      ORDER BY COUNT(*) DESC
      LIMIT $1`,
@@ -521,12 +484,11 @@ export async function getTopSearchedCourses(limit = 10) {
   await ensureAnalyticsTable();
 
   const { rows } = await db.query(
-    `SELECT
-        course_name AS "courseName",
-        COUNT(*)::int AS "searches"
+    `SELECT course_name AS "courseName", COUNT(*)::int AS "searches"
      FROM analytics
      WHERE course_name IS NOT NULL
-       AND type = 'search_course'
+       AND course_name <> ''
+       AND type IN ('search_course','course_search','searched_course')
      GROUP BY course_name
      ORDER BY COUNT(*) DESC
      LIMIT $1`,
@@ -547,15 +509,19 @@ export async function getDemandRanking(limit = 10) {
     `
     SELECT
       course_name AS "courseName",
-      SUM(CASE WHEN type = 'search_course' THEN 1 ELSE 0 END)::int AS "searches",
-      SUM(CASE WHEN type IN ('booking_click','course_booking_click') THEN 1 ELSE 0 END)::int AS "clicks",
+      SUM(CASE WHEN type IN ('search_course','course_search','searched_course') THEN 1 ELSE 0 END)::int AS "searches",
+      SUM(CASE WHEN type IN ('booking_click','course_booking_click','booking','book_click','course_booking') THEN 1 ELSE 0 END)::int AS "clicks",
       (
-        SUM(CASE WHEN type = 'search_course' THEN 1 ELSE 0 END) * 2
-        + SUM(CASE WHEN type IN ('booking_click','course_booking_click') THEN 1 ELSE 0 END)
+        SUM(CASE WHEN type IN ('search_course','course_search','searched_course') THEN 1 ELSE 0 END) * 2
+        + SUM(CASE WHEN type IN ('booking_click','course_booking_click','booking','book_click','course_booking') THEN 1 ELSE 0 END)
       )::int AS "score"
     FROM analytics
     WHERE course_name IS NOT NULL
-      AND type IN ('search_course','booking_click','course_booking_click')
+      AND course_name <> ''
+      AND type IN (
+        'search_course','course_search','searched_course',
+        'booking_click','course_booking_click','booking','book_click','course_booking'
+      )
     GROUP BY course_name
     ORDER BY "score" DESC
     LIMIT $1
