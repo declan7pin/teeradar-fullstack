@@ -1260,6 +1260,13 @@ router.get("/course/:slug", async (req, res) => {
  LIMIT 1;`
     );
     if (!rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+    // ✅ analytics: booking course page viewed
+recordEvent({
+  type: "booking_course_view",
+  userId: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip,
+  courseName: rows[0].name,
+  meta: { slug },
+}).catch(() => {});
     res.json({ ok: true, course: rows[0] });
   } catch (e) {
     console.error("course/:slug", e);
