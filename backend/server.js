@@ -704,6 +704,16 @@ app.use("/api/auth", authRouter);
 
 // ✅ NEW: booking API router
 app.use("/api/book", bookingRoutes);
+// ✅✅✅ ADD (needed): mount booking views router (admin/course-admin views) ✅✅✅
+app.use((req, res, next) => {
+  req.isSuperAdmin = (email) => isSuperAdmin(email);
+  req.isBookingAdmin = () => _isBookingAdminReq(req);
+  req.bookingAdmin = _isBookingAdminReq(req);
+  next();
+});
+
+app.use(bookingViewsRouter);
+// ✅✅✅ END ADD ✅✅✅
 
 // ✅ NOTE: roundsRouter mounts routes that can collide with the inline /api/rounds handlers below.
 // Keeping inline /api/rounds as the source of truth here.
