@@ -293,7 +293,8 @@
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
-      <a href="/analytics.html" class="nav-analytics">Analytics</a>
+      <!-- ✅ CHANGE: use the server route (more robust than /analytics.html) -->
+      <a href="/analytics" class="nav-analytics">Analytics</a>
     </nav>
   </div>
 </header>
@@ -560,16 +561,25 @@
     return (email || "").trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
   }
 
+  // ✅ FIX: do NOT redirect to home. Just block data load and show message.
   function enforceAdmin() {
+    const updatedAt = document.getElementById("summaryUpdated");
     try {
       const storedEmail = localStorage.getItem("teeradar_user_email");
       if (!isAdminEmail(storedEmail)) {
-        throw new Error("Not admin");
+        console.warn("[analytics] Not admin:", storedEmail);
+        if (updatedAt) {
+          updatedAt.textContent =
+            "Admin only. Please log in on this domain with " + ADMIN_EMAIL + " to view analytics.";
+        }
+        return false;
       }
       console.log("[analytics] Admin access granted:", storedEmail);
+      return true;
     } catch (err) {
-      console.warn("[analytics] Access blocked:", err.message);
-      window.location.href = "/index.html";
+      console.warn("[analytics] Admin check failed:", err.message);
+      if (updatedAt) updatedAt.textContent = "Admin only. Please log in to view analytics.";
+      return false;
     }
   }
 
@@ -633,61 +643,44 @@
   }
 
   function wireAlerts(summary) {
-    // Accept multiple alias styles
     const alertsSent7d = toInt(getAny(summary, ["alertsSent7d","alerts_sent_7d","alerts_sent7d","alertsSent"], null));
     const alertHits7d = toInt(getAny(summary, ["alertHits7d","alert_hits_7d","alert_hits7d","alertHits"], null));
     const avgTimeToHitMins = toFloat(getAny(summary, ["avgTimeToHitMins","avg_time_to_hit_mins","avgTimeToHit"], null));
-
-    // Alerts by plan can be object OR array OR string
     const alertsByPlan = getAny(summary, ["alertsByPlan","alerts_by_plan"], null);
-
-    // Top alert courses (7d)
     const topAlertCourses = getAny(summary, ["topAlertCourses","top_alert_courses","topAlertCourses7d","top_alert_courses_7d"], null);
 
-    // Render cards
     setText("metricAlertsSent7d", alertsSent7d ? String(alertsSent7d) : "Not configured");
     setText("metricAlertHits7d", alertHits7d ? String(alertHits7d) : "Not configured");
 
-    // Hit rate derived if possible
-    let hitRate = null;
     if (alertsSent7d > 0 && alertHits7d >= 0) {
-      hitRate = alertHits7d / alertsSent7d;
-      setText("metricHitRate7d", fmtPct(hitRate));
+      setText("metricHitRate7d", fmtPct(alertHits7d / alertsSent7d));
     } else {
-      // maybe backend provides hitRate7d directly
       const hitRate7dRaw = getAny(summary, ["hitRate7d","hit_rate_7d","hit_rate7d"], null);
       if (hitRate7dRaw != null) setText("metricHitRate7d", fmtPct(toFloat(hitRate7dRaw)));
       else setText("metricHitRate7d", "Not configured");
     }
 
     if (avgTimeToHitMins > 0) setText("metricAvgTimeToHit", avgTimeToHitMins.toFixed(0) + "m");
-    else {
-      const raw = getAny(summary, ["avgTimeToHitMins","avg_time_to_hit_mins"], null);
-      setText("metricAvgTimeToHit", raw != null ? String(raw) : "Not configured");
-    }
+    else setText("metricAvgTimeToHit", "Not configured");
 
-    // Alerts by plan display
     let byPlanText = "Not configured";
     if (alertsByPlan) {
       if (typeof alertsByPlan === "string") {
         byPlanText = alertsByPlan;
       } else if (Array.isArray(alertsByPlan)) {
-        // [{plan:"Basic", count: 12}] etc
         const basic = alertsByPlan.find(x => String(x.plan||x.name||"").toLowerCase().includes("basic"));
         const pro = alertsByPlan.find(x => String(x.plan||x.name||"").toLowerCase().includes("pro"));
         const b = basic ? (basic.count ?? basic.alerts ?? basic.n ?? 0) : 0;
         const p = pro ? (pro.count ?? pro.alerts ?? pro.n ?? 0) : 0;
         byPlanText = `${b} / ${p}`;
       } else if (typeof alertsByPlan === "object") {
-        // { basic: 12, pro: 4 } or similar
-        const b = alertsByPlan.basic ?? alertsByPlan.BASIC ?? alertsByPlan.freeBasic ?? 0;
+        const b = alertsByPlan.basic ?? alertsByPlan.BASIC ?? 0;
         const p = alertsByPlan.pro ?? alertsByPlan.PRO ?? 0;
         byPlanText = `${toInt(b)} / ${toInt(p)}`;
       }
     }
     setText("metricAlertsByPlan", byPlanText);
 
-    // Small headline card “Top alert courses (7d)”
     if (topAlertCourses && Array.isArray(topAlertCourses) && topAlertCourses.length) {
       const top1 = topAlertCourses[0];
       const name = top1.courseName || top1.course || top1.name || "—";
@@ -697,7 +690,6 @@
       setText("metricTopAlertCourses", "Not configured");
     }
 
-    // List render
     const listEl = document.getElementById("topAlertCoursesList");
     if (listEl) {
       listEl.innerHTML = "";
@@ -717,7 +709,6 @@
       }
     }
 
-    // Optional backend fields (wire if present)
     const trialToPaid = getAny(summary, ["trialToPaidRate","trial_to_paid_rate","trialToPaid"], null);
     if (trialToPaid != null) setText("metricTrialToPaid", fmtPct(toFloat(trialToPaid)));
     else setText("metricTrialToPaid", "—");
@@ -727,16 +718,13 @@
     else setText("metricChurn30d", "—");
 
     const couponUsage = getAny(summary, ["couponUsage","coupon_usage"], null);
-    if (couponUsage != null) {
-      if (typeof couponUsage === "number") setText("metricCouponUsage", String(couponUsage));
-      else setText("metricCouponUsage", String(couponUsage));
-    } else {
-      setText("metricCouponUsage", "—");
-    }
+    if (couponUsage != null) setText("metricCouponUsage", String(couponUsage));
+    else setText("metricCouponUsage", "—");
   }
 
   async function loadAnalytics() {
-    enforceAdmin();
+    // ✅ block data load if not admin (but do NOT redirect)
+    if (!enforceAdmin()) return;
 
     const summary = await fetchAnalyticsSummary();
     const updatedAt = document.getElementById("summaryUpdated");
@@ -749,7 +737,7 @@
     const homeViewsVal = toInt(getAny(summary, ["homePageViews","homeViews","home_page_views"], 0));
     const bookingClicksVal = toInt(getAny(summary, ["courseBookingClicks","bookingClicks","booking_clicks"], 0));
     const searchesVal = toInt(getAny(summary, ["searches"], 0));
-    const newUsersVal = toInt(getAny(summary, ["newUsers","new_users"], 0));
+    const newUsersVal = toInt(getAny(summary, ["newUsers","new_users","newUsers7d","newUsers7Days","new_users_7d"], 0));
     const usersAllTimeVal = toInt(getAny(summary, ["usersAllTime","unique_users"], 0));
     const usersTodayVal = toInt(getAny(summary, ["usersToday","users_today"], 0));
     const usersWeekVal = toInt(getAny(summary, ["usersWeek","users_week"], 0));
@@ -762,12 +750,10 @@
     setText("usersToday", String(usersTodayVal));
     setText("usersWeek", String(usersWeekVal));
 
-    // Rounds played (prefer all-time first)
     const roundsPlayedVal = toInt(getAny(summary, ["roundsPlayed","rounds","rounds_played"], null)) ||
                            toInt(getAny(summary, ["roundsPlayed7d","rounds_played_7d"], 0));
     setText("metricRoundsPlayed", String(roundsPlayedVal));
 
-    // Conversions
     let convHome = getAny(summary, ["conversionHomeToBooking","homeToBookingRate","home_to_booking_rate"], null);
     if (convHome == null) convHome = homeViewsVal > 0 ? bookingClicksVal / homeViewsVal : 0;
     setText("metricConvHomeBooking", fmtPct(toFloat(convHome)));
@@ -776,17 +762,14 @@
     if (convSearch == null) convSearch = searchesVal > 0 ? bookingClicksVal / searchesVal : 0;
     setText("metricConvSearchBooking", fmtPct(toFloat(convSearch)));
 
-    // 30d + returning
     const users30d = toInt(getAny(summary, ["users30d","users_30d"], 0));
     const returning7d = toInt(getAny(summary, ["returningUsers7d","returning_users_7d"], 0));
     setText("users30d", String(users30d));
     setText("returning7d", String(returning7d));
 
-    // Repeat bookers
     const repeatBookersVal = toInt(getAny(summary, ["repeatBookers","repeat_bookers"], 0));
     setText("metricRepeatBookers", String(repeatBookersVal));
 
-    // Peak hour
     const peak = getAny(summary, ["peakBookingHour","peak_booking_hour"], null);
     if (peak && peak.hour != null) {
       setText("metricPeakHour", `${formatHourRange(peak.hour)} (${peak.clicks} clicks)`);
@@ -794,7 +777,6 @@
       setText("metricPeakHour", "–");
     }
 
-    // Health summary
     const healthEl = document.getElementById("healthSummary");
     if (healthEl) {
       let signupRateRaw = 0;
@@ -813,7 +795,6 @@
 
     updatedAt.textContent = "Last updated " + new Date().toLocaleString();
 
-    // Top clicked courses
     const topList = document.getElementById("topCoursesList");
     if (topList) {
       topList.innerHTML = "";
@@ -832,7 +813,6 @@
       }
     }
 
-    // Top searched courses
     const topSearchList = document.getElementById("topSearchedCoursesList");
     if (topSearchList) {
       topSearchList.innerHTML = "";
@@ -851,7 +831,6 @@
       }
     }
 
-    // Demand rank
     const demandList = document.getElementById("demandRankList");
     if (demandList) {
       demandList.innerHTML = "";
@@ -870,7 +849,6 @@
       }
     }
 
-    // Played courses (all time + last 30d)
     const playedList = document.getElementById("topPlayedCoursesList");
     if (playedList) {
       const allTime = getAny(summary, ["topPlayedCourses","top_played_courses"], []);
@@ -899,7 +877,6 @@
       }
     }
 
-    // Alerts section (wired to summary fields if present)
     wireAlerts(summary);
   }
 
@@ -940,7 +917,6 @@
     if (p === "PRO") return "Pro";
     if (p === "BASIC") return "Basic";
     if (p === "FREE") return "Unsubscribed";
-    // handle "trial" etc gracefully
     if (p.includes("TRIAL")) return "Trial";
     return plan;
   }
@@ -972,7 +948,6 @@
   }
 
   function computeSubscriptionMetrics() {
-    // Count only after we’ve refreshed plans
     let basic = 0;
     let pro = 0;
 
@@ -1018,6 +993,9 @@
   }
 
   async function loadRegisteredUsers() {
+    // ✅ block users API if not admin (but do NOT redirect)
+    if (!enforceAdmin()) return;
+
     try {
       const res = await fetch("/api/analytics/users", {
         headers: { "Accept": "application/json" }
@@ -1033,7 +1011,6 @@
         if (table) table.style.display = "none";
         if (empty) empty.style.display = "none";
         if (errorEl) errorEl.style.display = "block";
-        // still compute subs (will be 0)
         computeSubscriptionMetrics();
         return;
       }
@@ -1048,7 +1025,6 @@
         if (errorEl) errorEl.style.display = "none";
         const detail = document.getElementById("userDetailCard");
         if (detail) detail.style.display = "none";
-        // subs should be 0
         computeSubscriptionMetrics();
         return;
       }
@@ -1132,10 +1108,7 @@
         });
       });
 
-      // pull live plan from Stripe for each user
       await refreshPlansForUsers(users);
-
-      // ✅ NOW compute subscription cards using refreshed plans
       computeSubscriptionMetrics();
 
     } catch (err) {
