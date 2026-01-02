@@ -1680,29 +1680,6 @@ app.post("/api/search", async (req, res) => {
 // -------------------------------------------------
 // Analytics Event Ingest
 // -------------------------------------------------
-app.post("/api/analytics/event", async (req, res) => {
-  try {
-    const { type, payload = {}, at } = req.body || {};
-
-    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
-    const userId = payload.userId || ip || null;
-
-    const courseName =
-      payload.course ||
-      payload.courseName ||
-      payload.course_name ||
-      payload.courseTitle ||
-      null;
-
-    console.log("Incoming analytics event:", { type, at, userId, courseName });
-
-    await recordEvent({ type, userId, courseName, at });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("analytics error:", err);
-    res.status(500).json({ error: "analytics error", detail: err.message });
-  }
-});
 
 // -------------------------------------------------
 // Analytics Summary
