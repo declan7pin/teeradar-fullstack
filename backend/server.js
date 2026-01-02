@@ -1684,44 +1684,7 @@ app.post("/api/search", async (req, res) => {
 // -------------------------------------------------
 // Analytics Summary
 // -------------------------------------------------
-function buildFlatSummary(summary, topCourses) {
-  return {
-    homePageViews: summary.homeViews ?? 0,
-    courseBookingClicks: summary.bookingClicks ?? 0,
-    searches: summary.searches ?? 0,
-    newUsers: summary.newUsers7d ?? 0,
-    homeViews: summary.homeViews ?? 0,
-    bookingClicks: summary.bookingClicks ?? 0,
-    usersAllTime: summary.usersAllTime ?? 0,
-    usersToday: summary.usersToday ?? 0,
-    usersWeek: summary.usersWeek ?? 0,
-    topCourses: topCourses || [],
-  };
-}
 
-app.get("/api/analytics", async (req, res) => {
-  try {
-    const summary = await getAnalyticsSummary();
-    const topCourses = await getTopCourses(10);
-    res.json(buildFlatSummary(summary, topCourses));
-  } catch (err) {
-    console.error("analytics summary error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ✅✅✅ FIX (analytics page compatibility): alias /api/analytics/summary to the same handler ✅✅✅ */
-app.get("/api/analytics/summary", async (req, res) => {
-  try {
-    const summary = await getAnalyticsSummary();
-    const topCourses = await getTopCourses(10);
-    res.json(buildFlatSummary(summary, topCourses));
-  } catch (err) {
-    console.error("analytics summary(/summary) error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-/* ✅✅✅ END FIX ✅✅✅ */
 
 // -------------------------------------------------
 // Registered Users for Admin Dashboard
