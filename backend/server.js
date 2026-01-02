@@ -1689,29 +1689,6 @@ app.post("/api/search", async (req, res) => {
 // -------------------------------------------------
 // Registered Users for Admin Dashboard
 // -------------------------------------------------
-app.get("/api/analytics/users", async (req, res) => {
-  try {
-    const { rows } = await db.query(`
-      SELECT
-        u.id,
-        u.email,
-        u.home_course,
-        u.created_at,
-        u.last_login,
-        p.home_state,
-        p.favourites,
-        p.preferred_days,
-        p.preferred_earliest,
-        p.preferred_latest,
-        p.preferred_holes,
-        p.preferred_party_size,
-        p.alert_frequency
-      FROM users u
-      LEFT JOIN user_preferences p
-        ON p.email = u.email
-      ORDER BY u.id DESC
-      LIMIT 200;
-    `);
 
     const users = rows.map((u) => ({
       id: u.id,
