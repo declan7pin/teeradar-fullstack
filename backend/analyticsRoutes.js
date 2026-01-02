@@ -1,15 +1,16 @@
 // backend/analyticsRoutes.js
 import express from "express";
-import {
-  logAnalyticsEvent,
-  getAnalyticsSummary,
-  getAllEvents,
-  getRegisteredUsers,
-  recordRegisteredUser,
-  deleteRegisteredUser,
-} from "./db/analyticsDb.js";
 
-/* ✅ ONLY ADDITIONS NEEDED: also write + read Postgres analytics (backend/analytics.js) */
+/**
+ * ✅ FIX:
+ * analyticsDb.js in your repo does NOT export `deleteRegisteredUser`.
+ * Named ESM imports must exist or Node will crash on boot.
+ *
+ * So we import the module as a namespace and safely access functions.
+ */
+import * as analyticsDb from "./db/analyticsDb.js";
+
+/* ✅ ALSO write + read Postgres analytics (backend/analytics.js) */
 import {
   recordEvent as recordPgEvent,
   getAnalyticsSummary as getPgAnalyticsSummary,
@@ -17,6 +18,22 @@ import {
 /* ✅ END ONLY ADDITIONS */
 
 const router = express.Router();
+
+// pull the functions that DO exist (no hard failure)
+const logAnalyticsEvent = analyticsDb.logAnalyticsEvent;
+const getAnalyticsSummary = analyticsDb.getAnalyticsSummary;
+const getAllEvents = analyticsDb.getAllEvents;
+const getRegisteredUsers = analyticsDb.getRegisteredUsers;
+const recordRegisteredUser = analyticsDb.recordRegisteredUser;
+
+// ✅ Try common delete export names (so it works across versions)
+const deleteRegisteredUser =
+  analyticsDb.deleteRegisteredUser ||
+  analyticsDb.deleteRegisteredUserById ||
+  analyticsDb.deleteUser ||
+  analyticsDb.deleteUserById ||
+  analyticsDb.removeRegisteredUser ||
+  null;
 
 /**
  * IMPORTANT:
@@ -65,7 +82,9 @@ router.post("/event", async (req, res) => {
     });
 
     // existing (SQLite) analytics (your old cards / views depend on this)
-    logAnalyticsEvent({ type, at, payload: mergedPayload });
+    if (typeof logAnalyticsEvent === "function") {
+      logAnalyticsEvent({ type, at, payload: mergedPayload });
+    }
 
     // ✅ ALSO store to Postgres analytics (so rounds + everything are in one place)
     try {
@@ -107,14 +126,14 @@ router.post("/event", async (req, res) => {
 // shared handler for summary so we can serve both "/" and "/summary"
 async function handleSummary(req, res) {
   try {
-    /* ✅ ONLY CHANGE NEEDED: prefer Postgres summary (includes rounds played + top played courses) */
+    // ✅ prefer Postgres summary (includes rounds played + top played courses)
     let s = null;
 
     try {
       s = await getPgAnalyticsSummary();
     } catch (e) {
       console.warn("Falling back to analyticsDb summary:", e?.message || e);
-      s = getAnalyticsSummary(); // legacy fallback
+      s = typeof getAnalyticsSummary === "function" ? getAnalyticsSummary() : {};
     }
 
     const response = {
@@ -148,7 +167,6 @@ async function handleSummary(req, res) {
       topPlayedCourses: s.topPlayedCourses ?? [],
       topPlayedCourses30d: s.topPlayedCourses30d ?? [],
     };
-    /* ✅ END ONLY CHANGE */
 
     return res.json(response);
   } catch (err) {
@@ -176,7 +194,7 @@ router.get("/summary", handleSummary);
 router.get("/events", (req, res) => {
   try {
     const limit = Number(req.query.limit) || 200;
-    const events = getAllEvents(limit);
+    const events = typeof getAllEvents === "function" ? getAllEvents(limit) : [];
     return res.json({ events });
   } catch (err) {
     console.error("Error fetching analytics events", err);
@@ -195,7 +213,9 @@ router.put("/register-user", (req, res) => {
     if (!email) {
       return res.status(400).json({ error: "Missing email" });
     }
-    recordRegisteredUser(email);
+    if (typeof recordRegisteredUser === "function") {
+      recordRegisteredUser(email);
+    }
     return res.json({ ok: true });
   } catch (err) {
     console.error("Error recording registered user", err);
@@ -207,10 +227,10 @@ router.put("/register-user", (req, res) => {
  * GET /api/analytics/users
  * Used by the admin dashboard table (analytics.html).
  */
-router.get("/registered-users", (req, res) => {
+router.get("/users", (req, res) => {
   try {
     const limit = Number(req.query.limit) || 500;
-    const users = getRegisteredUsers(limit);
+    const users = typeof getRegisteredUsers === "function" ? getRegisteredUsers(limit) : [];
     return res.json({ users });
   } catch (err) {
     console.error("Error fetching registered users", err);
@@ -222,12 +242,23 @@ router.get("/registered-users", (req, res) => {
  * DELETE /api/analytics/users/:id
  * Used by the "Delete" button in the admin UI.
  */
-router.delete("/registered-users/:id", (req, res) => {
+router.delete("/users/:id", (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!id) {
       return res.status(400).json({ error: "Invalid id" });
     }
+
+    if (typeof deleteRegisteredUser !== "function") {
+      // Don’t crash the server — return a clear error
+      return res.status(501).json({
+        error: "delete_not_supported",
+        message:
+          "Your analyticsDb.js does not export a delete user function. Add one (e.g. deleteRegisteredUser) or rename the export.",
+        availableExports: Object.keys(analyticsDb || {}).sort(),
+      });
+    }
+
     deleteRegisteredUser(id);
     return res.json({ ok: true });
   } catch (err) {
