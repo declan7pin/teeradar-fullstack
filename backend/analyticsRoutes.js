@@ -207,7 +207,7 @@ router.put("/register-user", (req, res) => {
  * GET /api/analytics/users
  * Used by the admin dashboard table (analytics.html).
  */
-router.get("/users", (req, res) => {
+router.get("/registered-users", (req, res) => {
   try {
     const limit = Number(req.query.limit) || 500;
     const users = getRegisteredUsers(limit);
