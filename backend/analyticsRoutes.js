@@ -222,7 +222,7 @@ router.get("/registered-users", (req, res) => {
  * DELETE /api/analytics/users/:id
  * Used by the "Delete" button in the admin UI.
  */
-router.delete("/users/:id", (req, res) => {
+router.delete("/registered-users/:id", (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!id) {
