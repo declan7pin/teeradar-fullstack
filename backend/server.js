@@ -17,7 +17,7 @@ import bookingRoutes from "./bookingRoutes.js";
 // ✅✅✅ ADD (needed): booking views (view booked tee times / bookings) ✅✅✅
 import bookingViewsRouter from "./bookingViews.js";
 // ✅✅✅ END ADD ✅✅✅
-import bookingAnalyticsRouter from "./bookingAnalyticsRoutes.js"
+import bookingAnalyticsRouter from "./bookingAnalyticsRoutes.js";
 import analyticsRouter from "./analyticsRoutes.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
@@ -83,6 +83,7 @@ for (const [key, priceId] of Object.entries(PRICE_IDS)) {
     PRICE_TO_PLAN[priceId] = { plan: "PRO", maxFavs: 10 };
   }
 }
+
 app.get("/api/analytics/debug", async (req, res) => {
   try {
     const total = await db.query(`SELECT COUNT(*)::int AS n FROM analytics;`);
@@ -531,43 +532,47 @@ app.options("*", cors(corsOptions));
 // -------------------------------------------------
 // Stripe Webhook – must be BEFORE express.json
 // -------------------------------------------------
-app.post("/api/webhook", express.raw({ type: "application/json" }), (req, res) => {
-  const sig = req.headers["stripe-signature"];
-  let event;
+app.post(
+  "/api/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    let event;
 
-  try {
-    event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-  } catch (err) {
-    console.error("❌ Stripe webhook error:", err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      console.error("❌ Stripe webhook error:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        console.log("✅ Stripe checkout completed for:", session.customer_email);
+        break;
+      }
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object;
+        console.log("❌ Subscription cancelled:", subscription.id);
+        break;
+      }
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object;
+        console.log("💰 Payment succeeded for:", invoice.customer_email);
+        break;
+      }
+      default:
+        console.log(`ℹ️ Unhandled Stripe event type: ${event.type}`);
+    }
+
+    res.json({ received: true });
   }
-
-  switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object;
-      console.log("✅ Stripe checkout completed for:", session.customer_email);
-      break;
-    }
-    case "customer.subscription.deleted": {
-      const subscription = event.data.object;
-      console.log("❌ Subscription cancelled:", subscription.id);
-      break;
-    }
-    case "invoice.payment_succeeded": {
-      const invoice = event.data.object;
-      console.log("💰 Payment succeeded for:", invoice.customer_email);
-      break;
-    }
-    default:
-      console.log(`ℹ️ Unhandled Stripe event type: ${event.type}`);
-  }
-
-  res.json({ received: true });
-});
+);
 
 app.use(express.json());
 
@@ -708,7 +713,9 @@ app.get("/api/scorecards/:state", (req, res) => {
           __dirname,
           cwd: process.cwd(),
           backendDataDir: _safeListDir(path.join(__dirname, "data")),
-          backendScorecardsDir: _safeListDir(path.join(__dirname, "data", "scorecards")),
+          backendScorecardsDir: _safeListDir(
+            path.join(__dirname, "data", "scorecards")
+          ),
           publicDataDir: _safeListDir(path.join(__dirname, "..", "public", "data")),
           publicScorecardsDir: _safeListDir(
             path.join(__dirname, "..", "public", "data", "scorecards")
@@ -857,7 +864,6 @@ app.get("/api/preferences", async (req, res) => {
 // -------------------------------------------------
 // ✅ NEW: My Rounds (logged-in only)
 // -------------------------------------------------
-
 app.get("/api/rounds", requireAuth, async (req, res) => {
   try {
     const userId = Number(req.user?.id);
@@ -915,7 +921,9 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
     const parMode = (par_mode || "").toString().trim().toUpperCase() || "PUBLISHED";
 
     let parsedPars = Array.isArray(pars)
-      ? pars.map((p) => (p === null || typeof p === "undefined" || p === "" ? null : Number(p)))
+      ? pars.map((p) =>
+          p === null || typeof p === "undefined" || p === "" ? null : Number(p)
+        )
       : null;
 
     let publishedDistances = null;
@@ -972,7 +980,9 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
 
     for (let i = 1; i <= holesCount; i++) {
       const parVal = parsedPars ? parsedPars[i - 1] : null;
-      const distVal = Array.isArray(publishedDistances) ? publishedDistances[i - 1] : null;
+      const distVal = Array.isArray(publishedDistances)
+        ? publishedDistances[i - 1]
+        : null;
 
       values.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
       params.push(round.id, i, parVal, distVal, null, null);
@@ -989,7 +999,9 @@ app.post("/api/rounds", requireAuth, async (req, res) => {
     return res.json({ ok: true, round });
   } catch (err) {
     console.error("/api/rounds POST error:", err);
-    return res.status(500).json({ ok: false, error: "internal error", detail: err.message });
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal error", detail: err.message });
   }
 });
 
@@ -1079,9 +1091,7 @@ app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
         : Number(putts);
 
     const parVal =
-      par === null || typeof par === "undefined" || par === ""
-        ? undefined
-        : Number(par);
+      par === null || typeof par === "undefined" || par === "" ? undefined : Number(par);
 
     if (strokesVal !== null && !Number.isFinite(strokesVal)) {
       return res.status(400).json({ ok: false, error: "strokes must be a number or null" });
@@ -1685,44 +1695,12 @@ app.post("/api/search", async (req, res) => {
 // Analytics Summary
 // -------------------------------------------------
 
-
 // -------------------------------------------------
 // Registered Users for Admin Dashboard
 // -------------------------------------------------
-
-    const users = rows.map((u) => ({
-      id: u.id,
-      email: u.email,
-      created_at: u.created_at,
-      last_seen_at: u.last_login || u.created_at || null,
-      home_course: u.home_course || null,
-      home_state: u.home_state || null,
-      favourites: u.favourites || null,
-      preferred_days: u.preferred_days || null,
-      preferred_earliest: u.preferred_earliest || null,
-      preferred_latest: u.preferred_latest || null,
-      preferred_holes: u.preferred_holes,
-      preferred_party_size: u.preferred_party_size,
-      alert_frequency: u.alert_frequency || null,
-      alert_days: u.preferred_days || null,
-      alert_time_range:
-        u.preferred_earliest && u.preferred_latest
-          ? `${u.preferred_earliest}–${u.preferred_latest}`
-          : null,
-      alert_holes: u.preferred_holes,
-      alert_players: u.preferred_party_size,
-    }));
-
-    res.json({ users });
-  } catch (err) {
-    console.error("analytics users error:", err);
-    res.status(500).json({ error: "internal error" });
-  }
-});
-
-// -------------------------------------------------
-// Delete user
-// -------------------------------------------------
+// ✅ NOTE: This is handled by analyticsRoutes.js at:
+// ✅ GET /api/analytics/users
+// (The broken orphan block that caused "Unexpected token }" has been removed.)
 
 // -------------------------------------------------
 // Contact Form Email System
@@ -1811,6 +1789,7 @@ app.get("/book/admin", (req, res) => {
 app.get("/book/:slug", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "book-course.html"));
 });
+
 // ✅ Explicit admin pages (must be BEFORE frontend fallback)
 app.get("/book-admin.html", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "book-admin.html"));
@@ -1864,7 +1843,8 @@ async function runAlertTickSafe() {
   }
 }
 
-const ALERT_TICK_INTERVAL_MS = Number(process.env.ALERT_TICK_INTERVAL_MS) || 5 * 60 * 1000;
+const ALERT_TICK_INTERVAL_MS =
+  Number(process.env.ALERT_TICK_INTERVAL_MS) || 5 * 60 * 1000;
 
 setTimeout(runAlertTickSafe, 20000);
 setInterval(runAlertTickSafe, ALERT_TICK_INTERVAL_MS);
