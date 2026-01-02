@@ -293,7 +293,6 @@
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
-      <!-- ✅ CHANGE: use the server route (more robust than /analytics.html) -->
       <a href="/analytics" class="nav-analytics">Analytics</a>
     </nav>
   </div>
@@ -553,7 +552,6 @@
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 
   // ======= Subscription config (edit these) =======
-  // Put your actual monthly price here (in dollars)
   const BASIC_MRR = 0; // e.g. 9.99
   const PRO_MRR = 0;   // e.g. 19.99
 
@@ -561,23 +559,28 @@
     return (email || "").trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
   }
 
-  // ✅ FIX: do NOT redirect to home. Just block data load and show message.
+  function getAuthHeaders() {
+    const h = { "Accept": "application/json" };
+    try {
+      const token = localStorage.getItem("teeradar_jwt") || "";
+      if (token) h["Authorization"] = "Bearer " + token;
+    } catch (e) {}
+    return h;
+  }
+
   function enforceAdmin() {
     const updatedAt = document.getElementById("summaryUpdated");
     try {
       const storedEmail = localStorage.getItem("teeradar_user_email");
       if (!isAdminEmail(storedEmail)) {
-        console.warn("[analytics] Not admin:", storedEmail);
         if (updatedAt) {
           updatedAt.textContent =
-            "Admin only. Please log in on this domain with " + ADMIN_EMAIL + " to view analytics.";
+            "Admin only. Log in on this domain with " + ADMIN_EMAIL + " to view analytics.";
         }
         return false;
       }
-      console.log("[analytics] Admin access granted:", storedEmail);
       return true;
     } catch (err) {
-      console.warn("[analytics] Admin check failed:", err.message);
       if (updatedAt) updatedAt.textContent = "Admin only. Please log in to view analytics.";
       return false;
     }
@@ -610,15 +613,29 @@
     return "$" + n.toFixed(0);
   }
 
-  async function fetchAnalyticsSummary() {
+  async function tryFetchJson(url) {
     try {
-      const res = await fetch("/api/analytics", { headers: { "Accept": "application/json" } });
+      const res = await fetch(url, { headers: getAuthHeaders() });
       if (!res.ok) return null;
-      return await res.json();
-    } catch (err) {
-      console.error("analytics fetch failed:", err);
+      const data = await res.json().catch(() => null);
+      return data || null;
+    } catch (e) {
       return null;
     }
+  }
+
+  // ✅ FIX: try the common analytics endpoints (summary first)
+  async function fetchAnalyticsSummary() {
+    const candidates = [
+      "/api/analytics/summary",
+      "/api/analytics",
+      "/api/analytics/summary.json"
+    ];
+    for (const url of candidates) {
+      const data = await tryFetchJson(url);
+      if (data) return { data, url };
+    }
+    return null;
   }
 
   function formatHourRange(hourStr) {
@@ -652,13 +669,8 @@
     setText("metricAlertsSent7d", alertsSent7d ? String(alertsSent7d) : "Not configured");
     setText("metricAlertHits7d", alertHits7d ? String(alertHits7d) : "Not configured");
 
-    if (alertsSent7d > 0 && alertHits7d >= 0) {
-      setText("metricHitRate7d", fmtPct(alertHits7d / alertsSent7d));
-    } else {
-      const hitRate7dRaw = getAny(summary, ["hitRate7d","hit_rate_7d","hit_rate7d"], null);
-      if (hitRate7dRaw != null) setText("metricHitRate7d", fmtPct(toFloat(hitRate7dRaw)));
-      else setText("metricHitRate7d", "Not configured");
-    }
+    if (alertsSent7d > 0 && alertHits7d >= 0) setText("metricHitRate7d", fmtPct(alertHits7d / alertsSent7d));
+    else setText("metricHitRate7d", "Not configured");
 
     if (avgTimeToHitMins > 0) setText("metricAvgTimeToHit", avgTimeToHitMins.toFixed(0) + "m");
     else setText("metricAvgTimeToHit", "Not configured");
@@ -708,36 +720,27 @@
         });
       }
     }
-
-    const trialToPaid = getAny(summary, ["trialToPaidRate","trial_to_paid_rate","trialToPaid"], null);
-    if (trialToPaid != null) setText("metricTrialToPaid", fmtPct(toFloat(trialToPaid)));
-    else setText("metricTrialToPaid", "—");
-
-    const churn30d = getAny(summary, ["churn30d","churn_30d"], null);
-    if (churn30d != null) setText("metricChurn30d", fmtPct(toFloat(churn30d)));
-    else setText("metricChurn30d", "—");
-
-    const couponUsage = getAny(summary, ["couponUsage","coupon_usage"], null);
-    if (couponUsage != null) setText("metricCouponUsage", String(couponUsage));
-    else setText("metricCouponUsage", "—");
   }
 
   async function loadAnalytics() {
-    // ✅ block data load if not admin (but do NOT redirect)
     if (!enforceAdmin()) return;
 
-    const summary = await fetchAnalyticsSummary();
     const updatedAt = document.getElementById("summaryUpdated");
 
-    if (!summary) {
-      updatedAt.textContent = "Analytics backend not configured.";
+    const wrapped = await fetchAnalyticsSummary();
+    if (!wrapped) {
+      updatedAt.textContent =
+        "Analytics is blank because the backend summary endpoint wasn’t found. Expected /api/analytics/summary or /api/analytics.";
       return;
     }
+
+    const summary = wrapped.data;
+    updatedAt.textContent = "Loaded from " + wrapped.url + " • " + new Date().toLocaleString();
 
     const homeViewsVal = toInt(getAny(summary, ["homePageViews","homeViews","home_page_views"], 0));
     const bookingClicksVal = toInt(getAny(summary, ["courseBookingClicks","bookingClicks","booking_clicks"], 0));
     const searchesVal = toInt(getAny(summary, ["searches"], 0));
-    const newUsersVal = toInt(getAny(summary, ["newUsers","new_users","newUsers7d","newUsers7Days","new_users_7d"], 0));
+    const newUsersVal = toInt(getAny(summary, ["newUsers","new_users"], 0));
     const usersAllTimeVal = toInt(getAny(summary, ["usersAllTime","unique_users"], 0));
     const usersTodayVal = toInt(getAny(summary, ["usersToday","users_today"], 0));
     const usersWeekVal = toInt(getAny(summary, ["usersWeek","users_week"], 0));
@@ -750,17 +753,14 @@
     setText("usersToday", String(usersTodayVal));
     setText("usersWeek", String(usersWeekVal));
 
-    const roundsPlayedVal = toInt(getAny(summary, ["roundsPlayed","rounds","rounds_played"], null)) ||
-                           toInt(getAny(summary, ["roundsPlayed7d","rounds_played_7d"], 0));
+    const roundsPlayedVal = toInt(getAny(summary, ["roundsPlayed","rounds","rounds_played"], 0));
     setText("metricRoundsPlayed", String(roundsPlayedVal));
 
-    let convHome = getAny(summary, ["conversionHomeToBooking","homeToBookingRate","home_to_booking_rate"], null);
-    if (convHome == null) convHome = homeViewsVal > 0 ? bookingClicksVal / homeViewsVal : 0;
-    setText("metricConvHomeBooking", fmtPct(toFloat(convHome)));
+    const convHome = homeViewsVal > 0 ? (bookingClicksVal / homeViewsVal) : 0;
+    setText("metricConvHomeBooking", fmtPct(convHome));
 
-    let convSearch = getAny(summary, ["conversionSearchToBooking","searchToBookingRate","search_to_booking_rate"], null);
-    if (convSearch == null) convSearch = searchesVal > 0 ? bookingClicksVal / searchesVal : 0;
-    setText("metricConvSearchBooking", fmtPct(toFloat(convSearch)));
+    const convSearch = searchesVal > 0 ? (bookingClicksVal / searchesVal) : 0;
+    setText("metricConvSearchBooking", fmtPct(convSearch));
 
     const users30d = toInt(getAny(summary, ["users30d","users_30d"], 0));
     const returning7d = toInt(getAny(summary, ["returningUsers7d","returning_users_7d"], 0));
@@ -771,116 +771,13 @@
     setText("metricRepeatBookers", String(repeatBookersVal));
 
     const peak = getAny(summary, ["peakBookingHour","peak_booking_hour"], null);
-    if (peak && peak.hour != null) {
-      setText("metricPeakHour", `${formatHourRange(peak.hour)} (${peak.clicks} clicks)`);
-    } else {
-      setText("metricPeakHour", "–");
-    }
-
-    const healthEl = document.getElementById("healthSummary");
-    if (healthEl) {
-      let signupRateRaw = 0;
-      const activeBase = users30d > 0 ? users30d : usersAllTimeVal;
-      if (activeBase > 0) signupRateRaw = newUsersVal / activeBase;
-      if (!Number.isFinite(signupRateRaw)) signupRateRaw = 0;
-
-      const bookingClickRatePct = (toFloat(convHome) * 100).toFixed(1).replace(/\.0$/, "");
-      const signupRatePct = (signupRateRaw * 100).toFixed(1).replace(/\.0$/, "");
-
-      healthEl.textContent =
-        `${bookingClickRatePct}% of visitors click a booking, ` +
-        `${signupRatePct}% sign up, ` +
-        `${returning7d} users returned in the last 7 days.`;
-    }
-
-    updatedAt.textContent = "Last updated " + new Date().toLocaleString();
-
-    const topList = document.getElementById("topCoursesList");
-    if (topList) {
-      topList.innerHTML = "";
-      const top = getAny(summary, ["topCourses","top_courses"], []);
-      if (!top || !top.length) {
-        topList.innerHTML = `<li><span class="label">No course clicks yet</span><span class="value">—</span></li>`;
-      } else {
-        top.forEach((row) => {
-          topList.innerHTML += `
-            <li>
-              <span class="label">${row.courseName}</span>
-              <span class="value">${row.clicks} clicks</span>
-            </li>
-          `;
-        });
-      }
-    }
-
-    const topSearchList = document.getElementById("topSearchedCoursesList");
-    if (topSearchList) {
-      topSearchList.innerHTML = "";
-      const topSearched = getAny(summary, ["topSearchedCourses","top_searched_courses"], []);
-      if (!topSearched || !topSearched.length) {
-        topSearchList.innerHTML = `<li><span class="label">No searches yet</span><span class="value">—</span></li>`;
-      } else {
-        topSearched.forEach((row) => {
-          topSearchList.innerHTML += `
-            <li>
-              <span class="label">${row.courseName}</span>
-              <span class="value">${row.searches} searches</span>
-            </li>
-          `;
-        });
-      }
-    }
-
-    const demandList = document.getElementById("demandRankList");
-    if (demandList) {
-      demandList.innerHTML = "";
-      const demand = getAny(summary, ["demandRank","demand_rank"], []);
-      if (!demand || !demand.length) {
-        demandList.innerHTML = `<li><span class="label">No demand data yet</span><span class="value">—</span></li>`;
-      } else {
-        demand.forEach((row) => {
-          demandList.innerHTML += `
-            <li>
-              <span class="label">${row.courseName}</span>
-              <span class="value">${row.score} pts · ${row.clicks} clicks · ${row.searches} searches</span>
-            </li>
-          `;
-        });
-      }
-    }
-
-    const playedList = document.getElementById("topPlayedCoursesList");
-    if (playedList) {
-      const allTime = getAny(summary, ["topPlayedCourses","top_played_courses"], []);
-      const last30d = getAny(summary, ["topPlayedCourses30d","top_played_courses_30d"], []);
-      playedList.innerHTML = "";
-
-      if ((!allTime || !allTime.length) && (!last30d || !last30d.length)) {
-        playedList.innerHTML = `<li><span class="label">No rounds logged yet</span><span class="value">—</span></li>`;
-      } else {
-        const map30 = new Map((last30d || []).map((r) => [r.courseName, r.rounds]));
-        const names = new Set([
-          ...(allTime || []).map((r) => r.courseName),
-          ...(last30d || []).map((r) => r.courseName),
-        ]);
-
-        Array.from(names).slice(0, 12).forEach((name) => {
-          const at = ((allTime || []).find((r) => r.courseName === name) || {}).rounds ?? 0;
-          const d30 = map30.get(name) ?? 0;
-          playedList.innerHTML += `
-            <li>
-              <span class="label">${name}</span>
-              <span class="value">${at} total • ${d30} (30d)</span>
-            </li>
-          `;
-        });
-      }
-    }
+    if (peak && peak.hour != null) setText("metricPeakHour", `${formatHourRange(peak.hour)} (${peak.clicks} clicks)`);
+    else setText("metricPeakHour", "–");
 
     wireAlerts(summary);
   }
 
-  // ---------- Registered users + detail card + plan lookup ----------
+  // ---------- Registered users ----------
 
   let USERS_CACHE = [];
 
@@ -889,8 +786,7 @@
     if (Array.isArray(raw)) return raw;
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-      return [];
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
@@ -921,32 +817,6 @@
     return plan;
   }
 
-  function showUserDetail(u) {
-    const card = document.getElementById("userDetailCard");
-    if (!card || !u) return;
-
-    const favString = favouritesToString(u.favourites || u.favourite_courses);
-    const planLabel = normalisePlanLabel(u.plan);
-
-    document.getElementById("detailEmail").textContent = u.email || "—";
-    document.getElementById("detailPlan").textContent = planLabel;
-    document.getElementById("detailHomeState").textContent = u.home_state || "Not set";
-    document.getElementById("detailFavs").textContent = favString || "None yet";
-
-    document.getElementById("detailDays").textContent = u.alert_days || "Not set";
-    document.getElementById("detailTimeRange").textContent = u.alert_time_range || "Not set";
-    document.getElementById("detailHoles").textContent = u.alert_holes != null ? u.alert_holes : "Any";
-    document.getElementById("detailPlayers").textContent = u.alert_players != null ? u.alert_players : "Any";
-
-    const created = u.created_at || u.createdAt || "";
-    const lastSeen = u.last_seen_at || u.lastLogin || "";
-
-    document.getElementById("detailCreatedAt").textContent = created ? new Date(created).toLocaleString() : "—";
-    document.getElementById("detailLastSeen").textContent = lastSeen ? new Date(lastSeen).toLocaleString() : "—";
-
-    card.style.display = "block";
-  }
-
   function computeSubscriptionMetrics() {
     let basic = 0;
     let pro = 0;
@@ -958,7 +828,6 @@
     });
 
     const active = basic + pro;
-
     setText("metricSubscribersActive", String(active));
     setText("metricSubscribersByPlan", `${basic} / ${pro}`);
 
@@ -966,161 +835,79 @@
     setText("metricMRR", fmtMoney(mrr));
   }
 
-  async function refreshPlansForUsers(users) {
-    await Promise.all(
-      users.map(async (u, idx) => {
-        if (!u.email) return;
-        try {
-          const res = await fetch(
-            `/api/account/plan?email=${encodeURIComponent(u.email)}`,
-            { headers: { "Accept": "application/json" } }
-          );
-          if (!res.ok) return;
-          const data = await res.json();
-          const plan = normalisePlanLabel(data.plan);
-          USERS_CACHE[idx].plan = plan;
-
-          const row = document.querySelector(`tr.user-row[data-idx="${idx}"]`);
-          if (row) {
-            const cell = row.querySelector("td[data-col='plan']");
-            if (cell) cell.textContent = plan;
-          }
-        } catch (err) {
-          console.error("plan lookup failed for", u.email, err);
-        }
-      })
-    );
+  async function fetchUsersFromAnyEndpoint() {
+    const candidates = [
+      "/api/analytics/users",
+      "/api/analytics/registered-users",
+      "/api/analytics/registeredUsers"
+    ];
+    for (const url of candidates) {
+      const data = await tryFetchJson(url);
+      if (data) return { data, url };
+    }
+    return null;
   }
 
   async function loadRegisteredUsers() {
-    // ✅ block users API if not admin (but do NOT redirect)
     if (!enforceAdmin()) return;
 
-    try {
-      const res = await fetch("/api/analytics/users", {
-        headers: { "Accept": "application/json" }
-      });
+    const table = document.getElementById("usersTable");
+    const tbody = document.getElementById("usersTbody");
+    const empty = document.getElementById("usersEmpty");
+    const errorEl = document.getElementById("usersError");
 
-      const table = document.getElementById("usersTable");
-      const tbody = document.getElementById("usersTbody");
-      const empty = document.getElementById("usersEmpty");
-      const errorEl = document.getElementById("usersError");
-
-      if (!res.ok) {
-        console.warn("Failed to load users:", res.status);
-        if (table) table.style.display = "none";
-        if (empty) empty.style.display = "none";
-        if (errorEl) errorEl.style.display = "block";
-        computeSubscriptionMetrics();
-        return;
-      }
-
-      const data = await res.json();
-      const users = data.users || [];
-      USERS_CACHE = users;
-
-      if (!users.length) {
-        if (table) table.style.display = "none";
-        if (empty) empty.style.display = "block";
-        if (errorEl) errorEl.style.display = "none";
-        const detail = document.getElementById("userDetailCard");
-        if (detail) detail.style.display = "none";
-        computeSubscriptionMetrics();
-        return;
-      }
-
-      if (empty) empty.style.display = "none";
-      if (errorEl) errorEl.style.display = "none";
-      if (table) table.style.display = "table";
-
-      if (tbody) {
-        tbody.innerHTML = users.map((u, idx) => {
-          const created = u.created_at || u.createdAt || "";
-          const lastSeen = u.last_seen_at || u.lastLogin || "";
-          const favDisplay = favouritesToString(u.favourites || u.favourite_courses);
-          const homeState = u.home_state || "";
-          const planLabel = normalisePlanLabel(u.plan);
-
-          return `
-            <tr class="user-row" data-idx="${idx}">
-              <td>${u.id}</td>
-              <td><span class="user-email-pill">${u.email}</span></td>
-              <td data-col="plan">${planLabel}</td>
-              <td>${homeState}</td>
-              <td>${favDisplay || ""}</td>
-              <td>${created ? new Date(created).toLocaleString() : ""}</td>
-              <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
-              <td>
-                <button
-                  type="button"
-                  class="user-delete-btn"
-                  data-user-id="${u.id}"
-                  data-user-email="${u.email}"
-                >
-                  Delete
-                </button>
-              </td>
-            </tr>
-          `;
-        }).join("");
-      }
-
-      document.querySelectorAll(".user-row").forEach((row) => {
-        row.addEventListener("click", (e) => {
-          if (e.target && e.target.classList.contains("user-delete-btn")) return;
-          const idx = Number(row.getAttribute("data-idx"));
-          const user = USERS_CACHE[idx];
-          if (user) showUserDetail(user);
-        });
-      });
-
-      document.querySelectorAll(".user-delete-btn").forEach((btn) => {
-        btn.addEventListener("click", async (event) => {
-          event.stopPropagation();
-
-          const id = btn.getAttribute("data-user-id");
-          const email = btn.getAttribute("data-user-email");
-
-          const sure = window.confirm(
-            `Are you sure you want to delete user:\n\n${email}\n\nThis cannot be undone.`
-          );
-          if (!sure) return;
-
-          const originalText = btn.textContent;
-          btn.disabled = true;
-          btn.textContent = "Deleting…";
-
-          try {
-            const res = await fetch(`/api/analytics/users/${id}`, { method: "DELETE" });
-            if (!res.ok) {
-              alert("Failed to delete user. Please try again.");
-              btn.disabled = false;
-              btn.textContent = originalText;
-              return;
-            }
-            await loadRegisteredUsers();
-          } catch (err) {
-            console.error("delete user error:", err);
-            alert("Error deleting user.");
-            btn.disabled = false;
-            btn.textContent = originalText;
-          }
-        });
-      });
-
-      await refreshPlansForUsers(users);
-      computeSubscriptionMetrics();
-
-    } catch (err) {
-      console.error("Error loading registered users:", err);
-      const table = document.getElementById("usersTable");
-      const empty = document.getElementById("usersEmpty");
-      const errorEl = document.getElementById("usersError");
+    const wrapped = await fetchUsersFromAnyEndpoint();
+    if (!wrapped) {
       if (table) table.style.display = "none";
       if (empty) empty.style.display = "none";
-      if (errorEl) errorEl.style.display = "block";
+      if (errorEl) {
+        errorEl.style.display = "block";
+        errorEl.textContent = "Users endpoint not found. Tried /api/analytics/users and common variants.";
+      }
       computeSubscriptionMetrics();
+      return;
     }
+
+    const data = wrapped.data;
+    const users = data.users || data.registeredUsers || data.items || [];
+    USERS_CACHE = users;
+
+    if (!users.length) {
+      if (table) table.style.display = "none";
+      if (empty) empty.style.display = "block";
+      if (errorEl) errorEl.style.display = "none";
+      computeSubscriptionMetrics();
+      return;
+    }
+
+    if (empty) empty.style.display = "none";
+    if (errorEl) errorEl.style.display = "none";
+    if (table) table.style.display = "table";
+
+    if (tbody) {
+      tbody.innerHTML = users.map((u) => {
+        const created = u.created_at || u.createdAt || "";
+        const lastSeen = u.last_seen_at || u.lastLogin || "";
+        const favDisplay = favouritesToString(u.favourites || u.favourite_courses);
+        const homeState = u.home_state || "";
+        const planLabel = normalisePlanLabel(u.plan);
+
+        return `
+          <tr>
+            <td>${u.id ?? ""}</td>
+            <td><span class="user-email-pill">${u.email ?? ""}</span></td>
+            <td data-col="plan">${planLabel}</td>
+            <td>${homeState}</td>
+            <td>${favDisplay || ""}</td>
+            <td>${created ? new Date(created).toLocaleString() : ""}</td>
+            <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
+            <td></td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    computeSubscriptionMetrics();
   }
 
   window.addEventListener("load", () => {
