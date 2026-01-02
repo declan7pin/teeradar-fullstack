@@ -18,6 +18,7 @@ import bookingRoutes from "./bookingRoutes.js";
 import bookingViewsRouter from "./bookingViews.js";
 // ✅✅✅ END ADD ✅✅✅
 import bookingAnalyticsRouter from "./bookingAnalyticsRoutes.js"
+import analyticsRouter from "./analyticsRoutes.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 
 // Analytics (Postgres)
