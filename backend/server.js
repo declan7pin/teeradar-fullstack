@@ -1746,27 +1746,6 @@ app.get("/api/analytics/users", async (req, res) => {
 // -------------------------------------------------
 // Delete user
 // -------------------------------------------------
-app.delete("/api/analytics/users/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: "invalid user id" });
-    }
-
-    const result = await db.query(`DELETE FROM users WHERE id = $1`, [id]);
-
-    console.log("🗑 deleted user id =", id, "rows:", result.rowCount);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: "user not found" });
-    }
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("delete user error:", err);
-    res.status(500).json({ error: "internal error" });
-  }
-});
 
 // -------------------------------------------------
 // Contact Form Email System
