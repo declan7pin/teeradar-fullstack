@@ -445,9 +445,49 @@ router.put("/register-user", (req, res) => {
 /**
  * GET /api/analytics/users
  */
-router.get("/users", (req, res) => {
+router.get("/users", async (req, res) => {
   try {
     const limit = Number(req.query.limit) || 500;
+
+    // ✅ Prefer Postgres "users" table if it exists (has plan/home state/etc.)
+    try {
+      const r = await db.query(
+        `
+        SELECT
+          id,
+          email,
+          plan,
+          home_state,
+          favourites,
+          favourite_courses,
+          created_at,
+          last_seen_at,
+          last_login
+        FROM users
+        ORDER BY created_at DESC NULLS LAST
+        LIMIT $1
+        `,
+        [limit]
+      );
+
+      // Normalize keys so your analytics.html can read them
+      const users = (r.rows || []).map((u) => ({
+        id: u.id,
+        email: u.email,
+        plan: u.plan,
+        home_state: u.home_state || "",
+        favourites: u.favourites ?? u.favourite_courses ?? null,
+        created_at: u.created_at || null,
+        last_seen_at: u.last_seen_at || u.last_login || null,
+      }));
+
+      return res.json({ users });
+    } catch (pgErr) {
+      // If table/columns differ, fall back without crashing
+      console.warn("Postgres users query failed, falling back to analyticsDb:", pgErr?.message || pgErr);
+    }
+
+    // ✅ Fallback: old SQLite users list (may not contain plan)
     const users = typeof getRegisteredUsers === "function" ? getRegisteredUsers(limit) : [];
     return res.json({ users });
   } catch (err) {
