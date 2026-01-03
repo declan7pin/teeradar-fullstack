@@ -91,6 +91,11 @@ ensureBookingAnalyticsTable();
 // auth helpers (use server.js middleware if present)
 // -----------------------------
 function isBookingAdminReq(req) {
+  // ✅ Added: optional bypass key for admin endpoints (doesn't affect public tracking)
+  const bypassKey = String(process.env.BOOKING_ADMIN_BYPASS_KEY || "").trim();
+  const providedBypass = String(req.headers["x-booking-admin-key"] || "").trim();
+  if (bypassKey && providedBypass && providedBypass === bypassKey) return true;
+
   // server.js already sets req.isBookingAdmin() + req.bookingAdmin in your setup
   try {
     if (typeof req.isBookingAdmin === "function") return !!req.isBookingAdmin();
@@ -131,6 +136,14 @@ function getClientIp(req) {
   );
 }
 
+function normaliseSlug(raw) {
+  const slug = String(raw || "").trim().toLowerCase();
+  if (!slug) return "";
+  // sane chars only
+  if (!/^[a-z0-9-]+$/.test(slug)) return "";
+  return slug;
+}
+
 // -----------------------------
 // POST event (public booking page can call this)
 // -----------------------------
@@ -145,12 +158,12 @@ router.post("/api/book/analytics/event", express.json(), async (req, res) => {
     } = req.body || {};
 
     const type = String(eventType || "").trim();
-    const slug = String(courseSlug || "").trim().toLowerCase();
+    const slug = normaliseSlug(courseSlug);
 
     if (!type) return res.status(400).json({ ok: false, error: "eventType is required" });
 
     // Allow event without slug (platform events), but if provided enforce sane chars
-    if (slug && !/^[a-z0-9-]+$/.test(slug)) {
+    if (courseSlug && !slug) {
       return res.status(400).json({ ok: false, error: "Invalid courseSlug" });
     }
 
@@ -334,10 +347,9 @@ router.get("/api/book/admin/analytics/summary", async (req, res) => {
     }
 
     const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
-    const slug = String(req.query.slug || "").trim().toLowerCase();
+    const slug = normaliseSlug(req.query.slug);
 
     const whereSlug = slug ? `AND course_slug = $2` : ``;
-
     const params = slug ? [days, slug] : [days];
 
     const totals = await qOne(
@@ -389,8 +401,10 @@ router.get("/api/book/admin/analytics/summary", async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 // -----------------------------
 // Platform admin: booking counts (calendar-based)
+// today / week / month / optional custom range + optional slug
 // -----------------------------
 router.get("/api/book/admin/analytics/bookings", async (req, res) => {
   try {
@@ -398,10 +412,11 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
       return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
     }
 
-    const slug = String(req.query.slug || "").trim().toLowerCase();
-    const start = String(req.query.start || "").trim();
-    const end = String(req.query.end || "").trim();
+    const slug = normaliseSlug(req.query.slug);
+    const start = String(req.query.start || "").trim(); // YYYY-MM-DD
+    const end = String(req.query.end || "").trim();     // YYYY-MM-DD
 
+    // We keep slug as LAST param for each query (simple + predictable)
     const slugWhere = slug ? `AND course_slug = $1` : ``;
     const slugParams = slug ? [slug] : [];
 
@@ -462,6 +477,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
     }
 
     // ---- Course list (for dropdown) ----
+    // last 90d confirmed bookings per slug
     const courses = await qAll(
       `
       SELECT
@@ -484,13 +500,14 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
         month: Number(month?.n || 0),
         range: rangeCount ? Number(rangeCount.n || 0) : null,
       },
-      courses: courses.filter(c => c.course_slug),
+      courses: (courses || []).filter((c) => c.course_slug),
     });
   } catch (e) {
     console.error("admin bookings analytics error:", e?.message || e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 // -----------------------------
 // Platform admin: funnel (last N days) + optional slug
 // -----------------------------
@@ -501,7 +518,7 @@ router.get("/api/book/admin/analytics/funnel", async (req, res) => {
     }
 
     const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
-    const slug = String(req.query.slug || "").trim().toLowerCase();
+    const slug = normaliseSlug(req.query.slug);
 
     const whereSlug = slug ? `AND course_slug = $2` : ``;
     const params = slug ? [days, slug] : [days];
@@ -557,7 +574,7 @@ router.get("/api/book/admin/analytics/daily", async (req, res) => {
       return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
     }
 
-    const slug = String(req.query.slug || "").trim().toLowerCase();
+    const slug = normaliseSlug(req.query.slug);
     const start = String(req.query.start || "").trim(); // YYYY-MM-DD
     const end = String(req.query.end || "").trim();     // YYYY-MM-DD
 
@@ -661,7 +678,7 @@ router.get("/api/book/admin/analytics/export.csv", async (req, res) => {
       return res.status(401).send("Not logged in as booking admin");
     }
 
-    const slug = String(req.query.slug || "").trim().toLowerCase();
+    const slug = normaliseSlug(req.query.slug);
     const start = String(req.query.start || "").trim();
     const end = String(req.query.end || "").trim();
 
@@ -702,7 +719,7 @@ router.get("/api/book/admin/analytics/export.csv", async (req, res) => {
 
     const csv = [
       header.join(","),
-      ...(rows || []).map(r => header.map(k => esc(r[k])).join(",")),
+      ...(rows || []).map((r) => header.map((k) => esc(r[k])).join(",")),
     ].join("\n");
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -713,4 +730,5 @@ router.get("/api/book/admin/analytics/export.csv", async (req, res) => {
     return res.status(500).send("internal_error");
   }
 });
+
 export default router;
