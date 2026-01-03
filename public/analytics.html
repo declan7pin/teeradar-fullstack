@@ -638,7 +638,12 @@
 
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
-
+window.addEventListener("error", (e) => {
+  console.error("Analytics page JS error:", e?.error || e?.message || e);
+});
+window.addEventListener("unhandledrejection", (e) => {
+  console.error("Unhandled promise rejection:", e?.reason || e);
+});
   // ======= Subscription config (edit these) =======
   const BASIC_MRR = 5; // e.g. 9.99
   const PRO_MRR = 10;   // e.g. 19.99
