@@ -1394,9 +1394,17 @@ document.addEventListener("click", (e) => {
   });
 </script>
   window.addEventListener("load", () => {
-    loadAnalytics();
-    loadRegisteredUsers();
-  });
+  try { loadAnalytics(); } catch (e) { console.warn("loadAnalytics failed", e); }
+  try { loadRegisteredUsers(); } catch (e) { console.warn("loadRegisteredUsers failed", e); }
+
+  // Booking analytics should NEVER break the page if backend endpoints aren’t ready yet
+  try {
+    if (typeof wireBookingAnalyticsButtons === "function") wireBookingAnalyticsButtons();
+    if (typeof loadBookingAnalytics === "function") loadBookingAnalytics();
+  } catch (e) {
+    console.warn("booking analytics failed (non-fatal)", e);
+  }
+});
 </script>
 </body>
 </html>
