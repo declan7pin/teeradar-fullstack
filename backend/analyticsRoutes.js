@@ -145,10 +145,10 @@ async function buildPgSummary() {
   /**
    * ✅ IMPORTANT FIX:
    * - "search" = real user pressing Search (what you want on the Searches card)
-   * - "search_course" = alert/background scanning
+   * - "search_course" = background scanning / course checks (alerts worker)
    */
   const searches = byType.search || 0; // ✅ USER searches only
-  const alertSearches = byType.search_course || 0; // ✅ background/alerts scans
+  const alertSearches = byType.search_course || 0; // ✅ background scans
 
   const newUsers = byType.new_user || 0;
 
@@ -222,7 +222,7 @@ async function buildPgSummary() {
      LIMIT 10;`
   );
 
-  // top searched courses (all-time) (this is background scanning right now)
+  // top scanned courses (all-time) - this is still your search_course bucket
   const topSearchedCourses = await q(
     `SELECT course_name AS course, COUNT(*)::int AS n
      FROM analytics
@@ -264,65 +264,32 @@ async function buildPgSummary() {
      LIMIT 10;`
   );
 
-  // ----------------- ✅ ALERT METRICS (7D) -----------------
+  // ✅ Alerts (7d) — based on analytics event types
   const alertsSent7dRows = await q(
     `SELECT COUNT(*)::int AS n
      FROM analytics
      WHERE type = 'alert_sent'
        AND occurred_at >= now() - interval '7 days';`
   );
-
   const alertHits7dRows = await q(
     `SELECT COUNT(*)::int AS n
      FROM analytics
      WHERE type = 'alert_hit'
        AND occurred_at >= now() - interval '7 days';`
   );
-
-  const alertsSent7d = alertsSent7dRows[0]?.n ?? 0;
-  const alertHits7d = alertHits7dRows[0]?.n ?? 0;
-
   const topAlertCourses7d = await q(
-    `SELECT course_name AS course, COUNT(*)::int AS hits
+    `SELECT course_name AS course, COUNT(*)::int AS n
      FROM analytics
      WHERE type = 'alert_hit'
        AND occurred_at >= now() - interval '7 days'
        AND course_name IS NOT NULL AND course_name <> ''
      GROUP BY course_name
-     ORDER BY hits DESC
+     ORDER BY n DESC
      LIMIT 10;`
   );
 
-  // avg time-to-hit (minutes) – based on first sent vs first hit per user+course within last 7d
-  const avgTimeToHitRows = await q(
-    `
-    WITH sent AS (
-      SELECT user_id, course_name, MIN(occurred_at) AS sent_at
-      FROM analytics
-      WHERE type = 'alert_sent'
-        AND occurred_at >= now() - interval '7 days'
-        AND user_id IS NOT NULL AND user_id <> ''
-        AND course_name IS NOT NULL AND course_name <> ''
-      GROUP BY user_id, course_name
-    ),
-    hit AS (
-      SELECT user_id, course_name, MIN(occurred_at) AS hit_at
-      FROM analytics
-      WHERE type = 'alert_hit'
-        AND occurred_at >= now() - interval '7 days'
-        AND user_id IS NOT NULL AND user_id <> ''
-        AND course_name IS NOT NULL AND course_name <> ''
-      GROUP BY user_id, course_name
-    )
-    SELECT AVG(EXTRACT(EPOCH FROM (hit.hit_at - sent.sent_at)) / 60.0) AS mins
-    FROM sent
-    JOIN hit USING (user_id, course_name)
-    WHERE hit.hit_at >= sent.sent_at;
-    `
-  );
-
-  const avgTimeToHitMins = avgTimeToHitRows[0]?.mins;
-  // --------------------------------------------------------
+  const alertsSent7d = alertsSent7dRows[0]?.n ?? 0;
+  const alertHits7d = alertHits7dRows[0]?.n ?? 0;
 
   return {
     homePageViews: homeViews,
@@ -331,7 +298,7 @@ async function buildPgSummary() {
     // ✅ clean user number
     searches,
 
-    // ✅ background scanning (optional)
+    // ✅ background scans count
     alertSearches,
 
     newUsers,
@@ -357,13 +324,12 @@ async function buildPgSummary() {
     topPlayedCourses: topPlayedCourses.map((r) => ({ course: r.course, n: r.n })),
     topPlayedCourses30d: topPlayedCourses30d.map((r) => ({ course: r.course, n: r.n })),
 
-    // ✅ Alerts (7d)
+    // ✅ Alerts summary fields analytics.html expects
     alertsSent7d,
     alertHits7d,
-    avgTimeToHitMins: typeof avgTimeToHitMins === "number" ? avgTimeToHitMins : null,
-    topAlertCourses: topAlertCourses7d.map((r) => ({ course: r.course, hits: r.hits })),
-    // leave this for later unless you add plan into alert events
+    avgTimeToHitMins: null,
     alertsByPlan: null,
+    topAlertCourses: topAlertCourses7d.map((r) => ({ course: r.course, hits: r.n })),
   };
 }
 
@@ -401,12 +367,12 @@ async function handleSummary(req, res) {
         topPlayedCourses: s.topPlayedCourses ?? [],
         topPlayedCourses30d: s.topPlayedCourses30d ?? [],
 
-        // alerts not available in sqlite fallback
+        // Alerts not supported in sqlite summary here
         alertsSent7d: 0,
         alertHits7d: 0,
         avgTimeToHitMins: null,
-        topAlertCourses: [],
         alertsByPlan: null,
+        topAlertCourses: [],
       });
     } catch (err) {
       console.error("Error building analytics summary", err);
@@ -441,6 +407,7 @@ router.get("/events", (req, res) => {
 
 /**
  * PUT /api/analytics/register-user
+ * Body: { email }
  */
 router.put("/register-user", (req, res) => {
   try {
