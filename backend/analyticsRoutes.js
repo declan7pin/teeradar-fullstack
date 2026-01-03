@@ -452,7 +452,7 @@ router.get("/users", async (req, res) => {
   try {
     // ---- helpers ----
     const tableExists = async (name) => {
-      const r = await db.query(`SELECT to_regclass($1) AS t;`, [name]);
+      const r = await db.query(`SELECT to_regclass($1::text) AS t;`, [name]);
       return !!r.rows[0]?.t;
     };
 
