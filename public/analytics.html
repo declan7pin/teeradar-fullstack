@@ -762,8 +762,9 @@
     setText("metricAlertsSent7d", String(alertsSent7d));
     setText("metricAlertHits7d", String(alertHits7d));
 
-    if (alertsSent7d > 0) setText("metricHitRate7d", fmtPct(alertHits7d / alertsSent7d));
-    else setText("metricHitRate7d", "0%");
+    // ✅ Delivery rate = sent ÷ hits
+if (alertHits7d > 0) setText("metricHitRate7d", fmtPct(alertsSent7d / alertHits7d));
+else setText("metricHitRate7d", "—");
 
     if (avgTimeToHitMins != null && avgTimeToHitMins > 0) setText("metricAvgTimeToHit", avgTimeToHitMins.toFixed(0) + "m");
     else setText("metricAvgTimeToHit", "—");
