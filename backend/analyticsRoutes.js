@@ -567,7 +567,7 @@ router.get("/users", async (req, res) => {
 
     const r = await db.query(sql, [limit]);
 
-const users = (r.rows || []).map((u) => {
+let users = (r.rows || []).map((u) => {
   const raw = String(u.plan || "").trim();
   const up = raw.toUpperCase();
 
@@ -579,18 +579,50 @@ const users = (r.rows || []).map((u) => {
   return { ...u, plan };
 });
 
-return res.json({ users });
-  } catch (err) {
-    console.error("❌ /api/analytics/users error:", err);
+// ✅ Stripe-heal: if Stripe is set up, correct plans for users showing Unsubscribed
+if (stripe) {
+  const toCheck = users
+    .filter((u) => u.plan === "Unsubscribed" && u.email)
+    .slice(0, 50); // keep this capped to avoid rate limits
 
-    // ✅ IMPORTANT: return 200 so analytics.html won't say "endpoint not found"
-    return res.json({
-      users: [],
-      error: "users_query_failed",
-      detail: err?.message || String(err),
-    });
+  for (const u of toCheck) {
+    try {
+      const email = String(u.email || "").trim().toLowerCase();
+      if (!email) continue;
+
+      const custList = await stripe.customers.list({ email, limit: 1 });
+      if (!custList.data.length) continue;
+
+      const customer = custList.data[0];
+
+      const subs = await stripe.subscriptions.list({
+        customer: customer.id,
+        status: "active",
+        limit: 1,
+        expand: ["data.items.data.price"],
+      });
+
+      if (!subs.data.length) continue;
+
+      const priceId = subs.data[0]?.items?.data?.[0]?.price?.id || null;
+      const mappedPlan = priceId ? PRICE_TO_PLAN[priceId] : null;
+      const finalPlan = mappedPlan || "Basic";
+
+      // ✅ update DB so future loads are correct
+      await db.query(
+        `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
+        [email, finalPlan]
+      );
+
+      // ✅ update response
+      u.plan = finalPlan;
+    } catch (e) {
+      console.warn("Stripe heal failed for", u.email, e?.message || e);
+    }
   }
-});
+}
+
+return res.json({ users });
 
 /**
  * DELETE /api/analytics/users/:id
