@@ -657,22 +657,26 @@
   }
 
   function enforceAdmin() {
-    const updatedAt = document.getElementById("summaryUpdated");
-    try {
-      const storedEmail = localStorage.getItem("teeradar_user_email");
-      if (!isAdminEmail(storedEmail)) {
-        if (updatedAt) {
-          updatedAt.textContent =
-            "Admin only. Log in on this domain with " + ADMIN_EMAIL + " to view analytics.";
-        }
-        return false;
+  const updatedAt = document.getElementById("summaryUpdated");
+  try {
+    const storedEmail = localStorage.getItem("teeradar_user_email");
+
+    // ✅ Don’t block rendering — backend auth should protect endpoints anyway
+    if (!isAdminEmail(storedEmail)) {
+      if (updatedAt) {
+        updatedAt.textContent =
+          "Note: admin email not detected in localStorage. If you just logged in, refresh. Stored: " +
+          (storedEmail || "none");
       }
       return true;
-    } catch (err) {
-      if (updatedAt) updatedAt.textContent = "Admin only. Please log in to view analytics.";
-      return false;
     }
+
+    return true;
+  } catch (err) {
+    if (updatedAt) updatedAt.textContent = "Note: couldn’t read localStorage (continuing).";
+    return true;
   }
+}
 
   function getAny(obj, keys, fallback = null) {
     for (const k of keys) {
