@@ -111,8 +111,6 @@ router.post("/event", async (req, res) => {
           roundId,
           round_id: roundId,
         });
-      } else {
-        // If analytics.js isn't wired, do nothing (server must still run)
       }
     } catch (e) {
       console.warn("Postgres analytics insert failed (non-fatal):", e?.message || e);
@@ -146,12 +144,10 @@ async function buildPgSummary() {
 
   /**
    * ✅ IMPORTANT FIX:
-   * - "search" = real user pressing Search (what you want on the Searches card)
-   * - "search_course" is being spammed by alert scraping/background scanning
-   *   so we separate it out instead of adding it to Searches.
+   * "search_course" can be inflated by automated alert scraping.
+   * So "Searches" should only represent real user searches => type='search'
    */
-  const searches = byType.search || 0; // ✅ USER searches only
-  const alertSearches = byType.search_course || 0; // ✅ background/alerts scans
+  const searches = byType.search || 0;
 
   const newUsers = byType.new_user || 0;
 
@@ -225,9 +221,7 @@ async function buildPgSummary() {
      LIMIT 10;`
   );
 
-  // top searched courses (all-time)
-  // NOTE: still based on search_course. If you later want ONLY user searches,
-  // we can add a new event type for user-picked course clicks and use that instead.
+  // top searched courses (all-time) - keep as "search_course" list (dropdown/course selection)
   const topSearchedCourses = await q(
     `SELECT course_name AS course, COUNT(*)::int AS n
      FROM analytics
@@ -269,15 +263,84 @@ async function buildPgSummary() {
      LIMIT 10;`
   );
 
+  // -------------------------------------------------
+  // ✅ ALERTS (7D) from Postgres analytics table
+  // -------------------------------------------------
+  const alertsSent7dRows = await q(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'alert_sent'
+       AND occurred_at >= now() - interval '7 days';`
+  );
+  const alertHits7dRows = await q(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'alert_hit'
+       AND occurred_at >= now() - interval '7 days';`
+  );
+
+  const alertsSent7d = alertsSent7dRows[0]?.n ?? 0;
+  const alertHits7d = alertHits7dRows[0]?.n ?? 0;
+
+  const topAlertCoursesRows = await q(
+    `SELECT course_name AS course, COUNT(*)::int AS hits
+     FROM analytics
+     WHERE type = 'alert_hit'
+       AND occurred_at >= now() - interval '7 days'
+       AND course_name IS NOT NULL AND course_name <> ''
+     GROUP BY course_name
+     ORDER BY hits DESC
+     LIMIT 12;`
+  );
+
+  /**
+   * Avg time-to-hit (mins), estimated:
+   * For each alert_hit (7d), find the most recent alert_sent for same user_id + course_name
+   * within 7d, then average minutes difference.
+   */
+  const avgTimeToHitRows = await q(
+    `
+    WITH hits AS (
+      SELECT user_id, course_name, occurred_at AS hit_at
+      FROM analytics
+      WHERE type = 'alert_hit'
+        AND occurred_at >= now() - interval '7 days'
+        AND user_id IS NOT NULL AND user_id <> ''
+        AND course_name IS NOT NULL AND course_name <> ''
+    )
+    SELECT AVG(EXTRACT(EPOCH FROM (h.hit_at - s.sent_at))/60.0) AS avg_mins
+    FROM hits h
+    JOIN LATERAL (
+      SELECT occurred_at AS sent_at
+      FROM analytics
+      WHERE type = 'alert_sent'
+        AND user_id = h.user_id
+        AND course_name = h.course_name
+        AND occurred_at <= h.hit_at
+        AND occurred_at >= now() - interval '7 days'
+      ORDER BY occurred_at DESC
+      LIMIT 1
+    ) s ON TRUE
+    WHERE h.hit_at >= s.sent_at;
+    `
+  );
+
+  const avgTimeToHitMinsRaw = avgTimeToHitRows[0]?.avg_mins;
+  const avgTimeToHitMins =
+    avgTimeToHitMinsRaw == null || !Number.isFinite(Number(avgTimeToHitMinsRaw))
+      ? 0
+      : Number(avgTimeToHitMinsRaw);
+
+  // We don't have plan mapping in analytics table reliably yet.
+  // Return zeros so UI shows "0 / 0" instead of "Not configured".
+  const alertsByPlan = { basic: 0, pro: 0 };
+
   return {
     homePageViews: homeViews,
     courseBookingClicks: bookingClicks,
 
-    // ✅ THIS is now the clean user number
+    // ✅ fixed searches (user searches only)
     searches,
-
-    // ✅ new field so you can show alerts scanning elsewhere without polluting Searches
-    alertSearches,
 
     newUsers,
 
@@ -302,6 +365,13 @@ async function buildPgSummary() {
     roundsPlayed7d: roundsPlayed7dRows[0]?.n ?? 0,
     topPlayedCourses: topPlayedCourses.map((r) => ({ course: r.course, n: r.n })),
     topPlayedCourses30d: topPlayedCourses30d.map((r) => ({ course: r.course, n: r.n })),
+
+    // ✅ Alerts fields that analytics.html is already looking for
+    alertsSent7d,
+    alertHits7d,
+    avgTimeToHitMins,
+    alertsByPlan,
+    topAlertCourses: topAlertCoursesRows.map((r) => ({ course: r.course, hits: r.hits })),
   };
 }
 
@@ -320,8 +390,6 @@ async function handleSummary(req, res) {
         homePageViews: s.homePageViews ?? s.home_page_views ?? s.homeViews ?? 0,
         courseBookingClicks: s.courseBookingClicks ?? s.booking_clicks ?? s.bookingClicks ?? 0,
         searches: s.searches ?? 0,
-        // keep compatibility (no alertSearches in sqlite)
-        alertSearches: 0,
         newUsers: s.newUsers ?? s.new_users ?? 0,
         homeViews: s.homeViews ?? s.home_page_views ?? 0,
         bookingClicks: s.bookingClicks ?? s.booking_clicks ?? 0,
@@ -339,6 +407,13 @@ async function handleSummary(req, res) {
         roundsPlayed7d: s.roundsPlayed7d ?? s.rounds_played_7d ?? 0,
         topPlayedCourses: s.topPlayedCourses ?? [],
         topPlayedCourses30d: s.topPlayedCourses30d ?? [],
+
+        // alerts placeholders (sqlite fallback)
+        alertsSent7d: 0,
+        alertHits7d: 0,
+        avgTimeToHitMins: 0,
+        alertsByPlan: { basic: 0, pro: 0 },
+        topAlertCourses: [],
       });
     } catch (err) {
       console.error("Error building analytics summary", err);
@@ -349,19 +424,16 @@ async function handleSummary(req, res) {
 
 /**
  * GET /api/analytics
- * Main endpoint used by analytics.html
  */
 router.get("/", handleSummary);
 
 /**
  * GET /api/analytics/summary
- * Backwards-compatible alias
  */
 router.get("/summary", handleSummary);
 
 /**
  * GET /api/analytics/events
- * For debugging – recent raw events.
  */
 router.get("/events", (req, res) => {
   try {
@@ -376,7 +448,6 @@ router.get("/events", (req, res) => {
 
 /**
  * PUT /api/analytics/register-user
- * Body: { email }
  */
 router.put("/register-user", (req, res) => {
   try {
