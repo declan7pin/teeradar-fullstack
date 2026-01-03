@@ -113,7 +113,6 @@ router.post("/event", async (req, res) => {
         });
       } else {
         // If analytics.js isn't wired, do nothing (server must still run)
-        // (Your debug endpoint proves rows are already being inserted anyway.)
       }
     } catch (e) {
       console.warn("Postgres analytics insert failed (non-fatal):", e?.message || e);
@@ -128,7 +127,6 @@ router.post("/event", async (req, res) => {
 
 /**
  * ✅ Build summary directly from Postgres analytics table
- * (This matches your /api/analytics/debug which already proves data exists.)
  */
 async function buildPgSummary() {
   const q = async (sql, params = []) => (await db.query(sql, params)).rows;
@@ -146,16 +144,22 @@ async function buildPgSummary() {
   const homeViews = byType.home_view || 0;
   const bookingClicks = byType.course_booking_click || 0;
 
-  // Your “search” events are split across:
-  // - search_course (course pick/search)
-  // - search (general search)
-  const searches = (byType.search || 0) + (byType.search_course || 0);
+  /**
+   * ✅ IMPORTANT FIX:
+   * - "search" = real user pressing Search (what you want on the Searches card)
+   * - "search_course" is being spammed by alert scraping/background scanning
+   *   so we separate it out instead of adding it to Searches.
+   */
+  const searches = byType.search || 0; // ✅ USER searches only
+  const alertSearches = byType.search_course || 0; // ✅ background/alerts scans
 
   const newUsers = byType.new_user || 0;
 
   // uniques
   const usersAllTime = await q(
-    `SELECT COUNT(DISTINCT user_id)::int AS n FROM analytics WHERE user_id IS NOT NULL AND user_id <> '';`
+    `SELECT COUNT(DISTINCT user_id)::int AS n
+     FROM analytics
+     WHERE user_id IS NOT NULL AND user_id <> '';`
   );
   const usersToday = await q(
     `SELECT COUNT(DISTINCT user_id)::int AS n
@@ -222,6 +226,8 @@ async function buildPgSummary() {
   );
 
   // top searched courses (all-time)
+  // NOTE: still based on search_course. If you later want ONLY user searches,
+  // we can add a new event type for user-picked course clicks and use that instead.
   const topSearchedCourses = await q(
     `SELECT course_name AS course, COUNT(*)::int AS n
      FROM analytics
@@ -266,7 +272,13 @@ async function buildPgSummary() {
   return {
     homePageViews: homeViews,
     courseBookingClicks: bookingClicks,
+
+    // ✅ THIS is now the clean user number
     searches,
+
+    // ✅ new field so you can show alerts scanning elsewhere without polluting Searches
+    alertSearches,
+
     newUsers,
 
     homeViews,
@@ -296,7 +308,6 @@ async function buildPgSummary() {
 // shared handler for summary so we can serve both "/" and "/summary"
 async function handleSummary(req, res) {
   try {
-    // ✅ Always compute from Postgres first (your debug proves the data is there)
     const pg = await buildPgSummary();
     return res.json(pg);
   } catch (e) {
@@ -309,6 +320,8 @@ async function handleSummary(req, res) {
         homePageViews: s.homePageViews ?? s.home_page_views ?? s.homeViews ?? 0,
         courseBookingClicks: s.courseBookingClicks ?? s.booking_clicks ?? s.bookingClicks ?? 0,
         searches: s.searches ?? 0,
+        // keep compatibility (no alertSearches in sqlite)
+        alertSearches: 0,
         newUsers: s.newUsers ?? s.new_users ?? 0,
         homeViews: s.homeViews ?? s.home_page_views ?? 0,
         bookingClicks: s.bookingClicks ?? s.booking_clicks ?? 0,
