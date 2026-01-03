@@ -460,11 +460,14 @@ router.get("/users/stripe-check", async (req, res) => {
     const email = String(req.query.email || "").trim().toLowerCase();
     if (!email) return res.status(400).json({ ok: false, error: "email is required" });
 
-    // DB plan right now
-    const dbRow = await db.query(
-      `SELECT id, email, plan FROM users WHERE LOWER(email) = $1 LIMIT 1;`,
-      [email]
-    );
+    const cols = await db.query(
+  `SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='users';`
+);
+const hasPlan = new Set(cols.rows.map(r => r.column_name)).has("plan");
+
+const dbRow = hasPlan
+  ? await db.query(`SELECT id, email, plan FROM users WHERE LOWER(email) = $1 LIMIT 1;`, [email])
+  : await db.query(`SELECT id, email FROM users WHERE LOWER(email) = $1 LIMIT 1;`, [email]);
 
     const out = {
       ok: true,
