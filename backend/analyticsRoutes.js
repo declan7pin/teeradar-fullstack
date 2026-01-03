@@ -302,7 +302,8 @@ const alertHitsAllTimeRows = await q(
 
   const alertsSent7d = alertsSent7dRows[0]?.n ?? 0;
   const alertHits7d = alertHits7dRows[0]?.n ?? 0;
-
+const alertsSentAllTime = alertsSentAllTimeRows[0]?.n ?? 0;
+const alertHitsAllTime = alertHitsAllTimeRows[0]?.n ?? 0;
   return {
     homePageViews: homeViews,
     courseBookingClicks: bookingClicks,
