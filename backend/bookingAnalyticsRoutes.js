@@ -389,5 +389,106 @@ router.get("/api/book/admin/analytics/summary", async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// -----------------------------
+// Platform admin: booking counts (calendar-based)
+// -----------------------------
+router.get("/api/book/admin/analytics/bookings", async (req, res) => {
+  try {
+    if (!isBookingAdminReq(req)) {
+      return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
+    }
 
+    const slug = String(req.query.slug || "").trim().toLowerCase();
+    const start = String(req.query.start || "").trim();
+    const end = String(req.query.end || "").trim();
+
+    const slugWhere = slug ? `AND course_slug = $1` : ``;
+    const slugParams = slug ? [slug] : [];
+
+    // ---- TODAY ----
+    const today = await qOne(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM booking_analytics_events
+      WHERE event_type = 'booking_confirmed'
+        AND occurred_at >= date_trunc('day', now())
+        AND occurred_at <  date_trunc('day', now()) + interval '1 day'
+      ${slugWhere}
+      `,
+      slugParams
+    );
+
+    // ---- THIS WEEK (Mon–Sun) ----
+    const week = await qOne(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM booking_analytics_events
+      WHERE event_type = 'booking_confirmed'
+        AND occurred_at >= date_trunc('week', now())
+        AND occurred_at <  date_trunc('week', now()) + interval '7 days'
+      ${slugWhere}
+      `,
+      slugParams
+    );
+
+    // ---- THIS MONTH ----
+    const month = await qOne(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM booking_analytics_events
+      WHERE event_type = 'booking_confirmed'
+        AND occurred_at >= date_trunc('month', now())
+        AND occurred_at <  date_trunc('month', now()) + interval '1 month'
+      ${slugWhere}
+      `,
+      slugParams
+    );
+
+    // ---- CUSTOM RANGE (optional) ----
+    let rangeCount = null;
+    if (start && end) {
+      const params = slug ? [start, end, slug] : [start, end];
+      rangeCount = await qOne(
+        `
+        SELECT COUNT(*)::int AS n
+        FROM booking_analytics_events
+        WHERE event_type = 'booking_confirmed'
+          AND occurred_at >= $1::date
+          AND occurred_at <  ($2::date + interval '1 day')
+        ${slug ? "AND course_slug = $3" : ""}
+        `,
+        params
+      );
+    }
+
+    // ---- Course list (for dropdown) ----
+    const courses = await qAll(
+      `
+      SELECT
+        course_slug,
+        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS bookings
+      FROM booking_analytics_events
+      WHERE occurred_at >= now() - interval '90 days'
+      GROUP BY course_slug
+      ORDER BY bookings DESC
+      `,
+      []
+    );
+
+    return res.json({
+      ok: true,
+      filter: { courseSlug: slug || "all" },
+      bookings: {
+        today: Number(today?.n || 0),
+        week: Number(week?.n || 0),
+        month: Number(month?.n || 0),
+        range: rangeCount ? Number(rangeCount.n || 0) : null,
+      },
+      courses: courses.filter(c => c.course_slug),
+    });
+  } catch (e) {
+    console.error("admin bookings analytics error:", e?.message || e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 export default router;
