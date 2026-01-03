@@ -491,4 +491,226 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// -----------------------------
+// Platform admin: funnel (last N days) + optional slug
+// -----------------------------
+router.get("/api/book/admin/analytics/funnel", async (req, res) => {
+  try {
+    if (!isBookingAdminReq(req)) {
+      return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
+    }
+
+    const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
+    const slug = String(req.query.slug || "").trim().toLowerCase();
+
+    const whereSlug = slug ? `AND course_slug = $2` : ``;
+    const params = slug ? [days, slug] : [days];
+
+    const row = await qOne(
+      `
+      SELECT
+        COUNT(*) FILTER (WHERE event_type='course_page_view')::int AS views,
+        COUNT(*) FILTER (WHERE event_type='times_view')::int AS times_view,
+        COUNT(*) FILTER (WHERE event_type='booking_started')::int AS started,
+        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS confirmed
+      FROM booking_analytics_events
+      WHERE occurred_at >= now() - ($1::int || ' days')::interval
+        AND event_type IN ('course_page_view','times_view','booking_started','booking_confirmed')
+      ${whereSlug}
+      `,
+      params
+    );
+
+    const views = Number(row?.views || 0);
+    const times = Number(row?.times_view || 0);
+    const started = Number(row?.started || 0);
+    const confirmed = Number(row?.confirmed || 0);
+
+    const convViewToConfirmed = views > 0 ? confirmed / views : 0;
+    const convTimesToConfirmed = times > 0 ? confirmed / times : 0;
+    const convStartedToConfirmed = started > 0 ? confirmed / started : 0;
+
+    return res.json({
+      ok: true,
+      days,
+      filter: { courseSlug: slug || null },
+      funnel: { views, times, started, confirmed },
+      conversion: {
+        view_to_confirmed: convViewToConfirmed,
+        times_to_confirmed: convTimesToConfirmed,
+        started_to_confirmed: convStartedToConfirmed,
+      },
+    });
+  } catch (e) {
+    console.error("admin funnel error:", e?.message || e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// -----------------------------
+// Platform admin: daily series (custom range) + optional slug
+// returns bookings + revenue per day
+// -----------------------------
+router.get("/api/book/admin/analytics/daily", async (req, res) => {
+  try {
+    if (!isBookingAdminReq(req)) {
+      return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
+    }
+
+    const slug = String(req.query.slug || "").trim().toLowerCase();
+    const start = String(req.query.start || "").trim(); // YYYY-MM-DD
+    const end = String(req.query.end || "").trim();     // YYYY-MM-DD
+
+    // default last 30 days if not provided
+    const startSql = start ? `$1::date` : `(now()::date - interval '29 days')::date`;
+    const endSql = end ? `($2::date + interval '1 day')` : `(now()::date + interval '1 day')`;
+
+    const params = [];
+    if (start) params.push(start);
+    if (end) params.push(end);
+
+    const slugWhere = slug ? `AND course_slug = $${params.length + 1}` : ``;
+    if (slug) params.push(slug);
+
+    const rows = await qAll(
+      `
+      SELECT
+        to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') AS day,
+        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS bookings,
+        COALESCE(SUM(
+          CASE WHEN event_type='booking_confirmed'
+            THEN (payload->>'total_cents')::int
+            ELSE 0
+          END
+        ),0)::int AS revenue_cents
+      FROM booking_analytics_events
+      WHERE occurred_at >= ${startSql}
+        AND occurred_at <  ${endSql}
+        AND event_type IN ('booking_confirmed')
+      ${slugWhere}
+      GROUP BY 1
+      ORDER BY 1 ASC
+      `,
+      params
+    );
+
+    return res.json({
+      ok: true,
+      filter: { courseSlug: slug || null, start: start || null, end: end || null },
+      rows: rows || [],
+    });
+  } catch (e) {
+    console.error("admin daily error:", e?.message || e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// -----------------------------
+// Platform admin: top courses (range) for quick ranking widgets
+// -----------------------------
+router.get("/api/book/admin/analytics/top", async (req, res) => {
+  try {
+    if (!isBookingAdminReq(req)) {
+      return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
+    }
+
+    const start = String(req.query.start || "").trim(); // YYYY-MM-DD optional
+    const end = String(req.query.end || "").trim();     // YYYY-MM-DD optional
+
+    const startSql = start ? `$1::date` : `(now()::date - interval '29 days')::date`;
+    const endSql = end ? `($2::date + interval '1 day')` : `(now()::date + interval '1 day')`;
+
+    const params = [];
+    if (start) params.push(start);
+    if (end) params.push(end);
+
+    const rows = await qAll(
+      `
+      SELECT
+        course_slug,
+        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS bookings,
+        COALESCE(SUM(
+          CASE WHEN event_type='booking_confirmed'
+            THEN (payload->>'total_cents')::int
+            ELSE 0
+          END
+        ),0)::int AS revenue_cents
+      FROM booking_analytics_events
+      WHERE occurred_at >= ${startSql}
+        AND occurred_at <  ${endSql}
+      GROUP BY course_slug
+      ORDER BY revenue_cents DESC NULLS LAST, bookings DESC
+      LIMIT 50
+      `,
+      params
+    );
+
+    return res.json({ ok: true, rows: rows || [] });
+  } catch (e) {
+    console.error("admin top error:", e?.message || e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// -----------------------------
+// Platform admin: export CSV (range + optional slug)
+// -----------------------------
+router.get("/api/book/admin/analytics/export.csv", async (req, res) => {
+  try {
+    if (!isBookingAdminReq(req)) {
+      return res.status(401).send("Not logged in as booking admin");
+    }
+
+    const slug = String(req.query.slug || "").trim().toLowerCase();
+    const start = String(req.query.start || "").trim();
+    const end = String(req.query.end || "").trim();
+
+    const startSql = start ? `$1::date` : `(now()::date - interval '29 days')::date`;
+    const endSql = end ? `($2::date + interval '1 day')` : `(now()::date + interval '1 day')`;
+
+    const params = [];
+    if (start) params.push(start);
+    if (end) params.push(end);
+
+    const slugWhere = slug ? `AND course_slug = $${params.length + 1}` : ``;
+    if (slug) params.push(slug);
+
+    const rows = await qAll(
+      `
+      SELECT
+        id,
+        course_slug,
+        event_type,
+        occurred_at,
+        session_id,
+        referrer,
+        path,
+        COALESCE((payload->>'total_cents')::text,'') AS total_cents
+      FROM booking_analytics_events
+      WHERE occurred_at >= ${startSql}
+        AND occurred_at <  ${endSql}
+        AND event_type IN ('booking_confirmed','booking_started','times_view','course_page_view')
+      ${slugWhere}
+      ORDER BY occurred_at DESC
+      `,
+      params
+    );
+
+    // CSV
+    const header = ["id","course_slug","event_type","occurred_at","session_id","referrer","path","total_cents"];
+    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+
+    const csv = [
+      header.join(","),
+      ...(rows || []).map(r => header.map(k => esc(r[k])).join(",")),
+    ].join("\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="booking-analytics.csv"`);
+    return res.send(csv);
+  } catch (e) {
+    console.error("export csv error:", e?.message || e);
+    return res.status(500).send("internal_error");
+  }
+});
 export default router;
