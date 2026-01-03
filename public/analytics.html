@@ -775,7 +775,11 @@
 
     setText("metricAlertsSent7d", String(alertsSent7d));
     setText("metricAlertHits7d", String(alertHits7d));
+    const alertsSentAllTime = sentAllRaw == null ? 0 : toInt(sentAllRaw);
+const alertHitsAllTime = hitsAllRaw == null ? 0 : toInt(hitsAllRaw);
 
+setText("metricAlertsSentAllTime", String(alertsSentAllTime));
+setText("metricAlertHitsAllTime", String(alertHitsAllTime));
     // ✅ Delivery rate = sent ÷ hits
 if (alertHits7d > 0) setText("metricHitRate7d", fmtPct(alertsSent7d / alertHits7d));
 else setText("metricHitRate7d", "—");
