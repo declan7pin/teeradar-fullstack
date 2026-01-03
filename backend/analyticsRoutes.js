@@ -360,47 +360,83 @@ const alertHitsAllTime = alertHitsAllTimeRows[0]?.n ?? 0;
 
 // shared handler for summary so we can serve both "/" and "/summary"
 async function handleSummary(req, res) {
+  const shapeSqlite = (s = {}) => ({
+    homePageViews: s.homePageViews ?? s.home_page_views ?? s.homeViews ?? 0,
+    courseBookingClicks: s.courseBookingClicks ?? s.booking_clicks ?? s.bookingClicks ?? 0,
+    searches: s.searches ?? 0,
+    alertSearches: 0,
+    newUsers: s.newUsers ?? s.new_users ?? 0,
+
+    homeViews: s.homeViews ?? s.home_page_views ?? 0,
+    bookingClicks: s.bookingClicks ?? s.booking_clicks ?? 0,
+
+    usersAllTime: s.usersAllTime ?? s.unique_users ?? 0,
+    usersToday: s.usersToday ?? s.users_today ?? 0,
+    usersWeek: s.usersWeek ?? s.users_week ?? 0,
+    users30d: s.users30d ?? 0,
+    returningUsers7d: s.returningUsers7d ?? s.returning_users_7d ?? 0,
+    repeatBookers: s.repeatBookers ?? s.repeat_bookers ?? 0,
+    peakBookingHour: s.peakBookingHour ?? s.peak_booking_hour ?? null,
+
+    topCourses: s.topCourses ?? s.top_courses ?? [],
+    topSearchedCourses: s.topSearchedCourses ?? s.top_searched_courses ?? [],
+    demandRank: s.demandRank ?? s.demand_rank ?? [],
+
+    roundsPlayed: s.roundsPlayed ?? s.rounds_played ?? s.rounds ?? 0,
+    roundsPlayed7d: s.roundsPlayed7d ?? s.rounds_played_7d ?? 0,
+    topPlayedCourses: s.topPlayedCourses ?? [],
+    topPlayedCourses30d: s.topPlayedCourses30d ?? [],
+
+    // Alerts not supported in sqlite summary here
+    alertsSent7d: 0,
+    alertHits7d: 0,
+    alertsSentAllTime: 0,
+    alertHitsAllTime: 0,
+    avgTimeToHitMins: null,
+    alertsByPlan: null,
+    topAlertCourses: [],
+  });
+
   try {
     const pg = await buildPgSummary();
+
+    // ✅ If Postgres returns all zeros (because your events are actually in SQLite),
+    // fall back to SQLite summary instead of showing a dead dashboard.
+    const pgLooksEmpty =
+      !pg ||
+      (
+        Number(pg.homePageViews || 0) === 0 &&
+        Number(pg.courseBookingClicks || 0) === 0 &&
+        Number(pg.searches || 0) === 0 &&
+        Number(pg.newUsers || 0) === 0 &&
+        Number(pg.roundsPlayed || 0) === 0
+      );
+
+    if (pgLooksEmpty) {
+      try {
+        const s = typeof getAnalyticsSummarySqlite === "function" ? getAnalyticsSummarySqlite() : {};
+        const out = shapeSqlite(s);
+
+        const sqliteHasSignal =
+          Number(out.homePageViews || 0) > 0 ||
+          Number(out.courseBookingClicks || 0) > 0 ||
+          Number(out.searches || 0) > 0 ||
+          Number(out.newUsers || 0) > 0 ||
+          Number(out.roundsPlayed || 0) > 0;
+
+        if (sqliteHasSignal) return res.json(out);
+      } catch (e) {
+        console.warn("SQLite fallback failed (non-fatal):", e?.message || e);
+      }
+    }
+
     return res.json(pg);
   } catch (e) {
     console.warn("Postgres summary failed, falling back to analyticsDb:", e?.message || e);
 
     try {
       const s = typeof getAnalyticsSummarySqlite === "function" ? getAnalyticsSummarySqlite() : {};
-
-      return res.json({
-        homePageViews: s.homePageViews ?? s.home_page_views ?? s.homeViews ?? 0,
-        courseBookingClicks: s.courseBookingClicks ?? s.booking_clicks ?? s.bookingClicks ?? 0,
-        searches: s.searches ?? 0,
-        alertSearches: 0,
-        newUsers: s.newUsers ?? s.new_users ?? 0,
-        homeViews: s.homeViews ?? s.home_page_views ?? 0,
-        bookingClicks: s.bookingClicks ?? s.booking_clicks ?? 0,
-        usersAllTime: s.usersAllTime ?? s.unique_users ?? 0,
-        usersToday: s.usersToday ?? s.users_today ?? 0,
-        usersWeek: s.usersWeek ?? s.users_week ?? 0,
-        users30d: s.users30d ?? 0,
-        returningUsers7d: s.returningUsers7d ?? s.returning_users_7d ?? 0,
-        repeatBookers: s.repeatBookers ?? s.repeat_bookers ?? 0,
-        peakBookingHour: s.peakBookingHour ?? s.peak_booking_hour ?? null,
-        topCourses: s.topCourses ?? s.top_courses ?? [],
-        topSearchedCourses: s.topSearchedCourses ?? s.top_searched_courses ?? [],
-        demandRank: s.demandRank ?? s.demand_rank ?? [],
-        roundsPlayed: s.roundsPlayed ?? s.rounds_played ?? s.rounds ?? 0,
-        roundsPlayed7d: s.roundsPlayed7d ?? s.rounds_played_7d ?? 0,
-        topPlayedCourses: s.topPlayedCourses ?? [],
-        topPlayedCourses30d: s.topPlayedCourses30d ?? [],
-
-        // Alerts not supported in sqlite summary here
-        alertsSent7d: 0,
-        alertHits7d: 0,
-        alertsSentAllTime: 0,
-        alertHitsAllTime: 0,
-        avgTimeToHitMins: null,
-        alertsByPlan: null,
-        topAlertCourses: [],
-      });
+      return res.json(shapeSqlite(s));
     } catch (err) {
       console.error("Error building analytics summary", err);
       return res.status(500).json({ error: "Failed to load analytics summary" });
