@@ -451,7 +451,66 @@ router.put("/register-user", (req, res) => {
     return res.status(500).json({ error: "Failed to record user" });
   }
 });
+/**
+ * ✅ DEBUG: check Stripe + DB plan for one email
+ * GET /api/analytics/users/stripe-check?email=someone@gmail.com
+ */
+router.get("/users/stripe-check", async (req, res) => {
+  try {
+    const email = String(req.query.email || "").trim().toLowerCase();
+    if (!email) return res.status(400).json({ ok: false, error: "email is required" });
 
+    // DB plan right now
+    const dbRow = await db.query(
+      `SELECT id, email, plan FROM users WHERE LOWER(email) = $1 LIMIT 1;`,
+      [email]
+    );
+
+    const out = {
+      ok: true,
+      stripeEnabled: !!stripe,
+      stripeKeyPresent: !!stripeKey,
+      email,
+      dbUser: dbRow.rows[0] || null,
+      stripe: {
+        customerFound: false,
+        customerId: null,
+        activeSubFound: false,
+        priceId: null,
+        mappedPlan: null,
+      },
+    };
+
+    if (!stripe) return res.json(out);
+
+    const custList = await stripe.customers.list({ email, limit: 1 });
+    if (!custList.data.length) return res.json(out);
+
+    const customer = custList.data[0];
+    out.stripe.customerFound = true;
+    out.stripe.customerId = customer.id;
+
+    const subs = await stripe.subscriptions.list({
+      customer: customer.id,
+      status: "active",
+      limit: 1,
+      expand: ["data.items.data.price"],
+    });
+
+    if (!subs.data.length) return res.json(out);
+
+    out.stripe.activeSubFound = true;
+
+    const priceId = subs.data[0]?.items?.data?.[0]?.price?.id || null;
+    out.stripe.priceId = priceId;
+    out.stripe.mappedPlan = priceId ? PRICE_TO_PLAN[priceId] : null;
+
+    return res.json(out);
+  } catch (err) {
+    console.error("stripe-check error:", err);
+    return res.status(500).json({ ok: false, error: "internal error", detail: err.message });
+  }
+});
  /**
  * GET /api/analytics/users
  * ✅ Robust: works even if your users table schema differs
