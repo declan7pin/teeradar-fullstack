@@ -1026,8 +1026,8 @@ else setText("metricHitRate7d", "—");
         const planLabel = normalisePlanLabel(u.plan);
 
         return `
-          <tr>
-            <td>${u.id ?? ""}</td>
+  <tr data-user-idx="${idx}">
+    <td>${u.id ?? ""}</td>
             <td><span class="user-email-pill">${u.email ?? ""}</span></td>
             <td data-col="plan">${planLabel}</td>
             <td>${homeState}</td>
