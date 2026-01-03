@@ -444,54 +444,34 @@ router.put("/register-user", (req, res) => {
 
 /**
  * GET /api/analytics/users
+ * ✅ SOURCE OF TRUTH = Postgres users table
  */
 router.get("/users", async (req, res) => {
   try {
-    const limit = Number(req.query.limit) || 500;
+    const limit = Math.max(1, Math.min(1000, Number(req.query.limit) || 500));
 
-    // ✅ Prefer Postgres "users" table if it exists (has plan/home state/etc.)
-    try {
-      const r = await db.query(
-        `
-        SELECT
-          id,
-          email,
-          plan,
-          home_state,
-          favourites,
-          favourite_courses,
-          created_at,
-          last_seen_at,
-          last_login
-        FROM users
-        ORDER BY created_at DESC NULLS LAST
-        LIMIT $1
-        `,
-        [limit]
-      );
+    const { rows } = await db.query(
+      `
+      SELECT
+        u.id,
+        u.email,
+        COALESCE(u.plan, 'FREE') AS plan,
+        COALESCE(p.home_state, u.home_course_state, '') AS home_state,
+        COALESCE(p.favourites, '[]'::jsonb) AS favourites,
+        u.created_at,
+        u.last_seen_at
+      FROM users u
+      LEFT JOIN user_preferences p
+        ON LOWER(p.email) = LOWER(u.email)
+      ORDER BY u.created_at DESC NULLS LAST, u.id DESC
+      LIMIT $1;
+      `,
+      [limit]
+    );
 
-      // Normalize keys so your analytics.html can read them
-      const users = (r.rows || []).map((u) => ({
-        id: u.id,
-        email: u.email,
-        plan: u.plan,
-        home_state: u.home_state || "",
-        favourites: u.favourites ?? u.favourite_courses ?? null,
-        created_at: u.created_at || null,
-        last_seen_at: u.last_seen_at || u.last_login || null,
-      }));
-
-      return res.json({ users });
-    } catch (pgErr) {
-      // If table/columns differ, fall back without crashing
-      console.warn("Postgres users query failed, falling back to analyticsDb:", pgErr?.message || pgErr);
-    }
-
-    // ✅ Fallback: old SQLite users list (may not contain plan)
-    const users = typeof getRegisteredUsers === "function" ? getRegisteredUsers(limit) : [];
-    return res.json({ users });
+    return res.json({ users: rows });
   } catch (err) {
-    console.error("Error fetching registered users", err);
+    console.error("❌ /api/analytics/users failed", err);
     return res.status(500).json({ error: "Failed to fetch users" });
   }
 });
