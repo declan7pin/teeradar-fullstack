@@ -340,6 +340,8 @@ const alertHitsAllTime = alertHitsAllTimeRows[0]?.n ?? 0;
     // ✅ Alerts summary fields analytics.html expects
     alertsSent7d,
     alertHits7d,
+    alertsSentAllTime,
+    alertHitsAllTime,
     avgTimeToHitMins: null,
     alertsByPlan: null,
     topAlertCourses: topAlertCourses7d.map((r) => ({ course: r.course, hits: r.n })),
