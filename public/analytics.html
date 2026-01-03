@@ -430,6 +430,14 @@
       <div class="card-hint">Hits ÷ sent</div>
     </article>
 
+    <!-- ✅ ADDED: separate the worker's "search_course" spam from real Searches -->
+    <article class="card">
+      <div class="card-label">Alert searches (7d)</div>
+      <div id="metricAlertSearches7d" class="card-value">—</div>
+      <div class="card-hint">Background scans by alerts worker</div>
+    </article>
+    <!-- ✅ END ADD -->
+
     <article class="card">
       <div class="card-label">Avg time-to-hit</div>
       <div id="metricAvgTimeToHit" class="card-value">—</div>
@@ -666,11 +674,20 @@
     const alertsByPlan = getAny(summary, ["alertsByPlan","alerts_by_plan"], null);
     const topAlertCourses = getAny(summary, ["topAlertCourses","top_alert_courses","topAlertCourses7d","top_alert_courses_7d"], null);
 
+    // ✅ NEW: the worker's background "search_course" count (7d)
+    // Prefer backend-provided field; fallback if not present.
+    const alertSearches7d =
+      toInt(getAny(summary, ["alertSearches7d","alert_searches_7d","alertSearches"], null)) ||
+      toInt(getAny(summary, ["alertSearches"], 0));
+
     setText("metricAlertsSent7d", alertsSent7d ? String(alertsSent7d) : "Not configured");
     setText("metricAlertHits7d", alertHits7d ? String(alertHits7d) : "Not configured");
 
     if (alertsSent7d > 0 && alertHits7d >= 0) setText("metricHitRate7d", fmtPct(alertHits7d / alertsSent7d));
     else setText("metricHitRate7d", "Not configured");
+
+    // ✅ ADDED render for the new card
+    setText("metricAlertSearches7d", alertSearches7d ? String(alertSearches7d) : "Not configured");
 
     if (avgTimeToHitMins > 0) setText("metricAvgTimeToHit", avgTimeToHitMins.toFixed(0) + "m");
     else setText("metricAvgTimeToHit", "Not configured");
