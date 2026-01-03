@@ -556,7 +556,20 @@ router.get("/users", async (req, res) => {
     }
 
     const r = await db.query(sql, [limit]);
-    return res.json({ users: r.rows || [] });
+
+const users = (r.rows || []).map((u) => {
+  const raw = String(u.plan || "").trim();
+  const up = raw.toUpperCase();
+
+  let plan = "Unsubscribed";
+  if (up.includes("PRO")) plan = "Pro";
+  else if (up.includes("BASIC")) plan = "Basic";
+  else if (up === "FREE" || up === "" || up.includes("UNSUB")) plan = "Unsubscribed";
+
+  return { ...u, plan };
+});
+
+return res.json({ users });
   } catch (err) {
     console.error("❌ /api/analytics/users error:", err);
 
