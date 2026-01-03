@@ -1174,239 +1174,216 @@ document.addEventListener("click", (e) => {
 
   showUserDetails(u);
 });
-<script>
-  // ... keep your existing code ABOVE
 
-  // ---------- Booking analytics ----------
 
-  function yyyyMmDd(d) {
-    const x = new Date(d);
-    if (isNaN(x.getTime())) return "";
-    const y = x.getFullYear();
-    const m = String(x.getMonth() + 1).padStart(2, "0");
-    const day = String(x.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }
+// ---------- Booking analytics ----------
 
-  function moneyFromCents(cents) {
-    const n = Number(cents || 0) / 100;
-    return "$" + n.toFixed(0);
-  }
+function yyyyMmDd(d) {
+  const x = new Date(d);
+  if (isNaN(x.getTime())) return "";
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, "0");
+  const day = String(x.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
-  function buildBookUrl(path, paramsObj) {
-    const u = new URL(path, window.location.origin);
-    Object.entries(paramsObj || {}).forEach(([k, v]) => {
-      if (v !== null && v !== undefined && String(v).trim() !== "") u.searchParams.set(k, v);
-    });
-    return u.pathname + "?" + u.searchParams.toString();
-  }
-
-  function drawSimpleLine(canvasId, labels, values) {
-    const c = document.getElementById(canvasId);
-    if (!c) return;
-    const ctx = c.getContext("2d");
-
-    const w = c.width = c.clientWidth * (window.devicePixelRatio || 1);
-    const h = c.height = (c.getAttribute("height") ? Number(c.getAttribute("height")) : 160) * (window.devicePixelRatio || 1);
-
-    ctx.clearRect(0, 0, w, h);
-
-    const pad = 18 * (window.devicePixelRatio || 1);
-    const max = Math.max(1, ...values.map(v => Number(v || 0)));
-    const min = 0;
-
-    // axes
-    ctx.globalAlpha = 0.25;
-    ctx.beginPath();
-    ctx.moveTo(pad, pad);
-    ctx.lineTo(pad, h - pad);
-    ctx.lineTo(w - pad, h - pad);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-
-    if (!values.length) return;
-
-    const xStep = (w - pad * 2) / Math.max(1, values.length - 1);
-    const yScale = (h - pad * 2) / (max - min);
-
-    ctx.beginPath();
-    values.forEach((v, i) => {
-      const x = pad + xStep * i;
-      const y = (h - pad) - (Number(v || 0) - min) * yScale;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-
-    // points
-    values.forEach((v, i) => {
-      const x = pad + xStep * i;
-      const y = (h - pad) - (Number(v || 0) - min) * yScale;
-      ctx.beginPath();
-      ctx.arc(x, y, 2.5 * (window.devicePixelRatio || 1), 0, Math.PI * 2);
-      ctx.fill();
-    });
-  }
-
-  async function loadBookingAnalytics(mode = "default") {
-    if (!enforceAdmin()) return;
-
-    const slugSel = document.getElementById("bookCourseSlug");
-    const slug = slugSel ? String(slugSel.value || "").trim() : "";
-
-    // 1) Populate course dropdown (from /top endpoint)
-    // (we reuse it to fill the select once)
-    if (slugSel && slugSel.options.length <= 1) {
-      const top = await tryFetchJson("/api/book/admin/analytics/top");
-      if (top && Array.isArray(top.rows)) {
-        top.rows
-          .map(r => r.course_slug)
-          .filter(Boolean)
-          .forEach(s => {
-            const opt = document.createElement("option");
-            opt.value = s;
-            opt.textContent = s;
-            slugSel.appendChild(opt);
-          });
-      }
-    }
-
-    // 2) Calendar-based counts (today/week/month + optional range)
-    const startEl = document.getElementById("bookStart");
-    const endEl = document.getElementById("bookEnd");
-
-    const start = startEl ? startEl.value : "";
-    const end = endEl ? endEl.value : "";
-
-    const bookingsUrl = buildBookUrl("/api/book/admin/analytics/bookings", {
-      slug,
-      start: mode === "range" ? start : "",
-      end: mode === "range" ? end : ""
-    });
-
-    const counts = await tryFetchJson(bookingsUrl);
-    if (counts && counts.ok) {
-      setText("metricBookToday", String(counts.bookings?.today ?? 0));
-      setText("metricBookWeek", String(counts.bookings?.week ?? 0));
-      setText("metricBookMonth", String(counts.bookings?.month ?? 0));
-    } else {
-      setText("metricBookToday", "—");
-      setText("metricBookWeek", "—");
-      setText("metricBookMonth", "—");
-    }
-
-    // 3) Funnel (last 30d by default)
-    const funnelUrl = buildBookUrl("/api/book/admin/analytics/funnel", { slug, days: 30 });
-    const funnel = await tryFetchJson(funnelUrl);
-    if (funnel && funnel.ok) {
-      setText("fViews", String(funnel.funnel?.views ?? 0));
-      setText("fTimes", String(funnel.funnel?.times ?? 0));
-      setText("fStarted", String(funnel.funnel?.started ?? 0));
-      setText("fConfirmed", String(funnel.funnel?.confirmed ?? 0));
-
-      setText("fConvVC", fmtPct(funnel.conversion?.view_to_confirmed ?? 0));
-      setText("fConvTC", fmtPct(funnel.conversion?.times_to_confirmed ?? 0));
-      setText("fConvSC", fmtPct(funnel.conversion?.started_to_confirmed ?? 0));
-    } else {
-      setText("fViews", "—"); setText("fTimes", "—"); setText("fStarted", "—"); setText("fConfirmed", "—");
-      setText("fConvVC", "—"); setText("fConvTC", "—"); setText("fConvSC", "—");
-    }
-
-    // 4) Daily bookings + revenue (range if set, else last 30 days)
-    const dailyUrl = buildBookUrl("/api/book/admin/analytics/daily", {
-      slug,
-      start: mode === "range" ? start : "",
-      end: mode === "range" ? end : ""
-    });
-    const daily = await tryFetchJson(dailyUrl);
-
-    if (daily && daily.ok && Array.isArray(daily.rows)) {
-      const labels = daily.rows.map(r => r.day);
-      const bookingsSeries = daily.rows.map(r => Number(r.bookings || 0));
-      const revenueSeries = daily.rows.map(r => Number(r.revenue_cents || 0) / 100);
-
-      drawSimpleLine("chartBookings", labels, bookingsSeries);
-      drawSimpleLine("chartRevenue", labels, revenueSeries);
-    } else {
-      drawSimpleLine("chartBookings", [], []);
-      drawSimpleLine("chartRevenue", [], []);
-    }
-
-    // 5) CSV download button
-    const btnCsv = document.getElementById("btnBookCsv");
-    if (btnCsv && !btnCsv._wired) {
-      btnCsv._wired = true;
-      btnCsv.addEventListener("click", () => {
-        const s = (document.getElementById("bookStart") || {}).value || "";
-        const e = (document.getElementById("bookEnd") || {}).value || "";
-        const sl = (document.getElementById("bookCourseSlug") || {}).value || "";
-
-        const url = buildBookUrl("/api/book/admin/analytics/export.csv", { slug: sl, start: s, end: e });
-        window.open(url, "_blank");
-      });
-    }
-  }
-
-  function wireBookingAnalyticsButtons() {
-    const btnToday = document.getElementById("btnBookToday");
-    const btnWeek = document.getElementById("btnBookWeek");
-    const btnMonth = document.getElementById("btnBookMonth");
-    const btnApply = document.getElementById("btnBookApply");
-    const slugSel = document.getElementById("bookCourseSlug");
-
-    const startEl = document.getElementById("bookStart");
-    const endEl = document.getElementById("bookEnd");
-
-    const setRange = (s, e) => {
-      if (startEl) startEl.value = s;
-      if (endEl) endEl.value = e;
-    };
-
-    if (btnToday) btnToday.addEventListener("click", () => {
-      const d = yyyyMmDd(new Date());
-      setRange(d, d);
-      loadBookingAnalytics("range");
-    });
-
-    if (btnWeek) btnWeek.addEventListener("click", () => {
-      const now = new Date();
-      const day = now.getDay(); // 0 Sun .. 6 Sat
-      const diffToMon = (day === 0 ? -6 : 1 - day);
-      const mon = new Date(now);
-      mon.setDate(now.getDate() + diffToMon);
-      const sun = new Date(mon);
-      sun.setDate(mon.getDate() + 6);
-      setRange(yyyyMmDd(mon), yyyyMmDd(sun));
-      loadBookingAnalytics("range");
-    });
-
-    if (btnMonth) btnMonth.addEventListener("click", () => {
-      const now = new Date();
-      const first = new Date(now.getFullYear(), now.getMonth(), 1);
-      const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      setRange(yyyyMmDd(first), yyyyMmDd(last));
-      loadBookingAnalytics("range");
-    });
-
-    if (btnApply) btnApply.addEventListener("click", () => loadBookingAnalytics("range"));
-
-    if (slugSel) slugSel.addEventListener("change", () => loadBookingAnalytics("range"));
-  }
-
-  // ... keep your existing window load at bottom, but ADD these calls:
-  window.addEventListener("load", () => {
-    loadAnalytics();
-    loadRegisteredUsers();
-
-    wireBookingAnalyticsButtons();
-    loadBookingAnalytics(); // initial load
+function buildBookUrl(path, paramsObj) {
+  const u = new URL(path, window.location.origin);
+  Object.entries(paramsObj || {}).forEach(([k, v]) => {
+    if (v !== null && v !== undefined && String(v).trim() !== "") u.searchParams.set(k, v);
   });
-</script>
-  window.addEventListener("load", () => {
+  return u.pathname + "?" + u.searchParams.toString();
+}
+
+function drawSimpleLine(canvasId, labels, values) {
+  const c = document.getElementById(canvasId);
+  if (!c) return;
+  const ctx = c.getContext("2d");
+
+  const w = c.width = c.clientWidth * (window.devicePixelRatio || 1);
+  const h = c.height = (c.getAttribute("height") ? Number(c.getAttribute("height")) : 160) * (window.devicePixelRatio || 1);
+
+  ctx.clearRect(0, 0, w, h);
+
+  const pad = 18 * (window.devicePixelRatio || 1);
+  const max = Math.max(1, ...values.map(v => Number(v || 0)));
+  const min = 0;
+
+  ctx.globalAlpha = 0.25;
+  ctx.beginPath();
+  ctx.moveTo(pad, pad);
+  ctx.lineTo(pad, h - pad);
+  ctx.lineTo(w - pad, h - pad);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  if (!values.length) return;
+
+  const xStep = (w - pad * 2) / Math.max(1, values.length - 1);
+  const yScale = (h - pad * 2) / (max - min);
+
+  ctx.beginPath();
+  values.forEach((v, i) => {
+    const x = pad + xStep * i;
+    const y = (h - pad) - (Number(v || 0) - min) * yScale;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  values.forEach((v, i) => {
+    const x = pad + xStep * i;
+    const y = (h - pad) - (Number(v || 0) - min) * yScale;
+    ctx.beginPath();
+    ctx.arc(x, y, 2.5 * (window.devicePixelRatio || 1), 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+async function loadBookingAnalytics(mode = "default") {
+  if (!enforceAdmin()) return;
+
+  const slugSel = document.getElementById("bookCourseSlug");
+  const slug = slugSel ? String(slugSel.value || "").trim() : "";
+
+  if (slugSel && slugSel.options.length <= 1) {
+    const top = await tryFetchJson("/api/book/admin/analytics/top");
+    if (top && Array.isArray(top.rows)) {
+      top.rows
+        .map(r => r.course_slug)
+        .filter(Boolean)
+        .forEach(s => {
+          const opt = document.createElement("option");
+          opt.value = s;
+          opt.textContent = s;
+          slugSel.appendChild(opt);
+        });
+    }
+  }
+
+  const startEl = document.getElementById("bookStart");
+  const endEl = document.getElementById("bookEnd");
+
+  const start = startEl ? startEl.value : "";
+  const end = endEl ? endEl.value : "";
+
+  const bookingsUrl = buildBookUrl("/api/book/admin/analytics/bookings", {
+    slug,
+    start: mode === "range" ? start : "",
+    end: mode === "range" ? end : ""
+  });
+
+  const counts = await tryFetchJson(bookingsUrl);
+  if (counts && counts.ok) {
+    setText("metricBookToday", String(counts.bookings?.today ?? 0));
+    setText("metricBookWeek", String(counts.bookings?.week ?? 0));
+    setText("metricBookMonth", String(counts.bookings?.month ?? 0));
+  } else {
+    setText("metricBookToday", "—");
+    setText("metricBookWeek", "—");
+    setText("metricBookMonth", "—");
+  }
+
+  const funnelUrl = buildBookUrl("/api/book/admin/analytics/funnel", { slug, days: 30 });
+  const funnel = await tryFetchJson(funnelUrl);
+  if (funnel && funnel.ok) {
+    setText("fViews", String(funnel.funnel?.views ?? 0));
+    setText("fTimes", String(funnel.funnel?.times ?? 0));
+    setText("fStarted", String(funnel.funnel?.started ?? 0));
+    setText("fConfirmed", String(funnel.funnel?.confirmed ?? 0));
+
+    setText("fConvVC", fmtPct(funnel.conversion?.view_to_confirmed ?? 0));
+    setText("fConvTC", fmtPct(funnel.conversion?.times_to_confirmed ?? 0));
+    setText("fConvSC", fmtPct(funnel.conversion?.started_to_confirmed ?? 0));
+  } else {
+    setText("fViews", "—"); setText("fTimes", "—"); setText("fStarted", "—"); setText("fConfirmed", "—");
+    setText("fConvVC", "—"); setText("fConvTC", "—"); setText("fConvSC", "—");
+  }
+
+  const dailyUrl = buildBookUrl("/api/book/admin/analytics/daily", {
+    slug,
+    start: mode === "range" ? start : "",
+    end: mode === "range" ? end : ""
+  });
+  const daily = await tryFetchJson(dailyUrl);
+
+  if (daily && daily.ok && Array.isArray(daily.rows)) {
+    const labels = daily.rows.map(r => r.day);
+    const bookingsSeries = daily.rows.map(r => Number(r.bookings || 0));
+    const revenueSeries = daily.rows.map(r => Number(r.revenue_cents || 0) / 100);
+
+    drawSimpleLine("chartBookings", labels, bookingsSeries);
+    drawSimpleLine("chartRevenue", labels, revenueSeries);
+  } else {
+    drawSimpleLine("chartBookings", [], []);
+    drawSimpleLine("chartRevenue", [], []);
+  }
+
+  const btnCsv = document.getElementById("btnBookCsv");
+  if (btnCsv && !btnCsv._wired) {
+    btnCsv._wired = true;
+    btnCsv.addEventListener("click", () => {
+      const s = (document.getElementById("bookStart") || {}).value || "";
+      const e = (document.getElementById("bookEnd") || {}).value || "";
+      const sl = (document.getElementById("bookCourseSlug") || {}).value || "";
+
+      const url = buildBookUrl("/api/book/admin/analytics/export.csv", { slug: sl, start: s, end: e });
+      window.open(url, "_blank");
+    });
+  }
+}
+
+function wireBookingAnalyticsButtons() {
+  const btnToday = document.getElementById("btnBookToday");
+  const btnWeek = document.getElementById("btnBookWeek");
+  const btnMonth = document.getElementById("btnBookMonth");
+  const btnApply = document.getElementById("btnBookApply");
+  const slugSel = document.getElementById("bookCourseSlug");
+
+  const startEl = document.getElementById("bookStart");
+  const endEl = document.getElementById("bookEnd");
+
+  const setRange = (s, e) => {
+    if (startEl) startEl.value = s;
+    if (endEl) endEl.value = e;
+  };
+
+  if (btnToday) btnToday.addEventListener("click", () => {
+    const d = yyyyMmDd(new Date());
+    setRange(d, d);
+    loadBookingAnalytics("range");
+  });
+
+  if (btnWeek) btnWeek.addEventListener("click", () => {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMon = (day === 0 ? -6 : 1 - day);
+    const mon = new Date(now);
+    mon.setDate(now.getDate() + diffToMon);
+    const sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    setRange(yyyyMmDd(mon), yyyyMmDd(sun));
+    loadBookingAnalytics("range");
+  });
+
+  if (btnMonth) btnMonth.addEventListener("click", () => {
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    setRange(yyyyMmDd(first), yyyyMmDd(last));
+    loadBookingAnalytics("range");
+  });
+
+  if (btnApply) btnApply.addEventListener("click", () => loadBookingAnalytics("range"));
+  if (slugSel) slugSel.addEventListener("change", () => loadBookingAnalytics("range"));
+}
+
+
+// ✅ ONE load handler ONLY (safe)
+window.addEventListener("load", () => {
   try { loadAnalytics(); } catch (e) { console.warn("loadAnalytics failed", e); }
   try { loadRegisteredUsers(); } catch (e) { console.warn("loadRegisteredUsers failed", e); }
 
-  // Booking analytics should NEVER break the page if backend endpoints aren’t ready yet
   try {
     if (typeof wireBookingAnalyticsButtons === "function") wireBookingAnalyticsButtons();
     if (typeof loadBookingAnalytics === "function") loadBookingAnalytics();
@@ -1414,6 +1391,5 @@ document.addEventListener("click", (e) => {
     console.warn("booking analytics failed (non-fatal)", e);
   }
 });
-</script>
 </body>
 </html>
