@@ -185,7 +185,27 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ ok: false, error: "Invalid token" });
   }
 }
+// ✅ NEW: ensure users table has plan column (Stripe/webhooks + analytics rely on it)
+async function ensureUsersPlanColumn() {
+  try {
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'FREE';
+    `);
 
+    // backfill safety (older rows)
+    await db.query(`
+      UPDATE users
+      SET plan = 'FREE'
+      WHERE plan IS NULL OR TRIM(plan) = '';
+    `);
+
+    console.log("✅ users.plan column ready");
+  } catch (err) {
+    console.error("❌ error ensuring users plan column:", err);
+  }
+}
+ensureUsersPlanColumn();
 // ✅ NEW: ensure user_preferences table exists
 async function ensureUserPreferencesTable() {
   try {
