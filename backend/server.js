@@ -550,117 +550,91 @@ app.post(
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    switch (event.type) {
-  case "checkout.session.completed": {
-    const session = event.data.object;
+    try {
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const session = event.data.object;
 
-    // session.customer_email may be null if customer was created without email
-    const email = (session.customer_email || "").toString().trim().toLowerCase();
+          const email = (session.customer_details?.email || session.customer_email || "")
+            .toString()
+            .trim()
+            .toLowerCase();
 
-    // If this is a subscription checkout, get the subscription + price
-    const subId = session.subscription;
+          const subId = session.subscription;
 
-    if (email && subId) {
-      const sub = await stripe.subscriptions.retrieve(subId, {
-        expand: ["items.data.price"],
-      });
+          if (email && subId) {
+            const sub = await stripe.subscriptions.retrieve(subId, {
+              expand: ["items.data.price"],
+            });
 
-      const priceId = sub?.items?.data?.[0]?.price?.id || null;
-      const mapped = priceId ? PRICE_TO_PLAN[priceId] : null;
+            const priceId = sub?.items?.data?.[0]?.price?.id || null;
+            const mapped = priceId ? PRICE_TO_PLAN[priceId] : null;
 
-      const plan = mapped?.plan || "BASIC"; // fallback if unknown
-      await db.query(
-        `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
-        [email, plan]
-      );
-      console.log("✅ Updated plan from webhook:", email, plan, priceId);
-    } else {
-      console.log("ℹ️ Webhook checkout completed, but missing email/subscription");
-    }
-    break;
-  }
+            const plan = mapped?.plan || "BASIC"; // fallback if unknown
+            await db.query(
+              `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
+              [email, plan]
+            );
 
-  case "customer.subscription.updated":
-  case "customer.subscription.deleted": {
-    const sub = event.data.object;
+            console.log("✅ Updated plan from checkout:", email, plan, priceId);
+          } else {
+            console.log("ℹ️ checkout.session.completed missing email/subscription", {
+              email: !!email,
+              subId: !!subId,
+            });
+          }
+          break;
+        }
 
-    const customerId = sub.customer;
-    const priceId = sub?.items?.data?.[0]?.price?.id || null;
+        case "customer.subscription.updated":
+        case "customer.subscription.deleted": {
+          const sub = event.data.object;
 
-    // Find customer email
-    const cust = await stripe.customers.retrieve(customerId);
-    const email = (cust?.email || "").toString().trim().toLowerCase();
+          const customerId = sub.customer;
+          const priceId = sub?.items?.data?.[0]?.price?.id || null;
 
-    if (email) {
-      let plan = "FREE";
+          const cust = await stripe.customers.retrieve(customerId);
+          const email = (cust?.email || "").toString().trim().toLowerCase();
 
-      if (event.type !== "customer.subscription.deleted" && sub.status === "active") {
-        const mapped = priceId ? PRICE_TO_PLAN[priceId] : null;
-        plan = mapped?.plan || "BASIC";
+          if (email) {
+            let plan = "FREE";
+
+            if (
+              event.type !== "customer.subscription.deleted" &&
+              sub.status === "active"
+            ) {
+              const mapped = priceId ? PRICE_TO_PLAN[priceId] : null;
+              plan = mapped?.plan || "BASIC";
+            }
+
+            await db.query(
+              `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
+              [email, plan]
+            );
+
+            console.log("✅ Updated plan from subscription:", email, plan, priceId);
+          }
+          break;
+        }
+
+        case "invoice.payment_succeeded": {
+          const invoice = event.data.object;
+          console.log("💰 invoice.payment_succeeded:", invoice.id);
+          break;
+        }
+
+        default:
+          console.log(`ℹ️ Unhandled Stripe event type: ${event.type}`);
+          break;
       }
 
-      await db.query(
-        `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
-        [email, plan]
-      );
-
-      console.log("✅ Updated plan from subscription event:", email, plan, priceId);
+      return res.json({ received: true });
+    } catch (err) {
+      console.error("❌ Webhook handler failed:", err);
+      return res.status(500).json({ received: true }); // still 200/ok-ish for Stripe
     }
-    break;
-  }
-
-  default:
-    break;
-}
-      case "checkout.session.completed": {
-  const session = event.data.object;
-
-  // Pull full session so we can read the priceId
-  const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
-    expand: ["line_items.data.price"],
-  });
-
-  const email =
-    session.customer_details?.email ||
-    session.customer_email ||
-    null;
-
-  const priceId = fullSession.line_items?.data?.[0]?.price?.id || null;
-
-  const mapped = PRICE_TO_PLAN[priceId]; // { plan: "BASIC"/"PRO", maxFavs: ... }
-
-  if (email && mapped?.plan) {
-    // ✅ Update your main users table so analytics/users endpoints can show plan
-    await db.query(
-      `UPDATE users SET plan = $1 WHERE LOWER(email) = LOWER($2)`,
-      [mapped.plan, email]
-    );
-
-    console.log("✅ Plan updated:", email, mapped.plan, priceId);
-  } else {
-    console.log("⚠️ Could not map plan:", { email, priceId });
-  }
-
-  break;
-}
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object;
-        console.log("❌ Subscription cancelled:", subscription.id);
-        break;
-      }
-      case "invoice.payment_succeeded": {
-        const invoice = event.data.object;
-        console.log("💰 Payment succeeded for:", invoice.customer_email);
-        break;
-      }
-      default:
-        console.log(`ℹ️ Unhandled Stripe event type: ${event.type}`);
-    }
-
-    res.json({ received: true });
   }
 );
-
 app.use(express.json());
 
 // ✅ NEW: cookies (needed for booking admin auth cookie)
