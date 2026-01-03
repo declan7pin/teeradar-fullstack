@@ -443,36 +443,120 @@ router.put("/register-user", (req, res) => {
 });
 
 /**
+ /**
  * GET /api/analytics/users
- * ✅ SOURCE OF TRUTH = Postgres users table
+ * ✅ Robust: works even if your users table schema differs
  */
 router.get("/users", async (req, res) => {
+  const limit = Math.max(1, Math.min(1000, Number(req.query.limit) || 500));
+
   try {
-    const limit = Math.max(1, Math.min(1000, Number(req.query.limit) || 500));
+    // ---- helpers ----
+    const tableExists = async (name) => {
+      const r = await db.query(`SELECT to_regclass($1) AS t;`, [name]);
+      return !!r.rows[0]?.t;
+    };
 
-    const { rows } = await db.query(
-      `
-      SELECT
-        u.id,
-        u.email,
-        COALESCE(u.plan, 'FREE') AS plan,
-        COALESCE(p.home_state, u.home_course_state, '') AS home_state,
-        COALESCE(p.favourites, '[]'::jsonb) AS favourites,
-        u.created_at,
-        u.last_seen_at
-      FROM users u
-      LEFT JOIN user_preferences p
-        ON LOWER(p.email) = LOWER(u.email)
-      ORDER BY u.created_at DESC NULLS LAST, u.id DESC
-      LIMIT $1;
-      `,
-      [limit]
-    );
+    const getCols = async (tableName) => {
+      const r = await db.query(
+        `
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1
+        `,
+        [tableName]
+      );
+      return new Set((r.rows || []).map((x) => x.column_name));
+    };
 
-    return res.json({ users: rows });
+    // ---- must have users table ----
+    const hasUsers = await tableExists("public.users");
+    if (!hasUsers) {
+      // Return 200 so frontend doesn't treat as "endpoint missing"
+      return res.json({
+        users: [],
+        warning: "users_table_missing",
+      });
+    }
+
+    const usersCols = await getCols("users");
+
+    // Safe column picks
+    const colId = usersCols.has("id") ? "u.id" : "NULL::int AS id";
+    const colEmail = usersCols.has("email") ? "u.email" : "NULL::text AS email";
+
+    const colPlan = usersCols.has("plan")
+      ? "COALESCE(u.plan, 'FREE') AS plan"
+      : "'FREE'::text AS plan";
+
+    const colCreatedAt = usersCols.has("created_at")
+      ? "u.created_at"
+      : "NULL::timestamptz AS created_at";
+
+    const colLastSeen = usersCols.has("last_seen_at")
+      ? "u.last_seen_at"
+      : (usersCols.has("last_login") ? "u.last_login AS last_seen_at" : "NULL::timestamptz AS last_seen_at");
+
+    // Optional join to preferences (if table exists)
+    const hasPrefs = await tableExists("public.user_preferences");
+
+    let sql = "";
+    if (hasPrefs) {
+      const prefsCols = await getCols("user_preferences");
+
+      const colHomeState =
+        prefsCols.has("home_state")
+          ? "COALESCE(p.home_state, '') AS home_state"
+          : "''::text AS home_state";
+
+      const colFavs =
+        prefsCols.has("favourites")
+          ? "COALESCE(p.favourites, '[]'::jsonb) AS favourites"
+          : "'[]'::jsonb AS favourites";
+
+      sql = `
+        SELECT
+          ${colId},
+          ${colEmail},
+          ${colPlan},
+          ${colHomeState},
+          ${colFavs},
+          ${colCreatedAt},
+          ${colLastSeen}
+        FROM users u
+        LEFT JOIN user_preferences p
+          ON LOWER(p.email) = LOWER(u.email)
+        ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
+        LIMIT $1;
+      `;
+    } else {
+      // no prefs table - still return users
+      sql = `
+        SELECT
+          ${colId},
+          ${colEmail},
+          ${colPlan},
+          ''::text AS home_state,
+          '[]'::jsonb AS favourites,
+          ${colCreatedAt},
+          ${colLastSeen}
+        FROM users u
+        ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
+        LIMIT $1;
+      `;
+    }
+
+    const r = await db.query(sql, [limit]);
+    return res.json({ users: r.rows || [] });
   } catch (err) {
-    console.error("❌ /api/analytics/users failed", err);
-    return res.status(500).json({ error: "Failed to fetch users" });
+    console.error("❌ /api/analytics/users error:", err);
+
+    // ✅ IMPORTANT: return 200 so analytics.html won't say "endpoint not found"
+    return res.json({
+      users: [],
+      error: "users_query_failed",
+      detail: err?.message || String(err),
+    });
   }
 });
 
