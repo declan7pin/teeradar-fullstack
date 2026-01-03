@@ -385,6 +385,8 @@ async function handleSummary(req, res) {
         // Alerts not supported in sqlite summary here
         alertsSent7d: 0,
         alertHits7d: 0,
+        alertsSentAllTime: 0,
+        alertHitsAllTime: 0,
         avgTimeToHitMins: null,
         alertsByPlan: null,
         topAlertCourses: [],
