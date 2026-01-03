@@ -624,7 +624,6 @@
     }
   }
 
-  // ✅ FIX: try the common analytics endpoints (summary first)
   async function fetchAnalyticsSummary() {
     const candidates = [
       "/api/analytics/summary",
@@ -659,7 +658,6 @@
     if (el) el.textContent = txt;
   }
 
-  // ✅ ADDED: render list blocks (top courses / searches / demand / played)
   function renderTopList(listElId, rows, emptyLabel) {
     const el = document.getElementById(listElId);
     if (!el) return;
@@ -683,7 +681,7 @@
     });
   }
 
-  // ✅ ADDED: special render for "Most-played courses" (All time • Last 30 days)
+  // ✅ FIXED: match All-time vs 30d by course name (not array index)
   function renderPlayedCourses(listElId, allTimeRows, last30Rows) {
     const el = document.getElementById(listElId);
     if (!el) return;
@@ -691,45 +689,86 @@
     const allArr = Array.isArray(allTimeRows) ? allTimeRows : [];
     const d30Arr = Array.isArray(last30Rows) ? last30Rows : [];
 
-    const max = Math.max(allArr.length, d30Arr.length, 0);
-    if (!max) {
+    if (!allArr.length && !d30Arr.length) {
       el.innerHTML = `<li><span class="label">No rounds logged yet</span><span class="value">—</span></li>`;
       return;
     }
 
+    const map30 = new Map();
+    d30Arr.forEach((r) => {
+      const name = r.courseName || r.course || r.name || "";
+      if (!name) return;
+      map30.set(name, toInt(r.n ?? r.count ?? r.plays ?? 0));
+    });
+
     el.innerHTML = "";
-    for (let i = 0; i < Math.min(max, 12); i++) {
-      const a = allArr[i] || {};
-      const b = d30Arr[i] || {};
-      const name = a.courseName || a.course || a.name || b.courseName || b.course || b.name || "—";
-      const aN = toInt(a.n ?? a.count ?? a.plays ?? 0);
-      const bN = toInt(b.n ?? b.count ?? b.plays ?? 0);
+
+    // Keep ordering from all-time, then append any 30d-only courses
+    const used = new Set();
+
+    const ordered = [];
+    allArr.forEach((r) => {
+      const name = r.courseName || r.course || r.name || "—";
+      const aN = toInt(r.n ?? r.count ?? r.plays ?? 0);
+      const bN = map30.has(name) ? map30.get(name) : 0;
+      ordered.push({ name, aN, bN });
+      used.add(name);
+    });
+
+    d30Arr.forEach((r) => {
+      const name = r.courseName || r.course || r.name || "";
+      if (!name || used.has(name)) return;
+      const bN = toInt(r.n ?? r.count ?? r.plays ?? 0);
+      ordered.push({ name, aN: 0, bN });
+    });
+
+    ordered.slice(0, 12).forEach((row) => {
       el.innerHTML += `
         <li>
-          <span class="label">${name}</span>
-          <span class="value">${aN} • ${bN}</span>
+          <span class="label">${row.name}</span>
+          <span class="value">${row.aN} • ${row.bN}</span>
         </li>
       `;
-    }
+    });
   }
 
+  // ✅ FIXED: 0 should show "0", not "Not configured"
   function wireAlerts(summary) {
-    const alertsSent7d = toInt(getAny(summary, ["alertsSent7d","alerts_sent_7d","alerts_sent7d","alertsSent"], null));
-    const alertHits7d = toInt(getAny(summary, ["alertHits7d","alert_hits_7d","alert_hits7d","alertHits"], null));
-    const avgTimeToHitMins = toFloat(getAny(summary, ["avgTimeToHitMins","avg_time_to_hit_mins","avgTimeToHit"], null));
+    const sentRaw = getAny(summary, ["alertsSent7d","alerts_sent_7d","alerts_sent7d","alertsSent"], null);
+    const hitsRaw = getAny(summary, ["alertHits7d","alert_hits_7d","alert_hits7d","alertHits"], null);
+    const avgRaw = getAny(summary, ["avgTimeToHitMins","avg_time_to_hit_mins","avgTimeToHitMins","avgTimeToHit"], null);
     const alertsByPlan = getAny(summary, ["alertsByPlan","alerts_by_plan"], null);
     const topAlertCourses = getAny(summary, ["topAlertCourses","top_alert_courses","topAlertCourses7d","top_alert_courses_7d"], null);
 
-    setText("metricAlertsSent7d", alertsSent7d ? String(alertsSent7d) : "Not configured");
-    setText("metricAlertHits7d", alertHits7d ? String(alertHits7d) : "Not configured");
+    const hasAlertsMetrics = (sentRaw != null) || (hitsRaw != null) || (avgRaw != null) || (topAlertCourses != null);
 
-    if (alertsSent7d > 0 && alertHits7d >= 0) setText("metricHitRate7d", fmtPct(alertHits7d / alertsSent7d));
-    else setText("metricHitRate7d", "Not configured");
+    if (!hasAlertsMetrics) {
+      setText("metricAlertsSent7d", "Not configured");
+      setText("metricAlertHits7d", "Not configured");
+      setText("metricHitRate7d", "Not configured");
+      setText("metricAvgTimeToHit", "Not configured");
+      setText("metricAlertsByPlan", "Not configured");
+      setText("metricTopAlertCourses", "Not configured");
 
-    if (avgTimeToHitMins > 0) setText("metricAvgTimeToHit", avgTimeToHitMins.toFixed(0) + "m");
-    else setText("metricAvgTimeToHit", "Not configured");
+      const listEl = document.getElementById("topAlertCoursesList");
+      if (listEl) listEl.innerHTML = `<li><span class="label">Not configured</span><span class="value">—</span></li>`;
+      return;
+    }
 
-    let byPlanText = "Not configured";
+    const alertsSent7d = sentRaw == null ? 0 : toInt(sentRaw);
+    const alertHits7d = hitsRaw == null ? 0 : toInt(hitsRaw);
+    const avgTimeToHitMins = avgRaw == null ? null : toFloat(avgRaw);
+
+    setText("metricAlertsSent7d", String(alertsSent7d));
+    setText("metricAlertHits7d", String(alertHits7d));
+
+    if (alertsSent7d > 0) setText("metricHitRate7d", fmtPct(alertHits7d / alertsSent7d));
+    else setText("metricHitRate7d", "0%");
+
+    if (avgTimeToHitMins != null && avgTimeToHitMins > 0) setText("metricAvgTimeToHit", avgTimeToHitMins.toFixed(0) + "m");
+    else setText("metricAvgTimeToHit", "—");
+
+    let byPlanText = "—";
     if (alertsByPlan) {
       if (typeof alertsByPlan === "string") {
         byPlanText = alertsByPlan;
@@ -750,17 +789,17 @@
     if (topAlertCourses && Array.isArray(topAlertCourses) && topAlertCourses.length) {
       const top1 = topAlertCourses[0];
       const name = top1.courseName || top1.course || top1.name || "—";
-      const hits = top1.hits ?? top1.count ?? top1.n ?? "—";
-      setText("metricTopAlertCourses", `${name} (${hits})`);
+      const hits = top1.hits ?? top1.count ?? top1.n ?? 0;
+      setText("metricTopAlertCourses", `${name} (${toInt(hits)})`);
     } else {
-      setText("metricTopAlertCourses", "Not configured");
+      setText("metricTopAlertCourses", "—");
     }
 
     const listEl = document.getElementById("topAlertCoursesList");
     if (listEl) {
       listEl.innerHTML = "";
       if (!topAlertCourses || !Array.isArray(topAlertCourses) || !topAlertCourses.length) {
-        listEl.innerHTML = `<li><span class="label">Not configured</span><span class="value">—</span></li>`;
+        listEl.innerHTML = `<li><span class="label">No alerts yet</span><span class="value">—</span></li>`;
       } else {
         topAlertCourses.slice(0, 12).forEach((row) => {
           const name = row.courseName || row.course || row.name || "—";
@@ -777,8 +816,6 @@
   }
 
   function renderAllLists(summary) {
-    // These keys are exactly what your backend summary returns:
-    // topCourses, topSearchedCourses, demandRank, topPlayedCourses, topPlayedCourses30d
     const topCourses = getAny(summary, ["topCourses","top_courses"], []);
     const topSearched = getAny(summary, ["topSearchedCourses","top_searched_courses"], []);
     const demandRank = getAny(summary, ["demandRank","demand_rank"], []);
@@ -839,8 +876,6 @@
     const repeatBookersVal = toInt(getAny(summary, ["repeatBookers","repeat_bookers"], 0));
     setText("metricRepeatBookers", String(repeatBookersVal));
 
-    // ✅ FIX: your backend may return peakBookingHour as a NUMBER (hour),
-    // while older versions returned an object {hour, clicks}
     const peak = getAny(summary, ["peakBookingHour","peak_booking_hour"], null);
     if (peak != null && typeof peak === "number") {
       setText("metricPeakHour", formatHourRange(peak));
@@ -850,9 +885,7 @@
       setText("metricPeakHour", "–");
     }
 
-    // ✅ ADDED: actually render the lists
     renderAllLists(summary);
-
     wireAlerts(summary);
   }
 
