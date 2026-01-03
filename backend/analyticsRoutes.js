@@ -623,7 +623,15 @@ if (stripe) {
 }
 
 return res.json({ users });
-
+  } catch (err) {
+    console.error("❌ /api/analytics/users error:", err);
+    return res.json({
+      users: [],
+      error: "users_query_failed",
+      detail: err?.message || String(err),
+    });
+  }
+});
 /**
  * DELETE /api/analytics/users/:id
  */
