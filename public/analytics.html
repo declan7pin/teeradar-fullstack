@@ -748,6 +748,8 @@
   function wireAlerts(summary) {
     const sentRaw = getAny(summary, ["alertsSent7d","alerts_sent_7d","alerts_sent7d","alertsSent"], null);
     const hitsRaw = getAny(summary, ["alertHits7d","alert_hits_7d","alert_hits7d","alertHits"], null);
+    const sentAllRaw = getAny(summary, ["alertsSentAllTime","alerts_sent_all_time"], null);
+    const hitsAllRaw = getAny(summary, ["alertHitsAllTime","alert_hits_all_time"], null);
     const avgRaw = getAny(summary, ["avgTimeToHitMins","avg_time_to_hit_mins","avgTimeToHitMins","avgTimeToHit"], null);
     const alertsByPlan = getAny(summary, ["alertsByPlan","alerts_by_plan"], null);
     const topAlertCourses = getAny(summary, ["topAlertCourses","top_alert_courses","topAlertCourses7d","top_alert_courses_7d"], null);
