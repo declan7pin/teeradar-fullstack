@@ -552,10 +552,36 @@ app.post(
 
     switch (event.type) {
       case "checkout.session.completed": {
-        const session = event.data.object;
-        console.log("✅ Stripe checkout completed for:", session.customer_email);
-        break;
-      }
+  const session = event.data.object;
+
+  // Pull full session so we can read the priceId
+  const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
+    expand: ["line_items.data.price"],
+  });
+
+  const email =
+    session.customer_details?.email ||
+    session.customer_email ||
+    null;
+
+  const priceId = fullSession.line_items?.data?.[0]?.price?.id || null;
+
+  const mapped = PRICE_TO_PLAN[priceId]; // { plan: "BASIC"/"PRO", maxFavs: ... }
+
+  if (email && mapped?.plan) {
+    // ✅ Update your main users table so analytics/users endpoints can show plan
+    await db.query(
+      `UPDATE users SET plan = $1 WHERE LOWER(email) = LOWER($2)`,
+      [mapped.plan, email]
+    );
+
+    console.log("✅ Plan updated:", email, mapped.plan, priceId);
+  } else {
+    console.log("⚠️ Could not map plan:", { email, priceId });
+  }
+
+  break;
+}
       case "customer.subscription.deleted": {
         const subscription = event.data.object;
         console.log("❌ Subscription cancelled:", subscription.id);
