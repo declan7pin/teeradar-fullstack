@@ -468,6 +468,82 @@
     </ul>
   </section>
 
+<div class="section-title">Booking analytics</div>
+
+<section class="card" style="margin-top:14px;">
+  <div class="card-label">Bookings made through TeeRadar booking pages</div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
+    <div>
+      <div class="muted-note">Course</div>
+      <select id="bookCourseSlug" style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+        <option value="">All courses</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="muted-note">Start</div>
+      <input id="bookStart" type="date" style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+    </div>
+
+    <div>
+      <div class="muted-note">End</div>
+      <input id="bookEnd" type="date" style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+    </div>
+
+    <button id="btnBookToday" type="button">Today</button>
+    <button id="btnBookWeek" type="button">This week</button>
+    <button id="btnBookMonth" type="button">This month</button>
+    <button id="btnBookApply" type="button" class="secondary">Apply range</button>
+    <button id="btnBookCsv" type="button" class="secondary">Download CSV</button>
+  </div>
+
+  <div class="cards-grid" style="margin-top:14px;">
+    <article class="card">
+      <div class="card-label">Bookings today</div>
+      <div id="metricBookToday" class="card-value">—</div>
+    </article>
+    <article class="card">
+      <div class="card-label">Bookings this week</div>
+      <div id="metricBookWeek" class="card-value">—</div>
+    </article>
+    <article class="card">
+      <div class="card-label">Bookings this month</div>
+      <div id="metricBookMonth" class="card-value">—</div>
+    </article>
+  </div>
+
+  <div class="cards-grid" style="margin-top:14px;">
+    <article class="card">
+      <div class="card-label">Funnel (last 30 days)</div>
+      <div class="muted-note">Views → Times → Started → Confirmed</div>
+      <div style="margin-top:8px;font-size:13px;line-height:1.6;">
+        <div><strong>Views:</strong> <span id="fViews">—</span></div>
+        <div><strong>Times:</strong> <span id="fTimes">—</span></div>
+        <div><strong>Started:</strong> <span id="fStarted">—</span></div>
+        <div><strong>Confirmed:</strong> <span id="fConfirmed">—</span></div>
+        <div style="margin-top:6px;">
+          <strong>View→Confirmed:</strong> <span id="fConvVC">—</span><br>
+          <strong>Times→Confirmed:</strong> <span id="fConvTC">—</span><br>
+          <strong>Started→Confirmed:</strong> <span id="fConvSC">—</span>
+        </div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Daily bookings</div>
+      <canvas id="chartBookings" height="160"></canvas>
+      <div class="card-hint">Custom range uses the date fields above</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Daily revenue</div>
+      <canvas id="chartRevenue" height="160"></canvas>
+      <div class="card-hint">From payload.total_cents on booking_confirmed</div>
+    </article>
+  </div>
+</section>
+
   <div class="section-title">Subscriptions</div>
   <section class="cards-grid" aria-label="Subscription metrics">
     <article class="card">
