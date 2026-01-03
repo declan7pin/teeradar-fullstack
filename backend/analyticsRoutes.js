@@ -442,7 +442,6 @@ router.put("/register-user", (req, res) => {
   }
 });
 
-/**
  /**
  * GET /api/analytics/users
  * ✅ Robust: works even if your users table schema differs
