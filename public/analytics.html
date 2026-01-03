@@ -1042,7 +1042,53 @@ else setText("metricHitRate7d", "—");
 
     computeSubscriptionMetrics();
   }
+function showUserDetails(u) {
+  const card = document.getElementById("userDetailCard");
+  if (!card) return;
 
+  card.style.display = "block";
+
+  setText("detailEmail", u.email ?? "—");
+  setText("detailPlan", normalisePlanLabel(u.plan));
+  setText("detailHomeState", u.home_state ?? "—");
+
+  const favs = favouritesToString(u.favourites || u.favourite_courses);
+  setText("detailFavs", favs || "—");
+
+  // Alert settings (only if your backend returns them; otherwise show —)
+  const days = u.alert_days ?? u.days ?? u.alertDays ?? null;
+  const timeRange = u.alert_time_range ?? u.time_range ?? u.alertTimeRange ?? null;
+  const holes = u.alert_holes ?? u.holes ?? u.alertHoles ?? null;
+  const players = u.alert_players ?? u.players ?? u.alertPlayers ?? null;
+
+  setText("detailDays", days != null ? String(days) : "—");
+  setText("detailTimeRange", timeRange != null ? String(timeRange) : "—");
+  setText("detailHoles", holes != null ? String(holes) : "—");
+  setText("detailPlayers", players != null ? String(players) : "—");
+
+  const created = u.created_at || u.createdAt || "";
+  const lastSeen = u.last_seen_at || u.lastLogin || u.last_seen || "";
+
+  setText("detailCreatedAt", created ? new Date(created).toLocaleString() : "—");
+  setText("detailLastSeen", lastSeen ? new Date(lastSeen).toLocaleString() : "—");
+
+  // scroll to the details card on mobile
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// Delegate click for any row in the users table
+document.addEventListener("click", (e) => {
+  const tr = e.target.closest("#usersTable tbody tr");
+  if (!tr) return;
+
+  const idx = Number(tr.getAttribute("data-user-idx"));
+  if (!Number.isFinite(idx)) return;
+
+  const u = USERS_CACHE[idx];
+  if (!u) return;
+
+  showUserDetails(u);
+});
   window.addEventListener("load", () => {
     loadAnalytics();
     loadRegisteredUsers();
