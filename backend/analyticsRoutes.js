@@ -10,11 +10,11 @@ import express from "express";
  */
 import * as analyticsDb from "./db/analyticsDb.js";
 
-/* ✅ ALSO write + read Postgres analytics (backend/analytics.js) */
-import {
-  recordEvent as recordPgEvent,
-  getAnalyticsSummary as getPgAnalyticsSummary,
-} from "./analytics.js";
+/**
+ * ✅ ALSO write + read Postgres analytics (backend/analytics.js)
+ * IMPORTANT: use namespace import so missing exports never crash boot.
+ */
+import * as pgAnalytics from "./analytics.js";
 /* ✅ END ONLY ADDITIONS */
 
 const router = express.Router();
@@ -83,35 +83,55 @@ router.post("/event", async (req, res) => {
 
     // existing (SQLite) analytics (your old cards / views depend on this)
     if (typeof logAnalyticsEvent === "function") {
-      logAnalyticsEvent({ type, at, payload: mergedPayload });
+      const r = logAnalyticsEvent({ type, at, payload: mergedPayload });
+      // if analyticsDb implementation returns a promise, don't leave it unhandled
+      if (r && typeof r.then === "function") await r;
     }
 
     // ✅ ALSO store to Postgres analytics (so rounds + everything are in one place)
     try {
-      const userId =
-        mergedPayload.userId ??
-        mergedPayload.user_id ??
-        mergedPayload.uid ??
+      const recordPgEvent =
+        pgAnalytics.recordEvent ||
+        pgAnalytics.recordPgEvent ||
         null;
 
-      const courseName =
-        mergedPayload.courseName ??
-        mergedPayload.course_name ??
-        mergedPayload.course ??
-        null;
+      if (typeof recordPgEvent === "function") {
+        const userId =
+          mergedPayload.userId ??
+          mergedPayload.user_id ??
+          mergedPayload.uid ??
+          null;
 
-      const roundId =
-        mergedPayload.roundId ??
-        mergedPayload.round_id ??
-        null;
+        const courseName =
+          mergedPayload.courseName ??
+          mergedPayload.course_name ??
+          mergedPayload.course ??
+          null;
 
-      await recordPgEvent({
-        type,
-        userId,
-        courseName,
-        at,
-        roundId,
-      });
+        const roundId =
+          mergedPayload.roundId ??
+          mergedPayload.round_id ??
+          null;
+
+        // ✅ send multiple key variants so recordEvent matches whatever your analytics.js expects
+        await recordPgEvent({
+          type,
+          at,
+          occurredAt: at,
+          occurred_at: at,
+
+          userId,
+          user_id: userId,
+
+          courseName,
+          course_name: courseName,
+
+          roundId,
+          round_id: roundId,
+        });
+      } else {
+        console.warn("Postgres analytics insert skipped: recordEvent export not found in ./analytics.js");
+      }
     } catch (e) {
       console.warn("Postgres analytics insert failed (non-fatal):", e?.message || e);
     }
@@ -130,7 +150,16 @@ async function handleSummary(req, res) {
     let s = null;
 
     try {
-      s = await getPgAnalyticsSummary();
+      const getPgAnalyticsSummary =
+        pgAnalytics.getAnalyticsSummary ||
+        pgAnalytics.getPgAnalyticsSummary ||
+        null;
+
+      if (typeof getPgAnalyticsSummary === "function") {
+        s = await getPgAnalyticsSummary();
+      } else {
+        throw new Error("getAnalyticsSummary export not found in ./analytics.js");
+      }
     } catch (e) {
       console.warn("Falling back to analyticsDb summary:", e?.message || e);
       s = typeof getAnalyticsSummary === "function" ? getAnalyticsSummary() : {};
@@ -230,7 +259,8 @@ router.put("/register-user", (req, res) => {
 router.get("/users", (req, res) => {
   try {
     const limit = Number(req.query.limit) || 500;
-    const users = typeof getRegisteredUsers === "function" ? getRegisteredUsers(limit) : [];
+    const users =
+      typeof getRegisteredUsers === "function" ? getRegisteredUsers(limit) : [];
     return res.json({ users });
   } catch (err) {
     console.error("Error fetching registered users", err);
