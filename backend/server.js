@@ -551,6 +551,67 @@ app.post(
     }
 
     switch (event.type) {
+  case "checkout.session.completed": {
+    const session = event.data.object;
+
+    // session.customer_email may be null if customer was created without email
+    const email = (session.customer_email || "").toString().trim().toLowerCase();
+
+    // If this is a subscription checkout, get the subscription + price
+    const subId = session.subscription;
+
+    if (email && subId) {
+      const sub = await stripe.subscriptions.retrieve(subId, {
+        expand: ["items.data.price"],
+      });
+
+      const priceId = sub?.items?.data?.[0]?.price?.id || null;
+      const mapped = priceId ? PRICE_TO_PLAN[priceId] : null;
+
+      const plan = mapped?.plan || "BASIC"; // fallback if unknown
+      await db.query(
+        `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
+        [email, plan]
+      );
+      console.log("✅ Updated plan from webhook:", email, plan, priceId);
+    } else {
+      console.log("ℹ️ Webhook checkout completed, but missing email/subscription");
+    }
+    break;
+  }
+
+  case "customer.subscription.updated":
+  case "customer.subscription.deleted": {
+    const sub = event.data.object;
+
+    const customerId = sub.customer;
+    const priceId = sub?.items?.data?.[0]?.price?.id || null;
+
+    // Find customer email
+    const cust = await stripe.customers.retrieve(customerId);
+    const email = (cust?.email || "").toString().trim().toLowerCase();
+
+    if (email) {
+      let plan = "FREE";
+
+      if (event.type !== "customer.subscription.deleted" && sub.status === "active") {
+        const mapped = priceId ? PRICE_TO_PLAN[priceId] : null;
+        plan = mapped?.plan || "BASIC";
+      }
+
+      await db.query(
+        `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
+        [email, plan]
+      );
+
+      console.log("✅ Updated plan from subscription event:", email, plan, priceId);
+    }
+    break;
+  }
+
+  default:
+    break;
+}
       case "checkout.session.completed": {
   const session = event.data.object;
 
