@@ -277,6 +277,18 @@ async function buildPgSummary() {
      WHERE type = 'alert_hit'
        AND occurred_at >= now() - interval '7 days';`
   );
+  // ✅ Alerts (all-time)
+const alertsSentAllTimeRows = await q(
+  `SELECT COUNT(*)::int AS n
+   FROM analytics
+   WHERE type = 'alert_sent';`
+);
+
+const alertHitsAllTimeRows = await q(
+  `SELECT COUNT(*)::int AS n
+   FROM analytics
+   WHERE type = 'alert_hit';`
+);
   const topAlertCourses7d = await q(
     `SELECT course_name AS course, COUNT(*)::int AS n
      FROM analytics
