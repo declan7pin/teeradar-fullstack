@@ -485,8 +485,18 @@ router.get("/users", async (req, res) => {
     const colEmail = usersCols.has("email") ? "u.email" : "NULL::text AS email";
 
     const colPlan = usersCols.has("plan")
-      ? "COALESCE(u.plan, 'FREE') AS plan"
-      : "'FREE'::text AS plan";
+  ? `
+    CASE
+      WHEN u.plan IS NULL OR NULLIF(TRIM(u.plan), '') IS NULL THEN 'FREE'
+      WHEN UPPER(u.plan) IN ('FREE','BASIC','PRO') THEN UPPER(u.plan)
+      WHEN LOWER(u.plan) IN ('unsubscribed','unsubscribed ') THEN 'FREE'
+      WHEN LOWER(u.plan) LIKE '%pro%' THEN 'PRO'
+      WHEN LOWER(u.plan) LIKE '%basic%' THEN 'BASIC'
+      WHEN LOWER(u.plan) LIKE '%free%' THEN 'FREE'
+      ELSE 'FREE'
+    END AS plan
+  `
+  : "'FREE'::text AS plan";
 
     const colCreatedAt = usersCols.has("created_at")
       ? "u.created_at"
