@@ -18,7 +18,7 @@ import db from "./db.js";
  * Use namespace import so missing exports never crash boot.
  */
 import * as pgAnalytics from "./analytics.js";
-
+import Stripe from "stripe";
 const router = express.Router();
 
 // pull the functions that DO exist (no hard failure)
