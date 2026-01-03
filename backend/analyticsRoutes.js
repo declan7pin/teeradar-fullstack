@@ -20,7 +20,17 @@ import db from "./db.js";
 import * as pgAnalytics from "./analytics.js";
 import Stripe from "stripe";
 const router = express.Router();
+// ✅ Stripe (for plan healing in /api/analytics/users)
+const stripeKey = String(process.env.STRIPE_SECRET_KEY || "").trim();
+const stripe = stripeKey ? new Stripe(stripeKey) : null;
 
+// ✅ priceId → plan
+const PRICE_TO_PLAN = {
+  "price_1SdnQTASm4geYL4WeBGAEEkA": "Basic",
+  "price_1SdnRLASm4geYL4W23IKreHO": "Basic",
+  "price_1SdnSGASm4geYL4WBWsFWUNe": "Pro",
+  "price_1SdnSpASm4geYL4W1yxaZf2i": "Pro",
+};
 // pull the functions that DO exist (no hard failure)
 const logAnalyticsEvent = analyticsDb.logAnalyticsEvent;
 const getAnalyticsSummarySqlite = analyticsDb.getAnalyticsSummary;
