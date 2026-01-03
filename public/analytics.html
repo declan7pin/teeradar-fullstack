@@ -1018,7 +1018,7 @@ else setText("metricHitRate7d", "—");
     if (table) table.style.display = "table";
 
     if (tbody) {
-      tbody.innerHTML = users.map((u) => {
+      tbody.innerHTML = users.map((u, idx) => {
         const created = u.created_at || u.createdAt || "";
         const lastSeen = u.last_seen_at || u.lastLogin || "";
         const favDisplay = favouritesToString(u.favourites || u.favourite_courses);
