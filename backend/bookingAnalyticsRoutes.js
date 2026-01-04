@@ -4,6 +4,15 @@ import db from "./db.js";
 
 const router = express.Router();
 
+// ✅ Support multiple mount styles (so frontend calls always hit)
+const PREFIXES = ["", "/book", "/api/book"];
+function mount(method, relPath, ...handlers) {
+  for (const p of PREFIXES) {
+    const full = `${p}${relPath}`.replace(/\/+/g, "/");
+    router[method](full, ...handlers);
+  }
+}
+
 // -----------------------------
 // db wrappers (pg or sqlite)
 // -----------------------------
@@ -117,11 +126,6 @@ function isBookingAdminReq(req) {
   return false;
 }
 
-// ✅ Read-only admin GET endpoints should still respond (so UI doesn't show "—")
-function allowAdminRead(req) {
-  return req.method === "GET";
-}
-
 function getCourseAdminSlugFromReq(req) {
   const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
   const providedBypass = String(req.headers["x-course-admin-key"] || "").trim();
@@ -158,81 +162,10 @@ function normaliseSlug(raw) {
   return slug;
 }
 
-function slugify(str) {
-  return String(str || "")
-    .toLowerCase()
-    .trim()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-// -----------------------------
-// ✅ Fallback to main analytics table if booking_analytics_events is empty
-// -----------------------------
-async function tableExistsPg(qualifiedName) {
-  try {
-    if (typeof db.query !== "function") return false;
-    const r = await db.query(`SELECT to_regclass($1::text) AS t;`, [qualifiedName]);
-    return !!r.rows?.[0]?.t;
-  } catch {
-    return false;
-  }
-}
-
-async function bookingEventsCount() {
-  try {
-    if (typeof db.query !== "function") return 0;
-    const r = await db.query(`SELECT COUNT(*)::int AS n FROM booking_analytics_events;`);
-    return Number(r.rows?.[0]?.n || 0);
-  } catch {
-    return 0;
-  }
-}
-
-async function legacyCourseMapFromAnalytics() {
-  // map slug -> course_name using analytics.course_name
-  const map = new Map();
-  try {
-    const hasAnalytics = await tableExistsPg("public.analytics");
-    if (!hasAnalytics) return map;
-
-    const rows = await qAll(
-      `
-      SELECT course_name, COUNT(*)::int AS n
-      FROM analytics
-      WHERE type = 'course_booking_click'
-        AND course_name IS NOT NULL
-        AND course_name <> ''
-      GROUP BY course_name
-      ORDER BY n DESC
-      LIMIT 500
-      `,
-      []
-    );
-
-    for (const r of rows || []) {
-      const name = String(r.course_name || "").trim();
-      if (!name) continue;
-      const s = slugify(name);
-      if (s && !map.has(s)) map.set(s, name);
-    }
-  } catch {}
-  return map;
-}
-
-async function shouldUseLegacyFallback() {
-  // If no booking analytics events recorded yet, use the main analytics table
-  const n = await bookingEventsCount();
-  if (n > 0) return false;
-  const hasAnalytics = await tableExistsPg("public.analytics");
-  return !!hasAnalytics;
-}
-
 // -----------------------------
 // POST event (public booking page can call this)
 // -----------------------------
-router.post("/api/book/analytics/event", express.json(), async (req, res) => {
+mount("post", "/analytics/event", express.json(), async (req, res) => {
   try {
     const {
       eventType,
@@ -306,47 +239,10 @@ router.post("/api/book/analytics/event", express.json(), async (req, res) => {
 // -----------------------------
 // Course admin: summary (last N days)
 // -----------------------------
-router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypass, async (req, res) => {
+mount("get", "/course-admin/analytics/summary", requireCourseAdminOrBypass, async (req, res) => {
   try {
     const slug = req._courseSlug;
     const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
-
-    const useLegacy = await shouldUseLegacyFallback();
-    if (useLegacy) {
-      // Legacy fallback has no funnel steps - treat click-outs as confirmed bookings
-      const courseMap = await legacyCourseMapFromAnalytics();
-      const courseName = courseMap.get(slug) || null;
-
-      const params = courseName ? [days, courseName] : [days];
-      const whereCourse = courseName ? `AND course_name = $2` : ``;
-
-      const confirmed = await qOne(
-        `
-        SELECT COUNT(*)::int AS n
-        FROM analytics
-        WHERE type = 'course_booking_click'
-          AND occurred_at >= now() - ($1::int || ' days')::interval
-          ${whereCourse}
-        `,
-        params
-      );
-
-      const c = Number(confirmed?.n || 0);
-
-      return res.json({
-        ok: true,
-        courseSlug: slug,
-        days,
-        metrics: {
-          course_page_view: 0,
-          times_view: 0,
-          booking_started: 0,
-          booking_confirmed: c,
-          revenue_cents: 0,
-          conversion_rate: 0,
-        },
-      });
-    }
 
     const views = await qOne(
       `
@@ -386,7 +282,7 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
       SELECT COUNT(*)::int AS n
       FROM booking_analytics_events
       WHERE course_slug = $1
-        AND event_type IN ('booking_confirmed','course_booking_click')
+        AND event_type = 'booking_confirmed'
         AND occurred_at >= now() - ($2::int || ' days')::interval
       `,
       [slug, days]
@@ -429,38 +325,10 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
 // -----------------------------
 // Course admin: daily series (last N days)
 // -----------------------------
-router.get("/api/book/course-admin/analytics/daily", requireCourseAdminOrBypass, async (req, res) => {
+mount("get", "/course-admin/analytics/daily", requireCourseAdminOrBypass, async (req, res) => {
   try {
     const slug = req._courseSlug;
     const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
-
-    const useLegacy = await shouldUseLegacyFallback();
-    if (useLegacy) {
-      const courseMap = await legacyCourseMapFromAnalytics();
-      const courseName = courseMap.get(slug) || null;
-
-      const params = courseName ? [days, courseName] : [days];
-      const whereCourse = courseName ? `AND course_name = $2` : ``;
-
-      const rows = await qAll(
-        `
-        SELECT
-          to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') AS day,
-          'course_booking_click'::text AS event_type,
-          COUNT(*)::int AS n,
-          0::int AS revenue_cents
-        FROM analytics
-        WHERE type = 'course_booking_click'
-          AND occurred_at >= now() - ($1::int || ' days')::interval
-          ${whereCourse}
-        GROUP BY 1,2
-        ORDER BY 1 ASC
-        `,
-        params
-      );
-
-      return res.json({ ok: true, courseSlug: slug, days, rows });
-    }
 
     const rows = await qAll(
       `
@@ -472,13 +340,7 @@ router.get("/api/book/course-admin/analytics/daily", requireCourseAdminOrBypass,
       FROM booking_analytics_events
       WHERE course_slug = $1
         AND occurred_at >= now() - ($2::int || ' days')::interval
-        AND event_type IN (
-          'course_page_view',
-          'times_view',
-          'booking_started',
-          'booking_confirmed',
-          'course_booking_click'
-        )
+        AND event_type IN ('course_page_view','times_view','booking_started','booking_confirmed')
       GROUP BY 1,2
       ORDER BY 1 ASC
       `,
@@ -493,130 +355,11 @@ router.get("/api/book/course-admin/analytics/daily", requireCourseAdminOrBypass,
 });
 
 // -----------------------------
-// Platform admin: overall summary
-// -----------------------------
-router.get("/api/book/admin/analytics/summary", async (req, res) => {
-  try {
-    if (!isBookingAdminReq(req) && !allowAdminRead(req)) {
-      return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
-    }
-
-    const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
-    const slug = normaliseSlug(req.query.slug);
-
-    const useLegacy = await shouldUseLegacyFallback();
-    if (useLegacy) {
-      const courseMap = await legacyCourseMapFromAnalytics();
-      const courseName = slug ? (courseMap.get(slug) || null) : null;
-
-      const params = courseName ? [days, courseName] : [days];
-      const whereCourse = courseName ? `AND course_name = $2` : ``;
-
-      const totals = await qOne(
-        `
-        SELECT COUNT(*)::int AS confirmed
-        FROM analytics
-        WHERE type = 'course_booking_click'
-          AND occurred_at >= now() - ($1::int || ' days')::interval
-          ${whereCourse}
-        `,
-        params
-      );
-
-      const top = await qAll(
-        `
-        SELECT course_name, COUNT(*)::int AS bookings
-        FROM analytics
-        WHERE type = 'course_booking_click'
-          AND occurred_at >= now() - ($1::int || ' days')::interval
-        GROUP BY course_name
-        ORDER BY bookings DESC
-        LIMIT 20
-        `,
-        [days]
-      );
-
-      return res.json({
-        ok: true,
-        days,
-        filter: { courseSlug: slug || null },
-        metrics: {
-          course_page_view: 0,
-          times_view: 0,
-          booking_started: 0,
-          booking_confirmed: Number(totals?.confirmed || 0),
-          revenue_cents: 0,
-        },
-        topCourses: (top || [])
-          .filter((r) => r.course_name)
-          .map((r) => ({
-            course_slug: slugify(r.course_name),
-            bookings: Number(r.bookings || 0),
-            revenue_cents: 0,
-          })),
-      });
-    }
-
-    const whereSlug = slug ? `AND course_slug = $2` : ``;
-    const params = slug ? [days, slug] : [days];
-
-    const totals = await qOne(
-      `
-      SELECT
-        COUNT(*) FILTER (WHERE event_type='course_page_view')::int AS views,
-        COUNT(*) FILTER (WHERE event_type='times_view')::int AS times_view,
-        COUNT(*) FILTER (WHERE event_type='booking_started')::int AS started,
-        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS confirmed,
-        COALESCE(SUM(CASE WHEN event_type='booking_confirmed' THEN (payload->>'total_cents')::int ELSE 0 END),0)::int AS revenue_cents
-      FROM booking_analytics_events
-      WHERE occurred_at >= now() - ($1::int || ' days')::interval
-      ${whereSlug}
-      `,
-      params
-    );
-
-    const top = await qAll(
-      `
-      SELECT
-        course_slug,
-        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS bookings,
-        COALESCE(SUM(CASE WHEN event_type='booking_confirmed' THEN (payload->>'total_cents')::int ELSE 0 END),0)::int AS revenue_cents
-      FROM booking_analytics_events
-      WHERE occurred_at >= now() - ($1::int || ' days')::interval
-      ${whereSlug}
-      GROUP BY course_slug
-      ORDER BY revenue_cents DESC NULLS LAST, bookings DESC
-      LIMIT 20
-      `,
-      params
-    );
-
-    return res.json({
-      ok: true,
-      days,
-      filter: { courseSlug: slug || null },
-      metrics: {
-        course_page_view: Number(totals?.views || 0),
-        times_view: Number(totals?.times_view || 0),
-        booking_started: Number(totals?.started || 0),
-        booking_confirmed: Number(totals?.confirmed || 0),
-        revenue_cents: Number(totals?.revenue_cents || 0),
-      },
-      topCourses: top || [],
-    });
-  } catch (e) {
-    console.error("admin analytics summary error:", e?.message || e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-// -----------------------------
 // Platform admin: booking counts (calendar-based)
-// today / week / month / optional custom range + optional slug
 // -----------------------------
-router.get("/api/book/admin/analytics/bookings", async (req, res) => {
+mount("get", "/admin/analytics/bookings", async (req, res) => {
   try {
-    if (!isBookingAdminReq(req) && !allowAdminRead(req)) {
+    if (!isBookingAdminReq(req)) {
       return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
     }
 
@@ -624,102 +367,6 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
     const start = String(req.query.start || "").trim(); // YYYY-MM-DD
     const end = String(req.query.end || "").trim();     // YYYY-MM-DD
 
-    const useLegacy = await shouldUseLegacyFallback();
-    if (useLegacy) {
-      const courseMap = await legacyCourseMapFromAnalytics();
-      const courseName = slug && slug !== "all" ? (courseMap.get(slug) || null) : null;
-
-      const whereCourse = courseName ? `AND course_name = $1` : ``;
-      const courseParams = courseName ? [courseName] : [];
-
-      const today = await qOne(
-        `
-        SELECT COUNT(*)::int AS n
-        FROM analytics
-        WHERE type = 'course_booking_click'
-          AND occurred_at >= date_trunc('day', now())
-          AND occurred_at <  date_trunc('day', now()) + interval '1 day'
-        ${whereCourse}
-        `,
-        courseParams
-      );
-
-      const week = await qOne(
-        `
-        SELECT COUNT(*)::int AS n
-        FROM analytics
-        WHERE type = 'course_booking_click'
-          AND occurred_at >= date_trunc('week', now())
-          AND occurred_at <  date_trunc('week', now()) + interval '7 days'
-        ${whereCourse}
-        `,
-        courseParams
-      );
-
-      const month = await qOne(
-        `
-        SELECT COUNT(*)::int AS n
-        FROM analytics
-        WHERE type = 'course_booking_click'
-          AND occurred_at >= date_trunc('month', now())
-          AND occurred_at <  date_trunc('month', now()) + interval '1 month'
-        ${whereCourse}
-        `,
-        courseParams
-      );
-
-      let rangeCount = null;
-      if (start && end) {
-        const params = courseName ? [start, end, courseName] : [start, end];
-        rangeCount = await qOne(
-          `
-          SELECT COUNT(*)::int AS n
-          FROM analytics
-          WHERE type = 'course_booking_click'
-            AND occurred_at >= $1::date
-            AND occurred_at <  ($2::date + interval '1 day')
-          ${courseName ? "AND course_name = $3" : ""}
-          `,
-          params
-        );
-      }
-
-      const coursesRaw = await qAll(
-        `
-        SELECT
-          course_name,
-          COUNT(*)::int AS bookings
-        FROM analytics
-        WHERE type = 'course_booking_click'
-          AND occurred_at >= now() - interval '90 days'
-          AND course_name IS NOT NULL
-          AND course_name <> ''
-        GROUP BY course_name
-        ORDER BY bookings DESC
-        LIMIT 200
-        `,
-        []
-      );
-
-      const courses = (coursesRaw || []).map((r) => ({
-        course_slug: slugify(r.course_name),
-        bookings: Number(r.bookings || 0),
-      }));
-
-      return res.json({
-        ok: true,
-        filter: { courseSlug: slug || "all" },
-        bookings: {
-          today: Number(today?.n || 0),
-          week: Number(week?.n || 0),
-          month: Number(month?.n || 0),
-          range: rangeCount ? Number(rangeCount.n || 0) : null,
-        },
-        courses: courses.filter((c) => c.course_slug),
-      });
-    }
-
-    // We keep slug as LAST param for each query (simple + predictable)
     const slugWhere = slug ? `AND course_slug = $1` : ``;
     const slugParams = slug ? [slug] : [];
 
@@ -727,7 +374,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
       `
       SELECT COUNT(*)::int AS n
       FROM booking_analytics_events
-      WHERE event_type IN ('booking_confirmed','course_booking_click')
+      WHERE event_type = 'booking_confirmed'
         AND occurred_at >= date_trunc('day', now())
         AND occurred_at <  date_trunc('day', now()) + interval '1 day'
       ${slugWhere}
@@ -739,7 +386,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
       `
       SELECT COUNT(*)::int AS n
       FROM booking_analytics_events
-      WHERE event_type IN ('booking_confirmed','course_booking_click')
+      WHERE event_type = 'booking_confirmed'
         AND occurred_at >= date_trunc('week', now())
         AND occurred_at <  date_trunc('week', now()) + interval '7 days'
       ${slugWhere}
@@ -751,7 +398,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
       `
       SELECT COUNT(*)::int AS n
       FROM booking_analytics_events
-      WHERE event_type IN ('booking_confirmed','course_booking_click')
+      WHERE event_type = 'booking_confirmed'
         AND occurred_at >= date_trunc('month', now())
         AND occurred_at <  date_trunc('month', now()) + interval '1 month'
       ${slugWhere}
@@ -766,7 +413,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
         `
         SELECT COUNT(*)::int AS n
         FROM booking_analytics_events
-        WHERE event_type IN ('booking_confirmed','course_booking_click')
+        WHERE event_type = 'booking_confirmed'
           AND occurred_at >= $1::date
           AND occurred_at <  ($2::date + interval '1 day')
         ${slug ? "AND course_slug = $3" : ""}
@@ -779,7 +426,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
       `
       SELECT
         course_slug,
-        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS bookings
+        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS bookings
       FROM booking_analytics_events
       WHERE occurred_at >= now() - interval '90 days'
       GROUP BY course_slug
@@ -808,48 +455,14 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
 // -----------------------------
 // Platform admin: funnel (last N days) + optional slug
 // -----------------------------
-router.get("/api/book/admin/analytics/funnel", async (req, res) => {
+mount("get", "/admin/analytics/funnel", async (req, res) => {
   try {
-    if (!isBookingAdminReq(req) && !allowAdminRead(req)) {
+    if (!isBookingAdminReq(req)) {
       return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
     }
 
     const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
     const slug = normaliseSlug(req.query.slug);
-
-    const useLegacy = await shouldUseLegacyFallback();
-    if (useLegacy) {
-      const courseMap = await legacyCourseMapFromAnalytics();
-      const courseName = slug ? (courseMap.get(slug) || null) : null;
-
-      const params = courseName ? [days, courseName] : [days];
-      const whereCourse = courseName ? `AND course_name = $2` : ``;
-
-      const row = await qOne(
-        `
-        SELECT COUNT(*)::int AS confirmed
-        FROM analytics
-        WHERE type = 'course_booking_click'
-          AND occurred_at >= now() - ($1::int || ' days')::interval
-          ${whereCourse}
-        `,
-        params
-      );
-
-      const confirmed = Number(row?.confirmed || 0);
-
-      return res.json({
-        ok: true,
-        days,
-        filter: { courseSlug: slug || null },
-        funnel: { views: 0, times: 0, started: 0, confirmed },
-        conversion: {
-          view_to_confirmed: 0,
-          times_to_confirmed: 0,
-          started_to_confirmed: 0,
-        },
-      });
-    }
 
     const whereSlug = slug ? `AND course_slug = $2` : ``;
     const params = slug ? [days, slug] : [days];
@@ -860,16 +473,10 @@ router.get("/api/book/admin/analytics/funnel", async (req, res) => {
         COUNT(*) FILTER (WHERE event_type='course_page_view')::int AS views,
         COUNT(*) FILTER (WHERE event_type='times_view')::int AS times_view,
         COUNT(*) FILTER (WHERE event_type='booking_started')::int AS started,
-        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS confirmed
+        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS confirmed
       FROM booking_analytics_events
       WHERE occurred_at >= now() - ($1::int || ' days')::interval
-        AND event_type IN (
-          'course_page_view',
-          'times_view',
-          'booking_started',
-          'booking_confirmed',
-          'course_booking_click'
-        )
+        AND event_type IN ('course_page_view','times_view','booking_started','booking_confirmed')
       ${whereSlug}
       `,
       params
@@ -903,56 +510,16 @@ router.get("/api/book/admin/analytics/funnel", async (req, res) => {
 
 // -----------------------------
 // Platform admin: daily series (custom range) + optional slug
-// returns bookings + revenue per day
 // -----------------------------
-router.get("/api/book/admin/analytics/daily", async (req, res) => {
+mount("get", "/admin/analytics/daily", async (req, res) => {
   try {
-    if (!isBookingAdminReq(req) && !allowAdminRead(req)) {
+    if (!isBookingAdminReq(req)) {
       return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
     }
 
     const slug = normaliseSlug(req.query.slug);
     const start = String(req.query.start || "").trim(); // YYYY-MM-DD
     const end = String(req.query.end || "").trim();     // YYYY-MM-DD
-
-    const useLegacy = await shouldUseLegacyFallback();
-    if (useLegacy) {
-      const courseMap = await legacyCourseMapFromAnalytics();
-      const courseName = slug ? (courseMap.get(slug) || null) : null;
-
-      const startSql = start ? `$1::date` : `(now()::date - interval '29 days')::date`;
-      const endSql = end ? `($2::date + interval '1 day')` : `(now()::date + interval '1 day')`;
-
-      const params = [];
-      if (start) params.push(start);
-      if (end) params.push(end);
-
-      const courseWhere = courseName ? `AND course_name = $${params.length + 1}` : ``;
-      if (courseName) params.push(courseName);
-
-      const rows = await qAll(
-        `
-        SELECT
-          to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') AS day,
-          COUNT(*)::int AS bookings,
-          0::int AS revenue_cents
-        FROM analytics
-        WHERE type = 'course_booking_click'
-          AND occurred_at >= ${startSql}
-          AND occurred_at <  ${endSql}
-          ${courseWhere}
-        GROUP BY 1
-        ORDER BY 1 ASC
-        `,
-        params
-      );
-
-      return res.json({
-        ok: true,
-        filter: { courseSlug: slug || null, start: start || null, end: end || null },
-        rows: rows || [],
-      });
-    }
 
     const startSql = start ? `$1::date` : `(now()::date - interval '29 days')::date`;
     const endSql = end ? `($2::date + interval '1 day')` : `(now()::date + interval '1 day')`;
@@ -968,7 +535,7 @@ router.get("/api/book/admin/analytics/daily", async (req, res) => {
       `
       SELECT
         to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') AS day,
-        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS bookings,
+        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS bookings,
         COALESCE(SUM(
           CASE WHEN event_type='booking_confirmed'
             THEN (payload->>'total_cents')::int
@@ -978,7 +545,7 @@ router.get("/api/book/admin/analytics/daily", async (req, res) => {
       FROM booking_analytics_events
       WHERE occurred_at >= ${startSql}
         AND occurred_at <  ${endSql}
-        AND event_type IN ('booking_confirmed','course_booking_click')
+        AND event_type IN ('booking_confirmed')
       ${slugWhere}
       GROUP BY 1
       ORDER BY 1 ASC
@@ -998,96 +565,10 @@ router.get("/api/book/admin/analytics/daily", async (req, res) => {
 });
 
 // -----------------------------
-// Platform admin: top courses (range) for quick ranking widgets
-// -----------------------------
-router.get("/api/book/admin/analytics/top", async (req, res) => {
-  try {
-    if (!isBookingAdminReq(req) && !allowAdminRead(req)) {
-      return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
-    }
-
-    const start = String(req.query.start || "").trim(); // YYYY-MM-DD optional
-    const end = String(req.query.end || "").trim();     // YYYY-MM-DD optional
-
-    const useLegacy = await shouldUseLegacyFallback();
-    if (useLegacy) {
-      const startSql = start ? `$1::date` : `(now()::date - interval '29 days')::date`;
-      const endSql = end ? `($2::date + interval '1 day')` : `(now()::date + interval '1 day')`;
-
-      const params = [];
-      if (start) params.push(start);
-      if (end) params.push(end);
-
-      const rows = await qAll(
-        `
-        SELECT
-          course_name,
-          COUNT(*)::int AS bookings,
-          0::int AS revenue_cents
-        FROM analytics
-        WHERE type = 'course_booking_click'
-          AND occurred_at >= ${startSql}
-          AND occurred_at <  ${endSql}
-          AND course_name IS NOT NULL
-          AND course_name <> ''
-        GROUP BY course_name
-        ORDER BY bookings DESC
-        LIMIT 50
-        `,
-        params
-      );
-
-      return res.json({
-        ok: true,
-        rows: (rows || []).map((r) => ({
-          course_slug: slugify(r.course_name),
-          bookings: Number(r.bookings || 0),
-          revenue_cents: 0,
-        })),
-      });
-    }
-
-    const startSql = start ? `$1::date` : `(now()::date - interval '29 days')::date`;
-    const endSql = end ? `($2::date + interval '1 day')` : `(now()::date + interval '1 day')`;
-
-    const params = [];
-    if (start) params.push(start);
-    if (end) params.push(end);
-
-    const rows = await qAll(
-      `
-      SELECT
-        course_slug,
-        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS bookings,
-        COALESCE(SUM(
-          CASE WHEN event_type='booking_confirmed'
-            THEN (payload->>'total_cents')::int
-            ELSE 0
-          END
-        ),0)::int AS revenue_cents
-      FROM booking_analytics_events
-      WHERE occurred_at >= ${startSql}
-        AND occurred_at <  ${endSql}
-      GROUP BY course_slug
-      ORDER BY revenue_cents DESC NULLS LAST, bookings DESC
-      LIMIT 50
-      `,
-      params
-    );
-
-    return res.json({ ok: true, rows: rows || [] });
-  } catch (e) {
-    console.error("admin top error:", e?.message || e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-// -----------------------------
 // Platform admin: export CSV (range + optional slug)
 // -----------------------------
-router.get("/api/book/admin/analytics/export.csv", async (req, res) => {
+mount("get", "/admin/analytics/export.csv", async (req, res) => {
   try {
-    // keep export protected
     if (!isBookingAdminReq(req)) {
       return res.status(401).send("Not logged in as booking admin");
     }
@@ -1120,13 +601,7 @@ router.get("/api/book/admin/analytics/export.csv", async (req, res) => {
       FROM booking_analytics_events
       WHERE occurred_at >= ${startSql}
         AND occurred_at <  ${endSql}
-        AND event_type IN (
-          'booking_confirmed',
-          'course_booking_click',
-          'booking_started',
-          'times_view',
-          'course_page_view'
-        )
+        AND event_type IN ('booking_confirmed','booking_started','times_view','course_page_view')
       ${slugWhere}
       ORDER BY occurred_at DESC
       `,
