@@ -1875,5 +1875,53 @@ router.post("/book", async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ NEW: Booking Analytics (uses real bookings + existing analytics table)
+router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req, res) => {
+  try {
+    const days = Number(req.query.days || 30);
+    const range = Number.isFinite(days) && days > 0 ? `${days} days` : "30 days";
 
+    // --- bookings counts ---
+    const today = await db.query(`
+      SELECT COUNT(*)::int AS c
+      FROM booking_bookings
+      WHERE created_at >= date_trunc('day', now())
+    `);
+
+    const week = await db.query(`
+      SELECT COUNT(*)::int AS c
+      FROM booking_bookings
+      WHERE created_at >= now() - interval '7 days'
+    `);
+
+    const month = await db.query(`
+      SELECT COUNT(*)::int AS c
+      FROM booking_bookings
+      WHERE created_at >= now() - interval '30 days'
+    `);
+
+    // --- funnel (from analytics table you already have data in) ---
+    const funnel = await db.query(
+      `
+      SELECT
+        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_course_view' AND occurred_at >= NOW() - $1::interval) AS views,
+        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_availability_search' AND occurred_at >= NOW() - $1::interval) AS times,
+        0::int AS started,
+        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_created' AND occurred_at >= NOW() - $1::interval) AS confirmed
+      `,
+      [range]
+    );
+
+    res.json({
+      ok: true,
+      bookingsToday: today.rows[0]?.c || 0,
+      bookingsThisWeek: week.rows[0]?.c || 0,
+      bookingsThisMonth: month.rows[0]?.c || 0,
+      funnelLast30Days: funnel.rows[0] || { views: 0, times: 0, started: 0, confirmed: 0 },
+    });
+  } catch (e) {
+    console.error("admin/booking-analytics/summary", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 export default router;
