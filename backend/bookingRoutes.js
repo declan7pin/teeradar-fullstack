@@ -588,13 +588,7 @@ router.post("/admin/login", (req, res) => {
     return res.status(401).json({ ok: false, error: "invalid_secret" });
   }
 
-  res.cookie("tr_book_admin", "1", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: isHttps(req),
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    path: "/",
-  });
+  res.cookie("tr_book_admin", "1", baseCookieOpts(req));
 
   res.json({ ok: true });
 });
