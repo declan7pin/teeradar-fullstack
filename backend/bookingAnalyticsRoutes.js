@@ -274,6 +274,7 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
       [slug, days]
     );
 
+    // ✅ Treat click-outs as "confirmed" bookings for TeeRadar referral flow
     const confirmed = await qOne(
       `
       SELECT COUNT(*)::int AS n
@@ -285,12 +286,13 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
       [slug, days]
     );
 
+    // ✅ Only real checkout confirmations contribute revenue
     const revenue = await qOne(
       `
       SELECT COALESCE(SUM((payload->>'total_cents')::int),0)::int AS total_cents
       FROM booking_analytics_events
       WHERE course_slug = $1
-        AND event_type IN ('booking_confirmed','course_booking_click')
+        AND event_type = 'booking_confirmed'
         AND occurred_at >= now() - ($2::int || ' days')::interval
       `,
       [slug, days]
@@ -337,13 +339,13 @@ router.get("/api/book/course-admin/analytics/daily", requireCourseAdminOrBypass,
       FROM booking_analytics_events
       WHERE course_slug = $1
         AND occurred_at >= now() - ($2::int || ' days')::interval
-        AND AND event_type IN (
-  'course_page_view',
-  'times_view',
-  'booking_started',
-  'booking_confirmed',
-  'course_booking_click'
-)
+        AND event_type IN (
+          'course_page_view',
+          'times_view',
+          'booking_started',
+          'booking_confirmed',
+          'course_booking_click'
+        )
       GROUP BY 1,2
       ORDER BY 1 ASC
       `,
@@ -378,7 +380,7 @@ router.get("/api/book/admin/analytics/summary", async (req, res) => {
         COUNT(*) FILTER (WHERE event_type='course_page_view')::int AS views,
         COUNT(*) FILTER (WHERE event_type='times_view')::int AS times_view,
         COUNT(*) FILTER (WHERE event_type='booking_started')::int AS started,
-        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS confirmed,
+        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS confirmed,
         COALESCE(SUM(CASE WHEN event_type='booking_confirmed' THEN (payload->>'total_cents')::int ELSE 0 END),0)::int AS revenue_cents
       FROM booking_analytics_events
       WHERE occurred_at >= now() - ($1::int || ' days')::interval
@@ -391,7 +393,7 @@ router.get("/api/book/admin/analytics/summary", async (req, res) => {
       `
       SELECT
         course_slug,
-        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS bookings,
+        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS bookings,
         COALESCE(SUM(CASE WHEN event_type='booking_confirmed' THEN (payload->>'total_cents')::int ELSE 0 END),0)::int AS revenue_cents
       FROM booking_analytics_events
       WHERE occurred_at >= now() - ($1::int || ' days')::interval
@@ -497,12 +499,12 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
     }
 
     // ---- Course list (for dropdown) ----
-    // last 90d confirmed bookings per slug
+    // last 90d bookings per slug (click-outs + confirmed)
     const courses = await qAll(
       `
       SELECT
         course_slug,
-        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS bookings
+        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS bookings
       FROM booking_analytics_events
       WHERE occurred_at >= now() - interval '90 days'
       GROUP BY course_slug
@@ -549,16 +551,16 @@ router.get("/api/book/admin/analytics/funnel", async (req, res) => {
         COUNT(*) FILTER (WHERE event_type='course_page_view')::int AS views,
         COUNT(*) FILTER (WHERE event_type='times_view')::int AS times_view,
         COUNT(*) FILTER (WHERE event_type='booking_started')::int AS started,
-        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS confirmed
+        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS confirmed
       FROM booking_analytics_events
       WHERE occurred_at >= now() - ($1::int || ' days')::interval
-        AND AND event_type IN (
-  'course_page_view',
-  'times_view',
-  'booking_started',
-  'booking_confirmed',
-  'course_booking_click'
-)
+        AND event_type IN (
+          'course_page_view',
+          'times_view',
+          'booking_started',
+          'booking_confirmed',
+          'course_booking_click'
+        )
       ${whereSlug}
       `,
       params
@@ -619,7 +621,7 @@ router.get("/api/book/admin/analytics/daily", async (req, res) => {
       `
       SELECT
         to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') AS day,
-        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS bookings,
+        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS bookings,
         COALESCE(SUM(
           CASE WHEN event_type='booking_confirmed'
             THEN (payload->>'total_cents')::int
@@ -629,7 +631,7 @@ router.get("/api/book/admin/analytics/daily", async (req, res) => {
       FROM booking_analytics_events
       WHERE occurred_at >= ${startSql}
         AND occurred_at <  ${endSql}
-        AND event_type IN ('booking_confirmed')
+        AND event_type IN ('booking_confirmed','course_booking_click')
       ${slugWhere}
       GROUP BY 1
       ORDER BY 1 ASC
@@ -671,7 +673,7 @@ router.get("/api/book/admin/analytics/top", async (req, res) => {
       `
       SELECT
         course_slug,
-        COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS bookings,
+        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS bookings,
         COALESCE(SUM(
           CASE WHEN event_type='booking_confirmed'
             THEN (payload->>'total_cents')::int
@@ -732,7 +734,13 @@ router.get("/api/book/admin/analytics/export.csv", async (req, res) => {
       FROM booking_analytics_events
       WHERE occurred_at >= ${startSql}
         AND occurred_at <  ${endSql}
-        AND event_type IN ('booking_confirmed','booking_started','times_view','course_page_view')
+        AND event_type IN (
+          'booking_confirmed',
+          'course_booking_click',
+          'booking_started',
+          'times_view',
+          'course_page_view'
+        )
       ${slugWhere}
       ORDER BY occurred_at DESC
       `,
