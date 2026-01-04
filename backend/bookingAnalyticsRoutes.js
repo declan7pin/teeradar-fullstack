@@ -132,12 +132,15 @@ function isBookingAdminReq(req) {
     .trim()
     .toLowerCase();
 
-  const authedEmail =
+    const authedEmail =
     String(req.user?.email || req.user?.user?.email || req.auth?.email || "")
       .trim()
       .toLowerCase();
 
-  if (adminEmail && authedEmail && authedEmail === adminEmail) return true;
+  const bearerEmail = getEmailFromBearer(req);
+  const effectiveEmail = authedEmail || bearerEmail;
+
+  if (adminEmail && effectiveEmail && effectiveEmail === adminEmail) return true;
 
   return false;
 }
