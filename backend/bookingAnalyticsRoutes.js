@@ -279,7 +279,7 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
       SELECT COUNT(*)::int AS n
       FROM booking_analytics_events
       WHERE course_slug = $1
-        AND event_type = 'booking_confirmed'
+        AND event_type IN ('booking_confirmed','course_booking_click')
         AND occurred_at >= now() - ($2::int || ' days')::interval
       `,
       [slug, days]
@@ -290,7 +290,7 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
       SELECT COALESCE(SUM((payload->>'total_cents')::int),0)::int AS total_cents
       FROM booking_analytics_events
       WHERE course_slug = $1
-        AND event_type = 'booking_confirmed'
+        AND event_type IN ('booking_confirmed','course_booking_click')
         AND occurred_at >= now() - ($2::int || ' days')::interval
       `,
       [slug, days]
@@ -439,7 +439,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
       `
       SELECT COUNT(*)::int AS n
       FROM booking_analytics_events
-      WHERE event_type = 'booking_confirmed'
+      WHERE event_type IN ('booking_confirmed','course_booking_click')
         AND occurred_at >= date_trunc('day', now())
         AND occurred_at <  date_trunc('day', now()) + interval '1 day'
       ${slugWhere}
@@ -452,7 +452,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
       `
       SELECT COUNT(*)::int AS n
       FROM booking_analytics_events
-      WHERE event_type = 'booking_confirmed'
+      WHERE event_type IN ('booking_confirmed','course_booking_click')
         AND occurred_at >= date_trunc('week', now())
         AND occurred_at <  date_trunc('week', now()) + interval '7 days'
       ${slugWhere}
@@ -465,7 +465,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
       `
       SELECT COUNT(*)::int AS n
       FROM booking_analytics_events
-      WHERE event_type = 'booking_confirmed'
+      WHERE event_type IN ('booking_confirmed','course_booking_click')
         AND occurred_at >= date_trunc('month', now())
         AND occurred_at <  date_trunc('month', now()) + interval '1 month'
       ${slugWhere}
@@ -481,7 +481,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
         `
         SELECT COUNT(*)::int AS n
         FROM booking_analytics_events
-        WHERE event_type = 'booking_confirmed'
+        WHERE event_type IN ('booking_confirmed','course_booking_click')
           AND occurred_at >= $1::date
           AND occurred_at <  ($2::date + interval '1 day')
         ${slug ? "AND course_slug = $3" : ""}
