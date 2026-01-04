@@ -1198,7 +1198,93 @@ router.get("/admin/analytics/summary", requirePlatformAdmin, async (req, res) =>
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ DEBUG: Platform admin — analytics truth check (no psql needed)
+router.get("/admin/analytics/debug", requirePlatformAdmin, async (req, res) => {
+  try {
+    const days = Number(req.query.days || 7);
+    const range = Number.isFinite(days) && days > 0 ? `${days} days` : "7 days";
 
+    // 1) booking_analytics_events (recordBookingEvent)
+    const baeTotals = await db.query(
+      `
+      SELECT
+        COUNT(*)::int AS total,
+        MIN(occurred_at) AS first_at,
+        MAX(occurred_at) AS last_at
+      FROM booking_analytics_events
+      WHERE occurred_at >= NOW() - $1::interval
+      `,
+      [range]
+    );
+
+    const baeTypes = await db.query(
+      `
+      SELECT event_type, COUNT(*)::int AS count
+      FROM booking_analytics_events
+      WHERE occurred_at >= NOW() - $1::interval
+      GROUP BY event_type
+      ORDER BY count DESC
+      `,
+      [range]
+    );
+
+    // 2) analytics table (recordEvent)
+    const aTotals = await db.query(
+      `
+      SELECT
+        COUNT(*)::int AS total,
+        MIN(occurred_at) AS first_at,
+        MAX(occurred_at) AS last_at
+      FROM analytics
+      WHERE occurred_at >= NOW() - $1::interval
+      `,
+      [range]
+    );
+
+    const aTypes = await db.query(
+      `
+      SELECT type, COUNT(*)::int AS count
+      FROM analytics
+      WHERE occurred_at >= NOW() - $1::interval
+      GROUP BY type
+      ORDER BY count DESC
+      `,
+      [range]
+    );
+
+    // 3) booking_bookings (actual bookings)
+    const bTotals = await db.query(
+      `
+      SELECT
+        COUNT(*)::int AS total,
+        MIN(created_at) AS first_at,
+        MAX(created_at) AS last_at
+      FROM booking_bookings
+      WHERE created_at >= NOW() - $1::interval
+      `,
+      [range]
+    );
+
+    res.json({
+      ok: true,
+      range,
+      booking_analytics_events: {
+        totals: baeTotals.rows[0] || null,
+        types: baeTypes.rows || [],
+      },
+      analytics: {
+        totals: aTotals.rows[0] || null,
+        types: aTypes.rows || [],
+      },
+      booking_bookings: {
+        totals: bTotals.rows[0] || null,
+      },
+    });
+  } catch (e) {
+    console.error("admin/analytics/debug", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // -----------------------------
 // ✅ Course admin endpoints
 // -----------------------------
