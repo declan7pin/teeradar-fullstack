@@ -713,7 +713,6 @@ router.post("/course-admin/login", async (req, res) => {
       courseAdminToken: courseAdminToken,
       accessToken: courseAdminToken,
     });
-  } catch (e) {
     console.error("course-admin/login", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
