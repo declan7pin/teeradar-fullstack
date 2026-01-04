@@ -642,16 +642,19 @@ function updateModalTotal(){
         method: "POST",
         headers: { "Content-Type":"application/json" },
         body: JSON.stringify({
-          slug,
-          date,
-          time: selectedSlot.time,
-          holes,
-          players,
-          name,
-          email,
-          phone
-        })
-      });
+  slug,
+  date,
+  time: selectedSlot.time,
+  holes,
+  players,
+  name,
+  email,
+  phone,
+  addOns: {
+    hire_clubs: !!$("addClubs")?.checked,
+    cart: !!$("addCart")?.checked
+  }
+})
 
       const data = await res.json().catch(()=> ({}));
       if (!res.ok || !data || !data.ok) {
