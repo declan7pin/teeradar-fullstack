@@ -91,16 +91,30 @@ ensureBookingAnalyticsTable();
 // auth helpers (use server.js middleware if present)
 // -----------------------------
 function isBookingAdminReq(req) {
-  // ✅ Added: optional bypass key for admin endpoints (doesn't affect public tracking)
+  // 1) bypass key (optional)
   const bypassKey = String(process.env.BOOKING_ADMIN_BYPASS_KEY || "").trim();
   const providedBypass = String(req.headers["x-booking-admin-key"] || "").trim();
   if (bypassKey && providedBypass && providedBypass === bypassKey) return true;
 
-  // server.js already sets req.isBookingAdmin() + req.bookingAdmin in your setup
+  // 2) server middleware flags (if present)
   try {
-    if (typeof req.isBookingAdmin === "function") return !!req.isBookingAdmin();
-    if (typeof req.bookingAdmin !== "undefined") return !!req.bookingAdmin;
+    if (typeof req.isBookingAdmin === "function" && req.isBookingAdmin()) return true;
+    if (req.bookingAdmin === true) return true;
   } catch {}
+
+  // 3) ✅ allow your normal JWT admin user through if server set req.user
+  // (most auth middleware attaches req.user after verifying Bearer token)
+  const adminEmail = String(process.env.ADMIN_EMAIL || "declan7pin@gmail.com")
+    .trim()
+    .toLowerCase();
+
+  const authedEmail =
+    String(req.user?.email || req.user?.user?.email || req.auth?.email || "")
+      .trim()
+      .toLowerCase();
+
+  if (adminEmail && authedEmail && authedEmail === adminEmail) return true;
+
   return false;
 }
 
