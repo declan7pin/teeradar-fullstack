@@ -831,7 +831,7 @@ app.use((req, res, next) => {
 });
 
 // ✅✅✅ ADD THIS ✅✅✅
-app.use("/api/booking-analytics", bookingAnalyticsRouter);
+app.use(bookingAnalyticsRouter);
 // ✅✅✅ END ADD ✅✅✅
 app.use("/api/analytics", analyticsRouter);
 app.use(bookingViewsRouter);
