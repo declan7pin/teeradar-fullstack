@@ -1053,17 +1053,21 @@ else setText("metricHitRate7d", "—");
     setText("metricMRR", fmtMoney(mrr));
   }
 
+  async function tryFetchJsonAny(urls) {
+    for (const url of urls) {
+      const data = await tryFetchJson(url);
+      if (data) return { data, url };
+    }
+    return null;
+  }
+
   async function fetchUsersFromAnyEndpoint() {
     const candidates = [
       "/api/analytics/users",
       "/api/analytics/registered-users",
       "/api/analytics/registeredUsers"
     ];
-    for (const url of candidates) {
-      const data = await tryFetchJson(url);
-      if (data) return { data, url };
-    }
-    return null;
+    return await tryFetchJsonAny(candidates);
   }
 
   async function loadRegisteredUsers() {
@@ -1127,6 +1131,7 @@ else setText("metricHitRate7d", "—");
 
     computeSubscriptionMetrics();
   }
+
 function showUserDetails(u) {
   const card = document.getElementById("userDetailCard");
   if (!card) return;
@@ -1391,5 +1396,7 @@ window.addEventListener("load", () => {
     console.warn("booking analytics failed (non-fatal)", e);
   }
 });
+</script>
+
 </body>
 </html>
