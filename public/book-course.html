@@ -326,7 +326,26 @@
           <input id="bPhone" placeholder="04xx xxx xxx" autocomplete="tel" />
         </div>
       </div>
+<div class="field sm6">
+  <label class="muted">Add-ons</label>
 
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text);">
+      <input id="addClubs" type="checkbox" style="width:auto;" />
+      Hire clubs <span style="color:var(--muted);font-size:12px;">(+<span id="clubsFeeLabel">—</span>)</span>
+    </label>
+
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text);">
+      <input id="addCart" type="checkbox" style="width:auto;" />
+      Cart <span style="color:var(--muted);font-size:12px;">(+<span id="cartFeeLabel">—</span>)</span>
+    </label>
+  </div>
+
+  <div style="margin-top:8px;font-size:13px;">
+    <strong>Total:</strong> <span id="mTotal">—</span>
+    <span style="color:var(--muted);font-size:12px;margin-left:6px;">(includes add-ons)</span>
+  </div>
+</div>
       <div class="modalActions">
         <button class="btn" id="confirmBtn">Confirm booking</button>
         <button class="btn secondary" id="cancelBtn">Cancel</button>
