@@ -643,7 +643,7 @@ router.post("/admin/course-admin", requirePlatformAdmin, async (req, res) => {
 });
 
 // -----------------------------
-// ✅ Course admin login/logout/me
+// ✅ Course admin login
 // -----------------------------
 router.post("/course-admin/login", async (req, res) => {
   try {
@@ -666,44 +666,56 @@ router.post("/course-admin/login", async (req, res) => {
       [email]
     );
 
-    if (!rows.length) return res.status(401).json({ ok: false, error: "invalid_login" });
+    if (!rows.length) {
+      return res.status(401).json({ ok: false, error: "invalid_login" });
+    }
 
     const u = rows[0];
-    const ok = verifyPassword(password, u.salt_hex, u.hash_hex);
-    if (!ok) return res.status(401).json({ ok: false, error: "invalid_login" });
+    const valid = verifyPassword(password, u.salt_hex, u.hash_hex);
+    if (!valid) {
+      return res.status(401).json({ ok: false, error: "invalid_login" });
+    }
 
-    // legacy cookies (fine to keep)
-    res.cookie("tr_course_admin_slug", String(u.slug), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isHttps(req),
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/",
-    });
-    res.cookie("tr_course_admin_email", String(u.email), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isHttps(req),
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/",
-    });
-
-    // ✅ Token (HMAC) — MUST exist for frontend
-    let courseAdminToken = "";
+    // ✅ build token
+    let courseAdminToken;
     try {
       courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email });
     } catch (err) {
-      console.error("❌ course-admin/login token error", err);
-      return res.status(500).json({ ok: false, error: "course_admin_token_failed" });
+      console.error("❌ token generation failed", err);
+      return res.status(500).json({ ok: false, error: "token_failed" });
     }
 
-    res.cookie("tr_course_admin_token", courseAdminToken, {
+    // ✅ IMPORTANT: cross-site safe cookies (Render / separate frontend)
+    const cookieOpts = {
       httpOnly: true,
-      sameSite: "lax",
-      secure: isHttps(req),
+      sameSite: "none",
+      secure: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/",
+    };
+
+    // legacy + token cookies
+    res.cookie("tr_course_admin_slug", u.slug, cookieOpts);
+    res.cookie("tr_course_admin_email", u.email, cookieOpts);
+    res.cookie("tr_course_admin_token", courseAdminToken, cookieOpts);
+
+    console.log("✅ course-admin login OK", {
+      email: u.email,
+      slug: u.slug,
+      tokenLen: courseAdminToken.length,
     });
+
+    res.json({
+      ok: true,
+      slug: u.slug,
+      email: u.email,
+      token: courseAdminToken,
+    });
+  } catch (err) {
+    console.error("❌ course-admin/login error", err);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 
     const response = {
       ok: true,
