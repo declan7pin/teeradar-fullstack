@@ -167,6 +167,7 @@ function getClientIp(req) {
     ""
   );
 }
+
 // ✅ Booking analytics events (used by bookings analytics dashboard)
 async function recordBookingEvent(req, { courseSlug, eventType, payload = {} }) {
   try {
@@ -199,28 +200,11 @@ async function recordBookingEvent(req, { courseSlug, eventType, payload = {} }) 
         JSON.stringify(payload || {}),
       ]
     );
-        // ✅ booking analytics dashboard event
-    recordBookingEvent(req, {
-      courseSlug: slug,
-      eventType: "booking_confirmed",
-      payload: {
-        slug,
-        date,
-        time,
-        holes,
-        players,
-        reference,
-        totalCents,
-        cart_fee_cents,
-        hire_clubs_fee_cents,
-        grossCents: Number(totalCents || 0) + Number(cart_fee_cents || 0) + Number(hire_clubs_fee_cents || 0),
-        email: golfer_email || null,
-      },
-    }).catch(() => {});
   } catch (e) {
     console.warn("booking_analytics_events insert failed (non-fatal):", e?.message || e);
   }
 }
+
 // ✅ Send booking email via Resend (safe)
 async function sendBookingEmail({
   to,
@@ -544,6 +528,32 @@ async function ensureBookingTables() {
   await db.query(`
     CREATE INDEX IF NOT EXISTS booking_bookings_course_date_idx
     ON booking_bookings (course_id, play_date);
+  `);
+
+  // ✅ ADD: booking analytics events table (needed for recordBookingEvent)
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_analytics_events (
+      id BIGSERIAL PRIMARY KEY,
+      course_slug TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      session_id TEXT,
+      user_agent TEXT,
+      ip TEXT,
+      referrer TEXT,
+      path TEXT,
+      payload JSONB NOT NULL DEFAULT '{}'::jsonb
+    );
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_analytics_events_course_time_idx
+    ON booking_analytics_events (course_slug, occurred_at DESC);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_analytics_events_type_time_idx
+    ON booking_analytics_events (event_type, occurred_at DESC);
   `);
 
   console.log("✅ booking tables ready");
@@ -1427,7 +1437,7 @@ router.post("/course-admin/booking-paid", requireCourseAdmin, async (req, res) =
 router.get("/course/:slug", async (req, res) => {
   try {
     const slug = normSlug(req.params.slug);
-        const { rows } = await db.query(
+    const { rows } = await db.query(
       `SELECT id, slug, name, notes, cart_fee_cents, hire_clubs_fee_cents
        FROM booking_courses
        WHERE slug=$1
@@ -1693,6 +1703,25 @@ router.post("/book", async (req, res) => {
           paid: false,
         },
       });
+
+      // ✅ booking analytics dashboard event (THIS is the correct place)
+      recordBookingEvent(req, {
+        courseSlug: slug,
+        eventType: "booking_confirmed",
+        payload: {
+          slug,
+          date,
+          time,
+          holes,
+          players,
+          reference,
+          totalCents,
+          cart_fee_cents,
+          hire_clubs_fee_cents,
+          grossCents,
+          email: golfer_email || null,
+        },
+      }).catch(() => {});
     } catch (err) {
       console.error("❌ booking analytics failed:", err?.message || err);
     }
