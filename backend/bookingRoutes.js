@@ -1265,6 +1265,406 @@ router.get("/admin/analytics/debug", requirePlatformAdmin, async (req, res) => {
   }
 });
 // -----------------------------
+// ✅ Platform admin: booking analytics endpoints (for public/analytics page)
+// These match the frontend calls:
+// /api/book/admin/analytics/top
+// /api/book/admin/analytics/bookings
+// /api/book/admin/analytics/funnel
+// /api/book/admin/analytics/daily
+// /api/book/admin/analytics/export.csv
+// -----------------------------
+
+function _isYmd(s) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(s || "").trim());
+}
+function _parseYmd(s) {
+  const v = String(s || "").trim();
+  if (!_isYmd(v)) return null;
+  return v; // keep as YYYY-MM-DD for SQL ::date
+}
+function _diffDaysInclusive(startYmd, endYmd) {
+  try {
+    const a = new Date(startYmd + "T00:00:00Z");
+    const b = new Date(endYmd + "T00:00:00Z");
+    const ms = b.getTime() - a.getTime();
+    const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+    return days + 1; // inclusive
+  } catch {
+    return null;
+  }
+}
+
+async function _courseIdAndNameFromSlug(slug) {
+  const s = normSlug(slug);
+  if (!s) return null;
+  const r = await db.query(`SELECT id, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [s]);
+  if (!r.rows.length) return null;
+  return { id: r.rows[0].id, name: r.rows[0].name };
+}
+
+function _csvEscape(v) {
+  const s = String(v ?? "");
+  if (/[,"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+// 1) TOP courses by bookings (last 30d, or within start/end if provided)
+router.get("/admin/analytics/top", requirePlatformAdmin, async (req, res) => {
+  try {
+    const start = _parseYmd(req.query.start);
+    const end = _parseYmd(req.query.end);
+
+    // default last 30 days
+    let where = `WHERE b.created_at >= NOW() - INTERVAL '30 days'`;
+    const params = [];
+
+    if (start && end) {
+      params.push(start, end);
+      where = `WHERE b.created_at::date BETWEEN $1::date AND $2::date`;
+    } else if (start && !end) {
+      params.push(start);
+      where = `WHERE b.created_at::date >= $1::date`;
+    } else if (!start && end) {
+      params.push(end);
+      where = `WHERE b.created_at::date <= $1::date`;
+    }
+
+    const q = `
+      SELECT c.slug AS course_slug, COUNT(*)::int AS bookings
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      ${where}
+      GROUP BY c.slug
+      ORDER BY COUNT(*) DESC
+      LIMIT 200;
+    `;
+
+    const r = await db.query(q, params);
+    res.json({ ok: true, rows: r.rows || [] });
+  } catch (e) {
+    console.error("admin/analytics/top", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// 2) Bookings counters: today / week / month (or interpret start/end as preset)
+router.get("/admin/analytics/bookings", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.query.slug || "");
+    const start = _parseYmd(req.query.start);
+    const end = _parseYmd(req.query.end);
+
+    let courseId = null;
+    if (slug) {
+      const c = await _courseIdAndNameFromSlug(slug);
+      if (!c) return res.json({ ok: true, bookings: { today: 0, week: 0, month: 0 } });
+      courseId = c.id;
+    }
+
+    // If the UI passed a range (today/week/month buttons set the date inputs),
+    // interpret it as a "preset":
+    // - single day => today
+    // - <= 7 days => week
+    // - otherwise => month
+    const wantsPreset = !!(start && end);
+    const spanDays = wantsPreset ? _diffDaysInclusive(start, end) : null;
+
+    const whereCourse = courseId ? `AND b.course_id = $1` : "";
+    const p = [];
+    if (courseId) p.push(courseId);
+
+    // helpers
+    async function countWhere(extraSql, extraParams = []) {
+      const params = p.concat(extraParams);
+      const idx = params.length - extraParams.length + 1; // first extra param index
+      // extraSql must use $<idx>... if it needs params
+      const q = `
+        SELECT COUNT(*)::int AS n
+        FROM booking_bookings b
+        WHERE 1=1
+          ${whereCourse}
+          ${extraSql}
+      `;
+      const r = await db.query(q, params);
+      return Number(r.rows[0]?.n || 0);
+    }
+
+    let today = 0, week = 0, month = 0;
+
+    if (wantsPreset && spanDays != null) {
+      // preset mode (range buttons)
+      if (spanDays <= 1) {
+        // TODAY preset
+        today = await countWhere(`AND b.created_at::date = $${p.length + 1}::date`, [start]);
+        week = 0;
+        month = 0;
+      } else if (spanDays <= 7) {
+        // WEEK preset
+        week = await countWhere(
+          `AND b.created_at::date BETWEEN $${p.length + 1}::date AND $${p.length + 2}::date`,
+          [start, end]
+        );
+        today = 0;
+        month = 0;
+      } else {
+        // MONTH preset (or custom long range)
+        month = await countWhere(
+          `AND b.created_at::date BETWEEN $${p.length + 1}::date AND $${p.length + 2}::date`,
+          [start, end]
+        );
+        today = 0;
+        week = 0;
+      }
+    } else {
+      // normal mode
+      today = await countWhere(`AND b.created_at::date = CURRENT_DATE`);
+      week = await countWhere(`AND b.created_at >= date_trunc('week', NOW())`);
+      month = await countWhere(`AND b.created_at >= date_trunc('month', NOW())`);
+    }
+
+    res.json({ ok: true, bookings: { today, week, month } });
+  } catch (e) {
+    console.error("admin/analytics/bookings", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// 3) Funnel (last N days) based on EXISTING analytics events you already record
+// Views  = booking_course_view
+// Times  = booking_availability_search
+// Started = booking_created (proxy)
+// Confirmed = booking_created (same for now)
+router.get("/admin/analytics/funnel", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.query.slug || "");
+    const days = Number(req.query.days || 30);
+    const range = Number.isFinite(days) && days > 0 ? `${days} days` : "30 days";
+
+    let courseName = null;
+    if (slug) {
+      const c = await db.query(`SELECT name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+      if (!c.rows.length) {
+        return res.json({
+          ok: true,
+          funnel: { views: 0, times: 0, started: 0, confirmed: 0 },
+          conversion: { view_to_confirmed: 0, times_to_confirmed: 0, started_to_confirmed: 0 },
+        });
+      }
+      courseName = c.rows[0].name;
+    }
+
+    // Build optional course filter
+    const courseFilter = courseName ? `AND course_name = $2` : "";
+    const params = courseName ? [range, courseName] : [range];
+
+    const viewsQ = await db.query(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM analytics
+      WHERE type='booking_course_view'
+        AND occurred_at >= NOW() - $1::interval
+        ${courseFilter}
+      `,
+      params
+    );
+    const timesQ = await db.query(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM analytics
+      WHERE type='booking_availability_search'
+        AND occurred_at >= NOW() - $1::interval
+        ${courseFilter}
+      `,
+      params
+    );
+    const confirmedQ = await db.query(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM analytics
+      WHERE type='booking_created'
+        AND occurred_at >= NOW() - $1::interval
+        ${courseFilter}
+      `,
+      params
+    );
+
+    const views = Number(viewsQ.rows[0]?.n || 0);
+    const times = Number(timesQ.rows[0]?.n || 0);
+    const confirmed = Number(confirmedQ.rows[0]?.n || 0);
+
+    // proxy for now (until you log a true "booking_started")
+    const started = confirmed;
+
+    const conv = {
+      view_to_confirmed: views > 0 ? confirmed / views : 0,
+      times_to_confirmed: times > 0 ? confirmed / times : 0,
+      started_to_confirmed: started > 0 ? confirmed / started : 0,
+    };
+
+    res.json({
+      ok: true,
+      funnel: { views, times, started, confirmed },
+      conversion: conv,
+    });
+  } catch (e) {
+    console.error("admin/analytics/funnel", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// 4) Daily series for charts (bookings + revenue) from booking_bookings
+router.get("/admin/analytics/daily", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.query.slug || "");
+    const start = _parseYmd(req.query.start);
+    const end = _parseYmd(req.query.end);
+
+    let courseId = null;
+    if (slug) {
+      const c = await _courseIdAndNameFromSlug(slug);
+      if (!c) return res.json({ ok: true, rows: [] });
+      courseId = c.id;
+    }
+
+    const params = [];
+    let where = `WHERE 1=1`;
+
+    if (courseId) {
+      params.push(courseId);
+      where += ` AND b.course_id = $${params.length}`;
+    }
+
+    if (start && end) {
+      params.push(start, end);
+      where += ` AND b.created_at::date BETWEEN $${params.length - 1}::date AND $${params.length}::date`;
+    } else if (start && !end) {
+      params.push(start);
+      where += ` AND b.created_at::date >= $${params.length}::date`;
+    } else if (!start && end) {
+      params.push(end);
+      where += ` AND b.created_at::date <= $${params.length}::date`;
+    } else {
+      // default last 30 days
+      where += ` AND b.created_at >= NOW() - INTERVAL '30 days'`;
+    }
+
+    const r = await db.query(
+      `
+      SELECT
+        b.created_at::date::text AS day,
+        COUNT(*)::int AS bookings,
+        COALESCE(SUM(b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents), 0)::bigint AS revenue_cents
+      FROM booking_bookings b
+      ${where}
+      GROUP BY b.created_at::date
+      ORDER BY b.created_at::date ASC;
+      `,
+      params
+    );
+
+    res.json({ ok: true, rows: r.rows || [] });
+  } catch (e) {
+    console.error("admin/analytics/daily", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// 5) CSV export of bookings (uses booking_bookings)
+router.get("/admin/analytics/export.csv", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.query.slug || "");
+    const start = _parseYmd(req.query.start);
+    const end = _parseYmd(req.query.end);
+
+    let courseId = null;
+    if (slug) {
+      const c = await _courseIdAndNameFromSlug(slug);
+      if (!c) {
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="teeradar_bookings.csv"`);
+        return res.send("course_slug,created_at,play_date,tee_time,holes,players,name,email,phone,reference,paid,gross_cents\n");
+      }
+      courseId = c.id;
+    }
+
+    const params = [];
+    let where = `WHERE 1=1`;
+
+    if (courseId) {
+      params.push(courseId);
+      where += ` AND b.course_id = $${params.length}`;
+    }
+
+    if (start && end) {
+      params.push(start, end);
+      where += ` AND b.created_at::date BETWEEN $${params.length - 1}::date AND $${params.length}::date`;
+    } else if (start && !end) {
+      params.push(start);
+      where += ` AND b.created_at::date >= $${params.length}::date`;
+    } else if (!start && end) {
+      params.push(end);
+      where += ` AND b.created_at::date <= $${params.length}::date`;
+    } else {
+      where += ` AND b.created_at >= NOW() - INTERVAL '30 days'`;
+    }
+
+    const r = await db.query(
+      `
+      SELECT
+        c.slug AS course_slug,
+        b.created_at,
+        b.play_date::text AS play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.golfer_name,
+        b.golfer_email,
+        b.golfer_phone,
+        b.reference,
+        b.paid,
+        (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents)::bigint AS gross_cents
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      ${where}
+      ORDER BY b.created_at DESC
+      LIMIT 5000;
+      `,
+      params
+    );
+
+    const header = [
+      "course_slug","created_at","play_date","tee_time","holes","players",
+      "name","email","phone","reference","paid","gross_cents"
+    ].join(",");
+
+    const lines = (r.rows || []).map(row => {
+      return [
+        _csvEscape(row.course_slug),
+        _csvEscape(row.created_at ? new Date(row.created_at).toISOString() : ""),
+        _csvEscape(row.play_date),
+        _csvEscape(row.tee_time),
+        _csvEscape(row.holes),
+        _csvEscape(row.players),
+        _csvEscape(row.golfer_name),
+        _csvEscape(row.golfer_email),
+        _csvEscape(row.golfer_phone),
+        _csvEscape(row.reference),
+        _csvEscape(row.paid ? "true" : "false"),
+        _csvEscape(row.gross_cents ?? 0),
+      ].join(",");
+    });
+
+    const csv = [header].concat(lines).join("\n") + "\n";
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="teeradar_bookings.csv"`);
+    res.send(csv);
+  } catch (e) {
+    console.error("admin/analytics/export.csv", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+// -----------------------------
 // ✅ Course admin endpoints
 // -----------------------------
 async function courseIdFromSlug(slug) {
