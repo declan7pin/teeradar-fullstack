@@ -1435,8 +1435,12 @@ async function loadBookingAnalytics(mode = "default") {
     const bookingsSeries = daily.rows.map(r => Number(r.bookings || 0));
     const revenueSeries = daily.rows.map(r => Number(r.revenue_cents || 0) / 100);
 
-    drawSimpleLine("chartBookings", labels, bookingsSeries);
-    drawSimpleLine("chartRevenue", labels, revenueSeries);
+    drawSimpleLine("chartBookings", labels, bookingsSeries, {
+  valueFormatter: (n) => `${Number(n || 0)} bookings`
+});
+drawSimpleLine("chartRevenue", labels, revenueSeries, {
+  valueFormatter: (n) => `$${Number(n || 0).toFixed(0)}`
+});
   } else {
     drawSimpleLine("chartBookings", [], []);
     drawSimpleLine("chartRevenue", [], []);
