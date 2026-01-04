@@ -635,7 +635,21 @@
     </div>
   </section>
 </main>
-
+<div id="chartTip" style="
+  position:fixed;
+  display:none;
+  z-index:9999;
+  pointer-events:none;
+  background:#0f172a;
+  color:#fff;
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:12px;
+  line-height:1.25;
+  box-shadow:0 10px 20px rgba(0,0,0,.18);
+  transform:translate(-50%,-110%);
+  max-width:260px;
+"></div>
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 window.addEventListener("error", (e) => {
