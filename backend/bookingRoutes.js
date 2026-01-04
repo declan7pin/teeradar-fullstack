@@ -113,7 +113,23 @@ function isHttps(req) {
   const xfProto = String(req.headers["x-forwarded-proto"] || "");
   return req.secure || xfProto.includes("https");
 }
+// ✅ Cookie helpers (fix cookies not being saved cross-domain / on Render)
+function cookieSameSite(req) {
+  const origin = String(req.headers.origin || "");
+  const host = String(req.headers.host || "");
+  const crossSite = origin && host && !origin.includes(host);
+  return crossSite ? "none" : "lax";
+}
 
+function baseCookieOpts(req) {
+  return {
+    httpOnly: true,
+    sameSite: cookieSameSite(req),
+    secure: isHttps(req), // MUST be true when sameSite="none"
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: "/",
+  };
+}
 function requirePlatformAdmin(req, res, next) {
   if (!ADMIN_SECRET) {
     return res.status(500).json({ ok: false, error: "BOOKING_ADMIN_SECRET not set" });
