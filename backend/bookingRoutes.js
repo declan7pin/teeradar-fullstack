@@ -167,7 +167,42 @@ function getClientIp(req) {
     ""
   );
 }
+// ✅ Booking analytics events (used by bookings analytics dashboard)
+async function recordBookingEvent(req, { courseSlug, eventType, payload = {} }) {
+  try {
+    const slug = String(courseSlug || "").trim().toLowerCase() || null;
+    const type = String(eventType || "").trim();
 
+    if (!slug || !type) return;
+
+    const sessionId =
+      String(req.headers["x-session-id"] || "").trim() ||
+      String(req.body?.sessionId || "").trim() ||
+      String(req.query?.sessionId || "").trim() ||
+      null;
+
+    await db.query(
+      `
+      INSERT INTO booking_analytics_events
+        (course_slug, event_type, occurred_at, session_id, user_agent, ip, referrer, path, payload)
+      VALUES
+        ($1, $2, now(), $3, $4, $5, $6, $7, $8::jsonb)
+      `,
+      [
+        slug,
+        type,
+        sessionId,
+        String(req.headers["user-agent"] || "") || null,
+        getClientIp(req) || null,
+        String(req.headers["referer"] || "") || null,
+        String(req.originalUrl || req.path || "") || null,
+        JSON.stringify(payload || {}),
+      ]
+    );
+  } catch (e) {
+    console.warn("booking_analytics_events insert failed (non-fatal):", e?.message || e);
+  }
+}
 // ✅ Send booking email via Resend (safe)
 async function sendBookingEmail({
   to,
