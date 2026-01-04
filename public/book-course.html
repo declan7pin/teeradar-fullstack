@@ -419,7 +419,36 @@ const CART_FEE_CENTS  = 2500; // $25
       wrap.innerHTML = `<div class="sub">No times available in this window.</div>`;
       return;
     }
+function moneyFromCents(cents){
+  const n = Number(cents || 0) / 100;
+  return "$" + n.toFixed(0);
+}
 
+function computeTotalCents(slot){
+  const players = Number($("players").value || 1);
+  const perPlayer = Number(slot.pricePerPlayerCents ?? slot.pricePerPlayer ?? 0) * 100; 
+  // your slots currently use dollars; keep safe:
+  const perPlayerCents = slot.pricePerPlayerCents != null
+    ? Number(slot.pricePerPlayerCents || 0)
+    : Math.round(Number(slot.pricePerPlayer || 0) * 100);
+
+  let total = perPlayerCents * players;
+
+  const clubs = !!$("addClubs")?.checked;
+  const cart = !!$("addCart")?.checked;
+
+  if (clubs) total += CLUBS_FEE_CENTS;
+  if (cart) total += CART_FEE_CENTS;
+
+  return total;
+}
+
+function updateModalTotal(){
+  if (!selectedSlot) return;
+  const totalCents = computeTotalCents(selectedSlot);
+  const mTotal = $("mTotal");
+  if (mTotal) mTotal.textContent = moneyFromCents(totalCents);
+}
     const wantPlayers = Number($("players").value);
 
     list.forEach((t) => {
