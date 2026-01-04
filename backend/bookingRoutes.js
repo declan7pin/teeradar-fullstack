@@ -1425,7 +1425,11 @@ router.get("/course/:slug", async (req, res) => {
       courseName: rows[0].name,
       meta: { slug },
     }).catch(() => {});
-
+    recordBookingEvent(req, {
+      courseSlug: slug,
+      eventType: "course_view",
+      payload: { slug },
+    }).catch(() => {});
     res.json({ ok: true, course: rows[0] });
   } catch (e) {
     console.error("course/:slug", e);
