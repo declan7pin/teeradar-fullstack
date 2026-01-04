@@ -1123,78 +1123,57 @@ router.get("/admin/analytics/summary", requirePlatformAdmin, async (req, res) =>
     const days = Number(req.query.days || 7);
     const range = Number.isFinite(days) && days > 0 ? `${days} days` : "7 days";
 
-    // Bookings + gross from booking_bookings (truth)
-    const totals = await db.query(
+    // 1️⃣ BOOKINGS (ground truth)
+    const bookings = await db.query(
       `
       SELECT
         COUNT(*)::int AS bookings,
-        COALESCE(SUM(
-          COALESCE(total_cents,0)
-          + COALESCE(cart_fee_cents,0)
-          + COALESCE(hire_clubs_fee_cents,0)
-        ), 0)::bigint AS gross_cents
+        COALESCE(SUM(total_cents + cart_fee_cents + hire_clubs_fee_cents), 0)::bigint AS gross_cents
       FROM booking_bookings
       WHERE created_at >= NOW() - $1::interval
       `,
       [range]
     );
 
-    // Top courses
+    // 2️⃣ FUNNEL (from analytics table)
+    const funnel = await db.query(
+      `
+      SELECT
+        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_course_view' AND occurred_at >= NOW() - $1::interval) AS course_views,
+        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_availability_search' AND occurred_at >= NOW() - $1::interval) AS availability_searches,
+        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_created' AND occurred_at >= NOW() - $1::interval) AS bookings
+      `,
+      [range]
+    );
+
+    // 3️⃣ TOP COURSES
     const topCourses = await db.query(
       `
       SELECT
-        c.name AS "courseName",
-        COUNT(*)::int AS "bookings",
-        COALESCE(SUM(
-          COALESCE(b.total_cents,0)
-          + COALESCE(b.cart_fee_cents,0)
-          + COALESCE(b.hire_clubs_fee_cents,0)
-        ), 0)::bigint AS "grossCents"
-      FROM booking_bookings b
-      JOIN booking_courses c ON c.id = b.course_id
-      WHERE b.created_at >= NOW() - $1::interval
-      GROUP BY c.name
-      ORDER BY COUNT(*) DESC
+        course_name AS "courseName",
+        COUNT(*)::int AS bookings
+      FROM analytics
+      WHERE type='booking_created'
+        AND occurred_at >= NOW() - $1::interval
+        AND course_name IS NOT NULL
+      GROUP BY course_name
+      ORDER BY bookings DESC
       LIMIT 10
       `,
       [range]
     );
 
-    // Funnel from booking_analytics_events
-    const funnel = await db.query(
-      `
-      SELECT
-        (SELECT COUNT(*)::int
-         FROM booking_analytics_events
-         WHERE event_type='course_view'
-           AND occurred_at >= NOW() - $1::interval) AS course_views,
-
-        (SELECT COUNT(*)::int
-         FROM booking_analytics_events
-         WHERE event_type='times_view'
-           AND occurred_at >= NOW() - $1::interval) AS availability_searches,
-
-        (SELECT COUNT(*)::int
-         FROM booking_analytics_events
-         WHERE event_type='booking_confirmed'
-           AND occurred_at >= NOW() - $1::interval) AS bookings
-      `,
-      [range]
-    );
-
-    const grossCents = Number(totals.rows[0]?.gross_cents || 0);
-
     res.json({
       ok: true,
-      days: days || 7,
-      bookings: totals.rows[0]?.bookings || 0,
-      grossCents,
-      gross: grossCents / 100,
-      funnel: funnel.rows[0] || { course_views: 0, availability_searches: 0, bookings: 0 },
+      days,
+      bookings: bookings.rows[0]?.bookings || 0,
+      grossCents: Number(bookings.rows[0]?.gross_cents || 0),
+      gross: Number(bookings.rows[0]?.gross_cents || 0) / 100,
+      funnel: funnel.rows[0],
       topCourses: topCourses.rows || [],
     });
   } catch (e) {
-    console.error("admin booking analytics", e);
+    console.error("admin analytics summary", e);
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
