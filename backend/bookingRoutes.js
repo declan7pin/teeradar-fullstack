@@ -1467,7 +1467,11 @@ router.get("/availability", async (req, res) => {
       courseName: c.rows[0].name,
       meta: { slug, date, holes, players, earliest, latest },
     }).catch(() => {});
-
+    recordBookingEvent(req, {
+      courseSlug: slug,
+      eventType: "times_view",
+      payload: { slug, date, holes, players, earliest, latest },
+    }).catch(() => {});
     const { rows } = await db.query(
       `
       SELECT tee_time, max_players, booked_players, holes, price_per_player_cents
