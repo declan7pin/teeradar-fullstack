@@ -337,7 +337,13 @@ router.get("/api/book/course-admin/analytics/daily", requireCourseAdminOrBypass,
       FROM booking_analytics_events
       WHERE course_slug = $1
         AND occurred_at >= now() - ($2::int || ' days')::interval
-        AND event_type IN ('course_page_view','times_view','booking_started','booking_confirmed')
+        AND AND event_type IN (
+  'course_page_view',
+  'times_view',
+  'booking_started',
+  'booking_confirmed',
+  'course_booking_click'
+)
       GROUP BY 1,2
       ORDER BY 1 ASC
       `,
@@ -546,7 +552,13 @@ router.get("/api/book/admin/analytics/funnel", async (req, res) => {
         COUNT(*) FILTER (WHERE event_type='booking_confirmed')::int AS confirmed
       FROM booking_analytics_events
       WHERE occurred_at >= now() - ($1::int || ' days')::interval
-        AND event_type IN ('course_page_view','times_view','booking_started','booking_confirmed')
+        AND AND event_type IN (
+  'course_page_view',
+  'times_view',
+  'booking_started',
+  'booking_confirmed',
+  'course_booking_click'
+)
       ${whereSlug}
       `,
       params
