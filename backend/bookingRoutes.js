@@ -199,6 +199,24 @@ async function recordBookingEvent(req, { courseSlug, eventType, payload = {} }) 
         JSON.stringify(payload || {}),
       ]
     );
+        // ✅ booking analytics dashboard event
+    recordBookingEvent(req, {
+      courseSlug: slug,
+      eventType: "booking_confirmed",
+      payload: {
+        slug,
+        date,
+        time,
+        holes,
+        players,
+        reference,
+        totalCents,
+        cart_fee_cents,
+        hire_clubs_fee_cents,
+        grossCents: Number(totalCents || 0) + Number(cart_fee_cents || 0) + Number(hire_clubs_fee_cents || 0),
+        email: golfer_email || null,
+      },
+    }).catch(() => {});
   } catch (e) {
     console.warn("booking_analytics_events insert failed (non-fatal):", e?.message || e);
   }
