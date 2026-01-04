@@ -1214,20 +1214,48 @@ function buildBookUrl(path, paramsObj) {
   return u.pathname + "?" + u.searchParams.toString();
 }
 
-function drawSimpleLine(canvasId, labels, values) {
+// --- simple tooltip helpers ---
+function showChartTip(clientX, clientY, html) {
+  const tip = document.getElementById("chartTip");
+  if (!tip) return;
+  tip.innerHTML = html;
+  tip.style.left = clientX + "px";
+  tip.style.top = clientY + "px";
+  tip.style.display = "block";
+}
+function hideChartTip() {
+  const tip = document.getElementById("chartTip");
+  if (!tip) return;
+  tip.style.display = "none";
+}
+
+// Store hit targets per canvas
+const CHART_HITS = {}; // { [canvasId]: { points: [{cx,cy,r,label,value}], dpr } }
+
+function drawSimpleLine(canvasId, labels, values, opts = {}) {
   const c = document.getElementById(canvasId);
   if (!c) return;
+
   const ctx = c.getContext("2d");
+  const dpr = (window.devicePixelRatio || 1);
 
-  const w = c.width = c.clientWidth * (window.devicePixelRatio || 1);
-  const h = c.height = (c.getAttribute("height") ? Number(c.getAttribute("height")) : 160) * (window.devicePixelRatio || 1);
+  const cssW = c.clientWidth || 300;
+  const cssH = (c.getAttribute("height") ? Number(c.getAttribute("height")) : 160);
 
+  // set internal size for crisp drawing
+  c.width = Math.round(cssW * dpr);
+  c.height = Math.round(cssH * dpr);
+
+  const w = c.width, h = c.height;
   ctx.clearRect(0, 0, w, h);
 
-  const pad = 18 * (window.devicePixelRatio || 1);
-  const max = Math.max(1, ...values.map(v => Number(v || 0)));
+  const pad = 18 * dpr;
+
+  const nums = (values || []).map(v => Number(v || 0));
+  const max = Math.max(1, ...nums);
   const min = 0;
 
+  // axes
   ctx.globalAlpha = 0.25;
   ctx.beginPath();
   ctx.moveTo(pad, pad);
@@ -1236,28 +1264,104 @@ function drawSimpleLine(canvasId, labels, values) {
   ctx.stroke();
   ctx.globalAlpha = 1;
 
-  if (!values.length) return;
+  if (!nums.length) {
+    CHART_HITS[canvasId] = { points: [], dpr };
+    return;
+  }
 
-  const xStep = (w - pad * 2) / Math.max(1, values.length - 1);
-  const yScale = (h - pad * 2) / (max - min);
+  const xStep = (w - pad * 2) / Math.max(1, nums.length - 1);
+  const yScale = (h - pad * 2) / (max - min || 1);
 
+  // line
   ctx.beginPath();
-  values.forEach((v, i) => {
+  nums.forEach((v, i) => {
     const x = pad + xStep * i;
-    const y = (h - pad) - (Number(v || 0) - min) * yScale;
+    const y = (h - pad) - (v - min) * yScale;
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
   ctx.stroke();
 
-  values.forEach((v, i) => {
+  // dots + record hit targets
+  const points = [];
+  const dotR = 2.8 * dpr;
+  nums.forEach((v, i) => {
     const x = pad + xStep * i;
-    const y = (h - pad) - (Number(v || 0) - min) * yScale;
+    const y = (h - pad) - (v - min) * yScale;
+
     ctx.beginPath();
-    ctx.arc(x, y, 2.5 * (window.devicePixelRatio || 1), 0, Math.PI * 2);
+    ctx.arc(x, y, dotR, 0, Math.PI * 2);
     ctx.fill();
+
+    points.push({
+      cx: x,
+      cy: y,
+      r: 10 * dpr, // hit radius (bigger than visible dot)
+      label: (labels && labels[i]) ? String(labels[i]) : "",
+      value: v
+    });
   });
+
+  CHART_HITS[canvasId] = { points, dpr };
+
+  // wire once
+  if (!c._hitWired) {
+    c._hitWired = true;
+
+    const handler = (ev) => {
+      // support mouse + touch
+      const e = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+      const rect = c.getBoundingClientRect();
+
+      // coords in canvas pixels
+      const x = (e.clientX - rect.left) * dpr;
+      const y = (e.clientY - rect.top) * dpr;
+
+      const hit = CHART_HITS[canvasId];
+      if (!hit || !hit.points || !hit.points.length) return;
+
+      let best = null;
+      let bestDist = Infinity;
+
+      hit.points.forEach((p) => {
+        const dx = x - p.cx;
+        const dy = y - p.cy;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist <= p.r && dist < bestDist) {
+          best = p;
+          bestDist = dist;
+        }
+      });
+
+      if (best) {
+        const fmt = opts.valueFormatter || ((n) => String(n));
+        const title = best.label ? `<div style="opacity:.85">${best.label}</div>` : "";
+        const val = `<div style="font-weight:800;font-size:13px;margin-top:2px;">${fmt(best.value)}</div>`;
+        showChartTip(e.clientX, e.clientY, title + val);
+
+        // hide after a moment
+        clearTimeout(c._tipTimer);
+        c._tipTimer = setTimeout(hideChartTip, 2200);
+
+        ev.preventDefault?.();
+      } else {
+        hideChartTip();
+      }
+    };
+
+    // click + touch
+    c.addEventListener("click", handler, { passive: false });
+    c.addEventListener("touchstart", handler, { passive: false });
+  }
 }
+
+// hide tooltip when scrolling / tapping elsewhere
+window.addEventListener("scroll", hideChartTip, { passive: true });
+document.addEventListener("click", (e) => {
+  const tip = document.getElementById("chartTip");
+  if (!tip) return;
+  if (!e.target.closest || !e.target.closest("canvas")) hideChartTip();
+});
 
 async function loadBookingAnalytics(mode = "default") {
   if (!enforceAdmin()) return;
