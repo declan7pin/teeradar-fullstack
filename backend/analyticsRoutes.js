@@ -446,31 +446,47 @@ function buildSqliteSummaryFromEvents(events = []) {
 // shared handler for summary so we can serve both "/" and "/summary"
 async function handleSummary(req, res) {
   try {
-    // ✅ Use the events you can already see working
+    // ✅ Prefer Postgres as source of truth
+    const pg = await buildPgSummary();
+
+    const pgHasSignal =
+      Number(pg.homePageViews || 0) > 0 ||
+      Number(pg.courseBookingClicks || 0) > 0 ||
+      Number(pg.searches || 0) > 0 ||
+      Number(pg.newUsers || 0) > 0 ||
+      Number(pg.roundsPlayed || 0) > 0 ||
+      Number(pg.alertsSent7d || 0) > 0 ||
+      Number(pg.alertHits7d || 0) > 0 ||
+      Number(pg.alertsSentAllTime || 0) > 0 ||
+      Number(pg.alertHitsAllTime || 0) > 0;
+
+    if (pgHasSignal) return res.json(pg);
+
+    // ✅ If Postgres is truly empty, fall back to SQLite (if available)
     const events =
       typeof getAllEvents === "function"
-        ? await Promise.resolve(getAllEvents(5000))
+        ? await Promise.resolve(getAllEvents(20000))
         : [];
 
     const sqliteSummary = buildSqliteSummaryFromEvents(events || []);
-    const sqliteHasSignal =
-      Number(sqliteSummary.homePageViews || 0) > 0 ||
-      Number(sqliteSummary.courseBookingClicks || 0) > 0 ||
-      Number(sqliteSummary.searches || 0) > 0 ||
-      Number(sqliteSummary.newUsers || 0) > 0 ||
-      Number(sqliteSummary.roundsPlayed || 0) > 0;
-
-    if (sqliteHasSignal) return res.json(sqliteSummary);
-
-    // If truly empty, fall back to Postgres
-    const pg = await buildPgSummary();
-    return res.json(pg);
+    return res.json(sqliteSummary);
   } catch (e) {
-    console.error("Error building analytics summary", e);
-    return res.status(500).json({ error: "Failed to load analytics summary" });
+    console.warn("Postgres summary failed, falling back to SQLite:", e?.message || e);
+
+    try {
+      const events =
+        typeof getAllEvents === "function"
+          ? await Promise.resolve(getAllEvents(20000))
+          : [];
+
+      const sqliteSummary = buildSqliteSummaryFromEvents(events || []);
+      return res.json(sqliteSummary);
+    } catch (err) {
+      console.error("Error building analytics summary", err);
+      return res.status(500).json({ error: "Failed to load analytics summary" });
+    }
   }
 }
-
 /**
  * GET /api/analytics
  */
