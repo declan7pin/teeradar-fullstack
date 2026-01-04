@@ -676,16 +676,17 @@ router.post("/course-admin/login", async (req, res) => {
       return res.status(401).json({ ok: false, error: "invalid_login" });
     }
 
-    // ✅ build token
     let courseAdminToken;
     try {
       courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email });
     } catch (err) {
-      console.error("❌ token generation failed", err);
-      return res.status(500).json({ ok: false, error: "token_failed" });
+      console.error("❌ course-admin/login token error", err);
+      return res.status(500).json({ ok: false, error: "course_admin_token_failed" });
     }
 
-    // ✅ IMPORTANT: cross-site safe cookies (Render / separate frontend)
+    // ✅ Cookie options:
+    // - Render production (frontend on different domain): SameSite=None + Secure=true
+    // - Local dev (http): this cookie won't set (that’s OK if you test on prod)
     const cookieOpts = {
       httpOnly: true,
       sameSite: "none",
@@ -694,26 +695,27 @@ router.post("/course-admin/login", async (req, res) => {
       path: "/",
     };
 
-    // legacy + token cookies
-    res.cookie("tr_course_admin_slug", u.slug, cookieOpts);
-    res.cookie("tr_course_admin_email", u.email, cookieOpts);
-    res.cookie("tr_course_admin_token", courseAdminToken, cookieOpts);
+    res.cookie("tr_course_admin_slug", String(u.slug), cookieOpts);
+    res.cookie("tr_course_admin_email", String(u.email), cookieOpts);
+    res.cookie("tr_course_admin_token", String(courseAdminToken), cookieOpts);
 
-    console.log("✅ course-admin login OK", {
+    console.log("✅ course-admin/login OK", {
       email: u.email,
       slug: u.slug,
       tokenLen: courseAdminToken.length,
     });
 
-    res.json({
+    return res.json({
       ok: true,
       slug: u.slug,
       email: u.email,
       token: courseAdminToken,
+      courseAdminToken: courseAdminToken,
+      accessToken: courseAdminToken,
     });
-  } catch (err) {
-    console.error("❌ course-admin/login error", err);
-    res.status(500).json({ ok: false, error: "internal_error" });
+  } catch (e) {
+    console.error("course-admin/login", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
