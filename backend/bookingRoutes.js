@@ -1198,7 +1198,7 @@ router.get("/admin/analytics/summary", requirePlatformAdmin, async (req, res) =>
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
+console.log("✅ HIT /admin/analytics/summary", { hasSecret: !!req.query.secret, hasCookie: !!req.cookies?.tr_book_admin });
 // -----------------------------
 // ✅ Course admin endpoints
 // -----------------------------
