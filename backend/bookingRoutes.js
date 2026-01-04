@@ -113,6 +113,7 @@ function isHttps(req) {
   const xfProto = String(req.headers["x-forwarded-proto"] || "");
   return req.secure || xfProto.includes("https");
 }
+
 // ✅ Cookie helpers (fix cookies not being saved cross-domain / on Render)
 function cookieSameSite(req) {
   const origin = String(req.headers.origin || "");
@@ -130,6 +131,7 @@ function baseCookieOpts(req) {
     path: "/",
   };
 }
+
 function requirePlatformAdmin(req, res, next) {
   if (!ADMIN_SECRET) {
     return res.status(500).json({ ok: false, error: "BOOKING_ADMIN_SECRET not set" });
@@ -407,23 +409,9 @@ function requireCourseAdmin(req, res, next) {
         return res.status(400).json({ ok: false, error: "slug_required" });
       }
 
-      // ✅ CRITICAL FIX:
-      // When bypass works via fetch headers, set cookies so
-      // normal browser navigations (View bookings / Daily sheet) also work.
-      res.cookie("tr_course_admin_bypass", providedKey, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: isHttps(req),
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      });
-      res.cookie("tr_course_admin_slug", slug, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: isHttps(req),
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      });
+      // ✅ When bypass works via fetch headers, set cookies so normal browser navigations also work.
+      res.cookie("tr_course_admin_bypass", providedKey, baseCookieOpts(req));
+      res.cookie("tr_course_admin_slug", slug, baseCookieOpts(req));
 
       req.courseAdmin = { slug, email: "bypass@teeradar" };
       return next();
@@ -589,7 +577,6 @@ router.post("/admin/login", (req, res) => {
   }
 
   res.cookie("tr_book_admin", "1", baseCookieOpts(req));
-
   res.json({ ok: true });
 });
 
@@ -643,7 +630,7 @@ router.post("/admin/course-admin", requirePlatformAdmin, async (req, res) => {
 });
 
 // -----------------------------
-// ✅ Course admin login
+// ✅ Course admin login  ✅ FIXED (this was your syntax issue)
 // -----------------------------
 router.post("/course-admin/login", async (req, res) => {
   try {
@@ -676,7 +663,7 @@ router.post("/course-admin/login", async (req, res) => {
       return res.status(401).json({ ok: false, error: "invalid_login" });
     }
 
-    let courseAdminToken;
+    let courseAdminToken = "";
     try {
       courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email });
     } catch (err) {
@@ -684,39 +671,10 @@ router.post("/course-admin/login", async (req, res) => {
       return res.status(500).json({ ok: false, error: "course_admin_token_failed" });
     }
 
-    // ✅ Cookie options:
-    // - Render production (frontend on different domain): SameSite=None + Secure=true
-    // - Local dev (http): this cookie won't set (that’s OK if you test on prod)
-    const cookieOpts = {
-      httpOnly: true,
-      sameSite: "none",
-      secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/",
-    };
-
-    res.cookie("tr_course_admin_slug", String(u.slug), cookieOpts);
-    res.cookie("tr_course_admin_email", String(u.email), cookieOpts);
-    res.cookie("tr_course_admin_token", String(courseAdminToken), cookieOpts);
-
-    console.log("✅ course-admin/login OK", {
-      email: u.email,
-      slug: u.slug,
-      tokenLen: courseAdminToken.length,
-    });
-
-    return res.json({
-      ok: true,
-      slug: u.slug,
-      email: u.email,
-      token: courseAdminToken,
-      courseAdminToken: courseAdminToken,
-      accessToken: courseAdminToken,
-    });
-    console.error("course-admin/login", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
+    // ✅ Set cookies using your helper (handles cross-site properly)
+    res.cookie("tr_course_admin_slug", String(u.slug), baseCookieOpts(req));
+    res.cookie("tr_course_admin_email", String(u.email), baseCookieOpts(req));
+    res.cookie("tr_course_admin_token", String(courseAdminToken), baseCookieOpts(req));
 
     const response = {
       ok: true,
@@ -738,10 +696,10 @@ router.post("/course-admin/login", async (req, res) => {
       usingAdminFallback: !!ADMIN_SECRET && !COURSE_ADMIN_JWT_SECRET && !JWT_SECRET_FALLBACK,
     });
 
-    res.json(response);
+    return res.json(response);
   } catch (e) {
     console.error("course-admin/login", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
@@ -1523,6 +1481,7 @@ router.get("/availability", async (req, res) => {
       eventType: "times_view",
       payload: { slug, date, holes, players, earliest, latest },
     }).catch(() => {});
+
     const { rows } = await db.query(
       `
       SELECT tee_time, max_players, booked_players, holes, price_per_player_cents
