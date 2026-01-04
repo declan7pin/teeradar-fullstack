@@ -1198,6 +1198,7 @@ async function courseIdFromSlug(slug) {
 }
 
 // ✅ NEW: Course admin — booking analytics summary (scoped)
+// Uses booking_bookings + booking_analytics_events (source of truth)
 router.get("/course-admin/analytics/summary", requireCourseAdmin, async (req, res) => {
   try {
     const slug = req.courseAdmin.slug;
@@ -1207,30 +1208,50 @@ router.get("/course-admin/analytics/summary", requireCourseAdmin, async (req, re
     const c = await db.query(`SELECT id, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
     if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
 
+    const courseId = c.rows[0].id;
     const courseName = c.rows[0].name;
 
     const totals = await db.query(
       `
       SELECT
         COUNT(*)::int AS bookings,
-        COALESCE(SUM((meta->>'grossCents')::bigint), 0)::bigint AS gross_cents
-      FROM analytics
-      WHERE type='booking_created'
-        AND course_name=$1
-        AND occurred_at >= NOW() - $2::interval
+        COALESCE(SUM(
+          COALESCE(total_cents,0)
+          + COALESCE(cart_fee_cents,0)
+          + COALESCE(hire_clubs_fee_cents,0)
+        ), 0)::bigint AS gross_cents
+      FROM booking_bookings
+      WHERE course_id = $1
+        AND created_at >= NOW() - $2::interval
       `,
-      [courseName, range]
+      [courseId, range]
     );
 
     const funnel = await db.query(
       `
       SELECT
-        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_course_view' AND course_name=$1 AND occurred_at >= NOW() - $2::interval) AS course_views,
-        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_availability_search' AND course_name=$1 AND occurred_at >= NOW() - $2::interval) AS availability_searches,
-        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_created' AND course_name=$1 AND occurred_at >= NOW() - $2::interval) AS bookings
+        (SELECT COUNT(*)::int
+         FROM booking_analytics_events
+         WHERE course_slug=$1
+           AND event_type='course_view'
+           AND occurred_at >= NOW() - $2::interval) AS course_views,
+
+        (SELECT COUNT(*)::int
+         FROM booking_analytics_events
+         WHERE course_slug=$1
+           AND event_type='times_view'
+           AND occurred_at >= NOW() - $2::interval) AS availability_searches,
+
+        (SELECT COUNT(*)::int
+         FROM booking_analytics_events
+         WHERE course_slug=$1
+           AND event_type='booking_confirmed'
+           AND occurred_at >= NOW() - $2::interval) AS bookings
       `,
-      [courseName, range]
+      [slug, range]
     );
+
+    const grossCents = Number(totals.rows[0]?.gross_cents || 0);
 
     res.json({
       ok: true,
@@ -1238,8 +1259,8 @@ router.get("/course-admin/analytics/summary", requireCourseAdmin, async (req, re
       courseName,
       days: days || 7,
       bookings: totals.rows[0]?.bookings || 0,
-      grossCents: Number(totals.rows[0]?.gross_cents || 0),
-      gross: Number(totals.rows[0]?.gross_cents || 0) / 100,
+      grossCents,
+      gross: grossCents / 100,
       funnel: funnel.rows[0] || { course_views: 0, availability_searches: 0, bookings: 0 },
     });
   } catch (e) {
