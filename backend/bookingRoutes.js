@@ -136,9 +136,19 @@ function requirePlatformAdmin(req, res, next) {
   if (!ADMIN_SECRET) {
     return res.status(500).json({ ok: false, error: "BOOKING_ADMIN_SECRET not set" });
   }
-  const token = String(req.cookies?.tr_book_admin || "");
-  if (token !== "1") return res.status(401).json({ ok: false, error: "not_authorized" });
-  return next();
+
+  // ✅ allow cookie login (existing)
+  const cookieToken = String(req.cookies?.tr_book_admin || "");
+  if (cookieToken === "1") return next();
+
+  // ✅ allow query/header secret (so your analytics page can work without cookies)
+  const provided =
+    String(req.query?.secret || "").trim() ||
+    String(req.headers["x-booking-admin-secret"] || "").trim();
+
+  if (provided && provided === ADMIN_SECRET) return next();
+
+  return res.status(401).json({ ok: false, error: "not_authorized" });
 }
 
 // ✅ accept both the old and new admin generator payload shapes
