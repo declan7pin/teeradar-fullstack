@@ -91,6 +91,29 @@ ensureBookingAnalyticsTable();
 // -----------------------------
 // auth helpers (use server.js middleware if present)
 // -----------------------------
+function getEmailFromBearer(req) {
+  const auth = String(req.headers.authorization || "");
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  const token = m ? m[1].trim() : "";
+  if (!token) return "";
+
+  const JWT_SECRET =
+    process.env.JWT_SECRET ||
+    process.env.AUTH_JWT_SECRET ||
+    process.env.AUTH_SECRET ||
+    "";
+
+  if (!JWT_SECRET) return "";
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    return String(payload?.email || payload?.userEmail || payload?.sub || "")
+      .trim()
+      .toLowerCase();
+  } catch {
+    return "";
+  }
+}
 function isBookingAdminReq(req) {
   // 1) bypass key (optional)
   const bypassKey = String(process.env.BOOKING_ADMIN_BYPASS_KEY || "").trim();
