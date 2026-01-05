@@ -755,47 +755,7 @@
         })
       });
 
-  async function confirmBooking() {
-    if (!selectedSlot) return;
-
-    const date = $("date").value;
-    const holes = Number($("holes").value);
-    const players = Number($("players").value);
-
-    const nameRaw = ($("bName").value || "").trim();
-    const name = nameRaw.replace(/\s+/g, " ");
-    const email = ($("bEmail").value || "").trim().toLowerCase();
-    const phone = ($("bPhone").value || "").trim();
-
-    if (!isFullName(name)) {
-      $("modalSub").textContent = "❌ Please enter your first and last name.";
-      return;
-    }
-
-    if (!isValidEmail(email)) {
-      $("modalSub").textContent = "❌ Please enter a valid email address.";
-      return;
-    }
-
-    $("modalSub").textContent = "Booking…";
-    $("confirmBtn").disabled = true;
-
-    try {
-      const res = await apiFetch("/api/book/book", {
-        method: "POST",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify({
-          slug,
-          date,
-          time: selectedSlot.time,
-          holes,
-          players,
-          name,
-          email,
-          phone,
-          addonIds: selectedAddonIds,
-        })
-      });
+  
 
       const data = await res.json().catch(()=> ({}));
       if (!res.ok || !data || !data.ok) {
