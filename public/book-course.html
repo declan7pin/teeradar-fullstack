@@ -595,11 +595,12 @@ if ($("cartFeeLabel")) $("cartFeeLabel").textContent = moneyFromCents(cartFee);
 const clubsLabel = $("addClubs")?.closest("label");
 const cartLabel  = $("addCart")?.closest("label");
 
-if (clubsLabel) clubsLabel.style.display = clubsFee > 0 ? "" : "none";
-if (cartLabel)  cartLabel.style.display  = cartFee > 0 ? "" : "none";
-    if ($("addClubs")) $("addClubs").checked = false;
+if ($("addClubs")) $("addClubs").checked = false;
     if ($("addCart")) $("addCart").checked = false;
 
+if (clubsLabel) clubsLabel.style.display = clubsFee > 0 ? "" : "none";
+if (cartLabel)  cartLabel.style.display  = cartFee > 0 ? "" : "none";
+    
     if ($("addClubs") && !$("addClubs")._wired){
       $("addClubs")._wired = true;
       $("addClubs").addEventListener("change", updateModalTotal);
