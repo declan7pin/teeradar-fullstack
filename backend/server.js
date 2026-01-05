@@ -536,19 +536,19 @@ function isAllowedOrigin(origin) {
 const corsOptions = {
   origin: (origin, cb) => {
     if (isAllowedOrigin(origin)) return cb(null, true);
-    return cb(null, false); // ✅ don't throw
+    return cb(null, false);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: [
+  allowedHeaders: [
     "Content-Type",
     "Authorization",
 
-    // booking admin header
+    // booking admin
     "X-Booking-Admin-Secret",
     "x-booking-admin-secret",
 
-    // course-admin / per-course session headers (needed for preflight)
+    // course admin / booking system
     "X-Course-Admin-Key",
     "x-course-admin-key",
     "X-Course-Slug",
@@ -556,6 +556,9 @@ const corsOptions = {
     "X-Session-Id",
     "x-session-id",
   ],
+
+  // ✅ THIS IS STEP 2
+  optionsSuccessStatus: 204,
 };
 
 app.use(cors(corsOptions));
