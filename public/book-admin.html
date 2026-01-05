@@ -23,17 +23,8 @@
     .actions a, .actions button{font-size:13px}
     button.small{padding:8px 10px;border-radius:10px}
     button.danger{background:#b91c1c}
-/* ✅ ADD: add-ons admin list */
-.addonGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.addonTableWrap{overflow:auto;border:1px solid #e2e8f0;border-radius:12px;background:#fff;margin-top:10px}
-.addonTable{width:100%;border-collapse:separate;border-spacing:0;min-width:760px}
-.addonTable th,.addonTable td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;font-size:13px;white-space:nowrap}
-.addonTable th{background:#f8fafc;font-weight:900;position:sticky;top:0;z-index:1}
-.addonTable tr:last-child td{border-bottom:none}
-.tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid #e2e8f0;background:#f8fafc}
-.tag.on{background:#ecfeff;border-color:#a7f3d0;color:#0f766e}
-.tag.off{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
-    /* ✅ ADD: tables for viewing times + bookings */
+
+    /* ✅ tables for viewing times + bookings */
     .tableWrap{overflow:auto;border:1px solid #e2e8f0;border-radius:12px;background:#fff;margin-top:10px}
     table{width:100%;border-collapse:separate;border-spacing:0;min-width:760px}
     th,td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;font-size:13px;white-space:nowrap}
@@ -41,7 +32,7 @@
     tr:last-child td{border-bottom:none}
     .right{text-align:right}
 
-    /* ✅ ADD: MiClub-style daily sheet grid */
+    /* ✅ MiClub-style daily sheet grid */
     .sheetWrap{overflow:auto;border:1px solid #e2e8f0;border-radius:12px;background:#fff;margin-top:10px}
     .sheetTable{width:100%;border-collapse:separate;border-spacing:0;min-width:980px}
     .sheetTable th,.sheetTable td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;font-size:13px;vertical-align:top}
@@ -101,7 +92,60 @@
       <div id="courseMsg" class="muted" style="margin-top:10px;"></div>
     </div>
 
-    <!-- ✅ NEW: Generate tee times -->
+    <!-- ✅ NEW: Course settings (add-ons + durations) -->
+    <div class="card">
+      <h3>Course Settings (Add-ons + Durations)</h3>
+      <p class="muted">These power the booking add-ons UI (<code>Cart</code> + <code>Hire clubs</code>) and overlap inventory checks.</p>
+
+      <div class="row">
+        <div>
+          <label class="muted">Course Slug</label>
+          <input id="sSlug" placeholder="hillview  or  marri-park" />
+        </div>
+        <div>
+          <label class="muted">Cart fee (cents)</label>
+          <input id="sCartFee" type="number" min="0" step="1" value="0" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label class="muted">Cart quantity</label>
+          <input id="sCartQty" type="number" min="0" step="1" value="0" />
+        </div>
+        <div>
+          <label class="muted">Hire clubs fee (cents)</label>
+          <input id="sClubsFee" type="number" min="0" step="1" value="0" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label class="muted">Hire clubs quantity</label>
+          <input id="sClubsQty" type="number" min="0" step="1" value="0" />
+        </div>
+        <div>
+          <label class="muted">9 holes duration (mins)</label>
+          <input id="sDur9" type="number" min="30" step="1" value="210" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label class="muted">18 holes duration (mins)</label>
+          <input id="sDur18" type="number" min="30" step="1" value="390" />
+        </div>
+        <div></div>
+      </div>
+
+      <div class="actions" style="margin-top:12px">
+        <button id="saveSettingsBtn">Save Settings</button>
+      </div>
+
+      <div id="settingsMsg" class="muted" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- ✅ Generate tee times -->
     <div class="card">
       <h3>Generate Tee Times</h3>
       <p class="muted">Creates a batch of <code>booking_times</code> rows for a course. Use this to seed Hillview / Marri Park.</p>
@@ -159,7 +203,7 @@
       <div id="previewBox" class="muted mini" style="margin-top:8px;"></div>
     </div>
 
-    <!-- ✅ NEW: Delete course / tee times -->
+    <!-- Delete course / tee times -->
     <div class="card">
       <h3>Delete Course / Tee Times</h3>
       <p class="muted">Danger zone. Deletes cannot be undone.</p>
@@ -213,75 +257,8 @@
       </div>
       <div id="adminMsg" class="muted" style="margin-top:10px;"></div>
     </div>
-<!-- ✅ NEW: Add-ons (Cart hire / Club hire) -->
-<div class="card">
-  <h3>Add-ons (Cart hire / Club hire)</h3>
-  <p class="muted">Create add-ons per course. These show in the cart during booking.</p>
 
-  <div class="addonGrid">
-    <div>
-      <label class="muted">Course Slug</label>
-      <input id="adSlug" placeholder="hillview  or  marri-park" />
-    </div>
-    <div>
-      <label class="muted">Label</label>
-      <input id="adLabel" placeholder="Shared Cart Hire" />
-    </div>
-  </div>
-
-  <div class="addonGrid" style="margin-top:10px">
-    <div>
-      <label class="muted">Category</label>
-      <input id="adCategory" placeholder="cart  or  clubs" value="cart" />
-      <div class="muted mini">Use: <code>cart</code> or <code>clubs</code> (you can add more later)</div>
-    </div>
-    <div>
-      <label class="muted">Price (cents)</label>
-      <input id="adPrice" type="number" min="0" step="1" value="0" />
-    </div>
-  </div>
-
-  <div class="addonGrid" style="margin-top:10px">
-    <div>
-      <label class="muted">Per player?</label>
-      <input id="adPerPlayer" type="checkbox" />
-      <div class="muted mini">If checked: multiplied by players. If unchecked: per booking.</div>
-    </div>
-    <div>
-      <label class="muted">Active?</label>
-      <input id="adActive" type="checkbox" checked />
-    </div>
-  </div>
-
-  <div class="actions" style="margin-top:12px">
-    <button id="adCreateBtn">Create / Update</button>
-    <button id="adListBtn" class="secondary small">List add-ons</button>
-    <button id="adClearBtn" class="secondary small">Clear form</button>
-  </div>
-
-  <div id="adMsg" class="muted" style="margin-top:10px;"></div>
-
-  <div id="adListBox" style="display:none;">
-    <div class="addonTableWrap">
-      <table class="addonTable">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Label</th>
-            <th>Category</th>
-            <th class="right">Price (c)</th>
-            <th>Per player</th>
-            <th>Active</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="adBody"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-    <!-- ✅ ADD: View tee times + bookings (admin) -->
+    <!-- View tee times + bookings -->
     <div class="card">
       <h3>View Tee Times / Bookings</h3>
       <p class="muted">View what’s been generated and what’s been booked (requires backend endpoints).</p>
@@ -341,7 +318,7 @@
                 <th>Email</th>
                 <th>Phone</th>
                 <th>Add-ons</th>
-<th class="right">Total (c)</th>
+                <th class="right">Total (c)</th>
                 <th>Ref</th>
                 <th>Status</th>
               </tr>
@@ -382,7 +359,6 @@
   </div>
 
 <script>
-  /* ✅ ADD (needed): persist secret so iPhone refresh loads courses */
   const ADMIN_SECRET_KEY = "teeradar_booking_admin_secret";
 
   function _getSecret(){
@@ -396,10 +372,8 @@
   function _clearSecret(){
     try { localStorage.removeItem(ADMIN_SECRET_KEY); } catch {}
   }
-  /* ✅ END ADD */
 
   async function j(url, opts) {
-    /* ✅ FIX (needed): always send admin secret in header (input OR saved) */
     const secret = _getSecret();
 
     const headers = {
@@ -419,142 +393,7 @@
   }
 
   const $ = (id) => document.getElementById(id);
-// ✅ ADD: Add-ons API helpers
-function _boolTag(on){
-  return on ? `<span class="tag on">YES</span>` : `<span class="tag off">NO</span>`;
-}
 
-function _clearAddonForm(){
-  $("adLabel").value = "";
-  $("adCategory").value = "cart";
-  $("adPrice").value = 0;
-  $("adPerPlayer").checked = false;
-  $("adActive").checked = true;
-}
-
-async function listAddons(){
-  $("adMsg").textContent = "Loading add-ons...";
-  $("adMsg").dataset.editingId = "";
-  $("adListBox").style.display = "none";
-  $("adBody").innerHTML = "";
-
-  const slug = ($("adSlug").value || "").trim();
-  if (!slug) { $("adMsg").textContent = "❌ course slug is required"; return; }
-
-  try{
-    // ✅ Expected backend endpoint:
-    // GET /api/book/admin/addons?slug=COURSE
-    const out = await j("/api/book/admin/addons?" + new URLSearchParams({ slug }).toString(), { method:"GET" });
-    const rows = (out && out.addons) || [];
-
-    if (!Array.isArray(rows) || !rows.length){
-      $("adMsg").textContent = "✅ No add-ons yet for this course.";
-      return;
-    }
-
-    $("adMsg").textContent = `✅ Loaded ${rows.length} add-ons`;
-    $("adListBox").style.display = "block";
-
-    rows.forEach(a => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><code>${a.id ?? ""}</code></td>
-        <td>${_escape(a.label || "")}</td>
-        <td>${_escape(a.category || "")}</td>
-        <td class="right">${a.price_cents ?? a.priceCents ?? ""}</td>
-        <td>${_boolTag(!!(a.per_player ?? a.perPlayer))}</td>
-        <td>${_boolTag(!!(a.active))}</td>
-        <td class="actions">
-          <button class="small secondary" data-edit="${a.id}">Edit</button>
-          <button class="small danger" data-del="${a.id}">Delete</button>
-        </td>
-      `;
-      $("adBody").appendChild(tr);
-    });
-// Edit
-    $("adBody").querySelectorAll("button[data-edit]").forEach(btn => {
-      btn.onclick = () => {
-        const id = btn.getAttribute("data-edit");
-        const row = rows.find(x => String(x.id) === String(id));
-        if (!row) return;
-
-        $("adLabel").value = row.label || "";
-        $("adCategory").value = row.category || "cart";
-        $("adPrice").value = row.price_cents ?? row.priceCents ?? 0;
-        $("adPerPlayer").checked = !!(row.per_player ?? row.perPlayer);
-        $("adActive").checked = row.active !== false;
-        $("adMsg").textContent = `Editing add-on ID ${id} (press Create/Update to save)`;
-        $("adMsg").dataset.editingId = String(id);
-      };
-    });
-
-    // Delete
-    $("adBody").querySelectorAll("button[data-del]").forEach(btn => {
-      btn.onclick = async () => {
-        const id = btn.getAttribute("data-del");
-        if (!id) return;
-        if (!confirm(`Delete add-on ID ${id}?`)) return;
-
-        try{
-          // ✅ Expected backend endpoint:
-          // DELETE /api/book/admin/addons/:id
-          await j("/api/book/admin/addons/" + encodeURIComponent(id), { method:"DELETE" });
-          $("adMsg").textContent = `✅ Deleted add-on ${id}`;
-          await listAddons();
-        }catch(e){
-          $("adMsg").textContent = "❌ " + e.message;
-        }
-      };
-    });
-
-  }catch(e){
-    $("adMsg").textContent = "❌ " + e.message;
-  }
-}
-// ✅ ADD: Add-ons button handlers
-$("adCreateBtn").onclick = async () => {
-  $("adMsg").textContent = "Saving add-on...";
-  try{
-    const slug = ($("adSlug").value || "").trim();
-    if (!slug) throw new Error("course slug is required");
-
-    const label = ($("adLabel").value || "").trim();
-    if (!label) throw new Error("label is required");
-
-    const payload = {
-      slug,
-      label,
-      category: ($("adCategory").value || "cart").trim(),
-      priceCents: Number($("adPrice").value || 0),
-      perPlayer: !!$("adPerPlayer").checked,
-      active: !!$("adActive").checked,
-    };
-
-    // If editing existing add-on
-    const editingId = $("adMsg").dataset.editingId || "";
-    if (editingId) payload.id = Number(editingId);
-
-    // ✅ Expected backend endpoint:
-    // POST /api/book/admin/addons  (create or update if payload.id present)
-    await j("/api/book/admin/addons", { method:"POST", body: JSON.stringify(payload) });
-
-    $("adMsg").textContent = "✅ Saved add-on";
-$("adMsg").dataset.editingId = "";
-$("adListBox").style.display = "none";
-$("adBody").innerHTML = "";
-    await listAddons();
-  }catch(e){
-    $("adMsg").textContent = "❌ " + e.message;
-  }
-};
-
-$("adListBtn").onclick = listAddons;
-
-$("adClearBtn").onclick = () => {
-  $("adMsg").textContent = "";
-  $("adMsg").dataset.editingId = "";
-  _clearAddonForm();
-};
   (function(){
     try{
       const d = new Date();
@@ -567,15 +406,13 @@ $("adClearBtn").onclick = () => {
       $("vDate").value = today;
     }catch{}
   })();
-   
-  /* ✅ ADD: auto-fill secret input from storage */
+
   (function(){
     try{
       const s = (localStorage.getItem(ADMIN_SECRET_KEY) || "").trim();
       if (s && $("secret")) $("secret").value = s;
     }catch{}
   })();
-  /* ✅ END ADD */
 
   function pad2(n){ return String(n).padStart(2,"0"); }
   function toMins(hhmm){
@@ -610,9 +447,7 @@ $("adClearBtn").onclick = () => {
       const secret = $("secret").value || "";
       if (!secret.trim()) throw new Error("Missing admin secret");
 
-      /* ✅ ADD */
       _setSecret(secret);
-      /* ✅ END ADD */
 
       await j("/api/book/admin/login", { method:"POST", body: JSON.stringify({ secret }) });
 
@@ -627,10 +462,8 @@ $("adClearBtn").onclick = () => {
     try {
       await j("/api/book/admin/logout", { method:"POST", body:"{}" });
 
-      /* ✅ ADD */
       _clearSecret();
       if ($("secret")) $("secret").value = "";
-      /* ✅ END ADD */
 
       $("loginMsg").textContent = "Logged out";
       if ($("coursesMsg")) $("coursesMsg").textContent = "Logged out";
@@ -653,9 +486,37 @@ $("adClearBtn").onclick = () => {
       });
       $("courseMsg").textContent = "✅ Saved: " + out.course.slug + " — opens at /book/" + out.course.slug;
       $("gSlug").value = out.course.slug;
+      $("sSlug").value = out.course.slug;
       await refresh();
     } catch (e) {
       $("courseMsg").textContent = "❌ " + e.message;
+    }
+  };
+
+  $("saveSettingsBtn").onclick = async () => {
+    $("settingsMsg").textContent = "Saving settings...";
+    try{
+      const slug = ($("sSlug").value || "").trim();
+      if (!slug) throw new Error("course slug is required");
+
+      const payload = {
+        slug,
+        cart_fee_cents: Number($("sCartFee").value || 0),
+        cart_qty: Number($("sCartQty").value || 0),
+        hire_clubs_fee_cents: Number($("sClubsFee").value || 0),
+        hire_clubs_qty: Number($("sClubsQty").value || 0),
+        duration_9_mins: Number($("sDur9").value || 210),
+        duration_18_mins: Number($("sDur18").value || 390),
+      };
+
+      const out = await j("/api/book/admin/course-settings", {
+        method:"POST",
+        body: JSON.stringify(payload)
+      });
+
+      $("settingsMsg").textContent = `✅ Saved settings for ${out.course.slug}`;
+    }catch(e){
+      $("settingsMsg").textContent = "❌ " + e.message;
     }
   };
 
@@ -791,6 +652,16 @@ $("adClearBtn").onclick = () => {
       return d.toLocaleString();
     }catch{ return s || ""; }
   }
+
+  function _escape(s){
+    return String(s ?? "")
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#039;");
+  }
+
   function clearViewBoxes(){
     $("viewMsg").textContent = "";
     $("timesBody").innerHTML = "";
@@ -866,6 +737,10 @@ $("adClearBtn").onclick = () => {
       const tb = $("bookingsBody");
 
       rows.forEach(r => {
+        const addons = [];
+        if (r.has_cart) addons.push("Cart");
+        if (r.has_hire_clubs) addons.push("Hire clubs");
+
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${fmtDT(r.created_at || "")}</td>
@@ -873,30 +748,19 @@ $("adClearBtn").onclick = () => {
           <td>${(r.tee_time || "")}</td>
           <td>${(r.holes ?? "")}</td>
           <td class="right">${(r.players ?? "")}</td>
-          <td>${(r.name || "")}</td>
-          <td>${(r.email || "")}</td>
-          <td>${(r.phone || "")}</td>
-          <td>${Array.isArray(r.addons) && r.addons.length
-  ? r.addons.map(a => `${_escape(a.label || a.name || "addon")} x${a.qty || 1}`).join(", ")
-  : ""}</td>
-<td class="right">${(r.total_cents ?? "")}</td>
-          <td><code>${(r.reference || "")}</code></td>
-          <td>${(r.status || "")}</td>
+          <td>${_escape(r.name || "")}</td>
+          <td>${_escape(r.email || "")}</td>
+          <td>${_escape(r.phone || "")}</td>
+          <td>${_escape(addons.join(", "))}</td>
+          <td class="right">${(r.gross_cents ?? "")}</td>
+          <td><code>${_escape(r.reference || "")}</code></td>
+          <td>${_escape(r.status || "")}</td>
         `;
         tb.appendChild(tr);
       });
     }catch(e){
       $("viewMsg").textContent = "❌ " + e.message;
     }
-  }
-
-  function _escape(s){
-    return String(s ?? "")
-      .replace(/&/g,"&amp;")
-      .replace(/</g,"&lt;")
-      .replace(/>/g,"&gt;")
-      .replace(/"/g,"&quot;")
-      .replace(/'/g,"&#039;");
   }
 
   function buildSlotCell(item, slotIndex){
@@ -1062,12 +926,12 @@ $("adClearBtn").onclick = () => {
       list.forEach(c => {
         const li = document.createElement("li");
         li.innerHTML =
-          `<b>${c.name}</b> — <code>${c.slug}</code> — <a href="/book/${c.slug}">open</a>` +
+          `<b>${_escape(c.name)}</b> — <code>${_escape(c.slug)}</code> — <a href="/book/${_escape(c.slug)}">open</a>` +
           `<div class="actions">` +
-          `<button class="small secondary" data-fill="${c.slug}">Use for generator</button>` +
-          `<button class="small secondary" data-viewtimes="${c.slug}">View times</button>` +
-          `<button class="small secondary" data-viewbookings="${c.slug}">View bookings</button>` +
-          `<button class="small danger" data-delcourse="${c.slug}">Delete course</button>` +
+          `<button class="small secondary" data-fill="${_escape(c.slug)}">Use for generator</button>` +
+          `<button class="small secondary" data-viewtimes="${_escape(c.slug)}">View times</button>` +
+          `<button class="small secondary" data-viewbookings="${_escape(c.slug)}">View bookings</button>` +
+          `<button class="small danger" data-delcourse="${_escape(c.slug)}">Delete course</button>` +
           `</div>`;
         ul.appendChild(li);
       });
@@ -1080,10 +944,11 @@ $("adClearBtn").onclick = () => {
           $("cSlug").value = s;
           $("dSlug").value = s;
           $("vSlug").value = s;
-          $("adSlug").value = s;
+          $("sSlug").value = s;
           $("previewBox").textContent = "";
           $("genMsg").textContent = "";
           $("delMsg").textContent = "";
+          $("settingsMsg").textContent = "";
           clearViewBoxes();
         };
       });
@@ -1130,7 +995,6 @@ $("adClearBtn").onclick = () => {
       ul.appendChild(li);
     }
   }
-
 
   refresh();
 </script>
