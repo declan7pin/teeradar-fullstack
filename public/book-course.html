@@ -676,9 +676,8 @@
           name,
           email,
           phone,
-          addOns: {
-            hire_clubs: !!$("addClubs")?.checked,
-            cart: !!$("addCart")?.checked
+          hasCart: !!$("addCart")?.checked,
+          hasHireClubs: !!$("addClubs")?.checked,
           }
         })
       });
