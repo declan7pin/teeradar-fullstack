@@ -434,6 +434,7 @@ function _clearAddonForm(){
 
 async function listAddons(){
   $("adMsg").textContent = "Loading add-ons...";
+  $("adMsg").dataset.editingId = "";
   $("adListBox").style.display = "none";
   $("adBody").innerHTML = "";
 
