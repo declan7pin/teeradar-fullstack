@@ -851,7 +851,10 @@ async function listAddons(){
           <td>${(r.name || "")}</td>
           <td>${(r.email || "")}</td>
           <td>${(r.phone || "")}</td>
-          <td class="right">${(r.total_cents ?? "")}</td>
+          <td>${Array.isArray(r.addons) && r.addons.length
+  ? r.addons.map(a => `${_escape(a.label || a.name || "addon")} x${a.qty || 1}`).join(", ")
+  : ""}</td>
+<td class="right">${(r.total_cents ?? "")}</td>
           <td><code>${(r.reference || "")}</code></td>
           <td>${(r.status || "")}</td>
         `;
