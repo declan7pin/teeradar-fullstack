@@ -569,9 +569,9 @@ async function loadAddons(){
         </span>
       `;
 
-      const fitsText =
+            const fitsText =
         Number.isFinite(remaining)
-          ? `✅ fits ${Math.min(wantPlayers, remaining)} of ${wantPlayers}`
+          ? (remaining >= wantPlayers ? `✅ fits ${wantPlayers}` : `❌ only ${remaining} left`)
           : "";
 
       div.innerHTML = `
