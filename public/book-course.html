@@ -404,10 +404,7 @@ function moneyFromCents(cents){
     if (mTotal) mTotal.textContent = moneyFromCents(totalCents);
   }
   // ✅ END ADD-ONS helpers
-function moneyFromCents(cents){
-  const n = Number(cents || 0) / 100;
-  return "$" + n.toFixed(2);
-}
+
 
 // Render add-ons into the modal
 function renderAddons(){
