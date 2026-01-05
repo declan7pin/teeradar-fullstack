@@ -204,7 +204,73 @@
       </div>
       <div id="adminMsg" class="muted" style="margin-top:10px;"></div>
     </div>
+<!-- ✅ NEW: Add-ons (Cart hire / Club hire) -->
+<div class="card">
+  <h3>Add-ons (Cart hire / Club hire)</h3>
+  <p class="muted">Create add-ons per course. These show in the cart during booking.</p>
 
+  <div class="addonGrid">
+    <div>
+      <label class="muted">Course Slug</label>
+      <input id="adSlug" placeholder="hillview  or  marri-park" />
+    </div>
+    <div>
+      <label class="muted">Label</label>
+      <input id="adLabel" placeholder="Shared Cart Hire" />
+    </div>
+  </div>
+
+  <div class="addonGrid" style="margin-top:10px">
+    <div>
+      <label class="muted">Category</label>
+      <input id="adCategory" placeholder="cart  or  clubs" value="cart" />
+      <div class="muted mini">Use: <code>cart</code> or <code>clubs</code> (you can add more later)</div>
+    </div>
+    <div>
+      <label class="muted">Price (cents)</label>
+      <input id="adPrice" type="number" min="0" step="1" value="0" />
+    </div>
+  </div>
+
+  <div class="addonGrid" style="margin-top:10px">
+    <div>
+      <label class="muted">Per player?</label>
+      <input id="adPerPlayer" type="checkbox" />
+      <div class="muted mini">If checked: multiplied by players. If unchecked: per booking.</div>
+    </div>
+    <div>
+      <label class="muted">Active?</label>
+      <input id="adActive" type="checkbox" checked />
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:12px">
+    <button id="adCreateBtn">Create / Update</button>
+    <button id="adListBtn" class="secondary small">List add-ons</button>
+    <button id="adClearBtn" class="secondary small">Clear form</button>
+  </div>
+
+  <div id="adMsg" class="muted" style="margin-top:10px;"></div>
+
+  <div id="adListBox" style="display:none;">
+    <div class="addonTableWrap">
+      <table class="addonTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Label</th>
+            <th>Category</th>
+            <th class="right">Price (c)</th>
+            <th>Per player</th>
+            <th>Active</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="adBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
     <!-- ✅ ADD: View tee times + bookings (admin) -->
     <div class="card">
       <h3>View Tee Times / Bookings</h3>
