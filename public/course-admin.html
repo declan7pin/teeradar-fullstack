@@ -256,7 +256,14 @@
   if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
   return data;
 }
-
+  // ✅ adapter so template feature can use apiFetch() like the snippet
+  async function apiFetch(url, opts = {}) {
+    const data = await j(url, opts);
+    return {
+      ok: true,
+      json: async () => data
+    };
+  }
   function fmtDT(s){
     try{
       const d = new Date(s);
