@@ -419,7 +419,98 @@
   }
 
   const $ = (id) => document.getElementById(id);
+// ✅ ADD: Add-ons API helpers
+function _boolTag(on){
+  return on ? `<span class="tag on">YES</span>` : `<span class="tag off">NO</span>`;
+}
 
+function _clearAddonForm(){
+  $("adLabel").value = "";
+  $("adCategory").value = "cart";
+  $("adPrice").value = 0;
+  $("adPerPlayer").checked = false;
+  $("adActive").checked = true;
+}
+
+async function listAddons(){
+  $("adMsg").textContent = "Loading add-ons...";
+  $("adListBox").style.display = "none";
+  $("adBody").innerHTML = "";
+
+  const slug = ($("adSlug").value || "").trim();
+  if (!slug) { $("adMsg").textContent = "❌ course slug is required"; return; }
+
+  try{
+    // ✅ Expected backend endpoint:
+    // GET /api/book/admin/addons?slug=COURSE
+    const out = await j("/api/book/admin/addons?" + new URLSearchParams({ slug }).toString(), { method:"GET" });
+    const rows = (out && out.addons) || [];
+
+    if (!Array.isArray(rows) || !rows.length){
+      $("adMsg").textContent = "✅ No add-ons yet for this course.";
+      return;
+    }
+
+    $("adMsg").textContent = `✅ Loaded ${rows.length} add-ons`;
+    $("adListBox").style.display = "block";
+
+    rows.forEach(a => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><code>${a.id ?? ""}</code></td>
+        <td>${_escape(a.label || "")}</td>
+        <td>${_escape(a.category || "")}</td>
+        <td class="right">${a.price_cents ?? a.priceCents ?? ""}</td>
+        <td>${_boolTag(!!(a.per_player ?? a.perPlayer))}</td>
+        <td>${_boolTag(!!(a.active))}</td>
+        <td class="actions">
+          <button class="small secondary" data-edit="${a.id}">Edit</button>
+          <button class="small danger" data-del="${a.id}">Delete</button>
+        </td>
+      `;
+      $("adBody").appendChild(tr);
+    });
+
+    // Edit
+    $("adBody").querySelectorAll("button[data-edit]").forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.getAttribute("data-edit");
+        const row = rows.find(x => String(x.id) === String(id));
+        if (!row) return;
+
+        $("adLabel").value = row.label || "";
+        $("adCategory").value = row.category || "cart";
+        $("adPrice").value = row.price_cents ?? row.priceCents ?? 0;
+        $("adPerPlayer").checked = !!(row.per_player ?? row.perPlayer);
+        $("adActive").checked = row.active !== false;
+        $("adMsg").textContent = `Editing add-on ID ${id} (press Create/Update to save)`;
+        $("adMsg").dataset.editingId = String(id);
+      };
+    });
+
+    // Delete
+    $("adBody").querySelectorAll("button[data-del]").forEach(btn => {
+      btn.onclick = async () => {
+        const id = btn.getAttribute("data-del");
+        if (!id) return;
+        if (!confirm(`Delete add-on ID ${id}?`)) return;
+
+        try{
+          // ✅ Expected backend endpoint:
+          // DELETE /api/book/admin/addons/:id
+          await j("/api/book/admin/addons/" + encodeURIComponent(id), { method:"DELETE" });
+          $("adMsg").textContent = `✅ Deleted add-on ${id}`;
+          await listAddons();
+        }catch(e){
+          $("adMsg").textContent = "❌ " + e.message;
+        }
+      };
+    });
+
+  }catch(e){
+    $("adMsg").textContent = "❌ " + e.message;
+  }
+}
   /* ✅ ADD: auto-fill secret input from storage */
   (function(){
     try{
