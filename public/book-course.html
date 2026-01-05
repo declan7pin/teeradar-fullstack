@@ -384,21 +384,24 @@
   }
 
   function computeTotalCents(slot){
-    const players = Number($("players").value || 1);
+  const players = Number($("players").value || 1);
 
-    // slots on this page use dollars in slot.pricePerPlayer
-    const perPlayerCents = Math.round(Number(slot.pricePerPlayer || 0) * 100);
+  // slots on this page use dollars in slot.pricePerPlayer
+  const perPlayerCents = Math.round(Number(slot.pricePerPlayer || 0) * 100);
 
-    let total = perPlayerCents * players;
+  let total = perPlayerCents * players;
 
-    const clubs = !!$("addClubs")?.checked;
-    const cart = !!$("addCart")?.checked;
+  const clubs = !!$("addClubs")?.checked;
+  const cart = !!$("addCart")?.checked;
 
-    $("clubsFeeLabel").textContent = moneyFromCents(CLUBS_FEE_CENTS);
-$("cartFeeLabel").textContent = moneyFromCents(CART_FEE_CENTS);
+  const clubsFee = Number(course?.hire_clubs_fee_cents || 0);
+  const cartFee  = Number(course?.cart_fee_cents || 0);
 
-    return total;
-  }
+  if (clubs) total += clubsFee;
+  if (cart) total += cartFee;
+
+  return total;
+}
 
   function updateModalTotal(){
     if (!selectedSlot) return;
