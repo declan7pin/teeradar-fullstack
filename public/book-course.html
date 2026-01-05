@@ -687,9 +687,7 @@
     $("modalWrap").style.display = "flex";
   }
 
-  // ... keep everything else the same
-
-function showBookingConfirmation(data, email) {
+   function showBookingConfirmation(data, email) {
     $("modalTitle").textContent = "✅ Booking confirmed";
     $("detailsGrid").style.display = "none";
 
@@ -756,7 +754,6 @@ function showBookingConfirmation(data, email) {
           addonIds: selectedAddonIds,
         })
       });
-  // ... keep everything else the same
 
   async function confirmBooking() {
     if (!selectedSlot) return;
