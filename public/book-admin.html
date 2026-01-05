@@ -470,7 +470,101 @@ async function listAddons(){
       `;
       $("adBody").appendChild(tr);
     });
+// Edit
+    $("adBody").querySelectorAll("button[data-edit]").forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.getAttribute("data-edit");
+        const row = rows.find(x => String(x.id) === String(id));
+        if (!row) return;
 
+        $("adLabel").value = row.label || "";
+        $("adCategory").value = row.category || "cart";
+        $("adPrice").value = row.price_cents ?? row.priceCents ?? 0;
+        $("adPerPlayer").checked = !!(row.per_player ?? row.perPlayer);
+        $("adActive").checked = row.active !== false;
+        $("adMsg").textContent = `Editing add-on ID ${id} (press Create/Update to save)`;
+        $("adMsg").dataset.editingId = String(id);
+      };
+    });
+
+    // Delete
+    $("adBody").querySelectorAll("button[data-del]").forEach(btn => {
+      btn.onclick = async () => {
+        const id = btn.getAttribute("data-del");
+        if (!id) return;
+        if (!confirm(`Delete add-on ID ${id}?`)) return;
+
+        try{
+          // ✅ Expected backend endpoint:
+          // DELETE /api/book/admin/addons/:id
+          await j("/api/book/admin/addons/" + encodeURIComponent(id), { method:"DELETE" });
+          $("adMsg").textContent = `✅ Deleted add-on ${id}`;
+          await listAddons();
+        }catch(e){
+          $("adMsg").textContent = "❌ " + e.message;
+        }
+      };
+    });
+
+  }catch(e){
+    $("adMsg").textContent = "❌ " + e.message;
+  }
+}
+// ✅ ADD: Add-ons button handlers
+$("adCreateBtn").onclick = async () => {
+  $("adMsg").textContent = "Saving add-on...";
+  try{
+    const slug = ($("adSlug").value || "").trim();
+    if (!slug) throw new Error("course slug is required");
+
+    const label = ($("adLabel").value || "").trim();
+    if (!label) throw new Error("label is required");
+
+    const payload = {
+      slug,
+      label,
+      category: ($("adCategory").value || "cart").trim(),
+      priceCents: Number($("adPrice").value || 0),
+      perPlayer: !!$("adPerPlayer").checked,
+      active: !!$("adActive").checked,
+    };
+
+    // If editing existing add-on
+    const editingId = $("adMsg").dataset.editingId || "";
+    if (editingId) payload.id = Number(editingId);
+
+    // ✅ Expected backend endpoint:
+    // POST /api/book/admin/addons  (create or update if payload.id present)
+    await j("/api/book/admin/addons", { method:"POST", body: JSON.stringify(payload) });
+
+    $("adMsg").textContent = "✅ Saved add-on";
+    $("adMsg").dataset.editingId = "";
+    await listAddons();
+  }catch(e){
+    $("adMsg").textContent = "❌ " + e.message;
+  }
+};
+
+$("adListBtn").onclick = listAddons;
+
+$("adClearBtn").onclick = () => {
+  $("adMsg").textContent = "";
+  $("adMsg").dataset.editingId = "";
+  _clearAddonForm();
+};
+  (function(){
+    try{
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,"0");
+      const dd = String(d.getDate()).padStart(2,"0");
+      const today = `${yyyy}-${mm}-${dd}`;
+      $("gDate").value = today;
+      $("dDate").value = today;
+      $("vDate").value = today;
+    }catch{}
+  })();
+   
   /* ✅ ADD: auto-fill secret input from storage */
   (function(){
     try{
