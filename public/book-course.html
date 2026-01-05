@@ -688,30 +688,94 @@
   }
 
    function showBookingConfirmation(data, email) {
-    $("modalTitle").textContent = "✅ Booking confirmed";
-    $("detailsGrid").style.display = "none";
+  $("modalTitle").textContent = "✅ Booking confirmed";
+  $("detailsGrid").style.display = "none";
 
-    const emailOk = !!(data && data.emailOk);
-    const reason = (data && data.emailReason) ? String(data.emailReason) : "";
-    const emailMsg = emailOk
-      ? `📧 Confirmation email sent to ${email}`
-      : `📧 Email not sent${reason ? ` (${reason})` : ""}`;
+  const emailOk = !!(data && data.emailOk);
+  const reason = (data && data.emailReason) ? String(data.emailReason) : "";
+  const emailMsg = emailOk
+    ? `📧 Confirmation email sent to ${email}`
+    : `📧 Email not sent${reason ? ` (${reason})` : ""}`;
 
-    $("modalSub").innerHTML =
-      `Reference: <b>${data.reference}</b><br/>` +
-      `${emailMsg}`;
+  // --- Build add-ons breakdown (what the user picked) ---
+  const picked = new Set((selectedAddonIds || []).map(String));
+  const chosenAddons = (addons || []).filter(a => a && picked.has(String(a.id)));
 
-    $("modalFoot").textContent = "You can screenshot this reference for your records.";
+  const addonLines = chosenAddons.map(a => {
+    const label = String(a.label || a.id || "Add-on");
+    const cents = Number(a.price_cents ?? a.priceCents ?? 0);
+    return `
+      <div style="display:flex;justify-content:space-between;gap:10px;">
+        <span>${label}</span>
+        <b>${moneyFromCents(cents)}</b>
+      </div>
+    `;
+  }).join("");
 
-    $("confirmBtn").textContent = "Close";
-    $("confirmBtn").disabled = false;
-    $("cancelBtn").style.display = "none";
+  // --- Prices ---
+  const perPlayerCents = selectedSlot ? _slotPerPlayerCents(selectedSlot) : 0;
+  const totalCents = selectedSlot ? computeTotalCents(selectedSlot) : null;
 
-    $("confirmBtn").onclick = () => {
-      $("modalWrap").style.display = "none";
-      $("confirmBtn").onclick = confirmBooking;
-    };
-  }
+  const baseBlock = `
+    <div style="margin-top:10px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;">
+        <span>Price (per player)</span>
+        <b>${moneyFromCents(perPlayerCents)}</b>
+      </div>
+    </div>
+  `;
+
+  const addonsBlock = addonLines
+    ? `
+      <div style="margin-top:10px;">
+        <div style="font-weight:800;margin-bottom:6px;">Add-ons</div>
+        ${addonLines}
+      </div>
+    `
+    : "";
+
+  const totalBlock = (typeof totalCents === "number")
+    ? `
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;">
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <span>Total</span>
+          <b>${moneyFromCents(totalCents)}</b>
+        </div>
+        <div style="color:var(--muted);font-size:12px;margin-top:4px;">
+          (includes add-ons)
+        </div>
+      </div>
+    `
+    : "";
+
+  // --- Summary block (keeps your existing details) ---
+  $("modalSub").innerHTML =
+    `Reference: <b>${data.reference}</b><br/>` +
+    `${emailMsg}` +
+    `<div style="margin-top:10px;">
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:6px 10px;font-size:13px;">
+        <div style="color:var(--muted)">Course</div><div>${course?.name || slug}</div>
+        <div style="color:var(--muted)">Date</div><div>${$("date").value}</div>
+        <div style="color:var(--muted)">Time</div><div>${selectedSlot?.time || ""}</div>
+        <div style="color:var(--muted)">Players</div><div>${$("players").value}</div>
+        <div style="color:var(--muted)">Holes</div><div>${$("holes").value}</div>
+      </div>
+    </div>` +
+    baseBlock +
+    addonsBlock +
+    totalBlock;
+
+  $("modalFoot").textContent = "You can screenshot this reference for your records.";
+
+  $("confirmBtn").textContent = "Close";
+  $("confirmBtn").disabled = false;
+  $("cancelBtn").style.display = "none";
+
+  $("confirmBtn").onclick = () => {
+    $("modalWrap").style.display = "none";
+    $("confirmBtn").onclick = confirmBooking;
+  };
+}
 
   async function confirmBooking() {
     if (!selectedSlot) return;
