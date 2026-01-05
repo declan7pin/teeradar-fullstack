@@ -370,39 +370,59 @@
     return parts.length >= 2 && parts[0].length >= 2 && parts[1].length >= 2;
   }
 
-  // ✅ ADD-ONS helpers (must be top-level)
+    // ✅ ADD-ONS helpers (course-settings model: cart + clubs)
+
+  function _slotPerPlayerCents(slot){
+    // Prefer cents if backend provides it, else fallback:
+    // - if slot.pricePerPlayer looks like dollars (e.g. 25) -> convert to cents
+    // - if slot.pricePerPlayer already looks like cents (e.g. 2500) -> use it
+    const cents = Number(slot?.pricePerPlayerCents ?? slot?.price_per_player_cents);
+    if (Number.isFinite(cents) && cents >= 0) return cents;
+
+    const raw = Number(slot?.pricePerPlayer ?? slot?.price_per_player ?? 0);
+    if (!Number.isFinite(raw) || raw < 0) return 0;
+
+    // Heuristic: if raw is large, assume it's already cents
+    if (raw >= 500) return Math.round(raw);
+    return Math.round(raw * 100);
+  }
 
   function computeTotalCents(slot){
-  const players = Number($("players").value || 1);
+    const players = Number($("players").value || 1);
 
-  // slots on this page use dollars in slot.pricePerPlayer
-  const perPlayerCents = Math.round(Number(slot.pricePerPlayer || 0) * 100);
-  let total = perPlayerCents * players;
+    // base tee time price
+    const perPlayerCents = _slotPerPlayerCents(slot);
+    let total = perPlayerCents * players;
 
-  const picked = new Set(selectedAddonIds || []);
-  (addons || []).forEach(a => {
-    const id = String(a.id);
-    if (!picked.has(id)) return;
-    if (a.active === false) return;
+    // add-ons (expect ids: "cart" and/or "clubs")
+    const picked = new Set((selectedAddonIds || []).map(String));
+    (addons || []).forEach(a => {
+      const id = String(a.id || "");
+      if (!id || !picked.has(id)) return;
+      if (a.active === false) return;
 
-    const priceCents = Number(a.price_cents ?? a.priceCents ?? 0);
-    const perPlayer = !!(a.per_player ?? a.perPlayer);
+      const priceCents = Number(a.price_cents ?? a.priceCents ?? 0);
+      if (!Number.isFinite(priceCents) || priceCents < 0) return;
 
-    total += perPlayer ? (priceCents * players) : priceCents;
-  });
+      // For course-settings add-ons, these are per booking (not per player)
+      total += priceCents;
+    });
 
-  return total;
-}
-function moneyFromCents(cents){
-  const n = Number(cents || 0) / 100;
-  return "$" + n.toFixed(2);
-}
+    return total;
+  }
+
+  function moneyFromCents(cents){
+    const n = Number(cents || 0) / 100;
+    return "$" + n.toFixed(2);
+  }
+
   function updateModalTotal(){
     if (!selectedSlot) return;
     const totalCents = computeTotalCents(selectedSlot);
     const mTotal = $("mTotal");
     if (mTotal) mTotal.textContent = moneyFromCents(totalCents);
   }
+
   // ✅ END ADD-ONS helpers
 
 
