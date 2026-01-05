@@ -500,10 +500,14 @@ async function ensureBookingTables() {
   }
 }
 ensureBookingTables();
+
 ensureBookingAddonsSchema(db)
   .then(() => console.log("✅ booking add-ons schema ready"))
   .catch((err) => console.error("❌ error ensuring booking add-ons schema:", err));
-/* ✅✅✅ END ONLY ADDITION ✅✅✅ */
+
+ensureBookingTemplateSchema(db)
+  .then(() => console.log("✅ booking template schema ready"))
+  .catch((err) => console.error("❌ error ensuring booking template schema:", err));
 
 /* ✅✅✅ FIX (needed): CORS + preflight, and do NOT duplicate SITE_URL ✅✅✅ */
 const EXTRA_CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
