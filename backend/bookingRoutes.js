@@ -656,7 +656,8 @@ router.post("/admin/course-admin", requirePlatformAdmin, async (req, res) => {
       `SELECT id, slug, name, cart_fee_cents, hire_clubs_fee_cents
        FROM booking_courses
        WHERE slug=$1
-       LIMIT 1;`,
+       LIMIT 1;
+      `,
       [slug]
     );
     if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
