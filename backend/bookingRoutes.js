@@ -1980,6 +1980,65 @@ router.post("/course-admin/booking-paid", requireCourseAdmin, async (req, res) =
 // -----------------------------
 // Public course + availability + booking
 // -----------------------------
+// -----------------------------
+// ✅ Public: course add-ons (for book-course.html dynamic add-ons UI)
+// GET /api/book/addons?slug=COURSE
+// Returns "cart" + "hire_clubs" add-ons derived from booking_courses columns.
+// -----------------------------
+router.get("/addons", async (req, res) => {
+  try {
+    const slug = normSlug(req.query.slug);
+    if (!slug || !isValidSlug(slug)) {
+      return res.status(400).json({ ok: false, error: "slug_invalid" });
+    }
+
+    const c = await db.query(
+      `
+      SELECT
+        slug, name,
+        cart_fee_cents, hire_clubs_fee_cents,
+        cart_qty, hire_clubs_qty
+      FROM booking_courses
+      WHERE slug=$1
+      LIMIT 1;
+      `,
+      [slug]
+    );
+
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const row = c.rows[0];
+
+    const addons = [];
+
+    // Show Cart add-on if course has any cart setup (fee or qty)
+    if (Number(row.cart_fee_cents || 0) > 0 || Number(row.cart_qty || 0) > 0) {
+      addons.push({
+        id: "cart",
+        label: "Cart",
+        price_cents: Number(row.cart_fee_cents || 0),
+        per_player: false,
+        active: true,
+      });
+    }
+
+    // Show Hire Clubs add-on if course has any clubs setup (fee or qty)
+    if (Number(row.hire_clubs_fee_cents || 0) > 0 || Number(row.hire_clubs_qty || 0) > 0) {
+      addons.push({
+        id: "hire_clubs",
+        label: "Hire clubs",
+        price_cents: Number(row.hire_clubs_fee_cents || 0),
+        per_player: false,
+        active: true,
+      });
+    }
+
+    return res.json({ ok: true, addons });
+  } catch (e) {
+    console.error("addons GET", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 router.get("/course/:slug", async (req, res) => {
   try {
     const slug = normSlug(req.params.slug);
