@@ -634,6 +634,9 @@ async function loadAddons(){
   function openModal(slot) {
     selectedSlot = slot;
 
+ await loadAddons();
+    renderAddons();
+    
     resetModalToForm();
 
     $("mCourse").textContent = course.name || slug;
