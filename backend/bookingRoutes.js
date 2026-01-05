@@ -661,7 +661,9 @@ router.post("/admin/course-admin", requirePlatformAdmin, async (req, res) => {
     );
     if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
     const courseId = c.rows[0].id;
-
+const courseRow = c.rows[0];
+const cartQty = Number(courseRow.cart_qty || 0);
+const clubsQty = Number(courseRow.hire_clubs_qty || 0);
     const { saltHex, hashHex } = hashPassword(password);
 
     await db.query(
