@@ -769,9 +769,15 @@ async function loadAddons(){
     }
   }
 
-  $("cancelBtn").onclick = () => $("modalWrap").style.display = "none";
+    function closeModal(){
+    $("modalWrap").style.display = "none";
+    selectedSlot = null;
+    selectedAddonIds = [];
+  }
+
+  $("cancelBtn").onclick = closeModal;
   $("modalWrap").addEventListener("click", (e) => {
-    if (e.target === $("modalWrap")) $("modalWrap").style.display = "none";
+    if (e.target === $("modalWrap")) closeModal();
   });
 
   $("findBtn").onclick = fetchAvailability;
