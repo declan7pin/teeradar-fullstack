@@ -862,7 +862,23 @@ app.use((req, res, next) => {
 });
 
 // ✅ NEW: booking API router
-app.use("/api/book", bookingRoutes);
+app.use("/api/book", (req, res, next) => {
+  // Try to get slug from header OR query OR /api/book/:slug style param
+  const fromHeader = req.headers["x-course-slug"] || req.headers["X-Course-Slug"];
+  const fromQuery = req.query.slug || req.query.course || req.query.courseSlug;
+  const fromParam = req.params && req.params.slug;
+
+  const slug = String(fromHeader || fromQuery || fromParam || "")
+    .trim()
+    .toLowerCase();
+
+  // If bookingRoutes expects header, make sure it always has it
+  if (slug && !req.headers["x-course-slug"]) {
+    req.headers["x-course-slug"] = slug;
+  }
+
+  next();
+}, bookingRoutes);
 
 
 
