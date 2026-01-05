@@ -394,8 +394,8 @@
     const clubs = !!$("addClubs")?.checked;
     const cart = !!$("addCart")?.checked;
 
-    if (clubs) total += CLUBS_FEE_CENTS;
-    if (cart) total += CART_FEE_CENTS;
+    $("clubsFeeLabel").textContent = moneyFromCents(CLUBS_FEE_CENTS);
+$("cartFeeLabel").textContent = moneyFromCents(CART_FEE_CENTS);
 
     return total;
   }
