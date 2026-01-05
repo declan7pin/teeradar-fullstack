@@ -2096,7 +2096,7 @@ router.get("/availability", async (req, res) => {
     pricePerPlayerCents: r.price_per_player_cents,
     pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
 
-    // ✅ NEW: add-on availability (so UI can show SOLD OUT)
+    // ✅ add-on availability
     cartRemaining,
     clubsRemaining,
     cartSoldOut: cartQty > 0 && cartRemaining <= 0,
