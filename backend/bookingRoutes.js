@@ -2112,7 +2112,10 @@ router.post("/book", async (req, res) => {
 
     // ✅ FIX: load course add-on fees from DB (do NOT trust client values)
     const c = await db.query(
-      `SELECT id, slug, name, cart_fee_cents, hire_clubs_fee_cents
+      SELECT id, slug, name, notes,
+       cart_fee_cents, hire_clubs_fee_cents,
+       cart_qty, hire_clubs_qty,
+       duration_9_mins, duration_18_mins
        FROM booking_courses
        WHERE slug=$1
        LIMIT 1;`,
