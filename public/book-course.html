@@ -393,7 +393,10 @@ let selectedAddonIds = []; // what the user picked for this booking
 
   return total;
 }
-
+function moneyFromCents(cents){
+  const n = Number(cents || 0) / 100;
+  return "$" + n.toFixed(2);
+}
   function updateModalTotal(){
     if (!selectedSlot) return;
     const totalCents = computeTotalCents(selectedSlot);
