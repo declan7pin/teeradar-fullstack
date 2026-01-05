@@ -650,40 +650,16 @@ async function loadAddons(){
     $("bEmail").value = "";
     $("bPhone").value = "";
 
-   // ✅ add-ons: labels, reset, wire, update total
-const clubsFee = Number(course?.hire_clubs_fee_cents || 0);
-const cartFee  = Number(course?.cart_fee_cents || 0);
+   // ✅ Dynamic add-ons: render + wire total updates
+renderAddons();
 
-if ($("clubsFeeLabel")) $("clubsFeeLabel").textContent = moneyFromCents(clubsFee);
-if ($("cartFeeLabel")) $("cartFeeLabel").textContent = moneyFromCents(cartFee);
+if ($("players") && !$("players")._wiredForTotal){
+  $("players")._wiredForTotal = true;
+  $("players").addEventListener("change", updateModalTotal);
+}
 
-// reset checkboxes first (prevents hidden add-ons staying selected)
-if ($("addClubs")) $("addClubs").checked = false;
-if ($("addCart")) $("addCart").checked = false;
-
-// hide add-ons that are not offered by the course
-const clubsLabel = $("addClubs")?.closest("label");
-const cartLabel  = $("addCart")?.closest("label");
-
-if (clubsLabel) clubsLabel.style.display = clubsFee > 0 ? "" : "none";
-if (cartLabel)  cartLabel.style.display  = cartFee > 0 ? "" : "none";
-
-    
-    if ($("addClubs") && !$("addClubs")._wired){
-      $("addClubs")._wired = true;
-      $("addClubs").addEventListener("change", updateModalTotal);
-    }
-    if ($("addCart") && !$("addCart")._wired){
-      $("addCart")._wired = true;
-      $("addCart").addEventListener("change", updateModalTotal);
-    }
-    if ($("players") && !$("players")._wiredForTotal){
-      $("players")._wiredForTotal = true;
-      $("players").addEventListener("change", updateModalTotal);
-    }
-
-    updateModalTotal();
-    // ✅ END add-ons
+updateModalTotal();
+// ✅ END Dynamic add-ons
 
     $("modalWrap").style.display = "flex";
   }
