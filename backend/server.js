@@ -705,7 +705,24 @@ app.get("/api/book/admin/_debug", (req, res) => {
     },
   });
 });
+// ✅ TEMP FIX: ensure inline <script> in public HTML files can run (book-course/admin use inline JS)
+app.use((req, res, next) => {
+  // If something upstream/downstream sets CSP, try to remove it first
+  res.removeHeader("Content-Security-Policy");
+  res.removeHeader("content-security-policy");
 
+  // Allow inline scripts + inline styles for now (you can tighten later)
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self' https: data: blob:; " +
+      "script-src 'self' 'unsafe-inline' https:; " +
+      "style-src 'self' 'unsafe-inline' https:; " +
+      "img-src 'self' https: data:; " +
+      "connect-src 'self' https:; " +
+      "font-src 'self' https: data:;"
+  );
+  next();
+});
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 /* ✅✅✅ ONLY ADDITION (needed): more robust scorecards file discovery (Render-safe) ✅✅✅ */
