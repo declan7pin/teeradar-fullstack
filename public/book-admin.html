@@ -23,7 +23,16 @@
     .actions a, .actions button{font-size:13px}
     button.small{padding:8px 10px;border-radius:10px}
     button.danger{background:#b91c1c}
-
+/* ✅ ADD: add-ons admin list */
+.addonGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.addonTableWrap{overflow:auto;border:1px solid #e2e8f0;border-radius:12px;background:#fff;margin-top:10px}
+.addonTable{width:100%;border-collapse:separate;border-spacing:0;min-width:760px}
+.addonTable th,.addonTable td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;font-size:13px;white-space:nowrap}
+.addonTable th{background:#f8fafc;font-weight:900;position:sticky;top:0;z-index:1}
+.addonTable tr:last-child td{border-bottom:none}
+.tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid #e2e8f0;background:#f8fafc}
+.tag.on{background:#ecfeff;border-color:#a7f3d0;color:#0f766e}
+.tag.off{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
     /* ✅ ADD: tables for viewing times + bookings */
     .tableWrap{overflow:auto;border:1px solid #e2e8f0;border-radius:12px;background:#fff;margin-top:10px}
     table{width:100%;border-collapse:separate;border-spacing:0;min-width:760px}
