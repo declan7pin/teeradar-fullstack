@@ -669,8 +669,8 @@ async function loadAddons(){
   $("mPlayers").textContent = $("players").value;
   $("mHoles").textContent = $("holes").value;
 
-  const price = Number(slot.pricePerPlayer || 0);
-  $("mPrice").textContent = `$${price.toFixed(0)} per player`;
+    const priceCents = _slotPerPlayerCents(slot);
+  $("mPrice").textContent = `${moneyFromCents(priceCents)} per player`;
 
   $("bName").value = "";
   $("bEmail").value = "";
