@@ -1810,7 +1810,202 @@ async function courseIdFromSlug(slug) {
   const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
   return c.rows.length ? c.rows[0].id : null;
 }
+// GET current template for course
+router.get("/course-template", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = String(req.query.slug || "").trim().toLowerCase();
+    if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
 
+    const c = await db.query(
+      `SELECT id, slug, name FROM booking_courses WHERE slug = $1 LIMIT 1;`,
+      [slug]
+    );
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const courseId = c.rows[0].id;
+
+    const t = await db.query(
+      `SELECT timezone, template, updated_at
+       FROM booking_time_templates
+       WHERE course_id = $1
+       LIMIT 1;`,
+      [courseId]
+    );
+
+    if (!t.rows.length) {
+      return res.json({
+        ok: true,
+        course: c.rows[0],
+        timezone: "Australia/Perth",
+        template: {},
+        updated_at: null,
+        found: false,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      course: c.rows[0],
+      timezone: t.rows[0].timezone,
+      template: t.rows[0].template || {},
+      updated_at: t.rows[0].updated_at,
+      found: true,
+    });
+  } catch (err) {
+    console.error("GET /course-template error:", err);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// PUT save template for course
+router.put("/course-template", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = String(req.body?.slug || "").trim().toLowerCase();
+    const timezone = String(req.body?.timezone || "Australia/Perth").trim() || "Australia/Perth";
+    const template = req.body?.template && typeof req.body.template === "object"
+      ? req.body.template
+      : null;
+
+    if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
+    if (!template) return res.status(400).json({ ok: false, error: "template_required" });
+
+    const c = await db.query(
+      `SELECT id, slug, name FROM booking_courses WHERE slug = $1 LIMIT 1;`,
+      [slug]
+    );
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const courseId = c.rows[0].id;
+
+    await db.query(
+      `INSERT INTO booking_time_templates (course_id, timezone, template, updated_at)
+       VALUES ($1, $2, $3::jsonb, now())
+       ON CONFLICT (course_id)
+       DO UPDATE SET timezone = EXCLUDED.timezone, template = EXCLUDED.template, updated_at = now();`,
+      [courseId, timezone, JSON.stringify(template)]
+    );
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("PUT /course-template error:", err);
+    return res.status(500).json({ ok: false, error: "internal_error", detail: err.message });
+  }
+});
+
+// POST generate times from saved template
+// Body: { slug, startDate, daysAhead, mode }
+// mode: "skip" (default) OR "overwrite-range"
+router.post("/generate-from-template", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = String(req.body?.slug || "").trim().toLowerCase();
+    const startDate = String(req.body?.startDate || "").trim(); // YYYY-MM-DD
+    const daysAhead = Math.max(1, Math.min(120, Number(req.body?.daysAhead || 30)));
+    const mode = String(req.body?.mode || "skip").trim().toLowerCase();
+
+    if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
+    if (!startDate) return res.status(400).json({ ok: false, error: "startDate_required" });
+
+    const c = await db.query(
+      `SELECT id, slug, name FROM booking_courses WHERE slug = $1 LIMIT 1;`,
+      [slug]
+    );
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const courseId = c.rows[0].id;
+
+    const t = await db.query(
+      `SELECT template
+       FROM booking_time_templates
+       WHERE course_id = $1
+       LIMIT 1;`,
+      [courseId]
+    );
+    if (!t.rows.length) return res.status(400).json({ ok: false, error: "no_template_saved" });
+
+    const template = t.rows[0].template || {};
+    const daysCfg = template.days || {}; // expects keys "1".."7"
+
+    // Parse startDate safely
+    const m = startDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return res.status(400).json({ ok: false, error: "startDate_invalid" });
+
+    const start = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (Number.isNaN(start.getTime())) return res.status(400).json({ ok: false, error: "startDate_invalid" });
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + daysAhead);
+
+    // Optional overwrite range
+    if (mode === "overwrite-range") {
+      await db.query(
+        `DELETE FROM booking_times
+         WHERE course_id = $1
+           AND play_date >= $2::date
+           AND play_date < $3::date;`,
+        [courseId, startDate, _isoDate(end)]
+      );
+    }
+
+    let inserted = 0;
+    let skipped = 0;
+
+    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+      const playDate = _isoDate(d);
+      const wd = String(_weekdayISO(d)); // "1".."7"
+      const cfg = daysCfg[wd];
+
+      if (!cfg || cfg.enabled === false) continue;
+
+      const windows = Array.isArray(cfg.windows) ? cfg.windows : [];
+      for (const w of windows) {
+        const holes = Number(w.holes);
+        const interval = Number(w.intervalMins || w.interval || 10);
+        const maxPlayers = Number(w.maxPlayers || 4);
+        const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
+
+        const startMin = _timeToMinutes(w.start);
+        const endMin = _timeToMinutes(w.end);
+
+        if (![9, 18].includes(holes)) continue;
+        if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
+        if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
+        if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
+        if (startMin === null || endMin === null || endMin <= startMin) continue;
+
+        for (let mins = startMin; mins < endMin; mins += interval) {
+          const teeTime = _minutesToTime(mins);
+
+          const r = await db.query(
+            `INSERT INTO booking_times (
+              course_id, play_date, tee_time, holes,
+              max_players, price_per_player_cents,
+              status, created_at, updated_at
+            )
+            VALUES ($1, $2::date, $3, $4, $5, $6, 'AVAILABLE', now(), now())
+            ON CONFLICT (course_id, play_date, tee_time, holes) DO NOTHING;`,
+            [courseId, playDate, teeTime, holes, maxPlayers, pricePerPlayerCents]
+          );
+
+          if (r.rowCount === 1) inserted += 1;
+          else skipped += 1;
+        }
+      }
+    }
+
+    return res.json({
+      ok: true,
+      course: c.rows[0],
+      startDate,
+      daysAhead,
+      mode,
+      inserted,
+      skipped,
+    });
+  } catch (err) {
+    console.error("POST /generate-from-template error:", err);
+    return res.status(500).json({ ok: false, error: "internal_error", detail: err.message });
+  }
+});
 // ✅ NEW: Course admin — booking analytics summary (scoped)
 // Uses booking_bookings + booking_analytics_events (source of truth)
 router.get("/course-admin/analytics/summary", requireCourseAdmin, async (req, res) => {
