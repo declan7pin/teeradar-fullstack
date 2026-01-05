@@ -631,11 +631,12 @@ async function loadAddons(){
   async function openModal(slot) {
     selectedSlot = slot;
 
- await loadAddons();
-    renderAddons();
+ 
     
     resetModalToForm();
-
+    await loadAddons();
+    renderAddons();
+    
     $("mCourse").textContent = course.name || slug;
     $("mDate").textContent = $("date").value;
     $("mTime").textContent = slot.time;
