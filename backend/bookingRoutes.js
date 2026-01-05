@@ -100,7 +100,40 @@ function fromMinutes(mins) {
   const m = String(mins % 60).padStart(2, "0");
   return `${h}:${m}`;
 }
+function toIsoDateTimeLocal(dateYmd, timeHhMm) {
+  // stored as timestamptz, interpret date+time as local server time (Render is usually UTC)
+  // If you want strict AU timezone later, we can switch to a fixed TZ approach.
+  return `${dateYmd}T${timeHhMm}:00`;
+}
 
+function durationMinsForHoles(courseRow, holes) {
+  const h = Number(holes || 18);
+  if (h === 9) return Number(courseRow?.duration_9_mins || 210);
+  return Number(courseRow?.duration_18_mins || 390);
+}
+
+async function countOverlappingAddonUsage({ courseId, startAtIso, endAtIso }) {
+  // Overlap rule: existing.start < new.end AND existing.end > new.start
+  const r = await db.query(
+    `
+    SELECT
+      COALESCE(SUM(CASE WHEN has_cart THEN 1 ELSE 0 END),0)::int AS carts_used,
+      COALESCE(SUM(CASE WHEN has_hire_clubs THEN 1 ELSE 0 END),0)::int AS clubs_used
+    FROM booking_bookings
+    WHERE course_id = $1
+      AND status = 'CONFIRMED'
+      AND start_at IS NOT NULL
+      AND end_at IS NOT NULL
+      AND start_at < $3::timestamptz
+      AND end_at   > $2::timestamptz
+    `,
+    [courseId, startAtIso, endAtIso]
+  );
+  return {
+    cartsUsed: Number(r.rows[0]?.carts_used || 0),
+    clubsUsed: Number(r.rows[0]?.clubs_used || 0),
+  };
+}
 function makeRef(prefix = "TR") {
   // e.g. TR-8F2KQ9
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
