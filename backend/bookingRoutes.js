@@ -526,7 +526,12 @@ async function ensureBookingTables() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
+  // ✅ NEW: store the "usage window" so inventory can be checked by overlap
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;`);
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;`);
 
+  // helps overlap queries
+  await db.query(`CREATE INDEX IF NOT EXISTS booking_bookings_course_window_idx ON booking_bookings (course_id, start_at, end_at);`);
   // ✅ ADD: paid flag + cart tracking (needed for MiClub paid checkbox + analytics)
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_cart BOOLEAN NOT NULL DEFAULT false;`);
