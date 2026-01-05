@@ -79,7 +79,53 @@
       <div id="msg" class="muted" style="margin-top:10px;"></div>
       <div id="who" class="muted mini" style="margin-top:6px;"></div>
     </div>
+    <div class="card">
+      <h2 style="margin:0 0 6px;">Weekly schedule template</h2>
+      <div class="sub" style="margin-bottom:10px;">
+        Save a weekly pattern once, then generate tee times for the next 30 days in one click.
+      </div>
 
+      <div id="tplStatus" class="status"></div>
+
+      <div style="display:grid;gap:10px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
+          <div style="flex:1;min-width:220px;">
+            <label>Timezone</label>
+            <input id="tplTimezone" value="Australia/Perth" />
+          </div>
+
+          <div style="flex:1;min-width:220px;">
+            <label>Generate from date</label>
+            <input id="tplStartDate" type="date" />
+          </div>
+
+          <div style="width:180px;">
+            <label>Days ahead</label>
+            <input id="tplDaysAhead" type="number" min="1" max="120" value="30" />
+          </div>
+
+          <div style="width:220px;">
+            <label>Mode</label>
+            <select id="tplMode">
+              <option value="skip" selected>Skip duplicates</option>
+              <option value="overwrite-range">Overwrite range</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="tplGrid" style="display:grid;gap:10px;"></div>
+
+        <div class="actions">
+          <button id="tplLoadBtn">Load template</button>
+          <button class="secondary" id="tplSaveBtn">Save template</button>
+          <button id="tplGenerateBtn">Generate next days</button>
+        </div>
+
+        <div class="note">
+          Tip: set different windows for 18 and 9 so 18-hole groups can roll through without clashes.
+        </div>
+      </div>
+    </div>
     <div class="card">
       <h3>View Tee Times / Bookings</h3>
 
