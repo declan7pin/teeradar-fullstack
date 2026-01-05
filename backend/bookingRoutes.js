@@ -791,7 +791,54 @@ router.get("/course-admin/_debug", (req, res) => {
     },
   });
 });
+// ✅ NEW: platform admin — update course settings (add-ons + durations)
+router.post("/admin/course-settings", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.body?.slug);
+    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
 
+    const cart_fee_cents = Number(req.body?.cart_fee_cents ?? 0);
+    const hire_clubs_fee_cents = Number(req.body?.hire_clubs_fee_cents ?? 0);
+    const cart_qty = Number(req.body?.cart_qty ?? 0);
+    const hire_clubs_qty = Number(req.body?.hire_clubs_qty ?? 0);
+    const duration_9_mins = Number(req.body?.duration_9_mins ?? 210);
+    const duration_18_mins = Number(req.body?.duration_18_mins ?? 390);
+
+    function okInt(n, min, max) {
+      return Number.isFinite(n) && n >= min && n <= max;
+    }
+
+    if (!okInt(cart_fee_cents, 0, 10000000)) return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
+    if (!okInt(hire_clubs_fee_cents, 0, 10000000)) return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
+    if (!okInt(cart_qty, 0, 9999)) return res.status(400).json({ ok: false, error: "cart_qty_invalid" });
+    if (!okInt(hire_clubs_qty, 0, 9999)) return res.status(400).json({ ok: false, error: "hire_clubs_qty_invalid" });
+    if (!okInt(duration_9_mins, 30, 900)) return res.status(400).json({ ok: false, error: "duration_9_invalid" });
+    if (!okInt(duration_18_mins, 30, 1200)) return res.status(400).json({ ok: false, error: "duration_18_invalid" });
+
+    const r = await db.query(
+      `
+      UPDATE booking_courses
+      SET
+        cart_fee_cents = $2,
+        cart_qty = $3,
+        hire_clubs_fee_cents = $4,
+        hire_clubs_qty = $5,
+        duration_9_mins = $6,
+        duration_18_mins = $7
+      WHERE slug = $1
+      RETURNING slug, name, cart_fee_cents, cart_qty, hire_clubs_fee_cents, hire_clubs_qty, duration_9_mins, duration_18_mins;
+      `,
+      [slug, cart_fee_cents, cart_qty, hire_clubs_fee_cents, hire_clubs_qty, duration_9_mins, duration_18_mins]
+    );
+
+    if (!r.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    res.json({ ok: true, course: r.rows[0] });
+  } catch (e) {
+    console.error("admin/course-settings POST", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // -----------------------------
 // ✅ Platform admin: courses + times + bookings (existing)
 // -----------------------------
