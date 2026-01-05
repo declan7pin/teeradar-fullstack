@@ -352,7 +352,7 @@
 <script>
   const $ = (id) => document.getElementById(id);
 
-  const slug = location.pathname.split("/").pop().toLowerCase();
+  const slug = location.pathname.replace(/\/+$/,"").split("/").pop().toLowerCase();
 
   let course = { slug, name: "Course", notes: "" };
   let addons = [];           // list from backend (active add-ons for this course)
