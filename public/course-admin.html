@@ -42,13 +42,14 @@
     .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid #e2e8f0;background:#f8fafc;color:#0f172a}
     .badge.ok{background:#ecfeff;border-color:#a7f3d0;color:#0f766e}
     .badge.warn{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
-     /* ✅ Weekly template status + note */
+
+    /* ✅ Weekly template status + note */
     .status{margin:8px 0;padding:10px 12px;border-radius:10px;border:1px solid #e2e8f0;background:#f8fafc;color:#0f172a}
     .status.ok{border-color:#a7f3d0;background:#ecfeff;color:#0f766e}
     .status.err{border-color:#fecaca;background:#fef2f2;color:#991b1b}
     .note{font-size:13px;color:#64748b}
     .sub{color:#64748b;font-size:13px}
-   </style>
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -79,6 +80,8 @@
       <div id="msg" class="muted" style="margin-top:10px;"></div>
       <div id="who" class="muted mini" style="margin-top:6px;"></div>
     </div>
+
+    <!-- ✅ Weekly schedule template -->
     <div class="card">
       <h2 style="margin:0 0 6px;">Weekly schedule template</h2>
       <div class="sub" style="margin-bottom:10px;">
@@ -126,6 +129,7 @@
         </div>
       </div>
     </div>
+
     <div class="card">
       <h3>View Tee Times / Bookings</h3>
 
@@ -224,46 +228,45 @@
   function setKey(v){ try { localStorage.setItem(BYPASS_KEY, String(v||"").trim()); } catch {} }
   function clearAuth(){ try { localStorage.removeItem(SLUG_KEY); localStorage.removeItem(BYPASS_KEY); } catch {} }
 
-    async function j(url, opts = {}) {
-  const slug = getSlug();
-  const key = getKey();
-  if (!slug) throw new Error("slug_required");
-  if (!key) throw new Error("bypass_key_required");
+  async function j(url, opts = {}) {
+    const slug = getSlug();
+    const key = getKey();
+    if (!slug) throw new Error("slug_required");
+    if (!key) throw new Error("bypass_key_required");
 
-  const headers = {
-    "content-type": "application/json",
-    "x-course-admin-key": key,
-    "x-course-slug": slug,
-    ...(opts.headers || {}),
-  };
+    const headers = {
+      "content-type": "application/json",
+      "x-course-admin-key": key,
+      "x-course-slug": slug,
+      ...(opts.headers || {}),
+    };
 
-  const res = await fetch(url, {
-    ...opts,
-    headers,
-    credentials: "include",   // ✅ important on iOS Safari
-    cache: "no-store",        // ✅ prevents stale/old 401 caching
-  });
+    const res = await fetch(url, {
+      ...opts,
+      headers,
+      credentials: "include",   // ✅ important on iOS Safari
+      cache: "no-store",        // ✅ prevents stale/old 401 caching
+    });
 
-  const ct = (res.headers.get("content-type") || "").toLowerCase();
-  let data = {};
-  if (ct.includes("application/json")) {
-    data = await res.json().catch(() => ({}));
-  } else {
-    const preview = (await res.text().catch(() => "")).slice(0, 200);
-    throw new Error("non_json_response — " + preview.replace(/\s+/g, " ").slice(0, 120));
+    const ct = (res.headers.get("content-type") || "").toLowerCase();
+    let data = {};
+    if (ct.includes("application/json")) {
+      data = await res.json().catch(() => ({}));
+    } else {
+      const preview = (await res.text().catch(() => "")).slice(0, 200);
+      throw new Error("non_json_response — " + preview.replace(/\s+/g, " ").slice(0, 120));
+    }
+
+    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+    return data;
   }
 
-  if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
-  return data;
-}
   // ✅ adapter so template feature can use apiFetch() like the snippet
   async function apiFetch(url, opts = {}) {
     const data = await j(url, opts);
-    return {
-      ok: true,
-      json: async () => data
-    };
+    return { ok: true, json: async () => data };
   }
+
   function fmtDT(s){
     try{
       const d = new Date(s);
@@ -354,7 +357,6 @@
   }
 
   async function getMe(){
-    // send slug also in query so it works even if you later remove header usage
     const out = await j("/api/book/course-admin/me?slug=" + encodeURIComponent(getSlug()), { method:"GET" });
     $("who").textContent = `✅ ${out.slug || ""} — ${out.email || ""}`;
     return out;
@@ -559,7 +561,228 @@
     $("key").value = getKey();
     if (getSlug()) $("who").textContent = "Using: " + getSlug();
   })();
-  (function templateFeature(){ ... })();
+
+  // ✅ Weekly template feature
+  (function templateFeature(){
+    const DOW = [
+      { id:"1", name:"Mon" },
+      { id:"2", name:"Tue" },
+      { id:"3", name:"Wed" },
+      { id:"4", name:"Thu" },
+      { id:"5", name:"Fri" },
+      { id:"6", name:"Sat" },
+      { id:"7", name:"Sun" },
+    ];
+
+    function setTplStatus(msg, type){
+      const el = $("tplStatus");
+      if (!el) return;
+      el.textContent = msg || "";
+      el.className = "status " + (type || "");
+    }
+
+    function todayISO(){
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,"0");
+      const dd = String(d.getDate()).padStart(2,"0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function defaultTemplate(){
+      const days = {};
+      DOW.forEach(x => {
+        days[x.id] = {
+          enabled: ["6","7"].includes(x.id) ? false : true,
+          windows: [
+            { holes:18, start:"06:00", end:"10:00", intervalMins:10, maxPlayers:4, pricePerPlayerCents:2500 },
+            { holes:9,  start:"06:30", end:"11:00", intervalMins:10, maxPlayers:4, pricePerPlayerCents:1800 },
+          ]
+        };
+      });
+      return { days };
+    }
+
+    function renderWindowInputs(dow, cfg, holes){
+      const w = (cfg.windows || []).find(x => Number(x.holes) === holes) || {
+        holes,
+        start: holes === 18 ? "06:00" : "06:30",
+        end: holes === 18 ? "10:00" : "11:00",
+        intervalMins: 10,
+        maxPlayers: 4,
+        pricePerPlayerCents: holes === 18 ? 2500 : 1800
+      };
+
+      return `
+        <div class="field sm3" style="grid-column:span 3">
+          <label>${holes} holes start</label>
+          <input data-w="start" data-dow="${dow}" data-holes="${holes}" value="${w.start || ""}" placeholder="06:00" />
+        </div>
+        <div class="field sm3" style="grid-column:span 3">
+          <label>${holes} holes end</label>
+          <input data-w="end" data-dow="${dow}" data-holes="${holes}" value="${w.end || ""}" placeholder="10:00" />
+        </div>
+        <div class="field sm3" style="grid-column:span 3">
+          <label>${holes} interval (mins)</label>
+          <input type="number" min="5" max="60" data-w="intervalMins" data-dow="${dow}" data-holes="${holes}" value="${Number(w.intervalMins||10)}" />
+        </div>
+        <div class="field sm3" style="grid-column:span 3">
+          <label>${holes} price / player ($)</label>
+          <input type="number" min="0" step="0.01" data-w="priceDollars" data-dow="${dow}" data-holes="${holes}" value="${(Number(w.pricePerPlayerCents||0)/100).toFixed(2)}" />
+        </div>
+      `;
+    }
+
+    function renderTemplate(tpl){
+      const grid = $("tplGrid");
+      if (!grid) return;
+
+      grid.innerHTML = "";
+      const days = tpl?.days || {};
+
+      DOW.forEach(d => {
+        const cfg = days[d.id] || { enabled:true, windows:[] };
+
+        const wrap = document.createElement("div");
+        wrap.style.border = "1px solid var(--border)";
+        wrap.style.borderRadius = "12px";
+        wrap.style.padding = "10px";
+        wrap.style.background = "#fff";
+
+        wrap.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+            <div style="font-weight:800;">${d.name}</div>
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted);">
+              <input type="checkbox" data-dow="${d.id}" class="tplEnabled" ${cfg.enabled === false ? "" : "checked"} />
+              Enabled
+            </label>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:10px;margin-top:10px;">
+            ${renderWindowInputs(d.id, cfg, 18)}
+            ${renderWindowInputs(d.id, cfg, 9)}
+          </div>
+        `;
+
+        grid.appendChild(wrap);
+      });
+    }
+
+    function readTemplateFromUI(){
+      const tpl = { days:{} };
+
+      document.querySelectorAll(".tplEnabled").forEach(cb => {
+        const dow = cb.getAttribute("data-dow");
+        tpl.days[dow] = tpl.days[dow] || { enabled:true, windows:[] };
+        tpl.days[dow].enabled = cb.checked;
+      });
+
+      const inputs = Array.from(document.querySelectorAll("[data-w][data-dow][data-holes]"));
+      const byKey = new Map();
+
+      inputs.forEach(inp => {
+        const dow = inp.getAttribute("data-dow");
+        const holes = Number(inp.getAttribute("data-holes"));
+        const wkey = `${dow}|${holes}`;
+        if (!byKey.has(wkey)) byKey.set(wkey, {});
+        byKey.get(wkey)[inp.getAttribute("data-w")] = inp.value;
+      });
+
+      for (const [k, obj] of byKey.entries()){
+        const [dow, holesStr] = k.split("|");
+        const holes = Number(holesStr);
+
+        const start = String(obj.start || "").trim();
+        const end = String(obj.end || "").trim();
+        const intervalMins = Number(obj.intervalMins || 10);
+        const priceDollars = Number(obj.priceDollars || 0);
+
+        tpl.days[dow] = tpl.days[dow] || { enabled:true, windows:[] };
+
+        tpl.days[dow].windows.push({
+          holes,
+          start,
+          end,
+          intervalMins,
+          maxPlayers: 4,
+          pricePerPlayerCents: Math.max(0, Math.round(priceDollars * 100)),
+        });
+      }
+
+      return tpl;
+    }
+
+    async function tplLoad(){
+      try{
+        setTplStatus("Loading template…", "");
+        const res = await apiFetch("/api/book/course-template?slug=" + encodeURIComponent(getSlug()));
+        const data = await res.json().catch(()=> ({}));
+
+        if (!res.ok || !data || !data.ok) throw new Error(data?.error || ("HTTP " + (res.status || "")));
+
+        $("tplTimezone").value = data.timezone || "Australia/Perth";
+        const tpl = (data.template && typeof data.template === "object") ? data.template : defaultTemplate();
+        renderTemplate(tpl);
+
+        setTplStatus(data.found ? "✅ Template loaded." : "✅ No saved template yet (showing defaults).", "ok");
+      }catch(e){
+        renderTemplate(defaultTemplate());
+        setTplStatus("❌ " + (e.message || "Failed to load template"), "err");
+      }
+    }
+
+    async function tplSave(){
+      try{
+        setTplStatus("Saving template…", "");
+        const template = readTemplateFromUI();
+        const timezone = String($("tplTimezone").value || "Australia/Perth").trim() || "Australia/Perth";
+
+        const res = await apiFetch("/api/book/course-template", {
+          method:"PUT",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ slug: getSlug(), timezone, template })
+        });
+        const data = await res.json().catch(()=> ({}));
+        if (!res.ok || !data || !data.ok) throw new Error(data?.error || ("HTTP " + (res.status || "")));
+
+        setTplStatus("✅ Template saved.", "ok");
+      }catch(e){
+        setTplStatus("❌ " + (e.message || "Failed to save template"), "err");
+      }
+    }
+
+    async function tplGenerate(){
+      try{
+        setTplStatus("Generating times…", "");
+        const startDate = $("tplStartDate").value || todayISO();
+        const daysAhead = Number($("tplDaysAhead").value || 30);
+        const mode = String($("tplMode").value || "skip");
+
+        const res = await apiFetch("/api/book/generate-from-template", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ slug: getSlug(), startDate, daysAhead, mode })
+        });
+
+        const data = await res.json().catch(()=> ({}));
+        if (!res.ok || !data || !data.ok) throw new Error(data?.error || ("HTTP " + (res.status || "")));
+
+        setTplStatus(`✅ Generated. Inserted ${data.inserted}, skipped ${data.skipped}.`, "ok");
+      }catch(e){
+        setTplStatus("❌ " + (e.message || "Failed to generate"), "err");
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      if ($("tplStartDate")) $("tplStartDate").value = todayISO();
+
+      $("tplLoadBtn")?.addEventListener("click", tplLoad);
+      $("tplSaveBtn")?.addEventListener("click", tplSave);
+      $("tplGenerateBtn")?.addEventListener("click", tplGenerate);
+
+      renderTemplate(defaultTemplate());
+    });
+  })();
 </script>
 </body>
 </html>
