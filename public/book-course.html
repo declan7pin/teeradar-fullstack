@@ -766,8 +766,11 @@ updateModalTotal();
 
   $("confirmBtn").onclick = confirmBooking;
 
-  loadCourse();
+  (async () => {
+  await loadCourse();
+  await loadAddons();
   renderTimes([]);
+})();
 </script>
 </body>
 </html>
