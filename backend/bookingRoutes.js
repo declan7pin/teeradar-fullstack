@@ -1990,7 +1990,9 @@ router.get("/course/:slug", async (req, res) => {
       [slug]
     );
     if (!rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
-
+const courseRow = rows[0];
+const cartQty = Number(courseRow.cart_qty || 0);
+const clubsQty = Number(courseRow.hire_clubs_qty || 0);
     // ✅ analytics: booking course page viewed
     recordEvent({
       type: "booking_course_view",
