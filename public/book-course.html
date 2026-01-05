@@ -444,7 +444,7 @@ function renderAddons(){
     const id = String(a.id);
     const label = String(a.label || "Add-on");
     const priceCents = Number(a.price_cents ?? a.priceCents ?? 0);
-    const perPlayer = !!(a.per_player ?? a.perPlayer);
+        const perPlayer = false; // course-settings add-ons are per booking
 
     const el = document.createElement("label");
     el.style.display = "flex";
