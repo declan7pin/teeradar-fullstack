@@ -403,7 +403,77 @@ let selectedAddonIds = []; // what the user picked for this booking
     if (mTotal) mTotal.textContent = moneyFromCents(totalCents);
   }
   // ✅ END ADD-ONS helpers
+function moneyFromCents(cents){
+  const n = Number(cents || 0) / 100;
+  return "$" + n.toFixed(2);
+}
 
+// Render add-ons into the modal
+function renderAddons(){
+  const wrap = $("addonsWrap");
+  if (!wrap) return;
+
+  wrap.innerHTML = "";
+  selectedAddonIds = [];
+
+  const active = (addons || []).filter(a => a && a.active !== false);
+  if (!active.length){
+    wrap.innerHTML = `<span class="note">No add-ons for this course.</span>`;
+    return;
+  }
+
+  active.forEach(a => {
+    const id = String(a.id);
+    const label = String(a.label || "Add-on");
+    const priceCents = Number(a.price_cents ?? a.priceCents ?? 0);
+    const perPlayer = !!(a.per_player ?? a.perPlayer);
+
+    const el = document.createElement("label");
+    el.style.display = "flex";
+    el.style.gap = "8px";
+    el.style.alignItems = "center";
+    el.style.fontSize = "13px";
+    el.style.color = "var(--text)";
+
+    el.innerHTML = `
+      <input type="checkbox" data-addon-id="${id}" style="width:auto;" />
+      ${label}
+      <span style="color:var(--muted);font-size:12px;">
+        (+${moneyFromCents(priceCents)}${perPlayer ? " / player" : ""})
+      </span>
+    `;
+
+    const cb = el.querySelector("input[type='checkbox']");
+    cb.addEventListener("change", () => {
+      // rebuild selected list
+      selectedAddonIds = Array.from(wrap.querySelectorAll("input[type='checkbox'][data-addon-id]"))
+        .filter(x => x.checked)
+        .map(x => String(x.getAttribute("data-addon-id") || ""))
+        .filter(Boolean);
+
+      updateModalTotal();
+    });
+
+    wrap.appendChild(el);
+  });
+}
+
+async function loadAddons(){
+  try{
+    // ✅ You need a PUBLIC endpoint that returns active add-ons for the course:
+    // GET /api/book/addons?slug=COURSE
+    const res = await fetch("/api/book/addons?" + new URLSearchParams({ slug }).toString());
+    const data = await res.json().catch(()=> ({}));
+
+    if (res.ok && data && data.ok && Array.isArray(data.addons)){
+      addons = data.addons;
+    } else {
+      addons = [];
+    }
+  }catch{
+    addons = [];
+  }
+}
   // default date = today (local)
   const today = new Date();
   const yyyy = today.getFullYear();
