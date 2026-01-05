@@ -540,11 +540,21 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
+    allowedHeaders: [
     "Content-Type",
     "Authorization",
+
+    // booking admin header
     "X-Booking-Admin-Secret",
     "x-booking-admin-secret",
+
+    // course-admin / per-course session headers (needed for preflight)
+    "X-Course-Admin-Key",
+    "x-course-admin-key",
+    "X-Course-Slug",
+    "x-course-slug",
+    "X-Session-Id",
+    "x-session-id",
   ],
 };
 
