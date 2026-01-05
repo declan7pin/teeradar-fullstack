@@ -631,7 +631,7 @@ async function loadAddons(){
     $("modalFoot").textContent = "You’ll receive a reference after confirming.";
   }
 
-  function openModal(slot) {
+  async function openModal(slot) {
     selectedSlot = slot;
 
  await loadAddons();
