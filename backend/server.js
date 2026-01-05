@@ -563,7 +563,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 // ✅ IMPORTANT: preflight must be OK (some browsers will fail login without this)
-app.options("*", cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 /* ✅✅✅ END FIX ✅✅✅ */
 
 // -------------------------------------------------
