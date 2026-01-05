@@ -371,10 +371,6 @@ let selectedAddonIds = []; // what the user picked for this booking
   }
 
   // ✅ ADD-ONS helpers (must be top-level)
-  function moneyFromCents(cents){
-    const n = Number(cents || 0) / 100;
-    return "$" + n.toFixed(0);
-  }
 
   function computeTotalCents(slot){
   const players = Number($("players").value || 1);
