@@ -381,17 +381,19 @@ let selectedAddonIds = []; // what the user picked for this booking
 
   // slots on this page use dollars in slot.pricePerPlayer
   const perPlayerCents = Math.round(Number(slot.pricePerPlayer || 0) * 100);
-
   let total = perPlayerCents * players;
 
-  const clubs = !!$("addClubs")?.checked;
-  const cart = !!$("addCart")?.checked;
+  const picked = new Set(selectedAddonIds || []);
+  (addons || []).forEach(a => {
+    const id = String(a.id);
+    if (!picked.has(id)) return;
+    if (a.active === false) return;
 
-  const clubsFee = Number(course?.hire_clubs_fee_cents || 0);
-  const cartFee  = Number(course?.cart_fee_cents || 0);
+    const priceCents = Number(a.price_cents ?? a.priceCents ?? 0);
+    const perPlayer = !!(a.per_player ?? a.perPlayer);
 
-  if (clubs) total += clubsFee;
-  if (cart) total += cartFee;
+    total += perPlayer ? (priceCents * players) : priceCents;
+  });
 
   return total;
 }
