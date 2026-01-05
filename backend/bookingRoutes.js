@@ -11,7 +11,11 @@ router.use((req, res, next) => {
   console.log("📌 bookingRoutes hit:", req.method, req.originalUrl);
   next();
 });
+// ✅ ADD (needed): ensure JSON bodies work for ALL routes in this router
+router.use(express.json());
 
+// ✅ ADD (needed): read cookies for admin auth
+router.use(cookieParser());
 const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 // ✅ NEW: dedicated secret for course-admin tokens (preferred)
 const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
