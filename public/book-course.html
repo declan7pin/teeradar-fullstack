@@ -687,6 +687,9 @@
     $("modalWrap").style.display = "flex";
   }
 
+  <script>
+  // ... keep everything else the same
+
   function showBookingConfirmation(data, email) {
     $("modalTitle").textContent = "✅ Booking confirmed";
     $("detailsGrid").style.display = "none";
@@ -697,9 +700,55 @@
       ? `📧 Confirmation email sent to ${email}`
       : `📧 Email not sent${reason ? ` (${reason})` : ""}`;
 
+    // ✅ Build add-ons breakdown (what the user picked)
+    const picked = new Set((selectedAddonIds || []).map(String));
+    const chosenAddons = (addons || []).filter(a => a && picked.has(String(a.id)));
+
+    const addonLines = chosenAddons.map(a => {
+      const label = String(a.label || a.id || "Add-on");
+      const cents = Number(a.price_cents ?? a.priceCents ?? 0);
+      return `<div style="display:flex;justify-content:space-between;gap:10px;">
+                <span>${label}</span>
+                <b>${moneyFromCents(cents)}</b>
+              </div>`;
+    }).join("");
+
+    // ✅ Total (base tee time + add-ons)
+    const totalCents = selectedSlot ? computeTotalCents(selectedSlot) : null;
+
+    // ✅ Use the *actual selected slot* base price
+    const perPlayerCents = selectedSlot ? _slotPerPlayerCents(selectedSlot) : 0;
+
+    const totalBlock = (typeof totalCents === "number")
+      ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;">
+           <div style="display:flex;justify-content:space-between;gap:10px;">
+             <span>Total</span>
+             <b>${moneyFromCents(totalCents)}</b>
+           </div>
+           <div style="color:var(--muted);font-size:12px;margin-top:4px;">
+             (includes add-ons)
+           </div>
+         </div>`
+      : "";
+
+    const addonsBlock = addonLines
+      ? `<div style="margin-top:10px;">
+           <div style="font-weight:800;margin-bottom:6px;">Add-ons</div>
+           ${addonLines}
+         </div>`
+      : "";
+
     $("modalSub").innerHTML =
       `Reference: <b>${data.reference}</b><br/>` +
-      `${emailMsg}`;
+      `${emailMsg}` +
+      `<div style="margin-top:10px;">
+         <div style="display:flex;justify-content:space-between;gap:10px;">
+           <span>Price (per player)</span>
+           <b>${moneyFromCents(perPlayerCents)}</b>
+         </div>
+       </div>` +
+      addonsBlock +
+      totalBlock;
 
     $("modalFoot").textContent = "You can screenshot this reference for your records.";
 
@@ -712,6 +761,9 @@
       $("confirmBtn").onclick = confirmBooking;
     };
   }
+
+  // ... keep everything else the same
+</script>
 
   async function confirmBooking() {
     if (!selectedSlot) return;
