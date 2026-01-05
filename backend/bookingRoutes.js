@@ -85,6 +85,48 @@ console.log("📧 booking email env check:", {
 // -----------------------------
 // Helpers
 // -----------------------------
+function _timeToMinutes(hhmm) {
+  const m = String(hhmm || "").match(/^(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return hh * 60 + mm;
+}
+
+function _minutesToTime(mins) {
+  const hh = Math.floor(mins / 60);
+  const mm = mins % 60;
+  return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+}
+
+function _isoDate(d) {
+  // expects Date object in local server time; returns YYYY-MM-DD
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Monday=1 ... Sunday=7
+function _weekdayISO(d) {
+  const js = d.getDay(); // Sun=0 ... Sat=6
+  return js === 0 ? 7 : js;
+}
+
+// Use whatever auth you already have for course-admin.
+// This is a simple fallback: booking admin OR COURSE_ADMIN_KEY header.
+function requireCourseAdmin(req, res, next) {
+  const isBookingAdmin = !!req.bookingAdmin || (req.isBookingAdmin && req.isBookingAdmin());
+  if (isBookingAdmin) return next();
+
+  const expected = String(process.env.COURSE_ADMIN_KEY || "").trim();
+  const got = String(req.headers["x-course-admin-key"] || req.headers["X-Course-Admin-Key"] || "").trim();
+  if (expected && got && got === expected) return next();
+
+  return res.status(401).json({ ok: false, error: "unauthorized" });
+}
 function normSlug(s) {
   return String(s || "").trim().toLowerCase();
 }
