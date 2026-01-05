@@ -1177,6 +1177,7 @@ router.get("/admin/analytics/summary", requirePlatformAdmin, async (req, res) =>
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 // ✅ DEBUG: Platform admin — analytics truth check (no psql needed)
 router.get("/admin/analytics/debug", requirePlatformAdmin, async (req, res) => {
   try {
@@ -1264,6 +1265,7 @@ router.get("/admin/analytics/debug", requirePlatformAdmin, async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 // -----------------------------
 // ✅ Platform admin: booking analytics endpoints (for public/analytics page)
 // These match the frontend calls:
@@ -1376,8 +1378,6 @@ router.get("/admin/analytics/bookings", requirePlatformAdmin, async (req, res) =
     // helpers
     async function countWhere(extraSql, extraParams = []) {
       const params = p.concat(extraParams);
-      const idx = params.length - extraParams.length + 1; // first extra param index
-      // extraSql must use $<idx>... if it needs params
       const q = `
         SELECT COUNT(*)::int AS n
         FROM booking_bookings b
@@ -1664,6 +1664,7 @@ router.get("/admin/analytics/export.csv", requirePlatformAdmin, async (req, res)
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 // -----------------------------
 // ✅ Course admin endpoints
 // -----------------------------
@@ -2275,6 +2276,7 @@ router.post("/book", async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 // ✅ NEW: Booking Analytics (uses real bookings + existing analytics table)
 router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req, res) => {
   try {
@@ -2324,4 +2326,5 @@ router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req,
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 export default router;
