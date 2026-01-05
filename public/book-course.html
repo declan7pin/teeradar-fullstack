@@ -586,8 +586,11 @@
     $("bPhone").value = "";
 
     // ✅ add-ons: labels, reset, wire, update total
-    if ($("clubsFeeLabel")) $("clubsFeeLabel").textContent = moneyFromCents(CLUBS_FEE_CENTS);
-    if ($("cartFeeLabel")) $("cartFeeLabel").textContent = moneyFromCents(CART_FEE_CENTS);
+    const clubsFee = Number(course?.hire_clubs_fee_cents || 0);
+const cartFee  = Number(course?.cart_fee_cents || 0);
+
+if ($("clubsFeeLabel")) $("clubsFeeLabel").textContent = moneyFromCents(clubsFee);
+if ($("cartFeeLabel")) $("cartFeeLabel").textContent = moneyFromCents(cartFee);
 
     if ($("addClubs")) $("addClubs").checked = false;
     if ($("addCart")) $("addCart").checked = false;
