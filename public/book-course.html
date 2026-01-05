@@ -591,7 +591,12 @@ const cartFee  = Number(course?.cart_fee_cents || 0);
 
 if ($("clubsFeeLabel")) $("clubsFeeLabel").textContent = moneyFromCents(clubsFee);
 if ($("cartFeeLabel")) $("cartFeeLabel").textContent = moneyFromCents(cartFee);
+// hide add-ons that are not offered by the course
+const clubsLabel = $("addClubs")?.closest("label");
+const cartLabel  = $("addCart")?.closest("label");
 
+if (clubsLabel) clubsLabel.style.display = clubsFee > 0 ? "" : "none";
+if (cartLabel)  cartLabel.style.display  = cartFee > 0 ? "" : "none";
     if ($("addClubs")) $("addClubs").checked = false;
     if ($("addCart")) $("addCart").checked = false;
 
