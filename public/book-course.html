@@ -477,14 +477,21 @@ function renderAddons(){
 }
 
 async function loadAddons(){
+  // ✅ Course-settings model: expect backend to return cart/clubs (virtual add-ons)
+  // GET /api/book/addons?slug=COURSE
   try{
-    // ✅ You need a PUBLIC endpoint that returns active add-ons for the course:
-    // GET /api/book/addons?slug=COURSE
     const res = await fetch("/api/book/addons?" + new URLSearchParams({ slug }).toString());
     const data = await res.json().catch(()=> ({}));
 
     if (res.ok && data && data.ok && Array.isArray(data.addons)){
-      addons = data.addons;
+      // Expect: [{ id:"cart", label:"Shared Cart Hire", price_cents:..., active:true }, { id:"clubs", ... }]
+      addons = data.addons.map(a => ({
+        id: String(a.id || ""),
+        label: String(a.label || "Add-on"),
+        // normalize price field name to price_cents
+        price_cents: Number(a.price_cents ?? a.priceCents ?? 0),
+        active: a.active !== false
+      })).filter(a => a.id);
     } else {
       addons = [];
     }
