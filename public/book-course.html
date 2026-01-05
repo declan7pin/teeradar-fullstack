@@ -352,7 +352,17 @@
 <script>
   const $ = (id) => document.getElementById(id);
 
-  const slug = location.pathname.replace(/\/+$/,"").split("/").pop().toLowerCase();
+  // ✅ IMPORTANT: slug from URL path
+  const COURSE_SLUG = location.pathname.replace(/\/+$/,"").split("/").pop().toLowerCase().trim();
+  const slug = COURSE_SLUG;
+
+  // ✅ IMPORTANT: always include X-Course-Slug header so backend can find course
+  function apiFetch(url, opts = {}) {
+    const o = opts || {};
+    const headers = new Headers(o.headers || {});
+    if (COURSE_SLUG) headers.set("X-Course-Slug", COURSE_SLUG);
+    return fetch(url, { ...o, headers });
+  }
 
   let course = { slug, name: "Course", notes: "" };
   let addons = [];           // list from backend (active add-ons for this course)
@@ -370,19 +380,14 @@
     return parts.length >= 2 && parts[0].length >= 2 && parts[1].length >= 2;
   }
 
-    // ✅ ADD-ONS helpers (course-settings model: cart + clubs)
-
+  // ✅ ADD-ONS helpers (course-settings model: cart + clubs)
   function _slotPerPlayerCents(slot){
-    // Prefer cents if backend provides it, else fallback:
-    // - if slot.pricePerPlayer looks like dollars (e.g. 25) -> convert to cents
-    // - if slot.pricePerPlayer already looks like cents (e.g. 2500) -> use it
     const cents = Number(slot?.pricePerPlayerCents ?? slot?.price_per_player_cents);
     if (Number.isFinite(cents) && cents >= 0) return cents;
 
     const raw = Number(slot?.pricePerPlayer ?? slot?.price_per_player ?? 0);
     if (!Number.isFinite(raw) || raw < 0) return 0;
 
-    // Heuristic: if raw is large, assume it's already cents
     if (raw >= 500) return Math.round(raw);
     return Math.round(raw * 100);
   }
@@ -390,11 +395,9 @@
   function computeTotalCents(slot){
     const players = Number($("players").value || 1);
 
-    // base tee time price
     const perPlayerCents = _slotPerPlayerCents(slot);
     let total = perPlayerCents * players;
 
-    // add-ons (expect ids: "cart" and/or "clubs")
     const picked = new Set((selectedAddonIds || []).map(String));
     (addons || []).forEach(a => {
       const id = String(a.id || "");
@@ -404,7 +407,6 @@
       const priceCents = Number(a.price_cents ?? a.priceCents ?? 0);
       if (!Number.isFinite(priceCents) || priceCents < 0) return;
 
-      // For course-settings add-ons, these are per booking (not per player)
       total += priceCents;
     });
 
@@ -423,82 +425,75 @@
     if (mTotal) mTotal.textContent = moneyFromCents(totalCents);
   }
 
-  // ✅ END ADD-ONS helpers
+  // Render add-ons into the modal
+  function renderAddons(){
+    const wrap = $("addonsWrap");
+    if (!wrap) return;
 
+    wrap.innerHTML = "";
+    selectedAddonIds = [];
 
-// Render add-ons into the modal
-function renderAddons(){
-  const wrap = $("addonsWrap");
-  if (!wrap) return;
+    const active = (addons || []).filter(a => a && a.active !== false);
+    if (!active.length){
+      wrap.innerHTML = `<span class="note">No add-ons for this course.</span>`;
+      return;
+    }
 
-  wrap.innerHTML = "";
-  selectedAddonIds = [];
+    active.forEach(a => {
+      const id = String(a.id);
+      const label = String(a.label || "Add-on");
+      const priceCents = Number(a.price_cents ?? a.priceCents ?? 0);
+      const perPlayer = false;
 
-  const active = (addons || []).filter(a => a && a.active !== false);
-  if (!active.length){
-    wrap.innerHTML = `<span class="note">No add-ons for this course.</span>`;
-    return;
+      const el = document.createElement("label");
+      el.style.display = "flex";
+      el.style.gap = "8px";
+      el.style.alignItems = "center";
+      el.style.fontSize = "13px";
+      el.style.color = "var(--text)";
+
+      el.innerHTML = `
+        <input type="checkbox" data-addon-id="${id}" style="width:auto;" />
+        ${label}
+        <span style="color:var(--muted);font-size:12px;">
+          (+${moneyFromCents(priceCents)}${perPlayer ? " / player" : ""})
+        </span>
+      `;
+
+      const cb = el.querySelector("input[type='checkbox']");
+      cb.addEventListener("change", () => {
+        selectedAddonIds = Array.from(wrap.querySelectorAll("input[type='checkbox'][data-addon-id]"))
+          .filter(x => x.checked)
+          .map(x => String(x.getAttribute("data-addon-id") || ""))
+          .filter(Boolean);
+
+        updateModalTotal();
+      });
+
+      wrap.appendChild(el);
+    });
   }
 
-  active.forEach(a => {
-    const id = String(a.id);
-    const label = String(a.label || "Add-on");
-    const priceCents = Number(a.price_cents ?? a.priceCents ?? 0);
-        const perPlayer = false; // course-settings add-ons are per booking
+  async function loadAddons(){
+    try{
+      const res = await apiFetch("/api/book/addons?" + new URLSearchParams({ slug }).toString());
+      const data = await res.json().catch(()=> ({}));
 
-    const el = document.createElement("label");
-    el.style.display = "flex";
-    el.style.gap = "8px";
-    el.style.alignItems = "center";
-    el.style.fontSize = "13px";
-    el.style.color = "var(--text)";
-
-    el.innerHTML = `
-      <input type="checkbox" data-addon-id="${id}" style="width:auto;" />
-      ${label}
-      <span style="color:var(--muted);font-size:12px;">
-        (+${moneyFromCents(priceCents)}${perPlayer ? " / player" : ""})
-      </span>
-    `;
-
-    const cb = el.querySelector("input[type='checkbox']");
-    cb.addEventListener("change", () => {
-      // rebuild selected list
-      selectedAddonIds = Array.from(wrap.querySelectorAll("input[type='checkbox'][data-addon-id]"))
-        .filter(x => x.checked)
-        .map(x => String(x.getAttribute("data-addon-id") || ""))
-        .filter(Boolean);
-
-      updateModalTotal();
-    });
-
-    wrap.appendChild(el);
-  });
-}
-
-async function loadAddons(){
-  // ✅ Course-settings model: expect backend to return cart/clubs (virtual add-ons)
-  // GET /api/book/addons?slug=COURSE
-  try{
-    const res = await fetch("/api/book/addons?" + new URLSearchParams({ slug }).toString());
-    const data = await res.json().catch(()=> ({}));
-
-    if (res.ok && data && data.ok && Array.isArray(data.addons)){
-      // Expect: [{ id:"cart", label:"Shared Cart Hire", price_cents:..., active:true }, { id:"clubs", ... }]
-      addons = data.addons.map(a => ({
-        id: String(a.id || ""),
-        label: String(a.label || "Add-on"),
-        // normalize price field name to price_cents
-        price_cents: Number(a.price_cents ?? a.priceCents ?? 0),
-        active: a.active !== false
-      })).filter(a => a.id);
-    } else {
+      if (res.ok && data && data.ok && Array.isArray(data.addons)){
+        addons = data.addons.map(a => ({
+          id: String(a.id || ""),
+          label: String(a.label || "Add-on"),
+          price_cents: Number(a.price_cents ?? a.priceCents ?? 0),
+          active: a.active !== false
+        })).filter(a => a.id);
+      } else {
+        addons = [];
+      }
+    }catch{
       addons = [];
     }
-  }catch{
-    addons = [];
   }
-}
+
   // default date = today (local)
   const today = new Date();
   const yyyy = today.getFullYear();
@@ -509,10 +504,16 @@ async function loadAddons(){
   // Load course info (if it exists in DB)
   async function loadCourse() {
     try {
-      const res = await fetch("/api/book/course/" + encodeURIComponent(slug));
-      const data = await res.json();
+      // ✅ Use slug param + header (covers both backend styles)
+      const res = await apiFetch("/api/book/course?slug=" + encodeURIComponent(slug));
+      const data = await res.json().catch(()=> ({}));
       if (res.ok && data && data.ok && data.course) {
         course = data.course;
+      } else {
+        // optional fallback if your router uses /course/:slug
+        const r2 = await apiFetch("/api/book/course/" + encodeURIComponent(slug));
+        const d2 = await r2.json().catch(()=> ({}));
+        if (r2.ok && d2 && d2.ok && d2.course) course = d2.course;
       }
     } catch {}
     $("courseName").textContent = course.name || "Course";
@@ -557,7 +558,6 @@ async function loadAddons(){
         ? Number(t.remaining || 0)
         : Math.max(0, maxPlayers - bookedPlayers);
 
-      // golfer icons (green avail, red taken)
       const spots = [];
       const availCount = Math.max(0, Math.min(maxPlayers, remaining));
       for (let i = 0; i < maxPlayers; i++) {
@@ -570,7 +570,7 @@ async function loadAddons(){
         </span>
       `;
 
-            const fitsText =
+      const fitsText =
         Number.isFinite(remaining)
           ? (remaining >= wantPlayers ? `✅ fits ${wantPlayers}` : `❌ only ${remaining} left`)
           : "";
@@ -586,7 +586,7 @@ async function loadAddons(){
               ${fitsText ? `<span>${fitsText}</span>` : ""}
             </div>
           </div>
-                    <div class="price">$${price.toFixed(2)} / player</div>
+          <div class="price">$${price.toFixed(2)} / player</div>
         </div>
         <button class="bookBtn">Book this time</button>
       `;
@@ -620,7 +620,7 @@ async function loadAddons(){
         latest
       });
 
-      const res = await fetch("/api/book/availability?" + qs.toString());
+      const res = await apiFetch("/api/book/availability?" + qs.toString());
       const data = await res.json().catch(()=> ({}));
 
       if (!res.ok || !data || !data.ok) {
@@ -657,35 +657,35 @@ async function loadAddons(){
   }
 
   async function openModal(slot) {
-  selectedSlot = slot;
+    selectedSlot = slot;
 
-  resetModalToForm();
+    resetModalToForm();
 
-  await loadAddons();
-  renderAddons();
+    await loadAddons();
+    renderAddons();
 
-  $("mCourse").textContent = course.name || slug;
-  $("mDate").textContent = $("date").value;
-  $("mTime").textContent = slot.time;
-  $("mPlayers").textContent = $("players").value;
-  $("mHoles").textContent = $("holes").value;
+    $("mCourse").textContent = course.name || slug;
+    $("mDate").textContent = $("date").value;
+    $("mTime").textContent = slot.time;
+    $("mPlayers").textContent = $("players").value;
+    $("mHoles").textContent = $("holes").value;
 
     const priceCents = _slotPerPlayerCents(slot);
-  $("mPrice").textContent = `${moneyFromCents(priceCents)} per player`;
+    $("mPrice").textContent = `${moneyFromCents(priceCents)} per player`;
 
-  $("bName").value = "";
-  $("bEmail").value = "";
-  $("bPhone").value = "";
+    $("bName").value = "";
+    $("bEmail").value = "";
+    $("bPhone").value = "";
 
-  if ($("players") && !$("players")._wiredForTotal){
-    $("players")._wiredForTotal = true;
-    $("players").addEventListener("change", updateModalTotal);
+    if ($("players") && !$("players")._wiredForTotal){
+      $("players")._wiredForTotal = true;
+      $("players").addEventListener("change", updateModalTotal);
+    }
+
+    updateModalTotal();
+
+    $("modalWrap").style.display = "flex";
   }
-
-  updateModalTotal();
-
-  $("modalWrap").style.display = "flex";
-}
 
   function showBookingConfirmation(data, email) {
     $("modalTitle").textContent = "✅ Booking confirmed";
@@ -739,7 +739,7 @@ async function loadAddons(){
     $("confirmBtn").disabled = true;
 
     try {
-      const res = await fetch("/api/book/book", {
+      const res = await apiFetch("/api/book/book", {
         method: "POST",
         headers: { "Content-Type":"application/json" },
         body: JSON.stringify({
@@ -752,7 +752,6 @@ async function loadAddons(){
           email,
           phone,
           addonIds: selectedAddonIds,
-          }
         })
       });
 
@@ -770,7 +769,7 @@ async function loadAddons(){
     }
   }
 
-    function closeModal(){
+  function closeModal(){
     $("modalWrap").style.display = "none";
     selectedSlot = null;
     selectedAddonIds = [];
@@ -796,10 +795,10 @@ async function loadAddons(){
   $("confirmBtn").onclick = confirmBooking;
 
   (async () => {
-  await loadCourse();
-  await loadAddons();
-  renderTimes([]);
-})();
+    await loadCourse();
+    await loadAddons();
+    renderTimes([]);
+  })();
 </script>
 </body>
 </html>
