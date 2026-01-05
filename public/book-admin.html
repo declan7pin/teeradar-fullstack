@@ -1072,60 +1072,7 @@ async function listAddons(){
       ul.appendChild(li);
     }
   }
-// ✅ ADD: Add-ons button handlers
-$("adCreateBtn").onclick = async () => {
-  $("adMsg").textContent = "Saving add-on...";
-  try{
-    const slug = ($("adSlug").value || "").trim();
-    if (!slug) throw new Error("course slug is required");
 
-    const label = ($("adLabel").value || "").trim();
-    if (!label) throw new Error("label is required");
-
-    const payload = {
-      slug,
-      label,
-      category: ($("adCategory").value || "cart").trim(),
-      priceCents: Number($("adPrice").value || 0),
-      perPlayer: !!$("adPerPlayer").checked,
-      active: !!$("adActive").checked,
-    };
-
-    // If editing existing add-on
-    const editingId = $("adMsg").dataset.editingId || "";
-    if (editingId) payload.id = Number(editingId);
-
-    // ✅ Expected backend endpoint:
-    // POST /api/book/admin/addons  (create or update if payload.id present)
-    await j("/api/book/admin/addons", { method:"POST", body: JSON.stringify(payload) });
-
-    $("adMsg").textContent = "✅ Saved add-on";
-    $("adMsg").dataset.editingId = "";
-    await listAddons();
-  }catch(e){
-    $("adMsg").textContent = "❌ " + e.message;
-  }
-};
-
-$("adListBtn").onclick = listAddons;
-
-$("adClearBtn").onclick = () => {
-  $("adMsg").textContent = "";
-  $("adMsg").dataset.editingId = "";
-  _clearAddonForm();
-};
-  (function(){
-    try{
-      const d = new Date();
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth()+1).padStart(2,"0");
-      const dd = String(d.getDate()).padStart(2,"0");
-      const today = `${yyyy}-${mm}-${dd}`;
-      $("gDate").value = today;
-      $("dDate").value = today;
-      $("vDate").value = today;
-    }catch{}
-  })();
 
   refresh();
 </script>
