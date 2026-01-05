@@ -2191,8 +2191,12 @@ router.post("/book", async (req, res) => {
     const golfer_phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
     // ✅ ADD: cart / hire clubs selection (optional)
-    const has_cart = !!req.body?.hasCart;
-    const has_hire_clubs = !!req.body?.hasHireClubs; // ✅ NEW
+// Support BOTH legacy flags (hasCart/hasHireClubs) AND new dynamic add-ons (addonIds)
+const addonIds = Array.isArray(req.body?.addonIds) ? req.body.addonIds.map(String) : [];
+const picked = new Set(addonIds.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean));
+
+const has_cart = !!req.body?.hasCart || picked.has("cart");
+const has_hire_clubs = !!req.body?.hasHireClubs || picked.has("hire_clubs");
 
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
