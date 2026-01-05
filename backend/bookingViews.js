@@ -74,6 +74,75 @@ async function qExec(sql, params = []) {
 }
 
 // -----------------------------
+// ✅ NEW: load add-ons per booking (cart hire / club hire)
+// (Postgres-only; safe no-op if tables not present)
+// -----------------------------
+async function getAddonsForBookingIds(bookingIds = []) {
+  const ids = Array.isArray(bookingIds)
+    ? bookingIds
+        .map((x) => Number(x))
+        .filter((n) => Number.isFinite(n) && n > 0)
+    : [];
+
+  if (!ids.length) return new Map();
+
+  // NOTE: bookingMigrate.js should have created:
+  // - booking_addons (id, name, price_cents, ...)
+  // - booking_booking_addons (booking_id, addon_id, qty, total_cents)
+  const rows = await qAll(
+    `
+    SELECT
+      bba.booking_id,
+      bba.qty,
+      bba.total_cents,
+      a.id          AS addon_id,
+      a.name        AS addon_name,
+      a.price_cents AS addon_price_cents
+    FROM booking_booking_addons bba
+    JOIN booking_addons a
+      ON a.id = bba.addon_id
+    WHERE bba.booking_id = ANY($1::bigint[])
+    ORDER BY bba.booking_id ASC, a.name ASC
+    `,
+    [ids]
+  );
+
+  const map = new Map();
+  for (const r of rows) {
+    const bid = Number(r.booking_id);
+    if (!map.has(bid)) map.set(bid, []);
+    map.get(bid).push({
+      addonId: r.addon_id,
+      name: r.addon_name,
+      qty: Number(r.qty) || 1,
+      priceCents: Number(r.addon_price_cents) || 0,
+      totalCents: Number(r.total_cents) || 0,
+    });
+  }
+  return map;
+}
+
+async function attachAddonsToRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) return rows;
+
+  // Only for Postgres booking system (SQLite fallback likely won’t have addons schema)
+  if (typeof db.query !== "function") {
+    return rows.map((r) => ({ ...r, addons: [] }));
+  }
+
+  try {
+    const bookingIds = rows.map((r) => r.id).filter(Boolean);
+    const map = await getAddonsForBookingIds(bookingIds);
+    return rows.map((r) => ({
+      ...r,
+      addons: map.get(Number(r.id)) || [],
+    }));
+  } catch {
+    return rows.map((r) => ({ ...r, addons: [] }));
+  }
+}
+
+// -----------------------------
 // SUPER ADMIN helper (provided by server.js middleware)
 // -----------------------------
 function _isSuperAdminReq(req, email) {
@@ -419,6 +488,7 @@ router.get("/api/book/admin/bookings", requireBookingAdmin, async (req, res) => 
       if (date) {
         rows = await qAll(
           `SELECT
+             b.id,
              $1::text AS course_slug,
              b.play_date::text AS play_date,
              b.tee_time,
@@ -427,6 +497,9 @@ router.get("/api/book/admin/bookings", requireBookingAdmin, async (req, res) => 
              b.golfer_name  AS name,
              b.golfer_email AS email,
              b.golfer_phone AS phone,
+             b.price_per_player_cents,
+             b.total_cents,
+             b.booking_fee_cents,
              b.status,
              b.reference,
              b.created_at
@@ -438,6 +511,7 @@ router.get("/api/book/admin/bookings", requireBookingAdmin, async (req, res) => 
       } else {
         rows = await qAll(
           `SELECT
+             b.id,
              $1::text AS course_slug,
              b.play_date::text AS play_date,
              b.tee_time,
@@ -446,6 +520,9 @@ router.get("/api/book/admin/bookings", requireBookingAdmin, async (req, res) => 
              b.golfer_name  AS name,
              b.golfer_email AS email,
              b.golfer_phone AS phone,
+             b.price_per_player_cents,
+             b.total_cents,
+             b.booking_fee_cents,
              b.status,
              b.reference,
              b.created_at
@@ -480,6 +557,8 @@ router.get("/api/book/admin/bookings", requireBookingAdmin, async (req, res) => 
     return res.status(500).json({ error: "Failed to load bookings", detail: String(e?.message || e) });
   }
 
+  rows = await attachAddonsToRows(rows);
+
   return res.json({ bookings: rows });
 });
 
@@ -492,7 +571,12 @@ router.get("/api/book/course-admin/bookings", requireCourseAdmin, async (req, re
   const url = new URL(req.url, `http://${req.headers.host}`);
   const date = String(url.searchParams.get("date") || "").trim();
 
-  const slug = String(req.courseAdmin?.slug || "").trim();
+  // ✅ allow super-admin "*" to query a course via ?slug=xxx
+  let slug = String(req.courseAdmin?.slug || "").trim();
+  if (slug === "*") {
+    slug = String(url.searchParams.get("slug") || "").trim();
+  }
+
   if (!slug) return res.status(400).json({ error: "Missing slug" });
 
   let courseId = null;
@@ -508,6 +592,7 @@ router.get("/api/book/course-admin/bookings", requireCourseAdmin, async (req, re
       if (date) {
         rows = await qAll(
           `SELECT
+             b.id,
              $1::text AS course_slug,
              b.play_date::text AS play_date,
              b.tee_time,
@@ -516,6 +601,9 @@ router.get("/api/book/course-admin/bookings", requireCourseAdmin, async (req, re
              b.golfer_name  AS name,
              b.golfer_email AS email,
              b.golfer_phone AS phone,
+             b.price_per_player_cents,
+             b.total_cents,
+             b.booking_fee_cents,
              b.status,
              b.reference,
              b.created_at
@@ -527,6 +615,7 @@ router.get("/api/book/course-admin/bookings", requireCourseAdmin, async (req, re
       } else {
         rows = await qAll(
           `SELECT
+             b.id,
              $1::text AS course_slug,
              b.play_date::text AS play_date,
              b.tee_time,
@@ -535,6 +624,9 @@ router.get("/api/book/course-admin/bookings", requireCourseAdmin, async (req, re
              b.golfer_name  AS name,
              b.golfer_email AS email,
              b.golfer_phone AS phone,
+             b.price_per_player_cents,
+             b.total_cents,
+             b.booking_fee_cents,
              b.status,
              b.reference,
              b.created_at
@@ -568,6 +660,8 @@ router.get("/api/book/course-admin/bookings", requireCourseAdmin, async (req, re
   } catch (e) {
     return res.status(500).json({ error: "Failed to load bookings", detail: String(e?.message || e) });
   }
+
+  rows = await attachAddonsToRows(rows);
 
   return res.json({ bookings: rows, course_slug: slug });
 });
