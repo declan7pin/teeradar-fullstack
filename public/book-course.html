@@ -728,8 +728,7 @@ updateModalTotal();
           name,
           email,
           phone,
-          hasCart: !!$("addCart")?.checked,
-          hasHireClubs: !!$("addClubs")?.checked,
+          addonIds: selectedAddonIds,
           }
         })
       });
