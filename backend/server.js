@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 import nodemailer from "nodemailer";
 import Stripe from "stripe"; // ✅ Stripe
 import jwt from "jsonwebtoken"; // ✅ NEW (only used to read email from Bearer token)
-
+import { ensureBookingTemplateSchema } from "./bookingTemplateMigrate.js";
 // ✅ NEW: cookies (needed for booking admin auth cookie)
 import cookieParser from "cookie-parser";
 
