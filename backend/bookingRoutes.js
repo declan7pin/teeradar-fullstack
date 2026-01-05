@@ -662,9 +662,7 @@ router.post("/admin/course-admin", requirePlatformAdmin, async (req, res) => {
     );
     if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
     const courseId = c.rows[0].id;
-const courseRow = c.rows[0];
-const cartQty = Number(courseRow.cart_qty || 0);
-const clubsQty = Number(courseRow.hire_clubs_qty || 0);
+
     const { saltHex, hashHex } = hashPassword(password);
 
     await db.query(
@@ -1993,9 +1991,7 @@ router.get("/course/:slug", async (req, res) => {
       [slug]
     );
     if (!rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
-const courseRow = rows[0];
-const cartQty = Number(courseRow.cart_qty || 0);
-const clubsQty = Number(courseRow.hire_clubs_qty || 0);
+
     // ✅ analytics: booking course page viewed
     recordEvent({
       type: "booking_course_view",
@@ -2008,6 +2004,7 @@ const clubsQty = Number(courseRow.hire_clubs_qty || 0);
       eventType: "course_view",
       payload: { slug },
     }).catch(() => {});
+
     res.json({ ok: true, course: rows[0] });
   } catch (e) {
     console.error("course/:slug", e);
@@ -2035,14 +2032,19 @@ router.get("/availability", async (req, res) => {
     if (sM === null || eM === null || eM <= sM) return res.status(400).json({ ok: false, error: "time_range_invalid" });
 
     const c = await db.query(
-  `SELECT id, name, cart_qty, hire_clubs_qty, duration_9_mins, duration_18_mins
-   FROM booking_courses
-   WHERE slug=$1
-   LIMIT 1;`,
-  [slug]
-);
+      `SELECT id, name, cart_qty, hire_clubs_qty, duration_9_mins, duration_18_mins
+       FROM booking_courses
+       WHERE slug=$1
+       LIMIT 1;`,
+      [slug]
+    );
     if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
     const courseId = c.rows[0].id;
+
+    // ✅ FIX: these were referenced later but not defined in this scope
+    const courseRow = c.rows[0];
+    const cartQty = Number(courseRow.cart_qty || 0);
+    const clubsQty = Number(courseRow.hire_clubs_qty || 0);
 
     // ✅ analytics: availability search
     recordEvent({
@@ -2074,41 +2076,43 @@ router.get("/availability", async (req, res) => {
       [courseId, date, holes, sM, eM, players]
     );
 
-    const slots = await Promise.all((rows || []).map(async (r) => {
-  const startAtIso = toIsoDateTimeLocal(date, r.tee_time);
-  const dur = durationMinsForHoles(courseRow, r.holes);
-  const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
+    const slots = await Promise.all(
+      (rows || []).map(async (r) => {
+        const startAtIso = toIsoDateTimeLocal(date, r.tee_time);
+        const dur = durationMinsForHoles(courseRow, r.holes);
+        const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-  const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage({
-    courseId,
-    startAtIso,
-    endAtIso,
-  });
+        const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage({
+          courseId,
+          startAtIso,
+          endAtIso,
+        });
 
-  const cartRemaining = Math.max(0, cartQty - cartsUsed);
-  const clubsRemaining = Math.max(0, clubsQty - clubsUsed);
+        const cartRemaining = Math.max(0, cartQty - cartsUsed);
+        const clubsRemaining = Math.max(0, clubsQty - clubsUsed);
 
-  return {
-    time: r.tee_time,
-    holes: r.holes,
-    maxPlayers: r.max_players,
-    bookedPlayers: r.booked_players,
-    remaining: Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0)),
-    pricePerPlayerCents: r.price_per_player_cents,
-    pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
+        return {
+          time: r.tee_time,
+          holes: r.holes,
+          maxPlayers: r.max_players,
+          bookedPlayers: r.booked_players,
+          remaining: Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0)),
+          pricePerPlayerCents: r.price_per_player_cents,
+          pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
 
-    // ✅ add-on availability
-    cartRemaining,
-    clubsRemaining,
-    cartSoldOut: cartQty > 0 && cartRemaining <= 0,
-    clubsSoldOut: clubsQty > 0 && clubsRemaining <= 0,
-    cartQty,
-    clubsQty,
-    durationMins: dur,
-  };
-}));
+          // ✅ add-on availability
+          cartRemaining,
+          clubsRemaining,
+          cartSoldOut: cartQty > 0 && cartRemaining <= 0,
+          clubsSoldOut: clubsQty > 0 && clubsRemaining <= 0,
+          cartQty,
+          clubsQty,
+          durationMins: dur,
+        };
+      })
+    );
 
-res.json({ ok: true, slots });
+    res.json({ ok: true, slots });
   } catch (e) {
     console.error("availability", e);
     res.status(500).json({ ok: false, error: "internal_error" });
@@ -2145,24 +2149,28 @@ router.post("/book", async (req, res) => {
       return res.status(400).json({ ok: false, error: "email_required_valid" });
     }
 
-    // ✅ FIX: load course add-on fees from DB (do NOT trust client values)
+    // ✅ FIX 1: the SQL string was missing a starting backtick
+    // ✅ FIX 2: also load qty + durations so we can validate add-on inventory + set start/end window
     const c = await db.query(
+      `
       SELECT id, slug, name, notes,
-       cart_fee_cents, hire_clubs_fee_cents,
-       cart_qty, hire_clubs_qty,
-       duration_9_mins, duration_18_mins
-       FROM booking_courses
-       WHERE slug=$1
-       LIMIT 1;`,
+        cart_fee_cents, hire_clubs_fee_cents,
+        cart_qty, hire_clubs_qty,
+        duration_9_mins, duration_18_mins
+      FROM booking_courses
+      WHERE slug=$1
+      LIMIT 1;
+      `,
       [slug]
     );
     if (!c.rows.length) {
       return res.status(404).json({ ok: false, error: "course_not_found" });
     }
-    const courseId = c.rows[0].id;
+    const courseRow = c.rows[0];
+    const courseId = courseRow.id;
 
-    const courseCartFeeCents = Number(c.rows[0].cart_fee_cents || 0);
-    const courseHireClubsFeeCents = Number(c.rows[0].hire_clubs_fee_cents || 0);
+    const courseCartFeeCents = Number(courseRow.cart_fee_cents || 0);
+    const courseHireClubsFeeCents = Number(courseRow.hire_clubs_fee_cents || 0);
 
     const cart_fee_cents = has_cart ? courseCartFeeCents : 0;
     const hire_clubs_fee_cents = has_hire_clubs ? courseHireClubsFeeCents : 0;
@@ -2172,6 +2180,32 @@ router.post("/book", async (req, res) => {
     }
     if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_clubs_fee_cents > 10000000) {
       return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
+    }
+
+    // ✅ NEW: compute start/end window and re-check add-on availability server-side
+    const startAtIso = toIsoDateTimeLocal(date, time);
+    const dur = durationMinsForHoles(courseRow, holes);
+    const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
+
+    const cartQty = Number(courseRow.cart_qty || 0);
+    const clubsQty = Number(courseRow.hire_clubs_qty || 0);
+
+    if ((has_cart && cartQty > 0) || (has_hire_clubs && clubsQty > 0)) {
+      const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage({
+        courseId,
+        startAtIso,
+        endAtIso,
+      });
+
+      const cartRemaining = Math.max(0, cartQty - cartsUsed);
+      const clubsRemaining = Math.max(0, clubsQty - clubsUsed);
+
+      if (has_cart && cartQty > 0 && cartRemaining <= 0) {
+        return res.status(409).json({ ok: false, error: "cart_sold_out" });
+      }
+      if (has_hire_clubs && clubsQty > 0 && clubsRemaining <= 0) {
+        return res.status(409).json({ ok: false, error: "hire_clubs_sold_out" });
+      }
     }
 
     const feePerPlayerCents = Number(process.env.BOOKING_FEE_PER_PLAYER_CENTS || 0);
@@ -2230,6 +2264,7 @@ router.post("/book", async (req, res) => {
     const pricePerPlayerCents = Number(timeRow.price_per_player_cents || 0);
     const totalCents = pricePerPlayerCents * players;
 
+    // ✅ FIX: store start_at/end_at so overlap inventory works (and future reporting)
     await db.query(
       `
       INSERT INTO booking_bookings
@@ -2238,9 +2273,10 @@ router.post("/book", async (req, res) => {
          price_per_player_cents, total_cents, booking_fee_cents,
          reference, status, paid,
          has_cart, cart_fee_cents,
-         has_hire_clubs, hire_clubs_fee_cents)
+         has_hire_clubs, hire_clubs_fee_cents,
+         start_at, end_at)
       VALUES
-        ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'CONFIRMED',false,$13,$14,$15,$16)
+        ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'CONFIRMED',false,$13,$14,$15,$16,$17::timestamptz,$18::timestamptz)
       `,
       [
         courseId,
@@ -2259,6 +2295,8 @@ router.post("/book", async (req, res) => {
         cart_fee_cents,
         has_hire_clubs,
         hire_clubs_fee_cents,
+        startAtIso,
+        endAtIso,
       ]
     );
 
@@ -2266,7 +2304,8 @@ router.post("/book", async (req, res) => {
     try {
       const ip = getClientIp(req);
       const userId = golfer_email || ip || null;
-      const grossCents = Number(totalCents || 0) + Number(cart_fee_cents || 0) + Number(hire_clubs_fee_cents || 0);
+      const grossCents =
+        Number(totalCents || 0) + Number(cart_fee_cents || 0) + Number(hire_clubs_fee_cents || 0);
 
       await recordEvent({
         type: "booking_created",
