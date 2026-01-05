@@ -629,39 +629,35 @@ async function loadAddons(){
   }
 
   async function openModal(slot) {
-    selectedSlot = slot;
+  selectedSlot = slot;
 
- 
-    
-    resetModalToForm();
-    await loadAddons();
-    renderAddons();
-    
-    $("mCourse").textContent = course.name || slug;
-    $("mDate").textContent = $("date").value;
-    $("mTime").textContent = slot.time;
-    $("mPlayers").textContent = $("players").value;
-    $("mHoles").textContent = $("holes").value;
+  resetModalToForm();
 
-    const price = Number(slot.pricePerPlayer || 0);
-    $("mPrice").textContent = `$${price.toFixed(0)} per player`;
+  await loadAddons();
+  renderAddons();
 
-    $("bName").value = "";
-    $("bEmail").value = "";
-    $("bPhone").value = "";
+  $("mCourse").textContent = course.name || slug;
+  $("mDate").textContent = $("date").value;
+  $("mTime").textContent = slot.time;
+  $("mPlayers").textContent = $("players").value;
+  $("mHoles").textContent = $("holes").value;
 
-   // ✅ Dynamic add-ons: render + wire total updates
+  const price = Number(slot.pricePerPlayer || 0);
+  $("mPrice").textContent = `$${price.toFixed(0)} per player`;
 
-if ($("players") && !$("players")._wiredForTotal){
-  $("players")._wiredForTotal = true;
-  $("players").addEventListener("change", updateModalTotal);
-}
+  $("bName").value = "";
+  $("bEmail").value = "";
+  $("bPhone").value = "";
 
-updateModalTotal();
-// ✅ END Dynamic add-ons
-
-    $("modalWrap").style.display = "flex";
+  if ($("players") && !$("players")._wiredForTotal){
+    $("players")._wiredForTotal = true;
+    $("players").addEventListener("change", updateModalTotal);
   }
+
+  updateModalTotal();
+
+  $("modalWrap").style.display = "flex";
+}
 
   function showBookingConfirmation(data, email) {
     $("modalTitle").textContent = "✅ Booking confirmed";
