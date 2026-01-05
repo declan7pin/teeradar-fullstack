@@ -2069,17 +2069,41 @@ router.get("/availability", async (req, res) => {
       [courseId, date, holes, sM, eM, players]
     );
 
-    const slots = (rows || []).map((r) => ({
-      time: r.tee_time,
-      holes: r.holes,
-      maxPlayers: r.max_players,
-      bookedPlayers: r.booked_players,
-      remaining: Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0)),
-      pricePerPlayerCents: r.price_per_player_cents,
-      pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
-    }));
+    const slots = await Promise.all((rows || []).map(async (r) => {
+  const startAtIso = toIsoDateTimeLocal(date, r.tee_time);
+  const dur = durationMinsForHoles(courseRow, r.holes);
+  const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-    res.json({ ok: true, slots });
+  const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage({
+    courseId,
+    startAtIso,
+    endAtIso,
+  });
+
+  const cartRemaining = Math.max(0, cartQty - cartsUsed);
+  const clubsRemaining = Math.max(0, clubsQty - clubsUsed);
+
+  return {
+    time: r.tee_time,
+    holes: r.holes,
+    maxPlayers: r.max_players,
+    bookedPlayers: r.booked_players,
+    remaining: Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0)),
+    pricePerPlayerCents: r.price_per_player_cents,
+    pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
+
+    // ✅ NEW: add-on availability (so UI can show SOLD OUT)
+    cartRemaining,
+    clubsRemaining,
+    cartSoldOut: cartQty > 0 && cartRemaining <= 0,
+    clubsSoldOut: clubsQty > 0 && clubsRemaining <= 0,
+    cartQty,
+    clubsQty,
+    durationMins: dur,
+  };
+}));
+
+res.json({ ok: true, slots });
   } catch (e) {
     console.error("availability", e);
     res.status(500).json({ ok: false, error: "internal_error" });
