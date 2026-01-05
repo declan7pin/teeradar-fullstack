@@ -852,17 +852,19 @@ app.get("/api/scorecards/:state", (req, res) => {
 /* ✅✅✅ END ONLY ADDITION ✅✅✅ */
 
 app.use("/api/auth", authRouter);
-
-// ✅ NEW: booking API router
-app.use("/api/book", bookingRoutes);
-
 // ✅✅✅ ADD (needed): mount booking views router (admin/course-admin views) ✅✅✅
+
 app.use((req, res, next) => {
   req.isSuperAdmin = (email) => isSuperAdmin(email);
   req.isBookingAdmin = () => _isBookingAdminReq(req);
   req.bookingAdmin = _isBookingAdminReq(req);
   next();
 });
+
+// ✅ NEW: booking API router
+app.use("/api/book", bookingRoutes);
+
+
 
 // ✅✅✅ ADD THIS ✅✅✅
 app.use(bookingAnalyticsRouter);
