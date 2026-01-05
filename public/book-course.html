@@ -355,6 +355,8 @@
   const slug = location.pathname.split("/").pop().toLowerCase();
 
   let course = { slug, name: "Course", notes: "" };
+  let addons = [];           // list from backend (active add-ons for this course)
+let selectedAddonIds = []; // what the user picked for this booking
 
   // basic validators (match backend requirements)
   function isValidEmail(email){
