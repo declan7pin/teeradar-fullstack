@@ -538,7 +538,7 @@ $("adCreateBtn").onclick = async () => {
     // POST /api/book/admin/addons  (create or update if payload.id present)
     await j("/api/book/admin/addons", { method:"POST", body: JSON.stringify(payload) });
 
-    $("adMsg").textContent = "Loading add-ons...";
+    $("adMsg").textContent = "✅ Saved add-on";
 $("adMsg").dataset.editingId = "";
 $("adListBox").style.display = "none";
 $("adBody").innerHTML = "";
