@@ -23,13 +23,10 @@ const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim
 const JWT_SECRET_FALLBACK = (process.env.JWT_SECRET || "").trim();
 
 // ✅ ADD: visibility for course-admin token secret (Render env check)
-console.log("🔐 course admin jwt env check:", {
+console.log("🔐 course admin env:", {
   COURSE_ADMIN_JWT_SECRET_set: !!COURSE_ADMIN_JWT_SECRET,
-  COURSE_ADMIN_JWT_SECRET_len: COURSE_ADMIN_JWT_SECRET ? COURSE_ADMIN_JWT_SECRET.length : 0,
   JWT_SECRET_set: !!JWT_SECRET_FALLBACK,
-  JWT_SECRET_len: JWT_SECRET_FALLBACK ? JWT_SECRET_FALLBACK.length : 0,
   BOOKING_ADMIN_SECRET_set: !!ADMIN_SECRET,
-  BOOKING_ADMIN_SECRET_len: ADMIN_SECRET ? ADMIN_SECRET.length : 0,
 });
 
 // ✅ ADD: prove requests are hitting THIS router (Render logs)
