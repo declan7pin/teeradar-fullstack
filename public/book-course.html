@@ -434,7 +434,11 @@ let clubsAddonId = null;
     if (!wrap) return;
 
     wrap.innerHTML = "";
-    selectedAddonIds = [];
+selectedAddonIds = [];
+cartQtySelected = 0;
+clubsQtySelected = 0;
+cartAddonId = null;
+clubsAddonId = null;
 
     const active = (addons || []).filter(a => a && a.active !== false);
     if (!active.length){
