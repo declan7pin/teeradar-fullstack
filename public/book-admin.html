@@ -1114,7 +1114,59 @@ timesRows.sort((a,b) => {
       ul.appendChild(li);
     }
   }
+$("checkInventoryBtn").onclick = async () => {
+  $("inventoryMsg").textContent = "Checking inventory...";
+  $("inventoryBox").style.display = "none";
 
+  try {
+    const slug = ($("iSlug").value || "").trim();
+    const date = ($("iDate").value || "").trim();
+
+    if (!slug) throw new Error("course slug is required");
+    if (!date) throw new Error("play date is required");
+
+    // 1️⃣ Load course settings (totals)
+    const settings = await j(
+      "/api/book/admin/course-settings?slug=" + encodeURIComponent(slug),
+      { method:"GET" }
+    );
+
+    const totalCarts = Number(settings.cart_qty || 0);
+    const totalClubs = Number(settings.hire_clubs_qty || 0);
+
+    // 2️⃣ Load bookings for date
+    const bookingsOut = await j(
+      "/api/book/admin/bookings?" +
+      new URLSearchParams({ slug, date }).toString(),
+      { method:"GET" }
+    );
+
+    const bookings = bookingsOut.bookings || [];
+
+    let cartsUsed = 0;
+    let clubsUsed = 0;
+
+    bookings.forEach(b => {
+      cartsUsed += Number(b.cart_qty ?? (b.has_cart ? 1 : 0));
+      clubsUsed += Number(b.hire_clubs_qty ?? (b.has_hire_clubs ? 1 : 0));
+    });
+
+    const cartsLeft = Math.max(0, totalCarts - cartsUsed);
+    const clubsLeft = Math.max(0, totalClubs - clubsUsed);
+
+    $("invCarts").textContent =
+      `${cartsLeft} remaining (of ${totalCarts})`;
+
+    $("invClubs").textContent =
+      `${clubsLeft} remaining (of ${totalClubs})`;
+
+    $("inventoryBox").style.display = "block";
+    $("inventoryMsg").textContent = "✅ Inventory loaded";
+
+  } catch (e) {
+    $("inventoryMsg").textContent = "❌ " + e.message;
+  }
+};
   refresh();
 </script>
 </body>
