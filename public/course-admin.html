@@ -49,6 +49,9 @@
     .status.err{border-color:#fecaca;background:#fef2f2;color:#991b1b}
     .note{font-size:13px;color:#64748b}
     .sub{color:#64748b;font-size:13px}
+
+    /* ✅ list (used by inventory card) */
+    .list{margin:0;padding-left:18px}
   </style>
 </head>
 <body>
@@ -130,6 +133,32 @@
       </div>
     </div>
 
+    <!-- ✅ Inventory check (carts + clubs) -->
+    <div class="card">
+      <h3>Inventory (Carts & Hire Clubs)</h3>
+      <p class="muted">Quick check for bookings on a specific date.</p>
+
+      <div class="row">
+        <div>
+          <label class="muted">Play Date</label>
+          <input id="iDate" type="date" />
+        </div>
+        <div style="display:flex;align-items:end;gap:8px;justify-content:flex-end">
+          <button id="checkInventoryBtn" class="secondary">Check availability</button>
+        </div>
+      </div>
+
+      <div id="inventoryMsg" class="muted" style="margin-top:10px;"></div>
+      <div id="inventoryDebug" class="muted mini" style="margin-top:8px;white-space:pre-wrap;"></div>
+
+      <div id="inventoryBox" style="display:none;margin-top:10px">
+        <ul class="list">
+          <li><b>Carts:</b> <span id="invCarts"></span></li>
+          <li><b>Hire clubs:</b> <span id="invClubs"></span></li>
+        </ul>
+      </div>
+    </div>
+
     <div class="card">
       <h3>View Tee Times / Bookings</h3>
 
@@ -174,21 +203,21 @@
           <table>
             <thead>
               <tr>
-  <th>Created</th>
-  <th>Date</th>
-  <th>Time</th>
-  <th>Holes</th>
-  <th class="right">Players</th>
-  <th>Name</th>
-  <th>Email</th>
-  <th>Phone</th>
-  <th class="right">Gross (c)</th>
-  <th>Paid</th>
-  <th>Checked in</th>
-  <th>Add-ons</th>
-  <th>Ref</th>
-  <th>Status</th>
-</tr>
+                <th>Created</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Holes</th>
+                <th class="right">Players</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th class="right">Gross (c)</th>
+                <th>Paid</th>
+                <th>Checked in</th>
+                <th>Add-ons</th>
+                <th>Ref</th>
+                <th>Status</th>
+              </tr>
             </thead>
             <tbody id="bookingsBody"></tbody>
           </table>
@@ -527,11 +556,11 @@
           <td>${(r.email || "")}</td>
           <td>${(r.phone || "")}</td>
           <td class="right">${(r.gross_cents ?? r.total_cents ?? "")}</td>
-<td>${r.paid ? "✅" : "—"}</td>
-<td>${r.checked_in ? "✅" : "—"}</td>
-<td>${[r.has_cart ? "Cart" : "", r.has_hire_clubs ? "Clubs" : ""].filter(Boolean).join(", ") || "—"}</td>
-<td><code>${(r.reference || "")}</code></td>
-<td>${(r.status || "")}</td>
+          <td>${r.paid ? "✅" : "—"}</td>
+          <td>${r.checked_in ? "✅" : "—"}</td>
+          <td>${[r.has_cart ? "Cart" : "", r.has_hire_clubs ? "Clubs" : ""].filter(Boolean).join(", ") || "—"}</td>
+          <td><code>${(r.reference || "")}</code></td>
+          <td>${(r.status || "")}</td>
         `;
         tb.appendChild(tr);
       });
@@ -569,55 +598,55 @@
       sheet.forEach(row => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-  <td class="sheetTime">${_escape(row.time)} <span class="muted mini">(${_escape(row.holes)} holes)</span></td>
-  <td>${buildSlotCell(row.slots[0], 1)}</td>
-  <td>${buildSlotCell(row.slots[1], 2)}</td>
-  <td>${buildSlotCell(row.slots[2], 3)}</td>
-  <td>${buildSlotCell(row.slots[3], 4)}</td>
-`;
+          <td class="sheetTime">${_escape(row.time)} <span class="muted mini">(${_escape(row.holes)} holes)</span></td>
+          <td>${buildSlotCell(row.slots[0], 1)}</td>
+          <td>${buildSlotCell(row.slots[1], 2)}</td>
+          <td>${buildSlotCell(row.slots[2], 3)}</td>
+          <td>${buildSlotCell(row.slots[3], 4)}</td>
+        `;
         tb.appendChild(tr);
       });
 
       tb.querySelectorAll('input[type="checkbox"][data-ref][data-kind]').forEach(cb => {
-  cb.onchange = async () => {
-    const ref = cb.getAttribute("data-ref") || "";
-    const kind = cb.getAttribute("data-kind") || "";
-    const val = cb.checked;
+        cb.onchange = async () => {
+          const ref = cb.getAttribute("data-ref") || "";
+          const kind = cb.getAttribute("data-kind") || "";
+          const val = cb.checked;
 
-    const msgEl = tb.querySelector(`[data-msg="${CSS.escape(ref)}"]`);
-    if (msgEl) msgEl.textContent = "Saving...";
+          const msgEl = tb.querySelector(`[data-msg="${CSS.escape(ref)}"]`);
+          if (msgEl) msgEl.textContent = "Saving...";
 
-    try{
-      if (kind === "paid") {
-        await j("/api/book/course-admin/booking-paid", {
-          method:"POST",
-          body: JSON.stringify({ reference: ref, paid: val })
-        });
+          try{
+            if (kind === "paid") {
+              await j("/api/book/course-admin/booking-paid", {
+                method:"POST",
+                body: JSON.stringify({ reference: ref, paid: val })
+              });
 
-        // ✅ update badge immediately
-        const badgeEl = tb.querySelector(`[data-badge="${CSS.escape(ref)}"]`);
-        if (badgeEl) {
-          badgeEl.textContent = val ? "PAID" : "UNPAID";
-          badgeEl.classList.toggle("ok", !!val);
-          badgeEl.classList.toggle("warn", !val);
-        }
-      }
+              // ✅ update badge immediately
+              const badgeEl = tb.querySelector(`[data-badge="${CSS.escape(ref)}"]`);
+              if (badgeEl) {
+                badgeEl.textContent = val ? "PAID" : "UNPAID";
+                badgeEl.classList.toggle("ok", !!val);
+                badgeEl.classList.toggle("warn", !val);
+              }
+            }
 
-      if (kind === "checkin") {
-        // ✅ backend needs to implement this endpoint (or mirror admin endpoint)
-        await j("/api/book/course-admin/booking-checkin", {
-          method:"POST",
-          body: JSON.stringify({ reference: ref, checked_in: val })
-        });
-      }
+            if (kind === "checkin") {
+              // ✅ backend needs to implement this endpoint (or mirror admin endpoint)
+              await j("/api/book/course-admin/booking-checkin", {
+                method:"POST",
+                body: JSON.stringify({ reference: ref, checked_in: val })
+              });
+            }
 
-      if (msgEl) msgEl.textContent = "✅ saved";
-    }catch(e){
-      cb.checked = !cb.checked;
-      if (msgEl) msgEl.textContent = "❌ " + e.message;
-    }
-  };
-});
+            if (msgEl) msgEl.textContent = "✅ saved";
+          }catch(e){
+            cb.checked = !cb.checked;
+            if (msgEl) msgEl.textContent = "❌ " + e.message;
+          }
+        };
+      });
 
       $("sheetBox").style.display = "block";
       $("viewMsg").textContent = `✅ Loaded daily sheet (${timesRows.length} tee times, ${bookingsRows.length} bookings)`;
@@ -630,6 +659,76 @@
   $("viewBookingsBtn").onclick = viewBookings;
   $("viewSheetBtn").onclick = viewSheet;
 
+  // ✅ Inventory feature
+  $("checkInventoryBtn").onclick = async () => {
+    $("inventoryMsg").textContent = "Checking inventory...";
+    $("inventoryBox").style.display = "none";
+    $("inventoryDebug").textContent = "";
+
+    try {
+      await getMe();
+
+      const date = ($("iDate").value || "").trim();
+      if (!date) throw new Error("play_date_required");
+
+      // 1️⃣ Load course settings (totals)
+      let settingsRes = null;
+
+      // Try (A) header-based endpoint
+      try{
+        settingsRes = await j("/api/book/course-admin/course-settings", { method:"GET" });
+      }catch(e1){
+        // Try (B) query-based endpoint
+        settingsRes = await j("/api/book/course-admin/course-settings?slug=" + encodeURIComponent(getSlug()), { method:"GET" });
+      }
+
+      $("inventoryDebug").textContent =
+        "course-settings response:\n" + JSON.stringify(settingsRes, null, 2);
+
+      // ✅ support different backend response shapes
+      const cs =
+        settingsRes.settings ||
+        settingsRes.course_settings ||
+        settingsRes.courseSettings ||
+        settingsRes.data ||
+        settingsRes ||
+        {};
+
+      const totalCarts = Number(cs.cart_qty ?? cs.cartQty ?? 0);
+      const totalClubs = Number(cs.hire_clubs_qty ?? cs.hireClubsQty ?? 0);
+
+      // 2️⃣ Load bookings for date
+      const bookingsOut = await j(
+        "/api/book/course-admin/bookings?" + new URLSearchParams({ slug: getSlug(), date }).toString(),
+        { method:"GET" }
+      );
+
+      $("inventoryDebug").textContent +=
+        "\n\nbookings response:\n" + JSON.stringify(bookingsOut, null, 2);
+
+      const bookings = bookingsOut.bookings || [];
+
+      let cartsUsed = 0;
+      let clubsUsed = 0;
+
+      bookings.forEach(b => {
+        cartsUsed += Number(b.cart_qty ?? (b.has_cart ? 1 : 0));
+        clubsUsed += Number(b.hire_clubs_qty ?? (b.has_hire_clubs ? 1 : 0));
+      });
+
+      const cartsLeft = Math.max(0, totalCarts - cartsUsed);
+      const clubsLeft = Math.max(0, totalClubs - clubsUsed);
+
+      $("invCarts").textContent = `${cartsLeft} remaining (of ${totalCarts})`;
+      $("invClubs").textContent = `${clubsLeft} remaining (of ${totalClubs})`;
+
+      $("inventoryBox").style.display = "block";
+      $("inventoryMsg").textContent = "✅ Inventory loaded";
+    } catch (e) {
+      $("inventoryMsg").textContent = "❌ " + e.message;
+    }
+  };
+
   // set today
   (function(){
     try{
@@ -637,7 +736,9 @@
       const yyyy = d.getFullYear();
       const mm = String(d.getMonth()+1).padStart(2,"0");
       const dd = String(d.getDate()).padStart(2,"0");
-      $("date").value = `${yyyy}-${mm}-${dd}`;
+      const today = `${yyyy}-${mm}-${dd}`;
+      $("date").value = today;
+      if ($("iDate")) $("iDate").value = today;
     }catch{}
   })();
 
