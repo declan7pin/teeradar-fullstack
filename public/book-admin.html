@@ -771,22 +771,28 @@
   const name = _escape(item.name || "");
   const email = _escape(item.email || "");
   const phone = _escape(item.phone || "");
+
+  // ✅ keep a RAW ref for API + selectors, and an escaped ref for display
   const refRaw = String(item.reference || "");
-const refEsc = _escape(refRaw);
+  const refDisp = _escape(refRaw);
 
-const paid = !!item.paid;
-const checkedIn = !!item.checked_in;
+  const paid = !!item.paid;
+  const checkedIn = !!item.checked_in;
 
-const hasCart = !!item.has_cart;
-const hasClubs = !!item.has_hire_clubs;
+  const hasCart = !!item.has_cart;
+  const hasClubs = !!item.has_hire_clubs;
 
-const paidId = `paid_${refRaw}_${slotIndex}`;
-const checkinId = `checkin_${refRaw}_${slotIndex}`;
-  // ✅ give badge a data-hook so we can update it when Paid toggles
+  // ✅ stable ids even if ref is blank
+  const key = refRaw || `empty_${slotIndex}`;
+
+  const paidId = `paid_${key}_${slotIndex}`;
+  const checkinId = `checkin_${key}_${slotIndex}`;
+
+  // ✅ badge hook must use the SAME value we later query with (refRaw)
   const badge =
     paid
-      ? `<span class="badge ok" data-badge="${ref}">PAID</span>`
-      : `<span class="badge warn" data-badge="${ref}">UNPAID</span>`;
+      ? `<span class="badge ok" data-badge="${_escape(refRaw)}">PAID</span>`
+      : `<span class="badge warn" data-badge="${_escape(refRaw)}">UNPAID</span>`;
 
   const addonBits = [];
   if (hasCart) addonBits.push(`<span class="badge">Cart</span>`);
@@ -802,7 +808,7 @@ const checkinId = `checkin_${refRaw}_${slotIndex}`;
       <div class="slotMeta">
         ${email ? `<span>${email}</span>` : ""}
         ${phone ? `<span>${phone}</span>` : ""}
-        ${ref ? `<span><code>${ref}</code></span>` : ""}
+        ${refRaw ? `<span><code>${refDisp}</code></span>` : ""}
         ${addonBits.length ? `<span style="display:flex;gap:6px;flex-wrap:wrap">${addonBits.join("")}</span>` : ""}
       </div>
 
@@ -811,7 +817,7 @@ const checkinId = `checkin_${refRaw}_${slotIndex}`;
           <input
             id="${paidId}"
             type="checkbox"
-            data-ref="${ref}"
+            data-ref="${_escape(refRaw)}"
             data-kind="paid"
             ${paid ? "checked" : ""}
           />
@@ -822,14 +828,14 @@ const checkinId = `checkin_${refRaw}_${slotIndex}`;
           <input
             id="${checkinId}"
             type="checkbox"
-            data-ref="${ref}"
+            data-ref="${_escape(refRaw)}"
             data-kind="checkin"
             ${checkedIn ? "checked" : ""}
           />
           Checked in
         </label>
 
-        <div class="mini muted" data-msg="${ref}"></div>
+        <div class="mini muted" data-msg="${_escape(refRaw)}"></div>
       </div>
     </div>
   `;
