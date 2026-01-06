@@ -1131,8 +1131,8 @@ $("inventoryDebug").textContent = "";
   "/api/book/admin/course-settings?slug=" + encodeURIComponent(slug),
   { method:"GET" }
 );
-$("inventoryMsg").textContent = "settingsRes = " + JSON.stringify(settingsRes);
-<div id="inventoryDebug" class="muted mini" style="margin-top:8px;white-space:pre-wrap;"></div>
+$($("inventoryDebug").textContent =
+  "course-settings response:\n" + JSON.stringify(settingsRes, null, 2);
 // ✅ support different backend response shapes
 const cs =
   settingsRes.settings ||
