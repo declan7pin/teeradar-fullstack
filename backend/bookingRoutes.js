@@ -1187,7 +1187,25 @@ router.post("/admin/booking-paid", requirePlatformAdmin, async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ ADD: toggle checked-in flag (platform admin) — used by admin daily sheet
+router.post("/admin/booking-checkin", requirePlatformAdmin, async (req, res) => {
+  try {
+    const reference = String(req.body?.reference || "").trim();
+    const checked_in = !!req.body?.checked_in;
+    if (!reference) return res.status(400).json({ ok: false, error: "reference_required" });
 
+    const r = await db.query(
+      `UPDATE booking_bookings SET checked_in=$2 WHERE reference=$1 RETURNING reference, checked_in;`,
+      [reference, checked_in]
+    );
+    if (!r.rows.length) return res.status(404).json({ ok: false, error: "booking_not_found" });
+
+    res.json({ ok: true, reference, checked_in });
+  } catch (e) {
+    console.error("admin/booking-checkin", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // ✅ ADD: platform admin bookings (include paid + gross)
 router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
   try {
