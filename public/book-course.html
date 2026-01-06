@@ -521,7 +521,6 @@ cb.addEventListener("change", () => {
 
 /* ✅ FIX 2 + FIX 3 — ADD THIS BLOCK HERE (before wrap.appendChild) */
 if (qtySel) {
-if (qtySel) {
   qtySel.addEventListener("change", () => {
     const qty = Math.max(0, Math.min(4, Number(qtySel.value || 0)));
 
