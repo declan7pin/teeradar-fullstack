@@ -1157,7 +1157,7 @@ router.get("/admin/times", requirePlatformAdmin, async (req, res) => {
       q += ` AND holes = $3`;
       params.push(holes);
     }
-    q += ` ORDER BY holes DESC, tee_time ASC`;
+    q += ` ORDER BY tee_time ASC, holes DESC`;
 
     const { rows } = await db.query(q, params);
     res.json({ ok: true, times: rows || [] });
@@ -2163,7 +2163,7 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
       params.push(holes);
       q += ` AND holes = $3`;
     }
-    q += ` ORDER BY holes DESC, tee_time ASC`;
+    q += ` ORDER BY tee_time ASC, holes DESC`;
 
     const { rows } = await db.query(q, params);
     res.json({ ok: true, times: rows || [] });
