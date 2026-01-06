@@ -1132,6 +1132,7 @@ $("checkInventoryBtn").onclick = async () => {
   { method:"GET" }
 );
 $("inventoryMsg").textContent = "settingsRes = " + JSON.stringify(settingsRes);
+<div id="inventoryDebug" class="muted mini" style="margin-top:8px;white-space:pre-wrap;"></div>
 // ✅ support different backend response shapes
 const cs =
   settingsRes.settings ||
