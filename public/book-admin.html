@@ -805,33 +805,49 @@
   }
 
   function groupBookingsToSheet(timesRows, bookingsRows){
-    const byTime = new Map();
+  // Key by time+holes so 06:00 (18) and 06:00 (9) don't collide
+  const keyOf = (time, holes) => `${String(time || "")}__${String(holes ?? "")}`;
 
-    (bookingsRows || []).forEach(b => {
-      const time = String(b.tee_time || b.time || "");
-      const players = Math.max(1, Number(b.players || 1));
-      for (let i=0;i<players;i++){
-        if (!byTime.has(time)) byTime.set(time, []);
-        byTime.get(time).push({
-          reference: b.reference || "",
-          name: b.name || b.golfer_name || "",
-          email: b.email || b.golfer_email || "",
-          phone: b.phone || b.golfer_phone || "",
-          paid: !!b.paid
-        });
-      }
-    });
+  const byKey = new Map();
 
-    const out = [];
-    (timesRows || []).forEach(t => {
-      const time = String(t.tee_time || t.time || "");
-      const arr = (byTime.get(time) || []).slice(0, 4);
-      const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
-      out.push({ time, slots });
-    });
+  (bookingsRows || []).forEach(b => {
+    const time = String(b.tee_time || b.time || "");
+    const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? "");
+    const key = keyOf(time, holes);
 
-    return out;
-  }
+    const players = Math.max(1, Number(b.players || 1));
+    for (let i=0;i<players;i++){
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key).push({
+        reference: b.reference || "",
+        name: b.name || b.golfer_name || "",
+        email: b.email || b.golfer_email || "",
+        phone: b.phone || b.golfer_phone || "",
+        paid: !!b.paid,
+
+        // ✅ add-ons
+        has_cart: !!b.has_cart,
+        has_hire_clubs: !!b.has_hire_clubs,
+
+        // ✅ check-in (backend must return this; otherwise defaults false)
+        checked_in: !!b.checked_in,
+      });
+    }
+  });
+
+  const out = [];
+  (timesRows || []).forEach(t => {
+    const time = String(t.tee_time || t.time || "");
+    const holes = Number(t.holes ?? "");
+    const key = keyOf(time, holes);
+
+    const arr = (byKey.get(key) || []).slice(0, 4);
+    const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
+    out.push({ time, holes, slots });
+  });
+
+  return out;
+}
 
   async function viewSheet(){
     clearViewBoxes();
