@@ -2221,6 +2221,7 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
         b.golfer_phone AS phone,
         b.reference,
         b.paid,
+        b.checked_in,
         b.has_cart,
         b.cart_fee_cents,
         b.has_hire_clubs,
