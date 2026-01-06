@@ -874,6 +874,41 @@ router.post("/admin/course-settings", requirePlatformAdmin, async (req, res) => 
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ NEW: platform admin — fetch course settings (add-ons + durations)
+router.get("/admin/course-settings", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.query.slug);
+    if (!slug || !isValidSlug(slug)) {
+      return res.status(400).json({ ok: false, error: "slug_invalid" });
+    }
+
+    const r = await db.query(
+      `
+      SELECT
+        slug,
+        name,
+        cart_fee_cents,
+        cart_qty,
+        hire_clubs_fee_cents,
+        hire_clubs_qty,
+        duration_9_mins,
+        duration_18_mins
+      FROM booking_courses
+      WHERE slug = $1
+      LIMIT 1;
+      `,
+      [slug]
+    );
+
+    if (!r.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    // ✅ Return shape that your frontend can read safely
+    return res.json({ ok: true, settings: r.rows[0] });
+  } catch (e) {
+    console.error("admin/course-settings GET", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // -----------------------------
 // ✅ Platform admin: courses + times + bookings (existing)
 // -----------------------------
