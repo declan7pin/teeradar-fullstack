@@ -1869,9 +1869,10 @@ router.put("/course-template", requireCourseAdmin, async (req, res) => {
   try {
     const slug = String(req.body?.slug || "").trim().toLowerCase();
     const timezone = String(req.body?.timezone || "Australia/Perth").trim() || "Australia/Perth";
-    const template = req.body?.template && typeof req.body.template === "object"
-      ? req.body.template
-      : null;
+    const template =
+  req.body?.template && typeof req.body.template === "object"
+    ? req.body.template
+    : null;
 
     if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
     if (!template) return res.status(400).json({ ok: false, error: "template_required" });
