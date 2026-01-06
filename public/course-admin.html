@@ -563,12 +563,12 @@
       sheet.forEach(row => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td class="sheetTime">${_escape(row.time)}</td>
-          <td>${buildSlotCell(row.slots[0], 1)}</td>
-          <td>${buildSlotCell(row.slots[1], 2)}</td>
-          <td>${buildSlotCell(row.slots[2], 3)}</td>
-          <td>${buildSlotCell(row.slots[3], 4)}</td>
-        `;
+  <td class="sheetTime">${_escape(row.time)} <span class="muted mini">(${_escape(row.holes)} holes)</span></td>
+  <td>${buildSlotCell(row.slots[0], 1)}</td>
+  <td>${buildSlotCell(row.slots[1], 2)}</td>
+  <td>${buildSlotCell(row.slots[2], 3)}</td>
+  <td>${buildSlotCell(row.slots[3], 4)}</td>
+`;
         tb.appendChild(tr);
       });
 
