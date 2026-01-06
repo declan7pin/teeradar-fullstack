@@ -7,8 +7,6 @@ import cookieParser from "cookie-parser"; // ✅ ADD
 import { recordEvent } from "./analytics.js";
 
 const router = express.Router();
-router.use(express.json());
-router.use(cookieParser());
 router.use((req, res, next) => {
   console.log("📌 bookingRoutes hit:", req.method, req.originalUrl);
   next();
