@@ -367,7 +367,10 @@
   let course = { slug, name: "Course", notes: "" };
   let addons = [];           // list from backend (active add-ons for this course)
   let selectedAddonIds = []; // what the user picked for this booking
-
+let cartQtySelected = 0;
+let clubsQtySelected = 0;
+let cartAddonId = null;
+let clubsAddonId = null;
   // basic validators (match backend requirements)
   function isValidEmail(email){
     const e = String(email || "").trim();
