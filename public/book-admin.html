@@ -1127,13 +1127,22 @@ $("checkInventoryBtn").onclick = async () => {
     if (!date) throw new Error("play date is required");
 
     // 1️⃣ Load course settings (totals)
-    const settings = await j(
-      "/api/book/admin/course-settings?slug=" + encodeURIComponent(slug),
-      { method:"GET" }
-    );
+    const settingsRes = await j(
+  "/api/book/admin/course-settings?slug=" + encodeURIComponent(slug),
+  { method:"GET" }
+);
 
-    const totalCarts = Number(settings.cart_qty || 0);
-    const totalClubs = Number(settings.hire_clubs_qty || 0);
+// ✅ support different backend response shapes
+const cs =
+  settingsRes.settings ||
+  settingsRes.course_settings ||
+  settingsRes.courseSettings ||
+  settingsRes.data ||
+  settingsRes ||
+  {};
+
+const totalCarts = Number(cs.cart_qty ?? cs.cartQty ?? 0);
+const totalClubs = Number(cs.hire_clubs_qty ?? cs.hireClubsQty ?? 0);
 
     // 2️⃣ Load bookings for date
     const bookingsOut = await j(
