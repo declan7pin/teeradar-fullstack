@@ -1131,7 +1131,7 @@ $("inventoryDebug").textContent = "";
   "/api/book/admin/course-settings?slug=" + encodeURIComponent(slug),
   { method:"GET" }
 );
-$($("inventoryDebug").textContent =
+$("inventoryDebug").textContent =
   "course-settings response:\n" + JSON.stringify(settingsRes, null, 2);
 // ✅ support different backend response shapes
 const cs =
