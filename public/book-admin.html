@@ -771,16 +771,17 @@
   const name = _escape(item.name || "");
   const email = _escape(item.email || "");
   const phone = _escape(item.phone || "");
-  const ref = _escape(item.reference || "");
-  const paid = !!item.paid;
-  const checkedIn = !!item.checked_in;
+  const refRaw = String(item.reference || "");
+const refEsc = _escape(refRaw);
 
-  const hasCart = !!item.has_cart;
-  const hasClubs = !!item.has_hire_clubs;
+const paid = !!item.paid;
+const checkedIn = !!item.checked_in;
 
-  const paidId = `paid_${ref}_${slotIndex}`;
-  const checkinId = `checkin_${ref}_${slotIndex}`;
+const hasCart = !!item.has_cart;
+const hasClubs = !!item.has_hire_clubs;
 
+const paidId = `paid_${refRaw}_${slotIndex}`;
+const checkinId = `checkin_${refRaw}_${slotIndex}`;
   // ✅ give badge a data-hook so we can update it when Paid toggles
   const badge =
     paid
