@@ -504,7 +504,41 @@ clubsAddonId = clubsA ? String(clubsA.id) : null;
 
         updateModalTotal();
       });
+const cb = el.querySelector("input[type='checkbox']");
+cb.addEventListener("change", () => {
+  selectedAddonIds = Array.from(wrap.querySelectorAll("input[type='checkbox'][data-addon-id]"))
+    .filter(x => x.checked)
+    .map(x => String(x.getAttribute("data-addon-id") || ""))
+    .filter(Boolean);
 
+  updateModalTotal();
+});
+
+/* ✅ FIX 2 + FIX 3 — ADD THIS BLOCK HERE (before wrap.appendChild) */
+const qtySel = el.querySelector("select[data-addon-qty]");
+if (qtySel) {
+  qtySel.addEventListener("change", () => {
+    const qty = Math.max(0, Math.min(4, Number(qtySel.value || 0)));
+
+    // ✅ store qty in the right variable
+    if (cartAddonId && id === String(cartAddonId)) cartQtySelected = qty;
+    if (clubsAddonId && id === String(clubsAddonId)) clubsQtySelected = qty;
+
+    // ✅ FIX 3: auto-sync checkbox with qty
+    cb.checked = qty > 0;
+
+    // ✅ keep selectedAddonIds in sync too
+    selectedAddonIds = Array.from(wrap.querySelectorAll("input[type='checkbox'][data-addon-id]"))
+      .filter(x => x.checked)
+      .map(x => String(x.getAttribute("data-addon-id") || ""))
+      .filter(Boolean);
+
+    updateModalTotal();
+  });
+}
+/* ✅ END FIX 2 + FIX 3 */
+
+wrap.appendChild(el);
       wrap.appendChild(el);
     });
   }
