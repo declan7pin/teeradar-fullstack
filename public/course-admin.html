@@ -572,25 +572,46 @@
         tb.appendChild(tr);
       });
 
-      tb.querySelectorAll('input[type="checkbox"][data-ref]').forEach(cb => {
-        cb.onchange = async () => {
-          const ref = cb.getAttribute("data-ref") || "";
-          const paid = cb.checked;
+      tb.querySelectorAll('input[type="checkbox"][data-ref][data-kind]').forEach(cb => {
+  cb.onchange = async () => {
+    const ref = cb.getAttribute("data-ref") || "";
+    const kind = cb.getAttribute("data-kind") || "";
+    const val = cb.checked;
 
-          const msgEl = tb.querySelector(`[data-paidmsg="${CSS.escape(ref)}"]`);
-          if (msgEl) msgEl.textContent = "Saving...";
-          try{
-            await j("/api/book/course-admin/booking-paid", {
-              method:"POST",
-              body: JSON.stringify({ reference: ref, paid })
-            });
-            if (msgEl) msgEl.textContent = "✅ saved";
-          }catch(e){
-            cb.checked = !cb.checked;
-            if (msgEl) msgEl.textContent = "❌ " + e.message;
-          }
-        };
-      });
+    const msgEl = tb.querySelector(`[data-msg="${CSS.escape(ref)}"]`);
+    if (msgEl) msgEl.textContent = "Saving...";
+
+    try{
+      if (kind === "paid") {
+        await j("/api/book/course-admin/booking-paid", {
+          method:"POST",
+          body: JSON.stringify({ reference: ref, paid: val })
+        });
+
+        // ✅ update badge immediately
+        const badgeEl = tb.querySelector(`[data-badge="${CSS.escape(ref)}"]`);
+        if (badgeEl) {
+          badgeEl.textContent = val ? "PAID" : "UNPAID";
+          badgeEl.classList.toggle("ok", !!val);
+          badgeEl.classList.toggle("warn", !val);
+        }
+      }
+
+      if (kind === "checkin") {
+        // ✅ backend needs to implement this endpoint (or mirror admin endpoint)
+        await j("/api/book/course-admin/booking-checkin", {
+          method:"POST",
+          body: JSON.stringify({ reference: ref, checked_in: val })
+        });
+      }
+
+      if (msgEl) msgEl.textContent = "✅ saved";
+    }catch(e){
+      cb.checked = !cb.checked;
+      if (msgEl) msgEl.textContent = "❌ " + e.message;
+    }
+  };
+});
 
       $("sheetBox").style.display = "block";
       $("viewMsg").textContent = `✅ Loaded daily sheet (${timesRows.length} tee times, ${bookingsRows.length} bookings)`;
