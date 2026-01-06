@@ -764,46 +764,75 @@
   }
 
   function buildSlotCell(item, slotIndex){
-    if (!item){
-      return `<div class="slotBox"><div class="slotEmpty">—</div></div>`;
-    }
-
-    const name = _escape(item.name || "");
-    const email = _escape(item.email || "");
-    const phone = _escape(item.phone || "");
-    const ref = _escape(item.reference || "");
-    const paid = !!item.paid;
-
-    const paidId = `paid_${ref}_${slotIndex}`;
-    const badge = paid ? `<span class="badge ok">PAID</span>` : `<span class="badge warn">UNPAID</span>`;
-
-    return `
-      <div class="slotBox">
-        <div class="slotTop">
-          <div class="slotName">${name || "Booking"}</div>
-          ${badge}
-        </div>
-        <div class="slotMeta">
-          ${email ? `<span>${email}</span>` : ""}
-          ${phone ? `<span>${phone}</span>` : ""}
-          ${ref ? `<span><code>${ref}</code></span>` : ""}
-        </div>
-        <div style="margin-top:8px">
-          <label class="paidWrap" for="${paidId}">
-            <input
-              id="${paidId}"
-              type="checkbox"
-              data-ref="${ref}"
-              ${paid ? "checked" : ""}
-            />
-            Paid
-          </label>
-          <div class="mini muted" data-paidmsg="${ref}"></div>
-        </div>
-      </div>
-    `;
+  if (!item){
+    return `<div class="slotBox"><div class="slotEmpty">—</div></div>`;
   }
 
+  const name = _escape(item.name || "");
+  const email = _escape(item.email || "");
+  const phone = _escape(item.phone || "");
+  const ref = _escape(item.reference || "");
+  const paid = !!item.paid;
+  const checkedIn = !!item.checked_in;
+
+  const hasCart = !!item.has_cart;
+  const hasClubs = !!item.has_hire_clubs;
+
+  const paidId = `paid_${ref}_${slotIndex}`;
+  const checkinId = `checkin_${ref}_${slotIndex}`;
+
+  // ✅ give badge a data-hook so we can update it when Paid toggles
+  const badge =
+    paid
+      ? `<span class="badge ok" data-badge="${ref}">PAID</span>`
+      : `<span class="badge warn" data-badge="${ref}">UNPAID</span>`;
+
+  const addonBits = [];
+  if (hasCart) addonBits.push(`<span class="badge">Cart</span>`);
+  if (hasClubs) addonBits.push(`<span class="badge">Clubs</span>`);
+
+  return `
+    <div class="slotBox">
+      <div class="slotTop">
+        <div class="slotName">${name || "Booking"}</div>
+        ${badge}
+      </div>
+
+      <div class="slotMeta">
+        ${email ? `<span>${email}</span>` : ""}
+        ${phone ? `<span>${phone}</span>` : ""}
+        ${ref ? `<span><code>${ref}</code></span>` : ""}
+        ${addonBits.length ? `<span style="display:flex;gap:6px;flex-wrap:wrap">${addonBits.join("")}</span>` : ""}
+      </div>
+
+      <div style="margin-top:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <label class="paidWrap" for="${paidId}">
+          <input
+            id="${paidId}"
+            type="checkbox"
+            data-ref="${ref}"
+            data-kind="paid"
+            ${paid ? "checked" : ""}
+          />
+          Paid
+        </label>
+
+        <label class="paidWrap" for="${checkinId}">
+          <input
+            id="${checkinId}"
+            type="checkbox"
+            data-ref="${ref}"
+            data-kind="checkin"
+            ${checkedIn ? "checked" : ""}
+          />
+          Checked in
+        </label>
+
+        <div class="mini muted" data-msg="${ref}"></div>
+      </div>
+    </div>
+  `;
+}
   function groupBookingsToSheet(timesRows, bookingsRows){
   // Key by time+holes so 06:00 (18) and 06:00 (9) don't collide
   const keyOf = (time, holes) => `${String(time || "")}__${String(holes ?? "")}`;
