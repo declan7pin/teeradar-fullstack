@@ -32,12 +32,6 @@ console.log("🔐 course admin jwt env check:", {
   BOOKING_ADMIN_SECRET_len: ADMIN_SECRET ? ADMIN_SECRET.length : 0,
 });
 
-// ✅ ADD (needed): ensure JSON bodies work for ALL routes in this router
-router.use(express.json());
-
-// ✅ ADD (needed): read cookies for admin auth
-router.use(cookieParser());
-
 // ✅ ADD: prove requests are hitting THIS router (Render logs)
 router.use((req, _res, next) => {
   if (req.path.startsWith("/course-admin")) {
