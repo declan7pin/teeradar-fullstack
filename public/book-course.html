@@ -478,12 +478,22 @@ clubsAddonId = clubsA ? String(clubsA.id) : null;
       el.style.color = "var(--text)";
 
       el.innerHTML = `
-        <input type="checkbox" data-addon-id="${id}" style="width:auto;" />
-        ${label}
-        <span style="color:var(--muted);font-size:12px;">
-          (+${moneyFromCents(priceCents)}${perPlayer ? " / player" : ""})
-        </span>
-      `;
+  <input type="checkbox" data-addon-id="${id}" style="width:auto;" />
+
+  ${label}
+
+  <select data-addon-qty="${id}" style="width:64px;">
+    <option value="0">0</option>
+    <option value="1">1</option>
+    <option value="2">2</option>
+    <option value="3">3</option>
+    <option value="4">4</option>
+  </select>
+
+  <span style="color:var(--muted);font-size:12px;">
+    (+${moneyFromCents(priceCents)})
+  </span>
+`;
 
       const cb = el.querySelector("input[type='checkbox']");
       cb.addEventListener("change", () => {
