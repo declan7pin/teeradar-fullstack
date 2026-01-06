@@ -507,7 +507,7 @@ clubsAddonId = clubsA ? String(clubsA.id) : null;
 
 
 /* ✅ FIX 2 + FIX 3 — ADD THIS BLOCK HERE (before wrap.appendChild) */
-const qtySel = el.querySelector("select[data-addon-qty]");
+const qtySel = el.querySelector(`select[data-addon-qty="${id}"]`);
 if (qtySel) {
   qtySel.addEventListener("change", () => {
     const qty = Math.max(0, Math.min(4, Number(qtySel.value || 0)));
