@@ -1131,7 +1131,7 @@ $("checkInventoryBtn").onclick = async () => {
   "/api/book/admin/course-settings?slug=" + encodeURIComponent(slug),
   { method:"GET" }
 );
-console.log("settingsRes", settingsRes);
+$("inventoryMsg").textContent = "settingsRes = " + JSON.stringify(settingsRes);
 // ✅ support different backend response shapes
 const cs =
   settingsRes.settings ||
