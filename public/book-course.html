@@ -401,17 +401,23 @@ let clubsAddonId = null;
     const perPlayerCents = _slotPerPlayerCents(slot);
     let total = perPlayerCents * players;
 
-    const picked = new Set((selectedAddonIds || []).map(String));
-    (addons || []).forEach(a => {
-      const id = String(a.id || "");
-      if (!id || !picked.has(id)) return;
-      if (a.active === false) return;
+    // qty-aware add-ons
+const idToQty = new Map();
+if (cartAddonId) idToQty.set(String(cartAddonId), Number(cartQtySelected || 0));
+if (clubsAddonId) idToQty.set(String(clubsAddonId), Number(clubsQtySelected || 0));
 
-      const priceCents = Number(a.price_cents ?? a.priceCents ?? 0);
-      if (!Number.isFinite(priceCents) || priceCents < 0) return;
+(addons || []).forEach(a => {
+  const id = String(a.id || "");
+  if (!id || a.active === false) return;
 
-      total += priceCents;
-    });
+  const qty = Math.max(0, Math.min(4, Number(idToQty.get(id) || 0)));
+  if (!qty) return;
+
+  const priceCents = Number(a.price_cents ?? a.priceCents ?? 0);
+  if (!Number.isFinite(priceCents) || priceCents < 0) return;
+
+  total += priceCents * qty;
+});
 
     return total;
   }
