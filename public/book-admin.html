@@ -1118,7 +1118,7 @@ timesRows.sort((a,b) => {
 $("checkInventoryBtn").onclick = async () => {
   $("inventoryMsg").textContent = "Checking inventory...";
   $("inventoryBox").style.display = "none";
-
+$("inventoryDebug").textContent = "";
   try {
     const slug = ($("iSlug").value || "").trim();
     const date = ($("iDate").value || "").trim();
