@@ -553,7 +553,14 @@ async function ensureBookingTables() {
       UNIQUE(course_id, email)
     );
   `);
-
+await db.query(`
+  CREATE TABLE IF NOT EXISTS booking_time_templates (
+    course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
+    timezone TEXT NOT NULL DEFAULT 'Australia/Perth',
+    template JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ DEFAULT now()
+  );
+`);
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_times (
       id BIGSERIAL PRIMARY KEY,
