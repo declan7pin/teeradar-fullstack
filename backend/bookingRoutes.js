@@ -115,18 +115,6 @@ function _weekdayISO(d) {
   return js === 0 ? 7 : js;
 }
 
-// Use whatever auth you already have for course-admin.
-// This is a simple fallback: booking admin OR COURSE_ADMIN_KEY header.
-function requireCourseAdmin(req, res, next) {
-  const isBookingAdmin = !!req.bookingAdmin || (req.isBookingAdmin && req.isBookingAdmin());
-  if (isBookingAdmin) return next();
-
-  const expected = String(process.env.COURSE_ADMIN_KEY || "").trim();
-  const got = String(req.headers["x-course-admin-key"] || req.headers["X-Course-Admin-Key"] || "").trim();
-  if (expected && got && got === expected) return next();
-
-  return res.status(401).json({ ok: false, error: "unauthorized" });
-}
 function normSlug(s) {
   return String(s || "").trim().toLowerCase();
 }
