@@ -91,6 +91,43 @@
       </div>
       <div id="courseMsg" class="muted" style="margin-top:10px;"></div>
     </div>
+<!-- ✅ Inventory check (carts + clubs) -->
+<div class="card">
+  <h3>Inventory (Carts & Hire Clubs)</h3>
+  <p class="muted">Quick check for phone bookings.</p>
+
+  <div class="row">
+    <div>
+      <label class="muted">Course Slug</label>
+      <input id="iSlug" placeholder="hillview or marri-park" />
+    </div>
+    <div>
+      <label class="muted">Play Date</label>
+      <input id="iDate" type="date" />
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:10px">
+    <button id="checkInventoryBtn" class="secondary small">
+      Check availability
+    </button>
+  </div>
+
+  <div id="inventoryMsg" class="muted" style="margin-top:10px;"></div>
+
+  <div id="inventoryBox" style="display:none;margin-top:10px">
+    <ul class="list">
+      <li>
+        <b>Carts:</b>
+        <span id="invCarts"></span>
+      </li>
+      <li>
+        <b>Hire clubs:</b>
+        <span id="invClubs"></span>
+      </li>
+    </ul>
+  </div>
+</div>
 <div class="card">
       <h3>View Tee Times / Bookings</h3>
       <p class="muted">View what’s been generated and what’s been booked (requires backend endpoints).</p>
