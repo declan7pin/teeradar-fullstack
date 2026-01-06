@@ -891,6 +891,17 @@
     try{
       const timesOut = await j("/api/book/admin/times?" + new URLSearchParams({ slug, date }).toString(), { method:"GET" });
       const timesRows = (timesOut && timesOut.times) || [];
+      // ✅ Blend 9/18 together in time order
+timesRows.sort((a,b) => {
+  const ta = toMins(a.tee_time || a.time || "") ?? 99999;
+  const tb = toMins(b.tee_time || b.time || "") ?? 99999;
+  if (ta !== tb) return ta - tb;
+
+  // tie-breaker so both show (9 + 18)
+  const ha = Number(a.holes ?? 0);
+  const hb = Number(b.holes ?? 0);
+  return ha - hb;
+});
 
       const bookingsOut = await j("/api/book/admin/bookings?" + new URLSearchParams({ slug, date }).toString(), { method:"GET" });
       const bookingsRows = (bookingsOut && bookingsOut.bookings) || [];
