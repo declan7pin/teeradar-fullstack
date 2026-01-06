@@ -496,14 +496,27 @@ clubsAddonId = clubsA ? String(clubsA.id) : null;
 `;
 
       const cb = el.querySelector("input[type='checkbox']");
-      cb.addEventListener("change", () => {
-        selectedAddonIds = Array.from(wrap.querySelectorAll("input[type='checkbox'][data-addon-id]"))
-          .filter(x => x.checked)
-          .map(x => String(x.getAttribute("data-addon-id") || ""))
-          .filter(Boolean);
+const qtySel = el.querySelector(`select[data-addon-qty="${id}"]`);
 
-        updateModalTotal();
-      });
+cb.addEventListener("change", () => {
+  // rebuild selectedAddonIds
+  selectedAddonIds = Array.from(
+    wrap.querySelectorAll("input[type='checkbox'][data-addon-id]")
+  )
+    .filter(x => x.checked)
+    .map(x => String(x.getAttribute("data-addon-id") || ""))
+    .filter(Boolean);
+
+  // ✅ FIX B: if unchecked, force qty back to 0
+  if (!cb.checked && qtySel) {
+    qtySel.value = "0";
+
+    if (cartAddonId && id === String(cartAddonId)) cartQtySelected = 0;
+    if (clubsAddonId && id === String(clubsAddonId)) clubsQtySelected = 0;
+  }
+
+  updateModalTotal();
+});
 
 
 /* ✅ FIX 2 + FIX 3 — ADD THIS BLOCK HERE (before wrap.appendChild) */
