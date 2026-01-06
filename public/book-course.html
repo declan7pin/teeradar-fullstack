@@ -720,16 +720,27 @@ clubsAddonId = clubsA ? String(clubsA.id) : null;
   const picked = new Set((selectedAddonIds || []).map(String));
   const chosenAddons = (addons || []).filter(a => a && picked.has(String(a.id)));
 
-  const addonLines = chosenAddons.map(a => {
-    const label = String(a.label || a.id || "Add-on");
-    const cents = Number(a.price_cents ?? a.priceCents ?? 0);
-    return `
-      <div style="display:flex;justify-content:space-between;gap:10px;">
-        <span>${label}</span>
-        <b>${moneyFromCents(cents)}</b>
-      </div>
-    `;
-  }).join("");
+  const qtyForAddon = (id) => {
+  const sid = String(id || "");
+  if (cartAddonId && sid === String(cartAddonId)) return Number(cartQtySelected || 0);
+  if (clubsAddonId && sid === String(clubsAddonId)) return Number(clubsQtySelected || 0);
+  return 0;
+};
+
+const addonLines = chosenAddons.map(a => {
+  const id = String(a.id || "");
+  const label = String(a.label || a.id || "Add-on");
+  const cents = Number(a.price_cents ?? a.priceCents ?? 0);
+  const qty = Math.max(0, Math.min(4, qtyForAddon(id)));
+  const lineTotal = cents * qty;
+
+  return `
+    <div style="display:flex;justify-content:space-between;gap:10px;">
+      <span>${label} ${qty ? `(x${qty})` : ""}</span>
+      <b>${moneyFromCents(lineTotal)}</b>
+    </div>
+  `;
+}).join("");
 
   // --- Prices ---
   const perPlayerCents = selectedSlot ? _slotPerPlayerCents(selectedSlot) : 0;
