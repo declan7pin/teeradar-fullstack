@@ -441,6 +441,18 @@ cartAddonId = null;
 clubsAddonId = null;
 
     const active = (addons || []).filter(a => a && a.active !== false);
+    // detect cart / clubs addon IDs by label or id
+const findBy = (needle) =>
+  active.find(a =>
+    String(a.id || "").toLowerCase() === needle ||
+    String(a.label || "").toLowerCase().includes(needle.replace("_"," "))
+  );
+
+const cartA = findBy("cart");
+const clubsA = findBy("hire_clubs") || findBy("clubs");
+
+cartAddonId = cartA ? String(cartA.id) : null;
+clubsAddonId = clubsA ? String(clubsA.id) : null;
     if (!active.length){
       wrap.innerHTML = `<span class="note">No add-ons for this course.</span>`;
       return;
