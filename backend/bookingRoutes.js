@@ -805,7 +805,40 @@ router.get("/course-admin/me", requireCourseAdmin, async (req, res) => {
   console.log("✅ course-admin/me OK", req.courseAdmin);
   res.json({ ok: true, slug: req.courseAdmin.slug, email: req.courseAdmin.email });
 });
+// ✅ NEW: Course admin — fetch course settings (carts/clubs qty + fees + durations)
+router.get("/course-admin/course-settings", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
+    if (!slug || !isValidSlug(slug)) {
+      return res.status(400).json({ ok: false, error: "slug_invalid" });
+    }
 
+    const r = await db.query(
+      `
+      SELECT
+        slug,
+        name,
+        cart_fee_cents,
+        cart_qty,
+        hire_clubs_fee_cents,
+        hire_clubs_qty,
+        duration_9_mins,
+        duration_18_mins
+      FROM booking_courses
+      WHERE slug = $1
+      LIMIT 1;
+      `,
+      [slug]
+    );
+
+    if (!r.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    return res.json({ ok: true, settings: r.rows[0] });
+  } catch (e) {
+    console.error("course-admin/course-settings GET", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // ✅ NEW: debug route so it returns JSON (won't fall into SPA index.html)
 router.get("/course-admin/_debug", (req, res) => {
   const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
