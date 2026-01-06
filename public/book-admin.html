@@ -1153,7 +1153,7 @@ const totalClubs = Number(cs.hire_clubs_qty ?? cs.hireClubsQty ?? 0);
     );
 
     const bookings = bookingsOut.bookings || [];
-
+$("inventoryDebug").textContent += "\n\nbookings response:\n" + JSON.stringify(bookingsOut, null, 2);
     let cartsUsed = 0;
     let clubsUsed = 0;
 
