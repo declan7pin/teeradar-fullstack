@@ -504,15 +504,7 @@ clubsAddonId = clubsA ? String(clubsA.id) : null;
 
         updateModalTotal();
       });
-const cb = el.querySelector("input[type='checkbox']");
-cb.addEventListener("change", () => {
-  selectedAddonIds = Array.from(wrap.querySelectorAll("input[type='checkbox'][data-addon-id]"))
-    .filter(x => x.checked)
-    .map(x => String(x.getAttribute("data-addon-id") || ""))
-    .filter(Boolean);
 
-  updateModalTotal();
-});
 
 /* ✅ FIX 2 + FIX 3 — ADD THIS BLOCK HERE (before wrap.appendChild) */
 const qtySel = el.querySelector("select[data-addon-qty]");
