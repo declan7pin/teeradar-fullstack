@@ -700,7 +700,70 @@ async function apiFetch(url, opts = {}) {
         `;
         tb.appendChild(tr);
       });
+// ✅ Allow creating a booking from an empty slot
+tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
+  btn.onclick = async () => {
+    try{
+      await getMe();
 
+      const date = ($("date").value || "").trim();
+      if (!date) throw new Error("play_date_required");
+
+      // Find the row time/holes by walking up to the <tr>
+      const tr = btn.closest("tr");
+      if (!tr) throw new Error("row_not_found");
+
+      // First cell text is like: "06:00 (18 holes)"
+      const timeCell = tr.querySelector(".sheetTime");
+      const timeText = (timeCell?.innerText || "").trim();
+
+      // Parse time + holes from the cell
+      const timeMatch = timeText.match(/^(\d{1,2}:\d{2})/);
+      const holesMatch = timeText.match(/\((\d+)\s*holes\)/i);
+
+      const teeTime = timeMatch ? timeMatch[1] : "";
+      const holes = holesMatch ? Number(holesMatch[1]) : 18;
+
+      if (!teeTime) throw new Error("tee_time_missing");
+
+      // Simple prompt flow (fast + works on mobile)
+      const name = prompt("Name for booking:", "");
+      if (!name) return;
+
+      const email = prompt("Email (optional):", "") || "";
+      const phone = prompt("Phone (optional):", "") || "";
+
+      const playersRaw = prompt("Players (1-4):", "1") || "1";
+      const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
+
+      const hasCart = confirm("Add cart?");
+      const hasClubs = confirm("Add hire clubs?");
+
+      // ✅ This endpoint must exist in backend (see note below)
+      await j("/api/book/course-admin/manual-booking", {
+        method:"POST",
+        body: JSON.stringify({
+          date,
+          teeTime,
+          holes,
+          players,
+          name,
+          email,
+          phone,
+          has_cart: hasCart,
+          has_hire_clubs: hasClubs,
+          paid: false,
+          checked_in: false
+        })
+      });
+
+      $("viewMsg").textContent = "✅ Booking added";
+      await viewSheet(); // refresh
+    }catch(e){
+      $("viewMsg").textContent = "❌ " + e.message;
+    }
+  };
+});
       tb.querySelectorAll('input[type="checkbox"][data-ref][data-kind]').forEach(cb => {
         cb.onchange = async () => {
           const ref = cb.getAttribute("data-ref") || "";
