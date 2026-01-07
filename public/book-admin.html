@@ -757,6 +757,7 @@ async function loadCourseSettingsIntoForm(slug){
       $("genMsg").textContent =
         `✅ Generated ${out.inserted || 0} times (${out.skipped || 0} skipped). Open: /book/${slug}`;
       await refresh();
+      await refreshActiveView();
     } catch (e) {
       $("genMsg").textContent = "❌ " + e.message;
     }
