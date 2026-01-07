@@ -493,6 +493,40 @@
   }
 
   const $ = (id) => document.getElementById(id);
+  // ✅ Create a booking and "take a slot" for a specific tee time
+async function adminFillSlot({ slug, playDate, teeTime, holes }) {
+  const name = prompt("Player name:");
+  if (!name) return;
+
+  const email = prompt("Email (optional):") || "";
+  const phone = prompt("Phone (optional):") || "";
+
+  // default: 1 player takes 1 slot
+  const players = 1;
+
+  // Try a few endpoint names so it works with your backend naming
+  const endpoints = [
+    "/api/book/admin/fill-slot",
+    "/api/book/admin/manual-fill-slot",
+    "/api/book/admin/manual-slot-fill",
+  ];
+
+  const payload = { slug, playDate, teeTime, holes, players, name, email, phone };
+
+  // Try each endpoint until one works
+  let lastErr = null;
+  for (const ep of endpoints) {
+    try {
+      await j(ep, { method: "POST", body: JSON.stringify(payload) });
+      await refreshActiveView(); // refresh the sheet automatically
+      return;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+
+  alert("Failed to add booking: " + (lastErr?.message || "unknown error"));
+}
 // ✅ Track current open view so we can refresh it automatically after changes
 let __activeView = null; // "times" | "bookings" | "sheet"
 let __activeSlug = "";
