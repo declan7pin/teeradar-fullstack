@@ -2118,7 +2118,10 @@ router.post("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
     const checked_in = !!req.body?.checked_in;
     const has_cart = !!req.body?.has_cart;
     const has_hire_clubs = !!req.body?.has_hire_clubs;
-
+// ✅ ADD: store quantities + notes (needed for addon overlap + daily sheet)
+const cart_qty = Math.max(0, Math.min(4, Number(req.body?.cart_qty ?? req.body?.cartQty ?? 0)));
+const hire_clubs_qty = Math.max(0, Math.min(4, Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? 0)));
+const notes = req.body?.notes ? String(req.body.notes).trim() : "";
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
     if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
