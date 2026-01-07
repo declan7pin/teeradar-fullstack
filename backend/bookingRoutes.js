@@ -2157,20 +2157,23 @@ DO UPDATE SET
       RETURNING *;
       `,
       [
-        courseId,
-        play_date,
-        tee_time,
-        holes,
-        slot_index,
-        reference,
-        name || null,
-        email || null,
-        phone || null,
-        paid,
-        checked_in,
-        has_cart,
-        has_hire_clubs,
-      ]
+  courseId,
+  play_date,
+  tee_time,
+  holes,
+  slot_index,
+  reference,
+  name || null,
+  email || null,
+  phone || null,
+  paid,
+  checked_in,
+  has_cart,
+  has_hire_clubs,
+  cart_qty,
+  hire_clubs_qty,
+  notes || null,
+]
     );
 
     const sync = await syncBookedPlayersForTime({
