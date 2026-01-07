@@ -1290,6 +1290,7 @@ timesRows.sort((a,b) => {
 
       $("manualMsg").textContent = "✅ Added manual tee time";
       await loadManualSlots();
+      await refreshActiveView();
     }catch(e){
       $("manualMsg").textContent = "❌ " + e.message;
     }
