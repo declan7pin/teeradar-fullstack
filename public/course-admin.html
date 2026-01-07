@@ -406,8 +406,23 @@ async function apiFetch(url, opts = {}) {
 
   function buildSlotCell(item, slotIndex){
   if (!item){
-    return `<div class="slotBox"><div class="slotEmpty">—</div></div>`;
-  }
+  return `
+    <div class="slotBox">
+      <div class="slotEmpty">—</div>
+      <div style="margin-top:8px;">
+        <button
+          type="button"
+          class="secondary"
+          style="font-size:12px;padding:8px 10px;border-radius:10px;"
+          data-addbooking="1"
+          data-slot="${slotIndex}"
+        >
+          Add booking
+        </button>
+      </div>
+    </div>
+  `;
+}
 
   const name = _escape(item.name || "");
   const email = _escape(item.email || "");
