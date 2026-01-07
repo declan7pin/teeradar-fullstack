@@ -2089,7 +2089,14 @@ router.post("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
       ]
     );
 
-    res.json({ ok: true, row: r.rows[0] || null });
+    const sync = await syncBookedPlayersForTime({
+  courseId,
+  play_date,
+  tee_time,
+  holes,
+});
+
+res.json({ ok: true, row: r.rows[0] || null, sync });
   } catch (e) {
     console.error("admin/manual-slot POST", e);
     res.status(500).json({ ok: false, error: "internal_error" });
