@@ -2281,6 +2281,9 @@ router.get("/course-admin/manual-slots", requireCourseAdmin, async (req, res) =>
         checked_in,
         has_cart,
         has_hire_clubs
+        cart_qty,
+        hire_clubs_qty,
+        notes
       FROM booking_manual_slots
       WHERE course_id=$1 AND play_date=$2::date
       ORDER BY tee_time ASC, holes DESC, slot_index ASC;
