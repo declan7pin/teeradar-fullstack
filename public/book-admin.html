@@ -804,6 +804,7 @@ async function loadCourseSettingsIntoForm(slug){
       await j("/api/book/admin/courses/" + encodeURIComponent(slug), { method: "DELETE" });
       $("delMsg").textContent = `✅ Deleted course ${slug}`;
       await refresh();
+      __activeView = null; // view is no longer valid
     } catch (e) {
       $("delMsg").textContent = "❌ " + e.message;
     }
