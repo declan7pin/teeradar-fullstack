@@ -884,6 +884,9 @@ __activeDate = date;
     clearViewBoxes();
     const slug = ($("vSlug").value || "").trim();
     const date = ($("vDate").value || "").trim();
+    __activeView = "bookings";
+__activeSlug = slug;
+__activeDate = date;
     if (!slug) { $("viewMsg").textContent = "❌ course slug is required"; return; }
     $("viewMsg").textContent = "Loading bookings...";
     try{
