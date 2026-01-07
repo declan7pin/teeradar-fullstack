@@ -2004,7 +2004,7 @@ router.get("/admin/manual-slots", requirePlatformAdmin, async (req, res) => {
 
     const params = [courseId, date];
     let q = `
-      SELECT
+            SELECT
         play_date::text AS play_date,
         tee_time,
         holes,
@@ -2016,7 +2016,10 @@ router.get("/admin/manual-slots", requirePlatformAdmin, async (req, res) => {
         paid,
         checked_in,
         has_cart,
-        has_hire_clubs
+        has_hire_clubs,
+        cart_qty,
+        hire_clubs_qty,
+        notes
       FROM booking_manual_slots
       WHERE course_id=$1 AND play_date=$2::date
     `;
