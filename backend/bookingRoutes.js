@@ -2209,7 +2209,7 @@ router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
 
     const cartQty = Math.max(0, Math.min(4, Number(req.body?.cartQty || 0)));
     const hireClubsQty = Math.max(0, Math.min(4, Number(req.body?.hireClubsQty || 0)));
-
+const notes = req.body?.notes ? String(req.body.notes).trim() : "";
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(play_date)) return res.status(400).json({ ok: false, error: "date_invalid" });
