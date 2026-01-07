@@ -2044,69 +2044,87 @@ router.post("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ NEW: Admin "fill slot" (click empty daily-sheet slot -> enter name/email)
 // POST /api/book/admin/fill-slot
-// Body: { slug, date, time, slotIndex, name, email, cartQty?, hireClubsQty? }
-router.post("/admin/fill-slot", requireAdmin, async (req, res) => {
+// Body: { slug, date, time, holes, slotIndex, name, email, phone?, paid?, checked_in?, cartQty?, hireClubsQty? }
+router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
   try {
-    const {
-      slug,
-      date,
-      time,
-      slotIndex,
-      name,
-      email,
-      cartQty = 0,
-      hireClubsQty = 0,
-    } = req.body || {};
+    const slug = normSlug(req.body?.slug);
+    const play_date = String(req.body?.date || "").trim(); // MUST be YYYY-MM-DD
+    const tee_time = String(req.body?.time || "").trim();
+    const holes = Number(req.body?.holes || 18);
+    const slot_index = Number(req.body?.slotIndex || 0);
 
-    const isoDate = String(date || "").trim(); // MUST be YYYY-MM-DD
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
-      return res.status(400).json({ ok: false, error: "date_required" });
-    }
-    if (!slug || !time) {
-      return res.status(400).json({ ok: false, error: "missing_slug_or_time" });
-    }
-    const idx = Number(slotIndex);
-    if (!Number.isInteger(idx) || idx < 1 || idx > 4) {
-      return res.status(400).json({ ok: false, error: "invalid_slotIndex" });
-    }
+    const name = String(req.body?.name || "").trim();
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
-    const cleanName = String(name || "").trim().replace(/\s+/g, " ");
-    const cleanEmail = String(email || "").trim().toLowerCase();
-    if (cleanName.split(" ").length < 2) {
-      return res.status(400).json({ ok: false, error: "name_required" });
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      return res.status(400).json({ ok: false, error: "email_required" });
+    const paid = !!req.body?.paid;
+    const checked_in = !!req.body?.checked_in;
+
+    const cartQty = Math.max(0, Math.min(4, Number(req.body?.cartQty || 0)));
+    const hireClubsQty = Math.max(0, Math.min(4, Number(req.body?.hireClubsQty || 0)));
+
+    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+    if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(play_date)) return res.status(400).json({ ok: false, error: "date_invalid" });
+    if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+    if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4) {
+      return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
     }
 
-    const cQty = Math.max(0, Math.min(4, Number(cartQty || 0)));
-    const hQty = Math.max(0, Math.min(4, Number(hireClubsQty || 0)));
+    if (!hasFirstAndLastName(name)) return res.status(400).json({ ok: false, error: "name_required_first_last" });
+    if (!isLikelyEmail(email)) return res.status(400).json({ ok: false, error: "email_required_valid" });
 
-    // ✅ Prevent overwriting an already-filled slot for this time/date/slug
-    const existing = await db.get(
-      `SELECT id FROM bookings
-       WHERE course_slug = ? AND play_date = ? AND tee_time = ? AND slot_index = ?`,
-      [slug, isoDate, time, idx]
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    // One reference groups multiple manual slots (if you ever fill multiple slots for one booking)
+    const reference = String(req.body?.reference || "").trim() || makeRef("MAN");
+
+    // Upsert into booking_manual_slots
+    const r = await db.query(
+      `
+      INSERT INTO booking_manual_slots
+        (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
+         paid, checked_in, has_cart, has_hire_clubs, updated_at)
+      VALUES
+        ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now())
+      ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
+      DO UPDATE SET
+        reference = EXCLUDED.reference,
+        name = EXCLUDED.name,
+        email = EXCLUDED.email,
+        phone = EXCLUDED.phone,
+        paid = EXCLUDED.paid,
+        checked_in = EXCLUDED.checked_in,
+        has_cart = EXCLUDED.has_cart,
+        has_hire_clubs = EXCLUDED.has_hire_clubs,
+        updated_at = now()
+      RETURNING *;
+      `,
+      [
+        courseId,
+        play_date,
+        tee_time,
+        holes,
+        slot_index,
+        reference,
+        name,
+        email,
+        phone || null,
+        paid,
+        checked_in,
+        cartQty > 0,
+        hireClubsQty > 0,
+      ]
     );
-    if (existing?.id) {
-      return res.status(409).json({ ok: false, error: "slot_already_filled" });
-    }
 
-    // ✅ Insert a 1-player booking for that slot
-    const reference = "TR-" + Math.random().toString(36).slice(2, 8).toUpperCase();
-
-    await db.run(
-      `INSERT INTO bookings
-        (course_slug, play_date, tee_time, players, slot_index, name, email, source, cart_qty, hire_clubs_qty, reference)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [slug, isoDate, time, 1, idx, cleanName, cleanEmail, "admin", cQty, hQty, reference]
-    );
-
-    return res.json({ ok: true, reference });
-  } catch (err) {
-    console.error("admin/fill-slot failed", err);
-    return res.status(500).json({ ok: false, error: "server_error" });
+    return res.json({ ok: true, row: r.rows[0] || null, cartQty, hireClubsQty });
+  } catch (e) {
+    console.error("admin/fill-slot POST", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 // DELETE manual slot (platform admin)
