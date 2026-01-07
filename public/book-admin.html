@@ -429,7 +429,35 @@
   }
 
   const $ = (id) => document.getElementById(id);
+async function loadCourseSettingsIntoForm(slug){
+  try{
+    const s = String(slug || "").trim();
+    if (!s) return;
 
+    const out = await j("/api/book/admin/course-settings?slug=" + encodeURIComponent(s), { method:"GET" });
+
+    const cs =
+      out.settings ||
+      out.course_settings ||
+      out.courseSettings ||
+      out.data ||
+      out ||
+      {};
+
+    $("sSlug").value = s;
+    $("sCartFee").value = Number(cs.cart_fee_cents ?? 0);
+    $("sCartQty").value = Number(cs.cart_qty ?? 0);
+    $("sClubsFee").value = Number(cs.hire_clubs_fee_cents ?? 0);
+    $("sClubsQty").value = Number(cs.hire_clubs_qty ?? 0);
+    $("sDur9").value = Number(cs.duration_9_mins ?? 210);
+    $("sDur18").value = Number(cs.duration_18_mins ?? 390);
+
+    $("settingsMsg").textContent = `✅ Loaded settings for ${s}`;
+  } catch(e){
+    // non-fatal
+    $("settingsMsg").textContent = "⚠️ Could not load settings: " + e.message;
+  }
+}
   (function(){
     try{
       const d = new Date();
