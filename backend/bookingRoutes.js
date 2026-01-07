@@ -1355,7 +1355,40 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
       params
     );
 
-    res.json({ ok: true, bookings: r.rows || [] });
+        // ✅ ADD: also return manual slots so daily sheet can render walk-ins/phone-ins
+    const ms = await db.query(
+      `
+      SELECT
+        play_date::text AS play_date,
+        tee_time,
+        holes,
+        slot_index,
+        reference,
+        name,
+        email,
+        phone,
+        paid,
+        checked_in,
+        has_cart,
+        has_hire_clubs,
+        cart_qty,
+        hire_clubs_qty,
+        notes,
+        created_at,
+        updated_at
+      FROM booking_manual_slots
+      WHERE course_id = $1
+        ${date ? "AND play_date = $2::date" : ""}
+      ORDER BY play_date DESC, tee_time ASC, holes DESC, slot_index ASC;
+      `,
+      date ? [courseId, date] : [courseId]
+    );
+
+    res.json({
+      ok: true,
+      bookings: r.rows || [],
+      manualSlots: ms.rows || [], // ✅ NEW
+    });
   } catch (e) {
     console.error("admin/bookings GET", e);
     res.status(500).json({ ok: false, error: "internal_error" });
