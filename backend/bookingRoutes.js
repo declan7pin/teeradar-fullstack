@@ -3332,7 +3332,13 @@ router.post("/book", async (req, res) => {
     if (lockKey) {
       await db.query(`SELECT pg_advisory_xact_lock($1::bigint);`, [lockKey]);
     }
-
+// ✅ IMPORTANT: sync booked_players so manual slots are included before capacity reservation
+await syncBookedPlayersForTime({
+  courseId,
+  play_date: date,
+  tee_time: time,
+  holes,
+});
     // ✅ Re-check add-on availability INSIDE the transaction (prevents racing)
     const cartQty = Number(courseRow.cart_qty || 0);
     const clubsQty = Number(courseRow.hire_clubs_qty || 0);
