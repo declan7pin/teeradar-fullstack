@@ -552,7 +552,8 @@ async function loadCourseSettingsIntoForm(slug){
       $("courseMsg").textContent = "✅ Saved: " + out.course.slug + " — opens at /book/" + out.course.slug;
       $("gSlug").value = out.course.slug;
       $("sSlug").value = out.course.slug;
-      await refresh();
+     await loadCourseSettingsIntoForm(out.course.slug);
+       await refresh();
     } catch (e) {
       $("courseMsg").textContent = "❌ " + e.message;
     }
