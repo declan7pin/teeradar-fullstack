@@ -357,11 +357,25 @@
     return data;
   }
 
-  // ✅ adapter so template feature can use apiFetch() like the snippet
-  async function apiFetch(url, opts = {}) {
+  // ✅ adapter so template feature can use apiFetch() like real fetch()
+async function apiFetch(url, opts = {}) {
+  try{
     const data = await j(url, opts);
-    return { ok: true, json: async () => data };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => data
+    };
+  }catch(e){
+    // j() throws, but our template code expects a Response-like object
+    const msg = (e && e.message) ? e.message : "Request failed";
+    return {
+      ok: false,
+      status: 400,
+      json: async () => ({ ok:false, error: msg })
+    };
   }
+}
 
   function fmtDT(s){
     try{
