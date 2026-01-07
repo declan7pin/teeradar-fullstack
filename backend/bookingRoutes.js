@@ -648,6 +648,35 @@ await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs
     CREATE INDEX IF NOT EXISTS booking_analytics_events_type_time_idx
     ON booking_analytics_events (event_type, occurred_at DESC);
   `);
+  // ... your existing table/index creation above
+
+  // ✅ Manual slot entries (walk-ins / phone-ins) for daily sheet
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_manual_slots (
+      id BIGSERIAL PRIMARY KEY,
+      course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
+      play_date DATE NOT NULL,
+      tee_time TEXT NOT NULL,
+      holes INTEGER NOT NULL,
+      slot_index INTEGER NOT NULL, -- 1..4
+      reference TEXT NOT NULL,     -- groups multiple players together (same booking colour)
+      name TEXT,
+      email TEXT,
+      phone TEXT,
+      paid BOOLEAN NOT NULL DEFAULT false,
+      checked_in BOOLEAN NOT NULL DEFAULT false,
+      has_cart BOOLEAN NOT NULL DEFAULT false,
+      has_hire_clubs BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(course_id, play_date, tee_time, holes, slot_index)
+    );
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_manual_slots_lookup_idx
+    ON booking_manual_slots (course_id, play_date, holes, tee_time);
+  `);
 
   console.log("✅ booking tables ready");
 }
