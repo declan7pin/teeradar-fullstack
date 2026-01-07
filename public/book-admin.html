@@ -1057,7 +1057,9 @@ __activeDate = date;
 
     const slug = ($("vSlug").value || "").trim();
     const date = ($("vDate").value || "").trim();
-
+__activeView = "sheet";
+__activeSlug = slug;
+__activeDate = date;
     if (!slug) { $("viewMsg").textContent = "❌ course slug is required"; return; }
     if (!date) { $("viewMsg").textContent = "❌ play date is required for daily sheet"; return; }
 
