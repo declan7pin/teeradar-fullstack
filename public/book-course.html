@@ -659,7 +659,7 @@ if (qtySel) {
 
     const wantPlayers = Number($("players").value);
 
-    list.forEach((t) => {
+        list.map(normalizeSlot).forEach((t) => {
       const div = document.createElement("div");
       div.className = "timeCard";
 
