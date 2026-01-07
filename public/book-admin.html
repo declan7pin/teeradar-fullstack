@@ -254,7 +254,70 @@
       <div id="genMsg" class="muted" style="margin-top:10px;"></div>
       <div id="previewBox" class="muted mini" style="margin-top:8px;"></div>
     </div>
+    <!-- ✅ Manual tee times (Platform Admin) -->
+    <div class="card">
+      <h3>Manual Tee Times (Platform Admin)</h3>
+      <p class="muted">Add one-off tee times (without generating a full batch). Also lets you view/delete manual slots.</p>
 
+      <div class="row">
+        <div>
+          <label class="muted">Course Slug</label>
+          <input id="mSlug" placeholder="hillview  or  marri-park" />
+        </div>
+        <div>
+          <label class="muted">Play Date</label>
+          <input id="mDate" type="date" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label class="muted">Tee Time</label>
+          <input id="mTime" placeholder="06:30" value="06:30" />
+        </div>
+        <div>
+          <label class="muted">Holes</label>
+          <input id="mHoles" type="number" min="1" step="1" value="18" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label class="muted">Max players</label>
+          <input id="mMaxPlayers" type="number" min="1" step="1" value="4" />
+        </div>
+        <div>
+          <label class="muted">Price per player (cents)</label>
+          <input id="mPrice" type="number" min="0" step="1" value="0" />
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top:12px">
+        <button id="mAddBtn">Add manual tee time</button>
+        <button id="mLoadBtn" class="secondary small">View manual tee times</button>
+      </div>
+
+      <div id="manualMsg" class="muted" style="margin-top:10px;"></div>
+
+      <div id="manualBox" style="display:none;margin-top:10px">
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Holes</th>
+                <th class="right">Max</th>
+                <th class="right">Price (c)</th>
+                <th>ID</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="manualBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     <!-- Delete course / tee times -->
     <div class="card">
       <h3>Delete Course / Tee Times</h3>
