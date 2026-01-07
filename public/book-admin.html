@@ -787,6 +787,7 @@ async function loadCourseSettingsIntoForm(slug){
       const out = await j("/api/book/admin/times?" + qs.toString(), { method: "DELETE" });
       $("delMsg").textContent = `✅ Deleted ${out.deletedTimes || 0} tee times`;
       await refresh();
+      await refreshActiveView();
     } catch (e) {
       $("delMsg").textContent = "❌ " + e.message;
     }
