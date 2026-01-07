@@ -761,29 +761,33 @@ tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
       await j("/api/book/course-admin/manual-booking", {
         method:"POST",
         body: JSON.stringify({
-          date,
-          teeTime,
-          holes,
-          players,
-          name,
+  // date aliases
+  date,
+  playDate: date,
+  play_date: date,
 
-          // qty fields (new)
-          cartQty,
-          hireClubsQty,
-          cart_qty: cartQty,
-          hire_clubs_qty: hireClubsQty,
+  // time aliases
+  teeTime,
+  tee_time: teeTime,
 
-          // optional notes
-          notes,
-          note: notes,
+  holes,
+  players,
+  name,
 
-          // keep these present but empty (backend should allow empty)
-          email: "",
-          phone: "",
+  cartQty,
+  hireClubsQty,
+  cart_qty: cartQty,
+  hire_clubs_qty: hireClubsQty,
 
-          paid: false,
-          checked_in: false
-        })
+  notes,
+  note: notes,
+
+  email: "",
+  phone: "",
+
+  paid: false,
+  checked_in: false
+})
       });
 
       $("viewMsg").textContent = "✅ Booking added";
