@@ -697,6 +697,10 @@ await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS cart_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS notes TEXT;`);
+    // ✅ NEW: store window for add-on overlap checks (manual slots)
+  await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;`);
+  await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;`);
+  await db.query(`CREATE INDEX IF NOT EXISTS booking_manual_slots_course_window_idx ON booking_manual_slots (course_id, start_at, end_at);`);
   await db.query(`
     CREATE INDEX IF NOT EXISTS booking_manual_slots_lookup_idx
     ON booking_manual_slots (course_id, play_date, holes, tee_time);
