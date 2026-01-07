@@ -2179,7 +2179,14 @@ router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
       ]
     );
 
-    return res.json({ ok: true, row: r.rows[0] || null, cartQty, hireClubsQty });
+    const sync = await syncBookedPlayersForTime({
+  courseId,
+  play_date,
+  tee_time,
+  holes,
+});
+
+return res.json({ ok: true, row: r.rows[0] || null, cartQty, hireClubsQty, sync });
   } catch (e) {
     console.error("admin/fill-slot POST", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
