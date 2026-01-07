@@ -838,7 +838,9 @@ async function loadCourseSettingsIntoForm(slug){
     clearViewBoxes();
     const slug = ($("vSlug").value || "").trim();
     const date = ($("vDate").value || "").trim();
-
+__activeView = "times";
+__activeSlug = slug;
+__activeDate = date;
     if (!slug) { $("viewMsg").textContent = "❌ course slug is required"; return; }
     if (!date) { $("viewMsg").textContent = "❌ play date is required to view tee times"; return; }
 
