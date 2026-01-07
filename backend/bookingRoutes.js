@@ -3219,7 +3219,20 @@ router.get("/availability", async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ NEW: per-slot transaction lock key (prevents race + addon oversell)
+function advisoryKeyForSlot({ courseId, dateYmd, timeHhMm }) {
+  // key = courseId * 10^12 + yyyymmdd * 10^4 + minutes
+  const ymdNum = Number(String(dateYmd || "").replace(/-/g, ""));
+  const mins = toMinutes(timeHhMm);
+  if (!Number.isFinite(ymdNum) || mins === null) return null;
 
+  const key =
+    BigInt(courseId) * 1000000000000n +
+    BigInt(ymdNum) * 10000n +
+    BigInt(mins);
+
+  return key.toString(); // pass as string to pg bigint
+}
 router.post("/book", async (req, res) => {
   try {
     const slug = normSlug(req.body?.slug);
