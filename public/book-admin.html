@@ -1288,6 +1288,8 @@ timesRows.sort((a,b) => {
           $("vSlug").value = s;
           $("sSlug").value = s;
           $("iSlug").value = s; // ✅ also fill inventory slug
+          if ($("mSlug")) $("mSlug").value = s;
+          if ($("mDate")) $("mDate").value = $("vDate")?.value || $("gDate")?.value || $("mDate").value;
 loadCourseSettingsIntoForm(s); // ✅ auto-load fees/qty/durations
           $("previewBox").textContent = "";
           $("genMsg").textContent = "";
