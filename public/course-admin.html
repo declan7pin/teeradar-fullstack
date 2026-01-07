@@ -538,6 +538,7 @@ async function apiFetch(url, opts = {}) {
     setKey(key);
     $("msg").textContent = "✅ Saved";
     $("who").textContent = slug ? `Using: ${slug}` : "";
+    document.querySelector("#tplLoadBtn")?.click();
   };
 
   $("clearBtn").onclick = () => {
