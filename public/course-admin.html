@@ -717,7 +717,6 @@ tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
       const timeCell = tr.querySelector(".sheetTime");
       const timeText = (timeCell?.innerText || "").trim();
 
-      // Parse time + holes from the cell
       const timeMatch = timeText.match(/^(\d{1,2}:\d{2})/);
       const holesMatch = timeText.match(/\((\d+)\s*holes\)/i);
 
@@ -726,20 +725,21 @@ tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
 
       if (!teeTime) throw new Error("tee_time_missing");
 
-      // Simple prompt flow (fast + works on mobile)
-      const name = prompt("Name for booking:", "");
+      // ✅ NEW: only ask for name + qty + notes
+      const name = (prompt("Name:", "") || "").trim();
       if (!name) return;
 
-      const email = prompt("Email (optional):", "") || "";
-      const phone = prompt("Phone (optional):", "") || "";
+      const cartsRaw = prompt("Cart qty (0-4):", "0") || "0";
+      const clubsRaw = prompt("Clubs qty (0-4):", "0") || "0";
+      const notes = (prompt("Notes (optional):", "") || "").trim();
 
-      const playersRaw = prompt("Players (1-4):", "1") || "1";
-      const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
+      const cartQty = Math.max(0, Math.min(4, Number(cartsRaw || 0)));
+      const hireClubsQty = Math.max(0, Math.min(4, Number(clubsRaw || 0)));
 
-      const hasCart = confirm("Add cart?");
-      const hasClubs = confirm("Add hire clubs?");
+      // ✅ One slot = one golfer (keeps your daily sheet logic consistent)
+      const players = 1;
 
-      // ✅ This endpoint must exist in backend (see note below)
+      // ✅ Post (send BOTH naming styles so it works with whichever backend you have)
       await j("/api/book/course-admin/manual-booking", {
         method:"POST",
         body: JSON.stringify({
@@ -748,10 +748,21 @@ tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
           holes,
           players,
           name,
-          email,
-          phone,
-          has_cart: hasCart,
-          has_hire_clubs: hasClubs,
+
+          // qty fields (new)
+          cartQty,
+          hireClubsQty,
+          cart_qty: cartQty,
+          hire_clubs_qty: hireClubsQty,
+
+          // optional notes
+          notes,
+          note: notes,
+
+          // keep these present but empty (backend should allow empty)
+          email: "",
+          phone: "",
+
           paid: false,
           checked_in: false
         })
@@ -760,7 +771,7 @@ tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
       $("viewMsg").textContent = "✅ Booking added";
       await viewSheet(); // refresh
     }catch(e){
-      $("viewMsg").textContent = "❌ " + e.message;
+      $("viewMsg").textContent = "❌ " + (e?.message || "Failed to add booking");
     }
   };
 });
