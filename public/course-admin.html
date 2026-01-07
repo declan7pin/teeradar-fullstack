@@ -466,6 +466,7 @@ async function apiFetch(url, opts = {}) {
         ${phone ? `<span>${phone}</span>` : ""}
         ${refRaw ? `<span><code>${refDisp}</code></span>` : ""}
         ${addonBits.length ? `<span style="display:flex;gap:6px;flex-wrap:wrap">${addonBits.join("")}</span>` : ""}
+                ${notes ? `<span style="width:100%"><span class="muted">Notes:</span> ${notes}</span>` : ""}
       </div>
 
       <div style="margin-top:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
