@@ -244,7 +244,67 @@
           </table>
         </div>
       </div>
+      <!-- ✅ Manual tee times (Course Admin) -->
+      <div class="card" style="margin-top:12px;">
+        <h3>Manual Tee Times</h3>
+        <p class="muted">Add one-off tee times for a specific date (without generating a full batch). You can also view/delete manual slots.</p>
 
+        <div class="row">
+          <div>
+            <label class="muted">Play Date</label>
+            <input id="mDate" type="date" />
+          </div>
+          <div>
+            <label class="muted">Tee Time</label>
+            <input id="mTime" placeholder="06:30" value="06:30" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div>
+            <label class="muted">Holes</label>
+            <input id="mHoles" type="number" min="1" step="1" value="18" />
+          </div>
+          <div>
+            <label class="muted">Max players</label>
+            <input id="mMaxPlayers" type="number" min="1" step="1" value="4" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div>
+            <label class="muted">Price per player (cents)</label>
+            <input id="mPrice" type="number" min="0" step="1" value="0" />
+          </div>
+          <div></div>
+        </div>
+
+        <div class="actions" style="margin-top:12px">
+          <button id="mAddBtn">Add manual tee time</button>
+          <button id="mLoadBtn" class="secondary">View manual tee times</button>
+        </div>
+
+        <div id="manualMsg" class="muted" style="margin-top:10px;"></div>
+
+        <div id="manualBox" style="display:none;margin-top:10px">
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Holes</th>
+                  <th class="right">Max</th>
+                  <th class="right">Price (c)</th>
+                  <th>ID</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="manualBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
