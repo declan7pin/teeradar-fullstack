@@ -363,7 +363,49 @@
     if (COURSE_SLUG) headers.set("X-Course-Slug", COURSE_SLUG);
     return fetch(url, { ...o, headers });
   }
+  // ✅ Normalize backend slot shape (snake_case vs camelCase)
+  function normalizeSlot(s){
+    if (!s || typeof s !== "object") return s;
 
+    const time =
+      s.time ??
+      s.tee_time ??
+      s.teeTime ??
+      "";
+
+    const holes =
+      Number(s.holes ?? s.num_holes ?? s.hole_count ?? s.holeCount ?? 18);
+
+    const maxPlayers =
+      Number(s.maxPlayers ?? s.max_players ?? s.max_players_per_slot ?? s.maxPlayersPerSlot ?? 4);
+
+    const bookedPlayers =
+      Number(s.bookedPlayers ?? s.booked_players ?? s.booked ?? s.bookedCount ?? 0);
+
+    const remaining =
+      (typeof s.remaining !== "undefined")
+        ? Number(s.remaining || 0)
+        : Math.max(0, maxPlayers - bookedPlayers);
+
+    const pricePerPlayerCents =
+      Number(
+        s.pricePerPlayerCents ??
+        s.price_per_player_cents ??
+        s.priceCents ??
+        s.price_cents ??
+        0
+      );
+
+    return {
+      ...s,
+      time,
+      holes,
+      maxPlayers,
+      bookedPlayers,
+      remaining,
+      pricePerPlayerCents,
+    };
+  }
   let course = { slug, name: "Course", notes: "" };
   let addons = [];           // list from backend (active add-ons for this course)
   let selectedAddonIds = []; // what the user picked for this booking
