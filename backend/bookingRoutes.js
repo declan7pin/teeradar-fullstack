@@ -2481,24 +2481,30 @@ router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res)
           checked_in = EXCLUDED.checked_in,
           has_cart = EXCLUDED.has_cart,
           has_hire_clubs = EXCLUDED.has_hire_clubs,
+          cart_qty = EXCLUDED.cart_qty,
+          hire_clubs_qty = EXCLUDED.hire_clubs_qty,
+          notes = EXCLUDED.notes,
           updated_at = now()
         RETURNING *;
         `,
         [
-          courseId,
-          play_date,
-          tee_time,
-          holes,
-          slot_index,
-          reference,
-          name,
-          email,
-          phone || null,
-          paid,
-          checked_in,
-          has_cart,
-          has_hire_clubs,
-        ]
+  courseId,
+  play_date,
+  tee_time,
+  holes,
+  slot_index,
+  reference,
+  name,
+  email || null,
+  phone || null,
+  paid,
+  checked_in,
+  cartQty > 0,
+  hireClubsQty > 0,
+  cartQty,
+  hireClubsQty,
+  notes || null,
+]
       );
 
       filled.push(r.rows[0]);
