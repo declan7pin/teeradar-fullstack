@@ -857,6 +857,7 @@
       const dd = String(d.getDate()).padStart(2,"0");
       const today = `${yyyy}-${mm}-${dd}`;
       $("date").value = today;
+            if ($("mDate")) $("mDate").value = today;
       if ($("iDate")) $("iDate").value = today;
     }catch{}
   })();
