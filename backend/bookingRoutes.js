@@ -1916,6 +1916,19 @@ async function courseIdFromSlug(slug) {
   return c.rows.length ? c.rows[0].id : null;
 }
 async function syncBookedPlayersForTime({ courseId, play_date, tee_time, holes }) {
+  // ✅ Ensure the booking_times row exists (manual sheet can create slots before times exist)
+  await db.query(
+    `
+    INSERT INTO booking_times
+      (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, created_at, updated_at)
+    VALUES
+      ($1, $2::date, $3, $4, 4, 0, 0, 'AVAILABLE', now(), now())
+    ON CONFLICT (course_id, play_date, tee_time, holes)
+    DO NOTHING;
+    `,
+    [courseId, play_date, tee_time, holes]
+  );
+
   // 1) Count manual slots filled (1 row = 1 player slot)
   const ms = await db.query(
     `
@@ -1942,13 +1955,14 @@ async function syncBookedPlayersForTime({ courseId, play_date, tee_time, holes }
 
   const totalBooked = manualCount + bookingPlayers;
 
-  // 3) Apply to booking_times (and set status accordingly)
+  // 3) Apply to booking_times (preserve BLOCKED)
   const upd = await db.query(
     `
     UPDATE booking_times
     SET
       booked_players = $5,
       status = CASE
+        WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
         WHEN $5 >= max_players THEN 'BOOKED'
         ELSE 'AVAILABLE'
       END,
