@@ -2397,7 +2397,9 @@ router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res)
     const checked_in = !!req.body?.checked_in;
     const has_cart = !!req.body?.has_cart;
     const has_hire_clubs = !!req.body?.has_hire_clubs;
-
+    const cartQty = Math.max(0, Math.min(4, Number(req.body?.cartQty ?? req.body?.cart_qty ?? 0)));
+    const hireClubsQty = Math.max(0, Math.min(4, Number(req.body?.hireClubsQty ?? req.body?.hire_clubs_qty ?? 0)));
+    const notes = req.body?.notes ? String(req.body.notes).trim() : "";
     // optional (lets your manual tee time creator pass these)
     const pricePerPlayerCents = Number(req.body?.pricePerPlayerCents ?? 0);
     const maxPlayers = Math.max(1, Math.min(4, Number(req.body?.maxPlayers ?? 4)));
