@@ -2379,28 +2379,26 @@ res.json({ ok: true, row: r.rows[0] || null, sync });
 });
 // ✅ NEW: Course admin — create a "manual booking" by auto-filling empty slot(s)
 // POST /api/book/course-admin/manual-booking
-// Body: { date, teeTime, holes, players, name, email, phone?, has_cart?, has_hire_clubs?, paid?, checked_in?, pricePerPlayerCents?, maxPlayers? }
 router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res) => {
   try {
     const slug = req.courseAdmin.slug;
 
-    const play_date = String(req.body?.date || "").trim();           // YYYY-MM-DD
+    const play_date = String(req.body?.date || "").trim(); // YYYY-MM-DD
     const tee_time = String(req.body?.teeTime || req.body?.time || "").trim(); // HH:MM
     const holes = Number(req.body?.holes || 18);
     const players = Math.max(1, Math.min(4, Number(req.body?.players || 1)));
 
     const name = String(req.body?.name || "").trim();
-    const email = String(req.body?.email || "").trim().toLowerCase();
+    const email = String(req.body?.email || "").trim().toLowerCase(); // optional
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
     const paid = !!req.body?.paid;
     const checked_in = !!req.body?.checked_in;
-    const has_cart = !!req.body?.has_cart;
-    const has_hire_clubs = !!req.body?.has_hire_clubs;
+
     const cartQty = Math.max(0, Math.min(4, Number(req.body?.cartQty ?? req.body?.cart_qty ?? 0)));
     const hireClubsQty = Math.max(0, Math.min(4, Number(req.body?.hireClubsQty ?? req.body?.hire_clubs_qty ?? 0)));
     const notes = req.body?.notes ? String(req.body.notes).trim() : "";
-    // optional (lets your manual tee time creator pass these)
+
     const pricePerPlayerCents = Number(req.body?.pricePerPlayerCents ?? 0);
     const maxPlayers = Math.max(1, Math.min(4, Number(req.body?.maxPlayers ?? 4)));
 
@@ -2408,14 +2406,13 @@ router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(play_date)) return res.status(400).json({ ok: false, error: "date_invalid" });
     if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
-
-        if (!name) return res.status(400).json({ ok: false, error: "name_required" });
-    // ✅ email NOT required for manual bookings
+    if (!name) return res.status(400).json({ ok: false, error: "name_required" });
+    // ✅ email is NOT required for manual bookings
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-    // ✅ Ensure the tee time row exists (so it always shows on the sheet)
+    // ✅ Ensure the tee time row exists (so it shows on the daily sheet)
     await db.query(
       `
       INSERT INTO booking_times
@@ -2434,7 +2431,7 @@ router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res)
       [courseId, play_date, tee_time, holes, maxPlayers, Math.max(0, pricePerPlayerCents)]
     );
 
-    // Find which slot indexes are already taken
+    // Find taken slots
     const taken = await db.query(
       `
       SELECT slot_index
@@ -2445,71 +2442,69 @@ router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res)
       [courseId, play_date, tee_time, holes]
     );
 
-    const takenSet = new Set((taken.rows || []).map(r => Number(r.slot_index)));
-    const freeSlots = [1, 2, 3, 4].filter(i => !takenSet.has(i));
+    const takenSet = new Set((taken.rows || []).map((r) => Number(r.slot_index)));
+    const freeSlots = [1, 2, 3, 4].filter((i) => !takenSet.has(i));
 
     if (freeSlots.length < players) {
       return res.status(409).json({
         ok: false,
         error: "not_enough_empty_slots",
-        remainingSlots: freeSlots.length
+        remainingSlots: freeSlots.length,
       });
     }
 
     const reference = makeRef("MAN");
+    const filled = [];
 
-    // Fill N slots (one row per player)
-const filled = [];
+    for (let i = 0; i < players; i++) {
+      const slot_index = freeSlots[i];
 
-for (let i = 0; i < players; i++) {
-  const slot_index = freeSlots[i];
+      const r = await db.query(
+        `
+        INSERT INTO booking_manual_slots
+          (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
+           paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes, updated_at)
+        VALUES
+          ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now())
+        ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
+        DO UPDATE SET
+          reference = EXCLUDED.reference,
+          name = EXCLUDED.name,
+          email = EXCLUDED.email,
+          phone = EXCLUDED.phone,
+          paid = EXCLUDED.paid,
+          checked_in = EXCLUDED.checked_in,
+          has_cart = EXCLUDED.has_cart,
+          has_hire_clubs = EXCLUDED.has_hire_clubs,
+          cart_qty = EXCLUDED.cart_qty,
+          hire_clubs_qty = EXCLUDED.hire_clubs_qty,
+          notes = EXCLUDED.notes,
+          updated_at = now()
+        RETURNING *;
+        `,
+        [
+          courseId,
+          play_date,
+          tee_time,
+          holes,
+          slot_index,
+          reference,
+          name,
+          email || null,
+          phone || null,
+          paid,
+          checked_in,
+          cartQty > 0,
+          hireClubsQty > 0,
+          cartQty,
+          hireClubsQty,
+          notes || null,
+        ]
+      );
 
-  const r = await db.query(
-    `
-    INSERT INTO booking_manual_slots
-      (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
-       paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes, updated_at)
-    VALUES
-      ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,now())
-    ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
-    DO UPDATE SET
-      reference = EXCLUDED.reference,
-      name = EXCLUDED.name,
-      email = EXCLUDED.email,
-      phone = EXCLUDED.phone,
-      paid = EXCLUDED.paid,
-      checked_in = EXCLUDED.checked_in,
-      has_cart = EXCLUDED.has_cart,
-      has_hire_clubs = EXCLUDED.has_hire_clubs,
-      cart_qty = EXCLUDED.cart_qty,
-      hire_clubs_qty = EXCLUDED.hire_clubs_qty,
-      notes = EXCLUDED.notes,
-      updated_at = now()
-    RETURNING *;
-    `,
-    [
-      courseId,
-      play_date,
-      tee_time,
-      holes,
-      slot_index,
-      reference,
-      name,
-      email || null,
-      phone || null,
-      paid,
-      checked_in,
-      cartQty > 0,
-      hireClubsQty > 0,
-      cartQty,
-      hireClubsQty,
-      notes || null,
-      // $17 placeholder for notes already used; this is correct count because we added notes as $16 and keep $17 for notes?
-    ]
-  );
+      filled.push(r.rows[0]);
+    }
 
-  filled.push(r.rows[0]);
-}
     const sync = await syncBookedPlayersForTime({
       courseId,
       play_date,
