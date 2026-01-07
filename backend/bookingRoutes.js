@@ -2214,7 +2214,14 @@ router.delete("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
       [courseId, play_date, tee_time, holes, slot_index]
     );
 
-    res.json({ ok: true, deleted: r.rowCount || 0 });
+    const sync = await syncBookedPlayersForTime({
+  courseId,
+  play_date,
+  tee_time,
+  holes,
+});
+
+res.json({ ok: true, deleted: r.rowCount || 0, sync });
   } catch (e) {
     console.error("admin/manual-slot DELETE", e);
     res.status(500).json({ ok: false, error: "internal_error" });
