@@ -934,7 +934,7 @@ const addonLines = chosenAddons.map(a => {
         body: JSON.stringify({
           slug,
           date,
-          time: selectedSlot.time,
+                    time: (normalizeSlot(selectedSlot).time || ""),
           holes,
           players,
           name,
