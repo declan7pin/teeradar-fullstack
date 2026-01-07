@@ -3531,15 +3531,15 @@ await syncBookedPlayersForTime({
     await db.query(
       `
       INSERT INTO booking_bookings
-        (course_id, play_date, tee_time, holes, players,
-         golfer_name, golfer_email, golfer_phone,
-         price_per_player_cents, total_cents, booking_fee_cents,
-         reference, status, paid, checked_in,
-         has_cart, cart_fee_cents,
-         has_hire_clubs, hire_clubs_fee_cents,
-         start_at, end_at)
-      VALUES
-        ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'CONFIRMED',false,false,$13,$14,$15,$16,$17::timestamptz,$18::timestamptz)
+  (course_id, play_date, tee_time, holes, players,
+   golfer_name, golfer_email, golfer_phone,
+   price_per_player_cents, total_cents, booking_fee_cents,
+   reference, status, paid, checked_in,
+   has_cart, cart_fee_cents, cart_qty,
+   has_hire_clubs, hire_clubs_fee_cents, hire_clubs_qty,
+   start_at, end_at)
+VALUES
+  ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'CONFIRMED',false,false,$13,$14,$15,$16,$17,$18,$19::timestamptz,$20::timestamptz)
       `,
       [
         courseId,
