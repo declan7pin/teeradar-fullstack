@@ -1095,6 +1095,8 @@ timesRows.sort((a,b) => {
           $("dSlug").value = s;
           $("vSlug").value = s;
           $("sSlug").value = s;
+          $("iSlug").value = s; // ✅ also fill inventory slug
+loadCourseSettingsIntoForm(s); // ✅ auto-load fees/qty/durations
           $("previewBox").textContent = "";
           $("genMsg").textContent = "";
           $("delMsg").textContent = "";
