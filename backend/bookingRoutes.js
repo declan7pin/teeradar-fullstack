@@ -1915,6 +1915,57 @@ async function courseIdFromSlug(slug) {
   const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
   return c.rows.length ? c.rows[0].id : null;
 }
+async function syncBookedPlayersForTime({ courseId, play_date, tee_time, holes }) {
+  // 1) Count manual slots filled (1 row = 1 player slot)
+  const ms = await db.query(
+    `
+    SELECT COUNT(*)::int AS n
+    FROM booking_manual_slots
+    WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+      AND COALESCE(name,'') <> ''
+    `,
+    [courseId, play_date, tee_time, holes]
+  );
+  const manualCount = Number(ms.rows[0]?.n || 0);
+
+  // 2) Count CONFIRMED booking players for same time
+  const bb = await db.query(
+    `
+    SELECT COALESCE(SUM(players),0)::int AS n
+    FROM booking_bookings
+    WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+      AND status='CONFIRMED'
+    `,
+    [courseId, play_date, tee_time, holes]
+  );
+  const bookingPlayers = Number(bb.rows[0]?.n || 0);
+
+  const totalBooked = manualCount + bookingPlayers;
+
+  // 3) Apply to booking_times (and set status accordingly)
+  const upd = await db.query(
+    `
+    UPDATE booking_times
+    SET
+      booked_players = $5,
+      status = CASE
+        WHEN $5 >= max_players THEN 'BOOKED'
+        ELSE 'AVAILABLE'
+      END,
+      updated_at = now()
+    WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+    RETURNING id, max_players, booked_players, status;
+    `,
+    [courseId, play_date, tee_time, holes, totalBooked]
+  );
+
+  return {
+    manualCount,
+    bookingPlayers,
+    totalBooked,
+    timeRow: upd.rows[0] || null,
+  };
+}
 // -----------------------------
 // ✅ Platform admin manual slots (book-admin.html)
 // -----------------------------
