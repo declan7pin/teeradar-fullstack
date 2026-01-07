@@ -1915,7 +1915,171 @@ async function courseIdFromSlug(slug) {
   const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
   return c.rows.length ? c.rows[0].id : null;
 }
+// -----------------------------
+// ✅ Platform admin manual slots (book-admin.html)
+// -----------------------------
 
+// GET manual slots for a course + date
+// /api/book/admin/manual-slots?slug=xxx&date=YYYY-MM-DD&holes=18(optional)
+router.get("/admin/manual-slots", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.query.slug);
+    const date = String(req.query.date || "").trim();
+    const holes = req.query.holes ? Number(req.query.holes) : null;
+
+    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+    if (!date) return res.status(400).json({ ok: false, error: "date_required" });
+    if (holes !== null && ![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const params = [courseId, date];
+    let q = `
+      SELECT
+        play_date::text AS play_date,
+        tee_time,
+        holes,
+        slot_index,
+        reference,
+        name,
+        email,
+        phone,
+        paid,
+        checked_in,
+        has_cart,
+        has_hire_clubs
+      FROM booking_manual_slots
+      WHERE course_id=$1 AND play_date=$2::date
+    `;
+
+    if (holes !== null) {
+      params.push(holes);
+      q += ` AND holes = $3`;
+    }
+
+    q += ` ORDER BY tee_time ASC, holes DESC, slot_index ASC;`;
+
+    const r = await db.query(q, params);
+    res.json({ ok: true, rows: r.rows || [] });
+  } catch (e) {
+    console.error("admin/manual-slots GET", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// POST upsert manual slot (platform admin)
+// body: { slug, date, time, holes, slotIndex, reference?, name?, email?, phone?, paid?, checked_in?, has_cart?, has_hire_clubs? }
+router.post("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.body?.slug);
+    const play_date = String(req.body?.date || "").trim();
+    const tee_time = String(req.body?.time || "").trim();
+    const holes = Number(req.body?.holes || 18);
+    const slot_index = Number(req.body?.slotIndex || 0);
+
+    // allow frontend to send a reference; otherwise create one
+    const reference = String(req.body?.reference || "").trim() || makeRef("MAN");
+
+    const name = req.body?.name ? String(req.body.name).trim() : "";
+    const email = req.body?.email ? String(req.body.email).trim() : "";
+    const phone = req.body?.phone ? String(req.body.phone).trim() : "";
+
+    const paid = !!req.body?.paid;
+    const checked_in = !!req.body?.checked_in;
+    const has_cart = !!req.body?.has_cart;
+    const has_hire_clubs = !!req.body?.has_hire_clubs;
+
+    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+    if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
+    if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+    if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4) {
+      return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
+    }
+
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const r = await db.query(
+      `
+      INSERT INTO booking_manual_slots
+        (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
+         paid, checked_in, has_cart, has_hire_clubs, updated_at)
+      VALUES
+        ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now())
+      ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
+      DO UPDATE SET
+        reference = EXCLUDED.reference,
+        name = EXCLUDED.name,
+        email = EXCLUDED.email,
+        phone = EXCLUDED.phone,
+        paid = EXCLUDED.paid,
+        checked_in = EXCLUDED.checked_in,
+        has_cart = EXCLUDED.has_cart,
+        has_hire_clubs = EXCLUDED.has_hire_clubs,
+        updated_at = now()
+      RETURNING *;
+      `,
+      [
+        courseId,
+        play_date,
+        tee_time,
+        holes,
+        slot_index,
+        reference,
+        name || null,
+        email || null,
+        phone || null,
+        paid,
+        checked_in,
+        has_cart,
+        has_hire_clubs,
+      ]
+    );
+
+    res.json({ ok: true, row: r.rows[0] || null });
+  } catch (e) {
+    console.error("admin/manual-slot POST", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// DELETE manual slot (platform admin)
+// /api/book/admin/manual-slot?slug=xxx&date=YYYY-MM-DD&time=HH:MM&holes=18&slotIndex=1
+router.delete("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.query.slug);
+    const play_date = String(req.query?.date || "").trim();
+    const tee_time = String(req.query?.time || "").trim();
+    const holes = Number(req.query?.holes || 18);
+    const slot_index = Number(req.query?.slotIndex || 0);
+
+    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+    if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
+    if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+    if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4) {
+      return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
+    }
+
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const r = await db.query(
+      `
+      DELETE FROM booking_manual_slots
+      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 AND slot_index=$5
+      `,
+      [courseId, play_date, tee_time, holes, slot_index]
+    );
+
+    res.json({ ok: true, deleted: r.rowCount || 0 });
+  } catch (e) {
+    console.error("admin/manual-slot DELETE", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 /* ✅✅✅ PASTE NEW MANUAL SLOT ROUTES HERE ✅✅✅ */
 
 // GET manual slots for a date
