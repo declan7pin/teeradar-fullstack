@@ -509,18 +509,23 @@ async function apiFetch(url, opts = {}) {
     const players = Math.max(1, Number(b.players || 1));
     for (let i=0;i<players;i++){
       if (!byKey.has(key)) byKey.set(key, []);
-      byKey.get(key).push({
+            byKey.get(key).push({
         reference: b.reference || "",
         name: b.name || b.golfer_name || "",
         email: b.email || b.golfer_email || "",
         phone: b.phone || b.golfer_phone || "",
         paid: !!b.paid,
 
-        // ✅ add-ons
-        has_cart: !!b.has_cart,
-        has_hire_clubs: !!b.has_hire_clubs,
+        // ✅ add-ons (support both bool and qty)
+        cart_qty: Number(b.cart_qty ?? 0),
+        hire_clubs_qty: Number(b.hire_clubs_qty ?? 0),
+        has_cart: !!(b.has_cart || Number(b.cart_qty ?? 0) > 0),
+        has_hire_clubs: !!(b.has_hire_clubs || Number(b.hire_clubs_qty ?? 0) > 0),
 
-        // ✅ check-in (backend must return this; otherwise defaults false)
+        // ✅ notes
+        notes: b.notes || b.note || "",
+
+        // ✅ check-in
         checked_in: !!b.checked_in,
       });
     }
