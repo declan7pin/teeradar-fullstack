@@ -2232,21 +2232,24 @@ const notes = req.body?.notes ? String(req.body.notes).trim() : "";
     const r = await db.query(
       `
       INSERT INTO booking_manual_slots
-        (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
-         paid, checked_in, has_cart, has_hire_clubs, updated_at)
-      VALUES
-        ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now())
-      ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
-      DO UPDATE SET
-        reference = EXCLUDED.reference,
-        name = EXCLUDED.name,
-        email = EXCLUDED.email,
-        phone = EXCLUDED.phone,
-        paid = EXCLUDED.paid,
-        checked_in = EXCLUDED.checked_in,
-        has_cart = EXCLUDED.has_cart,
-        has_hire_clubs = EXCLUDED.has_hire_clubs,
-        updated_at = now()
+  (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
+   paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes, updated_at)
+VALUES
+  ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now())
+...
+DO UPDATE SET
+  reference = EXCLUDED.reference,
+  name = EXCLUDED.name,
+  email = EXCLUDED.email,
+  phone = EXCLUDED.phone,
+  paid = EXCLUDED.paid,
+  checked_in = EXCLUDED.checked_in,
+  has_cart = EXCLUDED.has_cart,
+  has_hire_clubs = EXCLUDED.has_hire_clubs,
+  cart_qty = EXCLUDED.cart_qty,
+  hire_clubs_qty = EXCLUDED.hire_clubs_qty,
+  notes = EXCLUDED.notes,
+  updated_at = now()
       RETURNING *;
       `,
       [
@@ -2263,7 +2266,10 @@ const notes = req.body?.notes ? String(req.body.notes).trim() : "";
         checked_in,
         cartQty > 0,
         hireClubsQty > 0,
-      ]
+        cartQty,
+        hireClubsQty,
+        notes || null,
+        ]
     );
 
     const sync = await syncBookedPlayersForTime({
