@@ -771,7 +771,7 @@ if (qtySel) {
   }
 
   async function openModal(slot) {
-    selectedSlot = slot;
+        selectedSlot = normalizeSlot(slot);
 
     resetModalToForm();
 
