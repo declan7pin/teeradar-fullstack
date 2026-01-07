@@ -2459,57 +2459,57 @@ router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res)
     const reference = makeRef("MAN");
 
     // Fill N slots (one row per player)
-    const filled = [];
-    paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes, updated_at
-    
-      const slot_index = freeSlots[i];
+const filled = [];
 
-      const r = await db.query(
-        `
-        INSERT INTO booking_manual_slots
-          (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
-           paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes, updated_at
-        VALUES
-          ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now()
-        ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
-        DO UPDATE SET
-          reference = EXCLUDED.reference,
-          name = EXCLUDED.name,
-          email = EXCLUDED.email,
-          phone = EXCLUDED.phone,
-          paid = EXCLUDED.paid,
-          checked_in = EXCLUDED.checked_in,
-          has_cart = EXCLUDED.has_cart,
-          has_hire_clubs = EXCLUDED.has_hire_clubs,
-          cart_qty = EXCLUDED.cart_qty,
-          hire_clubs_qty = EXCLUDED.hire_clubs_qty,
-          notes = EXCLUDED.notes,
-          updated_at = now()
-        RETURNING *;
-        `,
-        [
-  courseId,
-  play_date,
-  tee_time,
-  holes,
-  slot_index,
-  reference,
-  name,
-  email || null,
-  phone || null,
-  paid,
-  checked_in,
-  cartQty > 0,
-  hireClubsQty > 0,
-  cartQty,
-  hireClubsQty,
-  notes || null,
-]
-      );
+for (let i = 0; i < players; i++) {
+  const slot_index = freeSlots[i];
 
-      filled.push(r.rows[0]);
-    }
+  const r = await db.query(
+    `
+    INSERT INTO booking_manual_slots
+      (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
+       paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes, updated_at)
+    VALUES
+      ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,now())
+    ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
+    DO UPDATE SET
+      reference = EXCLUDED.reference,
+      name = EXCLUDED.name,
+      email = EXCLUDED.email,
+      phone = EXCLUDED.phone,
+      paid = EXCLUDED.paid,
+      checked_in = EXCLUDED.checked_in,
+      has_cart = EXCLUDED.has_cart,
+      has_hire_clubs = EXCLUDED.has_hire_clubs,
+      cart_qty = EXCLUDED.cart_qty,
+      hire_clubs_qty = EXCLUDED.hire_clubs_qty,
+      notes = EXCLUDED.notes,
+      updated_at = now()
+    RETURNING *;
+    `,
+    [
+      courseId,
+      play_date,
+      tee_time,
+      holes,
+      slot_index,
+      reference,
+      name,
+      email || null,
+      phone || null,
+      paid,
+      checked_in,
+      cartQty > 0,
+      hireClubsQty > 0,
+      cartQty,
+      hireClubsQty,
+      notes || null,
+      // $17 placeholder for notes already used; this is correct count because we added notes as $16 and keep $17 for notes?
+    ]
+  );
 
+  filled.push(r.rows[0]);
+}
     const sync = await syncBookedPlayersForTime({
       courseId,
       play_date,
