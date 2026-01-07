@@ -1160,7 +1160,29 @@ timesRows.sort((a,b) => {
         `;
         tb.appendChild(tr);
       });
+// ✅ wire up "Add booking" buttons per row (needs row time+holes)
+tb.querySelectorAll('button[data-addbooking="1"]').forEach(btn => {
+  btn.onclick = async () => {
+    const rowEl = btn.closest("tr");
+    if (!rowEl) return;
 
+    // first cell contains time + holes
+    const timeText = rowEl.querySelector(".sheetTime")?.childNodes?.[0]?.textContent || "";
+    const teeTime = (timeText || "").trim();
+
+    // holes is inside the muted mini "(18 holes)"
+    const holesText = rowEl.querySelector(".sheetTime .mini")?.textContent || "";
+    const holesMatch = holesText.match(/(\d+)/);
+    const holes = holesMatch ? Number(holesMatch[1]) : 18;
+
+    const slug = (__activeSlug || ($("vSlug").value || "")).trim();
+    const playDate = (__activeDate || ($("vDate").value || "")).trim();
+
+    if (!slug || !playDate || !teeTime) return;
+
+    await adminFillSlot({ slug, playDate, teeTime, holes });
+  };
+});
       tb.querySelectorAll('input[type="checkbox"][data-ref][data-kind]').forEach(cb => {
   cb.onchange = async () => {
     const ref = cb.getAttribute("data-ref") || "";
