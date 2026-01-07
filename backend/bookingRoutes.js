@@ -2044,7 +2044,71 @@ router.post("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// POST /api/book/admin/fill-slot
+// Body: { slug, date, time, slotIndex, name, email, cartQty?, hireClubsQty? }
+router.post("/admin/fill-slot", requireAdmin, async (req, res) => {
+  try {
+    const {
+      slug,
+      date,
+      time,
+      slotIndex,
+      name,
+      email,
+      cartQty = 0,
+      hireClubsQty = 0,
+    } = req.body || {};
 
+    const isoDate = String(date || "").trim(); // MUST be YYYY-MM-DD
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+      return res.status(400).json({ ok: false, error: "date_required" });
+    }
+    if (!slug || !time) {
+      return res.status(400).json({ ok: false, error: "missing_slug_or_time" });
+    }
+    const idx = Number(slotIndex);
+    if (!Number.isInteger(idx) || idx < 1 || idx > 4) {
+      return res.status(400).json({ ok: false, error: "invalid_slotIndex" });
+    }
+
+    const cleanName = String(name || "").trim().replace(/\s+/g, " ");
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    if (cleanName.split(" ").length < 2) {
+      return res.status(400).json({ ok: false, error: "name_required" });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ ok: false, error: "email_required" });
+    }
+
+    const cQty = Math.max(0, Math.min(4, Number(cartQty || 0)));
+    const hQty = Math.max(0, Math.min(4, Number(hireClubsQty || 0)));
+
+    // ✅ Prevent overwriting an already-filled slot for this time/date/slug
+    const existing = await db.get(
+      `SELECT id FROM bookings
+       WHERE course_slug = ? AND play_date = ? AND tee_time = ? AND slot_index = ?`,
+      [slug, isoDate, time, idx]
+    );
+    if (existing?.id) {
+      return res.status(409).json({ ok: false, error: "slot_already_filled" });
+    }
+
+    // ✅ Insert a 1-player booking for that slot
+    const reference = "TR-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+
+    await db.run(
+      `INSERT INTO bookings
+        (course_slug, play_date, tee_time, players, slot_index, name, email, source, cart_qty, hire_clubs_qty, reference)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [slug, isoDate, time, 1, idx, cleanName, cleanEmail, "admin", cQty, hQty, reference]
+    );
+
+    return res.json({ ok: true, reference });
+  } catch (err) {
+    console.error("admin/fill-slot failed", err);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
 // DELETE manual slot (platform admin)
 // /api/book/admin/manual-slot?slug=xxx&date=YYYY-MM-DD&time=HH:MM&holes=18&slotIndex=1
 router.delete("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
