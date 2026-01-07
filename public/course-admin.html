@@ -660,7 +660,13 @@ async function apiFetch(url, opts = {}) {
           <td class="right">${(r.gross_cents ?? r.total_cents ?? "")}</td>
           <td>${r.paid ? "✅" : "—"}</td>
           <td>${r.checked_in ? "✅" : "—"}</td>
-          <td>${[r.has_cart ? "Cart" : "", r.has_hire_clubs ? "Clubs" : ""].filter(Boolean).join(", ") || "—"}</td>
+          <td>${
+  [
+    (Number(r.cart_qty ?? 0) > 0 ? `Cart x${Number(r.cart_qty)}` : (r.has_cart ? "Cart" : "")),
+    (Number(r.hire_clubs_qty ?? 0) > 0 ? `Clubs x${Number(r.hire_clubs_qty)}` : (r.has_hire_clubs ? "Clubs" : "")),
+    (r.notes ? `Notes: ${String(r.notes)}` : "")
+  ].filter(Boolean).join(", ") || "—"
+}</td>
           <td><code>${(r.reference || "")}</code></td>
           <td>${(r.status || "")}</td>
         `;
