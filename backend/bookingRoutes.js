@@ -2147,7 +2147,6 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4) {
       return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
     }
-    if (!reference) return res.status(400).json({ ok: false, error: "reference_required" });
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
