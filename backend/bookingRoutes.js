@@ -2460,7 +2460,7 @@ router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res)
 
     // Fill N slots (one row per player)
     const filled = [];
-    for (let i = 0; i < players; i++) {
+    paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes, updated_at
       const slot_index = freeSlots[i];
 
       const r = await db.query(
