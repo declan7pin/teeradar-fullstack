@@ -2409,8 +2409,8 @@ router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res)
     if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
 
-    if (!hasFirstAndLastName(name)) return res.status(400).json({ ok: false, error: "name_required_first_last" });
-    if (!isLikelyEmail(email)) return res.status(400).json({ ok: false, error: "email_required_valid" });
+        if (!name) return res.status(400).json({ ok: false, error: "name_required" });
+    // ✅ email NOT required for manual bookings
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
