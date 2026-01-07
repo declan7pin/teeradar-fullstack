@@ -3234,6 +3234,8 @@ function advisoryKeyForSlot({ courseId, dateYmd, timeHhMm }) {
   return key.toString(); // pass as string to pg bigint
 }
 router.post("/book", async (req, res) => {
+  let didBegin = false;
+
   try {
     const slug = normSlug(req.body?.slug);
     const date = String(req.body?.date || "").trim();
@@ -3245,13 +3247,12 @@ router.post("/book", async (req, res) => {
     const golfer_email = req.body?.email ? String(req.body.email).trim().toLowerCase() : "";
     const golfer_phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
-    // ✅ ADD: cart / hire clubs selection (optional)
-// Support BOTH legacy flags (hasCart/hasHireClubs) AND new dynamic add-ons (addonIds)
-const addonIds = Array.isArray(req.body?.addonIds) ? req.body.addonIds.map(String) : [];
-const picked = new Set(addonIds.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean));
+    // ✅ cart / hire clubs selection (optional)
+    const addonIds = Array.isArray(req.body?.addonIds) ? req.body.addonIds.map(String) : [];
+    const picked = new Set(addonIds.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean));
 
-const has_cart = !!req.body?.hasCart || picked.has("cart");
-const has_hire_clubs = !!req.body?.hasHireClubs || picked.has("hire_clubs");
+    const has_cart = !!req.body?.hasCart || picked.has("cart");
+    const has_hire_clubs = !!req.body?.hasHireClubs || picked.has("hire_clubs");
 
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
@@ -3267,8 +3268,7 @@ const has_hire_clubs = !!req.body?.hasHireClubs || picked.has("hire_clubs");
       return res.status(400).json({ ok: false, error: "email_required_valid" });
     }
 
-    // ✅ FIX 1: the SQL string was missing a starting backtick
-    // ✅ FIX 2: also load qty + durations so we can validate add-on inventory + set start/end window
+    // ✅ Load course (includes addon qty + durations)
     const c = await db.query(
       `
       SELECT id, slug, name, notes,
@@ -3281,9 +3281,8 @@ const has_hire_clubs = !!req.body?.hasHireClubs || picked.has("hire_clubs");
       `,
       [slug]
     );
-    if (!c.rows.length) {
-      return res.status(404).json({ ok: false, error: "course_not_found" });
-    }
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
     const courseRow = c.rows[0];
     const courseId = courseRow.id;
 
@@ -3300,11 +3299,27 @@ const has_hire_clubs = !!req.body?.hasHireClubs || picked.has("hire_clubs");
       return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
     }
 
-    // ✅ NEW: compute start/end window and re-check add-on availability server-side
+    // ✅ Compute booking window
     const startAtIso = toIsoDateTimeLocal(date, time);
     const dur = durationMinsForHoles(courseRow, holes);
     const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
+    const feePerPlayerCents = Number(process.env.BOOKING_FEE_PER_PLAYER_CENTS || 0);
+    const bookingFeeCents = feePerPlayerCents * players;
+
+    const reference = makeRef("TR");
+
+    // ✅✅✅ TRANSACTION START (atomic slot update + booking insert) ✅✅✅
+    await db.query("BEGIN");
+    didBegin = true;
+
+    // ✅ Serialize this exact tee time (also prevents add-on oversells)
+    const lockKey = advisoryKeyForSlot({ courseId, dateYmd: date, timeHhMm: time });
+    if (lockKey) {
+      await db.query(`SELECT pg_advisory_xact_lock($1::bigint);`, [lockKey]);
+    }
+
+    // ✅ Re-check add-on availability INSIDE the transaction (prevents racing)
     const cartQty = Number(courseRow.cart_qty || 0);
     const clubsQty = Number(courseRow.hire_clubs_qty || 0);
 
@@ -3319,18 +3334,18 @@ const has_hire_clubs = !!req.body?.hasHireClubs || picked.has("hire_clubs");
       const clubsRemaining = Math.max(0, clubsQty - clubsUsed);
 
       if (has_cart && cartQty > 0 && cartRemaining <= 0) {
+        await db.query("ROLLBACK");
+        didBegin = false;
         return res.status(409).json({ ok: false, error: "cart_sold_out" });
       }
       if (has_hire_clubs && clubsQty > 0 && clubsRemaining <= 0) {
+        await db.query("ROLLBACK");
+        didBegin = false;
         return res.status(409).json({ ok: false, error: "hire_clubs_sold_out" });
       }
     }
 
-    const feePerPlayerCents = Number(process.env.BOOKING_FEE_PER_PLAYER_CENTS || 0);
-    const bookingFeeCents = feePerPlayerCents * players;
-
-    const reference = makeRef("TR");
-
+    // ✅ Atomic capacity reservation (prevents double bookings)
     const upd = await db.query(
       `
       UPDATE booking_times
@@ -3363,6 +3378,9 @@ const has_hire_clubs = !!req.body?.hasHireClubs || picked.has("hire_clubs");
         [courseId, date, time, holes]
       );
 
+      await db.query("ROLLBACK");
+      didBegin = false;
+
       if (!chk.rows.length) return res.status(404).json({ ok: false, error: "time_not_found" });
 
       const r = chk.rows[0];
@@ -3382,19 +3400,19 @@ const has_hire_clubs = !!req.body?.hasHireClubs || picked.has("hire_clubs");
     const pricePerPlayerCents = Number(timeRow.price_per_player_cents || 0);
     const totalCents = pricePerPlayerCents * players;
 
-    // ✅ FIX: store start_at/end_at so overlap inventory works (and future reporting)
+    // ✅ Insert booking (still inside txn)
     await db.query(
       `
       INSERT INTO booking_bookings
-  (course_id, play_date, tee_time, holes, players,
-   golfer_name, golfer_email, golfer_phone,
-   price_per_player_cents, total_cents, booking_fee_cents,
-   reference, status, paid, checked_in,
-   has_cart, cart_fee_cents,
-   has_hire_clubs, hire_clubs_fee_cents,
-   start_at, end_at)
-VALUES
-  ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'CONFIRMED',false,false,$13,$14,$15,$16,$17::timestamptz,$18::timestamptz)
+        (course_id, play_date, tee_time, holes, players,
+         golfer_name, golfer_email, golfer_phone,
+         price_per_player_cents, total_cents, booking_fee_cents,
+         reference, status, paid, checked_in,
+         has_cart, cart_fee_cents,
+         has_hire_clubs, hire_clubs_fee_cents,
+         start_at, end_at)
+      VALUES
+        ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'CONFIRMED',false,false,$13,$14,$15,$16,$17::timestamptz,$18::timestamptz)
       `,
       [
         courseId,
@@ -3418,7 +3436,12 @@ VALUES
       ]
     );
 
-    // ✅✅✅ BOOKING ANALYTICS (server-side truth) ✅✅✅
+    // ✅ Commit guarantees "no ghost slot increments"
+    await db.query("COMMIT");
+    didBegin = false;
+    // ✅✅✅ TRANSACTION END ✅✅✅
+
+    // ✅ Analytics (outside txn is fine)
     try {
       const ip = getClientIp(req);
       const userId = golfer_email || ip || null;
@@ -3445,7 +3468,6 @@ VALUES
         },
       });
 
-      // ✅ booking analytics dashboard event (THIS is the correct place)
       recordBookingEvent(req, {
         courseSlug: slug,
         eventType: "booking_confirmed",
@@ -3466,8 +3488,8 @@ VALUES
     } catch (err) {
       console.error("❌ booking analytics failed:", err?.message || err);
     }
-    // ✅✅✅ END BOOKING ANALYTICS ✅✅✅
 
+    // ✅ Email (outside txn so email failure doesn't rollback a real booking)
     const emailResult = await sendBookingEmail({
       to: golfer_email,
       courseName: c.rows[0].name,
@@ -3490,7 +3512,7 @@ VALUES
       fromUsed: buildFrom() || null,
     });
 
-    res.json({
+    return res.json({
       ok: true,
       reference,
       course: c.rows[0].name,
@@ -3512,7 +3534,15 @@ VALUES
     });
   } catch (e) {
     console.error("book POST", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+
+    // ✅ rollback if txn started
+    try {
+      if (didBegin) await db.query("ROLLBACK");
+    } catch (rbErr) {
+      console.error("book POST rollback failed", rbErr);
+    }
+
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
