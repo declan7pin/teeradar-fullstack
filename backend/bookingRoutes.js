@@ -140,20 +140,41 @@ function durationMinsForHoles(courseRow, holes) {
 async function countOverlappingAddonUsage({ courseId, startAtIso, endAtIso }) {
   // Overlap rule: existing.start < new.end AND existing.end > new.start
   const r = await db.query(
-  `
-  SELECT
-    COALESCE(SUM(COALESCE(cart_qty,0)),0)::int AS carts_used,
-    COALESCE(SUM(COALESCE(hire_clubs_qty,0)),0)::int AS clubs_used
-  FROM booking_bookings
-  WHERE course_id = $1
-    AND status = 'CONFIRMED'
-    AND start_at IS NOT NULL
-    AND end_at IS NOT NULL
-    AND start_at < $3::timestamptz
-    AND end_at   > $2::timestamptz
-  `,
-  [courseId, startAtIso, endAtIso]
-);
+    `
+    SELECT
+      COALESCE(SUM(carts_used),0)::int AS carts_used,
+      COALESCE(SUM(clubs_used),0)::int AS clubs_used
+    FROM (
+      -- confirmed online bookings
+      SELECT
+        COALESCE(SUM(COALESCE(cart_qty,0)),0) AS carts_used,
+        COALESCE(SUM(COALESCE(hire_clubs_qty,0)),0) AS clubs_used
+      FROM booking_bookings
+      WHERE course_id = $1
+        AND status = 'CONFIRMED'
+        AND start_at IS NOT NULL
+        AND end_at IS NOT NULL
+        AND start_at < $3::timestamptz
+        AND end_at   > $2::timestamptz
+
+      UNION ALL
+
+      -- manual slots that have a name filled (walk-ins / phone-ins)
+      SELECT
+        COALESCE(SUM(COALESCE(cart_qty,0)),0) AS carts_used,
+        COALESCE(SUM(COALESCE(hire_clubs_qty,0)),0) AS clubs_used
+      FROM booking_manual_slots
+      WHERE course_id = $1
+        AND COALESCE(name,'') <> ''
+        AND start_at IS NOT NULL
+        AND end_at IS NOT NULL
+        AND start_at < $3::timestamptz
+        AND end_at   > $2::timestamptz
+    ) t
+    `,
+    [courseId, startAtIso, endAtIso]
+  );
+
   return {
     cartsUsed: Number(r.rows[0]?.carts_used || 0),
     clubsUsed: Number(r.rows[0]?.clubs_used || 0),
