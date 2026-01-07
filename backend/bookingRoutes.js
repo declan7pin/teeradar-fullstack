@@ -2280,7 +2280,7 @@ router.get("/course-admin/manual-slots", requireCourseAdmin, async (req, res) =>
         paid,
         checked_in,
         has_cart,
-        has_hire_clubs
+        has_hire_clubs,
         cart_qty,
         hire_clubs_qty,
         notes
