@@ -492,6 +492,39 @@
   }
 
   const $ = (id) => document.getElementById(id);
+// ✅ Track current open view so we can refresh it automatically after changes
+let __activeView = null; // "times" | "bookings" | "sheet"
+let __activeSlug = "";
+let __activeDate = "";
+
+// ✅ Refresh whatever the admin is currently looking at (without making them click again)
+async function refreshActiveView(){
+  if (!__activeView) return;
+
+  // preserve scroll position if the sheet is open
+  let sheetWrap = null;
+  let savedScroll = null;
+  if (__activeView === "sheet") {
+    sheetWrap = document.querySelector(".sheetWrap");
+    if (sheetWrap) {
+      savedScroll = { left: sheetWrap.scrollLeft, top: sheetWrap.scrollTop };
+    }
+  }
+
+  // keep the same slug/date in the view inputs
+  if (__activeSlug) $("vSlug").value = __activeSlug;
+  if (__activeDate) $("vDate").value = __activeDate;
+
+  if (__activeView === "times") await viewTimes();
+  if (__activeView === "bookings") await viewBookings();
+  if (__activeView === "sheet") await viewSheet();
+
+  // restore sheet scroll
+  if (savedScroll && sheetWrap) {
+    sheetWrap.scrollLeft = savedScroll.left;
+    sheetWrap.scrollTop = savedScroll.top;
+  }
+}
 async function loadCourseSettingsIntoForm(slug){
   try{
     const s = String(slug || "").trim();
