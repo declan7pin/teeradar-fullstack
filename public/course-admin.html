@@ -499,36 +499,40 @@ async function apiFetch(url, opts = {}) {
 }
 
   function groupBookingsToSheet(timesRows, bookingsRows){
-  // ✅ Key by time+holes so 06:00 (18) and 06:00 (9) don't collide
-  const keyOf = (time, holes) => `${String(time || "")}__${String(holes ?? "")}`;
+  // ✅ normalize "06:10", "6:10", "06:10:00" -> "06:10"
+  const normTime = (v) => {
+    const s = String(v || "").trim();
+    const m = s.match(/(\d{1,2}):(\d{2})/);
+    if (!m) return s;
+    return String(m[1]).padStart(2,"0") + ":" + m[2];
+  };
+
+  // Key by time+holes so 06:00 (18) and 06:00 (9) don't collide
+  const keyOf = (time, holes) => `${normTime(time)}__${String(holes ?? "")}`;
 
   const byKey = new Map();
 
   (bookingsRows || []).forEach(b => {
-    const time = String(b.tee_time || b.time || "");
-    const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? "");
+    const time = normTime(b.tee_time || b.time || b.teeTime || "");
+    const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
     const key = keyOf(time, holes);
 
     const players = Math.max(1, Number(b.players || 1));
     for (let i=0;i<players;i++){
       if (!byKey.has(key)) byKey.set(key, []);
-            byKey.get(key).push({
+      byKey.get(key).push({
         reference: b.reference || "",
         name: b.name || b.golfer_name || "",
         email: b.email || b.golfer_email || "",
         phone: b.phone || b.golfer_phone || "",
         paid: !!b.paid,
 
-        // ✅ add-ons (support both bool and qty)
         cart_qty: Number(b.cart_qty ?? 0),
         hire_clubs_qty: Number(b.hire_clubs_qty ?? 0),
         has_cart: !!(b.has_cart || Number(b.cart_qty ?? 0) > 0),
         has_hire_clubs: !!(b.has_hire_clubs || Number(b.hire_clubs_qty ?? 0) > 0),
 
-        // ✅ notes
         notes: b.notes || b.note || "",
-
-        // ✅ check-in
         checked_in: !!b.checked_in,
       });
     }
@@ -536,7 +540,7 @@ async function apiFetch(url, opts = {}) {
 
   const out = [];
   (timesRows || []).forEach(t => {
-    const time = String(t.tee_time || t.time || "");
+    const time = normTime(t.tee_time || t.time || "");
     const holes = Number(t.holes ?? "");
     const key = keyOf(time, holes);
 
