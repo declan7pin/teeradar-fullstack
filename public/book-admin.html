@@ -1120,7 +1120,136 @@ timesRows.sort((a,b) => {
   $("viewSheetBtn").onclick = viewSheet;
 
   $("refreshBtn").onclick = refresh;
+  // ✅ Manual tee times (Platform Admin)
+  function _fillManualDefaults(){
+    try{
+      if ($("mDate") && $("vDate") && $("vDate").value) $("mDate").value = $("vDate").value;
+      if ($("mDate") && $("gDate") && $("gDate").value) $("mDate").value = $("mDate").value || $("gDate").value;
 
+      if ($("mSlug") && $("vSlug") && $("vSlug").value) $("mSlug").value = $("vSlug").value;
+      if ($("mSlug") && $("gSlug") && $("gSlug").value) $("mSlug").value = $("mSlug").value || $("gSlug").value;
+    }catch{}
+  }
+
+  async function loadManualSlots(){
+    $("manualMsg").textContent = "";
+    $("manualBody").innerHTML = "";
+    $("manualBox").style.display = "none";
+
+    const slug = ($("mSlug").value || "").trim();
+    const date = ($("mDate").value || "").trim();
+
+    if (!slug) { $("manualMsg").textContent = "❌ course slug is required"; return; }
+    if (!date) { $("manualMsg").textContent = "❌ play dateate is required"; return; }
+
+    $("manualMsg").textContent = "Loading manual tee times...";
+    try{
+      const qs = new URLSearchParams({ slug, date });
+      const out = await j("/api/book/admin/manual-slots?" + qs.toString(), { method:"GET" });
+
+      const rows = out.manualSlots || out.manual_slots || out.slots || out.rows || [];
+      if (!Array.isArray(rows) || !rows.length){
+        $("manualMsg").textContent = "✅ No manual tee times found for this course/date.";
+        return;
+      }
+
+      $("manualMsg").textContent = `✅ Loaded ${rows.length} manual tee times`;
+      $("manualBox").style.display = "block";
+
+      const tb = $("manualBody");
+      rows.forEach(r => {
+        const tr = document.createElement("tr");
+
+        // try common id fields
+        const id = String(r.id ?? r.slot_id ?? r.manual_slot_id ?? "");
+        const playDate = String(r.play_date ?? r.date ?? "");
+        const teeTime = String(r.tee_time ?? r.time ?? "");
+        const holes = String(r.holes ?? "");
+        const maxPlayers = String(r.max_players ?? "");
+        const price = String(r.price_per_player_cents ?? r.price_cents ?? "");
+
+        tr.innerHTML = `
+          <td>${_escape(playDate)}</td>
+          <td>${_escape(teeTime)}</td>
+          <td>${_escape(holes)}</td>
+          <td class="right">${_escape(maxPlayers)}</td>
+          <td class="right">${_escape(price)}</td>
+          <td><code>${_escape(id)}</code></td>
+          <td class="right">
+            <button class="small danger" data-delmanual="${_escape(id)}">Delete</button>
+          </td>
+        `;
+        tb.appendChild(tr);
+      });
+
+      tb.querySelectorAll("button[data-delmanual]").forEach(btn => {
+        btn.onclick = async () => {
+          const id = btn.getAttribute("data-delmanual") || "";
+          if (!id) return;
+
+          if (!confirm(`Delete manual tee time ID "${id}"?`)) return;
+
+          try{
+            await j("/api/book/admin/manual-slot", {
+              method:"DELETE",
+              body: JSON.stringify({ id })
+            });
+            $("manualMsg").textContent = "✅ Deleted manual tee time";
+            await loadManualSlots();
+          }catch(e){
+            $("manualMsg").textContent = "❌ " + e.message;
+          }
+        };
+      });
+
+    }catch(e){
+      $("manualMsg").textContent = "❌ " + e.message;
+    }
+  }
+
+  $("mLoadBtn").onclick = async () => {
+    _fillManualDefaults();
+    await loadManualSlots();
+  };
+
+  $("mAddBtn").onclick = async () => {
+    $("manualMsg").textContent = "Adding manual tee time...";
+    $("manualBox").style.display = "none";
+    $("manualBody").innerHTML = "";
+
+    try{
+      const slug = ($("mSlug").value || "").trim();
+      const playDate = ($("mDate").value || "").trim();
+      const teeTime = ($("mTime").value || "").trim();
+      const holes = Number($("mHoles").value || 18);
+      const maxPlayers = Number($("mMaxPlayers").value || 4);
+      const pricePerPlayerCents = Number($("mPrice").value || 0);
+
+      if (!slug) throw new Error("course slug is required");
+      if (!playDate) throw new Error("play date is required");
+      if (!teeTime) throw new Error("tee time is required");
+
+      // basic HH:MM sanity
+      if (!/^(\d{1,2}):(\d{2})$/.test(teeTime)) throw new Error("tee time must be HH:MM (e.g. 06:30)");
+
+      await j("/api/book/admin/manual-slot", {
+        method:"POST",
+        body: JSON.stringify({
+          slug,
+          playDate,
+          teeTime,
+          holes,
+          maxPlayers,
+          pricePerPlayerCents
+        })
+      });
+
+      $("manualMsg").textContent = "✅ Added manual tee time";
+      await loadManualSlots();
+    }catch(e){
+      $("manualMsg").textContent = "❌ " + e.message;
+    }
+  };
   async function refresh() {
     const ul = $("courses");
     ul.innerHTML = "";
