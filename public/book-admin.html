@@ -971,7 +971,22 @@ __activeDate = date;
 
   function buildSlotCell(item, slotIndex){
   if (!item){
-    return `<div class="slotBox"><div class="slotEmpty">—</div></div>`;
+    // ✅ Add booking button for empty slots (uses the currently active sheet slug/date + row data)
+    return `
+      <div class="slotBox">
+        <div class="slotEmpty">—</div>
+        <div style="margin-top:8px">
+          <button
+            class="small secondary"
+            type="button"
+            data-addbooking="1"
+            data-slot="${slotIndex}"
+          >
+            Add booking
+          </button>
+        </div>
+      </div>
+    `;
   }
 
   const name = _escape(item.name || "");
