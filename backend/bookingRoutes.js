@@ -2371,7 +2371,7 @@ router.get("/course-admin/manual-slots", requireCourseAdmin, async (req, res) =>
   }
 });
 
-// POST upsert manual slot
+// POST upsert manual slot (COURSE ADMIN) ✅ now stores cart/clubs qty + notes
 router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) => {
   try {
     const slug = req.courseAdmin.slug;
@@ -2388,8 +2388,15 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
 
     const paid = !!req.body?.paid;
     const checked_in = !!req.body?.checked_in;
-    const has_cart = !!req.body?.has_cart;
-    const has_hire_clubs = !!req.body?.has_hire_clubs;
+
+    // ✅ quantities + notes (accept both snake_case + camelCase)
+    const cart_qty = Math.max(0, Math.min(4, Number(req.body?.cart_qty ?? req.body?.cartQty ?? 0)));
+    const hire_clubs_qty = Math.max(0, Math.min(4, Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? 0)));
+    const notes = req.body?.notes ? String(req.body.notes).trim() : "";
+
+    // ✅ derive booleans from qty if caller didn't explicitly send them
+    const has_cart = typeof req.body?.has_cart !== "undefined" ? !!req.body.has_cart : cart_qty > 0;
+    const has_hire_clubs = typeof req.body?.has_hire_clubs !== "undefined" ? !!req.body.has_hire_clubs : hire_clubs_qty > 0;
 
     if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
     if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
@@ -2404,9 +2411,19 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     const r = await db.query(
       `
       INSERT INTO booking_manual_slots
-        (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone, paid, checked_in, has_cart, has_hire_clubs, updated_at)
+        (course_id, play_date, tee_time, holes, slot_index, reference,
+         name, email, phone,
+         paid, checked_in,
+         has_cart, has_hire_clubs,
+         cart_qty, hire_clubs_qty, notes,
+         updated_at)
       VALUES
-        ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now())
+        ($1,$2::date,$3,$4,$5,$6,
+         $7,$8,$9,
+         $10,$11,
+         $12,$13,
+         $14,$15,$16,
+         now())
       ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
       DO UPDATE SET
         reference = EXCLUDED.reference,
@@ -2417,6 +2434,9 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
         checked_in = EXCLUDED.checked_in,
         has_cart = EXCLUDED.has_cart,
         has_hire_clubs = EXCLUDED.has_hire_clubs,
+        cart_qty = EXCLUDED.cart_qty,
+        hire_clubs_qty = EXCLUDED.hire_clubs_qty,
+        notes = EXCLUDED.notes,
         updated_at = now()
       RETURNING *;
       `,
@@ -2434,17 +2454,20 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
         checked_in,
         has_cart,
         has_hire_clubs,
+        cart_qty,
+        hire_clubs_qty,
+        notes || null,
       ]
     );
 
     const sync = await syncBookedPlayersForTime({
-  courseId,
-  play_date,
-  tee_time,
-  holes,
-});
+      courseId,
+      play_date,
+      tee_time,
+      holes,
+    });
 
-res.json({ ok: true, row: r.rows[0] || null, sync });
+    res.json({ ok: true, row: r.rows[0] || null, sync });
   } catch (e) {
     console.error("course-admin/manual-slot POST", e);
     res.status(500).json({ ok: false, error: "internal_error" });
