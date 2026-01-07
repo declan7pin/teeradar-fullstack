@@ -3372,7 +3372,9 @@ router.post("/book", async (req, res) => {
 
     const has_cart = !!req.body?.hasCart || picked.has("cart");
     const has_hire_clubs = !!req.body?.hasHireClubs || picked.has("hire_clubs");
-
+// ✅ ADD: quantities (your UI is checkbox-based, so default 1 when selected)
+const cart_qty = has_cart ? 1 : 0;
+const hire_clubs_qty = has_hire_clubs ? 1 : 0;
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
     if (!time || !/^\d{2}:\d{2}$/.test(time)) return res.status(400).json({ ok: false, error: "time_invalid" });
