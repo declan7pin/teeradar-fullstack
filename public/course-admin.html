@@ -437,7 +437,9 @@ async function apiFetch(url, opts = {}) {
 
   const hasCart = !!item.has_cart;
   const hasClubs = !!item.has_hire_clubs;
-
+  const cartQty = Number(item.cart_qty ?? 0) || 0;
+  const clubsQty = Number(item.hire_clubs_qty ?? 0) || 0;
+  const notes = _escape(item.notes || "");
   const key = refRaw || `empty_${slotIndex}`;
 
   const paidId = `paid_${key}_${slotIndex}`;
