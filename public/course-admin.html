@@ -450,9 +450,9 @@ async function apiFetch(url, opts = {}) {
       ? `<span class="badge ok" data-badge="${_escape(refRaw)}">PAID</span>`
       : `<span class="badge warn" data-badge="${_escape(refRaw)}">UNPAID</span>`;
 
-  const addonBits = [];
-  if (hasCart) addonBits.push(`<span class="badge">Cart</span>`);
-  if (hasClubs) addonBits.push(`<span class="badge">Clubs</span>`);
+    const addonBits = [];
+    if (hasCart) addonBits.push(`<span class="badge">Cart${cartQty > 0 ? " x" + cartQty : ""}</span>`);
+    if (hasClubs) addonBits.push(`<span class="badge">Clubs${clubsQty > 0 ? " x" + clubsQty : ""}</span>`);
 
   return `
     <div class="slotBox">
