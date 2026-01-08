@@ -2319,10 +2319,14 @@ const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toIS
       `
       INSERT INTO booking_manual_slots
   (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
-   paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes, updated_at)
+   paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes,
+   start_at, end_at,
+   updated_at)
 VALUES
-  ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now())
-...
+  ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+   $17::timestamptz, $18::timestamptz,
+   now())
+ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
 DO UPDATE SET
   reference = EXCLUDED.reference,
   name = EXCLUDED.name,
@@ -2335,27 +2339,31 @@ DO UPDATE SET
   cart_qty = EXCLUDED.cart_qty,
   hire_clubs_qty = EXCLUDED.hire_clubs_qty,
   notes = EXCLUDED.notes,
+  start_at = EXCLUDED.start_at,
+  end_at = EXCLUDED.end_at,
   updated_at = now()
-      RETURNING *;
+RETURNING *;
       `,
       [
-        courseId,
-        play_date,
-        tee_time,
-        holes,
-        slot_index,
-        reference,
-        name,
-        email,
-        phone || null,
-        paid,
-        checked_in,
-        cartQty > 0,
-        hireClubsQty > 0,
-        cartQty,
-        hireClubsQty,
-        notes || null,
-        ]
+  courseId,
+  play_date,
+  tee_time,
+  holes,
+  slot_index,
+  reference,
+  name || null,
+  email || null,
+  phone || null,
+  paid,
+  checked_in,
+  has_cart,
+  has_hire_clubs,
+  cart_qty,
+  hire_clubs_qty,
+  notes || null,
+  startAtIso,
+  endAtIso,
+]
     );
 
     const sync = await syncBookedPlayersForTime({
