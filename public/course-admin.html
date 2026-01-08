@@ -696,7 +696,41 @@ function normTime(v){
 
       const timesOut = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
       const timesRows = (timesOut && timesOut.times) || [];
+// ✅ Merge manual tee times into daily sheet
+try{
+  const manualOut = await j("/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date), { method:"GET" });
+  const manualRows = manualOut.manualSlots || manualOut.manual_slots || manualOut.slots || manualOut.rows || [];
 
+  if (Array.isArray(manualRows) && manualRows.length) {
+    manualRows.forEach(ms => {
+      timesRows.push({
+        play_date: ms.play_date ?? ms.date ?? date,
+        tee_time: ms.tee_time ?? ms.time ?? "",
+        holes: ms.holes ?? "",
+        max_players: ms.max_players ?? "",
+        booked_players: 0,
+        status: "open",
+        price_per_player_cents: ms.price_per_player_cents ?? ms.price_cents ?? ""
+      });
+    });
+
+    // de-dupe by time + holes (so manual slot doesn't duplicate an existing generated time)
+    const seen = new Set();
+    const deduped = [];
+    for (const r of timesRows) {
+      const key = `${normTime(r.tee_time || r.time || "")}__${String(r.holes ?? "")}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(r);
+    }
+    deduped.sort((a,b) => (normTime(a.tee_time||"") > normTime(b.tee_time||"") ? 1 : -1));
+
+    timesRows.length = 0;
+    deduped.forEach(x => timesRows.push(x));
+  }
+}catch(e){
+  // ignore if manual endpoint missing; daily sheet will still work from normal times
+}
       const bookingsOut = await j("/api/book/course-admin/bookings?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
       const bookingsRows = (bookingsOut && bookingsOut.bookings) || [];
 
