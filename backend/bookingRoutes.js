@@ -3786,7 +3786,7 @@ if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining)
 
         // ✅ Compute booking window
     startAtIso = toIsoDateTimeLocal(date, time);
-    const dur = durationMinsForHoles(courseRow, holes);
+    const durMins = durationMinsForHoles(courseRow, holes);
     const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
     // ✅ Lock key to prevent race conditions on same slot
