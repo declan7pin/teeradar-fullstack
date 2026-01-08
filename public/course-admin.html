@@ -775,7 +775,15 @@ try{
 }
       const bookingsOut = await j("/api/book/course-admin/bookings?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
       const bookingsRows = (bookingsOut && bookingsOut.bookings) || [];
-
+      // ✅ Load manual holds too (so the sheet shows taken slots)
+      let manualRows = [];
+      try{
+        const manualOut = await j("/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date), { method:"GET" });
+        manualRows = manualOut.manualSlots || manualOut.manual_slots || manualOut.slots || manualOut.rows || [];
+        if (!Array.isArray(manualRows)) manualRows = [];
+      }catch(e){
+        manualRows = []; // endpoint not available? sheet still works
+      }
       if (!Array.isArray(timesRows) || !timesRows.length){
         $("viewMsg").textContent = "✅ No tee times found (generate them in Booking Admin).";
         return;
