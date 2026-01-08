@@ -2187,7 +2187,7 @@ const name =
     const email = req.body?.email ? String(req.body.email).trim() : "";
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
-    const paid = !!req.body?.paid;
+    const paid = parseBool(req.body?.paid, false);
     const checked_in = !!req.body?.checked_in;
     const has_cart = !!req.body?.has_cart;
     const has_hire_clubs = !!req.body?.has_hire_clubs;
@@ -2293,7 +2293,7 @@ router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
     const email = String(req.body?.email || "").trim().toLowerCase();
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
-    const paid = !!req.body?.paid;
+    const paid = parseBool(req.body?.paid, false);
     const checked_in = !!req.body?.checked_in;
 
     const cartQty = Math.max(0, Math.min(4, Number(req.body?.cartQty || 0)));
@@ -2497,7 +2497,7 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     const email = req.body?.email ? String(req.body.email).trim() : "";
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
-    const paid = !!req.body?.paid;
+    const paid = parseBool(req.body?.paid, false);
     const checked_in = !!req.body?.checked_in;
 
     // ✅ quantities + notes (accept both snake_case + camelCase)
@@ -2605,7 +2605,7 @@ router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res)
     const email = String(req.body?.email || "").trim().toLowerCase(); // optional
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
-    const paid = !!req.body?.paid;
+    const paid = parseBool(req.body?.paid, false);
     const checked_in = !!req.body?.checked_in;
 
     const cartQty = Math.max(0, Math.min(4, Number(req.body?.cartQty ?? req.body?.cart_qty ?? 0)));
