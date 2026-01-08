@@ -455,8 +455,12 @@ function normTime(v){
   const refRaw = String(item.reference || "");
   const refDisp = _escape(refRaw);
 
-  const paid = !!item.paid;
-  const checkedIn = !!item.checked_in;
+    // ✅ supports per-slot flags if backend returns them later (fallback to old fields)
+  const paid =
+    !!(item.paid_slot ?? item.paidSlot ?? (Array.isArray(item.paid_slots) ? item.paid_slots[slotIndex-1] : null) ?? item.paid);
+
+  const checkedIn =
+    !!(item.checked_in_slot ?? item.checkedInSlot ?? (Array.isArray(item.checked_in_slots) ? item.checked_in_slots[slotIndex-1] : null) ?? item.checked_in);
 
     // ✅ qty-first (supports manual holds + bookings)
   const cartQty = Number(item.cart_qty ?? item.cartQty ?? 0) || 0;
