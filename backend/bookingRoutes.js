@@ -3556,12 +3556,16 @@ router.get("/availability", async (req, res) => {
       [slug]
     );
     if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
-    const courseId = c.rows[0].id;
-
-    // ✅ FIX: these were referenced later but not defined in this scope
     const courseRow = c.rows[0];
-    const cartQty = Number(courseRow.cart_qty || 0);
-    const clubsQty = Number(courseRow.hire_clubs_qty || 0);
+const courseId = courseRow.id;
+
+// ✅ FIX: define these in THIS scope (they were being referenced later)
+const courseName = String(courseRow.name || "");
+const courseCartQty = Number(courseRow.cart_qty || 0);
+const courseHireClubsQty = Number(courseRow.hire_clubs_qty || 0);
+
+// ✅ duration used later for overlap windows
+const durationMins = durationMinsForHoles(courseRow, holes);
 
     // ✅ analytics: availability search
     recordEvent({
