@@ -470,7 +470,8 @@ function normTime(v){
   const hasCart = !!(item.has_cart || item.hasCart || cartQty > 0);
   const hasClubs = !!(item.has_hire_clubs || item.hasHireClubs || clubsQty > 0);
   const notes = _escape(item.notes || "");
-  const key = refRaw || `empty_${slotIndex}`;
+    const key = refRaw || `empty_${slotIndex}`;
+  const slotKey = `${key}__slot${slotIndex}`; // ✅ unique per slot for selectors
 
   const paidId = `paid_${key}_${slotIndex}`;
   const checkinId = `checkin_${key}_${slotIndex}`;
