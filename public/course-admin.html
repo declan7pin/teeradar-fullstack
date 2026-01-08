@@ -859,7 +859,13 @@ async function apiFetch(url, opts = {}) {
       if ($("mDate") && d) $("mDate").value = d;
     }catch{}
   }
-
+function isSheetOpenForDate(d){
+  try{
+    const open = $("sheetBox") && $("sheetBox").style.display !== "none";
+    const cur = ($("date")?.value || "").trim();
+    return open && cur && d && cur === d;
+  }catch{ return false; }
+}
   async function loadManualSlots(){
     $("manualMsg").textContent = "";
     $("manualBody").innerHTML = "";
