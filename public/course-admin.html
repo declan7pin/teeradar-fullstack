@@ -476,10 +476,10 @@ function normTime(v){
   const paidId = `paid_${key}_${slotIndex}`;
   const checkinId = `checkin_${key}_${slotIndex}`;
 
-  const badge =
+    const badge =
     paid
-      ? `<span class="badge ok" data-badge="${_escape(refRaw)}">PAID</span>`
-      : `<span class="badge warn" data-badge="${_escape(refRaw)}">UNPAID</span>`;
+      ? `<span class="badge ok" data-badge="${_escape(slotKey)}">PAID</span>`
+      : `<span class="badge warn" data-badge="${_escape(slotKey)}">UNPAID</span>`;
 
     const addonBits = [];
     if (hasCart) addonBits.push(`<span class="badge">Cart${cartQty > 0 ? " x" + cartQty : ""}</span>`);
