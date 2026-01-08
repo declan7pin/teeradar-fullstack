@@ -3548,23 +3548,15 @@ router.get("/availability", async (req, res) => {
     const eM = toMinutes(latest);
     if (sM === null || eM === null || eM <= sM) return res.status(400).json({ ok: false, error: "time_range_invalid" });
 
-    const c = await db.query(
-      `SELECT id, name, cart_qty, hire_clubs_qty, duration_9_mins, duration_18_mins
-       FROM booking_courses
-       WHERE slug=$1
-       LIMIT 1;`,
-      [slug]
-    );
-    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
     const courseRow = c.rows[0];
 const courseId = courseRow.id;
 
-// ✅ FIX: define these in THIS scope (they were being referenced later)
+// ✅ FIX: define these in THIS scope (used later below)
 const courseName = String(courseRow.name || "");
 const courseCartQty = Number(courseRow.cart_qty || 0);
 const courseHireClubsQty = Number(courseRow.hire_clubs_qty || 0);
 
-// ✅ duration used later for overlap windows
+// ✅ duration window helpers (used for add-on overlap checks)
 const durationMins = durationMinsForHoles(courseRow, holes);
 
     // ✅ analytics: availability search
