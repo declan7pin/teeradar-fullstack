@@ -248,6 +248,7 @@
           </table>
         </div>
       </div>
+
       <!-- ✅ Manual tee times (Course Admin) -->
      <div style="margin-top:12px;">
         <h3>Manual Tee Times</h3>
@@ -718,85 +719,87 @@ async function apiFetch(url, opts = {}) {
         `;
         tb.appendChild(tr);
       });
-// ✅ Allow creating a booking from an empty slot
-tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
-  btn.onclick = async () => {
-    try{
-      await getMe();
 
-      const date = ($("date").value || "").trim();
-      if (!date) throw new Error("play_date_required");
+      // ✅ Allow creating a booking from an empty slot
+      tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
+        btn.onclick = async () => {
+          try{
+            await getMe();
 
-      // Find the row time/holes by walking up to the <tr>
-      const tr = btn.closest("tr");
-      if (!tr) throw new Error("row_not_found");
+            const date = ($("date").value || "").trim();
+            if (!date) throw new Error("play_date_required");
 
-      // First cell text is like: "06:00 (18 holes)"
-      const timeCell = tr.querySelector(".sheetTime");
-      const timeText = (timeCell?.innerText || "").trim();
+            // Find the row time/holes by walking up to the <tr>
+            const tr = btn.closest("tr");
+            if (!tr) throw new Error("row_not_found");
 
-      const timeMatch = timeText.match(/^(\d{1,2}:\d{2})/);
-      const holesMatch = timeText.match(/\((\d+)\s*holes\)/i);
+            // First cell text is like: "06:00 (18 holes)"
+            const timeCell = tr.querySelector(".sheetTime");
+            const timeText = (timeCell?.innerText || "").trim();
 
-      const teeTime = timeMatch ? timeMatch[1] : "";
-      const holes = holesMatch ? Number(holesMatch[1]) : 18;
+            const timeMatch = timeText.match(/^(\d{1,2}:\d{2})/);
+            const holesMatch = timeText.match(/\((\d+)\s*holes\)/i);
 
-      if (!teeTime) throw new Error("tee_time_missing");
+            const teeTime = timeMatch ? timeMatch[1] : "";
+            const holes = holesMatch ? Number(holesMatch[1]) : 18;
 
-      // ✅ NEW: only ask for name + qty + notes
-      const name = (prompt("Name:", "") || "").trim();
-      if (!name) return;
+            if (!teeTime) throw new Error("tee_time_missing");
 
-      const cartsRaw = prompt("Cart qty (0-4):", "0") || "0";
-      const clubsRaw = prompt("Clubs qty (0-4):", "0") || "0";
-      const notes = (prompt("Notes (optional):", "") || "").trim();
+            // ✅ NEW: only ask for name + qty + notes
+            const name = (prompt("Name:", "") || "").trim();
+            if (!name) return;
 
-      const cartQty = Math.max(0, Math.min(4, Number(cartsRaw || 0)));
-      const hireClubsQty = Math.max(0, Math.min(4, Number(clubsRaw || 0)));
+            const cartsRaw = prompt("Cart qty (0-4):", "0") || "0";
+            const clubsRaw = prompt("Clubs qty (0-4):", "0") || "0";
+            const notes = (prompt("Notes (optional):", "") || "").trim();
 
-      // ✅ One slot = one golfer (keeps your daily sheet logic consistent)
-      const players = 1;
+            const cartQty = Math.max(0, Math.min(4, Number(cartsRaw || 0)));
+            const hireClubsQty = Math.max(0, Math.min(4, Number(clubsRaw || 0)));
 
-      // ✅ Post (send BOTH naming styles so it works with whichever backend you have)
-      await j("/api/book/course-admin/booking", {
-        method:"POST",
-        body: JSON.stringify({
-  // date aliases
-  date,
-  playDate: date,
-  play_date: date,
+            // ✅ One slot = one golfer (keeps your daily sheet logic consistent)
+            const players = 1;
 
-  // time aliases
-  teeTime,
-  tee_time: teeTime,
+            // ✅ Post (send BOTH naming styles so it works with whichever backend you have)
+            await j("/api/book/course-admin/booking", {
+              method:"POST",
+              body: JSON.stringify({
+                // date aliases
+                date,
+                playDate: date,
+                play_date: date,
 
-  holes,
-  players,
-  name,
+                // time aliases
+                teeTime,
+                tee_time: teeTime,
 
-  cartQty,
-  hireClubsQty,
-  cart_qty: cartQty,
-  hire_clubs_qty: hireClubsQty,
+                holes,
+                players,
+                name,
 
-  notes,
-  note: notes,
+                cartQty,
+                hireClubsQty,
+                cart_qty: cartQty,
+                hire_clubs_qty: hireClubsQty,
 
-  email: "",
-  phone: "",
+                notes,
+                note: notes,
 
-  paid: false,
-  checked_in: false
-})
+                email: "",
+                phone: "",
+
+                paid: false,
+                checked_in: false
+              })
+            });
+
+            $("viewMsg").textContent = "✅ Booking added";
+            await viewSheet(); // refresh
+          }catch(e){
+            $("viewMsg").textContent = "❌ " + (e?.message || "Failed to add booking");
+          }
+        };
       });
 
-      $("viewMsg").textContent = "✅ Booking added";
-      await viewSheet(); // refresh
-    }catch(e){
-      $("viewMsg").textContent = "❌ " + (e?.message || "Failed to add booking");
-    }
-  };
-});
       tb.querySelectorAll('input[type="checkbox"][data-ref][data-kind]').forEach(cb => {
         cb.onchange = async () => {
           const ref = cb.getAttribute("data-ref") || "";
@@ -848,6 +851,7 @@ tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
   $("viewTimesBtn").onclick = viewTimes;
   $("viewBookingsBtn").onclick = viewBookings;
   $("viewSheetBtn").onclick = viewSheet;
+
   // ✅ Manual tee times (Course Admin)
   function _manualDateDefault(){
     try{
@@ -952,15 +956,15 @@ tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
       if (!/^(\d{1,2}):(\d{2})$/.test(teeTime)) throw new Error("tee_time must be HH:MM (e.g. 06:30)");
 
       await j("/api/book/course-admin/manual-slot", {
-  method:"POST",
-  body: JSON.stringify({
-    date: playDate,                 // ✅ backend expects `date`
-    teeTime,
-    holes,
-    maxPlayers,
-    pricePerPlayerCents
-  })
-});
+        method:"POST",
+        body: JSON.stringify({
+          date: playDate,                 // ✅ backend expects `date`
+          teeTime,
+          holes,
+          maxPlayers,
+          pricePerPlayerCents
+        })
+      });
 
       $("manualMsg").textContent = "✅ Added manual tee time";
       await loadManualSlots();
@@ -968,6 +972,7 @@ tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
       $("manualMsg").textContent = "❌ " + e.message;
     }
   };
+
   // ✅ Inventory feature
   $("checkInventoryBtn").onclick = async () => {
     $("inventoryMsg").textContent = "Checking inventory...";
@@ -1047,7 +1052,7 @@ tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
       const dd = String(d.getDate()).padStart(2,"0");
       const today = `${yyyy}-${mm}-${dd}`;
       $("date").value = today;
-            if ($("mDate")) $("mDate").value = today;
+      if ($("mDate")) $("mDate").value = today;
       if ($("iDate")) $("iDate").value = today;
     }catch{}
   })();
@@ -1057,6 +1062,11 @@ tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
     $("slug").value = getSlug();
     $("key").value = getKey();
     if (getSlug()) $("who").textContent = "Using: " + getSlug();
+
+    // ✅ CHANGE (only): auto-load weekly template if slug+key already saved
+    if (getSlug() && getKey()) {
+      setTimeout(() => document.querySelector("#tplLoadBtn")?.click(), 0);
+    }
   })();
 
   // ✅ Weekly template feature
