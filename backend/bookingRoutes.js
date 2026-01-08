@@ -3734,7 +3734,7 @@ didBegin = true;
 // lock per-slot (course+date+time). If two people try same tee time, one waits.
 await advisoryLockForSlot(db, { courseId, dateYmd: date, timeHhMm: time });
 // ✅ compute booking window (needed for addon overlap inventory checks)
-const startAtIso = toIsoDateTimeLocal(date, time);
+let startAtIso = toIsoDateTimeLocal(date, time);
 const dur = durationMinsForHoles(courseRow, holes);
 const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
@@ -3785,7 +3785,7 @@ if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining)
     }
 
         // ✅ Compute booking window
-    const startAtIso = toIsoDateTimeLocal(date, time);
+    startAtIso = toIsoDateTimeLocal(date, time);
     const dur = durationMinsForHoles(courseRow, holes);
     const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
