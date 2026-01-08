@@ -385,7 +385,12 @@ async function apiFetch(url, opts = {}) {
       return d.toLocaleString();
     }catch{ return s || ""; }
   }
-
+function normTime(v){
+  const s = String(v || "").trim();
+  const m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return s;
+  return String(m[1]).padStart(2,"0") + ":" + m[2];
+}
   function clearView(){
     $("viewMsg").textContent = "";
     $("timesBody").innerHTML = "";
