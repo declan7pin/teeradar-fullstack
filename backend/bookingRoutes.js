@@ -2508,57 +2508,63 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
-
+const courseRowQ = await db.query(
+  `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
+  [courseId]
+);
+const courseRow = courseRowQ.rows[0] || {};
+const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
+const dur = durationMinsForHoles(courseRow, holes);
+const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
     const r = await db.query(
       `
       INSERT INTO booking_manual_slots
-        (course_id, play_date, tee_time, holes, slot_index, reference,
-         name, email, phone,
-         paid, checked_in,
-         has_cart, has_hire_clubs,
-         cart_qty, hire_clubs_qty, notes,
-         updated_at)
-      VALUES
-        ($1,$2::date,$3,$4,$5,$6,
-         $7,$8,$9,
-         $10,$11,
-         $12,$13,
-         $14,$15,$16,
-         now())
-      ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
-      DO UPDATE SET
-        reference = EXCLUDED.reference,
-        name = EXCLUDED.name,
-        email = EXCLUDED.email,
-        phone = EXCLUDED.phone,
-        paid = EXCLUDED.paid,
-        checked_in = EXCLUDED.checked_in,
-        has_cart = EXCLUDED.has_cart,
-        has_hire_clubs = EXCLUDED.has_hire_clubs,
-        cart_qty = EXCLUDED.cart_qty,
-        hire_clubs_qty = EXCLUDED.hire_clubs_qty,
-        notes = EXCLUDED.notes,
-        updated_at = now()
-      RETURNING *;
+  (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
+   paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes,
+   start_at, end_at,
+   updated_at)
+VALUES
+  ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+   $17::timestamptz, $18::timestamptz,
+   now())
+ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
+DO UPDATE SET
+  reference = EXCLUDED.reference,
+  name = EXCLUDED.name,
+  email = EXCLUDED.email,
+  phone = EXCLUDED.phone,
+  paid = EXCLUDED.paid,
+  checked_in = EXCLUDED.checked_in,
+  has_cart = EXCLUDED.has_cart,
+  has_hire_clubs = EXCLUDED.has_hire_clubs,
+  cart_qty = EXCLUDED.cart_qty,
+  hire_clubs_qty = EXCLUDED.hire_clubs_qty,
+  notes = EXCLUDED.notes,
+  start_at = EXCLUDED.start_at,
+  end_at = EXCLUDED.end_at,
+  updated_at = now()
+RETURNING *;
       `,
       [
-        courseId,
-        play_date,
-        tee_time,
-        holes,
-        slot_index,
-        reference,
-        name || null,
-        email || null,
-        phone || null,
-        paid,
-        checked_in,
-        has_cart,
-        has_hire_clubs,
-        cart_qty,
-        hire_clubs_qty,
-        notes || null,
-      ]
+  courseId,
+  play_date,
+  tee_time,
+  holes,
+  slot_index,
+  reference,
+  name || null,
+  email || null,
+  phone || null,
+  paid,
+  checked_in,
+  has_cart,
+  has_hire_clubs,
+  cart_qty,
+  hire_clubs_qty,
+  notes || null,
+  startAtIso,
+  endAtIso,
+]
     );
 
     const sync = await syncBookedPlayersForTime({
