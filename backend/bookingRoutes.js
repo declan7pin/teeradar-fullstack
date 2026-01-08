@@ -2506,8 +2506,8 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     const notes = req.body?.notes ? String(req.body.notes).trim() : "";
 
     // ✅ derive booleans from qty if caller didn't explicitly send them
-    const has_cart = typeof req.body?.has_cart !== "undefined" ? !!req.body.has_cart : cart_qty > 0;
-    const has_hire_clubs = typeof req.body?.has_hire_clubs !== "undefined" ? !!req.body.has_hire_clubs : hire_clubs_qty > 0;
+    const has_cart = parseBool(req.body?.has_cart, false);
+const has_hire_clubs = parseBool(req.body?.has_hire_clubs, false);
 
     if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
     if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
