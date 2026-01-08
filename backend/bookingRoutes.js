@@ -3784,26 +3784,6 @@ if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining)
       return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
     }
 
-        // ✅ Compute booking window
-    startAtIso = toIsoDateTimeLocal(date, time);
-    const durMins = durationMinsForHoles(courseRow, holes);
-    const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
-
-    // ✅ Lock key to prevent race conditions on same slot
-    const lockKey = advisoryKeyForSlot({ courseId, dateYmd: date, timeHhMm: time });
-    if (!lockKey) return res.status(400).json({ ok: false, error: "lock_key_failed" });
-
-    // totals (base green fee)
-    const pricePerPlayerCents = 0; // will be loaded from booking_times row below
-    let baseTotalCents = 0;
-
-    // ✅ Begin transaction
-    await db.query("BEGIN");
-    didBegin = true;
-
-    // ✅ Advisory lock (transaction scoped)
-    await db.query(`SELECT pg_advisory_xact_lock($1::bigint);`, [lockKey]);
-
     // 1) Lock the booking_times row for this slot
     const t = await db.query(
       `
