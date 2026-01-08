@@ -458,10 +458,13 @@ function normTime(v){
   const paid = !!item.paid;
   const checkedIn = !!item.checked_in;
 
-  const hasCart = !!item.has_cart;
-  const hasClubs = !!item.has_hire_clubs;
-  const cartQty = Number(item.cart_qty ?? 0) || 0;
-  const clubsQty = Number(item.hire_clubs_qty ?? 0) || 0;
+    // ✅ qty-first (supports manual holds + bookings)
+  const cartQty = Number(item.cart_qty ?? item.cartQty ?? 0) || 0;
+  const clubsQty = Number(item.hire_clubs_qty ?? item.hireClubsQty ?? 0) || 0;
+
+  // ✅ show add-ons if either boolean OR qty > 0
+  const hasCart = !!(item.has_cart || item.hasCart || cartQty > 0);
+  const hasClubs = !!(item.has_hire_clubs || item.hasHireClubs || clubsQty > 0);
   const notes = _escape(item.notes || "");
   const key = refRaw || `empty_${slotIndex}`;
 
