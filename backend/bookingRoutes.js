@@ -251,7 +251,17 @@ function hasFirstAndLastName(fullName) {
   const parts = v.split(/\s+/).filter(Boolean);
   return parts.length >= 2;
 }
-
+// ✅ FIX: robust boolean parsing (handles "true"/"false" strings)
+function parseBool(v, fallback = false) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    if (["true", "1", "yes", "y", "on"].includes(s)) return true;
+    if (["false", "0", "no", "n", "off", ""].includes(s)) return false;
+  }
+  return fallback;
+}
 function fmtMoney(cents) {
   const n = Number(cents || 0) / 100;
   return `$${n.toFixed(2)}`;
