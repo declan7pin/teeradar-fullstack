@@ -2388,7 +2388,7 @@ RETURNING *;
   holes,
 });
 
-return res.json({ ok: true, row: r.rows[0] || null, cartQty, hireClubsQty, sync });
+return res.json({ ok: true, row: r.rows[0] || null, cart_qty, hire_clubs_qty, sync });
   } catch (e) {
     console.error("admin/fill-slot POST", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
