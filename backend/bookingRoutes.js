@@ -3547,9 +3547,14 @@ router.get("/availability", async (req, res) => {
     const sM = toMinutes(earliest);
     const eM = toMinutes(latest);
     if (sM === null || eM === null || eM <= sM) return res.status(400).json({ ok: false, error: "time_range_invalid" });
-const c = await db.query(`SELECT ... FROM booking_courses WHERE slug=$1 LIMIT 1`, [slug]);
+const c = await db.query(`
+  SELECT id, slug, name, cart_qty, hire_clubs_qty, duration_9_mins, duration_18_mins
+  FROM booking_courses
+  WHERE slug=$1
+  LIMIT 1;
+`, [slug]);
+
 if (!c.rows.length) return res.status(404).json({ ok:false, error:"course_not_found" });
-const courseRow = c.rows[0];
     const courseRow = c.rows[0];
 const courseId = courseRow.id;
 
