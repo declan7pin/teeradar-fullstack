@@ -3649,6 +3649,13 @@ function advisoryKeyForSlot({ courseId, dateYmd, timeHhMm }) {
 
   return key.toString(); // pass as string to pg bigint
 }
+async function advisoryLockForSlot(client, { courseId, dateYmd, timeHhMm }) {
+  const key = advisoryKeyForSlot({ courseId, dateYmd, timeHhMm });
+  if (!key) return null;
+  // pg_advisory_xact_lock is released automatically on COMMIT/ROLLBACK
+  await client.query(`SELECT pg_advisory_xact_lock($1::bigint);`, [key]);
+  return key;
+}
 router.post("/book", async (req, res) => {
   let didBegin = false;
 
