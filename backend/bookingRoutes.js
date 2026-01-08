@@ -1383,7 +1383,7 @@ router.post("/admin/time", requirePlatformAdmin, async (req, res) => {
 router.post("/admin/booking-checkin", requirePlatformAdmin, async (req, res) => {
   try {
     const reference = String(req.body?.reference || "").trim();
-    const checked_in = !!req.body?.checked_in;
+    const checked_in = parseBool(req.body?.checked_in, false);
     if (!reference) return res.status(400).json({ ok: false, error: "reference_required" });
 
     const r = await db.query(
