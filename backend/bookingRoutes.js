@@ -2614,6 +2614,140 @@ router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res)
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ NEW: Course admin — add booking (alias for frontend)
+// POST /api/book/course-admin/booking
+router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
+  try {
+    // ✅ your course-admin is always scoped to their own slug
+    const slug = req.courseAdmin.slug;
+
+    // ✅ accept multiple payload shapes (so frontend doesn't have to be perfect)
+    const play_date = String(req.body?.play_date || req.body?.date || "").trim(); // YYYY-MM-DD
+    const tee_time = String(req.body?.tee_time || req.body?.teeTime || req.body?.time || "").trim(); // HH:MM
+    const holes = Number(req.body?.holes || 18);
+    const players = Math.max(1, Math.min(4, Number(req.body?.players || 1)));
+
+    const name = String(req.body?.name || "").trim();
+    const email = String(req.body?.email || "").trim().toLowerCase(); // optional
+    const phone = req.body?.phone ? String(req.body.phone).trim() : "";
+
+    const paid = !!req.body?.paid;
+    const checked_in = !!req.body?.checked_in;
+
+    const cartQty = Math.max(0, Math.min(4, Number(req.body?.cartQty ?? req.body?.cart_qty ?? 0)));
+    const hireClubsQty = Math.max(0, Math.min(4, Number(req.body?.hireClubsQty ?? req.body?.hire_clubs_qty ?? 0)));
+    const notes = req.body?.notes ? String(req.body.notes).trim() : "";
+
+    // required
+    if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(play_date)) return res.status(400).json({ ok: false, error: "date_invalid" });
+    if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+    if (!name) return res.status(400).json({ ok: false, error: "name_required" });
+
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    // ✅ Ensure tee time exists (so daily sheet renders consistently)
+    await db.query(
+      `
+      INSERT INTO booking_times
+        (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, created_at, updated_at)
+      VALUES
+        ($1, $2::date, $3, $4, 4, 0, 0, 'AVAILABLE', now(), now())
+      ON CONFLICT (course_id, play_date, tee_time, holes)
+      DO NOTHING;
+      `,
+      [courseId, play_date, tee_time, holes]
+    );
+
+    // ✅ Find empty slots
+    const taken = await db.query(
+      `
+      SELECT slot_index
+      FROM booking_manual_slots
+      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+        AND COALESCE(name,'') <> ''
+      `,
+      [courseId, play_date, tee_time, holes]
+    );
+
+    const takenSet = new Set((taken.rows || []).map((r) => Number(r.slot_index)));
+    const freeSlots = [1, 2, 3, 4].filter((i) => !takenSet.has(i));
+
+    if (freeSlots.length < players) {
+      return res.status(409).json({
+        ok: false,
+        error: "not_enough_empty_slots",
+        remainingSlots: freeSlots.length,
+      });
+    }
+
+    const reference = makeRef("MAN");
+    const filled = [];
+
+    for (let i = 0; i < players; i++) {
+      const slot_index = freeSlots[i];
+
+      const r = await db.query(
+        `
+        INSERT INTO booking_manual_slots
+          (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
+           paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes, updated_at)
+        VALUES
+          ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now())
+        ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
+        DO UPDATE SET
+          reference = EXCLUDED.reference,
+          name = EXCLUDED.name,
+          email = EXCLUDED.email,
+          phone = EXCLUDED.phone,
+          paid = EXCLUDED.paid,
+          checked_in = EXCLUDED.checked_in,
+          has_cart = EXCLUDED.has_cart,
+          has_hire_clubs = EXCLUDED.has_hire_clubs,
+          cart_qty = EXCLUDED.cart_qty,
+          hire_clubs_qty = EXCLUDED.hire_clubs_qty,
+          notes = EXCLUDED.notes,
+          updated_at = now()
+        RETURNING *;
+        `,
+        [
+          courseId,
+          play_date,
+          tee_time,
+          holes,
+          slot_index,
+          reference,
+          name,
+          email || null,
+          phone || null,
+          paid,
+          checked_in,
+          cartQty > 0,
+          hireClubsQty > 0,
+          cartQty,
+          hireClubsQty,
+          notes || null,
+        ]
+      );
+
+      filled.push(r.rows[0]);
+    }
+
+    const sync = await syncBookedPlayersForTime({
+      courseId,
+      play_date,
+      tee_time,
+      holes,
+    });
+
+    return res.json({ ok: true, reference, rows: filled, sync });
+  } catch (e) {
+    console.error("course-admin/booking POST", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // DELETE manual slot
 router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) => {
   try {
