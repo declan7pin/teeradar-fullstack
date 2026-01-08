@@ -2195,7 +2195,15 @@ const notes = req.body?.notes ? String(req.body.notes).trim() : "";
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
-
+// ✅ compute usage window for addon overlap checks
+const courseRowQ = await db.query(
+  `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
+  [courseId]
+);
+const courseRow = courseRowQ.rows[0] || {};
+const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
+const dur = durationMinsForHoles(courseRow, holes);
+const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
     const r = await db.query(
       `
       INSERT INTO booking_manual_slots
