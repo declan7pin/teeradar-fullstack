@@ -2606,7 +2606,7 @@ router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res)
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
     const paid = parseBool(req.body?.paid, false);
-    const checked_in = !!req.body?.checked_in;
+    const checked_in = parseBool(req.body?.checked_in, false);
 
     const cartQty = Math.max(0, Math.min(4, Number(req.body?.cartQty ?? req.body?.cart_qty ?? 0)));
     const hireClubsQty = Math.max(0, Math.min(4, Number(req.body?.hireClubsQty ?? req.body?.hire_clubs_qty ?? 0)));
@@ -2749,7 +2749,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
     const paid = parseBool(req.body?.paid, false);
-    const checked_in = !!req.body?.checked_in;
+    const checked_in = parseBool(req.body?.checked_in, false);
 
     const cartQty = Math.max(0, Math.min(4, Number(req.body?.cartQty ?? req.body?.cart_qty ?? 0)));
     const hireClubsQty = Math.max(0, Math.min(4, Number(req.body?.hireClubsQty ?? req.body?.hire_clubs_qty ?? 0)));
