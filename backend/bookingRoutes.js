@@ -3731,246 +3731,217 @@ const hire_clubs_qty = Math.max(0, Math.min(4, Number.isFinite(hire_clubs_qty_ra
       return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
     }
 
-    // ✅ Compute booking window
+        // ✅ Compute booking window
     const startAtIso = toIsoDateTimeLocal(date, time);
     const dur = durationMinsForHoles(courseRow, holes);
     const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-    const feePerPlayerCents = Number(process.env.BOOKING_FEE_PER_PLAYER_CENTS || 0);
-    const bookingFeeCents = feePerPlayerCents * players;
+    // ✅ Lock key to prevent race conditions on same slot
+    const lockKey = advisoryKeyForSlot({ courseId, dateYmd: date, timeHhMm: time });
+    if (!lockKey) return res.status(400).json({ ok: false, error: "lock_key_failed" });
 
-    const reference = makeRef("TR");
+    // totals (base green fee)
+    const pricePerPlayerCents = 0; // will be loaded from booking_times row below
+    let baseTotalCents = 0;
 
-    // ✅✅✅ TRANSACTION START (atomic slot update + booking insert) ✅✅✅
+    // ✅ Begin transaction
     await db.query("BEGIN");
     didBegin = true;
 
-    // ✅ Serialize this exact tee time (also prevents add-on oversells)
-    const lockKey = advisoryKeyForSlot({ courseId, dateYmd: date, timeHhMm: time });
-    if (lockKey) {
-      await db.query(`SELECT pg_advisory_xact_lock($1::bigint);`, [lockKey]);
-    }
-// ✅ IMPORTANT: sync booked_players so manual slots are included before capacity reservation
-await syncBookedPlayersForTime({
-  courseId,
-  play_date: date,
-  tee_time: time,
-  holes,
-});
-    // ✅ Re-check add-on availability INSIDE the transaction (prevents racing)
-    const cartQty = Number(courseRow.cart_qty || 0);
-    const clubsQty = Number(courseRow.hire_clubs_qty || 0);
+    // ✅ Advisory lock (transaction scoped)
+    await db.query(`SELECT pg_advisory_xact_lock($1::bigint);`, [lockKey]);
 
-    if ((has_cart && cartQty > 0) || (has_hire_clubs && clubsQty > 0)) {
+    // 1) Lock the booking_times row for this slot
+    const t = await db.query(
+      `
+      SELECT id, max_players, booked_players, price_per_player_cents, status
+      FROM booking_times
+      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+      LIMIT 1
+      FOR UPDATE;
+      `,
+      [courseId, date, time, holes]
+    );
+
+    if (!t.rows.length) {
+      await db.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: "time_not_found" });
+    }
+
+    const timeRow = t.rows[0];
+
+    if (String(timeRow.status || "").toUpperCase() !== "AVAILABLE") {
+      await db.query("ROLLBACK");
+      return res.status(409).json({ ok: false, error: "time_not_available" });
+    }
+
+    const maxPlayers = Number(timeRow.max_players || 0);
+    const bookedPlayers = Number(timeRow.booked_players || 0);
+
+    if (players > (maxPlayers - bookedPlayers)) {
+      await db.query("ROLLBACK");
+      return res.status(409).json({ ok: false, error: "not_enough_spots" });
+    }
+
+    // 2) Add-on inventory checks by overlap (carts/clubs)
+    const cartCapacity = Number(courseRow.cart_qty || 0);
+    const clubsCapacity = Number(courseRow.hire_clubs_qty || 0);
+
+    if (cart_qty > 0 || hire_clubs_qty > 0) {
       const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage({
         courseId,
         startAtIso,
         endAtIso,
       });
 
-      const cartRemaining = Math.max(0, cartQty - cartsUsed);
-      const clubsRemaining = Math.max(0, clubsQty - clubsUsed);
+      const cartRemaining = Math.max(0, cartCapacity - cartsUsed);
+      const clubsRemaining = Math.max(0, clubsCapacity - clubsUsed);
 
-      if (has_cart && cartQty > 0 && cartRemaining <= 0) {
+      if (cart_qty > 0 && cartCapacity > 0 && cart_qty > cartRemaining) {
         await db.query("ROLLBACK");
-        didBegin = false;
-        return res.status(409).json({ ok: false, error: "cart_sold_out" });
+        return res.status(409).json({
+          ok: false,
+          error: "cart_sold_out",
+          remaining: cartRemaining,
+        });
       }
-      if (has_hire_clubs && clubsQty > 0 && clubsRemaining <= 0) {
+
+      if (hire_clubs_qty > 0 && clubsCapacity > 0 && hire_clubs_qty > clubsRemaining) {
         await db.query("ROLLBACK");
-        didBegin = false;
-        return res.status(409).json({ ok: false, error: "hire_clubs_sold_out" });
+        return res.status(409).json({
+          ok: false,
+          error: "hire_clubs_sold_out",
+          remaining: clubsRemaining,
+        });
       }
     }
 
-    // ✅ Atomic capacity reservation (prevents double bookings)
-    const upd = await db.query(
+    // 3) Price calc
+    const ppp = Number(timeRow.price_per_player_cents || 0);
+    baseTotalCents = ppp * players;
+
+    // add-ons are per-booking (not per-player) in your schema
+    const addonsCents =
+      (cart_qty > 0 ? cart_fee_cents : 0) +
+      (hire_clubs_qty > 0 ? hire_clubs_fee_cents : 0);
+
+    const totalCents = baseTotalCents; // store base in total_cents
+    const reference = makeRef("TR");
+
+    // 4) Insert booking
+    const ins = await db.query(
+      `
+      INSERT INTO booking_bookings
+        (course_id, play_date, tee_time, holes, players,
+         golfer_name, golfer_email, golfer_phone,
+         price_per_player_cents, total_cents, reference, status,
+         start_at, end_at,
+         paid, checked_in,
+         has_cart, cart_qty, cart_fee_cents,
+         has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
+         created_at)
+      VALUES
+        ($1,$2::date,$3,$4,$5,
+         $6,$7,$8,
+         $9,$10,$11,'CONFIRMED',
+         $12::timestamptz,$13::timestamptz,
+         false,false,
+         $14,$15,$16,
+         $17,$18,$19,
+         now())
+      RETURNING id, reference;
+      `,
+      [
+        courseId,
+        date,
+        time,
+        holes,
+        players,
+        golfer_name || null,
+        golfer_email || null,
+        golfer_phone || null,
+        ppp,
+        totalCents,
+        reference,
+        startAtIso,
+        endAtIso,
+        cart_qty > 0,
+        cart_qty,
+        cart_fee_cents,
+        hire_clubs_qty > 0,
+        hire_clubs_qty,
+        hire_clubs_fee_cents,
+      ]
+    );
+
+    // 5) Update booking_times booked_players + status
+    const newBooked = bookedPlayers + players;
+
+    await db.query(
       `
       UPDATE booking_times
       SET
-        booked_players = booked_players + $5,
+        booked_players = $5,
         status = CASE
-          WHEN (booked_players + $5) >= max_players THEN 'BOOKED'
-          ELSE status
+          WHEN status = 'BLOCKED' THEN 'BLOCKED'
+          WHEN $5 >= max_players THEN 'BOOKED'
+          ELSE 'AVAILABLE'
         END,
         updated_at = now()
-      WHERE course_id = $1
-        AND play_date = $2::date
-        AND tee_time = $3
-        AND holes = $4
-        AND status = 'AVAILABLE'
-        AND (max_players - booked_players) >= $5
-      RETURNING id, max_players, booked_players, price_per_player_cents, status;
+      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4;
       `,
-      [courseId, date, time, holes, players]
+      [courseId, date, time, holes, newBooked]
     );
 
-    if (!upd.rows.length) {
-      const chk = await db.query(
-        `
-        SELECT status, max_players, booked_players
-        FROM booking_times
-        WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
-        LIMIT 1;
-        `,
-        [courseId, date, time, holes]
-      );
-
-      await db.query("ROLLBACK");
-      didBegin = false;
-
-      if (!chk.rows.length) return res.status(404).json({ ok: false, error: "time_not_found" });
-
-      const r = chk.rows[0];
-      if (String(r.status || "").toUpperCase() !== "AVAILABLE") {
-        return res.status(409).json({ ok: false, error: "time_not_available" });
-      }
-
-      const remaining = Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0));
-      if (remaining < players) {
-        return res.status(409).json({ ok: false, error: "not_enough_capacity", remaining });
-      }
-
-      return res.status(409).json({ ok: false, error: "time_not_available" });
-    }
-
-    const timeRow = upd.rows[0];
-    const pricePerPlayerCents = Number(timeRow.price_per_player_cents || 0);
-    const totalCents = pricePerPlayerCents * players;
-
-    // ✅ Insert booking (still inside txn)
-    await db.query(
-      `
-      INSERT INTO booking_bookings
-  (course_id, play_date, tee_time, holes, players,
-   golfer_name, golfer_email, golfer_phone,
-   price_per_player_cents, total_cents, booking_fee_cents,
-   reference, status, paid, checked_in,
-   has_cart, cart_fee_cents, cart_qty,
-   has_hire_clubs, hire_clubs_fee_cents, hire_clubs_qty,
-   start_at, end_at)
-VALUES
-  ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'CONFIRMED',false,false,$13,$14,$15,$16,$17,$18,$19::timestamptz,$20::timestamptz)
-      `,
-      [
-  courseId,
-  date,
-  time,
-  holes,
-  players,
-  golfer_name,
-  golfer_email,
-  golfer_phone,
-  pricePerPlayerCents,
-  totalCents,
-  bookingFeeCents,
-  reference,
-  has_cart,
-  cart_fee_cents,
-  cart_qty,
-  has_hire_clubs,
-  hire_clubs_fee_cents,
-  hire_clubs_qty,
-  startAtIso,
-  endAtIso,
-]
-    );
-
-    // ✅ Commit guarantees "no ghost slot increments"
+    // 6) Commit
     await db.query("COMMIT");
     didBegin = false;
-    // ✅✅✅ TRANSACTION END ✅✅✅
 
-    // ✅ Analytics (outside txn is fine)
-    try {
-      const ip = getClientIp(req);
-      const userId = golfer_email || ip || null;
-      const grossCents =
-        Number(totalCents || 0) + Number(cart_fee_cents || 0) + Number(hire_clubs_fee_cents || 0);
+    // ✅ analytics
+    recordEvent({
+      type: "booking_created",
+      userId: getClientIp(req) || null,
+      courseName: courseRow.name,
+      meta: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty },
+    }).catch(() => {});
+    recordBookingEvent(req, {
+      courseSlug: slug,
+      eventType: "booking_confirmed",
+      payload: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty },
+    }).catch(() => {});
 
-      await recordEvent({
-        type: "booking_created",
-        userId,
-        courseName: c.rows[0].name,
-        at: new Date().toISOString(),
-        meta: {
-          slug,
-          date,
-          time,
-          holes,
-          players,
-          reference,
-          totalCents,
-          cart_fee_cents,
-          hire_clubs_fee_cents,
-          grossCents,
-          paid: false,
-        },
-      });
-
-      recordBookingEvent(req, {
-        courseSlug: slug,
-        eventType: "booking_confirmed",
-        payload: {
-          slug,
-          date,
-          time,
-          holes,
-          players,
-          reference,
-          totalCents,
-          cart_fee_cents,
-          hire_clubs_fee_cents,
-          grossCents,
-          email: golfer_email || null,
-        },
-      }).catch(() => {});
-    } catch (err) {
-      console.error("❌ booking analytics failed:", err?.message || err);
-    }
-
-    // ✅ Email (outside txn so email failure doesn't rollback a real booking)
+    // 7) Email (non-fatal)
     const emailResult = await sendBookingEmail({
       to: golfer_email,
-      courseName: c.rows[0].name,
+      courseName: courseRow.name,
       date,
       time,
       holes,
       players,
       reference,
-      pricePerPlayerCents,
-      totalCents,
+      pricePerPlayerCents: ppp,
+      totalCents: totalCents,
       cartCents: cart_fee_cents,
       hireClubsCents: hire_clubs_fee_cents,
-    });
-
-    console.log("✅ booking created", {
-      reference,
-      to: golfer_email,
-      emailOk: emailResult.emailOk,
-      emailReason: emailResult.emailReason || null,
-      fromUsed: buildFrom() || null,
     });
 
     return res.json({
       ok: true,
       reference,
-      course: c.rows[0].name,
-      date,
-      time,
-      holes,
-      players,
-      total: (totalCents + cart_fee_cents + hire_clubs_fee_cents) / 100,
-      pricePerPlayer: pricePerPlayerCents / 100,
-      cartFee: cart_fee_cents / 100,
-      hireClubsFee: hire_clubs_fee_cents / 100,
-      bookingFee: bookingFeeCents / 100,
-      status: timeRow.status,
-      bookedPlayers: timeRow.booked_players,
-      maxPlayers: timeRow.max_players,
-      remaining: Math.max(0, Number(timeRow.max_players || 0) - Number(timeRow.booked_players || 0)),
+      course: { slug: courseRow.slug, name: courseRow.name },
+      booking: {
+        date,
+        time,
+        holes,
+        players,
+        pricePerPlayerCents: ppp,
+        totalCents: totalCents + addonsCents,
+        addonsCents,
+        cart_qty,
+        hire_clubs_qty,
+      },
       emailOk: emailResult.emailOk,
-      emailReason: emailResult.emailReason || "",
+      emailReason: emailResult.emailReason || null,
     });
   } catch (e) {
     console.error("book POST", e);
