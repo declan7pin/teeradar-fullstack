@@ -2476,7 +2476,14 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     const slot_index = Number(req.body?.slotIndex || 0);
 
     const reference = String(req.body?.reference || "").trim() || makeRef("MAN");
-    const name = req.body?.name ? String(req.body.name).trim() : "";
+    const name =
+  req.body?.holdName
+    ? String(req.body.holdName).trim()
+    : req.body?.hold_name
+      ? String(req.body.hold_name).trim()
+      : req.body?.name
+        ? String(req.body.name).trim()
+        : "";
     const email = req.body?.email ? String(req.body.email).trim() : "";
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
