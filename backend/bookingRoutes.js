@@ -1314,6 +1314,61 @@ router.post("/admin/booking-paid", requirePlatformAdmin, async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ NEW: add / upsert ONE tee time row (so it appears on the daily sheet)
+// POST /api/book/admin/time
+// Body: { slug, date: "YYYY-MM-DD", time: "HH:MM", holes: 9|18, maxPlayers, pricePerPlayerCents, status? }
+router.post("/admin/time", requirePlatformAdmin, async (req, res) => {
+  try {
+    const slug = normSlug(req.body?.slug);
+    const playDate = String(req.body?.date || "").trim();      // YYYY-MM-DD
+    const teeTime = String(req.body?.time || "").trim();       // HH:MM
+    const holes = Number(req.body?.holes || 18);
+    const maxPlayers = Number(req.body?.maxPlayers || 4);
+    const pricePerPlayerCents = Number(req.body?.pricePerPlayerCents || 0);
+    const status = String(req.body?.status || "AVAILABLE").trim().toUpperCase();
+
+    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(playDate)) return res.status(400).json({ ok: false, error: "date_invalid" });
+    if (!/^\d{2}:\d{2}$/.test(teeTime)) return res.status(400).json({ ok: false, error: "time_invalid" });
+    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+    if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4)
+      return res.status(400).json({ ok: false, error: "maxPlayers_invalid" });
+    if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0 || pricePerPlayerCents > 10000000)
+      return res.status(400).json({ ok: false, error: "price_invalid" });
+    if (!["AVAILABLE", "BLOCKED"].includes(status))
+      return res.status(400).json({ ok: false, error: "status_invalid" });
+
+    const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+    const courseId = c.rows[0].id;
+
+    // ✅ Upsert the row and (important) allow BLOCKED -> AVAILABLE if admin wants
+    const r = await db.query(
+      `
+      INSERT INTO booking_times
+        (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, created_at, updated_at)
+      VALUES
+        ($1, $2::date, $3, $4, $5, 0, $6, $7, now(), now())
+      ON CONFLICT (course_id, play_date, tee_time, holes)
+      DO UPDATE SET
+        max_players = EXCLUDED.max_players,
+        price_per_player_cents = EXCLUDED.price_per_player_cents,
+        status = CASE
+          WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
+          ELSE EXCLUDED.status
+        END,
+        updated_at = now()
+      RETURNING id, play_date::text AS play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status;
+      `,
+      [courseId, playDate, teeTime, holes, maxPlayers, pricePerPlayerCents, status]
+    );
+
+    return res.json({ ok: true, time: r.rows[0] });
+  } catch (e) {
+    console.error("admin/time POST", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // ✅ ADD: toggle checked-in flag (platform admin) — used by admin daily sheet
 router.post("/admin/booking-checkin", requirePlatformAdmin, async (req, res) => {
   try {
