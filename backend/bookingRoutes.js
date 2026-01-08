@@ -2189,8 +2189,8 @@ const name =
 
     const paid = parseBool(req.body?.paid, false);
     const checked_in = parseBool(req.body?.checked_in, false);
-    const has_cart = !!req.body?.has_cart;
-    const has_hire_clubs = !!req.body?.has_hire_clubs;
+    const has_cart = parseBool(req.body?.has_cart, false);
+const has_hire_clubs = parseBool(req.body?.has_hire_clubs, false);
 // ✅ ADD: store quantities + notes (needed for addon overlap + daily sheet)
 const cart_qty = Math.max(0, Math.min(4, Number(req.body?.cart_qty ?? req.body?.cartQty ?? 0)));
 const hire_clubs_qty = Math.max(0, Math.min(4, Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? 0)));
