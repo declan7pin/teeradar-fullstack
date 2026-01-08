@@ -3404,7 +3404,7 @@ router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res
   try {
     const slug = req.courseAdmin.slug;
     const reference = String(req.body?.reference || "").trim();
-    const checked_in = !!req.body?.checked_in;
+    const checked_in = parseBool(req.body?.checked_in, false);
     if (!reference) return res.status(400).json({ ok: false, error: "reference_required" });
 
     const courseId = await courseIdFromSlug(slug);
