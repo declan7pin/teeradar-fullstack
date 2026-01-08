@@ -538,24 +538,31 @@ function normTime(v){
 
   const byKey = new Map();
   // ✅ ALSO consume manual holds so they appear as "taken" on the sheet
-  (manualRows || []).forEach(m => {
+    (manualRows || []).forEach(m => {
     const time = normTime(m.tee_time || m.time || m.teeTime || "");
     const holes = Number(m.holes ?? m.hole_count ?? m.num_holes ?? m.holeCount ?? "");
     const key = keyOf(time, holes);
 
+    // ✅ pull hold name + qty from manual slot row
+    const holdName = String(m.hold_name ?? m.holdName ?? m.name ?? "").trim();
+    const cartQty = Number(m.cart_qty ?? m.cartQty ?? 0) || 0;
+    const clubsQty = Number(m.hire_clubs_qty ?? m.hireClubsQty ?? 0) || 0;
+    const notes = String(m.notes ?? m.note ?? "").trim();
+
     if (!byKey.has(key)) byKey.set(key, []);
-    // Each manual row represents 1 occupied slot (your UI shows multiple rows for the same time)
+
+    // Each manual row represents 1 occupied slot
     byKey.get(key).push({
-      reference: "",
-      name: "Manual hold",
+      reference: "",                 // manual holds don't have a booking ref
+      name: holdName || "Manual hold",
       email: "",
       phone: "",
       paid: false,
-      cart_qty: 0,
-      hire_clubs_qty: 0,
-      has_cart: false,
-      has_hire_clubs: false,
-      notes: "",
+      cart_qty: cartQty,
+      hire_clubs_qty: clubsQty,
+      has_cart: cartQty > 0,
+      has_hire_clubs: clubsQty > 0,
+      notes,
       checked_in: false,
     });
   });
