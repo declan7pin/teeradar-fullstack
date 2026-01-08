@@ -1072,12 +1072,23 @@ const hireClubsQty = Math.max(0, Math.min(4, Number($("mClubsQty")?.value || 0))
       await j("/api/book/course-admin/manual-slot", {
         method:"POST",
         body: JSON.stringify({
-          date: playDate,                 // ✅ backend expects `date`
-          teeTime,
-          holes,
-          maxPlayers,
-          pricePerPlayerCents
-        })
+  date: playDate,                 // ✅ backend expects `date`
+  teeTime,
+  holes,
+  maxPlayers,
+  pricePerPlayerCents,
+
+  // ✅ show on daily sheet (instead of "Manual hold")
+  holdName,
+  hold_name: holdName,
+  name: holdName,
+
+  // ✅ add-ons for the hold
+  cartQty,
+  hireClubsQty,
+  cart_qty: cartQty,
+  hire_clubs_qty: hireClubsQty
+})
       });
 
       $("manualMsg").textContent = "✅ Added manual tee time";
