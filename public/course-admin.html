@@ -789,7 +789,7 @@ try{
         return;
       }
 
-      const sheet = groupBookingsToSheet(timesRows, bookingsRows);
+      const sheet = groupBookingsToSheet(timesRows, bookingsRows, manualRows);
 
       $("sheetPill").textContent = `${getSlug()} • ${date}`;
       $("sheetHint").textContent = "Names fill into the 4 slots for each time. Tick Paid to mark payment.";
