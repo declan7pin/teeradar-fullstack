@@ -2188,7 +2188,7 @@ const name =
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
     const paid = parseBool(req.body?.paid, false);
-    const checked_in = !!req.body?.checked_in;
+    const checked_in = parseBool(req.body?.checked_in, false);
     const has_cart = !!req.body?.has_cart;
     const has_hire_clubs = !!req.body?.has_hire_clubs;
 // ✅ ADD: store quantities + notes (needed for addon overlap + daily sheet)
@@ -2294,7 +2294,7 @@ router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
     const paid = parseBool(req.body?.paid, false);
-    const checked_in = !!req.body?.checked_in;
+    const checked_in = parseBool(req.body?.checked_in, false);
 
     const cartQty = Math.max(0, Math.min(4, Number(req.body?.cartQty || 0)));
     const hireClubsQty = Math.max(0, Math.min(4, Number(req.body?.hireClubsQty || 0)));
@@ -2498,7 +2498,7 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
     const paid = parseBool(req.body?.paid, false);
-    const checked_in = !!req.body?.checked_in;
+    const checked_in = parseBool(req.body?.checked_in, false);
 
     // ✅ quantities + notes (accept both snake_case + camelCase)
     const cart_qty = Math.max(0, Math.min(4, Number(req.body?.cart_qty ?? req.body?.cartQty ?? 0)));
