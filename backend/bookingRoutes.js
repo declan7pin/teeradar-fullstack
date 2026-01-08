@@ -1309,7 +1309,7 @@ router.get("/admin/times", requirePlatformAdmin, async (req, res) => {
 router.post("/admin/booking-paid", requirePlatformAdmin, async (req, res) => {
   try {
     const reference = String(req.body?.reference || "").trim();
-    const paid = !!req.body?.paid;
+    const paid = parseBool(req.body?.paid, false);
     if (!reference) return res.status(400).json({ ok: false, error: "reference_required" });
 
     const r = await db.query(
