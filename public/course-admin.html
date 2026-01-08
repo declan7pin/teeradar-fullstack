@@ -517,7 +517,28 @@ function normTime(v){
   const keyOf = (time, holes) => `${normTime(time)}__${String(holes ?? "")}`;
 
   const byKey = new Map();
+  // ✅ ALSO consume manual holds so they appear as "taken" on the sheet
+  (manualRows || []).forEach(m => {
+    const time = normTime(m.tee_time || m.time || m.teeTime || "");
+    const holes = Number(m.holes ?? m.hole_count ?? m.num_holes ?? m.holeCount ?? "");
+    const key = keyOf(time, holes);
 
+    if (!byKey.has(key)) byKey.set(key, []);
+    // Each manual row represents 1 occupied slot (your UI shows multiple rows for the same time)
+    byKey.get(key).push({
+      reference: "",
+      name: "Manual hold",
+      email: "",
+      phone: "",
+      paid: false,
+      cart_qty: 0,
+      hire_clubs_qty: 0,
+      has_cart: false,
+      has_hire_clubs: false,
+      notes: "",
+      checked_in: false,
+    });
+  });
   (bookingsRows || []).forEach(b => {
     const time = normTime(b.tee_time || b.time || b.teeTime || "");
     const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
