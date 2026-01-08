@@ -503,23 +503,27 @@ function normTime(v){
       <div style="margin-top:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
         <label class="paidWrap" for="${paidId}">
           <input
-            id="${paidId}"
-            type="checkbox"
-            data-ref="${_escape(refRaw)}"
-            data-kind="paid"
-            ${paid ? "checked" : ""}
-          />
+  id="${paidId}"
+  type="checkbox"
+  data-ref="${_escape(refRaw)}"
+  data-kind="paid"
+  data-slot="${slotIndex}"
+  data-slotkey="${_escape(slotKey)}"
+  ${paid ? "checked" : ""}
+/>
           Paid
         </label>
 
         <label class="paidWrap" for="${checkinId}">
           <input
-            id="${checkinId}"
-            type="checkbox"
-            data-ref="${_escape(refRaw)}"
-            data-kind="checkin"
-            ${checkedIn ? "checked" : ""}
-          />
+  id="${checkinId}"
+  type="checkbox"
+  data-ref="${_escape(refRaw)}"
+  data-kind="checkin"
+  data-slot="${slotIndex}"
+  data-slotkey="${_escape(slotKey)}"
+  ${checkedIn ? "checked" : ""}
+/>
           Checked in
         </label>
 
