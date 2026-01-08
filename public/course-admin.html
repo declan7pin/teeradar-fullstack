@@ -504,7 +504,7 @@ function normTime(v){
   `;
 }
 
-  function groupBookingsToSheet(timesRows, bookingsRows){
+  function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
   // ✅ normalize "06:10", "6:10", "06:10:00" -> "06:10"
   const normTime = (v) => {
     const s = String(v || "").trim();
