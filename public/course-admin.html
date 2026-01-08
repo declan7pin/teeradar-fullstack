@@ -919,6 +919,12 @@ try{
       tb.querySelectorAll('input[type="checkbox"][data-ref][data-kind]').forEach(cb => {
         cb.onchange = async () => {
           const ref = cb.getAttribute("data-ref") || "";
+          // ✅ Manual holds don't have a booking reference (can't update paid/checkin)
+if (!ref) {
+  cb.checked = !cb.checked;
+  if (msgEl) msgEl.textContent = "❌ reference_required";
+  return;
+}
           const kind = cb.getAttribute("data-kind") || "";
           const val = cb.checked;
 
