@@ -3608,27 +3608,27 @@ const durationMins = durationMinsForHoles(courseRow, holes);
           endAtIso,
         });
 
-        const cartRemaining = Math.max(0, cartQty - cartsUsed);
-        const clubsRemaining = Math.max(0, clubsQty - clubsUsed);
+        const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
+const clubsRemaining = Math.max(0, courseHireClubsQty - clubsUsed);
 
-        return {
-          time: r.tee_time,
-          holes: r.holes,
-          maxPlayers: r.max_players,
-          bookedPlayers: r.booked_players,
-          remaining: Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0)),
-          pricePerPlayerCents: r.price_per_player_cents,
-          pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
+return {
+  time: r.tee_time,
+  holes: r.holes,
+  maxPlayers: r.max_players,
+  bookedPlayers: r.booked_players,
+  remaining: Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0)),
+  pricePerPlayerCents: r.price_per_player_cents,
+  pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
 
-          // ✅ add-on availability
-          cartRemaining,
-          clubsRemaining,
-          cartSoldOut: cartQty > 0 && cartRemaining <= 0,
-          clubsSoldOut: clubsQty > 0 && clubsRemaining <= 0,
-          cartQty,
-          clubsQty,
-          durationMins: dur,
-        };
+  // ✅ add-on availability
+  cartRemaining,
+  clubsRemaining,
+  cartSoldOut: courseCartQty > 0 && cartRemaining <= 0,
+  clubsSoldOut: courseHireClubsQty > 0 && clubsRemaining <= 0,
+  cartQty: courseCartQty,
+  clubsQty: courseHireClubsQty,
+  durationMins: dur,
+};
       })
     );
 
