@@ -973,7 +973,13 @@ function isSheetOpenForDate(d){
       });
 
       $("manualMsg").textContent = "✅ Added manual tee time";
-      await loadManualSlots();
+await loadManualSlots();
+
+// ✅ If the daily sheet is currently showing this same date, refresh it too
+if (isSheetOpenForDate(playDate)) {
+  $("viewMsg").textContent = "Refreshing daily sheet...";
+  await viewSheet();
+}
     }catch(e){
       $("manualMsg").textContent = "❌ " + e.message;
     }
