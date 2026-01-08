@@ -3659,8 +3659,8 @@ router.post("/book", async (req, res) => {
     const addonIds = Array.isArray(req.body?.addonIds) ? req.body.addonIds.map(String) : [];
     const picked = new Set(addonIds.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean));
 
-    const has_cart = !!req.body?.hasCart || picked.has("cart");
-    const has_hire_clubs = !!req.body?.hasHireClubs || picked.has("hire_clubs");
+    const has_cart = parseBool(req.body?.has_cart, false);
+const has_hire_clubs = parseBool(req.body?.has_hire_clubs, false);
 // ✅ ADD: quantities (your UI is checkbox-based, so default 1 when selected)
 const cart_qty = has_cart ? 1 : 0;
 const hire_clubs_qty = has_hire_clubs ? 1 : 0;
