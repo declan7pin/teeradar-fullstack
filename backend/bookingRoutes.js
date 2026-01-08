@@ -3664,14 +3664,28 @@ router.post("/book", async (req, res) => {
     const golfer_phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
     // ✅ cart / hire clubs selection (optional)
-    const addonIds = Array.isArray(req.body?.addonIds) ? req.body.addonIds.map(String) : [];
-    const picked = new Set(addonIds.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean));
+// Accept either:
+// - addonIds: ["cart","hire_clubs"]
+// - booleans: has_cart / has_hire_clubs
+// - optional quantities: cartQty / hireClubsQty (or snake_case)
+const addonIds = Array.isArray(req.body?.addonIds) ? req.body.addonIds.map(String) : [];
+const picked = new Set(
+  addonIds.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean)
+);
 
-    const has_cart = parseBool(req.body?.has_cart, false);
-const has_hire_clubs = parseBool(req.body?.has_hire_clubs, false);
-// ✅ ADD: quantities (your UI is checkbox-based, so default 1 when selected)
-const cart_qty = has_cart ? 1 : 0;
-const hire_clubs_qty = has_hire_clubs ? 1 : 0;
+// decide selected add-ons (addonIds wins, but booleans still supported)
+const has_cart =
+  picked.size > 0 ? picked.has("cart") : parseBool(req.body?.has_cart, false);
+
+const has_hire_clubs =
+  picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
+
+// quantities (default 1 if selected, clamp 0..4)
+const cart_qty_raw = Number(req.body?.cart_qty ?? req.body?.cartQty ?? (has_cart ? 1 : 0));
+const hire_clubs_qty_raw = Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? (has_hire_clubs ? 1 : 0));
+
+const cart_qty = Math.max(0, Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : (has_cart ? 1 : 0)));
+const hire_clubs_qty = Math.max(0, Math.min(4, Number.isFinite(hire_clubs_qty_raw) ? hire_clubs_qty_raw : (has_hire_clubs ? 1 : 0)));
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
     if (!time || !/^\d{2}:\d{2}$/.test(time)) return res.status(400).json({ ok: false, error: "time_invalid" });
