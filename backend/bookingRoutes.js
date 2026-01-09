@@ -3776,7 +3776,10 @@ await advisoryLockForSlot(client, { courseId, dateYmd: date, timeHhMm: time });
 let startAtIso = toIsoDateTimeLocal(date, time);
 const dur = durationMinsForHoles(courseRow, holes);
 const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
-
+// ✅ NEW: lock addon inventory per course (prevents carts/clubs oversell across overlapping times)
+await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
+  `addons:${courseId}`,
+]);
 // ✅ check addon overlap usage (confirmed bookings + filled manual slots)
 const courseCartQty = Number(courseRow.cart_qty || 0);
 const courseClubsQty = Number(courseRow.hire_clubs_qty || 0);
