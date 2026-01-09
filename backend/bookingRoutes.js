@@ -3756,8 +3756,8 @@ const clubsRemaining = Math.max(0, courseClubsQty - clubsUsed);
 // if course has inventory configured (>0), enforce it
 if (cart_qty > 0 && courseCartQty > 0 && cart_qty > cartRemaining) {
   await client.query("ROLLBACK");
-didBegin = false;
-return res.status(409).json(...);
+  didBegin = false;
+  return res.status(409).json({
     ok: false,
     error: "cart_sold_out",
     cartRemaining,
@@ -3766,8 +3766,8 @@ return res.status(409).json(...);
 
 if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining) {
   await client.query("ROLLBACK");
-didBegin = false;
-return res.status(409).json(...);
+  didBegin = false;
+  return res.status(409).json({
     ok: false,
     error: "hire_clubs_sold_out",
     clubsRemaining,
