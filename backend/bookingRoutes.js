@@ -3730,11 +3730,11 @@ const hire_clubs_qty = Math.max(0, Math.min(4, Number.isFinite(hire_clubs_qty_ra
     const courseRow = c.rows[0];
     const courseId = courseRow.id;
 // ✅ begin transaction + lock this specific slot to prevent double-book + addon oversell
-await db.query("BEGIN");
+await client.query("BEGIN");
 didBegin = true;
 
 // lock per-slot (course+date+time). If two people try same tee time, one waits.
-await advisoryLockForSlot(db, { courseId, dateYmd: date, timeHhMm: time });
+await advisoryLockForSlot(client, { courseId, dateYmd: date, timeHhMm: time });
 // ✅ compute booking window (needed for addon overlap inventory checks)
 let startAtIso = toIsoDateTimeLocal(date, time);
 const dur = durationMinsForHoles(courseRow, holes);
