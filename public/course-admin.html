@@ -620,9 +620,9 @@ function normTime(v){
     const holes = Number(t.holes ?? "");
     const key = keyOf(time, holes);
 
-    const arr = (byKey.get(key) || []).slice(0, 4);
-    const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
-        // ✅ If tee_times says spots are booked but bookings list doesn't have them,
+        const arr = (byKey.get(key) || []).slice(0, 4);
+
+    // ✅ If tee_times says spots are booked but bookings list doesn't have them,
     //    fill placeholders so the course can see the time is taken on the sheet.
     const bookedCount = Number(
       t.booked_players ?? t.bookedPlayers ?? t.booked ?? 0
@@ -643,6 +643,8 @@ function normTime(v){
         checked_in: false,
       });
     }
+
+    const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
     out.push({ time, holes, slots });
   });
 
