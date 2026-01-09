@@ -2835,49 +2835,64 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
 
     for (let i = 0; i < players; i++) {
       const slot_index = freeSlots[i];
-
+const courseDurQ = await db.query(
+  `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
+  [courseId]
+);
+const courseDurRow = courseDurQ.rows[0] || {};
+const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
+const durMins = durationMinsForHoles(courseDurRow, holes);
+const endAtIso = new Date(new Date(startAtIso).getTime() + durMins * 60 * 1000).toISOString();
       const r = await db.query(
-        `
-        INSERT INTO booking_manual_slots
-          (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
-           paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes, updated_at)
-        VALUES
-          ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now())
-        ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
-        DO UPDATE SET
-          reference = EXCLUDED.reference,
-          name = EXCLUDED.name,
-          email = EXCLUDED.email,
-          phone = EXCLUDED.phone,
-          paid = EXCLUDED.paid,
-          checked_in = EXCLUDED.checked_in,
-          has_cart = EXCLUDED.has_cart,
-          has_hire_clubs = EXCLUDED.has_hire_clubs,
-          cart_qty = EXCLUDED.cart_qty,
-          hire_clubs_qty = EXCLUDED.hire_clubs_qty,
-          notes = EXCLUDED.notes,
-          updated_at = now()
-        RETURNING *;
-        `,
-        [
-          courseId,
-          play_date,
-          tee_time,
-          holes,
-          slot_index,
-          reference,
-          name,
-          email || null,
-          phone || null,
-          paid,
-          checked_in,
-          cartQty > 0,
-          hireClubsQty > 0,
-          cartQty,
-          hireClubsQty,
-          notes || null,
-        ]
-      );
+  `
+  INSERT INTO booking_manual_slots
+    (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
+     paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes,
+     start_at, end_at,
+     updated_at)
+  VALUES
+    ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+     $17::timestamptz, $18::timestamptz,
+     now())
+  ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
+  DO UPDATE SET
+    reference = EXCLUDED.reference,
+    name = EXCLUDED.name,
+    email = EXCLUDED.email,
+    phone = EXCLUDED.phone,
+    paid = EXCLUDED.paid,
+    checked_in = EXCLUDED.checked_in,
+    has_cart = EXCLUDED.has_cart,
+    has_hire_clubs = EXCLUDED.has_hire_clubs,
+    cart_qty = EXCLUDED.cart_qty,
+    hire_clubs_qty = EXCLUDED.hire_clubs_qty,
+    notes = EXCLUDED.notes,
+    start_at = EXCLUDED.start_at,
+    end_at = EXCLUDED.end_at,
+    updated_at = now()
+  RETURNING *;
+  `,
+  [
+    courseId,
+    play_date,
+    tee_time,
+    holes,
+    slot_index,
+    reference,
+    name,
+    email || null,
+    phone || null,
+    paid,
+    checked_in,
+    cartQty > 0,
+    hireClubsQty > 0,
+    cartQty,
+    hireClubsQty,
+    notes || null,
+    startAtIso,
+    endAtIso,
+  ]
+);
 
       filled.push(r.rows[0]);
     }
