@@ -3842,9 +3842,10 @@ if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_c
     );
 
     if (!t.rows.length) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ ok: false, error: "time_not_found" });
-    }
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(404).json({ ok: false, error: "time_not_found" });
+}
 
     const timeRow = t.rows[0];
 
