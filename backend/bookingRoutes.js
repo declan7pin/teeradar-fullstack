@@ -2954,7 +2954,43 @@ const endAtIso = new Date(new Date(startAtIso).getTime() + durMins * 60 * 1000).
       tee_time,
       holes,
     });
+    // ✅ NEW: send confirmation email for MANUAL booking (if email provided)
+    try {
+      if (email && isLikelyEmail(email)) {
+        const courseInfo = await db.query(
+          `SELECT name, cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
+          [courseId]
+        );
+        const courseName = String(courseInfo.rows[0]?.name || slug);
 
+        const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
+        const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
+
+        const cartCents = cartQty > 0 ? cartFee * cartQty : 0;
+        const hireClubsCents = hireClubsQty > 0 ? clubsFee * hireClubsQty : 0;
+
+        // if you later want price-per-player on course-admin manual, pass it in body and use it here.
+        const ppp = 0;
+        const totalCents = 0;
+
+        await sendBookingEmail({
+          to: email,
+          courseName,
+          date: play_date,
+          time: tee_time,
+          holes,
+          players,
+          reference,
+          pricePerPlayerCents: ppp,
+          totalCents,
+          cartCents,
+          hireClubsCents,
+          source: "manual",
+        });
+      }
+    } catch (e) {
+      console.warn("course-admin/booking email failed (non-fatal):", e?.message || e);
+    }
     return res.json({ ok: true, reference, rows: filled, sync });
   } catch (e) {
     console.error("course-admin/booking POST", e);
