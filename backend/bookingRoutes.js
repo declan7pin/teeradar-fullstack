@@ -3859,9 +3859,10 @@ if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_c
     const bookedPlayers = Number(timeRow.booked_players || 0);
 
     if (players > (maxPlayers - bookedPlayers)) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({ ok: false, error: "not_enough_spots" });
-    }
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(409).json({ ok: false, error: "not_enough_spots" });
+}
 
 
     // 3) Price calc
