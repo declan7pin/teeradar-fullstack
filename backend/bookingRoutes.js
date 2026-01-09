@@ -2686,7 +2686,14 @@ router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res)
 
     for (let i = 0; i < players; i++) {
       const slot_index = freeSlots[i];
-
+const courseDurQ = await db.query(
+  `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
+  [courseId]
+);
+const courseDurRow = courseDurQ.rows[0] || {};
+const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
+const durMins = durationMinsForHoles(courseDurRow, holes);
+const endAtIso = new Date(new Date(startAtIso).getTime() + durMins * 60 * 1000).toISOString();
       const r = await db.query(
   `
   INSERT INTO booking_manual_slots
