@@ -3713,7 +3713,7 @@ const hire_clubs_qty = Math.max(0, Math.min(4, Number.isFinite(hire_clubs_qty_ra
     }
 
     // ✅ Load course (includes addon qty + durations)
-    const c = await db.query(
+    const c = await client.query(
       `
       SELECT id, slug, name, notes,
         cart_fee_cents, hire_clubs_fee_cents,
@@ -3788,7 +3788,7 @@ const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire
     }
 
     // 1) Lock the booking_times row for this slot
-    const t = await db.query(
+    const t = await client.query(
       `
       SELECT id, max_players, booked_players, price_per_player_cents, status
       FROM booking_times
@@ -3800,14 +3800,14 @@ const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire
     );
 
     if (!t.rows.length) {
-      await db.query("ROLLBACK");
+      await client.query("ROLLBACK");
       return res.status(404).json({ ok: false, error: "time_not_found" });
     }
 
     const timeRow = t.rows[0];
 
     if (String(timeRow.status || "").toUpperCase() !== "AVAILABLE") {
-      await db.query("ROLLBACK");
+      await client.query("ROLLBACK");
       return res.status(409).json({ ok: false, error: "time_not_available" });
     }
 
@@ -3815,7 +3815,7 @@ const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire
     const bookedPlayers = Number(timeRow.booked_players || 0);
 
     if (players > (maxPlayers - bookedPlayers)) {
-      await db.query("ROLLBACK");
+      await client.query("ROLLBACK");
       return res.status(409).json({ ok: false, error: "not_enough_spots" });
     }
 
@@ -3832,7 +3832,7 @@ const baseTotalCents = ppp * players;
     const reference = makeRef("TR");
 
     // 4) Insert booking
-    const ins = await db.query(
+    const ins = await client.query(
       `
       INSERT INTO booking_bookings
         (course_id, play_date, tee_time, holes, players,
@@ -3880,7 +3880,7 @@ const baseTotalCents = ppp * players;
     // 5) Update booking_times booked_players + status
     const newBooked = bookedPlayers + players;
 
-    await db.query(
+    await client.query(
       `
       UPDATE booking_times
       SET
@@ -3946,18 +3946,17 @@ didBegin = false;
       emailOk: emailResult.emailOk,
       emailReason: emailResult.emailReason || null,
     });
-    } catch (e) {
+  } catch (e) {
     console.error("book POST", e);
 
+    // ✅ rollback if txn started
     try {
-      if (didBegin && client) await client.query("ROLLBACK");
-    } catch (rbErr) {
-      console.error("book POST rollback failed", rbErr);
-    }
+  if (didBegin && client) await client.query("ROLLBACK");
+} catch (rbErr) {
+  console.error("book POST rollback failed", rbErr);
+}
 
     return res.status(500).json({ ok: false, error: "internal_error" });
-  } finally {
-    try { if (client) client.release(); } catch {}
   }
 });
 
