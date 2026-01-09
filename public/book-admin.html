@@ -1062,14 +1062,22 @@ __activeDate = date;
   `;
 }
   function groupBookingsToSheet(timesRows, bookingsRows){
+  // ✅ Normalize times so "6:00", "06:00", "06:00:00" all match
+  const normTime = (v) => {
+    const s = String(v || "").trim();
+    const m = s.match(/(\d{1,2}):(\d{2})/);
+    if (!m) return s;
+    return String(m[1]).padStart(2,"0") + ":" + m[2];
+  };
+
   // Key by time+holes so 06:00 (18) and 06:00 (9) don't collide
-  const keyOf = (time, holes) => `${String(time || "")}__${String(holes ?? "")}`;
+  const keyOf = (time, holes) => `${normTime(time)}__${String(holes ?? "")}`;
 
   const byKey = new Map();
 
   (bookingsRows || []).forEach(b => {
-    const time = String(b.tee_time || b.time || "");
-    const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? "");
+    const time = normTime(b.tee_time || b.time || b.teeTime || "");
+    const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
     const key = keyOf(time, holes);
 
     const players = Math.max(1, Number(b.players || 1));
@@ -1086,7 +1094,7 @@ __activeDate = date;
         has_cart: !!b.has_cart,
         has_hire_clubs: !!b.has_hire_clubs,
 
-        // ✅ check-in (backend must return this; otherwise defaults false)
+        // ✅ check-in
         checked_in: !!b.checked_in,
       });
     }
@@ -1094,11 +1102,31 @@ __activeDate = date;
 
   const out = [];
   (timesRows || []).forEach(t => {
-    const time = String(t.tee_time || t.time || "");
+    const time = normTime(t.tee_time || t.time || "");
     const holes = Number(t.holes ?? "");
     const key = keyOf(time, holes);
 
     const arr = (byKey.get(key) || []).slice(0, 4);
+
+    // ✅ If tee_times says spots are booked but bookings list doesn't have them,
+    //    fill placeholders so the admin can see the time is taken on the sheet.
+    const bookedCount = Number(
+      t.booked_players ?? t.bookedPlayers ?? t.booked ?? 0
+    );
+
+    while (arr.length < Math.min(4, bookedCount)) {
+      arr.push({
+        reference: "",
+        name: "Booked",
+        email: "",
+        phone: "",
+        paid: false,
+        has_cart: false,
+        has_hire_clubs: false,
+        checked_in: false,
+      });
+    }
+
     const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
     out.push({ time, holes, slots });
   });
