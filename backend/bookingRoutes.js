@@ -2951,7 +2951,103 @@ res.json({ ok: true, deleted: r.rowCount || 0, sync });
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ NEW: toggle PAID for MANUAL slots (course admin)
+router.post("/course-admin/manual-slot-paid", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = req.courseAdmin.slug;
+    const id = req.body?.id ? Number(req.body.id) : null;
+    const paid = parseBool(req.body?.paid, false);
 
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    let r;
+
+    if (Number.isFinite(id) && id > 0) {
+      r = await db.query(
+        `UPDATE booking_manual_slots
+         SET paid=$3, updated_at=now()
+         WHERE id=$1 AND course_id=$2
+         RETURNING id, paid;`,
+        [id, courseId, paid]
+      );
+    } else {
+      const play_date = String(req.body?.date || "").trim();
+      const tee_time = String(req.body?.time || "").trim();
+      const holes = Number(req.body?.holes || 18);
+      const slot_index = Number(req.body?.slotIndex || 0);
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(play_date)) return res.status(400).json({ ok: false, error: "date_invalid" });
+      if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+      if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+      if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4)
+        return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
+
+      r = await db.query(
+        `UPDATE booking_manual_slots
+         SET paid=$6, updated_at=now()
+         WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 AND slot_index=$5
+         RETURNING id, paid;`,
+        [courseId, play_date, tee_time, holes, slot_index, paid]
+      );
+    }
+
+    if (!r.rows.length) return res.status(404).json({ ok: false, error: "manual_slot_not_found" });
+    return res.json({ ok: true, id: r.rows[0].id, paid: r.rows[0].paid });
+  } catch (e) {
+    console.error("course-admin/manual-slot-paid POST", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// ✅ NEW: toggle CHECKED-IN for MANUAL slots (course admin)
+router.post("/course-admin/manual-slot-checkin", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = req.courseAdmin.slug;
+    const id = req.body?.id ? Number(req.body.id) : null;
+    const checked_in = parseBool(req.body?.checked_in, false);
+
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    let r;
+
+    if (Number.isFinite(id) && id > 0) {
+      r = await db.query(
+        `UPDATE booking_manual_slots
+         SET checked_in=$3, updated_at=now()
+         WHERE id=$1 AND course_id=$2
+         RETURNING id, checked_in;`,
+        [id, courseId, checked_in]
+      );
+    } else {
+      const play_date = String(req.body?.date || "").trim();
+      const tee_time = String(req.body?.time || "").trim();
+      const holes = Number(req.body?.holes || 18);
+      const slot_index = Number(req.body?.slotIndex || 0);
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(play_date)) return res.status(400).json({ ok: false, error: "date_invalid" });
+      if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+      if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+      if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4)
+        return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
+
+      r = await db.query(
+        `UPDATE booking_manual_slots
+         SET checked_in=$6, updated_at=now()
+         WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 AND slot_index=$5
+         RETURNING id, checked_in;`,
+        [courseId, play_date, tee_time, holes, slot_index, checked_in]
+      );
+    }
+
+    if (!r.rows.length) return res.status(404).json({ ok: false, error: "manual_slot_not_found" });
+    return res.json({ ok: true, id: r.rows[0].id, checked_in: r.rows[0].checked_in });
+  } catch (e) {
+    console.error("course-admin/manual-slot-checkin POST", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 /* ✅✅✅ END NEW MANUAL SLOT ROUTES ✅✅✅ */
 
 // GET current template for course
