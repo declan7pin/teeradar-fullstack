@@ -2410,7 +2410,39 @@ RETURNING *;
   tee_time,
   holes,
 });
+    // ✅ NEW: send confirmation email when admin fills a slot (if email provided)
+    try {
+      if (email && isLikelyEmail(email)) {
+        const courseInfo = await db.query(
+          `SELECT name, cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
+          [courseId]
+        );
+        const courseName = String(courseInfo.rows[0]?.name || slug);
 
+        const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
+        const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
+
+        const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
+        const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
+
+        await sendBookingEmail({
+          to: email,
+          courseName,
+          date: play_date,
+          time: tee_time,
+          holes,
+          players: 1,
+          reference,
+          pricePerPlayerCents: 0,
+          totalCents: 0,
+          cartCents,
+          hireClubsCents,
+          source: "manual",
+        });
+      }
+    } catch (e) {
+      console.warn("admin fill-slot email failed (non-fatal):", e?.message || e);
+    }
 return res.json({ ok: true, row: r.rows[0] || null, cart_qty, hire_clubs_qty, sync });
   } catch (e) {
     console.error("admin/fill-slot POST", e);
