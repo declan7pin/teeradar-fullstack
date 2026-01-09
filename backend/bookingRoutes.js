@@ -3774,10 +3774,11 @@ if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining)
   });
 }
     const courseCartFeeCents = Number(courseRow.cart_fee_cents || 0);
-    const courseHireClubsFeeCents = Number(courseRow.hire_clubs_fee_cents || 0);
+const courseHireClubsFeeCents = Number(courseRow.hire_clubs_fee_cents || 0);
 
-    const cart_fee_cents = has_cart ? courseCartFeeCents : 0;
-    const hire_clubs_fee_cents = has_hire_clubs ? courseHireClubsFeeCents : 0;
+// charge per unit (qty). if you want “per booking” instead, keep your old version.
+const cart_fee_cents = cart_qty > 0 ? courseCartFeeCents * cart_qty : 0;
+const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire_clubs_qty : 0;
 
     if (!Number.isFinite(cart_fee_cents) || cart_fee_cents < 0 || cart_fee_cents > 10000000) {
       return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
