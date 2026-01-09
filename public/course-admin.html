@@ -348,8 +348,12 @@
     if (!slug) throw new Error("slug_required");
     if (!key) throw new Error("bypass_key_required");
 
+        const method = String(opts.method || "GET").toUpperCase();
+    const hasBody = opts.body != null;
+
     const headers = {
-      "content-type": "application/json",
+      // ✅ don’t force content-type on GET/HEAD (avoids OPTIONS preflight / CORS issues)
+      ...(hasBody && method !== "GET" && method !== "HEAD" ? { "content-type": "application/json" } : {}),
       "x-course-admin-key": key,
       "x-course-slug": slug,
       ...(opts.headers || {}),
