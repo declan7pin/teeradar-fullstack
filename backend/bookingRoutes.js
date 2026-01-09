@@ -3897,8 +3897,8 @@ const baseTotalCents = ppp * players;
     );
 
     // 6) Commit
-    await db.query("COMMIT");
-    didBegin = false;
+    await client.query("COMMIT");
+didBegin = false;
 
     // ✅ analytics
     recordEvent({
