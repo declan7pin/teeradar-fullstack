@@ -335,6 +335,8 @@ async function sendBookingEmail({
   totalCents,
   cartCents,
   hireClubsCents,
+  // ✅ NEW (optional): show “Manual booking” vs normal
+  source = "online", // "online" | "manual"
 }) {
   const result = { emailOk: false, emailReason: "" };
 
@@ -354,19 +356,33 @@ async function sendBookingEmail({
     return result;
   }
 
-  const subject = `TeeRadar booking confirmed — ${reference}`;
-
-  const cartLine = `
-    <tr><td style="padding:6px 0;color:#64748b">Cart</td><td style="padding:6px 0">${fmtMoney(cartCents || 0)}</td></tr>
-  `;
-  const hireClubsLine = `
-    <tr><td style="padding:6px 0;color:#64748b">Hire clubs</td><td style="padding:6px 0">${fmtMoney(hireClubsCents || 0)}</td></tr>
-  `;
+  const subject =
+    source === "manual"
+      ? `TeeRadar manual booking confirmed — ${reference}`
+      : `TeeRadar booking confirmed — ${reference}`;
 
   const extrasCents = Number(cartCents || 0) + Number(hireClubsCents || 0);
 
+  const cartLine =
+    Number(cartCents || 0) > 0
+      ? `<tr><td style="padding:6px 0;color:#64748b">Cart</td><td style="padding:6px 0">${fmtMoney(cartCents || 0)}</td></tr>`
+      : "";
+
+  const hireClubsLine =
+    Number(hireClubsCents || 0) > 0
+      ? `<tr><td style="padding:6px 0;color:#64748b">Hire clubs</td><td style="padding:6px 0">${fmtMoney(hireClubsCents || 0)}</td></tr>`
+      : "";
+
+  const totalAll = Number(totalCents || 0) + extrasCents;
+
+  const badge =
+    source === "manual"
+      ? `<div style="display:inline-block;background:#eef2ff;color:#3730a3;padding:4px 10px;border-radius:999px;font-size:12px;margin-bottom:10px;">Manual booking</div>`
+      : "";
+
   const html = `
     <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.5;color:#0f172a">
+      ${badge}
       <h2 style="margin:0 0 10px">✅ Booking confirmed</h2>
       <p style="margin:0 0 12px">Reference: <b>${reference}</b></p>
 
@@ -376,10 +392,10 @@ async function sendBookingEmail({
         <tr><td style="padding:6px 0;color:#64748b">Time</td><td style="padding:6px 0">${time}</td></tr>
         <tr><td style="padding:6px 0;color:#64748b">Players</td><td style="padding:6px 0">${players}</td></tr>
         <tr><td style="padding:6px 0;color:#64748b">Holes</td><td style="padding:6px 0">${holes}</td></tr>
-        <tr><td style="padding:6px 0;color:#64748b">Price</td><td style="padding:6px 0">${fmtMoney(pricePerPlayerCents)} per player</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Price</td><td style="padding:6px 0">${fmtMoney(pricePerPlayerCents || 0)} per player</td></tr>
         ${cartLine}
         ${hireClubsLine}
-        <tr><td style="padding:6px 0;color:#64748b">Total</td><td style="padding:6px 0"><b>${fmtMoney(totalCents + extrasCents)}</b></td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Total</td><td style="padding:6px 0"><b>${fmtMoney(totalAll)}</b></td></tr>
       </table>
 
       <p style="margin:14px 0 0;color:#64748b;font-size:12px">
