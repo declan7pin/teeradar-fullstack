@@ -3004,7 +3004,7 @@ router.get("/course-template", requireCourseAdmin, async (req, res) => {
 // PUT save template for course
 router.put("/course-template", requireCourseAdmin, async (req, res) => {
   try {
-    const slug = String(req.body?.slug || "").trim().toLowerCase();
+    const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
     const timezone = String(req.body?.timezone || "Australia/Perth").trim() || "Australia/Perth";
     const template =
   req.body?.template && typeof req.body.template === "object"
