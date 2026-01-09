@@ -3850,9 +3850,10 @@ if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_c
     const timeRow = t.rows[0];
 
     if (String(timeRow.status || "").toUpperCase() !== "AVAILABLE") {
-      await client.query("ROLLBACK");
-      return res.status(409).json({ ok: false, error: "time_not_available" });
-    }
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(409).json({ ok: false, error: "time_not_available" });
+}
 
     const maxPlayers = Number(timeRow.max_players || 0);
     const bookedPlayers = Number(timeRow.booked_players || 0);
