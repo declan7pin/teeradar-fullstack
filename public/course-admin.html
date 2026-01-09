@@ -588,11 +588,20 @@ function normTime(v){
     for (let i=0;i<players;i++){
       if (!byKey.has(key)) byKey.set(key, []);
       byKey.get(key).push({
-        reference: b.reference || "",
-        name: b.name || b.golfer_name || "",
-        email: b.email || b.golfer_email || "",
-        phone: b.phone || b.golfer_phone || "",
-        paid: !!b.paid,
+                reference: (
+          b.reference ??
+          b.ref ??
+          b.booking_reference ??
+          b.bookingReference ??
+          b.booking_ref ??
+          b.reference_code ??
+          b.referenceCode ??
+          b.code ??
+          b.confirmation ??
+          b.confirmation_code ??
+          b.confirmationCode ??
+          ""
+        ),
 
         cart_qty: Number(b.cart_qty ?? 0),
         hire_clubs_qty: Number(b.hire_clubs_qty ?? 0),
