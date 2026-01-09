@@ -3946,17 +3946,18 @@ didBegin = false;
       emailOk: emailResult.emailOk,
       emailReason: emailResult.emailReason || null,
     });
-  } catch (e) {
+    } catch (e) {
     console.error("book POST", e);
 
-    // ✅ rollback if txn started
     try {
-  if (didBegin && client) await client.query("ROLLBACK");
-} catch (rbErr) {
-  console.error("book POST rollback failed", rbErr);
-}
+      if (didBegin && client) await client.query("ROLLBACK");
+    } catch (rbErr) {
+      console.error("book POST rollback failed", rbErr);
+    }
 
     return res.status(500).json({ ok: false, error: "internal_error" });
+  } finally {
+    try { if (client) client.release(); } catch {}
   }
 });
 
