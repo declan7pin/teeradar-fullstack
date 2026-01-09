@@ -3819,38 +3819,6 @@ const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire
       return res.status(409).json({ ok: false, error: "not_enough_spots" });
     }
 
-    // 2) Add-on inventory checks by overlap (carts/clubs)
-    const cartCapacity = Number(courseRow.cart_qty || 0);
-    const clubsCapacity = Number(courseRow.hire_clubs_qty || 0);
-
-    if (cart_qty > 0 || hire_clubs_qty > 0) {
-      const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage({
-        courseId,
-        startAtIso,
-        endAtIso,
-      });
-
-      const cartRemaining = Math.max(0, cartCapacity - cartsUsed);
-      const clubsRemaining = Math.max(0, clubsCapacity - clubsUsed);
-
-      if (cart_qty > 0 && cartCapacity > 0 && cart_qty > cartRemaining) {
-        await db.query("ROLLBACK");
-        return res.status(409).json({
-          ok: false,
-          error: "cart_sold_out",
-          remaining: cartRemaining,
-        });
-      }
-
-      if (hire_clubs_qty > 0 && clubsCapacity > 0 && hire_clubs_qty > clubsRemaining) {
-        await db.query("ROLLBACK");
-        return res.status(409).json({
-          ok: false,
-          error: "hire_clubs_sold_out",
-          remaining: clubsRemaining,
-        });
-      }
-    }
 
     // 3) Price calc
 const ppp = Number(timeRow.price_per_player_cents || 0);
