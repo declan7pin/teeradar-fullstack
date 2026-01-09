@@ -3992,18 +3992,23 @@ didBegin = false;
       emailReason: emailResult.emailReason || null,
     });
   } catch (e) {
-    console.error("book POST", e);
+  console.error("book POST", e);
 
-    // ✅ rollback if txn started
-    try {
-  if (didBegin && client) await client.query("ROLLBACK");
-} catch (rbErr) {
-  console.error("book POST rollback failed", rbErr);
-}
-
-    return res.status(500).json({ ok: false, error: "internal_error" });
+  try {
+    if (client && didBegin) {
+      await client.query("ROLLBACK");
+      didBegin = false;
+    }
+  } catch (rbErr) {
+    console.error("book POST rollback failed", rbErr);
   }
-});
+
+  return res.status(500).json({ ok: false, error: "internal_error" });
+} finally {
+  try {
+    if (client) client.release();
+  } catch {}
+}
 
 // ✅ NEW: Booking Analytics (uses real bookings + existing analytics table)
 router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req, res) => {
