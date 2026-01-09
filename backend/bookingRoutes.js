@@ -3660,9 +3660,11 @@ async function advisoryLockForSlot(client, { courseId, dateYmd, timeHhMm }) {
   return key;
 }
 router.post("/book", async (req, res) => {
+  let client = null;
   let didBegin = false;
 
   try {
+    client = await db.connect();
     const slug = normSlug(req.body?.slug);
     const date = String(req.body?.date || "").trim();
     const time = String(req.body?.time || "").trim();
