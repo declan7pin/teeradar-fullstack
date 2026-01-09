@@ -883,9 +883,12 @@ try{
 
             if (!teeTime) throw new Error("tee_time_missing");
 
-            // ✅ NEW: only ask for name + qty + notes
+                        // ✅ Ask for details (email is needed if you want confirmation sent)
             const name = (prompt("Name:", "") || "").trim();
             if (!name) return;
+
+            const email = (prompt("Email (needed for confirmation):", "") || "").trim();
+            const phone = (prompt("Phone (optional):", "") || "").trim();
 
             const cartsRaw = prompt("Cart qty (0-4):", "0") || "0";
             const clubsRaw = prompt("Clubs qty (0-4):", "0") || "0";
