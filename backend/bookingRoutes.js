@@ -3852,9 +3852,8 @@ if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining)
     }
 
     // 3) Price calc
-    const ppp = Number(timeRow.price_per_player_cents || 0);
-    baseTotalCents = ppp * players;
-
+const ppp = Number(timeRow.price_per_player_cents || 0);
+const baseTotalCents = ppp * players;
     // add-ons are per-booking (not per-player) in your schema
     const addonsCents =
       (cart_qty > 0 ? cart_fee_cents : 0) +
