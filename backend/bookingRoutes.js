@@ -3781,11 +3781,16 @@ const cart_fee_cents = cart_qty > 0 ? courseCartFeeCents * cart_qty : 0;
 const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire_clubs_qty : 0;
 
     if (!Number.isFinite(cart_fee_cents) || cart_fee_cents < 0 || cart_fee_cents > 10000000) {
-      return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
-    }
-    if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_clubs_fee_cents > 10000000) {
-      return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
-    }
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
+}
+
+if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_clubs_fee_cents > 10000000) {
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
+}
 
     // 1) Lock the booking_times row for this slot
     const t = await client.query(
