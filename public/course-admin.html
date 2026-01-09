@@ -768,7 +768,7 @@ function normTime(v){
     (r.notes ? `Notes: ${String(r.notes)}` : "")
   ].filter(Boolean).join(", ") || "—"
 }</td>
-          <td><code>${(r.reference || "")}</code></td>
+          <td><code>${(r.reference ?? r.ref ?? r.booking_reference ?? r.bookingReference ?? r.booking_ref ?? r.code ?? "")}</code></td>
           <td>${(r.status || "")}</td>
         `;
         tb.appendChild(tr);
