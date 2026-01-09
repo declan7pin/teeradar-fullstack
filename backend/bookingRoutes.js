@@ -2313,9 +2313,16 @@ const has_hire_clubs = hire_clubs_qty > 0;
       return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
     }
 
-    if (!hasFirstAndLastName(name)) return res.status(400).json({ ok: false, error: "name_required_first_last" });
-    if (!isLikelyEmail(email)) return res.status(400).json({ ok: false, error: "email_required_valid" });
+    // ✅ name required (allow single name for walk-ins if you want)
+// If you still want first+last only, keep hasFirstAndLastName() instead.
+if (!String(name || "").trim()) {
+  return res.status(400).json({ ok: false, error: "name_required" });
+}
 
+// ✅ email optional — only validate if provided
+if (email && !isLikelyEmail(email)) {
+  return res.status(400).json({ ok: false, error: "email_invalid" });
+}
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 const courseRowQ = await db.query(
