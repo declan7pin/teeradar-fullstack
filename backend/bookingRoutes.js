@@ -2957,7 +2957,7 @@ res.json({ ok: true, deleted: r.rowCount || 0, sync });
 // GET current template for course
 router.get("/course-template", requireCourseAdmin, async (req, res) => {
   try {
-    const slug = String(req.query.slug || "").trim().toLowerCase();
+    const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
     if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
 
     const c = await db.query(
