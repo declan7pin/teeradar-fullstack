@@ -3951,10 +3951,10 @@ didBegin = false;
 
     // ✅ rollback if txn started
     try {
-      if (didBegin) await db.query("ROLLBACK");
-    } catch (rbErr) {
-      console.error("book POST rollback failed", rbErr);
-    }
+  if (didBegin && client) await client.query("ROLLBACK");
+} catch (rbErr) {
+  console.error("book POST rollback failed", rbErr);
+}
 
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
