@@ -463,39 +463,7 @@ function normTime(v){
     </div>
   `;
 }
-// ✅ NEW: normalize booking-like rows into the shape the sheet expects
-function normalizeBookingLikeRow(b){
-  return {
-    reference: (
-      b.reference ??
-      b.ref ??
-      b.booking_reference ??
-      b.bookingReference ??
-      b.booking_ref ??
-      b.reference_code ??
-      b.referenceCode ??
-      b.code ??
-      b.confirmation ??
-      b.confirmation_code ??
-      b.confirmationCode ??
-      ""
-    ),
-    name: (b.name ?? b.hold_name ?? b.holdName ?? "").trim(),
-    email: (b.email ?? "").trim(),
-    phone: (b.phone ?? "").trim(),
 
-    paid: !!(b.paid ?? b.is_paid ?? b.paid_flag ?? false),
-    checked_in: !!(b.checked_in ?? b.checkedIn ?? false),
-
-    cart_qty: Number(b.cart_qty ?? b.cartQty ?? 0) || 0,
-    hire_clubs_qty: Number(b.hire_clubs_qty ?? b.hireClubsQty ?? 0) || 0,
-
-    has_cart: !!(b.has_cart || b.hasCart || (Number(b.cart_qty ?? b.cartQty ?? 0) > 0)),
-    has_hire_clubs: !!(b.has_hire_clubs || b.hasHireClubs || (Number(b.hire_clubs_qty ?? b.hireClubsQty ?? 0) > 0)),
-
-    notes: String(b.notes ?? b.note ?? "").trim(),
-  };
-}
   const name = _escape(item.name || "");
   const email = _escape(item.email || "");
   const phone = _escape(item.phone || "");
@@ -594,7 +562,39 @@ function normalizeBookingLikeRow(b){
     </div>
   `;
 }
+// ✅ NEW: normalize booking-like rows into the shape the sheet expects
+function normalizeBookingLikeRow(b){
+  return {
+    reference: (
+      b.reference ??
+      b.ref ??
+      b.booking_reference ??
+      b.bookingReference ??
+      b.booking_ref ??
+      b.reference_code ??
+      b.referenceCode ??
+      b.code ??
+      b.confirmation ??
+      b.confirmation_code ??
+      b.confirmationCode ??
+      ""
+    ),
+    name: (b.name ?? b.hold_name ?? b.holdName ?? "").trim(),
+    email: (b.email ?? "").trim(),
+    phone: (b.phone ?? "").trim(),
 
+    paid: !!(b.paid ?? b.is_paid ?? b.paid_flag ?? false),
+    checked_in: !!(b.checked_in ?? b.checkedIn ?? false),
+
+    cart_qty: Number(b.cart_qty ?? b.cartQty ?? 0) || 0,
+    hire_clubs_qty: Number(b.hire_clubs_qty ?? b.hireClubsQty ?? 0) || 0,
+
+    has_cart: !!(b.has_cart || b.hasCart || (Number(b.cart_qty ?? b.cartQty ?? 0) > 0)),
+    has_hire_clubs: !!(b.has_hire_clubs || b.hasHireClubs || (Number(b.hire_clubs_qty ?? b.hireClubsQty ?? 0) > 0)),
+
+    notes: String(b.notes ?? b.note ?? "").trim(),
+  };
+}
   function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
   // ✅ normalize "06:10", "6:10", "06:10:00" -> "06:10"
   const normTime = (v) => {
