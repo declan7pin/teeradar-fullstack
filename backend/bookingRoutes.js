@@ -1092,7 +1092,7 @@ router.delete("/admin/courses/:slug", requirePlatformAdmin, async (req, res) => 
     const slug = normSlug(req.params.slug);
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
 
-    const r = await client.query(`DELETE FROM booking_courses WHERE slug=$1;`, [slug]);
+    const r = await db.query(`DELETE FROM booking_courses WHERE slug=$1;`, [slug]);
     if (!r.rowCount) return res.status(404).json({ ok: false, error: "course_not_found" });
 
     res.json({ ok: true, deleted: slug });
