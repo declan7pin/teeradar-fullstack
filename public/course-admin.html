@@ -467,7 +467,20 @@ function normTime(v){
   const phone = _escape(item.phone || "");
 
   // ✅ RAW ref for API calls / selectors, escaped only for display
-  const refRaw = String(item.reference || "");
+  const refRaw = String(
+  item.reference ??
+  item.ref ??
+  item.booking_reference ??
+  item.bookingReference ??
+  item.booking_ref ??
+  item.reference_code ??
+  item.referenceCode ??
+  item.code ??
+  item.confirmation ??
+  item.confirmation_code ??
+  item.confirmationCode ??
+  ""
+);
   const refDisp = _escape(refRaw);
 
     // ✅ supports per-slot flags if backend returns them later (fallback to old fields)
