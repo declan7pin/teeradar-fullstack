@@ -677,43 +677,6 @@ function normalizeBookingLikeRow(b){
   return out;
 }
 
-  const out = [];
-  (timesRows || []).forEach(t => {
-    const time = normTime(t.tee_time || t.time || "");
-    const holes = Number(t.holes ?? "");
-    const key = keyOf(time, holes);
-
-        const arr = (byKey.get(key) || []).slice(0, 4);
-
-    // ✅ If tee_times says spots are booked but bookings list doesn't have them,
-    //    fill placeholders so the course can see the time is taken on the sheet.
-    const bookedCount = Number(
-      t.booked_players ?? t.bookedPlayers ?? t.booked ?? 0
-    );
-
-    while (arr.length < Math.min(4, bookedCount)) {
-      arr.push({
-        reference: "",
-        name: "Booked",
-        email: "",
-        phone: "",
-        paid: false,
-        cart_qty: 0,
-        hire_clubs_qty: 0,
-        has_cart: false,
-        has_hire_clubs: false,
-        notes: "",
-        checked_in: false,
-      });
-    }
-
-    const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
-    out.push({ time, holes, slots });
-  });
-
-  return out;
-}
-
   async function getMe(){
     const out = await j("/api/book/course-admin/me?slug=" + encodeURIComponent(getSlug()), { method:"GET" });
     $("who").textContent = `✅ ${out.slug || ""} — ${out.email || ""}`;
