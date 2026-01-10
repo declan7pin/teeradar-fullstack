@@ -1141,6 +1141,12 @@ function isSheetOpenForDate(d){
 
   // ✅ Manual BOOKING button (standalone) — this was wrongly nested before
 $("mBookBtn").onclick = async () => {
+  // ✅ ADD: prevent accidental double-binding during edits
+if (!window.__tr_mBookBound) window.__tr_mBookBound = false;
+if (window.__tr_mBookBound) {
+  console.warn("mBookBtn already bound — skipping rebind");
+} else {
+  window.__tr_mBookBound = true;
   $("manualMsg").textContent = "Creating booking...";
   try{
     await getMe();
