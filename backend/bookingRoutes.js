@@ -2601,7 +2601,7 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     const holes = Number(req.body?.holes || 18);
     const slot_index = Number(req.body?.slotIndex || 0);
 
-    const reference = String(req.body?.reference || "").trim() || makeRef("MAN");
+    let reference = String(req.body?.reference || "").trim();
     const name =
   req.body?.holdName
     ? String(req.body.holdName).trim()
