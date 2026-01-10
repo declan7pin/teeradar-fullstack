@@ -1303,10 +1303,36 @@ router.get("/admin/times", requirePlatformAdmin, async (req, res) => {
 
     const params = [courseId, date];
     let q = `
-      SELECT id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status
-      FROM booking_times
-      WHERE course_id = $1 AND play_date = $2::date
-    `;
+  SELECT
+    t.id                     AS time_id,
+    t.play_date,
+    t.tee_time,
+    t.holes,
+    t.max_players,
+    t.booked_players,
+    t.price_per_player_cents,
+    t.status,
+
+    -- ✅ booking linkage (this is the fix)
+    b.id                     AS booking_id,
+    b.reference              AS reference,
+    b.golfer_name            AS name,
+    b.golfer_email           AS email,
+    b.golfer_phone           AS phone,
+    b.paid                   AS paid,
+    b.checked_in             AS checked_in
+
+  FROM booking_times t
+  LEFT JOIN booking_bookings b
+    ON b.course_id = t.course_id
+   AND b.play_date  = t.play_date
+   AND b.tee_time   = t.tee_time
+   AND b.holes      = t.holes
+   AND b.status     = 'CONFIRMED'
+
+  WHERE t.course_id = $1
+    AND t.play_date = $2::date
+`;
     if (holes) {
       q += ` AND holes = $3`;
       params.push(holes);
