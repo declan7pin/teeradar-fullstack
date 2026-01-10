@@ -4022,7 +4022,18 @@ await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
 // ✅ check addon overlap usage (confirmed bookings + filled manual slots)
 const courseCartQty = Number(courseRow.cart_qty || 0);
 const courseClubsQty = Number(courseRow.hire_clubs_qty || 0);
+// ✅ NEW: if course doesn't offer the addon (qty=0), block selecting it
+if (cart_qty > 0 && courseCartQty <= 0) {
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(400).json({ ok: false, error: "cart_not_offered" });
+}
 
+if (hire_clubs_qty > 0 && courseClubsQty <= 0) {
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(400).json({ ok: false, error: "hire_clubs_not_offered" });
+}
 const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage({
   courseId,
   startAtIso,
