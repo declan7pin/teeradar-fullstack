@@ -599,7 +599,14 @@ function normTime(v){
     const checkedIn = !!(m.checked_in ?? m.checkedIn ?? m.is_checked_in ?? false);
 
     byKey.get(key).push({
-      reference: refRaw,                 // ✅ NOW the sheet has a ref (or id fallback)
+      reference:
+  m.reference ??
+  m.ref ??
+  m.booking_reference ??
+  m.bookingReference ??
+  m.reference_code ??
+  m.code ??
+  "",                 // ✅ NOW the sheet has a ref (or id fallback)
       name: holdName || "Manual hold",
       email,
       phone,
