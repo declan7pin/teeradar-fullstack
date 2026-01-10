@@ -2637,6 +2637,13 @@ const has_hire_clubs = bodyHasHireFlag ? parseBool(req.body?.has_hire_clubs, fal
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+    // ✅ reference: reuse existing ref for this tee time if present, otherwise create one
+if (!reference) {
+  reference = await getExistingManualRef(courseId, play_date, tee_time, holes);
+}
+if (!reference) {
+  reference = makeRef("MAN");
+}
 const courseRowQ = await db.query(
   `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
   [courseId]
