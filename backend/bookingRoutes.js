@@ -2212,8 +2212,9 @@ const cart_qty = Math.max(0, Math.min(4, Number(req.body?.cart_qty ?? req.body?.
 const hire_clubs_qty = Math.max(0, Math.min(4, Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? 0)));
 const notes = req.body?.notes ? String(req.body.notes).trim() : "";
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
-    if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
-    if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
+if (!/^\d{4}-\d{2}-\d{2}$/.test(play_date)) return res.status(400).json({ ok: false, error: "date_invalid" });
+if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
     if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4) {
       return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
