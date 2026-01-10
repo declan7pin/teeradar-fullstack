@@ -608,48 +608,18 @@ function normalizeBookingLikeRow(b){
   const keyOf = (time, holes) => `${normTime(time)}__${String(holes ?? "")}`;
 
   const byKey = new Map();
-     // ✅ pull any reference if backend provides it (manual booking / manual slot id)
-    const refRaw = String(
-      m.reference ??
-      m.ref ??
-      m.booking_reference ??
-      m.bookingReference ??
-      m.booking_ref ??
-      m.reference_code ??
-      m.referenceCode ??
-      m.code ??
-      m.confirmation ??
-      m.confirmation_code ??
-      m.confirmationCode ??
-      m.id ??                      // ✅ fallback: use manual slot id as a “ref”
-      ""
-    ).trim();
 
-    const email = String(m.email ?? "").trim();
-    const phone = String(m.phone ?? "").trim();
-    const paid = !!(m.paid ?? m.is_paid ?? m.paid_flag ?? false);
-    const checkedIn = !!(m.checked_in ?? m.checkedIn ?? m.is_checked_in ?? false);
+  // ✅ Treat manual rows as booking-like rows (1 row = 1 occupied slot)
+  (manualRows || []).forEach(m => {
+    const time = normTime(m.tee_time || m.time || m.teeTime || "");
+    const holes = Number(m.holes ?? m.hole_count ?? m.num_holes ?? m.holeCount ?? "");
+    const key = keyOf(time, holes);
 
-    byKey.get(key).push({
-      reference:
-  m.reference ??
-  m.ref ??
-  m.booking_reference ??
-  m.bookingReference ??
-  m.reference_code ??
-  m.code ??
-  "",                 // ✅ NOW the sheet has a ref (or id fallback)
-      name: holdName || "Manual hold",
-      email,
-      phone,
-      paid,
-      cart_qty: cartQty,
-      hire_clubs_qty: clubsQty,
-      has_cart: cartQty > 0,
-      has_hire_clubs: clubsQty > 0,
-      notes,
-      checked_in: checkedIn,
-    });
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(normalizeBookingLikeRow(m));
+  });
+
+  // ✅ Normal bookings (players = slots)
   (bookingsRows || []).forEach(b => {
     const time = normTime(b.tee_time || b.time || b.teeTime || "");
     const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
@@ -658,32 +628,46 @@ function normalizeBookingLikeRow(b){
     const players = Math.max(1, Number(b.players || 1));
     for (let i=0;i<players;i++){
       if (!byKey.has(key)) byKey.set(key, []);
-      byKey.get(key).push({
-                reference: (
-          b.reference ??
-          b.ref ??
-          b.booking_reference ??
-          b.bookingReference ??
-          b.booking_ref ??
-          b.reference_code ??
-          b.referenceCode ??
-          b.code ??
-          b.confirmation ??
-          b.confirmation_code ??
-          b.confirmationCode ??
-          ""
-        ),
-
-        cart_qty: Number(b.cart_qty ?? 0),
-        hire_clubs_qty: Number(b.hire_clubs_qty ?? 0),
-        has_cart: !!(b.has_cart || Number(b.cart_qty ?? 0) > 0),
-        has_hire_clubs: !!(b.has_hire_clubs || Number(b.hire_clubs_qty ?? 0) > 0),
-
-        notes: b.notes || b.note || "",
-        checked_in: !!b.checked_in,
-      });
+      byKey.get(key).push(normalizeBookingLikeRow(b));
     }
   });
+
+  const out = [];
+  (timesRows || []).forEach(t => {
+    const time = normTime(t.tee_time || t.time || "");
+    const holes = Number(t.holes ?? "");
+    const key = keyOf(time, holes);
+
+    const arr = (byKey.get(key) || []).slice(0, 4);
+
+    // ✅ If tee_times says spots are booked but bookings list doesn't have them,
+    //    fill placeholders so the course can see the time is taken on the sheet.
+    const bookedCount = Number(
+      t.booked_players ?? t.bookedPlayers ?? t.booked ?? 0
+    );
+
+    while (arr.length < Math.min(4, bookedCount)) {
+      arr.push({
+        reference: "",
+        name: "Booked",
+        email: "",
+        phone: "",
+        paid: false,
+        cart_qty: 0,
+        hire_clubs_qty: 0,
+        has_cart: false,
+        has_hire_clubs: false,
+        notes: "",
+        checked_in: false,
+      });
+    }
+
+    const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
+    out.push({ time, holes, slots });
+  });
+
+  return out;
+}
 
   const out = [];
   (timesRows || []).forEach(t => {
