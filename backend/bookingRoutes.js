@@ -4238,7 +4238,7 @@ didBegin = false;
         holes,
         players,
         pricePerPlayerCents: ppp,
-        totalCents: totalCents + addonsCents,
+        totalCents,
         addonsCents,
         cart_qty,
         hire_clubs_qty,
