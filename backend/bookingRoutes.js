@@ -1727,7 +1727,7 @@ function _diffDaysInclusive(startYmd, endYmd) {
 async function _courseIdAndNameFromSlug(slug) {
   const s = normSlug(slug);
   if (!s) return null;
-  const r = await client.query(`SELECT id, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [s]);
+  const r = await db.query(`SELECT id, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [s]);
   if (!r.rows.length) return null;
   return { id: r.rows[0].id, name: r.rows[0].name };
 }
