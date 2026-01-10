@@ -2270,24 +2270,7 @@ if (!reference) {
 if (!reference) {
   reference = makeRef("MAN");
 }
-// ✅ NEW: if a reference already exists for this tee time, reuse it (so you never have to type it)
-async function getExistingManualRef(courseId, play_date, tee_time, holes) {
-  const r = await db.query(
-    `
-    SELECT reference
-    FROM booking_manual_slots
-    WHERE course_id = $1
-      AND play_date = $2::date
-      AND tee_time = $3
-      AND holes = $4
-      AND COALESCE(reference,'') <> ''
-    ORDER BY updated_at DESC, id DESC
-    LIMIT 1;
-    `,
-    [courseId, play_date, tee_time, holes]
-  );
-  return r.rows[0]?.reference ? String(r.rows[0].reference) : "";
-}
+
 // ✅ compute usage window for addon overlap checks
 const courseRowQ = await db.query(
   `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
