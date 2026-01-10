@@ -2214,9 +2214,6 @@ router.post("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
     const holes = Number(req.body?.holes || 18);
     const slot_index = Number(req.body?.slotIndex || 0);
 
-    // allow frontend to send a reference; otherwise create one
-    const reference = String(req.body?.reference || "").trim() || makeRef("MAN");
-
     // ✅ accept holdName aliases from frontend
 const name =
   req.body?.holdName
@@ -2248,6 +2245,14 @@ if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, er
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+    // ✅ reference: reuse existing ref for this tee time if present, otherwise create one
+let reference = String(req.body?.reference || "").trim();
+if (!reference) {
+  reference = await getExistingManualRef(courseId, play_date, tee_time, holes);
+}
+if (!reference) {
+  reference = makeRef("MAN");
+}
 // ✅ compute usage window for addon overlap checks
 const courseRowQ = await db.query(
   `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
