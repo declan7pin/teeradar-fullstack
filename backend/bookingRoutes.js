@@ -3706,18 +3706,32 @@ router.post("/course-admin/booking-paid", requireCourseAdmin, async (req, res) =
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-    const r = await db.query(
-      `
-      UPDATE booking_bookings
-      SET paid=$3
-      WHERE reference=$1 AND course_id=$2
-      RETURNING reference, paid;
-      `,
-      [reference, courseId, paid]
-    );
+    // 1) Try real bookings table first
+let r = await db.query(
+  `
+  UPDATE booking_bookings
+  SET paid=$3
+  WHERE reference=$1 AND course_id=$2
+  RETURNING reference, paid;
+  `,
+  [reference, courseId, paid]
+);
 
-    if (!r.rows.length) return res.status(404).json({ ok: false, error: "booking_not_found" });
-    res.json({ ok: true, reference, paid });
+// 2) If not found, try manual slots table
+if (!r.rows.length) {
+  r = await db.query(
+    `
+    UPDATE booking_manual_slots
+    SET paid=$3, updated_at=now()
+    WHERE reference=$1 AND course_id=$2
+    RETURNING reference, paid;
+    `,
+    [reference, courseId, paid]
+  );
+}
+
+if (!r.rows.length) return res.status(404).json({ ok: false, error: "booking_not_found" });
+res.json({ ok: true, reference, paid });
   } catch (e) {
     console.error("course-admin/booking-paid", e);
     res.status(500).json({ ok: false, error: "internal_error" });
