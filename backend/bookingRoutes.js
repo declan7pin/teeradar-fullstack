@@ -2400,7 +2400,7 @@ const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
 const dur = durationMinsForHoles(courseRow, holes);
 const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
     // One reference groups multiple manual slots (if you ever fill multiple slots for one booking)
-    const reference = String(req.body?.reference || "").trim() || makeRef("MAN");
+    let reference = String(req.body?.reference || "").trim();
 
     // Upsert into booking_manual_slots
     const r = await db.query(
