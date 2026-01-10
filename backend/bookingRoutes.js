@@ -139,7 +139,7 @@ function durationMinsForHoles(courseRow, holes) {
 
 async function countOverlappingAddonUsage(client, { courseId, startAtIso, endAtIso }) {
   // Overlap rule: existing.start < new.end AND existing.end > new.start
-  const r = await db.query(
+  const r = await client.query(
     `
     SELECT
       COALESCE(SUM(carts_used),0)::int AS carts_used,
