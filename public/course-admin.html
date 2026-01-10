@@ -1008,7 +1008,7 @@ if (!refToUse) {
       if (kind === "paid") {
         await j("/api/book/course-admin/booking-paid", {
           method:"POST",
-          body: JSON.stringify({ reference: ref, slot, paid: val }) // ✅ slot added
+          body: JSON.stringify({ reference: refToUse, slot, paid: val }) // ✅ slot added
         });
 
         // ✅ update the correct badge (per slot)
