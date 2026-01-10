@@ -4121,13 +4121,15 @@ if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_c
     // 3) Price calc
 const ppp = Number(timeRow.price_per_player_cents || 0);
 const baseTotalCents = ppp * players;
-    // add-ons are per-booking (not per-player) in your schema
-    const addonsCents =
-      (cart_qty > 0 ? cart_fee_cents : 0) +
-      (hire_clubs_qty > 0 ? hire_clubs_fee_cents : 0);
 
-    const totalCents = baseTotalCents; // store base in total_cents
-    const reference = makeRef("TR");
+// add-ons are per-booking (not per-player) in your schema
+const addonsCents =
+  (cart_qty > 0 ? cart_fee_cents : 0) +
+  (hire_clubs_qty > 0 ? hire_clubs_fee_cents : 0);
+
+// ✅ store full total in DB
+const totalCents = baseTotalCents + addonsCents;
+const reference = makeRef("TR");
 
     // 4) Insert booking
     const ins = await client.query(
