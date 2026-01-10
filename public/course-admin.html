@@ -348,7 +348,12 @@
   const BYPASS_KEY = "tr_course_admin_key_bypass";
 
   const $ = (id) => document.getElementById(id);
-
+window.onerror = function(message, source, lineno, colno){
+  try{
+    const el = document.getElementById("viewMsg") || document.getElementById("msg");
+    if (el) el.textContent = "❌ JS error: " + message + " (line " + lineno + ")";
+  }catch{}
+};
   function getSlug(){ try { return (localStorage.getItem(SLUG_KEY) || "").trim().toLowerCase(); } catch { return ""; } }
   function getKey(){ try { return (localStorage.getItem(BYPASS_KEY) || "").trim(); } catch { return ""; } }
   function setSlug(v){ try { localStorage.setItem(SLUG_KEY, String(v||"").trim().toLowerCase()); } catch {} }
