@@ -1194,7 +1194,7 @@ if (window.__tr_mBookBound) {
     $("manualMsg").textContent = "❌ " + (e?.message || "Failed to create booking");
   }
 };
-
+} // ✅ ADD: closes the one-time binding guard
 
 // ✅ Manual BOOKING button should work immediately (not only after clicking Add)
 $("mBookBtn").onclick = async () => {
