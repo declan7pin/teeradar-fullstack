@@ -1023,7 +1023,7 @@ if (!refToUse) {
       if (kind === "checkin") {
         await j("/api/book/course-admin/booking-checkin", {
           method:"POST",
-          body: JSON.stringify({ reference: ref, slot, checked_in: val }) // ✅ slot added
+          body: JSON.stringify({ reference: refToUse, slot, checked_in: val }) // ✅ slot added
         });
       }
 
