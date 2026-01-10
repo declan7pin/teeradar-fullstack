@@ -979,12 +979,30 @@ try{
     const msgEl = tb.querySelector(`[data-msg="${CSS.escape(slotKey)}"]`);
     if (msgEl) msgEl.textContent = "Saving...";
 
-    // ✅ Manual holds don't have a booking reference (can't update paid/checkin)
-    if (!ref) {
-      cb.checked = !cb.checked;
-      if (msgEl) msgEl.textContent = "❌ reference_required";
-      return;
+   // ✅ If reference is missing (common for manual holds), allow entering it so Paid/Check-in can work.
+let refToUse = ref;
+
+if (!refToUse) {
+  const entered = (prompt("No reference on this slot.\n\nPaste the booking reference (e.g. MAN-P47PPU):", "") || "").trim();
+  if (!entered) {
+    cb.checked = !cb.checked;
+    if (msgEl) msgEl.textContent = "❌ reference_required";
+    return;
+  }
+  refToUse = entered;
+
+  // ✅ persist on the checkbox so future toggles don’t prompt again
+  cb.setAttribute("data-ref", refToUse);
+
+  // ✅ also show it in the UI (if the slot has a code element)
+  try{
+    const slotBox = cb.closest(".slotBox");
+    if (slotBox && !slotBox.querySelector("code")) {
+      const meta = slotBox.querySelector(".slotMeta");
+      if (meta) meta.insertAdjacentHTML("beforeend", `<span><code>${_escape(refToUse)}</code></span>`);
     }
+  }catch{}
+}
 
     try{
       if (kind === "paid") {
