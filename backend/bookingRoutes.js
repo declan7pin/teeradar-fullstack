@@ -137,7 +137,7 @@ function durationMinsForHoles(courseRow, holes) {
   return Number(courseRow?.duration_18_mins || 390);
 }
 
-async function countOverlappingAddonUsage({ courseId, startAtIso, endAtIso }) {
+async function countOverlappingAddonUsage(client, { courseId, startAtIso, endAtIso }) {
   // Overlap rule: existing.start < new.end AND existing.end > new.start
   const r = await db.query(
     `
