@@ -576,35 +576,41 @@ function normTime(v){
   const keyOf = (time, holes) => `${normTime(time)}__${String(holes ?? "")}`;
 
   const byKey = new Map();
-  // ✅ ALSO consume manual holds so they appear as "taken" on the sheet
-    (manualRows || []).forEach(m => {
-    const time = normTime(m.tee_time || m.time || m.teeTime || "");
-    const holes = Number(m.holes ?? m.hole_count ?? m.num_holes ?? m.holeCount ?? "");
-    const key = keyOf(time, holes);
+     // ✅ pull any reference if backend provides it (manual booking / manual slot id)
+    const refRaw = String(
+      m.reference ??
+      m.ref ??
+      m.booking_reference ??
+      m.bookingReference ??
+      m.booking_ref ??
+      m.reference_code ??
+      m.referenceCode ??
+      m.code ??
+      m.confirmation ??
+      m.confirmation_code ??
+      m.confirmationCode ??
+      m.id ??                      // ✅ fallback: use manual slot id as a “ref”
+      ""
+    ).trim();
 
-    // ✅ pull hold name + qty from manual slot row
-    const holdName = String(m.hold_name ?? m.holdName ?? m.name ?? "").trim();
-    const cartQty = Number(m.cart_qty ?? m.cartQty ?? 0) || 0;
-    const clubsQty = Number(m.hire_clubs_qty ?? m.hireClubsQty ?? 0) || 0;
-    const notes = String(m.notes ?? m.note ?? "").trim();
+    const email = String(m.email ?? "").trim();
+    const phone = String(m.phone ?? "").trim();
+    const paid = !!(m.paid ?? m.is_paid ?? m.paid_flag ?? false);
+    const checkedIn = !!(m.checked_in ?? m.checkedIn ?? m.is_checked_in ?? false);
 
-    if (!byKey.has(key)) byKey.set(key, []);
-
-    // Each manual row represents 1 occupied slot
     byKey.get(key).push({
-      reference: "",                 // manual holds don't have a booking ref
+      reference: refRaw,                 // ✅ NOW the sheet has a ref (or id fallback)
       name: holdName || "Manual hold",
-      email: "",
-      phone: "",
-      paid: false,
+      email,
+      phone,
+      paid,
       cart_qty: cartQty,
       hire_clubs_qty: clubsQty,
       has_cart: cartQty > 0,
       has_hire_clubs: clubsQty > 0,
       notes,
-      checked_in: false,
+      checked_in: checkedIn,
     });
-  });
   (bookingsRows || []).forEach(b => {
     const time = normTime(b.tee_time || b.time || b.teeTime || "");
     const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
