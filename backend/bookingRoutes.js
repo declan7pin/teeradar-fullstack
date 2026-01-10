@@ -1075,7 +1075,7 @@ router.delete("/admin/courses/:slug", requirePlatformAdmin, async (req, res) => 
     const slug = normSlug(req.params.slug);
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
 
-    const r = await db.query(`DELETE FROM booking_courses WHERE slug=$1;`, [slug]);
+    const r = await client.query(`DELETE FROM booking_courses WHERE slug=$1;`, [slug]);
     if (!r.rowCount) return res.status(404).json({ ok: false, error: "course_not_found" });
 
     res.json({ ok: true, deleted: slug });
@@ -1684,7 +1684,7 @@ function _diffDaysInclusive(startYmd, endYmd) {
 async function _courseIdAndNameFromSlug(slug) {
   const s = normSlug(slug);
   if (!s) return null;
-  const r = await db.query(`SELECT id, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [s]);
+  const r = await client.query(`SELECT id, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [s]);
   if (!r.rows.length) return null;
   return { id: r.rows[0].id, name: r.rows[0].name };
 }
