@@ -136,7 +136,24 @@ function durationMinsForHoles(courseRow, holes) {
   if (h === 9) return Number(courseRow?.duration_9_mins || 210);
   return Number(courseRow?.duration_18_mins || 390);
 }
-
+// ✅ NEW: reuse existing ref for a tee time (manual slots)
+async function getExistingManualRef(courseId, play_date, tee_time, holes) {
+  const r = await db.query(
+    `
+    SELECT reference
+    FROM booking_manual_slots
+    WHERE course_id = $1
+      AND play_date = $2::date
+      AND tee_time = $3
+      AND holes = $4
+      AND COALESCE(reference,'') <> ''
+    ORDER BY updated_at DESC, id DESC
+    LIMIT 1;
+    `,
+    [courseId, play_date, tee_time, holes]
+  );
+  return r.rows[0]?.reference ? String(r.rows[0].reference) : "";
+}
 async function countOverlappingAddonUsage(client, { courseId, startAtIso, endAtIso }) {
   // Overlap rule: existing.start < new.end AND existing.end > new.start
   const r = await client.query(
