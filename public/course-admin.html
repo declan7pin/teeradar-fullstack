@@ -1106,8 +1106,8 @@ function isSheetOpenForDate(d){
     await loadManualSlots();
   };
 
-  $("mAddBtn").onclick = async () => {
-    $("mBookBtn").onclick = async () => {
+  // ✅ Manual BOOKING button (standalone) — this was wrongly nested before
+$("mBookBtn").onclick = async () => {
   $("manualMsg").textContent = "Creating booking...";
   try{
     await getMe();
@@ -1149,10 +1149,68 @@ function isSheetOpenForDate(d){
     });
 
     $("manualMsg").textContent = "✅ Booking created + email sent";
-    await loadManualSlots(); // optional: still refresh manual list
-    if (isSheetOpenForDate(playDate)) await viewSheet(); // ✅ refresh sheet
+    await loadManualSlots();
+    if (isSheetOpenForDate(playDate)) await viewSheet();
   }catch(e){
-    $("manualMsg").textContent = "❌ " + e.message;
+    $("manualMsg").textContent = "❌ " + (e?.message || "Failed to create booking");
+  }
+};
+
+
+// ✅ Manual SLOT button (standalone)
+$("mAddBtn").onclick = async () => {
+  $("manualMsg").textContent = "Adding manual tee time...";
+  $("manualBox").style.display = "none";
+  $("manualBody").innerHTML = "";
+
+  try{
+    await getMe();
+
+    const playDate = ($("mDate").value || "").trim();
+    const teeTime = ($("mTime").value || "").trim();
+    const holes = Number($("mHoles").value || 18);
+    const maxPlayers = Number($("mMaxPlayers").value || 4);
+    const pricePerPlayerCents = Number($("mPrice").value || 0);
+
+    const holdName = ($("mHoldName")?.value || "").trim();
+    const cartQty = Math.max(0, Math.min(4, Number($("mCartQty")?.value || 0)));
+    const hireClubsQty = Math.max(0, Math.min(4, Number($("mClubsQty")?.value || 0)));
+
+    if (!playDate) throw new Error("play_date_required");
+    if (!teeTime) throw new Error("tee_time_required");
+    if (!/^(\d{1,2}):(\d{2})$/.test(teeTime)) throw new Error("tee_time must be HH:MM (e.g. 06:30)");
+
+    await j("/api/book/course-admin/manual-slot", {
+      method:"POST",
+      body: JSON.stringify({
+        date: playDate,
+        teeTime,
+        holes,
+        maxPlayers,
+        pricePerPlayerCents,
+
+        // show on daily sheet
+        holdName,
+        hold_name: holdName,
+        name: holdName,
+
+        // add-ons for the hold
+        cartQty,
+        hireClubsQty,
+        cart_qty: cartQty,
+        hire_clubs_qty: hireClubsQty
+      })
+    });
+
+    $("manualMsg").textContent = "✅ Added manual tee time";
+    await loadManualSlots();
+
+    if (isSheetOpenForDate(playDate)) {
+      $("viewMsg").textContent = "Refreshing daily sheet...";
+      await viewSheet();
+    }
+  }catch(e){
+    $("manualMsg").textContent = "❌ " + (e?.message || "Failed to add manual slot");
   }
 };
     $("manualMsg").textContent = "Adding manual tee time...";
