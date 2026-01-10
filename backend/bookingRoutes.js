@@ -2519,7 +2519,13 @@ router.delete("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
-
+// ✅ reference: reuse existing ref for this tee time if present, otherwise create one
+if (!reference) {
+  reference = await getExistingManualRef(courseId, play_date, tee_time, holes);
+}
+if (!reference) {
+  reference = makeRef("MAN");
+}
     const r = await db.query(
       `
       DELETE FROM booking_manual_slots
