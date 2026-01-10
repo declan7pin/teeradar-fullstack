@@ -3855,11 +3855,11 @@ const durationMins = durationMinsForHoles(courseRow, holes);
         const dur = durationMinsForHoles(courseRow, r.holes);
         const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-        const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage({
-          courseId,
-          startAtIso,
-          endAtIso,
-        });
+        const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(client, {
+  courseId,
+  startAtIso,
+  endAtIso,
+});
 
         const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
 const clubsRemaining = Math.max(0, courseHireClubsQty - clubsUsed);
@@ -4034,7 +4034,7 @@ if (hire_clubs_qty > 0 && courseClubsQty <= 0) {
   didBegin = false;
   return res.status(400).json({ ok: false, error: "hire_clubs_not_offered" });
 }
-const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage({
+const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(client, {
   courseId,
   startAtIso,
   endAtIso,
