@@ -636,17 +636,30 @@ function normalizeBookingLikeRow(b){
   });
 
   // ✅ Normal bookings (players = slots)
-  (bookingsRows || []).forEach(b => {
-    const time = normTime(b.tee_time || b.time || b.teeTime || "");
-    const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
-    const key = keyOf(time, holes);
+// ✅ Show cart/clubs qty ONCE per booking (on first slot only)
+(bookingsRows || []).forEach(b => {
+  const time = normTime(b.tee_time || b.time || b.teeTime || "");
+  const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
+  const key = keyOf(time, holes);
 
-    const players = Math.max(1, Number(b.players || 1));
-    for (let i=0;i<players;i++){
-      if (!byKey.has(key)) byKey.set(key, []);
-      byKey.get(key).push(normalizeBookingLikeRow(b));
+  const players = Math.max(1, Number(b.players || 1));
+
+  for (let i = 0; i < players; i++) {
+    if (!byKey.has(key)) byKey.set(key, []);
+
+    const row = normalizeBookingLikeRow(b);
+
+    // ✅ only show add-ons on Slot 1 for that booking
+    if (i > 0) {
+      row.cart_qty = 0;
+      row.hire_clubs_qty = 0;
+      row.has_cart = false;
+      row.has_hire_clubs = false;
     }
-  });
+
+    byKey.get(key).push(row);
+  }
+});
 
   const out = [];
   (timesRows || []).forEach(t => {
