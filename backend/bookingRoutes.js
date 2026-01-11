@@ -2334,7 +2334,7 @@ const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
 const dur = durationMinsForHoles(courseRow, holes);
 const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 // ✅ ENFORCE add-on inventory (carts/clubs) before upsert
-const inv = await enforceAddonInventory(db, {
+const inv = await enforceAddonInventory(client, {
   courseId,
   startAtIso,
   endAtIso,
@@ -2342,6 +2342,8 @@ const inv = await enforceAddonInventory(db, {
   hireClubsQtyWanted: hire_clubs_qty,
 });
 if (!inv.ok) {
+  await client.query("ROLLBACK");
+  didBegin = false;
   return res.status(409).json({ ok: false, ...inv });
 }
     const r = await db.query(
@@ -2464,7 +2466,7 @@ const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
 const dur = durationMinsForHoles(courseRow, holes);
 const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 // ✅ ENFORCE add-on inventory (carts/clubs) before upsert
-const inv = await enforceAddonInventory(db, {
+const inv = await enforceAddonInventory(client, {
   courseId,
   startAtIso,
   endAtIso,
@@ -2472,6 +2474,8 @@ const inv = await enforceAddonInventory(db, {
   hireClubsQtyWanted: hire_clubs_qty,
 });
 if (!inv.ok) {
+  await client.query("ROLLBACK");
+  didBegin = false;
   return res.status(409).json({ ok: false, ...inv });
 }
     // One reference groups multiple manual slots (if you ever fill multiple slots for one booking)
@@ -2926,7 +2930,7 @@ hireClubsQtyWanted: hireClubsQty,
       const durMins = durationMinsForHoles(courseDurRow, holes);
       const endAtIso = new Date(new Date(startAtIso).getTime() + durMins * 60 * 1000).toISOString();
 // ✅ ENFORCE add-on inventory (carts/clubs) before upsert
-const inv = await enforceAddonInventory(db, {
+const inv = await enforceAddonInventory(client, {
   courseId,
   startAtIso,
   endAtIso,
@@ -2934,6 +2938,8 @@ const inv = await enforceAddonInventory(db, {
   hireClubsQtyWanted: hire_clubs_qty,
 });
 if (!inv.ok) {
+  await client.query("ROLLBACK");
+  didBegin = false;
   return res.status(409).json({ ok: false, ...inv });
 }
       const r = await db.query(
@@ -3894,7 +3900,7 @@ const durationMins = durationMinsForHoles(courseRow, holes);
         const dur = durationMinsForHoles(courseRow, r.holes);
         const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 // ✅ ENFORCE add-on inventory (carts/clubs) before upsert
-const inv = await enforceAddonInventory(db, {
+const inv = await enforceAddonInventory(client, {
   courseId,
   startAtIso,
   endAtIso,
@@ -3902,6 +3908,8 @@ const inv = await enforceAddonInventory(db, {
   hireClubsQtyWanted: hire_clubs_qty,
 });
 if (!inv.ok) {
+  await client.query("ROLLBACK");
+  didBegin = false;
   return res.status(409).json({ ok: false, ...inv });
 }
         const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(client, {
@@ -4065,7 +4073,7 @@ let startAtIso = toIsoDateTimeLocal(date, time);
 const dur = durationMinsForHoles(courseRow, holes);
 const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 // ✅ ENFORCE add-on inventory (carts/clubs) before upsert
-const inv = await enforceAddonInventory(db, {
+const inv = await enforceAddonInventory(client, {
   courseId,
   startAtIso,
   endAtIso,
@@ -4073,6 +4081,8 @@ const inv = await enforceAddonInventory(db, {
   hireClubsQtyWanted: hire_clubs_qty,
 });
 if (!inv.ok) {
+  await client.query("ROLLBACK");
+  didBegin = false;
   return res.status(409).json({ ok: false, ...inv });
 }
 // ✅ NEW: lock addon inventory per course (prevents carts/clubs oversell across overlapping times)
