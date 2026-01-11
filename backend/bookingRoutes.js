@@ -197,6 +197,59 @@ async function countOverlappingAddonUsage(client, { courseId, startAtIso, endAtI
     clubsUsed: Number(r.rows[0]?.clubs_used || 0),
   };
 }
+async function enforceAddonInventory(client, {
+  courseId,
+  startAtIso,
+  endAtIso,
+  cartQtyWanted = 0,
+  hireClubsQtyWanted = 0,
+}) {
+  const wantedCarts = Math.max(0, Number(cartQtyWanted || 0));
+  const wantedClubs = Math.max(0, Number(hireClubsQtyWanted || 0));
+
+  // If nothing requested, nothing to enforce.
+  if (wantedCarts === 0 && wantedClubs === 0) {
+    return { ok: true };
+  }
+
+  // Course capacity
+  const capQ = await client.query(
+    `
+    SELECT
+      COALESCE(cart_qty,0)::int AS cart_qty,
+      COALESCE(hire_clubs_qty,0)::int AS hire_clubs_qty
+    FROM booking_courses
+    WHERE id=$1
+    LIMIT 1;
+    `,
+    [courseId]
+  );
+
+  const caps = capQ.rows[0] || { cart_qty: 0, hire_clubs_qty: 0 };
+
+  // Current usage in overlap window (confirmed bookings + filled manual slots)
+  const used = await countOverlappingAddonUsage(client, { courseId, startAtIso, endAtIso });
+
+  const cartsRemaining = Math.max(0, Number(caps.cart_qty || 0) - Number(used.cartsUsed || 0));
+  const clubsRemaining = Math.max(0, Number(caps.hire_clubs_qty || 0) - Number(used.clubsUsed || 0));
+
+  if (wantedCarts > cartsRemaining || wantedClubs > clubsRemaining) {
+    return {
+      ok: false,
+      error: "addons_unavailable",
+      remaining: {
+        carts: cartsRemaining,
+        hireClubs: clubsRemaining,
+      },
+      requested: {
+        carts: wantedCarts,
+        hireClubs: wantedClubs,
+      },
+    };
+  }
+
+  return { ok: true };
+}
 function makeRef(prefix = "TR") {
   // e.g. TR-8F2KQ9
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
