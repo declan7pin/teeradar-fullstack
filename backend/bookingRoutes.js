@@ -2717,81 +2717,186 @@ RETURNING *;
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-// ✅ NEW: Course admin — create a "manual booking" by auto-filling empty slot(s)
-// POST /api/book/course-admin/manual-booking
-router.post("/course-admin/manual-booking", requireCourseAdmin, async (req, res) => {
+// ✅ REPLACE your existing manual-slot create route with THIS
+// Supports booking multiple players by inserting multiple rows into booking_manual_slots
+router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) => {
+  let client = null;
+  let didBegin = false;
+
   try {
     const slug = req.courseAdmin.slug;
 
-    const play_date = String(req.body?.date || "").trim(); // YYYY-MM-DD
-    const tee_time = String(req.body?.teeTime || req.body?.time || "").trim(); // HH:MM
-    const holes = Number(req.body?.holes || 18);
-    const players = Math.max(1, Math.min(4, Number(req.body?.players || 1)));
+    // Accept a few body aliases so we don't break existing frontend calls
+    const playDate = String(_pickAny(req.body, ["play_date", "playDate", "date"], "") || "").trim();
+    const tee_time = String(_pickAny(req.body, ["tee_time", "teeTime", "time"], "") || "").trim();
+    const holes = Number(_pickAny(req.body, ["holes"], 18));
 
-    const name = String(req.body?.name || "").trim();
-    const email = String(req.body?.email || "").trim().toLowerCase(); // optional
-    const phone = req.body?.phone ? String(req.body.phone).trim() : "";
+    // ✅ NEW: players count (default 1, clamp 1..4)
+    const playersRaw = Number(_pickAny(req.body, ["players", "numPlayers"], 1));
+    const players = Math.max(1, Math.min(4, Number.isFinite(playersRaw) ? playersRaw : 1));
 
-    const paid = parseBool(req.body?.paid, false);
-    const checked_in = parseBool(req.body?.checked_in, false);
+    const name = String(_pickAny(req.body, ["name"], "") || "").trim();
+    const email = String(_pickAny(req.body, ["email"], "") || "").trim().toLowerCase();
+    const phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
-    const cartQty = Math.max(0, Math.min(4, Number(req.body?.cartQty ?? req.body?.cart_qty ?? 0)));
-    const hireClubsQty = Math.max(0, Math.min(4, Number(req.body?.hireClubsQty ?? req.body?.hire_clubs_qty ?? 0)));
-    const notes = req.body?.notes ? String(req.body.notes).trim() : "";
+    const paid = parseBool(_pickAny(req.body, ["paid"], false), false);
+    const checked_in = parseBool(_pickAny(req.body, ["checked_in", "checkedIn"], false), false);
 
-    const pricePerPlayerCents = Number(req.body?.pricePerPlayerCents ?? 0);
-    const maxPlayers = Math.max(1, Math.min(4, Number(req.body?.maxPlayers ?? 4)));
+    const has_cart = parseBool(_pickAny(req.body, ["has_cart", "hasCart"], false), false);
+    const has_hire_clubs = parseBool(_pickAny(req.body, ["has_hire_clubs", "hasHireClubs"], false), false);
 
-    if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(play_date)) return res.status(400).json({ ok: false, error: "date_invalid" });
-    if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+    // quantities (default 1 if selected)
+    const cart_qty_raw = Number(_pickAny(req.body, ["cart_qty", "cartQty"], has_cart ? 1 : 0));
+    const hire_clubs_qty_raw = Number(
+      _pickAny(req.body, ["hire_clubs_qty", "hireClubsQty"], has_hire_clubs ? 1 : 0)
+    );
+
+    const cart_qty = Math.max(0, Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : (has_cart ? 1 : 0)));
+    const hire_clubs_qty = Math.max(
+      0,
+      Math.min(4, Number.isFinite(hire_clubs_qty_raw) ? hire_clubs_qty_raw : (has_hire_clubs ? 1 : 0))
+    );
+
+    const notes = req.body?.notes ? String(req.body.notes).trim() : null;
+
+    // Basic validations (keep light so we don't break existing behavior)
+    if (!playDate) return res.status(400).json({ ok: false, error: "date_required" });
+    if (!tee_time || !/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
-    if (!name) return res.status(400).json({ ok: false, error: "name_required" });
-    // ✅ email is NOT required for manual bookings
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-    // ✅ Ensure the tee time row exists (so it shows on the daily sheet)
-    await db.query(
+    client = await db.connect();
+    await client.query("BEGIN");
+    didBegin = true;
+
+    // ✅ Lock this tee time manual-slot group so two admins can't collide slot_index
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
+      `manualslots:${courseId}:${playDate}:${tee_time}:${holes}`,
+    ]);
+
+    // Determine next slot_index start for this tee time
+    const mx = await client.query(
       `
-      INSERT INTO booking_times
-        (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, created_at, updated_at)
-      VALUES
-        ($1, $2::date, $3, $4, $5, 0, $6, 'AVAILABLE', now(), now())
-      ON CONFLICT (course_id, play_date, tee_time, holes)
-      DO UPDATE SET
-        max_players = GREATEST(booking_times.max_players, EXCLUDED.max_players),
-        price_per_player_cents = CASE
-          WHEN EXCLUDED.price_per_player_cents > 0 THEN EXCLUDED.price_per_player_cents
-          ELSE booking_times.price_per_player_cents
+      SELECT COALESCE(MAX(slot_index), 0)::int AS max_slot
+      FROM booking_manual_slots
+      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4;
+      `,
+      [courseId, playDate, tee_time, holes]
+    );
+
+    const startIndex = Number(mx.rows[0]?.max_slot || 0) + 1;
+
+    // Use one shared reference for the whole group
+    const reference = String(_pickAny(req.body, ["reference"], "") || "").trim() || makeRef("MS");
+
+    const insertedRows = [];
+
+    // ✅ Insert N rows (one per player)
+    for (let i = 0; i < players; i++) {
+      const slot_index = startIndex + i;
+
+      const ins = await client.query(
+        `
+        INSERT INTO booking_manual_slots
+          (course_id, play_date, tee_time, holes, slot_index,
+           reference, name, email, phone,
+           paid, checked_in,
+           has_cart, has_hire_clubs,
+           cart_qty, hire_clubs_qty,
+           notes,
+           created_at, updated_at)
+        VALUES
+          ($1, $2::date, $3, $4, $5,
+           $6, $7, $8, $9,
+           $10, $11,
+           $12, $13,
+           $14, $15,
+           $16,
+           now(), now())
+        RETURNING
+          play_date::text AS play_date,
+          tee_time, holes, slot_index, reference,
+          name, email, phone, paid, checked_in,
+          has_cart, has_hire_clubs, cart_qty, hire_clubs_qty,
+          notes, created_at, updated_at;
+        `,
+        [
+          courseId,
+          playDate,
+          tee_time,
+          holes,
+          slot_index,
+          reference,
+          name || null,
+          email || null,
+          phone || null,
+          paid,
+          checked_in,
+          cart_qty > 0,
+          hire_clubs_qty > 0,
+          cart_qty,
+          hire_clubs_qty,
+          notes,
+        ]
+      );
+
+      insertedRows.push(ins.rows[0]);
+    }
+
+    // ✅ OPTIONAL BUT RECOMMENDED:
+    // If you track tee-time capacity using booking_times.booked_players,
+    // increment it by "players" so availability doesn't oversell.
+    // This is safe: if booking_times row doesn't exist, it does nothing.
+    await client.query(
+      `
+      UPDATE booking_times
+      SET
+        booked_players = booked_players + $5,
+        status = CASE
+          WHEN status = 'BLOCKED' THEN 'BLOCKED'
+          WHEN (booked_players + $5) >= max_players THEN 'BOOKED'
+          ELSE status
         END,
         updated_at = now()
+      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4;
       `,
-      [courseId, play_date, tee_time, holes, maxPlayers, Math.max(0, pricePerPlayerCents)]
+      [courseId, playDate, tee_time, holes, players]
     );
 
-    // Find taken slots
-    const taken = await db.query(
-      `
-      SELECT slot_index
-      FROM booking_manual_slots
-      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
-        AND COALESCE(name,'') <> ''
-      `,
-      [courseId, play_date, tee_time, holes]
-    );
+    await client.query("COMMIT");
+    didBegin = false;
 
-    const takenSet = new Set((taken.rows || []).map((r) => Number(r.slot_index)));
-    const freeSlots = [1, 2, 3, 4].filter((i) => !takenSet.has(i));
+    return res.json({
+      ok: true,
+      course_slug: slug,
+      play_date: playDate,
+      tee_time,
+      holes,
+      players,
+      reference,
+      manualSlotsInserted: insertedRows,
+    });
+  } catch (e) {
+    console.error("course-admin/manual-slot POST", e);
 
-    if (freeSlots.length < players) {
-      return res.status(409).json({
-        ok: false,
-        error: "not_enough_empty_slots",
-        remainingSlots: freeSlots.length,
-      });
+    try {
+      if (client && didBegin) {
+        await client.query("ROLLBACK");
+        didBegin = false;
+      }
+    } catch (rbErr) {
+      console.error("manual-slot rollback failed", rbErr);
     }
+
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  } finally {
+    try {
+      if (client) client.release();
+    } catch {}
+  }
+});
 
     const reference = makeRef("MAN");
     const filled = [];
