@@ -3957,7 +3957,7 @@ router.post("/availability", async (req, res) => {
 
     // ...your existing code here...
     // After your db query that fetches the times, add:
-    dbgLog(debugId, "availability_result_counts", {
+       dbgLog(debugId, "availability_result_counts", {
       timesReturned: Array.isArray(times) ? times.length : null,
     });
 
@@ -3969,15 +3969,11 @@ router.post("/availability", async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: "internal_error",
-      debugId, // ✅ this will show on the UI response if you print it
-});
-
-    res.json({ ok: true, slots });
-  } catch (e) {
-    console.error("availability", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+      debugId,
+    });
   }
 });
+
 // ✅ NEW: per-slot transaction lock key (prevents race + addon oversell)
 function advisoryKeyForSlot({ courseId, dateYmd, timeHhMm }) {
   // key = courseId * 10^12 + yyyymmdd * 10^4 + minutes
