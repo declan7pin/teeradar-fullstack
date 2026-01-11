@@ -3189,11 +3189,12 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const freeSlots = [1, 2, 3, 4].filter((i) => !takenSet.has(i));
 
     if (freeSlots.length < players) {
-      return res.status(409).json({
-        ok: false,
-        error: "not_enough_empty_slots",
-        remainingSlots: freeSlots.length,
-    }
+  return res.status(409).json({
+    ok: false,
+    error: "not_enough_empty_slots",
+    remainingSlots: freeSlots.length,
+  });
+}
 
     const reference = makeRef("MAN");
     const filled = [];
