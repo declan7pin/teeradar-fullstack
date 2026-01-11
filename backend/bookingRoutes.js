@@ -3043,8 +3043,8 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const paid = parseBool(req.body?.paid, false);
     const checked_in = parseBool(req.body?.checked_in, false);
 
-    const cartQty = Math.max(0, Math.min(4, Number(req.body?.cartQty ?? req.body?.cart_qty ?? 0)));
-    const hireClubsQty = Math.max(0, Math.min(4, Number(req.body?.hireClubsQty ?? req.body?.hire_clubs_qty ?? 0)));
+    cartQtyWanted: cartQty,
+hireClubsQtyWanted: hireClubsQty,
     const notes = req.body?.notes ? String(req.body.notes).trim() : "";
 
     // required
