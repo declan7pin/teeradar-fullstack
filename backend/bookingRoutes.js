@@ -2859,12 +2859,9 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
     const paid = parseBool(req.body?.paid, false);
-    const checked_in = parseBool(req.body?.checked_in, false);
+const checked_in = parseBool(req.body?.checked_in, false);
 
-    cartQtyWanted: cartQty,
-hireClubsQtyWanted: hireClubsQty,
-    const notes = req.body?.notes ? String(req.body.notes).trim() : "";
-
+const notes = req.body?.notes ? String(req.body.notes).trim() : "";
     // required
     if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(play_date)) return res.status(400).json({ ok: false, error: "date_invalid" });
