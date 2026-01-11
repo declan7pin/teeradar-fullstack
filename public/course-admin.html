@@ -1158,7 +1158,7 @@ $("mBookBtn").onclick = async () => {
     const holes = Number($("mHoles").value || 18);
     const maxPlayers = Number($("mMaxPlayers").value || 4);
     const pricePerPlayerCents = Number($("mPrice").value || 0);
-
+const players = Math.max(1, Math.min(4, Number($("mPlayers")?.value || 1)));
     const name = ($("mHoldName")?.value || "").trim();
     const email = ($("mEmail")?.value || "").trim();
     const phone = ($("mPhone")?.value || "").trim();
