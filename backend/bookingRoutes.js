@@ -223,6 +223,20 @@ async function enforceAddonInventory(client, {
     `,
     [courseId]
   );
+  const BOOKING_DEBUG = String(process.env.BOOKING_DEBUG || "").trim() === "1";
+
+function makeDebugId() {
+  return `dbg_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function dbgLog(debugId, label, obj) {
+  if (!BOOKING_DEBUG) return;
+  try {
+    console.log(`🧪[${debugId}] ${label}`, obj ?? "");
+  } catch {
+    console.log(`🧪[${debugId}] ${label}`);
+  }
+}
 
   const caps = capQ.rows[0] || { cart_qty: 0, hire_clubs_qty: 0 };
 
