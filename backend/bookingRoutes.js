@@ -224,6 +224,21 @@ async function enforceAddonInventory(client, {
     `,
     [courseId]
   );
+
+  const caps = capQ.rows[0] || { cart_qty: 0, hire_clubs_qty: 0 };
+
+  // Current usage in overlap window (confirmed bookings + filled manual slots)
+  const used = await countOverlappingAddonUsage(client, { courseId, startAtIso, endAtIso });
+
+  const cartsRemaining = Math.max(0, Number(caps.cart_qty || 0) - Number(used.cartsUsed || 0));
+  const clubsRemaining = Math.max(0, Number(caps.hire_clubs_qty || 0) - Number(used.clubsUsed || 0));
+
+  if (wantedCarts > cartsRemaining || wantedClubs > clubsRemaining) {
+    return {
+      ok: false,
+      error: "addons_unavailable",
+      remaining: { carts: cartsRemaining, hireClubs: clubsRemaining },
+      requested: { carts: wantedCarts, hireClubs: wantedClubs },
     };
   }
 
