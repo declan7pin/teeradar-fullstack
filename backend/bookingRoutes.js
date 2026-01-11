@@ -2874,21 +2874,10 @@ const has_cart =
 const has_hire_clubs =
   picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
 
-// quantities (default 1 if selected, clamp 0..4)
-const cart_qty_raw = Number(req.body?.cart_qty ?? req.body?.cartQty ?? (has_cart ? 1 : 0));
-const hire_clubs_qty_raw = Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? (has_hire_clubs ? 1 : 0));
-
-const cart_qty = Math.max(0, Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : (has_cart ? 1 : 0)));
-const hire_clubs_qty = Math.max(0, Math.min(4, Number.isFinite(hire_clubs_qty_raw) ? hire_clubs_qty_raw : (has_hire_clubs ? 1 : 0)));
-
 // final derived flags (qty can force false)
 const final_has_cart = cart_qty > 0;
 const final_has_hire_clubs = hire_clubs_qty > 0;
-const cart_qty_raw = Number(req.body?.cart_qty ?? req.body?.cartQty ?? 0);
-const hire_clubs_qty_raw = Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? 0);
 
-const cart_qty = Math.max(0, Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : 0));
-const hire_clubs_qty = Math.max(0, Math.min(4, Number.isFinite(hire_clubs_qty_raw) ? hire_clubs_qty_raw : 0));
 const notes = req.body?.notes ? String(req.body.notes).trim() : "";
     // required
     if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
