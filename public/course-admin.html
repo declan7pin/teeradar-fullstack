@@ -933,8 +933,8 @@ try{
             const cartQty = Math.max(0, Math.min(4, Number(cartsRaw || 0)));
             const hireClubsQty = Math.max(0, Math.min(4, Number(clubsRaw || 0)));
 
-            // ✅ One slot = one golfer (keeps your daily sheet logic consistent)
-            const players = 1;
+            const playersRaw = prompt("Players (1-4):", "1") || "1";
+const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
 
             // ✅ Post (send BOTH naming styles so it works with whichever backend you have)
             await j("/api/book/course-admin/booking", {
