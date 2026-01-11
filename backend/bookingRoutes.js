@@ -2585,131 +2585,176 @@ router.get("/course-admin/manual-slots", requireCourseAdmin, async (req, res) =>
   }
 });
 
-// POST upsert manual slot (COURSE ADMIN) ✅ now stores cart/clubs qty + notes
+// ✅ Course admin: create manual slots (supports multiple players)
+// POST /api/book/course-admin/manual-slot
+// Body: { date, time, holes, players, name, email?, phone?, paid?, checked_in?, cart_qty?, hire_clubs_qty?, notes? }
 router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) => {
+  let client = null;
+  let didBegin = false;
+
   try {
     const slug = req.courseAdmin.slug;
 
-    const play_date = String(req.body?.date || "").trim();
-    const tee_time = String(req.body?.time || "").trim();
-    const holes = Number(req.body?.holes || 18);
-    const slot_index = Number(req.body?.slotIndex || 0);
+    const playDate = String(_pickAny(req.body, ["play_date", "playDate", "date"], "") || "").trim();
+    const tee_time = String(_pickAny(req.body, ["tee_time", "teeTime", "time"], "") || "").trim();
+    const holes = Number(_pickAny(req.body, ["holes"], 18));
 
-    let reference = String(req.body?.reference || "").trim();
-    const name =
-  req.body?.holdName
-    ? String(req.body.holdName).trim()
-    : req.body?.hold_name
-      ? String(req.body.hold_name).trim()
-      : req.body?.name
-        ? String(req.body.name).trim()
-        : "";
-    const email = req.body?.email ? String(req.body.email).trim() : "";
-    const phone = req.body?.phone ? String(req.body.phone).trim() : "";
+    const playersRaw = Number(_pickAny(req.body, ["players", "numPlayers"], 1));
+    const players = Math.max(1, Math.min(4, Number.isFinite(playersRaw) ? playersRaw : 1));
 
-    const paid = parseBool(req.body?.paid, false);
-    const checked_in = parseBool(req.body?.checked_in, false);
+    const name = String(_pickAny(req.body, ["name"], "") || "").trim();
+    const email = String(_pickAny(req.body, ["email"], "") || "").trim().toLowerCase();
+    const phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
-    // ✅ quantities + notes (accept both snake_case + camelCase)
-    const cart_qty = Math.max(0, Math.min(4, Number(req.body?.cart_qty ?? req.body?.cartQty ?? 0)));
-    const hire_clubs_qty = Math.max(0, Math.min(4, Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? 0)));
-    const notes = req.body?.notes ? String(req.body.notes).trim() : "";
+    const paid = parseBool(_pickAny(req.body, ["paid"], false), false);
+    const checked_in = parseBool(_pickAny(req.body, ["checked_in", "checkedIn"], false), false);
 
-    // ✅ derive booleans from qty if caller didn't explicitly send them
-    const bodyHasCartFlag = Object.prototype.hasOwnProperty.call(req.body || {}, "has_cart");
-const bodyHasHireFlag = Object.prototype.hasOwnProperty.call(req.body || {}, "has_hire_clubs");
+    const cart_qty_raw = Number(_pickAny(req.body, ["cart_qty", "cartQty"], 0));
+    const hire_clubs_qty_raw = Number(_pickAny(req.body, ["hire_clubs_qty", "hireClubsQty"], 0));
+    const cart_qty = Math.max(0, Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : 0));
+    const hire_clubs_qty = Math.max(0, Math.min(4, Number.isFinite(hire_clubs_qty_raw) ? hire_clubs_qty_raw : 0));
 
-const has_cart = bodyHasCartFlag ? parseBool(req.body?.has_cart, false) : cart_qty > 0;
-const has_hire_clubs = bodyHasHireFlag ? parseBool(req.body?.has_hire_clubs, false) : hire_clubs_qty > 0;
+    const notes = req.body?.notes ? String(req.body.notes).trim() : null;
 
-    if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
-    if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+    if (!playDate) return res.status(400).json({ ok: false, error: "date_required" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(playDate)) return res.status(400).json({ ok: false, error: "date_invalid" });
+    if (!tee_time || !/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
-    if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4) {
-      return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
-    }
+    if (!name) return res.status(400).json({ ok: false, error: "name_required" });
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
-    // ✅ reference: reuse existing ref for this tee time if present, otherwise create one
-if (!reference) {
-  reference = await getExistingManualRef(courseId, play_date, tee_time, holes);
-}
-if (!reference) {
-  reference = makeRef("MAN");
-}
-    // ✅ reference: reuse existing ref for this tee time if present, otherwise create one
-if (!reference) {
-  reference = await getExistingManualRef(courseId, play_date, tee_time, holes);
-}
-if (!reference) {
-  reference = makeRef("MAN");
-}
-const courseRowQ = await db.query(
-  `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
-  [courseId]
-);
-const courseRow = courseRowQ.rows[0] || {};
-const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
-const dur = durationMinsForHoles(courseRow, holes);
-const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
-    const r = await db.query(
-      `
-      INSERT INTO booking_manual_slots
-  (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
-   paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes,
-   start_at, end_at,
-   updated_at)
-VALUES
-  ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
-   $17::timestamptz, $18::timestamptz,
-   now())
-ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
-DO UPDATE SET
-  reference = EXCLUDED.reference,
-  name = EXCLUDED.name,
-  email = EXCLUDED.email,
-  phone = EXCLUDED.phone,
-  paid = EXCLUDED.paid,
-  checked_in = EXCLUDED.checked_in,
-  has_cart = EXCLUDED.has_cart,
-  has_hire_clubs = EXCLUDED.has_hire_clubs,
-  cart_qty = EXCLUDED.cart_qty,
-  hire_clubs_qty = EXCLUDED.hire_clubs_qty,
-  notes = EXCLUDED.notes,
-  start_at = EXCLUDED.start_at,
-  end_at = EXCLUDED.end_at,
-  updated_at = now()
-RETURNING *;
-      `,
-      [
-  courseId,
-  play_date,
-  tee_time,
-  holes,
-  slot_index,
-  reference,
-  name || null,
-  email || null,
-  phone || null,
-  paid,
-  checked_in,
-  has_cart,
-  has_hire_clubs,
-  cart_qty,
-  hire_clubs_qty,
-  notes || null,
-  startAtIso,
-  endAtIso,
-]
-    );
 
+    // IMPORTANT: requires db.connect() to exist (pg Pool). If your db.js doesn't expose connect(),
+    // tell me and I’ll swap this to a safe non-transaction version.
+    client = await db.connect();
+    await client.query("BEGIN");
+    didBegin = true;
+
+    // lock this tee time group so slot_index doesn't collide
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
+      `manualslots:${courseId}:${playDate}:${tee_time}:${holes}`,
+    ]);
+
+    // find next slot_index start
+    const mx = await client.query(
+      `
+      SELECT COALESCE(MAX(slot_index), 0)::int AS max_slot
+      FROM booking_manual_slots
+      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4;
+      `,
+      [courseId, playDate, tee_time, holes]
+    );
+    const startIndex = Number(mx.rows[0]?.max_slot || 0) + 1;
+
+    // shared reference
+    const reference = String(_pickAny(req.body, ["reference"], "") || "").trim() || makeRef("MS");
+
+    // compute window once for overlap (per player row shares same window)
+    const courseDurQ = await client.query(
+      `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
+      [courseId]
+    );
+    const courseDurRow = courseDurQ.rows[0] || {};
+    const startAtIso = toIsoDateTimeLocal(playDate, tee_time);
+    const durMins = durationMinsForHoles(courseDurRow, holes);
+    const endAtIso = new Date(new Date(startAtIso).getTime() + durMins * 60 * 1000).toISOString();
+
+    const insertedRows = [];
+
+    for (let i = 0; i < players; i++) {
+      const slot_index = startIndex + i;
+
+      const ins = await client.query(
+        `
+        INSERT INTO booking_manual_slots
+          (course_id, play_date, tee_time, holes, slot_index,
+           reference, name, email, phone,
+           paid, checked_in,
+           has_cart, has_hire_clubs,
+           cart_qty, hire_clubs_qty,
+           notes,
+           start_at, end_at,
+           created_at, updated_at)
+        VALUES
+          ($1, $2::date, $3, $4, $5,
+           $6, $7, $8, $9,
+           $10, $11,
+           $12, $13,
+           $14, $15,
+           $16,
+           $17::timestamptz, $18::timestamptz,
+           now(), now())
+        RETURNING
+          play_date::text AS play_date,
+          tee_time, holes, slot_index, reference,
+          name, email, phone, paid, checked_in,
+          has_cart, has_hire_clubs, cart_qty, hire_clubs_qty,
+          notes, start_at, end_at, created_at, updated_at;
+        `,
+        [
+          courseId,
+          playDate,
+          tee_time,
+          holes,
+          slot_index,
+          reference,
+          name || null,
+          email || null,
+          phone || null,
+          paid,
+          checked_in,
+          cart_qty > 0,
+          hire_clubs_qty > 0,
+          cart_qty,
+          hire_clubs_qty,
+          notes,
+          startAtIso,
+          endAtIso,
+        ]
+      );
+
+      insertedRows.push(ins.rows[0]);
+    }
+
+    await client.query("COMMIT");
+    didBegin = false;
+
+    // keep booking_times in sync (your existing helper already handles this properly)
     const sync = await syncBookedPlayersForTime({
       courseId,
-      play_date,
+      play_date: playDate,
       tee_time,
       holes,
     });
+
+    return res.json({
+      ok: true,
+      course_slug: slug,
+      play_date: playDate,
+      tee_time,
+      holes,
+      players,
+      reference,
+      manualSlotsInserted: insertedRows,
+      sync,
+    });
+  } catch (e) {
+    console.error("course-admin/manual-slot POST", e);
+
+    try {
+      if (client && didBegin) await client.query("ROLLBACK");
+    } catch (rbErr) {
+      console.error("manual-slot rollback failed", rbErr);
+    }
+
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  } finally {
+    try {
+      if (client) client.release();
+    } catch {}
+  }
+});
 
     res.json({ ok: true, row: r.rows[0] || null, sync });
   } catch (e) {
