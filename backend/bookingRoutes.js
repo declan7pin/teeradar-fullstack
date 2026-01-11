@@ -2927,8 +2927,8 @@ const inv = await enforceAddonInventory(db, {
   courseId,
   startAtIso,
   endAtIso,
-  cartQtyWanted: cart_qty,
-  hireClubsQtyWanted: hire_clubs_qty,
+  cartQtyWanted: 0,
+  hireClubsQtyWanted: 0,
 });
 if (!inv.ok) {
   return res.status(409).json({ ok: false, ...inv });
