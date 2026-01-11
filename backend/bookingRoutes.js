@@ -3959,8 +3959,39 @@ return {
   clubsQty: courseHireClubsQty,
   durationMins: dur,
 };
-      })
-    );
+router.post("/availability", async (req, res) => {
+  const debugId = makeDebugId();
+
+  try {
+    dbgLog(debugId, "availability_request", {
+      path: req.originalUrl,
+      method: req.method,
+      slug: req.body?.slug ?? req.query?.slug ?? null,
+      date: req.body?.date ?? req.query?.date ?? null,
+      holes: req.body?.holes ?? req.query?.holes ?? null,
+      players: req.body?.players ?? req.query?.players ?? null,
+      timeFrom: req.body?.timeFrom ?? req.query?.timeFrom ?? null,
+      timeTo: req.body?.timeTo ?? req.query?.timeTo ?? null,
+    });
+
+    // ...your existing code here...
+    // After your db query that fetches the times, add:
+    dbgLog(debugId, "availability_result_counts", {
+      timesReturned: Array.isArray(times) ? times.length : null,
+    });
+
+    return res.json({ ok: true, times });
+  } catch (e) {
+    console.error(`❌ availability_error [${debugId}]`, e);
+    if (e?.stack) console.error(e.stack);
+
+    return res.status(500).json({
+      ok: false,
+      error: "internal_error",
+      debugId, // ✅ this will show on the UI response if you print it
+    });
+  }
+});
 
     res.json({ ok: true, slots });
   } catch (e) {
