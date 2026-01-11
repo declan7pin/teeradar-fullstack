@@ -2858,8 +2858,33 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const email = String(req.body?.email || "").trim().toLowerCase(); // optional
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
-    const paid = parseBool(req.body?.paid, false);
-const checked_in = parseBool(req.body?.checked_in, false);
+    // --- add-ons (course-admin manual booking) ---
+const addonIdsRaw = req.body?.addonIds ?? req.body?.addon_ids;
+const addonIds = Array.isArray(addonIdsRaw)
+  ? addonIdsRaw
+  : typeof addonIdsRaw === "string"
+  ? addonIdsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+  : [];
+
+const picked = new Set(addonIds);
+
+// addonIds wins, but booleans still supported
+const has_cart =
+  picked.size > 0 ? picked.has("cart") : parseBool(req.body?.has_cart, false);
+
+const has_hire_clubs =
+  picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
+
+// quantities (default 1 if selected, clamp 0..4)
+const cart_qty_raw = Number(req.body?.cart_qty ?? req.body?.cartQty ?? (has_cart ? 1 : 0));
+const hire_clubs_qty_raw = Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? (has_hire_clubs ? 1 : 0));
+
+const cart_qty = Math.max(0, Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : (has_cart ? 1 : 0)));
+const hire_clubs_qty = Math.max(0, Math.min(4, Number.isFinite(hire_clubs_qty_raw) ? hire_clubs_qty_raw : (has_hire_clubs ? 1 : 0)));
+
+// final derived flags (qty can force false)
+const final_has_cart = cart_qty > 0;
+const final_has_hire_clubs = hire_clubs_qty > 0;
 const cart_qty_raw = Number(req.body?.cart_qty ?? req.body?.cartQty ?? 0);
 const hire_clubs_qty_raw = Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? 0);
 
