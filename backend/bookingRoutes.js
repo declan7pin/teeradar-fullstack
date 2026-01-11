@@ -3119,7 +3119,6 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
         ok: false,
         error: "not_enough_empty_slots",
         remainingSlots: freeSlots.length,
-      });
     }
 
     const reference = makeRef("MAN");
