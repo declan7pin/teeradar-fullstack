@@ -3970,7 +3970,6 @@ router.post("/availability", async (req, res) => {
       ok: false,
       error: "internal_error",
       debugId, // ✅ this will show on the UI response if you print it
-    });
   }
 });
 
