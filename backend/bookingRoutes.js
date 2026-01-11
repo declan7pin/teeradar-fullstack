@@ -155,8 +155,12 @@ async function getExistingManualRef(courseId, play_date, tee_time, holes) {
   return r.rows[0]?.reference ? String(r.rows[0].reference) : "";
 }
 async function countOverlappingAddonUsage(client, { courseId, startAtIso, endAtIso }) {
-  // Overlap rule: existing.start < new.end AND existing.end > new.start
-  const r = await client.query(
+  const r = await client.query(`...`, [courseId, startAtIso, endAtIso]);
+  return {
+    cartsUsed: Number(r.rows[0]?.carts_used || 0),
+    clubsUsed: Number(r.rows[0]?.clubs_used || 0),
+  };
+}
     `
     SELECT
       COALESCE(SUM(carts_used),0)::int AS carts_used,
