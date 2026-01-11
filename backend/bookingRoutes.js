@@ -76,21 +76,7 @@ console.log("📧 booking email env check:", {
 // -----------------------------
 // Helpers
 // -----------------------------
-// ✅ DEBUG (toggle with BOOKING_DEBUG=1)
-const BOOKING_DEBUG = String(process.env.BOOKING_DEBUG || "").trim() === "1";
 
-function makeDebugId() {
-  return `dbg_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
-function dbgLog(debugId, label, obj) {
-  if (!BOOKING_DEBUG) return;
-  try {
-    console.log(`🧪[${debugId}] ${label}`, obj ?? "");
-  } catch {
-    console.log(`🧪[${debugId}] ${label}`);
-  }
-}
 function _timeToMinutes(hhmm) {
   const m = String(hhmm || "").match(/^(\d{2}):(\d{2})$/);
   if (!m) return null;
