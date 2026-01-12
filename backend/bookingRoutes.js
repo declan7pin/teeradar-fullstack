@@ -4069,6 +4069,17 @@ const durationMins = durationMinsForHoles(courseRow, holes);
     }).catch(() => {});
 
     const { rows } = await db.query(
+      if (debug) {
+  console.log("🧪 booking_times rows", {
+    rowsFound: rows?.length || 0,
+    courseId,
+    date,
+    holes,
+    players,
+    sM,
+    eM,
+  });
+}
       `
       SELECT tee_time, max_players, booked_players, holes, price_per_player_cents
       FROM booking_times
