@@ -3910,19 +3910,12 @@ const durationMins = durationMinsForHoles(courseRow, holes);
       [courseId, date, holes, sM, eM, players]
     );
 
-    const slots = await Promise.all(
+    const times = await Promise.all(
       (rows || []).map(async (r) => {
         const startAtIso = toIsoDateTimeLocal(date, r.tee_time);
         const dur = durationMinsForHoles(courseRow, r.holes);
         const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
-// ✅ ENFORCE add-on inventory (carts/clubs) before upsert
-const inv = await enforceAddonInventory(db, {
-  courseId,
-  startAtIso,
-  endAtIso,
-  cartQtyWanted: cart_qty,
-  hireClubsQtyWanted: hire_clubs_qty,
-});
+
 // ✅ don't throw 409 in a GET listing; just expose remaining counts
 // (booking validation happens in POST /availability)
         const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(db, {
