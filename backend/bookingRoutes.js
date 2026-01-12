@@ -4135,7 +4135,25 @@ return {
 }));
 
 // ✅ CLOSE THE GET /availability ROUTE **HERE**
-return res.json({ ok: true, times });
+return res.json({
+  ok: true,
+  times,
+  ...(debug
+    ? {
+        debug: {
+          slug,
+          date,
+          holes,
+          players,
+          earliest,
+          latest,
+          courseId,
+          courseName,
+          rowsFound: Array.isArray(rows) ? rows.length : null,
+        },
+      }
+    : {}),
+});
 } catch (e) {
   console.error("GET /availability error", e);
   return res.status(500).json({ ok: false, error: "internal_error" });
