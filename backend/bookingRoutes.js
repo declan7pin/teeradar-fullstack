@@ -3863,7 +3863,9 @@ const courseId = courseRow.id;
 const courseName = String(courseRow.name || "");
 const courseCartQty = Number(courseRow.cart_qty || 0);
 const courseHireClubsQty = Number(courseRow.hire_clubs_qty || 0);
-
+// ✅ availability listing does not "want" any addons (those are chosen at booking time)
+const cartQtyWanted = 0;
+const hireClubsQtyWanted = 0;
 // ✅ duration window helpers (used for add-on overlap checks)
 const durationMins = durationMinsForHoles(courseRow, holes);
 
@@ -3910,10 +3912,9 @@ const inv = await enforceAddonInventory(db, {
   cartQtyWanted: cart_qty,
   hireClubsQtyWanted: hire_clubs_qty,
 });
-if (!inv.ok) {
-  return res.status(409).json({ ok: false, ...inv });
-}
-        const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(client, {
+// ✅ don't throw 409 in a GET listing; just expose remaining counts
+// (booking validation happens in POST /availability)
+        const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(db, {
   courseId,
   startAtIso,
   endAtIso,
