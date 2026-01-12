@@ -4102,6 +4102,7 @@ const durationMins = durationMinsForHoles(courseRow, holes);
       `,
       [courseId, date, holes, sM, eM, players]
     );
+    console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
 // ✅ DEBUG: show what the availability query returned
 if (debug) {
   console.log("🧪 availability query returned", {
