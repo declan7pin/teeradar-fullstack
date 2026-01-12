@@ -4209,8 +4209,8 @@ const baseTotalCents = ppp * players;
 
 // add-ons are per-booking (not per-player) in your schema
 const addonsCents =
-  (cart_qty > 0 ? cart_fee_cents : 0) +
-  (hire_clubs_qty > 0 ? hire_clubs_fee_cents : 0);
+  (final_has_cart ? cart_fee_cents : 0) +
+  (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
 
 // ✅ store full total in DB
 const totalCents = baseTotalCents + addonsCents;
@@ -4253,12 +4253,12 @@ const reference = makeRef("TR");
         reference,
         startAtIso,
         endAtIso,
-        cart_qty > 0,
-        cart_qty,
-        cart_fee_cents,
-        hire_clubs_qty > 0,
-        hire_clubs_qty,
-        hire_clubs_fee_cents,
+        final_has_cart,
+cart_qty,
+cart_fee_cents,
+final_has_hire_clubs,
+hire_clubs_qty,
+hire_clubs_fee_cents,
       ]
     );
 
