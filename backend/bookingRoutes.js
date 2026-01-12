@@ -4106,6 +4106,24 @@ if (debug) {
       Array.isArray(rows) && rows.length ? rows[rows.length - 1] : null,
   });
 }
+// ✅ DEBUG: if none returned, inspect what's in booking_times for that day regardless of filters
+if (debug && (!rows || rows.length === 0)) {
+  const diag = await db.query(
+    `
+    SELECT status, holes, COUNT(*)::int AS c,
+           MIN(tee_time) AS first_time,
+           MAX(tee_time) AS last_time
+    FROM booking_times
+    WHERE course_id = $1
+      AND play_date = $2::date
+    GROUP BY status, holes
+    ORDER BY holes, status;
+    `,
+    [courseId, date]
+  );
+
+  console.log("🧪 availability DIAG booking_times summary", diag.rows);
+}
     const times = await Promise.all(
       (rows || []).map(async (r) => {
         const startAtIso = toIsoDateTimeLocal(date, r.tee_time);
