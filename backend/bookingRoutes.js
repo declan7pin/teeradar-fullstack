@@ -3040,8 +3040,8 @@ if (!inv.ok) {
         const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
         const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
 
-        const cartCents = cartQty > 0 ? cartFee * cartQty : 0;
-        const hireClubsCents = hireClubsQty > 0 ? clubsFee * hireClubsQty : 0;
+        const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
+const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
 
         const ppp = 0; // you can wire this later if needed
         const totalCents = ppp * Number(players || 1);
