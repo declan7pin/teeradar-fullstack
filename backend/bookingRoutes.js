@@ -2863,7 +2863,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const email = String(req.body?.email || "").trim().toLowerCase(); // optional
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
 
-    // --- add-ons (course-admin manual booking) ---
+   // --- add-ons (course-admin manual booking) ---
 const addonIdsRaw = req.body?.addonIds ?? req.body?.addon_ids;
 const addonIds = Array.isArray(addonIdsRaw)
   ? addonIdsRaw
@@ -2873,14 +2873,25 @@ const addonIds = Array.isArray(addonIdsRaw)
 
 const picked = new Set(addonIds);
 
-// addonIds wins, but booleans still supported
+// booleans still supported (addonIds wins if provided)
 const has_cart =
   picked.size > 0 ? picked.has("cart") : parseBool(req.body?.has_cart, false);
 
 const has_hire_clubs =
   picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
 
-// final derived flags (qty can force false)
+// ✅ DEFINE QTY (this is what you were missing)
+const cart_qty = Math.max(
+  0,
+  Math.min(4, Number(req.body?.cart_qty ?? req.body?.cartQty ?? (has_cart ? 1 : 0)))
+);
+
+const hire_clubs_qty = Math.max(
+  0,
+  Math.min(4, Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? (has_hire_clubs ? 1 : 0)))
+);
+
+// ✅ derived flags from qty (single source of truth)
 const final_has_cart = cart_qty > 0;
 const final_has_hire_clubs = hire_clubs_qty > 0;
 
