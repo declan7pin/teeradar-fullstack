@@ -21,7 +21,102 @@ const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
 // ✅ ALSO support normal JWT secret if you already have it set
 const JWT_SECRET_FALLBACK = (process.env.JWT_SECRET || "").trim();
+// ✅ STEP 4: capacity-aware manual slots (players + carts + hire clubs)
+function toDateKey(playDate) {
+  // Accepts "2026-01-13" OR ISO string like "2026-01-13T00:00:00.000Z"
+  if (!playDate) return "";
+  const s = String(playDate);
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
 
+async function getCapacitySnapshot({ courseId, playDateKey }) {
+  // 1) course resource totals (adjust table/columns to YOUR schema)
+  // You likely have something like course_admin/course_settings with totals.
+  const course = await db.get(
+    `
+    SELECT
+      carts_total,
+      hire_clubs_total,
+      max_players_per_slot
+    FROM course_admin
+    WHERE course_id = ?
+    `,
+    [courseId]
+  );
+
+  const cartsTotal = Number(course?.carts_total ?? 0);
+  const clubsTotal = Number(course?.hire_clubs_total ?? 0);
+  const maxPlayersPerSlot = Number(course?.max_players_per_slot ?? 4);
+
+  // 2) usage from ALL bookings for that day (manual + paid/online)
+  // IMPORTANT: normalize date by comparing the first 10 chars (YYYY-MM-DD)
+  const used = await db.get(
+    `
+    SELECT
+      COALESCE(SUM(COALESCE(carts, 0)), 0) AS carts_used,
+      COALESCE(SUM(COALESCE(hire_clubs, 0)), 0) AS clubs_used
+    FROM bookings
+    WHERE course_id = ?
+      AND SUBSTR(play_date, 1, 10) = ?
+      AND status IN ('confirmed','paid','pending') -- keep whatever statuses you treat as "counts"
+    `,
+    [courseId, playDateKey]
+  );
+
+  return {
+    cartsTotal,
+    clubsTotal,
+    maxPlayersPerSlot,
+    cartsUsed: Number(used?.carts_used ?? 0),
+    clubsUsed: Number(used?.clubs_used ?? 0),
+  };
+}
+
+async function manualSlotAllowed({
+  courseId,
+  playDate,
+  teeTime,      // "06:00" style
+  holes,
+  playersWanted,
+  cartsWanted,
+  clubsWanted,
+}) {
+  const playDateKey = toDateKey(playDate);
+
+  // A) per-tee-time player capacity (respect existing bookings at that time)
+  const row = await db.get(
+    `
+    SELECT COALESCE(SUM(COALESCE(players, 0)), 0) AS players_booked
+    FROM bookings
+    WHERE course_id = ?
+      AND SUBSTR(play_date, 1, 10) = ?
+      AND tee_time = ?
+      AND holes = ?
+      AND status IN ('confirmed','paid','pending')
+    `,
+    [courseId, playDateKey, teeTime, holes]
+  );
+
+  const alreadyBookedPlayers = Number(row?.players_booked ?? 0);
+
+  // Pull daily resource totals + used (carts/clubs)
+  const snap = await getCapacitySnapshot({ courseId, playDateKey });
+
+  const playersOk = (alreadyBookedPlayers + Number(playersWanted || 0)) <= snap.maxPlayersPerSlot;
+
+  // B) daily carts/clubs capacity
+  const cartsOk =
+    snap.cartsTotal <= 0
+      ? true // treat 0 as "not enforced" (change if you want it strict)
+      : (snap.cartsUsed + Number(cartsWanted || 0)) <= snap.cartsTotal;
+
+  const clubsOk =
+    snap.clubsTotal <= 0
+      ? true
+      : (snap.clubsUsed + Number(clubsWanted || 0)) <= snap.clubsTotal;
+
+  return playersOk && cartsOk && clubsOk;
+}
 // ✅ ADD: visibility for course-admin token secret (Render env check)
 console.log("🔐 course admin env:", {
   COURSE_ADMIN_JWT_SECRET_set: !!COURSE_ADMIN_JWT_SECRET,
