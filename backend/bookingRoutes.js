@@ -4153,7 +4153,9 @@ return {
   remaining: Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0)),
   pricePerPlayerCents: r.price_per_player_cents,
   pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
-
+  cartQty: courseCartQty,
+  clubsQty: courseHireClubsQty,
+  
   // ✅ add-on availability (DISPLAY ONLY)
   cartRemaining,
   clubsRemaining,
