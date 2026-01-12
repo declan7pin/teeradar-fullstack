@@ -4097,7 +4097,15 @@ const durationMins = durationMinsForHoles(courseRow, holes);
       `,
       [courseId, date, holes, sM, eM, players]
     );
-
+// ✅ DEBUG: show what the availability query returned
+if (debug) {
+  console.log("🧪 availability query returned", {
+    rowCount: Array.isArray(rows) ? rows.length : null,
+    firstRow: Array.isArray(rows) && rows.length ? rows[0] : null,
+    lastRow:
+      Array.isArray(rows) && rows.length ? rows[rows.length - 1] : null,
+  });
+}
     const times = await Promise.all(
       (rows || []).map(async (r) => {
         const startAtIso = toIsoDateTimeLocal(date, r.tee_time);
