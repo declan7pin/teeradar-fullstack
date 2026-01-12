@@ -3932,15 +3932,27 @@ return {
   pricePerPlayerCents: r.price_per_player_cents,
   pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
 
-  // ✅ add-on availability
+  // ✅ add-on availability (DISPLAY ONLY)
   cartRemaining,
   clubsRemaining,
   cartSoldOut: courseCartQty > 0 && cartRemaining <= 0,
   clubsSoldOut: courseHireClubsQty > 0 && clubsRemaining <= 0,
   cartQty: courseCartQty,
   clubsQty: courseHireClubsQty,
+
   durationMins: dur,
 };
+}));
+
+// ✅ CLOSE THE GET /availability ROUTE **HERE**
+return res.json({ ok: true, times });
+} catch (e) {
+  console.error("GET /availability error", e);
+  return res.status(500).json({ ok: false, error: "internal_error" });
+}
+});
+
+// ✅ NOW (and ONLY now) start POST /availability
 router.post("/availability", async (req, res) => {
   const debugId = makeDebugId();
 
