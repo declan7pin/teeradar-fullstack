@@ -251,7 +251,18 @@ function makeRef(prefix = "TR") {
   for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
   return `${prefix}-${out}`;
 }
+// -----------------------------
+// ✅ Debug helpers (used by POST /availability logs)
+// -----------------------------
+function makeDebugId() {
+  return "dbg_" + crypto.randomBytes(4).toString("hex");
+}
 
+function dbgLog(id, label, obj = {}) {
+  try {
+    console.log(`🧪 ${id} ${label}`, obj);
+  } catch {}
+}
 function isHttps(req) {
   const xfProto = String(req.headers["x-forwarded-proto"] || "");
   return req.secure || xfProto.includes("https");
