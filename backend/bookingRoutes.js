@@ -21,6 +21,11 @@ const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
 // ✅ ALSO support normal JWT secret if you already have it set
 const JWT_SECRET_FALLBACK = (process.env.JWT_SECRET || "").trim();
+// ✅ DEBUG logger (safe anywhere)
+const DEBUG_BOOKING = String(process.env.DEBUG_BOOKING || "").trim() === "1";
+function dlog(...args) {
+  if (DEBUG_BOOKING) console.log(...args);
+}
 // ✅ STEP 4: capacity-aware manual slots (players + carts + hire clubs)
 function toDateKey(playDate) {
   // Accepts "2026-01-13" OR ISO string like "2026-01-13T00:00:00.000Z"
@@ -4044,13 +4049,7 @@ const c = await db.query(`
 if (!c.rows.length) return res.status(404).json({ ok:false, error:"course_not_found" });
     const courseRow = c.rows[0];
 const courseId = courseRow.id;
-if (debug) {
-  console.log("🧪 course matched", {
-    courseId,
-    courseSlug: courseRow.slug,
-    courseName: courseRow.name,
-  });
-}
+
 // ✅ FIX: define these in THIS scope (used later below)
 const courseName = String(courseRow.name || "");
 const courseCartQty = Number(courseRow.cart_qty || 0);
