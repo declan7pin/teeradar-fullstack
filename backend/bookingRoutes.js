@@ -4044,7 +4044,13 @@ const c = await db.query(`
 if (!c.rows.length) return res.status(404).json({ ok:false, error:"course_not_found" });
     const courseRow = c.rows[0];
 const courseId = courseRow.id;
-
+if (debug) {
+  console.log("🧪 course matched", {
+    courseId,
+    courseSlug: courseRow.slug,
+    courseName: courseRow.name,
+  });
+}
 // ✅ FIX: define these in THIS scope (used later below)
 const courseName = String(courseRow.name || "");
 const courseCartQty = Number(courseRow.cart_qty || 0);
