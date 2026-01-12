@@ -4049,7 +4049,15 @@ const c = await db.query(`
 if (!c.rows.length) return res.status(404).json({ ok:false, error:"course_not_found" });
     const courseRow = c.rows[0];
 const courseId = courseRow.id;
-
+dlog("🧪 GET /availability course matched", {
+  courseId,
+  slug,
+  date,
+  holes,
+  players,
+  earliest,
+  latest,
+});
 // ✅ FIX: define these in THIS scope (used later below)
 const courseName = String(courseRow.name || "");
 const courseCartQty = Number(courseRow.cart_qty || 0);
@@ -4074,17 +4082,6 @@ const durationMins = durationMinsForHoles(courseRow, holes);
     }).catch(() => {});
 
     const { rows } = await db.query(
-      if (debug) {
-  console.log("🧪 booking_times rows", {
-    rowsFound: rows?.length || 0,
-    courseId,
-    date,
-    holes,
-    players,
-    sM,
-    eM,
-  });
-}
       `
       SELECT tee_time, max_players, booked_players, holes, price_per_player_cents
       FROM booking_times
