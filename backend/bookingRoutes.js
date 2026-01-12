@@ -4013,7 +4013,18 @@ router.get("/availability", async (req, res) => {
     const players = Number(req.query.players || 2);
     const earliest = String(req.query.earliest || "06:00").trim();
     const latest = String(req.query.latest || "17:00").trim();
+const debug = String(req.query.debug || "") === "1";
 
+if (debug) {
+  console.log("🧪 GET /availability DEBUG incoming", {
+    slug: req.query.slug,
+    date: req.query.date,
+    holes: req.query.holes,
+    players: req.query.players,
+    earliest: req.query.earliest,
+    latest: req.query.latest,
+  });
+}
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
