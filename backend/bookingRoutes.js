@@ -4210,16 +4210,6 @@ return res.json({
 }
 });
 
-// ✅ POST /availability is NOT used (booking validation happens in POST /book)
-// Keep this route so nothing crashes if the front-end accidentally calls it.
-router.post("/availability", (req, res) => {
-  return res.status(405).json({
-    ok: false,
-    error: "method_not_allowed",
-    message: "Use GET /availability to list times and POST /book to confirm a booking.",
-  });
-});
-
 // ✅ NEW: per-slot transaction lock key (prevents race + addon oversell)
 function advisoryKeyForSlot({ courseId, dateYmd, timeHhMm }) {
   // key = courseId * 10^12 + yyyymmdd * 10^4 + minutes
