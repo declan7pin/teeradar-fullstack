@@ -7,8 +7,6 @@ import cookieParser from "cookie-parser"; // ✅ ADD
 import { recordEvent } from "./analytics.js";
 
 const router = express.Router();
-const router = express.Router();
-
 // ✅ DEBUG flag (Render env var DEBUG_BOOKING=1)
 const debug = String(process.env.DEBUG_BOOKING || "").trim() === "1";
 console.log("🧪 DEBUG_BOOKING enabled?", debug, "raw=", process.env.DEBUG_BOOKING);
