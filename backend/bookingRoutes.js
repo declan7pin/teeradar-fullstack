@@ -4155,6 +4155,16 @@ return {
   pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
   cartQty: courseCartQty,
   clubsQty: courseHireClubsQty,
+    
+    // ✅ ALIASES for front-end compatibility
+  cart_qty: courseCartQty,
+  hire_clubs_qty: courseHireClubsQty,
+  hireClubsQty: courseHireClubsQty,
+
+  cart_remaining: cartRemaining,
+  clubs_remaining: clubsRemaining,
+  cartsRemaining: cartRemaining,
+  hireClubsRemaining: clubsRemaining,
   
   // ✅ add-on availability (DISPLAY ONLY)
   cartRemaining,
