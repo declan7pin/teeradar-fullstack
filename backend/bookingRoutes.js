@@ -4170,6 +4170,10 @@ return {
 return res.json({
   ok: true,
   times,
+  // ✅ compatibility: front-end may expect one of these keys
+  rows: times,
+  slots: times,
+  teeTimes: times,
   ...(debug
     ? {
         debug: {
@@ -4182,6 +4186,8 @@ return res.json({
           courseId,
           courseName,
           rowsFound: Array.isArray(rows) ? rows.length : null,
+          returnedTimes: Array.isArray(times) ? times.length : null,
+          sample: Array.isArray(times) && times.length ? times[0] : null,
         },
       }
     : {}),
