@@ -4120,39 +4120,14 @@ return res.json({ ok: true, times });
 }
 });
 
-// ✅ NOW (and ONLY now) start POST /availability
-router.post("/availability", async (req, res) => {
-  const debugId = makeDebugId();
-
-  try {
-    dbgLog(debugId, "availability_request", {
-      path: req.originalUrl,
-      method: req.method,
-      slug: req.body?.slug ?? req.query?.slug ?? null,
-      date: req.body?.date ?? req.query?.date ?? null,
-      holes: req.body?.holes ?? req.query?.holes ?? null,
-      players: req.body?.players ?? req.query?.players ?? null,
-      timeFrom: req.body?.timeFrom ?? req.query?.timeFrom ?? null,
-      timeTo: req.body?.timeTo ?? req.query?.timeTo ?? null,
-    });
-
-    // ...your existing code here...
-    // After your db query that fetches the times, add:
-       dbgLog(debugId, "availability_result_counts", {
-      timesReturned: Array.isArray(times) ? times.length : null,
-    });
-
-    return res.json({ ok: true, times });
-  } catch (e) {
-    console.error(`❌ availability_error [${debugId}]`, e);
-    if (e?.stack) console.error(e.stack);
-
-    return res.status(500).json({
-      ok: false,
-      error: "internal_error",
-      debugId,
-    });
-  }
+// ✅ POST /availability is NOT used (booking validation happens in POST /book)
+// Keep this route so nothing crashes if the front-end accidentally calls it.
+router.post("/availability", (req, res) => {
+  return res.status(405).json({
+    ok: false,
+    error: "method_not_allowed",
+    message: "Use GET /availability to list times and POST /book to confirm a booking.",
+  });
 });
 
 // ✅ NEW: per-slot transaction lock key (prevents race + addon oversell)
