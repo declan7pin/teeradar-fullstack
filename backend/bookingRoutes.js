@@ -2905,7 +2905,44 @@ const notes = req.body?.notes ? String(req.body.notes).trim() : "";
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+// ✅ Step 4: enforce cart/club capacity for manual slots
+const inv = await db.get(
+  `
+  SELECT
+    COALESCE(cart_capacity, 0) AS cart_capacity,
+    COALESCE(hire_clubs_capacity, 0) AS hire_clubs_capacity
+  FROM course_admin_courses
+  WHERE id = ?
+  `,
+  [courseId]
+);
 
+const cartCap = Number(inv?.cart_capacity || 0);
+const clubsCap = Number(inv?.hire_clubs_capacity || 0);
+
+// current usage at this tee time (manual slots)
+const used = await getManualAddonUsage({ courseId, teeDate, teeTime });
+
+// if capacities are 0, treat as "no add-ons available"
+if (cart_qty > 0 && cartCap <= 0) {
+  return res.status(400).json({ error: "Carts are not available for this course." });
+}
+if (hire_clubs_qty > 0 && clubsCap <= 0) {
+  return res.status(400).json({ error: "Hire clubs are not available for this course." });
+}
+
+// capacity enforcement
+if (cart_qty > 0 && used.carts_used + cart_qty > cartCap) {
+  return res.status(400).json({
+    error: `Cart capacity exceeded for this tee time. Remaining: ${Math.max(0, cartCap - used.carts_used)}`
+  });
+}
+
+if (hire_clubs_qty > 0 && used.clubs_used + hire_clubs_qty > clubsCap) {
+  return res.status(400).json({
+    error: `Hire clubs capacity exceeded for this tee time. Remaining: ${Math.max(0, clubsCap - used.clubs_used)}`
+  });
+}
     // Ensure tee time exists (so daily sheet renders consistently)
     await db.query(
       `
