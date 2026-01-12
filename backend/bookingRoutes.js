@@ -137,6 +137,27 @@ function durationMinsForHoles(courseRow, holes) {
   if (h === 9) return Number(courseRow?.duration_9_mins || 210);
   return Number(courseRow?.duration_18_mins || 390);
 }
+async function getManualAddonUsage({ courseId, teeDate, teeTime }) {
+  // sums quantities already reserved in manual slots for that exact tee time
+  const row = await db.get(
+    `
+    SELECT
+      COALESCE(SUM(cart_qty), 0) AS carts_used,
+      COALESCE(SUM(hire_clubs_qty), 0) AS clubs_used
+    FROM booking_manual_slots
+    WHERE course_id = ?
+      AND tee_date = ?
+      AND tee_time = ?
+      AND (status IS NULL OR status NOT IN ('cancelled','canceled','refunded'))
+    `,
+    [courseId, teeDate, teeTime]
+  );
+
+  return {
+    carts_used: Number(row?.carts_used || 0),
+    clubs_used: Number(row?.clubs_used || 0),
+  };
+}
 // ✅ NEW: reuse existing ref for a tee time (manual slots)
 async function getExistingManualRef(courseId, play_date, tee_time, holes) {
   const r = await db.query(
