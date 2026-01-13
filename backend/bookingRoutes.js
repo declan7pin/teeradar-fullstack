@@ -3029,46 +3029,51 @@ const notes = req.body?.notes ? String(req.body.notes).trim() : "";
     if (!name) return res.status(400).json({ ok: false, error: "name_required" });
 
     const courseId = await courseIdFromSlug(slug);
-    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
-// ✅ Step 4: enforce cart/club capacity for manual slots
-const inv = await db.get(
+if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+// ✅ Load courseRow properly (you were using courseRow before it existed)
+const courseQ = await db.query(
   `
-  SELECT
-    COALESCE(cart_capacity, 0) AS cart_capacity,
-    COALESCE(hire_clubs_capacity, 0) AS hire_clubs_capacity
-  FROM course_admin_courses
-  WHERE id = ?
+  SELECT id, slug, name, cart_qty, hire_clubs_qty, duration_9_mins, duration_18_mins
+  FROM booking_courses
+  WHERE id=$1
+  LIMIT 1;
   `,
   [courseId]
 );
-// ✅ inventory constants (manual booking route)
-const courseCartQty = Number(courseRow?.cart_qty || 0);
-const courseClubsQty = Number(courseRow?.hire_clubs_qty || 0);
-const cartCap = Number(inv?.cart_capacity || 0);
-const clubsCap = Number(inv?.hire_clubs_capacity || 0);
+const courseRow = courseQ.rows[0] || null;
+if (!courseRow) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-// current usage at this tee time (manual slots)
-const used = await getManualAddonUsage({ courseId, teeDate, teeTime });
+// ✅ Build booking window once (same for all players at this tee time)
+const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
+const durMins = durationMinsForHoles(courseRow, holes);
+const endAtIso = new Date(new Date(startAtIso).getTime() + durMins * 60 * 1000).toISOString();
 
-// if capacities are 0, treat as "no add-ons available"
-if (cart_qty > 0 && cartCap <= 0) {
-  return res.status(400).json({ error: "Carts are not available for this course." });
+// ✅ Enforce add-on inventory using the SAME overlap logic as online bookings
+const courseCartQty = Number(courseRow.cart_qty || 0);
+const courseClubsQty = Number(courseRow.hire_clubs_qty || 0);
+
+if (cart_qty > 0 && courseCartQty <= 0) {
+  return res.status(400).json({ ok: false, error: "cart_not_offered" });
 }
-if (hire_clubs_qty > 0 && clubsCap <= 0) {
-  return res.status(400).json({ error: "Hire clubs are not available for this course." });
-}
-
-// capacity enforcement
-if (cart_qty > 0 && used.carts_used + cart_qty > cartCap) {
-  return res.status(400).json({
-    error: `Cart capacity exceeded for this tee time. Remaining: ${Math.max(0, cartCap - used.carts_used)}`
-  });
+if (hire_clubs_qty > 0 && courseClubsQty <= 0) {
+  return res.status(400).json({ ok: false, error: "hire_clubs_not_offered" });
 }
 
-if (hire_clubs_qty > 0 && used.clubs_used + hire_clubs_qty > clubsCap) {
-  return res.status(400).json({
-    error: `Hire clubs capacity exceeded for this tee time. Remaining: ${Math.max(0, clubsCap - used.clubs_used)}`
-  });
+const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(db, {
+  courseId,
+  startAtIso,
+  endAtIso,
+});
+
+const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
+const clubsRemaining = Math.max(0, courseClubsQty - clubsUsed);
+
+if (cart_qty > 0 && cart_qty > cartRemaining) {
+  return res.status(409).json({ ok: false, error: "cart_sold_out", cartRemaining });
+}
+if (hire_clubs_qty > 0 && hire_clubs_qty > clubsRemaining) {
+  return res.status(409).json({ ok: false, error: "hire_clubs_sold_out", clubsRemaining });
 }
     // Ensure tee time exists (so daily sheet renders consistently)
     await db.query(
