@@ -4234,7 +4234,10 @@ async function advisoryLockForSlot(client, { courseId, dateYmd, timeHhMm }) {
 async function handleBook(req, res) {
   let client = null;
   let didBegin = false;
+const body = req.body || {};
 
+const cart_qty = Number(body.cart_qty ?? body.cartQty ?? 0) || 0;
+const hire_clubs_qty = Number(body.hire_clubs_qty ?? body.hireClubsQty ?? 0) || 0;
   try {
     client = await db.connect();
     const slug = normSlug(req.body?.slug);
