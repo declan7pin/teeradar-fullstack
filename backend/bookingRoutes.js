@@ -1614,7 +1614,7 @@ router.post("/admin/time", requirePlatformAdmin, async (req, res) => {
       [courseId, playDate, teeTime, holes, maxPlayers, pricePerPlayerCents, status]
     );
 
-    return res.json({ ok: true, times });
+    return res.json({ ok: true, time: r.rows[0] });
   } catch (e) {
     console.error("admin/time POST", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
