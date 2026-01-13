@@ -3040,7 +3040,9 @@ const inv = await db.get(
   `,
   [courseId]
 );
-
+// ✅ inventory constants (manual booking route)
+const courseCartQty = Number(courseRow?.cart_qty || 0);
+const courseClubsQty = Number(courseRow?.hire_clubs_qty || 0);
 const cartCap = Number(inv?.cart_capacity || 0);
 const clubsCap = Number(inv?.hire_clubs_capacity || 0);
 
