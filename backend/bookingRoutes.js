@@ -2986,7 +2986,8 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const name = String(req.body?.name || "").trim();
     const email = String(req.body?.email || "").trim().toLowerCase(); // optional
     const phone = req.body?.phone ? String(req.body.phone).trim() : "";
-
+const paid = parseBool(req.body?.paid, false);
+const checked_in = parseBool(req.body?.checked_in, false);
    // --- add-ons (course-admin manual booking) ---
 const addonIdsRaw = req.body?.addonIds ?? req.body?.addon_ids;
 const addonIds = Array.isArray(addonIdsRaw)
