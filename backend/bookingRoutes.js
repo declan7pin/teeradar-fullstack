@@ -4231,7 +4231,7 @@ async function advisoryLockForSlot(client, { courseId, dateYmd, timeHhMm }) {
   await client.query(`SELECT pg_advisory_xact_lock($1::bigint);`, [key]);
   return key;
 }
-router.post("/book", async (req, res) => {
+async function handleBook(req, res) {
   let client = null;
   let didBegin = false;
 
@@ -4585,7 +4585,9 @@ didBegin = false;
     if (client) client.release();
   } catch {}
 }
-});
+}
+router.post("/book", handleBook);
+router.post("/availability", handleBook);
 // ✅ NEW: Booking Analytics (uses real bookings + existing analytics table)
 router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req, res) => {
   try {
