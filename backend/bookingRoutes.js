@@ -4587,7 +4587,15 @@ didBegin = false;
 }
 }
 router.post("/book", handleBook);
-router.post("/availability", handleBook);
+
+// keep /availability POST blocked so the frontend can’t accidentally use it
+router.post("/availability", (req, res) => {
+  return res.status(405).json({
+    ok: false,
+    error: "method_not_allowed",
+    message: "Use GET /availability to list times and POST /book to confirm a booking.",
+  });
+});
 // ✅ NEW: Booking Analytics (uses real bookings + existing analytics table)
 router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req, res) => {
   try {
