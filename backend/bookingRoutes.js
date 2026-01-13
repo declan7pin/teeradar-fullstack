@@ -3125,48 +3125,7 @@ if (hire_clubs_qty > 0 && hire_clubs_qty > clubsRemaining) {
       const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
       const durMins = durationMinsForHoles(courseDurRow, holes);
       const endAtIso = new Date(new Date(startAtIso).getTime() + durMins * 60 * 1000).toISOString();
-      // ✅ STEP 3: enforce cart / hire clubs inventory for MANUAL bookings
-const cart_qty = Number(req.body?.cart_qty || 0);
-const hire_clubs_qty = Number(req.body?.hire_clubs_qty || 0);
-
-const courseCartQty = Number(courseRow.cart_qty || 0);
-const courseClubsQty = Number(courseRow.hire_clubs_qty || 0);
-
-const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(db, {
-  courseId,
-  startAtIso,
-  endAtIso,
-});
-
-const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
-const clubsRemaining = Math.max(0, courseClubsQty - clubsUsed);
-
-if (cart_qty > 0 && cart_qty > cartRemaining) {
-  return res.status(409).json({
-    ok: false,
-    error: "cart_sold_out",
-    cartRemaining,
-  });
-}
-
-if (hire_clubs_qty > 0 && hire_clubs_qty > clubsRemaining) {
-  return res.status(409).json({
-    ok: false,
-    error: "hire_clubs_sold_out",
-    clubsRemaining,
-  });
-}
-// ✅ ENFORCE add-on inventory (carts/clubs) before upsert
-const inv = await enforceAddonInventory(db, {
-  courseId,
-  startAtIso,
-  endAtIso,
-  cartQtyWanted: cart_qty,
-  hireClubsQtyWanted: hire_clubs_qty,
-});
-if (!inv.ok) {
-  return res.status(409).json({ ok: false, ...inv });
-}
+     
       const r = await db.query(
         `
         INSERT INTO booking_manual_slots
