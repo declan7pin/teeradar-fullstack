@@ -2906,10 +2906,10 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
           phone || null,
           paid,
           checked_in,
-          cart_qty > 0,
-          hire_clubs_qty > 0,
-          cart_qty,
-          hire_clubs_qty,
+          i === 0 ? cart_qty > 0 : false,
+          i === 0 ? hire_clubs_qty > 0 : false,
+          i === 0 ? cart_qty : 0,
+          i === 0 ? hire_clubs_qty : 0,
           notes,
         ]
       );
