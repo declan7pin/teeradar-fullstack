@@ -999,6 +999,7 @@ const checkinId = `checkin_${safeKey}_${slotIndex}`;
             if (!name) return;
 
             const email = (prompt("Email (needed for confirmation):", "") || "").trim();
+if (!email) { alert("email_required"); return; }
 if (!email) {
   alert("email_required");
   return;
