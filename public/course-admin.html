@@ -868,8 +868,7 @@ function normalizeBookingLikeRow(b){
   [
     (Number(r.cart_qty ?? 0) > 0 ? `Cart x${Number(r.cart_qty)}` : (r.has_cart ? "Cart" : "")),
     (Number(r.hire_clubs_qty ?? 0) > 0 ? `Clubs x${Number(r.hire_clubs_qty)}` : (r.has_hire_clubs ? "Clubs" : "")),
-    (r.notes ? `Notes:
-    Notes: ${String(r.notes)}` : "")
+    (r.notes ? `Notes: ${String(r.notes)}` : "")
   ].filter(Boolean).join(", ") || "—"
 }</td>
           <td><code>${(r.reference ?? r.ref ?? r.booking_reference ?? r.bookingReference ?? r.booking_ref ?? r.code ?? "")}</code></td>
