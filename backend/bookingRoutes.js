@@ -300,19 +300,22 @@ FROM (
 
   UNION ALL
 
-  -- manual slots: ONLY count slot_index = 1 (the booking holder)
-  SELECT
-    COALESCE(SUM(COALESCE(cart_qty,0)),0) AS carts_used,
-    COALESCE(SUM(COALESCE(hire_clubs_qty,0)),0) AS clubs_used
-  FROM booking_manual_slots
-  WHERE course_id = $1
-    AND slot_index = 1
-    AND COALESCE(name,'') <> ''          -- keep this if blanks shouldn't count
-    AND start_at IS NOT NULL
-    AND end_at IS NOT NULL
-    AND start_at < $3::timestamptz
-    AND end_at   > $2::timestamptz
-) t
+  -- manual slots: count carts/clubs ONCE per booking (lowest slot_index per reference)
+SELECT
+  COALESCE(SUM(cart_qty),0) AS carts_used,
+  COALESCE(SUM(hire_clubs_qty),0) AS clubs_used
+FROM booking_manual_slots m
+WHERE course_id = $1
+  AND COALESCE(name,'') <> ''
+  AND start_at IS NOT NULL
+  AND end_at IS NOT NULL
+  AND start_at < $3::timestamptz
+  AND end_at   > $2::timestamptz
+  AND slot_index = (
+    SELECT MIN(slot_index)
+    FROM booking_manual_slots
+    WHERE reference = m.reference
+  )
     `,
     [courseId, startAtIso, endAtIso]
   );
