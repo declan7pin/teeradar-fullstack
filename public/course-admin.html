@@ -1314,13 +1314,44 @@ $("mAddBtn").onclick = async () => {
 
       const bookings = bookingsOut.bookings || [];
 
-      let cartsUsed = 0;
-      let clubsUsed = 0;
+// ✅ NEW: include manual slots too (your response already contains manualSlots)
+const manualSlots =
+  bookingsOut.manualSlots ||
+  bookingsOut.manual_slots ||
+  bookingsOut.slots ||
+  bookingsOut.rows ||
+  [];
 
-      bookings.forEach(b => {
-        cartsUsed += Number(b.cart_qty ?? (b.has_cart ? 1 : 0));
-        clubsUsed += Number(b.hire_clubs_qty ?? (b.has_hire_clubs ? 1 : 0));
-      });
+let cartsUsed = 0;
+let clubsUsed = 0;
+
+// ✅ online bookings
+bookings.forEach(b => {
+  cartsUsed += Number(b.cart_qty ?? (b.has_cart ? 1 : 0));
+  clubsUsed += Number(b.hire_clubs_qty ?? (b.has_hire_clubs ? 1 : 0));
+});
+
+// ✅ manual bookings/holds
+// Count add-ons ONCE per manual booking reference (use the lowest slot_index row per reference)
+if (Array.isArray(manualSlots) && manualSlots.length) {
+  const byRef = new Map();
+
+  manualSlots.forEach(s => {
+    const ref = String(s.reference || "").trim();
+    if (!ref) return;
+
+    const prev = byRef.get(ref);
+    const sIdx = Number(s.slot_index ?? 999);
+    const pIdx = prev ? Number(prev.slot_index ?? 999) : 999;
+
+    if (!prev || sIdx < pIdx) byRef.set(ref, s);
+  });
+
+  for (const s of byRef.values()) {
+    cartsUsed += Number(s.cart_qty || 0);
+    clubsUsed += Number(s.hire_clubs_qty || 0);
+  }
+}
 
       const cartsLeft = Math.max(0, totalCarts - cartsUsed);
       const clubsLeft = Math.max(0, totalClubs - clubsUsed);
