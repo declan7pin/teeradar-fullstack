@@ -458,16 +458,7 @@ async function apiFetch(url, opts = {}) {
       return d.toLocaleString();
     }catch{ return s || ""; }
   }
-function normTime(v){
-  function timeToMins(v){
-  const s = String(v || "").trim();
-  const m = s.match(/(\d{1,2}):(\d{2})/);
-  if (!m) return null;
-  const hh = Math.max(0, Math.min(23, Number(m[1])));
-  const mm = Math.max(0, Math.min(59, Number(m[2])));
-  return hh * 60 + mm;
-}
-// ✅ convert HH:MM → minutes since midnight
+  // ✅ convert HH:MM → minutes since midnight
 function timeToMins(v){
   const s = String(v || "").trim();
   const m = s.match(/(\d{1,2}):(\d{2})/);
@@ -477,7 +468,7 @@ function timeToMins(v){
   return hh * 60 + mm;
 }
 
-// ✅ Date → minutes since midnight (for start_at timestamps)
+// ✅ Date → minutes since midnight (for timestamps)
 function dateObjToMins(d){
   try{
     const dt = new Date(d);
@@ -488,10 +479,20 @@ function dateObjToMins(d){
   }
 }
 
-// ✅ window overlap check
+// ✅ overlap test
 function minsOverlap(aStart, aEnd, bStart, bEnd){
   return Math.max(aStart, bStart) < Math.min(aEnd, bEnd);
 }
+function normTime(v){
+  function timeToMins(v){
+  const s = String(v || "").trim();
+  const m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const hh = Math.max(0, Math.min(23, Number(m[1])));
+  const mm = Math.max(0, Math.min(59, Number(m[2])));
+  return hh * 60 + mm;
+}
+
 function minsOverlap(aStart, aEnd, bStart, bEnd){
   return Math.max(aStart, bStart) < Math.min(aEnd, bEnd);
 }
