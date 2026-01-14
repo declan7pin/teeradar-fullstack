@@ -61,6 +61,7 @@
 <body>
   <div class="wrap">
 
+    <!-- 1) Slug login -->
     <div class="card">
       <h2>Course Admin</h2>
       <p class="muted">
@@ -88,56 +89,7 @@
       <div id="who" class="muted mini" style="margin-top:6px;"></div>
     </div>
 
-    <!-- ✅ Weekly schedule template -->
-    <div class="card">
-      <h2 style="margin:0 0 6px;">Weekly schedule template</h2>
-      <div class="sub" style="margin-bottom:10px;">
-        Save a weekly pattern once, then generate tee times for the next 30 days in one click.
-      </div>
-
-      <div id="tplStatus" class="status"></div>
-
-      <div style="display:grid;gap:10px;">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
-          <div style="flex:1;min-width:220px;">
-            <label>Timezone</label>
-            <input id="tplTimezone" value="Australia/Perth" />
-          </div>
-
-          <div style="flex:1;min-width:220px;">
-            <label>Generate from date</label>
-            <input id="tplStartDate" type="date" />
-          </div>
-
-          <div style="width:180px;">
-            <label>Days ahead</label>
-            <input id="tplDaysAhead" type="number" min="1" max="120" value="30" />
-          </div>
-
-          <div style="width:220px;">
-            <label>Mode</label>
-            <select id="tplMode">
-              <option value="skip" selected>Skip duplicates</option>
-              <option value="overwrite-range">Overwrite range</option>
-            </select>
-          </div>
-        </div>
-
-        <div id="tplGrid" style="display:grid;gap:10px;"></div>
-
-        <div class="actions">
-          <button id="tplLoadBtn">Load template</button>
-          <button class="secondary" id="tplSaveBtn">Save template</button>
-          <button id="tplGenerateBtn">Generate next days</button>
-        </div>
-
-        <div class="note">
-          Tip: set different windows for 18 and 9 so 18-hole groups can roll through without clashes.
-        </div>
-      </div>
-    </div>
-
-    <!-- ✅ Inventory check (carts + clubs) -->
+    <!-- 2) Cart availability (Inventory) -->
     <div class="card">
       <h3>Inventory (Carts & Hire Clubs)</h3>
       <p class="muted">Quick check for bookings on a specific date.</p>
@@ -187,6 +139,7 @@
       </div>
     </div>
 
+    <!-- 3) View tee times -->
     <div class="card">
       <h3>View Tee Times / Bookings</h3>
 
@@ -272,7 +225,10 @@
           </table>
         </div>
       </div>
+    </div>
 
+    <!-- 4) Manual tee times -->
+    <div class="card">
       <!-- ✅ Manual tee times (Course Admin) -->
      <div style="margin-top:12px;">
         <h3>Manual Tee Times</h3>
@@ -373,6 +329,56 @@
         </div>
       </div>
     </div>
+
+    <!-- 5) Weekly schedule template -->
+    <div class="card">
+      <h2 style="margin:0 0 6px;">Weekly schedule template</h2>
+      <div class="sub" style="margin-bottom:10px;">
+        Save a weekly pattern once, then generate tee times for the next 30 days in one click.
+      </div>
+
+      <div id="tplStatus" class="status"></div>
+
+      <div style="display:grid;gap:10px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
+          <div style="flex:1;min-width:220px;">
+            <label>Timezone</label>
+            <input id="tplTimezone" value="Australia/Perth" />
+          </div>
+
+          <div style="flex:1;min-width:220px;">
+            <label>Generate from date</label>
+            <input id="tplStartDate" type="date" />
+          </div>
+
+          <div style="width:180px;">
+            <label>Days ahead</label>
+            <input id="tplDaysAhead" type="number" min="1" max="120" value="30" />
+          </div>
+
+          <div style="width:220px;">
+            <label>Mode</label>
+            <select id="tplMode">
+              <option value="skip" selected>Skip duplicates</option>
+              <option value="overwrite-range">Overwrite range</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="tplGrid" style="display:grid;gap:10px;"></div>
+
+        <div class="actions">
+          <button id="tplLoadBtn">Load template</button>
+          <button class="secondary" id="tplSaveBtn">Save template</button>
+          <button id="tplGenerateBtn">Generate next days</button>
+        </div>
+
+        <div class="note">
+          Tip: set different windows for 18 and 9 so 18-hole groups can roll through without clashes.
+        </div>
+      </div>
+    </div>
+
   </div>
 
 <script>
@@ -883,7 +889,8 @@ function normalizeBookingLikeRow(b){
   [
     (Number(r.cart_qty ?? 0) > 0 ? `Cart x${Number(r.cart_qty)}` : (r.has_cart ? "Cart" : "")),
     (Number(r.hire_clubs_qty ?? 0) > 0 ? `Clubs x${Number(r.hire_clubs_qty)}` : (r.has_hire_clubs ? "Clubs" : "")),
-    (r.notes ? `Notes: ${String(r.notes)}` : "")
+    (r.notes ? `Notes:
+    Notes: ${String(r.notes)}` : "")
   ].filter(Boolean).join(", ") || "—"
 }</td>
           <td><code>${(r.reference ?? r.ref ?? r.booking_reference ?? r.bookingReference ?? r.booking_ref ?? r.code ?? "")}</code></td>
@@ -905,43 +912,46 @@ function normalizeBookingLikeRow(b){
 
       const timesOut = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
       const timesRows = (timesOut && timesOut.times) || [];
-// ✅ Merge manual tee times into daily sheet
-try{
-  const manualOut = await j("/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date), { method:"GET" });
-  const manualRows = manualOut.manualSlots || manualOut.manual_slots || manualOut.slots || manualOut.rows || [];
 
-  if (Array.isArray(manualRows) && manualRows.length) {
-    manualRows.forEach(ms => {
-      timesRows.push({
-        play_date: ms.play_date ?? ms.date ?? date,
-        tee_time: ms.tee_time ?? ms.time ?? "",
-        holes: ms.holes ?? "",
-        max_players: ms.max_players ?? "",
-        booked_players: 0,
-        status: "open",
-        price_per_player_cents: ms.price_per_player_cents ?? ms.price_cents ?? ""
-      });
-    });
+      // ✅ Merge manual tee times into daily sheet
+      try{
+        const manualOut = await j("/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date), { method:"GET" });
+        const manualRows = manualOut.manualSlots || manualOut.manual_slots || manualOut.slots || manualOut.rows || [];
 
-    // de-dupe by time + holes (so manual slot doesn't duplicate an existing generated time)
-    const seen = new Set();
-    const deduped = [];
-    for (const r of timesRows) {
-      const key = `${normTime(r.tee_time || r.time || "")}__${String(r.holes ?? "")}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      deduped.push(r);
-    }
-    deduped.sort((a,b) => (normTime(a.tee_time||"") > normTime(b.tee_time||"") ? 1 : -1));
+        if (Array.isArray(manualRows) && manualRows.length) {
+          manualRows.forEach(ms => {
+            timesRows.push({
+              play_date: ms.play_date ?? ms.date ?? date,
+              tee_time: ms.tee_time ?? ms.time ?? "",
+              holes: ms.holes ?? "",
+              max_players: ms.max_players ?? "",
+              booked_players: 0,
+              status: "open",
+              price_per_player_cents: ms.price_per_player_cents ?? ms.price_cents ?? ""
+            });
+          });
 
-    timesRows.length = 0;
-    deduped.forEach(x => timesRows.push(x));
-  }
-}catch(e){
-  // ignore if manual endpoint missing; daily sheet will still work from normal times
-}
+          // de-dupe by time + holes (so manual slot doesn't duplicate an existing generated time)
+          const seen = new Set();
+          const deduped = [];
+          for (const r of timesRows) {
+            const key = `${normTime(r.tee_time || r.time || "")}__${String(r.holes ?? "")}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            deduped.push(r);
+          }
+          deduped.sort((a,b) => (normTime(a.tee_time||"") > normTime(b.tee_time||"") ? 1 : -1));
+
+          timesRows.length = 0;
+          deduped.forEach(x => timesRows.push(x));
+        }
+      }catch(e){
+        // ignore if manual endpoint missing; daily sheet will still work from normal times
+      }
+
       const bookingsOut = await j("/api/book/course-admin/bookings?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
       const bookingsRows = (bookingsOut && bookingsOut.bookings) || [];
+
       // ✅ Load manual holds too (so the sheet shows taken slots)
       let manualRows = [];
       try{
@@ -951,6 +961,7 @@ try{
       }catch(e){
         manualRows = []; // endpoint not available? sheet still works
       }
+
       if (!Array.isArray(timesRows) || !timesRows.length){
         $("viewMsg").textContent = "✅ No tee times found (generate them in Booking Admin).";
         return;
@@ -1001,7 +1012,7 @@ try{
 
             if (!teeTime) throw new Error("tee_time_missing");
 
-                        // ✅ Ask for details (email is needed if you want confirmation sent)
+            // ✅ Ask for details (email is needed if you want confirmation sent)
             const name = (prompt("Name:", "") || "").trim();
             if (!name) return;
 
@@ -1016,7 +1027,7 @@ try{
             const hireClubsQty = Math.max(0, Math.min(4, Number(clubsRaw || 0)));
 
             const playersRaw = prompt("Players (1-4):", "1") || "1";
-const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
+            const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
 
             // ✅ Post (send BOTH naming styles so it works with whichever backend you have)
             await j("/api/book/course-admin/booking", {
@@ -1043,7 +1054,7 @@ const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
                 notes,
                 note: notes,
 
-               email,
+                email,
                 phone,
 
                 paid: false,
@@ -1060,72 +1071,72 @@ const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
       });
 
       tb.querySelectorAll('input[type="checkbox"][data-ref][data-kind]').forEach(cb => {
-  cb.onchange = async () => {
-    const ref = cb.getAttribute("data-ref") || "";
-    const kind = cb.getAttribute("data-kind") || "";
-    const val = cb.checked;
+        cb.onchange = async () => {
+          const ref = cb.getAttribute("data-ref") || "";
+          const kind = cb.getAttribute("data-kind") || "";
+          const val = cb.checked;
 
-    const slot = Number(cb.getAttribute("data-slot") || 0);        // ✅ which slot (1–4)
-    const slotKey = cb.getAttribute("data-slotkey") || "";         // ✅ unique UI key
+          const slot = Number(cb.getAttribute("data-slot") || 0);        // ✅ which slot (1–4)
+          const slotKey = cb.getAttribute("data-slotkey") || "";         // ✅ unique UI key
 
-    const msgEl = tb.querySelector(`[data-msg="${CSS.escape(slotKey)}"]`);
-    if (msgEl) msgEl.textContent = "Saving...";
+          const msgEl = tb.querySelector(`[data-msg="${CSS.escape(slotKey)}"]`);
+          if (msgEl) msgEl.textContent = "Saving...";
 
-   // ✅ If reference is missing (common for manual holds), allow entering it so Paid/Check-in can work.
-let refToUse = ref;
+          // ✅ If reference is missing (common for manual holds), allow entering it so Paid/Check-in can work.
+          let refToUse = ref;
 
-if (!refToUse) {
-  const entered = (prompt("No reference on this slot.\n\nPaste the booking reference (e.g. MAN-P47PPU):", "") || "").trim();
-  if (!entered) {
-    cb.checked = !cb.checked;
-    if (msgEl) msgEl.textContent = "❌ reference_required";
-    return;
-  }
-  refToUse = entered;
+          if (!refToUse) {
+            const entered = (prompt("No reference on this slot.\n\nPaste the booking reference (e.g. MAN-P47PPU):", "") || "").trim();
+            if (!entered) {
+              cb.checked = !cb.checked;
+              if (msgEl) msgEl.textContent = "❌ reference_required";
+              return;
+            }
+            refToUse = entered;
 
-  // ✅ persist on the checkbox so future toggles don’t prompt again
-  cb.setAttribute("data-ref", refToUse);
+            // ✅ persist on the checkbox so future toggles don’t prompt again
+            cb.setAttribute("data-ref", refToUse);
 
-  // ✅ also show it in the UI (if the slot has a code element)
-  try{
-    const slotBox = cb.closest(".slotBox");
-    if (slotBox && !slotBox.querySelector("code")) {
-      const meta = slotBox.querySelector(".slotMeta");
-      if (meta) meta.insertAdjacentHTML("beforeend", `<span><code>${_escape(refToUse)}</code></span>`);
-    }
-  }catch{}
-}
+            // ✅ also show it in the UI (if the slot has a code element)
+            try{
+              const slotBox = cb.closest(".slotBox");
+              if (slotBox && !slotBox.querySelector("code")) {
+                const meta = slotBox.querySelector(".slotMeta");
+                if (meta) meta.insertAdjacentHTML("beforeend", `<span><code>${_escape(refToUse)}</code></span>`);
+              }
+            }catch{}
+          }
 
-    try{
-      if (kind === "paid") {
-        await j("/api/book/course-admin/booking-paid", {
-          method:"POST",
-          body: JSON.stringify({ reference: refToUse, slot, paid: val }) // ✅ slot added
-        });
+          try{
+            if (kind === "paid") {
+              await j("/api/book/course-admin/booking-paid", {
+                method:"POST",
+                body: JSON.stringify({ reference: refToUse, slot, paid: val }) // ✅ slot added
+              });
 
-        // ✅ update the correct badge (per slot)
-        const badgeEl = tb.querySelector(`[data-badge="${CSS.escape(slotKey)}"]`);
-        if (badgeEl) {
-          badgeEl.textContent = val ? "PAID" : "UNPAID";
-          badgeEl.classList.toggle("ok", !!val);
-          badgeEl.classList.toggle("warn", !val);
-        }
-      }
+              // ✅ update the correct badge (per slot)
+              const badgeEl = tb.querySelector(`[data-badge="${CSS.escape(slotKey)}"]`);
+              if (badgeEl) {
+                badgeEl.textContent = val ? "PAID" : "UNPAID";
+                badgeEl.classList.toggle("ok", !!val);
+                badgeEl.classList.toggle("warn", !val);
+              }
+            }
 
-      if (kind === "checkin") {
-        await j("/api/book/course-admin/booking-checkin", {
-          method:"POST",
-          body: JSON.stringify({ reference: refToUse, slot, checked_in: val }) // ✅ slot added
-        });
-      }
+            if (kind === "checkin") {
+              await j("/api/book/course-admin/booking-checkin", {
+                method:"POST",
+                body: JSON.stringify({ reference: refToUse, slot, checked_in: val }) // ✅ slot added
+              });
+            }
 
-      if (msgEl) msgEl.textContent = "✅ saved";
-    }catch(e){
-      cb.checked = !cb.checked;
-      if (msgEl) msgEl.textContent = "❌ " + e.message;
-    }
-  };
-});
+            if (msgEl) msgEl.textContent = "✅ saved";
+          }catch(e){
+            cb.checked = !cb.checked;
+            if (msgEl) msgEl.textContent = "❌ " + e.message;
+          }
+        };
+      });
 
       $("sheetBox").style.display = "block";
       $("viewMsg").textContent = `✅ Loaded daily sheet (${timesRows.length} tee times, ${bookingsRows.length} bookings)`;
@@ -1145,13 +1156,15 @@ if (!refToUse) {
       if ($("mDate") && d) $("mDate").value = d;
     }catch{}
   }
-function isSheetOpenForDate(d){
-  try{
-    const open = $("sheetBox") && $("sheetBox").style.display !== "none";
-    const cur = ($("date")?.value || "").trim();
-    return open && cur && d && cur === d;
-  }catch{ return false; }
-}
+
+  function isSheetOpenForDate(d){
+    try{
+      const open = $("sheetBox") && $("sheetBox").style.display !== "none";
+      const cur = ($("date")?.value || "").trim();
+      return open && cur && d && cur === d;
+    }catch{ return false; }
+  }
+
   async function loadManualSlots(){
     $("manualMsg").textContent = "";
     $("manualBody").innerHTML = "";
@@ -1230,109 +1243,109 @@ function isSheetOpenForDate(d){
   };
 
   // ✅ Manual BOOKING button (standalone) — this was wrongly nested before
-$("mBookBtn").onclick = async () => {
-  $("manualMsg").textContent = "Creating booking...";
-  try{
-    await getMe();
+  $("mBookBtn").onclick = async () => {
+    $("manualMsg").textContent = "Creating booking...";
+    try{
+      await getMe();
 
-    const playDate = ($("mDate").value || "").trim();
-    const teeTime = ($("mTime").value || "").trim();
-    const holes = Number($("mHoles").value || 18);
-    const maxPlayers = Number($("mMaxPlayers").value || 4);
-    const pricePerPlayerCents = Number($("mPrice").value || 0);
-const players = Math.max(1, Math.min(4, Number($("mPlayers")?.value || 1)));
-    const name = ($("mHoldName")?.value || "").trim();
-    const email = ($("mEmail")?.value || "").trim();
-    const phone = ($("mPhone")?.value || "").trim();
+      const playDate = ($("mDate").value || "").trim();
+      const teeTime = ($("mTime").value || "").trim();
+      const holes = Number($("mHoles").value || 18);
+      const maxPlayers = Number($("mMaxPlayers").value || 4);
+      const pricePerPlayerCents = Number($("mPrice").value || 0);
+      const players = Math.max(1, Math.min(4, Number($("mPlayers")?.value || 1)));
+      const name = ($("mHoldName")?.value || "").trim();
+      const email = ($("mEmail")?.value || "").trim();
+      const phone = ($("mPhone")?.value || "").trim();
 
-    const cartQty = Math.max(0, Math.min(4, Number($("mCartQty")?.value || 0)));
-    const hireClubsQty = Math.max(0, Math.min(4, Number($("mClubsQty")?.value || 0)));
+      const cartQty = Math.max(0, Math.min(4, Number($("mCartQty")?.value || 0)));
+      const hireClubsQty = Math.max(0, Math.min(4, Number($("mClubsQty")?.value || 0)));
 
-    if (!playDate) throw new Error("play_date_required");
-    if (!teeTime) throw new Error("tee_time_required");
-    if (!/^(\d{1,2}):(\d{2})$/.test(teeTime)) throw new Error("tee_time must be HH:MM (e.g. 06:30)");
-    if (!name) throw new Error("name_required");
-    if (!email) throw new Error("email_required");
+      if (!playDate) throw new Error("play_date_required");
+      if (!teeTime) throw new Error("tee_time_required");
+      if (!/^(\d{1,2}):(\d{2})$/.test(teeTime)) throw new Error("tee_time must be HH:MM (e.g. 06:30)");
+      if (!name) throw new Error("name_required");
+      if (!email) throw new Error("email_required");
 
-    await j("/api/book/course-admin/manual-booking", {
-      method:"POST",
-      body: JSON.stringify({
-        date: playDate,
-        teeTime,
-        holes,
-        players,
-        name,
-        email,
-        phone,
-        maxPlayers,
-        pricePerPlayerCents,
-        cart_qty: cartQty,
-        hire_clubs_qty: hireClubsQty,
-      })
-    });
+      await j("/api/book/course-admin/manual-booking", {
+        method:"POST",
+        body: JSON.stringify({
+          date: playDate,
+          teeTime,
+          holes,
+          players,
+          name,
+          email,
+          phone,
+          maxPlayers,
+          pricePerPlayerCents,
+          cart_qty: cartQty,
+          hire_clubs_qty: hireClubsQty,
+        })
+      });
 
-    $("manualMsg").textContent = "✅ Booking created + email sent";
-    await loadManualSlots();
-    if (isSheetOpenForDate(playDate)) await viewSheet();
-  }catch(e){
-    $("manualMsg").textContent = "❌ " + (e?.message || "Failed to create booking");
-  }
-};
-
-// ✅ Manual tee time button
-$("mAddBtn").onclick = async () => {
-  $("manualMsg").textContent = "Adding manual tee time...";
-  $("manualBox").style.display = "none";
-  $("manualBody").innerHTML = "";
-
-  try{
-    await getMe();
-
-    const playDate = ($("mDate").value || "").trim();
-    const teeTime = ($("mTime").value || "").trim();
-    const holes = Number($("mHoles").value || 18);
-    const maxPlayers = Number($("mMaxPlayers").value || 4);
-    const pricePerPlayerCents = Number($("mPrice").value || 0);
-
-    const holdName = ($("mHoldName")?.value || "").trim();
-    const cartQty = Math.max(0, Math.min(4, Number($("mCartQty")?.value || 0)));
-    const hireClubsQty = Math.max(0, Math.min(4, Number($("mClubsQty")?.value || 0)));
-
-    if (!playDate) throw new Error("play_date_required");
-    if (!teeTime) throw new Error("tee_time_required");
-    if (!/^(\d{1,2}):(\d{2})$/.test(teeTime)) throw new Error("tee_time must be HH:MM (e.g. 06:30)");
-
-    await j("/api/book/course-admin/manual-slot", {
-      method:"POST",
-      body: JSON.stringify({
-        date: playDate,
-        teeTime,
-        holes,
-        maxPlayers,
-        pricePerPlayerCents,
-
-        holdName,
-        hold_name: holdName,
-        name: holdName,
-
-        cartQty,
-        hireClubsQty,
-        cart_qty: cartQty,
-        hire_clubs_qty: hireClubsQty
-      })
-    });
-
-    $("manualMsg").textContent = "✅ Added manual tee time";
-    await loadManualSlots();
-
-    if (isSheetOpenForDate(playDate)) {
-      $("viewMsg").textContent = "Refreshing daily sheet...";
-      await viewSheet();
+      $("manualMsg").textContent = "✅ Booking created + email sent";
+      await loadManualSlots();
+      if (isSheetOpenForDate(playDate)) await viewSheet();
+    }catch(e){
+      $("manualMsg").textContent = "❌ " + (e?.message || "Failed to create booking");
     }
-  }catch(e){
-    $("manualMsg").textContent = "❌ " + e.message;
-  }
-};
+  };
+
+  // ✅ Manual tee time button
+  $("mAddBtn").onclick = async () => {
+    $("manualMsg").textContent = "Adding manual tee time...";
+    $("manualBox").style.display = "none";
+    $("manualBody").innerHTML = "";
+
+    try{
+      await getMe();
+
+      const playDate = ($("mDate").value || "").trim();
+      const teeTime = ($("mTime").value || "").trim();
+      const holes = Number($("mHoles").value || 18);
+      const maxPlayers = Number($("mMaxPlayers").value || 4);
+      const pricePerPlayerCents = Number($("mPrice").value || 0);
+
+      const holdName = ($("mHoldName")?.value || "").trim();
+      const cartQty = Math.max(0, Math.min(4, Number($("mCartQty")?.value || 0)));
+      const hireClubsQty = Math.max(0, Math.min(4, Number($("mClubsQty")?.value || 0)));
+
+      if (!playDate) throw new Error("play_date_required");
+      if (!teeTime) throw new Error("tee_time_required");
+      if (!/^(\d{1,2}):(\d{2})$/.test(teeTime)) throw new Error("tee_time must be HH:MM (e.g. 06:30)");
+
+      await j("/api/book/course-admin/manual-slot", {
+        method:"POST",
+        body: JSON.stringify({
+          date: playDate,
+          teeTime,
+          holes,
+          maxPlayers,
+          pricePerPlayerCents,
+
+          holdName,
+          hold_name: holdName,
+          name: holdName,
+
+          cartQty,
+          hireClubsQty,
+          cart_qty: cartQty,
+          hire_clubs_qty: hireClubsQty
+        })
+      });
+
+      $("manualMsg").textContent = "✅ Added manual tee time";
+      await loadManualSlots();
+
+      if (isSheetOpenForDate(playDate)) {
+        $("viewMsg").textContent = "Refreshing daily sheet...";
+        await viewSheet();
+      }
+    }catch(e){
+      $("manualMsg").textContent = "❌ " + e.message;
+    }
+  };
 
   // ✅ Inventory feature
   $("checkInventoryBtn").onclick = async () => {
@@ -1371,23 +1384,24 @@ $("mAddBtn").onclick = async () => {
 
       const totalCarts = Number(cs.cart_qty ?? cs.cartQty ?? 0);
       const totalClubs = Number(cs.hire_clubs_qty ?? cs.hireClubsQty ?? 0);
-const dur9 = Number(cs.duration_9_mins ?? cs.duration9 ?? 180) || 180;
-const dur18 = Number(cs.duration_18_mins ?? cs.duration18 ?? 360) || 360;
+      const dur9 = Number(cs.duration_9_mins ?? cs.duration9 ?? 180) || 180;
+      const dur18 = Number(cs.duration_18_mins ?? cs.duration18 ?? 360) || 360;
 
-// window selection (All day OR Custom start + duration)
-const winMode = String($("iWindow")?.value || "all");
-let winStart = 0;
-let winEnd = 24 * 60;
+      // window selection (All day OR Custom start + duration)
+      const winMode = String($("iWindow")?.value || "all");
+      let winStart = 0;
+      let winEnd = 24 * 60;
 
-if (winMode === "custom") {
-  const startMins = timeToMins($("iStartTime")?.value || "");
-  const holes = Number($("iHoles")?.value || 18);
-  const dur = holes === 9 ? dur9 : dur18;
+      if (winMode === "custom") {
+        const startMins = timeToMins($("iStartTime")?.value || "");
+        const holes = Number($("iHoles")?.value || 18);
+        const dur = holes === 9 ? dur9 : dur18;
 
-  if (startMins == null) throw new Error("custom_start_time_required (e.g. 06:00)");
-  winStart = startMins;
-  winEnd = Math.min(24 * 60, startMins + dur);
-}
+        if (startMins == null) throw new Error("custom_start_time_required (e.g. 06:00)");
+        winStart = startMins;
+        winEnd = Math.min(24 * 60, startMins + dur);
+      }
+
       // 2️⃣ Load bookings for date
       const bookingsOut = await j(
         "/api/book/course-admin/bookings?" + new URLSearchParams({ slug: getSlug(), date }).toString(),
@@ -1399,68 +1413,68 @@ if (winMode === "custom") {
 
       const bookings = bookingsOut.bookings || [];
 
-// ✅ NEW: include manual slots too (your response already contains manualSlots)
-const manualSlots =
-  bookingsOut.manualSlots ||
-  bookingsOut.manual_slots ||
-  bookingsOut.slots ||
-  bookingsOut.rows ||
-  [];
+      // ✅ NEW: include manual slots too (your response already contains manualSlots)
+      const manualSlots =
+        bookingsOut.manualSlots ||
+        bookingsOut.manual_slots ||
+        bookingsOut.slots ||
+        bookingsOut.rows ||
+        [];
 
-let cartsUsed = 0;
-let clubsUsed = 0;
+      let cartsUsed = 0;
+      let clubsUsed = 0;
 
-function bookingStartMins(row){
-  // prefer start_at if present, fallback to tee_time
-  const a = row.start_at || row.startAt;
-  const aM = a ? dateObjToMins(a) : null;
-  if (aM != null) return aM;
+      function bookingStartMins(row){
+        // prefer start_at if present, fallback to tee_time
+        const a = row.start_at || row.startAt;
+        const aM = a ? dateObjToMins(a) : null;
+        if (aM != null) return aM;
 
-  const t = row.tee_time || row.teeTime || row.time;
-  return timeToMins(t);
-}
+        const t = row.tee_time || row.teeTime || row.time;
+        return timeToMins(t);
+      }
 
-function bookingDurationMins(row){
-  const h = Number(row.holes ?? row.hole_count ?? row.holeCount ?? 18);
-  return h === 9 ? dur9 : dur18;
-}
+      function bookingDurationMins(row){
+        const h = Number(row.holes ?? row.hole_count ?? row.holeCount ?? 18);
+        return h === 9 ? dur9 : dur18;
+      }
 
-function rowOverlapsWindow(row){
-  const s = bookingStartMins(row);
-  if (s == null) return false;
-  const e = Math.min(24 * 60, s + bookingDurationMins(row));
-  return minsOverlap(s, e, winStart, winEnd);
-}
+      function rowOverlapsWindow(row){
+        const s = bookingStartMins(row);
+        if (s == null) return false;
+        const e = Math.min(24 * 60, s + bookingDurationMins(row));
+        return minsOverlap(s, e, winStart, winEnd);
+      }
 
-// ✅ online bookings
-bookings.forEach(b => {
-  if (!rowOverlapsWindow(b)) return;
-  cartsUsed += Number(b.cart_qty ?? (b.has_cart ? 1 : 0));
-  clubsUsed += Number(b.hire_clubs_qty ?? (b.has_hire_clubs ? 1 : 0));
-});
+      // ✅ online bookings
+      bookings.forEach(b => {
+        if (!rowOverlapsWindow(b)) return;
+        cartsUsed += Number(b.cart_qty ?? (b.has_cart ? 1 : 0));
+        clubsUsed += Number(b.hire_clubs_qty ?? (b.has_hire_clubs ? 1 : 0));
+      });
 
-// ✅ manual bookings/holds
-// Count add-ons ONCE per manual booking reference (use the lowest slot_index row per reference)
-if (Array.isArray(manualSlots) && manualSlots.length) {
-  const byRef = new Map();
+      // ✅ manual bookings/holds
+      // Count add-ons ONCE per manual booking reference (use the lowest slot_index row per reference)
+      if (Array.isArray(manualSlots) && manualSlots.length) {
+        const byRef = new Map();
 
-  manualSlots.forEach(s => {
-    const ref = String(s.reference || "").trim();
-    if (!ref) return;
+        manualSlots.forEach(s => {
+          const ref = String(s.reference || "").trim();
+          if (!ref) return;
 
-    const prev = byRef.get(ref);
-    const sIdx = Number(s.slot_index ?? 999);
-    const pIdx = prev ? Number(prev.slot_index ?? 999) : 999;
+          const prev = byRef.get(ref);
+          const sIdx = Number(s.slot_index ?? 999);
+          const pIdx = prev ? Number(prev.slot_index ?? 999) : 999;
 
-    if (!prev || sIdx < pIdx) byRef.set(ref, s);
-  });
+          if (!prev || sIdx < pIdx) byRef.set(ref, s);
+        });
 
-  for (const s of byRef.values()) {
-    if (!rowOverlapsWindow(s)) continue;
-    cartsUsed += Number(s.cart_qty || 0);
-    clubsUsed += Number(s.hire_clubs_qty || 0);
-  }
-}
+        for (const s of byRef.values()) {
+          if (!rowOverlapsWindow(s)) continue;
+          cartsUsed += Number(s.cart_qty || 0);
+          clubsUsed += Number(s.hire_clubs_qty || 0);
+        }
+      }
 
       const cartsLeft = Math.max(0, totalCarts - cartsUsed);
       const clubsLeft = Math.max(0, totalClubs - clubsUsed);
