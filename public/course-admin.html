@@ -1379,12 +1379,6 @@ const winMode = String($("iWindow")?.value || "all");
 let winStart = 0;
 let winEnd = 24 * 60;
 
-if (winMode === "am") {
-  winStart = 0;
-  winEnd = 12 * 60; // 00:00–12:00
-} else if (winMode === "pm") {
-  winStart = 12 * 60;
-  winEnd = 24 * 60; // 12:00–24:00
 } else if (winMode === "custom") {
   const startMins = timeToMins($("iStartTime")?.value || "");
   const holes = Number($("iHoles")?.value || 18);
