@@ -1431,8 +1431,8 @@ const checkinId = `checkin_${safeKey}_${slotIndex}`;
       // ✅ online bookings
       bookings.forEach(b => {
         if (!rowOverlapsWindow(b)) return;
-        cartsUsed += Number(b.cart_qty ?? (b.has_cart ? 1 : 0));
-        clubsUsed += Number(b.hire_clubs_qty ?? (b.has_hire_clubs ? 1 : 0));
+        cartsUsed += (Number(b.cart_qty) || 0) + (!b.cart_qty && b.has_cart ? 1 : 0);
+        clubsUsed += (Number(b.hire_clubs_qty) || 0) + (!b.hire_clubs_qty && b.has_hire_clubs ? 1 : 0);
       });
 
       // ✅ manual bookings/holds
