@@ -143,14 +143,40 @@
       <p class="muted">Quick check for bookings on a specific date.</p>
 
       <div class="row">
-        <div>
-          <label class="muted">Play Date</label>
-          <input id="iDate" type="date" />
-        </div>
-        <div style="display:flex;align-items:end;gap:8px;justify-content:flex-end">
-          <button id="checkInventoryBtn" class="secondary">Check availability</button>
-        </div>
-      </div>
+  <div>
+    <label class="muted">Play Date</label>
+    <input id="iDate" type="date" />
+  </div>
+
+  <div>
+    <label class="muted">Window</label>
+    <select id="iWindow">
+      <option value="all" selected>All day</option>
+      <option value="am">AM (00:00–11:59)</option>
+      <option value="pm">PM (12:00–23:59)</option>
+      <option value="custom">Custom start (duration-based)</option>
+    </select>
+  </div>
+</div>
+
+<div class="row" style="margin-top:10px">
+  <div>
+    <label class="muted">Start time (Custom only)</label>
+    <input id="iStartTime" placeholder="06:00" value="06:00" />
+  </div>
+
+  <div>
+    <label class="muted">Holes (Custom only)</label>
+    <select id="iHoles">
+      <option value="18" selected>18 holes</option>
+      <option value="9">9 holes</option>
+    </select>
+  </div>
+</div>
+
+<div class="actions" style="margin-top:10px">
+  <button id="checkInventoryBtn" class="secondary">Check availability</button>
+</div>
 
       <div id="inventoryMsg" class="muted" style="margin-top:10px;"></div>
       <div id="inventoryDebug" class="muted mini" style="margin-top:8px;white-space:pre-wrap;"></div>
@@ -433,6 +459,26 @@ async function apiFetch(url, opts = {}) {
     }catch{ return s || ""; }
   }
 function normTime(v){
+  function timeToMins(v){
+  const s = String(v || "").trim();
+  const m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const hh = Math.max(0, Math.min(23, Number(m[1])));
+  const mm = Math.max(0, Math.min(59, Number(m[2])));
+  return hh * 60 + mm;
+}
+
+function minsOverlap(aStart, aEnd, bStart, bEnd){
+  return Math.max(aStart, bStart) < Math.min(aEnd, bEnd);
+}
+
+function dateObjToMins(d){
+  try{
+    const dt = new Date(d);
+    if (String(dt) === "Invalid Date") return null;
+    return dt.getHours() * 60 + dt.getMinutes();
+  }catch{ return null; }
+}
   const s = String(v || "").trim();
   const m = s.match(/(\d{1,2}):(\d{2})/);
   if (!m) return s;
@@ -1302,7 +1348,29 @@ $("mAddBtn").onclick = async () => {
 
       const totalCarts = Number(cs.cart_qty ?? cs.cartQty ?? 0);
       const totalClubs = Number(cs.hire_clubs_qty ?? cs.hireClubsQty ?? 0);
+const dur9 = Number(cs.duration_9_mins ?? cs.duration9 ?? 180) || 180;
+const dur18 = Number(cs.duration_18_mins ?? cs.duration18 ?? 360) || 360;
 
+// window selection
+const winMode = String($("iWindow")?.value || "all");
+let winStart = 0;
+let winEnd = 24 * 60;
+
+if (winMode === "am") {
+  winStart = 0;
+  winEnd = 12 * 60; // 00:00–12:00
+} else if (winMode === "pm") {
+  winStart = 12 * 60;
+  winEnd = 24 * 60; // 12:00–24:00
+} else if (winMode === "custom") {
+  const startMins = timeToMins($("iStartTime")?.value || "");
+  const holes = Number($("iHoles")?.value || 18);
+  const dur = holes === 9 ? dur9 : dur18;
+
+  if (startMins == null) throw new Error("custom_start_time_required (e.g. 06:00)");
+  winStart = startMins;
+  winEnd = Math.min(24 * 60, startMins + dur);
+}
       // 2️⃣ Load bookings for date
       const bookingsOut = await j(
         "/api/book/course-admin/bookings?" + new URLSearchParams({ slug: getSlug(), date }).toString(),
@@ -1325,8 +1393,31 @@ const manualSlots =
 let cartsUsed = 0;
 let clubsUsed = 0;
 
+function bookingStartMins(row){
+  // prefer start_at if present, fallback to tee_time
+  const a = row.start_at || row.startAt;
+  const aM = a ? dateObjToMins(a) : null;
+  if (aM != null) return aM;
+
+  const t = row.tee_time || row.teeTime || row.time;
+  return timeToMins(t);
+}
+
+function bookingDurationMins(row){
+  const h = Number(row.holes ?? row.hole_count ?? row.holeCount ?? 18);
+  return h === 9 ? dur9 : dur18;
+}
+
+function rowOverlapsWindow(row){
+  const s = bookingStartMins(row);
+  if (s == null) return false;
+  const e = Math.min(24 * 60, s + bookingDurationMins(row));
+  return minsOverlap(s, e, winStart, winEnd);
+}
+
 // ✅ online bookings
 bookings.forEach(b => {
+  if (!rowOverlapsWindow(b)) return;
   cartsUsed += Number(b.cart_qty ?? (b.has_cart ? 1 : 0));
   clubsUsed += Number(b.hire_clubs_qty ?? (b.has_hire_clubs ? 1 : 0));
 });
@@ -1348,6 +1439,7 @@ if (Array.isArray(manualSlots) && manualSlots.length) {
   });
 
   for (const s of byRef.values()) {
+    if (!rowOverlapsWindow(s)) continue;
     cartsUsed += Number(s.cart_qty || 0);
     clubsUsed += Number(s.hire_clubs_qty || 0);
   }
