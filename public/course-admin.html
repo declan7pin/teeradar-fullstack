@@ -1016,47 +1016,65 @@ if (!email) {
             const playersRaw = prompt("Players (1-4):", "1") || "1";
             const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
 
-            // ✅ Post (send BOTH naming styles so it works with whichever backend you have)
-            await j("/api/book/course-admin/booking", {
-              method:"POST",
-              body: JSON.stringify({
-                slug: getSlug(),
-                // date aliases
-                date,
-                playDate: date,
-                play_date: date,
+            // ✅ Try normal booking endpoint first
+try {
+  await j("/api/book/course-admin/booking", {
+    method:"POST",
+    body: JSON.stringify({
+      slug: getSlug(), // ✅ include slug in body too (some backends expect it)
 
-                // time aliases
-                teeTime,
-                tee_time: teeTime,
+      // date aliases
+      date,
+      playDate: date,
+      play_date: date,
 
-                holes,
-                players,
-                name,
+      // time aliases
+      teeTime,
+      tee_time: teeTime,
 
-                cartQty,
-                hireClubsQty,
-                cart_qty: cartQty,
-                hire_clubs_qty: hireClubsQty,
+      holes,
+      players,
+      name,
 
-                notes,
-                note: notes,
+      cartQty,
+      hireClubsQty,
+      cart_qty: cartQty,
+      hire_clubs_qty: hireClubsQty,
 
-                email,
-                phone,
+      notes,
+      note: notes,
 
-                paid: false,
-                checked_in: false
-              })
-            });
+      email,
+      phone,
 
-            $("viewMsg").textContent = "✅ Booking added";
-            await viewSheet(); // refresh
-          }catch(e){
-            $("viewMsg").textContent = "❌ " + (e?.message || "Failed to add booking");
-          }
-        };
-      });
+      paid: false,
+      checked_in: false
+    })
+  });
+} catch (e) {
+  // ✅ Fallback: if your backend doesn’t support /booking or it throws, use manual-booking
+  await j("/api/book/course-admin/manual-booking", {
+    method:"POST",
+    body: JSON.stringify({
+      slug: getSlug(),
+
+      date,
+      teeTime,
+      holes,
+      players,
+      name,
+      email,
+      phone,
+
+      // safe defaults (your endpoint accepts these)
+      maxPlayers: 4,
+      pricePerPlayerCents: 0,
+
+      cart_qty: cartQty,
+      hire_clubs_qty: hireClubsQty,
+    })
+  });
+}
 
       tb.querySelectorAll('input[type="checkbox"][data-ref][data-kind]').forEach(cb => {
         cb.onchange = async () => {
