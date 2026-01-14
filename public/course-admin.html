@@ -1374,12 +1374,12 @@ $("mAddBtn").onclick = async () => {
 const dur9 = Number(cs.duration_9_mins ?? cs.duration9 ?? 180) || 180;
 const dur18 = Number(cs.duration_18_mins ?? cs.duration18 ?? 360) || 360;
 
-// window selection
+// window selection (All day OR Custom start + duration)
 const winMode = String($("iWindow")?.value || "all");
 let winStart = 0;
 let winEnd = 24 * 60;
 
-} else if (winMode === "custom") {
+if (winMode === "custom") {
   const startMins = timeToMins($("iStartTime")?.value || "");
   const holes = Number($("iHoles")?.value || 18);
   const dur = holes === 9 ? dur9 : dur18;
