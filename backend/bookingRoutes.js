@@ -3116,7 +3116,12 @@ if (hire_clubs_qty > 0 && hire_clubs_qty > clubsRemaining) {
 
     for (let i = 0; i < players; i++) {
       const slot_index = freeSlots[i];
-
+  // ✅ Only store add-ons on the FIRST filled slot for this booking
+  const isFirstSlotForBooking = i === 0;
+  const slot_cart_qty = isFirstSlotForBooking ? cart_qty : 0;
+  const slot_hire_clubs_qty = isFirstSlotForBooking ? hire_clubs_qty : 0;
+  const slot_has_cart = slot_cart_qty > 0;
+  const slot_has_hire_clubs = slot_hire_clubs_qty > 0;
       const courseDurQ = await db.query(
         `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
         [courseId]
