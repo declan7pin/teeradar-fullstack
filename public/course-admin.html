@@ -603,10 +603,14 @@ function normalizeBookingLikeRow(b){
   const hasClubs = !!(item.has_hire_clubs || item.hasHireClubs || clubsQty > 0);
   const notes = _escape(item.notes || "");
     const key = refRaw || `empty_${slotIndex}`;
-  const slotKey = `${key}__slot${slotIndex}`; // ✅ unique per slot for selectors
 
-  const paidId = `paid_${key}_${slotIndex}`;
-  const checkinId = `checkin_${key}_${slotIndex}`;
+// ✅ safe key for element IDs (no spaces/special chars)
+const safeKey = String(key).replace(/[^a-zA-Z0-9_-]/g, "_");
+
+const slotKey = `${key}__slot${slotIndex}`; // keep raw for messaging + badge keys
+
+const paidId = `paid_${safeKey}_${slotIndex}`;
+const checkinId = `checkin_${safeKey}_${slotIndex}`;
 
     const badge =
     paid
