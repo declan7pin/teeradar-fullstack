@@ -400,7 +400,12 @@ window.onerror = function(message, source, lineno, colno){
   const key = getKey();
   if (!slug) throw new Error("slug_required");
   if (!key) throw new Error("bypass_key_required");
-
+  // ✅ Ensure slug is ALWAYS present on course-admin endpoints (some backend routes require query param)
+  if (typeof url === "string" && url.startsWith("/api/book/course-admin/")) {
+    if (!/[?&]slug=/.test(url)) {
+      url += (url.includes("?") ? "&" : "?") + "slug=" + encodeURIComponent(slug);
+    }
+  }
   const method = String(opts.method || "GET").toUpperCase();
   const hasBody = opts.body != null;
 
