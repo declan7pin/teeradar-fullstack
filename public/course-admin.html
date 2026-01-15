@@ -61,6 +61,7 @@
 <body>
   <div class="wrap">
 
+    <!-- 1) Slug login -->
     <div class="card">
       <h2>Course Admin</h2>
       <p class="muted">
@@ -88,93 +89,44 @@
       <div id="who" class="muted mini" style="margin-top:6px;"></div>
     </div>
 
-    <!-- ✅ Weekly schedule template -->
-    <div class="card">
-      <h2 style="margin:0 0 6px;">Weekly schedule template</h2>
-      <div class="sub" style="margin-bottom:10px;">
-        Save a weekly pattern once, then generate tee times for the next 30 days in one click.
-      </div>
-
-      <div id="tplStatus" class="status"></div>
-
-      <div style="display:grid;gap:10px;">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
-          <div style="flex:1;min-width:220px;">
-            <label>Timezone</label>
-            <input id="tplTimezone" value="Australia/Perth" />
-          </div>
-
-          <div style="flex:1;min-width:220px;">
-            <label>Generate from date</label>
-            <input id="tplStartDate" type="date" />
-          </div>
-
-          <div style="width:180px;">
-            <label>Days ahead</label>
-            <input id="tplDaysAhead" type="number" min="1" max="120" value="30" />
-          </div>
-
-          <div style="width:220px;">
-            <label>Mode</label>
-            <select id="tplMode">
-              <option value="skip" selected>Skip duplicates</option>
-              <option value="overwrite-range">Overwrite range</option>
-            </select>
-          </div>
-        </div>
-
-        <div id="tplGrid" style="display:grid;gap:10px;"></div>
-
-        <div class="actions">
-          <button id="tplLoadBtn">Load template</button>
-          <button class="secondary" id="tplSaveBtn">Save template</button>
-          <button id="tplGenerateBtn">Generate next days</button>
-        </div>
-
-        <div class="note">
-          Tip: set different windows for 18 and 9 so 18-hole groups can roll through without clashes.
-        </div>
-      </div>
-    </div>
-
-    <!-- ✅ Inventory check (carts + clubs) -->
+    <!-- 2) Cart availability (Inventory) -->
     <div class="card">
       <h3>Inventory (Carts & Hire Clubs)</h3>
       <p class="muted">Quick check for bookings on a specific date.</p>
 
       <div class="row">
-  <div>
-    <label class="muted">Play Date</label>
-    <input id="iDate" type="date" />
-  </div>
+        <div>
+          <label class="muted">Play Date</label>
+          <input id="iDate" type="date" />
+        </div>
 
-  <div>
-    <label class="muted">Window</label>
-    <select id="iWindow">
-  <option value="all" selected>All day</option>
-  <option value="custom">Custom start (duration)</option>
-</select>
-  </div>
-</div>
+        <div>
+          <label class="muted">Window</label>
+          <select id="iWindow">
+            <option value="all" selected>All day</option>
+            <option value="custom">Custom start (duration)</option>
+          </select>
+        </div>
+      </div>
 
-<div class="row" style="margin-top:10px">
-  <div>
-    <label class="muted">Start time (Custom only)</label>
-    <input id="iStartTime" placeholder="06:00" value="06:00" />
-  </div>
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label class="muted">Start time (Custom only)</label>
+          <input id="iStartTime" placeholder="06:00" value="06:00" />
+        </div>
 
-  <div>
-    <label class="muted">Holes (Custom only)</label>
-    <select id="iHoles">
-      <option value="18" selected>18 holes</option>
-      <option value="9">9 holes</option>
-    </select>
-  </div>
-</div>
+        <div>
+          <label class="muted">Holes (Custom only)</label>
+          <select id="iHoles">
+            <option value="18" selected>18 holes</option>
+            <option value="9">9 holes</option>
+          </select>
+        </div>
+      </div>
 
-<div class="actions" style="margin-top:10px">
-  <button id="checkInventoryBtn" class="secondary">Check availability</button>
-</div>
+      <div class="actions" style="margin-top:10px">
+        <button id="checkInventoryBtn" class="secondary">Check availability</button>
+      </div>
 
       <div id="inventoryMsg" class="muted" style="margin-top:10px;"></div>
       <div id="inventoryDebug" class="muted mini" style="margin-top:8px;white-space:pre-wrap;"></div>
@@ -187,6 +139,7 @@
       </div>
     </div>
 
+    <!-- 3) View tee times / bookings / sheet / manual -->
     <div class="card">
       <h3>View Tee Times / Bookings</h3>
 
@@ -373,6 +326,56 @@
         </div>
       </div>
     </div>
+
+    <!-- 4) Weekly schedule template (moved down; no other changes) -->
+    <div class="card">
+      <h2 style="margin:0 0 6px;">Weekly schedule template</h2>
+      <div class="sub" style="margin-bottom:10px;">
+        Save a weekly pattern once, then generate tee times for the next 30 days in one click.
+      </div>
+
+      <div id="tplStatus" class="status"></div>
+
+      <div style="display:grid;gap:10px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
+          <div style="flex:1;min-width:220px;">
+            <label>Timezone</label>
+            <input id="tplTimezone" value="Australia/Perth" />
+          </div>
+
+          <div style="flex:1;min-width:220px;">
+            <label>Generate from date</label>
+            <input id="tplStartDate" type="date" />
+          </div>
+
+          <div style="width:180px;">
+            <label>Days ahead</label>
+            <input id="tplDaysAhead" type="number" min="1" max="120" value="30" />
+          </div>
+
+          <div style="width:220px;">
+            <label>Mode</label>
+            <select id="tplMode">
+              <option value="skip" selected>Skip duplicates</option>
+              <option value="overwrite-range">Overwrite range</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="tplGrid" style="display:grid;gap:10px;"></div>
+
+        <div class="actions">
+          <button id="tplLoadBtn">Load template</button>
+          <button class="secondary" id="tplSaveBtn">Save template</button>
+          <button id="tplGenerateBtn">Generate next days</button>
+        </div>
+
+        <div class="note">
+          Tip: set different windows for 18 and 9 so 18-hole groups can roll through without clashes.
+        </div>
+      </div>
+    </div>
+
   </div>
 
 <script>
