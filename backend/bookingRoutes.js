@@ -2970,7 +2970,12 @@ if (startIndex + players - 1 > 4) {
 
     await client.query("COMMIT");
     didBegin = false;
-
+const sync = await syncBookedPlayersForTime({
+  courseId,
+  play_date: playDate,
+  tee_time,
+  holes,
+});
     return res.json({
       ok: true,
       course_slug: slug,
@@ -2980,6 +2985,7 @@ if (startIndex + players - 1 > 4) {
       players,
       reference,
       manualSlotsInserted: insertedRows,
+      sync, // ✅ add this
     });
   } catch (e) {
     console.error("course-admin/manual-slot POST", e);
