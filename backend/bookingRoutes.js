@@ -823,7 +823,14 @@ await db.query(`
     ALTER TABLE booking_times
     ADD COLUMN IF NOT EXISTS booked_players INTEGER NOT NULL DEFAULT 0;
   `);
-
+await db.query(`
+  ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;`);
+);
+  `);
+await db.query(`
+  ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;`);
+  );
+  `);
   await db.query(`
     UPDATE booking_times
     SET booked_players = 0
