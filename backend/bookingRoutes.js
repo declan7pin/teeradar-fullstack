@@ -3081,16 +3081,15 @@ if (hire_clubs_qty > 0 && hire_clubs_qty > clubsRemaining) {
 }
     // Ensure tee time exists (so daily sheet renders consistently)
     await db.query(
-      `
-      INSERT INTO booking_times
-        (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, created_at, updated_at)
-      VALUES
-        ($1, $2::date, $3, $4, 4, 0, 0, 'AVAILABLE', now(), now())
-      ON CONFLICT (course_id, play_date, tee_time, holes)
-      DO NOTHING;
-      `,
-      [courseId, play_date, tee_time, holes]
-    );
+  `
+  INSERT INTO booking_times
+    (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, created_at, updated_at)
+  VALUES
+    ($1, $2::date, $3, $4, 4, 0, 0, 'AVAILABLE', now(), now())
+  ON CONFLICT DO NOTHING;
+  `,
+  [courseId, play_date, tee_time, holes]
+);
 
     // Find empty slots
     const taken = await db.query(
