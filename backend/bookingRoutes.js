@@ -7,6 +7,18 @@ import cookieParser from "cookie-parser"; // ✅ ADD
 import { recordEvent } from "./analytics.js";
 
 const router = express.Router();
+// ✅ Add request id + timing + end-of-request status log
+router.use((req, res, next) => {
+  req._rid = Math.random().toString(16).slice(2, 10);
+  const start = Date.now();
+
+  res.on("finish", () => {
+    const ms = Date.now() - start;
+    console.log(`🧾 [${req._rid}] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${ms}ms)`);
+  });
+
+  next();
+});
 // ✅ DEBUG flag (Render env var DEBUG_BOOKING=1)
 const debug = String(process.env.DEBUG_BOOKING || "").trim() === "1";
 console.log("🧪 DEBUG_BOOKING enabled?", debug, "raw=", process.env.DEBUG_BOOKING);
