@@ -396,41 +396,55 @@ window.onerror = function(message, source, lineno, colno){
   function clearAuth(){ try { localStorage.removeItem(SLUG_KEY); localStorage.removeItem(BYPASS_KEY); } catch {} }
 
   async function j(url, opts = {}) {
-    const slug = getSlug();
-    const key = getKey();
-    if (!slug) throw new Error("slug_required");
-    if (!key) throw new Error("bypass_key_required");
+  const slug = getSlug();
+  const key = getKey();
+  if (!slug) throw new Error("slug_required");
+  if (!key) throw new Error("bypass_key_required");
 
-        const method = String(opts.method || "GET").toUpperCase();
-    const hasBody = opts.body != null;
+  const method = String(opts.method || "GET").toUpperCase();
+  const hasBody = opts.body != null;
 
-    const headers = {
-      // ✅ don’t force content-type on GET/HEAD (avoids OPTIONS preflight / CORS issues)
-      ...(hasBody && method !== "GET" && method !== "HEAD" ? { "content-type": "application/json" } : {}),
-      "x-course-admin-key": key,
-      "x-course-slug": slug,
-      ...(opts.headers || {}),
-    };
+  const headers = {
+    ...(hasBody && method !== "GET" && method !== "HEAD"
+      ? { "content-type": "application/json" }
+      : {}),
+    "x-course-admin-key": key,
+    "x-course-slug": slug,
+    ...(opts.headers || {}),
+  };
 
-    const res = await fetch(url, {
+  let res;
+  try {
+    res = await fetch(url, {
       ...opts,
       headers,
-      credentials: "include",   // ✅ important on iOS Safari
-      cache: "no-store",        // ✅ prevents stale/old 401 caching
+      credentials: "include",
+      cache: "no-store",
     });
-
-    const ct = (res.headers.get("content-type") || "").toLowerCase();
-    let data = {};
-    if (ct.includes("application/json")) {
-      data = await res.json().catch(() => ({}));
-    } else {
-      const preview = (await res.text().catch(() => "")).slice(0, 200);
-      throw new Error("non_json_response — " + preview.replace(/\s+/g, " ").slice(0, 120));
-    }
-
-    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
-    return data;
+  } catch (e) {
+    throw new Error(`network_error @ ${url}`);
   }
+
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  let data = null;
+
+  if (ct.includes("application/json")) {
+    data = await res.json().catch(() => null);
+  } else {
+    const preview = (await res.text().catch(() => "")).slice(0, 200);
+    throw new Error(
+      `non_json_response (HTTP ${res.status}) @ ${url} — ` +
+        preview.replace(/\s+/g, " ").slice(0, 140)
+    );
+  }
+
+  if (!res.ok) {
+    const err = (data && (data.error || data.message)) || `HTTP_${res.status}`;
+    throw new Error(`${err} @ ${url}`);
+  }
+
+  return data || {};
+}
 
   // ✅ adapter so template feature can use apiFetch() like real fetch()
 async function apiFetch(url, opts = {}) {
