@@ -2854,7 +2854,29 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+// ✅ compute usage window (needed for addon overlap checks)
+const courseRowQ = await client.query(
+  `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
+  [courseId]
+);
+const courseRow = courseRowQ.rows[0] || {};
+const startAtIso = toIsoDateTimeLocal(playDate, tee_time);
+const dur = durationMinsForHoles(courseRow, holes);
+const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
+// ✅ ENFORCE add-on inventory (carts/clubs) before inserting rows
+const inv = await enforceAddonInventory(client, {
+  courseId,
+  startAtIso,
+  endAtIso,
+  cartQtyWanted: cart_qty,
+  hireClubsQtyWanted: hire_clubs_qty,
+});
+if (!inv.ok) {
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(409).json({ ok: false, ...inv });
+}
     client = await db.connect();
     await client.query("BEGIN");
     didBegin = true;
