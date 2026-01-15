@@ -2863,7 +2863,16 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     );
 
     const startIndex = Number(mx.rows[0]?.max_slot || 0) + 1;
-
+// ✅ prevent slot overflow (only 1..4)
+if (startIndex + players - 1 > 4) {
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(409).json({
+    ok: false,
+    error: "not_enough_empty_slots",
+    remainingSlots: Math.max(0, 4 - (startIndex - 1)),
+  });
+}
     // Use one shared reference for the whole group
     const reference = String(_pickAny(req.body, ["reference"], "") || "").trim() || makeRef("MS");
 
