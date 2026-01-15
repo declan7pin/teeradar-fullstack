@@ -2982,7 +2982,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const slug = req.courseAdmin.slug;
 
     // ✅ accept multiple payload shapes
-    const play_date = String(req.body?.play_date || req.body?.date || "").trim(); // YYYY-MM-DD
+    const play_date = String(req.body?.play_date || req.body?.playDate || req.body?.date || "").trim();
     const tee_time = String(req.body?.tee_time || req.body?.teeTime || req.body?.time || "").trim(); // HH:MM
     const holes = Number(req.body?.holes || 18);
     const players = Math.max(1, Math.min(4, Number(req.body?.players || 1)));
