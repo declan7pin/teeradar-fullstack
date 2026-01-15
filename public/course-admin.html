@@ -1213,22 +1213,22 @@ tb.querySelectorAll('button[data-edit-slot]').forEach(btn => {
       const hireClubsQty = Math.max(0, Math.min(4, Number(prompt("Clubs qty (0-4):", "0") || "0")));
       const notes = (prompt("Notes (optional):", "") || "").trim();
 
-      // ✅ Manual slot update/upsert (NOT /booking)
       await j("/api/book/course-admin/manual-slot", {
-        method:"POST",
-        body: JSON.stringify({
-          date,
-          teeTime,
-          holes,
-          slotIndex,
-          name,
-          email,
-          phone,
-          cart_qty: cartQty,
-          hire_clubs_qty: hireClubsQty,
-          notes,
-        })
-      });
+  method:"POST",
+  body: JSON.stringify({
+    date,
+    time: teeTime,     // ✅ ADD THIS LINE
+    teeTime,
+    holes,
+    slotIndex,
+    name,
+    email,
+    phone,
+    cart_qty: cartQty,
+    hire_clubs_qty: hireClubsQty,
+    notes,
+  })
+});
 
       $("viewMsg").textContent = "✅ Slot updated";
       await viewSheet();
