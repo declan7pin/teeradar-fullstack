@@ -1064,9 +1064,9 @@ try{
 const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
 
             // ✅ Post (send BOTH naming styles so it works with whichever backend you have)
-            await j("/api/book/course-admin/booking", {
-              method:"POST",
-              body: JSON.stringify({
+            await j("/api/book/course-admin/booking?slug=" + encodeURIComponent(getSlug()), {
+  method:"POST",
+  body: JSON.stringify({
                 // date aliases
                 date,
                 playDate: date,
