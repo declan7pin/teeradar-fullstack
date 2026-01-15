@@ -80,9 +80,9 @@
       </div>
 
       <div class="actions">
-        <button id="saveBtn">Save</button>
-        <button id="testBtn" class="secondary">Test /me</button>
-        <button id="clearBtn" class="secondary">Clear</button>
+        <button id="saveBtn" type="button">Save</button>
+        <button id="testBtn" type="button" class="secondary">Test /me</button>
+        <button id="clearBtn" type="button" class="secondary">Clear</button>
       </div>
 
       <div id="msg" class="muted" style="margin-top:10px;"></div>
@@ -841,7 +841,7 @@ function normalizeBookingLikeRow(b){
     $("who").textContent = `✅ ${out.slug || ""} — ${out.email || ""}`;
     return out;
   }
-
+document.addEventListener("DOMContentLoaded", () => {
   $("saveBtn").onclick = () => {
     const slug = String($("slug").value || "").trim().toLowerCase();
     const key = String($("key").value || "").trim();
@@ -1707,7 +1707,7 @@ if (Array.isArray(manualSlots) && manualSlots.length) {
       setTimeout(() => document.querySelector("#tplLoadBtn")?.click(), 0);
     }
   })();
-
+});
   // ✅ Weekly template feature
   (function templateFeature(){
     const DOW = [
