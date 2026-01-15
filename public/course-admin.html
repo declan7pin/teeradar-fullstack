@@ -1128,133 +1128,12 @@ const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
           }
         };
       });
-      // ✅ NEW: Edit / Delete buttons on each slot (daily sheet)
+      // ✅ Edit / Delete buttons on each slot (daily sheet) — SINGLE handler (no duplicates)
 tb.querySelectorAll('button[data-del-slot]').forEach(btn => {
-  btn.onclick = async () => {
-    try{
-      await getMe();
+  btn.onclick = async (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
 
-      const date = ($("date").value || "").trim();
-      if (!date) throw new Error("play_date_required");
-
-      const tr = btn.closest("tr");
-      if (!tr) throw new Error("row_not_found");
-
-      const timeCell = tr.querySelector(".sheetTime");
-      const timeText = (timeCell?.innerText || "").trim();
-
-      const timeMatch = timeText.match(/^(\d{1,2}:\d{2})/);
-      const holesMatch = timeText.match(/\((\d+)\s*holes\)/i);
-
-      const teeTime = timeMatch ? timeMatch[1] : "";
-      const holes = holesMatch ? Number(holesMatch[1]) : 18;
-
-      const slotIndex = Number(btn.getAttribute("data-slot") || 0);
-      if (!teeTime || !slotIndex) throw new Error("missing_time_or_slot");
-
-      // Optional: only allow delete for MAN-* refs
-      const ref = (btn.getAttribute("data-ref") || "").trim();
-      if (ref && !ref.startsWith("MAN-")) {
-        alert("Delete is only supported for manual (MAN-*) slots right now.");
-        return;
-      }
-
-      if (!confirm(`Delete slot ${slotIndex} at ${teeTime} (${holes} holes)?`)) return;
-
-      // ✅ backend DELETE uses query params
-      await j(
-        "/api/book/course-admin/manual-slot?" +
-          new URLSearchParams({
-            date,
-            time: teeTime,
-            holes: String(holes),
-            slotIndex: String(slotIndex),
-          }).toString(),
-        { method:"DELETE" }
-      );
-
-      $("viewMsg").textContent = "✅ Slot deleted";
-      await viewSheet();
-    }catch(e){
-      $("viewMsg").textContent = "❌ " + (e?.message || "Failed to delete slot");
-    }
-  };
-});
-
-tb.querySelectorAll('button[data-edit-slot]').forEach(btn => {
-  btn.onclick = async () => {
-    try{
-      await getMe();
-
-      const date = ($("date").value || "").trim();
-      if (!date) throw new Error("play_date_required");
-
-      const tr = btn.closest("tr");
-      if (!tr) throw new Error("row_not_found");
-
-      const timeCell = tr.querySelector(".sheetTime");
-      const timeText = (timeCell?.innerText || "").trim();
-
-      const timeMatch = timeText.match(/^(\d{1,2}:\d{2})/);
-      const holesMatch = timeText.match(/\((\d+)\s*holes\)/i);
-
-      const teeTime = timeMatch ? timeMatch[1] : "";
-      const holes = holesMatch ? Number(holesMatch[1]) : 18;
-
-      const slotIndex = Number(btn.getAttribute("data-slot") || 0);
-      if (!teeTime || !slotIndex) throw new Error("missing_time_or_slot");
-
-      // Optional: only allow edit for MAN-* refs
-      const ref = (btn.getAttribute("data-ref") || "").trim();
-      if (ref && !ref.startsWith("MAN-")) {
-        alert("Edit is only supported for manual (MAN-*) slots right now.");
-        return;
-      }
-
-      // Prompt edits
-      const name = (prompt("Name:", "") || "").trim();
-      if (!name) return;
-
-      const email = (prompt("Email (optional):", "") || "").trim();
-      const phone = (prompt("Phone (optional):", "") || "").trim();
-
-      const cartQty = Math.max(0, Math.min(4, Number(prompt("Cart qty (0-4):", "0") || "0")));
-      const hireClubsQty = Math.max(0, Math.min(4, Number(prompt("Clubs qty (0-4):", "0") || "0")));
-      const notes = (prompt("Notes (optional):", "") || "").trim();
-
-      const playersRaw = prompt("Players (1-4):", "1") || "1";
-      const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
-
-      // ✅ Edit = re-create booking using /course-admin/booking (your backend supports this)
-      await j("/api/book/course-admin/booking?slug=" + encodeURIComponent(getSlug()), {
-        method:"POST",
-        body: JSON.stringify({
-          date,
-          teeTime,
-          tee_time: teeTime,
-          holes,
-          players,
-          name,
-          email,
-          phone,
-          cart_qty: cartQty,
-          hire_clubs_qty: hireClubsQty,
-          notes,
-          paid: false,
-          checked_in: false
-        })
-      });
-
-      $("viewMsg").textContent = "✅ Slot updated";
-      await viewSheet();
-    }catch(e){
-      $("viewMsg").textContent = "❌ " + (e?.message || "Failed to edit slot");
-    }
-  };
-});
-// ✅ NEW: Edit / Delete buttons on each slot
-tb.querySelectorAll('button[data-del-slot]').forEach(btn => {
-  btn.onclick = async () => {
     try{
       await getMe();
 
@@ -1278,7 +1157,8 @@ tb.querySelectorAll('button[data-del-slot]').forEach(btn => {
 
       if (!confirm(`Delete slot ${slotIndex} at ${teeTime} (${holes} holes)?`)) return;
 
-      // ✅ IMPORTANT: backend DELETE uses query params (not JSON body)
+      // ✅ IMPORTANT: This assumes your backend supports delete by (date,time,holes,slotIndex).
+      // If your backend only deletes by {id}, you MUST add backend support OR return ids in the sheet.
       await j(
         "/api/book/course-admin/manual-slot?" +
           new URLSearchParams({
@@ -1299,7 +1179,10 @@ tb.querySelectorAll('button[data-del-slot]').forEach(btn => {
 });
 
 tb.querySelectorAll('button[data-edit-slot]').forEach(btn => {
-  btn.onclick = async () => {
+  btn.onclick = async (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+
     try{
       await getMe();
 
@@ -1321,18 +1204,16 @@ tb.querySelectorAll('button[data-edit-slot]').forEach(btn => {
       const slotIndex = Number(btn.getAttribute("data-slot") || 0);
       if (!teeTime || !slotIndex) throw new Error("missing_time_or_slot");
 
-      // Prompt edits
       const name = (prompt("Name:", "") || "").trim();
       if (!name) return;
 
       const email = (prompt("Email (optional):", "") || "").trim();
       const phone = (prompt("Phone (optional):", "") || "").trim();
-
       const cartQty = Math.max(0, Math.min(4, Number(prompt("Cart qty (0-4):", "0") || "0")));
       const hireClubsQty = Math.max(0, Math.min(4, Number(prompt("Clubs qty (0-4):", "0") || "0")));
       const notes = (prompt("Notes (optional):", "") || "").trim();
 
-      // ✅ This expects your backend POST /course-admin/manual-slot to upsert by (date,time,holes,slotIndex)
+      // ✅ Manual slot update/upsert (NOT /booking)
       await j("/api/book/course-admin/manual-slot", {
         method:"POST",
         body: JSON.stringify({
