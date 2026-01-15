@@ -2968,26 +2968,6 @@ if (startIndex + players - 1 > 4) {
       insertedRows.push(ins.rows[0]);
     }
 
-    // ✅ OPTIONAL BUT RECOMMENDED:
-    // If you track tee-time capacity using booking_times.booked_players,
-    // increment it by "players" so availability doesn't oversell.
-    // This is safe: if booking_times row doesn't exist, it does nothing.
-    await client.query(
-      `
-      UPDATE booking_times
-      SET
-        booked_players = booked_players + $5,
-        status = CASE
-          WHEN status = 'BLOCKED' THEN 'BLOCKED'
-          WHEN (booked_players + $5) >= max_players THEN 'BOOKED'
-          ELSE status
-        END,
-        updated_at = now()
-      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4;
-      `,
-      [courseId, playDate, tee_time, holes, players]
-    );
-
     await client.query("COMMIT");
     didBegin = false;
 
