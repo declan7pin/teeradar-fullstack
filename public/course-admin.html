@@ -439,9 +439,12 @@ window.onerror = function(message, source, lineno, colno){
   }
 
   if (!res.ok) {
-    const err = (data && (data.error || data.message)) || `HTTP_${res.status}`;
-    throw new Error(`${err} @ ${url}`);
-  }
+  const err = (data && (data.error || data.message)) || `HTTP_${res.status}`;
+  const detail =
+    (data && (data.details || data.detail || data.reason)) ? 
+      (" — " + String(data.details || data.detail || data.reason)) : "";
+  throw new Error(`${err}${detail} @ ${url}`);
+}
 
   return data || {};
 }
