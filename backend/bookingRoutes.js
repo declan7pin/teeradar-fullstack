@@ -3082,6 +3082,17 @@ const courseQ = await db.query(
 const courseRow = courseQ.rows[0] || null;
 if (!courseRow) return res.status(404).json({ ok: false, error: "course_not_found" });
 
+const timePriceQ = await db.query(
+  `
+  SELECT price_per_player_cents
+  FROM booking_times
+  WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+  LIMIT 1;
+  `,
+  [courseId, play_date, tee_time, holes]
+);
+
+let pricePerPlayerCents = Number(timePriceQ.rows[0]?.price_per_player_cents || 0);
 // ✅ Build booking window once (same for all players at this tee time)
 const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
 const durMins = durationMinsForHoles(courseRow, holes);
