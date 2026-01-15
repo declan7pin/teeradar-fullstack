@@ -2861,7 +2861,13 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
 
     const courseId = await courseIdFromSlug(slug);
-    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+// ✅ CONNECT + BEGIN BEFORE USING client
+client = await db.connect();
+await client.query("BEGIN");
+didBegin = true;
+
 // ✅ compute usage window (needed for addon overlap checks)
 const courseRowQ = await client.query(
   `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
@@ -2885,9 +2891,6 @@ if (!inv.ok) {
   didBegin = false;
   return res.status(409).json({ ok: false, ...inv });
 }
-    client = await db.connect();
-    await client.query("BEGIN");
-    didBegin = true;
 
     // ✅ Lock this tee time manual-slot group so two admins can't collide slot_index
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
