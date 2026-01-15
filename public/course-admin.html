@@ -711,15 +711,43 @@ function normalizeBookingLikeRow(b){
 
   const byKey = new Map();
 
-  // ✅ Treat manual rows as booking-like rows (1 row = 1 occupied slot)
-  (manualRows || []).forEach(m => {
-    const time = normTime(m.tee_time || m.time || m.teeTime || "");
-    const holes = Number(m.holes ?? m.hole_count ?? m.num_holes ?? m.holeCount ?? "");
-    const key = keyOf(time, holes);
+  // ✅ Treat manual rows as booking-like rows.
+// ✅ If backend returns only ONE manual row (no slot_index rows),
+//    expand into multiple slots using players count.
+(manualRows || []).forEach(m => {
+  const time = normTime(m.tee_time || m.time || m.teeTime || "");
+  const holes = Number(m.holes ?? m.hole_count ?? m.num_holes ?? m.holeCount ?? "");
+  const key = keyOf(time, holes);
 
-    if (!byKey.has(key)) byKey.set(key, []);
-    byKey.get(key).push(normalizeBookingLikeRow(m));
-  });
+  if (!byKey.has(key)) byKey.set(key, []);
+
+  const hasSlotIndex = (m.slot_index != null || m.slotIndex != null);
+
+  // If NOT expanded per-slot by backend → expand here
+  if (!hasSlotIndex) {
+    const players = Math.max(1, Math.min(4, Number(
+      m.players ?? m.num_players ?? m.player_count ?? m.playerCount ?? 1
+    )));
+
+    for (let i = 0; i < players; i++) {
+      const row = normalizeBookingLikeRow(m);
+
+      // ✅ only show add-ons once (slot 1)
+      if (i > 0) {
+        row.cart_qty = 0;
+        row.hire_clubs_qty = 0;
+        row.has_cart = false;
+        row.has_hire_clubs = false;
+      }
+
+      byKey.get(key).push(row);
+    }
+    return;
+  }
+
+  // Already expanded per-slot by backend
+  byKey.get(key).push(normalizeBookingLikeRow(m));
+});
 
   // ✅ Normal bookings (players = slots)
 // ✅ Show cart/clubs qty ONCE per booking (on first slot only)
