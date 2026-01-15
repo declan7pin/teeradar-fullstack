@@ -1051,6 +1051,7 @@ try{
             if (!name) return;
 
             const email = (prompt("Email (needed for confirmation):", "") || "").trim();
+            if (!email) throw new Error("email_required");
             const phone = (prompt("Phone (optional):", "") || "").trim();
 
             const cartsRaw = prompt("Cart qty (0-4):", "0") || "0";
