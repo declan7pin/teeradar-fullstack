@@ -3130,10 +3130,10 @@ if (hire_clubs_qty > 0 && hire_clubs_qty > clubsRemaining) {
   INSERT INTO booking_times
     (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, created_at, updated_at)
   VALUES
-    ($1, $2::date, $3, $4, 4, 0, 0, 'AVAILABLE', now(), now())
+    ($1, $2::date, $3, $4, 4, 0, $5, 'AVAILABLE', now(), now())
   ON CONFLICT DO NOTHING;
   `,
-  [courseId, play_date, tee_time, holes]
+  [courseId, play_date, tee_time, holes, pricePerPlayerCents]
 );
 
     // Find empty slots
