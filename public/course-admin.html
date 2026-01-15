@@ -667,34 +667,55 @@ function normalizeBookingLikeRow(b){
                 ${notes ? `<span style="width:100%"><span class="muted">Notes:</span> ${notes}</span>` : ""}
       </div>
 
-      <div style="margin-top:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+            <div style="margin-top:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
         <label class="paidWrap" for="${paidId}">
           <input
-  id="${paidId}"
-  type="checkbox"
-  data-ref="${_escape(refRaw)}"
-  data-kind="paid"
-  data-slot="${slotIndex}"
-  data-slotkey="${_escape(slotKey)}"
-  ${paid ? "checked" : ""}
-/>
+            id="${paidId}"
+            type="checkbox"
+            data-ref="${_escape(refRaw)}"
+            data-kind="paid"
+            data-slot="${slotIndex}"
+            data-slotkey="${_escape(slotKey)}"
+            ${paid ? "checked" : ""}
+          />
           Paid
         </label>
 
         <label class="paidWrap" for="${checkinId}">
           <input
-  id="${checkinId}"
-  type="checkbox"
-  data-ref="${_escape(refRaw)}"
-  data-kind="checkin"
-  data-slot="${slotIndex}"
-  data-slotkey="${_escape(slotKey)}"
-  ${checkedIn ? "checked" : ""}
-/>
+            id="${checkinId}"
+            type="checkbox"
+            data-ref="${_escape(refRaw)}"
+            data-kind="checkin"
+            data-slot="${slotIndex}"
+            data-slotkey="${_escape(slotKey)}"
+            ${checkedIn ? "checked" : ""}
+          />
           Checked in
         </label>
 
         <div class="mini muted" data-msg="${_escape(slotKey)}"></div>
+      </div>
+
+      <!-- ✅ NEW: slot actions -->
+      <div class="actions" style="margin-top:10px">
+        <button
+          type="button"
+          class="secondary"
+          style="font-size:12px;padding:8px 10px;border-radius:10px;"
+          data-edit-slot="1"
+          data-ref="${_escape(refRaw)}"
+          data-slot="${slotIndex}"
+        >Edit</button>
+
+        <button
+          type="button"
+          class="secondary"
+          style="font-size:12px;padding:8px 10px;border-radius:10px;background:#b91c1c"
+          data-del-slot="1"
+          data-ref="${_escape(refRaw)}"
+          data-slot="${slotIndex}"
+        >Delete</button>
       </div>
     </div>
   `;
