@@ -2917,49 +2917,53 @@ if (startIndex + players - 1 > 4) {
       const slot_index = startIndex + i;
 
       const ins = await client.query(
-        `
-        INSERT INTO booking_manual_slots
-          (course_id, play_date, tee_time, holes, slot_index,
-           reference, name, email, phone,
-           paid, checked_in,
-           has_cart, has_hire_clubs,
-           cart_qty, hire_clubs_qty,
-           notes,
-           created_at, updated_at)
-        VALUES
-          ($1, $2::date, $3, $4, $5,
-           $6, $7, $8, $9,
-           $10, $11,
-           $12, $13,
-           $14, $15,
-           $16,
-           now(), now())
-        RETURNING
-          play_date::text AS play_date,
-          tee_time, holes, slot_index, reference,
-          name, email, phone, paid, checked_in,
-          has_cart, has_hire_clubs, cart_qty, hire_clubs_qty,
-          notes, created_at, updated_at;
-        `,
-        [
-          courseId,
-          playDate,
-          tee_time,
-          holes,
-          slot_index,
-          reference,
-          name || null,
-          email || null,
-          phone || null,
-          paid,
-          checked_in,
-          i === 0 ? cart_qty > 0 : false,
-          i === 0 ? hire_clubs_qty > 0 : false,
-          i === 0 ? cart_qty : 0,
-          i === 0 ? hire_clubs_qty : 0,
-          notes,
-        ]
-      );
+  `
+  INSERT INTO booking_manual_slots
+    (course_id, play_date, tee_time, holes, slot_index,
+     reference, name, email, phone,
+     paid, checked_in,
+     has_cart, has_hire_clubs,
+     cart_qty, hire_clubs_qty,
+     notes,
+     start_at, end_at,
+     created_at, updated_at)
+  VALUES
+    ($1, $2::date, $3, $4, $5,
+     $6, $7, $8, $9,
+     $10, $11,
+     $12, $13,
+     $14, $15,
+     $16,
+     $17::timestamptz, $18::timestamptz,
+     now(), now())
+  RETURNING
+    play_date::text AS play_date,
+    tee_time, holes, slot_index, reference,
+    name, email, phone, paid, checked_in,
+    has_cart, has_hire_clubs, cart_qty, hire_clubs_qty,
+    notes, start_at, end_at, created_at, updated_at;
+  `,
+  [
+    courseId,
+    playDate,
+    tee_time,
+    holes,
+    slot_index,
+    reference,
+    name || null,
+    email || null,
+    phone || null,
+    paid,
+    checked_in,
+    i === 0 ? cart_qty > 0 : false,
+    i === 0 ? hire_clubs_qty > 0 : false,
+    i === 0 ? cart_qty : 0,
+    i === 0 ? hire_clubs_qty : 0,
+    notes,
+    startAtIso,
+    endAtIso,
+  ]
+);
 
       insertedRows.push(ins.rows[0]);
     }
