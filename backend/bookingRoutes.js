@@ -2518,10 +2518,10 @@ RETURNING *;
   phone || null,
   paid,
   checked_in,
-  slot_has_cart,
-  slot_has_hire_clubs,
-  slot_cart_qty,
-  slot_hire_clubs_qty,
+  has_cart,          // ✅ FIX
+  has_hire_clubs,    // ✅ FIX
+  cart_qty,          // ✅ FIX
+  hire_clubs_qty,
   notes || null,
   startAtIso,
   endAtIso,
