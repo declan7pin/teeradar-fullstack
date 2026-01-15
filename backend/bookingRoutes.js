@@ -3937,6 +3937,74 @@ res.json({ ok: true, reference, paid });
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ NEW: cancel ONLINE booking (course admin)
+router.post("/course-admin/booking-cancel", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = req.courseAdmin.slug;
+    const reference = String(req.body?.reference || "").trim();
+    const reason = String(req.body?.reason || "").trim();
+
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
+
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) {
+      return res.status(404).json({ ok: false, error: "course_not_found" });
+    }
+
+    // Load booking
+    const b = await db.query(
+      `
+      SELECT id, course_id, play_date::text AS play_date, tee_time, holes, status
+      FROM booking_bookings
+      WHERE reference=$1 AND course_id=$2
+      LIMIT 1;
+      `,
+      [reference, courseId]
+    );
+
+    if (!b.rows.length) {
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    const row = b.rows[0];
+
+    // Idempotent
+    if (String(row.status).toUpperCase() === "CANCELLED") {
+      const sync = await syncBookedPlayersForTime({
+        courseId,
+        play_date: row.play_date,
+        tee_time: row.tee_time,
+        holes: row.holes,
+      });
+      return res.json({ ok: true, already: true, sync });
+    }
+
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET status='CANCELLED',
+          cancelled_at=now(),
+          cancelled_reason=$3
+      WHERE reference=$1 AND course_id=$2;
+      `,
+      [reference, courseId, reason || null]
+    );
+
+    const sync = await syncBookedPlayersForTime({
+      courseId,
+      play_date: row.play_date,
+      tee_time: row.tee_time,
+      holes: row.holes,
+    });
+
+    return res.json({ ok: true, reference, status: "CANCELLED", sync });
+  } catch (e) {
+    console.error("course-admin/booking-cancel", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // ✅ ADD: toggle checked-in flag (course admin)
 router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res) => {
   try {
