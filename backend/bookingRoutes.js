@@ -3130,10 +3130,10 @@ if (hire_clubs_qty > 0 && hire_clubs_qty > clubsRemaining) {
   INSERT INTO booking_times
     (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, created_at, updated_at)
   VALUES
-    ($1, $2::date, $3, $4, 4, 0, $5, 'AVAILABLE', now(), now())
+    ($1, $2::date, $3, $4, 4, 0, 0, 'AVAILABLE', now(), now())
   ON CONFLICT DO NOTHING;
   `,
-  [courseId, play_date, tee_time, holes, pricePerPlayerCents]
+  [courseId, play_date, tee_time, holes]
 );
 
     // Find empty slots
@@ -3255,8 +3255,8 @@ if (hire_clubs_qty > 0 && hire_clubs_qty > clubsRemaining) {
         const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
 const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
 
-        const ppp = 0; // you can wire this later if needed
-        const totalCents = ppp * Number(players || 1);
+        const ppp = pricePerPlayerCents;
+const totalCents = ppp * Number(players || 1);
 
         await sendBookingEmail({
           to: email,
