@@ -765,42 +765,6 @@ async function sendBookingEmail({
   }
 }
 
-// ✅ NEW: helper for bypass to work on BOTH fetch() and full page navigation
-function getBypassProvided(req) {
-  const key =
-    String(req.headers["x-course-admin-key"] || "").trim() ||
-    String(req.query.key || "").trim() ||
-    String(req.cookies?.tr_course_admin_bypass || "").trim();
-
-  const slug =
-    String(req.headers["x-course-slug"] || "").trim().toLowerCase() ||
-    String(req.query.slug || "").trim().toLowerCase() ||
-    String(req.cookies?.tr_course_admin_slug || "").trim().toLowerCase();
-
-  return { key, slug };
-}
-
-  // ✅ Normal mode (token/cookies)
-  const auth = String(req.headers.authorization || "");
-  const m = auth.match(/^Bearer\s+(.+)$/i);
-  const bearer = m ? m[1].trim() : "";
-  const token = bearer || String(req.cookies?.tr_course_admin_token || "");
-  const verified = token ? verifyCourseAdminToken(token) : null;
-
-  if (verified?.slug && verified?.email) {
-    req.courseAdmin = { slug: verified.slug, email: verified.email, role: verified.role || "proshop" };
-    return next();
-  }
-
-  // ✅ fallback: old cookies (backwards compatible)
-  const slug = String(req.cookies?.tr_course_admin_slug || "");
-  const email = String(req.cookies?.tr_course_admin_email || "");
-  if (!slug || !email) return res.status(401).json({ ok: false, error: "not_course_admin" });
-
-  req.courseAdmin = { slug, email, role: "proshop" };
-  return next();
-}
-
 // -----------------------------
 // One-time table creation (safe)
 // -----------------------------
@@ -816,10 +780,6 @@ async function ensureBookingTables() {
   `);
   // ✅ NEW: role-based access for course users (manager vs proshop)
   await db.query(`
-    ALTER TABLE booking_course_users
-    ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'proshop';
-  `);
-  await db.query(`
     CREATE TABLE IF NOT EXISTS booking_course_users (
       id SERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
@@ -829,6 +789,10 @@ async function ensureBookingTables() {
       created_at TIMESTAMPTZ DEFAULT now(),
       UNIQUE(course_id, email)
     );
+  `);
+  await db.query(`
+    ALTER TABLE booking_course_users
+    ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'proshop';
   `);
 await db.query(`
   CREATE TABLE IF NOT EXISTS booking_time_templates (
@@ -3761,7 +3725,7 @@ else skipped += 1;
 });
 // ✅ NEW: Course admin — booking analytics summary (scoped)
 // Uses booking_bookings + booking_analytics_events (source of truth)
-router.get("/course-admin/analytics/summary", requireCourseAdmin, requireCourseManager, async (req, res) => {
+router.get("/course-admin/analytics/summary", requireCourseAdmin, requireCourseAdminManager, async (req, res) => {
   try {
     const slug = req.courseAdmin.slug;
     const days = Number(req.query.days || 7);
