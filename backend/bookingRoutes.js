@@ -3576,7 +3576,7 @@ const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
 const daysAhead = Math.max(1, Math.min(120, Number(req.body?.daysAhead || 30)));
 const mode = String(req.body?.mode || "skip").trim().toLowerCase();
 
-if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
+if (!slug) return res.status(401).json({ ok: false, error: "not_course_admin" });
 
 // ✅ fallback if frontend didn’t send startDate
 if (!startDate) {
