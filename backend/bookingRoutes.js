@@ -3571,7 +3571,11 @@ router.post("/generate-from-template", requireCourseAdmin, async (req, res) => {
   req.headers["x-course-slug"] ||
   ""
 ).trim().toLowerCase();
-    const startDate = String(req.body?.startDate || "").trim(); // YYYY-MM-DD
+    const startDate = String(
+  req.body?.startDate ||
+  req.body?.start_date ||
+  ""
+).trim(); // YYYY-MM-DD
     const daysAhead = Math.max(1, Math.min(120, Number(req.body?.daysAhead || 30)));
     const mode = String(req.body?.mode || "skip").trim().toLowerCase();
 
