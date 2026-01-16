@@ -363,10 +363,11 @@ async function countOverlappingAddonUsage(client, { courseId, startAtIso, endAtI
         AND start_at < $3::timestamptz
         AND end_at   > $2::timestamptz
         AND slot_index = (
-          SELECT MIN(slot_index)
-          FROM booking_manual_slots
-          WHERE reference = m.reference
-        )
+        SELECT MIN(slot_index)
+        FROM booking_manual_slots
+        WHERE reference = m.reference
+        AND course_id = $1
+      )
     ) t
     `,
     [courseId, startAtIso, endAtIso]
