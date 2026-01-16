@@ -676,7 +676,7 @@ app.post(
     }
   }
 );
-app.use(express.json());
+app.use(express.json({ type: ["application/json", "text/plain"] }));
 
 // ✅ NEW: cookies (needed for booking admin auth cookie)
 app.use(cookieParser());
