@@ -749,18 +749,6 @@ function getBypassProvided(req) {
   return { key, slug };
 }
 
-function requireCourseAdmin(req, res, next) {
-  // 🔓 BYPASS MODE — enabled only if env var is set
-  const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
-
-  if (bypassKey) {
-    const { key: providedKey, slug } = getBypassProvided(req);
-
-    if (providedKey && providedKey === bypassKey) {
-      if (!slug || !isValidSlug(slug)) {
-        return res.status(400).json({ ok: false, error: "slug_required" });
-      }
-
       // ✅ When bypass works via fetch headers, set cookies so normal browser navigations also work.
       res.cookie("tr_course_admin_bypass", providedKey, baseCookieOpts(req));
       res.cookie("tr_course_admin_slug", slug, baseCookieOpts(req));
