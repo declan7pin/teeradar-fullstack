@@ -152,6 +152,7 @@
           <button id="viewTimesBtn" class="secondary">View tee times</button>
           <button id="viewBookingsBtn" class="secondary">View bookings</button>
           <button id="viewSheetBtn" class="secondary">Daily sheet</button>
+          <button id="deleteTimesBtn" class="secondary" style="background:#b91c1c">Delete tee times (date)</button>
         </div>
       </div>
 
@@ -1286,7 +1287,26 @@ if (!refToUse) {
   $("viewTimesBtn").onclick = viewTimes;
   $("viewBookingsBtn").onclick = viewBookings;
   $("viewSheetBtn").onclick = viewSheet;
+$("deleteTimesBtn").onclick = async () => {
+  try{
+    await getMe();
 
+    const date = ($("date").value || "").trim();
+    if (!date) throw new Error("play_date_required");
+
+    if (!confirm(`Delete ALL tee times for ${date}? This cannot be undone.`)) return;
+
+    await j(
+      "/api/book/course-admin/times?" + new URLSearchParams({ date }).toString(),
+      { method:"DELETE" }
+    );
+
+    $("viewMsg").textContent = `✅ Tee times deleted for ${date}`;
+    clearView();
+  }catch(e){
+    $("viewMsg").textContent = "❌ " + (e?.message || "delete_failed");
+  }
+};
   // ✅ Manual tee times (Course Admin)
   function _manualDateDefault(){
     try{
