@@ -343,7 +343,19 @@ function _isoDate(d) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+// -----------------------------
+// ✅ Course admin password helpers (PBKDF2)
+// -----------------------------
+function hashPassword(password, saltHex = null) {
+  const salt = saltHex ? Buffer.from(saltHex, "hex") : crypto.randomBytes(16);
+  const derived = crypto.pbkdf2Sync(String(password), salt, 100000, 32, "sha256");
+  return { saltHex: salt.toString("hex"), hashHex: derived.toString("hex") };
+}
 
+function verifyPassword(password, saltHex, hashHex) {
+  const { hashHex: test } = hashPassword(password, saltHex);
+  return crypto.timingSafeEqual(Buffer.from(test, "hex"), Buffer.from(hashHex, "hex"));
+}
 // Monday=1 ... Sunday=7
 function _weekdayISO(d) {
   const js = d.getDay(); // Sun=0 ... Sat=6
