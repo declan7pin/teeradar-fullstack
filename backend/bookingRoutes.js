@@ -75,6 +75,63 @@ const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
 // ✅ ALSO support normal JWT secret if you already have it set
 const JWT_SECRET_FALLBACK = (process.env.JWT_SECRET || "").trim();
+// ------------------------------
+// ✅ Course Admin JWT helpers
+// ------------------------------
+function getCourseAdminSecret() {
+  return COURSE_ADMIN_JWT_SECRET || JWT_SECRET_FALLBACK || "";
+}
+
+function signCourseAdminToken(payload) {
+  const secret = getCourseAdminSecret();
+  if (!secret) throw new Error("COURSE_ADMIN_JWT_SECRET_not_set");
+  return jwt.sign(payload, secret, { expiresIn: "30d" });
+}
+
+function verifyCourseAdminToken(token) {
+  const secret = getCourseAdminSecret();
+  if (!secret) throw new Error("COURSE_ADMIN_JWT_SECRET_not_set");
+  return jwt.verify(token, secret);
+}
+
+function getBearer(req) {
+  const auth = String(req.headers.authorization || "");
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  return m ? m[1].trim() : "";
+}
+
+async function requireCourseAdmin(req, res, next) {
+  try {
+    const token = getBearer(req);
+    if (!token) return res.status(401).json({ ok: false, error: "missing_token" });
+
+    const payload = verifyCourseAdminToken(token);
+
+    // expected: { courseId, slug, email, role }
+    req.courseAdmin = {
+      courseId: Number(payload.courseId),
+      slug: String(payload.slug || ""),
+      email: String(payload.email || ""),
+      role: String(payload.role || "PROSHOP"),
+    };
+
+    if (!req.courseAdmin.courseId || !req.courseAdmin.slug || !req.courseAdmin.email) {
+      return res.status(401).json({ ok: false, error: "invalid_token" });
+    }
+
+    return next();
+  } catch (e) {
+    return res.status(401).json({ ok: false, error: "invalid_token" });
+  }
+}
+
+function requireCourseAdminManager(req, res, next) {
+  const role = String(req.courseAdmin?.role || "").toUpperCase();
+  if (role !== "MANAGER") {
+    return res.status(403).json({ ok: false, error: "manager_only" });
+  }
+  return next();
+}
 // ✅ DEBUG logger (safe anywhere)
 const DEBUG_BOOKING = String(process.env.DEBUG_BOOKING || "").trim() === "1";
 function dlog(...args) {
