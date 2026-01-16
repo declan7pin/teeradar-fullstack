@@ -598,7 +598,8 @@ function normalizeBookingLikeRow(b){
   item.confirmation_code ??
   item.confirmationCode ??
   ""
-);
+).trim();
+
   const refDisp = _escape(refRaw);
 const isManualRef = /^MAN-/.test(refRaw);
     // ✅ supports per-slot flags if backend returns them later (fallback to old fields)
