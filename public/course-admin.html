@@ -1205,6 +1205,7 @@ if (!/^MAN-/.test(ref)) {
       await j("/api/book/course-admin/manual-slot", {
   method:"POST",
   body: JSON.stringify({
+    reference: ref,
     date,
     time: teeTime,     // ✅ ADD THIS LINE
     teeTime,
