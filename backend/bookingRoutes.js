@@ -3565,7 +3565,12 @@ router.put("/course-template", requireCourseAdmin, async (req, res) => {
 // mode: "skip" (default) OR "overwrite-range"
 router.post("/generate-from-template", requireCourseAdmin, async (req, res) => {
   try {
-    const slug = String(req.body?.slug || "").trim().toLowerCase();
+    const slug = String(
+  req.body?.slug ||
+  req.query?.slug ||
+  req.headers["x-course-slug"] ||
+  ""
+).trim().toLowerCase();
     const startDate = String(req.body?.startDate || "").trim(); // YYYY-MM-DD
     const daysAhead = Math.max(1, Math.min(120, Number(req.body?.daysAhead || 30)));
     const mode = String(req.body?.mode || "skip").trim().toLowerCase();
