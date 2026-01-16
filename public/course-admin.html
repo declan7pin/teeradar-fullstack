@@ -394,7 +394,24 @@ window.onerror = function(message, source, lineno, colno){
   function setSlug(v){ try { localStorage.setItem(SLUG_KEY, String(v||"").trim().toLowerCase()); } catch {} }
   function setKey(v){ try { localStorage.setItem(BYPASS_KEY, String(v||"").trim()); } catch {} }
   function clearAuth(){ try { localStorage.removeItem(SLUG_KEY); localStorage.removeItem(BYPASS_KEY); } catch {} }
+// ✅ NEW: set HttpOnly bypass cookie on the server (so user doesn't re-enter key)
+async function setBypassCookie(slug, key) {
+  const res = await fetch("/api/book/course-admin/bypass", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ slug, key }),
+  });
 
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  const data = ct.includes("application/json") ? await res.json().catch(() => null) : null;
+
+  if (!res.ok) {
+    const err = (data && (data.error || data.message)) || `HTTP_${res.status}`;
+    throw new Error(err);
+  }
+  return data || {};
+}
   async function j(url, opts = {}) {
   const slug = getSlug();
   const key = getKey();
@@ -804,14 +821,24 @@ const isManualRef = /^MAN-/.test(refRaw);
     return out;
   }
 document.addEventListener("DOMContentLoaded", () => {
-  $("saveBtn").onclick = () => {
+    $("saveBtn").onclick = async () => {
     const slug = String($("slug").value || "").trim().toLowerCase();
     const key = String($("key").value || "").trim();
+
     setSlug(slug);
     setKey(key);
-    $("msg").textContent = "✅ Saved";
-    $("who").textContent = slug ? `Using: ${slug}` : "";
-    document.querySelector("#tplLoadBtn")?.click();
+
+    $("msg").textContent = "Saving...";
+    try {
+      // ✅ NEW: store bypass in HttpOnly cookie
+      await setBypassCookie(slug, key);
+
+      $("msg").textContent = "✅ Saved (cookie set)";
+      $("who").textContent = slug ? `Using: ${slug}` : "";
+      document.querySelector("#tplLoadBtn")?.click();
+    } catch (e) {
+      $("msg").textContent = "❌ " + (e?.message || "Failed to save");
+    }
   };
 
   $("clearBtn").onclick = () => {
