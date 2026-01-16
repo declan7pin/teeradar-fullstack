@@ -1116,7 +1116,11 @@ tb.querySelectorAll('button[data-del-slot]').forEach(btn => {
 
     try{
       await getMe();
-
+const ref = String(btn.getAttribute("data-ref") || "");
+if (!/^MAN-/.test(ref)) {
+  $("viewMsg").textContent = "❌ Only MAN- bookings can be edited/deleted here (TR- are online bookings).";
+  return;
+}
       const date = ($("date").value || "").trim();
       if (!date) throw new Error("play_date_required");
 
@@ -1165,7 +1169,11 @@ tb.querySelectorAll('button[data-edit-slot]').forEach(btn => {
 
     try{
       await getMe();
-
+const ref = String(btn.getAttribute("data-ref") || "");
+if (!/^MAN-/.test(ref)) {
+  $("viewMsg").textContent = "❌ Only MAN- bookings can be edited/deleted here (TR- are online bookings).";
+  return;
+}
       const date = ($("date").value || "").trim();
       if (!date) throw new Error("play_date_required");
 
