@@ -2971,7 +2971,7 @@ for (let i = 0; i < players; i++) {
   const slot_index = freeSlots[i];
 
   const ins = await client.query(
-    `
+        `
     INSERT INTO booking_manual_slots
       (course_id, play_date, tee_time, holes, slot_index,
        reference, name, email, phone,
@@ -2990,13 +2990,29 @@ for (let i = 0; i < players; i++) {
        $16,
        $17::timestamptz, $18::timestamptz,
        now(), now())
+    ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
+    DO UPDATE SET
+      reference = EXCLUDED.reference,
+      name = EXCLUDED.name,
+      email = EXCLUDED.email,
+      phone = EXCLUDED.phone,
+      paid = EXCLUDED.paid,
+      checked_in = EXCLUDED.checked_in,
+      has_cart = EXCLUDED.has_cart,
+      has_hire_clubs = EXCLUDED.has_hire_clubs,
+      cart_qty = EXCLUDED.cart_qty,
+      hire_clubs_qty = EXCLUDED.hire_clubs_qty,
+      notes = EXCLUDED.notes,
+      start_at = EXCLUDED.start_at,
+      end_at = EXCLUDED.end_at,
+      updated_at = now()
     RETURNING
       play_date::text AS play_date,
       tee_time, holes, slot_index, reference,
       name, email, phone, paid, checked_in,
       has_cart, has_hire_clubs, cart_qty, hire_clubs_qty,
       notes, start_at, end_at, created_at, updated_at;
-    `,
+    `
     [
       courseId,
       playDate,
