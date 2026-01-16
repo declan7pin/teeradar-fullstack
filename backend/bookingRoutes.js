@@ -794,7 +794,7 @@ function requireCourseAdmin(req, res, next) {
       res.cookie("tr_course_admin_bypass", providedKey, baseCookieOpts(req));
       res.cookie("tr_course_admin_slug", slug, baseCookieOpts(req));
 
-      req.courseAdmin = { slug, email: "bypass@teeradar" };
+      req.courseAdmin = { slug, email: "bypass@teeradar", role: "manager" };
       return next();
     }
   }
@@ -807,7 +807,7 @@ function requireCourseAdmin(req, res, next) {
   const verified = token ? verifyCourseAdminToken(token) : null;
 
   if (verified?.slug && verified?.email) {
-    req.courseAdmin = { slug: verified.slug, email: verified.email };
+    req.courseAdmin = { slug: verified.slug, email: verified.email, role: verified.role || "proshop" };
     return next();
   }
 
@@ -816,7 +816,7 @@ function requireCourseAdmin(req, res, next) {
   const email = String(req.cookies?.tr_course_admin_email || "");
   if (!slug || !email) return res.status(401).json({ ok: false, error: "not_course_admin" });
 
-  req.courseAdmin = { slug, email };
+  req.courseAdmin = { slug, email, role: "proshop" };
   return next();
 }
 function requireCourseManager(req, res, next) {
