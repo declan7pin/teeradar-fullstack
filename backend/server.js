@@ -447,6 +447,18 @@ async function ensureBookingTables() {
         UNIQUE(course_id, email)
       );
     `);
+        // ✅ NEW: role for course admin users (MANAGER can see analytics)
+    await db.query(`
+      ALTER TABLE booking_course_users
+      ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'PROSHOP';
+    `);
+
+    // Safety backfill
+    await db.query(`
+      UPDATE booking_course_users
+      SET role = 'PROSHOP'
+      WHERE role IS NULL OR TRIM(role) = '';
+    `);
     // ✅ NEW: course admin role (PROSHOP or MANAGER)
     await db.query(`
       ALTER TABLE booking_course_users
