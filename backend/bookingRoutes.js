@@ -102,29 +102,61 @@ function getBearer(req) {
 }
 
 async function requireCourseAdmin(req, res, next) {
+  // ✅ helper for bypass to work on BOTH fetch() and full page navigation
+  function getBypassProvided(req) {
+    const key =
+      String(req.headers["x-course-admin-key"] || "").trim() ||
+      String(req.query.key || "").trim() ||
+      String(req.cookies?.tr_course_admin_bypass || "").trim();
+
+    const slug =
+      String(req.headers["x-course-slug"] || "").trim().toLowerCase() ||
+      String(req.query.slug || "").trim().toLowerCase() ||
+      String(req.cookies?.tr_course_admin_slug || "").trim().toLowerCase();
+
+    return { key, slug };
+  }
+
   try {
-    const token = getBearer(req);
-    if (!token) return res.status(401).json({ ok: false, error: "missing_token" });
-
-    const payload = verifyCourseAdminToken(token);
-
-    req.courseAdmin = {
-      courseId: Number(payload.courseId),
-      slug: String(payload.slug || ""),
-      email: String(payload.email || ""),
-      role: String(payload.role || "PROSHOP"),
-    };
-
-    if (!req.courseAdmin.courseId || !req.courseAdmin.slug || !req.courseAdmin.email) {
-      return res.status(401).json({ ok: false, error: "invalid_token" });
+    // ✅ 1) BYPASS mode (if you still support it)
+    const { key, slug } = getBypassProvided(req);
+    if (key && slug) {
+      const expected = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
+      if (expected && key === expected) {
+        req.courseAdmin = { slug, email: "bypass@local", role: "proshop" };
+        return next();
+      }
     }
 
-    next();
+    // ✅ 2) Normal mode (token/cookies)
+    const auth = String(req.headers.authorization || "");
+    const m = auth.match(/^Bearer\s+(.+)$/i);
+    const bearer = m ? m[1].trim() : "";
+    const token = bearer || String(req.cookies?.tr_course_admin_token || "");
+    const verified = token ? verifyCourseAdminToken(token) : null;
+
+    if (verified?.slug && verified?.email) {
+      req.courseAdmin = {
+        slug: verified.slug,
+        email: verified.email,
+        role: verified.role || "proshop",
+      };
+      return next();
+    }
+
+    // ✅ 3) fallback: old cookies (backwards compatible)
+    const slug2 = String(req.cookies?.tr_course_admin_slug || "");
+    const email2 = String(req.cookies?.tr_course_admin_email || "");
+    if (!slug2 || !email2) {
+      return res.status(401).json({ ok: false, error: "not_course_admin" });
+    }
+
+    req.courseAdmin = { slug: slug2, email: email2, role: "proshop" };
+    return next();
   } catch (e) {
-    return res.status(401).json({ ok: false, error: "invalid_token" });
+    return res.status(401).json({ ok: false, error: "not_course_admin" });
   }
 }
-
 function requireCourseAdminManager(req, res, next) {
   const role = String(req.courseAdmin?.role || "").toUpperCase();
   if (role !== "MANAGER") {
