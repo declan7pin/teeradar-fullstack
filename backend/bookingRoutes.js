@@ -3634,15 +3634,17 @@ if (!startDate) {
     end.setDate(end.getDate() + daysAhead);
 
     // Optional overwrite range
-    if (mode === "overwrite-range") {
-      await db.query(
-        `DELETE FROM booking_times
-         WHERE course_id = $1
-           AND play_date >= $2::date
-           AND play_date < $3::date;`,
-        [courseId, startDate, _isoDate(end)]
-      );
-    }
+if (mode === "overwrite-range") {
+  // ✅ Only delete non-booked times (never delete BOOKED)
+  await db.query(
+    `DELETE FROM booking_times
+     WHERE course_id = $1
+       AND play_date >= $2::date
+       AND play_date < $3::date
+       AND status <> 'BOOKED';`,
+    [courseId, startDate, _isoDate(end)]
+  );
+}
 
     let inserted = 0;
     let skipped = 0;
@@ -3674,18 +3676,29 @@ if (!startDate) {
           const teeTime = _minutesToTime(mins);
 
           const r = await db.query(
-            `INSERT INTO booking_times (
-              course_id, play_date, tee_time, holes,
-              max_players, price_per_player_cents,
-              status, created_at, updated_at
-            )
-            VALUES ($1, $2::date, $3, $4, $5, $6, 'AVAILABLE', now(), now())
-            ON CONFLICT (course_id, play_date, tee_time, holes) DO NOTHING;`,
-            [courseId, playDate, teeTime, holes, maxPlayers, pricePerPlayerCents]
-          );
+  `INSERT INTO booking_times (
+    course_id, play_date, tee_time, holes,
+    max_players, price_per_player_cents,
+    status, created_at, updated_at
+  )
+  VALUES ($1, $2::date, $3, $4, $5, $6, 'AVAILABLE', now(), now())
+  ON CONFLICT (course_id, play_date, tee_time, holes)
+  DO UPDATE SET
+    max_players = EXCLUDED.max_players,
+    price_per_player_cents = EXCLUDED.price_per_player_cents,
+    status = CASE
+      WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
+      WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
+      ELSE 'AVAILABLE'
+    END,
+    updated_at = now()
+  RETURNING (xmax = 0) AS inserted;`,
+  [courseId, playDate, teeTime, holes, maxPlayers, pricePerPlayerCents]
+);
 
-          if (r.rowCount === 1) inserted += 1;
-          else skipped += 1;
+// ✅ Accurate inserted/skipped counts even with DO UPDATE
+if (r.rows[0]?.inserted) inserted += 1;
+else skipped += 1;
         }
       }
     }
