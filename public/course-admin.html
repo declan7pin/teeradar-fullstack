@@ -448,26 +448,6 @@ window.onerror = function(message, source, lineno, colno){
   return data || {};
 }
 
-  // ✅ adapter so template feature can use apiFetch() like real fetch()
-async function apiFetch(url, opts = {}) {
-  try{
-    const data = await j(url, opts);
-    return {
-      ok: true,
-      status: 200,
-      json: async () => data
-    };
-  }catch(e){
-    // j() throws, but our template code expects a Response-like object
-    const msg = (e && e.message) ? e.message : "Request failed";
-    return {
-      ok: false,
-      status: 400,
-      json: async () => ({ ok:false, error: msg })
-    };
-  }
-}
-
   function fmtDT(s){
     try{
       const d = new Date(s);
@@ -1843,66 +1823,61 @@ if (Array.isArray(manualSlots) && manualSlots.length) {
     }
 
     async function tplLoad(){
-      try{
-        setTplStatus("Loading template…", "");
-        const res = await apiFetch("/api/book/course-template?slug=" + encodeURIComponent(getSlug()));
-        const data = await res.json().catch(()=> ({}));
+  try{
+    setTplStatus("Loading template…", "");
+    const data = await j("/api/book/course-template?slug=" + encodeURIComponent(getSlug()), { method:"GET" });
 
-        if (!res.ok || !data || !data.ok) throw new Error(data?.error || ("HTTP " + (res.status || "")));
+    if (!data || !data.ok) throw new Error(data?.error || "load_failed");
 
-        $("tplTimezone").value = data.timezone || "Australia/Perth";
-        const tpl = (data.template && typeof data.template === "object") ? data.template : defaultTemplate();
-        renderTemplate(tpl);
+    $("tplTimezone").value = data.timezone || "Australia/Perth";
+    const tpl = (data.template && typeof data.template === "object") ? data.template : defaultTemplate();
+    renderTemplate(tpl);
 
-        setTplStatus(data.found ? "✅ Template loaded." : "✅ No saved template yet (showing defaults).", "ok");
-      }catch(e){
-        renderTemplate(defaultTemplate());
-        setTplStatus("❌ " + (e.message || "Failed to load template"), "err");
-      }
-    }
+    setTplStatus(data.found ? "✅ Template loaded." : "✅ No saved template yet (showing defaults).", "ok");
+  }catch(e){
+    renderTemplate(defaultTemplate());
+    setTplStatus("❌ " + (e.message || "Failed to load template"), "err");
+  }
+}
 
     async function tplSave(){
-      try{
-        setTplStatus("Saving template…", "");
-        const template = readTemplateFromUI();
-        const timezone = String($("tplTimezone").value || "Australia/Perth").trim() || "Australia/Perth";
+  try{
+    setTplStatus("Saving template…", "");
+    const template = readTemplateFromUI();
+    const timezone = String($("tplTimezone").value || "Australia/Perth").trim() || "Australia/Perth";
 
-        const res = await apiFetch("/api/book/course-template", {
-          method:"PUT",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({ slug: getSlug(), timezone, template })
-        });
-        const data = await res.json().catch(()=> ({}));
-        if (!res.ok || !data || !data.ok) throw new Error(data?.error || ("HTTP " + (res.status || "")));
+    const data = await j("/api/book/course-template", {
+      method:"PUT",
+      body: JSON.stringify({ timezone, template })
+    });
 
-        setTplStatus("✅ Template saved.", "ok");
-      }catch(e){
-        setTplStatus("❌ " + (e.message || "Failed to save template"), "err");
-      }
-    }
+    if (!data || !data.ok) throw new Error(data?.error || "save_failed");
+
+    setTplStatus("✅ Template saved.", "ok");
+  }catch(e){
+    setTplStatus("❌ " + (e.message || "Failed to save template"), "err");
+  }
+}
 
     async function tplGenerate(){
-      try{
-        setTplStatus("Generating times…", "");
-        const startDate = $("tplStartDate").value || todayISO();
-        const daysAhead = Number($("tplDaysAhead").value || 30);
-        const mode = String($("tplMode").value || "skip");
+  try{
+    setTplStatus("Generating times…", "");
+    const startDate = $("tplStartDate").value || todayISO();
+    const daysAhead = Number($("tplDaysAhead").value || 30);
+    const mode = String($("tplMode").value || "skip");
 
-        const res = await apiFetch("/api/book/generate-from-template", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({ slug: getSlug(), startDate, daysAhead, mode })
-        });
+    const data = await j("/api/book/generate-from-template", {
+      method:"POST",
+      body: JSON.stringify({ startDate, daysAhead, mode })
+    });
 
-        const data = await res.json().catch(()=> ({}));
-        if (!res.ok || !data || !data.ok) throw new Error(data?.error || ("HTTP " + (res.status || "")));
+    if (!data || !data.ok) throw new Error(data?.error || "generate_failed");
 
-        setTplStatus(`✅ Generated. Inserted ${data.inserted}, skipped ${data.skipped}.`, "ok");
-      }catch(e){
-        setTplStatus("❌ " + (e.message || "Failed to generate"), "err");
-      }
-    }
-
+    setTplStatus(`✅ Generated. Inserted ${data.inserted}, skipped ${data.skipped}.`, "ok");
+  }catch(e){
+    setTplStatus("❌ " + (e.message || "Failed to generate"), "err");
+  }
+}
     document.addEventListener("DOMContentLoaded", () => {
       if ($("tplStartDate")) $("tplStartDate").value = todayISO();
 
