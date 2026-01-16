@@ -1080,7 +1080,12 @@ router.post("/course-admin/login", async (req, res) => {
 
     let courseAdminToken = "";
     try {
-      courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email, role: u.role });
+      courseAdminToken = signCourseAdminToken({
+  courseId: u.course_id,
+  slug: u.slug,
+  email: u.email,
+  role: u.role,
+});
     } catch (err) {
       console.error("❌ course-admin/login token error", err);
       return res.status(500).json({ ok: false, error: "course_admin_token_failed" });
