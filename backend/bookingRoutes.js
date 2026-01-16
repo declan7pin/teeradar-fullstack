@@ -4859,7 +4859,7 @@ router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req,
     });
   } catch (e) {
     console.error("admin/booking-analytics/summary", e);
-    res.status(500).j son({ ok: false, error: "internal_error" });
+    res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
