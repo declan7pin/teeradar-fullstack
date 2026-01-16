@@ -1283,6 +1283,39 @@ router.get("/course-admin/_debug", (req, res) => {
     },
   });
 });
+// ✅ NEW: set bypass cookies once (so user doesn't need to re-enter key)
+// POST /api/book/course-admin/bypass
+// Body: { slug, key }
+router.post("/course-admin/bypass", (req, res) => {
+  try {
+    const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
+    if (!bypassKey) {
+      return res.status(400).json({ ok: false, error: "bypass_not_enabled" });
+    }
+
+    const slug = normSlug(req.body?.slug);
+    const key = String(req.body?.key || "").trim();
+
+    if (!slug || !isValidSlug(slug)) {
+      return res.status(400).json({ ok: false, error: "slug_invalid" });
+    }
+    if (!key) {
+      return res.status(400).json({ ok: false, error: "key_required" });
+    }
+    if (key !== bypassKey) {
+      return res.status(401).json({ ok: false, error: "invalid_key" });
+    }
+
+    // ✅ store cookies so future visits work without re-entering
+    res.cookie("tr_course_admin_bypass", key, baseCookieOpts(req));
+    res.cookie("tr_course_admin_slug", slug, baseCookieOpts(req));
+
+    return res.json({ ok: true, slug });
+  } catch (e) {
+    console.error("course-admin/bypass POST", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // ✅ NEW: platform admin — update course settings (add-ons + durations)
 router.post("/admin/course-settings", requirePlatformAdmin, async (req, res) => {
   try {
