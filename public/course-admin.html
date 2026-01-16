@@ -676,7 +676,7 @@ const isManualRef = /^MAN-/.test(refRaw);
         <div class="mini muted" data-msg="${_escape(slotKey)}"></div>
       </div>
 
-      <!-- ✅ NEW: slot actions -->
+            ${isManualRef ? `
       <div class="actions" style="margin-top:10px">
         <button
           type="button"
@@ -696,6 +696,7 @@ const isManualRef = /^MAN-/.test(refRaw);
           data-slot="${slotIndex}"
         >Delete</button>
       </div>
+      ` : ``}
     </div>
   `;
 }
