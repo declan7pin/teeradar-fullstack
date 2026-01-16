@@ -3565,12 +3565,8 @@ router.put("/course-template", requireCourseAdmin, async (req, res) => {
 // mode: "skip" (default) OR "overwrite-range"
 router.post("/generate-from-template", requireCourseAdmin, async (req, res) => {
   try {
-    const slug = String(
-  req.body?.slug ||
-  req.query?.slug ||
-  req.headers["x-course-slug"] ||
-  ""
-).trim().toLowerCase();
+    // ✅ Course admins can ONLY generate for their own course
+const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
     let startDate = String(
   req.body?.startDate ||
   req.body?.start_date ||
