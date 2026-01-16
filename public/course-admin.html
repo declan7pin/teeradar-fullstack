@@ -600,7 +600,7 @@ function normalizeBookingLikeRow(b){
   ""
 );
   const refDisp = _escape(refRaw);
-
+const isManualRef = /^MAN-/.test(refRaw);
     // ✅ supports per-slot flags if backend returns them later (fallback to old fields)
   const paid =
     !!(item.paid_slot ?? item.paidSlot ?? (Array.isArray(item.paid_slots) ? item.paid_slots[slotIndex-1] : null) ?? item.paid);
