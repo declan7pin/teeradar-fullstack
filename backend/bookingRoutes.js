@@ -3571,16 +3571,25 @@ router.post("/generate-from-template", requireCourseAdmin, async (req, res) => {
   req.headers["x-course-slug"] ||
   ""
 ).trim().toLowerCase();
-    const startDate = String(
+    let startDate = String(
   req.body?.startDate ||
   req.body?.start_date ||
   ""
 ).trim(); // YYYY-MM-DD
-    const daysAhead = Math.max(1, Math.min(120, Number(req.body?.daysAhead || 30)));
-    const mode = String(req.body?.mode || "skip").trim().toLowerCase();
 
-    if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
-    if (!startDate) return res.status(400).json({ ok: false, error: "startDate_required" });
+const daysAhead = Math.max(1, Math.min(120, Number(req.body?.daysAhead || 30)));
+const mode = String(req.body?.mode || "skip").trim().toLowerCase();
+
+if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
+
+// ✅ fallback if frontend didn’t send startDate
+if (!startDate) {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  startDate = `${yyyy}-${mm}-${dd}`;
+}
 
     const c = await db.query(
       `SELECT id, slug, name FROM booking_courses WHERE slug = $1 LIMIT 1;`,
