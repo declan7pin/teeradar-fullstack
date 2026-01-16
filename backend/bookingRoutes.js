@@ -2937,87 +2937,90 @@ if (!inv.ok) {
       `manualslots:${courseId}:${playDate}:${tee_time}:${holes}`,
     ]);
 
-    // Determine next slot_index start for this tee time
-    const mx = await client.query(
-      `
-      SELECT COALESCE(MAX(slot_index), 0)::int AS max_slot
-      FROM booking_manual_slots
-      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4;
-      `,
-      [courseId, playDate, tee_time, holes]
-    );
+   // ✅ Find which slots are already filled at this tee time
+const taken = await client.query(
+  `
+  SELECT slot_index
+  FROM booking_manual_slots
+  WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+    AND COALESCE(name,'') <> ''
+  `,
+  [courseId, playDate, tee_time, holes]
+);
 
-    const startIndex = Number(mx.rows[0]?.max_slot || 0) + 1;
-// ✅ prevent slot overflow (only 1..4)
-if (startIndex + players - 1 > 4) {
+const takenSet = new Set((taken.rows || []).map((r) => Number(r.slot_index)));
+const freeSlots = [1, 2, 3, 4].filter((i) => !takenSet.has(i));
+
+if (freeSlots.length < players) {
   await client.query("ROLLBACK");
   didBegin = false;
   return res.status(409).json({
     ok: false,
     error: "not_enough_empty_slots",
-    remainingSlots: Math.max(0, 4 - (startIndex - 1)),
+    remainingSlots: freeSlots.length,
   });
 }
-    // Use one shared reference for the whole group
-    const reference = String(_pickAny(req.body, ["reference"], "") || "").trim() || makeRef("MS");
 
-    const insertedRows = [];
+// Use one shared reference for the whole group
+const reference =
+  String(_pickAny(req.body, ["reference"], "") || "").trim() || makeRef("MS");
 
-    // ✅ Insert N rows (one per player)
-    for (let i = 0; i < players; i++) {
-      const slot_index = startIndex + i;
+const insertedRows = [];
 
-      const ins = await client.query(
-  `
-  INSERT INTO booking_manual_slots
-    (course_id, play_date, tee_time, holes, slot_index,
-     reference, name, email, phone,
-     paid, checked_in,
-     has_cart, has_hire_clubs,
-     cart_qty, hire_clubs_qty,
-     notes,
-     start_at, end_at,
-     created_at, updated_at)
-  VALUES
-    ($1, $2::date, $3, $4, $5,
-     $6, $7, $8, $9,
-     $10, $11,
-     $12, $13,
-     $14, $15,
-     $16,
-     $17::timestamptz, $18::timestamptz,
-     now(), now())
-  RETURNING
-    play_date::text AS play_date,
-    tee_time, holes, slot_index, reference,
-    name, email, phone, paid, checked_in,
-    has_cart, has_hire_clubs, cart_qty, hire_clubs_qty,
-    notes, start_at, end_at, created_at, updated_at;
-  `,
-  [
-    courseId,
-    playDate,
-    tee_time,
-    holes,
-    slot_index,
-    reference,
-    name || null,
-    email || null,
-    phone || null,
-    paid,
-    checked_in,
-    i === 0 ? cart_qty > 0 : false,
-    i === 0 ? hire_clubs_qty > 0 : false,
-    i === 0 ? cart_qty : 0,
-    i === 0 ? hire_clubs_qty : 0,
-    notes,
-    startAtIso,
-    endAtIso,
-  ]
-);
+for (let i = 0; i < players; i++) {
+  const slot_index = freeSlots[i];
 
-      insertedRows.push(ins.rows[0]);
-    }
+  const ins = await client.query(
+    `
+    INSERT INTO booking_manual_slots
+      (course_id, play_date, tee_time, holes, slot_index,
+       reference, name, email, phone,
+       paid, checked_in,
+       has_cart, has_hire_clubs,
+       cart_qty, hire_clubs_qty,
+       notes,
+       start_at, end_at,
+       created_at, updated_at)
+    VALUES
+      ($1, $2::date, $3, $4, $5,
+       $6, $7, $8, $9,
+       $10, $11,
+       $12, $13,
+       $14, $15,
+       $16,
+       $17::timestamptz, $18::timestamptz,
+       now(), now())
+    RETURNING
+      play_date::text AS play_date,
+      tee_time, holes, slot_index, reference,
+      name, email, phone, paid, checked_in,
+      has_cart, has_hire_clubs, cart_qty, hire_clubs_qty,
+      notes, start_at, end_at, created_at, updated_at;
+    `,
+    [
+      courseId,
+      playDate,
+      tee_time,
+      holes,
+      slot_index,
+      reference,
+      name || null,
+      email || null,
+      phone || null,
+      paid,
+      checked_in,
+      i === 0 ? cart_qty > 0 : false,
+      i === 0 ? hire_clubs_qty > 0 : false,
+      i === 0 ? cart_qty : 0,
+      i === 0 ? hire_clubs_qty : 0,
+      notes,
+      startAtIso,
+      endAtIso,
+    ]
+  );
+
+  insertedRows.push(ins.rows[0]);
+}
 
     await client.query("COMMIT");
     didBegin = false;
