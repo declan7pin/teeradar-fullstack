@@ -413,10 +413,10 @@ async function setBypassCookie(slug, key) {
   return data || {};
 }
   async function j(url, opts = {}) {
-  const slug = getSlug();
+    const slug = getSlug();
   const key = getKey();
   if (!slug) throw new Error("slug_required");
-  if (!key) throw new Error("bypass_key_required");
+  // ✅ key is optional now (cookie can authenticate)
   
   const method = String(opts.method || "GET").toUpperCase();
   const hasBody = opts.body != null;
