@@ -3012,7 +3012,7 @@ for (let i = 0; i < players; i++) {
       name, email, phone, paid, checked_in,
       has_cart, has_hire_clubs, cart_qty, hire_clubs_qty,
       notes, start_at, end_at, created_at, updated_at;
-    `
+    `,
     [
       courseId,
       playDate,
@@ -4859,7 +4859,7 @@ router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req,
     });
   } catch (e) {
     console.error("admin/booking-analytics/summary", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+    res.status(500).j son({ ok: false, error: "internal_error" });
   }
 });
 
