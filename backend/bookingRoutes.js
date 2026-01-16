@@ -3870,7 +3870,65 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ NEW: delete tee times (course admin)
+// DELETE /api/book/course-admin/times?date=YYYY-MM-DD&holes=18(optional)&time=HH:MM(optional)
+// - If time is provided: deletes that single tee time row
+// - If time is NOT provided: deletes all tee times for that date (optionally filtered by holes)
+// - NEVER deletes BOOKED times
+router.delete("/course-admin/times", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = req.courseAdmin.slug;
 
+    const date = String(req.query.date || "").trim();
+    const holes = req.query.holes ? Number(req.query.holes) : null;
+    const teeTime = req.query.time ? String(req.query.time).trim() : ""; // optional
+
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ ok: false, error: "date_invalid" });
+    }
+    if (holes !== null && ![9, 18].includes(holes)) {
+      return res.status(400).json({ ok: false, error: "holes_invalid" });
+    }
+    if (teeTime && !/^\d{2}:\d{2}$/.test(teeTime)) {
+      return res.status(400).json({ ok: false, error: "time_invalid" });
+    }
+
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const params = [courseId, date];
+    let q = `
+      DELETE FROM booking_times
+      WHERE course_id = $1
+        AND play_date = $2::date
+        AND status <> 'BOOKED'
+    `;
+
+    // optional filters
+    if (holes !== null) {
+      params.push(holes);
+      q += ` AND holes = $${params.length}`;
+    }
+    if (teeTime) {
+      params.push(teeTime);
+      q += ` AND tee_time = $${params.length}`;
+    }
+
+    const r = await db.query(q + `;`, params);
+
+    return res.json({
+      ok: true,
+      slug,
+      date,
+      holes: holes !== null ? holes : null,
+      time: teeTime || null,
+      deletedTimes: r.rowCount || 0,
+    });
+  } catch (e) {
+    console.error("course-admin/times DELETE", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // view times (course admin)
 router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
   try {
