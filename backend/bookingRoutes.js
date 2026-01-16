@@ -712,10 +712,15 @@ function getCourseAdminSecret() {
   throw new Error("COURSE_ADMIN_SECRET_missing");
 }
 
-function makeCourseAdminToken({ slug, email }) {
+function makeCourseAdminToken({ slug, email, role }) {
   const secret = getCourseAdminSecret();
   const exp = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
-  const payload = { slug: String(slug || ""), email: String(email || ""), exp };
+  const payload = {
+    slug: String(slug || ""),
+    email: String(email || ""),
+    role: String(role || "proshop"),
+    exp,
+  };
   const payloadB64 = _base64url(JSON.stringify(payload));
   const sig = _base64url(crypto.createHmac("sha256", secret).update(payloadB64).digest());
   return `${payloadB64}.${sig}`;
@@ -745,9 +750,14 @@ function verifyCourseAdminToken(token) {
     const payload = JSON.parse(payloadJson);
 
     if (!payload?.slug || !payload?.email) return null;
-    if (!payload?.exp || Date.now() > Number(payload.exp)) return null;
+if (!payload?.exp || Date.now() > Number(payload.exp)) return null;
 
-    return { slug: String(payload.slug), email: String(payload.email) };
+const role = String(payload?.role || "proshop").toLowerCase();
+return {
+  slug: String(payload.slug),
+  email: String(payload.email),
+  role: role === "manager" ? "manager" : "proshop",
+};
   } catch {
     return null;
   }
@@ -809,7 +819,11 @@ function requireCourseAdmin(req, res, next) {
   req.courseAdmin = { slug, email };
   return next();
 }
-
+function requireCourseManager(req, res, next) {
+  const role = String(req.courseAdmin?.role || "").toLowerCase();
+  if (role === "manager") return next();
+  return res.status(403).json({ ok: false, error: "manager_only" });
+}
 // -----------------------------
 // One-time table creation (safe)
 // -----------------------------
@@ -823,7 +837,11 @@ async function ensureBookingTables() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
-
+  // ✅ NEW: role-based access for course users (manager vs proshop)
+  await db.query(`
+    ALTER TABLE booking_course_users
+    ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'proshop';
+  `);
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_course_users (
       id SERIAL PRIMARY KEY,
@@ -1028,7 +1046,8 @@ router.post("/admin/course-admin", requirePlatformAdmin, async (req, res) => {
     const slug = normSlug(req.body?.slug);
     const email = String(req.body?.email || "").trim().toLowerCase();
     const password = String(req.body?.password || "");
-
+    const roleRaw = String(req.body?.role || "proshop").trim().toLowerCase();
+    const role = roleRaw === "manager" ? "manager" : "proshop";
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!isLikelyEmail(email)) return res.status(400).json({ ok: false, error: "email_invalid" });
     if (password.length < 8) return res.status(400).json({ ok: false, error: "password_min_8" });
@@ -1048,14 +1067,15 @@ router.post("/admin/course-admin", requirePlatformAdmin, async (req, res) => {
 
     await db.query(
       `
-      INSERT INTO booking_course_users (course_id, email, salt_hex, hash_hex)
-      VALUES ($1,$2,$3,$4)
+            INSERT INTO booking_course_users (course_id, email, salt_hex, hash_hex, role)
+      VALUES ($1,$2,$3,$4,$5)
       ON CONFLICT (course_id, email)
       DO UPDATE SET
         salt_hex = EXCLUDED.salt_hex,
-        hash_hex = EXCLUDED.hash_hex
+        hash_hex = EXCLUDED.hash_hex,
+        role     = EXCLUDED.role
       `,
-      [courseId, email, saltHex, hashHex]
+            [courseId, email, saltHex, hashHex, role]
     );
 
     res.json({ ok: true });
@@ -1079,7 +1099,7 @@ router.post("/course-admin/login", async (req, res) => {
 
     const { rows } = await db.query(
       `
-      SELECT cu.course_id, cu.email, cu.salt_hex, cu.hash_hex, c.slug
+      SELECT cu.course_id, cu.email, cu.salt_hex, cu.hash_hex, cu.role, c.slug
       FROM booking_course_users cu
       JOIN booking_courses c ON c.id = cu.course_id
       WHERE lower(cu.email) = $1
@@ -1101,7 +1121,7 @@ router.post("/course-admin/login", async (req, res) => {
 
     let courseAdminToken = "";
     try {
-      courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email });
+      courseAdminToken = makeCourseAdminToken({ slug: u.slug, email: u.email, role: u.role });
     } catch (err) {
       console.error("❌ course-admin/login token error", err);
       return res.status(500).json({ ok: false, error: "course_admin_token_failed" });
