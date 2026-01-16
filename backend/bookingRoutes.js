@@ -3746,7 +3746,7 @@ else skipped += 1;
 });
 // ✅ NEW: Course admin — booking analytics summary (scoped)
 // Uses booking_bookings + booking_analytics_events (source of truth)
-router.get("/course-admin/analytics/summary", requireCourseAdmin, async (req, res) => {
+router.get("/course-admin/analytics/summary", requireCourseAdmin, requireCourseManager, async (req, res) => {
   try {
     const slug = req.courseAdmin.slug;
     const days = Number(req.query.days || 7);
