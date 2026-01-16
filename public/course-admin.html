@@ -425,7 +425,7 @@ async function setBypassCookie(slug, key) {
     ...(hasBody && method !== "GET" && method !== "HEAD"
       ? { "content-type": "application/json" }
       : {}),
-    "x-course-admin-key": key,
+        ...(key ? { "x-course-admin-key": key } : {}),
     "x-course-slug": slug,
     ...(opts.headers || {}),
   };
