@@ -1,10 +1,9 @@
-<!-- public/course-admin-login.html -->
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TeeRadar — Course Admin</title>
+  <title>TeeRadar — Course Admin Login</title>
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
   <style>
     body{
@@ -21,15 +20,25 @@
       background:#fff;
       border:1px solid #e2e8f0;
       border-radius:14px;
-      padding:24px;
-      text-align:center;
+      padding:28px;
+      width:100%;
       max-width:420px;
     }
-    h2{margin:0 0 10px}
-    p{color:#64748b;font-size:14px}
+    h2{margin:0 0 8px;text-align:center}
+    p{color:#64748b;font-size:14px;text-align:center}
+    label{display:block;margin-top:14px;font-size:13px;color:#475569}
+    input{
+      width:100%;
+      padding:12px;
+      border:1px solid #cbd5e1;
+      border-radius:10px;
+      margin-top:6px;
+      font-size:14px;
+    }
     button{
-      margin-top:16px;
-      padding:12px 18px;
+      margin-top:20px;
+      width:100%;
+      padding:12px;
       border:0;
       border-radius:12px;
       background:#00796b;
@@ -37,16 +46,65 @@
       font-weight:700;
       cursor:pointer;
     }
+    .msg{
+      margin-top:12px;
+      font-size:13px;
+      text-align:center;
+      color:#b91c1c;
+    }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>Course Admin</h2>
-    <p>Admin login is temporarily disabled.</p>
-    <p>Click below to enter the admin panel.</p>
-    <button onclick="location.href='/course-admin.html'">
-      Enter Course Admin
-    </button>
+    <p>Sign in to manage tee times and bookings</p>
+
+    <label>Email</label>
+    <input id="email" type="email" placeholder="admin@course.com" />
+
+    <label>Password</label>
+    <input id="password" type="password" placeholder="••••••••" />
+
+    <button id="loginBtn">Sign in</button>
+
+    <div id="msg" class="msg"></div>
   </div>
+
+<script>
+const msg = document.getElementById("msg");
+
+document.getElementById("loginBtn").onclick = async () => {
+  msg.textContent = "Signing in…";
+
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+
+  if (!email || !password) {
+    msg.textContent = "Email and password required";
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/book/course-admin/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      msg.textContent = data.error || "Login failed";
+      return;
+    }
+
+    // success
+    window.location.href = "/course-admin.html";
+  } catch (e) {
+    msg.textContent = "Network error";
+  }
+};
+</script>
 </body>
 </html>
