@@ -7,6 +7,45 @@ import cookieParser from "cookie-parser"; // ✅ ADD
 import { recordEvent } from "./analytics.js";
 
 const router = express.Router();
+// ✅ CORS for booking admin + course admin UIs (fixes “buttons do nothing” due to blocked preflight)
+router.use((req, res, next) => {
+  const origin = String(req.headers.origin || "");
+
+  // If the request has an Origin header, reflect it (required for cookies/credentials).
+  // If no Origin (server-to-server), just continue.
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+
+  // Allow the headers your frontends actually send
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "x-booking-admin-secret",
+      "x-course-admin-key",
+      "x-course-slug",
+      "x-session-id",
+    ].join(", ")
+  );
+
+  // Allow methods used by your UIs
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  );
+
+  // ✅ End preflight fast (this is what unblocks “dead buttons”)
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
+  next();
+});
 // ✅ Add request id + timing + end-of-request status log
 router.use((req, res, next) => {
   req._rid = Math.random().toString(16).slice(2, 10);
