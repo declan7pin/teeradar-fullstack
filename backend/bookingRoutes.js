@@ -103,55 +103,35 @@ function getBearer(req) {
 
 async function requireCourseAdmin(req, res, next) {
   try {
-    // 1) ✅ Bypass mode (optional) — works for fetch() AND normal navigation
-    const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
-    if (bypassKey) {
-      const { key: providedKey, slug: providedSlug } = getBypassProvided(req);
-
-      if (providedKey && providedSlug && providedKey === bypassKey) {
-        // set cookies so browser navigations work too
-        res.cookie("tr_course_admin_bypass", providedKey, baseCookieOpts(req));
-        res.cookie("tr_course_admin_slug", providedSlug, baseCookieOpts(req));
-
-        req.courseAdmin = {
-          courseId: 0,
-          slug: providedSlug,
-          email: "bypass@teeradar",
-          role: "manager",
-        };
-        return next();
-      }
-    }
-
-    // 2) ✅ Normal JWT mode (Bearer OR cookie)
-    const token = getBearer(req) || String(req.cookies?.tr_course_admin_token || "");
+    const token = getBearer(req);
     if (!token) return res.status(401).json({ ok: false, error: "missing_token" });
 
     const payload = verifyCourseAdminToken(token);
 
     req.courseAdmin = {
-      courseId: Number(payload.courseId || 0),
-      slug: String(payload.slug || "").trim().toLowerCase(),
-      email: String(payload.email || "").trim().toLowerCase(),
-      role: String(payload.role || "proshop").trim().toLowerCase(),
+      courseId: Number(payload.courseId),
+      slug: String(payload.slug || ""),
+      email: String(payload.email || ""),
+      role: String(payload.role || "PROSHOP"),
     };
 
-    if (!req.courseAdmin.slug || !req.courseAdmin.email) {
+    if (!req.courseAdmin.courseId || !req.courseAdmin.slug || !req.courseAdmin.email) {
       return res.status(401).json({ ok: false, error: "invalid_token" });
     }
 
-    return next();
+    next();
   } catch (e) {
     return res.status(401).json({ ok: false, error: "invalid_token" });
   }
 }
 
-function requireCourseManager(req, res, next) {
-  const role = String(req.courseAdmin?.role || "").toLowerCase();
-  if (role === "manager") return next();
-  return res.status(403).json({ ok: false, error: "manager_only" });
+function requireCourseAdminManager(req, res, next) {
+  const role = String(req.courseAdmin?.role || "").toUpperCase();
+  if (role !== "MANAGER") {
+    return res.status(403).json({ ok: false, error: "manager_only" });
+  }
+  next();
 }
-
 // ✅ DEBUG logger (safe anywhere)
 const DEBUG_BOOKING = String(process.env.DEBUG_BOOKING || "").trim() === "1";
 function dlog(...args) {
