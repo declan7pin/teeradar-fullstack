@@ -945,9 +945,80 @@ document.addEventListener("DOMContentLoaded", () => {
     clearView();
     applyRoleUI();
   };
+  // ✅ Wire up view buttons AFTER DOM is ready
+  $("viewTimesBtn").onclick = () => viewTimes();
+  $("viewBookingsBtn").onclick = () => viewBookings();
+  $("viewSheetBtn").onclick = () => viewSheet();
 
+  $("deleteTimesBtn").onclick = async () => {
+    try{
+      await getMe();
+
+      const date = ($("date").value || "").trim();
+      if (!date) throw new Error("play_date_required");
+
+      if (!confirm(`Delete ALL tee times for ${date}? This cannot be undone.`)) return;
+
+      await j(
+        "/api/book/course-admin/times?" + new URLSearchParams({ date }).toString(),
+        { method:"DELETE" }
+      );
+
+      $("viewMsg").textContent = `✅ Tee times deleted for ${date}`;
+      clearView();
+    }catch(e){
+      $("viewMsg").textContent = "❌ " + (e?.message || "delete_failed");
+    }
+  };
 });
+async function viewTimes(){
+  clearView();
+  $("viewMsg").textContent = "Loading tee times...";
+  try{
+    await getMe();
 
+    const date = ($("date").value || "").trim();
+    if (!date) throw new Error("play_date_required");
+
+    const out = await j(
+      "/api/book/course-admin/times?date=" + encodeURIComponent(date) +
+      "&slug=" + encodeURIComponent(getSlug()),
+      { method:"GET" }
+    );
+
+    const rows = (out && out.times) || [];
+    if (!Array.isArray(rows) || !rows.length){
+      $("viewMsg").textContent = "✅ No tee times found for this date.";
+      return;
+    }
+
+    $("viewMsg").textContent = `✅ Loaded ${rows.length} tee times`;
+    $("timesBox").style.display = "block";
+
+    const tb = $("timesBody");
+    tb.innerHTML = "";
+    rows.forEach(r => {
+      const maxP = Number(r.max_players ?? 0);
+      const bookedP = Number(r.booked_players ?? 0);
+      const remaining = Math.max(0, maxP - bookedP);
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${String(r.play_date || "")}</td>
+        <td>${String(r.tee_time || "")}</td>
+        <td>${(r.holes ?? "")}</td>
+        <td>${String(r.status || "")}</td>
+        <td class="right">${(r.max_players ?? "")}</td>
+        <td class="right">${(r.booked_players ?? "")}</td>
+        <td class="right">${remaining}</td>
+        <td class="right">${(r.price_per_player_cents ?? "")}</td>
+      `;
+      tb.appendChild(tr);
+    });
+  }catch(e){
+    $("viewMsg").textContent = "❌ " + e.message;
+  }
+}
   async function viewBookings(){
     clearView();
     $("viewMsg").textContent = "Loading bookings...";
@@ -1357,31 +1428,6 @@ if (!refToUse) {
     }
   }
 
- // ✅ Wire up buttons (safe even if functions are defined later)
-document.getElementById("viewTimesBtn").onclick = () => viewTimes();
-document.getElementById("viewBookingsBtn").onclick = () => viewBookings();
-document.getElementById("viewSheetBtn").onclick = () => viewSheet();
-
-document.getElementById("deleteTimesBtn").onclick = async () => {
-  try{
-    await getMe();
-
-    const date = (document.getElementById("date").value || "").trim();
-    if (!date) throw new Error("play_date_required");
-
-    if (!confirm(`Delete ALL tee times for ${date}? This cannot be undone.`)) return;
-
-    await j(
-      "/api/book/course-admin/times?" + new URLSearchParams({ date }).toString(),
-      { method: "DELETE" }
-    );
-
-    document.getElementById("viewMsg").textContent = `✅ Tee times deleted for ${date}`;
-    clearView();
-  }catch(e){
-    document.getElementById("viewMsg").textContent = "❌ " + (e?.message || "delete_failed");
-  }
-};
   // ✅ Manual tee times (Course Admin)
   function _manualDateDefault(){
     try{
