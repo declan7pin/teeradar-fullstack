@@ -61,33 +61,41 @@
 <body>
   <div class="wrap">
 
-    <!-- 1) Slug login -->
-    <div class="card">
-      <h2>Course Admin</h2>
-      <p class="muted">
-        Token/login removed. This page uses a bypass key + course slug (sent in headers).
-      </p>
+    <!-- 1) Login -->
+<div class="card">
+  <h2>Course Admin</h2>
+  <p class="muted">Log in with your course email & password.</p>
 
-      <div class="row">
-        <div>
-          <label class="muted">Course Slug</label>
-          <input id="slug" placeholder="e.g. hillview-gc" />
-        </div>
-        <div>
-          <label class="muted">Bypass Key</label>
-          <input id="key" type="password" placeholder="Set COURSE_ADMIN_BYPASS_KEY in Render" />
-        </div>
-      </div>
-
-      <div class="actions">
-        <button id="saveBtn" type="button">Save</button>
-        <button id="testBtn" type="button" class="secondary">Test /me</button>
-        <button id="clearBtn" type="button" class="secondary">Clear</button>
-      </div>
-
-      <div id="msg" class="muted" style="margin-top:10px;"></div>
-      <div id="who" class="muted mini" style="margin-top:6px;"></div>
+  <div class="row">
+    <div>
+      <label class="muted">Course Slug</label>
+      <input id="slug" placeholder="e.g. hillview-gc" />
     </div>
+    <div>
+      <label class="muted">Email</label>
+      <input id="email" placeholder="proshop@course.com" />
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label class="muted">Password</label>
+      <input id="password" type="password" placeholder="••••••••" />
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:8px;justify-content:flex-end">
+      <button id="loginBtn" type="button">Log in</button>
+      <button id="logoutBtn" type="button" class="secondary">Log out</button>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:10px">
+    <button id="testBtn" type="button" class="secondary">Test /me</button>
+    <button id="clearBtn" type="button" class="secondary">Clear</button>
+  </div>
+
+  <div id="msg" class="muted" style="margin-top:10px;"></div>
+  <div id="who" class="muted mini" style="margin-top:6px;"></div>
+</div>
 
     <!-- 2) Cart availability (Inventory) -->
     <div class="card">
@@ -327,8 +335,8 @@
       </div>
     </div>
 
-    <!-- 4) Weekly schedule template (moved down; no other changes) -->
-    <div class="card">
+    <!-- 4) Weekly schedule template (manager only) -->
+<div class="card" id="managerOnlyTemplate" style="display:none;">
       <h2 style="margin:0 0 6px;">Weekly schedule template</h2>
       <div class="sub" style="margin-bottom:10px;">
         Save a weekly pattern once, then generate tee times for the next 30 days in one click.
