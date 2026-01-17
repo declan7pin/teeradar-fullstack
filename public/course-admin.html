@@ -416,7 +416,11 @@ function clearAuth(){
     localStorage.removeItem(ROLE_KEY);
   } catch {}
 }
-
+function applyRoleUI(){
+  const role = getRole(); // "manager" | "proshop" | ""
+  const mgrCard = document.getElementById("managerOnlyTemplate");
+  if (mgrCard) mgrCard.style.display = (role === "manager") ? "block" : "none";
+}
   const ct = (res.headers.get("content-type") || "").toLowerCase();
   const data = ct.includes("application/json") ? await res.json().catch(() => null) : null;
 
@@ -791,129 +795,167 @@ const isManualRef = /^MAN-/.test(refRaw);
   }
 });
 
-  const out = [];
-  (timesRows || []).forEach(t => {
-    const time = normTime(t.tee_time || t.time || "");
-    const holes = Number(t.holes ?? "");
-    const key = keyOf(time, holes);
+  // =======================
+// Daily sheet builder
+// =======================
+const out = [];
+(timesRows || []).forEach(t => {
+  const time = normTime(t.tee_time || t.time || "");
+  const holes = Number(t.holes ?? "");
+  const key = keyOf(time, holes);
 
-    const arr = (byKey.get(key) || []).slice(0, 4);
+  const arr = (byKey.get(key) || []).slice(0, 4);
 
-    // ✅ If tee_times says spots are booked but bookings list doesn't have them,
-    //    fill placeholders so the course can see the time is taken on the sheet.
-    const bookedCount = Number(
-      t.booked_players ?? t.bookedPlayers ?? t.booked ?? 0
-    );
+  // If tee_times says spots are booked but bookings list doesn't have them,
+  // fill placeholders so the course can see the time is taken on the sheet.
+  const bookedCount = Number(
+    t.booked_players ?? t.bookedPlayers ?? t.booked ?? 0
+  );
 
-    while (arr.length < Math.min(4, bookedCount)) {
-      arr.push({
-        reference: "",
-        name: "Booked",
-        email: "",
-        phone: "",
-        paid: false,
-        cart_qty: 0,
-        hire_clubs_qty: 0,
-        has_cart: false,
-        has_hire_clubs: false,
-        notes: "",
-        checked_in: false,
-      });
-    }
+  while (arr.length < Math.min(4, bookedCount)) {
+    arr.push({
+      reference: "",
+      name: "Booked",
+      email: "",
+      phone: "",
+      paid: false,
+      cart_qty: 0,
+      hire_clubs_qty: 0,
+      has_cart: false,
+      has_hire_clubs: false,
+      notes: "",
+      checked_in: false,
+    });
+  }
 
-    const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
-    out.push({ time, holes, slots });
-  });
+  const slots = [
+    arr[0] || null,
+    arr[1] || null,
+    arr[2] || null,
+    arr[3] || null
+  ];
+
+  out.push({ time, holes, slots });
+});
+
+return out;
+}
+
+// =======================
+// Auth helpers
+// =======================
+async function getMe(){
+  const out = await j(
+    "/api/book/course-admin/me?slug=" + encodeURIComponent(getSlug()),
+    { method: "GET" }
+  );
+
+  $("who").textContent =
+    `✅ ${out.slug || ""} — ${out.email || ""} (${out.role || ""})`;
 
   return out;
 }
 
-  async function getMe(){
-    const out = await j("/api/book/course-admin/me?slug=" + encodeURIComponent(getSlug()), { method:"GET" });
-    $("who").textContent = `✅ ${out.slug || ""} — ${out.email || ""}`;
-    return out;
-  }
+// =======================
+// Page init
+// =======================
 document.addEventListener("DOMContentLoaded", () => {
-    $("saveBtn").onclick = async () => {
-    const slug = String($("slug").value || "").trim().toLowerCase();
-    const key = String($("key").value || "").trim();
 
-    setSlug(slug);
-    setKey(key);
-
-    $("msg").textContent = "Saving...";
+  // 🔐 LOGIN
+  $("loginBtn").onclick = async () => {
+    $("msg").textContent = "Logging in...";
     try {
-      // ✅ NEW: store bypass in HttpOnly cookie
-      await setBypassCookie(slug, key);
+      const slug = String($("slug").value || "").trim().toLowerCase();
+      const email = String($("email").value || "").trim();
+      const password = String($("password").value || "").trim();
 
-      $("msg").textContent = "✅ Saved (cookie set)";
-      $("who").textContent = slug ? `Using: ${slug}` : "";
-      document.querySelector("#tplLoadBtn")?.click();
+      if (!slug) throw new Error("slug_required");
+      if (!email) throw new Error("email_required");
+      if (!password) throw new Error("password_required");
+
+      setSlug(slug);
+
+      const res = await fetch("/api/book/course-admin/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-course-slug": slug,
+        },
+        body: JSON.stringify({ slug, email, password }),
+        credentials: "include",
+      });
+
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      const data = ct.includes("application/json")
+        ? await res.json().catch(() => null)
+        : null;
+
+      if (!res.ok) {
+        throw new Error((data && (data.error || data.message)) || `HTTP_${res.status}`);
+      }
+
+      if (!data?.token) throw new Error("missing_token");
+
+      setToken(data.token);
+      setRole(String(data.role || "").toLowerCase());
+
+      $("msg").textContent = "✅ Logged in";
+      $("who").textContent =
+        `✅ ${data.slug || slug} — ${data.email || email} (${data.role || ""})`;
+
+      applyRoleUI();
+
+      // auto-load template for managers
+      if (getRole() === "manager") {
+        setTimeout(() => document.querySelector("#tplLoadBtn")?.click(), 0);
+      }
+
     } catch (e) {
-      $("msg").textContent = "❌ " + (e?.message || "Failed to save");
+      $("msg").textContent = "❌ " + (e.message || "login_failed");
+      clearAuth();
+      applyRoleUI();
     }
   };
 
-  $("clearBtn").onclick = () => {
+  // 🔓 LOGOUT
+  $("logoutBtn").onclick = async () => {
+    try {
+      await fetch("/api/book/course-admin/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {}
+
     clearAuth();
-    $("slug").value = "";
-    $("key").value = "";
-    $("msg").textContent = "Cleared";
+    $("msg").textContent = "Logged out";
     $("who").textContent = "";
-    clearView();
+    applyRoleUI();
   };
 
+  // 🧪 TEST /me
   $("testBtn").onclick = async () => {
     $("msg").textContent = "Testing...";
-    try{
+    try {
       await getMe();
       $("msg").textContent = "✅ /me OK";
-    }catch(e){
+    } catch (e) {
       $("msg").textContent = "❌ " + e.message;
     }
   };
 
-  async function viewTimes(){
+  // 🧹 CLEAR LOCAL AUTH
+  $("clearBtn").onclick = () => {
+    clearAuth();
+    $("slug").value = "";
+    $("email").value = "";
+    $("password").value = "";
+    $("msg").textContent = "Cleared";
+    $("who").textContent = "";
     clearView();
-    $("viewMsg").textContent = "Loading tee times...";
-    try{
-      await getMe();
-      const date = ($("date").value || "").trim();
-      if (!date) throw new Error("play_date_required");
+    applyRoleUI();
+  };
 
-      const out = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
-
-      const rows = (out && out.times) || [];
-      if (!Array.isArray(rows) || !rows.length){
-        $("viewMsg").textContent = "✅ No tee times found (generate them in Booking Admin).";
-        return;
-      }
-      $("viewMsg").textContent = `✅ Loaded ${rows.length} tee times`;
-      $("timesBox").style.display = "block";
-
-      const tb = $("timesBody");
-      rows.forEach(r => {
-        const maxP = Number(r.max_players ?? 0);
-        const bookedP = Number(r.booked_players ?? 0);
-        const remaining = Math.max(0, maxP - bookedP);
-
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${String(r.play_date || "")}</td>
-          <td>${String(r.tee_time || "")}</td>
-          <td>${(r.holes ?? "")}</td>
-          <td>${String(r.status || "")}</td>
-          <td class="right">${(r.max_players ?? "")}</td>
-          <td class="right">${(r.booked_players ?? "")}</td>
-          <td class="right">${remaining}</td>
-          <td class="right">${(r.price_per_player_cents ?? "")}</td>
-        `;
-        tb.appendChild(tr);
-      });
-    }catch(e){
-      $("viewMsg").textContent = "❌ " + e.message;
-    }
-  }
+});
 
   async function viewBookings(){
     clearView();
