@@ -157,8 +157,8 @@ async function requireCourseAdmin(req, res, next) {
   }
 }
 function requireCourseAdminManager(req, res, next) {
-  const role = String(req.courseAdmin?.role || "").toUpperCase();
-  if (role !== "MANAGER") {
+  const role = String(req.courseAdmin?.role || "").trim().toLowerCase();
+  if (role !== "manager") {
     return res.status(403).json({ ok: false, error: "manager_only" });
   }
   next();
@@ -1088,11 +1088,12 @@ router.post("/course-admin/login", async (req, res) => {
     res.cookie("tr_course_admin_slug", String(u.slug), baseCookieOpts(req));
     res.cookie("tr_course_admin_email", String(u.email), baseCookieOpts(req));
     res.cookie("tr_course_admin_token", String(courseAdminToken), baseCookieOpts(req));
-
+    res.cookie("tr_course_admin_role", String(u.role || "proshop"), baseCookieOpts(req));
     const response = {
       ok: true,
       slug: u.slug,
       email: u.email,
+      role: u.role || "proshop",
       token: courseAdminToken,
       courseAdminToken: courseAdminToken,
       accessToken: courseAdminToken,
@@ -1121,12 +1122,15 @@ router.post("/course-admin/logout", async (req, res) => {
   res.clearCookie("tr_course_admin_email", { path: "/" });
   res.clearCookie("tr_course_admin_token", { path: "/" });
   res.clearCookie("tr_course_admin_bypass", { path: "/" }); // ✅ added
+  res.clearCookie("tr_course_admin_role", { path: "/" });
   res.json({ ok: true });
 });
 
-router.get("/course-admin/me", requireCourseAdmin, async (req, res) => {
-  console.log("✅ course-admin/me OK", req.courseAdmin);
-  res.json({ ok: true, slug: req.courseAdmin.slug, email: req.courseAdmin.email });
+res.json({
+  ok: true,
+  slug: req.courseAdmin.slug,
+  email: req.courseAdmin.email,
+  role: req.courseAdmin.role || "proshop", // ✅ ADD
 });
 // ✅ NEW: Course admin — fetch course settings (carts/clubs qty + fees + durations)
 router.get("/course-admin/course-settings", requireCourseAdmin, async (req, res) => {
@@ -3551,7 +3555,7 @@ router.get("/course-template", requireCourseAdmin, async (req, res) => {
 });
 
 // PUT save template for course
-router.put("/course-template", requireCourseAdmin, async (req, res) => {
+router.put("/course-template", requireCourseAdmin, requireCourseAdminManager, async (req, res) => {
   try {
     const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
     const timezone = String(req.body?.timezone || "Australia/Perth").trim() || "Australia/Perth";
@@ -3596,7 +3600,7 @@ if (req.body?.template && typeof req.body.template === "object") {
 // POST generate times from saved template
 // Body: { slug, startDate, daysAhead, mode }
 // mode: "skip" (default) OR "overwrite-range"
-router.post("/generate-from-template", requireCourseAdmin, async (req, res) => {
+router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminManager, async (req, res) => {
   try {
     // ✅ Course admins can ONLY generate for their own course
 const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
