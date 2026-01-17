@@ -1040,6 +1040,7 @@ async function viewTimes(){
       $("bookingsBox").style.display = "block";
 
       const tb = $("bookingsBody");
+      tb.innerHTML = "";
       rows.forEach(r => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
