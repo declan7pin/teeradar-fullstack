@@ -1768,6 +1768,7 @@ if (Array.isArray(manualSlots) && manualSlots.length) {
 
     if (getSlug()) $("who").textContent = "Using: " + getSlug();
 
+    applyRoleUI();
     // ✅ auto-load weekly template only if a slug is saved AND role is manager
     // (role may not be set yet until after login, so we don't auto-load here)
   }catch{}
