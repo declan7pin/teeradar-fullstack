@@ -4170,45 +4170,63 @@ router.post("/course-admin/booking-cancel", requireCourseAdmin, async (req, res)
   }
 });
 // ✅ ADD: toggle checked-in flag (course admin)
+// ✅ Course admin: mark a booking checked-in (supports TR- + MAN- refs)
 router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res) => {
   try {
-    const slug = req.courseAdmin.slug;
     const reference = String(req.body?.reference || "").trim();
-    const checked_in = parseBool(req.body?.checked_in, false);
-    if (!reference) return res.status(400).json({ ok: false, error: "reference_required" });
+    const slot = Number(req.body?.slot || 0) || 0; // 1–4 for MAN- slots
+    const checkedIn = !!(req.body?.checked_in ?? req.body?.checkedIn ?? false);
 
-    const courseId = await courseIdFromSlug(slug);
-    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
 
-    // 1) Try real bookings table first
-let r = await db.query(
-  `
-  UPDATE booking_bookings
-  SET checked_in=$3
-  WHERE reference=$1 AND course_id=$2
-  RETURNING reference, checked_in;
-  `,
-  [reference, courseId, checked_in]
-);
+    // Resolve courseId from slug (works even if req.courseAdmin has no courseId)
+    const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
+    const courseQ = await db.query(
+      `SELECT id FROM booking_courses WHERE slug = $1 LIMIT 1;`,
+      [slug]
+    );
+    const courseId = Number(courseQ.rows?.[0]?.id || 0);
+    if (!courseId) {
+      return res.status(404).json({ ok: false, error: "course_not_found" });
+    }
 
-// 2) If not found, try manual slots table
-if (!r.rows.length) {
-  r = await db.query(
-    `
-    UPDATE booking_manual_slots
-    SET checked_in=$3, updated_at=now()
-    WHERE reference=$1 AND course_id=$2
-    RETURNING reference, checked_in;
-    `,
-    [reference, courseId, checked_in]
-  );
-}
+    if (/^MAN-/.test(reference)) {
+      // Manual slots are per-slot rows
+      if (!slot || slot < 1 || slot > 4) {
+        return res.status(400).json({ ok: false, error: "slot_required_for_manual" });
+      }
 
-if (!r.rows.length) return res.status(404).json({ ok: false, error: "booking_not_found" });
-res.json({ ok: true, reference, checked_in });
+      await db.query(
+        `
+        UPDATE booking_manual_slots
+        SET checked_in = $1, updated_at = now()
+        WHERE course_id = $2
+          AND reference = $3
+          AND slot_index = $4
+        `,
+        [checkedIn, courseId, reference, slot]
+      );
+
+      return res.json({ ok: true, kind: "manual", reference, slot, checked_in: checkedIn });
+    }
+
+    // Normal bookings (TR- etc)
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET checked_in = $1, updated_at = now()
+      WHERE course_id = $2
+        AND reference = $3
+      `,
+      [checkedIn, courseId, reference]
+    );
+
+    return res.json({ ok: true, kind: "booking", reference, checked_in: checkedIn });
   } catch (e) {
     console.error("course-admin/booking-checkin", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 // -----------------------------
