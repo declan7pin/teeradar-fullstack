@@ -1357,27 +1357,29 @@ if (!refToUse) {
     }
   }
 
-  $("viewTimesBtn").onclick = viewTimes;
-  $("viewBookingsBtn").onclick = viewBookings;
-  $("viewSheetBtn").onclick = viewSheet;
-$("deleteTimesBtn").onclick = async () => {
+ // ✅ Wire up buttons (safe even if functions are defined later)
+document.getElementById("viewTimesBtn").onclick = () => viewTimes();
+document.getElementById("viewBookingsBtn").onclick = () => viewBookings();
+document.getElementById("viewSheetBtn").onclick = () => viewSheet();
+
+document.getElementById("deleteTimesBtn").onclick = async () => {
   try{
     await getMe();
 
-    const date = ($("date").value || "").trim();
+    const date = (document.getElementById("date").value || "").trim();
     if (!date) throw new Error("play_date_required");
 
     if (!confirm(`Delete ALL tee times for ${date}? This cannot be undone.`)) return;
 
     await j(
       "/api/book/course-admin/times?" + new URLSearchParams({ date }).toString(),
-      { method:"DELETE" }
+      { method: "DELETE" }
     );
 
-    $("viewMsg").textContent = `✅ Tee times deleted for ${date}`;
+    document.getElementById("viewMsg").textContent = `✅ Tee times deleted for ${date}`;
     clearView();
   }catch(e){
-    $("viewMsg").textContent = "❌ " + (e?.message || "delete_failed");
+    document.getElementById("viewMsg").textContent = "❌ " + (e?.message || "delete_failed");
   }
 };
   // ✅ Manual tee times (Course Admin)
@@ -1463,17 +1465,20 @@ function isSheetOpenForDate(d){
     if (!confirm(`Delete manual slot ${slotIndex} at ${teeTime} (${holes} holes) on ${playDate}?`)) return;
 
     try{
-      await j(
-        "/api/book/course-admin/manual-slot?" +
-          new URLSearchParams({
-            reference: ref,
-            date: playDate,
-            time: teeTime,
-            holes: String(holes),
-            slotIndex: String(slotIndex),
-          }).toString(),
-        { method:"DELETE" }
-      );
+      const ref = String(row?.reference || "").trim();
+if (!ref) throw new Error("missing_reference_for_manual_slot");
+
+await j(
+  "/api/book/course-admin/manual-slot?" +
+    new URLSearchParams({
+      reference: ref,
+      date: playDate,
+      time: teeTime,
+      holes: String(holes),
+      slotIndex: String(slotIndex),
+    }).toString(),
+  { method:"DELETE" }
+);
 
             $("manualMsg").textContent = "✅ Deleted manual tee time";
             await loadManualSlots();
