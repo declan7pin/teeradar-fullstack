@@ -656,27 +656,29 @@ const isManualRef = /^MAN-/.test(refRaw);
             <div style="margin-top:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
         <label class="paidWrap" for="${paidId}">
           <input
-            id="${paidId}"
-            type="checkbox"
-            data-ref="${_escape(refRaw)}"
-            data-kind="paid"
-            data-slot="${slotIndex}"
-            data-slotkey="${_escape(slotKey)}"
-            ${paid ? "checked" : ""}
-          />
+  id="${paidId}"
+  type="checkbox"
+  data-ref="${_escape(refRaw)}"
+  data-kind="paid"
+  data-slot="${slotIndex}"
+  data-slotkey="${_escape(slotKey)}"
+  ${paid ? "checked" : ""}
+  ${refRaw ? "" : 'disabled title="No reference on this slot"'}
+/>
           Paid
         </label>
 
         <label class="paidWrap" for="${checkinId}">
           <input
-            id="${checkinId}"
-            type="checkbox"
-            data-ref="${_escape(refRaw)}"
-            data-kind="checkin"
-            data-slot="${slotIndex}"
-            data-slotkey="${_escape(slotKey)}"
-            ${checkedIn ? "checked" : ""}
-          />
+  id="${checkinId}"
+  type="checkbox"
+  data-ref="${_escape(refRaw)}"
+  data-kind="checkin"
+  data-slot="${slotIndex}"
+  data-slotkey="${_escape(slotKey)}"
+  ${checkedIn ? "checked" : ""}
+  ${refRaw ? "" : 'disabled title="No reference on this slot"'}
+/>
           Checked in
         </label>
 
