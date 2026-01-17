@@ -395,8 +395,6 @@ window.onerror = function(message, source, lineno, colno){
     if (el) el.textContent = "❌ JS error: " + message + " (line " + lineno + ")";
   }catch{}
 };
-  const $ = (id) => document.getElementById(id);
-  
   const SLUG_KEY = "tr_course_admin_slug";
 const TOKEN_KEY = "tr_course_admin_token";
 const ROLE_KEY = "tr_course_admin_role";
@@ -1755,17 +1753,20 @@ if (Array.isArray(manualSlots) && manualSlots.length) {
     }catch{}
   })();
 
-  // load saved
-  (function(){
+// load saved
+(function(){
+  try{
     $("slug").value = getSlug();
-    $("key").value = getKey();
+
+    // optional: auto-fill email if you want later (leave for now)
+    // $("email").value = "";
+
     if (getSlug()) $("who").textContent = "Using: " + getSlug();
 
-   // ✅ auto-load weekly template only if a slug is saved
-if (getSlug()) {
-  setTimeout(() => document.querySelector("#tplLoadBtn")?.click(), 0);
-}
-});
+    // ✅ auto-load weekly template only if a slug is saved AND role is manager
+    // (role may not be set yet until after login, so we don't auto-load here)
+  }catch{}
+})();
   // ✅ Weekly template feature
   (function templateFeature(){
     const DOW = [
