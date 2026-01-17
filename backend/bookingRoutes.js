@@ -100,7 +100,19 @@ function getBearer(req) {
   const m = auth.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : "";
 }
+function getBypassProvided(req) {
+  const key =
+    String(req.headers["x-course-admin-key"] || "").trim() ||
+    String(req.query.key || "").trim() ||
+    String(req.cookies?.tr_course_admin_bypass || "").trim();
 
+  const slug =
+    String(req.headers["x-course-slug"] || "").trim().toLowerCase() ||
+    String(req.query.slug || "").trim().toLowerCase() ||
+    String(req.cookies?.tr_course_admin_slug || "").trim().toLowerCase();
+
+  return { key, slug };
+}
 async function requireCourseAdmin(req, res, next) {
   // ✅ helper for bypass to work on BOTH fetch() and full page navigation
   function getBypassProvided(req) {
