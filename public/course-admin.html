@@ -395,7 +395,8 @@ window.onerror = function(message, source, lineno, colno){
     if (el) el.textContent = "❌ JS error: " + message + " (line " + lineno + ")";
   }catch{}
 };
-  function getSlug(){ try { return (localStorage.getItem(SLUG_KEY) || "").trim().toLowerCase(); } catch { return ""; } }
+  const $ = (id) => document.getElementById(id);
+  
   const SLUG_KEY = "tr_course_admin_slug";
 const TOKEN_KEY = "tr_course_admin_token";
 const ROLE_KEY = "tr_course_admin_role";
@@ -421,15 +422,7 @@ function applyRoleUI(){
   const mgrCard = document.getElementById("managerOnlyTemplate");
   if (mgrCard) mgrCard.style.display = (role === "manager") ? "block" : "none";
 }
-  const ct = (res.headers.get("content-type") || "").toLowerCase();
-  const data = ct.includes("application/json") ? await res.json().catch(() => null) : null;
-
-  if (!res.ok) {
-    const err = (data && (data.error || data.message)) || `HTTP_${res.status}`;
-    throw new Error(err);
-  }
-  return data || {};
-}
+  
   async function j(url, opts = {}) {
     const slug = getSlug();
 const token = getToken();
@@ -1768,11 +1761,10 @@ if (Array.isArray(manualSlots) && manualSlots.length) {
     $("key").value = getKey();
     if (getSlug()) $("who").textContent = "Using: " + getSlug();
 
-    // ✅ CHANGE (only): auto-load weekly template if slug+key already saved
-    if (getSlug() && getKey()) {
-      setTimeout(() => document.querySelector("#tplLoadBtn")?.click(), 0);
-    }
-  })();
+   // ✅ auto-load weekly template only if a slug is saved
+if (getSlug()) {
+  setTimeout(() => document.querySelector("#tplLoadBtn")?.click(), 0);
+}
 });
   // ✅ Weekly template feature
   (function templateFeature(){
