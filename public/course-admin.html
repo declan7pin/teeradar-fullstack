@@ -387,8 +387,9 @@
   </div>
 
 <script>
-  const SLUG_KEY = "tr_course_admin_slug_bypass";
-  const BYPASS_KEY = "tr_course_admin_key_bypass";
+  const SLUG_KEY = "tr_course_admin_slug";
+  const TOKEN_KEY = "tr_course_admin_token";
+  const ROLE_KEY = "tr_course_admin_role";
 
   const $ = (id) => document.getElementById(id);
 window.onerror = function(message, source, lineno, colno){
@@ -398,18 +399,26 @@ window.onerror = function(message, source, lineno, colno){
   }catch{}
 };
   function getSlug(){ try { return (localStorage.getItem(SLUG_KEY) || "").trim().toLowerCase(); } catch { return ""; } }
-  function getKey(){ try { return (localStorage.getItem(BYPASS_KEY) || "").trim(); } catch { return ""; } }
-  function setSlug(v){ try { localStorage.setItem(SLUG_KEY, String(v||"").trim().toLowerCase()); } catch {} }
-  function setKey(v){ try { localStorage.setItem(BYPASS_KEY, String(v||"").trim()); } catch {} }
-  function clearAuth(){ try { localStorage.removeItem(SLUG_KEY); localStorage.removeItem(BYPASS_KEY); } catch {} }
-// ✅ NEW: set HttpOnly bypass cookie on the server (so user doesn't re-enter key)
-async function setBypassCookie(slug, key) {
-  const res = await fetch("/api/book/course-admin/bypass", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ slug, key }),
-  });
+  const SLUG_KEY = "tr_course_admin_slug";
+const TOKEN_KEY = "tr_course_admin_token";
+const ROLE_KEY = "tr_course_admin_role";
+
+function getSlug(){ try { return (localStorage.getItem(SLUG_KEY) || "").trim().toLowerCase(); } catch { return ""; } }
+function setSlug(v){ try { localStorage.setItem(SLUG_KEY, String(v||"").trim().toLowerCase()); } catch {} }
+
+function getToken(){ try { return (localStorage.getItem(TOKEN_KEY) || "").trim(); } catch { return ""; } }
+function setToken(v){ try { localStorage.setItem(TOKEN_KEY, String(v||"").trim()); } catch {} }
+
+function getRole(){ try { return (localStorage.getItem(ROLE_KEY) || "").trim().toLowerCase(); } catch { return ""; } }
+function setRole(v){ try { localStorage.setItem(ROLE_KEY, String(v||"").trim().toLowerCase()); } catch {} }
+
+function clearAuth(){
+  try {
+    localStorage.removeItem(SLUG_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(ROLE_KEY);
+  } catch {}
+}
 
   const ct = (res.headers.get("content-type") || "").toLowerCase();
   const data = ct.includes("application/json") ? await res.json().catch(() => null) : null;
@@ -422,21 +431,20 @@ async function setBypassCookie(slug, key) {
 }
   async function j(url, opts = {}) {
     const slug = getSlug();
-  const key = getKey();
-  if (!slug) throw new Error("slug_required");
-  // ✅ key is optional now (cookie can authenticate)
-  
-  const method = String(opts.method || "GET").toUpperCase();
-  const hasBody = opts.body != null;
+const token = getToken();
+if (!slug) throw new Error("slug_required");
 
-  const headers = {
-    ...(hasBody && method !== "GET" && method !== "HEAD"
-      ? { "content-type": "application/json" }
-      : {}),
-        ...(key ? { "x-course-admin-key": key } : {}),
-    "x-course-slug": slug,
-    ...(opts.headers || {}),
-  };
+const method = String(opts.method || "GET").toUpperCase();
+const hasBody = opts.body != null;
+
+const headers = {
+  ...(hasBody && method !== "GET" && method !== "HEAD"
+    ? { "content-type": "application/json" }
+    : {}),
+  ...(token ? { "Authorization": "Bearer " + token } : {}),
+  "x-course-slug": slug,
+  ...(opts.headers || {}),
+};
 
   let res;
   try {
