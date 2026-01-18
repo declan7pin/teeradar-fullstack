@@ -179,17 +179,19 @@ function toDateKey(playDate) {
 async function getCapacitySnapshot({ courseId, playDateKey }) {
   // 1) course resource totals (adjust table/columns to YOUR schema)
   // You likely have something like course_admin/course_settings with totals.
-  const course = await db.get(
-    `
-    SELECT
-      carts_total,
-      hire_clubs_total,
-      max_players_per_slot
-    FROM course_admin
-    WHERE course_id = ?
-    `,
-    [courseId]
-  );
+  const courseQ = await db.query(
+  `
+  SELECT
+    carts_total,
+    hire_clubs_total,
+    max_players_per_slot
+  FROM course_admin
+  WHERE course_id = $1
+  LIMIT 1;
+  `,
+  [courseId]
+);
+const course = courseQ.rows[0] || null;
 
   const cartsTotal = Number(course?.carts_total ?? 0);
   const clubsTotal = Number(course?.hire_clubs_total ?? 0);
@@ -202,7 +204,7 @@ async function getCapacitySnapshot({ courseId, playDateKey }) {
     SELECT
       COALESCE(SUM(COALESCE(carts, 0)), 0) AS carts_used,
       COALESCE(SUM(COALESCE(hire_clubs, 0)), 0) AS clubs_used
-    FROM bookings
+    FROM booking_bookings
     WHERE course_id = ?
       AND SUBSTR(play_date, 1, 10) = ?
       AND status IN ('confirmed','paid','pending') -- keep whatever statuses you treat as "counts"
@@ -381,9 +383,8 @@ function fromMinutes(mins) {
   return `${h}:${m}`;
 }
 function toIsoDateTimeLocal(dateYmd, timeHhMm) {
-  // stored as timestamptz, interpret date+time as local server time (Render is usually UTC)
-  // If you want strict AU timezone later, we can switch to a fixed TZ approach.
-  return `${dateYmd}T${timeHhMm}:00`;
+  // Force UTC interpretation so overlap windows are stable on Render
+  return `${dateYmd}T${timeHhMm}:00Z`;
 }
 
 function durationMinsForHoles(courseRow, holes) {
@@ -845,7 +846,7 @@ await db.query(`
     ON booking_times (course_id, play_date, holes, status, tee_time);
   `);
 
-  await db.query(`
+    await db.query(`
     CREATE TABLE IF NOT EXISTS booking_bookings (
       id BIGSERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
@@ -862,16 +863,18 @@ await db.query(`
       reference TEXT UNIQUE NOT NULL,
       status TEXT NOT NULL DEFAULT 'CONFIRMED',
       created_at TIMESTAMPTZ DEFAULT now()
-    `);
-    await db.query(`
-  ALTER TABLE booking_bookings 
-  ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+    );
   `);
-await db.query(`
-  ALTER TABLE booking_bookings 
-  ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;
+
+  await db.query(`
+    ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
   `);
-);
+
+  await db.query(`
+    ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;
+  `);
   
   // ✅ NEW: store the "usage window" so inventory can be checked by overlap
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;`);
