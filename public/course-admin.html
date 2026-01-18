@@ -563,6 +563,96 @@ function normTime(v){
   if (!m) return s;
   return String(m[1]).padStart(2,"0") + ":" + m[2];
 }
+// =======================
+// Manager Analytics helpers
+// =======================
+function moneyAUD(cents){
+  const n = Number(cents || 0) / 100;
+  return n.toLocaleString(undefined, { style:"currency", currency:"AUD" });
+}
+
+function isoMinusDays(days){
+  const d = new Date();
+  d.setDate(d.getDate() - Number(days || 0));
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const dd = String(d.getDate()).padStart(2,"0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+async function loadAnalytics(){
+  const msg = $("analyticsMsg");
+  const box = $("analyticsBox");
+  if (msg) msg.textContent = "Loading analytics...";
+  if (box) box.style.display = "none";
+
+  try{
+    await getMe();
+
+    // ✅ hard gate in UI
+    if (getRole() !== "manager") throw new Error("manager_only");
+
+    const start = ($("aStart")?.value || "").trim();
+    const end = ($("aEnd")?.value || "").trim();
+
+    const qs = new URLSearchParams();
+    if (start) qs.set("start", start);
+    if (end) qs.set("end", end);
+
+    // ✅ IMPORTANT: no slug passed; backend must use req.courseAdmin scope
+    const out = await j(
+      "/api/book/course-admin/analytics/summary" + (qs.toString() ? "?" + qs.toString() : ""),
+      { method:"GET" }
+    );
+
+    const bookings = Number(out.bookings || 0);
+    const grossCents = Number(out.grossCents ?? out.gross_cents ?? 0);
+
+    $("aBookings").textContent = String(bookings);
+    $("aRevenue").textContent = moneyAUD(grossCents);
+    $("aGrossCents").textContent = String(grossCents);
+
+    const aov = bookings > 0 ? Math.round(grossCents / bookings) : 0;
+    $("aAov").textContent = moneyAUD(aov);
+
+    if (box) box.style.display = "block";
+    if (msg) msg.textContent = "✅ Analytics loaded";
+  }catch(e){
+    if (msg) msg.textContent = "❌ " + (e?.message || "analytics_failed");
+  }
+}
+
+function exportAnalyticsCSV(){
+  try{
+    const bookings = $("aBookings")?.textContent || "0";
+    const revenue = $("aRevenue")?.textContent || "$0.00";
+    const aov = $("aAov")?.textContent || "$0.00";
+    const grossCents = $("aGrossCents")?.textContent || "0";
+
+    const start = ($("aStart")?.value || "").trim();
+    const end = ($("aEnd")?.value || "").trim();
+
+    const rows = [
+      ["start","end","bookings","revenue","avg_booking_value","gross_cents"],
+      [start,end,bookings,revenue,aov,grossCents],
+    ];
+
+    const csv = rows.map(r => r.map(x => `"${String(x).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type:"text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "course-analytics.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }catch(e){
+    const msg = $("analyticsMsg");
+    if (msg) msg.textContent = "❌ export_failed: " + (e?.message || "");
+  }
+}
   function clearView(){
     $("viewMsg").textContent = "";
     $("timesBody").innerHTML = "";
@@ -1035,6 +1125,12 @@ function initCourseAdminUI(){
       $("viewMsg").textContent = "❌ " + (e?.message || "delete_failed");
     }
   };
+    // ✅ Manager-only analytics buttons
+  const analyticsLoadBtn = $("analyticsLoadBtn");
+  if (analyticsLoadBtn) analyticsLoadBtn.onclick = loadAnalytics;
+
+  const analyticsExportBtn = $("analyticsExportBtn");
+  if (analyticsExportBtn) analyticsExportBtn.onclick = exportAnalyticsCSV;
 
   // ✅ Manual buttons (make sure these are also wired even if earlier code moved)
   const mLoadBtn = $("mLoadBtn");
@@ -1881,6 +1977,8 @@ if (Array.isArray(manualSlots) && manualSlots.length) {
       $("date").value = today;
       if ($("mDate")) $("mDate").value = today;
       if ($("iDate")) $("iDate").value = today;
+      if ($("aEnd")) $("aEnd").value = today;
+      if ($("aStart")) $("aStart").value = isoMinusDays(30);
     }catch{}
   })();
 
