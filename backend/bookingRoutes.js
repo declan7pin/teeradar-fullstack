@@ -833,14 +833,7 @@ await db.query(`
     ALTER TABLE booking_times
     ADD COLUMN IF NOT EXISTS booked_players INTEGER NOT NULL DEFAULT 0;
   `);
-await db.query(`
-  ALTER TABLE booking_bookings 
-  ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
-  `);
-await db.query(`
-  ALTER TABLE booking_bookings 
-  ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;
-  `);
+
   await db.query(`
     UPDATE booking_times
     SET booked_players = 0
@@ -869,8 +862,17 @@ await db.query(`
       reference TEXT UNIQUE NOT NULL,
       status TEXT NOT NULL DEFAULT 'CONFIRMED',
       created_at TIMESTAMPTZ DEFAULT now()
-    );
+    `);
+    await db.query(`
+  ALTER TABLE booking_bookings 
+  ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
   `);
+await db.query(`
+  ALTER TABLE booking_bookings 
+  ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;
+  `);
+);
+  
   // ✅ NEW: store the "usage window" so inventory can be checked by overlap
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;`);
