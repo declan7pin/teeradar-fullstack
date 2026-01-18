@@ -443,6 +443,20 @@
         <input id="aPass" type="password" placeholder="Set a password (8+ chars)" />
       </div>
       <div style="margin-top:10px">
+  <label class="muted">Account Role</label>
+  <div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap">
+    <label style="display:flex;gap:6px;align-items:center">
+      <input type="radio" name="aRole" value="proshop" checked />
+      Pro Shop
+    </label>
+
+    <label style="display:flex;gap:6px;align-items:center">
+      <input type="radio" name="aRole" value="manager" />
+      Manager
+    </label>
+  </div>
+</div>
+      <div style="margin-top:10px">
         <button id="createAdminBtn">Save Course Admin</button>
       </div>
       <div id="adminMsg" class="muted" style="margin-top:10px;"></div>
