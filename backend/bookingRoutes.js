@@ -1090,15 +1090,12 @@ router.post("/course-admin/login", async (req, res) => {
     res.cookie("tr_course_admin_token", String(courseAdminToken), baseCookieOpts(req));
     res.cookie("tr_course_admin_role", String(u.role || "proshop"), baseCookieOpts(req));
     const response = {
-      ok: true,
-      slug: u.slug,
-      email: u.email,
-      role: u.role || "proshop",
-      token: courseAdminToken,
-      courseAdminToken: courseAdminToken,
-      accessToken: courseAdminToken,
-    };
-
+  ok: true,
+  slug: u.slug,
+  email: u.email,
+  role: u.role || "proshop",
+  token: courseAdminToken,
+};
     console.log("✅ course-admin/login OK", {
       email: u.email,
       slug: u.slug,
