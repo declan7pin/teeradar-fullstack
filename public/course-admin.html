@@ -2028,14 +2028,13 @@ if (Array.isArray(manualSlots) && manualSlots.length) {
     setTplStatus("❌ " + (e.message || "Failed to generate"), "err");
   }
 }
-    document.addEventListener("DOMContentLoaded", () => {
-      if ($("tplStartDate")) $("tplStartDate").value = todayISO();
+    if ($("tplStartDate")) $("tplStartDate").value = todayISO();
 
-      $("tplLoadBtn")?.addEventListener("click", tplLoad);
-      $("tplSaveBtn")?.addEventListener("click", tplSave);
-      $("tplGenerateBtn")?.addEventListener("click", tplGenerate);
+$("tplLoadBtn")?.addEventListener("click", tplLoad);
+$("tplSaveBtn")?.addEventListener("click", tplSave);
+$("tplGenerateBtn")?.addEventListener("click", tplGenerate);
 
-      renderTemplate(defaultTemplate());
+renderTemplate(defaultTemplate());
     });
   })();
 </script>
