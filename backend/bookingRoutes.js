@@ -3820,7 +3820,148 @@ router.get("/course-admin/analytics/summary", requireCourseAdmin, requireCourseA
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ NEW: Course admin (MANAGER ONLY) — analytics daily series
+router.get(
+  "/course-admin/analytics/daily",
+  requireCourseAdmin,
+  requireCourseAdminManager,
+  async (req, res) => {
+    try {
+      const slug = req.courseAdmin.slug;
+      const start = _parseYmd(req.query.start);
+      const end = _parseYmd(req.query.end);
 
+      const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+      if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+      const courseId = c.rows[0].id;
+
+      const params = [courseId];
+      let where = `WHERE b.course_id = $1`;
+
+      if (start && end) {
+        params.push(start, end);
+        where += ` AND b.created_at::date BETWEEN $2::date AND $3::date`;
+      } else if (start && !end) {
+        params.push(start);
+        where += ` AND b.created_at::date >= $2::date`;
+      } else if (!start && end) {
+        params.push(end);
+        where += ` AND b.created_at::date <= $2::date`;
+      } else {
+        where += ` AND b.created_at >= NOW() - INTERVAL '30 days'`;
+      }
+
+      const r = await db.query(
+        `
+        SELECT
+          b.created_at::date::text AS day,
+          COUNT(*)::int AS bookings,
+          COALESCE(SUM(b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents), 0)::bigint AS revenue_cents
+        FROM booking_bookings b
+        ${where}
+        GROUP BY b.created_at::date
+        ORDER BY b.created_at::date ASC;
+        `,
+        params
+      );
+
+      return res.json({ ok: true, rows: r.rows || [] });
+    } catch (e) {
+      console.error("course-admin/analytics/daily", e);
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  }
+);
+
+// ✅ NEW: Course admin (MANAGER ONLY) — export bookings CSV
+router.get(
+  "/course-admin/analytics/export.csv",
+  requireCourseAdmin,
+  requireCourseAdminManager,
+  async (req, res) => {
+    try {
+      const slug = req.courseAdmin.slug;
+      const start = _parseYmd(req.query.start);
+      const end = _parseYmd(req.query.end);
+
+      const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
+      if (!c.rows.length) {
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="teeradar_bookings.csv"`);
+        return res.send("created_at,play_date,tee_time,holes,players,name,email,phone,reference,paid,gross_cents\n");
+      }
+      const courseId = c.rows[0].id;
+
+      const params = [courseId];
+      let where = `WHERE b.course_id = $1`;
+
+      if (start && end) {
+        params.push(start, end);
+        where += ` AND b.created_at::date BETWEEN $2::date AND $3::date`;
+      } else if (start && !end) {
+        params.push(start);
+        where += ` AND b.created_at::date >= $2::date`;
+      } else if (!start && end) {
+        params.push(end);
+        where += ` AND b.created_at::date <= $2::date`;
+      } else {
+        where += ` AND b.created_at >= NOW() - INTERVAL '30 days'`;
+      }
+
+      const r = await db.query(
+        `
+        SELECT
+          b.created_at,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name,
+          b.golfer_email,
+          b.golfer_phone,
+          b.reference,
+          b.paid,
+          (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents)::bigint AS gross_cents
+        FROM booking_bookings b
+        ${where}
+        ORDER BY b.created_at DESC
+        LIMIT 5000;
+        `,
+        params
+      );
+
+      const header = [
+        "created_at","play_date","tee_time","holes","players",
+        "name","email","phone","reference","paid","gross_cents"
+      ].join(",");
+
+      const lines = (r.rows || []).map((row) => {
+        return [
+          _csvEscape(row.created_at ? new Date(row.created_at).toISOString() : ""),
+          _csvEscape(row.play_date),
+          _csvEscape(row.tee_time),
+          _csvEscape(row.holes),
+          _csvEscape(row.players),
+          _csvEscape(row.golfer_name),
+          _csvEscape(row.golfer_email),
+          _csvEscape(row.golfer_phone),
+          _csvEscape(row.reference),
+          _csvEscape(row.paid ? "true" : "false"),
+          _csvEscape(row.gross_cents ?? 0),
+        ].join(",");
+      });
+
+      const csv = [header].concat(lines).join("\n") + "\n";
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="teeradar_bookings_${slug}.csv"`);
+      return res.send(csv);
+    } catch (e) {
+      console.error("course-admin/analytics/export.csv", e);
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  }
+);
 // generate times (course admin)
 router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res) => {
   try {
