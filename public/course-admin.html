@@ -475,7 +475,10 @@ function applyRoleUI(){
   async function j(url, opts = {}) {
     const slug = getSlug();
 const token = getToken();
-if (!slug) throw new Error("slug_required");
+// allow unauthenticated calls if needed (login uses fetch anyway)
+if (!slug && !url.includes("/api/book/course-admin/login")) {
+  throw new Error("slug_required");
+}
 
 const method = String(opts.method || "GET").toUpperCase();
 const hasBody = opts.body != null;
@@ -1135,12 +1138,6 @@ function initCourseAdminUI(){
   // ✅ Manual buttons (make sure these are also wired even if earlier code moved)
   const mLoadBtn = $("mLoadBtn");
   if (mLoadBtn) mLoadBtn.onclick = async () => { _manualDateDefault(); await loadManualSlots(); };
-
-  const mBookBtn = $("mBookBtn");
-  if (mBookBtn) mBookBtn.onclick = $("mBookBtn").onclick; // keep your existing handler if defined later
-
-  const mAddBtn = $("mAddBtn");
-  if (mAddBtn) mAddBtn.onclick = $("mAddBtn").onclick; // keep your existing handler if defined later
 }
 
 // run now + fallback
