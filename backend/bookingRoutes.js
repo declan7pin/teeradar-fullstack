@@ -1138,6 +1138,15 @@ router.get("/course-admin/me", requireCourseAdmin, (req, res) => {
     role: req.courseAdmin.role || "proshop",
   });
 });
+// ✅ Manager-only: allow frontend to check access for Analytics page
+router.get(
+  "/course-admin/analytics/access",
+  requireCourseAdmin,
+  requireCourseAdminManager,
+  (req, res) => {
+    return res.json({ ok: true, access: "manager" });
+  }
+);
 // ✅ NEW: Course admin — fetch course settings (carts/clubs qty + fees + durations)
 router.get("/course-admin/course-settings", requireCourseAdmin, async (req, res) => {
   try {
