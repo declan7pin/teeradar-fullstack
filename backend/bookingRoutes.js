@@ -1123,11 +1123,15 @@ router.post("/course-admin/logout", async (req, res) => {
   res.json({ ok: true });
 });
 
-res.json({
-  ok: true,
-  slug: req.courseAdmin.slug,
-  email: req.courseAdmin.email,
-  role: req.courseAdmin.role || "proshop", // ✅ ADD
+// ✅ ADD THIS (course admin "who am I")
+// Place this EXACTLY where the stray res.json block currently is.
+router.get("/course-admin/me", requireCourseAdmin, (req, res) => {
+  return res.json({
+    ok: true,
+    slug: req.courseAdmin.slug,
+    email: req.courseAdmin.email,
+    role: req.courseAdmin.role || "proshop",
+  });
 });
 // ✅ NEW: Course admin — fetch course settings (carts/clubs qty + fees + durations)
 router.get("/course-admin/course-settings", requireCourseAdmin, async (req, res) => {
