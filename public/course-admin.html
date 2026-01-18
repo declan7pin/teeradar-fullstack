@@ -850,12 +850,20 @@ async function getMe(){
 }
 
 // =======================
-// Page init
+// Page init (robust - works on Safari even if DOMContentLoaded timing is weird)
 // =======================
-document.addEventListener("DOMContentLoaded", () => {
+let __inited = false;
+
+function initCourseAdminUI(){
+  if (__inited) return;
+  __inited = true;
+
+  // quick sanity: proves JS ran
+  try { $("msg").textContent = $("msg").textContent || ""; } catch {}
 
   // 🔐 LOGIN
-  $("loginBtn").onclick = async () => {
+  const loginBtn = $("loginBtn");
+  if (loginBtn) loginBtn.onclick = async () => {
     $("msg").textContent = "Logging in...";
     try {
       const slug = String($("slug").value || "").trim().toLowerCase();
@@ -893,8 +901,7 @@ document.addEventListener("DOMContentLoaded", () => {
       setRole(String(data.role || "").toLowerCase());
 
       $("msg").textContent = "✅ Logged in";
-      $("who").textContent =
-        `✅ ${data.slug || slug} — ${data.email || email} (${data.role || ""})`;
+      $("who").textContent = `✅ ${data.slug || slug} — ${data.email || email} (${data.role || ""})`;
 
       applyRoleUI();
 
@@ -902,23 +909,19 @@ document.addEventListener("DOMContentLoaded", () => {
       if (getRole() === "manager") {
         setTimeout(() => document.querySelector("#tplLoadBtn")?.click(), 0);
       }
-
     } catch (e) {
-      $("msg").textContent = "❌ " + (e.message || "login_failed");
+      $("msg").textContent = "❌ " + (e?.message || "login_failed");
       clearAuth();
       applyRoleUI();
     }
   };
 
   // 🔓 LOGOUT
-  $("logoutBtn").onclick = async () => {
+  const logoutBtn = $("logoutBtn");
+  if (logoutBtn) logoutBtn.onclick = async () => {
     try {
-      await fetch("/api/book/course-admin/logout", {
-        method: "POST",
-        credentials: "include",
-      });
+      await fetch("/api/book/course-admin/logout", { method: "POST", credentials: "include" });
     } catch {}
-
     clearAuth();
     $("msg").textContent = "Logged out";
     $("who").textContent = "";
@@ -926,18 +929,20 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // 🧪 TEST /me
-  $("testBtn").onclick = async () => {
+  const testBtn = $("testBtn");
+  if (testBtn) testBtn.onclick = async () => {
     $("msg").textContent = "Testing...";
     try {
       await getMe();
       $("msg").textContent = "✅ /me OK";
     } catch (e) {
-      $("msg").textContent = "❌ " + e.message;
+      $("msg").textContent = "❌ " + (e?.message || "me_failed");
     }
   };
 
-  // 🧹 CLEAR LOCAL AUTH
-  $("clearBtn").onclick = () => {
+  // 🧹 CLEAR
+  const clearBtn = $("clearBtn");
+  if (clearBtn) clearBtn.onclick = () => {
     clearAuth();
     $("slug").value = "";
     $("email").value = "";
@@ -947,12 +952,19 @@ document.addEventListener("DOMContentLoaded", () => {
     clearView();
     applyRoleUI();
   };
-  // ✅ Wire up view buttons AFTER DOM is ready
-  $("viewTimesBtn").onclick = () => viewTimes();
-  $("viewBookingsBtn").onclick = () => viewBookings();
-  $("viewSheetBtn").onclick = () => viewSheet();
 
-  $("deleteTimesBtn").onclick = async () => {
+  // ✅ View buttons
+  const viewTimesBtn = $("viewTimesBtn");
+  if (viewTimesBtn) viewTimesBtn.onclick = viewTimes;
+
+  const viewBookingsBtn = $("viewBookingsBtn");
+  if (viewBookingsBtn) viewBookingsBtn.onclick = viewBookings;
+
+  const viewSheetBtn = $("viewSheetBtn");
+  if (viewSheetBtn) viewSheetBtn.onclick = viewSheet;
+
+  const deleteTimesBtn = $("deleteTimesBtn");
+  if (deleteTimesBtn) deleteTimesBtn.onclick = async () => {
     try{
       await getMe();
 
@@ -972,7 +984,21 @@ document.addEventListener("DOMContentLoaded", () => {
       $("viewMsg").textContent = "❌ " + (e?.message || "delete_failed");
     }
   };
-});
+
+  // ✅ Manual buttons (make sure these are also wired even if earlier code moved)
+  const mLoadBtn = $("mLoadBtn");
+  if (mLoadBtn) mLoadBtn.onclick = async () => { _manualDateDefault(); await loadManualSlots(); };
+
+  const mBookBtn = $("mBookBtn");
+  if (mBookBtn) mBookBtn.onclick = $("mBookBtn").onclick; // keep your existing handler if defined later
+
+  const mAddBtn = $("mAddBtn");
+  if (mAddBtn) mAddBtn.onclick = $("mAddBtn").onclick; // keep your existing handler if defined later
+}
+
+// run now + fallback
+initCourseAdminUI();
+document.addEventListener("DOMContentLoaded", initCourseAdminUI);
 async function viewTimes(){
   clearView();
   $("viewMsg").textContent = "Loading tee times...";
