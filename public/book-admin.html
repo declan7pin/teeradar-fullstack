@@ -733,21 +733,26 @@ async function loadCourseSettingsIntoForm(slug){
   };
 
   $("createAdminBtn").onclick = async () => {
-    $("adminMsg").textContent = "Saving...";
-    try {
-      await j("/api/book/admin/course-admin", {
-        method:"POST",
-        body: JSON.stringify({
-          slug: $("aSlug").value,
-          email: $("aEmail").value,
-          password: $("aPass").value
-        })
-      });
-      $("adminMsg").textContent = "✅ Course admin saved";
-    } catch (e) {
-      $("adminMsg").textContent = "❌ " + e.message;
-    }
-  };
+  $("adminMsg").textContent = "Saving...";
+  try {
+    const role =
+      document.querySelector('input[name="aRole"]:checked')?.value || "proshop";
+
+    await j("/api/book/admin/course-admin", {
+      method:"POST",
+      body: JSON.stringify({
+        slug: $("aSlug").value,
+        email: $("aEmail").value,
+        password: $("aPass").value,
+        role // ✅ ADD THIS LINE
+      })
+    });
+
+    $("adminMsg").textContent = "✅ Course admin saved";
+  } catch (e) {
+    $("adminMsg").textContent = "❌ " + e.message;
+  }
+};
 
   $("previewBtn").onclick = async () => {
     $("genMsg").textContent = "";
