@@ -465,8 +465,11 @@ function clearAuth(){
 }
 function applyRoleUI(){
   const role = getRole(); // "manager" | "proshop" | ""
-  const mgrCard = document.getElementById("managerOnlyTemplate");
-  if (mgrCard) mgrCard.style.display = (role === "manager") ? "block" : "none";
+  const mgrTpl = document.getElementById("managerOnlyTemplate");
+  const mgrAna = document.getElementById("managerOnlyAnalytics");
+
+  if (mgrTpl) mgrTpl.style.display = (role === "manager") ? "block" : "none";
+  if (mgrAna) mgrAna.style.display = (role === "manager") ? "block" : "none";
 }
   
   async function j(url, opts = {}) {
