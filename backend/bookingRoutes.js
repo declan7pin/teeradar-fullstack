@@ -1181,6 +1181,55 @@ router.get("/course-admin/course-settings", requireCourseAdmin, async (req, res)
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ NEW: Course admin — update course settings (manager-only)
+router.post(
+  "/course-admin/course-settings",
+  requireCourseAdmin,
+  requireCourseAdminManager,
+  async (req, res) => {
+    try {
+      const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
+      if (!slug || !isValidSlug(slug)) {
+        return res.status(400).json({ ok: false, error: "slug_invalid" });
+      }
+
+      const cart_qty = Number(req.body?.cart_qty ?? req.body?.cartQty ?? 0);
+      const hire_clubs_qty = Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? 0);
+      const duration_9_mins = Number(req.body?.duration_9_mins ?? req.body?.duration9 ?? 180);
+      const duration_18_mins = Number(req.body?.duration_18_mins ?? req.body?.duration18 ?? 360);
+
+      function okInt(n, min, max) {
+        return Number.isFinite(n) && n >= min && n <= max;
+      }
+
+      if (!okInt(cart_qty, 0, 9999)) return res.status(400).json({ ok: false, error: "cart_qty_invalid" });
+      if (!okInt(hire_clubs_qty, 0, 9999)) return res.status(400).json({ ok: false, error: "hire_clubs_qty_invalid" });
+      if (!okInt(duration_9_mins, 30, 900)) return res.status(400).json({ ok: false, error: "duration_9_invalid" });
+      if (!okInt(duration_18_mins, 30, 1200)) return res.status(400).json({ ok: false, error: "duration_18_invalid" });
+
+      const r = await db.query(
+        `
+        UPDATE booking_courses
+        SET
+          cart_qty = $2,
+          hire_clubs_qty = $3,
+          duration_9_mins = $4,
+          duration_18_mins = $5
+        WHERE slug = $1
+        RETURNING slug, name, cart_fee_cents, cart_qty, hire_clubs_fee_cents, hire_clubs_qty, duration_9_mins, duration_18_mins;
+        `,
+        [slug, cart_qty, hire_clubs_qty, duration_9_mins, duration_18_mins]
+      );
+
+      if (!r.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+      return res.json({ ok: true, settings: r.rows[0] });
+    } catch (e) {
+      console.error("course-admin/course-settings POST", e);
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  }
+);
 // ✅ NEW: debug route so it returns JSON (won't fall into SPA index.html)
 router.get("/course-admin/_debug", (req, res) => {
   const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
