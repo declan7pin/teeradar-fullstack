@@ -389,7 +389,49 @@
   <div class="sub" style="margin-bottom:10px;">
     Manager only — shows analytics for your course only.
   </div>
+<div style="margin-top:12px;">
+  <div class="muted" style="font-weight:700;">Popularity</div>
+  <div class="row" style="margin-top:10px">
+    <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+      <div class="muted mini">Popular day</div>
+      <div style="font-weight:900;font-size:18px" id="aPopDay">—</div>
+      <div class="muted mini" id="aPopDayN"></div>
+    </div>
+    <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+      <div class="muted mini">Popular tee time</div>
+      <div style="font-weight:900;font-size:18px" id="aPopTime">—</div>
+      <div class="muted mini" id="aPopTimeN"></div>
+    </div>
+  </div>
 
+  <div class="row" style="margin-top:10px">
+    <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+      <div class="muted mini">Cart attach rate</div>
+      <div style="font-weight:900;font-size:18px" id="aCartRate">—</div>
+    </div>
+    <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+      <div class="muted mini">Clubs attach rate</div>
+      <div style="font-weight:900;font-size:18px" id="aClubsRate">—</div>
+    </div>
+  </div>
+
+  <div class="muted" style="margin-top:12px;font-weight:700;">Per-day</div>
+  <div class="tableWrap" style="margin-top:10px">
+    <table>
+      <thead>
+        <tr>
+          <th>Day</th>
+          <th class="right">Bookings</th>
+          <th class="right">Players</th>
+          <th class="right">Carts</th>
+          <th class="right">Clubs</th>
+          <th class="right">Gross</th>
+        </tr>
+      </thead>
+      <tbody id="aPerDayBody"></tbody>
+    </table>
+  </div>
+</div>
   <div class="row">
     <div>
       <label class="muted">From</label>
@@ -1128,6 +1170,7 @@ function initCourseAdminUI(){
       $("viewMsg").textContent = "❌ " + (e?.message || "delete_failed");
     }
   };
+  
     // ✅ Manager-only analytics buttons
   const analyticsLoadBtn = $("analyticsLoadBtn");
   if (analyticsLoadBtn) analyticsLoadBtn.onclick = loadAnalytics;
