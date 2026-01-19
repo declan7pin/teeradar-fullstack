@@ -1183,7 +1183,12 @@ function initCourseAdminUI(){
       const slug = String($("slug").value || "").trim().toLowerCase();
       const email = String($("email").value || "").trim();
       const password = String($("password").value || "").trim();
+// ✅ Stock buttons
+const csLoadBtn = $("csLoadBtn");
+if (csLoadBtn) csLoadBtn.onclick = loadCourseSettingsToUI;
 
+const csSaveBtn = $("csSaveBtn");
+if (csSaveBtn) csSaveBtn.onclick = saveCourseSettingsFromUI;
       if (!slug) throw new Error("slug_required");
       if (!email) throw new Error("email_required");
       if (!password) throw new Error("password_required");
