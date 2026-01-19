@@ -4279,19 +4279,7 @@ router.get(
       // 1) Per-day: bookings, players, carts/clubs, add-on revenue, gross, capacity, fill rate
 const perDayQ = await db.query(
   `
-  WITH days AS (
-    SELECT d::date AS day
-    FROM generate_series(
-      (SELECT MIN(play_date::date) FROM booking_times t WHERE t.course_id=$1
-        ${start && end ? "AND t.play_date::date BETWEEN $2::date AND $3::date" : "AND t.play_date::date >= (CURRENT_DATE - INTERVAL '30 days')"}
-      ),
-      (SELECT MAX(play_date::date) FROM booking_times t WHERE t.course_id=$1
-        ${start && end ? "AND t.play_date::date BETWEEN $2::date AND $3::date" : "AND t.play_date::date >= (CURRENT_DATE - INTERVAL '30 days')"}
-      ),
-      interval '1 day'
-    ) d
-  ),
-  book AS (
+  WITH book AS (
     SELECT
       b.play_date::date AS day,
       COUNT(*)::int AS bookings,
