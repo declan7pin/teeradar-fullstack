@@ -4295,7 +4295,7 @@ const perDayQ = await db.query(
       ),0)::bigint AS gross_cents,
       COALESCE(SUM(CASE WHEN COALESCE(b.checked_in,false) THEN 1 ELSE 0 END),0)::int AS checked_in_bookings,
       COALESCE(SUM(CASE WHEN COALESCE(b.paid,false) THEN 1 ELSE 0 END),0)::int AS paid_bookings,
-      COALESCE(AVG(EXTRACT(EPOCH FROM (b.play_date::date - b.created_at::date)) / 86400.0),0)::float AS lead_days_avg
+      COALESCE(AVG((b.play_date::date - b.created_at::date)::numeric), 0)::float AS lead_days_avg
     FROM booking_bookings b
     ${where}
     GROUP BY 1
