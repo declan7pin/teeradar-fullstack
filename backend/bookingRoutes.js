@@ -4480,10 +4480,11 @@ return res.json({
     topTimes,
   }
 });
-    } catch (e) {
-      console.error("course-admin/analytics/insights", e);
-      return res.status(500).json({ ok: false, error: "internal_error" });
-    }
+   } catch (e) {
+  console.error("course-admin/analytics/insights", e?.message || e);
+  console.error("course-admin/analytics/insights stack", e?.stack || "");
+  return res.status(500).json({ ok: false, error: "internal_error", detail: String(e?.message || e) });
+}
   }
 );
 // generate times (course admin)
