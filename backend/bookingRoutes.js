@@ -4487,6 +4487,119 @@ return res.json({
 }
   }
 );
+// -----------------------------
+// ✅ Course admin (MANAGER ONLY): inventory settings (carts + hire clubs)
+// GET  /api/book/course-admin/inventory-settings
+// POST /api/book/course-admin/inventory-settings
+// -----------------------------
+router.get(
+  "/course-admin/inventory-settings",
+  requireCourseAdmin,
+  requireCourseAdminManager,
+  async (req, res) => {
+    try {
+      const slug = String(req.courseAdmin.slug || "").trim().toLowerCase();
+
+      const c = await db.query(
+        `
+        SELECT
+          slug, name,
+          cart_qty, hire_clubs_qty,
+          cart_fee_cents, hire_clubs_fee_cents
+        FROM booking_courses
+        WHERE slug=$1
+        LIMIT 1;
+        `,
+        [slug]
+      );
+
+      if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+      return res.json({ ok: true, course: c.rows[0] });
+    } catch (e) {
+      console.error("course-admin/inventory-settings GET", e);
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  }
+);
+
+router.post(
+  "/course-admin/inventory-settings",
+  requireCourseAdmin,
+  requireCourseAdminManager,
+  async (req, res) => {
+    try {
+      const slug = String(req.courseAdmin.slug || "").trim().toLowerCase();
+
+      // allow qty 0..100 (0 means "not offered")
+      const cartQty = Number(req.body?.cartQty ?? req.body?.cart_qty ?? 0);
+      const hireClubsQty = Number(req.body?.hireClubsQty ?? req.body?.hire_clubs_qty ?? 0);
+
+      // optional fee updates (in cents)
+      const cartFeeCents = req.body?.cartFeeCents ?? req.body?.cart_fee_cents;
+      const hireClubsFeeCents = req.body?.hireClubsFeeCents ?? req.body?.hire_clubs_fee_cents;
+
+      if (!Number.isFinite(cartQty) || cartQty < 0 || cartQty > 100) {
+        return res.status(400).json({ ok: false, error: "cart_qty_invalid" });
+      }
+      if (!Number.isFinite(hireClubsQty) || hireClubsQty < 0 || hireClubsQty > 100) {
+        return res.status(400).json({ ok: false, error: "hire_clubs_qty_invalid" });
+      }
+
+      // fees are optional; if provided validate 0..10,000,000 cents
+      let cartFeeVal = null;
+      let clubsFeeVal = null;
+
+      if (cartFeeCents !== undefined && cartFeeCents !== null && cartFeeCents !== "") {
+        cartFeeVal = Number(cartFeeCents);
+        if (!Number.isFinite(cartFeeVal) || cartFeeVal < 0 || cartFeeVal > 10000000) {
+          return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
+        }
+      }
+
+      if (hireClubsFeeCents !== undefined && hireClubsFeeCents !== null && hireClubsFeeCents !== "") {
+        clubsFeeVal = Number(hireClubsFeeCents);
+        if (!Number.isFinite(clubsFeeVal) || clubsFeeVal < 0 || clubsFeeVal > 10000000) {
+          return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
+        }
+      }
+
+      // Build dynamic update: only overwrite fees if provided
+      const fields = ["cart_qty = $2", "hire_clubs_qty = $3"];
+      const params = [slug, cartQty, hireClubsQty];
+      let idx = 4;
+
+      if (cartFeeVal !== null) {
+        fields.push(`cart_fee_cents = $${idx++}`);
+        params.push(cartFeeVal);
+      }
+      if (clubsFeeVal !== null) {
+        fields.push(`hire_clubs_fee_cents = $${idx++}`);
+        params.push(clubsFeeVal);
+      }
+
+      const u = await db.query(
+        `
+        UPDATE booking_courses
+        SET ${fields.join(", ")}, updated_at = now()
+        WHERE slug = $1
+        RETURNING
+          slug, name,
+          cart_qty, hire_clubs_qty,
+          cart_fee_cents, hire_clubs_fee_cents;
+        `,
+        params
+      );
+
+      if (!u.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+      return res.json({ ok: true, course: u.rows[0] });
+    } catch (e) {
+      console.error("course-admin/inventory-settings POST", e);
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  }
+);
 // generate times (course admin)
 router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res) => {
   try {
