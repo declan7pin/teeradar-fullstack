@@ -609,6 +609,7 @@ function normTime(v){
   if (!m) return s;
   return String(m[1]).padStart(2,"0") + ":" + m[2];
 }
+let LAST_INSIGHTS = null;
 // =======================
 // Manager Analytics helpers
 // =======================
@@ -684,6 +685,7 @@ async function loadAnalytics(){
   "/api/book/course-admin/analytics/insights" + (qs.toString() ? "?" + qs.toString() : ""),
   { method:"GET" }
 );
+LAST_INSIGHTS = out;
 
 // ✅ fill the popularity + per-day table
 loadInsightsToUI(out);
@@ -709,26 +711,36 @@ const grossCents = perDay.reduce((a, r) => a + Number(r.gross_cents || 0), 0);
 
 function exportAnalyticsCSV(){
   try{
-    const bookings = $("aBookings")?.textContent || "0";
-    const revenue = $("aRevenue")?.textContent || "$0.00";
-    const aov = $("aAov")?.textContent || "$0.00";
-    const grossCents = $("aGrossCents")?.textContent || "0";
-
     const start = ($("aStart")?.value || "").trim();
     const end = ($("aEnd")?.value || "").trim();
 
-    const rows = [
-      ["start","end","bookings","revenue","avg_booking_value","gross_cents"],
-      [start,end,bookings,revenue,aov,grossCents],
-    ];
+    const out = LAST_INSIGHTS || {};
+    const perDay = Array.isArray(out?.perDay) ? out.perDay : [];
 
-    const csv = rows.map(r => r.map(x => `"${String(x).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const header = ["day","bookings","players","carts","clubs","gross_cents"].join(",");
+    const lines = perDay.map(r => [
+      r.day || "",
+      Number(r.bookings || 0),
+      Number(r.players || 0),
+      Number(r.carts || 0),
+      Number(r.clubs || 0),
+      Number(r.gross_cents || 0),
+    ].map(x => `"${String(x).replace(/"/g,'""')}"`).join(","));
+
+    const meta = [
+      ["start", start],
+      ["end", end],
+      ["slug", getSlug()],
+    ].map(r => r.map(x => `"${String(x).replace(/"/g,'""')}"`).join(",")).join("\n");
+
+    const csv = meta + "\n\n" + header + "\n" + lines.join("\n") + "\n";
+
     const blob = new Blob([csv], { type:"text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = "course-analytics.csv";
+    a.download = `course-analytics-${getSlug() || "course"}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
