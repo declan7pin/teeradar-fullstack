@@ -743,7 +743,7 @@ function pct(v){
 function loadInsightsToUI(out){
   const perDay = Array.isArray(out?.perDay) ? out.perDay : [];
   const pop = out?.popular || {};
-
+  const totals = out?.totals || {};
   $("aPopDay").textContent = pop.dayOfWeek || "—";
   $("aPopDayN").textContent = pop.dayOfWeekBookings ? `(${pop.dayOfWeekBookings} bookings)` : "";
 
@@ -752,7 +752,25 @@ function loadInsightsToUI(out){
 
   $("aCartRate").textContent = pct(pop.attachRateCart);
   $("aClubsRate").textContent = pct(pop.attachRateClubs);
+  // ✅ NEW: selling-factor tiles
+  if ($("aFillRate")) $("aFillRate").textContent = pct(totals.fillRate || 0);
+  if ($("aAddonRev")) $("aAddonRev").textContent = moneyAUD(totals.addOnRevenueCents || 0);
 
+  // ✅ NEW: Top 3 lists
+  const topDays = Array.isArray(pop.topDays) ? pop.topDays.slice(0,3) : [];
+  const topTimes = Array.isArray(pop.topTimes) ? pop.topTimes.slice(0,3) : [];
+
+  if ($("aTopDays")) {
+    $("aTopDays").textContent = topDays.length
+      ? topDays.map(x => `${_escape(x.day || "")} (${Number(x.bookings || 0)})`).join(" • ")
+      : "—";
+  }
+
+  if ($("aTopTimes")) {
+    $("aTopTimes").textContent = topTimes.length
+      ? topTimes.map(x => `${_escape(x.teeTime || "")} (${Number(x.bookings || 0)})`).join(" • ")
+      : "—";
+  }
   const tb = $("aPerDayBody");
   if (!tb) return;
   tb.innerHTML = "";
