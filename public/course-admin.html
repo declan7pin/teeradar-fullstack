@@ -681,12 +681,17 @@ async function loadAnalytics(){
 
     // ✅ IMPORTANT: no slug passed; backend must use req.courseAdmin scope
     const out = await j(
-      "/api/book/course-admin/analytics/summary" + (qs.toString() ? "?" + qs.toString() : ""),
-      { method:"GET" }
-    );
+  "/api/book/course-admin/analytics/insights" + (qs.toString() ? "?" + qs.toString() : ""),
+  { method:"GET" }
+);
 
-    const bookings = Number(out.bookings || 0);
-    const grossCents = Number(out.grossCents ?? out.gross_cents ?? 0);
+// ✅ fill the popularity + per-day table
+loadInsightsToUI(out);
+
+// ✅ totals derived from per-day (so you don’t need summary endpoint)
+const perDay = Array.isArray(out?.perDay) ? out.perDay : [];
+const bookings = perDay.reduce((a, r) => a + Number(r.bookings || 0), 0);
+const grossCents = perDay.reduce((a, r) => a + Number(r.gross_cents || 0), 0);
 
     $("aBookings").textContent = String(bookings);
     $("aRevenue").textContent = moneyAUD(grossCents);
