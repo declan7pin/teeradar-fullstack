@@ -4242,6 +4242,134 @@ router.get(
     }
   }
 );
+// -----------------------------
+// ✅ Course admin: analytics INSIGHTS (manager-only, scoped to own course)
+// -----------------------------
+router.get(
+  "/course-admin/analytics/insights",
+  requireCourseAdmin,
+  requireCourseAdminManager,
+  async (req, res) => {
+    try {
+      const slug = String(req.courseAdmin.slug || "").trim().toLowerCase();
+
+      const start = _parseYmd(req.query.start);
+      const end = _parseYmd(req.query.end);
+
+      const c = await db.query(
+        `SELECT id, name FROM booking_courses WHERE slug=$1 LIMIT 1;`,
+        [slug]
+      );
+      if (!c.rows.length) {
+        return res.json({ ok: true, slug, courseName: "", perDay: [], popular: {} });
+      }
+      const courseId = c.rows[0].id;
+
+      const params = [courseId];
+      let where = `WHERE b.course_id = $1`;
+
+      // default range: last 30 days
+      if (start && end) {
+        params.push(start, end);
+        where += ` AND b.play_date::date BETWEEN $2::date AND $3::date`;
+      } else {
+        where += ` AND b.play_date::date >= (CURRENT_DATE - INTERVAL '30 days')`;
+      }
+
+      // 1) Per-day: bookings, revenue, carts, clubs, players
+      const perDayQ = await db.query(
+        `
+        SELECT
+          b.play_date::date::text AS day,
+          COUNT(*)::int AS bookings,
+          COALESCE(SUM(COALESCE(b.players,1)),0)::int AS players,
+          COALESCE(SUM(COALESCE(b.cart_qty,0)),0)::int AS carts,
+          COALESCE(SUM(COALESCE(b.hire_clubs_qty,0)),0)::int AS clubs,
+          COALESCE(SUM(
+            COALESCE(b.total_cents,0) +
+            COALESCE(b.cart_fee_cents,0) +
+            COALESCE(b.hire_clubs_fee_cents,0)
+          ),0)::bigint AS gross_cents
+        FROM booking_bookings b
+        ${where}
+        GROUP BY b.play_date::date
+        ORDER BY b.play_date::date ASC;
+        `,
+        params
+      );
+
+      // 2) Popular day of week
+      // PostgreSQL: extract(dow) gives 0=Sun..6=Sat
+      const dowQ = await db.query(
+        `
+        SELECT
+          EXTRACT(DOW FROM b.play_date::date)::int AS dow,
+          COUNT(*)::int AS bookings
+        FROM booking_bookings b
+        ${where}
+        GROUP BY 1
+        ORDER BY bookings DESC
+        LIMIT 1;
+        `,
+        params
+      );
+
+      // 3) Popular tee time (by play_date tee_time buckets)
+      const timeQ = await db.query(
+        `
+        SELECT
+          b.tee_time::text AS tee_time,
+          COUNT(*)::int AS bookings
+        FROM booking_bookings b
+        ${where}
+        GROUP BY 1
+        ORDER BY bookings DESC
+        LIMIT 1;
+        `,
+        params
+      );
+
+      // 4) Add-on attach rate (what % of bookings add carts/clubs)
+      const attachQ = await db.query(
+        `
+        SELECT
+          COUNT(*)::int AS bookings,
+          SUM(CASE WHEN COALESCE(b.cart_qty,0) > 0 THEN 1 ELSE 0 END)::int AS with_cart,
+          SUM(CASE WHEN COALESCE(b.hire_clubs_qty,0) > 0 THEN 1 ELSE 0 END)::int AS with_clubs
+        FROM booking_bookings b
+        ${where};
+        `,
+        params
+      );
+
+      const bookingsTotal = Number(attachQ.rows[0]?.bookings || 0);
+      const withCart = Number(attachQ.rows[0]?.with_cart || 0);
+      const withClubs = Number(attachQ.rows[0]?.with_clubs || 0);
+
+      const dowMap = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+      const dowRow = dowQ.rows[0] || null;
+      const timeRow = timeQ.rows[0] || null;
+
+      return res.json({
+        ok: true,
+        slug,
+        courseName: c.rows[0].name || "",
+        perDay: perDayQ.rows || [],
+        popular: {
+          dayOfWeek: dowRow ? dowMap[dowRow.dow] : "",
+          dayOfWeekBookings: dowRow ? Number(dowRow.bookings || 0) : 0,
+          teeTime: timeRow ? String(timeRow.tee_time || "") : "",
+          teeTimeBookings: timeRow ? Number(timeRow.bookings || 0) : 0,
+          attachRateCart: bookingsTotal ? withCart / bookingsTotal : 0,
+          attachRateClubs: bookingsTotal ? withClubs / bookingsTotal : 0,
+        }
+      });
+    } catch (e) {
+      console.error("course-admin/analytics/insights", e);
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  }
+);
 // generate times (course admin)
 router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res) => {
   try {
