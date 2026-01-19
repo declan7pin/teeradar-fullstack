@@ -4428,20 +4428,74 @@ const topTimesQ = await db.query(
       const dowRow = dowQ.rows[0] || null;
       const timeRow = timeQ.rows[0] || null;
 
-      return res.json({
-        ok: true,
-        slug,
-        courseName: c.rows[0].name || "",
-        perDay: perDayQ.rows || [],
-        popular: {
-          dayOfWeek: dowRow ? dowMap[dowRow.dow] : "",
-          dayOfWeekBookings: dowRow ? Number(dowRow.bookings || 0) : 0,
-          teeTime: timeRow ? String(timeRow.tee_time || "") : "",
-          teeTimeBookings: timeRow ? Number(timeRow.bookings || 0) : 0,
-          attachRateCart: bookingsTotal ? withCart / bookingsTotal : 0,
-          attachRateClubs: bookingsTotal ? withClubs / bookingsTotal : 0,
-        }
-      });
+      const perDay = perDayQ.rows || [];
+
+// totals derived from perDay
+const totals = perDay.reduce(
+  (a, r) => {
+    a.bookings += Number(r.bookings || 0);
+    a.players += Number(r.players || 0);
+    a.capacity += Number(r.capacity_players || 0);
+    a.gross += Number(r.gross_cents || 0);
+    a.cartRev += Number(r.cart_rev_cents || 0);
+    a.clubsRev += Number(r.clubs_rev_cents || 0);
+    a.checkedIn += Number(r.checked_in_bookings || 0);
+    a.paid += Number(r.paid_bookings || 0);
+    a.leadDaysSum += Number(r.lead_days_avg || 0);
+    a.leadDaysN += 1;
+    return a;
+  },
+  { bookings:0, players:0, capacity:0, gross:0, cartRev:0, clubsRev:0, checkedIn:0, paid:0, leadDaysSum:0, leadDaysN:0 }
+);
+
+const fillRateTotal = totals.capacity > 0 ? (totals.players / totals.capacity) : 0;
+const checkinRate = totals.bookings > 0 ? (totals.checkedIn / totals.bookings) : 0;
+const paidRate = totals.bookings > 0 ? (totals.paid / totals.bookings) : 0;
+const leadDaysAvg = totals.leadDaysN > 0 ? (totals.leadDaysSum / totals.leadDaysN) : 0;
+
+const dowMap = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const dowRow = dowQ.rows[0] || null;
+const timeRow = timeQ.rows[0] || null;
+
+const topDow = (topDowQ.rows || []).map(r => ({
+  day: dowMap[Number(r.dow)],
+  bookings: Number(r.bookings || 0),
+}));
+
+const topTimes = (topTimesQ.rows || []).map(r => ({
+  teeTime: String(r.tee_time || ""),
+  bookings: Number(r.bookings || 0),
+}));
+
+return res.json({
+  ok: true,
+  slug,
+  courseName: c.rows[0].name || "",
+  perDay,
+  totals: {
+    bookings: totals.bookings,
+    players: totals.players,
+    capacityPlayers: totals.capacity,
+    fillRate: fillRateTotal,
+    grossCents: totals.gross,
+    cartRevenueCents: totals.cartRev,
+    clubsRevenueCents: totals.clubsRev,
+    addOnRevenueCents: totals.cartRev + totals.clubsRev,
+    checkinRate,
+    paidRate,
+    leadDaysAvg,
+  },
+  popular: {
+    dayOfWeek: dowRow ? dowMap[dowRow.dow] : "",
+    dayOfWeekBookings: dowRow ? Number(dowRow.bookings || 0) : 0,
+    teeTime: timeRow ? String(timeRow.tee_time || "") : "",
+    teeTimeBookings: timeRow ? Number(timeRow.bookings || 0) : 0,
+    attachRateCart: bookingsTotal ? withCart / bookingsTotal : 0,
+    attachRateClubs: bookingsTotal ? withClubs / bookingsTotal : 0,
+    topDays: topDow,
+    topTimes,
+  }
+});
     } catch (e) {
       console.error("course-admin/analytics/insights", e);
       return res.status(500).json({ ok: false, error: "internal_error" });
