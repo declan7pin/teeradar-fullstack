@@ -4453,9 +4453,6 @@ const checkinRate = totals.bookings > 0 ? (totals.checkedIn / totals.bookings) :
 const paidRate = totals.bookings > 0 ? (totals.paid / totals.bookings) : 0;
 const leadDaysAvg = totals.leadDaysN > 0 ? (totals.leadDaysSum / totals.leadDaysN) : 0;
 
-const dowRow = dowQ.rows[0] || null;
-const timeRow = timeQ.rows[0] || null;
-
 const topDow = (topDowQ.rows || []).map(r => ({
   day: dowMap[Number(r.dow)],
   bookings: Number(r.bookings || 0),
