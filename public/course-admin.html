@@ -615,7 +615,41 @@ function moneyAUD(cents){
   const n = Number(cents || 0) / 100;
   return n.toLocaleString(undefined, { style:"currency", currency:"AUD" });
 }
+function pct(v){
+  const n = Number(v || 0) * 100;
+  return (isFinite(n) ? n : 0).toFixed(0) + "%";
+}
 
+function loadInsightsToUI(out){
+  const perDay = Array.isArray(out?.perDay) ? out.perDay : [];
+  const pop = out?.popular || {};
+
+  $("aPopDay").textContent = pop.dayOfWeek || "—";
+  $("aPopDayN").textContent = pop.dayOfWeekBookings ? `(${pop.dayOfWeekBookings} bookings)` : "";
+
+  $("aPopTime").textContent = pop.teeTime || "—";
+  $("aPopTimeN").textContent = pop.teeTimeBookings ? `(${pop.teeTimeBookings} bookings)` : "";
+
+  $("aCartRate").textContent = pct(pop.attachRateCart);
+  $("aClubsRate").textContent = pct(pop.attachRateClubs);
+
+  const tb = $("aPerDayBody");
+  if (!tb) return;
+  tb.innerHTML = "";
+
+  perDay.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${_escape(r.day || "")}</td>
+      <td class="right">${_escape(r.bookings ?? 0)}</td>
+      <td class="right">${_escape(r.players ?? 0)}</td>
+      <td class="right">${_escape(r.carts ?? 0)}</td>
+      <td class="right">${_escape(r.clubs ?? 0)}</td>
+      <td class="right">${moneyAUD(r.gross_cents ?? 0)}</td>
+    `;
+    tb.appendChild(tr);
+  });
+}
 function isoMinusDays(days){
   const d = new Date();
   d.setDate(d.getDate() - Number(days || 0));
