@@ -2029,7 +2029,10 @@ async function loadCourseSettingsToUI(){
 
     if ($("csTotalCarts")) $("csTotalCarts").value = Number(cs.cart_qty ?? cs.cartQty ?? 0) || 0;
     if ($("csTotalClubs")) $("csTotalClubs").value = Number(cs.hire_clubs_qty ?? cs.hireClubsQty ?? 0) || 0;
-
+    // ✅ fees (cents -> dollars)
+    if ($("csCartFee")) $("csCartFee").value = ((Number(cs.cart_fee_cents ?? cs.cartFeeCents ?? 0)) / 100).toFixed(2);
+    if ($("csClubsFee")) $("csClubsFee").value = ((Number(cs.hire_clubs_fee_cents ?? cs.hireClubsFeeCents ?? 0)) / 100).toFixed(2);
+    
     if ($("csDur18")) $("csDur18").value = Number(cs.duration_18_mins ?? cs.duration18 ?? 360) || 360;
     if ($("csDur9")) $("csDur9").value = Number(cs.duration_9_mins ?? cs.duration9 ?? 180) || 180;
 
@@ -2048,7 +2051,9 @@ async function saveCourseSettingsFromUI(){
     const payload = {
       cart_qty: Number($("csTotalCarts")?.value || 0) || 0,
       hire_clubs_qty: Number($("csTotalClubs")?.value || 0) || 0,
-      duration_18_mins: Number($("csDur18")?.value || 360) || 360,
+      cart_fee_cents: Math.max(0, Math.round(Number($("csCartFee")?.value || 0) * 100)),
+      hire_clubs_fee_cents: Math.max(0, Math.round(Number($("csClubsFee")?.value || 0) * 100)),
+       duration_18_mins: Number($("csDur18")?.value || 360) || 360,
       duration_9_mins: Number($("csDur9")?.value || 180) || 180,
     };
 
