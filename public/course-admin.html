@@ -132,6 +132,39 @@
         </div>
       </div>
 
+<!-- ✅ NEW: Stock levels (saved to your course settings) -->
+<div style="margin-top:12px;">
+  <div class="muted" style="font-weight:700;">Stock levels (used for availability calc)</div>
+
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label class="muted">Total carts available</label>
+      <input id="csTotalCarts" type="number" min="0" step="1" value="0" />
+    </div>
+    <div>
+      <label class="muted">Total hire clubs available</label>
+      <input id="csTotalClubs" type="number" min="0" step="1" value="0" />
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label class="muted">18-hole booking duration (mins)</label>
+      <input id="csDur18" type="number" min="30" step="10" value="360" />
+    </div>
+    <div>
+      <label class="muted">9-hole booking duration (mins)</label>
+      <input id="csDur9" type="number" min="30" step="10" value="180" />
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:10px">
+    <button id="csLoadBtn" type="button" class="secondary">Load stock</button>
+    <button id="csSaveBtn" type="button">Save stock</button>
+  </div>
+
+  <div id="csMsg" class="muted" style="margin-top:10px;"></div>
+</div>
       <div class="actions" style="margin-top:10px">
         <button id="checkInventoryBtn" class="secondary">Check availability</button>
       </div>
@@ -1959,6 +1992,61 @@ $("mAddBtn").onclick = async () => {
   }
 };
 
+// =======================
+// Course settings (stock levels) - carts/clubs + durations
+// =======================
+async function loadCourseSettingsToUI(){
+  const msg = $("csMsg");
+  try{
+    if (msg) msg.textContent = "Loading stock...";
+    await getMe();
+
+    const out = await j("/api/book/course-admin/course-settings", { method:"GET" });
+
+    const cs =
+      out.settings ||
+      out.course_settings ||
+      out.courseSettings ||
+      out.data ||
+      out ||
+      {};
+
+    if ($("csTotalCarts")) $("csTotalCarts").value = Number(cs.cart_qty ?? cs.cartQty ?? 0) || 0;
+    if ($("csTotalClubs")) $("csTotalClubs").value = Number(cs.hire_clubs_qty ?? cs.hireClubsQty ?? 0) || 0;
+
+    if ($("csDur18")) $("csDur18").value = Number(cs.duration_18_mins ?? cs.duration18 ?? 360) || 360;
+    if ($("csDur9")) $("csDur9").value = Number(cs.duration_9_mins ?? cs.duration9 ?? 180) || 180;
+
+    if (msg) msg.textContent = "✅ Stock loaded";
+  }catch(e){
+    if (msg) msg.textContent = "❌ " + (e?.message || "load_failed");
+  }
+}
+
+async function saveCourseSettingsFromUI(){
+  const msg = $("csMsg");
+  try{
+    if (msg) msg.textContent = "Saving stock...";
+    await getMe();
+
+    const payload = {
+      cart_qty: Number($("csTotalCarts")?.value || 0) || 0,
+      hire_clubs_qty: Number($("csTotalClubs")?.value || 0) || 0,
+      duration_18_mins: Number($("csDur18")?.value || 360) || 360,
+      duration_9_mins: Number($("csDur9")?.value || 180) || 180,
+    };
+
+    // Use POST or PUT depending on what your backend supports (POST is common)
+    await j("/api/book/course-admin/course-settings", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    if (msg) msg.textContent = "✅ Stock saved";
+  }catch(e){
+    if (msg) msg.textContent = "❌ " + (e?.message || "save_failed");
+  }
+}
   // ✅ Inventory feature
   $("checkInventoryBtn").onclick = async () => {
     $("inventoryMsg").textContent = "Checking inventory...";
