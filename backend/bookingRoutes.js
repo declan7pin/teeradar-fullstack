@@ -4276,27 +4276,80 @@ router.get(
         where += ` AND b.play_date::date >= (CURRENT_DATE - INTERVAL '30 days')`;
       }
 
-      // 1) Per-day: bookings, revenue, carts, clubs, players
-      const perDayQ = await db.query(
-        `
-        SELECT
-          b.play_date::date::text AS day,
-          COUNT(*)::int AS bookings,
-          COALESCE(SUM(COALESCE(b.players,1)),0)::int AS players,
-          COALESCE(SUM(COALESCE(b.cart_qty,0)),0)::int AS carts,
-          COALESCE(SUM(COALESCE(b.hire_clubs_qty,0)),0)::int AS clubs,
-          COALESCE(SUM(
-            COALESCE(b.total_cents,0) +
-            COALESCE(b.cart_fee_cents,0) +
-            COALESCE(b.hire_clubs_fee_cents,0)
-          ),0)::bigint AS gross_cents
-        FROM booking_bookings b
-        ${where}
-        GROUP BY b.play_date::date
-        ORDER BY b.play_date::date ASC;
-        `,
-        params
-      );
+      // 1) Per-day: bookings, players, carts/clubs, add-on revenue, gross, capacity, fill rate
+const perDayQ = await db.query(
+  `
+  WITH days AS (
+    SELECT d::date AS day
+    FROM generate_series(
+      (SELECT MIN(play_date::date) FROM booking_times t WHERE t.course_id=$1
+        ${start && end ? "AND t.play_date::date BETWEEN $2::date AND $3::date" : "AND t.play_date::date >= (CURRENT_DATE - INTERVAL '30 days')"}
+      ),
+      (SELECT MAX(play_date::date) FROM booking_times t WHERE t.course_id=$1
+        ${start && end ? "AND t.play_date::date BETWEEN $2::date AND $3::date" : "AND t.play_date::date >= (CURRENT_DATE - INTERVAL '30 days')"}
+      ),
+      interval '1 day'
+    ) d
+  ),
+  book AS (
+    SELECT
+      b.play_date::date AS day,
+      COUNT(*)::int AS bookings,
+      COALESCE(SUM(COALESCE(b.players,1)),0)::int AS players,
+      COALESCE(SUM(COALESCE(b.cart_qty,0)),0)::int AS carts,
+      COALESCE(SUM(COALESCE(b.hire_clubs_qty,0)),0)::int AS clubs,
+      COALESCE(SUM(COALESCE(b.cart_fee_cents,0)),0)::bigint AS cart_rev_cents,
+      COALESCE(SUM(COALESCE(b.hire_clubs_fee_cents,0)),0)::bigint AS clubs_rev_cents,
+      COALESCE(SUM(
+        COALESCE(b.total_cents,0) +
+        COALESCE(b.cart_fee_cents,0) +
+        COALESCE(b.hire_clubs_fee_cents,0)
+      ),0)::bigint AS gross_cents,
+      COALESCE(SUM(CASE WHEN COALESCE(b.checked_in,false) THEN 1 ELSE 0 END),0)::int AS checked_in_bookings,
+      COALESCE(SUM(CASE WHEN COALESCE(b.paid,false) THEN 1 ELSE 0 END),0)::int AS paid_bookings,
+      COALESCE(AVG(EXTRACT(EPOCH FROM (b.play_date::date - b.created_at::date)) / 86400.0),0)::float AS lead_days_avg
+    FROM booking_bookings b
+    ${where}
+    GROUP BY 1
+  ),
+  cap AS (
+    SELECT
+      t.play_date::date AS day,
+      COALESCE(SUM(COALESCE(t.max_players,0)),0)::int AS capacity_players
+    FROM booking_times t
+    WHERE t.course_id=$1
+      AND t.status <> 'BLOCKED'
+      ${
+        start && end
+          ? "AND t.play_date::date BETWEEN $2::date AND $3::date"
+          : "AND t.play_date::date >= (CURRENT_DATE - INTERVAL '30 days')"
+      }
+    GROUP BY 1
+  )
+  SELECT
+    COALESCE(book.day, cap.day)::text AS day,
+    COALESCE(book.bookings,0)::int AS bookings,
+    COALESCE(book.players,0)::int AS players,
+    COALESCE(book.carts,0)::int AS carts,
+    COALESCE(book.clubs,0)::int AS clubs,
+    COALESCE(book.cart_rev_cents,0)::bigint AS cart_rev_cents,
+    COALESCE(book.clubs_rev_cents,0)::bigint AS clubs_rev_cents,
+    COALESCE(book.gross_cents,0)::bigint AS gross_cents,
+    COALESCE(cap.capacity_players,0)::int AS capacity_players,
+    CASE
+      WHEN COALESCE(cap.capacity_players,0) > 0
+      THEN (COALESCE(book.players,0)::float / cap.capacity_players::float)
+      ELSE 0
+    END AS fill_rate,
+    COALESCE(book.checked_in_bookings,0)::int AS checked_in_bookings,
+    COALESCE(book.paid_bookings,0)::int AS paid_bookings,
+    COALESCE(book.lead_days_avg,0)::float AS lead_days_avg
+  FROM book
+  FULL OUTER JOIN cap ON cap.day = book.day
+  ORDER BY COALESCE(book.day, cap.day) ASC;
+  `,
+  params
+);
 
       // 2) Popular day of week
       // PostgreSQL: extract(dow) gives 0=Sun..6=Sat
@@ -4328,6 +4381,31 @@ router.get(
         `,
         params
       );
+      // 2b) Top 3 days of week
+const topDowQ = await db.query(
+  `
+  SELECT EXTRACT(DOW FROM b.play_date::date)::int AS dow, COUNT(*)::int AS bookings
+  FROM booking_bookings b
+  ${where}
+  GROUP BY 1
+  ORDER BY bookings DESC
+  LIMIT 3;
+  `,
+  params
+);
+
+// 3b) Top 3 tee times
+const topTimesQ = await db.query(
+  `
+  SELECT b.tee_time::text AS tee_time, COUNT(*)::int AS bookings
+  FROM booking_bookings b
+  ${where}
+  GROUP BY 1
+  ORDER BY bookings DESC
+  LIMIT 3;
+  `,
+  params
+);
 
       // 4) Add-on attach rate (what % of bookings add carts/clubs)
       const attachQ = await db.query(
