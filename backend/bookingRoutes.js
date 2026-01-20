@@ -177,37 +177,56 @@ function toDateKey(playDate) {
 }
 
 async function getCapacitySnapshot({ courseId, playDateKey }) {
-  // 1) course resource totals (adjust table/columns to YOUR schema)
-  // You likely have something like course_admin/course_settings with totals.
+  // 1) course inventory totals (from booking_courses)
   const courseQ = await db.query(
-  `
-  SELECT
-    carts_total,
-    hire_clubs_total,
-    max_players_per_slot
-  FROM course_admin
-  WHERE course_id = $1
-  LIMIT 1;
-  `,
-  [courseId]
-);
-const course = courseQ.rows[0] || null;
+    `
+    SELECT
+      COALESCE(cart_qty,0)::int          AS carts_total,
+      COALESCE(hire_clubs_qty,0)::int    AS hire_clubs_total,
+      COALESCE(duration_9_mins,210)::int AS duration_9_mins,
+      COALESCE(duration_18_mins,390)::int AS duration_18_mins
+    FROM booking_courses
+    WHERE id = $1
+    LIMIT 1;
+    `,
+    [courseId]
+  );
+  const course = courseQ.rows[0] || null;
 
   const cartsTotal = Number(course?.carts_total ?? 0);
   const clubsTotal = Number(course?.hire_clubs_total ?? 0);
-  const maxPlayersPerSlot = Number(course?.max_players_per_slot ?? 4);
 
-  // 2) usage from ALL bookings for that day (manual + paid/online)
-  // IMPORTANT: normalize date by comparing the first 10 chars (YYYY-MM-DD)
-  const used = await db.get(
+  // 2) used add-ons from confirmed online bookings for that day
+  const usedBookings = await db.query(
     `
     SELECT
-      COALESCE(SUM(COALESCE(carts, 0)), 0) AS carts_used,
-      COALESCE(SUM(COALESCE(hire_clubs, 0)), 0) AS clubs_used
+      COALESCE(SUM(COALESCE(cart_qty,0)), 0)::int       AS carts_used,
+      COALESCE(SUM(COALESCE(hire_clubs_qty,0)), 0)::int AS clubs_used
     FROM booking_bookings
-    WHERE course_id = ?
-      AND SUBSTR(play_date, 1, 10) = ?
-      AND status IN ('confirmed','paid','pending') -- keep whatever statuses you treat as "counts"
+    WHERE course_id = $1
+      AND play_date = $2::date
+      AND status = 'CONFIRMED';
+    `,
+    [courseId, playDateKey]
+  );
+
+  // 3) used add-ons from manual slots for that day (count ONCE per reference)
+  const usedManual = await db.query(
+    `
+    SELECT
+      COALESCE(SUM(COALESCE(cart_qty,0)), 0)::int       AS carts_used,
+      COALESCE(SUM(COALESCE(hire_clubs_qty,0)), 0)::int AS clubs_used
+    FROM booking_manual_slots m
+    WHERE course_id = $1
+      AND play_date = $2::date
+      AND COALESCE(name,'') <> ''
+      AND slot_index = (
+        SELECT MIN(slot_index)
+        FROM booking_manual_slots
+        WHERE reference = m.reference
+          AND course_id = $1
+          AND play_date = $2::date
+      );
     `,
     [courseId, playDateKey]
   );
@@ -215,16 +234,15 @@ const course = courseQ.rows[0] || null;
   return {
     cartsTotal,
     clubsTotal,
-    maxPlayersPerSlot,
-    cartsUsed: Number(used?.carts_used ?? 0),
-    clubsUsed: Number(used?.clubs_used ?? 0),
+    cartsUsed: Number(usedBookings.rows[0]?.carts_used || 0) + Number(usedManual.rows[0]?.carts_used || 0),
+    clubsUsed: Number(usedBookings.rows[0]?.clubs_used || 0) + Number(usedManual.rows[0]?.clubs_used || 0),
   };
 }
 
 async function manualSlotAllowed({
   courseId,
   playDate,
-  teeTime,      // "06:00" style
+  teeTime,      // "06:00"
   holes,
   playersWanted,
   cartsWanted,
@@ -232,37 +250,59 @@ async function manualSlotAllowed({
 }) {
   const playDateKey = toDateKey(playDate);
 
-  // A) per-tee-time player capacity (respect existing bookings at that time)
-  const row = await db.get(
+  // A) per-tee-time player capacity (manual slots + confirmed bookings)
+  const ms = await db.query(
     `
-    SELECT COALESCE(SUM(COALESCE(players, 0)), 0) AS players_booked
-    FROM bookings
-    WHERE course_id = ?
-      AND SUBSTR(play_date, 1, 10) = ?
-      AND tee_time = ?
-      AND holes = ?
-      AND status IN ('confirmed','paid','pending')
+    SELECT COUNT(*)::int AS players_booked
+    FROM booking_manual_slots
+    WHERE course_id = $1
+      AND play_date = $2::date
+      AND tee_time = $3
+      AND holes = $4
+      AND COALESCE(name,'') <> '';
     `,
     [courseId, playDateKey, teeTime, holes]
   );
 
-  const alreadyBookedPlayers = Number(row?.players_booked ?? 0);
+  const bb = await db.query(
+    `
+    SELECT COALESCE(SUM(players),0)::int AS players_booked
+    FROM booking_bookings
+    WHERE course_id = $1
+      AND play_date = $2::date
+      AND tee_time = $3
+      AND holes = $4
+      AND status = 'CONFIRMED';
+    `,
+    [courseId, playDateKey, teeTime, holes]
+  );
 
-  // Pull daily resource totals + used (carts/clubs)
+  const alreadyBookedPlayers =
+    Number(ms.rows[0]?.players_booked || 0) + Number(bb.rows[0]?.players_booked || 0);
+
+  // Use booking_times.max_players if it exists; otherwise default 4
+  const cap = await db.query(
+    `
+    SELECT COALESCE(max_players,4)::int AS max_players
+    FROM booking_times
+    WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+    LIMIT 1;
+    `,
+    [courseId, playDateKey, teeTime, holes]
+  );
+
+  const maxPlayersPerSlot = Number(cap.rows[0]?.max_players || 4);
+
+  const playersOk = (alreadyBookedPlayers + Number(playersWanted || 0)) <= maxPlayersPerSlot;
+
+  // B) daily carts/clubs capacity (only if course has totals set)
   const snap = await getCapacitySnapshot({ courseId, playDateKey });
 
-  const playersOk = (alreadyBookedPlayers + Number(playersWanted || 0)) <= snap.maxPlayersPerSlot;
-
-  // B) daily carts/clubs capacity
   const cartsOk =
-    snap.cartsTotal <= 0
-      ? true // treat 0 as "not enforced" (change if you want it strict)
-      : (snap.cartsUsed + Number(cartsWanted || 0)) <= snap.cartsTotal;
+    snap.cartsTotal <= 0 ? true : (snap.cartsUsed + Number(cartsWanted || 0)) <= snap.cartsTotal;
 
   const clubsOk =
-    snap.clubsTotal <= 0
-      ? true
-      : (snap.clubsUsed + Number(clubsWanted || 0)) <= snap.clubsTotal;
+    snap.clubsTotal <= 0 ? true : (snap.clubsUsed + Number(clubsWanted || 0)) <= snap.clubsTotal;
 
   return playersOk && cartsOk && clubsOk;
 }
