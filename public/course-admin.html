@@ -1439,6 +1439,15 @@ async function viewTimes(){
 
       const timesOut = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
       const timesRows = (timesOut && timesOut.times) || [];
+      // ✅ Price lookup (time+holes) so bookings inherit tee time pricing
+const priceByKey = new Map();
+try{
+  (timesRows || []).forEach(t => {
+    const k = `${normTime(t.tee_time || t.time || "")}__${String(t.holes ?? "")}`;
+    const p = Number(t.price_per_player_cents ?? t.pricePerPlayerCents ?? 0) || 0;
+    priceByKey.set(k, p);
+  });
+}catch{}
 // ✅ Merge manual tee times into daily sheet
 try{
   const manualOut = await j("/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date), { method:"GET" });
@@ -1534,6 +1543,9 @@ try{
             const holes = holesMatch ? Number(holesMatch[1]) : 18;
 
             if (!teeTime) throw new Error("tee_time_missing");
+            // ✅ auto-fill price from tee times table
+const priceKey = `${normTime(teeTime)}__${String(holes)}`;
+const pricePerPlayerCents = Number(priceByKey.get(priceKey) || 0);
 
                         // ✅ Ask for details (email is needed if you want confirmation sent)
             const name = (prompt("Name:", "") || "").trim();
@@ -1568,6 +1580,8 @@ const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
 
                 holes,
                 players,
+                pricePerPlayerCents,
+price.          _per_player_cents: pricePerPlayerCents,
                 name,
 
                 cartQty,
