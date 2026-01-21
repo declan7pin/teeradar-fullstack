@@ -2047,22 +2047,22 @@ const funnel = await db.query(
   [range]
 );
 
-    // 3️⃣ TOP COURSES
-    const topCourses = await db.query(
-      `
-      SELECT
-        course_name AS "courseName",
-        COUNT(*)::int AS bookings
-      FROM analytics
-      WHERE type='booking_created'
-        AND occurred_at >= NOW() - $1::interval
-        AND course_name IS NOT NULL
-      GROUP BY course_name
-      ORDER BY bookings DESC
-      LIMIT 10
-      `,
-      [range]
-    );
+    // 3️⃣ TOP COURSES (source of truth: booking_analytics_events)
+const topCourses = await db.query(
+  `
+  SELECT
+    c.name AS "courseName",
+    COUNT(*)::int AS bookings
+  FROM booking_analytics_events e
+  JOIN booking_courses c ON c.slug = e.course_slug
+  WHERE e.event_type = 'booking_confirmed'
+    AND e.occurred_at >= NOW() - $1::interval
+  GROUP BY c.name
+  ORDER BY bookings DESC
+  LIMIT 10;
+  `,
+  [range]
+);
 
     res.json({
       ok: true,
