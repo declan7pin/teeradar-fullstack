@@ -4369,7 +4369,7 @@ router.get("/course-admin/analytics/summary", requireCourseAdmin, requireCourseA
 
     -- manual bookings (1 row per reference)
     SELECT
-      MAX(ms.updated_at) AS created_at,
+      MAX(ms.created_at) AS created_at,
       (
         COALESCE(t.price_per_player_cents,0) * COUNT(*) FILTER (WHERE COALESCE(ms.name,'') <> '')
         + COALESCE(c.cart_fee_cents,0) * MAX(COALESCE(ms.cart_qty,0))
