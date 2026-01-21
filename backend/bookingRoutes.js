@@ -4474,7 +4474,7 @@ router.get(
       ms.tee_time,
       ms.holes,
       ms.reference,
-      COUNT(*) FILTER (WHERE COALESCE(ms.name,'') <> '')::int AS players,
+      COUNT(*) FILTER (WHERE COALESCE(ms.player_name,'') <> '')::int AS players,
       MAX(COALESCE(ms.cart_qty,0))::int AS cart_qty,
       MAX(COALESCE(ms.hire_clubs_qty,0))::int AS hire_clubs_qty
     FROM booking_manual_slots ms
