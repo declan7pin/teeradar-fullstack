@@ -4371,7 +4371,7 @@ router.get("/course-admin/analytics/summary", requireCourseAdmin, requireCourseA
     SELECT
       MAX(ms.updated_at) AS created_at,
       (
-        COALESCE(t.price_per_player_cents,0) * COUNT(*) FILTER (WHERE COALESCE(ms.player_name,'') <> '')
+        COALESCE(t.price_per_player_cents,0) * COUNT(*) FILTER (WHERE COALESCE(ms.name,'') <> '')
         + COALESCE(c.cart_fee_cents,0) * MAX(COALESCE(ms.cart_qty,0))
         + COALESCE(c.hire_clubs_fee_cents,0) * MAX(COALESCE(ms.hire_clubs_qty,0))
       )::bigint AS gross_cents
