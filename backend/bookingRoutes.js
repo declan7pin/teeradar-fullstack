@@ -1939,15 +1939,43 @@ router.get("/admin/analytics/summary", requirePlatformAdmin, async (req, res) =>
 
     // 1️⃣ BOOKINGS (ground truth)
     const bookings = await db.query(
-      `
-      SELECT
-        COUNT(*)::int AS bookings,
-        COALESCE(SUM(total_cents + cart_fee_cents + hire_clubs_fee_cents), 0)::bigint AS gross_cents
-      FROM booking_bookings
-      WHERE created_at >= NOW() - $1::interval
-      `,
-      [range]
-    );
+  `
+  SELECT
+    COUNT(*)::int AS bookings,
+    COALESCE(SUM(gross_cents),0)::bigint AS gross_cents
+  FROM (
+    -- online bookings
+    SELECT
+      created_at,
+      (COALESCE(total_cents,0) + COALESCE(cart_fee_cents,0) + COALESCE(hire_clubs_fee_cents,0))::bigint AS gross_cents
+    FROM booking_bookings
+    WHERE created_at >= NOW() - $1::interval
+
+    UNION ALL
+
+    -- manual bookings (1 row per reference)
+    SELECT
+      MAX(ms.updated_at) AS created_at,
+      (
+        COALESCE(t.price_per_player_cents,0) * COUNT(*) FILTER (WHERE COALESCE(ms.name,'') <> '')
+        + COALESCE(c.cart_fee_cents,0) * MAX(COALESCE(ms.cart_qty,0))
+        + COALESCE(c.hire_clubs_fee_cents,0) * MAX(COALESCE(ms.hire_clubs_qty,0))
+      )::bigint AS gross_cents
+    FROM booking_manual_slots ms
+    JOIN booking_courses c ON c.id = ms.course_id
+    LEFT JOIN booking_times t
+      ON t.course_id = ms.course_id
+     AND t.play_date = ms.play_date::date
+     AND t.tee_time = ms.tee_time
+     AND t.holes = ms.holes
+    WHERE ms.updated_at >= NOW() - $1::interval
+      AND COALESCE(ms.name,'') <> ''
+    GROUP BY ms.course_id, ms.play_date, ms.tee_time, ms.holes, ms.reference,
+             t.price_per_player_cents, c.cart_fee_cents, c.hire_clubs_fee_cents
+  ) x
+  `,
+  [range]
+);
 
     // 2️⃣ FUNNEL (from analytics table)
     const funnel = await db.query(
@@ -4324,20 +4352,45 @@ router.get("/course-admin/analytics/summary", requireCourseAdmin, requireCourseA
     const courseName = c.rows[0].name;
 
     const totals = await db.query(
-      `
-      SELECT
-        COUNT(*)::int AS bookings,
-        COALESCE(SUM(
-          COALESCE(total_cents,0)
-          + COALESCE(cart_fee_cents,0)
-          + COALESCE(hire_clubs_fee_cents,0)
-        ), 0)::bigint AS gross_cents
-      FROM booking_bookings
-      WHERE course_id = $1
-        AND created_at >= NOW() - $2::interval
-      `,
-      [courseId, range]
-    );
+  `
+  SELECT
+    COUNT(*)::int AS bookings,
+    COALESCE(SUM(gross_cents),0)::bigint AS gross_cents
+  FROM (
+    -- online bookings
+    SELECT
+      created_at,
+      (COALESCE(total_cents,0) + COALESCE(cart_fee_cents,0) + COALESCE(hire_clubs_fee_cents,0))::bigint AS gross_cents
+    FROM booking_bookings
+    WHERE course_id = $1
+      AND created_at >= NOW() - $2::interval
+
+    UNION ALL
+
+    -- manual bookings (1 row per reference)
+    SELECT
+      MAX(ms.updated_at) AS created_at,
+      (
+        COALESCE(t.price_per_player_cents,0) * COUNT(*) FILTER (WHERE COALESCE(ms.name,'') <> '')
+        + COALESCE(c.cart_fee_cents,0) * MAX(COALESCE(ms.cart_qty,0))
+        + COALESCE(c.hire_clubs_fee_cents,0) * MAX(COALESCE(ms.hire_clubs_qty,0))
+      )::bigint AS gross_cents
+    FROM booking_manual_slots ms
+    JOIN booking_courses c ON c.id = ms.course_id
+    LEFT JOIN booking_times t
+      ON t.course_id = ms.course_id
+     AND t.play_date = ms.play_date::date
+     AND t.tee_time = ms.tee_time
+     AND t.holes = ms.holes
+    WHERE ms.course_id = $1
+      AND ms.updated_at >= NOW() - $2::interval
+      AND COALESCE(ms.name,'') <> ''
+    GROUP BY ms.course_id, ms.play_date, ms.tee_time, ms.holes, ms.reference,
+             t.price_per_player_cents, c.cart_fee_cents, c.hire_clubs_fee_cents
+  ) x
+  `,
+  [courseId, range]
+);
 
     const funnel = await db.query(
       `
