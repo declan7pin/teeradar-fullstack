@@ -76,6 +76,22 @@ const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
 // ✅ ALSO support normal JWT secret if you already have it set
 const JWT_SECRET_FALLBACK = (process.env.JWT_SECRET || "").trim();
+
+async function getTeePricePerPlayerCents({ courseId, playDate, teeTime, holes }) {
+  const r = await db.query(
+    `
+    SELECT COALESCE(price_per_player_cents, 0)::int AS p
+    FROM booking_times
+    WHERE course_id = $1
+      AND play_date = $2::date
+      AND tee_time = $3
+      AND holes = $4
+    LIMIT 1;
+    `,
+    [courseId, playDate, teeTime, holes]
+  );
+  return Number(r.rows[0]?.p || 0);
+}
 // ------------------------------
 // ✅ Course Admin JWT helpers
 // ------------------------------
@@ -3155,8 +3171,19 @@ RETURNING *;
           holes,
           players: 1,
           reference,
-          pricePerPlayerCents: 0,
-          totalCents: 0,
+          pricePerPlayerCents: await getTeePricePerPlayerCents({
+  courseId,
+  playDate: play_date,
+  teeTime: tee_time,
+  holes,
+}),
+totalCents:
+  (await getTeePricePerPlayerCents({
+    courseId,
+    playDate: play_date,
+    teeTime: tee_time,
+    holes,
+  })) * (players || 1),
           cartCents,
           hireClubsCents,
           source: "manual",
@@ -3721,8 +3748,19 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
           holes,
           players,
           reference,
-          pricePerPlayerCents: 0,
-          totalCents: 0,
+          pricePerPlayerCents: await getTeePricePerPlayerCents({
+  courseId,
+  playDate,
+  teeTime: tee_time,
+  holes,
+}),
+totalCents:
+  (await getTeePricePerPlayerCents({
+    courseId,
+    playDate,
+    teeTime: tee_time,
+    holes,
+  })) * players,
           cartCents,
           hireClubsCents,
           source: "manual",
