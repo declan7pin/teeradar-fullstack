@@ -3180,7 +3180,7 @@ if (!String(name || "").trim()) {
   return res.status(400).json({ ok: false, error: "name_required" });
 }
 
-// ✅ email optional — only validate if provided
+// email OPTIONAL for manual admin bookings
 if (email && !isLikelyEmail(email)) {
   return res.status(400).json({ ok: false, error: "email_invalid" });
 }
