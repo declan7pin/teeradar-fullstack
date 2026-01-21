@@ -2610,10 +2610,13 @@ router.get("/admin/analytics/bookings", requirePlatformAdmin, async (req, res) =
   UNION ALL
 
   -- manual bookings (1 row per reference)
-  SELECT ms.course_id, MAX(ms.updated_at) AS created_at, ms.reference
-  FROM booking_manual_slots ms
-  WHERE COALESCE(ms.name,'') <> ''
-  GROUP BY ms.course_id, ms.reference
+SELECT
+  ms.course_id,
+  MIN(COALESCE(ms.created_at, ms.updated_at)) AS created_at,
+  ms.reference
+FROM booking_manual_slots ms
+WHERE COALESCE(ms.name,'') <> ''
+GROUP BY ms.course_id, ms.reference
 ) b
 WHERE 1=1
   ${whereCourse}
