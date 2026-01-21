@@ -4431,8 +4431,8 @@ router.get("/course-admin/analytics/summary", requireCourseAdmin, requireCourseA
      AND t.tee_time = ms.tee_time
      AND t.holes = ms.holes
     WHERE ms.course_id = $1
-      AND ms.updated_at >= NOW() - $2::interval
-      AND COALESCE(ms.player_name,'') <> ''
+  AND ms.updated_at >= NOW() - $2::interval
+  AND COALESCE(ms.name,'') <> ''
     GROUP BY ms.course_id, ms.play_date, ms.tee_time, ms.holes, ms.reference,
              t.price_per_player_cents, c.cart_fee_cents, c.hire_clubs_fee_cents
   ) x
@@ -4522,7 +4522,7 @@ router.get(
       ms.tee_time,
       ms.holes,
       ms.reference,
-      COUNT(*) FILTER (WHERE COALESCE(ms.player_name,'') <> '')::int AS players,
+      COUNT(*) FILTER (WHERE COALESCE(ms.name,'') <> '')::int AS players,
       MAX(COALESCE(ms.cart_qty,0))::int AS cart_qty,
       MAX(COALESCE(ms.hire_clubs_qty,0))::int AS hire_clubs_qty
     FROM booking_manual_slots ms
