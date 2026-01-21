@@ -2235,15 +2235,35 @@ router.get(
       const spanDays = wantsPreset ? _diffDaysInclusive(start, end) : null;
 
       async function countWhere(extraSql, extraParams = []) {
-        const q = `
-          SELECT COUNT(*)::int AS n
-          FROM booking_bookings b
-          WHERE b.course_id = $1
-            ${extraSql}
-        `;
-        const r = await db.query(q, [courseId].concat(extraParams));
-        return Number(r.rows[0]?.n || 0);
-      }
+  const q = `
+    SELECT COUNT(*)::int AS n
+    FROM (
+      -- online bookings (1 row per booking)
+      SELECT
+        b.course_id,
+        b.created_at,
+        b.reference
+      FROM booking_bookings b
+      WHERE b.course_id = $1
+
+      UNION ALL
+
+      -- manual bookings (1 row per reference)
+      SELECT
+        ms.course_id,
+        MAX(ms.updated_at) AS created_at,
+        ms.reference
+      FROM booking_manual_slots ms
+      WHERE ms.course_id = $1
+        AND COALESCE(ms.name,'') <> ''
+      GROUP BY ms.course_id, ms.reference
+    ) b
+    WHERE 1=1
+      ${extraSql}
+  `;
+  const r = await db.query(q, [courseId].concat(extraParams));
+  return Number(r.rows[0]?.n || 0);
+}
 
       let today = 0, week = 0, month = 0;
 
