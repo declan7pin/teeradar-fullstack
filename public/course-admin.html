@@ -1581,7 +1581,7 @@ const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
                 holes,
                 players,
                 pricePerPlayerCents,
-price.          _per_player_cents: pricePerPlayerCents,
+                price_per_player_cents: pricePerPlayerCents,
                 name,
 
                 cartQty,
@@ -1981,6 +1981,7 @@ $("mAddBtn").onclick = async () => {
     const holes = Number($("mHoles").value || 18);
     const maxPlayers = Number($("mMaxPlayers").value || 4);
     const pricePerPlayerCents = Number($("mPrice").value || 0);
+    const players = Math.max(1, Math.min(4, Number($("mPlayers")?.value || 1)));
 
     const holdName = ($("mHoldName")?.value || "").trim();
     const cartQty = Math.max(0, Math.min(4, Number($("mCartQty")?.value || 0)));
@@ -1998,6 +1999,10 @@ $("mAddBtn").onclick = async () => {
         holes,
         maxPlayers,
         pricePerPlayerCents,
+        
+        players,
+        num_players: players,
+        player_count: players,
 
         holdName,
         hold_name: holdName,
