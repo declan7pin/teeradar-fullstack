@@ -376,7 +376,55 @@ console.log("📧 booking email env check:", {
 // -----------------------------
 // Helpers
 // -----------------------------
+async function upsertManualBookingLedger({
+  courseSlug,
+  playDate,   // "YYYY-MM-DD"
+  time,       // "HH:MM"
+  holes,      // 9 or 18
+  name,
+  email,
+  paid,       // boolean
+  greenFeeCents, // optional (if you track it)
+  addonCents,    // optional (cart/clubs etc)
+  totalCents,    // if you already computed total, pass it
+  meta = {},
+}) {
+  const total_cents =
+    Number.isFinite(totalCents) ? Number(totalCents)
+    : (Number(greenFeeCents || 0) + Number(addonCents || 0));
 
+  // create a stable "manual booking id" so repeats update same row
+  const key = `${courseSlug}|${playDate}|${time}|${holes}|${(email || "").trim().toLowerCase()}|${(name || "").trim().toLowerCase()}`;
+  const manual_id = crypto.createHash("sha1").update(key).digest("hex");
+
+  await db.query(
+    `
+    INSERT INTO bookings_ledger
+      (id, course_slug, play_date, tee_time, holes, name, email, source, paid, total_cents, meta, created_at, updated_at)
+    VALUES
+      ($1, $2, $3, $4, $5, $6, $7, 'manual', $8, $9, $10::jsonb, NOW(), NOW())
+    ON CONFLICT (id) DO UPDATE SET
+      paid = EXCLUDED.paid,
+      total_cents = EXCLUDED.total_cents,
+      meta = EXCLUDED.meta,
+      updated_at = NOW()
+    `,
+    [
+      manual_id,
+      courseSlug,
+      playDate,
+      time,
+      holes,
+      name || "",
+      (email || "").trim().toLowerCase() || null,
+      !!paid,
+      Math.max(0, Number(total_cents || 0)),
+      JSON.stringify(meta || {}),
+    ]
+  );
+
+  return manual_id;
+}
 function _timeToMinutes(hhmm) {
   const m = String(hhmm || "").match(/^(\d{2}):(\d{2})$/);
   if (!m) return null;
