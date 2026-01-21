@@ -2001,25 +2001,25 @@ router.get("/admin/analytics/summary", requirePlatformAdmin, async (req, res) =>
 
     UNION ALL
 
-    -- manual bookings (1 row per reference)
-    SELECT
-      MAX(ms.updated_at) AS created_at,
-      (
-        COALESCE(t.price_per_player_cents,0) * COUNT(*) FILTER (WHERE COALESCE(ms.name,'') <> '')
-        + COALESCE(c.cart_fee_cents,0) * MAX(COALESCE(ms.cart_qty,0))
-        + COALESCE(c.hire_clubs_fee_cents,0) * MAX(COALESCE(ms.hire_clubs_qty,0))
-      )::bigint AS gross_cents
-    FROM booking_manual_slots ms
-    JOIN booking_courses c ON c.id = ms.course_id
-    LEFT JOIN booking_times t
-      ON t.course_id = ms.course_id
-     AND t.play_date = ms.play_date::date
-     AND t.tee_time = ms.tee_time
-     AND t.holes = ms.holes
-    WHERE ms.updated_at >= NOW() - $1::interval
-      AND COALESCE(ms.name,'') <> ''
-    GROUP BY ms.course_id, ms.play_date, ms.tee_time, ms.holes, ms.reference,
-             t.price_per_player_cents, c.cart_fee_cents, c.hire_clubs_fee_cents
+-- manual bookings (1 row per reference)
+SELECT
+  MIN(COALESCE(ms.created_at, ms.updated_at)) AS created_at,
+  (
+    COALESCE(t.price_per_player_cents,0) * COUNT(*) FILTER (WHERE COALESCE(ms.name,'') <> '')
+    + COALESCE(c.cart_fee_cents,0) * MAX(COALESCE(ms.cart_qty,0))
+    + COALESCE(c.hire_clubs_fee_cents,0) * MAX(COALESCE(ms.hire_clubs_qty,0))
+  )::bigint AS gross_cents
+FROM booking_manual_slots ms
+JOIN booking_courses c ON c.id = ms.course_id
+LEFT JOIN booking_times t
+  ON t.course_id = ms.course_id
+ AND t.play_date = ms.play_date::date
+ AND t.tee_time = ms.tee_time
+ AND t.holes = ms.holes
+WHERE COALESCE(ms.created_at, ms.updated_at) >= NOW() - $1::interval
+  AND COALESCE(ms.name,'') <> ''
+GROUP BY ms.course_id, ms.play_date, ms.tee_time, ms.holes, ms.reference,
+         t.price_per_player_cents, c.cart_fee_cents, c.hire_clubs_fee_cents
   ) x
   `,
   [range]
