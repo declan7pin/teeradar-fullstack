@@ -2426,14 +2426,35 @@ router.get("/admin/analytics/top", requirePlatformAdmin, async (req, res) => {
     }
 
     const q = `
-      SELECT c.slug AS course_slug, COUNT(*)::int AS bookings
-      FROM booking_bookings b
-      JOIN booking_courses c ON c.id = b.course_id
-      ${where}
-      GROUP BY c.slug
-      ORDER BY COUNT(*) DESC
-      LIMIT 200;
-    `;
+  WITH manual AS (
+    SELECT
+      ms.course_id,
+      ms.reference
+    FROM booking_manual_slots ms
+    ${where.replace(/b\./g, "ms.")}
+      AND COALESCE(ms.name,'') <> ''
+    GROUP BY ms.course_id, ms.reference
+  ),
+  online AS (
+    SELECT
+      b.course_id,
+      b.reference
+    FROM booking_bookings b
+    ${where}
+    GROUP BY b.course_id, b.reference
+  ),
+  all_bookings AS (
+    SELECT course_id, reference FROM online
+    UNION ALL
+    SELECT course_id, reference FROM manual
+  )
+  SELECT c.slug AS course_slug, COUNT(*)::int AS bookings
+  FROM all_bookings ab
+  JOIN booking_courses c ON c.id = ab.course_id
+  GROUP BY c.slug
+  ORDER BY COUNT(*) DESC
+  LIMIT 200;
+`;
 
     const r = await db.query(q, params);
     res.json({ ok: true, rows: r.rows || [] });
@@ -2474,10 +2495,22 @@ router.get("/admin/analytics/bookings", requirePlatformAdmin, async (req, res) =
       const params = p.concat(extraParams);
       const q = `
         SELECT COUNT(*)::int AS n
-        FROM booking_bookings b
-        WHERE 1=1
-          ${whereCourse}
-          ${extraSql}
+        FROM (
+  -- online bookings (1 row per booking)
+  SELECT b.course_id, b.created_at, b.reference
+  FROM booking_bookings b
+
+  UNION ALL
+
+  -- manual bookings (1 row per reference)
+  SELECT ms.course_id, MAX(ms.updated_at) AS created_at, ms.reference
+  FROM booking_manual_slots ms
+  WHERE COALESCE(ms.name,'') <> ''
+  GROUP BY ms.course_id, ms.reference
+) b
+WHERE 1=1
+  ${whereCourse}
+  ${extraSql}
       `;
       const r = await db.query(q, params);
       return Number(r.rows[0]?.n || 0);
@@ -2643,18 +2676,75 @@ router.get("/admin/analytics/daily", requirePlatformAdmin, async (req, res) => {
     }
 
     const r = await db.query(
-      `
-      SELECT
-        b.created_at::date::text AS day,
-        COUNT(*)::int AS bookings,
-        COALESCE(SUM(b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents), 0)::bigint AS revenue_cents
-      FROM booking_bookings b
-      ${where}
-      GROUP BY b.created_at::date
-      ORDER BY b.created_at::date ASC;
-      `,
-      params
-    );
+  `
+  WITH manual AS (
+    SELECT
+      ms.course_id,
+      ms.play_date::date AS day,
+      ms.play_date,
+      ms.tee_time,
+      ms.holes,
+      ms.reference,
+      COUNT(*) FILTER (WHERE COALESCE(ms.name,'') <> '')::int AS players,
+      MAX(COALESCE(ms.cart_qty,0))::int AS cart_qty,
+      MAX(COALESCE(ms.hire_clubs_qty,0))::int AS hire_clubs_qty
+    FROM booking_manual_slots ms
+    WHERE 1=1
+      ${courseId ? `AND ms.course_id = $1` : ""}
+      ${
+        start && end
+          ? `AND ms.play_date::date BETWEEN $${courseId ? 2 : 1}::date AND $${courseId ? 3 : 2}::date`
+          : start && !end
+          ? `AND ms.play_date::date >= $${courseId ? 2 : 1}::date`
+          : !start && end
+          ? `AND ms.play_date::date <= $${courseId ? 2 : 1}::date`
+          : `AND ms.play_date >= (CURRENT_DATE - INTERVAL '30 days')`
+      }
+      AND COALESCE(ms.name,'') <> ''
+    GROUP BY ms.course_id, ms.play_date::date, ms.play_date, ms.tee_time, ms.holes, ms.reference
+  ),
+  manual_priced AS (
+    SELECT
+      m.course_id,
+      m.day,
+      1::int AS bookings,
+      (
+        COALESCE(t.price_per_player_cents,0) * COALESCE(m.players,0)
+        + COALESCE(c.cart_fee_cents,0) * COALESCE(m.cart_qty,0)
+        + COALESCE(c.hire_clubs_fee_cents,0) * COALESCE(m.hire_clubs_qty,0)
+      )::bigint AS revenue_cents
+    FROM manual m
+    JOIN booking_courses c ON c.id = m.course_id
+    LEFT JOIN booking_times t
+      ON t.course_id = m.course_id
+     AND t.play_date = m.play_date::date
+     AND t.tee_time = m.tee_time
+     AND t.holes = m.holes
+  ),
+  online AS (
+    SELECT
+      b.course_id,
+      b.created_at::date AS day,
+      1::int AS bookings,
+      (COALESCE(b.total_cents,0) + COALESCE(b.cart_fee_cents,0) + COALESCE(b.hire_clubs_fee_cents,0))::bigint AS revenue_cents
+    FROM booking_bookings b
+    ${where}
+  ),
+  all_rows AS (
+    SELECT * FROM online
+    UNION ALL
+    SELECT * FROM manual_priced
+  )
+  SELECT
+    day::text AS day,
+    COUNT(*)::int AS bookings,
+    COALESCE(SUM(revenue_cents),0)::bigint AS revenue_cents
+  FROM all_rows
+  GROUP BY day
+  ORDER BY day ASC;
+  `,
+  params
+);
 
     res.json({ ok: true, rows: r.rows || [] });
   } catch (e) {
@@ -3477,6 +3567,35 @@ const sync = await syncBookedPlayersForTime({
   tee_time,
   holes,
 });
+// ✅ ADD: analytics - manual booking confirmed
+recordEvent({
+  type: "booking_created",
+  userId: getClientIp(req) || null,
+  courseName: (await db.query(`SELECT name FROM booking_courses WHERE id=$1 LIMIT 1;`, [courseId])).rows?.[0]?.name || slug,
+  meta: {
+    slug,
+    date: playDate,
+    time: tee_time,
+    holes,
+    players,
+    reference,
+    source: "manual",
+  },
+}).catch(() => {});
+
+recordBookingEvent(req, {
+  courseSlug: slug,
+  eventType: "booking_confirmed",
+  payload: {
+    slug,
+    date: playDate,
+    time: tee_time,
+    holes,
+    players,
+    reference,
+    source: "manual",
+  },
+}).catch(() => {});
     return res.json({
       ok: true,
       course_slug: slug,
@@ -3724,7 +3843,35 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       tee_time,
       holes,
     });
+// ✅ ADD: analytics - manual booking confirmed
+recordEvent({
+  type: "booking_created",
+  userId: getClientIp(req) || null,
+  courseName: (await db.query(`SELECT name FROM booking_courses WHERE id=$1 LIMIT 1;`, [courseId])).rows?.[0]?.name || slug,
+  meta: {
+    slug,
+    date: playDate,
+    time: tee_time,
+    holes,
+    players,
+    reference,
+    source: "manual",
+  },
+}).catch(() => {});
 
+recordBookingEvent(req, {
+  courseSlug: slug,
+  eventType: "booking_confirmed",
+  payload: {
+    slug,
+    date: playDate,
+    time: tee_time,
+    holes,
+    players,
+    reference,
+    source: "manual",
+  },
+}).catch(() => {});
     // optional email (send once)
     try {
       if (email && isLikelyEmail(email)) {
@@ -4265,18 +4412,75 @@ router.get(
       }
 
       const r = await db.query(
-        `
-        SELECT
-          b.created_at::date::text AS day,
-          COUNT(*)::int AS bookings,
-          COALESCE(SUM(b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents), 0)::bigint AS revenue_cents
-        FROM booking_bookings b
-        ${where}
-        GROUP BY b.created_at::date
-        ORDER BY b.created_at::date ASC;
-        `,
-        params
-      );
+  `
+  WITH manual AS (
+    SELECT
+      ms.course_id,
+      ms.play_date::date AS day,
+      ms.play_date,
+      ms.tee_time,
+      ms.holes,
+      ms.reference,
+      COUNT(*) FILTER (WHERE COALESCE(ms.name,'') <> '')::int AS players,
+      MAX(COALESCE(ms.cart_qty,0))::int AS cart_qty,
+      MAX(COALESCE(ms.hire_clubs_qty,0))::int AS hire_clubs_qty
+    FROM booking_manual_slots ms
+    WHERE 1=1
+      ${courseId ? `AND ms.course_id = $1` : ""}
+      ${
+        start && end
+          ? `AND ms.play_date::date BETWEEN $${courseId ? 2 : 1}::date AND $${courseId ? 3 : 2}::date`
+          : start && !end
+          ? `AND ms.play_date::date >= $${courseId ? 2 : 1}::date`
+          : !start && end
+          ? `AND ms.play_date::date <= $${courseId ? 2 : 1}::date`
+          : `AND ms.play_date >= (CURRENT_DATE - INTERVAL '30 days')`
+      }
+      AND COALESCE(ms.name,'') <> ''
+    GROUP BY ms.course_id, ms.play_date::date, ms.play_date, ms.tee_time, ms.holes, ms.reference
+  ),
+  manual_priced AS (
+    SELECT
+      m.course_id,
+      m.day,
+      1::int AS bookings,
+      (
+        COALESCE(t.price_per_player_cents,0) * COALESCE(m.players,0)
+        + COALESCE(c.cart_fee_cents,0) * COALESCE(m.cart_qty,0)
+        + COALESCE(c.hire_clubs_fee_cents,0) * COALESCE(m.hire_clubs_qty,0)
+      )::bigint AS revenue_cents
+    FROM manual m
+    JOIN booking_courses c ON c.id = m.course_id
+    LEFT JOIN booking_times t
+      ON t.course_id = m.course_id
+     AND t.play_date = m.play_date::date
+     AND t.tee_time = m.tee_time
+     AND t.holes = m.holes
+  ),
+  online AS (
+    SELECT
+      b.course_id,
+      b.created_at::date AS day,
+      1::int AS bookings,
+      (COALESCE(b.total_cents,0) + COALESCE(b.cart_fee_cents,0) + COALESCE(b.hire_clubs_fee_cents,0))::bigint AS revenue_cents
+    FROM booking_bookings b
+    ${where}
+  ),
+  all_rows AS (
+    SELECT * FROM online
+    UNION ALL
+    SELECT * FROM manual_priced
+  )
+  SELECT
+    day::text AS day,
+    COUNT(*)::int AS bookings,
+    COALESCE(SUM(revenue_cents),0)::bigint AS revenue_cents
+  FROM all_rows
+  GROUP BY day
+  ORDER BY day ASC;
+  `,
+  params
+);
 
       return res.json({ ok: true, rows: r.rows || [] });
     } catch (e) {
