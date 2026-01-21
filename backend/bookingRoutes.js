@@ -2025,16 +2025,27 @@ router.get("/admin/analytics/summary", requirePlatformAdmin, async (req, res) =>
   [range]
 );
 
-    // 2️⃣ FUNNEL (from analytics table)
-    const funnel = await db.query(
-      `
-      SELECT
-        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_course_view' AND occurred_at >= NOW() - $1::interval) AS course_views,
-        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_availability_search' AND occurred_at >= NOW() - $1::interval) AS availability_searches,
-        (SELECT COUNT(*)::int FROM analytics WHERE type='booking_created' AND occurred_at >= NOW() - $1::interval) AS bookings
-      `,
-      [range]
-    );
+    // 2️⃣ FUNNEL (source of truth: booking_analytics_events)
+const funnel = await db.query(
+  `
+  SELECT
+    (SELECT COUNT(*)::int
+     FROM booking_analytics_events
+     WHERE event_type='course_view'
+       AND occurred_at >= NOW() - $1::interval) AS course_views,
+
+    (SELECT COUNT(*)::int
+     FROM booking_analytics_events
+     WHERE event_type='times_view'
+       AND occurred_at >= NOW() - $1::interval) AS availability_searches,
+
+    (SELECT COUNT(*)::int
+     FROM booking_analytics_events
+     WHERE event_type='booking_confirmed'
+       AND occurred_at >= NOW() - $1::interval) AS bookings
+  `,
+  [range]
+);
 
     // 3️⃣ TOP COURSES
     const topCourses = await db.query(
