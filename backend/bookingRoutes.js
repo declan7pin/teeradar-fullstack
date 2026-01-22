@@ -4773,104 +4773,77 @@ router.get("/course-admin/analytics/insights", requireCourseAdmin, async (req, r
       bookings: Number(r.bookings || 0),
     }));
 
+        // ✅ Decide which view the UI asked for
+    const mode = String(req.query.mode || "total").toLowerCase();
+
+    // ✅ Build the combined per-day once (so we can reuse it)
+    const perDayTotal = (() => {
+      const byDay = new Map();
+
+      perDayOnline.forEach(r => {
+        const k = String(r.day);
+        byDay.set(k, {
+          day: k,
+          bookings: Number(r.bookings || 0),
+          players: Number(r.players || 0),
+          carts: Number(r.carts || 0),
+          clubs: Number(r.clubs || 0),
+          gross_cents: Number(r.gross_cents || 0),
+        });
+      });
+
+      perDayManual.forEach(r => {
+        const k = String(r.day);
+        const cur = byDay.get(k) || { day: k, bookings: 0, players: 0, carts: 0, clubs: 0, gross_cents: 0 };
+        cur.bookings += Number(r.bookings || 0);
+        cur.players += Number(r.players || 0);
+        cur.carts += Number(r.carts || 0);
+        cur.clubs += Number(r.clubs || 0);
+        cur.gross_cents += Number(r.gross_cents || 0);
+        byDay.set(k, cur);
+      });
+
+      return Array.from(byDay.values()).sort((a,b) => String(a.day).localeCompare(String(b.day)));
+    })();
+
+    // ✅ Pick the right dataset for the UI
+    const perDay =
+      mode === "online" ? perDayOnline :
+      mode === "manual" ? perDayManual :
+      perDayTotal;
+
+    const totals =
+      mode === "online" ? totalsOnline :
+      mode === "manual" ? totalsManual :
+      totalsTotal;
+
+    const popular =
+      mode === "online" ? popularOnline :
+      mode === "manual" ? popularManual :
+      popularTotal;
+
+    // ✅ IMPORTANT: also return the legacy keys the UI expects: perDay/totals/popular
     return res.json({
       ok: true,
       slug,
       courseName,
+      mode,
 
-      start: startDate,
-      end: endDate,
+      // ✅ what the UI already expects
+      perDay,
+      totals,
+      popular,
 
-      // ✅ per-day arrays (what your UI toggle needs)
+      // ✅ keep the detailed breakdowns too (optional, but nice)
       perDayOnline,
       perDayManual,
-      perDayTotal: (() => {
-        // merge by day
-        const map = new Map();
-        const add = (arr) => {
-          (arr || []).forEach(r => {
-            const day = String(r.day || "");
-            if (!map.has(day)) map.set(day, { day, bookings:0, players:0, carts:0, clubs:0, gross_cents:0 });
-            const cur = map.get(day);
-            cur.bookings += Number(r.bookings || 0);
-            cur.players += Number(r.players || 0);
-            cur.carts += Number(r.carts || 0);
-            cur.clubs += Number(r.clubs || 0);
-            cur.gross_cents += Number(r.gross_cents || 0);
-          });
-        };
-        add(perDayOnline);
-        add(perDayManual);
-        return Array.from(map.values()).sort((a,b) => String(a.day).localeCompare(String(b.day)));
-      })(),
-
-      // ✅ totals blocks (used by UI tiles)
-      totalsOnline: {
-        bookings: Number(tOn.bookings || 0),
-        players: Number(tOn.players || 0),
-        capacityPlayers,
-        fillRate: fillRateOnline,
-        grossCents: Number(tOn.gross_cents || 0),
-        addOnRevenueCents: null, // (optional) keep null unless you track add-ons separately online
-        checkinRate: Number(tOn.checkin_rate || 0),
-        paidRate: Number(tOn.paid_rate || 0),
-        leadDaysAvg: Number(tOn.lead_days_avg || 0),
-      },
-      totalsManual: {
-        bookings: Number(tMan.bookings || 0),
-        players: Number(tMan.players || 0),
-        capacityPlayers,
-        fillRate: fillRateManual,
-        grossCents: Number(tMan.gross_cents || 0),
-        addOnRevenueCents: null, // computed inside gross for manual already (ppp + addons)
-        checkinRate: Number(tMan.checkin_rate || 0),
-        paidRate: Number(tMan.paid_rate || 0),
-        leadDaysAvg: Number(tMan.lead_days_avg || 0),
-      },
-      totalsTotal: {
-        bookings: totalsTotal.bookings,
-        players: totalsTotal.players,
-        capacityPlayers,
-        fillRate: fillRateTotal,
-        grossCents: totalsTotal.gross_cents,
-        addOnRevenueCents: null,
-        checkinRate: null,
-        paidRate: null,
-        leadDaysAvg: null,
-      },
-
-      // ✅ popularity blocks (used by your “popular” tiles + top 3)
-      popularOnline: {
-        dayOfWeek: dowRowOnline ? dowMap[Number(dowRowOnline.dow || 0)] : "",
-        dayOfWeekBookings: dowRowOnline ? Number(dowRowOnline.bookings || 0) : 0,
-        teeTime: timeRowOnline ? String(timeRowOnline.tee_time || "") : "",
-        teeTimeBookings: timeRowOnline ? Number(timeRowOnline.bookings || 0) : 0,
-        attachRateCart: Number(tOn.attach_rate_cart || 0),
-        attachRateClubs: Number(tOn.attach_rate_clubs || 0),
-        topDays: topDowOnline,
-        topTimes: topTimesOnline,
-      },
-      popularManual: {
-        dayOfWeek: dowRowManual ? dowMap[Number(dowRowManual.dow || 0)] : "",
-        dayOfWeekBookings: dowRowManual ? Number(dowRowManual.bookings || 0) : 0,
-        teeTime: timeRowManual ? String(timeRowManual.tee_time || "") : "",
-        teeTimeBookings: timeRowManual ? Number(timeRowManual.bookings || 0) : 0,
-        attachRateCart: Number(tMan.attach_rate_cart || 0),
-        attachRateClubs: Number(tMan.attach_rate_clubs || 0),
-        topDays: topDowManual,
-        topTimes: topTimesManual,
-      },
-      popularTotal: {
-        // quick “best of” between the two (optional)
-        dayOfWeek: "",
-        dayOfWeekBookings: 0,
-        teeTime: "",
-        teeTimeBookings: 0,
-        attachRateCart: 0,
-        attachRateClubs: 0,
-        topDays: [],
-        topTimes: [],
-      },
+      perDayTotal,
+      totalsOnline,
+      totalsManual,
+      totalsTotal,
+      popularOnline,
+      popularManual,
+      popularTotal,
     });
   } catch (e) {
     console.error("course-admin/analytics/insights", e?.message || e);
