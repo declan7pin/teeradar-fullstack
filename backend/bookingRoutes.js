@@ -3287,6 +3287,7 @@ router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
     const tee_time = String(req.body?.time || "").trim();
     const holes = Number(req.body?.holes || 18);
     const slot_index = Number(req.body?.slotIndex || 0);
+    const players = Math.max(1, Math.min(4, Number(req.body?.players ?? 1)));
 
     const name = String(req.body?.name || "").trim();
     const email = String(req.body?.email || "").trim().toLowerCase();
