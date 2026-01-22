@@ -2296,13 +2296,7 @@ async function _courseIdAndNameFromSlug(slug) {
   const s = normSlug(slug);
   if (!s) return null;
   const r = await db.query(`SELECT id, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [s]);
-  dlog(req, "🧪 /admin/bookings online rows", {
-  count: r.rows?.length || 0,
-  first: r.rows?.[0] || null,
-  // proves paid + gross are present:
-  samplePaid: r.rows?.[0]?.paid,
-  sampleGross: r.rows?.[0]?.gross_cents,
-});
+  
   if (!r.rows.length) return null;
   return { id: r.rows[0].id, name: r.rows[0].name };
 }
