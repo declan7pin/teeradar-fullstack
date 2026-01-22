@@ -3841,41 +3841,13 @@ await logManualBookingConfirmedOnce({
       [courseId]
     )
   ).rows?.[0]?.name || slug,
-  playDate: play_date,
+  playDate: playDate, // ✅ FIXED (was play_date)
   tee_time,
   holes,
-  players: 1, // manual-slot fills ONE player per call
+  players,            // ✅ use the actual players count (not 1)
   reference,
 });
-// ✅ ADD: analytics - manual booking confirmed
-recordEvent({
-  type: "booking_created",
-  userId: getClientIp(req) || null,
-  courseName: (await db.query(`SELECT name FROM booking_courses WHERE id=$1 LIMIT 1;`, [courseId])).rows?.[0]?.name || slug,
-  meta: {
-    slug,
-    date: playDate,
-    time: tee_time,
-    holes,
-    players,
-    reference,
-    source: "manual",
-  },
-}).catch(() => {});
 
-recordBookingEvent(req, {
-  courseSlug: slug,
-  eventType: "booking_confirmed",
-  payload: {
-    slug,
-    date: playDate,
-    time: tee_time,
-    holes,
-    players,
-    reference,
-    source: "manual",
-  },
-}).catch(() => {});
     return res.json({
       ok: true,
       course_slug: slug,
@@ -4123,35 +4095,19 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       tee_time,
       holes,
     });
-// ✅ ADD: analytics - manual booking confirmed
-recordEvent({
-  type: "booking_created",
-  userId: getClientIp(req) || null,
-  courseName: (await db.query(`SELECT name FROM booking_courses WHERE id=$1 LIMIT 1;`, [courseId])).rows?.[0]?.name || slug,
-  meta: {
-    slug,
-    date: playDate,
-    time: tee_time,
-    holes,
-    players,
-    reference,
-    source: "manual",
-  },
-}).catch(() => {});
+    await logManualBookingConfirmedOnce({
+  req,
+  slug,
+  courseId,
+  courseName: (await db.query(`SELECT name FROM booking_courses WHERE id=$1 LIMIT 1;`, [courseId]))
+    .rows?.[0]?.name || slug,
+  playDate,
+  tee_time,
+  holes,
+  players,
+  reference,
+});
 
-recordBookingEvent(req, {
-  courseSlug: slug,
-  eventType: "booking_confirmed",
-  payload: {
-    slug,
-    date: playDate,
-    time: tee_time,
-    holes,
-    players,
-    reference,
-    source: "manual",
-  },
-}).catch(() => {});
     // optional email (send once)
     try {
       if (email && isLikelyEmail(email)) {
