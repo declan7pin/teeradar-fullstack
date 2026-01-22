@@ -2029,12 +2029,32 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
       `,
       date ? [courseId, date] : [courseId]
     );
+if (isDebug(req)) {
+  const onlinePaid = (r.rows || []).filter(x => x?.paid).length;
+  const manualPaid = (ms.rows || []).filter(x => x?.paid).length;
 
+  const onlineGross = (r.rows || []).reduce((a, x) => a + Number(x?.gross_cents || 0), 0);
+
+  dlog(req, "🧪 /admin/bookings totals", {
+    onlineCount: r.rows?.length || 0,
+    manualCount: ms.rows?.length || 0,
+    onlinePaid,
+    manualPaid,
+    onlineGrossCents: onlineGross,
+    onlineGross: onlineGross / 100,
+  });
+}
     res.json({
       ok: true,
       bookings: r.rows || [],
       manualSlots: ms.rows || [], // ✅ NEW
     });
+    dlog(req, "🧪 /admin/bookings manualSlots rows", {
+  count: ms.rows?.length || 0,
+  first: ms.rows?.[0] || null,
+  // proves paid exists on manual slots too:
+  samplePaid: ms.rows?.[0]?.paid,
+});
   } catch (e) {
     console.error("admin/bookings GET", e);
     res.status(500).json({ ok: false, error: "internal_error" });
