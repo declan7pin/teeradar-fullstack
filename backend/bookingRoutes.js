@@ -448,6 +448,12 @@ function _isoDate(d) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+function isDebug(req) {
+  return String(req.query?.debug || req.body?.debug || "") === "1";
+}
+function dlog(req, ...args) {
+  if (isDebug(req)) console.log(...args);
+}
 // -----------------------------
 // ✅ Course admin password helpers (PBKDF2)
 // -----------------------------
@@ -1958,6 +1964,7 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
     const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
     if (!c.rows.length) return res.json({ ok: true, bookings: [] });
     const courseId = c.rows[0].id;
+    dlog(req, "🧪 /admin/bookings params", { slug, date, courseId });
 
     const params = [courseId];
     let where = `WHERE b.course_id = $1`;
@@ -2257,6 +2264,13 @@ async function _courseIdAndNameFromSlug(slug) {
   const s = normSlug(slug);
   if (!s) return null;
   const r = await db.query(`SELECT id, name FROM booking_courses WHERE slug=$1 LIMIT 1;`, [s]);
+  dlog(req, "🧪 /admin/bookings online rows", {
+  count: r.rows?.length || 0,
+  first: r.rows?.[0] || null,
+  // proves paid + gross are present:
+  samplePaid: r.rows?.[0]?.paid,
+  sampleGross: r.rows?.[0]?.gross_cents,
+});
   if (!r.rows.length) return null;
   return { id: r.rows[0].id, name: r.rows[0].name };
 }
