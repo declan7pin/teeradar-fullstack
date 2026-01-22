@@ -782,7 +782,63 @@ async function recordBookingEvent(req, { courseSlug, eventType, payload = {} }) 
     console.warn("booking_analytics_events insert failed (non-fatal):", e?.message || e);
   }
 }
+// ✅ ADD: log manual booking_confirmed ONCE per reference
+async function logManualBookingConfirmedOnce({
+  req,
+  slug,
+  courseId,
+  courseName,
+  playDate,
+  tee_time,
+  holes,
+  players,
+  reference,
+}) {
+  // guard: already logged for this reference?
+  const already = await db.query(
+    `
+    SELECT 1
+    FROM booking_analytics_events
+    WHERE event_type = 'booking_confirmed'
+      AND course_slug = $1
+      AND (payload->>'reference') = $2
+    LIMIT 1;
+    `,
+    [slug, reference]
+  );
 
+  if (already.rows.length) return;
+
+  // legacy analytics (used by older dashboards)
+  recordEvent({
+    type: "booking_created",
+    courseName,
+    meta: {
+      slug,
+      date: playDate,
+      time: tee_time,
+      holes,
+      players,
+      reference,
+      source: "manual",
+    },
+  }).catch(() => {});
+
+  // source-of-truth analytics
+  await recordBookingEvent(req, {
+    courseSlug: slug,
+    eventType: "booking_confirmed",
+    payload: {
+      slug,
+      date: playDate,
+      time: tee_time,
+      holes,
+      players,
+      reference,
+      source: "manual",
+    },
+  });
+}
 // ✅ Send booking email via Resend (safe)
 async function sendBookingEmail({
   to,
@@ -3733,6 +3789,23 @@ const sync = await syncBookedPlayersForTime({
   play_date: playDate,
   tee_time,
   holes,
+});
+// ✅ ADD: analytics for manual booking (ONCE per reference)
+await logManualBookingConfirmedOnce({
+  req,
+  slug,
+  courseId,
+  courseName: (
+    await db.query(
+      `SELECT name FROM booking_courses WHERE id=$1 LIMIT 1;`,
+      [courseId]
+    )
+  ).rows?.[0]?.name || slug,
+  playDate: play_date,
+  tee_time,
+  holes,
+  players: 1, // manual-slot fills ONE player per call
+  reference,
 });
 // ✅ ADD: analytics - manual booking confirmed
 recordEvent({
