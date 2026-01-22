@@ -3214,7 +3214,63 @@ RETURNING *;
   tee_time,
   holes,
 });
+// ✅ ADD: analytics (manual booking confirmed) — log ONCE per reference
+try {
+  // Only log if this upsert actually has a name (filled slot)
+  if (name && String(name).trim()) {
+    const courseName =
+      (await db.query(`SELECT name FROM booking_courses WHERE id=$1 LIMIT 1;`, [courseId]))
+        .rows?.[0]?.name || slug;
 
+    // Prevent double-counting: only insert booking_confirmed once per reference
+    const already = await db.query(
+      `
+      SELECT 1
+      FROM booking_analytics_events
+      WHERE event_type = 'booking_confirmed'
+        AND course_slug = $1
+        AND (payload->>'reference') = $2
+      LIMIT 1;
+      `,
+      [slug, reference]
+    );
+
+    if (!already.rows.length) {
+      // analytics table (legacy)
+      recordEvent({
+        type: "booking_created",
+        userId: getClientIp(req) || null,
+        courseName,
+        meta: {
+          slug,
+          date: play_date,
+          time: tee_time,
+          holes,
+          players: 1,
+          reference,
+          source: "manual",
+        },
+      }).catch(() => {});
+
+      // booking_analytics_events (source of truth)
+      recordBookingEvent(req, {
+        courseSlug: slug,
+        eventType: "booking_confirmed",
+        payload: {
+          slug,
+          date: play_date,
+          time: tee_time,
+          holes,
+          players: 1,
+          reference,
+          source: "manual",
+        },
+      }).catch(() => {});
+    }
+  }
+} catch (e) {
+  console.warn("admin/manual-slot analytics log failed (non-fatal):", e?.message || e);
+}
 res.json({ ok: true, row: r.rows[0] || null, sync });
   } catch (e) {
     console.error("admin/manual-slot POST", e);
