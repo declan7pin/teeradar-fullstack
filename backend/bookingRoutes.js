@@ -4589,6 +4589,8 @@ return res.json({
   ok: true,
   slug,
   courseName: c.rows[0].name || "",
+
+  // ✅ IMPORTANT: keep the existing keys for backward compatibility
   perDay,
   totals: {
     bookings: totals.bookings,
@@ -4612,7 +4614,83 @@ return res.json({
     attachRateClubs: bookingsTotal ? withClubs / bookingsTotal : 0,
     topDays: topDow,
     topTimes,
-  }
+  },
+
+  // ✅ NEW: mode-specific keys the Course Admin UI expects
+  perDayTotal: perDay,
+  perDayOnline: perDay,
+  perDayManual: [],
+
+  totalsTotal: {
+    bookings: totals.bookings,
+    players: totals.players,
+    capacityPlayers: totals.capacity,
+    fillRate: fillRateTotal,
+    grossCents: totals.gross,
+    cartRevenueCents: totals.cartRev,
+    clubsRevenueCents: totals.clubsRev,
+    addOnRevenueCents: totals.cartRev + totals.clubsRev,
+    checkinRate,
+    paidRate,
+    leadDaysAvg,
+  },
+  totalsOnline: {
+    bookings: totals.bookings,
+    players: totals.players,
+    capacityPlayers: totals.capacity,
+    fillRate: fillRateTotal,
+    grossCents: totals.gross,
+    cartRevenueCents: totals.cartRev,
+    clubsRevenueCents: totals.clubsRev,
+    addOnRevenueCents: totals.cartRev + totals.clubsRev,
+    checkinRate,
+    paidRate,
+    leadDaysAvg,
+  },
+  totalsManual: {
+    bookings: 0,
+    players: 0,
+    capacityPlayers: 0,
+    fillRate: 0,
+    grossCents: 0,
+    cartRevenueCents: 0,
+    clubsRevenueCents: 0,
+    addOnRevenueCents: 0,
+    checkinRate: 0,
+    paidRate: 0,
+    leadDaysAvg: 0,
+  },
+
+  popularTotal: {
+    dayOfWeek: dowRow ? dowMap[dowRow.dow] : "",
+    dayOfWeekBookings: dowRow ? Number(dowRow.bookings || 0) : 0,
+    teeTime: timeRow ? String(timeRow.tee_time || "") : "",
+    teeTimeBookings: timeRow ? Number(timeRow.bookings || 0) : 0,
+    attachRateCart: bookingsTotal ? withCart / bookingsTotal : 0,
+    attachRateClubs: bookingsTotal ? withClubs / bookingsTotal : 0,
+    topDays: topDow,
+    topTimes,
+  },
+  popularOnline: {
+    dayOfWeek: dowRow ? dowMap[dowRow.dow] : "",
+    dayOfWeekBookings: dowRow ? Number(dowRow.bookings || 0) : 0,
+    teeTime: timeRow ? String(timeRow.tee_time || "") : "",
+    teeTimeBookings: timeRow ? Number(timeRow.bookings || 0) : 0,
+    attachRateCart: bookingsTotal ? withCart / bookingsTotal : 0,
+    attachRateClubs: bookingsTotal ? withClubs / bookingsTotal : 0,
+    topDays: topDow,
+    topTimes,
+  },
+  popularManual: {
+    dayOfWeek: "",
+    dayOfWeekBookings: 0,
+    teeTime: "",
+    teeTimeBookings: 0,
+    attachRateCart: 0,
+    attachRateClubs: 0,
+    topDays: [],
+    topTimes: [],
+  },
 });
    } catch (e) {
   console.error("course-admin/analytics/insights", e?.message || e);
