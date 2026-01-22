@@ -707,15 +707,69 @@ function normTime(v){
   if (!m) return s;
   return String(m[1]).padStart(2,"0") + ":" + m[2];
 }
-let LAST_INSIGHTS = null;
+let LAST_INSIGHTS = { total: null, online: null, manual: null };
 let ANALYTICS_MODE = "total"; // "total" | "online" | "manual"
+function getInsightsForMode(mode){
+  const m = (mode === "online" || mode === "manual") ? mode : "total";
+  return LAST_INSIGHTS?.[m] || null;
+}
 
+function getActiveInsights(){
+  return getInsightsForMode(ANALYTICS_MODE) || getInsightsForMode("total") || null;
+}
+
+// Fetch insights for a specific mode.
+// If backend ignores mode, all 3 calls will return the same shape (still fine).
+async function fetchInsights(mode, start, end){
+  const qs = new URLSearchParams();
+  if (start) qs.set("start", start);
+  if (end) qs.set("end", end);
+  qs.set("mode", mode); // ✅ key change (backend can use or ignore)
+
+  return await j(
+    "/api/book/course-admin/analytics/insights" + (qs.toString() ? "?" + qs.toString() : ""),
+    { method:"GET" }
+  );
+}
+
+function renderAnalyticsFromCurrentMode(){
+  const out = getActiveInsights();
+  const msg = $("analyticsMsg");
+  const box = $("analyticsBox");
+
+  if (!out){
+    if (box) box.style.display = "none";
+    if (msg) msg.textContent = "❌ No analytics loaded yet.";
+    return;
+  }
+
+  // Use your existing render function, but pass the active dataset
+  loadInsightsToUI(out);
+
+  // Totals derived from the selected mode's perDay
+  try{
+    const perDay = pickPerDay(out);
+    const bookings = perDay.reduce((a, r) => a + Number(r.bookings || 0), 0);
+    const grossCents = perDay.reduce((a, r) => a + Number(r.gross_cents || 0), 0);
+
+    $("aBookings").textContent = String(bookings);
+    $("aRevenue").textContent = moneyAUD(grossCents);
+    $("aGrossCents").textContent = String(grossCents);
+
+    const aov = bookings > 0 ? Math.round(grossCents / bookings) : 0;
+    $("aAov").textContent = moneyAUD(aov);
+  }catch{}
+
+  if (box) box.style.display = "block";
+}
 function setAnalyticsMode(mode){
   ANALYTICS_MODE = (mode === "online" || mode === "manual") ? mode : "total";
 
   // toggle button active state
   ["total","online","manual"].forEach(m => {
-    const el = document.getElementById(m === "total" ? "aModeTotal" : (m === "online" ? "aModeOnline" : "aModeManual"));
+    const el = document.getElementById(
+      m === "total" ? "aModeTotal" : (m === "online" ? "aModeOnline" : "aModeManual")
+    );
     if (el) el.classList.toggle("active", ANALYTICS_MODE === m);
   });
 
@@ -728,21 +782,8 @@ function setAnalyticsMode(mode){
       "Manual bookings/holds only.";
   }
 
-  // if we already have data loaded, re-render without calling backend again
-  if (LAST_INSIGHTS) {
-    loadInsightsToUI(LAST_INSIGHTS);
-    // also recompute totals tiles
-    try{
-      const perDay = pickPerDay(LAST_INSIGHTS);
-      const bookings = perDay.reduce((a, r) => a + Number(r.bookings || 0), 0);
-      const grossCents = perDay.reduce((a, r) => a + Number(r.gross_cents || 0), 0);
-      $("aBookings").textContent = String(bookings);
-      $("aRevenue").textContent = moneyAUD(grossCents);
-      $("aGrossCents").textContent = String(grossCents);
-      const aov = bookings > 0 ? Math.round(grossCents / bookings) : 0;
-      $("aAov").textContent = moneyAUD(aov);
-    }catch{}
-  }
+  // ✅ re-render from the selected dataset (no mixed fallbacks)
+  renderAnalyticsFromCurrentMode();
 }
 
 function pickPerDay(out){
@@ -869,33 +910,22 @@ async function loadAnalytics(){
     const start = ($("aStart")?.value || "").trim();
     const end = ($("aEnd")?.value || "").trim();
 
-    const qs = new URLSearchParams();
-    if (start) qs.set("start", start);
-    if (end) qs.set("end", end);
+    // ✅ Load ALL modes so toggles are consistent
+    const [totalOut, onlineOut, manualOut] = await Promise.all([
+      fetchInsights("total", start, end),
+      fetchInsights("online", start, end),
+      fetchInsights("manual", start, end),
+    ]);
 
-    // ✅ IMPORTANT: no slug passed; backend must use req.courseAdmin scope
-    const out = await j(
-  "/api/book/course-admin/analytics/insights" + (qs.toString() ? "?" + qs.toString() : ""),
-  { method:"GET" }
-);
-LAST_INSIGHTS = out;
+    LAST_INSIGHTS = {
+      total: totalOut,
+      online: onlineOut,
+      manual: manualOut,
+    };
 
-// ✅ fill the popularity + per-day table
-loadInsightsToUI(out);
+    // ✅ Render current mode (default = total)
+    renderAnalyticsFromCurrentMode();
 
-// ✅ totals derived from per-day (so you don’t need summary endpoint)
-const perDay = pickPerDay(out);
-const bookings = perDay.reduce((a, r) => a + Number(r.bookings || 0), 0);
-const grossCents = perDay.reduce((a, r) => a + Number(r.gross_cents || 0), 0);
-
-    $("aBookings").textContent = String(bookings);
-    $("aRevenue").textContent = moneyAUD(grossCents);
-    $("aGrossCents").textContent = String(grossCents);
-
-    const aov = bookings > 0 ? Math.round(grossCents / bookings) : 0;
-    $("aAov").textContent = moneyAUD(aov);
-
-    if (box) box.style.display = "block";
     if (msg) msg.textContent = "✅ Analytics loaded";
   }catch(e){
     if (msg) msg.textContent = "❌ " + (e?.message || "analytics_failed");
@@ -907,11 +937,12 @@ function exportAnalyticsCSV(){
     const start = ($("aStart")?.value || "").trim();
     const end = ($("aEnd")?.value || "").trim();
 
-    const out = LAST_INSIGHTS || {};
-    const perDay = Array.isArray(out?.perDay) ? out.perDay : [];
+    const out = getActiveInsights() || {};
+    const perDay = pickPerDay(out);
 
-    const header = ["day","bookings","players","carts","clubs","gross_cents"].join(",");
-    const lines = perDay.map(r => [
+    const header = ["mode","day","bookings","players","carts","clubs","gross_cents"].join(",");
+    const lines = (perDay || []).map(r => [
+      ANALYTICS_MODE,
       r.day || "",
       Number(r.bookings || 0),
       Number(r.players || 0),
@@ -924,6 +955,7 @@ function exportAnalyticsCSV(){
       ["start", start],
       ["end", end],
       ["slug", getSlug()],
+      ["mode", ANALYTICS_MODE],
     ].map(r => r.map(x => `"${String(x).replace(/"/g,'""')}"`).join(",")).join("\n");
 
     const csv = meta + "\n\n" + header + "\n" + lines.join("\n") + "\n";
@@ -933,7 +965,7 @@ function exportAnalyticsCSV(){
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = `course-analytics-${getSlug() || "course"}.csv`;
+    a.download = `course-analytics-${getSlug() || "course"}-${ANALYTICS_MODE}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
