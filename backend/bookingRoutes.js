@@ -4379,326 +4379,507 @@ router.get(
 // -----------------------------
 // ✅ Course admin: analytics INSIGHTS (manager-only, scoped to own course)
 // -----------------------------
-router.get(
-  "/course-admin/analytics/insights",
-  requireCourseAdmin,
-  requireCourseAdminManager,
-  async (req, res) => {
-    try {
-      const slug = String(req.courseAdmin.slug || "").trim().toLowerCase();
+router.get("/course-admin/analytics/insights", requireCourseAdmin, async (req, res) => {
+  try {
+    // manager only
+    if ((req.courseAdmin?.role || "") !== "manager") {
+      return res.status(403).json({ ok: false, error: "manager_only" });
+    }
 
-      const start = _parseYmd(req.query.start);
-      const end = _parseYmd(req.query.end);
+    const slug = req.courseAdmin.slug;
+    const courseId = req.courseAdmin.courseId;
 
-      const c = await db.query(
-        `SELECT id, name FROM booking_courses WHERE slug=$1 LIMIT 1;`,
-        [slug]
-      );
-      if (!c.rows.length) {
-        return res.json({ ok: true, slug, courseName: "", perDay: [], popular: {} });
-      }
-      const courseId = c.rows[0].id;
+    // date range (inclusive)
+    const start = String(req.query.start || "").trim() || null;
+    const end = String(req.query.end || "").trim() || null;
 
-      const params = [courseId];
-      let where = `WHERE b.course_id = $1`;
+    // default last 30 days if not provided
+    const endDate = end || new Date().toISOString().slice(0, 10);
+    const startDate =
+      start ||
+      (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 30);
+        return d.toISOString().slice(0, 10);
+      })();
 
-      // default range: last 30 days
-      if (start && end) {
-        params.push(start, end);
-        where += ` AND b.play_date::date BETWEEN $2::date AND $3::date`;
-      } else {
-        where += ` AND b.play_date::date >= (CURRENT_DATE - INTERVAL '30 days')`;
-      }
+    const c = await db.query(
+      `SELECT name FROM booking_courses WHERE id = $1 LIMIT 1`,
+      [courseId]
+    );
 
-      // 1) Per-day: bookings, players, carts/clubs, add-on revenue, gross, capacity, fill rate
-const perDayQ = await db.query(
-  `
-  WITH book AS (
-    SELECT
-      b.play_date::date AS day,
-      COUNT(*)::int AS bookings,
-      COALESCE(SUM(COALESCE(b.players,1)),0)::int AS players,
-      COALESCE(SUM(COALESCE(b.cart_qty,0)),0)::int AS carts,
-      COALESCE(SUM(COALESCE(b.hire_clubs_qty,0)),0)::int AS clubs,
-      COALESCE(SUM(COALESCE(b.cart_fee_cents,0)),0)::bigint AS cart_rev_cents,
-      COALESCE(SUM(COALESCE(b.hire_clubs_fee_cents,0)),0)::bigint AS clubs_rev_cents,
-      COALESCE(SUM(
-        COALESCE(b.total_cents,0) +
-        COALESCE(b.cart_fee_cents,0) +
-        COALESCE(b.hire_clubs_fee_cents,0)
-      ),0)::bigint AS gross_cents,
-      COALESCE(SUM(CASE WHEN COALESCE(b.checked_in,false) THEN 1 ELSE 0 END),0)::int AS checked_in_bookings,
-      COALESCE(SUM(CASE WHEN COALESCE(b.paid,false) THEN 1 ELSE 0 END),0)::int AS paid_bookings,
-      COALESCE(AVG((b.play_date::date - b.created_at::date)::numeric), 0)::float AS lead_days_avg
-    FROM booking_bookings b
-    ${where}
-    GROUP BY 1
-  ),
-  cap AS (
-    SELECT
-      t.play_date::date AS day,
-      COALESCE(SUM(COALESCE(t.max_players,0)),0)::int AS capacity_players
-    FROM booking_times t
-    WHERE t.course_id=$1
-      AND t.status <> 'BLOCKED'
-      ${
-        start && end
-          ? "AND t.play_date::date BETWEEN $2::date AND $3::date"
-          : "AND t.play_date::date >= (CURRENT_DATE - INTERVAL '30 days')"
-      }
-    GROUP BY 1
-  )
-  SELECT
-    COALESCE(book.day, cap.day)::text AS day,
-    COALESCE(book.bookings,0)::int AS bookings,
-    COALESCE(book.players,0)::int AS players,
-    COALESCE(book.carts,0)::int AS carts,
-    COALESCE(book.clubs,0)::int AS clubs,
-    COALESCE(book.cart_rev_cents,0)::bigint AS cart_rev_cents,
-    COALESCE(book.clubs_rev_cents,0)::bigint AS clubs_rev_cents,
-    COALESCE(book.gross_cents,0)::bigint AS gross_cents,
-    COALESCE(cap.capacity_players,0)::int AS capacity_players,
-    CASE
-      WHEN COALESCE(cap.capacity_players,0) > 0
-      THEN (COALESCE(book.players,0)::float / cap.capacity_players::float)
-      ELSE 0
-    END AS fill_rate,
-    COALESCE(book.checked_in_bookings,0)::int AS checked_in_bookings,
-    COALESCE(book.paid_bookings,0)::int AS paid_bookings,
-    COALESCE(book.lead_days_avg,0)::float AS lead_days_avg
-  FROM book
-  FULL OUTER JOIN cap ON cap.day = book.day
-  ORDER BY COALESCE(book.day, cap.day) ASC;
-  `,
-  params
-);
+    const courseName = c.rows[0]?.name || "";
 
-      // 2) Popular day of week
-      // PostgreSQL: extract(dow) gives 0=Sun..6=Sat
-      const dowQ = await db.query(
-        `
+    // ✅ capacity across range (same for all modes)
+    const capRes = await db.query(
+      `
+      SELECT COALESCE(SUM(max_players),0)::int AS capacity_players
+      FROM booking_times
+      WHERE course_id = $1
+        AND play_date >= $2 AND play_date <= $3
+      `,
+      [courseId, startDate, endDate]
+    );
+    const capacityPlayers = Number(capRes.rows[0]?.capacity_players || 0);
+
+    // =========================
+    // ONLINE (booking_bookings)
+    // =========================
+    const perDayOnlineRes = await db.query(
+      `
+      SELECT
+        play_date AS day,
+        COUNT(*)::int AS bookings,
+        COALESCE(SUM(players),0)::int AS players,
+        COALESCE(SUM(COALESCE(cart_qty,0)),0)::int AS carts,
+        COALESCE(SUM(COALESCE(hire_clubs_qty,0)),0)::int AS clubs,
+        COALESCE(SUM(COALESCE(total_cents,0)),0)::bigint AS gross_cents
+      FROM booking_bookings
+      WHERE course_id = $1
+        AND play_date >= $2 AND play_date <= $3
+        AND (status IS NULL OR status <> 'cancelled')
+      GROUP BY play_date
+      ORDER BY play_date ASC
+      `,
+      [courseId, startDate, endDate]
+    );
+    const perDayOnline = perDayOnlineRes.rows || [];
+
+    const totalsOnlineRes = await db.query(
+      `
+      SELECT
+        COUNT(*)::int AS bookings,
+        COALESCE(SUM(players),0)::int AS players,
+        COALESCE(SUM(COALESCE(cart_qty,0)),0)::int AS carts,
+        COALESCE(SUM(COALESCE(hire_clubs_qty,0)),0)::int AS clubs,
+        COALESCE(SUM(COALESCE(total_cents,0)),0)::bigint AS gross_cents,
+        COALESCE(AVG(GREATEST(0, DATE_PART('day', play_date::date - created_at::date))),0) AS lead_days_avg,
+        COALESCE(AVG(CASE WHEN checked_in THEN 1 ELSE 0 END),0) AS checkin_rate,
+        COALESCE(AVG(CASE WHEN paid THEN 1 ELSE 0 END),0) AS paid_rate,
+        COALESCE(AVG(CASE WHEN COALESCE(cart_qty,0) > 0 THEN 1 ELSE 0 END),0) AS attach_rate_cart,
+        COALESCE(AVG(CASE WHEN COALESCE(hire_clubs_qty,0) > 0 THEN 1 ELSE 0 END),0) AS attach_rate_clubs
+      FROM booking_bookings
+      WHERE course_id = $1
+        AND play_date >= $2 AND play_date <= $3
+        AND (status IS NULL OR status <> 'cancelled')
+      `,
+      [courseId, startDate, endDate]
+    );
+    const tOn = totalsOnlineRes.rows[0] || {};
+
+    const popDowOnlineRes = await db.query(
+      `
+      SELECT EXTRACT(DOW FROM play_date::date)::int AS dow, COUNT(*)::int AS bookings
+      FROM booking_bookings
+      WHERE course_id = $1
+        AND play_date >= $2 AND play_date <= $3
+        AND (status IS NULL OR status <> 'cancelled')
+      GROUP BY 1
+      ORDER BY bookings DESC
+      LIMIT 1
+      `,
+      [courseId, startDate, endDate]
+    );
+
+    const popTimeOnlineRes = await db.query(
+      `
+      SELECT tee_time, COUNT(*)::int AS bookings
+      FROM booking_bookings
+      WHERE course_id = $1
+        AND play_date >= $2 AND play_date <= $3
+        AND (status IS NULL OR status <> 'cancelled')
+      GROUP BY tee_time
+      ORDER BY bookings DESC
+      LIMIT 1
+      `,
+      [courseId, startDate, endDate]
+    );
+
+    const topDowOnlineRes = await db.query(
+      `
+      SELECT EXTRACT(DOW FROM play_date::date)::int AS dow, COUNT(*)::int AS bookings
+      FROM booking_bookings
+      WHERE course_id = $1
+        AND play_date >= $2 AND play_date <= $3
+        AND (status IS NULL OR status <> 'cancelled')
+      GROUP BY 1
+      ORDER BY bookings DESC
+      LIMIT 3
+      `,
+      [courseId, startDate, endDate]
+    );
+
+    const topTimesOnlineRes = await db.query(
+      `
+      SELECT tee_time, COUNT(*)::int AS bookings
+      FROM booking_bookings
+      WHERE course_id = $1
+        AND play_date >= $2 AND play_date <= $3
+        AND (status IS NULL OR status <> 'cancelled')
+      GROUP BY tee_time
+      ORDER BY bookings DESC
+      LIMIT 3
+      `,
+      [courseId, startDate, endDate]
+    );
+
+    // =========================
+    // MANUAL (booking_manual_slots)
+    // group by reference = one manual booking
+    // =========================
+    const perDayManualRes = await db.query(
+      `
+      WITH mb AS (
         SELECT
-          EXTRACT(DOW FROM b.play_date::date)::int AS dow,
-          COUNT(*)::int AS bookings
-        FROM booking_bookings b
-        ${where}
-        GROUP BY 1
-        ORDER BY bookings DESC
-        LIMIT 1;
-        `,
-        params
-      );
-
-      // 3) Popular tee time (by play_date tee_time buckets)
-      const timeQ = await db.query(
-        `
+          play_date,
+          reference,
+          MIN(created_at) AS created_at,
+          MIN(tee_time) AS tee_time,
+          MIN(holes)::int AS holes,
+          COUNT(*) FILTER (WHERE COALESCE(NULLIF(name,''),'') <> '')::int AS players,
+          MAX(COALESCE(cart_qty,0))::int AS carts,
+          MAX(COALESCE(hire_clubs_qty,0))::int AS clubs,
+          BOOL_OR(COALESCE(paid,false)) AS paid_any,
+          BOOL_OR(COALESCE(checked_in,false)) AS checked_in_any
+        FROM booking_manual_slots
+        WHERE course_id = $1
+          AND play_date >= $2 AND play_date <= $3
+          AND reference IS NOT NULL AND reference <> ''
+        GROUP BY play_date, reference
+      ),
+      fees AS (
         SELECT
-          b.tee_time::text AS tee_time,
-          COUNT(*)::int AS bookings
-        FROM booking_bookings b
-        ${where}
-        GROUP BY 1
-        ORDER BY bookings DESC
-        LIMIT 1;
-        `,
-        params
-      );
-      // 2b) Top 3 days of week
-const topDowQ = await db.query(
-  `
-  SELECT EXTRACT(DOW FROM b.play_date::date)::int AS dow, COUNT(*)::int AS bookings
-  FROM booking_bookings b
-  ${where}
-  GROUP BY 1
-  ORDER BY bookings DESC
-  LIMIT 3;
-  `,
-  params
-);
-
-// 3b) Top 3 tee times
-const topTimesQ = await db.query(
-  `
-  SELECT b.tee_time::text AS tee_time, COUNT(*)::int AS bookings
-  FROM booking_bookings b
-  ${where}
-  GROUP BY 1
-  ORDER BY bookings DESC
-  LIMIT 3;
-  `,
-  params
-);
-
-      // 4) Add-on attach rate (what % of bookings add carts/clubs)
-      const attachQ = await db.query(
-        `
+          id AS course_id,
+          COALESCE(cart_fee_cents,0)::int AS cart_fee_cents,
+          COALESCE(hire_clubs_fee_cents,0)::int AS clubs_fee_cents
+        FROM booking_courses
+        WHERE id = $1
+      ),
+      priced AS (
         SELECT
-          COUNT(*)::int AS bookings,
-          SUM(CASE WHEN COALESCE(b.cart_qty,0) > 0 THEN 1 ELSE 0 END)::int AS with_cart,
-          SUM(CASE WHEN COALESCE(b.hire_clubs_qty,0) > 0 THEN 1 ELSE 0 END)::int AS with_clubs
-        FROM booking_bookings b
-        ${where};
-        `,
-        params
-      );
+          mb.play_date,
+          mb.reference,
+          mb.players,
+          mb.carts,
+          mb.clubs,
+          mb.paid_any,
+          mb.checked_in_any,
+          mb.created_at,
+          mb.tee_time,
+          mb.holes,
+          COALESCE(t.price_per_player_cents,0)::int AS ppp,
+          (mb.players * COALESCE(t.price_per_player_cents,0)
+            + mb.carts * f.cart_fee_cents
+            + mb.clubs * f.clubs_fee_cents
+          )::bigint AS gross_cents
+        FROM mb
+        CROSS JOIN fees f
+        LEFT JOIN booking_times t
+          ON t.course_id = $1
+         AND t.play_date = mb.play_date
+         AND t.tee_time = mb.tee_time
+         AND t.holes = mb.holes
+      )
+      SELECT
+        play_date AS day,
+        COUNT(*)::int AS bookings,
+        COALESCE(SUM(players),0)::int AS players,
+        COALESCE(SUM(carts),0)::int AS carts,
+        COALESCE(SUM(clubs),0)::int AS clubs,
+        COALESCE(SUM(gross_cents),0)::bigint AS gross_cents
+      FROM priced
+      GROUP BY play_date
+      ORDER BY play_date ASC
+      `,
+      [courseId, startDate, endDate]
+    );
+    const perDayManual = perDayManualRes.rows || [];
 
-      const bookingsTotal = Number(attachQ.rows[0]?.bookings || 0);
-      const withCart = Number(attachQ.rows[0]?.with_cart || 0);
-      const withClubs = Number(attachQ.rows[0]?.with_clubs || 0);
+    const totalsManualRes = await db.query(
+      `
+      WITH mb AS (
+        SELECT
+          play_date,
+          reference,
+          MIN(created_at) AS created_at,
+          MIN(tee_time) AS tee_time,
+          MIN(holes)::int AS holes,
+          COUNT(*) FILTER (WHERE COALESCE(NULLIF(name,''),'') <> '')::int AS players,
+          MAX(COALESCE(cart_qty,0))::int AS carts,
+          MAX(COALESCE(hire_clubs_qty,0))::int AS clubs,
+          BOOL_OR(COALESCE(paid,false)) AS paid_any,
+          BOOL_OR(COALESCE(checked_in,false)) AS checked_in_any
+        FROM booking_manual_slots
+        WHERE course_id = $1
+          AND play_date >= $2 AND play_date <= $3
+          AND reference IS NOT NULL AND reference <> ''
+        GROUP BY play_date, reference
+      ),
+      fees AS (
+        SELECT
+          id AS course_id,
+          COALESCE(cart_fee_cents,0)::int AS cart_fee_cents,
+          COALESCE(hire_clubs_fee_cents,0)::int AS clubs_fee_cents
+        FROM booking_courses
+        WHERE id = $1
+      ),
+      priced AS (
+        SELECT
+          mb.*,
+          COALESCE(t.price_per_player_cents,0)::int AS ppp,
+          (mb.players * COALESCE(t.price_per_player_cents,0)
+            + mb.carts * f.cart_fee_cents
+            + mb.clubs * f.clubs_fee_cents
+          )::bigint AS gross_cents
+        FROM mb
+        CROSS JOIN fees f
+        LEFT JOIN booking_times t
+          ON t.course_id = $1
+         AND t.play_date = mb.play_date
+         AND t.tee_time = mb.tee_time
+         AND t.holes = mb.holes
+      )
+      SELECT
+        COUNT(*)::int AS bookings,
+        COALESCE(SUM(players),0)::int AS players,
+        COALESCE(SUM(carts),0)::int AS carts,
+        COALESCE(SUM(clubs),0)::int AS clubs,
+        COALESCE(SUM(gross_cents),0)::bigint AS gross_cents,
+        COALESCE(AVG(GREATEST(0, DATE_PART('day', play_date::date - created_at::date))),0) AS lead_days_avg,
+        COALESCE(AVG(CASE WHEN checked_in_any THEN 1 ELSE 0 END),0) AS checkin_rate,
+        COALESCE(AVG(CASE WHEN paid_any THEN 1 ELSE 0 END),0) AS paid_rate,
+        COALESCE(AVG(CASE WHEN carts > 0 THEN 1 ELSE 0 END),0) AS attach_rate_cart,
+        COALESCE(AVG(CASE WHEN clubs > 0 THEN 1 ELSE 0 END),0) AS attach_rate_clubs
+      FROM priced
+      `,
+      [courseId, startDate, endDate]
+    );
+    const tMan = totalsManualRes.rows[0] || {};
 
-      const dowMap = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-      const dowRow = dowQ.rows[0] || null;
-      const timeRow = timeQ.rows[0] || null;
+    const popDowManualRes = await db.query(
+      `
+      WITH mb AS (
+        SELECT play_date, reference
+        FROM booking_manual_slots
+        WHERE course_id = $1
+          AND play_date >= $2 AND play_date <= $3
+          AND reference IS NOT NULL AND reference <> ''
+        GROUP BY play_date, reference
+      )
+      SELECT EXTRACT(DOW FROM play_date::date)::int AS dow, COUNT(*)::int AS bookings
+      FROM mb
+      GROUP BY 1
+      ORDER BY bookings DESC
+      LIMIT 1
+      `,
+      [courseId, startDate, endDate]
+    );
 
-      const perDay = perDayQ.rows || [];
+    const popTimeManualRes = await db.query(
+      `
+      WITH mb AS (
+        SELECT MIN(tee_time) AS tee_time, play_date, reference
+        FROM booking_manual_slots
+        WHERE course_id = $1
+          AND play_date >= $2 AND play_date <= $3
+          AND reference IS NOT NULL AND reference <> ''
+        GROUP BY play_date, reference
+      )
+      SELECT tee_time, COUNT(*)::int AS bookings
+      FROM mb
+      GROUP BY tee_time
+      ORDER BY bookings DESC
+      LIMIT 1
+      `,
+      [courseId, startDate, endDate]
+    );
 
-// totals derived from perDay
-const totals = perDay.reduce(
-  (a, r) => {
-    a.bookings += Number(r.bookings || 0);
-    a.players += Number(r.players || 0);
-    a.capacity += Number(r.capacity_players || 0);
-    a.gross += Number(r.gross_cents || 0);
-    a.cartRev += Number(r.cart_rev_cents || 0);
-    a.clubsRev += Number(r.clubs_rev_cents || 0);
-    a.checkedIn += Number(r.checked_in_bookings || 0);
-    a.paid += Number(r.paid_bookings || 0);
-    a.leadDaysSum += Number(r.lead_days_avg || 0);
-    a.leadDaysN += 1;
-    return a;
-  },
-  { bookings:0, players:0, capacity:0, gross:0, cartRev:0, clubsRev:0, checkedIn:0, paid:0, leadDaysSum:0, leadDaysN:0 }
-);
+    const topDowManualRes = await db.query(
+      `
+      WITH mb AS (
+        SELECT play_date, reference
+        FROM booking_manual_slots
+        WHERE course_id = $1
+          AND play_date >= $2 AND play_date <= $3
+          AND reference IS NOT NULL AND reference <> ''
+        GROUP BY play_date, reference
+      )
+      SELECT EXTRACT(DOW FROM play_date::date)::int AS dow, COUNT(*)::int AS bookings
+      FROM mb
+      GROUP BY 1
+      ORDER BY bookings DESC
+      LIMIT 3
+      `,
+      [courseId, startDate, endDate]
+    );
 
-const fillRateTotal = totals.capacity > 0 ? (totals.players / totals.capacity) : 0;
-const checkinRate = totals.bookings > 0 ? (totals.checkedIn / totals.bookings) : 0;
-const paidRate = totals.bookings > 0 ? (totals.paid / totals.bookings) : 0;
-const leadDaysAvg = totals.leadDaysN > 0 ? (totals.leadDaysSum / totals.leadDaysN) : 0;
+    const topTimesManualRes = await db.query(
+      `
+      WITH mb AS (
+        SELECT MIN(tee_time) AS tee_time, play_date, reference
+        FROM booking_manual_slots
+        WHERE course_id = $1
+          AND play_date >= $2 AND play_date <= $3
+          AND reference IS NOT NULL AND reference <> ''
+        GROUP BY play_date, reference
+      )
+      SELECT tee_time, COUNT(*)::int AS bookings
+      FROM mb
+      GROUP BY tee_time
+      ORDER BY bookings DESC
+      LIMIT 3
+      `,
+      [courseId, startDate, endDate]
+    );
 
-const topDow = (topDowQ.rows || []).map(r => ({
-  day: dowMap[Number(r.dow)],
-  bookings: Number(r.bookings || 0),
-}));
+    // =========================
+    // TOTAL (online + manual)
+    // =========================
+    const totalsTotal = {
+      bookings: Number(tOn.bookings || 0) + Number(tMan.bookings || 0),
+      players: Number(tOn.players || 0) + Number(tMan.players || 0),
+      carts: Number(tOn.carts || 0) + Number(tMan.carts || 0),
+      clubs: Number(tOn.clubs || 0) + Number(tMan.clubs || 0),
+      gross_cents: Number(tOn.gross_cents || 0) + Number(tMan.gross_cents || 0),
+    };
 
-const topTimes = (topTimesQ.rows || []).map(r => ({
-  teeTime: String(r.tee_time || ""),
-  bookings: Number(r.bookings || 0),
-}));
+    const fillRateOnline = capacityPlayers ? Number(tOn.players || 0) / capacityPlayers : 0;
+    const fillRateManual = capacityPlayers ? Number(tMan.players || 0) / capacityPlayers : 0;
+    const fillRateTotal = capacityPlayers ? totalsTotal.players / capacityPlayers : 0;
 
-return res.json({
-  ok: true,
-  slug,
-  courseName: c.rows[0].name || "",
+    const dowMap = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
-  // ✅ IMPORTANT: keep the existing keys for backward compatibility
-  perDay,
-  totals: {
-    bookings: totals.bookings,
-    players: totals.players,
-    capacityPlayers: totals.capacity,
-    fillRate: fillRateTotal,
-    grossCents: totals.gross,
-    cartRevenueCents: totals.cartRev,
-    clubsRevenueCents: totals.clubsRev,
-    addOnRevenueCents: totals.cartRev + totals.clubsRev,
-    checkinRate,
-    paidRate,
-    leadDaysAvg,
-  },
-  popular: {
-    dayOfWeek: dowRow ? dowMap[dowRow.dow] : "",
-    dayOfWeekBookings: dowRow ? Number(dowRow.bookings || 0) : 0,
-    teeTime: timeRow ? String(timeRow.tee_time || "") : "",
-    teeTimeBookings: timeRow ? Number(timeRow.bookings || 0) : 0,
-    attachRateCart: bookingsTotal ? withCart / bookingsTotal : 0,
-    attachRateClubs: bookingsTotal ? withClubs / bookingsTotal : 0,
-    topDays: topDow,
-    topTimes,
-  },
+    const dowRowOnline = popDowOnlineRes.rows[0] || null;
+    const timeRowOnline = popTimeOnlineRes.rows[0] || null;
 
-  // ✅ NEW: mode-specific keys the Course Admin UI expects
-  perDayTotal: perDay,
-  perDayOnline: perDay,
-  perDayManual: [],
+    const dowRowManual = popDowManualRes.rows[0] || null;
+    const timeRowManual = popTimeManualRes.rows[0] || null;
 
-  totalsTotal: {
-    bookings: totals.bookings,
-    players: totals.players,
-    capacityPlayers: totals.capacity,
-    fillRate: fillRateTotal,
-    grossCents: totals.gross,
-    cartRevenueCents: totals.cartRev,
-    clubsRevenueCents: totals.clubsRev,
-    addOnRevenueCents: totals.cartRev + totals.clubsRev,
-    checkinRate,
-    paidRate,
-    leadDaysAvg,
-  },
-  totalsOnline: {
-    bookings: totals.bookings,
-    players: totals.players,
-    capacityPlayers: totals.capacity,
-    fillRate: fillRateTotal,
-    grossCents: totals.gross,
-    cartRevenueCents: totals.cartRev,
-    clubsRevenueCents: totals.clubsRev,
-    addOnRevenueCents: totals.cartRev + totals.clubsRev,
-    checkinRate,
-    paidRate,
-    leadDaysAvg,
-  },
-  totalsManual: {
-    bookings: 0,
-    players: 0,
-    capacityPlayers: 0,
-    fillRate: 0,
-    grossCents: 0,
-    cartRevenueCents: 0,
-    clubsRevenueCents: 0,
-    addOnRevenueCents: 0,
-    checkinRate: 0,
-    paidRate: 0,
-    leadDaysAvg: 0,
-  },
+    const topDowOnline = (topDowOnlineRes.rows || []).map(r => ({
+      day: dowMap[Number(r.dow || 0)] || "",
+      bookings: Number(r.bookings || 0),
+    }));
+    const topTimesOnline = (topTimesOnlineRes.rows || []).map(r => ({
+      teeTime: String(r.tee_time || ""),
+      bookings: Number(r.bookings || 0),
+    }));
 
-  popularTotal: {
-    dayOfWeek: dowRow ? dowMap[dowRow.dow] : "",
-    dayOfWeekBookings: dowRow ? Number(dowRow.bookings || 0) : 0,
-    teeTime: timeRow ? String(timeRow.tee_time || "") : "",
-    teeTimeBookings: timeRow ? Number(timeRow.bookings || 0) : 0,
-    attachRateCart: bookingsTotal ? withCart / bookingsTotal : 0,
-    attachRateClubs: bookingsTotal ? withClubs / bookingsTotal : 0,
-    topDays: topDow,
-    topTimes,
-  },
-  popularOnline: {
-    dayOfWeek: dowRow ? dowMap[dowRow.dow] : "",
-    dayOfWeekBookings: dowRow ? Number(dowRow.bookings || 0) : 0,
-    teeTime: timeRow ? String(timeRow.tee_time || "") : "",
-    teeTimeBookings: timeRow ? Number(timeRow.bookings || 0) : 0,
-    attachRateCart: bookingsTotal ? withCart / bookingsTotal : 0,
-    attachRateClubs: bookingsTotal ? withClubs / bookingsTotal : 0,
-    topDays: topDow,
-    topTimes,
-  },
-  popularManual: {
-    dayOfWeek: "",
-    dayOfWeekBookings: 0,
-    teeTime: "",
-    teeTimeBookings: 0,
-    attachRateCart: 0,
-    attachRateClubs: 0,
-    topDays: [],
-    topTimes: [],
-  },
-});
-   } catch (e) {
-  console.error("course-admin/analytics/insights", e?.message || e);
-  console.error("course-admin/analytics/insights stack", e?.stack || "");
-  return res.status(500).json({ ok: false, error: "internal_error", detail: String(e?.message || e) });
-}
+    const topDowManual = (topDowManualRes.rows || []).map(r => ({
+      day: dowMap[Number(r.dow || 0)] || "",
+      bookings: Number(r.bookings || 0),
+    }));
+    const topTimesManual = (topTimesManualRes.rows || []).map(r => ({
+      teeTime: String(r.tee_time || ""),
+      bookings: Number(r.bookings || 0),
+    }));
+
+    return res.json({
+      ok: true,
+      slug,
+      courseName,
+
+      start: startDate,
+      end: endDate,
+
+      // ✅ per-day arrays (what your UI toggle needs)
+      perDayOnline,
+      perDayManual,
+      perDayTotal: (() => {
+        // merge by day
+        const map = new Map();
+        const add = (arr) => {
+          (arr || []).forEach(r => {
+            const day = String(r.day || "");
+            if (!map.has(day)) map.set(day, { day, bookings:0, players:0, carts:0, clubs:0, gross_cents:0 });
+            const cur = map.get(day);
+            cur.bookings += Number(r.bookings || 0);
+            cur.players += Number(r.players || 0);
+            cur.carts += Number(r.carts || 0);
+            cur.clubs += Number(r.clubs || 0);
+            cur.gross_cents += Number(r.gross_cents || 0);
+          });
+        };
+        add(perDayOnline);
+        add(perDayManual);
+        return Array.from(map.values()).sort((a,b) => String(a.day).localeCompare(String(b.day)));
+      })(),
+
+      // ✅ totals blocks (used by UI tiles)
+      totalsOnline: {
+        bookings: Number(tOn.bookings || 0),
+        players: Number(tOn.players || 0),
+        capacityPlayers,
+        fillRate: fillRateOnline,
+        grossCents: Number(tOn.gross_cents || 0),
+        addOnRevenueCents: null, // (optional) keep null unless you track add-ons separately online
+        checkinRate: Number(tOn.checkin_rate || 0),
+        paidRate: Number(tOn.paid_rate || 0),
+        leadDaysAvg: Number(tOn.lead_days_avg || 0),
+      },
+      totalsManual: {
+        bookings: Number(tMan.bookings || 0),
+        players: Number(tMan.players || 0),
+        capacityPlayers,
+        fillRate: fillRateManual,
+        grossCents: Number(tMan.gross_cents || 0),
+        addOnRevenueCents: null, // computed inside gross for manual already (ppp + addons)
+        checkinRate: Number(tMan.checkin_rate || 0),
+        paidRate: Number(tMan.paid_rate || 0),
+        leadDaysAvg: Number(tMan.lead_days_avg || 0),
+      },
+      totalsTotal: {
+        bookings: totalsTotal.bookings,
+        players: totalsTotal.players,
+        capacityPlayers,
+        fillRate: fillRateTotal,
+        grossCents: totalsTotal.gross_cents,
+        addOnRevenueCents: null,
+        checkinRate: null,
+        paidRate: null,
+        leadDaysAvg: null,
+      },
+
+      // ✅ popularity blocks (used by your “popular” tiles + top 3)
+      popularOnline: {
+        dayOfWeek: dowRowOnline ? dowMap[Number(dowRowOnline.dow || 0)] : "",
+        dayOfWeekBookings: dowRowOnline ? Number(dowRowOnline.bookings || 0) : 0,
+        teeTime: timeRowOnline ? String(timeRowOnline.tee_time || "") : "",
+        teeTimeBookings: timeRowOnline ? Number(timeRowOnline.bookings || 0) : 0,
+        attachRateCart: Number(tOn.attach_rate_cart || 0),
+        attachRateClubs: Number(tOn.attach_rate_clubs || 0),
+        topDays: topDowOnline,
+        topTimes: topTimesOnline,
+      },
+      popularManual: {
+        dayOfWeek: dowRowManual ? dowMap[Number(dowRowManual.dow || 0)] : "",
+        dayOfWeekBookings: dowRowManual ? Number(dowRowManual.bookings || 0) : 0,
+        teeTime: timeRowManual ? String(timeRowManual.tee_time || "") : "",
+        teeTimeBookings: timeRowManual ? Number(timeRowManual.bookings || 0) : 0,
+        attachRateCart: Number(tMan.attach_rate_cart || 0),
+        attachRateClubs: Number(tMan.attach_rate_clubs || 0),
+        topDays: topDowManual,
+        topTimes: topTimesManual,
+      },
+      popularTotal: {
+        // quick “best of” between the two (optional)
+        dayOfWeek: "",
+        dayOfWeekBookings: 0,
+        teeTime: "",
+        teeTimeBookings: 0,
+        attachRateCart: 0,
+        attachRateClubs: 0,
+        topDays: [],
+        topTimes: [],
+      },
+    });
+  } catch (e) {
+    console.error("course-admin/analytics/insights", e?.message || e);
+    console.error("course-admin/analytics/insights stack", e?.stack || "");
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", detail: String(e?.message || e) });
   }
-);
+});
 // -----------------------------
 // ✅ Course admin (MANAGER ONLY): inventory settings (carts + hire clubs)
 // GET  /api/book/course-admin/inventory-settings
