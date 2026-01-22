@@ -4453,7 +4453,7 @@ router.get("/course-admin/analytics/insights", requireCourseAdmin, async (req, r
         COALESCE(SUM(COALESCE(cart_qty,0)),0)::int AS carts,
         COALESCE(SUM(COALESCE(hire_clubs_qty,0)),0)::int AS clubs,
         COALESCE(SUM(COALESCE(total_cents,0)),0)::bigint AS gross_cents,
-        COALESCE(AVG(GREATEST(0, DATE_PART('day', play_date::date - created_at::date))),0) AS lead_days_avg,
+        0::float AS lead_days_avg,
         COALESCE(AVG(CASE WHEN checked_in THEN 1 ELSE 0 END),0) AS checkin_rate,
         COALESCE(AVG(CASE WHEN paid THEN 1 ELSE 0 END),0) AS paid_rate,
         COALESCE(AVG(CASE WHEN COALESCE(cart_qty,0) > 0 THEN 1 ELSE 0 END),0) AS attach_rate_cart,
