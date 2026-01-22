@@ -2107,7 +2107,12 @@ GROUP BY ms.course_id, ms.play_date, ms.tee_time, ms.holes, ms.reference,
   `,
   [range]
 );
-
+dlog(req, "🧪 /admin/analytics/summary bookings SQL result", {
+  range,
+  row0: bookings.rows?.[0] || null,
+  bookings: bookings.rows?.[0]?.bookings,
+  gross_cents: bookings.rows?.[0]?.gross_cents,
+});
     // 2️⃣ FUNNEL (source of truth: booking_analytics_events)
 const funnel = await db.query(
   `
@@ -2129,7 +2134,10 @@ const funnel = await db.query(
   `,
   [range]
 );
-
+dlog(req, "🧪 /admin/analytics/summary funnel", {
+  range,
+  row0: funnel.rows?.[0] || null,
+});
     // 3️⃣ TOP COURSES (source of truth: booking_analytics_events)
 const topCourses = await db.query(
   `
@@ -2146,7 +2154,11 @@ const topCourses = await db.query(
   `,
   [range]
 );
-
+dlog(req, "🧪 /admin/analytics/summary topCourses", {
+  range,
+  count: topCourses.rows?.length || 0,
+  first: topCourses.rows?.[0] || null,
+});
     res.json({
       ok: true,
       days,
