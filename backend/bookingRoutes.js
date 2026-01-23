@@ -4468,7 +4468,7 @@ router.get(
       `SELECT
          COALESCE(cart_fee_cents,0)::int AS cart_fee_cents,
          COALESCE(hire_clubs_fee_cents,0)::int AS clubs_fee_cents,
-         COALESCE(max_players_per_booking,4)::int AS max_players
+         COALESCE(SUM(players), 0)::int AS capacity_players
        FROM booking_courses
        WHERE id = $1`,
       [courseId]
