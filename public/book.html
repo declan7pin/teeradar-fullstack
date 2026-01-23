@@ -1079,6 +1079,32 @@
       if (!course) return;
 
       const provider = course.provider || "Other";
+      // ✅ TeeRadarBooking (internal booking pages like Hillview)
+if (provider === "TeeRadarBooking") {
+  let slug =
+    (course.slug || course.bookingSlug || course.courseSlug || "").toString().trim();
+
+  // Fallback: generate slug from name if not provided
+  if (!slug) {
+    slug = String(courseName)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  const finalUrl =
+    window.location.origin + "/book/" + encodeURIComponent(slug);
+
+  trackEvent("course_booking_click", {
+    courseName,
+    provider,
+    url: finalUrl,
+    state: course.state || null,
+  });
+
+  window.open(finalUrl, "_blank");
+  return;
+}
       const slots = groupedSlots[courseName] || [];
       const exampleSlot = slots[0] || {};
       const searchDate =
