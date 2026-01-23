@@ -4402,6 +4402,50 @@ router.get("/course-admin/analytics/insights", requireCourseAdmin, async (req, r
     const c = await db.query(`SELECT name FROM booking_courses WHERE id = $1`, [courseId]);
     const courseName = c.rows[0]?.name || "";
 
+    // ---------------------------------------------------------
+    // ✅ ADD: fees + max players (used for add-on + fill rate)
+    // ---------------------------------------------------------
+    const feeRes = await db.query(
+      `SELECT
+         COALESCE(cart_fee_cents,0)::int AS cart_fee_cents,
+         COALESCE(hire_clubs_fee_cents,0)::int AS clubs_fee_cents,
+         COALESCE(max_players_per_booking,4)::int AS max_players
+       FROM booking_courses
+       WHERE id = $1`,
+      [courseId]
+    );
+    const fees = feeRes.rows?.[0] || { cart_fee_cents: 0, clubs_fee_cents: 0, max_players: 4 };
+
+    const buildTotals = (t) => {
+      const bookings = Number(t?.bookings || 0);
+      const players = Number(t?.players || 0);
+      const carts = Number(t?.carts || 0);
+      const clubs = Number(t?.clubs || 0);
+
+      const cartRevenueCents = carts * Number(fees.cart_fee_cents || 0);
+      const clubsRevenueCents = clubs * Number(fees.clubs_fee_cents || 0);
+      const addOnRevenueCents = cartRevenueCents + clubsRevenueCents;
+
+      const capacityPlayers = bookings * Number(fees.max_players || 4);
+      const fillRate = capacityPlayers ? players / capacityPlayers : 0;
+
+      return {
+        bookings,
+        players,
+        capacityPlayers,
+        fillRate,
+
+        grossCents: Number(t?.gross_cents || 0),
+        cartRevenueCents,
+        clubsRevenueCents,
+        addOnRevenueCents,
+
+        leadDaysAvg: Number(t?.lead_days_avg || 0),
+        checkinRate: Number(t?.checkin_rate || 0),
+        paidRate: Number(t?.paid_rate || 0),
+      };
+    };
+
     // -------------------------
     // ONLINE (booking_bookings)
     // -------------------------
@@ -4732,7 +4776,9 @@ router.get("/course-admin/analytics/insights", requireCourseAdmin, async (req, r
     perDayOnline.forEach(addRow);
     perDayManual.forEach(addRow);
 
-    const perDayTotal = Array.from(mapByDay.values()).sort((a, b) => String(a.day).localeCompare(String(b.day)));
+    const perDayTotal = Array.from(mapByDay.values()).sort((a, b) =>
+      String(a.day).localeCompare(String(b.day))
+    );
 
     const totalsTotal = {
       bookings: Number(tOn.bookings || 0) + Number(tMan.bookings || 0),
@@ -4740,22 +4786,17 @@ router.get("/course-admin/analytics/insights", requireCourseAdmin, async (req, r
       carts: Number(tOn.carts || 0) + Number(tMan.carts || 0),
       clubs: Number(tOn.clubs || 0) + Number(tMan.clubs || 0),
       gross_cents: Number(tOn.gross_cents || 0) + Number(tMan.gross_cents || 0),
-      // weighted-ish lead days (fallback: only online)
       lead_days_avg:
-        (Number(tOn.bookings || 0) > 0)
-          ? Number(tOn.lead_days_avg || 0)
-          : Number(tMan.lead_days_avg || 0),
+        Number(tOn.bookings || 0) > 0 ? Number(tOn.lead_days_avg || 0) : Number(tMan.lead_days_avg || 0),
       checkin_rate: 0,
       paid_rate: 0,
       attach_rate_cart: 0,
       attach_rate_clubs: 0,
     };
 
-    // for rates on totals: compute weighted by bookings if possible
+    // weighted rates
     const bOn = Number(tOn.bookings || 0);
     const bMan = Number(tMan.bookings || 0);
-    const bTot = bOn + bMan;
-
     const wAvg = (a, wa, b, wb) => {
       const den = wa + wb;
       if (!den) return 0;
@@ -4772,7 +4813,6 @@ router.get("/course-admin/analytics/insights", requireCourseAdmin, async (req, r
     // -------------------------
     const dowMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-    // total top day/time by combining online + manual
     const popDowTotalRes = await db.query(
       `
       WITH x AS (
@@ -4893,7 +4933,7 @@ router.get("/course-admin/analytics/insights", requireCourseAdmin, async (req, r
       [courseId, start, end]
     );
 
-    // Build popular objects (DECLARE THESE so “popularTotal is not defined” can never happen)
+    // Build popular objects
     const dowRowOnline = popDowOnlineRes.rows?.[0];
     const timeRowOnline = popTimeOnlineRes.rows?.[0];
     const topDowOnline = (topDowOnlineRes.rows || []).map((r) => ({
@@ -4960,13 +5000,20 @@ router.get("/course-admin/analytics/insights", requireCourseAdmin, async (req, r
       topTimes: topTimesTotal,
     };
 
+    // ---------------------------------------------------------
+    // ✅ NEW: build totals in UI-friendly shape (fillRate, addOns)
+    // ---------------------------------------------------------
+    const totalsOnline = buildTotals(tOn);
+    const totalsManual = buildTotals(tMan);
+    const totalsTotalBuilt = buildTotals(totalsTotal);
+
     // choose what the UI should treat as the “main” view
     const pick =
       mode === "online"
-        ? { perDay: perDayOnline, totals: tOn, popular: popularOnline }
+        ? { perDay: perDayOnline, totals: totalsOnline, popular: popularOnline }
         : mode === "manual"
-        ? { perDay: perDayManual, totals: tMan, popular: popularManual }
-        : { perDay: perDayTotal, totals: totalsTotal, popular: popularTotal };
+        ? { perDay: perDayManual, totals: totalsManual, popular: popularManual }
+        : { perDay: perDayTotal, totals: totalsTotalBuilt, popular: popularTotal };
 
     return res.json({
       ok: true,
@@ -4986,9 +5033,9 @@ router.get("/course-admin/analytics/insights", requireCourseAdmin, async (req, r
       perDayManual,
       perDayTotal,
 
-      totalsOnline: tOn,
-      totalsManual: tMan,
-      totalsTotal,
+      totalsOnline,
+      totalsManual,
+      totalsTotal: totalsTotalBuilt,
 
       popularOnline,
       popularManual,
