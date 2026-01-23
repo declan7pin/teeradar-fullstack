@@ -752,12 +752,38 @@ function requirePlatformAdmin(req, res, next) {
   const cookieToken = String(req.cookies?.tr_book_admin || "");
   if (cookieToken === "1") return next();
 
-  // ✅ allow query/header secret (so your analytics page can work without cookies)
+  // ✅ allow query/header secret (existing)
   const provided =
     String(req.query?.secret || "").trim() ||
     String(req.headers["x-booking-admin-secret"] || "").trim();
 
   if (provided && provided === ADMIN_SECRET) return next();
+
+  // ✅ NEW: allow normal site JWT (Authorization: Bearer <teeradar_jwt>)
+  // This is what your /analytics page is sending.
+  const bearer = typeof getBearer === "function" ? getBearer(req) : "";
+  if (bearer) {
+    try {
+      // Your file already has JWT_SECRET_FALLBACK in earlier sections (from your other snippets).
+      const secret = (JWT_SECRET_FALLBACK || "").trim();
+
+      if (secret) {
+        const decoded = jwt.verify(bearer, secret);
+
+        const adminEmail = String(process.env.ADMIN_EMAIL || "declan7pin@gmail.com")
+          .trim()
+          .toLowerCase();
+
+        const tokenEmail = String(decoded?.email || decoded?.user?.email || "")
+          .trim()
+          .toLowerCase();
+
+        if (tokenEmail && tokenEmail === adminEmail) return next();
+      }
+    } catch (e) {
+      // ignore and fall through to not_authorized
+    }
+  }
 
   return res.status(401).json({ ok: false, error: "not_authorized" });
 }
