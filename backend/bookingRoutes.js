@@ -4549,8 +4549,9 @@ const fees = feeRes.rows?.[0] || { cart_fee_cents: 0, clubs_fee_cents: 0 };
       const clubsRevenueCents = clubs * Number(fees.clubs_fee_cents || 0);
       const addOnRevenueCents = cartRevenueCents + clubsRevenueCents;
 
-      const capacityPlayers = bookings * Number(fees.max_players || 4);
-      const fillRate = capacityPlayers ? players / capacityPlayers : 0;
+      const capacityPlayers =
+  Number(t?.capacity_players || 0) || (bookings * 4); // fallback only
+const fillRate = capacityPlayers ? players / capacityPlayers : 0;
 
       return {
         bookings,
