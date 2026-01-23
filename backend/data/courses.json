@@ -270,12 +270,20 @@
   },
 
   {
-    "name": "Hillview Golf Course (Phone Booking)",
-    "provider": "Phone",
+    "name": "Hillview Golf Course (18 holes)",
+    "provider": "TeeRadarBooking",
     "holes": 18,
     "lat": -32.0600,
     "lng": 115.9600,
-    "phone": "08 9454 5554"
+    "bookingSlug": "hillview"
+  },
+  {
+    "name": "Hillview Golf Course (9 holes)",
+    "provider": "TeeRadarBooking",
+    "holes": 9,
+    "lat": -32.0600,
+    "lng": 115.9600,
+    "bookingSlug": "hillview"
   },
   {
     "name": "Marri Park Golf Course (Phone Booking)",
