@@ -429,6 +429,20 @@ function _timeToMinutes(hhmm) {
   if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
   return hh * 60 + mm;
 }
+function requireCourseAdminOrManager(req, res, next) {
+  // course admin login
+  if (req.courseAdmin?.course_id) {
+    return next();
+  }
+
+  // manager login
+  if (req.user?.role === "manager" && req.user?.course_id) {
+    req.courseAdmin = { course_id: req.user.course_id };
+    return next();
+  }
+
+  return res.status(401).json({ ok: false, error: "unauthorized" });
+}
 
 function _minutesToTime(mins) {
   const hh = Math.floor(mins / 60);
