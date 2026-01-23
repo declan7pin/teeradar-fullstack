@@ -2616,17 +2616,46 @@ router.get("/admin/analytics/bookings", requirePlatformAdmin, async (req, res) =
 
     // helpers
     async function countWhere(extraSql, extraParams = []) {
-      const params = p.concat(extraParams);
-      const q = `
-        SELECT COUNT(*)::int AS n
-        FROM booking_bookings b
-        WHERE 1=1
-          ${whereCourse}
-          ${extraSql}
-      `;
-      const r = await db.query(q, params);
-      return Number(r.rows[0]?.n || 0);
-    }
+  const params = p.concat(extraParams);
+
+  const q = `
+    WITH all_bookings AS (
+      -- online bookings (1 row per booking)
+      SELECT
+        b.course_id,
+        b.play_date::date AS booking_date,
+        b.created_at,
+        b.reference
+      FROM booking_bookings b
+
+      UNION ALL
+
+      -- manual bookings: many rows per booking, so collapse to 1 row per reference
+      SELECT
+        m.course_id,
+        m.play_date::date AS booking_date,
+        m.created_at,
+        m.reference
+      FROM (
+        SELECT
+          course_id,
+          play_date,
+          MIN(created_at) AS created_at,
+          reference
+        FROM booking_manual_slots
+        GROUP BY course_id, play_date, reference
+      ) m
+    )
+    SELECT COUNT(*)::int AS n
+    FROM all_bookings b
+    WHERE 1=1
+      ${whereCourse}
+      ${extraSql}
+  `;
+
+  const r = await db.query(q, params);
+  return Number(r.rows[0]?.n || 0);
+}
 
     let today = 0, week = 0, month = 0;
 
@@ -2634,31 +2663,33 @@ router.get("/admin/analytics/bookings", requirePlatformAdmin, async (req, res) =
       // preset mode (range buttons)
       if (spanDays <= 1) {
         // TODAY preset
-        today = await countWhere(`AND b.created_at::date = $${p.length + 1}::date`, [start]);
+        today = await countWhere(`AND b.booking_date = $${p.length + 1}::date`, [start]);
         week = 0;
         month = 0;
       } else if (spanDays <= 7) {
         // WEEK preset
         week = await countWhere(
-          `AND b.created_at::date BETWEEN $${p.length + 1}::date AND $${p.length + 2}::date`,
-          [start, end]
+  `AND b.booking_date BETWEEN $${p.length + 1}::date AND $${p.length + 2}::date`,
+  [start, end]
+);
         );
         today = 0;
         month = 0;
       } else {
         // MONTH preset (or custom long range)
         month = await countWhere(
-          `AND b.created_at::date BETWEEN $${p.length + 1}::date AND $${p.length + 2}::date`,
-          [start, end]
+  `AND b.booking_date BETWEEN $${p.length + 1}::date AND $${p.length + 2}::date`,
+  [start, end]
+);
         );
         today = 0;
         week = 0;
       }
     } else {
       // normal mode
-      today = await countWhere(`AND b.created_at::date = CURRENT_DATE`);
-      week = await countWhere(`AND b.created_at >= date_trunc('week', NOW())`);
-      month = await countWhere(`AND b.created_at >= date_trunc('month', NOW())`);
+      today = await countWhere(`AND b.booking_date = CURRENT_DATE`);
+week  = await countWhere(`AND b.booking_date >= date_trunc('week', CURRENT_DATE)::date`);
+month = await countWhere(`AND b.booking_date >= date_trunc('month', CURRENT_DATE)::date`);
     }
 
     res.json({ ok: true, bookings: { today, week, month } });
