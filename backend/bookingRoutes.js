@@ -4421,7 +4421,10 @@ router.get(
 // =======================
 // Course Admin Analytics (insights)
 // =======================
-router.get("/course-admin/analytics/insights", requireCourseAdmin, async (req, res) => {
+router.get(
+  "/course-admin/analytics/insights",
+  requireCourseAdminOrManager,
+  async (req, res) => {
   try {
     const courseId = req.courseAdmin?.course_id;
     if (!courseId) return res.status(401).json({ ok: false, error: "unauthorized" });
