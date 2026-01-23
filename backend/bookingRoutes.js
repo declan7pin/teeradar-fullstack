@@ -4499,7 +4499,7 @@ router.get(
 // =======================
 router.get(
   "/course-admin/analytics/insights",
-  requireCourseAdminOrManager,
+  requireCourseAdmin,
   async (req, res) => {
   try {
     const courseId = req.courseAdmin?.course_id;
