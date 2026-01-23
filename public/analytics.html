@@ -652,6 +652,9 @@
 "></div>
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
+  // ✅ Needed for booking admin analytics routes (requirePlatformAdmin)
+const BOOKING_ADMIN_SECRET = ""; 
+// put the same value as your Render env var BOOKING_ADMIN_SECRET
 window.addEventListener("error", (e) => {
   console.error("Analytics page JS error:", e?.error || e?.message || e);
 });
@@ -667,13 +670,21 @@ window.addEventListener("unhandledrejection", (e) => {
   }
 
   function getAuthHeaders() {
-    const h = { "Accept": "application/json" };
-    try {
-      const token = localStorage.getItem("teeradar_jwt") || "";
-      if (token) h["Authorization"] = "Bearer " + token;
-    } catch (e) {}
-    return h;
+  const h = { "Accept": "application/json" };
+
+  // keep your normal JWT (used by other analytics endpoints)
+  try {
+    const token = localStorage.getItem("teeradar_jwt") || "";
+    if (token) h["Authorization"] = "Bearer " + token;
+  } catch (e) {}
+
+  // ✅ add booking admin secret (used by /api/book/admin/analytics/*)
+  if (BOOKING_ADMIN_SECRET && BOOKING_ADMIN_SECRET.trim()) {
+    h["x-booking-admin-secret"] = BOOKING_ADMIN_SECRET.trim();
   }
+
+  return h;
+}
 
   function enforceAdmin() {
   const updatedAt = document.getElementById("summaryUpdated");
@@ -726,7 +737,10 @@ window.addEventListener("unhandledrejection", (e) => {
 
   async function tryFetchJson(url) {
     try {
-      const res = await fetch(url, { headers: getAuthHeaders() });
+      const res = await fetch(url, {
+  headers: getAuthHeaders(),
+  credentials: "include", // ✅ ensures cookies flow if you ever use cookie login
+});
       if (!res.ok) return null;
       const data = await res.json().catch(() => null);
       return data || null;
