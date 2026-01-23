@@ -131,15 +131,29 @@ function getBypassProvided(req) {
   return { key, slug };
 }
 async function requireCourseAdmin(req, res, next) {
- 
-
   try {
     // ✅ 1) BYPASS mode (if you still support it)
     const { key, slug } = getBypassProvided(req);
     if (key && slug) {
       const expected = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
       if (expected && key === expected) {
-        req.courseAdmin = { slug, email: "bypass@local", role: "proshop" };
+        // attach course_id from slug
+        const cr = await db.query(
+          `SELECT id, name, slug FROM booking_courses WHERE lower(slug)=lower($1) LIMIT 1`,
+          [slug]
+        );
+        const course = cr.rows?.[0];
+        if (!course?.id) {
+          return res.status(401).json({ ok: false, error: "course_not_found" });
+        }
+
+        req.courseAdmin = {
+          slug: course.slug,
+          email: "bypass@local",
+          role: "proshop",
+          course_id: course.id,
+          course_name: course.name || "",
+        };
         return next();
       }
     }
@@ -152,10 +166,22 @@ async function requireCourseAdmin(req, res, next) {
     const verified = token ? verifyCourseAdminToken(token) : null;
 
     if (verified?.slug && verified?.email) {
+      // attach course_id from slug
+      const cr = await db.query(
+        `SELECT id, name, slug FROM booking_courses WHERE lower(slug)=lower($1) LIMIT 1`,
+        [verified.slug]
+      );
+      const course = cr.rows?.[0];
+      if (!course?.id) {
+        return res.status(401).json({ ok: false, error: "course_not_found" });
+      }
+
       req.courseAdmin = {
-        slug: verified.slug,
+        slug: course.slug,
         email: verified.email,
         role: verified.role || "proshop",
+        course_id: course.id,
+        course_name: course.name || "",
       };
       return next();
     }
@@ -167,7 +193,23 @@ async function requireCourseAdmin(req, res, next) {
       return res.status(401).json({ ok: false, error: "not_course_admin" });
     }
 
-    req.courseAdmin = { slug: slug2, email: email2, role: "proshop" };
+    // attach course_id from slug
+    const cr2 = await db.query(
+      `SELECT id, name, slug FROM booking_courses WHERE lower(slug)=lower($1) LIMIT 1`,
+      [slug2]
+    );
+    const course2 = cr2.rows?.[0];
+    if (!course2?.id) {
+      return res.status(401).json({ ok: false, error: "course_not_found" });
+    }
+
+    req.courseAdmin = {
+      slug: course2.slug,
+      email: email2,
+      role: "proshop",
+      course_id: course2.id,
+      course_name: course2.name || "",
+    };
     return next();
   } catch (e) {
     return res.status(401).json({ ok: false, error: "not_course_admin" });
