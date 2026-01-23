@@ -3914,7 +3914,39 @@ totalCents:
     } catch (e) {
       console.warn("manual booking email failed (non-fatal):", e?.message || e);
     }
+// ✅ ADD THIS: record manual booking in analytics
+try {
+  // 1) booking_confirmed event (used by funnel + counts)
+  recordBookingEvent(req, {
+    courseSlug: slug,
+    eventType: "booking_confirmed",
+    payload: {
+      slug,
+      date: playDate,
+      time: tee_time,
+      holes,
+      players,
+      reference,
+      manual: true,
+    },
+  });
 
+  // 2) also record generic analytics event (used by admin charts)
+  recordEvent({
+    type: "booking_confirmed",
+    payload: {
+      slug,
+      date: playDate,
+      time: tee_time,
+      holes,
+      players,
+      reference,
+      source: "manual",
+    },
+  });
+} catch (e) {
+  console.warn("manual booking analytics failed (non-fatal):", e?.message || e);
+}
     return res.json({ ok: true, reference, rows: filled, sync });
   } catch (e) {
     console.error("course-admin/booking POST", e);
