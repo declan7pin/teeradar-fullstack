@@ -2619,39 +2619,38 @@ router.get("/admin/analytics/bookings", requirePlatformAdmin, async (req, res) =
   const params = p.concat(extraParams);
 
   const q = `
-    WITH all_bookings AS (
-      -- online bookings (1 row per booking)
-      SELECT
-        b.course_id,
-        b.play_date::date AS booking_date,
-        b.created_at,
-        b.reference
-      FROM booking_bookings b
+  WITH all_bookings AS (
+    -- online bookings (1 row per booking)
+    SELECT
+      b.course_id,
+      b.created_at,
+      b.reference
+    FROM booking_bookings b
 
-      UNION ALL
+    UNION ALL
 
-      -- manual bookings: many rows per booking, so collapse to 1 row per reference
+    -- manual bookings (collapse slots -> 1 row per reference)
+    SELECT
+      m.course_id,
+      m.created_at,
+      m.reference
+    FROM (
       SELECT
-        m.course_id,
-        m.play_date::date AS booking_date,
-        m.created_at,
-        m.reference
-      FROM (
-        SELECT
-          course_id,
-          play_date,
-          MIN(created_at) AS created_at,
-          reference
-        FROM booking_manual_slots
-        GROUP BY course_id, play_date, reference
-      ) m
-    )
-    SELECT COUNT(*)::int AS n
-    FROM all_bookings b
-    WHERE 1=1
-      ${whereCourse}
-      ${extraSql}
-  `;
+        course_id,
+        MIN(created_at) AS created_at,
+        reference
+      FROM booking_manual_slots
+      GROUP BY course_id, reference
+    ) m
+  )
+  SELECT c.slug AS course_slug, COUNT(*)::int AS bookings
+  FROM all_bookings b
+  JOIN booking_courses c ON c.id = b.course_id
+  ${where}
+  GROUP BY c.slug
+  ORDER BY COUNT(*) DESC
+  LIMIT 200;
+`;
 
   const r = await db.query(q, params);
   return Number(r.rows[0]?.n || 0);
