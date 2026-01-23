@@ -1098,16 +1098,22 @@
           baseUrl = course.url;
         }
       } else {
-        baseUrl =
-          exampleSlot.bookingUrl ||
-          exampleSlot.url ||
-          course.url ||
-          "";
-      }
+  baseUrl =
+    exampleSlot.bookUrl ||          // ✅ TeeRadarBooking (Hillview)
+    exampleSlot.bookingUrl ||
+    exampleSlot.url ||
+    course.bookUrl ||               // ✅ if you ever store it on the course object
+    course.url ||
+    "";
+}
 
       if (!baseUrl) return;
 
       let finalUrl = baseUrl;
+      // ✅ If backend returns a relative URL like "/book/hillview", make it absolute
+if (finalUrl.startsWith("/")) {
+  finalUrl = window.location.origin + finalUrl;
+}
 
       try {
         const u = new URL(baseUrl);
