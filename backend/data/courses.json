@@ -446,12 +446,12 @@
 
   {
     "name": "Hillview Golf Course",
-    "provider": "Phone",
+    "provider": "TeeRadarBooking",
     "state": "WA",
     "holes": 18,
     "lat": -31.939010380955974,
     "lng": 116.01996930968141,
-    "phone": "08 9454 5554"
+    "bookingSlug": "hillview"
   },
   {
     "name": "Marri Park Golf Course",
