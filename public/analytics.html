@@ -531,16 +531,24 @@
     </article>
 
         <article class="card">
-      <div class="card-label">Bookings (selected range)</div>
-      <div id="metricBookRange" class="card-value">—</div>
-      <div class="card-hint">Sum of bookings for the selected filter/range</div>
-    </article>
+  <div class="card-label">Bookings (selected range)</div>
+  <div id="metricBookRange" class="card-value">—</div>
+  <div class="card-hint">Sum of bookings for the selected filter/range</div>
+</article>
 
-    <article class="card">
-      <div class="card-label">Revenue (selected range)</div>
-      <div id="metricRevRange" class="card-value">—</div>
-      <div class="card-hint">Sum of revenue for the selected filter/range</div>
-    </article>
+<article class="card">
+  <div class="card-label">Revenue (selected range)</div>
+  <div id="metricRevRange" class="card-value">—</div>
+  <div class="card-hint">Sum of revenue for the selected filter/range</div>
+</article>
+
+<!-- keep canvases present (hidden) so existing JS can’t break the page -->
+<article class="card" style="display:none;">
+  <canvas id="chartBookings" height="160"></canvas>
+</article>
+<article class="card" style="display:none;">
+  <canvas id="chartRevenue" height="160"></canvas>
+</article>
 </section>
 
   <div class="section-title">Subscriptions</div>
