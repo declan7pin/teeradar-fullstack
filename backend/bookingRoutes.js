@@ -2658,37 +2658,39 @@ router.get("/admin/analytics/bookings", requirePlatformAdmin, async (req, res) =
 
     let today = 0, week = 0, month = 0;
 
-    if (wantsPreset && spanDays != null) {
-      // preset mode (range buttons)
-      if (spanDays <= 1) {
-        // TODAY preset
-        today = await countWhere(`AND b.booking_date = $${p.length + 1}::date`, [start]);
-        week = 0;
-        month = 0;
-      } else if (spanDays <= 7) {
-        // WEEK preset
-        week = await countWhere(
-  `AND b.booking_date BETWEEN $${p.length + 1}::date AND $${p.length + 2}::date`,
-  [start, end]
-);
-        today = 0;
-        month = 0;
-      } else {
-        // MONTH preset (or custom long range)
-        month = await countWhere(
-  `AND b.booking_date BETWEEN $${p.length + 1}::date AND $${p.length + 2}::date`,
-  [start, end]
-);
-        );
-        today = 0;
-        week = 0;
-      }
-    } else {
-      // normal mode
-      today = await countWhere(`AND b.booking_date = CURRENT_DATE`);
-week  = await countWhere(`AND b.booking_date >= date_trunc('week', CURRENT_DATE)::date`);
-month = await countWhere(`AND b.booking_date >= date_trunc('month', CURRENT_DATE)::date`);
-    }
+if (wantsPreset && spanDays != null) {
+  if (spanDays <= 1) {
+    // TODAY
+    today = await countWhere(
+      `AND b.booking_date = $${p.length + 1}::date`,
+      [start]
+    );
+
+  } else if (spanDays <= 7) {
+    // WEEK
+    week = await countWhere(
+      `AND b.booking_date BETWEEN $${p.length + 1}::date AND $${p.length + 2}::date`,
+      [start, end]
+    );
+
+  } else {
+    // MONTH
+    month = await countWhere(
+      `AND b.booking_date BETWEEN $${p.length + 1}::date AND $${p.length + 2}::date`,
+      [start, end]
+    );
+  }
+
+} else {
+  // normal mode
+  today = await countWhere(`AND b.booking_date = CURRENT_DATE`);
+  week  = await countWhere(
+    `AND b.booking_date >= date_trunc('week', CURRENT_DATE)::date`
+  );
+  month = await countWhere(
+    `AND b.booking_date >= date_trunc('month', CURRENT_DATE)::date`
+  );
+}
 
     res.json({ ok: true, bookings: { today, week, month } });
   } catch (e) {
