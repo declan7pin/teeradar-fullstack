@@ -1451,20 +1451,24 @@ async function loadBookingAnalytics(mode = "default") {
   });
     const daily = await tryFetchJson(dailyUrl);
 
-  if (daily && daily.ok && Array.isArray(daily.rows)) {
-    const totalBookings = daily.rows.reduce((sum, r) => sum + Number(r.bookings || 0), 0);
-    const totalRevenue = daily.rows.reduce((sum, r) => sum + Number(r.revenue_cents || 0), 0) / 100;
+if (daily && daily.ok && Array.isArray(daily.rows)) {
+  const totalBookings = daily.rows.reduce((sum, r) => sum + Number(r.bookings || 0), 0);
+  const totalRevenue = daily.rows.reduce((sum, r) => sum + Number(r.revenue_cents || 0), 0) / 100;
 
-    setText("metricBookRange", String(Math.trunc(totalBookings)));
-    setText("metricRevRange", "$" + Number(totalRevenue || 0).toFixed(0));
-  } else {
-    setText("metricBookRange", "—");
-    setText("metricRevRange", "—");
-  }
-  } else {
-    drawSimpleLine("chartBookings", [], []);
-    drawSimpleLine("chartRevenue", [], []);
-  }
+  setText("metricBookRange", String(Math.trunc(totalBookings)));
+  setText("metricRevRange", "$" + Number(totalRevenue || 0).toFixed(0));
+
+  // (Optional) keep old charts updated but hidden:
+  // const labels = daily.rows.map(r => r.day);
+  // const bookingsSeries = daily.rows.map(r => Number(r.bookings || 0));
+  // const revenueSeries = daily.rows.map(r => Number(r.revenue_cents || 0) / 100);
+  // drawSimpleLine("chartBookings", labels, bookingsSeries);
+  // drawSimpleLine("chartRevenue", labels, revenueSeries);
+
+} else {
+  setText("metricBookRange", "—");
+  setText("metricRevRange", "—");
+}
 
   const btnCsv = document.getElementById("btnBookCsv");
   if (btnCsv && !btnCsv._wired) {
