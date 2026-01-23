@@ -2671,7 +2671,6 @@ router.get("/admin/analytics/bookings", requirePlatformAdmin, async (req, res) =
   `AND b.booking_date BETWEEN $${p.length + 1}::date AND $${p.length + 2}::date`,
   [start, end]
 );
-        );
         today = 0;
         month = 0;
       } else {
