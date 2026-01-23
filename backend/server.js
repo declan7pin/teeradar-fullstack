@@ -1213,7 +1213,119 @@ app.get("/api/rounds/:id", requireAuth, async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal error" });
   }
 });
+// ✅ BULK SAVE (fixes "Save failed: 404")
+app.put("/api/rounds/:id", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
 
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+    if (!Number.isInteger(roundId) || roundId <= 0) {
+      return res.status(400).json({ ok: false, error: "Invalid round id" });
+    }
+
+    const own = await db.query(
+      `SELECT id FROM rounds WHERE id = $1 AND user_id = $2 LIMIT 1;`,
+      [roundId, userId]
+    );
+    if (!own.rows.length) {
+      return res.status(403).json({ ok: false, error: "Forbidden" });
+    }
+
+    const holes = req.body?.holes;
+    if (!Array.isArray(holes)) {
+      return res.status(400).json({ ok: false, error: "holes array is required" });
+    }
+
+    await db.query("BEGIN");
+
+    for (const h of holes) {
+      const holeNum = Number(h?.hole_number ?? h?.hole ?? h?.number);
+      if (!Number.isFinite(holeNum) || holeNum <= 0) continue;
+
+      const parVal =
+        h?.par === null || typeof h?.par === "undefined" || h?.par === ""
+          ? null
+          : Number(h.par);
+
+      const strokesVal =
+        h?.strokes === null || typeof h?.strokes === "undefined" || h?.strokes === ""
+          ? null
+          : Number(h.strokes);
+
+      const puttsVal =
+        h?.putts === null || typeof h?.putts === "undefined" || h?.putts === ""
+          ? null
+          : Number(h.putts);
+
+      const sbp =
+        h?.strokes_by_player || h?.strokesByPlayer
+          ? JSON.stringify(h.strokes_by_player || h.strokesByPlayer)
+          : null;
+
+      const pbp =
+        h?.putts_by_player || h?.puttsByPlayer
+          ? JSON.stringify(h.putts_by_player || h.puttsByPlayer)
+          : null;
+
+      await db.query(
+        `
+        INSERT INTO round_holes (round_id, hole_number, par, strokes, putts, strokes_by_player, putts_by_player)
+        VALUES ($1, $2, $3, $4, $5, COALESCE($6::jsonb, '{}'::jsonb), COALESCE($7::jsonb, '{}'::jsonb))
+        ON CONFLICT (round_id, hole_number) DO UPDATE SET
+          par = EXCLUDED.par,
+          strokes = EXCLUDED.strokes,
+          putts = EXCLUDED.putts,
+          strokes_by_player = EXCLUDED.strokes_by_player,
+          putts_by_player = EXCLUDED.putts_by_player;
+        `,
+        [
+          roundId,
+          holeNum,
+          Number.isFinite(parVal) ? parVal : null,
+          Number.isFinite(strokesVal) ? strokesVal : null,
+          Number.isFinite(puttsVal) ? puttsVal : null,
+          sbp,
+          pbp,
+        ]
+      );
+    }
+
+    await db.query("COMMIT");
+
+    const roundRes = await db.query(
+      `
+      SELECT id, user_id, course, layout, state, holes, par_mode, players_count, player_names, created_at
+      FROM rounds
+      WHERE id = $1
+      LIMIT 1;
+      `,
+      [roundId]
+    );
+
+    const holesRes = await db.query(
+      `
+      SELECT hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player
+      FROM round_holes
+      WHERE round_id = $1
+      ORDER BY hole_number ASC;
+      `,
+      [roundId]
+    );
+
+    return res.json({
+      ok: true,
+      round: roundRes.rows[0] || null,
+      holes: holesRes.rows || [],
+    });
+  } catch (err) {
+    try { await db.query("ROLLBACK"); } catch {}
+    console.error("/api/rounds/:id PUT error:", err);
+    return res.status(500).json({ ok: false, error: "internal error", detail: err?.message });
+  }
+});
 app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
   try {
     const userId = Number(req.user?.id);
