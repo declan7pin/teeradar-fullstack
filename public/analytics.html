@@ -530,18 +530,17 @@
       </div>
     </article>
 
-    <article class="card">
-      <div class="card-label">Daily bookings</div>
-      <canvas id="chartBookings" height="160"></canvas>
-      <div class="card-hint">Custom range uses the date fields above</div>
+        <article class="card">
+      <div class="card-label">Bookings (selected range)</div>
+      <div id="metricBookRange" class="card-value">—</div>
+      <div class="card-hint">Sum of bookings for the selected filter/range</div>
     </article>
 
     <article class="card">
-      <div class="card-label">Daily revenue</div>
-      <canvas id="chartRevenue" height="160"></canvas>
-      <div class="card-hint">From payload.total_cents on booking_confirmed</div>
+      <div class="card-label">Revenue (selected range)</div>
+      <div id="metricRevRange" class="card-value">—</div>
+      <div class="card-hint">Sum of revenue for the selected filter/range</div>
     </article>
-  </div>
 </section>
 
   <div class="section-title">Subscriptions</div>
@@ -1442,19 +1441,18 @@ async function loadBookingAnalytics(mode = "default") {
     start: mode === "range" ? start : "",
     end: mode === "range" ? end : ""
   });
-  const daily = await tryFetchJson(dailyUrl);
+    const daily = await tryFetchJson(dailyUrl);
 
   if (daily && daily.ok && Array.isArray(daily.rows)) {
-    const labels = daily.rows.map(r => r.day);
-    const bookingsSeries = daily.rows.map(r => Number(r.bookings || 0));
-    const revenueSeries = daily.rows.map(r => Number(r.revenue_cents || 0) / 100);
+    const totalBookings = daily.rows.reduce((sum, r) => sum + Number(r.bookings || 0), 0);
+    const totalRevenue = daily.rows.reduce((sum, r) => sum + Number(r.revenue_cents || 0), 0) / 100;
 
-    drawSimpleLine("chartBookings", labels, bookingsSeries, {
-  valueFormatter: (n) => `${Number(n || 0)} bookings`
-});
-drawSimpleLine("chartRevenue", labels, revenueSeries, {
-  valueFormatter: (n) => `$${Number(n || 0).toFixed(0)}`
-});
+    setText("metricBookRange", String(Math.trunc(totalBookings)));
+    setText("metricRevRange", "$" + Number(totalRevenue || 0).toFixed(0));
+  } else {
+    setText("metricBookRange", "—");
+    setText("metricRevRange", "—");
+  }
   } else {
     drawSimpleLine("chartBookings", [], []);
     drawSimpleLine("chartRevenue", [], []);
