@@ -4527,15 +4527,17 @@ router.get(
     // ✅ ADD: fees + max players (used for add-on + fill rate)
     // ---------------------------------------------------------
     const feeRes = await db.query(
-      `SELECT
-         COALESCE(cart_fee_cents,0)::int AS cart_fee_cents,
-         COALESCE(hire_clubs_fee_cents,0)::int AS clubs_fee_cents,
-         COALESCE(SUM(players), 0)::int AS capacity_players
-       FROM booking_courses
-       WHERE id = $1`,
-      [courseId]
-    );
-    const fees = feeRes.rows?.[0] || { cart_fee_cents: 0, clubs_fee_cents: 0, max_players: 4 };
+  `SELECT
+     COALESCE(cart_fee_cents,0)::int AS cart_fee_cents,
+     COALESCE(hire_clubs_fee_cents,0)::int AS clubs_fee_cents
+   FROM booking_courses
+   WHERE id = $1
+   LIMIT 1`,
+  [courseId]
+);
+
+// no max_players coming from this query anymore
+const fees = feeRes.rows?.[0] || { cart_fee_cents: 0, clubs_fee_cents: 0 };
 
     const buildTotals = (t) => {
       const bookings = Number(t?.bookings || 0);
