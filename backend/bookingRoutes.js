@@ -215,6 +215,82 @@ async function requireCourseAdmin(req, res, next) {
     return res.status(401).json({ ok: false, error: "not_course_admin" });
   }
 }
+// ✅ NEW: allow analytics access for either:
+// - course-admin token (cookie or Bearer)
+// - normal app "manager" JWT (cookie) that includes course_id
+async function requireCourseAdminOrManager(req, res, next) {
+  try {
+    // ---------- 1) Try COURSE ADMIN token ----------
+    const jwtSecret = (COURSE_ADMIN_JWT_SECRET || JWT_SECRET_FALLBACK || "").trim();
+
+    const bearer = String(req.headers.authorization || "");
+    const bearerToken =
+      bearer.toLowerCase().startsWith("bearer ") ? bearer.slice(7).trim() : "";
+
+    const courseAdminToken = String(
+      bearerToken || req.cookies?.tr_course_admin_token || ""
+    ).trim();
+
+    if (courseAdminToken && jwtSecret) {
+      try {
+        const decoded = jwt.verify(courseAdminToken, jwtSecret);
+        const adminId = decoded?.admin_id || decoded?.id;
+        if (adminId) {
+          const r = await db.query(
+            `SELECT id, course_id, role, email
+             FROM booking_course_admins
+             WHERE id = $1
+             LIMIT 1`,
+            [adminId]
+          );
+
+          const admin = r.rows?.[0];
+          if (admin?.course_id) {
+            req.courseAdmin = admin;
+            return next();
+          }
+        }
+      } catch (e) {
+        // fall through to manager jwt
+      }
+    }
+
+    // ---------- 2) Try NORMAL APP MANAGER JWT ----------
+    // Adjust cookie names here if yours differs:
+    const userToken = String(
+      req.cookies?.tr_token ||
+      req.cookies?.token ||
+      req.cookies?.jwt ||
+      ""
+    ).trim();
+
+    const userSecret = (JWT_SECRET_FALLBACK || "").trim();
+
+    if (userToken && userSecret) {
+      try {
+        const u = jwt.verify(userToken, userSecret);
+
+        // accept either role field
+        const role = String(u?.role || u?.user?.role || "").toLowerCase();
+
+        // accept either course_id field
+        const courseId =
+          u?.course_id || u?.courseId || u?.user?.course_id || u?.user?.courseId;
+
+        if (role === "manager" && courseId) {
+          req.courseAdmin = { course_id: courseId, role: "manager" };
+          return next();
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  } catch (e) {
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  }
+}
 function requireCourseAdminManager(req, res, next) {
   const role = String(req.courseAdmin?.role || "").trim().toLowerCase();
   if (role !== "manager") {
