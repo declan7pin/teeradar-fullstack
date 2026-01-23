@@ -3634,44 +3634,44 @@ try {
   );
 
   await db.query(
-    `
-    INSERT INTO booking_bookings (
-      course_id,
-      play_date,
-      tee_time,
-      holes,
-      players,
-      name,
-      email,
-      phone,
-      reference,
-      paid,
-      total_cents,
-      cart_fee_cents,
-      hire_clubs_fee_cents,
-      created_at,
-      updated_at
-    )
-    VALUES (
-      $1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now(), now()
-    );
-    `,
-    [
-      courseId,
-      playDate,
-      tee_time,
-      holes,
-      players,
-      name,
-      email || null,
-      phone || null,
-      reference,
-      paid,
-      totalCents,
-      cartCents,
-      hireClubsCents,
-    ]
+  `
+  INSERT INTO booking_bookings (
+    course_id,
+    play_date,
+    tee_time,
+    holes,
+    players,
+    name,
+    email,
+    phone,
+    reference,
+    paid,
+    total_cents,
+    cart_fee_cents,
+    hire_clubs_fee_cents,
+    created_at,
+    updated_at
+  )
+  VALUES (
+    $1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now(), now()
   );
+  `,
+  [
+    courseId,
+    playDate,
+    tee_time,
+    holes,
+    players,
+    name || null,
+    email || null,
+    phone || null,
+    reference,
+    paid,
+    totalCents,
+    cartCents,
+    hireClubsCents,
+  ]
+);
 } catch (e) {
   console.warn("manual booking analytics write failed (non-fatal):", e?.message || e);
 }
