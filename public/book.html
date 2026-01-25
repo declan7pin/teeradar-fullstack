@@ -431,28 +431,25 @@
     }
 // ✅ NEW: normalize slot remaining + "fits party size"
 function slotRemaining(slot) {
-  if (!slot || typeof slot !== "object") return 0;
+  if (!slot || typeof slot !== "object") return null;
 
   // 1) If backend already gives remaining under any common name, use it.
   const directRemaining =
-  slot.remaining ??
-  slot.remaining_players ??
-  slot.remainingPlayers ??
-  slot.playersRemaining ??
-  slot.players_remaining ??
-  slot.spotsRemaining ??
-  slot.spots_remaining ??
-  slot.available ??
-  slot.avail ??
-  slot.openings ??
-  slot.spotsAvailable ??
-  slot.spots_available ??
-  slot.playersAvailable ??
-  slot.players_available;
+    slot.remaining ??
+    slot.remaining_players ??
+    slot.remainingPlayers ??
+    slot.playersRemaining ??
+    slot.players_remaining ??
+    slot.spotsRemaining ??
+    slot.spots_remaining ??
+    slot.spotsAvailable ??
+    slot.spots_available ??
+    slot.playersAvailable ??
+    slot.players_available;
 
   if (directRemaining !== undefined && directRemaining !== null) {
     const r = Number(directRemaining);
-    return Number.isFinite(r) ? r : 0;
+    return Number.isFinite(r) ? r : null;
   }
 
   // 2) If backend gives a "3/4" style string anywhere, parse it.
@@ -466,13 +463,12 @@ function slotRemaining(slot) {
     const m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
     if (m) {
       const rem = Number(m[1]);
-      return Number.isFinite(rem) ? rem : 0;
+      return Number.isFinite(rem) ? rem : null;
     }
   }
 
-  // 3) Otherwise compute from max - booked with lots of fallbacks
-  const maxPlayers =
-  Number(
+  // 3) Otherwise compute from max - booked ONLY if we can see max or booked fields.
+  const rawMax =
     slot.maxPlayers ??
     slot.max_players ??
     slot.max_players_per_slot ??
@@ -480,12 +476,9 @@ function slotRemaining(slot) {
     slot.capacity ??
     slot.capacity_players ??
     slot.playersMax ??
-    slot.max ??
-    4
-  );
+    slot.max;
 
-  const bookedPlayers =
-  Number(
+  const rawBooked =
     slot.bookedPlayers ??
     slot.booked_players ??
     slot.booked ??
@@ -493,19 +486,29 @@ function slotRemaining(slot) {
     slot.taken ??
     slot.playersBooked ??
     slot.players_booked ??
-    slot.bookedCount ??
-    0
-  );
+    slot.bookedCount;
 
-  const maxP = Number.isFinite(maxPlayers) ? maxPlayers : 4;
+  // If neither max nor booked exists, we cannot infer remaining.
+  if (rawMax === undefined && rawBooked === undefined) return null;
+
+  const maxPlayers = Number(rawMax);
+  const bookedPlayers = Number(rawBooked);
+
+  // If max is missing or invalid, we cannot compute remaining.
+  if (!Number.isFinite(maxPlayers) || maxPlayers <= 0) return null;
+
   const bookedP = Number.isFinite(bookedPlayers) ? bookedPlayers : 0;
-
-  return Math.max(0, maxP - bookedP);
+  return Math.max(0, maxPlayers - bookedP);
 }
 
 function slotFitsParty(slot, partySize) {
   const want = Math.max(1, Number(partySize || 1));
-  return slotRemaining(slot) >= want;
+  const rem = slotRemaining(slot);
+
+  // ✅ If we don't KNOW remaining, do NOT claim it fits.
+  if (rem === null) return false;
+
+  return rem >= want;
 }
     // analytics helper (used for searches + booking clicks)
     function trackEvent(type, payload) {
