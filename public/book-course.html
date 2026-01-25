@@ -615,6 +615,46 @@ if (qtySel) {
   const dd = String(today.getDate()).padStart(2,"0");
   $("date").value = `${yyyy}-${mm}-${dd}`;
 
+// ✅ NEW: read query params sent from /book.html and prefill the form
+(function applyQueryParamsToForm(){
+  try {
+    const q = new URLSearchParams(location.search);
+
+    // Accept BOTH naming styles (because /book.html sends both)
+    const qpDate = q.get("date") || "";
+    const qpPlayers = q.get("players") || q.get("partySize") || "";
+    const qpHoles = q.get("holes") || "";
+    const qpStart = q.get("earliest") || q.get("timeFrom") || q.get("start") || "";
+    const qpEnd = q.get("latest") || q.get("timeTo") || q.get("end") || "";
+
+    // date (YYYY-MM-DD)
+    if (qpDate && /^\d{4}-\d{2}-\d{2}$/.test(qpDate)) {
+      $("date").value = qpDate;
+    }
+
+    // players (1..4)
+    const p = Number(qpPlayers);
+    if (Number.isFinite(p) && p >= 1 && p <= 4) {
+      $("players").value = String(p);
+    }
+
+    // holes (9 or 18)
+    const h = Number(qpHoles);
+    if (h === 9 || h === 18) {
+      $("holes").value = String(h);
+    }
+
+    // times (HH:MM)
+    if (qpStart && /^\d{2}:\d{2}$/.test(qpStart)) {
+      $("start").value = qpStart;
+    }
+    if (qpEnd && /^\d{2}:\d{2}$/.test(qpEnd)) {
+      $("end").value = qpEnd;
+    }
+  } catch (e) {
+    // silent fail
+  }
+})();
   // Load course info (if it exists in DB)
   async function loadCourse() {
     try {
@@ -976,14 +1016,30 @@ hireClubsQty: clubsQtySelected,
   $("findBtn").onclick = fetchAvailability;
 
   $("resetBtn").onclick = () => {
-    $("players").value = "2";
-    $("holes").value = "18";
-    $("start").value = "06:00";
-    $("end").value = "17:00";
-    setStatus("");
-    setHint("");
-    renderTimes([]);
-  };
+  // reset back to whatever the URL intended (or fall back defaults)
+  const q = new URLSearchParams(location.search);
+
+  const qpPlayers = q.get("players") || q.get("partySize") || "2";
+  const qpHoles = q.get("holes") || "18";
+  const qpStart = q.get("earliest") || q.get("timeFrom") || "06:00";
+  const qpEnd = q.get("latest") || q.get("timeTo") || "17:00";
+  const qpDate = q.get("date") || "";
+
+  if (qpDate && /^\d{4}-\d{2}-\d{2}$/.test(qpDate)) $("date").value = qpDate;
+
+  const p = Number(qpPlayers);
+  $("players").value = (p >= 1 && p <= 4) ? String(p) : "2";
+
+  const h = Number(qpHoles);
+  $("holes").value = (h === 9 || h === 18) ? String(h) : "18";
+
+  $("start").value = /^\d{2}:\d{2}$/.test(qpStart) ? qpStart : "06:00";
+  $("end").value = /^\d{2}:\d{2}$/.test(qpEnd) ? qpEnd : "17:00";
+
+  setStatus("");
+  setHint("");
+  renderTimes([]);
+};
 
   $("confirmBtn").onclick = confirmBooking;
 
