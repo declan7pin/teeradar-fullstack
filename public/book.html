@@ -1015,17 +1015,17 @@ const isChronogolf = providerLower === "chronogolf";
         }
 
         const providerLabel =
-          provider === "MiClub"
-            ? "MiClub • live check"
-            : provider === "Quick18"
-            ? "Quick18 • live check"
-            : provider === "TeeItUp"
-            ? "TeeItUp"
-            : provider === "Chronogolf"
-            ? "Chronogolf"
-            : provider === "Phone"
-            ? "Phone booking"
-            : provider;
+  providerLower === "miclub"
+    ? "MiClub • live check"
+    : providerLower === "quick18"
+    ? "Quick18 • live check"
+    : providerLower === "teeitup"
+    ? "TeeItUp"
+    : providerLower === "chronogolf"
+    ? "Chronogolf"
+    : providerLower === "phone"
+    ? "Phone booking"
+    : provider;
 
         const phoneText = isPhone && course.phone ? course.phone : "";
         const phoneHref = isPhone && course.phone ? getTelHref(course.phone) : "";
@@ -1162,7 +1162,7 @@ if (providerLower === "teeradarbooking") {
 
   let baseUrl = "";
 
-  if (provider === "TeeItUp" && course.url) {
+  if (providerLower === "teeitup" && course.url) {
     try {
       const u = new URL(course.url);
       if (searchDate) u.searchParams.set("date", searchDate);
@@ -1192,12 +1192,12 @@ if (providerLower === "teeradarbooking") {
   try {
     const u = new URL(finalUrl);
 
-    if (provider === "MiClub") {
+    if (providerLower === "miclub") {
       if (searchDate) u.searchParams.set("selectedDate", searchDate);
       u.searchParams.delete("recaptchaResponse");
       u.searchParams.delete("mobile");
       finalUrl = u.toString();
-    } else if (provider === "Quick18") {
+    } else if (providerLower === "quick18") {
       if (searchDate) {
         const yyyymmdd = searchDate.replace(/-/g, "");
         u.searchParams.set("teedate", yyyymmdd);
