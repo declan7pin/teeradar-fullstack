@@ -1044,10 +1044,25 @@ hireClubsQty: clubsQtySelected,
   $("confirmBtn").onclick = confirmBooking;
 
   (async () => {
-    await loadCourse();
-    await loadAddons();
-    renderTimes([]);
-  })();
+  await loadCourse();
+  await loadAddons();
+  renderTimes([]);
+
+  // ✅ NEW (optional): auto-run search if we arrived with query params
+  try {
+    const q = new URLSearchParams(location.search);
+    const hasPrefill =
+      q.get("date") ||
+      q.get("players") || q.get("partySize") ||
+      q.get("earliest") || q.get("timeFrom") ||
+      q.get("latest") || q.get("timeTo") ||
+      q.get("holes");
+
+    if (hasPrefill) {
+      await fetchAvailability();
+    }
+  } catch (e) {}
+})();
 </script>
 </body>
 </html>
