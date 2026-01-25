@@ -886,6 +886,21 @@ init();
           if (!groupedSlots[name]) groupedSlots[name] = [];
           groupedSlots[name].push(s);
         });
+        // ✅ FILTER groupedSlots to ONLY slots that fit selected party size
+const want = Number(players) || 1;
+
+Object.keys(groupedSlots).forEach((courseName) => {
+  const list = groupedSlots[courseName] || [];
+
+  // keep only slots that fit party size
+  const fitOnly = list.filter((s) => slotFitsParty(s, want));
+
+  if (fitOnly.length) {
+    groupedSlots[courseName] = fitOnly;
+  } else {
+    delete groupedSlots[courseName]; // remove courses with zero fitting slots
+  }
+});
 
         // 🔹 NEW: log one search_course event per course with slots
         Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
