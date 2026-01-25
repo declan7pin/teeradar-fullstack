@@ -424,92 +424,132 @@
     const statusLine = document.getElementById("status-line");
     const coursesStrip = document.getElementById("courses-strip");
 
+    // ✅ DEBUG: show JS errors on-screen (mobile-friendly)
+    window.addEventListener("error", (e) => {
+      try {
+        console.error("JS error:", e.error || e.message);
+        if (statusLine) {
+          statusLine.textContent = "JS error: " + (e.message || "unknown");
+          statusLine.style.color = "#b03030";
+        }
+      } catch (_) {}
+    });
+
+    window.addEventListener("unhandledrejection", (e) => {
+      try {
+        console.error("Promise error:", e.reason);
+        if (statusLine) {
+          statusLine.textContent = "Promise error: " + (e.reason?.message || String(e.reason));
+          statusLine.style.color = "#b03030";
+        }
+      } catch (_) {}
+    });
+
     // ✅ NEW: coerce string/number -> number (or null)
     function toNum(v) {
       const n = Number(v);
       return Number.isFinite(n) ? n : null;
     }
-// ✅ NEW: normalize slot remaining + "fits party size"
-function slotRemaining(slot) {
-  if (!slot || typeof slot !== "object") return 0;
 
-  // helper
-  const num = (v) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  };
+    // ✅ FIXED: normalize slot remaining (return null if unknown — no guessing)
+    function slotRemaining(slot) {
+      if (!slot || typeof slot !== "object") return null;
 
-  // 1) If backend already gives remaining explicitly, trust it
-  const directRemaining =
-    slot.remaining ??
-    slot.remainingPlayers ??
-    slot.playersRemaining ??
-    slot.spotsRemaining ??
-    slot.openings ??
-    slot.spotsAvailable ??
-    slot.playersAvailable;
+      const num = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
 
-  const dr = num(directRemaining);
-  if (dr !== null) return Math.max(0, dr);
+      // 1) explicit remaining
+      const directRemaining =
+        slot.remaining ??
+        slot.remainingPlayers ??
+        slot.playersRemaining ??
+        slot.spotsRemaining ??
+        slot.openings ??
+        slot.spotsAvailable ??
+        slot.playersAvailable;
 
-  // 2) If backend gives a "3/4" style string anywhere, treat it as BOOKED/TOTAL
-  // (because your UI shows "3/4" meaning 3 booked out of 4)
-  const ratioText =
-    slot.ratio ??
-    slot.bookedRatio ??
-    slot.spotsText ??
-    slot.availability ??
-    slot.capacityText ??
-    slot.playersText ??
-    slot.display ??
-    slot.label;
+      const dr = num(directRemaining);
+      if (dr !== null) return Math.max(0, dr);
 
-  if (typeof ratioText === "string") {
-    const m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
-    if (m) {
-      const a = num(m[1]); // usually booked
-      const b = num(m[2]); // total
-      if (a !== null && b !== null && b > 0) {
-        // interpret as booked/total
-        return Math.max(0, b - a);
+      // 2) booked/total string like "3/4"
+      const ratioText =
+        slot.ratio ??
+        slot.bookedRatio ??
+        slot.spotsText ??
+        slot.availability ??
+        slot.capacityText ??
+        slot.playersText ??
+        slot.display ??
+        slot.label;
+
+      if (typeof ratioText === "string") {
+        const m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
+        if (m) {
+          const booked = num(m[1]);
+          const total = num(m[2]);
+          if (booked !== null && total !== null && total > 0) {
+            return Math.max(0, total - booked);
+          }
+        }
       }
+
+      // 3) only compute max-booked if slot actually provides those fields
+      const hasMax =
+        slot.maxPlayers !== undefined ||
+        slot.max_players !== undefined ||
+        slot.capacity !== undefined ||
+        slot.max !== undefined ||
+        slot.playersMax !== undefined ||
+        slot.max_players_per_slot !== undefined ||
+        slot.maxPlayersPerSlot !== undefined;
+
+      const hasBooked =
+        slot.bookedPlayers !== undefined ||
+        slot.booked_players !== undefined ||
+        slot.booked !== undefined ||
+        slot.taken !== undefined ||
+        slot.playersBooked !== undefined ||
+        slot.bookedCount !== undefined;
+
+      // ✅ if we don't have evidence, we don't know
+      if (!hasMax && !hasBooked) return null;
+
+      const maxPlayers =
+        num(
+          slot.maxPlayers ??
+          slot.max_players ??
+          slot.capacity ??
+          slot.max ??
+          slot.playersMax ??
+          slot.max_players_per_slot ??
+          slot.maxPlayersPerSlot
+        ) ?? 4;
+
+      const bookedPlayers =
+        num(
+          slot.bookedPlayers ??
+          slot.booked_players ??
+          slot.booked ??
+          slot.taken ??
+          slot.playersBooked ??
+          slot.bookedCount
+        ) ?? 0;
+
+      return Math.max(0, maxPlayers - bookedPlayers);
     }
-  }
 
-  // 3) Otherwise compute from max - booked with lots of fallbacks
-  const maxPlayers =
-    num(
-      slot.maxPlayers ??
-      slot.max_players ??
-      slot.capacity ??
-      slot.max ??
-      slot.playersMax ??
-      slot.max_players_per_slot ??
-      slot.maxPlayersPerSlot
-    ) ?? 4;
+    function slotFitsParty(slot, partySize) {
+      const want = Math.max(1, Number(partySize || 1));
+      const rem = slotRemaining(slot);
 
-  const bookedPlayers =
-    num(
-      slot.bookedPlayers ??
-      slot.booked_players ??
-      slot.booked ??
-      slot.taken ??
-      slot.playersBooked ??
-      slot.bookedCount
-    ) ?? 0;
+      // ✅ If we don't KNOW remaining, do NOT claim it fits.
+      if (rem === null) return false;
 
-  return Math.max(0, maxPlayers - bookedPlayers);
-}
+      return rem >= want;
+    }
 
-function slotFitsParty(slot, partySize) {
-  const want = Math.max(1, Number(partySize || 1));
-  const rem = slotRemaining(slot);
-
-  // ✅ If we don't KNOW remaining, do NOT claim it fits.
-  if (rem === null) return false;
-
-  return rem >= want;
-}
     // analytics helper (used for searches + booking clicks)
     function trackEvent(type, payload) {
       try {
@@ -562,44 +602,44 @@ function slotFitsParty(slot, partySize) {
 
     // ✅ NEW: pull home state from backend and hydrate localStorage.tr_user
     async function hydrateUserFromServer() {
-  try {
-    const email = getLoggedInEmail();
-    if (!email) return;
+      try {
+        const email = getLoggedInEmail();
+        if (!email) return;
 
-    const res = await fetch(`/api/me?email=${encodeURIComponent(email)}`);
-    if (!res.ok) return;
+        const res = await fetch(`/api/me?email=${encodeURIComponent(email)}`);
+        if (!res.ok) return;
 
-    const me = await res.json();
+        const me = await res.json();
 
-    let obj = { email };
-    try {
-      const raw = localStorage.getItem("tr_user");
-      if (raw) obj = { ...obj, ...JSON.parse(raw) };
-    } catch (e) {}
+        let obj = { email };
+        try {
+          const raw = localStorage.getItem("tr_user");
+          if (raw) obj = { ...obj, ...JSON.parse(raw) };
+        } catch (e) {}
 
-    obj.email = (me.email || obj.email || email || "").toString().trim().toLowerCase();
-    if (me.homeCourse) obj.homeCourse = me.homeCourse;
-    if (me.homeCourseId) obj.homeCourseId = me.homeCourseId;
-    if (me.homeCourseState) obj.homeCourseState = me.homeCourseState;
+        obj.email = (me.email || obj.email || email || "").toString().trim().toLowerCase();
+        if (me.homeCourse) obj.homeCourse = me.homeCourse;
+        if (me.homeCourseId) obj.homeCourseId = me.homeCourseId;
+        if (me.homeCourseState) obj.homeCourseState = me.homeCourseState;
 
-    localStorage.setItem("tr_user", JSON.stringify(obj));
-  } catch (err) {
-    console.warn("hydrateUserFromServer error", err);
-  }
-}
+        localStorage.setItem("tr_user", JSON.stringify(obj));
+      } catch (err) {
+        console.warn("hydrateUserFromServer error", err);
+      }
+    }
 
-// ✅ set default date BEFORE init() runs
-(function setDefaultDate() {
-  const input = document.getElementById("date");
-  if (!input) return;
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const dd = String(today.getDate()).padStart(2, "0");
-  input.value = `${yyyy}-${mm}-${dd}`;
-})();
+    // ✅ set default date BEFORE init() runs
+    (function setDefaultDate() {
+      const input = document.getElementById("date");
+      if (!input) return;
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      input.value = `${yyyy}-${mm}-${dd}`;
+    })();
 
-init();
+    init();
 
     async function init() {
       initMap();
@@ -644,29 +684,18 @@ init();
         if (raw) {
           return JSON.parse(raw);
         }
-      } catch (e) {
-        // ignore parse errors and fall back
-      }
+      } catch (e) {}
 
       // Fallback: older storage where we only saved "teeradar_home_course"
       const legacyHomeRaw = localStorage.getItem("teeradar_home_course");
       if (!legacyHomeRaw) return null;
 
-      // Normalise course names so "Darwin Golf Club (18 holes weekday) (NT)"
-      // will still match the actual course name.
       function cleanName(str) {
         if (!str) return "";
         let s = String(str).toLowerCase();
-
-        // remove explicit state like "(nt)" or "(wa)"
         s = s.replace(/\(\s*(wa|nt|qld|nsw|vic|sa|tas|act)\s*\)/gi, "");
-
-        // drop anything from first "(" onwards
         const idx = s.indexOf("(");
-        if (idx >= 0) {
-          s = s.slice(0, idx);
-        }
-
+        if (idx >= 0) s = s.slice(0, idx);
         return s.trim();
       }
 
@@ -680,19 +709,12 @@ init();
         });
       }
 
-      // Try to infer state from the string, e.g. "(NT)"
       let inferredState = null;
       const stateMatch = legacyHomeRaw.match(/\b(WA|NT|QLD|NSW|VIC|SA|TAS|ACT)\b/i);
-      if (stateMatch) {
-        inferredState = stateMatch[1].toUpperCase();
-      }
+      if (stateMatch) inferredState = stateMatch[1].toUpperCase();
 
       if (!match) {
-        return {
-          homeCourse: legacyHomeRaw,
-          homeCourseId: null,
-          homeCourseState: inferredState
-        };
+        return { homeCourse: legacyHomeRaw, homeCourseId: null, homeCourseState: inferredState };
       }
 
       return {
@@ -703,9 +725,7 @@ init();
     }
 
     function applyHomeCourseDefaults() {
-      if (!map || !Array.isArray(allCourses) || allCourses.length === 0) {
-        return;
-      }
+      if (!map || !Array.isArray(allCourses) || allCourses.length === 0) return;
 
       const user = getStoredUser();
 
@@ -721,7 +741,6 @@ init();
         return;
       }
 
-      // helper to clean names, same logic as above
       function cleanName(str) {
         if (!str) return "";
         let s = String(str).toLowerCase();
@@ -740,28 +759,20 @@ init();
           const cname = cleanName(c.name || "");
           if (!cname) continue;
           if (cname === target) return c;
-          if (!best && (cname.includes(target) || target.includes(cname))) {
-            best = c;
-          }
+          if (!best && (cname.includes(target) || target.includes(cname))) best = c;
         }
         return best;
       }
 
-      // Use the user's homeCourseState if it's one of the active states
       if (user.homeCourseState && ACTIVE_STATES.includes(user.homeCourseState)) {
         selectedState = user.homeCourseState;
       }
 
       applyStateFilter();
 
-      // Prefer homeCourseId, fall back to fuzzy match by name
       let homeCourse = null;
-      if (user.homeCourseId) {
-        homeCourse = allCourses.find((c) => c.id === user.homeCourseId);
-      }
-      if (!homeCourse && user.homeCourse) {
-        homeCourse = findCourseFromHome(user.homeCourse);
-      }
+      if (user.homeCourseId) homeCourse = allCourses.find((c) => c.id === user.homeCourseId);
+      if (!homeCourse && user.homeCourse) homeCourse = findCourseFromHome(user.homeCourse);
 
       const hLat = homeCourse ? toNum(homeCourse.lat) : null;
       const hLng = homeCourse ? toNum(homeCourse.lng) : null;
@@ -780,9 +791,7 @@ init();
       }
 
       const labelEl = document.getElementById("stateSelectorLabel");
-      if (labelEl) {
-        labelEl.textContent = `State: ${selectedState}`;
-      }
+      if (labelEl) labelEl.textContent = `State: ${selectedState}`;
     }
 
     // ---- state helpers ----
@@ -814,7 +823,6 @@ init();
       }
     }
 
-    // 🔹 Zoom map to all courses in the current state
     function zoomToStateCourses() {
       if (!map || !Array.isArray(courses) || courses.length === 0) return;
 
@@ -833,7 +841,6 @@ init();
       map.fitBounds(bounds, { padding: [40, 40] });
     }
 
-    // ---- date helper: is the search date a weekend? ----
     function isWeekendDateStr(dateStr) {
       if (!dateStr) return false;
       const d = new Date(dateStr);
@@ -880,33 +887,18 @@ init();
         console.log("SEARCH slots sample:", slots[0]);
 
         groupedSlots = {};
-const want = Number(players) || 1;
+        const want = Number(players) || 1;
 
-slots.forEach((s) => {
-  // ✅ ONLY group slots that fit the selected party size
-  if (!slotFitsParty(s, want)) return;
+        // ✅ group ONLY slots that fit party size (no duplicate const want)
+        slots.forEach((s) => {
+          if (!slotFitsParty(s, want)) return;
 
-  const name = s.course || s.courseName || s.courseTitle || s.course_name;
-  if (!name) return;
+          const name = s.course || s.courseName || s.courseTitle || s.course_name;
+          if (!name) return;
 
-  if (!groupedSlots[name]) groupedSlots[name] = [];
-  groupedSlots[name].push(s);
-});
-        // ✅ FILTER groupedSlots to ONLY slots that fit selected party size
-const want = Number(players) || 1;
-
-Object.keys(groupedSlots).forEach((courseName) => {
-  const list = groupedSlots[courseName] || [];
-
-  // keep only slots that fit party size
-  const fitOnly = list.filter((s) => slotFitsParty(s, want));
-
-  if (fitOnly.length) {
-    groupedSlots[courseName] = fitOnly;
-  } else {
-    delete groupedSlots[courseName]; // remove courses with zero fitting slots
-  }
-});
+          if (!groupedSlots[name]) groupedSlots[name] = [];
+          groupedSlots[name].push(s);
+        });
 
         // 🔹 NEW: log one search_course event per course with slots
         Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
@@ -953,14 +945,11 @@ Object.keys(groupedSlots).forEach((courseName) => {
             return;
           }
 
-          // ✅ ONLY count slots that fit the selected party size
-const want = Number(players) || 1;
-const fitSlots = (cSlots || []).filter(s => slotFitsParty(s, want));
-
-if (fitSlots.length > 0) {
-  availableCourses++;
-  totalSlots += fitSlots.length;
-}
+          const fitSlots = Array.isArray(cSlots) ? cSlots : [];
+          if (fitSlots.length > 0) {
+            availableCourses++;
+            totalSlots += fitSlots.length;
+          }
         });
 
         if (totalSlots === 0) {
@@ -1011,22 +1000,18 @@ if (fitSlots.length > 0) {
       courses.forEach((course) => {
         const name = course.name || "";
         const provider = String(course.provider || "Other").trim();
-const providerLower = provider.toLowerCase();
-const isPhone = providerLower === "phone";
+        const providerLower = provider.toLowerCase();
+        const isPhone = providerLower === "phone";
         const isTeeItUp = providerLower === "teeitup";
-const isChronogolf = providerLower === "chronogolf";
+        const isChronogolf = providerLower === "chronogolf";
         const isClickThroughOnly = isTeeItUp || isChronogolf;
 
         if (searchDate) {
           const hasWeekendWord = /weekend/i.test(name);
           const hasWeekdayWord = /weekday/i.test(name);
 
-          if (hasWeekendWord && dateIsWeekend === false) {
-            return;
-          }
-          if (hasWeekdayWord && dateIsWeekend === true) {
-            return;
-          }
+          if (hasWeekendWord && dateIsWeekend === false) return;
+          if (hasWeekdayWord && dateIsWeekend === true) return;
         }
 
         const isUnconfirmed =
@@ -1046,22 +1031,14 @@ const isChronogolf = providerLower === "chronogolf";
 
         const slots = groupedSlots[name] || [];
 
-// ✅ ONLY treat as available if at least one slot fits party size
-const want = Number(
-  (lastSearchCriteria && lastSearchCriteria.partySize) ||
-  document.getElementById("players").value ||
-  1
-);
+        const want = Number(
+          (lastSearchCriteria && lastSearchCriteria.partySize) ||
+          document.getElementById("players").value ||
+          1
+        );
 
-const fitSlots = (slots || []).filter(s => slotFitsParty(s, want));
-if (slots && slots.length) {
-  console.log("DEBUG slots:", name, {
-    want,
-    firstSlot: slots[0],
-    remainingComputed: slotRemaining(slots[0])
-  });
-}
-const hasSlots = fitSlots.length > 0;
+        const fitSlots = (Array.isArray(slots) ? slots : []).filter(s => slotFitsParty(s, want));
+        const hasSlots = fitSlots.length > 0;
 
         let markerKind = "unavailable";
         if (isPhone) {
@@ -1140,17 +1117,17 @@ const hasSlots = fitSlots.length > 0;
         }
 
         const providerLabel =
-  providerLower === "miclub"
-    ? "MiClub • live check"
-    : providerLower === "quick18"
-    ? "Quick18 • live check"
-    : providerLower === "teeitup"
-    ? "TeeItUp"
-    : providerLower === "chronogolf"
-    ? "Chronogolf"
-    : providerLower === "phone"
-    ? "Phone booking"
-    : provider;
+          providerLower === "miclub"
+            ? "MiClub • live check"
+            : providerLower === "quick18"
+            ? "Quick18 • live check"
+            : providerLower === "teeitup"
+            ? "TeeItUp"
+            : providerLower === "chronogolf"
+            ? "Chronogolf"
+            : providerLower === "phone"
+            ? "Phone booking"
+            : provider;
 
         const phoneText = isPhone && course.phone ? course.phone : "";
         const phoneHref = isPhone && course.phone ? getTelHref(course.phone) : "";
@@ -1170,7 +1147,7 @@ const hasSlots = fitSlots.length > 0;
               isClickThroughOnly || isUnconfirmed
                 ? "Check course site"
                 : hasSlots
-? fitSlots.length + " slots"
+                ? fitSlots.length + " slots"
                 : isPhone
                 ? (phoneHref ? `<a href="${phoneHref}">${phoneText}</a>` : phoneText)
                 : ""
@@ -1197,153 +1174,146 @@ const hasSlots = fitSlots.length > 0;
       });
     }
 
-  // Handle clicks on "Go to booking" (cards + map popups)
-document.addEventListener("click", (evt) => {
-  const el = evt.target.closest(".booking-link");
-  if (!el) return;
+    // Handle clicks on "Go to booking" (cards + map popups)
+    document.addEventListener("click", (evt) => {
+      const el = evt.target.closest(".booking-link");
+      if (!el) return;
 
-  const disabled = el.getAttribute("aria-disabled") === "true";
-  if (disabled) return;
+      const disabled = el.getAttribute("aria-disabled") === "true";
+      if (disabled) return;
 
-  const courseNameEncoded = el.dataset.courseName;
-  if (!courseNameEncoded) return;
+      const courseNameEncoded = el.dataset.courseName;
+      if (!courseNameEncoded) return;
 
-  const courseName = decodeURIComponent(courseNameEncoded);
-  const course = courses.find((c) => c.name === courseName);
-  if (!course) return;
+      const courseName = decodeURIComponent(courseNameEncoded);
+      const course = courses.find((c) => c.name === courseName);
+      if (!course) return;
 
-  const provider = String(course.provider || "Other").trim();
-const providerLower = provider.toLowerCase();
+      const provider = String(course.provider || "Other").trim();
+      const providerLower = provider.toLowerCase();
 
-// ✅ TeeRadarBooking
-if (providerLower === "teeradarbooking") {
-    let slug = (course.slug || course.bookingSlug || course.courseSlug || "").toString().trim();
+      // ✅ TeeRadarBooking
+      if (providerLower === "teeradarbooking") {
+        let slug = (course.slug || course.bookingSlug || course.courseSlug || "").toString().trim();
 
-    // Fallback: generate slug from name if not provided
-    if (!slug) {
-      slug = String(courseName)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-    }
+        if (!slug) {
+          slug = String(courseName)
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "");
+        }
 
-    // Pull CURRENT filters (prefer lastSearchCriteria, else current inputs)
-    const date =
-      (lastSearchCriteria && lastSearchCriteria.date) ||
-      (document.getElementById("date") && document.getElementById("date").value) ||
-      "";
+        const date =
+          (lastSearchCriteria && lastSearchCriteria.date) ||
+          (document.getElementById("date") && document.getElementById("date").value) ||
+          "";
 
-    const players =
-      (lastSearchCriteria && lastSearchCriteria.partySize) ||
-      Number((document.getElementById("players") && document.getElementById("players").value) || 1);
+        const players =
+          (lastSearchCriteria && lastSearchCriteria.partySize) ||
+          Number((document.getElementById("players") && document.getElementById("players").value) || 1);
 
-    const holes =
-      (lastSearchCriteria && lastSearchCriteria.holes) ||
-      ((document.getElementById("holes") && document.getElementById("holes").value) || "");
+        const holes =
+          (lastSearchCriteria && lastSearchCriteria.holes) ||
+          ((document.getElementById("holes") && document.getElementById("holes").value) || "");
 
-    const earliest =
-      (lastSearchCriteria && lastSearchCriteria.earliest) ||
-      ((document.getElementById("earliest") && document.getElementById("earliest").value) || "06:00");
+        const earliest =
+          (lastSearchCriteria && lastSearchCriteria.earliest) ||
+          ((document.getElementById("earliest") && document.getElementById("earliest").value) || "06:00");
 
-    const latest =
-      (lastSearchCriteria && lastSearchCriteria.latest) ||
-      ((document.getElementById("latest") && document.getElementById("latest").value) || "17:00");
+        const latest =
+          (lastSearchCriteria && lastSearchCriteria.latest) ||
+          ((document.getElementById("latest") && document.getElementById("latest").value) || "17:00");
 
-    const u = new URL(window.location.origin + "/book/" + encodeURIComponent(slug));
+        const u = new URL(window.location.origin + "/book/" + encodeURIComponent(slug));
 
-    if (date) u.searchParams.set("date", date);
+        if (date) u.searchParams.set("date", date);
 
-    // IMPORTANT: send BOTH names (booking page might expect either)
-    u.searchParams.set("players", String(players));
-    u.searchParams.set("partySize", String(players));
+        u.searchParams.set("players", String(players));
+        u.searchParams.set("partySize", String(players));
 
-    if (holes) u.searchParams.set("holes", String(holes));
+        if (holes) u.searchParams.set("holes", String(holes));
 
-    // time window (send both naming styles)
-    u.searchParams.set("earliest", earliest);
-    u.searchParams.set("latest", latest);
-    u.searchParams.set("timeFrom", earliest);
-    u.searchParams.set("timeTo", latest);
+        u.searchParams.set("earliest", earliest);
+        u.searchParams.set("latest", latest);
+        u.searchParams.set("timeFrom", earliest);
+        u.searchParams.set("timeTo", latest);
 
-    const finalUrl = u.toString();
+        const finalUrl = u.toString();
 
-    trackEvent("course_booking_click", {
-      courseName,
-      provider,
-      url: finalUrl,
-      state: course.state || null,
-    });
+        trackEvent("course_booking_click", {
+          courseName,
+          provider,
+          url: finalUrl,
+          state: course.state || null,
+        });
 
-    window.open(finalUrl, "_blank");
-    return;
-  }
-
-  // Default providers (MiClub / Quick18 / TeeItUp / Chronogolf)
-  const slots = groupedSlots[courseName] || [];
-  const exampleSlot = slots[0] || {};
-  const searchDate =
-    (lastSearchCriteria && lastSearchCriteria.date) ||
-    window.teeRadarLastSearchDate;
-
-  let baseUrl = "";
-
-  if (providerLower === "teeitup" && course.url) {
-    try {
-      const u = new URL(course.url);
-      if (searchDate) u.searchParams.set("date", searchDate);
-      baseUrl = u.toString();
-    } catch (e) {
-      baseUrl = course.url;
-    }
-  } else {
-    baseUrl =
-      exampleSlot.bookUrl ||
-      exampleSlot.bookingUrl ||
-      exampleSlot.url ||
-      course.bookUrl ||
-      course.url ||
-      "";
-  }
-
-  if (!baseUrl) return;
-
-  let finalUrl = baseUrl;
-
-  // If backend returns relative URLs, make absolute
-  if (finalUrl.startsWith("/")) {
-    finalUrl = window.location.origin + finalUrl;
-  }
-
-  try {
-    const u = new URL(finalUrl);
-
-    if (providerLower === "miclub") {
-      if (searchDate) u.searchParams.set("selectedDate", searchDate);
-      u.searchParams.delete("recaptchaResponse");
-      u.searchParams.delete("mobile");
-      finalUrl = u.toString();
-    } else if (providerLower === "quick18") {
-      if (searchDate) {
-        const yyyymmdd = searchDate.replace(/-/g, "");
-        u.searchParams.set("teedate", yyyymmdd);
+        window.open(finalUrl, "_blank");
+        return;
       }
-      finalUrl = u.toString();
-    }
-  } catch (err) {
-    console.error("Error building booking URL:", err);
-  }
 
-  trackEvent("course_booking_click", {
-    courseName,
-    provider,
-    url: finalUrl,
-    state: course.state || null,
-  });
+      // Default providers
+      const slots = groupedSlots[courseName] || [];
+      const exampleSlot = slots[0] || {};
+      const searchDate =
+        (lastSearchCriteria && lastSearchCriteria.date) ||
+        window.teeRadarLastSearchDate;
 
-  window.open(finalUrl, "_blank");
-});
+      let baseUrl = "";
 
-    
+      if (providerLower === "teeitup" && course.url) {
+        try {
+          const u = new URL(course.url);
+          if (searchDate) u.searchParams.set("date", searchDate);
+          baseUrl = u.toString();
+        } catch (e) {
+          baseUrl = course.url;
+        }
+      } else {
+        baseUrl =
+          exampleSlot.bookUrl ||
+          exampleSlot.bookingUrl ||
+          exampleSlot.url ||
+          course.bookUrl ||
+          course.url ||
+          "";
+      }
+
+      if (!baseUrl) return;
+
+      let finalUrl = baseUrl;
+
+      if (finalUrl.startsWith("/")) {
+        finalUrl = window.location.origin + finalUrl;
+      }
+
+      try {
+        const u = new URL(finalUrl);
+
+        if (providerLower === "miclub") {
+          if (searchDate) u.searchParams.set("selectedDate", searchDate);
+          u.searchParams.delete("recaptchaResponse");
+          u.searchParams.delete("mobile");
+          finalUrl = u.toString();
+        } else if (providerLower === "quick18") {
+          if (searchDate) {
+            const yyyymmdd = searchDate.replace(/-/g, "");
+            u.searchParams.set("teedate", yyyymmdd);
+          }
+          finalUrl = u.toString();
+        }
+      } catch (err) {
+        console.error("Error building booking URL:", err);
+      }
+
+      trackEvent("course_booking_click", {
+        courseName,
+        provider,
+        url: finalUrl,
+        state: course.state || null,
+      });
+
+      window.open(finalUrl, "_blank");
+    });
 
     // State selector behaviour
     (function setupStateSelector() {
@@ -1353,11 +1323,9 @@ if (providerLower === "teeradarbooking") {
 
       if (!btn || !dropdown) return;
 
-      function setState(stateCode, stateLabel) {
+      function setState(stateCode) {
         selectedState = stateCode;
-        if (label) {
-          label.textContent = `State: ${stateCode}`;
-        }
+        if (label) label.textContent = `State: ${stateCode}`;
 
         const prettyName = getPrettyStateName(stateCode);
 
@@ -1379,8 +1347,7 @@ if (providerLower === "teeradarbooking") {
           courses = [];
           renderCourses();
           if (statusLine) {
-            statusLine.textContent =
-              `${prettyName} is coming soon to TeeRadar.`;
+            statusLine.textContent = `${prettyName} is coming soon to TeeRadar.`;
             statusLine.style.color = "#9a3412";
           }
         }
@@ -1395,23 +1362,18 @@ if (providerLower === "teeradarbooking") {
         const option = e.target.closest(".state-option");
         if (!option) return;
         const stateCode = option.getAttribute("data-state");
-        const stateLabel = option.textContent.trim();
         dropdown.classList.remove("open");
         if (!stateCode) return;
-        setState(stateCode, stateLabel);
+        setState(stateCode);
       });
 
       document.addEventListener("click", function (e) {
         if (!dropdown.classList.contains("open")) return;
-        if (!e.target.closest(".state-selector")) {
-          dropdown.classList.remove("open");
-        }
+        if (!e.target.closest(".state-selector")) dropdown.classList.remove("open");
       });
 
       const initialState = selectedState || "WA";
-      if (label) {
-        label.textContent = `State: ${initialState}`;
-      }
+      if (label) label.textContent = `State: ${initialState}`;
     })();
   </script>
 </body>
