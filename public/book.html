@@ -1064,122 +1064,139 @@
     }
 
     // Handle clicks on "Go to booking" (cards + map popups)
-    document.addEventListener("click", (evt) => {
-      const el = evt.target.closest(".booking-link");
-      if (!el) return;
+document.addEventListener("click", (evt) => {
+  const el = evt.target.closest(".booking-link");
+  if (!el) return;
 
-      const disabled = el.getAttribute("aria-disabled") === "true";
-      if (disabled) return;
+  const disabled = el.getAttribute("aria-disabled") === "true";
+  if (disabled) return;
 
-      const courseNameEncoded = el.dataset.courseName;
-      if (!courseNameEncoded) return;
+  const courseNameEncoded = el.dataset.courseName;
+  if (!courseNameEncoded) return;
 
-      const courseName = decodeURIComponent(courseNameEncoded);
-      const course = courses.find((c) => c.name === courseName);
-      if (!course) return;
+  const courseName = decodeURIComponent(courseNameEncoded);
+  const course = courses.find((c) => c.name === courseName);
+  if (!course) return;
 
-      const provider = course.provider || "Other";
-      // ✅ TeeRadarBooking (internal booking pages like Hillview)
-if (provider === "TeeRadarBooking") {
-  let slug =
-    (course.slug || course.bookingSlug || course.courseSlug || "").toString().trim();
+  const provider = course.provider || "Other";
 
-  // Fallback: generate slug from name if not provided
-  if (!slug) {
-    slug = String(courseName)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  }
+  // ✅ TeeRadarBooking (internal booking pages like Hillview)
+  if (provider === "TeeRadarBooking") {
+    let slug = (course.slug || course.bookingSlug || course.courseSlug || "").toString().trim();
 
-  // ✅ pull current search values
-  const date =
-    (lastSearchCriteria && lastSearchCriteria.date) ||
-    document.getElementById("date")?.value ||
-    "";
+    // Fallback: generate slug from name if not provided
+    if (!slug) {
+      slug = String(courseName)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
 
-  const players =
-    (lastSearchCriteria && lastSearchCriteria.partySize) ||
-    Number(document.getElementById("players")?.value || 1);
+    // Pull CURRENT filters (prefer lastSearchCriteria, else current inputs)
+    const date =
+      (lastSearchCriteria && lastSearchCriteria.date) ||
+      (document.getElementById("date") && document.getElementById("date").value) ||
+      "";
 
-  const holes =
-    (lastSearchCriteria && lastSearchCriteria.holes) ||
-    document.getElementById("holes")?.value ||
-    "";
+    const players =
+      (lastSearchCriteria && lastSearchCriteria.partySize) ||
+      Number((document.getElementById("players") && document.getElementById("players").value) || 1);
 
-  const earliest =
-    (lastSearchCriteria && lastSearchCriteria.earliest) ||
-    document.getElementById("earliest")?.value ||
-    "06:00";
+    const holes =
+      (lastSearchCriteria && lastSearchCriteria.holes) ||
+      ((document.getElementById("holes") && document.getElementById("holes").value) || "");
 
-  const latest =
-    (lastSearchCriteria && lastSearchCriteria.latest) ||
-    document.getElementById("latest")?.value ||
-    "17:00";
+    const earliest =
+      (lastSearchCriteria && lastSearchCriteria.earliest) ||
+      ((document.getElementById("earliest") && document.getElementById("earliest").value) || "06:00");
 
-  // ✅ build booking URL with params
-  const u = new URL(window.location.origin + "/book/" + encodeURIComponent(slug));
+    const latest =
+      (lastSearchCriteria && lastSearchCriteria.latest) ||
+      ((document.getElementById("latest") && document.getElementById("latest").value) || "17:00");
 
-  if (date) u.searchParams.set("date", date);
-  if (players) {
+    const u = new URL(window.location.origin + "/book/" + encodeURIComponent(slug));
+
+    if (date) u.searchParams.set("date", date);
+
+    // IMPORTANT: send BOTH names (booking page might expect either)
     u.searchParams.set("players", String(players));
-    u.searchParams.set("partySize", String(players)); // 👈 important
+    u.searchParams.set("partySize", String(players));
+
+    if (holes) u.searchParams.set("holes", String(holes));
+
+    // time window (send both naming styles)
+    u.searchParams.set("earliest", earliest);
+    u.searchParams.set("latest", latest);
+    u.searchParams.set("timeFrom", earliest);
+    u.searchParams.set("timeTo", latest);
+
+    const finalUrl = u.toString();
+
+    trackEvent("course_booking_click", {
+      courseName,
+      provider,
+      url: finalUrl,
+      state: course.state || null,
+    });
+
+    window.open(finalUrl, "_blank");
+    return;
   }
-  if (holes) u.searchParams.set("holes", String(holes));
 
-  u.searchParams.set("earliest", earliest);
-  u.searchParams.set("latest", latest);
-  u.searchParams.set("timeFrom", earliest);
-  u.searchParams.set("timeTo", latest);
-
-  const finalUrl = u.toString();
-
-  trackEvent("course_booking_click", {
-    courseName,
-    provider,
-    url: finalUrl,
-    state: course.state || null,
-  });
-
-  window.open(finalUrl, "_blank");
-  return;
-}
-
-  // ✅ Pull the CURRENT filters (prefer lastSearchCriteria, else current inputs)
-  const date =
+  // Default providers (MiClub / Quick18 / TeeItUp / Chronogolf)
+  const slots = groupedSlots[courseName] || [];
+  const exampleSlot = slots[0] || {};
+  const searchDate =
     (lastSearchCriteria && lastSearchCriteria.date) ||
-    document.getElementById("date")?.value ||
-    "";
-  const players =
-    (lastSearchCriteria && lastSearchCriteria.partySize) ||
-    Number(document.getElementById("players")?.value || 1);
-  const holes =
-    (lastSearchCriteria && lastSearchCriteria.holes) ||
-    document.getElementById("holes")?.value ||
-    "";
-  const earliest =
-    (lastSearchCriteria && lastSearchCriteria.earliest) ||
-    document.getElementById("earliest")?.value ||
-    "06:00";
-  const latest =
-    (lastSearchCriteria && lastSearchCriteria.latest) ||
-    document.getElementById("latest")?.value ||
-    "17:00";
+    window.teeRadarLastSearchDate;
 
-  // ✅ Build URL + append query params so the booking page loads with the same criteria
-  const u = new URL(window.location.origin + "/book/" + encodeURIComponent(slug));
+  let baseUrl = "";
 
-  if (date) u.searchParams.set("date", date);
-  if (players) u.searchParams.set("players", String(players));
-  if (holes) u.searchParams.set("holes", String(holes));
+  if (provider === "TeeItUp" && course.url) {
+    try {
+      const u = new URL(course.url);
+      if (searchDate) u.searchParams.set("date", searchDate);
+      baseUrl = u.toString();
+    } catch (e) {
+      baseUrl = course.url;
+    }
+  } else {
+    baseUrl =
+      exampleSlot.bookUrl ||
+      exampleSlot.bookingUrl ||
+      exampleSlot.url ||
+      course.bookUrl ||
+      course.url ||
+      "";
+  }
 
-  // Support both naming styles (in case your booking page expects different keys)
-  u.searchParams.set("earliest", earliest);
-  u.searchParams.set("latest", latest);
-  u.searchParams.set("timeFrom", earliest);
-  u.searchParams.set("timeTo", latest);
+  if (!baseUrl) return;
 
-  const finalUrl = u.toString();
+  let finalUrl = baseUrl;
+
+  // If backend returns relative URLs, make absolute
+  if (finalUrl.startsWith("/")) {
+    finalUrl = window.location.origin + finalUrl;
+  }
+
+  try {
+    const u = new URL(finalUrl);
+
+    if (provider === "MiClub") {
+      if (searchDate) u.searchParams.set("selectedDate", searchDate);
+      u.searchParams.delete("recaptchaResponse");
+      u.searchParams.delete("mobile");
+      finalUrl = u.toString();
+    } else if (provider === "Quick18") {
+      if (searchDate) {
+        const yyyymmdd = searchDate.replace(/-/g, "");
+        u.searchParams.set("teedate", yyyymmdd);
+      }
+      finalUrl = u.toString();
+    }
+  } catch (err) {
+    console.error("Error building booking URL:", err);
+  }
 
   trackEvent("course_booking_click", {
     courseName,
@@ -1189,8 +1206,7 @@ if (provider === "TeeRadarBooking") {
   });
 
   window.open(finalUrl, "_blank");
-  return;
-}
+});
       const slots = groupedSlots[courseName] || [];
       const exampleSlot = slots[0] || {};
       const searchDate =
