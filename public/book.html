@@ -433,16 +433,46 @@
 function slotRemaining(slot) {
   if (!slot || typeof slot !== "object") return 0;
 
-  // if backend already provides remaining, trust it
-  if (slot.remaining !== undefined && slot.remaining !== null) {
-    const r = Number(slot.remaining);
+  // 1) If backend already gives remaining under any common name, use it.
+  const directRemaining =
+    slot.remaining ??
+    slot.remainingPlayers ??
+    slot.playersRemaining ??
+    slot.spotsRemaining ??
+    slot.available ??
+    slot.avail ??
+    slot.openings ??
+    slot.spotsAvailable ??
+    slot.playersAvailable;
+
+  if (directRemaining !== undefined && directRemaining !== null) {
+    const r = Number(directRemaining);
     return Number.isFinite(r) ? r : 0;
   }
 
+  // 2) If backend gives a "3/4" style string anywhere, parse it.
+  const ratioText =
+    slot.remainingText ??
+    slot.availability ??
+    slot.spotsText ??
+    slot.capacityText;
+
+  if (ratioText && typeof ratioText === "string") {
+    const m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
+    if (m) {
+      const rem = Number(m[1]);
+      return Number.isFinite(rem) ? rem : 0;
+    }
+  }
+
+  // 3) Otherwise compute from max - booked with lots of fallbacks
   const maxPlayers =
     Number(
       slot.maxPlayers ??
       slot.max_players ??
+      slot.capacity ??
+      slot.max ??
+      slot.playersMax ??
       slot.max_players_per_slot ??
       slot.maxPlayersPerSlot ??
       4
@@ -453,6 +483,8 @@ function slotRemaining(slot) {
       slot.bookedPlayers ??
       slot.booked_players ??
       slot.booked ??
+      slot.taken ??
+      slot.playersBooked ??
       slot.bookedCount ??
       0
     );
