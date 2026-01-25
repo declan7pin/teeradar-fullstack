@@ -482,43 +482,44 @@
 
     // ✅ NEW: pull home state from backend and hydrate localStorage.tr_user
     async function hydrateUserFromServer() {
-      try {
-        const email = getLoggedInEmail();
-        if (!email) return;
+  try {
+    const email = getLoggedInEmail();
+    if (!email) return;
 
-        const res = await fetch(`/api/me?email=${encodeURIComponent(email)}`);
-        if (!res.ok) return;
+    const res = await fetch(`/api/me?email=${encodeURIComponent(email)}`);
+    if (!res.ok) return;
 
-        const me = await res.json();
+    const me = await res.json();
 
-        // Update / create tr_user so existing applyHomeCourseDefaults() works
-        let obj = { email };
-        try {
-          const raw = localStorage.getItem("tr_user");
-          if (raw) obj = { ...obj, ...JSON.parse(raw) };
-        } catch (e) {}
+    let obj = { email };
+    try {
+      const raw = localStorage.getItem("tr_user");
+      if (raw) obj = { ...obj, ...JSON.parse(raw) };
+    } catch (e) {}
 
-        obj.email = (me.email || obj.email || email || "").toString().trim().toLowerCase();
-        if (me.homeCourse) obj.homeCourse = me.homeCourse;
-        if (me.homeCourseId) obj.homeCourseId = me.homeCourseId;
-        if (me.homeCourseState) obj.homeCourseState = me.homeCourseState;
+    obj.email = (me.email || obj.email || email || "").toString().trim().toLowerCase();
+    if (me.homeCourse) obj.homeCourse = me.homeCourse;
+    if (me.homeCourseId) obj.homeCourseId = me.homeCourseId;
+    if (me.homeCourseState) obj.homeCourseState = me.homeCourseState;
 
-        localStorage.setItem("tr_user", JSON.stringify(obj));
-      } catch (err) {
-        // silent fail (no breaking)
-        console.warn("hydrateUserFromServer error", err);
-      }
-    }
+    localStorage.setItem("tr_user", JSON.stringify(obj));
+  } catch (err) {
+    console.warn("hydrateUserFromServer error", err);
+  }
+}
+
+// ✅ set default date BEFORE init() runs
 (function setDefaultDate() {
-      const input = document.getElementById("date");
-      if (!input) return;
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, "0");
-      const dd = String(today.getDate()).padStart(2, "0");
-      input.value = `${yyyy}-${mm}-${dd}`;
-    })();
-    init();
+  const input = document.getElementById("date");
+  if (!input) return;
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  input.value = `${yyyy}-${mm}-${dd}`;
+})();
+
+init();
 
     async function init() {
       initMap();
@@ -1072,7 +1073,7 @@ const isChronogolf = providerLower === "chronogolf";
       });
     }
 
-// Handle clicks on "Go to booking" (cards + map popups)
+  // Handle clicks on "Go to booking" (cards + map popups)
 document.addEventListener("click", (evt) => {
   const el = evt.target.closest(".booking-link");
   if (!el) return;
@@ -1088,12 +1089,13 @@ document.addEventListener("click", (evt) => {
   if (!course) return;
 
   const provider = String(course.provider || "Other").trim();
-  const providerLower = provider.toLowerCase();
+const providerLower = provider.toLowerCase();
 
-  // ✅ TeeRadarBooking (internal booking pages like Hillview)
-  if (providerLower === "teeradarbooking") {
-    let slug = String(course.slug || course.bookingSlug || course.courseSlug || "").trim();
+// ✅ TeeRadarBooking
+if (providerLower === "teeradarbooking") {
+    let slug = (course.slug || course.bookingSlug || course.courseSlug || "").toString().trim();
 
+    // Fallback: generate slug from name if not provided
     if (!slug) {
       slug = String(courseName)
         .toLowerCase()
@@ -1101,37 +1103,39 @@ document.addEventListener("click", (evt) => {
         .replace(/^-+|-+$/g, "");
     }
 
+    // Pull CURRENT filters (prefer lastSearchCriteria, else current inputs)
     const date =
       (lastSearchCriteria && lastSearchCriteria.date) ||
-      (document.getElementById("date") ? document.getElementById("date").value : "") ||
+      (document.getElementById("date") && document.getElementById("date").value) ||
       "";
 
     const players =
       (lastSearchCriteria && lastSearchCriteria.partySize) ||
-      Number((document.getElementById("players") ? document.getElementById("players").value : 1) || 1);
+      Number((document.getElementById("players") && document.getElementById("players").value) || 1);
 
     const holes =
       (lastSearchCriteria && lastSearchCriteria.holes) ||
-      (document.getElementById("holes") ? document.getElementById("holes").value : "") ||
-      "";
+      ((document.getElementById("holes") && document.getElementById("holes").value) || "");
 
     const earliest =
       (lastSearchCriteria && lastSearchCriteria.earliest) ||
-      (document.getElementById("earliest") ? document.getElementById("earliest").value : "06:00") ||
-      "06:00";
+      ((document.getElementById("earliest") && document.getElementById("earliest").value) || "06:00");
 
     const latest =
       (lastSearchCriteria && lastSearchCriteria.latest) ||
-      (document.getElementById("latest") ? document.getElementById("latest").value : "17:00") ||
-      "17:00";
+      ((document.getElementById("latest") && document.getElementById("latest").value) || "17:00");
 
     const u = new URL(window.location.origin + "/book/" + encodeURIComponent(slug));
 
     if (date) u.searchParams.set("date", date);
+
+    // IMPORTANT: send BOTH names (booking page might expect either)
     u.searchParams.set("players", String(players));
     u.searchParams.set("partySize", String(players));
+
     if (holes) u.searchParams.set("holes", String(holes));
 
+    // time window (send both naming styles)
     u.searchParams.set("earliest", earliest);
     u.searchParams.set("latest", latest);
     u.searchParams.set("timeFrom", earliest);
@@ -1153,9 +1157,12 @@ document.addEventListener("click", (evt) => {
   // Default providers (MiClub / Quick18 / TeeItUp / Chronogolf)
   const slots = groupedSlots[courseName] || [];
   const exampleSlot = slots[0] || {};
-  const searchDate = (lastSearchCriteria && lastSearchCriteria.date) || window.teeRadarLastSearchDate;
+  const searchDate =
+    (lastSearchCriteria && lastSearchCriteria.date) ||
+    window.teeRadarLastSearchDate;
 
   let baseUrl = "";
+
   if (providerLower === "teeitup" && course.url) {
     try {
       const u = new URL(course.url);
@@ -1177,7 +1184,11 @@ document.addEventListener("click", (evt) => {
   if (!baseUrl) return;
 
   let finalUrl = baseUrl;
-  if (finalUrl.startsWith("/")) finalUrl = window.location.origin + finalUrl;
+
+  // If backend returns relative URLs, make absolute
+  if (finalUrl.startsWith("/")) {
+    finalUrl = window.location.origin + finalUrl;
+  }
 
   try {
     const u = new URL(finalUrl);
@@ -1188,7 +1199,10 @@ document.addEventListener("click", (evt) => {
       u.searchParams.delete("mobile");
       finalUrl = u.toString();
     } else if (providerLower === "quick18") {
-      if (searchDate) u.searchParams.set("teedate", searchDate.replace(/-/g, ""));
+      if (searchDate) {
+        const yyyymmdd = searchDate.replace(/-/g, "");
+        u.searchParams.set("teedate", yyyymmdd);
+      }
       finalUrl = u.toString();
     }
   } catch (err) {
