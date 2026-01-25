@@ -429,7 +429,44 @@
       const n = Number(v);
       return Number.isFinite(n) ? n : null;
     }
+// ✅ NEW: normalize slot remaining + "fits party size"
+function slotRemaining(slot) {
+  if (!slot || typeof slot !== "object") return 0;
 
+  // if backend already provides remaining, trust it
+  if (slot.remaining !== undefined && slot.remaining !== null) {
+    const r = Number(slot.remaining);
+    return Number.isFinite(r) ? r : 0;
+  }
+
+  const maxPlayers =
+    Number(
+      slot.maxPlayers ??
+      slot.max_players ??
+      slot.max_players_per_slot ??
+      slot.maxPlayersPerSlot ??
+      4
+    );
+
+  const bookedPlayers =
+    Number(
+      slot.bookedPlayers ??
+      slot.booked_players ??
+      slot.booked ??
+      slot.bookedCount ??
+      0
+    );
+
+  const maxP = Number.isFinite(maxPlayers) ? maxPlayers : 4;
+  const bookedP = Number.isFinite(bookedPlayers) ? bookedPlayers : 0;
+
+  return Math.max(0, maxP - bookedP);
+}
+
+function slotFitsParty(slot, partySize) {
+  const want = Math.max(1, Number(partySize || 1));
+  return slotRemaining(slot) >= want;
+}
     // analytics helper (used for searches + booking clicks)
     function trackEvent(type, payload) {
       try {
@@ -851,8 +888,14 @@ init();
             return;
           }
 
-          availableCourses++;
-          totalSlots += cSlots.length;
+          // ✅ ONLY count slots that fit the selected party size
+const want = Number(players) || 1;
+const fitSlots = (cSlots || []).filter(s => slotFitsParty(s, want));
+
+if (fitSlots.length > 0) {
+  availableCourses++;
+  totalSlots += fitSlots.length;
+}
         });
 
         if (totalSlots === 0) {
@@ -937,7 +980,16 @@ const isChronogolf = providerLower === "chronogolf";
         }
 
         const slots = groupedSlots[name] || [];
-        const hasSlots = slots.length > 0;
+
+// ✅ ONLY treat as available if at least one slot fits party size
+const want = Number(
+  (lastSearchCriteria && lastSearchCriteria.partySize) ||
+  document.getElementById("players").value ||
+  1
+);
+
+const fitSlots = (slots || []).filter(s => slotFitsParty(s, want));
+const hasSlots = fitSlots.length > 0;
 
         let markerKind = "unavailable";
         if (isPhone) {
