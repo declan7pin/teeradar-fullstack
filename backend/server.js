@@ -1889,33 +1889,60 @@ app.post("/api/search", async (req, res) => {
     console.log("Incoming /api/search", criteria);
     // ✅ NEW: party-size enforcement (so 1-slot results don’t show green for 4 players)
     function normalizeRemaining(s) {
-      if (!s || typeof s !== "object") return 0;
+  if (!s || typeof s !== "object") return null;
 
-      // explicit remaining fields (any provider)
-      const direct =
-        s.remaining ??
-        s.remainingPlayers ??
-        s.playersRemaining ??
-        s.spotsRemaining ??
-        s.playersAvailable ??
-        s.spotsAvailable ??
-        s.available ??
-        s.openings;
+  const toNum = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
 
-      if (direct !== undefined && direct !== null) {
-        const r = Number(direct);
-        return Number.isFinite(r) ? r : 0;
+  // 1) explicit remaining fields
+  const direct =
+    s.remaining ??
+    s.remainingPlayers ??
+    s.playersRemaining ??
+    s.spotsRemaining ??
+    s.playersAvailable ??
+    s.spotsAvailable ??
+    s.available ??
+    s.openings;
+
+  const dr = toNum(direct);
+  if (dr !== null) return Math.max(0, dr);
+
+  // 2) detect "3/4" style strings anywhere (booked/total)
+  const ratioText =
+    s.ratio ??
+    s.bookedRatio ??
+    s.spotsText ??
+    s.availability ??
+    s.capacityText ??
+    s.playersText ??
+    s.display ??
+    s.label;
+
+  if (typeof ratioText === "string") {
+    const m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
+    if (m) {
+      const booked = toNum(m[1]);
+      const total = toNum(m[2]);
+      if (booked !== null && total !== null && total > 0) {
+        return Math.max(0, total - booked);
       }
-
-      // compute from max - booked (fallback)
-      const maxPlayers = Number(s.maxPlayers ?? s.max_players ?? s.capacity ?? s.max ?? 4);
-      const bookedPlayers = Number(s.bookedPlayers ?? s.booked_players ?? s.booked ?? s.taken ?? 0);
-
-      const maxP = Number.isFinite(maxPlayers) ? maxPlayers : 4;
-      const bookedP = Number.isFinite(bookedPlayers) ? bookedPlayers : 0;
-
-      return Math.max(0, maxP - bookedP);
     }
+  }
+
+  // 3) compute from max - booked if both are known
+  const maxPlayers = toNum(s.maxPlayers ?? s.max_players ?? s.capacity ?? s.max);
+  const bookedPlayers = toNum(s.bookedPlayers ?? s.booked_players ?? s.booked ?? s.taken);
+
+  if (maxPlayers === null && bookedPlayers === null) return null;
+
+  const maxP = maxPlayers ?? 4;
+  const bookedP = bookedPlayers ?? 0;
+
+  return Math.max(0, maxP - bookedP);
+}
     const searchCourses = stateCode
       ? courses.filter((c) => (c.state || "").toString().toUpperCase() === stateCode)
       : courses;
@@ -1981,9 +2008,16 @@ const slots = allResults.flat();
 
 // ✅ B: FINAL party-size enforcement (THIS fixes the green marker bug)
 const want = Number(criteria.partySize || 1);
-const filteredSlots = slots.filter(
-  (s) => normalizeRemaining(s) >= want
-);
+const want = Number(criteria.partySize || 1);
+
+const filteredSlots = slots.filter((s) => {
+  const rem = normalizeRemaining(s);
+
+  // If we don't know remaining, do NOT claim it fits a party size
+  if (rem === null) return false;
+
+  return rem >= want;
+});
 
 console.log(
   `🔎 /api/search complete → ${filteredSlots.length} total slots (after partySize filter)`
