@@ -1092,8 +1092,41 @@ if (provider === "TeeRadarBooking") {
       .replace(/^-+|-+$/g, "");
   }
 
-  const finalUrl =
-    window.location.origin + "/book/" + encodeURIComponent(slug);
+  // ✅ Pull the CURRENT filters (prefer lastSearchCriteria, else current inputs)
+  const date =
+    (lastSearchCriteria && lastSearchCriteria.date) ||
+    document.getElementById("date")?.value ||
+    "";
+  const players =
+    (lastSearchCriteria && lastSearchCriteria.partySize) ||
+    Number(document.getElementById("players")?.value || 1);
+  const holes =
+    (lastSearchCriteria && lastSearchCriteria.holes) ||
+    document.getElementById("holes")?.value ||
+    "";
+  const earliest =
+    (lastSearchCriteria && lastSearchCriteria.earliest) ||
+    document.getElementById("earliest")?.value ||
+    "06:00";
+  const latest =
+    (lastSearchCriteria && lastSearchCriteria.latest) ||
+    document.getElementById("latest")?.value ||
+    "17:00";
+
+  // ✅ Build URL + append query params so the booking page loads with the same criteria
+  const u = new URL(window.location.origin + "/book/" + encodeURIComponent(slug));
+
+  if (date) u.searchParams.set("date", date);
+  if (players) u.searchParams.set("players", String(players));
+  if (holes) u.searchParams.set("holes", String(holes));
+
+  // Support both naming styles (in case your booking page expects different keys)
+  u.searchParams.set("earliest", earliest);
+  u.searchParams.set("latest", latest);
+  u.searchParams.set("timeFrom", earliest);
+  u.searchParams.set("timeTo", latest);
+
+  const finalUrl = u.toString();
 
   trackEvent("course_booking_click", {
     courseName,
