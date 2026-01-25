@@ -2008,8 +2008,6 @@ const slots = allResults.flat();
 
 // ✅ B: FINAL party-size enforcement (THIS fixes the green marker bug)
 const want = Number(criteria.partySize || 1);
-const want = Number(criteria.partySize || 1);
-
 const filteredSlots = slots.filter((s) => {
   const rem = normalizeRemaining(s);
 
