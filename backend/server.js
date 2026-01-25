@@ -1887,7 +1887,35 @@ app.post("/api/search", async (req, res) => {
     };
 
     console.log("Incoming /api/search", criteria);
+    // ✅ NEW: party-size enforcement (so 1-slot results don’t show green for 4 players)
+    function normalizeRemaining(s) {
+      if (!s || typeof s !== "object") return 0;
 
+      // explicit remaining fields (any provider)
+      const direct =
+        s.remaining ??
+        s.remainingPlayers ??
+        s.playersRemaining ??
+        s.spotsRemaining ??
+        s.playersAvailable ??
+        s.spotsAvailable ??
+        s.available ??
+        s.openings;
+
+      if (direct !== undefined && direct !== null) {
+        const r = Number(direct);
+        return Number.isFinite(r) ? r : 0;
+      }
+
+      // compute from max - booked (fallback)
+      const maxPlayers = Number(s.maxPlayers ?? s.max_players ?? s.capacity ?? s.max ?? 4);
+      const bookedPlayers = Number(s.bookedPlayers ?? s.booked_players ?? s.booked ?? s.taken ?? 0);
+
+      const maxP = Number.isFinite(maxPlayers) ? maxPlayers : 4;
+      const bookedP = Number.isFinite(bookedPlayers) ? bookedPlayers : 0;
+
+      return Math.max(0, maxP - bookedP);
+    }
     const searchCourses = stateCode
       ? courses.filter((c) => (c.state || "").toString().toUpperCase() === stateCode)
       : courses;
@@ -1949,10 +1977,19 @@ app.post("/api/search", async (req, res) => {
     });
 
     const allResults = await Promise.all(jobs);
-    const slots = allResults.flat();
+const slots = allResults.flat();
 
-    console.log(`🔎 /api/search complete → ${slots.length} total slots`);
-    res.json({ slots });
+// ✅ B: FINAL party-size enforcement (THIS fixes the green marker bug)
+const want = Number(criteria.partySize || 1);
+const filteredSlots = slots.filter(
+  (s) => normalizeRemaining(s) >= want
+);
+
+console.log(
+  `🔎 /api/search complete → ${filteredSlots.length} total slots (after partySize filter)`
+);
+
+res.json({ slots: filteredSlots });
   } catch (err) {
     console.error("search error", err);
     res.status(500).json({ error: "internal error", detail: err.message });
