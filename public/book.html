@@ -880,12 +880,18 @@ init();
         console.log("SEARCH slots sample:", slots[0]);
 
         groupedSlots = {};
-        slots.forEach((s) => {
-          const name = s.course || s.courseName || s.courseTitle || s.course_name;
-          if (!name) return;
-          if (!groupedSlots[name]) groupedSlots[name] = [];
-          groupedSlots[name].push(s);
-        });
+const want = Number(players) || 1;
+
+slots.forEach((s) => {
+  // ✅ ONLY group slots that fit the selected party size
+  if (!slotFitsParty(s, want)) return;
+
+  const name = s.course || s.courseName || s.courseTitle || s.course_name;
+  if (!name) return;
+
+  if (!groupedSlots[name]) groupedSlots[name] = [];
+  groupedSlots[name].push(s);
+});
         // ✅ FILTER groupedSlots to ONLY slots that fit selected party size
 const want = Number(players) || 1;
 
