@@ -1014,7 +1014,7 @@ const hasSlots = fitSlots.length > 0;
           if (isClickThroughOnly || isUnconfirmed) {
             popupHtml += `<br><strong>Unable to confirm availability</strong>`;
           } else if (hasSlots) {
-            popupHtml += `<br>${slots.length} slots`;
+            popupHtml += `<br>${fitSlots.length} slots`;
           } else if (isPhone) {
             popupHtml += `<br>Phone booking`;
             if (course.phone) {
@@ -1098,7 +1098,7 @@ const hasSlots = fitSlots.length > 0;
               isClickThroughOnly || isUnconfirmed
                 ? "Check course site"
                 : hasSlots
-                ? slots.length + " slots"
+? fitSlots.length + " slots"
                 : isPhone
                 ? (phoneHref ? `<a href="${phoneHref}">${phoneText}</a>` : phoneText)
                 : ""
