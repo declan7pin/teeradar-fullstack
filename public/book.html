@@ -509,7 +509,15 @@
         console.warn("hydrateUserFromServer error", err);
       }
     }
-
+(function setDefaultDate() {
+      const input = document.getElementById("date");
+      if (!input) return;
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      input.value = `${yyyy}-${mm}-${dd}`;
+    })();
     init();
 
     async function init() {
@@ -893,10 +901,11 @@
 
       courses.forEach((course) => {
         const name = course.name || "";
-        const provider = course.provider || "Other";
-        const isPhone = provider === "Phone";
-        const isTeeItUp = provider === "TeeItUp";
-        const isChronogolf = provider === "Chronogolf";
+        const provider = String(course.provider || "Other").trim();
+const providerLower = provider.toLowerCase();
+const isPhone = providerLower === "phone";
+        const isTeeItUp = providerLower === "teeitup";
+const isChronogolf = providerLower === "chronogolf";
         const isClickThroughOnly = isTeeItUp || isChronogolf;
 
         if (searchDate) {
@@ -1078,10 +1087,11 @@ document.addEventListener("click", (evt) => {
   const course = courses.find((c) => c.name === courseName);
   if (!course) return;
 
-  const provider = course.provider || "Other";
+  const provider = String(course.provider || "Other").trim();
+const providerLower = provider.toLowerCase();
 
-  // ✅ TeeRadarBooking (internal booking pages like Hillview)
-  if (provider === "TeeRadarBooking") {
+// ✅ TeeRadarBooking
+if (providerLower === "teeradarbooking") {
     let slug = (course.slug || course.bookingSlug || course.courseSlug || "").toString().trim();
 
     // Fallback: generate slug from name if not provided
@@ -1208,15 +1218,7 @@ document.addEventListener("click", (evt) => {
   window.open(finalUrl, "_blank");
 });
 
-    (function setDefaultDate() {
-      const input = document.getElementById("date");
-      if (!input) return;
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, "0");
-      const dd = String(today.getDate()).padStart(2, "0");
-      input.value = `${yyyy}-${mm}-${dd}`;
-    })();
+    
 
     // State selector behaviour
     (function setupStateSelector() {
