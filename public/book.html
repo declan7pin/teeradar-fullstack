@@ -1063,7 +1063,7 @@
       });
     }
 
-    // Handle clicks on "Go to booking" (cards + map popups)
+  // Handle clicks on "Go to booking" (cards + map popups)
 document.addEventListener("click", (evt) => {
   const el = evt.target.closest(".booking-link");
   if (!el) return;
@@ -1207,70 +1207,6 @@ document.addEventListener("click", (evt) => {
 
   window.open(finalUrl, "_blank");
 });
-      const slots = groupedSlots[courseName] || [];
-      const exampleSlot = slots[0] || {};
-      const searchDate =
-        (lastSearchCriteria && lastSearchCriteria.date) ||
-        window.teeRadarLastSearchDate;
-
-      let baseUrl = "";
-
-      if (provider === "TeeItUp" && course.url) {
-        try {
-          const u = new URL(course.url);
-          if (searchDate) {
-            u.searchParams.set("date", searchDate);
-          }
-          baseUrl = u.toString();
-        } catch (e) {
-          baseUrl = course.url;
-        }
-      } else {
-  baseUrl =
-    exampleSlot.bookUrl ||          // ✅ TeeRadarBooking (Hillview)
-    exampleSlot.bookingUrl ||
-    exampleSlot.url ||
-    course.bookUrl ||               // ✅ if you ever store it on the course object
-    course.url ||
-    "";
-}
-
-      if (!baseUrl) return;
-
-      let finalUrl = baseUrl;
-      // ✅ If backend returns a relative URL like "/book/hillview", make it absolute
-if (finalUrl.startsWith("/")) {
-  finalUrl = window.location.origin + finalUrl;
-}
-
-      try {
-        const u = new URL(baseUrl);
-
-        if (provider === "MiClub") {
-          if (searchDate) u.searchParams.set("selectedDate", searchDate);
-          u.searchParams.delete("recaptchaResponse");
-          u.searchParams.delete("mobile");
-          finalUrl = u.toString();
-        } else if (provider === "Quick18") {
-          if (searchDate) {
-            const yyyymmdd = searchDate.replace(/-/g, "");
-            u.searchParams.set("teedate", yyyymmdd);
-          }
-          finalUrl = u.toString();
-        }
-      } catch (err) {
-        console.error("Error building booking URL:", err);
-      }
-
-      trackEvent("course_booking_click", {
-        courseName,
-        provider,
-        url: finalUrl,
-        state: course.state || null,
-      });
-
-      window.open(finalUrl, "_blank");
-    });
 
     (function setDefaultDate() {
       const input = document.getElementById("date");
