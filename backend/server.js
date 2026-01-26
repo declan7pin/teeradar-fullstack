@@ -2048,7 +2048,9 @@ const slots = allResults.flat();
 const want = parsePartySize(criteria.partySize);
 const filteredSlots = slots.filter((s) => {
   const rem = normalizeRemaining(s);
-
+if ((s.course || s.courseName || "").toLowerCase().includes("hillview")) {
+  console.log("HILLVIEW SLOT DEBUG:", s);
+}
   // If we don't know remaining, do NOT claim it fits a party size
   if (rem === null) return false;
 
