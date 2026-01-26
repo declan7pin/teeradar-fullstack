@@ -541,14 +541,12 @@
     }
 
     function slotFitsParty(slot, partySize) {
-      const want = Math.max(1, Number(partySize || 1));
-      const rem = slotRemaining(slot);
+  const want = Math.max(1, Number(partySize || 1));
+  const rem = slotRemaining(slot);
 
-      // ✅ If we don't KNOW remaining, do NOT claim it fits.
-      if (rem === null) return false;
-
-      return rem >= want;
-    }
+  if (rem === null) return want <= 1;
+  return rem >= want;
+}
 
     // analytics helper (used for searches + booking clicks)
     function trackEvent(type, payload) {
