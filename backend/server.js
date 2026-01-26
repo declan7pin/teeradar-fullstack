@@ -1915,7 +1915,7 @@ app.post("/api/search", async (req, res) => {
       earliest,
       latest,
       holes: holesValue,
-      partySize: Number(partySize) || 1,
+      partySize: parsePartySize(partySize),
       state: stateCode || null,
     };
 // ✅ robust party size parsing (handles "4 players" etc)
@@ -2047,7 +2047,7 @@ function parsePartySize(v) {
 const slots = allResults.flat();
 
 // ✅ B: FINAL party-size enforcement (THIS fixes the green marker bug)
-const want = Number(criteria.partySize || 1);
+const want = parsePartySize(criteria.partySize);
 const filteredSlots = slots.filter((s) => {
   const rem = normalizeRemaining(s);
 
