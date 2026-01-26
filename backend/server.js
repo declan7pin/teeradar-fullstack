@@ -1972,16 +1972,14 @@ function parsePartySize(v) {
     }
   }
 
-  // 3) compute from max - booked if both are known
+   // 3) compute from max - booked ONLY if BOTH are explicitly known
   const maxPlayers = toNum(s.maxPlayers ?? s.max_players ?? s.capacity ?? s.max);
   const bookedPlayers = toNum(s.bookedPlayers ?? s.booked_players ?? s.booked ?? s.taken);
 
-  if (maxPlayers === null && bookedPlayers === null) return null;
+  // ✅ if either is missing, we don't know remaining
+  if (maxPlayers === null || bookedPlayers === null) return null;
 
-  const maxP = maxPlayers ?? 4;
-  const bookedP = bookedPlayers ?? 0;
-
-  return Math.max(0, maxP - bookedP);
+  return Math.max(0, maxPlayers - bookedPlayers);
 }
     const searchCourses = stateCode
       ? courses.filter((c) => (c.state || "").toString().toUpperCase() === stateCode)
