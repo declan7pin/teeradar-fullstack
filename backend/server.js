@@ -1918,7 +1918,14 @@ app.post("/api/search", async (req, res) => {
       partySize: Number(partySize) || 1,
       state: stateCode || null,
     };
-
+// ✅ robust party size parsing (handles "4 players" etc)
+function parsePartySize(v) {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  const s = String(v ?? "").trim();
+  const m = s.match(/\d+/);
+  const n = m ? Number(m[0]) : NaN;
+  return Number.isFinite(n) ? n : 1;
+}
     console.log("Incoming /api/search", criteria);
     // ✅ NEW: party-size enforcement (so 1-slot results don’t show green for 4 players)
     function normalizeRemaining(s) {
