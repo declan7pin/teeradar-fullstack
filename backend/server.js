@@ -2044,32 +2044,13 @@ app.post("/api/search", async (req, res) => {
     const allResults = await Promise.all(jobs);
 const slots = allResults.flat();
 
-// ✅ B: FINAL party-size enforcement (balanced)
-// - If remaining is unknown: allow 1 player (so results still show)
-// - For 2+ players: must know remaining (prevents false greens like Hillview)
-const want = parsePartySize(criteria.partySize);
+// ✅ IMPORTANT: do NOT filter slots by party size on the backend.
+// Most providers don't reliably supply remaining/capacity.
+// Backend filtering wipes valid results and breaks availability.
+// Party-size / “green marker” logic is handled on the frontend instead.
 
-const filteredSlots = slots.filter((s) => {
-  const rem = normalizeRemaining(s);
-
-  if ((s.course || s.courseName || "").toLowerCase().includes("hillview")) {
-    console.log("HILLVIEW SLOT DEBUG:", { want, rem, slot: s });
-  }
-
-  if (rem === null) return want <= 1;
-  return rem >= want;
-});
-
-console.log(
-  `🔎 /api/search complete → ${filteredSlots.length} total slots (after partySize filter)`
-);
-
-res.json({ slots: filteredSlots });
-  } catch (err) {
-    console.error("search error", err);
-    res.status(500).json({ error: "internal error", detail: err.message });
-  }
-});
+console.log(`🔎 /api/search complete → ${slots.length} total slots (no backend partySize filter)`);
+res.json({ slots });
 
 // -------------------------------------------------
 // Analytics Event Ingest
