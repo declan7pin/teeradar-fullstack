@@ -1040,14 +1040,17 @@
         const fitSlots = (Array.isArray(slots) ? slots : []).filter(s => slotFitsParty(s, want));
         const hasSlots = fitSlots.length > 0;
 
-        let markerKind = "unavailable";
-        if (isPhone) {
-          markerKind = "phone";
-        } else if ((isClickThroughOnly && !hasSlots) || isUnconfirmed) {
-          markerKind = "unknown";
-        } else if (hasSlots) {
-          markerKind = "available";
-        }
+        // ✅ STRICT marker logic — fixes Hillview green bug
+let markerKind = "unavailable";
+
+if (isPhone) {
+  markerKind = "phone";
+} else if (hasSlots === true) {
+  // ONLY green if at least one slot fits party size
+  markerKind = "available";
+} else if (isClickThroughOnly || isUnconfirmed) {
+  markerKind = "unknown";
+}
 
         const cLat = toNum(course.lat);
         const cLng = toNum(course.lng);
