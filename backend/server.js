@@ -2041,20 +2041,23 @@ app.post("/api/search", async (req, res) => {
       }
     });
 
-    const allResults = await Promise.all(jobs);
-const slots = allResults.flat();
+        const allResults = await Promise.all(jobs);
+    const slots = allResults.flat();
 
-// ✅ IMPORTANT: do NOT filter slots by party size on the backend.
-// Most providers don't reliably supply remaining/capacity.
-// Backend filtering wipes valid results and breaks availability.
-// Party-size / “green marker” logic is handled on the frontend instead.
+    // ✅ IMPORTANT: do NOT filter slots by party size on the backend.
+    // Most providers don't reliably supply remaining/capacity.
+    // Backend filtering wipes valid results and breaks availability.
+    // Party-size / “green marker” logic is handled on the frontend instead.
+    console.log(
+      `🔎 /api/search complete → ${slots.length} total slots (no backend partySize filter)`
+    );
 
-console.log(`🔎 /api/search complete → ${slots.length} total slots (no backend partySize filter)`);
-res.json({ slots });
-
-// -------------------------------------------------
-// Analytics Event Ingest
-// -------------------------------------------------
+    return res.json({ slots });
+  } catch (err) {
+    console.error("search error", err);
+    return res.status(500).json({ error: "internal error", detail: err.message });
+  }
+});
 
 // -------------------------------------------------
 // Analytics Summary
