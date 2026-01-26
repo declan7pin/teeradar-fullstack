@@ -2044,16 +2044,19 @@ app.post("/api/search", async (req, res) => {
     const allResults = await Promise.all(jobs);
 const slots = allResults.flat();
 
-// ✅ B: FINAL party-size enforcement (THIS fixes the green marker bug)
+// ✅ B: FINAL party-size enforcement (balanced)
+// - If remaining is unknown: allow 1 player (so results still show)
+// - For 2+ players: must know remaining (prevents false greens like Hillview)
 const want = parsePartySize(criteria.partySize);
+
 const filteredSlots = slots.filter((s) => {
   const rem = normalizeRemaining(s);
-if ((s.course || s.courseName || "").toLowerCase().includes("hillview")) {
-  console.log("HILLVIEW SLOT DEBUG:", s);
-}
-  // If we don't know remaining, do NOT claim it fits a party size
-  if (rem === null) return false;
 
+  if ((s.course || s.courseName || "").toLowerCase().includes("hillview")) {
+    console.log("HILLVIEW SLOT DEBUG:", { want, rem, slot: s });
+  }
+
+  if (rem === null) return want <= 1;
   return rem >= want;
 });
 
