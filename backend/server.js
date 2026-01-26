@@ -1418,7 +1418,40 @@ app.patch("/api/rounds/:id/hole/:holeNumber", requireAuth, async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal error" });
   }
 });
+// ✅ DELETE round (fixes "Delete failed: 404")
+app.delete("/api/rounds/:id", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
 
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "Invalid user" });
+    }
+    if (!Number.isInteger(roundId) || roundId <= 0) {
+      return res.status(400).json({ ok: false, error: "Invalid round id" });
+    }
+
+    // Ensure the round belongs to the logged-in user
+    const own = await db.query(
+      `SELECT id FROM rounds WHERE id = $1 AND user_id = $2 LIMIT 1;`,
+      [roundId, userId]
+    );
+    if (!own.rows.length) {
+      return res.status(403).json({ ok: false, error: "Forbidden" });
+    }
+
+    // Will cascade delete round_holes because FK has ON DELETE CASCADE
+    await db.query(`DELETE FROM rounds WHERE id = $1 AND user_id = $2;`, [
+      roundId,
+      userId,
+    ]);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("/api/rounds/:id DELETE error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
 // 🔔 Alerts API
 app.use("/api/alerts", alertsRouter);
 
