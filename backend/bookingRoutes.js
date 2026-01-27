@@ -6022,21 +6022,44 @@ const durationMins = durationMinsForHoles(courseRow, holes);
     }).catch(() => {});
 
     const { rows } = await db.query(
-      `
-      SELECT tee_time, max_players, booked_players, holes, price_per_player_cents
-      FROM booking_times
-      WHERE course_id = $1
-        AND play_date = $2::date
-        AND holes = $3
-        AND status = 'AVAILABLE'
-        AND (substring(tee_time,1,2)::int*60 + substring(tee_time,4,2)::int) >= $4
-        AND (substring(tee_time,1,2)::int*60 + substring(tee_time,4,2)::int) <= $5
-        AND (max_players - booked_players) >= $6
-      ORDER BY tee_time ASC
-      LIMIT 200;
-      `,
-      [courseId, date, holes, sM, eM, players]
-    );
+  `
+  SELECT
+    t.tee_time,
+    t.max_players,
+    (
+      SELECT COALESCE(SUM(b.players), 0)
+      FROM booking_bookings b
+      WHERE b.course_id = t.course_id
+        AND b.play_date = t.play_date
+        AND b.tee_time = t.tee_time
+        AND b.holes = t.holes
+        AND b.status = 'CONFIRMED'
+    ) AS booked_players,
+    t.holes,
+    t.price_per_player_cents
+  FROM booking_times t
+  WHERE t.course_id = $1
+    AND t.play_date = $2::date
+    AND t.holes = $3
+    AND t.status = 'AVAILABLE'
+    AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) >= $4
+    AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) <= $5
+    AND (
+      t.max_players - (
+        SELECT COALESCE(SUM(b.players), 0)
+        FROM booking_bookings b
+        WHERE b.course_id = t.course_id
+          AND b.play_date = t.play_date
+          AND b.tee_time = t.tee_time
+          AND b.holes = t.holes
+          AND b.status = 'CONFIRMED'
+      )
+    ) >= $6
+  ORDER BY t.tee_time ASC
+  LIMIT 200;
+  `,
+  [courseId, date, holes, sM, eM, players]
+);
     console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
 // ✅ DEBUG: show what the availability query returned
 if (debug) {
