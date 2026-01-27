@@ -6024,42 +6024,56 @@ const durationMins = durationMinsForHoles(courseRow, holes);
     const { rows } = await db.query(
   `
   SELECT
-    bt.tee_time,
-    bt.max_players,
-    bt.booked_players,
-    bt.holes,
-    bt.price_per_player_cents,
+    t.tee_time,
+    t.holes,
+    t.max_players,
+    t.booked_players,
+    t.price_per_player_cents,
 
-    COALESCE(bb.booked_sum, 0)::int AS booked_sum,
-    GREATEST(bt.booked_players, COALESCE(bb.booked_sum, 0))::int AS booked_effective,
-    (bt.max_players - GREATEST(bt.booked_players, COALESCE(bb.booked_sum, 0)))::int AS remaining_effective
+    COALESCE(ms.manual_count, 0)::int   AS manual_count,
+    COALESCE(bb.booking_players, 0)::int AS booking_players,
 
-  FROM booking_times bt
-  LEFT JOIN (
-    SELECT
-      course_id,
-      play_date,
-      tee_time,
-      holes,
-      SUM(players)::int AS booked_sum
+    (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))::int AS booked_effective,
+
+    GREATEST(
+      0,
+      t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))
+    )::int AS remaining_effective
+
+  FROM booking_times t
+
+  LEFT JOIN LATERAL (
+    SELECT COUNT(*)::int AS manual_count
+    FROM booking_manual_slots
+    WHERE course_id = t.course_id
+      AND play_date = t.play_date
+      AND tee_time  = t.tee_time
+      AND holes     = t.holes
+      AND COALESCE(name,'') <> ''
+  ) ms ON true
+
+  LEFT JOIN LATERAL (
+    SELECT COALESCE(SUM(players),0)::int AS booking_players
     FROM booking_bookings
-    WHERE status = 'CONFIRMED'
-    GROUP BY course_id, play_date, tee_time, holes
-  ) bb
-    ON bb.course_id = bt.course_id
-   AND bb.play_date  = bt.play_date
-   AND bb.tee_time   = bt.tee_time
-   AND bb.holes      = bt.holes
+    WHERE course_id = t.course_id
+      AND play_date = t.play_date
+      AND tee_time  = t.tee_time
+      AND holes     = t.holes
+      AND status = 'CONFIRMED'
+  ) bb ON true
 
-  WHERE bt.course_id = $1
-    AND bt.play_date = $2::date
-    AND bt.holes = $3
-    AND bt.status = 'AVAILABLE'
-    AND (substring(bt.tee_time,1,2)::int*60 + substring(bt.tee_time,4,2)::int) >= $4
-    AND (substring(bt.tee_time,1,2)::int*60 + substring(bt.tee_time,4,2)::int) <= $5
-    AND (bt.max_players - GREATEST(bt.booked_players, COALESCE(bb.booked_sum, 0))) >= $6
+  WHERE t.course_id = $1
+    AND t.play_date = $2::date
+    AND t.holes = $3
+    AND t.status = 'AVAILABLE'
+    AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) >= $4
+    AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) <= $5
+    AND GREATEST(
+      0,
+      t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))
+    ) >= $6
 
-  ORDER BY bt.tee_time ASC
+  ORDER BY t.tee_time ASC
   LIMIT 200;
   `,
   [courseId, date, holes, sM, eM, players]
