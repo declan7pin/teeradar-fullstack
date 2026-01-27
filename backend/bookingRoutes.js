@@ -6024,38 +6024,42 @@ const durationMins = durationMinsForHoles(courseRow, holes);
     const { rows } = await db.query(
   `
   SELECT
-    t.tee_time,
-    t.max_players,
-    (
-      SELECT COALESCE(SUM(b.players), 0)
-      FROM booking_bookings b
-      WHERE b.course_id = t.course_id
-        AND b.play_date = t.play_date
-        AND b.tee_time = t.tee_time
-        AND b.holes = t.holes
-        AND b.status = 'CONFIRMED'
-    ) AS booked_players,
-    t.holes,
-    t.price_per_player_cents
-  FROM booking_times t
-  WHERE t.course_id = $1
-    AND t.play_date = $2::date
-    AND t.holes = $3
-    AND t.status = 'AVAILABLE'
-    AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) >= $4
-    AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) <= $5
-    AND (
-      t.max_players - (
-        SELECT COALESCE(SUM(b.players), 0)
-        FROM booking_bookings b
-        WHERE b.course_id = t.course_id
-          AND b.play_date = t.play_date
-          AND b.tee_time = t.tee_time
-          AND b.holes = t.holes
-          AND b.status = 'CONFIRMED'
-      )
-    ) >= $6
-  ORDER BY t.tee_time ASC
+    bt.tee_time,
+    bt.max_players,
+    bt.booked_players,
+    bt.holes,
+    bt.price_per_player_cents,
+
+    COALESCE(bb.booked_sum, 0)::int AS booked_sum,
+    GREATEST(bt.booked_players, COALESCE(bb.booked_sum, 0))::int AS booked_effective,
+    (bt.max_players - GREATEST(bt.booked_players, COALESCE(bb.booked_sum, 0)))::int AS remaining_effective
+
+  FROM booking_times bt
+  LEFT JOIN (
+    SELECT
+      course_id,
+      play_date,
+      tee_time,
+      holes,
+      SUM(players)::int AS booked_sum
+    FROM booking_bookings
+    WHERE status = 'CONFIRMED'
+    GROUP BY course_id, play_date, tee_time, holes
+  ) bb
+    ON bb.course_id = bt.course_id
+   AND bb.play_date  = bt.play_date
+   AND bb.tee_time   = bt.tee_time
+   AND bb.holes      = bt.holes
+
+  WHERE bt.course_id = $1
+    AND bt.play_date = $2::date
+    AND bt.holes = $3
+    AND bt.status = 'AVAILABLE'
+    AND (substring(bt.tee_time,1,2)::int*60 + substring(bt.tee_time,4,2)::int) >= $4
+    AND (substring(bt.tee_time,1,2)::int*60 + substring(bt.tee_time,4,2)::int) <= $5
+    AND (bt.max_players - GREATEST(bt.booked_players, COALESCE(bb.booked_sum, 0))) >= $6
+
+  ORDER BY bt.tee_time ASC
   LIMIT 200;
   `,
   [courseId, date, holes, sM, eM, players]
@@ -6108,9 +6112,12 @@ const clubsRemaining = Math.max(0, courseHireClubsQty - clubsUsed);
 return {
   time: r.tee_time,
   holes: r.holes,
-  maxPlayers: r.max_players,
-  bookedPlayers: r.booked_players,
-  remaining: Math.max(0, Number(r.max_players || 0) - Number(r.booked_players || 0)),
+  const bookedEffective = Number(r.booked_effective || 0);
+const remainingEffective = Number(r.remaining_effective || 0);
+
+maxPlayers: r.max_players,
+bookedPlayers: bookedEffective,
+remaining: Math.max(0, remainingEffective),
   pricePerPlayerCents: r.price_per_player_cents,
   pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
   cartQty: courseCartQty,
