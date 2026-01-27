@@ -453,93 +453,75 @@
 
     // ✅ FIXED: normalize slot remaining (return null if unknown — no guessing)
     function slotRemaining(slot) {
-      if (!slot || typeof slot !== "object") return null;
+  if (!slot || typeof slot !== "object") return null;
 
-      const num = (v) => {
-        const n = Number(v);
-        return Number.isFinite(n) ? n : null;
-      };
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
 
-      // 1) explicit remaining
-      const directRemaining =
-        slot.remaining ??
-        slot.remainingPlayers ??
-        slot.playersRemaining ??
-        slot.spotsRemaining ??
-        slot.openings ??
-        slot.spotsAvailable ??
-        slot.playersAvailable;
+  // 1) explicit remaining (best case)
+  const directRemaining =
+    slot.remaining ??
+    slot.remainingPlayers ??
+    slot.playersRemaining ??
+    slot.spotsRemaining ??
+    slot.openings ??
+    slot.spotsAvailable ??
+    slot.playersAvailable;
 
-      const dr = num(directRemaining);
-      if (dr !== null) return Math.max(0, dr);
+  const dr = num(directRemaining);
+  if (dr !== null) return Math.max(0, dr);
 
-      // 2) booked/total string like "3/4"
-      const ratioText =
-        slot.ratio ??
-        slot.bookedRatio ??
-        slot.spotsText ??
-        slot.availability ??
-        slot.capacityText ??
-        slot.playersText ??
-        slot.display ??
-        slot.label;
+  // 2) booked/total string like "3/4"
+  const ratioText =
+    slot.ratio ??
+    slot.bookedRatio ??
+    slot.spotsText ??
+    slot.availability ??
+    slot.capacityText ??
+    slot.playersText ??
+    slot.display ??
+    slot.label;
 
-      if (typeof ratioText === "string") {
-        const m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
-        if (m) {
-          const booked = num(m[1]);
-          const total = num(m[2]);
-          if (booked !== null && total !== null && total > 0) {
-            return Math.max(0, total - booked);
-          }
-        }
+  if (typeof ratioText === "string") {
+    const m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
+    if (m) {
+      const booked = num(m[1]);
+      const total = num(m[2]);
+      if (booked !== null && total !== null && total > 0) {
+        return Math.max(0, total - booked);
       }
-
-      // 3) only compute max-booked if slot actually provides those fields
-      const hasMax =
-        slot.maxPlayers !== undefined ||
-        slot.max_players !== undefined ||
-        slot.capacity !== undefined ||
-        slot.max !== undefined ||
-        slot.playersMax !== undefined ||
-        slot.max_players_per_slot !== undefined ||
-        slot.maxPlayersPerSlot !== undefined;
-
-      const hasBooked =
-        slot.bookedPlayers !== undefined ||
-        slot.booked_players !== undefined ||
-        slot.booked !== undefined ||
-        slot.taken !== undefined ||
-        slot.playersBooked !== undefined ||
-        slot.bookedCount !== undefined;
-
-      // ✅ if we don't have evidence, we don't know
-      if (!hasMax && !hasBooked) return null;
-
-      const maxPlayers =
-        num(
-          slot.maxPlayers ??
-          slot.max_players ??
-          slot.capacity ??
-          slot.max ??
-          slot.playersMax ??
-          slot.max_players_per_slot ??
-          slot.maxPlayersPerSlot
-        ) ?? 4;
-
-      const bookedPlayers =
-        num(
-          slot.bookedPlayers ??
-          slot.booked_players ??
-          slot.booked ??
-          slot.taken ??
-          slot.playersBooked ??
-          slot.bookedCount
-        ) ?? 0;
-
-      return Math.max(0, maxPlayers - bookedPlayers);
     }
+  }
 
+  // 3) compute max - booked ONLY if BOTH values are explicitly numeric
+  const maxPlayers = num(
+    slot.maxPlayers ??
+    slot.max_players ??
+    slot.capacity ??
+    slot.max ??
+    slot.playersMax ??
+    slot.max_players_per_slot ??
+    slot.maxPlayersPerSlot
+  );
+
+  const bookedPlayers = num(
+    slot.bookedPlayers ??
+    slot.booked_players ??
+    slot.booked ??
+    slot.taken ??
+    slot.playersBooked ??
+    slot.bookedCount ??
+    slot.players_booked ??
+    slot.booked_count
+  );
+
+  // ✅ if either is missing/not numeric, we don't know remaining
+  if (maxPlayers === null || bookedPlayers === null) return null;
+
+  return Math.max(0, maxPlayers - bookedPlayers);
+}
     function slotFitsParty(slot, partySize) {
   const want = Math.max(1, Number(partySize || 1));
   const rem = slotRemaining(slot);
