@@ -6123,21 +6123,35 @@ if (debug && (!rows || rows.length === 0)) {
         const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
 const clubsRemaining = Math.max(0, courseHireClubsQty - clubsUsed);
 
+const bookedEffective = Number(r.booked_effective ?? r.bookedPlayers ?? r.booked_players ?? r.booked ?? 0);
+const remainingEffective = Number(
+  r.remaining_effective ??
+  r.remaining ??
+  r.remainingPlayers ??
+  r.playersRemaining ??
+  (Number(r.max_players || r.maxPlayers || 0) - bookedEffective)
+);
+
 return {
   time: r.tee_time,
   holes: r.holes,
-  const bookedEffective = Number(r.booked_effective || 0);
-const remainingEffective = Number(r.remaining_effective || 0);
 
-maxPlayers: r.max_players,
-bookedPlayers: bookedEffective,
-remaining: Math.max(0, remainingEffective),
+  maxPlayers: Number(r.max_players ?? r.maxPlayers ?? 0),
+
+  // ✅ keep BOTH (front-end compatibility + debug)
+  bookedPlayers: Number(r.booked_players ?? r.bookedPlayers ?? 0),
+  bookedEffective,
+
+  remaining: Math.max(0, remainingEffective),
+  remainingEffective: Math.max(0, remainingEffective),
+
   pricePerPlayerCents: r.price_per_player_cents,
   pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
+
   cartQty: courseCartQty,
   clubsQty: courseHireClubsQty,
-    
-    // ✅ ALIASES for front-end compatibility
+
+  // ✅ ALIASES for front-end compatibility
   cart_qty: courseCartQty,
   hire_clubs_qty: courseHireClubsQty,
   hireClubsQty: courseHireClubsQty,
@@ -6146,14 +6160,12 @@ remaining: Math.max(0, remainingEffective),
   clubs_remaining: clubsRemaining,
   cartsRemaining: cartRemaining,
   hireClubsRemaining: clubsRemaining,
-  
+
   // ✅ add-on availability (DISPLAY ONLY)
   cartRemaining,
   clubsRemaining,
   cartSoldOut: courseCartQty > 0 && cartRemaining <= 0,
   clubsSoldOut: courseHireClubsQty > 0 && clubsRemaining <= 0,
-  cartQty: courseCartQty,
-  clubsQty: courseHireClubsQty,
 
   durationMins: dur,
 };
