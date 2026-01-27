@@ -6025,20 +6025,14 @@ const durationMins = durationMinsForHoles(courseRow, holes);
   `
   SELECT
     t.tee_time,
-    t.holes,
     t.max_players,
     t.booked_players,
+    t.holes,
     t.price_per_player_cents,
 
-    COALESCE(ms.manual_count, 0)::int   AS manual_count,
-    COALESCE(bb.booking_players, 0)::int AS booking_players,
-
-    (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))::int AS booked_effective,
-
-    GREATEST(
-      0,
-      t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))
-    )::int AS remaining_effective
+    -- manual filled slots (1 row = 1 player)
+    (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0) + COALESCE(t.booked_players, 0))::int
+      AS booked_effective
 
   FROM booking_times t
 
@@ -6047,9 +6041,11 @@ const durationMins = durationMinsForHoles(courseRow, holes);
     FROM booking_manual_slots
     WHERE course_id = t.course_id
       AND play_date = t.play_date
-      AND tee_time  = t.tee_time
-      AND holes     = t.holes
-      AND COALESCE(name,'') <> ''
+      AND tee_time = t.tee_time
+      AND holes = t.holes
+      AND (
+        COALESCE(NULLIF(name,''), NULLIF(email,''), NULLIF(phone,'')) IS NOT NULL
+      )
   ) ms ON true
 
   LEFT JOIN LATERAL (
@@ -6057,8 +6053,8 @@ const durationMins = durationMinsForHoles(courseRow, holes);
     FROM booking_bookings
     WHERE course_id = t.course_id
       AND play_date = t.play_date
-      AND tee_time  = t.tee_time
-      AND holes     = t.holes
+      AND tee_time = t.tee_time
+      AND holes = t.holes
       AND status = 'CONFIRMED'
   ) bb ON true
 
@@ -6068,11 +6064,7 @@ const durationMins = durationMinsForHoles(courseRow, holes);
     AND t.status = 'AVAILABLE'
     AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) >= $4
     AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) <= $5
-    AND GREATEST(
-      0,
-      t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))
-    ) >= $6
-
+    AND (t.max_players - (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0) + COALESCE(t.booked_players,0))) >= $6
   ORDER BY t.tee_time ASC
   LIMIT 200;
   `,
