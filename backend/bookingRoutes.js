@@ -6025,38 +6025,43 @@ const durationMins = durationMinsForHoles(courseRow, holes);
   `
   SELECT
     t.tee_time,
-    t.max_players,
     t.holes,
+    t.max_players,
+    t.booked_players,
     t.price_per_player_cents,
 
-    -- ✅ EFFECTIVE booked players
-    -- manual slots + confirmed bookings (DO NOT double-count t.booked_players)
-    (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))::int
-      AS booked_effective
+    COALESCE(ms.manual_count, 0)::int      AS manual_count,
+    COALESCE(bb.booking_players, 0)::int   AS booking_players,
+
+    (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0) + COALESCE(t.booked_players, 0))::int
+  AS booked_effective,
+
+GREATEST(
+  0,
+  t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0) + COALESCE(t.booked_players, 0))
+)::int AS remaining_effective
 
   FROM booking_times t
 
-  -- manual filled slots (1 row = 1 player)
   LEFT JOIN LATERAL (
     SELECT COUNT(*)::int AS manual_count
     FROM booking_manual_slots
     WHERE course_id = t.course_id
       AND play_date = t.play_date
-      AND tee_time = t.tee_time
-      AND holes = t.holes
+      AND tee_time  = t.tee_time
+      AND holes     = t.holes
       AND (
         COALESCE(NULLIF(name,''), NULLIF(email,''), NULLIF(phone,'')) IS NOT NULL
       )
   ) ms ON true
 
-  -- confirmed bookings (players count)
   LEFT JOIN LATERAL (
     SELECT COALESCE(SUM(players),0)::int AS booking_players
     FROM booking_bookings
     WHERE course_id = t.course_id
       AND play_date = t.play_date
-      AND tee_time = t.tee_time
-      AND holes = t.holes
+      AND tee_time  = t.tee_time
+      AND holes     = t.holes
       AND status = 'CONFIRMED'
   ) bb ON true
 
@@ -6067,11 +6072,11 @@ const durationMins = durationMinsForHoles(courseRow, holes);
     AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) >= $4
     AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) <= $5
 
-    -- ✅ remaining seats must fit party size
-    AND (
-      t.max_players
-      - (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0))
-    ) >= $6
+    -- ✅ This is the ONLY filter that decides if a time can serve the party size
+    AND GREATEST(
+  0,
+  t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0) + COALESCE(t.booked_players, 0))
+) >= $6
 
   ORDER BY t.tee_time ASC
   LIMIT 200;
@@ -6123,27 +6128,30 @@ if (debug && (!rows || rows.length === 0)) {
         const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
 const clubsRemaining = Math.max(0, courseHireClubsQty - clubsUsed);
 
-const bookedEffective = Number(r.booked_effective ?? r.bookedPlayers ?? r.booked_players ?? r.booked ?? 0);
-const remainingEffective = Number(
-  r.remaining_effective ??
-  r.remaining ??
-  r.remainingPlayers ??
-  r.playersRemaining ??
-  (Number(r.max_players || r.maxPlayers || 0) - bookedEffective)
-);
+// ✅ ONLY trust the SQL-calculated effective fields for TeeRadarBooking
+const bookedEffective = Number(r.booked_effective ?? 0);
+const remainingEffective = Number(r.remaining_effective ?? 0);
 
 return {
   time: r.tee_time,
-  holes: r.holes,
+  holes: Number(r.holes),
 
-  maxPlayers: Number(r.max_players ?? r.maxPlayers ?? 0),
+  maxPlayers: Number(r.max_players ?? 0),
 
-  // ✅ keep BOTH (front-end compatibility + debug)
-  bookedPlayers: Number(r.booked_players ?? r.bookedPlayers ?? 0),
+  // keep raw too (useful for debugging)
+  bookedPlayers: Number(r.booked_players ?? 0),
+
+  // ✅ THE values the frontend should use
   bookedEffective,
-
   remaining: Math.max(0, remainingEffective),
   remainingEffective: Math.max(0, remainingEffective),
+
+  // ✅ ALIASES so book.html slotRemaining() reads it reliably
+  remainingPlayers: Math.max(0, remainingEffective),
+  playersRemaining: Math.max(0, remainingEffective),
+  booked_effective: bookedEffective,
+  remaining_effective: Math.max(0, remainingEffective),
+  booked_players: Number(r.booked_players ?? 0),
 
   pricePerPlayerCents: r.price_per_player_cents,
   pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
@@ -6151,7 +6159,6 @@ return {
   cartQty: courseCartQty,
   clubsQty: courseHireClubsQty,
 
-  // ✅ ALIASES for front-end compatibility
   cart_qty: courseCartQty,
   hire_clubs_qty: courseHireClubsQty,
   hireClubsQty: courseHireClubsQty,
@@ -6161,7 +6168,6 @@ return {
   cartsRemaining: cartRemaining,
   hireClubsRemaining: clubsRemaining,
 
-  // ✅ add-on availability (DISPLAY ONLY)
   cartRemaining,
   clubsRemaining,
   cartSoldOut: courseCartQty > 0 && cartRemaining <= 0,
@@ -6169,7 +6175,6 @@ return {
 
   durationMins: dur,
 };
-}));
 
 // ✅ CLOSE THE GET /availability ROUTE **HERE**
 return res.json({
