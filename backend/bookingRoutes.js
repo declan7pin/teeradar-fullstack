@@ -293,9 +293,12 @@ async function requireCourseAdminOrManager(req, res, next) {
 }
 function requireCourseAdminManager(req, res, next) {
   const role = String(req.courseAdmin?.role || "").trim().toLowerCase();
-  if (role !== "manager") {
-    return res.status(403).json({ ok: false, error: "manager_only" });
+
+  // allow both course-admin staff and manager
+  if (role !== "manager" && role !== "proshop" && role !== "admin") {
+    return res.status(403).json({ ok: false, error: "forbidden" });
   }
+
   next();
 }
 // ✅ DEBUG logger (safe anywhere)
