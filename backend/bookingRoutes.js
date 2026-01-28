@@ -6026,16 +6026,17 @@ const durationMins = durationMinsForHoles(courseRow, holes);
   SELECT
     t.tee_time,
     t.max_players,
-    t.booked_players,
     t.holes,
     t.price_per_player_cents,
 
-    -- manual filled slots (1 row = 1 player)
-    (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0) + COALESCE(t.booked_players, 0))::int
+    -- ✅ EFFECTIVE booked players
+    -- manual slots + confirmed bookings (DO NOT double-count t.booked_players)
+    (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))::int
       AS booked_effective
 
   FROM booking_times t
 
+  -- manual filled slots (1 row = 1 player)
   LEFT JOIN LATERAL (
     SELECT COUNT(*)::int AS manual_count
     FROM booking_manual_slots
@@ -6048,6 +6049,7 @@ const durationMins = durationMinsForHoles(courseRow, holes);
       )
   ) ms ON true
 
+  -- confirmed bookings (players count)
   LEFT JOIN LATERAL (
     SELECT COALESCE(SUM(players),0)::int AS booking_players
     FROM booking_bookings
@@ -6064,7 +6066,13 @@ const durationMins = durationMinsForHoles(courseRow, holes);
     AND t.status = 'AVAILABLE'
     AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) >= $4
     AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) <= $5
-    AND (t.max_players - (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0) + COALESCE(t.booked_players,0))) >= $6
+
+    -- ✅ remaining seats must fit party size
+    AND (
+      t.max_players
+      - (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0))
+    ) >= $6
+
   ORDER BY t.tee_time ASC
   LIMIT 200;
   `,
