@@ -6058,16 +6058,13 @@ router.get("/availability", async (req, res) => {
       FROM booking_times t
 
       LEFT JOIN LATERAL (
-        SELECT COUNT(*)::int AS manual_count
-        FROM booking_manual_slots
-        WHERE course_id = t.course_id
-          AND play_date = t.play_date
-          AND tee_time  = t.tee_time
-          AND holes     = t.holes
-          AND (
-            COALESCE(NULLIF(name,''), NULLIF(email,''), NULLIF(phone,'')) IS NOT NULL
-          )
-      ) ms ON true
+  SELECT COUNT(*)::int AS manual_count
+  FROM booking_manual_slots
+  WHERE course_id = t.course_id
+    AND play_date = t.play_date
+    AND tee_time  = t.tee_time
+    AND holes     = t.holes
+) ms ON true
 
       LEFT JOIN LATERAL (
         SELECT COALESCE(SUM(players),0)::int AS booking_players
