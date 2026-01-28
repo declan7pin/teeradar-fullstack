@@ -5955,10 +5955,7 @@ router.get("/availability", async (req, res) => {
     const slug = normSlug(req.query.slug);
     const date = String(req.query.date || "").trim();
     const holes = Number(req.query.holes || 18);
-
-    // ✅ IMPORTANT: support both ?players= and ?partySize=
-    const players = Number(req.query.players ?? req.query.partySize ?? 2);
-
+    const players = Number(req.query.players || 2);
     const earliest = String(req.query.earliest || "06:00").trim();
     const latest = String(req.query.latest || "17:00").trim();
     const debug = String(req.query.debug || "") === "1";
@@ -5969,7 +5966,6 @@ router.get("/availability", async (req, res) => {
         date: req.query.date,
         holes: req.query.holes,
         players: req.query.players,
-        partySize: req.query.partySize,
         earliest: req.query.earliest,
         latest: req.query.latest,
       });
@@ -6010,14 +6006,16 @@ router.get("/availability", async (req, res) => {
       latest,
     });
 
+    // ✅ FIX: define these in THIS scope (used later below)
     const courseName = String(courseRow.name || "");
     const courseCartQty = Number(courseRow.cart_qty || 0);
     const courseHireClubsQty = Number(courseRow.hire_clubs_qty || 0);
 
-    // (display-only in GET listing)
+    // ✅ availability listing does not "want" any addons (those are chosen at booking time)
     const cartQtyWanted = 0;
     const hireClubsQtyWanted = 0;
 
+    // ✅ duration window helpers (used for add-on overlap checks)
     const durationMins = durationMinsForHoles(courseRow, holes);
 
     // ✅ analytics: availability search
@@ -6033,6 +6031,7 @@ router.get("/availability", async (req, res) => {
       payload: { slug, date, holes, players, earliest, latest },
     }).catch(() => {});
 
+    // ✅ IMPORTANT: availability must be based on *effective remaining* (manual slots + confirmed bookings)
     const { rows } = await db.query(
       `
       SELECT
@@ -6042,18 +6041,16 @@ router.get("/availability", async (req, res) => {
         t.booked_players,
         t.price_per_player_cents,
 
-        COALESCE(ms.manual_count, 0)::int AS manual_count,
-        COALESCE(bb.booking_players, 0)::int AS booking_players,
+        COALESCE(ms.manual_count, 0)::int      AS manual_count,
+        COALESCE(bb.booking_players, 0)::int   AS booking_players,
 
-        -- ✅ Avoid double counting:
-        -- booking_times.booked_players is usually already updated from confirmed bookings.
-        -- So use the larger of the two.
-        (GREATEST(COALESCE(t.booked_players,0), COALESCE(bb.booking_players,0)) + COALESCE(ms.manual_count,0))::int
-          AS booked_effective,
+        -- ✅ Effective booked = manual filled slots + confirmed bookings
+        (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))::int AS booked_effective,
 
+        -- ✅ Effective remaining = max - effective booked
         GREATEST(
           0,
-          t.max_players - (GREATEST(COALESCE(t.booked_players,0), COALESCE(bb.booking_players,0)) + COALESCE(ms.manual_count,0))
+          t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))
         )::int AS remaining_effective
 
       FROM booking_times t
@@ -6065,7 +6062,9 @@ router.get("/availability", async (req, res) => {
           AND play_date = t.play_date
           AND tee_time  = t.tee_time
           AND holes     = t.holes
-          AND (COALESCE(NULLIF(name,''), NULLIF(email,''), NULLIF(phone,'')) IS NOT NULL)
+          AND (
+            COALESCE(NULLIF(name,''), NULLIF(email,''), NULLIF(phone,'')) IS NOT NULL
+          )
       ) ms ON true
 
       LEFT JOIN LATERAL (
@@ -6085,10 +6084,10 @@ router.get("/availability", async (req, res) => {
         AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) >= $4
         AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) <= $5
 
-        -- ✅ Only show times that can fit the requested party size
+        -- ✅ ONLY filter that decides if a time can serve the party size
         AND GREATEST(
           0,
-          t.max_players - (GREATEST(COALESCE(t.booked_players,0), COALESCE(bb.booking_players,0)) + COALESCE(ms.manual_count,0))
+          t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))
         ) >= $6
 
       ORDER BY t.tee_time ASC
@@ -6099,6 +6098,7 @@ router.get("/availability", async (req, res) => {
 
     console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
 
+    // ✅ DEBUG: show what the availability query returned
     if (debug) {
       console.log("🧪 availability query returned", {
         rowCount: Array.isArray(rows) ? rows.length : null,
@@ -6107,6 +6107,7 @@ router.get("/availability", async (req, res) => {
       });
     }
 
+    // ✅ DEBUG: if none returned, inspect what's in booking_times for that day regardless of filters
     if (debug && (!rows || rows.length === 0)) {
       const diag = await db.query(
         `
@@ -6121,6 +6122,7 @@ router.get("/availability", async (req, res) => {
         `,
         [courseId, date]
       );
+
       console.log("🧪 availability DIAG booking_times summary", diag.rows);
     }
 
@@ -6130,6 +6132,7 @@ router.get("/availability", async (req, res) => {
         const dur = durationMinsForHoles(courseRow, r.holes);
         const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
+        // ✅ don't throw 409 in a GET listing; just expose remaining counts
         const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(db, {
           courseId,
           startAtIso,
@@ -6139,6 +6142,7 @@ router.get("/availability", async (req, res) => {
         const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
         const clubsRemaining = Math.max(0, courseHireClubsQty - clubsUsed);
 
+        // ✅ ONLY trust SQL-calculated effective fields
         const bookedEffective = Number(r.booked_effective ?? 0);
         const remainingEffective = Number(r.remaining_effective ?? 0);
 
@@ -6151,12 +6155,12 @@ router.get("/availability", async (req, res) => {
           // raw (debug)
           bookedPlayers: Number(r.booked_players ?? 0),
 
-          // ✅ values frontend should use
+          // ✅ the values the frontend should use
           bookedEffective,
           remaining: Math.max(0, remainingEffective),
           remainingEffective: Math.max(0, remainingEffective),
 
-          // ✅ aliases for front-end slotRemaining()
+          // ✅ aliases so slotRemaining() reads reliably
           remainingPlayers: Math.max(0, remainingEffective),
           playersRemaining: Math.max(0, remainingEffective),
           booked_effective: bookedEffective,
@@ -6188,6 +6192,7 @@ router.get("/availability", async (req, res) => {
       })
     );
 
+    // ✅ CLOSE THE GET /availability ROUTE **HERE**
     return res.json({
       ok: true,
       times,
