@@ -5958,18 +5958,19 @@ router.get("/availability", async (req, res) => {
     const players = Number(req.query.players || 2);
     const earliest = String(req.query.earliest || "06:00").trim();
     const latest = String(req.query.latest || "17:00").trim();
-const debug = String(req.query.debug || "") === "1";
+    const debug = String(req.query.debug || "") === "1";
 
-if (debug) {
-  console.log("🧪 GET /availability DEBUG incoming", {
-    slug: req.query.slug,
-    date: req.query.date,
-    holes: req.query.holes,
-    players: req.query.players,
-    earliest: req.query.earliest,
-    latest: req.query.latest,
-  });
-}
+    if (debug) {
+      console.log("🧪 GET /availability DEBUG incoming", {
+        slug: req.query.slug,
+        date: req.query.date,
+        holes: req.query.holes,
+        players: req.query.players,
+        earliest: req.query.earliest,
+        latest: req.query.latest,
+      });
+    }
+
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
@@ -5979,34 +5980,43 @@ if (debug) {
     const sM = toMinutes(earliest);
     const eM = toMinutes(latest);
     if (sM === null || eM === null || eM <= sM) return res.status(400).json({ ok: false, error: "time_range_invalid" });
-const c = await db.query(`
-  SELECT id, slug, name, cart_qty, hire_clubs_qty, duration_9_mins, duration_18_mins
-  FROM booking_courses
-  WHERE slug=$1
-  LIMIT 1;
-`, [slug]);
 
-if (!c.rows.length) return res.status(404).json({ ok:false, error:"course_not_found" });
+    const c = await db.query(
+      `
+      SELECT id, slug, name, cart_qty, hire_clubs_qty, duration_9_mins, duration_18_mins
+      FROM booking_courses
+      WHERE slug=$1
+      LIMIT 1;
+      `,
+      [slug]
+    );
+
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
     const courseRow = c.rows[0];
-const courseId = courseRow.id;
-dlog("🧪 GET /availability course matched", {
-  courseId,
-  slug,
-  date,
-  holes,
-  players,
-  earliest,
-  latest,
-});
-// ✅ FIX: define these in THIS scope (used later below)
-const courseName = String(courseRow.name || "");
-const courseCartQty = Number(courseRow.cart_qty || 0);
-const courseHireClubsQty = Number(courseRow.hire_clubs_qty || 0);
-// ✅ availability listing does not "want" any addons (those are chosen at booking time)
-const cartQtyWanted = 0;
-const hireClubsQtyWanted = 0;
-// ✅ duration window helpers (used for add-on overlap checks)
-const durationMins = durationMinsForHoles(courseRow, holes);
+    const courseId = courseRow.id;
+
+    dlog("🧪 GET /availability course matched", {
+      courseId,
+      slug,
+      date,
+      holes,
+      players,
+      earliest,
+      latest,
+    });
+
+    // ✅ FIX: define these in THIS scope (used later below)
+    const courseName = String(courseRow.name || "");
+    const courseCartQty = Number(courseRow.cart_qty || 0);
+    const courseHireClubsQty = Number(courseRow.hire_clubs_qty || 0);
+
+    // ✅ availability listing does not "want" any addons (those are chosen at booking time)
+    const cartQtyWanted = 0;
+    const hireClubsQtyWanted = 0;
+
+    // ✅ duration window helpers (used for add-on overlap checks)
+    const durationMins = durationMinsForHoles(courseRow, holes);
 
     // ✅ analytics: availability search
     recordEvent({
@@ -6022,190 +6032,207 @@ const durationMins = durationMinsForHoles(courseRow, holes);
     }).catch(() => {});
 
     const { rows } = await db.query(
-  `
-  SELECT
-    t.tee_time,
-    t.holes,
-    t.max_players,
-    t.booked_players,
-    t.price_per_player_cents,
+      `
+      SELECT
+        t.tee_time,
+        t.holes,
+        t.max_players,
+        t.booked_players,
+        t.price_per_player_cents,
 
-    COALESCE(ms.manual_count, 0)::int      AS manual_count,
-    COALESCE(bb.booking_players, 0)::int   AS booking_players,
+        COALESCE(ms.manual_count, 0)::int      AS manual_count,
+        COALESCE(bb.booking_players, 0)::int   AS booking_players,
 
-    (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0) + COALESCE(t.booked_players, 0))::int
-  AS booked_effective,
+        -- ✅ FIX: avoid double counting (booking_times.booked_players vs booking_bookings sum)
+        (
+          COALESCE(ms.manual_count, 0)
+          + GREATEST(COALESCE(t.booked_players, 0), COALESCE(bb.booking_players, 0))
+        )::int AS booked_effective,
 
-GREATEST(
-  0,
-  t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0) + COALESCE(t.booked_players, 0))
-)::int AS remaining_effective
+        -- ✅ Effective remaining = max - effective booked
+        GREATEST(
+          0,
+          t.max_players
+          - (
+              COALESCE(ms.manual_count, 0)
+              + GREATEST(COALESCE(t.booked_players, 0), COALESCE(bb.booking_players, 0))
+            )
+        )::int AS remaining_effective
 
-  FROM booking_times t
+      FROM booking_times t
 
-  LEFT JOIN LATERAL (
-    SELECT COUNT(*)::int AS manual_count
-    FROM booking_manual_slots
-    WHERE course_id = t.course_id
-      AND play_date = t.play_date
-      AND tee_time  = t.tee_time
-      AND holes     = t.holes
-      AND (
-        COALESCE(NULLIF(name,''), NULLIF(email,''), NULLIF(phone,'')) IS NOT NULL
-      )
-  ) ms ON true
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS manual_count
+        FROM booking_manual_slots
+        WHERE course_id = t.course_id
+          AND play_date = t.play_date
+          AND tee_time  = t.tee_time
+          AND holes     = t.holes
+          AND (
+            COALESCE(NULLIF(name,''), NULLIF(email,''), NULLIF(phone,'')) IS NOT NULL
+          )
+      ) ms ON true
 
-  LEFT JOIN LATERAL (
-    SELECT COALESCE(SUM(players),0)::int AS booking_players
-    FROM booking_bookings
-    WHERE course_id = t.course_id
-      AND play_date = t.play_date
-      AND tee_time  = t.tee_time
-      AND holes     = t.holes
-      AND status = 'CONFIRMED'
-  ) bb ON true
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(SUM(players),0)::int AS booking_players
+        FROM booking_bookings
+        WHERE course_id = t.course_id
+          AND play_date = t.play_date
+          AND tee_time  = t.tee_time
+          AND holes     = t.holes
+          AND status = 'CONFIRMED'
+      ) bb ON true
 
-  WHERE t.course_id = $1
-    AND t.play_date = $2::date
-    AND t.holes = $3
-    AND t.status = 'AVAILABLE'
-    AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) >= $4
-    AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) <= $5
+      WHERE t.course_id = $1
+        AND t.play_date = $2::date
+        AND t.holes = $3
+        AND t.status = 'AVAILABLE'
+        AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) >= $4
+        AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) <= $5
 
-    -- ✅ This is the ONLY filter that decides if a time can serve the party size
-    AND GREATEST(
-  0,
-  t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0) + COALESCE(t.booked_players, 0))
-) >= $6
+        -- ✅ This is the ONLY filter that decides if a time can serve the party size
+        AND GREATEST(
+          0,
+          t.max_players
+          - (
+              COALESCE(ms.manual_count, 0)
+              + GREATEST(COALESCE(t.booked_players, 0), COALESCE(bb.booking_players, 0))
+            )
+        ) >= $6
 
-  ORDER BY t.tee_time ASC
-  LIMIT 200;
-  `,
-  [courseId, date, holes, sM, eM, players]
-);
+      ORDER BY t.tee_time ASC
+      LIMIT 200;
+      `,
+      [courseId, date, holes, sM, eM, players]
+    );
+
     console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
-// ✅ DEBUG: show what the availability query returned
-if (debug) {
-  console.log("🧪 availability query returned", {
-    rowCount: Array.isArray(rows) ? rows.length : null,
-    firstRow: Array.isArray(rows) && rows.length ? rows[0] : null,
-    lastRow:
-      Array.isArray(rows) && rows.length ? rows[rows.length - 1] : null,
-  });
-}
-// ✅ DEBUG: if none returned, inspect what's in booking_times for that day regardless of filters
-if (debug && (!rows || rows.length === 0)) {
-  const diag = await db.query(
-    `
-    SELECT status, holes, COUNT(*)::int AS c,
-           MIN(tee_time) AS first_time,
-           MAX(tee_time) AS last_time
-    FROM booking_times
-    WHERE course_id = $1
-      AND play_date = $2::date
-    GROUP BY status, holes
-    ORDER BY holes, status;
-    `,
-    [courseId, date]
-  );
 
-  console.log("🧪 availability DIAG booking_times summary", diag.rows);
-}
+    // ✅ DEBUG: show what the availability query returned
+    if (debug) {
+      console.log("🧪 availability query returned", {
+        rowCount: Array.isArray(rows) ? rows.length : null,
+        firstRow: Array.isArray(rows) && rows.length ? rows[0] : null,
+        lastRow: Array.isArray(rows) && rows.length ? rows[rows.length - 1] : null,
+      });
+    }
+
+    // ✅ DEBUG: if none returned, inspect what's in booking_times for that day regardless of filters
+    if (debug && (!rows || rows.length === 0)) {
+      const diag = await db.query(
+        `
+        SELECT status, holes, COUNT(*)::int AS c,
+               MIN(tee_time) AS first_time,
+               MAX(tee_time) AS last_time
+        FROM booking_times
+        WHERE course_id = $1
+          AND play_date = $2::date
+        GROUP BY status, holes
+        ORDER BY holes, status;
+        `,
+        [courseId, date]
+      );
+
+      console.log("🧪 availability DIAG booking_times summary", diag.rows);
+    }
+
+    // ✅ FIX: close Promise.all/map properly (your current code returns res.json inside map)
     const times = await Promise.all(
       (rows || []).map(async (r) => {
         const startAtIso = toIsoDateTimeLocal(date, r.tee_time);
         const dur = durationMinsForHoles(courseRow, r.holes);
         const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-// ✅ don't throw 409 in a GET listing; just expose remaining counts
-// (booking validation happens in POST /availability)
+        // ✅ don't throw 409 in a GET listing; just expose remaining counts
         const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(db, {
-  courseId,
-  startAtIso,
-  endAtIso,
-});
+          courseId,
+          startAtIso,
+          endAtIso,
+        });
 
         const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
-const clubsRemaining = Math.max(0, courseHireClubsQty - clubsUsed);
+        const clubsRemaining = Math.max(0, courseHireClubsQty - clubsUsed);
 
-// ✅ ONLY trust the SQL-calculated effective fields for TeeRadarBooking
-const bookedEffective = Number(r.booked_effective ?? 0);
-const remainingEffective = Number(r.remaining_effective ?? 0);
+        // ✅ ONLY trust the SQL-calculated effective fields for TeeRadarBooking
+        const bookedEffective = Number(r.booked_effective ?? 0);
+        const remainingEffective = Number(r.remaining_effective ?? 0);
 
-return {
-  time: r.tee_time,
-  holes: Number(r.holes),
+        return {
+          time: r.tee_time,
+          holes: Number(r.holes),
 
-  maxPlayers: Number(r.max_players ?? 0),
+          maxPlayers: Number(r.max_players ?? 0),
 
-  // keep raw too (useful for debugging)
-  bookedPlayers: Number(r.booked_players ?? 0),
+          // keep raw too (useful for debugging)
+          bookedPlayers: Number(r.booked_players ?? 0),
 
-  // ✅ THE values the frontend should use
-  bookedEffective,
-  remaining: Math.max(0, remainingEffective),
-  remainingEffective: Math.max(0, remainingEffective),
+          // ✅ THE values the frontend should use
+          bookedEffective,
+          remaining: Math.max(0, remainingEffective),
+          remainingEffective: Math.max(0, remainingEffective),
 
-  // ✅ ALIASES so book.html slotRemaining() reads it reliably
-  remainingPlayers: Math.max(0, remainingEffective),
-  playersRemaining: Math.max(0, remainingEffective),
-  booked_effective: bookedEffective,
-  remaining_effective: Math.max(0, remainingEffective),
-  booked_players: Number(r.booked_players ?? 0),
+          // ✅ ALIASES so book.html slotRemaining() reads it reliably
+          remainingPlayers: Math.max(0, remainingEffective),
+          playersRemaining: Math.max(0, remainingEffective),
+          booked_effective: bookedEffective,
+          remaining_effective: Math.max(0, remainingEffective),
+          booked_players: Number(r.booked_players ?? 0),
 
-  pricePerPlayerCents: r.price_per_player_cents,
-  pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
+          pricePerPlayerCents: r.price_per_player_cents,
+          pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
 
-  cartQty: courseCartQty,
-  clubsQty: courseHireClubsQty,
+          cartQty: courseCartQty,
+          clubsQty: courseHireClubsQty,
 
-  cart_qty: courseCartQty,
-  hire_clubs_qty: courseHireClubsQty,
-  hireClubsQty: courseHireClubsQty,
+          cart_qty: courseCartQty,
+          hire_clubs_qty: courseHireClubsQty,
+          hireClubsQty: courseHireClubsQty,
 
-  cart_remaining: cartRemaining,
-  clubs_remaining: clubsRemaining,
-  cartsRemaining: cartRemaining,
-  hireClubsRemaining: clubsRemaining,
+          cart_remaining: cartRemaining,
+          clubs_remaining: clubsRemaining,
+          cartsRemaining: cartRemaining,
+          hireClubsRemaining: clubsRemaining,
 
-  cartRemaining,
-  clubsRemaining,
-  cartSoldOut: courseCartQty > 0 && cartRemaining <= 0,
-  clubsSoldOut: courseHireClubsQty > 0 && clubsRemaining <= 0,
+          cartRemaining,
+          clubsRemaining,
+          cartSoldOut: courseCartQty > 0 && cartRemaining <= 0,
+          clubsSoldOut: courseHireClubsQty > 0 && clubsRemaining <= 0,
 
-  durationMins: dur,
-};
+          durationMins: dur,
+        };
+      })
+    );
 
-// ✅ CLOSE THE GET /availability ROUTE **HERE**
-return res.json({
-  ok: true,
-  times,
-  // ✅ compatibility: front-end may expect one of these keys
-  rows: times,
-  slots: times,
-  teeTimes: times,
-  ...(debug
-    ? {
-        debug: {
-          slug,
-          date,
-          holes,
-          players,
-          earliest,
-          latest,
-          courseId,
-          courseName,
-          rowsFound: Array.isArray(rows) ? rows.length : null,
-          returnedTimes: Array.isArray(times) ? times.length : null,
-          sample: Array.isArray(times) && times.length ? times[0] : null,
-        },
-      }
-    : {}),
-});
-} catch (e) {
-  console.error("GET /availability error", e);
-  return res.status(500).json({ ok: false, error: "internal_error" });
-}
+    // ✅ CLOSE THE GET /availability ROUTE HERE
+    return res.json({
+      ok: true,
+      times,
+      // ✅ compatibility: front-end may expect one of these keys
+      rows: times,
+      slots: times,
+      teeTimes: times,
+      ...(debug
+        ? {
+            debug: {
+              slug,
+              date,
+              holes,
+              players,
+              earliest,
+              latest,
+              courseId,
+              courseName,
+              rowsFound: Array.isArray(rows) ? rows.length : null,
+              returnedTimes: Array.isArray(times) ? times.length : null,
+              sample: Array.isArray(times) && times.length ? times[0] : null,
+            },
+          }
+        : {}),
+    });
+  } catch (e) {
+    console.error("GET /availability error", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
 });
 
 // ✅ NEW: per-slot transaction lock key (prevents race + addon oversell)
@@ -6222,6 +6249,7 @@ function advisoryKeyForSlot({ courseId, dateYmd, timeHhMm }) {
 
   return key.toString(); // pass as string to pg bigint
 }
+
 async function advisoryLockForSlot(client, { courseId, dateYmd, timeHhMm }) {
   const key = advisoryKeyForSlot({ courseId, dateYmd, timeHhMm });
   if (!key) return null;
@@ -6229,6 +6257,7 @@ async function advisoryLockForSlot(client, { courseId, dateYmd, timeHhMm }) {
   await client.query(`SELECT pg_advisory_xact_lock($1::bigint);`, [key]);
   return key;
 }
+
 async function handleBook(req, res) {
   let client = null;
   let didBegin = false;
@@ -6246,51 +6275,52 @@ async function handleBook(req, res) {
     const golfer_phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
     // ✅ cart / hire clubs selection (optional)
-// Accept either:
-// - addonIds: ["cart","hire_clubs"]
-// - booleans: has_cart / has_hire_clubs
-// - optional quantities: cartQty / hireClubsQty (or snake_case)
-const addonIds = Array.isArray(req.body?.addonIds)
-  ? req.body.addonIds.map((x) => String(x))
-  : [];
+    // Accept either:
+    // - addonIds: ["cart","hire_clubs"]
+    // - booleans: has_cart / has_hire_clubs
+    // - optional quantities: cartQty / hireClubsQty (or snake_case)
+    const addonIds = Array.isArray(req.body?.addonIds)
+      ? req.body.addonIds.map((x) => String(x))
+      : [];
 
-const picked = new Set(
-  addonIds.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean)
-);
+    const picked = new Set(
+      addonIds.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean)
+    );
 
-// addonIds wins, but booleans still supported
-const has_cart =
-  picked.size > 0 ? picked.has("cart") : parseBool(req.body?.has_cart, false);
+    // addonIds wins, but booleans still supported
+    const has_cart =
+      picked.size > 0 ? picked.has("cart") : parseBool(req.body?.has_cart, false);
 
-const has_hire_clubs =
-  picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
+    const has_hire_clubs =
+      picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
 
-// quantities (default 1 if selected, clamp 0..4)
-const cart_qty_raw = Number(
-  req.body?.cart_qty ?? req.body?.cartQty ?? (has_cart ? 1 : 0)
-);
-const hire_clubs_qty_raw = Number(
-  req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? (has_hire_clubs ? 1 : 0)
-);
+    // quantities (default 1 if selected, clamp 0..4)
+    const cart_qty_raw = Number(
+      req.body?.cart_qty ?? req.body?.cartQty ?? (has_cart ? 1 : 0)
+    );
+    const hire_clubs_qty_raw = Number(
+      req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? (has_hire_clubs ? 1 : 0)
+    );
 
-const cart_qty = Math.max(
-  0,
-  Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : (has_cart ? 1 : 0))
-);
+    const cart_qty = Math.max(
+      0,
+      Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : (has_cart ? 1 : 0))
+    );
 
-const hire_clubs_qty = Math.max(
-  0,
-  Math.min(
-    4,
-    Number.isFinite(hire_clubs_qty_raw)
-      ? hire_clubs_qty_raw
-      : (has_hire_clubs ? 1 : 0)
-  )
-);
+    const hire_clubs_qty = Math.max(
+      0,
+      Math.min(
+        4,
+        Number.isFinite(hire_clubs_qty_raw)
+          ? hire_clubs_qty_raw
+          : (has_hire_clubs ? 1 : 0)
+      )
+    );
 
-// final derived flags (qty can force false)
-const final_has_cart = cart_qty > 0;
-const final_has_hire_clubs = hire_clubs_qty > 0;
+    // final derived flags (qty can force false)
+    const final_has_cart = cart_qty > 0;
+    const final_has_hire_clubs = hire_clubs_qty > 0;
+
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
     if (!time || !/^\d{2}:\d{2}$/.test(time)) return res.status(400).json({ ok: false, error: "time_invalid" });
@@ -6322,84 +6352,89 @@ const final_has_hire_clubs = hire_clubs_qty > 0;
 
     const courseRow = c.rows[0];
     const courseId = courseRow.id;
-// ✅ begin transaction + lock this specific slot to prevent double-book + addon oversell
-await client.query("BEGIN");
-didBegin = true;
 
-// lock per-slot (course+date+time). If two people try same tee time, one waits.
-await advisoryLockForSlot(client, { courseId, dateYmd: date, timeHhMm: time });
+    // ✅ begin transaction + lock this specific slot to prevent double-book + addon oversell
+    await client.query("BEGIN");
+    didBegin = true;
 
-// ✅ NEW: lock addon inventory per course BEFORE any overlap counting / enforcement
-await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
-  `addons:${courseId}`,
-]);
+    // lock per-slot (course+date+time). If two people try same tee time, one waits.
+    await advisoryLockForSlot(client, { courseId, dateYmd: date, timeHhMm: time });
 
-// ✅ compute booking window (needed for addon overlap inventory checks)
-let startAtIso = toIsoDateTimeLocal(date, time);
-const dur = durationMinsForHoles(courseRow, holes);
-const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
-// ✅ check addon overlap usage (confirmed bookings + filled manual slots)
-const courseCartQty = Number(courseRow.cart_qty || 0);
-const courseClubsQty = Number(courseRow.hire_clubs_qty || 0);
-// ✅ NEW: if course doesn't offer the addon (qty=0), block selecting it
-if (cart_qty > 0 && courseCartQty <= 0) {
-  await client.query("ROLLBACK");
-  didBegin = false;
-  return res.status(400).json({ ok: false, error: "cart_not_offered" });
-}
+    // ✅ NEW: lock addon inventory per course BEFORE any overlap counting / enforcement
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
+      `addons:${courseId}`,
+    ]);
 
-if (hire_clubs_qty > 0 && courseClubsQty <= 0) {
-  await client.query("ROLLBACK");
-  didBegin = false;
-  return res.status(400).json({ ok: false, error: "hire_clubs_not_offered" });
-}
-const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(client, {
-  courseId,
-  startAtIso,
-  endAtIso,
-});
+    // ✅ compute booking window (needed for addon overlap inventory checks)
+    let startAtIso = toIsoDateTimeLocal(date, time);
+    const dur = durationMinsForHoles(courseRow, holes);
+    const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
-const clubsRemaining = Math.max(0, courseClubsQty - clubsUsed);
+    // ✅ check addon overlap usage (confirmed bookings + filled manual slots)
+    const courseCartQty = Number(courseRow.cart_qty || 0);
+    const courseClubsQty = Number(courseRow.hire_clubs_qty || 0);
 
-// if course has inventory configured (>0), enforce it
-if (cart_qty > 0 && courseCartQty > 0 && cart_qty > cartRemaining) {
-  await client.query("ROLLBACK");
-  didBegin = false;
-  return res.status(409).json({
-    ok: false,
-    error: "cart_sold_out",
-    cartRemaining,
-  });
-}
+    // ✅ NEW: if course doesn't offer the addon (qty=0), block selecting it
+    if (cart_qty > 0 && courseCartQty <= 0) {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(400).json({ ok: false, error: "cart_not_offered" });
+    }
 
-if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining) {
-  await client.query("ROLLBACK");
-  didBegin = false;
-  return res.status(409).json({
-    ok: false,
-    error: "hire_clubs_sold_out",
-    clubsRemaining,
-  });
-}
+    if (hire_clubs_qty > 0 && courseClubsQty <= 0) {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(400).json({ ok: false, error: "hire_clubs_not_offered" });
+    }
+
+    const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(client, {
+      courseId,
+      startAtIso,
+      endAtIso,
+    });
+
+    const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
+    const clubsRemaining = Math.max(0, courseClubsQty - clubsUsed);
+
+    // if course has inventory configured (>0), enforce it
+    if (cart_qty > 0 && courseCartQty > 0 && cart_qty > cartRemaining) {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(409).json({
+        ok: false,
+        error: "cart_sold_out",
+        cartRemaining,
+      });
+    }
+
+    if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining) {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(409).json({
+        ok: false,
+        error: "hire_clubs_sold_out",
+        clubsRemaining,
+      });
+    }
+
     const courseCartFeeCents = Number(courseRow.cart_fee_cents || 0);
-const courseHireClubsFeeCents = Number(courseRow.hire_clubs_fee_cents || 0);
+    const courseHireClubsFeeCents = Number(courseRow.hire_clubs_fee_cents || 0);
 
-// charge per unit (qty). if you want “per booking” instead, keep your old version.
-const cart_fee_cents = cart_qty > 0 ? courseCartFeeCents * cart_qty : 0;
-const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire_clubs_qty : 0;
+    // charge per unit (qty). if you want “per booking” instead, keep your old version.
+    const cart_fee_cents = cart_qty > 0 ? courseCartFeeCents * cart_qty : 0;
+    const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire_clubs_qty : 0;
 
     if (!Number.isFinite(cart_fee_cents) || cart_fee_cents < 0 || cart_fee_cents > 10000000) {
-  await client.query("ROLLBACK");
-  didBegin = false;
-  return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
-}
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
+    }
 
-if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_clubs_fee_cents > 10000000) {
-  await client.query("ROLLBACK");
-  didBegin = false;
-  return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
-}
+    if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_clubs_fee_cents > 10000000) {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
+    }
 
     // 1) Lock the booking_times row for this slot
     const t = await client.query(
@@ -6414,41 +6449,40 @@ if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_c
     );
 
     if (!t.rows.length) {
-  await client.query("ROLLBACK");
-  didBegin = false;
-  return res.status(404).json({ ok: false, error: "time_not_found" });
-}
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(404).json({ ok: false, error: "time_not_found" });
+    }
 
     const timeRow = t.rows[0];
 
     if (String(timeRow.status || "").toUpperCase() !== "AVAILABLE") {
-  await client.query("ROLLBACK");
-  didBegin = false;
-  return res.status(409).json({ ok: false, error: "time_not_available" });
-}
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(409).json({ ok: false, error: "time_not_available" });
+    }
 
     const maxPlayers = Number(timeRow.max_players || 0);
     const bookedPlayers = Number(timeRow.booked_players || 0);
 
     if (players > (maxPlayers - bookedPlayers)) {
-  await client.query("ROLLBACK");
-  didBegin = false;
-  return res.status(409).json({ ok: false, error: "not_enough_spots" });
-}
-
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(409).json({ ok: false, error: "not_enough_spots" });
+    }
 
     // 3) Price calc
-const ppp = Number(timeRow.price_per_player_cents || 0);
-const baseTotalCents = ppp * players;
+    const ppp = Number(timeRow.price_per_player_cents || 0);
+    const baseTotalCents = ppp * players;
 
-// add-ons are per-booking (not per-player) in your schema
-const addonsCents =
-  (final_has_cart ? cart_fee_cents : 0) +
-  (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
+    // add-ons are per-booking (not per-player) in your schema
+    const addonsCents =
+      (final_has_cart ? cart_fee_cents : 0) +
+      (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
 
-// ✅ store full total in DB
-const totalCents = baseTotalCents + addonsCents;
-const reference = makeRef("TR");
+    // ✅ store full total in DB
+    const totalCents = baseTotalCents + addonsCents;
+    const reference = makeRef("TR");
 
     // 4) Insert booking
     const ins = await client.query(
@@ -6488,11 +6522,11 @@ const reference = makeRef("TR");
         startAtIso,
         endAtIso,
         final_has_cart,
-cart_qty,
-cart_fee_cents,
-final_has_hire_clubs,
-hire_clubs_qty,
-hire_clubs_fee_cents,
+        cart_qty,
+        cart_fee_cents,
+        final_has_hire_clubs,
+        hire_clubs_qty,
+        hire_clubs_fee_cents,
       ]
     );
 
@@ -6517,7 +6551,7 @@ hire_clubs_fee_cents,
 
     // 6) Commit
     await client.query("COMMIT");
-didBegin = false;
+    didBegin = false;
 
     // ✅ analytics
     recordEvent({
@@ -6566,24 +6600,25 @@ didBegin = false;
       emailReason: emailResult.emailReason || null,
     });
   } catch (e) {
-  console.error("book POST", e);
+    console.error("book POST", e);
 
-  try {
-    if (client && didBegin) {
-      await client.query("ROLLBACK");
-      didBegin = false;
+    try {
+      if (client && didBegin) {
+        await client.query("ROLLBACK");
+        didBegin = false;
+      }
+    } catch (rbErr) {
+      console.error("book POST rollback failed", rbErr);
     }
-  } catch (rbErr) {
-    console.error("book POST rollback failed", rbErr);
-  }
 
-  return res.status(500).json({ ok: false, error: "internal_error" });
-} finally {
-  try {
-    if (client) client.release();
-  } catch {}
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  } finally {
+    try {
+      if (client) client.release();
+    } catch {}
+  }
 }
-}
+
 router.post("/book", handleBook);
 
 // keep /availability POST blocked so the frontend can’t accidentally use it
@@ -6594,6 +6629,7 @@ router.post("/availability", (req, res) => {
     message: "Use GET /availability to list times and POST /book to confirm a booking.",
   });
 });
+
 // ✅ NEW: Booking Analytics (uses real bookings + existing analytics table)
 router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req, res) => {
   try {
