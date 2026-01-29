@@ -2053,6 +2053,18 @@ return normalized;
 
         const allResults = await Promise.all(jobs);
 const slots = allResults.flat();
+const party = Number(criteria.partySize) || 1;
+
+let known = 0, unknown = 0, blocked = 0;
+for (const s of slots) {
+  const r = normalizeRemaining(s);
+  if (r === null) unknown++;
+  else {
+    known++;
+    if (r < party) blocked++;
+  }
+}
+console.log("🧪 partySize filter stats", { party, raw: slots.length, known, unknown, blocked });
 
 const party = Number(criteria.partySize) || 1;
 
@@ -2060,22 +2072,16 @@ const party = Number(criteria.partySize) || 1;
 // - For TeeRadarBooking: remaining SHOULD exist → enforce it strictly
 // - For other providers: only enforce if remaining can be confidently derived
 const filtered = slots.filter((s) => {
-  const provider = String(s?._provider || "").toLowerCase();
-  const isTRB =
-    provider.includes("teeradarbooking") ||
-    provider.includes("teeradar booking") ||
-    provider.includes("booking"); // (safe since _provider is your source label)
+  const party = Number(criteria.partySize) || 1;
 
+const filtered = slots.filter((s) => {
   const remaining = normalizeRemaining(s);
 
-  // TeeRadarBooking MUST have remaining; if missing, treat as not fit
-  if (isTRB) {
-    return Number.isFinite(remaining) && remaining >= party;
-  }
-
-  // Other providers: if we can’t tell remaining, don’t block the slot
+  // ✅ If we can't confidently determine remaining, DO NOT block the slot.
+  // (Otherwise everything turns red.)
   if (remaining === null) return true;
 
+  // ✅ If we DO know remaining, enforce party size
   return remaining >= party;
 });
 
