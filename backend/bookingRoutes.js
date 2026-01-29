@@ -5957,25 +5957,27 @@ router.get("/availability", async (req, res) => {
     const slug = normSlug(req.query.slug);
     const date = String(req.query.date || "").trim();
     const holes = Number(req.query.holes || 18);
-    const playersRaw = Array.isArray(req.query.players) ? req.query.players[0] : req.query.players;
+    const playersQuery = (req.query.players ?? req.query.partySize);
+const playersRaw = Array.isArray(playersQuery) ? playersQuery[0] : playersQuery;
 const playersParsed = parseInt(String(playersRaw ?? "2"), 10);
 const players = Math.min(4, Math.max(1, Number.isFinite(playersParsed) ? playersParsed : 2));
     const earliest = String(req.query.earliest || "06:00").trim();
     const latest = String(req.query.latest || "17:00").trim();
     const debug = String(req.query.debug || "") === "1";
 
-    if (debug) {
-      console.log("🧪 GET /availability DEBUG incoming", {
-        slug: req.query.slug,
-        date: req.query.date,
-        holes: req.query.holes,
-        players: req.query.players,
-        playersRaw,
-        playersParsed,
-        earliest: req.query.earliest,
-        latest: req.query.latest,
-      });
-    }
+   if (debug) {
+  console.log("🧪 GET /availability DEBUG incoming", {
+    slug: req.query.slug,
+    date: req.query.date,
+    holes: req.query.holes,
+    players: req.query.players,
+    partySize: req.query.partySize,
+    playersRaw,
+    playersResolved: players,
+    earliest: req.query.earliest,
+    latest: req.query.latest,
+  });
+}
 
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
