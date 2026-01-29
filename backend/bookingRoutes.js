@@ -5958,7 +5958,8 @@ router.get("/availability", async (req, res) => {
     const date = String(req.query.date || "").trim();
     const holes = Number(req.query.holes || 18);
     const playersRaw = Array.isArray(req.query.players) ? req.query.players[0] : req.query.players;
-    const players = Math.max(1, parseInt(String(playersRaw ?? "2"), 10) || 2);
+const playersParsed = parseInt(String(playersRaw ?? "2"), 10);
+const players = Math.min(4, Math.max(1, Number.isFinite(playersParsed) ? playersParsed : 2));
     const earliest = String(req.query.earliest || "06:00").trim();
     const latest = String(req.query.latest || "17:00").trim();
     const debug = String(req.query.debug || "") === "1";
@@ -5969,6 +5970,8 @@ router.get("/availability", async (req, res) => {
         date: req.query.date,
         holes: req.query.holes,
         players: req.query.players,
+        playersRaw,
+        playersParsed,
         earliest: req.query.earliest,
         latest: req.query.latest,
       });
@@ -6097,7 +6100,53 @@ router.get("/availability", async (req, res) => {
     );
 
     console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
+// ✅ DEBUG: inspect the exact 06:00 slot to see why it "passes" players filter
+if (debug) {
+  const slotDiag = await db.query(
+    `
+    SELECT
+      t.tee_time,
+      t.holes,
+      t.max_players,
+      t.booked_players,
+      COALESCE(ms.manual_count, 0)::int    AS manual_count,
+      COALESCE(bb.booking_players, 0)::int AS booking_players,
+      (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))::int AS booked_effective,
+      GREATEST(
+        0,
+        t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))
+      )::int AS remaining_effective,
+      t.status
+    FROM booking_times t
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS manual_count
+      FROM booking_manual_slots
+      WHERE course_id = t.course_id
+        AND play_date = t.play_date
+        AND tee_time  = t.tee_time
+        AND holes     = t.holes
+    ) ms ON true
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(SUM(players),0)::int AS booking_players
+      FROM booking_bookings
+      WHERE course_id = t.course_id
+        AND play_date = t.play_date
+        AND tee_time  = t.tee_time
+        AND holes     = t.holes
+        AND status = 'CONFIRMED'
+    ) bb ON true
+    WHERE t.course_id = $1
+      AND t.play_date = $2::date
+      AND t.holes = $3
+      AND t.tee_time = '06:00'
+    LIMIT 1;
+    `,
+    [courseId, date, holes]
+  );
 
+  console.log("🧪 SLOT DIAG 06:00", slotDiag.rows[0] || null);
+  console.log("🧪 computed players =", { playersRaw, playersParsed, players });
+}
     // ✅ DEBUG: show what the availability query returned
     if (debug) {
       console.log("🧪 availability query returned", {
