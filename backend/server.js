@@ -1998,7 +1998,7 @@ app.post("/api/search", async (req, res) => {
         partySize: criteria.partySize,
       });
 
-      ifif (cached) {
+    if (cached) {
   const normalizedCached = Array.isArray(cached)
     ? cached.map((s) => ({
         ...(s && typeof s === "object" ? s : { time: String(s) }),
