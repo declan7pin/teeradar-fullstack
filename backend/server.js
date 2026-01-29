@@ -2066,13 +2066,9 @@ for (const s of slots) {
 }
 console.log("🧪 partySize filter stats", { party, raw: slots.length, known, unknown, blocked });
 
-const party = Number(criteria.partySize) || 1;
-
 // ✅ Filter logic:
 // - For TeeRadarBooking: remaining SHOULD exist → enforce it strictly
 // - For other providers: only enforce if remaining can be confidently derived
-const filtered = slots.filter((s) => {
-  const party = Number(criteria.partySize) || 1;
 
 const filtered = slots.filter((s) => {
   const remaining = normalizeRemaining(s);
