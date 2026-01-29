@@ -2005,23 +2005,33 @@ app.post("/api/search", async (req, res) => {
 
       try {
         const result = await scrapeCourse(c, criteria, feeGroups);
-        const count = Array.isArray(result) ? result.length : 0;
 
-        console.log(`✅ scraped ${c.name} → ${count} slots`);
+// ✅ attach provider/course metadata to every slot so we can filter later
+const normalized = Array.isArray(result)
+  ? result.map((s) => ({
+      ...(s && typeof s === "object" ? s : { time: String(s) }),
+      _provider: provider,
+      _courseName: c.name,
+      _courseId: courseId,
+      _state: (c.state || "").toString().toUpperCase(),
+    }))
+  : [];
 
-        await saveSlotsToCache({
-          courseId,
-          courseName: c.name,
-          provider,
-          date,
-          holes: holesValue || null,
-          partySize: criteria.partySize,
-          earliest,
-          latest,
-          slots: result || [],
-        });
+console.log(`✅ scraped ${c.name} → ${normalized.length} slots`);
 
-        return result || [];
+await saveSlotsToCache({
+  courseId,
+  courseName: c.name,
+  provider,
+  date,
+  holes: holesValue || null,
+  partySize: criteria.partySize,
+  earliest,
+  latest,
+  slots: normalized,
+});
+
+return normalized;
       } catch (err) {
         console.error(`❌ scrape error for ${c.name}:`, err.message);
 
@@ -2042,17 +2052,38 @@ app.post("/api/search", async (req, res) => {
     });
 
         const allResults = await Promise.all(jobs);
-    const slots = allResults.flat();
+const slots = allResults.flat();
 
-    // ✅ IMPORTANT: do NOT filter slots by party size on the backend.
-    // Most providers don't reliably supply remaining/capacity.
-    // Backend filtering wipes valid results and breaks availability.
-    // Party-size / “green marker” logic is handled on the frontend instead.
-    console.log(
-      `🔎 /api/search complete → ${slots.length} total slots (no backend partySize filter)`
-    );
+const party = Number(criteria.partySize) || 1;
 
-    return res.json({ slots });
+// ✅ Filter logic:
+// - For TeeRadarBooking: remaining SHOULD exist → enforce it strictly
+// - For other providers: only enforce if remaining can be confidently derived
+const filtered = slots.filter((s) => {
+  const provider = String(s?._provider || "").toLowerCase();
+  const isTRB =
+    provider.includes("teeradarbooking") ||
+    provider.includes("teeradar booking") ||
+    provider.includes("booking"); // (safe since _provider is your source label)
+
+  const remaining = normalizeRemaining(s);
+
+  // TeeRadarBooking MUST have remaining; if missing, treat as not fit
+  if (isTRB) {
+    return Number.isFinite(remaining) && remaining >= party;
+  }
+
+  // Other providers: if we can’t tell remaining, don’t block the slot
+  if (remaining === null) return true;
+
+  return remaining >= party;
+});
+
+console.log(
+  `🔎 /api/search complete → ${filtered.length} slots (partySize=${party}, raw=${slots.length})`
+);
+
+return res.json({ slots: filtered });
   } catch (err) {
     console.error("search error", err);
     return res.status(500).json({ error: "internal error", detail: err.message });
