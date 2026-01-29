@@ -1927,7 +1927,7 @@ app.post("/api/search", async (req, res) => {
     };
 
     console.log("Incoming /api/search", criteria);
-    // ✅ NEW: party-size enforcement (so 1-slot results don’t show green for 4 players)
+  // ✅ Party-size enforcement ONLY when remaining is confidently known
     function normalizeRemaining(s) {
   if (!s || typeof s !== "object") return null;
 
@@ -1998,10 +1998,20 @@ app.post("/api/search", async (req, res) => {
         partySize: criteria.partySize,
       });
 
-      if (cached) {
-        console.log(`⚡ cache hit → ${c.name} (${cached.length} slots)`);
-        return cached;
-      }
+      ifif (cached) {
+  const normalizedCached = Array.isArray(cached)
+    ? cached.map((s) => ({
+        ...(s && typeof s === "object" ? s : { time: String(s) }),
+        _provider: provider,
+        _courseName: c.name,
+        _courseId: courseId,
+        _state: (c.state || "").toString().toUpperCase(),
+      }))
+    : [];
+
+  console.log(`⚡ cache hit → ${c.name} (${normalizedCached.length} slots)`);
+  return normalizedCached;
+}
 
       try {
         const result = await scrapeCourse(c, criteria, feeGroups);
