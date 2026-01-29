@@ -2959,17 +2959,16 @@ async function syncBookedPlayersForTime({ courseId, play_date, tee_time, holes }
     [courseId, play_date, tee_time, holes]
   );
 
-  // 1) Count manual slots filled (1 row = 1 player slot)
-  const ms = await db.query(
-    `
-    SELECT COUNT(*)::int AS n
-    FROM booking_manual_slots
-    WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
-      AND COALESCE(name,'') <> ''
-    `,
-    [courseId, play_date, tee_time, holes]
-  );
-  const manualCount = Number(ms.rows[0]?.n || 0);
+ // 1) Count manual slots (1 row = 1 player slot) ✅ count ALL rows
+const ms = await db.query(
+  `
+  SELECT COUNT(*)::int AS n
+  FROM booking_manual_slots
+  WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+  `,
+  [courseId, play_date, tee_time, holes]
+);
+const manualCount = Number(ms.rows[0]?.n || 0);
 
   // 2) Count CONFIRMED booking players for same time
   const bb = await db.query(
