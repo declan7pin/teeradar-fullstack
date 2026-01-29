@@ -5957,8 +5957,8 @@ router.get("/availability", async (req, res) => {
     const slug = normSlug(req.query.slug);
     const date = String(req.query.date || "").trim();
     const holes = Number(req.query.holes || 18);
-    const const playersRaw = Array.isArray(req.query.players) ? req.query.players[0] : req.query.players;
-const players = Math.max(1, parseInt(String(playersRaw ?? "2"), 10) || 2);
+    const playersRaw = Array.isArray(req.query.players) ? req.query.players[0] : req.query.players;
+    const players = Math.max(1, parseInt(String(playersRaw ?? "2"), 10) || 2);
     const earliest = String(req.query.earliest || "06:00").trim();
     const latest = String(req.query.latest || "17:00").trim();
     const debug = String(req.query.debug || "") === "1";
