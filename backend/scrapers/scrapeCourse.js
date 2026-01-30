@@ -1,5 +1,5 @@
 // backend/scrapers/scrapeCourse.js
-import db from "../db.js"; // ✅ ADD: needed for TeeRadarBooking (Hillview) provider
+import db from "../db.js"; // ✅ needed for TeeRadarBooking provider
 
 import { parseMiClub } from "./parseMiClub.js";
 import { parseQuick18 } from "./parseQuick18.js";
@@ -44,10 +44,7 @@ function buildMiClubUrl(course, criteria, feeGroups = {}) {
     existingParams.get("bookingResourceId") ||
     "3000000";
 
-  const feeGroupId =
-    cfg.feeGroupId ||
-    existingParams.get("feeGroupId") ||
-    null;
+  const feeGroupId = cfg.feeGroupId || existingParams.get("feeGroupId") || null;
 
   const params = new URLSearchParams();
   params.set("bookingResourceId", bookingResourceId);
@@ -69,7 +66,7 @@ function buildQuick18Url(course, criteria) {
 }
 
 /**
- * ✅ NEW: Pull availability from TeeRadar Booking system (your own DB)
+ * ✅ Pull availability from TeeRadar Booking system (your own DB)
  * This lets Hillview show up in the map search results like MiClub/Quick18.
  */
 async function scrapeTeeRadarBookingCourse(course, criteria) {
@@ -92,7 +89,10 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
     .toLowerCase();
 
   if (!slug) {
-    console.warn("TeeRadarBooking: missing bookingSlug/slug/id for course:", course?.name);
+    console.warn(
+      "TeeRadarBooking: missing bookingSlug/slug/id for course:",
+      course?.name
+    );
     return [];
   }
 
@@ -100,15 +100,18 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
     `SELECT id, name FROM booking_courses WHERE LOWER(slug) = LOWER($1) LIMIT 1;`,
     [slug]
   );
+
   const courseId = c.rows[0]?.id || null;
-  // ✅ IMPORTANT: use the exact name from courses.json so frontend grouping matches
-const courseName = String(course.name || c.rows[0]?.name || slug);
-console.log("🟦 TeeRadarBooking name check:", {
-  coursesJsonName: course.name,
-  bookingCoursesName: c.rows[0]?.name,
-  emittedSlotCourseName: courseName,
-  slug,
-});
+
+  // ✅ IMPORTANT: emit the exact courses.json name so frontend grouping matches markers
+  const courseName = String(course.name || c.rows[0]?.name || slug);
+
+  console.log("🟦 TeeRadarBooking name check:", {
+    coursesJsonName: course.name,
+    bookingCoursesName: c.rows[0]?.name,
+    emittedSlotCourseName: courseName,
+    slug,
+  });
 
   if (!courseId) {
     console.warn("TeeRadarBooking: booking_courses not found for slug:", slug);
@@ -116,39 +119,39 @@ console.log("🟦 TeeRadarBooking name check:", {
   }
 
   const q = `
-  SELECT
-    bt.play_date,
-    bt.tee_time,
-    bt.holes,
-    bt.max_players,
-    bt.price_per_player_cents,
-    COALESCE(SUM(bb.players), 0)::int AS booked_players
-  FROM booking_times bt
-  LEFT JOIN booking_bookings bb
-    ON bb.course_id = bt.course_id
-   AND bb.play_date = bt.play_date
-   AND bb.tee_time  = bt.tee_time
-   AND bb.holes     = bt.holes
-   AND bb.status    = 'CONFIRMED'
-  WHERE bt.course_id = $1
-    AND bt.play_date = $2::date
-    AND bt.status = 'AVAILABLE'
-    ${requestedHoles ? "AND bt.holes = $4" : ""}
-  GROUP BY
-    bt.play_date,
-    bt.tee_time,
-    bt.holes,
-    bt.max_players,
-    bt.price_per_player_cents
-  HAVING (bt.max_players - COALESCE(SUM(bb.players), 0)) >= $3
-  ORDER BY bt.tee_time ASC;
-`;
+    SELECT
+      bt.play_date,
+      bt.tee_time,
+      bt.holes,
+      bt.max_players,
+      bt.price_per_player_cents,
+      COALESCE(SUM(bb.players), 0)::int AS booked_players
+    FROM booking_times bt
+    LEFT JOIN booking_bookings bb
+      ON bb.course_id = bt.course_id
+     AND bb.play_date = bt.play_date
+     AND bb.tee_time  = bt.tee_time
+     AND bb.holes     = bt.holes
+     AND bb.status    = 'CONFIRMED'
+    WHERE bt.course_id = $1
+      AND bt.play_date = $2::date
+      AND bt.status = 'AVAILABLE'
+      ${requestedHoles ? "AND bt.holes = $4" : ""}
+    GROUP BY
+      bt.play_date,
+      bt.tee_time,
+      bt.holes,
+      bt.max_players,
+      bt.price_per_player_cents
+    HAVING (bt.max_players - COALESCE(SUM(bb.players), 0)) >= $3
+    ORDER BY bt.tee_time ASC;
+  `;
 
-const params = requestedHoles
-  ? [courseId, date, partySize, requestedHoles]
-  : [courseId, date, partySize];
+  const params = requestedHoles
+    ? [courseId, date, partySize, requestedHoles]
+    : [courseId, date, partySize];
 
-const r = await db.query(q, params);
+  const r = await db.query(q, params);
 
   const SITE_URL = (process.env.SITE_URL || "https://teeradar.com.au").trim();
 
@@ -160,34 +163,41 @@ const r = await db.query(q, params);
     if (earliestMin !== null && mins !== null && mins < earliestMin) continue;
     if (latestMin !== null && mins !== null && mins > latestMin) continue;
 
-    const holes = Number(row.holes) || (course.holes ? Number(course.holes) : null) || 18;
+    const holes =
+      Number(row.holes) || (course.holes ? Number(course.holes) : null) || 18;
+
     const maxPlayers = Number(row.max_players || 4);
 
+    // ✅ FIX: these were missing (caused Hillview to be red + broke builds)
+    const playersBooked = Number(row.booked_players || 0);
+    const remaining = Math.max(0, maxPlayers - playersBooked);
+
     out.push({
-  course: courseName,
-  courseName,
-  courseTitle: courseName,
-  course_name: courseName,
+      course: courseName,
+      courseName,
+      courseTitle: courseName,
+      course_name: courseName,
 
-  provider: "TeeRadarBooking",
-  date,
-  time: t,
-  holes,
-  price: null,
+      provider: "TeeRadarBooking",
+      date,
+      time: t,
+      holes,
+      price: null,
 
-  maxPlayers,
-  playersBooked,
+      maxPlayers,
+      playersBooked,
 
-  remaining,                      // ✅ keep
-  spotsAvailable: remaining,      // ✅ ADD (frontend reads this)
-  playersAvailable: remaining,    // ✅ ADD (frontend reads this too)
+      remaining, // ✅ your strict logic needs this
+      spotsAvailable: remaining, // ✅ some UIs read this
+      playersAvailable: remaining, // ✅ some UIs read this too
+      availableSpots: remaining, // keep your existing naming too
 
-  availableSpots: remaining,      // keep your existing naming too
-  bookUrl: `${SITE_URL}/book/${slug}`,
+      bookUrl: `${SITE_URL}/book/${slug}`,
 
-  // optional extra (won't break anything if UI ignores it)
-  pricePerPlayerCents: Number(row.price_per_player_cents || 0),
-});
+      // optional extra (won't break anything if UI ignores it)
+      pricePerPlayerCents: Number(row.price_per_player_cents || 0),
+    });
+  }
 
   console.log(
     `TeeRadarBooking → ${courseName} → ${out.length} slots (after partySize filter)`
@@ -348,7 +358,7 @@ export async function scrapeCourse(course, criteria, feeGroups = {}) {
       return [];
     }
 
-    // ✅ NEW: TeeRadar booking system (Hillview etc.)
+    // ✅ TeeRadar booking system (Hillview etc.)
     if (course.provider === "TeeRadarBooking") {
       return await scrapeTeeRadarBookingCourse(course, criteria);
     }
@@ -381,7 +391,7 @@ export async function scrapeCourse(course, criteria, feeGroups = {}) {
       return await scrapeTeeItUpCourse(course, criteria);
     }
 
-    // ✅ NEW: Chronogolf support
+    // ✅ Chronogolf support
     if (course.provider === "Chronogolf") {
       return await scrapeChronogolfCourse(course, criteria);
     }
