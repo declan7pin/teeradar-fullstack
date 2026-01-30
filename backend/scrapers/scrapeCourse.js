@@ -103,6 +103,12 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
   const courseId = c.rows[0]?.id || null;
   // ✅ IMPORTANT: use the exact name from courses.json so frontend grouping matches
 const courseName = String(course.name || c.rows[0]?.name || slug);
+console.log("🟦 TeeRadarBooking name check:", {
+  coursesJsonName: course.name,
+  bookingCoursesName: c.rows[0]?.name,
+  emittedSlotCourseName: courseName,
+  slug,
+});
 
   if (!courseId) {
     console.warn("TeeRadarBooking: booking_courses not found for slug:", slug);
