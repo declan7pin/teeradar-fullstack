@@ -587,7 +587,19 @@ window.onerror = function(message, source, lineno, colno){
   const SLUG_KEY = "tr_course_admin_slug";
 const TOKEN_KEY = "tr_course_admin_token";
 const ROLE_KEY = "tr_course_admin_role";
+// ✅ Accept tokens saved by the separate login page (backwards compatible)
+const LEGACY_SLUG_KEY = "course_admin_slug";
+const LEGACY_TOKEN_KEY = "course_admin_token";
 
+(function migrateLegacyAuthKeys(){
+  try{
+    const legacySlug = (localStorage.getItem(LEGACY_SLUG_KEY) || "").trim().toLowerCase();
+    const legacyTok  = (localStorage.getItem(LEGACY_TOKEN_KEY) || "").trim();
+
+    if (legacySlug && !localStorage.getItem(SLUG_KEY)) localStorage.setItem(SLUG_KEY, legacySlug);
+    if (legacyTok  && !localStorage.getItem(TOKEN_KEY)) localStorage.setItem(TOKEN_KEY, legacyTok);
+  }catch{}
+})();
 function getSlug(){ try { return (localStorage.getItem(SLUG_KEY) || "").trim().toLowerCase(); } catch { return ""; } }
 function setSlug(v){ try { localStorage.setItem(SLUG_KEY, String(v||"").trim().toLowerCase()); } catch {} }
 
