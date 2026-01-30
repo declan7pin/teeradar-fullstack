@@ -2129,6 +2129,11 @@ console.log(
 );
 
 return res.json({ slots: slotsOut });
+  } catch (err) {
+    console.error("search error", err);
+    return res.status(500).json({ error: "internal error", detail: err.message });
+  }
+});
 
 // -------------------------------------------------
 // Analytics Summary
