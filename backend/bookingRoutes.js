@@ -3674,19 +3674,29 @@ try {
     tee_time,
     holes,
     players,
-    name,
-    email,
-    phone,
-    reference,
-    paid,
+    golfer_name,
+    golfer_email,
+    golfer_phone,
+    price_per_player_cents,
     total_cents,
+    reference,
+    status,
+    start_at,
+    end_at,
+    paid,
+    checked_in,
     cart_fee_cents,
     hire_clubs_fee_cents,
-    created_at,
-    updated_at
+    created_at
   )
   VALUES (
-    $1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now(), now()
+    $1,$2::date,$3,$4,$5,
+    $6,$7,$8,
+    $9,$10,$11,'CONFIRMED',
+    $12::timestamptz,$13::timestamptz,
+    $14,$15,
+    $16,$17,
+    now()
   );
   `,
   [
@@ -3698,9 +3708,13 @@ try {
     name || null,
     email || null,
     phone || null,
-    reference,
-    paid,
+    pricePerPlayerCents || 0,
     totalCents,
+    reference,
+    startAtIso,
+    endAtIso,
+    paid,
+    checked_in,
     cartCents,
     hireClubsCents,
   ]
