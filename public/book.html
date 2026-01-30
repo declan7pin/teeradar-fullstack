@@ -524,9 +524,16 @@
 }
     function slotFitsParty(slot, partySize) {
   const want = Math.max(1, Number(partySize || 1));
+
+  // ✅ TRUST BACKEND if it already decided
+  if (slot && typeof slot.fitsParty === "boolean") return slot.fitsParty;
+
+  // Fallback: calculate locally only if backend didn't provide fitsParty
   const rem = slotRemaining(slot);
 
-  if (rem === null) return want <= 1;
+  // ✅ If we can't confirm remaining, DO NOT treat as fitting for party > 1
+  if (rem === null) return false;
+
   return rem >= want;
 }
 
