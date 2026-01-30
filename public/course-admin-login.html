@@ -99,6 +99,13 @@ document.getElementById("loginBtn").onclick = async () => {
       return;
     }
 
+    // ✅ NEW: persist token/slug so course-admin.html can auto-use it (no second login)
+    const token = data.token || data.jwt || data.accessToken || "";
+    const slug = data.slug || data.courseSlug || data.course_slug || "";
+
+    if (token) localStorage.setItem("course_admin_token", token);
+    if (slug) localStorage.setItem("course_admin_slug", slug);
+
     // success
     window.location.href = "/course-admin.html";
   } catch (e) {
