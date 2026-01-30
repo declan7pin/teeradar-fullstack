@@ -2113,16 +2113,22 @@ const filtered = slots.filter((s) => {
   return remaining >= party;
 });
 
+const slotsOut = filtered.map((s) => {
+  const remaining = normalizeRemaining(s);
+
+  return {
+    ...s,
+    remaining: typeof s.remaining === "number" ? s.remaining : remaining,
+    fitsParty: remaining === null ? null : remaining >= party,
+    _partyRequested: party,
+  };
+});
+
 console.log(
-  `🔎 /api/search complete → ${filtered.length} slots (partySize=${party}, raw=${slots.length})`
+  `🔎 /api/search complete → ${slotsOut.length} slots (partySize=${party}, raw=${slots.length})`
 );
 
-return res.json({ slots: filtered });
-  } catch (err) {
-    console.error("search error", err);
-    return res.status(500).json({ error: "internal error", detail: err.message });
-  }
-});
+return res.json({ slots: slotsOut });
 
 // -------------------------------------------------
 // Analytics Summary
