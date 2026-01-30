@@ -2081,6 +2081,25 @@ return normalized;
 
         const allResults = await Promise.all(jobs);
 const slots = allResults.flat();
+const seen = new Set();
+const dedupedSlots = [];
+
+for (const s of slots) {
+  const key = [
+    s?._courseId || s?._courseName || s?.courseName || s?.course || "",
+    s?.date || "",
+    s?.time || "",
+    s?.holes || "",
+    s?._provider || s?.provider || "",
+  ].join("|");
+
+  if (seen.has(key)) continue;
+  seen.add(key);
+  dedupedSlots.push(s);
+}
+
+// replace downstream `slots` usage with `dedupedSlots`
+const slotsToUse = dedupedSlots;
 const party = Number(criteria.partySize) || 1;
 
 let known = 0, unknown = 0, blocked = 0;
