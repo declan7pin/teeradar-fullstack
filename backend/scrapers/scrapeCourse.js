@@ -164,26 +164,30 @@ const r = await db.query(q, params);
     const maxPlayers = Number(row.max_players || 4);
 
     out.push({
-      course: courseName,
-      courseName,
-      courseTitle: courseName,
-      course_name: courseName,
+  course: courseName,
+  courseName,
+  courseTitle: courseName,
+  course_name: courseName,
 
-      provider: "TeeRadarBooking",
-      date,
-      time: t,
-      holes,
-      price: null,
-      maxPlayers,
-      playersBooked,
-      remaining,                 // ✅ THIS is what your strict logic needs
-      availableSpots: remaining, // keep your existing naming too
-      bookUrl: `${SITE_URL}/book/${slug}`,
+  provider: "TeeRadarBooking",
+  date,
+  time: t,
+  holes,
+  price: null,
 
-      // optional extra (won't break anything if UI ignores it)
-      pricePerPlayerCents: Number(row.price_per_player_cents || 0),
-    });
-  }
+  maxPlayers,
+  playersBooked,
+
+  remaining,                      // ✅ keep
+  spotsAvailable: remaining,      // ✅ ADD (frontend reads this)
+  playersAvailable: remaining,    // ✅ ADD (frontend reads this too)
+
+  availableSpots: remaining,      // keep your existing naming too
+  bookUrl: `${SITE_URL}/book/${slug}`,
+
+  // optional extra (won't break anything if UI ignores it)
+  pricePerPlayerCents: Number(row.price_per_player_cents || 0),
+});
 
   console.log(
     `TeeRadarBooking → ${courseName} → ${out.length} slots (after partySize filter)`
