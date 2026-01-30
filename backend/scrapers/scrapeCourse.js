@@ -109,21 +109,39 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
   }
 
   const q = `
-    SELECT play_date, tee_time, holes, max_players, price_per_player_cents
-    FROM booking_times
-    WHERE course_id = $1
-      AND play_date = $2::date
-      AND status = 'AVAILABLE'
-      AND max_players >= $3
-      ${requestedHoles ? "AND holes = $4" : ""}
-    ORDER BY tee_time ASC;
-  `;
+  SELECT
+    bt.play_date,
+    bt.tee_time,
+    bt.holes,
+    bt.max_players,
+    bt.price_per_player_cents,
+    COALESCE(SUM(bb.players), 0)::int AS booked_players
+  FROM booking_times bt
+  LEFT JOIN booking_bookings bb
+    ON bb.course_id = bt.course_id
+   AND bb.play_date = bt.play_date
+   AND bb.tee_time  = bt.tee_time
+   AND bb.holes     = bt.holes
+   AND bb.status    = 'CONFIRMED'
+  WHERE bt.course_id = $1
+    AND bt.play_date = $2::date
+    AND bt.status = 'AVAILABLE'
+    ${requestedHoles ? "AND bt.holes = $4" : ""}
+  GROUP BY
+    bt.play_date,
+    bt.tee_time,
+    bt.holes,
+    bt.max_players,
+    bt.price_per_player_cents
+  HAVING (bt.max_players - COALESCE(SUM(bb.players), 0)) >= $3
+  ORDER BY bt.tee_time ASC;
+`;
 
-  const params = requestedHoles
-    ? [courseId, date, partySize, requestedHoles]
-    : [courseId, date, partySize];
+const params = requestedHoles
+  ? [courseId, date, partySize, requestedHoles]
+  : [courseId, date, partySize];
 
-  const r = await db.query(q, params);
+const r = await db.query(q, params);
 
   const SITE_URL = (process.env.SITE_URL || "https://teeradar.com.au").trim();
 
@@ -150,8 +168,9 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
       holes,
       price: null,
       maxPlayers,
-      playersBooked: 0,
-      availableSpots: maxPlayers, // status AVAILABLE means it can take partySize (we filtered max_players)
+      playersBooked,
+      remaining,                 // ✅ THIS is what your strict logic needs
+      availableSpots: remaining, // keep your existing naming too
       bookUrl: `${SITE_URL}/book/${slug}`,
 
       // optional extra (won't break anything if UI ignores it)
