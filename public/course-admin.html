@@ -2410,14 +2410,28 @@ if (Array.isArray(manualSlots) && manualSlots.length) {
   try{
     $("slug").value = getSlug();
 
-    // optional: auto-fill email if you want later (leave for now)
-    // $("email").value = "";
-
     if (getSlug()) $("who").textContent = "Using: " + getSlug();
 
     applyRoleUI();
-    // ✅ auto-load weekly template only if a slug is saved AND role is manager
-    // (role may not be set yet until after login, so we don't auto-load here)
+
+    // ✅ If we already have a token from the login page, validate it and set role automatically
+    if (getSlug() && getToken()){
+      $("msg").textContent = "✅ Logged in";
+      setTimeout(async () => {
+        try{
+          const me = await getMe();                 // confirms token works
+          setRole(String(me.role || "").toLowerCase());
+          applyRoleUI();
+          $("msg").textContent = "✅ Logged in";
+        }catch(e){
+          // token invalid/expired → clear so they can login normally
+          clearAuth();
+          applyRoleUI();
+          $("msg").textContent = "Session expired — please log in";
+          $("who").textContent = "";
+        }
+      }, 0);
+    }
   }catch{}
 })();
   // ✅ Weekly template feature
