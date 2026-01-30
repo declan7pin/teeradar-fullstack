@@ -3510,238 +3510,250 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
 
     const courseId = await courseIdFromSlug(slug);
-if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-// ✅ CONNECT + BEGIN BEFORE USING client
-client = await db.connect();
-await client.query("BEGIN");
-didBegin = true;
+    // ✅ CONNECT + BEGIN BEFORE USING client
+    client = await db.connect();
+    await client.query("BEGIN");
+    didBegin = true;
 
-// ✅ compute usage window (needed for addon overlap checks)
-const courseRowQ = await client.query(
-  `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
-  [courseId]
-);
-const courseRow = courseRowQ.rows[0] || {};
-const startAtIso = toIsoDateTimeLocal(playDate, tee_time);
-const dur = durationMinsForHoles(courseRow, holes);
-const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
+    // ✅ compute usage window (needed for addon overlap checks)
+    const courseRowQ = await client.query(
+      `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
+      [courseId]
+    );
+    const courseRow = courseRowQ.rows[0] || {};
+    const startAtIso = toIsoDateTimeLocal(playDate, tee_time);
+    const dur = durationMinsForHoles(courseRow, holes);
+    const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-// ✅ ENFORCE add-on inventory (carts/clubs) before inserting rows
-const inv = await enforceAddonInventory(client, {
-  courseId,
-  startAtIso,
-  endAtIso,
-  cartQtyWanted: cart_qty,
-  hireClubsQtyWanted: hire_clubs_qty,
-});
-if (!inv.ok) {
-  await client.query("ROLLBACK");
-  didBegin = false;
-  return res.status(409).json({ ok: false, ...inv });
-}
+    // ✅ ENFORCE add-on inventory (carts/clubs) before inserting rows
+    const inv = await enforceAddonInventory(client, {
+      courseId,
+      startAtIso,
+      endAtIso,
+      cartQtyWanted: cart_qty,
+      hireClubsQtyWanted: hire_clubs_qty,
+    });
+    if (!inv.ok) {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(409).json({ ok: false, ...inv });
+    }
 
     // ✅ Lock this tee time manual-slot group so two admins can't collide slot_index
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
       `manualslots:${courseId}:${playDate}:${tee_time}:${holes}`,
     ]);
 
-   // ✅ Find which slots are already filled at this tee time
-const taken = await client.query(
-  `
-  SELECT slot_index
-  FROM booking_manual_slots
-  WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
-    AND COALESCE(name,'') <> ''
-  `,
-  [courseId, playDate, tee_time, holes]
-);
+    // ✅ Find which slots are already filled at this tee time
+    const taken = await client.query(
+      `
+      SELECT slot_index
+      FROM booking_manual_slots
+      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+        AND COALESCE(name,'') <> ''
+      `,
+      [courseId, playDate, tee_time, holes]
+    );
 
-const takenSet = new Set((taken.rows || []).map((r) => Number(r.slot_index)));
-const freeSlots = [1, 2, 3, 4].filter((i) => !takenSet.has(i));
+    const takenSet = new Set((taken.rows || []).map((r) => Number(r.slot_index)));
+    const freeSlots = [1, 2, 3, 4].filter((i) => !takenSet.has(i));
 
-if (freeSlots.length < players) {
-  await client.query("ROLLBACK");
-  didBegin = false;
-  return res.status(409).json({
-    ok: false,
-    error: "not_enough_empty_slots",
-    remainingSlots: freeSlots.length,
-  });
-}
+    if (freeSlots.length < players) {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(409).json({
+        ok: false,
+        error: "not_enough_empty_slots",
+        remainingSlots: freeSlots.length,
+      });
+    }
 
-// Use one shared reference for the whole group
-const reference =
-  String(_pickAny(req.body, ["reference"], "") || "").trim() || makeRef("MS");
+    // Use one shared reference for the whole group
+    const reference =
+      String(_pickAny(req.body, ["reference"], "") || "").trim() || makeRef("MS");
 
-const insertedRows = [];
+    const insertedRows = [];
 
-for (let i = 0; i < players; i++) {
-  const slot_index = freeSlots[i];
+    for (let i = 0; i < players; i++) {
+      const slot_index = freeSlots[i];
 
-  const ins = await client.query(
+      // ✅ FIX 1: use the correct variable name (playDate), not play_date (undefined)
+      const price_per_player_cents = await getTeePricePerPlayerCents({
+        courseId,
+        playDate,
+        teeTime: tee_time,
+        holes,
+      });
+
+      const ins = await client.query(
         `
-    INSERT INTO booking_manual_slots
-      (course_id, play_date, tee_time, holes, slot_index,
-       reference, name, email, phone,
-       paid, checked_in,
-       has_cart, has_hire_clubs,
-       cart_qty, hire_clubs_qty,
-       notes,
-       start_at, end_at,
-       created_at, updated_at)
-    VALUES
-      ($1, $2::date, $3, $4, $5,
-       $6, $7, $8, $9,
-       $10, $11,
-       $12, $13,
-       $14, $15,
-       $16,
-       $17::timestamptz, $18::timestamptz,
-       now(), now())
-    ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
-    DO UPDATE SET
-      reference = EXCLUDED.reference,
-      name = EXCLUDED.name,
-      email = EXCLUDED.email,
-      phone = EXCLUDED.phone,
-      paid = EXCLUDED.paid,
-      checked_in = EXCLUDED.checked_in,
-      has_cart = EXCLUDED.has_cart,
-      has_hire_clubs = EXCLUDED.has_hire_clubs,
-      cart_qty = EXCLUDED.cart_qty,
-      hire_clubs_qty = EXCLUDED.hire_clubs_qty,
-      notes = EXCLUDED.notes,
-      start_at = EXCLUDED.start_at,
-      end_at = EXCLUDED.end_at,
-      updated_at = now()
-    RETURNING
-      play_date::text AS play_date,
-      tee_time, holes, slot_index, reference,
-      name, email, phone, paid, checked_in,
-      has_cart, has_hire_clubs, cart_qty, hire_clubs_qty,
-      notes, start_at, end_at, created_at, updated_at;
-    `,
-    [
-      courseId,
-      playDate,
-      tee_time,
-      holes,
-      slot_index,
-      reference,
-      name || null,
-      email || null,
-      phone || null,
-      paid,
-      checked_in,
-      i === 0 ? cart_qty > 0 : false,
-      i === 0 ? hire_clubs_qty > 0 : false,
-      i === 0 ? cart_qty : 0,
-      i === 0 ? hire_clubs_qty : 0,
-      notes,
-      startAtIso,
-      endAtIso,
-    ]
-  );
+        INSERT INTO booking_manual_slots
+          (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
+           paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes,
+           price_per_player_cents,
+           start_at, end_at,
+           updated_at)
+        VALUES
+          ($1, $2::date, $3, $4, $5,
+           $6, $7, $8, $9,
+           $10, $11,
+           $12, $13,
+           $14, $15,
+           $16,
+           $17,
+           $18::timestamptz, $19::timestamptz,
+           now())
+        ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
+        DO UPDATE SET
+          reference = EXCLUDED.reference,
+          name = EXCLUDED.name,
+          email = EXCLUDED.email,
+          phone = EXCLUDED.phone,
+          paid = EXCLUDED.paid,
+          checked_in = EXCLUDED.checked_in,
+          has_cart = EXCLUDED.has_cart,
+          has_hire_clubs = EXCLUDED.has_hire_clubs,
+          cart_qty = EXCLUDED.cart_qty,
+          hire_clubs_qty = EXCLUDED.hire_clubs_qty,
+          notes = EXCLUDED.notes,
+          // ✅ FIX 2: persist price on updates too
+          price_per_player_cents = EXCLUDED.price_per_player_cents,
+          start_at = EXCLUDED.start_at,
+          end_at = EXCLUDED.end_at,
+          updated_at = now()
+        RETURNING
+          play_date::text AS play_date,
+          tee_time, holes, slot_index, reference,
+          name, email, phone, paid, checked_in,
+          has_cart, has_hire_clubs, cart_qty, hire_clubs_qty,
+          notes, start_at, end_at, created_at, updated_at;
+        `,
+        [
+          courseId,
+          playDate,
+          tee_time,
+          holes,
+          slot_index,
+          reference,
+          name || null,
+          email || null,
+          phone || null,
+          paid,
+          checked_in,
+          i === 0 ? cart_qty > 0 : false,
+          i === 0 ? hire_clubs_qty > 0 : false,
+          i === 0 ? cart_qty : 0,
+          i === 0 ? hire_clubs_qty : 0,
+          notes,
+          price_per_player_cents || 0,
+          startAtIso,
+          endAtIso,
+        ]
+      );
 
-  insertedRows.push(ins.rows[0]);
-}
+      insertedRows.push(ins.rows[0]);
+    }
 
     await client.query("COMMIT");
     didBegin = false;
+
     // ✅ ADD: also write a summary row into booking_bookings so analytics includes manual bookings
-try {
-  // price per player from booking_times (same as online)
-  const pricePerPlayerCents = await getTeePricePerPlayerCents({
-    courseId,
-    playDate,
-    teeTime: tee_time,
-    holes,
-  });
+    try {
+      // price per player from booking_times (same as online)
+      const pricePerPlayerCents = await getTeePricePerPlayerCents({
+        courseId,
+        playDate,
+        teeTime: tee_time,
+        holes,
+      });
 
-  // ✅ get add-on prices from course
-  const courseInfo = await db.query(
-    `SELECT cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
-    [courseId]
-  );
-  const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
-  const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
+      // ✅ get add-on prices from course
+      const courseInfo = await db.query(
+        `SELECT cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
+        [courseId]
+      );
+      const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
+      const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
 
-  // ✅ compute add-on totals (qty-based, matches your manual slots)
-  const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
-  const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
+      // ✅ compute add-on totals (qty-based, matches your manual slots)
+      const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
+      const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
 
-  // ✅ total revenue for this manual booking group
-  const baseTotalCents = (pricePerPlayerCents || 0) * (players || 0);
-  const totalCents = baseTotalCents + cartCents + hireClubsCents;
+      // ✅ total revenue for this manual booking group
+      const baseTotalCents = (pricePerPlayerCents || 0) * (players || 0);
+      const totalCents = baseTotalCents + cartCents + hireClubsCents;
 
-  // Keep analytics accurate if editing same tee time
-  await db.query(
-    `DELETE FROM booking_bookings WHERE course_id = $1 AND reference = $2;`,
-    [courseId, reference]
-  );
+      // Keep analytics accurate if editing same tee time
+      await db.query(
+        `DELETE FROM booking_bookings WHERE course_id = $1 AND reference = $2;`,
+        [courseId, reference]
+      );
 
-  // ✅ IMPORTANT: booking_bookings schema uses golfer_* fields (like online bookings)
-  await db.query(
-    `
-    INSERT INTO booking_bookings
-      (course_id, play_date, tee_time, holes, players,
-       golfer_name, golfer_email, golfer_phone,
-       price_per_player_cents, total_cents, reference, status,
-       start_at, end_at,
-       paid, checked_in,
-       has_cart, cart_qty, cart_fee_cents,
-       has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
-       created_at)
-    VALUES
-      ($1,$2::date,$3,$4,$5,
-       $6,$7,$8,
-       $9,$10,$11,'CONFIRMED',
-       $12::timestamptz,$13::timestamptz,
-       $14,$15,
-       $16,$17,$18,
-       $19,$20,$21,
-       now());
-    `,
-    [
+      // ✅ IMPORTANT: booking_bookings schema uses golfer_* fields (like online bookings)
+      await db.query(
+        `
+        INSERT INTO booking_bookings
+          (course_id, play_date, tee_time, holes, players,
+           golfer_name, golfer_email, golfer_phone,
+           price_per_player_cents, total_cents, reference, status,
+           start_at, end_at,
+           paid, checked_in,
+           has_cart, cart_qty, cart_fee_cents,
+           has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
+           created_at)
+        VALUES
+          ($1,$2::date,$3,$4,$5,
+           $6,$7,$8,
+           $9,$10,$11,'CONFIRMED',
+           $12::timestamptz,$13::timestamptz,
+           $14,$15,
+           $16,$17,$18,
+           $19,$20,$21,
+           now());
+        `,
+        [
+          courseId,
+          playDate,
+          tee_time,
+          holes,
+          players,
+
+          name || null,
+          email || null,
+          phone || null,
+
+          pricePerPlayerCents || 0,
+          totalCents,
+          reference,
+
+          startAtIso,
+          endAtIso,
+
+          paid,
+          checked_in,
+
+          cart_qty > 0,
+          cart_qty,
+          cartCents,
+
+          hire_clubs_qty > 0,
+          hire_clubs_qty,
+          hireClubsCents,
+        ]
+      );
+    } catch (e) {
+      console.warn("manual booking analytics write failed (non-fatal):", e?.message || e);
+    }
+
+    const sync = await syncBookedPlayersForTime({
       courseId,
-      playDate,
+      play_date: playDate,
       tee_time,
       holes,
-      players,
+    });
 
-      name || null,
-      email || null,
-      phone || null,
-
-      pricePerPlayerCents || 0,
-      totalCents,
-      reference,
-
-      startAtIso,
-      endAtIso,
-
-      paid,
-      checked_in,
-
-      cart_qty > 0,
-      cart_qty,
-      cartCents,
-
-      hire_clubs_qty > 0,
-      hire_clubs_qty,
-      hireClubsCents,
-    ]
-  );
-} catch (e) {
-  console.warn("manual booking analytics write failed (non-fatal):", e?.message || e);
-}
-const sync = await syncBookedPlayersForTime({
-  courseId,
-  play_date: playDate,
-  tee_time,
-  holes,
-});
     return res.json({
       ok: true,
       course_slug: slug,
