@@ -2098,15 +2098,17 @@ const filtered = slots.filter((s) => {
 
   const prov = String(s?._provider || s?.provider || "").toLowerCase();
   const isTeeRadarBooking =
-    prov.includes("teeradarbooking") || prov.includes("teeradar booking") || prov === "booking";
+    prov.includes("teeradarbooking") ||
+    prov.includes("teeradar booking") ||
+    prov === "booking";
 
-  // ✅ STRICT: for TeeRadarBooking, unknown remaining = reject (otherwise it lies)
+  // ✅ STRICT: TeeRadarBooking must KNOW remaining
   if (isTeeRadarBooking) {
     if (remaining === null) return false;
     return remaining >= party;
   }
 
-  // ✅ Other providers: unknown remaining = allow
+  // ✅ Other providers: unknown remaining is allowed
   if (remaining === null) return true;
   return remaining >= party;
 });
