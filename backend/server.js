@@ -1912,8 +1912,14 @@ app.post("/api/search", async (req, res) => {
 
     if (!date) return res.status(400).json({ error: "date is required" });
 
-    const holesValue =
-      holes === "" || holes === null || typeof holes === "undefined" ? "" : Number(holes);
+    function parseHoles(v) {
+  if (v === "" || v === null || typeof v === "undefined") return "";
+  const m = String(v).match(/\d+/);      // pulls 18 from "18 holes"
+  const n = m ? Number(m[0]) : NaN;
+  return Number.isFinite(n) ? n : "";
+}
+
+const holesValue = parseHoles(holes);
 
     const stateCode = (state || "").toString().toUpperCase();
 
