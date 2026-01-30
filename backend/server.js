@@ -1945,6 +1945,11 @@ app.post("/api/search", async (req, res) => {
     s.playersAvailable ??
     s.spotsAvailable ??
     s.available ??
+    s.remaining_players ??
+    s.remainingSpots ??
+    s.spots_left ??
+    s.slots_left ??
+    s.players_left ??
     s.openings;
 
   const dr = toNum(direct);
@@ -1962,15 +1967,23 @@ app.post("/api/search", async (req, res) => {
     s.label;
 
   if (typeof ratioText === "string") {
-    const m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
-    if (m) {
-      const booked = toNum(m[1]);
-      const total = toNum(m[2]);
-      if (booked !== null && total !== null && total > 0) {
-        return Math.max(0, total - booked);
-      }
+  // 2) "3/4" format (booked/total)
+  let m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
+  if (m) {
+    const booked = toNum(m[1]);
+    const total = toNum(m[2]);
+    if (booked !== null && total !== null && total > 0) {
+      return Math.max(0, total - booked);
     }
   }
+
+  // 2b) "2 slots available" / "2 spots left" / "2 players left"
+  m = ratioText.match(/(\d+)\s*(slots?|spots?|players?)\s*(available|left|remain(ing)?)/i);
+  if (m) {
+    const n = toNum(m[1]);
+    if (n !== null) return Math.max(0, n);
+  }
+}
 
    // 3) compute from max - booked ONLY if BOTH are explicitly known
   const maxPlayers = toNum(s.maxPlayers ?? s.max_players ?? s.capacity ?? s.max);
@@ -2083,11 +2096,18 @@ console.log("🧪 partySize filter stats", { party, raw: slots.length, known, un
 const filtered = slots.filter((s) => {
   const remaining = normalizeRemaining(s);
 
-  // ✅ If we can't confidently determine remaining, DO NOT block the slot.
-  // (Otherwise everything turns red.)
-  if (remaining === null) return true;
+  const prov = String(s?._provider || s?.provider || "").toLowerCase();
+  const isTeeRadarBooking =
+    prov.includes("teeradarbooking") || prov.includes("teeradar booking") || prov === "booking";
 
-  // ✅ If we DO know remaining, enforce party size
+  // ✅ STRICT: for TeeRadarBooking, unknown remaining = reject (otherwise it lies)
+  if (isTeeRadarBooking) {
+    if (remaining === null) return false;
+    return remaining >= party;
+  }
+
+  // ✅ Other providers: unknown remaining = allow
+  if (remaining === null) return true;
   return remaining >= party;
 });
 
