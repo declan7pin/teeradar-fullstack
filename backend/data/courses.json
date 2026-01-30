@@ -454,6 +454,15 @@
     "bookingSlug": "hillview"
   },
   {
+    "name": "Hillview Golf Course",
+    "provider": "TeeRadarBooking",
+    "state": "WA",
+    "holes": 9,
+    "lat": -31.939010380955974,
+    "lng": 116.01996930968141,
+    "bookingSlug": "hillview"
+  },
+  {
     "name": "Marri Park Golf Course",
     "provider": "Phone",
     "state": "WA",
