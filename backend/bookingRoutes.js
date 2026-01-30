@@ -3660,92 +3660,86 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     didBegin = false;
 
     // ✅ ADD: also write a summary row into booking_bookings so analytics includes manual bookings
-    try {
-      // price per player from booking_times (same as online)
-      const pricePerPlayerCents = await getTeePricePerPlayerCents({
-        courseId,
-        playDate,
-        teeTime: tee_time,
-        holes,
-      });
+try {
+  const pricePerPlayerCents = await getTeePricePerPlayerCents({
+    courseId,
+    playDate,
+    teeTime: tee_time,
+    holes,
+  });
 
-      // ✅ get add-on prices from course
-      const courseInfo = await db.query(
-        `SELECT cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
-        [courseId]
-      );
-      const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
-      const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
+  const courseInfo = await db.query(
+    `SELECT cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
+    [courseId]
+  );
+  const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
+  const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
 
-      // ✅ compute add-on totals (qty-based, matches your manual slots)
-      const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
-      const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
+  const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
+  const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
 
-      // ✅ total revenue for this manual booking group
-      const baseTotalCents = (pricePerPlayerCents || 0) * (players || 0);
-      const totalCents = baseTotalCents + cartCents + hireClubsCents;
+  const baseTotalCents = (pricePerPlayerCents || 0) * (players || 0);
+  const totalCents = baseTotalCents + cartCents + hireClubsCents;
 
-      // Keep analytics accurate if editing same tee time
-      await db.query(
-        `DELETE FROM booking_bookings WHERE course_id = $1 AND reference = $2;`,
-        [courseId, reference]
-      );
+  await db.query(
+    `DELETE FROM booking_bookings WHERE course_id = $1 AND reference = $2;`,
+    [courseId, reference]
+  );
 
-      // ✅ IMPORTANT: booking_bookings schema uses golfer_* fields (like online bookings)
-      await db.query(
-        `
-        INSERT INTO booking_bookings
-          (course_id, play_date, tee_time, holes, players,
-           golfer_name, golfer_email, golfer_phone,
-           price_per_player_cents, total_cents, reference, status,
-           start_at, end_at,
-           paid, checked_in,
-           has_cart, cart_qty, cart_fee_cents,
-           has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
-           created_at)
-        VALUES
-          ($1,$2::date,$3,$4,$5,
-           $6,$7,$8,
-           $9,$10,$11,'CONFIRMED',
-           $12::timestamptz,$13::timestamptz,
-           $14,$15,
-           $16,$17,$18,
-           $19,$20,$21,
-           now());
-        `,
-        [
-          courseId,
-          playDate,
-          tee_time,
-          holes,
-          players,
+  await db.query(
+    `
+    INSERT INTO booking_bookings
+      (course_id, play_date, tee_time, holes, players,
+       golfer_name, golfer_email, golfer_phone,
+       price_per_player_cents, total_cents, reference, status,
+       start_at, end_at,
+       paid, checked_in,
+       has_cart, cart_qty, cart_fee_cents,
+       has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
+       created_at)
+    VALUES
+      ($1,$2::date,$3,$4,$5,
+       $6,$7,$8,
+       $9,$10,$11,'CONFIRMED',
+       $12::timestamptz,$13::timestamptz,
+       $14,$15,
+       $16,$17,$18,
+       $19,$20,$21,
+       now());
+    `,
+    [
+      courseId,
+      playDate,
+      tee_time,
+      holes,
+      players,
 
-          name || null,
-          email || null,
-          phone || null,
+      name || null,
+      email || null,
+      phone || null,
 
-          pricePerPlayerCents || 0,
-          totalCents,
-          reference,
+      pricePerPlayerCents || 0,
+      totalCents,
+      reference,
 
-          startAtIso,
-          endAtIso,
+      startAtIso,
+      endAtIso,
 
-          paid,
-          checked_in,
+      paid,
+      checked_in,
 
-          cart_qty > 0,
-          cart_qty,
-          cartCents,
+      cart_qty > 0,
+      cart_qty,
+      cartCents,
 
-          hire_clubs_qty > 0,
-          hire_clubs_qty,
-          hireClubsCents,
-        ]
-      );
-    } catch (e) {
-      console.warn("manual booking analytics write failed (non-fatal):", e?.message || e);
-    }
+      hire_clubs_qty > 0,
+      hire_clubs_qty,
+      hireClubsCents,
+    ]
+  );
+} catch (e) {
+  console.warn("manual booking analytics write failed (non-fatal):", e?.message || e);
+}
 
     const sync = await syncBookedPlayersForTime({
       courseId,
