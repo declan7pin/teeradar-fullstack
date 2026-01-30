@@ -1944,7 +1944,6 @@ app.post("/api/search", async (req, res) => {
     s.spotsRemaining ??
     s.playersAvailable ??
     s.spotsAvailable ??
-    s.available ??
     s.remaining_players ??
     s.remainingSpots ??
     s.spots_left ??
