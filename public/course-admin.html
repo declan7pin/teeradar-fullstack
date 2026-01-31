@@ -606,6 +606,34 @@ window.onerror = function(message, source, lineno, colno){
     if (el) el.textContent = "❌ JS error: " + message + " (line " + lineno + ")";
   }catch{}
 };
+// =======================
+// Course layouts (9-hole names)
+// =======================
+let COURSE_LAYOUTS = [];
+
+function renderLayouts(){
+  const wrap = $("layoutsList");
+  if (!wrap) return;
+
+  wrap.innerHTML = "";
+  COURSE_LAYOUTS.forEach((l, idx) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `
+      <div>
+        <input
+          value="${_escape(l.label || "")}"
+          data-layout-idx="${idx}"
+          class="layoutLabel"
+        />
+      </div>
+      <div style="display:flex;align-items:end">
+        <button class="secondary" data-del-layout="${idx}">Delete</button>
+      </div>
+    `;
+    wrap.appendChild(row);
+  });
+}
   const SLUG_KEY = "tr_course_admin_slug";
 const TOKEN_KEY = "tr_course_admin_token";
 const ROLE_KEY = "tr_course_admin_role";
@@ -1370,6 +1398,38 @@ function initCourseAdminUI(){
 const csLoadBtn = $("csLoadBtn");
 if (csLoadBtn) csLoadBtn.onclick = loadCourseSettingsToUI;
 
+// =======================
+// Layouts UI wiring
+// =======================
+$("addNineBtn")?.addEventListener("click", () => {
+  const v = ($("newNineLabel")?.value || "").trim();
+  if (!v) return;
+
+  COURSE_LAYOUTS.push({ label: v });
+  $("newNineLabel").value = "";
+  renderLayouts();
+});
+
+$("saveLayoutsBtn")?.addEventListener("click", saveLayouts);
+
+// live edits
+document.addEventListener("input", (e) => {
+  if (e.target?.classList?.contains("layoutLabel")) {
+    const idx = Number(e.target.getAttribute("data-layout-idx"));
+    if (COURSE_LAYOUTS[idx]) {
+      COURSE_LAYOUTS[idx].label = e.target.value;
+    }
+  }
+});
+
+// deletes
+document.addEventListener("click", (e) => {
+  const idx = e.target?.getAttribute?.("data-del-layout");
+  if (idx != null) {
+    COURSE_LAYOUTS.splice(Number(idx), 1);
+    renderLayouts();
+  }
+});
 const csSaveBtn = $("csSaveBtn");
 if (csSaveBtn) csSaveBtn.onclick = saveCourseSettingsFromUI;
       if (!slug) throw new Error("slug_required");
@@ -2213,6 +2273,41 @@ $("mAddBtn").onclick = async () => {
 // =======================
 // Course settings (stock levels) - carts/clubs + durations
 // =======================
+// =======================
+// Course layouts API
+// =======================
+async function loadLayouts(){
+  const msg = $("layoutsMsg");
+  try{
+    if (msg) msg.textContent = "Loading layouts...";
+    await getMe();
+
+    const out = await j("/api/book/course-admin/course-layouts", { method:"GET" });
+    COURSE_LAYOUTS = Array.isArray(out.layouts) ? out.layouts : [];
+
+    renderLayouts();
+    if (msg) msg.textContent = "✅ Layouts loaded";
+  }catch(e){
+    if (msg) msg.textContent = "❌ " + e.message;
+  }
+}
+
+async function saveLayouts(){
+  const msg = $("layoutsMsg");
+  try{
+    if (msg) msg.textContent = "Saving layouts...";
+    await getMe();
+
+    await j("/api/book/course-admin/course-layouts", {
+      method:"POST",
+      body: JSON.stringify({ layouts: COURSE_LAYOUTS })
+    });
+
+    if (msg) msg.textContent = "✅ Layouts saved";
+  }catch(e){
+    if (msg) msg.textContent = "❌ " + e.message;
+  }
+}
 async function loadCourseSettingsToUI(){
   const msg = $("csMsg");
   try{
