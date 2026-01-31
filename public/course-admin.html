@@ -2581,173 +2581,244 @@ function getNineLayoutOptionsHTML(selectedKey){
     })
   ].join("");
 }
-  // ✅ Weekly template feature
-  (function templateFeature(){
-    const DOW = [
-      { id:"1", name:"Mon" },
-      { id:"2", name:"Tue" },
-      { id:"3", name:"Wed" },
-      { id:"4", name:"Thu" },
-      { id:"5", name:"Fri" },
-      { id:"6", name:"Sat" },
-      { id:"7", name:"Sun" },
-    ];
+ // ✅ Weekly template feature
+(function templateFeature(){
+  const DOW = [
+    { id:"1", name:"Mon" },
+    { id:"2", name:"Tue" },
+    { id:"3", name:"Wed" },
+    { id:"4", name:"Thu" },
+    { id:"5", name:"Fri" },
+    { id:"6", name:"Sat" },
+    { id:"7", name:"Sun" },
+  ];
 
-    function setTplStatus(msg, type){
-      const el = $("tplStatus");
-      if (!el) return;
-      el.textContent = msg || "";
-      el.className = "status " + (type || "");
+  function setTplStatus(msg, type){
+    const el = $("tplStatus");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.className = "status " + (type || "");
+  }
+
+  function todayISO(){
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // -----------------------
+  // Default template
+  // -----------------------
+  function defaultTemplate(){
+    const days = {};
+    DOW.forEach(x => {
+      days[x.id] = {
+        enabled: !["6","7"].includes(x.id),
+        windows: [
+          {
+            holes:18,
+            start:"06:00",
+            end:"10:00",
+            intervalMins:10,
+            maxPlayers:4,
+            pricePerPlayerCents:2500
+          },
+          {
+            holes:9,
+            start:"06:30",
+            end:"11:00",
+            intervalMins:10,
+            maxPlayers:4,
+            pricePerPlayerCents:1800,
+            layout_key:"" // ✅ NEW
+          }
+        ]
+      };
+    });
+    return { days };
+  }
+
+  // -----------------------
+  // Layout selector (9-hole only)
+  // -----------------------
+  function renderLayoutSelect(dow, w){
+    if (!Array.isArray(COURSE_LAYOUTS) || !COURSE_LAYOUTS.length) {
+      return `
+        <div class="field sm3" style="grid-column:span 3">
+          <label>9-hole layout</label>
+          <div class="muted mini">No layouts defined</div>
+        </div>
+      `;
     }
 
-    function todayISO(){
-      const d = new Date();
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth()+1).padStart(2,"0");
-      const dd = String(d.getDate()).padStart(2,"0");
-      return `${yyyy}-${mm}-${dd}`;
-    }
+    return `
+      <div class="field sm3" style="grid-column:span 3">
+        <label>9-hole layout</label>
+        <select data-w="layout_key" data-dow="${dow}" data-holes="9">
+          <option value="">Auto / Any</option>
+          ${COURSE_LAYOUTS.map(l => `
+            <option value="${_escape(l.key || l.label)}"
+              ${(w.layout_key === (l.key || l.label)) ? "selected" : ""}>
+              ${_escape(l.label)}
+            </option>
+          `).join("")}
+        </select>
+      </div>
+    `;
+  }
 
-    function defaultTemplate(){
-      const days = {};
-      DOW.forEach(x => {
-        days[x.id] = {
-          enabled: ["6","7"].includes(x.id) ? false : true,
-          windows: [
-            { holes:18, start:"06:00", end:"10:00", intervalMins:10, maxPlayers:4, pricePerPlayerCents:2500 },
-            { holes:9,  start:"06:30", end:"11:00", intervalMins:10, maxPlayers:4, pricePerPlayerCents:1800 },
-          ]
-        };
-      });
-      return { days };
-    }
-
-    function renderWindowInputs(dow, cfg, holes){
-      const w = (cfg.windows || []).find(x => Number(x.holes) === holes) || {
+  // -----------------------
+  // Window inputs
+  // -----------------------
+  function renderWindowInputs(dow, cfg, holes){
+    const w =
+      (cfg.windows || []).find(x => Number(x.holes) === holes) ||
+      {
         holes,
         start: holes === 18 ? "06:00" : "06:30",
         end: holes === 18 ? "10:00" : "11:00",
         intervalMins: 10,
         maxPlayers: 4,
-        pricePerPlayerCents: holes === 18 ? 2500 : 1800
+        pricePerPlayerCents: holes === 18 ? 2500 : 1800,
+        layout_key: ""
       };
 
-      return `
-        <div class="field sm3" style="grid-column:span 3">
-          <label>${holes} holes start</label>
-          <input data-w="start" data-dow="${dow}" data-holes="${holes}" value="${w.start || ""}" placeholder="06:00" />
+    return `
+      <div class="field sm3" style="grid-column:span 3">
+        <label>${holes} holes start</label>
+        <input data-w="start" data-dow="${dow}" data-holes="${holes}" value="${w.start}" />
+      </div>
+
+      <div class="field sm3" style="grid-column:span 3">
+        <label>${holes} holes end</label>
+        <input data-w="end" data-dow="${dow}" data-holes="${holes}" value="${w.end}" />
+      </div>
+
+      <div class="field sm3" style="grid-column:span 3">
+        <label>${holes} interval (mins)</label>
+        <input type="number" min="5" max="60"
+          data-w="intervalMins"
+          data-dow="${dow}"
+          data-holes="${holes}"
+          value="${Number(w.intervalMins || 10)}" />
+      </div>
+
+      <div class="field sm3" style="grid-column:span 3">
+        <label>${holes} price / player ($)</label>
+        <input type="number" min="0" step="0.01"
+          data-w="priceDollars"
+          data-dow="${dow}"
+          data-holes="${holes}"
+          value="${(Number(w.pricePerPlayerCents||0)/100).toFixed(2)}" />
+      </div>
+
+      ${holes === 9 ? renderLayoutSelect(dow, w) : ""}
+    `;
+  }
+
+  // -----------------------
+  // Render template
+  // -----------------------
+  function renderTemplate(tpl){
+    const grid = $("tplGrid");
+    if (!grid) return;
+
+    grid.innerHTML = "";
+    const days = tpl?.days || {};
+
+    DOW.forEach(d => {
+      const cfg = days[d.id] || { enabled:true, windows:[] };
+
+      const wrap = document.createElement("div");
+      wrap.style.border = "1px solid var(--border)";
+      wrap.style.borderRadius = "12px";
+      wrap.style.padding = "10px";
+      wrap.style.background = "#fff";
+
+      wrap.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:800">${d.name}</div>
+          <label class="mini">
+            <input type="checkbox" class="tplEnabled" data-dow="${d.id}"
+              ${cfg.enabled !== false ? "checked" : ""} />
+            Enabled
+          </label>
         </div>
-        <div class="field sm3" style="grid-column:span 3">
-          <label>${holes} holes end</label>
-          <input data-w="end" data-dow="${dow}" data-holes="${holes}" value="${w.end || ""}" placeholder="10:00" />
-        </div>
-        <div class="field sm3" style="grid-column:span 3">
-          <label>${holes} interval (mins)</label>
-          <input type="number" min="5" max="60" data-w="intervalMins" data-dow="${dow}" data-holes="${holes}" value="${Number(w.intervalMins||10)}" />
-        </div>
-        <div class="field sm3" style="grid-column:span 3">
-          <label>${holes} price / player ($)</label>
-          <input type="number" min="0" step="0.01" data-w="priceDollars" data-dow="${dow}" data-holes="${holes}" value="${(Number(w.pricePerPlayerCents||0)/100).toFixed(2)}" />
+
+        <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:10px;margin-top:10px">
+          ${renderWindowInputs(d.id, cfg, 18)}
+          ${renderWindowInputs(d.id, cfg, 9)}
         </div>
       `;
-    }
 
-    function renderTemplate(tpl){
-      const grid = $("tplGrid");
-      if (!grid) return;
-
-      grid.innerHTML = "";
-      const days = tpl?.days || {};
-
-      DOW.forEach(d => {
-        const cfg = days[d.id] || { enabled:true, windows:[] };
-
-        const wrap = document.createElement("div");
-        wrap.style.border = "1px solid var(--border)";
-        wrap.style.borderRadius = "12px";
-        wrap.style.padding = "10px";
-        wrap.style.background = "#fff";
-
-        wrap.innerHTML = `
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-            <div style="font-weight:800;">${d.name}</div>
-            <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted);">
-              <input type="checkbox" data-dow="${d.id}" class="tplEnabled" ${cfg.enabled === false ? "" : "checked"} />
-              Enabled
-            </label>
-          </div>
-
-          <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:10px;margin-top:10px;">
-            ${renderWindowInputs(d.id, cfg, 18)}
-            ${renderWindowInputs(d.id, cfg, 9)}
-          </div>
-        `;
-
-        grid.appendChild(wrap);
-      });
-    }
-
-    function readTemplateFromUI(){
-      const tpl = { days:{} };
-
-      document.querySelectorAll(".tplEnabled").forEach(cb => {
-        const dow = cb.getAttribute("data-dow");
-        tpl.days[dow] = tpl.days[dow] || { enabled:true, windows:[] };
-        tpl.days[dow].enabled = cb.checked;
-      });
-
-      const inputs = Array.from(document.querySelectorAll("[data-w][data-dow][data-holes]"));
-      const byKey = new Map();
-
-      inputs.forEach(inp => {
-        const dow = inp.getAttribute("data-dow");
-        const holes = Number(inp.getAttribute("data-holes"));
-        const wkey = `${dow}|${holes}`;
-        if (!byKey.has(wkey)) byKey.set(wkey, {});
-        byKey.get(wkey)[inp.getAttribute("data-w")] = inp.value;
-      });
-
-      for (const [k, obj] of byKey.entries()){
-        const [dow, holesStr] = k.split("|");
-        const holes = Number(holesStr);
-
-        const start = String(obj.start || "").trim();
-        const end = String(obj.end || "").trim();
-        const intervalMins = Number(obj.intervalMins || 10);
-        const priceDollars = Number(obj.priceDollars || 0);
-
-        tpl.days[dow] = tpl.days[dow] || { enabled:true, windows:[] };
-
-        tpl.days[dow].windows.push({
-          holes,
-          start,
-          end,
-          intervalMins,
-          maxPlayers: 4,
-          pricePerPlayerCents: Math.max(0, Math.round(priceDollars * 100)),
-        });
-      }
-
-      return tpl;
-    }
-
-    async function tplLoad(){
-  try{
-    setTplStatus("Loading template…", "");
-    const data = await j("/api/book/course-template?slug=" + encodeURIComponent(getSlug()), { method:"GET" });
-
-    if (!data || !data.ok) throw new Error(data?.error || "load_failed");
-
-    $("tplTimezone").value = data.timezone || "Australia/Perth";
-    const tpl = (data.template && typeof data.template === "object") ? data.template : defaultTemplate();
-    renderTemplate(tpl);
-
-    setTplStatus(data.found ? "✅ Template loaded." : "✅ No saved template yet (showing defaults).", "ok");
-  }catch(e){
-    renderTemplate(defaultTemplate());
-    setTplStatus("❌ " + (e.message || "Failed to load template"), "err");
+      grid.appendChild(wrap);
+    });
   }
-}
+
+  // -----------------------
+  // Read template from UI
+  // -----------------------
+  function readTemplateFromUI(){
+    const tpl = { days:{} };
+
+    document.querySelectorAll(".tplEnabled").forEach(cb => {
+      const dow = cb.getAttribute("data-dow");
+      tpl.days[dow] = tpl.days[dow] || { enabled:true, windows:[] };
+      tpl.days[dow].enabled = cb.checked;
+    });
+
+    const inputs = Array.from(document.querySelectorAll("[data-w][data-dow][data-holes]"));
+    const byKey = new Map();
+
+    inputs.forEach(inp => {
+      const dow = inp.dataset.dow;
+      const holes = Number(inp.dataset.holes);
+      const key = `${dow}|${holes}`;
+      if (!byKey.has(key)) byKey.set(key, {});
+      byKey.get(key)[inp.dataset.w] = inp.value;
+    });
+
+    for (const [k, obj] of byKey.entries()){
+      const [dow, holesStr] = k.split("|");
+      const holes = Number(holesStr);
+
+      tpl.days[dow] = tpl.days[dow] || { enabled:true, windows:[] };
+      tpl.days[dow].windows.push({
+        holes,
+        start: obj.start,
+        end: obj.end,
+        intervalMins: Number(obj.intervalMins || 10),
+        maxPlayers: 4,
+        pricePerPlayerCents: Math.round(Number(obj.priceDollars || 0) * 100),
+        layout_key: holes === 9 ? (obj.layout_key || "") : undefined
+      });
+    }
+
+    return tpl;
+  }
+
+  // -----------------------
+  // Load template
+  // -----------------------
+  async function tplLoad(){
+    try{
+      setTplStatus("Loading template…", "");
+      const data = await j("/api/book/course-template?slug=" + encodeURIComponent(getSlug()), { method:"GET" });
+
+      $("tplTimezone").value = data.timezone || "Australia/Perth";
+      renderTemplate(data.template || defaultTemplate());
+      setTplStatus("✅ Template loaded", "ok");
+    }catch(e){
+      renderTemplate(defaultTemplate());
+      setTplStatus("❌ " + e.message, "err");
+    }
+  }
+
+  $("tplLoadBtn")?.addEventListener("click", tplLoad);
+  renderTemplate(defaultTemplate());
+})();
 
     async function tplSave(){
   try{
