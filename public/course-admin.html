@@ -2558,6 +2558,25 @@ if (Array.isArray(manualSlots) && manualSlots.length) {
     }
   }catch{}
 })();
+function getNineLayoutOptionsHTML(selectedKey){
+  const sel = String(selectedKey || "");
+  const layouts = Array.isArray(COURSE_LAYOUTS) ? COURSE_LAYOUTS : [];
+
+  // Treat all saved layouts as 9-hole layouts (your UI only creates 9s)
+  if (!layouts.length) {
+    return `<option value="">No layouts saved</option>`;
+  }
+
+  return [
+    `<option value="">Select layout</option>`,
+    ...layouts.map(l => {
+      const key = String(l.key || l.label || "").trim();
+      const label = String(l.label || l.key || "").trim();
+      const isSel = key && key === sel;
+      return `<option value="${_escape(key)}"${isSel ? " selected" : ""}>${_escape(label)}</option>`;
+    })
+  ].join("");
+}
   // ✅ Weekly template feature
   (function templateFeature(){
     const DOW = [
