@@ -1504,7 +1504,9 @@ router.post(
   async (req, res) => {
     try {
       const layouts = Array.isArray(req.body?.layouts) ? req.body.layouts : null;
-      if (!layouts) return res.status(400).json({ ok:false, error:"layouts_required" });
+      if (!layouts) {
+        return res.status(400).json({ ok: false, error: "layouts_required" });
+      }
 
       // minimal validation
       const cleaned = layouts
@@ -1516,10 +1518,16 @@ router.post(
           front: x.front != null ? String(x.front).trim().toLowerCase() : undefined,
           back: x.back != null ? String(x.back).trim().toLowerCase() : undefined,
         }))
-        .filter(x => (x.type === "nine" || x.type === "eighteen") && x.key);
-
+        .filter(
+          x =>
+            (x.type === "nine" || x.type === "eighteen") &&
+            x.key
+        );
 
       const courseId = Number(req.courseAdmin?.course_id || 0);
+      if (!courseId) {
+        return res.status(403).json({ ok: false, error: "course_not_found" });
+      }
 
       await db.query(
         `UPDATE booking_courses
@@ -1528,9 +1536,14 @@ router.post(
         [JSON.stringify(cleaned), courseId]
       );
 
-      return res.json({ ok:true, slug:String(req.courseAdmin?.slug||""), layouts: cleaned });
+      return res.json({
+        ok: true,
+        slug: String(req.courseAdmin?.slug || ""),
+        layouts: cleaned,
+      });
+    } catch (e) {
       console.error("course-admin/course-layouts POST", e);
-      return res.status(500).json({ ok:false, error:"internal_error" });
+      return res.status(500).json({ ok: false, error: "internal_error" });
     }
   }
 );
