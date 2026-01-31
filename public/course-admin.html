@@ -2292,7 +2292,11 @@ async function loadLayouts(){
     COURSE_LAYOUTS = Array.isArray(out.layouts) ? out.layouts : [];
 
     renderLayouts();
-    if (msg) msg.textContent = "✅ Layouts loaded";
+
+// ✅ if weekly template is visible, refresh it so the dropdown options appear
+try{ window.__tplRerender && window.__tplRerender(); }catch{}
+
+if (msg) msg.textContent = "✅ Layouts loaded";
   }catch(e){
     if (msg) msg.textContent = "❌ " + e.message;
   }
