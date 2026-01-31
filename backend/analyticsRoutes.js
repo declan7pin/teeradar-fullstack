@@ -19,18 +19,21 @@ import db from "./db.js";
  */
 import * as pgAnalytics from "./analytics.js";
 import Stripe from "stripe";
+
 const router = express.Router();
+
 // ✅ Stripe (for plan healing in /api/analytics/users)
 const stripeKey = String(process.env.STRIPE_SECRET_KEY || "").trim();
 const stripe = stripeKey ? new Stripe(stripeKey) : null;
 
 // ✅ priceId → plan
 const PRICE_TO_PLAN = {
-  "price_1SdnQTASm4geYL4WeBGAEEkA": "Basic",
-  "price_1SdnRLASm4geYL4W23IKreHO": "Basic",
-  "price_1SdnSGASm4geYL4WBWsFWUNe": "Pro",
-  "price_1SdnSpASm4geYL4W1yxaZf2i": "Pro",
+  "price_1SdnQTASm4geYL4WeBGAEEkA": "BASIC",
+  "price_1SdnRLASm4geYL4W23IKreHO": "BASIC",
+  "price_1SdnSGASm4geYL4WBWsFWUNe": "PRO",
+  "price_1SdnSpASm4geYL4W1yxaZf2i": "PRO",
 };
+
 // pull the functions that DO exist (no hard failure)
 const logAnalyticsEvent = analyticsDb.logAnalyticsEvent;
 const getAnalyticsSummarySqlite = analyticsDb.getAnalyticsSummary;
@@ -287,18 +290,20 @@ async function buildPgSummary() {
      WHERE type = 'alert_hit'
        AND occurred_at >= now() - interval '7 days';`
   );
-  // ✅ Alerts (all-time)
-const alertsSentAllTimeRows = await q(
-  `SELECT COUNT(*)::int AS n
-   FROM analytics
-   WHERE type = 'alert_sent';`
-);
 
-const alertHitsAllTimeRows = await q(
-  `SELECT COUNT(*)::int AS n
-   FROM analytics
-   WHERE type = 'alert_hit';`
-);
+  // ✅ Alerts (all-time)
+  const alertsSentAllTimeRows = await q(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'alert_sent';`
+  );
+
+  const alertHitsAllTimeRows = await q(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'alert_hit';`
+  );
+
   const topAlertCourses7d = await q(
     `SELECT course_name AS course, COUNT(*)::int AS n
      FROM analytics
@@ -312,8 +317,9 @@ const alertHitsAllTimeRows = await q(
 
   const alertsSent7d = alertsSent7dRows[0]?.n ?? 0;
   const alertHits7d = alertHits7dRows[0]?.n ?? 0;
-const alertsSentAllTime = alertsSentAllTimeRows[0]?.n ?? 0;
-const alertHitsAllTime = alertHitsAllTimeRows[0]?.n ?? 0;
+  const alertsSentAllTime = alertsSentAllTimeRows[0]?.n ?? 0;
+  const alertHitsAllTime = alertHitsAllTimeRows[0]?.n ?? 0;
+
   return {
     homePageViews: homeViews,
     courseBookingClicks: bookingClicks,
@@ -357,6 +363,7 @@ const alertHitsAllTime = alertHitsAllTimeRows[0]?.n ?? 0;
     topAlertCourses: topAlertCourses7d.map((r) => ({ course: r.course, hits: r.n })),
   };
 }
+
 function buildSqliteSummaryFromEvents(events = []) {
   const byType = {};
   for (const e of events) {
@@ -435,14 +442,15 @@ function buildSqliteSummaryFromEvents(events = []) {
 
     // alerts if you emit these event types
     alertsSent7d: byType.alert_sent || 0,
-    alertHits7d: byType.alert_hit || 0,
+    alertsHits7d: byType.alert_hit || 0,
     alertsSentAllTime: byType.alert_sent || 0,
-    alertHitsAllTime: byType.alert_hit || 0,
+    alertsHitAllTime: byType.alert_hit || 0,
     avgTimeToHitMins: null,
     alertsByPlan: null,
     topAlertCourses: [],
   };
 }
+
 // shared handler for summary so we can serve both "/" and "/summary"
 async function handleSummary(req, res) {
   try {
@@ -487,6 +495,7 @@ async function handleSummary(req, res) {
     }
   }
 }
+
 /**
  * GET /api/analytics
  */
@@ -530,6 +539,7 @@ router.put("/register-user", (req, res) => {
     return res.status(500).json({ error: "Failed to record user" });
   }
 });
+
 /**
  * ✅ DEBUG: check Stripe + DB plan for one email
  * GET /api/analytics/users/stripe-check?email=someone@gmail.com
@@ -540,13 +550,13 @@ router.get("/users/stripe-check", async (req, res) => {
     if (!email) return res.status(400).json({ ok: false, error: "email is required" });
 
     const cols = await db.query(
-  `SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='users';`
-);
-const hasPlan = new Set(cols.rows.map(r => r.column_name)).has("plan");
+      `SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='users';`
+    );
+    const hasPlan = new Set(cols.rows.map((r) => r.column_name)).has("plan");
 
-const dbRow = hasPlan
-  ? await db.query(`SELECT id, email, plan FROM users WHERE LOWER(email) = $1 LIMIT 1;`, [email])
-  : await db.query(`SELECT id, email FROM users WHERE LOWER(email) = $1 LIMIT 1;`, [email]);
+    const dbRow = hasPlan
+      ? await db.query(`SELECT id, email, plan FROM users WHERE LOWER(email) = $1 LIMIT 1;`, [email])
+      : await db.query(`SELECT id, email FROM users WHERE LOWER(email) = $1 LIMIT 1;`, [email]);
 
     const out = {
       ok: true,
@@ -593,7 +603,8 @@ const dbRow = hasPlan
     return res.status(500).json({ ok: false, error: "internal error", detail: err.message });
   }
 });
- /**
+
+/**
  * GET /api/analytics/users
  * ✅ Robust: works even if your users table schema differs
  */
@@ -630,24 +641,26 @@ router.get("/users", async (req, res) => {
     }
 
     const usersCols = await getCols("users");
+    const hasPlanCol = usersCols.has("plan");
 
     // Safe column picks
     const colId = usersCols.has("id") ? "u.id" : "NULL::int AS id";
     const colEmail = usersCols.has("email") ? "u.email" : "NULL::text AS email";
 
-    const colPlan = usersCols.has("plan")
-  ? `
-    CASE
-      WHEN u.plan IS NULL OR NULLIF(TRIM(u.plan), '') IS NULL THEN 'FREE'
-      WHEN UPPER(u.plan) IN ('FREE','BASIC','PRO') THEN UPPER(u.plan)
-      WHEN LOWER(u.plan) IN ('unsubscribed','unsubscribed ') THEN 'FREE'
-      WHEN LOWER(u.plan) LIKE '%pro%' THEN 'PRO'
-      WHEN LOWER(u.plan) LIKE '%basic%' THEN 'BASIC'
-      WHEN LOWER(u.plan) LIKE '%free%' THEN 'FREE'
-      ELSE 'FREE'
-    END AS plan
-  `
-  : "'FREE'::text AS plan";
+    // ✅ Normalise DB values to FREE/BASIC/PRO (not "Unsubscribed")
+    const colPlan = hasPlanCol
+      ? `
+        CASE
+          WHEN u.plan IS NULL OR NULLIF(TRIM(u.plan), '') IS NULL THEN 'FREE'
+          WHEN UPPER(TRIM(u.plan)) IN ('FREE','BASIC','PRO') THEN UPPER(TRIM(u.plan))
+          WHEN LOWER(TRIM(u.plan)) IN ('unsubscribed','unsubscribed ') THEN 'FREE'
+          WHEN LOWER(u.plan) LIKE '%pro%' THEN 'PRO'
+          WHEN LOWER(u.plan) LIKE '%basic%' THEN 'BASIC'
+          WHEN LOWER(u.plan) LIKE '%free%' THEN 'FREE'
+          ELSE 'FREE'
+        END AS plan
+      `
+      : "'FREE'::text AS plan";
 
     const colCreatedAt = usersCols.has("created_at")
       ? "u.created_at"
@@ -708,62 +721,62 @@ router.get("/users", async (req, res) => {
 
     const r = await db.query(sql, [limit]);
 
-let users = (r.rows || []).map((u) => {
-  const raw = String(u.plan || "").trim();
-  const up = raw.toUpperCase();
+    // ✅ Display-friendly labels: Free/Basic/Pro
+    let users = (r.rows || []).map((u) => {
+      const raw = String(u.plan || "").trim().toUpperCase();
+      let plan = "Free";
+      if (raw === "PRO" || raw.includes("PRO")) plan = "Pro";
+      else if (raw === "BASIC" || raw.includes("BASIC")) plan = "Basic";
+      else plan = "Free";
+      return { ...u, plan };
+    });
 
-  let plan = "Unsubscribed";
-  if (up.includes("PRO")) plan = "Pro";
-  else if (up.includes("BASIC")) plan = "Basic";
-  else if (up === "FREE" || up === "" || up.includes("UNSUB")) plan = "Unsubscribed";
+    // ✅ Stripe-heal: if Stripe is set up, correct plans for users showing Free
+    // (cap to avoid rate limits)
+    if (stripe && hasPlanCol) {
+      const toCheck = users
+        .filter((u) => u.plan === "Free" && u.email)
+        .slice(0, 50);
 
-  return { ...u, plan };
-});
+      for (const u of toCheck) {
+        try {
+          const email = String(u.email || "").trim().toLowerCase();
+          if (!email) continue;
 
-// ✅ Stripe-heal: if Stripe is set up, correct plans for users showing Unsubscribed
-if (stripe) {
-  const toCheck = users
-    .filter((u) => u.plan === "Unsubscribed" && u.email)
-    .slice(0, 50); // keep this capped to avoid rate limits
+          const custList = await stripe.customers.list({ email, limit: 1 });
+          if (!custList.data.length) continue;
 
-  for (const u of toCheck) {
-    try {
-      const email = String(u.email || "").trim().toLowerCase();
-      if (!email) continue;
+          const customer = custList.data[0];
 
-      const custList = await stripe.customers.list({ email, limit: 1 });
-      if (!custList.data.length) continue;
+          const subs = await stripe.subscriptions.list({
+            customer: customer.id,
+            status: "active",
+            limit: 1,
+            expand: ["data.items.data.price"],
+          });
 
-      const customer = custList.data[0];
+          if (!subs.data.length) continue;
 
-      const subs = await stripe.subscriptions.list({
-        customer: customer.id,
-        status: "active",
-        limit: 1,
-        expand: ["data.items.data.price"],
-      });
+          const priceId = subs.data[0]?.items?.data?.[0]?.price?.id || null;
+          const mappedPlan = priceId ? PRICE_TO_PLAN[priceId] : null;
 
-      if (!subs.data.length) continue;
+          // ✅ store canonical values
+          const finalPlanDb = mappedPlan || "BASIC";
 
-      const priceId = subs.data[0]?.items?.data?.[0]?.price?.id || null;
-      const mappedPlan = priceId ? PRICE_TO_PLAN[priceId] : null;
-      const finalPlan = mappedPlan || "Basic";
+          await db.query(
+            `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
+            [email, finalPlanDb]
+          );
 
-      // ✅ update DB so future loads are correct
-      await db.query(
-        `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
-        [email, finalPlan]
-      );
-
-      // ✅ update response
-      u.plan = finalPlan;
-    } catch (e) {
-      console.warn("Stripe heal failed for", u.email, e?.message || e);
+          // ✅ update response label
+          u.plan = finalPlanDb === "PRO" ? "Pro" : "Basic";
+        } catch (e) {
+          console.warn("Stripe heal failed for", u.email, e?.message || e);
+        }
+      }
     }
-  }
-}
 
-return res.json({ users });
+    return res.json({ users });
   } catch (err) {
     console.error("❌ /api/analytics/users error:", err);
     return res.json({
@@ -773,6 +786,7 @@ return res.json({ users });
     });
   }
 });
+
 /**
  * DELETE /api/analytics/users/:id
  */
