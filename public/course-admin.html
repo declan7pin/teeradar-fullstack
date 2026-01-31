@@ -1398,38 +1398,7 @@ function initCourseAdminUI(){
 const csLoadBtn = $("csLoadBtn");
 if (csLoadBtn) csLoadBtn.onclick = loadCourseSettingsToUI;
 
-// =======================
-// Layouts UI wiring
-// =======================
-$("addNineBtn")?.addEventListener("click", () => {
-  const v = ($("newNineLabel")?.value || "").trim();
-  if (!v) return;
 
-  COURSE_LAYOUTS.push({ label: v });
-  $("newNineLabel").value = "";
-  renderLayouts();
-});
-
-$("saveLayoutsBtn")?.addEventListener("click", saveLayouts);
-
-// live edits
-document.addEventListener("input", (e) => {
-  if (e.target?.classList?.contains("layoutLabel")) {
-    const idx = Number(e.target.getAttribute("data-layout-idx"));
-    if (COURSE_LAYOUTS[idx]) {
-      COURSE_LAYOUTS[idx].label = e.target.value;
-    }
-  }
-});
-
-// deletes
-document.addEventListener("click", (e) => {
-  const idx = e.target?.getAttribute?.("data-del-layout");
-  if (idx != null) {
-    COURSE_LAYOUTS.splice(Number(idx), 1);
-    renderLayouts();
-  }
-});
 const csSaveBtn = $("csSaveBtn");
 if (csSaveBtn) csSaveBtn.onclick = saveCourseSettingsFromUI;
       if (!slug) throw new Error("slug_required");
@@ -1471,6 +1440,7 @@ if (csSaveBtn) csSaveBtn.onclick = saveCourseSettingsFromUI;
       if (getRole() === "manager") {
         setTimeout(() => document.querySelector("#tplLoadBtn")?.click(), 0);
       }
+      setTimeout(() => loadLayouts(), 0);
     } catch (e) {
       $("msg").textContent = "❌ " + (e?.message || "login_failed");
       clearAuth();
@@ -1569,7 +1539,43 @@ if (csSaveBtn) csSaveBtn.onclick = saveCourseSettingsFromUI;
   const mLoadBtn = $("mLoadBtn");
   if (mLoadBtn) mLoadBtn.onclick = async () => { _manualDateDefault(); await loadManualSlots(); };
 }
+  // =======================
+  // Course layouts (wire buttons once on page init)
+  // =======================
+  const addNineBtn = $("addNineBtn");
+  if (addNineBtn) addNineBtn.onclick = () => {
+    const v = ($("newNineLabel")?.value || "").trim();
+    if (!v) { $("layoutsMsg").textContent = "❌ Enter a nine name"; return; }
 
+    COURSE_LAYOUTS.push({ label: v });
+    $("newNineLabel").value = "";
+    renderLayouts();
+    $("layoutsMsg").textContent = "✅ Added (not saved yet)";
+  };
+
+  const saveLayoutsBtn = $("saveLayoutsBtn");
+  if (saveLayoutsBtn) saveLayoutsBtn.onclick = saveLayouts;
+
+  // live edits
+  document.addEventListener("input", (e) => {
+    if (e.target?.classList?.contains("layoutLabel")) {
+      const idx = Number(e.target.getAttribute("data-layout-idx"));
+      if (COURSE_LAYOUTS[idx]) COURSE_LAYOUTS[idx].label = e.target.value;
+    }
+  });
+
+  // deletes
+  document.addEventListener("click", (e) => {
+    const idx = e.target?.getAttribute?.("data-del-layout");
+    if (idx != null) {
+      COURSE_LAYOUTS.splice(Number(idx), 1);
+      renderLayouts();
+      $("layoutsMsg").textContent = "✅ Removed (not saved yet)";
+    }
+  });
+
+  // show empty state immediately
+  renderLayouts();
 // run now + fallback
 initCourseAdminUI();
 document.addEventListener("DOMContentLoaded", initCourseAdminUI);
@@ -2540,6 +2546,7 @@ if (Array.isArray(manualSlots) && manualSlots.length) {
           setRole(String(me.role || "").toLowerCase());
           applyRoleUI();
           $("msg").textContent = "✅ Logged in";
+          loadLayouts();
         }catch(e){
           // token invalid/expired → clear so they can login normally
           clearAuth();
