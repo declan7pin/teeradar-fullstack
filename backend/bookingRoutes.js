@@ -6701,53 +6701,54 @@ async function handleBook(req, res) {
 
     // 4) Insert booking
     const ins = await client.query(
-      `
-      INSERT INTO booking_bookings
-        (course_id, play_date, tee_time, holes, players,
-         golfer_name, golfer_email, golfer_phone,
-         price_per_player_cents, total_cents, reference, status,
-         start_at, end_at,
-         paid, checked_in,
-         has_cart, cart_qty, cart_fee_cents,
-         has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
-         layout_key, front_nine_key, back_nine_key,
-         created_at)
-      VALUES
-        ($1,$2::date,$3,$4,$5,
-         $6,$7,$8,
-         $9,$10,$11,'CONFIRMED',
-         $12::timestamptz,$13::timestamptz,
-         false,false,
-         $14,$15,$16,
-         $17,$18,$19, $20, $21, $22,
-         now())
-      RETURNING id, reference;
-      `,
-      [
-        courseId,
-        date,
-        time,
-        holes,
-        players,
-        golfer_name || null,
-        golfer_email || null,
-        golfer_phone || null,
-        ppp,
-        totalCents,
-        reference,
-        startAtIso,
-        endAtIso,
-        final_has_cart,
-        cart_qty,
-        cart_fee_cents,
-        final_has_hire_clubs,
-        hire_clubs_qty,
-        hire_clubs_fee_cents,
-      ]
-        slotRow.layout_key || null,
-        slotRow.front_nine_key || null,
-        slotRow.back_nine_key || null,
-    );
+  `
+  INSERT INTO booking_bookings
+    (course_id, play_date, tee_time, holes, players,
+     golfer_name, golfer_email, golfer_phone,
+     price_per_player_cents, total_cents, reference, status,
+     start_at, end_at,
+     paid, checked_in,
+     has_cart, cart_qty, cart_fee_cents,
+     has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
+     layout_key, front_nine_key, back_nine_key,
+     created_at)
+  VALUES
+    ($1,$2::date,$3,$4,$5,
+     $6,$7,$8,
+     $9,$10,$11,'CONFIRMED',
+     $12::timestamptz,$13::timestamptz,
+     false,false,
+     $14,$15,$16,
+     $17,$18,$19,
+     $20,$21,$22,
+     now())
+  RETURNING id, reference;
+  `,
+  [
+    courseId,
+    date,
+    time,
+    holes,
+    players,
+    golfer_name || null,
+    golfer_email || null,
+    golfer_phone || null,
+    ppp,
+    totalCents,
+    reference,
+    startAtIso,
+    endAtIso,
+    final_has_cart,
+    cart_qty,
+    cart_fee_cents,
+    final_has_hire_clubs,
+    hire_clubs_qty,
+    hire_clubs_fee_cents,
+    slotRow.layout_key || null,
+    slotRow.front_nine_key || null,
+    slotRow.back_nine_key || null,
+  ]
+);
 
     // 5) Update booking_times booked_players + status
     const newBooked = bookedPlayers + players;
