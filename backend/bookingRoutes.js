@@ -1537,18 +1537,24 @@ router.post(
 
 // Public read (used by book.html / search UI)
 router.get("/course-layouts", async (req, res) => {
-  try{
+  try {
     const slug = String(req.query.slug || "").trim().toLowerCase();
-    if (!slug) return res.status(400).json({ ok:false, error:"slug_required" });
-    const course = await getCourseFromSlug(slug);
-    const r = await db.query(`SELECT layouts FROM booking_courses WHERE slug = $1 LIMIT 1`, [slug]);
+    if (!slug) {
+      return res.status(400).json({ ok: false, error: "slug_required" });
+    }
+
+    const r = await db.query(
+      `SELECT layouts FROM booking_courses WHERE slug = $1 LIMIT 1`,
+      [slug]
+    );
+
     const layouts = r.rows?.[0]?.layouts || [];
-    return res.json({ ok:true, slug, layouts });
+    return res.json({ ok: true, slug, layouts });
+  } catch (e) {
     console.error("course-layouts GET", e);
-    return res.status(500).json({ ok:false, error:"internal_error" });
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 router.get("/course-admin/_debug", (req, res) => {
   const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
   const provided = getBypassProvided(req);
