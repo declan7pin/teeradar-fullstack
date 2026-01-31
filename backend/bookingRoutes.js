@@ -6206,80 +6206,102 @@ const layoutKey = layoutKeyRaw ? layoutKeyRaw : null;
     }).catch(() => {});
 
     // ✅ IMPORTANT: availability must be based on *effective remaining* (manual slots + confirmed bookings)
-    const { rows } = await db.query(
-      `
-      WITH t AS (
-        SELECT
-          t.tee_time,
-          t.holes,
-          t.max_players,
-          t.price_per_player_cents,
-          t.status,
-          t.layout_key,
-          t.front_nine_key,
-          t.back_nine_key,
-          COALESCE(ms.booked, 0) AS manual_booked,
-          COALESCE(bk.booked, 0) AS booked
-        FROM booking_times t
-        LEFT JOIN LATERAL (
-  SELECT COALESCE(SUM(players),0)::int AS manual_count
-  FROM booking_manual_slots
-  WHERE course_id = t.course_id
-    AND play_date = t.play_date
-    AND tee_time  = t.tee_time
-    AND holes     = t.holes
-    AND layout_key IS NOT DISTINCT FROM t.layout_key
-) ms ON true
-        LEFT JOIN LATERAL (
-          SELECT COALESCE(SUM(players), 0) AS booked
-          FROM booking_bookings b
-          WHERE b.course_id = t.course_id
-            AND b.play_date = t.play_date
-            AND b.tee_time = t.tee_time
-            AND b.holes = t.holes
-            AND b.status = 'CONFIRMED'
-            AND b.layout_key IS NOT DISTINCT FROM t.layout_key
-        ) bk ON true
-        WHERE t.course_id = $1
-          AND t.play_date = $2
-          AND t.holes = $3
-          AND t.status = 'AVAILABLE'
-          AND ($7::text IS NULL OR t.layout_key = $7)
-          AND (
-            $3 <> 9
-            OR $7::text IS NULL
-            OR NOT EXISTS (
-              SELECT 1
-              FROM booking_bookings bb18
-              WHERE bb18.course_id = t.course_id
-                AND bb18.play_date = t.play_date
-                AND bb18.holes = 18
-                AND bb18.status = 'CONFIRMED'
-                AND bb18.back_nine_key = $7
-                AND (
-                  (
-                    (split_part(t.tee_time, ':', 1)::int * 60 + split_part(t.tee_time, ':', 2)::int)
-                    >= (split_part(bb18.tee_time, ':', 1)::int * 60 + split_part(bb18.tee_time, ':', 2)::int) + $8
-                  )
-                  AND (
-                    (split_part(t.tee_time, ':', 1)::int * 60 + split_part(t.tee_time, ':', 2)::int)
-                    < (split_part(bb18.tee_time, ':', 1)::int * 60 + split_part(bb18.tee_time, ':', 2)::int) + $9
-                  )
-                )
-            )
-          )
-      )
-      SELECT
-        tee_time, holes, max_players, price_per_player_cents, status, layout_key, front_nine_key, back_nine_key,
-        (booked + manual_booked) AS booked_players,
-        (max_players - (booked + manual_booked)) AS available_players
-      FROM t
-      ORDER BY tee_time ASC;`,
-      [courseId, playDate, holes, players, includeBooked, includeFull, layoutKey, dur9, dur18]
-    );
+const { rows } = await db.query(
+  `
+  WITH t AS (
+    SELECT
+      t.tee_time,
+      t.holes,
+      t.max_players,
+      t.price_per_player_cents,
+      t.status,
+      t.layout_key,
+      t.front_nine_key,
+      t.back_nine_key,
+      COALESCE(ms.manual_count, 0) AS manual_booked,
+      COALESCE(bk.booked, 0)       AS booked
+    FROM booking_times t
 
-    console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
-// ✅ DEBUG: inspect the exact 06:00 slot to see why it "passes" players filter
+    -- ✅ Manual slots (SUM players, layout-safe)
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(SUM(players),0)::int AS manual_count
+      FROM booking_manual_slots
+      WHERE course_id = t.course_id
+        AND play_date = t.play_date
+        AND tee_time  = t.tee_time
+        AND holes     = t.holes
+        AND layout_key IS NOT DISTINCT FROM t.layout_key
+    ) ms ON true
+
+    -- ✅ Confirmed bookings (layout-safe)
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(SUM(players),0)::int AS booked
+      FROM booking_bookings b
+      WHERE b.course_id = t.course_id
+        AND b.play_date = t.play_date
+        AND b.tee_time  = t.tee_time
+        AND b.holes     = t.holes
+        AND b.status    = 'CONFIRMED'
+        AND b.layout_key IS NOT DISTINCT FROM t.layout_key
+    ) bk ON true
+
+    WHERE t.course_id = $1
+      AND t.play_date = $2
+      AND t.holes     = $3
+      AND t.status    = 'AVAILABLE'
+      AND ($7::text IS NULL OR t.layout_key = $7)
+
+      -- ✅ 18→9 overlap protection (unchanged logic)
+      AND (
+        $3 <> 9
+        OR $7::text IS NULL
+        OR NOT EXISTS (
+          SELECT 1
+          FROM booking_bookings bb18
+          WHERE bb18.course_id = t.course_id
+            AND bb18.play_date = t.play_date
+            AND bb18.holes     = 18
+            AND bb18.status    = 'CONFIRMED'
+            AND bb18.back_nine_key = $7
+            AND (
+              (
+                (split_part(t.tee_time, ':', 1)::int * 60 +
+                 split_part(t.tee_time, ':', 2)::int)
+                >=
+                (split_part(bb18.tee_time, ':', 1)::int * 60 +
+                 split_part(bb18.tee_time, ':', 2)::int) + $8
+              )
+              AND (
+                (split_part(t.tee_time, ':', 1)::int * 60 +
+                 split_part(t.tee_time, ':', 2)::int)
+                <
+                (split_part(bb18.tee_time, ':', 1)::int * 60 +
+                 split_part(bb18.tee_time, ':', 2)::int) + $9
+              )
+            )
+        )
+      )
+  )
+  SELECT
+    tee_time,
+    holes,
+    max_players,
+    price_per_player_cents,
+    status,
+    layout_key,
+    front_nine_key,
+    back_nine_key,
+    (booked + manual_booked)                    AS booked_players,
+    (max_players - (booked + manual_booked))   AS available_players
+  FROM t
+  ORDER BY tee_time ASC;
+  `,
+  [courseId, playDate, holes, players, includeBooked, includeFull, layoutKey, dur9, dur18]
+);
+
+console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
+
+// ✅ DEBUG: inspect exact slot to verify maths
 if (debug) {
   const slotDiag = await db.query(
     `
@@ -6287,25 +6309,27 @@ if (debug) {
       t.tee_time,
       t.holes,
       t.max_players,
-      t.booked_players,
-      COALESCE(ms.manual_count, 0)::int    AS manual_count,
-      COALESCE(bb.booking_players, 0)::int AS booking_players,
-      (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))::int AS booked_effective,
+      COALESCE(ms.manual_count,0)::int    AS manual_count,
+      COALESCE(bb.booking_players,0)::int AS booking_players,
+      (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0))::int AS booked_effective,
       GREATEST(
         0,
-        t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))
+        t.max_players - (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0))
       )::int AS remaining_effective,
-      t.status
+      t.status,
+      t.layout_key
     FROM booking_times t
+
     LEFT JOIN LATERAL (
-  SELECT COALESCE(SUM(players),0)::int AS manual_count
-  FROM booking_manual_slots
-  WHERE course_id = t.course_id
-    AND play_date = t.play_date
-    AND tee_time  = t.tee_time
-    AND holes     = t.holes
-    AND layout_key IS NOT DISTINCT FROM t.layout_key
-) ms ON true
+      SELECT COALESCE(SUM(players),0)::int AS manual_count
+      FROM booking_manual_slots
+      WHERE course_id = t.course_id
+        AND play_date = t.play_date
+        AND tee_time  = t.tee_time
+        AND holes     = t.holes
+        AND layout_key IS NOT DISTINCT FROM t.layout_key
+    ) ms ON true
+
     LEFT JOIN LATERAL (
       SELECT COALESCE(SUM(players),0)::int AS booking_players
       FROM booking_bookings
@@ -6313,12 +6337,14 @@ if (debug) {
         AND play_date = t.play_date
         AND tee_time  = t.tee_time
         AND holes     = t.holes
-        AND status = 'CONFIRMED'
+        AND status    = 'CONFIRMED'
+        AND layout_key IS NOT DISTINCT FROM t.layout_key
     ) bb ON true
+
     WHERE t.course_id = $1
       AND t.play_date = $2::date
-      AND t.holes = $3
-      AND t.tee_time = '06:00'
+      AND t.holes     = $3
+      AND t.tee_time  = '06:00'
     LIMIT 1;
     `,
     [courseId, date, holes]
