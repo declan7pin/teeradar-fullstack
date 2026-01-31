@@ -1,3 +1,4 @@
+
 // backend/bookingRoutes.js
 import express from "express";
 import crypto from "crypto";
@@ -994,6 +995,18 @@ async function ensureBookingTables() {
     );
   `);
 
+  // ✅ NEW: store named 9s + 18-hole routings (as JSON, editable by course)
+  // layouts example:
+  // [
+  //   { type:'nine', key:'pines', label:'Pines' },
+  //   { type:'nine', key:'lakes', label:'Lakes' },
+  //   { type:'nine', key:'heritage', label:'Heritage' },
+  //   { type:'eighteen', key:'pines+lakes', label:'Pines + Lakes', front:'pines', back:'lakes' }
+  // ]
+  await db.query(`
+    ALTER TABLE booking_courses
+    ADD COLUMN IF NOT EXISTS layouts JSONB NOT NULL DEFAULT '[]'::jsonb;
+  `);
   // ✅ NEW: role-based access for course users (manager vs proshop)
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_course_users (
@@ -1006,51 +1019,18 @@ async function ensureBookingTables() {
       UNIQUE(course_id, email)
     );
   `);
-
   await db.query(`
     ALTER TABLE booking_course_users
     ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'proshop';
   `);
-
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS booking_time_templates (
-      course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
-      timezone TEXT NOT NULL DEFAULT 'Australia/Perth',
-      template JSONB NOT NULL DEFAULT '{}'::jsonb,
-      updated_at TIMESTAMPTZ DEFAULT now()
-    );
-  `);
-
-  // ===============================
-  // ✅ NEW: COURSE NINES + ROUTES
-  // ===============================
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS booking_course_nines (
-      id BIGSERIAL PRIMARY KEY,
-      course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
-      code TEXT NOT NULL,
-      name TEXT NOT NULL,
-      created_at TIMESTAMPTZ DEFAULT now(),
-      UNIQUE(course_id, code)
-    );
-  `);
-
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS booking_course_routes (
-      id BIGSERIAL PRIMARY KEY,
-      course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
-      code TEXT NOT NULL,
-      name TEXT NOT NULL,
-      start_nine_id BIGINT NOT NULL REFERENCES booking_course_nines(id) ON DELETE RESTRICT,
-      end_nine_id   BIGINT NOT NULL REFERENCES booking_course_nines(id) ON DELETE RESTRICT,
-      created_at TIMESTAMPTZ DEFAULT now(),
-      UNIQUE(course_id, code)
-    );
-  `);
-
-  // ===============================
-  // BOOKING TIMES
-  // ===============================
+await db.query(`
+  CREATE TABLE IF NOT EXISTS booking_time_templates (
+    course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
+    timezone TEXT NOT NULL DEFAULT 'Australia/Perth',
+    template JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ DEFAULT now()
+  );
+`);
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_times (
       id BIGSERIAL PRIMARY KEY,
@@ -1067,51 +1047,29 @@ async function ensureBookingTables() {
     );
   `);
 
-  // ✅ NEW: which nine(s) this tee time belongs to
-  await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS start_nine_id BIGINT;`);
-  await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS end_nine_id BIGINT;`);
-
-  // ✅ DROP old unique constraint safely (needed for multiple 9s at same time)
-  await db.query(`
-    DO $$
-    BEGIN
-      IF EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'booking_times_course_id_play_date_tee_time_holes_key'
-      ) THEN
-        ALTER TABLE booking_times
-        DROP CONSTRAINT booking_times_course_id_play_date_tee_time_holes_key;
-      END IF;
-    END $$;
-  `);
-
-  // ✅ NEW: unique per layout (holes + start/end nine)
-  await db.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS booking_times_unique_layout_idx
-    ON booking_times (
-      course_id,
-      play_date,
-      tee_time,
-      holes,
-      COALESCE(start_nine_id, 0),
-      COALESCE(end_nine_id, 0)
-    );
-  `);
-
   await db.query(`
     ALTER TABLE booking_times
     ADD COLUMN IF NOT EXISTS booked_players INTEGER NOT NULL DEFAULT 0;
   `);
 
   await db.query(`
+    UPDATE booking_times
+    SET booked_players = 0
+    WHERE booked_players IS NULL;
+  `);
+
+  // ✅ NEW: optional layout keys for named 9s + 18 routings (e.g. lakes, pines+lakes)
+  await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS layout_key TEXT;`);
+  await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS front_nine_key TEXT;`);
+  await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
+  await db.query(`CREATE INDEX IF NOT EXISTS booking_times_layout_idx ON booking_times (course_id, play_date, holes, layout_key, tee_time);`);
+
+  await db.query(`
     CREATE INDEX IF NOT EXISTS booking_times_lookup_idx
     ON booking_times (course_id, play_date, holes, status, tee_time);
   `);
 
-  // ===============================
-  // BOOKINGS
-  // ===============================
-  await db.query(`
+    await db.query(`
     CREATE TABLE IF NOT EXISTS booking_bookings (
       id BIGSERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
@@ -1131,45 +1089,55 @@ async function ensureBookingTables() {
     );
   `);
 
-  // ✅ NEW: which nine(s) were booked
-  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS start_nine_id BIGINT;`);
-  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS end_nine_id BIGINT;`);
+  await db.query(`
+    ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+  `);
 
-  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;`);
-  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;`);
+  await db.query(`
+    ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;
+  `);
 
-  // ✅ NEW: usage window (already in your logic)
+  // ✅ NEW: persist chosen layout for bookings (named 9s + 18 routings)
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS layout_key TEXT;`);
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS front_nine_key TEXT;`);
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
+  await db.query(`CREATE INDEX IF NOT EXISTS booking_bookings_layout_idx ON booking_bookings (course_id, play_date, holes, layout_key);`);
+  
+  // ✅ NEW: store the "usage window" so inventory can be checked by overlap
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;`);
-  await db.query(`CREATE INDEX IF NOT EXISTS booking_bookings_course_window_idx ON booking_bookings (course_id, start_at, end_at);`);
 
+  // helps overlap queries
+  await db.query(`CREATE INDEX IF NOT EXISTS booking_bookings_course_window_idx ON booking_bookings (course_id, start_at, end_at);`);
+  // ✅ ADD: paid flag + cart tracking (needed for MiClub paid checkbox + analytics)
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
-  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS checked_in BOOLEAN NOT NULL DEFAULT false;`);
+    await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS checked_in BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_cart BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cart_qty INTEGER NOT NULL DEFAULT 0;`);
-  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
+await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
-  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_hire_clubs BOOLEAN NOT NULL DEFAULT false;`);
-  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
-
-  // ===============================
-  // COURSE SETTINGS
-  // ===============================
+  // ✅ ADD: add-ons pricing stored per course
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+  // ✅ NEW: inventory quantities + auto-release duration (minutes)
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
+
+  // default durations: 9 holes = 210 mins (3.5h), 18 holes = 390 mins (6.5h)
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS duration_9_mins INTEGER NOT NULL DEFAULT 210;`);
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS duration_18_mins INTEGER NOT NULL DEFAULT 390;`);
+  // ✅ ADD: hire clubs stored per booking
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_hire_clubs BOOLEAN NOT NULL DEFAULT false;`);
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
 
   await db.query(`
     CREATE INDEX IF NOT EXISTS booking_bookings_course_date_idx
     ON booking_bookings (course_id, play_date);
   `);
 
-  // ===============================
-  // ANALYTICS
-  // ===============================
+  // ✅ ADD: booking analytics events table (needed for recordBookingEvent)
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_analytics_events (
       id BIGSERIAL PRIMARY KEY,
@@ -1194,10 +1162,9 @@ async function ensureBookingTables() {
     CREATE INDEX IF NOT EXISTS booking_analytics_events_type_time_idx
     ON booking_analytics_events (event_type, occurred_at DESC);
   `);
+  // ... your existing table/index creation above
 
-  // ===============================
-  // MANUAL SLOTS
-  // ===============================
+  // ✅ Manual slot entries (walk-ins / phone-ins) for daily sheet
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_manual_slots (
       id BIGSERIAL PRIMARY KEY,
@@ -1205,8 +1172,8 @@ async function ensureBookingTables() {
       play_date DATE NOT NULL,
       tee_time TEXT NOT NULL,
       holes INTEGER NOT NULL,
-      slot_index INTEGER NOT NULL,
-      reference TEXT NOT NULL,
+      slot_index INTEGER NOT NULL, -- 1..4
+      reference TEXT NOT NULL,     -- groups multiple players together (same booking colour)
       name TEXT,
       email TEXT,
       phone TEXT,
@@ -1219,42 +1186,15 @@ async function ensureBookingTables() {
       UNIQUE(course_id, play_date, tee_time, holes, slot_index)
     );
   `);
-
-  // ✅ NEW: which nine(s) manual slot belongs to
-  await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS start_nine_id BIGINT;`);
-  await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS end_nine_id BIGINT;`);
-
-  // ✅ DROP old unique constraint safely
-  await db.query(`
-    DO $$
-    BEGIN
-      IF EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'booking_manual_slots_course_id_play_date_tee_time_holes_slot_index_key'
-      ) THEN
-        ALTER TABLE booking_manual_slots
-        DROP CONSTRAINT booking_manual_slots_course_id_play_date_tee_time_holes_slot_index_key;
-      END IF;
-    END $$;
-  `);
-
-  // ✅ NEW: unique per layout + slot index
-  await db.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS booking_manual_slots_unique_layout_idx
-    ON booking_manual_slots (
-      course_id,
-      play_date,
-      tee_time,
-      holes,
-      slot_index,
-      COALESCE(start_nine_id, 0),
-      COALESCE(end_nine_id, 0)
-    );
-  `);
-
+  // ✅ NEW: qty + notes for manual slots (daily sheet)
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS cart_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS notes TEXT;`);
+  // ✅ NEW: persist chosen layout for manual slots too (named 9s + 18 routings)
+  await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS layout_key TEXT;`);
+  await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS front_nine_key TEXT;`);
+  await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
+    // ✅ NEW: store window for add-on overlap checks (manual slots)
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;`);
   await db.query(`CREATE INDEX IF NOT EXISTS booking_manual_slots_course_window_idx ON booking_manual_slots (course_id, start_at, end_at);`);
@@ -1530,6 +1470,85 @@ RETURNING slug, name, cart_fee_cents, cart_qty, hire_clubs_fee_cents, hire_clubs
   }
 );
 // ✅ NEW: debug route so it returns JSON (won't fall into SPA index.html)
+
+// =======================
+// Named 9s / routings (layouts)
+// =======================
+// Course-admin (manager/proshop) can save a list of named nines + 18-hole routings into booking_courses.layouts
+// Shape:
+// layouts: [
+//   { type:'nine', key:'lakes', label:'Lakes' },
+//   { type:'eighteen', key:'pines+lakes', label:'Pines + Lakes', front:'pines', back:'lakes' }
+// ]
+
+router.get(
+  "/course-admin/course-layouts",
+  requireCourseAdmin,
+  async (req, res) => {
+    try {
+      const courseId = Number(req.courseAdmin?.course_id || 0);
+      const slug = String(req.courseAdmin?.slug || "");
+      const r = await db.query(`SELECT layouts FROM booking_courses WHERE id = $1 LIMIT 1`, [courseId]);
+      const layouts = r.rows?.[0]?.layouts || [];
+      return res.json({ ok: true, slug, layouts });
+    } catch (e) {
+      console.error("course-admin/course-layouts GET", e);
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  }
+);
+
+router.post(
+  "/course-admin/course-layouts",
+  requireCourseAdmin,
+  async (req, res) => {
+    try {
+      const layouts = Array.isArray(req.body?.layouts) ? req.body.layouts : null;
+      if (!layouts) return res.status(400).json({ ok:false, error:"layouts_required" });
+
+      // minimal validation
+      const cleaned = layouts
+        .filter(x => x && typeof x === "object")
+        .map(x => ({
+          type: String(x.type || "").trim().toLowerCase(),
+          key: String(x.key || "").trim().toLowerCase(),
+          label: String(x.label || "").trim(),
+          front: x.front != null ? String(x.front).trim().toLowerCase() : undefined,
+          back: x.back != null ? String(x.back).trim().toLowerCase() : undefined,
+        }))
+        .filter(x => (x.type === "nine" || x.type === "eighteen") && x.key);
+
+
+      const courseId = Number(req.courseAdmin?.course_id || 0);
+
+      await db.query(
+        `UPDATE booking_courses
+         SET layouts = $1::jsonb
+         WHERE id = $2`,
+        [JSON.stringify(cleaned), courseId]
+      );
+
+      return res.json({ ok:true, slug:String(req.courseAdmin?.slug||""), layouts: cleaned });
+      console.error("course-admin/course-layouts POST", e);
+      return res.status(500).json({ ok:false, error:"internal_error" });
+    }
+  }
+);
+
+// Public read (used by book.html / search UI)
+router.get("/course-layouts", async (req, res) => {
+  try{
+    const slug = String(req.query.slug || "").trim().toLowerCase();
+    if (!slug) return res.status(400).json({ ok:false, error:"slug_required" });
+    const course = await getCourseFromSlug(slug);
+    const r = await db.query(`SELECT layouts FROM booking_courses WHERE slug = $1 LIMIT 1`, [slug]);
+    const layouts = r.rows?.[0]?.layouts || [];
+    return res.json({ ok:true, slug, layouts });
+    console.error("course-layouts GET", e);
+    return res.status(500).json({ ok:false, error:"internal_error" });
+  }
+});
+
 router.get("/course-admin/_debug", (req, res) => {
   const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
   const provided = getBypassProvided(req);
@@ -5706,7 +5725,7 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
 
     const params = [courseId, date];
     let q = `
-      SELECT id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status
+      SELECT id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, layout_key, front_nine_key, back_nine_key
       FROM booking_times
       WHERE course_id = $1 AND play_date = $2::date
     `;
@@ -6084,6 +6103,9 @@ router.get("/availability", async (req, res) => {
 const playersRaw = Array.isArray(playersQuery) ? playersQuery[0] : playersQuery;
 const playersParsed = parseInt(String(playersRaw ?? "2"), 10);
 const players = Math.min(4, Math.max(1, Number.isFinite(playersParsed) ? playersParsed : 2));
+
+const layoutKeyRaw = String(req.query.layoutKey || req.query.layout || "").trim().toLowerCase();
+const layoutKey = layoutKeyRaw ? layoutKeyRaw : null;
     const earliest = String(req.query.earliest || "06:00").trim();
     const latest = String(req.query.latest || "17:00").trim();
     const debug = String(req.query.debug || "") === "1";
@@ -6125,6 +6147,8 @@ const players = Math.min(4, Math.max(1, Number.isFinite(playersParsed) ? players
     if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
 
     const courseRow = c.rows[0];
+    const dur9 = Number(courseRow.duration_9_mins || 210);
+    const dur18 = Number(courseRow.duration_18_mins || 390);
     const courseId = courseRow.id;
 
     dlog("🧪 GET /availability course matched", {
@@ -6165,63 +6189,74 @@ const players = Math.min(4, Math.max(1, Number.isFinite(playersParsed) ? players
     // ✅ IMPORTANT: availability must be based on *effective remaining* (manual slots + confirmed bookings)
     const { rows } = await db.query(
       `
+      WITH t AS (
+        SELECT
+          t.tee_time,
+          t.holes,
+          t.max_players,
+          t.price_per_player_cents,
+          t.status,
+          t.layout_key,
+          t.front_nine_key,
+          t.back_nine_key,
+          COALESCE(ms.booked, 0) AS manual_booked,
+          COALESCE(bk.booked, 0) AS booked
+        FROM booking_times t
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*) AS booked
+          FROM booking_manual_slots ms
+          WHERE ms.course_id = t.course_id
+            AND ms.play_date = t.play_date
+            AND ms.tee_time = t.tee_time
+            AND ms.holes = t.holes
+            AND ms.layout_key IS NOT DISTINCT FROM t.layout_key
+        ) ms ON true
+        LEFT JOIN LATERAL (
+          SELECT COALESCE(SUM(players), 0) AS booked
+          FROM booking_bookings b
+          WHERE b.course_id = t.course_id
+            AND b.play_date = t.play_date
+            AND b.tee_time = t.tee_time
+            AND b.holes = t.holes
+            AND b.status = 'CONFIRMED'
+            AND b.layout_key IS NOT DISTINCT FROM t.layout_key
+        ) bk ON true
+        WHERE t.course_id = $1
+          AND t.play_date = $2
+          AND t.holes = $3
+          AND t.status = 'AVAILABLE'
+          AND ($7::text IS NULL OR t.layout_key = $7)
+          AND (
+            $3 <> 9
+            OR $7::text IS NULL
+            OR NOT EXISTS (
+              SELECT 1
+              FROM booking_bookings bb18
+              WHERE bb18.course_id = t.course_id
+                AND bb18.play_date = t.play_date
+                AND bb18.holes = 18
+                AND bb18.status = 'CONFIRMED'
+                AND bb18.back_nine_key = $7
+                AND (
+                  (
+                    (split_part(t.tee_time, ':', 1)::int * 60 + split_part(t.tee_time, ':', 2)::int)
+                    >= (split_part(bb18.tee_time, ':', 1)::int * 60 + split_part(bb18.tee_time, ':', 2)::int) + $8
+                  )
+                  AND (
+                    (split_part(t.tee_time, ':', 1)::int * 60 + split_part(t.tee_time, ':', 2)::int)
+                    < (split_part(bb18.tee_time, ':', 1)::int * 60 + split_part(bb18.tee_time, ':', 2)::int) + $9
+                  )
+                )
+            )
+          )
+      )
       SELECT
-        t.tee_time,
-        t.holes,
-        t.max_players,
-        t.booked_players,
-        t.price_per_player_cents,
-
-        COALESCE(ms.manual_count, 0)::int      AS manual_count,
-        COALESCE(bb.booking_players, 0)::int   AS booking_players,
-
-        -- ✅ Effective booked = manual filled slots + confirmed bookings
-        (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))::int AS booked_effective,
-
-        -- ✅ Effective remaining = max - effective booked
-        GREATEST(
-          0,
-          t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))
-        )::int AS remaining_effective
-
-      FROM booking_times t
-
-      LEFT JOIN LATERAL (
-  SELECT COUNT(*)::int AS manual_count
-  FROM booking_manual_slots
-  WHERE course_id = t.course_id
-    AND play_date = t.play_date
-    AND tee_time  = t.tee_time
-    AND holes     = t.holes
-) ms ON true
-
-      LEFT JOIN LATERAL (
-        SELECT COALESCE(SUM(players),0)::int AS booking_players
-        FROM booking_bookings
-        WHERE course_id = t.course_id
-          AND play_date = t.play_date
-          AND tee_time  = t.tee_time
-          AND holes     = t.holes
-          AND status = 'CONFIRMED'
-      ) bb ON true
-
-      WHERE t.course_id = $1
-        AND t.play_date = $2::date
-        AND t.holes = $3
-        AND t.status = 'AVAILABLE'
-        AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) >= $4
-        AND (substring(t.tee_time,1,2)::int*60 + substring(t.tee_time,4,2)::int) <= $5
-
-        -- ✅ ONLY filter that decides if a time can serve the party size
-        AND GREATEST(
-          0,
-          t.max_players - (COALESCE(ms.manual_count, 0) + COALESCE(bb.booking_players, 0))
-        ) >= $6
-
-      ORDER BY t.tee_time ASC
-      LIMIT 200;
-      `,
-      [courseId, date, holes, sM, eM, players]
+        tee_time, holes, max_players, price_per_player_cents, status, layout_key, front_nine_key, back_nine_key,
+        (booked + manual_booked) AS booked_players,
+        (max_players - (booked + manual_booked)) AS available_players
+      FROM t
+      ORDER BY tee_time ASC;`,
+      [courseId, playDate, holes, players, includeBooked, includeFull, layoutKey, dur9, dur18]
     );
 
     console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
@@ -6600,7 +6635,7 @@ async function handleBook(req, res) {
     // 1) Lock the booking_times row for this slot
     const t = await client.query(
       `
-      SELECT id, max_players, booked_players, price_per_player_cents, status
+        SELECT booked_players, max_players, price_per_player_cents, layout_key, front_nine_key, back_nine_key
       FROM booking_times
       WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
       LIMIT 1
@@ -6656,6 +6691,7 @@ async function handleBook(req, res) {
          paid, checked_in,
          has_cart, cart_qty, cart_fee_cents,
          has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
+         layout_key, front_nine_key, back_nine_key,
          created_at)
       VALUES
         ($1,$2::date,$3,$4,$5,
@@ -6664,7 +6700,7 @@ async function handleBook(req, res) {
          $12::timestamptz,$13::timestamptz,
          false,false,
          $14,$15,$16,
-         $17,$18,$19,
+         $17,$18,$19, $20, $21, $22,
          now())
       RETURNING id, reference;
       `,
@@ -6689,6 +6725,9 @@ async function handleBook(req, res) {
         hire_clubs_qty,
         hire_clubs_fee_cents,
       ]
+        slotRow.layout_key || null,
+        slotRow.front_nine_key || null,
+        slotRow.back_nine_key || null,
     );
 
     // 5) Update booking_times booked_players + status
