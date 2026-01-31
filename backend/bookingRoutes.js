@@ -993,6 +993,7 @@ async function ensureBookingTables() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
+
   // ✅ NEW: role-based access for course users (manager vs proshop)
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_course_users (
@@ -1005,18 +1006,51 @@ async function ensureBookingTables() {
       UNIQUE(course_id, email)
     );
   `);
+
   await db.query(`
     ALTER TABLE booking_course_users
     ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'proshop';
   `);
-await db.query(`
-  CREATE TABLE IF NOT EXISTS booking_time_templates (
-    course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
-    timezone TEXT NOT NULL DEFAULT 'Australia/Perth',
-    template JSONB NOT NULL DEFAULT '{}'::jsonb,
-    updated_at TIMESTAMPTZ DEFAULT now()
-  );
-`);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_time_templates (
+      course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
+      timezone TEXT NOT NULL DEFAULT 'Australia/Perth',
+      template JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+
+  // ===============================
+  // ✅ NEW: COURSE NINES + ROUTES
+  // ===============================
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_course_nines (
+      id BIGSERIAL PRIMARY KEY,
+      course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
+      code TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(course_id, code)
+    );
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_course_routes (
+      id BIGSERIAL PRIMARY KEY,
+      course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
+      code TEXT NOT NULL,
+      name TEXT NOT NULL,
+      start_nine_id BIGINT NOT NULL REFERENCES booking_course_nines(id) ON DELETE RESTRICT,
+      end_nine_id   BIGINT NOT NULL REFERENCES booking_course_nines(id) ON DELETE RESTRICT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(course_id, code)
+    );
+  `);
+
+  // ===============================
+  // BOOKING TIMES
+  // ===============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_times (
       id BIGSERIAL PRIMARY KEY,
@@ -1033,15 +1067,40 @@ await db.query(`
     );
   `);
 
+  // ✅ NEW: which nine(s) this tee time belongs to
+  await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS start_nine_id BIGINT;`);
+  await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS end_nine_id BIGINT;`);
+
+  // ✅ DROP old unique constraint safely (needed for multiple 9s at same time)
   await db.query(`
-    ALTER TABLE booking_times
-    ADD COLUMN IF NOT EXISTS booked_players INTEGER NOT NULL DEFAULT 0;
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'booking_times_course_id_play_date_tee_time_holes_key'
+      ) THEN
+        ALTER TABLE booking_times
+        DROP CONSTRAINT booking_times_course_id_play_date_tee_time_holes_key;
+      END IF;
+    END $$;
+  `);
+
+  // ✅ NEW: unique per layout (holes + start/end nine)
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS booking_times_unique_layout_idx
+    ON booking_times (
+      course_id,
+      play_date,
+      tee_time,
+      holes,
+      COALESCE(start_nine_id, 0),
+      COALESCE(end_nine_id, 0)
+    );
   `);
 
   await db.query(`
-    UPDATE booking_times
-    SET booked_players = 0
-    WHERE booked_players IS NULL;
+    ALTER TABLE booking_times
+    ADD COLUMN IF NOT EXISTS booked_players INTEGER NOT NULL DEFAULT 0;
   `);
 
   await db.query(`
@@ -1049,7 +1108,10 @@ await db.query(`
     ON booking_times (course_id, play_date, holes, status, tee_time);
   `);
 
-    await db.query(`
+  // ===============================
+  // BOOKINGS
+  // ===============================
+  await db.query(`
     CREATE TABLE IF NOT EXISTS booking_bookings (
       id BIGSERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
@@ -1069,49 +1131,45 @@ await db.query(`
     );
   `);
 
-  await db.query(`
-    ALTER TABLE booking_bookings
-    ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
-  `);
+  // ✅ NEW: which nine(s) were booked
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS start_nine_id BIGINT;`);
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS end_nine_id BIGINT;`);
 
-  await db.query(`
-    ALTER TABLE booking_bookings
-    ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;
-  `);
-  
-  // ✅ NEW: store the "usage window" so inventory can be checked by overlap
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;`);
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;`);
+
+  // ✅ NEW: usage window (already in your logic)
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;`);
-
-  // helps overlap queries
   await db.query(`CREATE INDEX IF NOT EXISTS booking_bookings_course_window_idx ON booking_bookings (course_id, start_at, end_at);`);
-  // ✅ ADD: paid flag + cart tracking (needed for MiClub paid checkbox + analytics)
+
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
-    await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS checked_in BOOLEAN NOT NULL DEFAULT false;`);
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS checked_in BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_cart BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cart_qty INTEGER NOT NULL DEFAULT 0;`);
-await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
-  // ✅ ADD: add-ons pricing stored per course
-  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
-  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
-  // ✅ NEW: inventory quantities + auto-release duration (minutes)
-  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_qty INTEGER NOT NULL DEFAULT 0;`);
-  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
-
-  // default durations: 9 holes = 210 mins (3.5h), 18 holes = 390 mins (6.5h)
-  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS duration_9_mins INTEGER NOT NULL DEFAULT 210;`);
-  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS duration_18_mins INTEGER NOT NULL DEFAULT 390;`);
-  // ✅ ADD: hire clubs stored per booking
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_hire_clubs BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+
+  // ===============================
+  // COURSE SETTINGS
+  // ===============================
+  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_qty INTEGER NOT NULL DEFAULT 0;`);
+  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
+  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS duration_9_mins INTEGER NOT NULL DEFAULT 210;`);
+  await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS duration_18_mins INTEGER NOT NULL DEFAULT 390;`);
 
   await db.query(`
     CREATE INDEX IF NOT EXISTS booking_bookings_course_date_idx
     ON booking_bookings (course_id, play_date);
   `);
 
-  // ✅ ADD: booking analytics events table (needed for recordBookingEvent)
+  // ===============================
+  // ANALYTICS
+  // ===============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_analytics_events (
       id BIGSERIAL PRIMARY KEY,
@@ -1136,9 +1194,10 @@ await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs
     CREATE INDEX IF NOT EXISTS booking_analytics_events_type_time_idx
     ON booking_analytics_events (event_type, occurred_at DESC);
   `);
-  // ... your existing table/index creation above
 
-  // ✅ Manual slot entries (walk-ins / phone-ins) for daily sheet
+  // ===============================
+  // MANUAL SLOTS
+  // ===============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_manual_slots (
       id BIGSERIAL PRIMARY KEY,
@@ -1146,8 +1205,8 @@ await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs
       play_date DATE NOT NULL,
       tee_time TEXT NOT NULL,
       holes INTEGER NOT NULL,
-      slot_index INTEGER NOT NULL, -- 1..4
-      reference TEXT NOT NULL,     -- groups multiple players together (same booking colour)
+      slot_index INTEGER NOT NULL,
+      reference TEXT NOT NULL,
       name TEXT,
       email TEXT,
       phone TEXT,
@@ -1160,11 +1219,42 @@ await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs
       UNIQUE(course_id, play_date, tee_time, holes, slot_index)
     );
   `);
-  // ✅ NEW: qty + notes for manual slots (daily sheet)
+
+  // ✅ NEW: which nine(s) manual slot belongs to
+  await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS start_nine_id BIGINT;`);
+  await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS end_nine_id BIGINT;`);
+
+  // ✅ DROP old unique constraint safely
+  await db.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'booking_manual_slots_course_id_play_date_tee_time_holes_slot_index_key'
+      ) THEN
+        ALTER TABLE booking_manual_slots
+        DROP CONSTRAINT booking_manual_slots_course_id_play_date_tee_time_holes_slot_index_key;
+      END IF;
+    END $$;
+  `);
+
+  // ✅ NEW: unique per layout + slot index
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS booking_manual_slots_unique_layout_idx
+    ON booking_manual_slots (
+      course_id,
+      play_date,
+      tee_time,
+      holes,
+      slot_index,
+      COALESCE(start_nine_id, 0),
+      COALESCE(end_nine_id, 0)
+    );
+  `);
+
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS cart_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS notes TEXT;`);
-    // ✅ NEW: store window for add-on overlap checks (manual slots)
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;`);
   await db.query(`CREATE INDEX IF NOT EXISTS booking_manual_slots_course_window_idx ON booking_manual_slots (course_id, start_at, end_at);`);
