@@ -398,7 +398,29 @@
         </div>
       </div>
     </div>
+<!-- 3.5) Course layouts (Nines & routing) -->
+<div class="card">
+  <h3>Course layouts</h3>
+  <p class="muted">Define the names of your 9-hole loops (e.g. Pines, Lakes, Heritage).</p>
 
+  <div id="layoutsList" style="display:grid;gap:8px;"></div>
+
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label class="muted">New 9 name</label>
+      <input id="newNineLabel" placeholder="e.g. Pines" />
+    </div>
+    <div style="display:flex;align-items:end">
+      <button id="addNineBtn">Add nine</button>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:10px">
+    <button id="saveLayoutsBtn">Save layouts</button>
+  </div>
+
+  <div id="layoutsMsg" class="muted" style="margin-top:10px;"></div>
+</div>
     <!-- 4) Weekly schedule template (manager only) -->
 <div class="card" id="managerOnlyTemplate" style="display:none;">
       <h2 style="margin:0 0 6px;">Weekly schedule template</h2>
