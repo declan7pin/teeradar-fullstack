@@ -1792,9 +1792,20 @@ if (csSaveBtn) csSaveBtn.onclick = saveCourseSettingsFromUI;
     const tb = $("timesBody");
     tb.innerHTML = "";
     rows.forEach(r => {
-      const maxP = Number(r.max_players ?? 0);
-      const bookedP = Number(r.booked_players ?? 0);
-      const remaining = Math.max(0, maxP - bookedP);
+            const maxP = Number(r.max_players ?? r.maxPlayers ?? 0);
+
+      // Some providers/backends provide a correct remaining/available field.
+      // Prefer it if present; fallback to max - booked.
+      const remainingRaw =
+        r.remaining_players ?? r.remainingPlayers ??
+        r.available_players ?? r.availablePlayers ??
+        r.remaining ?? r.available;
+
+      const bookedP = Number(r.booked_players ?? r.bookedPlayers ?? r.booked ?? 0);
+
+      const remaining = (remainingRaw != null && remainingRaw !== "")
+        ? Math.max(0, Number(remainingRaw) || 0)
+        : Math.max(0, maxP - bookedP);
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
