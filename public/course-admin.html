@@ -1394,13 +1394,7 @@ function initCourseAdminUI(){
       const slug = String($("slug").value || "").trim().toLowerCase();
       const email = String($("email").value || "").trim();
       const password = String($("password").value || "").trim();
-// ✅ Stock buttons
-const csLoadBtn = $("csLoadBtn");
-if (csLoadBtn) csLoadBtn.onclick = loadCourseSettingsToUI;
 
-
-const csSaveBtn = $("csSaveBtn");
-if (csSaveBtn) csSaveBtn.onclick = saveCourseSettingsFromUI;
       if (!slug) throw new Error("slug_required");
       if (!email) throw new Error("email_required");
       if (!password) throw new Error("password_required");
@@ -1592,6 +1586,13 @@ async function viewTimes(){
   "/api/book/course-admin/times?date=" + encodeURIComponent(date),
   { method:"GET" }
 );
+// ✅ Stock buttons
+const csLoadBtn = $("csLoadBtn");
+if (csLoadBtn) csLoadBtn.onclick = loadCourseSettingsToUI;
+
+
+const csSaveBtn = $("csSaveBtn");
+if (csSaveBtn) csSaveBtn.onclick = saveCourseSettingsFromUI;
 
     const rows = (out && out.times) || [];
     if (!Array.isArray(rows) || !rows.length){
@@ -2160,11 +2161,6 @@ await j(
       $("manualMsg").textContent = "❌ " + e.message;
     }
   }
-
-  $("mLoadBtn").onclick = async () => {
-    _manualDateDefault();
-    await loadManualSlots();
-  };
 
   // ✅ Manual BOOKING button (standalone) — this was wrongly nested before
 $("mBookBtn").onclick = async () => {
