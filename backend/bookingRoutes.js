@@ -1486,6 +1486,67 @@ RETURNING slug, name, cart_fee_cents, cart_qty, hire_clubs_fee_cents, hire_clubs
     }
   }
 );
+// =======================
+// Course layouts (9-hole loops + optional 18-hole routing)
+// Stored in booking_course_layouts
+// =======================
+
+// GET layouts
+router.get("/course-admin/course-layouts", requireCourseAdmin, async (req, res) => {
+  try {
+    const courseId = Number(req.courseAdmin.course_id);
+
+    const r = await db.query(
+      `
+      SELECT layouts, routes18
+      FROM booking_course_layouts
+      WHERE course_id = $1
+      LIMIT 1
+      `,
+      [courseId]
+    );
+
+    if (!r.rows.length) {
+      return res.json({ ok: true, layouts: [], routes18: [] });
+    }
+
+    return res.json({
+      ok: true,
+      layouts: r.rows[0].layouts || [],
+      routes18: r.rows[0].routes18 || [],
+    });
+  } catch (e) {
+    console.error("course-admin/course-layouts GET", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// SAVE layouts
+router.post("/course-admin/course-layouts", requireCourseAdmin, async (req, res) => {
+  try {
+    const courseId = Number(req.courseAdmin.course_id);
+    const layouts = Array.isArray(req.body.layouts) ? req.body.layouts : [];
+    const routes18 = Array.isArray(req.body.routes18) ? req.body.routes18 : [];
+
+    await db.query(
+      `
+      INSERT INTO booking_course_layouts (course_id, layouts, routes18)
+      VALUES ($1, $2::jsonb, $3::jsonb)
+      ON CONFLICT (course_id)
+      DO UPDATE SET
+        layouts = EXCLUDED.layouts,
+        routes18 = EXCLUDED.routes18,
+        updated_at = now()
+      `,
+      [courseId, JSON.stringify(layouts), JSON.stringify(routes18)]
+    );
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("course-admin/course-layouts POST", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // ✅ NEW: debug route so it returns JSON (won't fall into SPA index.html)
 
 // =======================
