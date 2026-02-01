@@ -1,4 +1,5 @@
 
+
 // backend/bookingRoutes.js
 import express from "express";
 import crypto from "crypto";
@@ -1003,14 +1004,14 @@ async function ensureBookingTables() {
     );
   `);
   // ✅ NEW: course layouts (9-hole loops + optional 18-hole routing)
-await db.query(`
-  CREATE TABLE IF NOT EXISTS booking_course_layouts (
-    course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
-    layouts JSONB NOT NULL DEFAULT '[]'::jsonb,      -- [{key,label}]
-    routes18 JSONB NOT NULL DEFAULT '[]'::jsonb,     -- optional: [{key,label,front9_key,back9_key}]
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-  );
-`);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_course_layouts (
+          course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
+            layouts JSONB NOT NULL DEFAULT '[]'::jsonb,   -- [{key,label}]
+            routes18 JSONB NOT NULL DEFAULT '[]'::jsonb,  -- [{key,label,front9_key,back9_key}]
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
 
   // ✅ NEW: store named 9s + 18-hole routings (as JSON, editable by course)
   // layouts example:
@@ -1552,100 +1553,126 @@ router.post("/course-admin/course-layouts", requireCourseAdmin, async (req, res)
 // =======================
 // Named 9s / routings (layouts)
 // =======================
-// Course-admin (manager/proshop) can save a list of named nines + 18-hole routings into booking_courses.layouts
-// Shape:
-// layouts: [
-//   { type:'nine', key:'lakes', label:'Lakes' },
-//   { type:'eighteen', key:'pines+lakes', label:'Pines + Lakes', front:'pines', back:'lakes' }
-// ]
+// Course-admin can save a list of named nines + optional 18-hole routings.
+// Stored in booking_course_layouts.
+//
+// layouts:  [{ key, label }]
+// routes18: [{ key, label, front9_key, back9_key }]
 
-router.get(
-  "/course-admin/course-layouts",
-  requireCourseAdmin,
-  async (req, res) => {
-    try {
-      const courseId = Number(req.courseAdmin?.course_id || 0);
-      const slug = String(req.courseAdmin?.slug || "");
-      const r = await db.query(`SELECT layouts FROM booking_courses WHERE id = $1 LIMIT 1`, [courseId]);
-      const layouts = r.rows?.[0]?.layouts || [];
-      return res.json({ ok: true, slug, layouts });
-    } catch (e) {
-      console.error("course-admin/course-layouts GET", e);
-      return res.status(500).json({ ok: false, error: "internal_error" });
-    }
+function _layoutKey(v){
+  return String(v || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
+
+router.get("/course-admin/course-layouts", requireCourseAdmin, async (req, res) => {
+  try {
+    const courseId = Number(req.courseAdmin?.course_id || req.courseAdmin?.courseId || 0);
+    const slug = String(req.courseAdmin?.slug || "");
+
+    if (!courseId) return res.status(403).json({ ok: false, error: "course_not_found" });
+
+    const r = await db.query(
+      `SELECT layouts, routes18 FROM booking_course_layouts WHERE course_id = $1 LIMIT 1`,
+      [courseId]
+    );
+
+    const layouts = r.rows?.[0]?.layouts || [];
+    const routes18 = r.rows?.[0]?.routes18 || [];
+
+    return res.json({ ok: true, slug, layouts, routes18 });
+  } catch (e) {
+    console.error("course-admin/course-layouts GET", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
-);
+});
 
-router.post(
-  "/course-admin/course-layouts",
-  requireCourseAdmin,
-  async (req, res) => {
-    try {
-      const layouts = Array.isArray(req.body?.layouts) ? req.body.layouts : null;
-      if (!layouts) {
-        return res.status(400).json({ ok: false, error: "layouts_required" });
-      }
+router.post("/course-admin/course-layouts", requireCourseAdmin, async (req, res) => {
+  try {
+    const courseId = Number(req.courseAdmin?.course_id || req.courseAdmin?.courseId || 0);
+    if (!courseId) return res.status(403).json({ ok: false, error: "course_not_found" });
 
-      // minimal validation
-      const cleaned = layouts
-        .filter(x => x && typeof x === "object")
-        .map(x => ({
-          type: String(x.type || "").trim().toLowerCase(),
-          key: String(x.key || "").trim().toLowerCase(),
-          label: String(x.label || "").trim(),
-          front: x.front != null ? String(x.front).trim().toLowerCase() : undefined,
-          back: x.back != null ? String(x.back).trim().toLowerCase() : undefined,
-        }))
-        .filter(
-          x =>
-            (x.type === "nine" || x.type === "eighteen") &&
-            x.key
-        );
+    const layoutsIn = Array.isArray(req.body?.layouts) ? req.body.layouts : null;
+    const routes18In = Array.isArray(req.body?.routes18) ? req.body.routes18 : (Array.isArray(req.body?.routes18s) ? req.body.routes18s : null);
 
-      const courseId = Number(req.courseAdmin?.course_id || 0);
-      if (!courseId) {
-        return res.status(403).json({ ok: false, error: "course_not_found" });
-      }
+    if (!layoutsIn) return res.status(400).json({ ok: false, error: "layouts_required" });
 
-      await db.query(
-        `UPDATE booking_courses
-         SET layouts = $1::jsonb
-         WHERE id = $2`,
-        [JSON.stringify(cleaned), courseId]
-      );
+    // ✅ 9-hole layouts (UI sends [{label}] — we add/normalize keys)
+    const layouts = layoutsIn
+      .filter(x => x && typeof x === "object")
+      .map(x => {
+        const label = String(x.label || x.name || x.key || "").trim();
+        const key = _layoutKey(x.key || label);
+        return key ? { key, label: label || key } : null;
+      })
+      .filter(Boolean);
 
-      return res.json({
-        ok: true,
-        slug: String(req.courseAdmin?.slug || ""),
-        layouts: cleaned,
-      });
-    } catch (e) {
-      console.error("course-admin/course-layouts POST", e);
-      return res.status(500).json({ ok: false, error: "internal_error" });
-    }
+    // ✅ Optional 18-hole routing (if you later add it to the UI)
+    const routes18 = (routes18In || [])
+      .filter(x => x && typeof x === "object")
+      .map(x => {
+        const label = String(x.label || x.name || x.key || "").trim();
+        const key = _layoutKey(x.key || label);
+        const front9_key = _layoutKey(x.front9_key || x.front || "");
+        const back9_key = _layoutKey(x.back9_key || x.back || "");
+        return key ? { key, label: label || key, front9_key, back9_key } : null;
+      })
+      .filter(Boolean);
+
+    await db.query(
+      `
+      INSERT INTO booking_course_layouts (course_id, layouts, routes18, updated_at)
+      VALUES ($1, $2::jsonb, $3::jsonb, now())
+      ON CONFLICT (course_id)
+      DO UPDATE SET
+        layouts = EXCLUDED.layouts,
+        routes18 = EXCLUDED.routes18,
+        updated_at = now();
+      `,
+      [courseId, JSON.stringify(layouts), JSON.stringify(routes18)]
+    );
+
+    return res.json({
+      ok: true,
+      slug: String(req.courseAdmin?.slug || ""),
+      layouts,
+      routes18,
+    });
+  } catch (e) {
+    console.error("course-admin/course-layouts POST", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
-);
+});
 
 // Public read (used by book.html / search UI)
 router.get("/course-layouts", async (req, res) => {
   try {
     const slug = String(req.query.slug || "").trim().toLowerCase();
-    if (!slug) {
-      return res.status(400).json({ ok: false, error: "slug_required" });
-    }
+    if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
 
     const r = await db.query(
-      `SELECT layouts FROM booking_courses WHERE slug = $1 LIMIT 1`,
+      `
+      SELECT l.layouts, l.routes18
+      FROM booking_courses c
+      LEFT JOIN booking_course_layouts l ON l.course_id = c.id
+      WHERE c.slug = $1
+      LIMIT 1;
+      `,
       [slug]
     );
 
     const layouts = r.rows?.[0]?.layouts || [];
-    return res.json({ ok: true, slug, layouts });
+    const routes18 = r.rows?.[0]?.routes18 || [];
+    return res.json({ ok: true, slug, layouts, routes18 });
   } catch (e) {
     console.error("course-layouts GET", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 router.get("/course-admin/_debug", (req, res) => {
   const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
   const provided = getBypassProvided(req);
