@@ -2858,33 +2858,82 @@ function getNineLayoutOptionsHTML(selectedKey){
   // -----------------------
   // Layout selector (9-hole only)
   // -----------------------
-  function renderLayoutSelect(dow, w){
-    const layouts = Array.isArray(COURSE_LAYOUTS) ? COURSE_LAYOUTS : [];
-    if (!layouts.length) {
-      return `
-        <div class="field sm3" style="grid-column:span 3">
-          <label>9-hole layout</label>
-          <div class="muted mini">No layouts defined</div>
-        </div>
-      `;
-    }
-
-    const selected = String(w.layout_key || "");
+  function renderNineLayoutSelect(dow, w){
+  const layouts = Array.isArray(COURSE_LAYOUTS) ? COURSE_LAYOUTS : [];
+  if (!layouts.length) {
     return `
       <div class="field sm3" style="grid-column:span 3">
         <label>9-hole layout</label>
-        <select data-w="layout_key" data-dow="${dow}" data-holes="9">
-          <option value="">Auto / Any</option>
-          ${layouts.map(l => {
-            const key = String(l.key || l.label || "").trim();
-            const label = String(l.label || l.key || "").trim();
-            const sel = key && key === selected ? "selected" : "";
-            return `<option value="${_escape(key)}" ${sel}>${_escape(label)}</option>`;
-          }).join("")}
-        </select>
+        <div class="muted mini">No layouts defined</div>
       </div>
     `;
   }
+
+  const selected = String(w.layout_key || "");
+  return `
+    <div class="field sm3" style="grid-column:span 3">
+      <label>9-hole layout</label>
+      <select data-w="layout_key" data-dow="${dow}" data-holes="9">
+        <option value="">Auto / Any</option>
+        ${layouts.map(l => {
+          const key = String(l.key || l.label || "").trim();
+          const label = String(l.label || l.key || "").trim();
+          const sel = key && key === selected ? "selected" : "";
+          return `<option value="${_escape(key)}" ${sel}>${_escape(label)}</option>`;
+        }).join("")}
+      </select>
+    </div>
+  `;
+}
+
+function renderEighteenRoutingSelect(dow, w){
+  const layouts = Array.isArray(COURSE_LAYOUTS) ? COURSE_LAYOUTS : [];
+  if (!layouts.length) {
+    return `
+      <div class="field sm3" style="grid-column:span 6">
+        <label>18-hole routing</label>
+        <div class="muted mini">No layouts defined</div>
+      </div>
+    `;
+  }
+
+  const fSel = String(w.front9_key || "");
+  const bSel = String(w.back9_key || "");
+
+  const opts = `
+    <option value="">Select</option>
+    ${layouts.map(l => {
+      const key = String(l.key || l.label || "").trim();
+      const label = String(l.label || l.key || "").trim();
+      return `<option value="${_escape(key)}">${_escape(label)}</option>`;
+    }).join("")}
+  `;
+
+  return `
+    <div class="field sm3" style="grid-column:span 3">
+      <label>18 front 9</label>
+      <select data-w="front9_key" data-dow="${dow}" data-holes="18">
+        ${opts}
+      </select>
+    </div>
+    <div class="field sm3" style="grid-column:span 3">
+      <label>18 back 9</label>
+      <select data-w="back9_key" data-dow="${dow}" data-holes="18">
+        ${opts}
+      </select>
+    </div>
+    <script>
+      (function(){
+        try{
+          const f = document.querySelector('select[data-w=\"front9_key\"][data-dow=\"${dow}\"][data-holes=\"18\"]');
+          const b = document.querySelector('select[data-w=\"back9_key\"][data-dow=\"${dow}\"][data-holes=\"18\"]');
+          if (f) f.value = \"${_escape(fSel)}\";
+          if (b) b.value = \"${_escape(bSel)}\";
+        }catch{}
+      })();
+    </script>
+  `;
+}
 
   // -----------------------
   // Window inputs
@@ -2931,7 +2980,8 @@ function getNineLayoutOptionsHTML(selectedKey){
           value="${(Number(w.pricePerPlayerCents||0)/100).toFixed(2)}" />
       </div>
 
-      ${holes === 9 ? renderLayoutSelect(dow, w) : ""}
+      ${holes === 18 ? renderEighteenRoutingSelect(dow, w) : ""}
+${holes === 9 ? renderNineLayoutSelect(dow, w) : ""}
     `;
   }
 
