@@ -398,12 +398,13 @@
         </div>
       </div>
     </div>
-<!-- 3.5) Course layouts (Nines & routing) -->
+<!-- 3.5) Course layouts (Nines & 18-hole routing) -->
 <div class="card">
   <h3>Course layouts</h3>
-  <p class="muted">Define the names of your 9-hole loops (e.g. Pines, Lakes, Heritage).</p>
+  <p class="muted">Define your 9-hole loops (e.g. Pines, Lakes). Then create 18-hole options by selecting a Front 9 + Back 9.</p>
 
-  <div id="layoutsList" style="display:grid;gap:8px;"></div>
+  <div style="font-weight:800;margin-top:6px;">9-hole loops</div>
+  <div id="layoutsList" style="display:grid;gap:8px;margin-top:8px;"></div>
 
   <div class="row" style="margin-top:10px">
     <div>
@@ -411,12 +412,44 @@
       <input id="newNineLabel" placeholder="e.g. Pines" />
     </div>
     <div style="display:flex;align-items:end">
-      <button id="addNineBtn">Add nine</button>
+      <button id="addNineBtn" type="button">Add nine</button>
+    </div>
+  </div>
+
+  <hr style="border:0;border-top:1px solid #e2e8f0;margin:14px 0;" />
+
+  <div style="font-weight:800;margin-top:6px;">18-hole options (Front 9 + Back 9)</div>
+  <div class="muted mini" style="margin-top:6px;">
+    Users booking 18 will pick one of these. We’ll also use the Back 9 to auto-block a 9-hole “return window”.
+  </div>
+
+  <div id="routes18List" style="display:grid;gap:8px;margin-top:10px;"></div>
+
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label class="muted">18 option label</label>
+      <input id="new18Label" placeholder="e.g. Pines + Lakes" />
+    </div>
+    <div>
+      <label class="muted">Front 9</label>
+      <select id="new18Front"></select>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label class="muted">Back 9</label>
+      <select id="new18Back"></select>
+    </div>
+    <div>
+      <label class="muted">Return window block (mins)</label>
+      <input id="new18BlockMins" type="number" min="0" step="5" value="30" />
     </div>
   </div>
 
   <div class="actions" style="margin-top:10px">
-    <button id="saveLayoutsBtn">Save layouts</button>
+    <button id="add18Btn" type="button" class="secondary">Add 18 option</button>
+    <button id="saveLayoutsBtn" type="button">Save layouts</button>
   </div>
 
   <div id="layoutsMsg" class="muted" style="margin-top:10px;"></div>
@@ -607,9 +640,38 @@ window.onerror = function(message, source, lineno, colno){
   }catch{}
 };
 // =======================
-// Course layouts (9-hole names)
+// Course layouts (9-hole loops + 18-hole routes)
 // =======================
-let COURSE_LAYOUTS = [];
+let COURSE_LAYOUTS = [];   // [{key,label}]
+let COURSE_ROUTES18 = [];  // [{key,label,front9_key,back9_key,block_mins}]
+
+function _slugKey(s){
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function renderNineSelectOptions(selectEl, selectedKey){
+  if (!selectEl) return;
+  const sel = String(selectedKey || "");
+  const opts = [];
+
+  if (!COURSE_LAYOUTS.length){
+    opts.push(`<option value="">No 9s defined</option>`);
+  } else {
+    opts.push(`<option value="">Select</option>`);
+    COURSE_LAYOUTS.forEach(l => {
+      const key = String(l.key || "");
+      const label = String(l.label || key || "");
+      const s = (key && key === sel) ? " selected" : "";
+      opts.push(`<option value="${_escape(key)}"${s}>${_escape(label)}</option>`);
+    });
+  }
+
+  selectEl.innerHTML = opts.join("");
+}
 
 function renderLayouts(){
   const wrap = $("layoutsList");
@@ -623,12 +685,48 @@ function renderLayouts(){
       <div>
         <input
           value="${_escape(l.label || "")}"
-          data-layout-idx="${idx}"
-          class="layoutLabel"
+          data-nine-idx="${idx}"
+          class="nineLabel"
         />
       </div>
       <div style="display:flex;align-items:end">
-        <button class="secondary" data-del-layout="${idx}">Delete</button>
+        <button type="button" class="secondary" data-del-nine="${idx}">Delete</button>
+      </div>
+    `;
+    wrap.appendChild(row);
+  });
+
+  // keep the add-18 selects in sync
+  renderNineSelectOptions($("new18Front"), "");
+  renderNineSelectOptions($("new18Back"), "");
+}
+
+function renderRoutes18(){
+  const wrap = $("routes18List");
+  if (!wrap) return;
+
+  wrap.innerHTML = "";
+  COURSE_ROUTES18.forEach((r, idx) => {
+    const frontLabel = (COURSE_LAYOUTS.find(x => x.key === r.front9_key)?.label) || r.front9_key || "";
+    const backLabel  = (COURSE_LAYOUTS.find(x => x.key === r.back9_key)?.label) || r.back9_key || "";
+
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `
+      <div>
+        <input
+          value="${_escape(r.label || "")}"
+          data-r18-idx="${idx}"
+          class="r18Label"
+          placeholder="e.g. Pines + Lakes"
+        />
+        <div class="muted mini" style="margin-top:6px;">
+          Front: <b>${_escape(frontLabel)}</b> • Back: <b>${_escape(backLabel)}</b> • Block: <b>${_escape(r.block_mins ?? 30)}</b> mins
+        </div>
+      </div>
+      <div style="display:flex;align-items:end;gap:8px;justify-content:flex-end;">
+        <button type="button" class="secondary" data-edit-r18="${idx}">Edit</button>
+        <button type="button" class="secondary" style="background:#b91c1c" data-del-r18="${idx}">Delete</button>
       </div>
     `;
     wrap.appendChild(row);
@@ -1550,6 +1648,94 @@ function initCourseAdminUI(){
   const saveLayoutsBtn = $("saveLayoutsBtn");
   if (saveLayoutsBtn) saveLayoutsBtn.onclick = saveLayouts;
 
+  const add18Btn = $("add18Btn");
+  if (add18Btn) add18Btn.onclick = () => {
+    const label = ($("new18Label")?.value || "").trim();
+    const front9 = String($("new18Front")?.value || "").trim().toLowerCase();
+    const back9  = String($("new18Back")?.value || "").trim().toLowerCase();
+    const blockMins = Number($("new18BlockMins")?.value || 30) || 30;
+
+    if (!label) { $("layoutsMsg").textContent = "❌ Enter an 18 option label"; return; }
+    if (!front9 || !back9) { $("layoutsMsg").textContent = "❌ Select front 9 and back 9"; return; }
+    if (front9 === back9) { $("layoutsMsg").textContent = "❌ Front and back cannot be the same"; return; }
+
+    const key = _slugKey(label);
+    COURSE_ROUTES18.push({ key, label, front9_key: front9, back9_key: back9, block_mins: blockMins });
+
+    $("new18Label").value = "";
+    $("layoutsMsg").textContent = "✅ Added 18 option (not saved yet)";
+    renderRoutes18();
+  };
+
+  // live edit 9 labels
+  document.addEventListener("input", (e) => {
+    if (e.target?.classList?.contains("nineLabel")) {
+      const idx = Number(e.target.getAttribute("data-nine-idx"));
+      if (COURSE_LAYOUTS[idx]) {
+        COURSE_LAYOUTS[idx].label = e.target.value;
+        COURSE_LAYOUTS[idx].key = _slugKey(COURSE_LAYOUTS[idx].label);
+        renderLayouts();      // keep selects in sync
+        renderRoutes18();
+      }
+    }
+    if (e.target?.classList?.contains("r18Label")) {
+      const idx = Number(e.target.getAttribute("data-r18-idx"));
+      if (COURSE_ROUTES18[idx]) {
+        COURSE_ROUTES18[idx].label = e.target.value;
+        COURSE_ROUTES18[idx].key = _slugKey(COURSE_ROUTES18[idx].label);
+      }
+    }
+  });
+
+  // deletes + edit route
+  document.addEventListener("click", (e) => {
+    const nineIdx = e.target?.getAttribute?.("data-del-nine");
+    if (nineIdx != null) {
+      const del = COURSE_LAYOUTS.splice(Number(nineIdx), 1)[0];
+      // also remove any 18 routes referencing it
+      if (del?.key) {
+        COURSE_ROUTES18 = COURSE_ROUTES18.filter(r => r.front9_key !== del.key && r.back9_key !== del.key);
+      }
+      renderLayouts();
+      renderRoutes18();
+      $("layoutsMsg").textContent = "✅ Removed (not saved yet)";
+      return;
+    }
+
+    const rDel = e.target?.getAttribute?.("data-del-r18");
+    if (rDel != null) {
+      COURSE_ROUTES18.splice(Number(rDel), 1);
+      renderRoutes18();
+      $("layoutsMsg").textContent = "✅ Removed 18 option (not saved yet)";
+      return;
+    }
+
+    const rEdit = e.target?.getAttribute?.("data-edit-r18");
+    if (rEdit != null) {
+      const idx = Number(rEdit);
+      const r = COURSE_ROUTES18[idx];
+      if (!r) return;
+
+      const label = (prompt("18 option label:", r.label || "") || "").trim();
+      if (!label) return;
+
+      const front = (prompt("Front 9 key (e.g. pines):", r.front9_key || "") || "").trim().toLowerCase();
+      const back  = (prompt("Back 9 key (e.g. lakes):", r.back9_key || "") || "").trim().toLowerCase();
+      const bm    = Number(prompt("Return window block (mins):", String(r.block_mins ?? 30)) || "30") || 30;
+
+      if (!front || !back) return;
+      if (front === back) { $("layoutsMsg").textContent = "❌ Front and back cannot be the same"; return; }
+
+      r.label = label;
+      r.key = _slugKey(label);
+      r.front9_key = front;
+      r.back9_key = back;
+      r.block_mins = bm;
+
+      renderRoutes18();
+      $("layoutsMsg").textContent = "✅ Updated 18 option (not saved yet)";
+    }
+  });
   // live edits
   document.addEventListener("input", (e) => {
     if (e.target?.classList?.contains("layoutLabel")) {
@@ -2285,14 +2471,38 @@ async function loadLayouts(){
     await getMe();
 
     const out = await j("/api/book/course-admin/course-layouts", { method:"GET" });
+
+    // backend may return {layouts,routes18} OR older {layouts} only
     COURSE_LAYOUTS = Array.isArray(out.layouts) ? out.layouts : [];
+    COURSE_ROUTES18 = Array.isArray(out.routes18) ? out.routes18 : [];
+
+    // normalize keys if missing
+    COURSE_LAYOUTS = COURSE_LAYOUTS
+      .filter(x => x && typeof x === "object")
+      .map(x => ({
+        key: String(x.key || _slugKey(x.label) || "").trim().toLowerCase(),
+        label: String(x.label || x.key || "").trim()
+      }))
+      .filter(x => x.key && x.label);
+
+    COURSE_ROUTES18 = COURSE_ROUTES18
+      .filter(x => x && typeof x === "object")
+      .map(x => ({
+        key: String(x.key || _slugKey(x.label) || "").trim().toLowerCase(),
+        label: String(x.label || x.key || "").trim(),
+        front9_key: String(x.front9_key || x.front || "").trim().toLowerCase(),
+        back9_key: String(x.back9_key || x.back || "").trim().toLowerCase(),
+        block_mins: Number(x.block_mins ?? x.blockMins ?? 30) || 30,
+      }))
+      .filter(x => x.key && x.label && x.front9_key && x.back9_key);
 
     renderLayouts();
+    renderRoutes18();
 
-// ✅ if weekly template is visible, refresh it so the dropdown options appear
-try{ window.__tplRerender && window.__tplRerender(); }catch{}
+    // if weekly template is note visible, it still safely rerenders
+    try{ window.__tplRerender && window.__tplRerender(); }catch{}
 
-if (msg) msg.textContent = "✅ Layouts loaded";
+    if (msg) msg.textContent = "✅ Layouts loaded";
   }catch(e){
     if (msg) msg.textContent = "❌ " + e.message;
   }
@@ -2304,10 +2514,34 @@ async function saveLayouts(){
     if (msg) msg.textContent = "Saving layouts...";
     await getMe();
 
+    // final clean before save
+    const layouts = (COURSE_LAYOUTS || [])
+      .map(x => ({
+        key: String(x.key || _slugKey(x.label) || "").trim().toLowerCase(),
+        label: String(x.label || "").trim(),
+      }))
+      .filter(x => x.key && x.label);
+
+    const routes18 = (COURSE_ROUTES18 || [])
+      .map(x => ({
+        key: String(x.key || _slugKey(x.label) || "").trim().toLowerCase(),
+        label: String(x.label || "").trim(),
+        front9_key: String(x.front9_key || "").trim().toLowerCase(),
+        back9_key: String(x.back9_key || "").trim().toLowerCase(),
+        block_mins: Number(x.block_mins ?? 30) || 30,
+      }))
+      .filter(x => x.key && x.label && x.front9_key && x.back9_key);
+
     await j("/api/book/course-admin/course-layouts", {
       method:"POST",
-      body: JSON.stringify({ layouts: COURSE_LAYOUTS })
+      body: JSON.stringify({ layouts, routes18 })
     });
+
+    COURSE_LAYOUTS = layouts;
+    COURSE_ROUTES18 = routes18;
+
+    renderLayouts();
+    renderRoutes18();
 
     if (msg) msg.textContent = "✅ Layouts saved";
   }catch(e){
