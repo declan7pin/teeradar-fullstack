@@ -6273,6 +6273,15 @@ const layoutKey = layoutKeyRaw ? layoutKeyRaw : null;
     const courseRow = c.rows[0];
     const dur9 = Number(courseRow.duration_9_mins || 210);
     const dur18 = Number(courseRow.duration_18_mins || 390);
+    
+    // ✅ 18→back-nine collision guard:
+    // We estimate the back-nine start of an 18-hole group at:
+    //   start + (dur9 - 15) minutes
+    // Then block 9-hole tee times on that back-nine for a 30 minute window:
+    //   [start + (dur9 - 15), start + (dur9 + 15))
+    // This matches: 9-hole duration = 2h15 → back-nine around 2h, blocked ±15 mins.
+    const back9BlockStartOffsetMins = Math.max(0, dur9 - 15);
+    const back9BlockEndOffsetMins = dur9 + 15;
     const courseId = courseRow.id;
 
     dlog("🧪 GET /availability course matched", {
@@ -6401,7 +6410,17 @@ const { rows } = await db.query(
   FROM t
   ORDER BY tee_time ASC;
   `,
-  [courseId, playDate, holes, players, includeBooked, includeFull, layoutKey, dur9, dur18]
+  [
+    courseId,
+    playDate,
+    holes,
+    players,
+    includeBooked,
+    includeFull,
+    layoutKey,
+    back9BlockStartOffsetMins,
+    back9BlockEndOffsetMins,
+  ]
 );
 
 console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
