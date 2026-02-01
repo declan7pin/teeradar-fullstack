@@ -1628,8 +1628,30 @@ function initCourseAdminUI(){
   setAnalyticsMode("total");
 
   // ✅ Manual buttons (make sure these are also wired even if earlier code moved)
-  const mLoadBtn = $("mLoadBtn");
-  if (mLoadBtn) mLoadBtn.onclick = async () => { _manualDateDefault(); await loadManualSlots(); };
+const mLoadBtn = $("mLoadBtn");
+if (mLoadBtn) mLoadBtn.onclick = async () => { _manualDateDefault(); await loadManualSlots(); };
+
+// ✅ Manual buttons (guarded)
+const mLoadBtn = $("mLoadBtn");
+if (mLoadBtn) mLoadBtn.onclick = async () => { _manualDateDefault(); await loadManualSlots(); };
+
+// ✅ Manual actions (these functions are defined later in this same file)
+const mBookBtn = $("mBookBtn");
+if (mBookBtn) mBookBtn.onclick = () => document.getElementById("mBookBtn").click(); // no-op safe
+
+const mAddBtn = $("mAddBtn");
+if (mAddBtn) mAddBtn.onclick = () => document.getElementById("mAddBtn").click();  // no-op safe
+
+// ✅ Inventory (the real handler is defined later)
+const checkInventoryBtn = $("checkInventoryBtn");
+if (checkInventoryBtn) checkInventoryBtn.onclick = () => document.getElementById("checkInventoryBtn").click();
+
+// ✅ Stock buttons MUST be wired on init (not inside viewTimes)
+const csLoadBtn = $("csLoadBtn");
+if (csLoadBtn) csLoadBtn.onclick = loadCourseSettingsToUI;
+
+const csSaveBtn = $("csSaveBtn");
+if (csSaveBtn) csSaveBtn.onclick = saveCourseSettingsFromUI;
 }
   // =======================
   // Course layouts (wire buttons once on page init)
