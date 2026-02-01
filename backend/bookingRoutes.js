@@ -1,5 +1,3 @@
-
-
 // backend/bookingRoutes.js
 import express from "express";
 import crypto from "crypto";
@@ -4627,61 +4625,200 @@ if (mode === "overwrite-range") {
   );
 }
 
+    // ✅ Load course durations (used for back-9 block calculation)
+    // If not set, default to 135 mins (2h15) for 9 holes.
+    const s = await db.query(
+      `SELECT duration_9_mins, duration_18_mins
+       FROM booking_course_settings
+       WHERE course_id = $1
+       LIMIT 1;`,
+      [courseId]
+    );
+
+    const dur9 = Number(s.rows[0]?.duration_9_mins || 135) || 135;
+    const dur18 = Number(s.rows[0]?.duration_18_mins || 360) || 360;
+
+    // Back-9 window: center around (dur9 - 15) mins after 18 starts, and block ±15 mins.
+    const back9CenterOffset = Math.max(0, dur9 - 15);
+    const back9HalfWindow = 15;
+
     let inserted = 0;
     let skipped = 0;
 
-    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
-      const playDate = _isoDate(d);
-      const wd = String(_weekdayISO(d)); // "1".."7"
-      const cfg = daysCfg[wd];
+    // One transaction for the whole generation run (prevents slow per-row commits)
+    await db.query("BEGIN");
+    try {
+      for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+        const playDate = _isoDate(d);
+        const wd = String(_weekdayISO(d)); // "1".."7"
+        const cfg = daysCfg[wd];
 
-      if (!cfg || cfg.enabled === false) continue;
+        if (!cfg || cfg.enabled === false) continue;
 
-      const windows = Array.isArray(cfg.windows) ? cfg.windows : [];
-      for (const w of windows) {
-        const holes = Number(w.holes);
-        const interval = Number(w.intervalMins || w.interval || 10);
-        const maxPlayers = Number(w.maxPlayers || 4);
-        const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
+        const windows = Array.isArray(cfg.windows) ? cfg.windows : [];
 
-        const startMin = _timeToMinutes(w.start);
-        const endMin = _timeToMinutes(w.end);
+        // Split windows for predictable processing (18 first, then 9)
+        const windows18 = windows.filter(w => Number(w?.holes) === 18);
+        const windows9 = windows.filter(w => Number(w?.holes) === 9);
 
-        if (![9, 18].includes(holes)) continue;
-        if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
-        if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
-        if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
-        if (startMin === null || endMin === null || endMin <= startMin) continue;
+        // Collect back-9 blocked windows (minute ranges)
+        const blocked9 = [];
 
-        for (let mins = startMin; mins < endMin; mins += interval) {
-          const teeTime = _minutesToTime(mins);
+        // Collect rows to insert for this day
+        const rows = [];
 
-          const r = await db.query(
-  `INSERT INTO booking_times (
-    course_id, play_date, tee_time, holes,
-    max_players, price_per_player_cents,
-    status, created_at, updated_at
-  )
-  VALUES ($1, $2::date, $3, $4, $5, $6, 'AVAILABLE', now(), now())
-  ON CONFLICT (course_id, play_date, tee_time, holes)
-  DO UPDATE SET
-    max_players = EXCLUDED.max_players,
-    price_per_player_cents = EXCLUDED.price_per_player_cents,
-    status = CASE
-      WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
-      WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
-      ELSE 'AVAILABLE'
-    END,
-    updated_at = now()
-  RETURNING (xmax = 0) AS inserted;`,
-  [courseId, playDate, teeTime, holes, maxPlayers, pricePerPlayerCents]
-);
+        // -----------------------
+        // 18-hole times (also creates back-9 blocks for 9-hole)
+        // -----------------------
+        for (const w of windows18) {
+          const interval = Number(w.intervalMins || w.interval || 10);
+          const maxPlayers = Number(w.maxPlayers || 4);
+          const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
+          const startMin = _timeToMinutes(w.start);
+          const endMin = _timeToMinutes(w.end);
 
-// ✅ Accurate inserted/skipped counts even with DO UPDATE
-if (r.rows[0]?.inserted) inserted += 1;
-else skipped += 1;
+          const front9Key = String(w.front9_key || w.front9Key || "").trim() || null;
+          const back9Key = String(w.back9_key || w.back9Key || "").trim() || null;
+
+          if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
+          if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
+          if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
+          if (startMin === null || endMin === null || endMin <= startMin) continue;
+
+          for (let mins = startMin; mins < endMin; mins += interval) {
+            const teeTime = _minutesToTime(mins);
+
+            // Back-9 window for this 18-hole group
+            const center = mins + back9CenterOffset;
+            const bStart = Math.max(0, center - back9HalfWindow);
+            const bEnd = Math.min(24 * 60, center + back9HalfWindow);
+            blocked9.push([bStart, bEnd]);
+
+            rows.push({
+              course_id: courseId,
+              play_date: playDate,
+              tee_time: teeTime,
+              holes: 18,
+              max_players: maxPlayers,
+              price_per_player_cents: pricePerPlayerCents,
+              layout_key: null,
+              front9_key: front9Key,
+              back9_key: back9Key,
+            });
+          }
         }
+
+        // -----------------------
+        // 9-hole times (skip times that overlap with any back-9 block)
+        // -----------------------
+        function isBlocked9(mins) {
+          return blocked9.some(([a, b]) => mins >= a && mins < b);
+        }
+
+        for (const w of windows9) {
+          const interval = Number(w.intervalMins || w.interval || 10);
+          const maxPlayers = Number(w.maxPlayers || 4);
+          const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
+          const startMin = _timeToMinutes(w.start);
+          const endMin = _timeToMinutes(w.end);
+          const layoutKey = String(w.layout_key || w.layoutKey || "").trim() || null;
+
+          if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
+          if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
+          if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
+          if (startMin === null || endMin === null || endMin <= startMin) continue;
+
+          for (let mins = startMin; mins < endMin; mins += interval) {
+            if (isBlocked9(mins)) continue; // ✅ auto-block around back-9 windows
+            const teeTime = _minutesToTime(mins);
+            rows.push({
+              course_id: courseId,
+              play_date: playDate,
+              tee_time: teeTime,
+              holes: 9,
+              max_players: maxPlayers,
+              price_per_player_cents: pricePerPlayerCents,
+              layout_key: layoutKey,
+              front9_key: null,
+              back9_key: null,
+            });
+          }
+        }
+
+        if (!rows.length) continue;
+
+        // Batch insert for the day (fast)
+        const cols = [
+          "course_id",
+          "play_date",
+          "tee_time",
+          "holes",
+          "max_players",
+          "price_per_player_cents",
+          "layout_key",
+          "front9_key",
+          "back9_key",
+        ];
+
+        const values = [];
+        const params = [];
+        let p = 1;
+        for (const r of rows) {
+          values.push(
+            `($${p++}, $${p++}::date, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++})`
+          );
+          params.push(
+            r.course_id,
+            r.play_date,
+            r.tee_time,
+            r.holes,
+            r.max_players,
+            r.price_per_player_cents,
+            r.layout_key,
+            r.front9_key,
+            r.back9_key
+          );
+        }
+
+        // ✅ Skip duplicates: DO NOTHING (doesn't touch existing)
+        // ✅ Overwrite range: DO UPDATE (but never overwrite BOOKED/BLOCKED status)
+        const onConflict =
+          mode === "overwrite-range"
+            ? `DO UPDATE SET
+                 max_players = EXCLUDED.max_players,
+                 price_per_player_cents = EXCLUDED.price_per_player_cents,
+                 layout_key = EXCLUDED.layout_key,
+                 front9_key = EXCLUDED.front9_key,
+                 back9_key = EXCLUDED.back9_key,
+                 status = CASE
+                   WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
+                   WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
+                   ELSE 'AVAILABLE'
+                 END,
+                 updated_at = now()`
+            : `DO NOTHING`;
+
+        const q = await db.query(
+          `INSERT INTO booking_times (
+             ${cols.join(", ")},
+             status, created_at, updated_at
+           )
+           VALUES ${values.join(",")}
+           ON CONFLICT (course_id, play_date, tee_time, holes)
+           ${onConflict}
+           RETURNING 1;`,
+          params
+        );
+
+        const ins = Number(q.rowCount || 0);
+        inserted += ins;
+        skipped += Math.max(0, rows.length - ins);
       }
+
+      await db.query("COMMIT");
+    } catch (e) {
+      await db.query("ROLLBACK");
+      throw e;
     }
 
     return res.json({
@@ -6273,15 +6410,6 @@ const layoutKey = layoutKeyRaw ? layoutKeyRaw : null;
     const courseRow = c.rows[0];
     const dur9 = Number(courseRow.duration_9_mins || 210);
     const dur18 = Number(courseRow.duration_18_mins || 390);
-    
-    // ✅ 18→back-nine collision guard:
-    // We estimate the back-nine start of an 18-hole group at:
-    //   start + (dur9 - 15) minutes
-    // Then block 9-hole tee times on that back-nine for a 30 minute window:
-    //   [start + (dur9 - 15), start + (dur9 + 15))
-    // This matches: 9-hole duration = 2h15 → back-nine around 2h, blocked ±15 mins.
-    const back9BlockStartOffsetMins = Math.max(0, dur9 - 15);
-    const back9BlockEndOffsetMins = dur9 + 15;
     const courseId = courseRow.id;
 
     dlog("🧪 GET /availability course matched", {
@@ -6410,17 +6538,7 @@ const { rows } = await db.query(
   FROM t
   ORDER BY tee_time ASC;
   `,
-  [
-    courseId,
-    playDate,
-    holes,
-    players,
-    includeBooked,
-    includeFull,
-    layoutKey,
-    back9BlockStartOffsetMins,
-    back9BlockEndOffsetMins,
-  ]
+  [courseId, playDate, holes, players, includeBooked, includeFull, layoutKey, dur9, dur18]
 );
 
 console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
