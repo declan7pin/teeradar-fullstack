@@ -548,7 +548,15 @@ function normSlug(s) {
 function isValidSlug(slug) {
   return /^[a-z0-9-]{2,64}$/.test(slug);
 }
-
+// ✅ NEW: make a safe "key" from a layout label (e.g. "Pines" -> "pines")
+function layoutKey(label) {
+  return String(label || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+}
 function toMinutes(hhmm) {
   const [h, m] = String(hhmm || "").split(":").map((x) => Number(x));
   if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
@@ -994,6 +1002,15 @@ async function ensureBookingTables() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
+  // ✅ NEW: course layouts (9-hole loops + optional 18-hole routing)
+await db.query(`
+  CREATE TABLE IF NOT EXISTS booking_course_layouts (
+    course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
+    layouts JSONB NOT NULL DEFAULT '[]'::jsonb,      -- [{key,label}]
+    routes18 JSONB NOT NULL DEFAULT '[]'::jsonb,     -- optional: [{key,label,front9_key,back9_key}]
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+`);
 
   // ✅ NEW: store named 9s + 18-hole routings (as JSON, editable by course)
   // layouts example:
