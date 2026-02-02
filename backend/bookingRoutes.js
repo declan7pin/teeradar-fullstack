@@ -4827,16 +4827,15 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             : `DO NOTHING`;
 
         const q = await db.query(
-          `INSERT INTO booking_times (
-             ${cols.join(", ")},
-             status, created_at, updated_at
-           )
-           VALUES ${values.join(",")}
-           ON CONFLICT (course_id, play_date, tee_time, holes)
-           ${onConflict}
-           RETURNING 1;`,
-          params
-        );
+  `INSERT INTO booking_times (
+     ${cols.join(", ")}
+   )
+   VALUES ${values.join(",")}
+   ON CONFLICT (course_id, play_date, tee_time, holes)
+   ${onConflict}
+   RETURNING 1;`,
+  params
+);
 
         const ins = Number(q.rowCount || 0);
         inserted += ins;
