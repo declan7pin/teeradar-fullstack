@@ -3084,7 +3084,7 @@ ${holes === 9 ? renderNineLayoutSelect(dow, w) : ""}
 
       const priceDollars = Number(obj.priceDollars || 0);
 
-      const w = {
+            const w = {
         holes,
         start: String(obj.start || "").trim(),
         end: String(obj.end || "").trim(),
@@ -3093,7 +3093,16 @@ ${holes === 9 ? renderNineLayoutSelect(dow, w) : ""}
         pricePerPlayerCents: Math.max(0, Math.round(priceDollars * 100)),
       };
 
-      if (holes === 9) w.layout_key = String(obj.layout_key || "").trim();
+      // ✅ 9-hole layout selection
+      if (holes === 9) {
+        w.layout_key = String(obj.layout_key || "").trim();
+      }
+
+      // ✅ 18-hole routing selection (Front 9 + Back 9)
+      if (holes === 18) {
+        w.front9_key = String(obj.front9_key || "").trim();
+        w.back9_key  = String(obj.back9_key  || "").trim();
+      }
 
       tpl.days[dow].windows.push(w);
     }
