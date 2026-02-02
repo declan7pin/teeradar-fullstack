@@ -1061,6 +1061,23 @@ async function ensureBookingTables() {
     );
   `);
 
+  // ✅ FIX: ensure ON CONFLICT has a matching unique constraint (safe on old DBs)
+  await db.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'booking_times_unique_slot'
+      ) THEN
+        ALTER TABLE booking_times
+        ADD CONSTRAINT booking_times_unique_slot
+        UNIQUE (course_id, play_date, tee_time, holes);
+      END IF;
+    END
+    $$;
+  `);
+
   await db.query(`
     ALTER TABLE booking_times
     ADD COLUMN IF NOT EXISTS booked_players INTEGER NOT NULL DEFAULT 0;
