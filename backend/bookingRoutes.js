@@ -5908,22 +5908,22 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
     // - 9 holes: layout_key is the identity (e.g. "pines", "lakes")
     // - 18 holes: identity is the front/back combo, stored in layout_key
     let layout_key = "";
-    let front_nine_key = "";
-    let back_nine_key = "";
+    let front9_key = "";
+    let back9_key = "";
 
     if (holes === 9) {
       layout_key = layoutKeyRaw || "9:default";
-      front_nine_key = "";
-      back_nine_key = "";
+      front9_key = "";
+      back9_key = "";
     } else {
-      front_nine_key = frontNineKeyRaw || "";
-      back_nine_key = backNineKeyRaw || "";
+      front9_key = frontNineKeyRaw || "";
+      back9_key = backNineKeyRaw || "";
 
       // ✅ IMPORTANT: make each 18-hole combo its own entity, even if tee_time matches
       // examples:
       //  - "18:classic|lakes"
       //  - "18:pines|lakes"
-      layout_key = `18:${front_nine_key || "front"}|${back_nine_key || "back"}`;
+      layout_key = `18:${front9_key || "front"}|${back9_key || "back"}`;
     }
 
     const times = [];
@@ -5943,11 +5943,11 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
           AND tee_time=$3
           AND holes=$4
           AND COALESCE(layout_key,'')=$5
-          AND COALESCE(front_nine_key,'')=$6
-          AND COALESCE(back_nine_key,'')=$7
+          AND COALESCE(front9_key,'')=$6
+          AND COALESCE(back9_key,'')=$7
         LIMIT 1;
         `,
-        [courseId, playDate, t, holes, layout_key, front_nine_key, back_nine_key]
+        [courseId, playDate, t, holes, layout_key, front9_key, back9_key]
       );
       const isExisting = !!exists.rows.length;
 
@@ -5956,13 +5956,13 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
         `
         INSERT INTO booking_times
           (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status,
-           layout_key, front_nine_key, back_nine_key,
+           layout_key, front9_key, back9_key,
            updated_at)
         VALUES
           ($1, $2::date, $3, $4, $5, 0, $6, $7,
            $8, $9, $10,
            now())
-        ON CONFLICT (course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key)
+        ON CONFLICT (course_id, play_date, tee_time, holes, layout_key, front9_key, back9_key)
         DO UPDATE SET
           max_players = EXCLUDED.max_players,
           price_per_player_cents = EXCLUDED.price_per_player_cents,
@@ -5972,7 +5972,7 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
           END,
           updated_at = now()
         `,
-        [courseId, playDate, t, holes, maxPlayers, pricePerPlayerCents, status, layout_key, front_nine_key, back_nine_key]
+        [courseId, playDate, t, holes, maxPlayers, pricePerPlayerCents, status, layout_key, front9_key, back9_key]
       );
 
       if (isExisting) skipped++;
@@ -5985,8 +5985,8 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
       date: playDate,
       holes,
       layout_key,
-      front_nine_key,
-      back_nine_key,
+      front9_key,
+      back9_key,
       generated: times.length,
       inserted,
       skipped,
