@@ -3809,12 +3809,20 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
   try {
     const slug = req.courseAdmin.slug;
 
-    // Accept a few body aliases so we don't break existing frontend calls
     const playDate = String(_pickAny(req.body, ["play_date", "playDate", "date"], "") || "").trim();
     const tee_time = String(_pickAny(req.body, ["tee_time", "teeTime", "time"], "") || "").trim();
     const holes = Number(_pickAny(req.body, ["holes"], 18));
 
-    // ✅ NEW: players count (default 1, clamp 1..4)
+    // ✅ NEW: layout identity (THIS IS THE IMPORTANT PART)
+    const layout_key =
+      String(_pickAny(req.body, ["layout_key", "layoutKey"], "") || "").trim() || null;
+
+    const front_nine_key =
+      String(_pickAny(req.body, ["front_nine_key", "front9_key", "front9Key"], "") || "").trim() || null;
+
+    const back_nine_key =
+      String(_pickAny(req.body, ["back_nine_key", "back9_key", "back9Key"], "") || "").trim() || null;
+
     const playersRaw = Number(_pickAny(req.body, ["players", "numPlayers"], 1));
     const players = Math.max(1, Math.min(4, Number.isFinite(playersRaw) ? playersRaw : 1));
 
@@ -3828,7 +3836,6 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     const has_cart = parseBool(_pickAny(req.body, ["has_cart", "hasCart"], false), false);
     const has_hire_clubs = parseBool(_pickAny(req.body, ["has_hire_clubs", "hasHireClubs"], false), false);
 
-    // quantities (default 1 if selected)
     const cart_qty_raw = Number(_pickAny(req.body, ["cart_qty", "cartQty"], has_cart ? 1 : 0));
     const hire_clubs_qty_raw = Number(
       _pickAny(req.body, ["hire_clubs_qty", "hireClubsQty"], has_hire_clubs ? 1 : 0)
@@ -3842,7 +3849,6 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
 
     const notes = req.body?.notes ? String(req.body.notes).trim() : null;
 
-    // Basic validations (keep light so we don't break existing behavior)
     if (!playDate) return res.status(400).json({ ok: false, error: "date_required" });
     if (!tee_time || !/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
@@ -3850,22 +3856,20 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-    // ✅ CONNECT + BEGIN BEFORE USING client
     client = await db.connect();
     await client.query("BEGIN");
     didBegin = true;
 
-    // ✅ compute usage window (needed for addon overlap checks)
     const courseRowQ = await client.query(
       `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
       [courseId]
     );
     const courseRow = courseRowQ.rows[0] || {};
+
     const startAtIso = toIsoDateTimeLocal(playDate, tee_time);
     const dur = durationMinsForHoles(courseRow, holes);
     const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-    // ✅ ENFORCE add-on inventory (carts/clubs) before inserting rows
     const inv = await enforceAddonInventory(client, {
       courseId,
       startAtIso,
@@ -3879,20 +3883,25 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
       return res.status(409).json({ ok: false, ...inv });
     }
 
-    // ✅ Lock this tee time manual-slot group so two admins can't collide slot_index
-    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
-      `manualslots:${courseId}:${playDate}:${tee_time}:${holes}`,
-    ]);
+    // ✅ FIX: advisory lock MUST include layout identity
+    await client.query(
+      `SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`,
+      [
+        `manualslots:${courseId}:${playDate}:${tee_time}:${holes}:${layout_key || ""}:${front_nine_key || ""}:${back_nine_key || ""}`,
+      ]
+    );
 
-    // ✅ Find which slots are already filled at this tee time
     const taken = await client.query(
       `
       SELECT slot_index
       FROM booking_manual_slots
       WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+        AND COALESCE(layout_key,'') = COALESCE($5,'')
+        AND COALESCE(front_nine_key,'') = COALESCE($6,'')
+        AND COALESCE(back_nine_key,'') = COALESCE($7,'')
         AND COALESCE(name,'') <> ''
       `,
-      [courseId, playDate, tee_time, holes]
+      [courseId, playDate, tee_time, holes, layout_key, front_nine_key, back_nine_key]
     );
 
     const takenSet = new Set((taken.rows || []).map((r) => Number(r.slot_index)));
@@ -3908,7 +3917,6 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
       });
     }
 
-    // Use one shared reference for the whole group
     const reference =
       String(_pickAny(req.body, ["reference"], "") || "").trim() || makeRef("MS");
 
@@ -3917,7 +3925,6 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     for (let i = 0; i < players; i++) {
       const slot_index = freeSlots[i];
 
-      // ✅ FIX 1: use the correct variable name (playDate), not play_date (undefined)
       const price_per_player_cents = await getTeePricePerPlayerCents({
         courseId,
         playDate,
@@ -3928,45 +3935,24 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
       const ins = await client.query(
         `
         INSERT INTO booking_manual_slots
-          (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
-           paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes,
+          (course_id, play_date, tee_time, holes, slot_index,
+           layout_key, front_nine_key, back_nine_key,
+           reference, name, email, phone,
+           paid, checked_in,
+           has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes,
            price_per_player_cents,
            start_at, end_at,
            updated_at)
         VALUES
-          ($1, $2::date, $3, $4, $5,
-           $6, $7, $8, $9,
-           $10, $11,
-           $12, $13,
-           $14, $15,
-           $16,
-           $17,
-           $18::timestamptz, $19::timestamptz,
+          ($1,$2::date,$3,$4,$5,
+           $6,$7,$8,
+           $9,$10,$11,$12,
+           $13,$14,
+           $15,$16,$17,$18,$19,
+           $20,
+           $21::timestamptz,$22::timestamptz,
            now())
-        ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
-        DO UPDATE SET
-          reference = EXCLUDED.reference,
-          name = EXCLUDED.name,
-          email = EXCLUDED.email,
-          phone = EXCLUDED.phone,
-          paid = EXCLUDED.paid,
-          checked_in = EXCLUDED.checked_in,
-          has_cart = EXCLUDED.has_cart,
-          has_hire_clubs = EXCLUDED.has_hire_clubs,
-          cart_qty = EXCLUDED.cart_qty,
-          hire_clubs_qty = EXCLUDED.hire_clubs_qty,
-          notes = EXCLUDED.notes,
-          // ✅ FIX 2: persist price on updates too
-          price_per_player_cents = EXCLUDED.price_per_player_cents,
-          start_at = EXCLUDED.start_at,
-          end_at = EXCLUDED.end_at,
-          updated_at = now()
-        RETURNING
-          play_date::text AS play_date,
-          tee_time, holes, slot_index, reference,
-          name, email, phone, paid, checked_in,
-          has_cart, has_hire_clubs, cart_qty, hire_clubs_qty,
-          notes, start_at, end_at, created_at, updated_at;
+        RETURNING *;
         `,
         [
           courseId,
@@ -3974,17 +3960,25 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
           tee_time,
           holes,
           slot_index,
+
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+
           reference,
           name || null,
           email || null,
           phone || null,
+
           paid,
           checked_in,
-          i === 0 ? cart_qty > 0 : false,
-          i === 0 ? hire_clubs_qty > 0 : false,
+
+          i === 0 ? has_cart : false,
+          i === 0 ? has_hire_clubs : false,
           i === 0 ? cart_qty : 0,
           i === 0 ? hire_clubs_qty : 0,
           notes,
+
           price_per_player_cents || 0,
           startAtIso,
           endAtIso,
@@ -3997,117 +3991,25 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     await client.query("COMMIT");
     didBegin = false;
 
-    // ✅ ADD: also write a summary row into booking_bookings so analytics includes manual bookings
-try {
-  const pricePerPlayerCents = await getTeePricePerPlayerCents({
-    courseId,
-    playDate,
-    teeTime: tee_time,
-    holes,
-  });
-
-  const courseInfo = await db.query(
-    `SELECT cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
-    [courseId]
-  );
-  const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
-  const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
-
-  const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
-  const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
-
-  const baseTotalCents = (pricePerPlayerCents || 0) * (players || 0);
-  const totalCents = baseTotalCents + cartCents + hireClubsCents;
-
-  await db.query(
-    `DELETE FROM booking_bookings WHERE course_id = $1 AND reference = $2;`,
-    [courseId, reference]
-  );
-
-  await db.query(
-    `
-    INSERT INTO booking_bookings
-      (course_id, play_date, tee_time, holes, players,
-       golfer_name, golfer_email, golfer_phone,
-       price_per_player_cents, total_cents, reference, status,
-       start_at, end_at,
-       paid, checked_in,
-       has_cart, cart_qty, cart_fee_cents,
-       has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
-       created_at)
-    VALUES
-      ($1,$2::date,$3,$4,$5,
-       $6,$7,$8,
-       $9,$10,$11,'CONFIRMED',
-       $12::timestamptz,$13::timestamptz,
-       $14,$15,
-       $16,$17,$18,
-       $19,$20,$21,
-       now());
-    `,
-    [
-      courseId,
-      playDate,
-      tee_time,
-      holes,
-      players,
-
-      name || null,
-      email || null,
-      phone || null,
-
-      pricePerPlayerCents || 0,
-      totalCents,
-      reference,
-
-      startAtIso,
-      endAtIso,
-
-      paid,
-      checked_in,
-
-      cart_qty > 0,
-      cart_qty,
-      cartCents,
-
-      hire_clubs_qty > 0,
-      hire_clubs_qty,
-      hireClubsCents,
-    ]
-  );
-} catch (e) {
-  console.warn("manual booking analytics write failed (non-fatal):", e?.message || e);
-}
-
-    const sync = await syncBookedPlayersForTime({
-      courseId,
-      play_date: playDate,
-      tee_time,
-      holes,
-    });
-
     return res.json({
       ok: true,
       course_slug: slug,
       play_date: playDate,
       tee_time,
       holes,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
       players,
       reference,
       manualSlotsInserted: insertedRows,
-      sync, // ✅ add this
     });
   } catch (e) {
     console.error("course-admin/manual-slot POST", e);
 
     try {
-      if (client && didBegin) {
-        await client.query("ROLLBACK");
-        didBegin = false;
-      }
-    } catch (rbErr) {
-      console.error("manual-slot rollback failed", rbErr);
-    }
+      if (client && didBegin) await client.query("ROLLBACK");
+    } catch {}
 
     return res.status(500).json({ ok: false, error: "internal_error" });
   } finally {
