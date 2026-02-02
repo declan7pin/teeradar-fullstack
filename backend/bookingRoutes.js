@@ -5878,6 +5878,14 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
     const pricePerPlayerCents = Number(_pickAny(req.body, ["pricePerPlayerCents"], 0));
     const status = String(_pickAny(req.body, ["status"], "AVAILABLE") || "AVAILABLE").trim().toUpperCase();
 
+    // ✅ NEW: accept layout identity from the UI
+    // 9-hole uses layout_key
+    const layoutKeyRaw = String(_pickAny(req.body, ["layout_key", "layoutKey"], "") || "").trim();
+
+    // 18-hole routing uses front/back keys
+    const frontNineKeyRaw = String(_pickAny(req.body, ["front_nine_key", "frontNineKey", "front9_key", "front9Key"], "") || "").trim();
+    const backNineKeyRaw = String(_pickAny(req.body, ["back_nine_key", "backNineKey", "back9_key", "back9Key"], "") || "").trim();
+
     if (!playDate) return res.status(400).json({ ok: false, error: "date_required" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_must_be_9_or_18" });
     if (!Number.isFinite(intervalMins) || intervalMins < 1 || intervalMins > 60)
@@ -5896,6 +5904,28 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
+    // ✅ NEW: build a stable "slot identity" so multiple layout options do NOT collide
+    // - 9 holes: layout_key is the identity (e.g. "pines", "lakes")
+    // - 18 holes: identity is the front/back combo, stored in layout_key
+    let layout_key = "";
+    let front_nine_key = "";
+    let back_nine_key = "";
+
+    if (holes === 9) {
+      layout_key = layoutKeyRaw || "9:default";
+      front_nine_key = "";
+      back_nine_key = "";
+    } else {
+      front_nine_key = frontNineKeyRaw || "";
+      back_nine_key = backNineKeyRaw || "";
+
+      // ✅ IMPORTANT: make each 18-hole combo its own entity, even if tee_time matches
+      // examples:
+      //  - "18:classic|lakes"
+      //  - "18:pines|lakes"
+      layout_key = `18:${front_nine_key || "front"}|${back_nine_key || "back"}`;
+    }
+
     const times = [];
     for (let m = sM; m <= eM; m += intervalMins) times.push(fromMinutes(m));
 
@@ -5903,19 +5933,36 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
     let skipped = 0;
 
     for (const t of times) {
+      // ✅ UPDATED: existence check must include identity keys
       const exists = await db.query(
-        `SELECT 1 FROM booking_times WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 LIMIT 1;`,
-        [courseId, playDate, t, holes]
+        `
+        SELECT 1
+        FROM booking_times
+        WHERE course_id=$1
+          AND play_date=$2::date
+          AND tee_time=$3
+          AND holes=$4
+          AND COALESCE(layout_key,'')=$5
+          AND COALESCE(front_nine_key,'')=$6
+          AND COALESCE(back_nine_key,'')=$7
+        LIMIT 1;
+        `,
+        [courseId, playDate, t, holes, layout_key, front_nine_key, back_nine_key]
       );
       const isExisting = !!exists.rows.length;
 
+      // ✅ UPDATED: insert/unique key includes layout + front/back
       await db.query(
         `
         INSERT INTO booking_times
-          (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, updated_at)
+          (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status,
+           layout_key, front_nine_key, back_nine_key,
+           updated_at)
         VALUES
-          ($1, $2::date, $3, $4, $5, 0, $6, $7, now())
-        ON CONFLICT (course_id, play_date, tee_time, holes)
+          ($1, $2::date, $3, $4, $5, 0, $6, $7,
+           $8, $9, $10,
+           now())
+        ON CONFLICT (course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key)
         DO UPDATE SET
           max_players = EXCLUDED.max_players,
           price_per_player_cents = EXCLUDED.price_per_player_cents,
@@ -5925,14 +5972,25 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
           END,
           updated_at = now()
         `,
-        [courseId, playDate, t, holes, maxPlayers, pricePerPlayerCents, status]
+        [courseId, playDate, t, holes, maxPlayers, pricePerPlayerCents, status, layout_key, front_nine_key, back_nine_key]
       );
 
       if (isExisting) skipped++;
       else inserted++;
     }
 
-    res.json({ ok: true, slug, date: playDate, holes, generated: times.length, inserted, skipped });
+    res.json({
+      ok: true,
+      slug,
+      date: playDate,
+      holes,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+      generated: times.length,
+      inserted,
+      skipped,
+    });
   } catch (e) {
     console.error("course-admin/generate-times", e);
     res.status(500).json({ ok: false, error: "internal_error" });
