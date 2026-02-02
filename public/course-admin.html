@@ -3327,16 +3327,29 @@ ${holes === 9 ? renderNineLayoutSelect(dow, w) : ""}
       }
 
       // ✅ 18-hole routing selection (Front 9 + Back 9)
-      if (holes === 18) {
-        w.front9_key = String(obj.front9_key || "").trim();
-        w.back9_key  = String(obj.back9_key  || "").trim();
-      }
+if (holes === 18) {
+  const front = String(
+    obj.front9_key || obj.front_nine_key || ""
+  ).trim();
 
-      tpl.days[dow].windows.push(w);
-    }
+  const back = String(
+    obj.back9_key || obj.back_nine_key || ""
+  ).trim();
 
-    return tpl;
-  }
+  // UI naming (already used)
+  w.front9_key = front;
+  w.back9_key  = back;
+
+  // ✅ ADD: backend-compatible aliases
+  w.front_nine_key = front;
+  w.back_nine_key  = back;
+}
+
+tpl.days[dow].windows.push(w);
+}
+
+return tpl;
+}
 
   // -----------------------
   // API actions
