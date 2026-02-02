@@ -4625,18 +4625,22 @@ if (mode === "overwrite-range") {
   );
 }
 
-    // ✅ Load course durations (used for back-9 block calculation)
-    // If not set, default to 135 mins (2h15) for 9 holes.
-    const s = await db.query(
-      `SELECT duration_9_mins, duration_18_mins
-       FROM booking_course_settings
-       WHERE course_id = $1
-       LIMIT 1;`,
-      [courseId]
-    );
+   // ✅ Load course durations (used for back-9 block calculation)
+// Durations live on booking_courses (booking_course_settings table does not exist)
+const s = await db.query(
+  `
+  SELECT
+    COALESCE(duration_9_mins, 210)::int  AS duration_9_mins,
+    COALESCE(duration_18_mins, 390)::int AS duration_18_mins
+  FROM booking_courses
+  WHERE id = $1
+  LIMIT 1;
+  `,
+  [courseId]
+);
 
-    const dur9 = Number(s.rows[0]?.duration_9_mins || 135) || 135;
-    const dur18 = Number(s.rows[0]?.duration_18_mins || 360) || 360;
+const dur9 = Number(s.rows[0]?.duration_9_mins || 210) || 210;
+const dur18 = Number(s.rows[0]?.duration_18_mins || 390) || 390;
 
     // Back-9 window: center around (dur9 - 15) mins after 18 starts, and block ±15 mins.
     const back9CenterOffset = Math.max(0, dur9 - 15);
