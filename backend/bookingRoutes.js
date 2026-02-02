@@ -1148,10 +1148,28 @@ async function ensureBookingTables() {
     DROP INDEX IF EXISTS booking_times_unique_slot_idx;
   `);
 
-  await db.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS booking_times_unique_slot_idx
-    ON booking_times (course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key);
-  `);
+  // ❌ DROP any legacy unique indexes that still treat layouts as duplicates
+await db.query(`
+  DROP INDEX IF EXISTS booking_times_unique_layout_idx;
+`);
+await db.query(`
+  DROP INDEX IF EXISTS booking_times_unique_slot_idx;
+`);
+
+// ✅ SINGLE source of truth for slot identity:
+// each 9/18 + layout/front/back combo is its own entity
+await db.query(`
+  CREATE UNIQUE INDEX booking_times_unique_slot_idx
+  ON booking_times (
+    course_id,
+    play_date,
+    tee_time,
+    holes,
+    layout_key,
+    front_nine_key,
+    back_nine_key
+  );
+`);
 
   await db.query(`CREATE INDEX IF NOT EXISTS booking_times_layout_idx ON booking_times (course_id, play_date, holes, layout_key, tee_time);`);
 
