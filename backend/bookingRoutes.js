@@ -4729,13 +4729,17 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          const frontNineKey = String(w.front_nine_key || w.front9_key || w.front9Key || "").trim() || null;
-          const backNineKey = String(w.back_nine_key || w.back9_key || w.back9Key || "").trim() || null;
+          // ✅ IMPORTANT: treat 18-hole "front/back combo" as its own entity
+          const frontNineKey = String(w.front_nine_key || w.front9_key || w.front9Key || "").trim();
+          const backNineKey = String(w.back_nine_key || w.back9_key || w.back9Key || "").trim();
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
           if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
           if (startMin === null || endMin === null || endMin <= startMin) continue;
+
+          // ✅ stable "entity key" for 18s (ensures uniqueness per combo)
+          const layoutKey18 = `18:${frontNineKey || "front"}|${backNineKey || "back"}`;
 
           for (let mins = startMin; mins < endMin; mins += interval) {
             const teeTime = _minutesToTime(mins);
@@ -4752,9 +4756,11 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
               holes: 18,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
-              layout_key: null,
-              front_nine_key: frontNineKey,
-              back_nine_key: backNineKey,
+
+              // ✅ never store nulls (keeps UNIQUE behaviour sane)
+              layout_key: layoutKey18,
+              front_nine_key: frontNineKey || "",
+              back_nine_key: backNineKey || "",
             });
           }
         }
@@ -4772,12 +4778,17 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
-          const layoutKey = String(w.layout_key || w.layoutKey || "").trim() || null;
+
+          // ✅ IMPORTANT: treat 9-hole layout_key as the entity
+          const layoutKey = String(w.layout_key || w.layoutKey || "").trim();
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
           if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
           if (startMin === null || endMin === null || endMin <= startMin) continue;
+
+          // ✅ If no layout key is set for 9s, give it a stable default so it still becomes an "entity"
+          const layoutKey9 = layoutKey || "9:default";
 
           for (let mins = startMin; mins < endMin; mins += interval) {
             if (isBlocked9(mins)) continue;
@@ -4790,9 +4801,11 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
               holes: 9,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
-              layout_key: layoutKey,
-              front_nine_key: null,
-              back_nine_key: null,
+
+              // ✅ never store nulls
+              layout_key: layoutKey9,
+              front_nine_key: "",
+              back_nine_key: "",
             });
           }
         }
