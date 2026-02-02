@@ -5879,12 +5879,15 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
     const status = String(_pickAny(req.body, ["status"], "AVAILABLE") || "AVAILABLE").trim().toUpperCase();
 
     // ✅ NEW: accept layout identity from the UI
-    // 9-hole uses layout_key
     const layoutKeyRaw = String(_pickAny(req.body, ["layout_key", "layoutKey"], "") || "").trim();
 
-    // 18-hole routing uses front/back keys
-    const frontNineKeyRaw = String(_pickAny(req.body, ["front_nine_key", "frontNineKey", "front9_key", "front9Key"], "") || "").trim();
-    const backNineKeyRaw = String(_pickAny(req.body, ["back_nine_key", "backNineKey", "back9_key", "back9Key"], "") || "").trim();
+    const frontNineKeyRaw = String(
+      _pickAny(req.body, ["front_nine_key", "frontNineKey", "front9_key", "front9Key"], "") || ""
+    ).trim();
+
+    const backNineKeyRaw = String(
+      _pickAny(req.body, ["back_nine_key", "backNineKey", "back9_key", "back9Key"], "") || ""
+    ).trim();
 
     if (!playDate) return res.status(400).json({ ok: false, error: "date_required" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_must_be_9_or_18" });
@@ -5904,26 +5907,41 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-    // ✅ NEW: build a stable "slot identity" so multiple layout options do NOT collide
-    // - 9 holes: layout_key is the identity (e.g. "pines", "lakes")
-    // - 18 holes: identity is the front/back combo, stored in layout_key
+    // ✅ NEW: normalize keys (treat "Select" as empty)
+    const cleanKey = (v) => {
+      const s = String(v || "").trim();
+      if (!s) return "";
+      if (s.toLowerCase() === "select") return "";
+      return s;
+    };
+
+    const layoutKeyClean = cleanKey(layoutKeyRaw);
+    const front9Clean = cleanKey(frontNineKeyRaw);
+    const back9Clean = cleanKey(backNineKeyRaw);
+
+    // ✅ stable identity so multiple layout options do NOT collide
     let layout_key = "";
     let front9_key = "";
     let back9_key = "";
 
     if (holes === 9) {
-      layout_key = layoutKeyRaw || "9:default";
+      // ✅ require a real layout key for 9-hole options
+      if (!layoutKeyClean) {
+        return res.status(400).json({ ok: false, error: "layout_key_required_for_9" });
+      }
+      layout_key = layoutKeyClean;
       front9_key = "";
       back9_key = "";
     } else {
-      front9_key = frontNineKeyRaw || "";
-      back9_key = backNineKeyRaw || "";
+      // ✅ require real front/back keys for 18-hole routings
+      if (!front9Clean || !back9Clean) {
+        return res.status(400).json({ ok: false, error: "front9_and_back9_required_for_18" });
+      }
 
-      // ✅ IMPORTANT: make each 18-hole combo its own entity, even if tee_time matches
-      // examples:
-      //  - "18:classic|lakes"
-      //  - "18:pines|lakes"
-      layout_key = `18:${front9_key || "front"}|${back9_key || "back"}`;
+      front9_key = front9Clean;
+      back9_key = back9Clean;
+
+      layout_key = `18:${front9_key}|${back9_key}`;
     }
 
     const times = [];
@@ -5933,7 +5951,6 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
     let skipped = 0;
 
     for (const t of times) {
-      // ✅ UPDATED: existence check must include identity keys
       const exists = await db.query(
         `
         SELECT 1
@@ -5949,9 +5966,9 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
         `,
         [courseId, playDate, t, holes, layout_key, front9_key, back9_key]
       );
+
       const isExisting = !!exists.rows.length;
 
-      // ✅ UPDATED: insert/unique key includes layout + front/back
       await db.query(
         `
         INSERT INTO booking_times
@@ -5987,6 +6004,11 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
       layout_key,
       front9_key,
       back9_key,
+      received: {
+        layoutKeyRaw,
+        frontNineKeyRaw,
+        backNineKeyRaw,
+      },
       generated: times.length,
       inserted,
       skipped,
