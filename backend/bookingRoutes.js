@@ -1061,7 +1061,27 @@ async function ensureBookingTables() {
     );
   `);
 
-  // ✅ FIX: ensure ON CONFLICT has a matching unique constraint (safe on old DBs)
+  // ✅ FIX #1: clean duplicates so we can add a unique constraint safely
+  // (keeps the earliest row per slot; prefers not deleting BOOKED rows)
+  await db.query(`
+    WITH ranked AS (
+      SELECT
+        id,
+        status,
+        ROW_NUMBER() OVER (
+          PARTITION BY course_id, play_date, tee_time, holes
+          ORDER BY id ASC
+        ) AS rn
+      FROM booking_times
+    )
+    DELETE FROM booking_times bt
+    USING ranked r
+    WHERE bt.id = r.id
+      AND r.rn > 1
+      AND r.status <> 'BOOKED';
+  `);
+
+  // ✅ FIX #2: ensure ON CONFLICT has a matching unique constraint (works even if table existed already)
   await db.query(`
     DO $$
     BEGIN
@@ -1076,6 +1096,12 @@ async function ensureBookingTables() {
       END IF;
     END
     $$;
+  `);
+
+  // ✅ Extra safety: ensure a unique INDEX also exists (some older DBs end up missing the constraint)
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS booking_times_unique_slot_idx
+    ON booking_times (course_id, play_date, tee_time, holes);
   `);
 
   await db.query(`
@@ -1141,7 +1167,7 @@ async function ensureBookingTables() {
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;`);
   await db.query(`CREATE INDEX IF NOT EXISTS booking_bookings_course_window_idx ON booking_bookings (course_id, start_at, end_at);`);
 
-  // ✅ ADD: paid flag + cart tracking (needed for MiClub paid checkbox + analytics)
+  // ✅ ADD: paid flag + cart tracking
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS checked_in BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_cart BOOLEAN NOT NULL DEFAULT false;`);
@@ -1153,15 +1179,12 @@ async function ensureBookingTables() {
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
 
-  // ✅ NEW: inventory quantities + auto-release duration (minutes)
+  // ✅ NEW: inventory quantities + durations stored per course
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
-
-  // default durations: 9 holes = 210 mins (3.5h), 18 holes = 390 mins (6.5h)
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS duration_9_mins INTEGER NOT NULL DEFAULT 210;`);
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS duration_18_mins INTEGER NOT NULL DEFAULT 390;`);
 
-  // ✅ ADD: hire clubs stored per booking
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_hire_clubs BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_fee_cents INTEGER NOT NULL DEFAULT 0;`);
 
@@ -1170,7 +1193,6 @@ async function ensureBookingTables() {
     ON booking_bookings (course_id, play_date);
   `);
 
-  // ✅ ADD: booking analytics events table (needed for recordBookingEvent)
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_analytics_events (
       id BIGSERIAL PRIMARY KEY,
@@ -1197,7 +1219,6 @@ async function ensureBookingTables() {
   `);
 
   // ✅ NEW: per-course settings (inventory + durations + add-on fees)
-  // Fixes: relation "booking_course_settings" does not exist
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_course_settings (
       course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
@@ -1215,7 +1236,6 @@ async function ensureBookingTables() {
     );
   `);
 
-  // ✅ Manual slot entries (walk-ins / phone-ins) for daily sheet
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_manual_slots (
       id BIGSERIAL PRIMARY KEY,
@@ -1223,8 +1243,8 @@ async function ensureBookingTables() {
       play_date DATE NOT NULL,
       tee_time TEXT NOT NULL,
       holes INTEGER NOT NULL,
-      slot_index INTEGER NOT NULL, -- 1..4
-      reference TEXT NOT NULL,     -- groups multiple players together (same booking colour)
+      slot_index INTEGER NOT NULL,
+      reference TEXT NOT NULL,
       name TEXT,
       email TEXT,
       phone TEXT,
@@ -1238,17 +1258,14 @@ async function ensureBookingTables() {
     );
   `);
 
-  // ✅ NEW: qty + notes for manual slots (daily sheet)
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS cart_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS notes TEXT;`);
 
-  // ✅ NEW: persist chosen layout for manual slots too (named 9s + 18 routings)
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS layout_key TEXT;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS front_nine_key TEXT;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
 
-  // ✅ NEW: store window for add-on overlap checks (manual slots)
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;`);
   await db.query(`CREATE INDEX IF NOT EXISTS booking_manual_slots_course_window_idx ON booking_manual_slots (course_id, start_at, end_at);`);
@@ -4675,7 +4692,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     );
 
     const dur9 = Number(s.rows[0]?.duration_9_mins || 135) || 135;
-    const dur18 = Number(s.rows[0]?.duration_18_mins || 360) || 360;
+    const dur18 = Number(s.rows[0]?.duration_18_mins || 360) || 360; // (ok if unused)
 
     // Back-9 window: center around (dur9 - 15) mins after 18 starts, and block ±15 mins.
     const back9CenterOffset = Math.max(0, dur9 - 15);
@@ -4684,7 +4701,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     let inserted = 0;
     let skipped = 0;
 
-    // One transaction for the whole generation run (prevents slow per-row commits)
+    // One transaction for the whole generation run
     await db.query("BEGIN");
     try {
       for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
@@ -4696,18 +4713,14 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
 
         const windows = Array.isArray(cfg.windows) ? cfg.windows : [];
 
-        // Split windows for predictable processing (18 first, then 9)
         const windows18 = windows.filter(w => Number(w?.holes) === 18);
         const windows9 = windows.filter(w => Number(w?.holes) === 9);
 
-        // Collect back-9 blocked windows (minute ranges)
         const blocked9 = [];
-
-        // Collect rows to insert for this day
         const rows = [];
 
         // -----------------------
-        // 18-hole times (also creates back-9 blocks for 9-hole)
+        // 18-hole times
         // -----------------------
         for (const w of windows18) {
           const interval = Number(w.intervalMins || w.interval || 10);
@@ -4716,7 +4729,6 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          // ✅ FIX: map template fields to DB column names (front_nine_key / back_nine_key)
           const frontNineKey = String(w.front_nine_key || w.front9_key || w.front9Key || "").trim() || null;
           const backNineKey = String(w.back_nine_key || w.back9_key || w.back9Key || "").trim() || null;
 
@@ -4728,7 +4740,6 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           for (let mins = startMin; mins < endMin; mins += interval) {
             const teeTime = _minutesToTime(mins);
 
-            // Back-9 window for this 18-hole group
             const center = mins + back9CenterOffset;
             const bStart = Math.max(0, center - back9HalfWindow);
             const bEnd = Math.min(24 * 60, center + back9HalfWindow);
@@ -4742,7 +4753,6 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
               layout_key: null,
-              // ✅ FIX: correct DB column names
               front_nine_key: frontNineKey,
               back_nine_key: backNineKey,
             });
@@ -4750,7 +4760,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
         }
 
         // -----------------------
-        // 9-hole times (skip times that overlap with any back-9 block)
+        // 9-hole times
         // -----------------------
         function isBlocked9(mins) {
           return blocked9.some(([a, b]) => mins >= a && mins < b);
@@ -4770,8 +4780,9 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           if (startMin === null || endMin === null || endMin <= startMin) continue;
 
           for (let mins = startMin; mins < endMin; mins += interval) {
-            if (isBlocked9(mins)) continue; // ✅ auto-block around back-9 windows
+            if (isBlocked9(mins)) continue;
             const teeTime = _minutesToTime(mins);
+
             rows.push({
               course_id: courseId,
               play_date: playDate,
@@ -4780,7 +4791,6 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
               layout_key: layoutKey,
-              // ✅ FIX: correct DB column names (9-hole uses nulls)
               front_nine_key: null,
               back_nine_key: null,
             });
@@ -4789,7 +4799,6 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
 
         if (!rows.length) continue;
 
-        // Batch insert for the day (fast)
         const cols = [
           "course_id",
           "play_date",
@@ -4798,7 +4807,6 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           "max_players",
           "price_per_player_cents",
           "layout_key",
-          // ✅ FIX: correct DB column names
           "front_nine_key",
           "back_nine_key",
         ];
@@ -4806,6 +4814,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
         const values = [];
         const params = [];
         let p = 1;
+
         for (const r of rows) {
           values.push(
             `($${p++}, $${p++}::date, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++})`
@@ -4818,21 +4827,17 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             r.max_players,
             r.price_per_player_cents,
             r.layout_key,
-            // ✅ FIX: correct fields
             r.front_nine_key,
             r.back_nine_key
           );
         }
 
-        // ✅ Skip duplicates: DO NOTHING (doesn't touch existing)
-        // ✅ Overwrite range: DO UPDATE (but never overwrite BOOKED/BLOCKED status)
         const onConflict =
           mode === "overwrite-range"
             ? `DO UPDATE SET
                  max_players = EXCLUDED.max_players,
                  price_per_player_cents = EXCLUDED.price_per_player_cents,
                  layout_key = EXCLUDED.layout_key,
-                 -- ✅ FIX: correct DB column names
                  front_nine_key = EXCLUDED.front_nine_key,
                  back_nine_key = EXCLUDED.back_nine_key,
                  status = CASE
@@ -4844,15 +4849,13 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             : `DO NOTHING`;
 
         const q = await db.query(
-  `INSERT INTO booking_times (
-     ${cols.join(", ")}
-   )
-   VALUES ${values.join(",")}
-   ON CONFLICT (course_id, play_date, tee_time, holes)
-   ${onConflict}
-   RETURNING 1;`,
-  params
-);
+          `INSERT INTO booking_times (${cols.join(", ")})
+           VALUES ${values.join(",")}
+           ON CONFLICT ON CONSTRAINT booking_times_unique_slot
+           ${onConflict}
+           RETURNING 1;`,
+          params
+        );
 
         const ins = Number(q.rowCount || 0);
         inserted += ins;
