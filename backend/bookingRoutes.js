@@ -1046,6 +1046,8 @@ async function ensureBookingTables() {
   `);
 
   // ✅ booking_times (base table)
+  // ✅ IMPORTANT: DO NOT keep the old UNIQUE(course_id, play_date, tee_time, holes)
+  // because it causes layouts to be treated as duplicates.
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_times (
       id BIGSERIAL PRIMARY KEY,
@@ -1057,8 +1059,7 @@ async function ensureBookingTables() {
       price_per_player_cents INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'AVAILABLE',
       created_at TIMESTAMPTZ DEFAULT now(),
-      updated_at TIMESTAMPTZ DEFAULT now(),
-      UNIQUE(course_id, play_date, tee_time, holes)
+      updated_at TIMESTAMPTZ DEFAULT now()
     );
   `);
 
@@ -1090,6 +1091,25 @@ async function ensureBookingTables() {
       layout_key IS NULL
       OR front_nine_key IS NULL
       OR back_nine_key IS NULL;
+  `);
+
+  // ✅ CRITICAL: drop the legacy unique constraint that ignores layout keys
+  // (Postgres usually auto-names it like booking_times_course_id_play_date_tee_time_holes_key)
+  await db.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'booking_times'::regclass
+          AND contype = 'u'
+          AND conname = 'booking_times_course_id_play_date_tee_time_holes_key'
+      ) THEN
+        ALTER TABLE booking_times
+        DROP CONSTRAINT booking_times_course_id_play_date_tee_time_holes_key;
+      END IF;
+    END
+    $$;
   `);
 
   // ✅ FIX #1: clean duplicates so we can add a unique constraint safely
@@ -1144,32 +1164,24 @@ async function ensureBookingTables() {
 
   // ✅ Extra safety: ensure a unique INDEX also exists (some older DBs end up missing the constraint)
   // ✅ UPDATED: index matches the new uniqueness definition
-  await db.query(`
-    DROP INDEX IF EXISTS booking_times_unique_slot_idx;
-  `);
-
   // ❌ DROP any legacy unique indexes that still treat layouts as duplicates
-await db.query(`
-  DROP INDEX IF EXISTS booking_times_unique_layout_idx;
-`);
-await db.query(`
-  DROP INDEX IF EXISTS booking_times_unique_slot_idx;
-`);
+  await db.query(`DROP INDEX IF EXISTS booking_times_unique_layout_idx;`);
+  await db.query(`DROP INDEX IF EXISTS booking_times_unique_slot_idx;`);
 
-// ✅ SINGLE source of truth for slot identity:
-// each 9/18 + layout/front/back combo is its own entity
-await db.query(`
-  CREATE UNIQUE INDEX booking_times_unique_slot_idx
-  ON booking_times (
-    course_id,
-    play_date,
-    tee_time,
-    holes,
-    layout_key,
-    front_nine_key,
-    back_nine_key
-  );
-`);
+  // ✅ SINGLE source of truth for slot identity:
+  // each 9/18 + layout/front/back combo is its own entity
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS booking_times_unique_slot_idx
+    ON booking_times (
+      course_id,
+      play_date,
+      tee_time,
+      holes,
+      layout_key,
+      front_nine_key,
+      back_nine_key
+    );
+  `);
 
   await db.query(`CREATE INDEX IF NOT EXISTS booking_times_layout_idx ON booking_times (course_id, play_date, holes, layout_key, tee_time);`);
 
