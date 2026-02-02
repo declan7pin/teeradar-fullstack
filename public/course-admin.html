@@ -1627,19 +1627,23 @@ function initCourseAdminUI(){
   // default hint
   setAnalyticsMode("total");
 
- // ✅ Manual buttons
-const mLoadBtn = $("mLoadBtn");
-if (mLoadBtn) mLoadBtn.onclick = async () => { _manualDateDefault(); await loadManualSlots(); };
+  // ✅ Manual: view manual tee times
+  const mLoadBtn = $("mLoadBtn");
+  if (mLoadBtn) mLoadBtn.onclick = async () => {
+    _manualDateDefault();
+    await loadManualSlots();
+  };
 
+  // ✅ Stock buttons
+  const csLoadBtn = $("csLoadBtn");
+  if (csLoadBtn) csLoadBtn.onclick = loadCourseSettingsToUI;
 
+  const csSaveBtn = $("csSaveBtn");
+  if (csSaveBtn) csSaveBtn.onclick = saveCourseSettingsFromUI;
 
-// ✅ Stock buttons MUST be wired on init (not inside viewTimes)
-const csLoadBtn = $("csLoadBtn");
-if (csLoadBtn) csLoadBtn.onclick = loadCourseSettingsToUI;
-
-const csSaveBtn = $("csSaveBtn");
-if (csSaveBtn) csSaveBtn.onclick = saveCourseSettingsFromUI;
-}
+  // ✅ Inventory button
+  // (The real handler is defined later as $("checkInventoryBtn").onclick = async () => {...})
+  // So DON'T bind a click-to-click recursion here.
   // =======================
   // Course layouts (wire buttons once on page init)
   // =======================
