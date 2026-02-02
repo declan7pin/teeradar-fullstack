@@ -1045,6 +1045,7 @@ async function ensureBookingTables() {
     );
   `);
 
+  // ✅ booking_times (base table)
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_times (
       id BIGSERIAL PRIMARY KEY,
@@ -1061,49 +1062,6 @@ async function ensureBookingTables() {
     );
   `);
 
-  // ✅ FIX #1: clean duplicates so we can add a unique constraint safely
-  // (keeps the earliest row per slot; prefers not deleting BOOKED rows)
-  await db.query(`
-    WITH ranked AS (
-      SELECT
-        id,
-        status,
-        ROW_NUMBER() OVER (
-          PARTITION BY course_id, play_date, tee_time, holes
-          ORDER BY id ASC
-        ) AS rn
-      FROM booking_times
-    )
-    DELETE FROM booking_times bt
-    USING ranked r
-    WHERE bt.id = r.id
-      AND r.rn > 1
-      AND r.status <> 'BOOKED';
-  `);
-
-  // ✅ FIX #2: ensure ON CONFLICT has a matching unique constraint (works even if table existed already)
-  await db.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conname = 'booking_times_unique_slot'
-      ) THEN
-        ALTER TABLE booking_times
-        ADD CONSTRAINT booking_times_unique_slot
-        UNIQUE (course_id, play_date, tee_time, holes);
-      END IF;
-    END
-    $$;
-  `);
-
-  // ✅ Extra safety: ensure a unique INDEX also exists (some older DBs end up missing the constraint)
-  await db.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS booking_times_unique_slot_idx
-    ON booking_times (course_id, play_date, tee_time, holes);
-  `);
-
   await db.query(`
     ALTER TABLE booking_times
     ADD COLUMN IF NOT EXISTS booked_players INTEGER NOT NULL DEFAULT 0;
@@ -1116,9 +1074,85 @@ async function ensureBookingTables() {
   `);
 
   // ✅ NEW: optional layout keys for named 9s + 18 routings (e.g. lakes, pines+lakes)
+  // (MUST exist before we enforce the new unique constraint)
   await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS layout_key TEXT;`);
   await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS front_nine_key TEXT;`);
   await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
+
+  // ✅ IMPORTANT: normalize NULL keys so uniqueness works predictably
+  await db.query(`
+    UPDATE booking_times
+    SET
+      layout_key = COALESCE(layout_key, ''),
+      front_nine_key = COALESCE(front_nine_key, ''),
+      back_nine_key = COALESCE(back_nine_key, '')
+    WHERE
+      layout_key IS NULL
+      OR front_nine_key IS NULL
+      OR back_nine_key IS NULL;
+  `);
+
+  // ✅ FIX #1: clean duplicates so we can add a unique constraint safely
+  // (keeps the earliest row per slot; prefers not deleting BOOKED rows)
+  // ✅ UPDATED: duplicates are now determined INCLUDING layout/front/back keys
+  await db.query(`
+    WITH ranked AS (
+      SELECT
+        id,
+        status,
+        ROW_NUMBER() OVER (
+          PARTITION BY course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key
+          ORDER BY id ASC
+        ) AS rn
+      FROM booking_times
+    )
+    DELETE FROM booking_times bt
+    USING ranked r
+    WHERE bt.id = r.id
+      AND r.rn > 1
+      AND r.status <> 'BOOKED';
+  `);
+
+  // ✅ FIX #2: ensure ON CONFLICT has a matching unique constraint (works even if table existed already)
+  // ✅ UPDATED: treat each 9/18 combo as its own entity by including layout/front/back keys
+  await db.query(`
+    DO $$
+    BEGIN
+      -- drop old constraint if it exists (older version used only course/date/time/holes)
+      IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'booking_times_unique_slot'
+      ) THEN
+        ALTER TABLE booking_times
+        DROP CONSTRAINT booking_times_unique_slot;
+      END IF;
+
+      -- create the correct constraint (idempotent)
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'booking_times_unique_slot'
+      ) THEN
+        ALTER TABLE booking_times
+        ADD CONSTRAINT booking_times_unique_slot
+        UNIQUE (course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key);
+      END IF;
+    END
+    $$;
+  `);
+
+  // ✅ Extra safety: ensure a unique INDEX also exists (some older DBs end up missing the constraint)
+  // ✅ UPDATED: index matches the new uniqueness definition
+  await db.query(`
+    DROP INDEX IF EXISTS booking_times_unique_slot_idx;
+  `);
+
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS booking_times_unique_slot_idx
+    ON booking_times (course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key);
+  `);
+
   await db.query(`CREATE INDEX IF NOT EXISTS booking_times_layout_idx ON booking_times (course_id, play_date, holes, layout_key, tee_time);`);
 
   await db.query(`
