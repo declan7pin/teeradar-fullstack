@@ -1419,33 +1419,87 @@ const isManualRef = /^MAN-/.test(refRaw);
     return String(m[1]).padStart(2,"0") + ":" + m[2];
   };
 
-  // Key by time+holes so 06:00 (18) and 06:00 (9) don't collide
-  const keyOf = (time, holes) => `${normTime(time)}__${String(holes ?? "")}`;
+  // ✅ IMPORTANT: differentiate tee times by routing/layout
+  function slotKeyFor(time, holes, layoutKey, frontKey, backKey){
+    const t = normTime(time);
+    const h = String(holes ?? "");
+    const lk = String(layoutKey || "").trim().toLowerCase();
+    const f  = String(frontKey || "").trim().toLowerCase();
+    const b  = String(backKey || "").trim().toLowerCase();
+
+    if (Number(holes) === 9) return `${t}__${h}__lk:${lk || ""}`;
+    if (Number(holes) === 18) return `${t}__${h}__f:${f || ""}__b:${b || ""}`;
+    return `${t}__${h}`;
+  }
 
   const byKey = new Map();
 
-  // ✅ Treat manual rows as booking-like rows.
-// ✅ If backend returns only ONE manual row (no slot_index rows),
-//    expand into multiple slots using players count.
-(manualRows || []).forEach(m => {
-  const time = normTime(m.tee_time || m.time || m.teeTime || "");
-  const holes = Number(m.holes ?? m.hole_count ?? m.num_holes ?? m.holeCount ?? "");
-  const key = keyOf(time, holes);
+  // ✅ Manual rows: treat as booking-like rows and preserve routing keys if present
+  (manualRows || []).forEach(m => {
+    const time = normTime(m.tee_time || m.time || m.teeTime || "");
+    const holes = Number(m.holes ?? m.hole_count ?? m.num_holes ?? m.holeCount ?? "");
+    const layoutKey = String(m.layout_key || m.layoutKey || "").trim();
+    const frontKey  = String(m.front_nine_key || m.front9_key || m.front9Key || "").trim();
+    const backKey   = String(m.back_nine_key  || m.back9_key  || m.back9Key  || "").trim();
 
-  if (!byKey.has(key)) byKey.set(key, []);
+    const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
+    if (!byKey.has(key)) byKey.set(key, []);
 
-  const hasSlotIndex = (m.slot_index != null || m.slotIndex != null);
+    const hasSlotIndex = (m.slot_index != null || m.slotIndex != null);
 
-  // If NOT expanded per-slot by backend → expand here
-  if (!hasSlotIndex) {
-    const players = Math.max(1, Math.min(4, Number(
-      m.players ?? m.num_players ?? m.player_count ?? m.playerCount ?? 1
-    )));
+    // If backend did not expand per-slot → expand here using players
+    if (!hasSlotIndex) {
+      const players = Math.max(1, Math.min(4, Number(
+        m.players ?? m.num_players ?? m.player_count ?? m.playerCount ?? 1
+      )));
+
+      for (let i = 0; i < players; i++) {
+        const row = normalizeBookingLikeRow(m);
+
+        // ✅ only show add-ons once (slot 1)
+        if (i > 0) {
+          row.cart_qty = 0;
+          row.hire_clubs_qty = 0;
+          row.has_cart = false;
+          row.has_hire_clubs = false;
+        }
+
+        // ✅ keep routing keys on the row too (handy later)
+        row.layout_key = layoutKey;
+        row.front_nine_key = frontKey;
+        row.back_nine_key = backKey;
+
+        byKey.get(key).push(row);
+      }
+      return;
+    }
+
+    const row = normalizeBookingLikeRow(m);
+    row.layout_key = layoutKey;
+    row.front_nine_key = frontKey;
+    row.back_nine_key = backKey;
+
+    byKey.get(key).push(row);
+  });
+
+  // ✅ Online bookings: preserve routing keys if present (booking_bookings has these columns)
+  (bookingsRows || []).forEach(b => {
+    const time = normTime(b.tee_time || b.time || b.teeTime || "");
+    const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
+    const layoutKey = String(b.layout_key || b.layoutKey || "").trim();
+    const frontKey  = String(b.front_nine_key || b.front9_key || b.front9Key || "").trim();
+    const backKey   = String(b.back_nine_key  || b.back9_key  || b.back9Key  || "").trim();
+
+    const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
+
+    const players = Math.max(1, Number(b.players || 1));
 
     for (let i = 0; i < players; i++) {
-      const row = normalizeBookingLikeRow(m);
+      if (!byKey.has(key)) byKey.set(key, []);
 
-      // ✅ only show add-ons once (slot 1)
+      const row = normalizeBookingLikeRow(b);
+
+      // ✅ only show add-ons on Slot 1 for that booking
       if (i > 0) {
         row.cart_qty = 0;
         row.hire_clubs_qty = 0;
@@ -1453,85 +1507,70 @@ const isManualRef = /^MAN-/.test(refRaw);
         row.has_hire_clubs = false;
       }
 
+      row.layout_key = layoutKey;
+      row.front_nine_key = frontKey;
+      row.back_nine_key = backKey;
+
       byKey.get(key).push(row);
     }
-    return;
-  }
-
-  // Already expanded per-slot by backend
-  byKey.get(key).push(normalizeBookingLikeRow(m));
-});
-
-  // ✅ Normal bookings (players = slots)
-// ✅ Show cart/clubs qty ONCE per booking (on first slot only)
-(bookingsRows || []).forEach(b => {
-  const time = normTime(b.tee_time || b.time || b.teeTime || "");
-  const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
-  const key = keyOf(time, holes);
-
-  const players = Math.max(1, Number(b.players || 1));
-
-  for (let i = 0; i < players; i++) {
-    if (!byKey.has(key)) byKey.set(key, []);
-
-    const row = normalizeBookingLikeRow(b);
-
-    // ✅ only show add-ons on Slot 1 for that booking
-    if (i > 0) {
-      row.cart_qty = 0;
-      row.hire_clubs_qty = 0;
-      row.has_cart = false;
-      row.has_hire_clubs = false;
-    }
-
-    byKey.get(key).push(row);
-  }
-});
+  });
 
   // =======================
-// Daily sheet builder
-// =======================
-const out = [];
-(timesRows || []).forEach(t => {
-  const time = normTime(t.tee_time || t.time || "");
-  const holes = Number(t.holes ?? "");
-  const key = keyOf(time, holes);
+  // Daily sheet builder
+  // =======================
+  const out = [];
 
-  const arr = (byKey.get(key) || []).slice(0, 4);
+  (timesRows || []).forEach(t => {
+    const time = normTime(t.tee_time || t.time || "");
+    const holes = Number(t.holes ?? "");
 
-  // If tee_times says spots are booked but bookings list doesn't have them,
-  // fill placeholders so the course can see the time is taken on the sheet.
-  const bookedCount = Number(
-    t.booked_players ?? t.bookedPlayers ?? t.booked ?? 0
-  );
+    const layoutKey = String(t.layout_key || t.layoutKey || "").trim();
+    const frontKey  = String(t.front_nine_key || t.front9_key || t.front9Key || "").trim();
+    const backKey   = String(t.back_nine_key  || t.back9_key  || t.back9Key  || "").trim();
 
-  while (arr.length < Math.min(4, bookedCount)) {
-    arr.push({
-      reference: "",
-      name: "Booked",
-      email: "",
-      phone: "",
-      paid: false,
-      cart_qty: 0,
-      hire_clubs_qty: 0,
-      has_cart: false,
-      has_hire_clubs: false,
-      notes: "",
-      checked_in: false,
+    const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
+
+    const arr = (byKey.get(key) || []).slice(0, 4);
+
+    const bookedCount = Number(
+      t.booked_players ?? t.bookedPlayers ?? t.booked ?? 0
+    );
+
+    while (arr.length < Math.min(4, bookedCount)) {
+      arr.push({
+        reference: "",
+        name: "Booked",
+        email: "",
+        phone: "",
+        paid: false,
+        cart_qty: 0,
+        hire_clubs_qty: 0,
+        has_cart: false,
+        has_hire_clubs: false,
+        notes: "",
+        checked_in: false,
+
+        // keep routing info
+        layout_key: layoutKey,
+        front_nine_key: frontKey,
+        back_nine_key: backKey,
+      });
+    }
+
+    const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
+
+    // ✅ include routing/layout on the row so UI renders correctly without doing find(...)
+    out.push({
+      time,
+      holes,
+      layout_key: layoutKey,
+      front_nine_key: frontKey,
+      back_nine_key: backKey,
+      slots
     });
-  }
+  });
 
-  const slots = [
-    arr[0] || null,
-    arr[1] || null,
-    arr[2] || null,
-    arr[3] || null
-  ];
-
-  out.push({ time, holes, slots });
-});
-
-return out;
+  return out;
 }
 
 // =======================
@@ -2002,19 +2041,33 @@ try{
       });
     });
 
-    // de-dupe by time + holes (so manual slot doesn't duplicate an existing generated time)
-    const seen = new Set();
-    const deduped = [];
-    for (const r of timesRows) {
-      const key = `${normTime(r.tee_time || r.time || "")}__${String(r.holes ?? "")}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      deduped.push(r);
-    }
-    deduped.sort((a,b) => (normTime(a.tee_time||"") > normTime(b.tee_time||"") ? 1 : -1));
+    // ✅ de-dupe by time + holes + routing/layout keys (so 2 x 06:10 (18) can exist if routing differs)
+const seen = new Set();
+const deduped = [];
 
-    timesRows.length = 0;
-    deduped.forEach(x => timesRows.push(x));
+for (const r of timesRows) {
+  const time = normTime(r.tee_time || r.time || "");
+  const holes = Number(r.holes ?? "");
+
+  const lk = String(r.layout_key || r.layoutKey || "").trim().toLowerCase();
+  const f  = String(r.front_nine_key || r.front9_key || r.front9Key || "").trim().toLowerCase();
+  const b  = String(r.back_nine_key  || r.back9_key  || r.back9Key  || "").trim().toLowerCase();
+
+  const key =
+    holes === 9
+      ? `${time}__${holes}__lk:${lk || ""}`
+      : holes === 18
+        ? `${time}__${holes}__f:${f || ""}__b:${b || ""}`
+        : `${time}__${holes}`;
+
+  if (seen.has(key)) continue;
+  seen.add(key);
+  deduped.push(r);
+}
+
+deduped.sort((a,b) => (normTime(a.tee_time||a.time||"") > normTime(b.tee_time||b.time||"") ? 1 : -1));
+timesRows.length = 0;
+deduped.forEach(x => timesRows.push(x));
   }
 }catch(e){
   // ignore if manual endpoint missing; daily sheet will still work from normal times
@@ -2046,7 +2099,10 @@ try{
       sheet.forEach(row => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td class="sheetTime">${_escape(row.time)} <span class="muted mini">(${_escape(fmtSheetHolesLabelFromTimeRow(timesRows.find(t => normTime(t.tee_time||t.time||"")===row.time && Number(t.holes)==Number(row.holes)) || { holes: row.holes }))})</span></td>
+          <td class="sheetTime">
+  ${_escape(row.time)}
+  <span class="muted mini">(${_escape(fmtSheetHolesLabelFromTimeRow(row))})</span>
+</td>
           <td>${buildSlotCell(row.slots[0], 1)}</td>
           <td>${buildSlotCell(row.slots[1], 2)}</td>
           <td>${buildSlotCell(row.slots[2], 3)}</td>
