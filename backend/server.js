@@ -447,19 +447,8 @@ async function ensureBookingTables() {
         UNIQUE(course_id, email)
       );
     `);
-        // ✅ NEW: role for course admin users (MANAGER can see analytics)
-    await db.query(`
-      ALTER TABLE booking_course_users
-      ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'PROSHOP';
-    `);
 
-    // Safety backfill
-    await db.query(`
-      UPDATE booking_course_users
-      SET role = 'PROSHOP'
-      WHERE role IS NULL OR TRIM(role) = '';
-    `);
-    // ✅ NEW: course admin role (PROSHOP or MANAGER)
+    // ✅ NEW: role for course admin users (PROSHOP or MANAGER)
     await db.query(`
       ALTER TABLE booking_course_users
       ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'PROSHOP';
@@ -471,6 +460,7 @@ async function ensureBookingTables() {
       SET role = 'PROSHOP'
       WHERE role IS NULL OR TRIM(role) = '';
     `);
+
     await db.query(`
       CREATE TABLE IF NOT EXISTS booking_times (
         id BIGSERIAL PRIMARY KEY,
@@ -478,12 +468,22 @@ async function ensureBookingTables() {
         play_date DATE NOT NULL,
         tee_time TEXT NOT NULL,
         holes INTEGER NOT NULL,
+
         max_players INTEGER NOT NULL DEFAULT 4,
+        booked_players INTEGER NOT NULL DEFAULT 0,
         price_per_player_cents INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'AVAILABLE',
+
+        -- ✅ NEW: routing/layout keys (empty string = not used)
+        layout_key TEXT NOT NULL DEFAULT '',
+        front9_key TEXT NOT NULL DEFAULT '',
+        back9_key  TEXT NOT NULL DEFAULT '',
+
         created_at TIMESTAMPTZ DEFAULT now(),
         updated_at TIMESTAMPTZ DEFAULT now(),
-        UNIQUE(course_id, play_date, tee_time, holes)
+
+        -- ✅ NEW: uniqueness includes routing keys
+        UNIQUE(course_id, play_date, tee_time, holes, layout_key, front9_key, back9_key)
       );
     `);
 
@@ -523,6 +523,67 @@ async function ensureBookingTables() {
   }
 }
 ensureBookingTables();
+
+// ✅ NEW: auto-migrate existing Postgres booking_times so multiple routings can coexist
+async function ensureBookingTimesRoutingSchema() {
+  const LOCK_KEY = 987654321; // any constant int is fine
+  try {
+    const lockRes = await db.query("SELECT pg_try_advisory_lock($1) AS locked;", [LOCK_KEY]);
+    if (!lockRes.rows?.[0]?.locked) {
+      console.log("ℹ️ booking_times routing migration: another instance is running it");
+      return;
+    }
+
+    console.log("🔧 booking_times routing migration: starting");
+
+    // 1) Ensure routing + booked_players columns exist
+    await db.query(`
+      ALTER TABLE booking_times
+        ADD COLUMN IF NOT EXISTS booked_players integer NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS layout_key text NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS front9_key text NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS back9_key  text NOT NULL DEFAULT '';
+    `);
+
+    // 2) Backfill any nulls (safety for older rows)
+    await db.query(`UPDATE booking_times SET booked_players = 0 WHERE booked_players IS NULL;`);
+    await db.query(`UPDATE booking_times SET layout_key = '' WHERE layout_key IS NULL;`);
+    await db.query(`UPDATE booking_times SET front9_key = '' WHERE front9_key IS NULL;`);
+    await db.query(`UPDATE booking_times SET back9_key  = '' WHERE back9_key  IS NULL;`);
+
+    // 3) Drop the OLD unique constraint (course_id, play_date, tee_time, holes)
+    const oldUq = await db.query(`
+      SELECT c.conname
+      FROM pg_constraint c
+      JOIN pg_class t ON t.oid = c.conrelid
+      WHERE c.contype = 'u'
+        AND t.relname = 'booking_times'
+        AND (
+          SELECT array_agg(a.attname ORDER BY a.attname)
+          FROM unnest(c.conkey) AS k(attnum)
+          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+        ) = ARRAY['course_id','holes','play_date','tee_time'];
+    `);
+
+    for (const r of oldUq.rows || []) {
+      console.log("🧹 dropping old booking_times unique constraint:", r.conname);
+      await db.query(`ALTER TABLE booking_times DROP CONSTRAINT IF EXISTS "${r.conname}";`);
+    }
+
+    // 4) Create the NEW unique index including routing keys
+    await db.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS booking_times_uq_routing
+      ON booking_times (course_id, play_date, tee_time, holes, layout_key, front9_key, back9_key);
+    `);
+
+    console.log("✅ booking_times routing migration: done");
+  } catch (e) {
+    console.error("❌ booking_times routing migration failed:", e);
+  } finally {
+    try { await db.query("SELECT pg_advisory_unlock($1);", [LOCK_KEY]); } catch {}
+  }
+}
+ensureBookingTimesRoutingSchema();
 
 ensureBookingAddonsSchema(db)
   .then(() => console.log("✅ booking add-ons schema ready"))
@@ -592,7 +653,6 @@ app.use(cors(corsOptions));
 // ✅ IMPORTANT: preflight must be OK (some browsers will fail login without this)
 app.options(/.*/, cors(corsOptions));
 /* ✅✅✅ END FIX ✅✅✅ */
-
 // -------------------------------------------------
 // Stripe Webhook – must be BEFORE express.json
 // -------------------------------------------------
