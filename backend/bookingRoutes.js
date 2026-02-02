@@ -4582,26 +4582,27 @@ if (req.body?.template && typeof req.body.template === "object") {
 router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminManager, async (req, res) => {
   try {
     // ✅ Course admins can ONLY generate for their own course
-const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
+    const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
+
     let startDate = String(
-  req.body?.startDate ||
-  req.body?.start_date ||
-  ""
-).trim(); // YYYY-MM-DD
+      req.body?.startDate ||
+      req.body?.start_date ||
+      ""
+    ).trim(); // YYYY-MM-DD
 
-const daysAhead = Math.max(1, Math.min(120, Number(req.body?.daysAhead || 30)));
-const mode = String(req.body?.mode || "skip").trim().toLowerCase();
+    const daysAhead = Math.max(1, Math.min(120, Number(req.body?.daysAhead || 30)));
+    const mode = String(req.body?.mode || "skip").trim().toLowerCase();
 
-if (!slug) return res.status(401).json({ ok: false, error: "not_course_admin" });
+    if (!slug) return res.status(401).json({ ok: false, error: "not_course_admin" });
 
-// ✅ fallback if frontend didn’t send startDate
-if (!startDate) {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  startDate = `${yyyy}-${mm}-${dd}`;
-}
+    // ✅ fallback if frontend didn’t send startDate
+    if (!startDate) {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      startDate = `${yyyy}-${mm}-${dd}`;
+    }
 
     const c = await db.query(
       `SELECT id, slug, name FROM booking_courses WHERE slug = $1 LIMIT 1;`,
@@ -4634,17 +4635,17 @@ if (!startDate) {
     end.setDate(end.getDate() + daysAhead);
 
     // Optional overwrite range
-if (mode === "overwrite-range") {
-  // ✅ Only delete non-booked times (never delete BOOKED)
-  await db.query(
-    `DELETE FROM booking_times
-     WHERE course_id = $1
-       AND play_date >= $2::date
-       AND play_date < $3::date
-       AND status <> 'BOOKED';`,
-    [courseId, startDate, _isoDate(end)]
-  );
-}
+    if (mode === "overwrite-range") {
+      // ✅ Only delete non-booked times (never delete BOOKED)
+      await db.query(
+        `DELETE FROM booking_times
+         WHERE course_id = $1
+           AND play_date >= $2::date
+           AND play_date < $3::date
+           AND status <> 'BOOKED';`,
+        [courseId, startDate, _isoDate(end)]
+      );
+    }
 
     // ✅ Load course durations (used for back-9 block calculation)
     // If not set, default to 135 mins (2h15) for 9 holes.
@@ -4698,8 +4699,9 @@ if (mode === "overwrite-range") {
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          const front9Key = String(w.front9_key || w.front9Key || "").trim() || null;
-          const back9Key = String(w.back9_key || w.back9Key || "").trim() || null;
+          // ✅ FIX: map template fields to DB column names (front_nine_key / back_nine_key)
+          const frontNineKey = String(w.front_nine_key || w.front9_key || w.front9Key || "").trim() || null;
+          const backNineKey = String(w.back_nine_key || w.back9_key || w.back9Key || "").trim() || null;
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
@@ -4723,8 +4725,9 @@ if (mode === "overwrite-range") {
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
               layout_key: null,
-              front9_key: front9Key,
-              back9_key: back9Key,
+              // ✅ FIX: correct DB column names
+              front_nine_key: frontNineKey,
+              back_nine_key: backNineKey,
             });
           }
         }
@@ -4760,8 +4763,9 @@ if (mode === "overwrite-range") {
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
               layout_key: layoutKey,
-              front9_key: null,
-              back9_key: null,
+              // ✅ FIX: correct DB column names (9-hole uses nulls)
+              front_nine_key: null,
+              back_nine_key: null,
             });
           }
         }
@@ -4777,8 +4781,9 @@ if (mode === "overwrite-range") {
           "max_players",
           "price_per_player_cents",
           "layout_key",
-          "front9_key",
-          "back9_key",
+          // ✅ FIX: correct DB column names
+          "front_nine_key",
+          "back_nine_key",
         ];
 
         const values = [];
@@ -4796,8 +4801,9 @@ if (mode === "overwrite-range") {
             r.max_players,
             r.price_per_player_cents,
             r.layout_key,
-            r.front9_key,
-            r.back9_key
+            // ✅ FIX: correct fields
+            r.front_nine_key,
+            r.back_nine_key
           );
         }
 
@@ -4809,8 +4815,9 @@ if (mode === "overwrite-range") {
                  max_players = EXCLUDED.max_players,
                  price_per_player_cents = EXCLUDED.price_per_player_cents,
                  layout_key = EXCLUDED.layout_key,
-                 front9_key = EXCLUDED.front9_key,
-                 back9_key = EXCLUDED.back9_key,
+                 -- ✅ FIX: correct DB column names
+                 front_nine_key = EXCLUDED.front_nine_key,
+                 back_nine_key = EXCLUDED.back_nine_key,
                  status = CASE
                    WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
                    WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
