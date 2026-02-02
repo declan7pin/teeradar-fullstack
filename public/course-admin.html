@@ -454,54 +454,87 @@
 
   <div id="layoutsMsg" class="muted" style="margin-top:10px;"></div>
 </div>
-    <!-- 4) Weekly schedule template (manager only) -->
+   <!-- 4) Weekly schedule template (manager only) -->
 <div class="card" id="managerOnlyTemplate" style="display:none;">
-      <h2 style="margin:0 0 6px;">Weekly schedule template</h2>
-      <div class="sub" style="margin-bottom:10px;">
-        Save a weekly pattern once, then generate tee times for the next 30 days in one click.
+  <h2 style="margin:0 0 6px;">Weekly schedule template</h2>
+  <div class="sub" style="margin-bottom:10px;">
+    Save a weekly pattern once, then generate tee times for the next 30 days in one click.
+  </div>
+
+  <div id="tplStatus" class="status"></div>
+
+  <!-- ✅ ALL controls live inside ONE grid -->
+  <div style="display:grid;gap:10px;">
+
+    <!-- Row 1: saved cards + timezone -->
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
+
+      <div style="flex:1;min-width:220px;">
+        <label>Saved card</label>
+        <select id="tplCardSelect"></select>
       </div>
 
-      <div id="tplStatus" class="status"></div>
+      <div style="flex:1;min-width:220px;">
+        <label>Card name</label>
+        <input id="tplCardName" placeholder="e.g. Pines AM" />
+      </div>
 
-      <div style="display:grid;gap:10px;">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
-          <div style="flex:1;min-width:220px;">
-            <label>Timezone</label>
-            <input id="tplTimezone" value="Australia/Perth" />
-          </div>
+      <div class="actions" style="margin:0;gap:8px;">
+        <button class="secondary" id="tplCardSaveBtn" type="button">Save card</button>
+        <button
+          class="secondary"
+          id="tplCardDeleteBtn"
+          type="button"
+          style="background:#b91c1c"
+        >
+          Delete card
+        </button>
+      </div>
 
-          <div style="flex:1;min-width:220px;">
-            <label>Generate from date</label>
-            <input id="tplStartDate" type="date" />
-          </div>
+      <div style="flex:1;min-width:220px;">
+        <label>Timezone</label>
+        <input id="tplTimezone" value="Australia/Perth" />
+      </div>
 
-          <div style="width:180px;">
-            <label>Days ahead</label>
-            <input id="tplDaysAhead" type="number" min="1" max="120" value="30" />
-          </div>
+    </div>
 
-          <div style="width:220px;">
-            <label>Mode</label>
-            <select id="tplMode">
-              <option value="skip" selected>Skip duplicates</option>
-              <option value="overwrite-range">Overwrite range</option>
-            </select>
-          </div>
-        </div>
+    <!-- Row 2: generation settings -->
+    <div class="row">
+      <div>
+        <label>Generate from date</label>
+        <input id="tplStartDate" type="date" />
+      </div>
 
-        <div id="tplGrid" style="display:grid;gap:10px;"></div>
-
-        <div class="actions">
-          <button id="tplLoadBtn">Load template</button>
-          <button class="secondary" id="tplSaveBtn">Save template</button>
-          <button id="tplGenerateBtn">Generate next days</button>
-        </div>
-
-        <div class="note">
-          Tip: set different windows for 18 and 9 so 18-hole groups can roll through without clashes.
-        </div>
+      <div>
+        <label>Days ahead</label>
+        <input id="tplDaysAhead" type="number" min="1" max="120" value="30" />
       </div>
     </div>
+
+    <div style="width:220px;">
+      <label>Mode</label>
+      <select id="tplMode">
+        <option value="skip" selected>Skip duplicates</option>
+        <option value="overwrite-range">Overwrite range</option>
+      </select>
+    </div>
+
+  </div>
+
+  <!-- Weekly grid -->
+  <div id="tplGrid" style="display:grid;gap:10px;margin-top:10px;"></div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button id="tplLoadBtn">Load template</button>
+    <button class="secondary" id="tplSaveBtn">Save template</button>
+    <button id="tplGenerateBtn">Generate next days</button>
+  </div>
+
+  <div class="note">
+    Tip: set different windows for 18 and 9 so 18-hole groups can roll through without clashes.
+  </div>
+</div>
 <!-- ✅ 5) Analytics (manager only) -->
 <div class="card" id="managerOnlyAnalytics" style="display:none;">
   <h2 style="margin:0 0 6px;">Analytics</h2>
@@ -2865,7 +2898,107 @@ function getNineLayoutOptionsHTML(selectedKey){
     const dd = String(d.getDate()).padStart(2,"0");
     return `${yyyy}-${mm}-${dd}`;
   }
+  // -----------------------
+  // Saved "cards" (localStorage, per slug)
+  // -----------------------
+  function cardsStoreKey(){
+    return `tr_tpl_cards_${getSlug() || "noslug"}`;
+  }
 
+  function readCards(){
+    try{
+      const raw = localStorage.getItem(cardsStoreKey());
+      const data = raw ? JSON.parse(raw) : null;
+      return (data && typeof data === "object") ? data : {};
+    }catch{
+      return {};
+    }
+  }
+
+  function writeCards(cards){
+    try{
+      localStorage.setItem(cardsStoreKey(), JSON.stringify(cards || {}));
+    }catch{}
+  }
+
+  function listCardNames(){
+    const cards = readCards();
+    return Object.keys(cards).sort((a,b) => a.localeCompare(b));
+  }
+
+  function renderCardSelect(selectedName){
+    const sel = document.getElementById("tplCardSelect");
+    if (!sel) return;
+
+    const names = listCardNames();
+
+    // Always include a "Server template" option
+    const opts = [
+      `<option value="__server__">Server template</option>`,
+      ...names.map(n => `<option value="${_escape(n)}">${_escape(n)}</option>`)
+    ];
+
+    sel.innerHTML = opts.join("");
+    sel.value = selectedName ? selectedName : "__server__";
+  }
+
+  function applyCard(cardName){
+    // "__server__" means use whatever is currently loaded from server in tplLoad()
+    if (!cardName || cardName === "__server__") {
+      // just re-render current UI state (no change)
+      try{
+        const cur = readTemplateFromUI();
+        renderTemplate(cur);
+      }catch{}
+      return;
+    }
+
+    const cards = readCards();
+    const card = cards[cardName];
+    if (!card || typeof card !== "object") return;
+
+    // apply timezone + template
+    if (document.getElementById("tplTimezone") && card.timezone) {
+      document.getElementById("tplTimezone").value = String(card.timezone || "Australia/Perth");
+    }
+
+    const tpl = (card.template && typeof card.template === "object") ? card.template : defaultTemplate();
+    renderTemplate(tpl);
+
+    // set card name input
+    const nameInput = document.getElementById("tplCardName");
+    if (nameInput) nameInput.value = cardName;
+  }
+
+  function saveCurrentAsCard(){
+    const nameInput = document.getElementById("tplCardName");
+    const rawName = String(nameInput?.value || "").trim();
+    if (!rawName) throw new Error("card_name_required");
+
+    const timezone = String(document.getElementById("tplTimezone")?.value || "Australia/Perth").trim() || "Australia/Perth";
+    const template = readTemplateFromUI();
+
+    const cards = readCards();
+    cards[rawName] = { timezone, template, savedAt: new Date().toISOString() };
+    writeCards(cards);
+
+    renderCardSelect(rawName);
+    setTplStatus(`✅ Saved card: ${rawName}`, "ok");
+  }
+
+  function deleteCardByName(name){
+    const cardName = String(name || "").trim();
+    if (!cardName || cardName === "__server__") return;
+
+    const cards = readCards();
+    if (!cards[cardName]) return;
+
+    delete cards[cardName];
+    writeCards(cards);
+
+    renderCardSelect("__server__");
+    setTplStatus(`✅ Deleted card: ${cardName}`, "ok");
+  }
   // -----------------------
   // Default template
   // -----------------------
@@ -3178,7 +3311,10 @@ ${holes === 9 ? renderNineLayoutSelect(dow, w) : ""}
     }catch{
       renderTemplate(defaultTemplate());
     }
+          // preserve dropdown options
+      try{ renderCardSelect(document.getElementById("tplCardSelect")?.value || "__server__"); }catch{}
   };
+  
 
   // -----------------------
   // Wire buttons (ONCE)
@@ -3192,7 +3328,48 @@ ${holes === 9 ? renderNineLayoutSelect(dow, w) : ""}
   if (genBtn)  genBtn.onclick  = tplGenerate;
 
   if ($("tplStartDate")) $("tplStartDate").value = todayISO();
+  // -----------------------
+  // Wire card controls
+  // -----------------------
+  const cardSelect = document.getElementById("tplCardSelect");
+  const cardSaveBtn = document.getElementById("tplCardSaveBtn");
+  const cardDeleteBtn = document.getElementById("tplCardDeleteBtn");
 
+  // populate dropdown on first load
+  renderCardSelect("__server__");
+
+  if (cardSelect) {
+    cardSelect.onchange = () => {
+      const v = String(cardSelect.value || "__server__");
+      applyCard(v);
+    };
+  }
+
+  if (cardSaveBtn) {
+    cardSaveBtn.onclick = () => {
+      try{
+        saveCurrentAsCard();
+      }catch(e){
+        setTplStatus("❌ " + (e?.message || "save_card_failed"), "err");
+      }
+    };
+  }
+
+  if (cardDeleteBtn) {
+    cardDeleteBtn.onclick = () => {
+      try{
+        const cur = String(document.getElementById("tplCardSelect")?.value || "__server__");
+        if (cur === "__server__") {
+          setTplStatus("❌ Select a saved card to delete", "err");
+          return;
+        }
+        if (!confirm(`Delete saved card "${cur}"?`)) return;
+        deleteCardByName(cur);
+      }catch(e){
+        setTplStatus("❌ " + (e?.message || "delete_card_failed"), "err");
+      }
+    };
+  }
   // first paint
   renderTemplate(defaultTemplate());
 })();
