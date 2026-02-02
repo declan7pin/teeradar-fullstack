@@ -3157,8 +3157,8 @@ function renderEighteenRoutingSelect(dow, w){
   const bSel = String(w.back9_key || "");
 
   const optsFront = [
-    `<option value="">Select</option>`,
-    ...layouts.map(l => {
+  `<option value="" disabled ${fSel ? "" : "selected"}>Select</option>`,
+  ...layouts.map(l => {
       const key = String(l.key || l.label || "").trim();
       const label = String(l.label || l.key || "").trim();
       const sel = key && key === fSel ? " selected" : "";
@@ -3167,8 +3167,8 @@ function renderEighteenRoutingSelect(dow, w){
   ].join("");
 
   const optsBack = [
-    `<option value="">Select</option>`,
-    ...layouts.map(l => {
+  `<option value="" disabled ${bSel ? "" : "selected"}>Select</option>`,
+  ...layouts.map(l => {
       const key = String(l.key || l.label || "").trim();
       const label = String(l.label || l.key || "").trim();
       const sel = key && key === bSel ? " selected" : "";
@@ -3384,6 +3384,30 @@ ${holes === 9 ? renderNineLayoutSelect(dow, w) : ""}
       const startDate = String($("tplStartDate")?.value || todayISO()).trim();
       const daysAhead = Number($("tplDaysAhead")?.value || 30);
       const mode = String($("tplMode")?.value || "skip");
+      // ✅ VALIDATE: enabled days must have routing selected for 18-hole windows
+const tpl = readTemplateFromUI();
+const days = tpl?.days || {};
+
+const dowName = { "1":"Mon","2":"Tue","3":"Wed","4":"Thu","5":"Fri","6":"Sat","7":"Sun" };
+
+for (const dow of Object.keys(days)) {
+  const day = days[dow];
+  if (!day || day.enabled === false) continue;
+
+  const wins = Array.isArray(day.windows) ? day.windows : [];
+  const w18 = wins.find(x => Number(x.holes) === 18);
+
+  if (w18) {
+    const f = String(w18.front9_key || "").trim();
+    const b = String(w18.back9_key || "").trim();
+    if (!f || !b) {
+      throw new Error(`Select Front 9 + Back 9 for ${dowName[dow] || ("DOW " + dow)} (18 holes)`);
+    }
+    if (f === b) {
+      throw new Error(`Front 9 and Back 9 cannot be the same on ${dowName[dow] || ("DOW " + dow)}`);
+    }
+  }
+}
 
       const data = await j("/api/book/generate-from-template", {
         method:"POST",
