@@ -1186,6 +1186,50 @@ function exportAnalyticsCSV(){
       .replace(/"/g,"&quot;")
       .replace(/'/g,"&#039;");
   }
+  // =======================
+// ✅ Layout labels for Daily Sheet (9/18 routing)
+// Uses already-loaded COURSE_LAYOUTS + COURSE_ROUTES18
+// =======================
+function layoutLabelByKey(key){
+  const k = String(key || "").trim().toLowerCase();
+  if (!k) return "";
+  const hit = (Array.isArray(COURSE_LAYOUTS) ? COURSE_LAYOUTS : []).find(x => String(x.key || "").toLowerCase() === k);
+  return hit ? String(hit.label || hit.key || k) : k;
+}
+
+function route18Label(frontKey, backKey){
+  const f = String(frontKey || "").trim().toLowerCase();
+  const b = String(backKey || "").trim().toLowerCase();
+  if (!f || !b) return "";
+
+  const routes = Array.isArray(COURSE_ROUTES18) ? COURSE_ROUTES18 : [];
+  const hit = routes.find(r =>
+    String(r.front9_key || "").toLowerCase() === f &&
+    String(r.back9_key || "").toLowerCase() === b
+  );
+  if (hit && hit.label) return String(hit.label);
+
+  // fallback: "Front + Back"
+  return `${layoutLabelByKey(f)} + ${layoutLabelByKey(b)}`.trim();
+}
+
+function fmtSheetHolesLabelFromTimeRow(t){
+  const holes = Number(t?.holes ?? t?.hole_count ?? t?.holeCount ?? 0);
+
+  if (holes === 9) {
+    const lk = String(t?.layout_key || t?.layoutKey || "").trim();
+    return lk ? `9 holes — ${layoutLabelByKey(lk)}` : `9 holes`;
+  }
+
+  if (holes === 18) {
+    const f = String(t?.front_nine_key || t?.front9_key || t?.front9Key || t?.front || "").trim();
+    const b = String(t?.back_nine_key || t?.back9_key || t?.back9Key || t?.back || "").trim();
+    if (f && b) return `18 holes — ${route18Label(f, b)}`;
+    return `18 holes`;
+  }
+
+  return holes ? `${holes} holes` : `holes`;
+}
 // ✅ normalize booking-like rows into the shape the sheet expects
 function normalizeBookingLikeRow(b){
   const ref = String(
@@ -2002,7 +2046,7 @@ try{
       sheet.forEach(row => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td class="sheetTime">${_escape(row.time)} <span class="muted mini">(${_escape(row.holes)} holes)</span></td>
+          <td class="sheetTime">${_escape(row.time)} <span class="muted mini">(${_escape(fmtSheetHolesLabelFromTimeRow(timesRows.find(t => normTime(t.tee_time||t.time||"")===row.time && Number(t.holes)==Number(row.holes)) || { holes: row.holes }))})</span></td>
           <td>${buildSlotCell(row.slots[0], 1)}</td>
           <td>${buildSlotCell(row.slots[1], 2)}</td>
           <td>${buildSlotCell(row.slots[2], 3)}</td>
