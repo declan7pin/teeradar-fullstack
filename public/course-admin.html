@@ -1767,11 +1767,15 @@ function initCourseAdminUI(){
     }
   });
 
-  // show empty state immediately
+   // show empty state immediately
   renderLayouts();
-// run now + fallback
+  renderRoutes18();
+} // ✅ CLOSE initCourseAdminUI
+
+// ✅ run now + fallback (OUTSIDE the function)
 initCourseAdminUI();
 document.addEventListener("DOMContentLoaded", initCourseAdminUI);
+
 async function viewTimes(){
   clearView();
   $("viewMsg").textContent = "Loading tee times...";
