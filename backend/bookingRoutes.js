@@ -4602,14 +4602,6 @@ if (req.body?.template && typeof req.body.template === "object") {
 // mode: "skip" (default) OR "overwrite-range"
 router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminManager, async (req, res) => {
   try {
-    // ✅ changes: normalize keys and require real layout identity to prevent collisions
-    const cleanKey = (v) => {
-      const s = String(v || "").trim();
-      if (!s) return "";
-      if (s.toLowerCase() === "select") return "";
-      return s;
-    };
-
     // ✅ Course admins can ONLY generate for their own course
     const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
 
@@ -4693,11 +4685,16 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     const back9CenterOffset = Math.max(0, dur9 - 15);
     const back9HalfWindow = 15;
 
+    // ✅ NEW: normalize keys (treat "Select" as empty)
+    const cleanKey = (v) => {
+      const s = String(v || "").trim();
+      if (!s) return "";
+      if (s.toLowerCase() === "select") return "";
+      return s;
+    };
+
     let inserted = 0;
     let skipped = 0;
-
-    // ✅ (optional) collect warnings for missing layout keys
-    const warnings = [];
 
     // One transaction for the whole generation run
     await db.query("BEGIN");
@@ -4727,7 +4724,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          // ✅ IMPORTANT: require real front/back keys (no defaults)
+          // ✅ IMPORTANT: REQUIRE real front/back keys (NO FALLBACKS)
           const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
           const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
 
@@ -4736,13 +4733,10 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
           if (startMin === null || endMin === null || endMin <= startMin) continue;
 
-          // ✅ If keys are missing, skip this 18-window to prevent collisions (classic/lakes vs pines/lakes)
-          if (!frontNineKey || !backNineKey) {
-            warnings.push({ type: "missing_18_routing_keys", playDate, start: w.start, end: w.end });
-            continue;
-          }
+          // ✅ If keys are missing, skip this 18 window (prevents "18:front|back" collisions)
+          if (!frontNineKey || !backNineKey) continue;
 
-          // ✅ stable "entity key" for 18s (unique per combo)
+          // ✅ stable "entity key" for 18s (ensures uniqueness per combo)
           const layoutKey18 = `18:${frontNineKey}|${backNineKey}`;
 
           for (let mins = startMin; mins < endMin; mins += interval) {
@@ -4761,7 +4755,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
 
-              // ✅ never store nulls (keeps UNIQUE behaviour sane)
+              // ✅ never store nulls
               layout_key: layoutKey18,
               front_nine_key: frontNineKey,
               back_nine_key: backNineKey,
@@ -4783,7 +4777,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          // ✅ IMPORTANT: layout_key is the identity for 9s (must be real)
+          // ✅ IMPORTANT: REQUIRE real layout key for 9s (NO FALLBACKS)
           const layoutKey = cleanKey(w.layout_key || w.layoutKey);
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
@@ -4791,11 +4785,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
           if (startMin === null || endMin === null || endMin <= startMin) continue;
 
-          // ✅ If no layout key is set for 9s, skip to prevent collisions (no "9:default")
-          if (!layoutKey) {
-            warnings.push({ type: "missing_9_layout_key", playDate, start: w.start, end: w.end });
-            continue;
-          }
+          // ✅ If no layout key is set, skip this 9 window (prevents "9:default" collisions)
+          if (!layoutKey) continue;
 
           for (let mins = startMin; mins < endMin; mins += interval) {
             if (isBlocked9(mins)) continue;
@@ -4896,7 +4887,6 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
       mode,
       inserted,
       skipped,
-      warnings, // ✅ helps you see if template is missing keys
     });
   } catch (err) {
     console.error("POST /generate-from-template error:", err);
