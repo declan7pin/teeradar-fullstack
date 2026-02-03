@@ -1111,7 +1111,28 @@ async function ensureBookingTables() {
     END
     $$;
   `);
-
+  // ✅ ALSO drop any legacy UNIQUE INDEX that ignores layout keys
+  // (some DBs have a unique index on course/date/time/holes with a different name)
+  await db.query(`
+    DO $$
+    DECLARE
+      r record;
+    BEGIN
+      FOR r IN
+        SELECT i.relname AS index_name
+        FROM pg_index x
+        JOIN pg_class t ON t.oid = x.indrelid
+        JOIN pg_class i ON i.oid = x.indexrelid
+        WHERE t.relname = 'booking_times'
+          AND x.indisunique = true
+          AND pg_get_indexdef(x.indexrelid) LIKE '%(course_id, play_date, tee_time, holes)%'
+          AND pg_get_indexdef(x.indexrelid) NOT LIKE '%layout_key%'
+      LOOP
+        EXECUTE format('DROP INDEX IF EXISTS %I', r.index_name);
+      END LOOP;
+    END
+    $$;
+  `);
   // ✅ FIX #1: clean duplicates so we can add a unique constraint safely
   // (keeps the earliest row per slot; prefers not deleting BOOKED rows)
   // ✅ UPDATED: duplicates are now determined INCLUDING layout/front/back keys
@@ -5907,7 +5928,7 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-    // ✅ NEW: normalize keys (treat "Select" as empty)
+    // ✅ normalize keys (treat "Select" as empty)
     const cleanKey = (v) => {
       const s = String(v || "").trim();
       if (!s) return "";
@@ -5921,8 +5942,8 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
 
     // ✅ stable identity so multiple layout options do NOT collide
     let layout_key = "";
-    let front9_key = "";
-    let back9_key = "";
+    let front_nine_key = "";
+    let back_nine_key = "";
 
     if (holes === 9) {
       // ✅ require a real layout key for 9-hole options
@@ -5930,18 +5951,19 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
         return res.status(400).json({ ok: false, error: "layout_key_required_for_9" });
       }
       layout_key = layoutKeyClean;
-      front9_key = "";
-      back9_key = "";
+      front_nine_key = "";
+      back_nine_key = "";
     } else {
       // ✅ require real front/back keys for 18-hole routings
       if (!front9Clean || !back9Clean) {
         return res.status(400).json({ ok: false, error: "front9_and_back9_required_for_18" });
       }
 
-      front9_key = front9Clean;
-      back9_key = back9Clean;
+      front_nine_key = front9Clean;
+      back_nine_key = back9Clean;
 
-      layout_key = `18:${front9_key}|${back9_key}`;
+      // keep this (helps debug + makes layouts readable)
+      layout_key = `18:${front_nine_key}|${back_nine_key}`;
     }
 
     const times = [];
@@ -5960,11 +5982,11 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
           AND tee_time=$3
           AND holes=$4
           AND COALESCE(layout_key,'')=$5
-          AND COALESCE(front9_key,'')=$6
-          AND COALESCE(back9_key,'')=$7
+          AND COALESCE(front_nine_key,'')=$6
+          AND COALESCE(back_nine_key,'')=$7
         LIMIT 1;
         `,
-        [courseId, playDate, t, holes, layout_key, front9_key, back9_key]
+        [courseId, playDate, t, holes, layout_key, front_nine_key, back_nine_key]
       );
 
       const isExisting = !!exists.rows.length;
@@ -5973,13 +5995,13 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
         `
         INSERT INTO booking_times
           (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status,
-           layout_key, front9_key, back9_key,
+           layout_key, front_nine_key, back_nine_key,
            updated_at)
         VALUES
           ($1, $2::date, $3, $4, $5, 0, $6, $7,
            $8, $9, $10,
            now())
-        ON CONFLICT (course_id, play_date, tee_time, holes, layout_key, front9_key, back9_key)
+        ON CONFLICT (course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key)
         DO UPDATE SET
           max_players = EXCLUDED.max_players,
           price_per_player_cents = EXCLUDED.price_per_player_cents,
@@ -5989,7 +6011,7 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
           END,
           updated_at = now()
         `,
-        [courseId, playDate, t, holes, maxPlayers, pricePerPlayerCents, status, layout_key, front9_key, back9_key]
+        [courseId, playDate, t, holes, maxPlayers, pricePerPlayerCents, status, layout_key, front_nine_key, back_nine_key]
       );
 
       if (isExisting) skipped++;
@@ -6002,8 +6024,8 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
       date: playDate,
       holes,
       layout_key,
-      front9_key,
-      back9_key,
+      front_nine_key,
+      back_nine_key,
       received: {
         layoutKeyRaw,
         frontNineKeyRaw,
