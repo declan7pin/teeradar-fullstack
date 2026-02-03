@@ -900,6 +900,10 @@ function normTime(v){
   if (!m) return s;
   return String(m[1]).padStart(2,"0") + ":" + m[2];
 }
+function displayTime(v){
+  // shows "06:00" even if DB stores "06:00|18:pines|lakes"
+  return String(v || "").split("|")[0].trim();
+}
 let LAST_INSIGHTS = { total: null, online: null, manual: null };
 let ANALYTICS_MODE = "total"; // "total" | "online" | "manual"
 function getInsightsForMode(mode){
@@ -1938,7 +1942,7 @@ async function viewTimes(){
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${String(r.play_date || "")}</td>
-        <td>${String(r.tee_time || "")}</td>
+        <td>${_escape(displayTime(r.tee_time || ""))}</td>
         <td>${(r.holes ?? "")}</td>
         <td>${String(r.status || "")}</td>
         <td class="right">${(r.max_players ?? "")}</td>
@@ -1979,7 +1983,7 @@ async function viewTimes(){
         tr.innerHTML = `
           <td>${fmtDT(r.created_at || "")}</td>
           <td>${(r.play_date || "")}</td>
-          <td>${(r.tee_time || "")}</td>
+          <td>${_escape(displayTime(r.tee_time || ""))}</td>
           <td>${(r.holes ?? "")}</td>
           <td class="right">${(r.players ?? "")}</td>
           <td>${(r.name || "")}</td>
@@ -2014,11 +2018,24 @@ async function viewTimes(){
 
       const timesOut = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
       const timesRows = (timesOut && timesOut.times) || [];
-      // ✅ Price lookup (time+holes) so bookings inherit tee time pricing
+      // ✅ Price lookup (time+holes+route/layout) so duplicates don't collide
 const priceByKey = new Map();
 try{
   (timesRows || []).forEach(t => {
-    const k = `${normTime(t.tee_time || t.time || "")}__${String(t.holes ?? "")}`;
+    const time = normTime(displayTime(t.tee_time || t.time || ""));
+    const holes = Number(t.holes ?? "");
+
+    const lk = String(t.layout_key || t.layoutKey || "").trim().toLowerCase();
+    const f  = String(t.front_nine_key || t.front9_key || t.front9Key || "").trim().toLowerCase();
+    const b  = String(t.back_nine_key  || t.back9_key  || t.back9Key  || "").trim().toLowerCase();
+
+    const k =
+      holes === 9
+        ? `${time}__9__lk:${lk || ""}`
+        : holes === 18
+          ? `${time}__18__f:${f || ""}__b:${b || ""}`
+          : `${time}__${holes}`;
+
     const p = Number(t.price_per_player_cents ?? t.pricePerPlayerCents ?? 0) || 0;
     priceByKey.set(k, p);
   });
@@ -2097,9 +2114,17 @@ deduped.forEach(x => timesRows.push(x));
       tb.innerHTML = "";
 
       sheet.forEach(row => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td class="sheetTime">
+  const tr = document.createElement("tr");
+
+  // ✅ attach routing/layout to the row (so Add booking knows which exact slot)
+  tr.dataset.time = String(row.time || "").trim(); // "HH:MM"
+  tr.dataset.holes = String(row.holes || "");
+  tr.dataset.layoutKey = String(row.layout_key || "");
+  tr.dataset.frontKey = String(row.front_nine_key || "");
+  tr.dataset.backKey = String(row.back_nine_key || "");
+
+  tr.innerHTML = `
+    <td class="sheetTime">
   ${_escape(row.time)}
   <span class="muted mini">(${_escape(fmtSheetHolesLabelFromTimeRow(row))})</span>
 </td>
@@ -2111,34 +2136,29 @@ deduped.forEach(x => timesRows.push(x));
         tb.appendChild(tr);
       });
 
-      // ✅ Allow creating a booking from an empty slot
-      tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
-        btn.onclick = async () => {
-          try{
-            await getMe();
-
-            const date = ($("date").value || "").trim();
-            if (!date) throw new Error("play_date_required");
-
             // Find the row time/holes by walking up to the <tr>
-            const tr = btn.closest("tr");
-            if (!tr) throw new Error("row_not_found");
+      const tr = btn.closest("tr");
+      if (!tr) throw new Error("row_not_found");
 
-            // First cell text is like: "06:00 (18 holes)"
-            const timeCell = tr.querySelector(".sheetTime");
-            const timeText = (timeCell?.innerText || "").trim();
+      const teeTime = String(tr.dataset.time || "").trim();
+      const holes = Number(tr.dataset.holes || 18);
 
-            const timeMatch = timeText.match(/^(\d{1,2}:\d{2})/);
-            const holesMatch = timeText.match(/\((\d+)\s*holes\)/i);
+      const layoutKey = String(tr.dataset.layoutKey || "").trim();
+      const frontNineKey = String(tr.dataset.frontKey || "").trim();
+      const backNineKey  = String(tr.dataset.backKey || "").trim();
 
-            const teeTime = timeMatch ? timeMatch[1] : "";
-            const holes = holesMatch ? Number(holesMatch[1]) : 18;
+      if (!teeTime) throw new Error("tee_time_missing");
 
-            if (!teeTime) throw new Error("tee_time_missing");
-            // ✅ auto-fill price from tee times table
-const priceKey = `${normTime(teeTime)}__${String(holes)}`;
-const pricePerPlayerCents = Number(priceByKey.get(priceKey) || 0);
+      // ✅ routing-aware price key
+      const priceKey =
+        holes === 9
+          ? `${normTime(teeTime)}__9__lk:${String(layoutKey||"").trim().toLowerCase()}`
+          : holes === 18
+            ? `${normTime(teeTime)}__18__f:${String(frontNineKey||"").trim().toLowerCase()}__b:${String(backNineKey||"").trim().toLowerCase()}`
+            : `${normTime(teeTime)}__${holes}`;
 
+      const pricePerPlayerCents = Number(priceByKey.get(priceKey) || 0);
+      
                         // ✅ Ask for details (email is needed if you want confirmation sent)
             const name = (prompt("Name:", "") || "").trim();
             if (!name) return;
@@ -2172,6 +2192,9 @@ const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
 
                 holes,
                 players,
+                layout_key: layoutKey,
+                front_nine_key: frontNineKey,
+                back_nine_key: backNineKey,
                 pricePerPlayerCents,
                 price_per_player_cents: pricePerPlayerCents,
                 name,
