@@ -4778,7 +4778,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const endMin = _timeToMinutes(w.end);
 
           // ✅ IMPORTANT: REQUIRE real layout key for 9s (NO FALLBACKS)
-          const layoutKey = String(w.layout_key || w.layoutKey || "").trim().toLowerCase();
+          const layoutKey = cleanKey(w.layout_key || w.layoutKey).toLowerCase();
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
@@ -4859,10 +4859,11 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
                  updated_at = now()`
             : `DO NOTHING`;
 
+        // ✅ CHANGE: conflict target must include layout/front/back so 18s can overlap at same tee_time
         const q = await db.query(
           `INSERT INTO booking_times (${cols.join(", ")})
            VALUES ${values.join(",")}
-           ON CONFLICT ON CONSTRAINT booking_times_unique_slot
+           ON CONFLICT (course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key)
            ${onConflict}
            RETURNING 1;`,
           params
