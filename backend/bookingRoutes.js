@@ -4778,7 +4778,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const endMin = _timeToMinutes(w.end);
 
           // ✅ IMPORTANT: REQUIRE real layout key for 9s (NO FALLBACKS)
-          const layoutKey = cleanKey(w.layout_key || w.layoutKey);
+          const layoutKey = String(w.layout_key || w.layoutKey || "").trim().toLowerCase();
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
