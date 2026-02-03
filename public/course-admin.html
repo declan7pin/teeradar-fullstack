@@ -17,6 +17,8 @@
     input,textarea,select{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:#fff}
     button{padding:10px 12px;border:0;border-radius:10px;background:#00796b;color:#fff;cursor:pointer}
     button.secondary{background:#475569}
+    button{ touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.btnGroup{ display:flex; gap:8px; align-items:flex-end; justify-content:flex-end; flex-wrap:wrap; }
     .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .muted{color:#64748b;font-size:13px}
     code{background:#f1f5f9;padding:2px 6px;border-radius:8px}
@@ -197,7 +199,7 @@
   <div id="csMsg" class="muted" style="margin-top:10px;"></div>
 </div>
       <div class="actions" style="margin-top:10px">
-        <button id="checkInventoryBtn" class="secondary">Check availability</button>
+        <button id="checkInventoryBtn" type="button" class="secondary">Check availability</button>
       </div>
 
       <div id="inventoryMsg" class="muted" style="margin-top:10px;"></div>
@@ -221,10 +223,10 @@
           <input id="date" type="date" />
         </div>
         <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;justify-content:flex-end">
-          <button id="viewTimesBtn" class="secondary">View tee times</button>
-          <button id="viewBookingsBtn" class="secondary">View bookings</button>
-          <button id="viewSheetBtn" class="secondary">Daily sheet</button>
-          <button id="deleteTimesBtn" class="secondary" style="background:#b91c1c">Delete tee times (date)</button>
+          <button id="viewTimesBtn" type="button" class="secondary">View tee times</button>
+<button id="viewBookingsBtn" type="button" class="secondary">View bookings</button>
+<button id="viewSheetBtn" type="button" class="secondary">Daily sheet</button>
+<button id="deleteTimesBtn" type="button" class="secondary" style="background:#b91c1c">Delete tee times (date)</button>
         </div>
       </div>
 
@@ -371,9 +373,9 @@
         </div>
 
         <div class="actions" style="margin-top:12px">
-          <button id="mAddBtn">Add manual tee time</button>
-          <button id="mBookBtn">Add manual BOOKING (ref + email)</button>
-          <button id="mLoadBtn" class="secondary">View manual tee times</button>
+          <button id="mAddBtn" type="button">Add manual tee time</button>
+<button id="mBookBtn" type="button">Add manual BOOKING (ref + email)</button>
+<button id="mLoadBtn" type="button" class="secondary">View manual tee times</button>
         </div>
 
         <div id="manualMsg" class="muted" style="margin-top:10px;"></div>
@@ -526,9 +528,9 @@
 
   <!-- Actions -->
   <div class="actions">
-    <button id="tplLoadBtn">Load template</button>
-    <button class="secondary" id="tplSaveBtn">Save template</button>
-    <button id="tplGenerateBtn">Generate next days</button>
+    <button id="tplLoadBtn" type="button">Load template</button>
+<button class="secondary" id="tplSaveBtn" type="button">Save template</button>
+<button id="tplGenerateBtn" type="button">Generate next days</button>
   </div>
 
   <div class="note">
@@ -666,6 +668,13 @@
 <script>
 
   const $ = (id) => document.getElementById(id);
+  // ✅ Tap tracer (shows last tapped button id)
+document.addEventListener("click", (e) => {
+  const b = e.target && e.target.closest ? e.target.closest("button") : null;
+  if (!b) return;
+  const msg = document.getElementById("msg");
+  if (msg) msg.textContent = `🟢 tapped: #${b.id || "(no id)"} (${b.textContent.trim().slice(0,40)})`;
+}, true);
 window.onerror = function(message, source, lineno, colno){
   try{
     const el = document.getElementById("viewMsg") || document.getElementById("msg");
