@@ -4693,6 +4693,13 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
       return s;
     };
 
+    // ✅ NEW: DB-only tee_time suffix to avoid unique clashes WITHOUT DB changes
+    const makeDbTeeTime = (teeTime, suffix) => {
+      const base = String(teeTime || "").trim();
+      const suf = String(suffix || "").trim();
+      return suf ? `${base}|${suf}` : base;
+    };
+
     let inserted = 0;
     let skipped = 0;
 
@@ -4736,7 +4743,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           // ✅ If keys are missing, skip this 18 window (prevents "18:front|back" collisions)
           if (!frontNineKey || !backNineKey) continue;
 
-          // ✅ stable "entity key" for 18s (ensures uniqueness per combo)
+          // ✅ stable "entity key" for 18s
           const layoutKey18 = `18:${frontNineKey}|${backNineKey}`;
 
           for (let mins = startMin; mins < endMin; mins += interval) {
@@ -4750,7 +4757,10 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             rows.push({
               course_id: courseId,
               play_date: playDate,
-              tee_time: teeTime,
+
+              // ✅ CHANGE: store unique tee_time per layout without DB changes
+              tee_time: makeDbTeeTime(teeTime, layoutKey18),
+
               holes: 18,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
@@ -4785,7 +4795,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
           if (startMin === null || endMin === null || endMin <= startMin) continue;
 
-          // ✅ If no layout key is set, skip this 9 window (prevents "9:default" collisions)
+          // ✅ If no layout key is set, skip this 9 window (prevents collisions)
           if (!layoutKey) continue;
 
           for (let mins = startMin; mins < endMin; mins += interval) {
@@ -4795,7 +4805,10 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             rows.push({
               course_id: courseId,
               play_date: playDate,
-              tee_time: teeTime,
+
+              // ✅ CHANGE: also suffix 9s so two different 9 layouts can share same time
+              tee_time: makeDbTeeTime(teeTime, `9:${layoutKey}`),
+
               holes: 9,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
@@ -4859,11 +4872,10 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
                  updated_at = now()`
             : `DO NOTHING`;
 
-        // ✅ CHANGE: conflict target must include layout/front/back so 18s can overlap at same tee_time
         const q = await db.query(
           `INSERT INTO booking_times (${cols.join(", ")})
            VALUES ${values.join(",")}
-           ON CONFLICT (course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key)
+           ON CONFLICT ON CONSTRAINT booking_times_unique_slot
            ${onConflict}
            RETURNING 1;`,
           params
