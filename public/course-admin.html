@@ -2136,7 +2136,16 @@ deduped.forEach(x => timesRows.push(x));
         tb.appendChild(tr);
       });
 
-            // Find the row time/holes by walking up to the <tr>
+            // ✅ Allow creating a booking from an empty slot (Add booking buttons)
+tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
+  btn.onclick = async () => {
+    try{
+      await getMe();
+
+      const date = ($("date").value || "").trim();
+      if (!date) throw new Error("play_date_required");
+
+      // Find the row time/holes by walking up to the <tr>
       const tr = btn.closest("tr");
       if (!tr) throw new Error("row_not_found");
 
@@ -2158,70 +2167,70 @@ deduped.forEach(x => timesRows.push(x));
             : `${normTime(teeTime)}__${holes}`;
 
       const pricePerPlayerCents = Number(priceByKey.get(priceKey) || 0);
-      
-                        // ✅ Ask for details (email is needed if you want confirmation sent)
-            const name = (prompt("Name:", "") || "").trim();
-            if (!name) return;
 
-            const email = (prompt("Email (needed for confirmation):", "") || "").trim();
-            if (!email) throw new Error("email_required");
-            const phone = (prompt("Phone (optional):", "") || "").trim();
+      // ✅ Ask for details
+      const name = (prompt("Name:", "") || "").trim();
+      if (!name) return;
 
-            const cartsRaw = prompt("Cart qty (0-4):", "0") || "0";
-            const clubsRaw = prompt("Clubs qty (0-4):", "0") || "0";
-            const notes = (prompt("Notes (optional):", "") || "").trim();
+      const email = (prompt("Email (needed for confirmation):", "") || "").trim();
+      if (!email) throw new Error("email_required");
 
-            const cartQty = Math.max(0, Math.min(4, Number(cartsRaw || 0)));
-            const hireClubsQty = Math.max(0, Math.min(4, Number(clubsRaw || 0)));
+      const phone = (prompt("Phone (optional):", "") || "").trim();
+      const cartsRaw = prompt("Cart qty (0-4):", "0") || "0";
+      const clubsRaw = prompt("Clubs qty (0-4):", "0") || "0";
+      const notes = (prompt("Notes (optional):", "") || "").trim();
 
-            const playersRaw = prompt("Players (1-4):", "1") || "1";
-const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
+      const cartQty = Math.max(0, Math.min(4, Number(cartsRaw || 0)));
+      const hireClubsQty = Math.max(0, Math.min(4, Number(clubsRaw || 0)));
 
-            // ✅ Post (send BOTH naming styles so it works with whichever backend you have)
-            await j("/api/book/course-admin/booking?slug=" + encodeURIComponent(getSlug()), {
-  method:"POST",
-  body: JSON.stringify({
-                // date aliases
-                date,
-                playDate: date,
-                play_date: date,
+      const playersRaw = prompt("Players (1-4):", "1") || "1";
+      const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
 
-                // time aliases
-                teeTime,
-                tee_time: teeTime,
+      await j("/api/book/course-admin/booking?slug=" + encodeURIComponent(getSlug()), {
+        method:"POST",
+        body: JSON.stringify({
+          date,
+          playDate: date,
+          play_date: date,
 
-                holes,
-                players,
-                layout_key: layoutKey,
-                front_nine_key: frontNineKey,
-                back_nine_key: backNineKey,
-                pricePerPlayerCents,
-                price_per_player_cents: pricePerPlayerCents,
-                name,
+          teeTime,
+          tee_time: teeTime,
 
-                cartQty,
-                hireClubsQty,
-                cart_qty: cartQty,
-                hire_clubs_qty: hireClubsQty,
+          holes,
+          players,
 
-                notes,
-                note: notes,
+          layout_key: layoutKey,
+          front_nine_key: frontNineKey,
+          back_nine_key: backNineKey,
 
-               email,
-                phone,
+          pricePerPlayerCents,
+          price_per_player_cents: pricePerPlayerCents,
 
-                paid: false,
-                checked_in: false
-              })
-            });
+          name,
 
-            $("viewMsg").textContent = "✅ Booking added";
-            await viewSheet(); // refresh
-          }catch(e){
-            $("viewMsg").textContent = "❌ " + (e?.message || "Failed to add booking");
-          }
-        };
+          cartQty,
+          hireClubsQty,
+          cart_qty: cartQty,
+          hire_clubs_qty: hireClubsQty,
+
+          notes,
+          note: notes,
+
+          email,
+          phone,
+
+          paid: false,
+          checked_in: false
+        })
       });
+
+      $("viewMsg").textContent = "✅ Booking added";
+      await viewSheet(); // refresh
+    }catch(e){
+      $("viewMsg").textContent = "❌ " + (e?.message || "Failed to add booking");
+    }
+  };
+});
       // ✅ Edit / Delete buttons on each slot (daily sheet) — SINGLE handler (no duplicates)
 tb.querySelectorAll('button[data-del-slot]').forEach(btn => {
   btn.onclick = async (ev) => {
