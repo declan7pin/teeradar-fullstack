@@ -732,20 +732,44 @@ if (qtySel) {
         </span>
       `;
 
-      const fitsText =
-        Number.isFinite(remaining)
-          ? (remaining >= wantPlayers ? `✅ fits ${wantPlayers}` : `❌ only ${remaining} left`)
+            // ✅ NEW: show "X slots available" based on the green golfer count
+      const availText =
+        Number.isFinite(availCount)
+          ? `${availCount} slot${availCount === 1 ? "" : "s"} available`
           : "";
+          
+      // ✅ NEW: show layout info (layout_key / front/back keys)
+      const layoutKey =
+        (t.layoutKey ?? t.layout_key ?? "").toString().trim();
 
+      const frontKey =
+        (t.frontNineKey ?? t.front_nine_key ?? "").toString().trim();
+
+      const backKey =
+        (t.backNineKey ?? t.back_nine_key ?? "").toString().trim();
+
+      let layoutLabel = "";
+      if (layoutKey) {
+        layoutLabel = layoutKey;
+      } else if (frontKey || backKey) {
+        // fallback label if you store front/back keys instead of layout_key
+        layoutLabel = [frontKey, backKey].filter(Boolean).join(" + ");
+      }
+
+      const layoutHtml = layoutLabel
+        ? `<span>🧩 ${layoutLabel}</span>`
+        : "";
+        
       div.innerHTML = `
         <div class="timeTop">
           <div>
             <div class="time">⏰ ${t.time}</div>
             <div class="meta">
-              <span>👥 up to ${maxPlayers}</span>
+                            <span>👥 up to ${maxPlayers}</span>
               <span>⛳ ${t.holes} holes</span>
+              ${layoutHtml}
               ${spotsHtml}
-              ${fitsText ? `<span>${fitsText}</span>` : ""}
+              ${availText ? `<span>✅ ${availText}</span>` : ""}
             </div>
           </div>
           <div class="price">$${price.toFixed(2)} / player</div>
