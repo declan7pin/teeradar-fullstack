@@ -4842,7 +4842,6 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     }
 
     // ✅ Load course durations (used for back-9 block calculation)
-    // If not set, default to 135 mins (2h15) for 9 holes.
     const s = await db.query(
       `SELECT duration_9_mins, duration_18_mins
        FROM booking_course_settings
@@ -4858,7 +4857,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     const back9CenterOffset = Math.max(0, dur9 - 15);
     const back9HalfWindow = 15;
 
-    // ✅ NEW: normalize keys (treat "Select" as empty)
+    // ✅ normalize keys (treat "Select" as empty)
     const cleanKey = (v) => {
       const s = String(v || "").trim();
       if (!s) return "";
@@ -4897,20 +4896,19 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          // ✅ REQUIRE real front/back keys (NO FALLBACKS)
-          const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
-          const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
+          const front9Key = cleanKey(w.front9_key || w.front9Key || w.front_nine_key || w.frontNineKey);
+          const back9Key  = cleanKey(w.back9_key  || w.back9Key  || w.back_nine_key  || w.backNineKey);
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
           if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
           if (startMin === null || endMin === null || endMin <= startMin) continue;
 
-          // ✅ If keys are missing, skip this 18 window (prevents collisions)
-          if (!frontNineKey || !backNineKey) continue;
+          // ✅ must have real routing keys
+          if (!front9Key || !back9Key) continue;
 
-          // ✅ stable identity for this 18 routing (DO NOT encode into tee_time)
-          const layoutKey18 = `18:${frontNineKey}+${backNineKey}`;
+          // ✅ CRITICAL: set layout_key for 18s so UI + availability knows the routing
+          const layoutKey18 = `18:${front9Key}|${back9Key}`;
 
           for (let mins = startMin; mins < endMin; mins += interval) {
             const teeTime = _minutesToTime(mins);
@@ -4923,18 +4921,13 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             rows.push({
               course_id: courseId,
               play_date: playDate,
-
-              // ✅ FIX: store CLEAN time (HH:MM)
-              tee_time: teeTime,
-
+              tee_time: teeTime,               // ✅ keep clean HH:MM
               holes: 18,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
-
-              // ✅ keys differentiate layouts
-              layout_key: layoutKey18,
-              front_nine_key: frontNineKey,
-              back_nine_key: backNineKey,
+              layout_key: layoutKey18,         // ✅ FIX
+              front9_key: front9Key,
+              back9_key: back9Key,
             });
           }
         }
@@ -4953,15 +4946,14 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          // ✅ REQUIRE real layout key for 9s (NO FALLBACKS)
-          const layoutKey = cleanKey(w.layout_key || w.layoutKey).toLowerCase();
+          const layoutKey = cleanKey(w.layout_key || w.layoutKey);
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
           if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
           if (startMin === null || endMin === null || endMin <= startMin) continue;
 
-          // ✅ If no layout key is set, skip this 9 window (prevents collisions)
+          // ✅ must have a real 9 key
           if (!layoutKey) continue;
 
           for (let mins = startMin; mins < endMin; mins += interval) {
@@ -4971,18 +4963,13 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             rows.push({
               course_id: courseId,
               play_date: playDate,
-
-              // ✅ FIX: store CLEAN time (HH:MM)
-              tee_time: teeTime,
-
+              tee_time: teeTime,               // ✅ keep clean HH:MM
               holes: 9,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
-
-              // ✅ keys differentiate layouts
               layout_key: layoutKey,
-              front_nine_key: "",
-              back_nine_key: "",
+              front9_key: "",
+              back9_key: "",
             });
           }
         }
@@ -4997,8 +4984,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           "max_players",
           "price_per_player_cents",
           "layout_key",
-          "front_nine_key",
-          "back_nine_key",
+          "front9_key",
+          "back9_key",
         ];
 
         const values = [];
@@ -5017,8 +5004,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             r.max_players,
             r.price_per_player_cents,
             r.layout_key,
-            r.front_nine_key,
-            r.back_nine_key
+            r.front9_key,
+            r.back9_key
           );
         }
 
@@ -5028,8 +5015,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
                  max_players = EXCLUDED.max_players,
                  price_per_player_cents = EXCLUDED.price_per_player_cents,
                  layout_key = EXCLUDED.layout_key,
-                 front_nine_key = EXCLUDED.front_nine_key,
-                 back_nine_key = EXCLUDED.back_nine_key,
+                 front9_key = EXCLUDED.front9_key,
+                 back9_key = EXCLUDED.back9_key,
                  status = CASE
                    WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
                    WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
