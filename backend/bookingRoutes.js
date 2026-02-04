@@ -4771,7 +4771,7 @@ if (req.body?.template && typeof req.body.template === "object") {
 });
 
 // POST generate times from saved template
-// Body: { slug, startDate, daysAhead, mode }
+// Body: { startDate, daysAhead, mode }
 // mode: "skip" (default) OR "overwrite-range"
 router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminManager, async (req, res) => {
   try {
@@ -4857,12 +4857,12 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     const back9CenterOffset = Math.max(0, dur9 - 15);
     const back9HalfWindow = 15;
 
-    // ✅ normalize keys (treat "Select" as empty)
+    // ✅ normalize keys (treat "Select" as empty) + keep them consistent (lowercase)
     const cleanKey = (v) => {
       const s = String(v || "").trim();
       if (!s) return "";
       if (s.toLowerCase() === "select") return "";
-      return s;
+      return s.toLowerCase();
     };
 
     let inserted = 0;
@@ -4896,8 +4896,9 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          const front9Key = cleanKey(w.front9_key || w.front9Key || w.front_nine_key || w.frontNineKey);
-          const back9Key  = cleanKey(w.back9_key  || w.back9Key  || w.back_nine_key  || w.backNineKey);
+          // ✅ IMPORTANT: read ANY of the possible field names, write ONLY the real DB column names
+          const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
+          const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
@@ -4905,10 +4906,10 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           if (startMin === null || endMin === null || endMin <= startMin) continue;
 
           // ✅ must have real routing keys
-          if (!front9Key || !back9Key) continue;
+          if (!frontNineKey || !backNineKey) continue;
 
-          // ✅ set layout_key for 18s so UI + availability knows the routing
-          const layoutKey18 = `18:${front9Key}|${back9Key}`;
+          // ✅ stable routing key for 18s
+          const layoutKey18 = `18:${frontNineKey}|${backNineKey}`;
 
           for (let mins = startMin; mins < endMin; mins += interval) {
             const teeTime = _minutesToTime(mins);
@@ -4921,13 +4922,15 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             rows.push({
               course_id: courseId,
               play_date: playDate,
-              tee_time: teeTime,               // ✅ keep clean HH:MM
+              tee_time: teeTime, // ✅ ALWAYS store clean HH:MM
               holes: 18,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
+
+              // ✅ REAL DB columns:
               layout_key: layoutKey18,
-              front_nine_key: front9Key,       // ✅ FIX: correct column name
-              back_nine_key: back9Key,         // ✅ FIX: correct column name
+              front_nine_key: frontNineKey,
+              back_nine_key: backNineKey,
             });
           }
         }
@@ -4946,7 +4949,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          const layoutKey = cleanKey(w.layout_key || w.layoutKey);
+          const layoutKey9 = cleanKey(w.layout_key || w.layoutKey);
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
@@ -4954,7 +4957,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           if (startMin === null || endMin === null || endMin <= startMin) continue;
 
           // ✅ must have a real 9 key
-          if (!layoutKey) continue;
+          if (!layoutKey9) continue;
 
           for (let mins = startMin; mins < endMin; mins += interval) {
             if (isBlocked9(mins)) continue;
@@ -4963,13 +4966,15 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             rows.push({
               course_id: courseId,
               play_date: playDate,
-              tee_time: teeTime,               // ✅ keep clean HH:MM
+              tee_time: teeTime, // ✅ ALWAYS store clean HH:MM
               holes: 9,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
-              layout_key: layoutKey,
-              front_nine_key: "",              // ✅ FIX: correct column name
-              back_nine_key: "",               // ✅ FIX: correct column name
+
+              // ✅ REAL DB columns:
+              layout_key: layoutKey9,
+              front_nine_key: "",
+              back_nine_key: "",
             });
           }
         }
@@ -4984,8 +4989,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           "max_players",
           "price_per_player_cents",
           "layout_key",
-          "front_nine_key",   // ✅ FIX
-          "back_nine_key",    // ✅ FIX
+          "front_nine_key",
+          "back_nine_key",
         ];
 
         const values = [];
@@ -5015,8 +5020,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
                  max_players = EXCLUDED.max_players,
                  price_per_player_cents = EXCLUDED.price_per_player_cents,
                  layout_key = EXCLUDED.layout_key,
-                 front_nine_key = EXCLUDED.front_nine_key,   -- ✅ FIX
-                 back_nine_key = EXCLUDED.back_nine_key,     -- ✅ FIX
+                 front_nine_key = EXCLUDED.front_nine_key,
+                 back_nine_key = EXCLUDED.back_nine_key,
                  status = CASE
                    WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
                    WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
