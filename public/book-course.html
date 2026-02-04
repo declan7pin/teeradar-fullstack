@@ -310,13 +310,14 @@
       <div class="sub" id="modalSub">Enter your details to confirm.</div>
 
       <div class="kv">
-        <div class="k">Course</div><div id="mCourse"></div>
-        <div class="k">Date</div><div id="mDate"></div>
-        <div class="k">Time</div><div id="mTime"></div>
-        <div class="k">Players</div><div id="mPlayers"></div>
-        <div class="k">Holes</div><div id="mHoles"></div>
-        <div class="k">Price</div><div id="mPrice"></div>
-      </div>
+  <div class="k">Course</div><div id="mCourse"></div>
+  <div class="k">Date</div><div id="mDate"></div>
+  <div class="k">Time</div><div id="mTime"></div>
+  <div class="k">Players</div><div id="mPlayers"></div>
+  <div class="k">Holes</div><div id="mHoles"></div>
+  <div class="k">Layout</div><div id="mLayout"></div>
+  <div class="k">Price</div><div id="mPrice"></div>
+</div>
 
       <div class="grid" id="detailsGrid" style="margin-top:12px">
         <div class="field sm6">
@@ -413,6 +414,47 @@
       remaining,
       pricePerPlayerCents,
     };
+  }
+    // ✅ Layout helpers (show "Pines + Lakes", etc.)
+  function _titleCaseKey(x){
+    return String(x || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[+]/g, " + ")
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .split(" ")
+      .filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  }
+
+  function getLayoutText(slot){
+    const s = slot || {};
+    const holes = Number(s.holes || 0);
+
+    const layoutKey =
+      s.layout_key ?? s.layoutKey ?? null;
+
+    const front =
+      s.front_nine_key ?? s.frontNineKey ?? s.frontNine ?? null;
+
+    const back =
+      s.back_nine_key ?? s.backNineKey ?? s.backNine ?? null;
+
+    if (holes === 18){
+      if (front && back) return `${_titleCaseKey(front)} + ${_titleCaseKey(back)}`;
+      if (layoutKey) return _titleCaseKey(layoutKey);
+      return "";
+    }
+
+    // 9 holes
+    if (holes === 9){
+      const nine = layoutKey || front || back;
+      return nine ? _titleCaseKey(nine) : "";
+    }
+
+    return "";
   }
   let course = { slug, name: "Course", notes: "" };
   let addons = [];           // list from backend (active add-ons for this course)
@@ -715,6 +757,7 @@ if (qtySel) {
       const price = priceCents / 100;
       const maxPlayers = Math.max(1, Number(t.maxPlayers || 0));
       const bookedPlayers = Number(t.bookedPlayers || 0);
+      const layoutText = getLayoutText(t);
 
       const remaining = (typeof t.remaining !== "undefined")
         ? Number(t.remaining || 0)
@@ -767,7 +810,7 @@ if (qtySel) {
             <div class="meta">
                             <span>👥 up to ${maxPlayers}</span>
               <span>⛳ ${t.holes} holes</span>
-              ${layoutHtml}
+              ${layoutText ? `<span>🧩 ${layoutText}</span>` : ""}
               ${spotsHtml}
               ${availText ? `<span>✅ ${availText}</span>` : ""}
             </div>
@@ -860,6 +903,7 @@ const qs = new URLSearchParams({
     $("mTime").textContent = selectedSlot.time;
     $("mPlayers").textContent = $("players").value;
     $("mHoles").textContent = $("holes").value;
+        $("mLayout").textContent = getLayoutText(selectedSlot) || "—";
 
     const priceCents = _slotPerPlayerCents(selectedSlot);
 $("mPrice").textContent = `${moneyFromCents(priceCents)} per player`;
