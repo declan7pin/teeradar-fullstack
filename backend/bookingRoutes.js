@@ -4782,7 +4782,10 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     const daysAhead = Math.max(1, Math.min(120, Number(req.body?.daysAhead || 30)));
     const mode = String(req.body?.mode || "skip").trim().toLowerCase();
 
+    // ✅ NEW: run id + always log a DB snapshot (so you can see truth in Render logs)
+    const runId = Math.random().toString(16).slice(2, 10);
     const dlog = (...args) => { if (debug) console.log(...args); };
+    const alog = (...args) => console.log(...args);
 
     if (!slug) return res.status(401).json({ ok: false, error: "not_course_admin" });
 
@@ -4846,7 +4849,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     };
 
     // ✅ NEW: normalize/validate window layout keys against saved course layouts
-    // This prevents "classic" accidentally being stored as "pines" because the template UI leaked stale keys.
+    // This prevents stale template keys generating old layouts.
     const layoutsRow = await db.query(
       `SELECT layouts, routes18
        FROM booking_course_layouts
@@ -4871,12 +4874,13 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
 
     const firstDayCfg = daysCfg[String(_weekdayISO(start))] || null;
 
-    dlog("🧪 generate-from-template START", {
+    alog(`🧪 [${runId}] generate-from-template START`, {
       slug,
       courseId,
       startDate,
       daysAhead,
       mode,
+      debug,
       dur9,
       dur18,
       layoutKeySet9: Array.from(layoutKeySet9),
@@ -4895,7 +4899,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
          RETURNING id;`,
         [courseId, startDate, _isoDate(end)]
       );
-      dlog("🧪 overwrite-range deleted rows:", del.rowCount || 0);
+      alog(`🧪 [${runId}] overwrite-range deleted rows`, { rowCount: del.rowCount || 0 });
     }
 
     let inserted = 0;
@@ -4945,7 +4949,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
 
           const layoutKey18 = `18:${frontNineKey}|${backNineKey}`;
 
-          // ✅ NEW: reject routes not in course layouts (prevents stale "pines+lakes" being injected)
+          // ✅ reject routes not in course layouts (prevents stale "pines|lakes")
           if (routeKeySet18.size > 0 && !routeKeySet18.has(layoutKey18)) {
             dlog("🧪 SKIP 18 window (route not in course layouts)", { playDate, layoutKey18, w });
             continue;
@@ -5005,7 +5009,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             continue;
           }
 
-          // ✅ NEW: reject 9 keys not in course layouts (prevents stale 'pines' sticking around)
+          // ✅ reject 9 keys not in course layouts (prevents stale 'pines')
           if (layoutKeySet9.size > 0 && !layoutKeySet9.has(layoutKey9)) {
             dlog("🧪 SKIP 9 window (layout key not in course layouts)", { playDate, layoutKey9, w });
             continue;
@@ -5037,7 +5041,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
 
         if (!rows.length) continue;
 
-        // ✅ optional: check what already exists for that day (debug)
+        // optional: check what already exists for that day (debug)
         let beforeSummary = null;
         if (debug) {
           const before = await db.query(
@@ -5112,7 +5116,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
            VALUES ${values.join(",")}
            ON CONFLICT ON CONSTRAINT booking_times_unique_slot
            ${onConflict}
-           RETURNING holes, tee_time, layout_key, front_nine_key, back_nine_key;`,
+           RETURNING 1;`,
           params
         );
 
@@ -5120,10 +5124,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
         inserted += ins;
         skipped += Math.max(0, rows.length - ins);
 
-        // ✅ after insert summary (debug)
-        let afterSummary = null;
-        let sample = null;
-        if (debug) {
+        if (debug && debugDays.length < 3) {
+          // after insert snapshot for this day
           const after = await db.query(
             `
             SELECT
@@ -5139,37 +5141,37 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             `,
             [courseId, playDate]
           );
-          afterSummary = after.rows;
 
           const samp = await db.query(
             `
             SELECT tee_time, holes, layout_key, front_nine_key, back_nine_key
             FROM booking_times
             WHERE course_id = $1 AND play_date = $2::date
-            ORDER BY tee_time ASC, holes ASC, layout_key ASC
+            ORDER BY tee_time ASC, holes DESC, layout_key ASC
             LIMIT 10;
             `,
             [courseId, playDate]
           );
-          sample = samp.rows;
 
-          // only keep a few days in response to avoid giant JSON
-          if (debugDays.length < 3) {
-            debugDays.push({
-              playDate,
-              windows18: windows18.length,
-              windows9: windows9.length,
-              rowsPrepared: rows.length,
-              inserted: ins,
-              skipped: Math.max(0, rows.length - ins),
-              beforeSummary,
-              afterSummary,
-              sample,
-            });
-          }
+          debugDays.push({
+            playDate,
+            windows18: windows18.length,
+            windows9: windows9.length,
+            rowsPrepared: rows.length,
+            inserted: ins,
+            skipped: Math.max(0, rows.length - ins),
+            beforeSummary,
+            afterSummary: after.rows,
+            sample: samp.rows,
+          });
         }
 
-        dlog("🧪 day result", { playDate, rowsPrepared: rows.length, inserted: ins, skipped: Math.max(0, rows.length - ins) });
+        dlog("🧪 day result", {
+          playDate,
+          rowsPrepared: rows.length,
+          inserted: ins,
+          skipped: Math.max(0, rows.length - ins),
+        });
       }
 
       await db.query("COMMIT");
@@ -5178,27 +5180,38 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
       throw e;
     }
 
-    // ✅ final: show what the DB currently has for the START DATE specifically (super useful)
-    let startDayDb = null;
-    if (debug) {
-      const diag = await db.query(
-        `
-        SELECT
-          holes,
-          layout_key,
-          front_nine_key,
-          back_nine_key,
-          COUNT(*)::int AS c
-        FROM booking_times
-        WHERE course_id = $1 AND play_date = $2::date
-        GROUP BY holes, layout_key, front_nine_key, back_nine_key
-        ORDER BY holes, layout_key;
-        `,
-        [courseId, startDate]
-      );
-      startDayDb = diag.rows;
-      dlog("🧪 startDayDb", startDayDb);
-    }
+    // ✅ ALWAYS log + (optionally) return what the DB actually has for startDate
+    const snapSummary = await db.query(
+      `
+      SELECT
+        holes,
+        layout_key,
+        front_nine_key,
+        back_nine_key,
+        COUNT(*)::int AS c
+      FROM booking_times
+      WHERE course_id = $1 AND play_date = $2::date
+      GROUP BY holes, layout_key, front_nine_key, back_nine_key
+      ORDER BY holes, layout_key;
+      `,
+      [courseId, startDate]
+    );
+
+    const snapSample = await db.query(
+      `
+      SELECT tee_time, holes, layout_key, front_nine_key, back_nine_key
+      FROM booking_times
+      WHERE course_id = $1 AND play_date = $2::date
+      ORDER BY tee_time ASC, holes DESC, layout_key ASC
+      LIMIT 12;
+      `,
+      [courseId, startDate]
+    );
+
+    alog(`🧪 [${runId}] DB SNAPSHOT startDate=${startDate}`, {
+      summary: snapSummary.rows || [],
+      sample: snapSample.rows || [],
+    });
 
     return res.json({
       ok: true,
@@ -5211,20 +5224,22 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
       ...(debug
         ? {
             debug: {
-              startDayDb,
+              runId,
+              startDayDb: snapSummary.rows || [],
+              sample: snapSample.rows || [],
               days: debugDays,
               courseLayouts: {
                 layouts: layouts.map(x => ({ key: cleanKey(x?.key), label: x?.label })),
-                routes18: routes18.map(r => ({
-                  label: r?.label,
-                  front9_key: cleanKey(r?.front9_key ?? r?.front9Key ?? r?.front_nine_key ?? r?.frontNineKey),
-                  back9_key: cleanKey(r?.back9_key ?? r?.back9Key ?? r?.back_nine_key ?? r?.backNineKey),
-                  routeKey: (() => {
-                    const f = cleanKey(r?.front9_key ?? r?.front9Key ?? r?.front_nine_key ?? r?.frontNineKey);
-                    const b = cleanKey(r?.back9_key ?? r?.back9Key ?? r?.back_nine_key ?? r?.backNineKey);
-                    return (f && b) ? `18:${f}|${b}` : "";
-                  })(),
-                })),
+                routes18: routes18.map(r => {
+                  const f = cleanKey(r?.front9_key ?? r?.front9Key ?? r?.front_nine_key ?? r?.frontNineKey);
+                  const b = cleanKey(r?.back9_key ?? r?.back9Key ?? r?.back_nine_key ?? r?.backNineKey);
+                  return {
+                    label: r?.label,
+                    front9_key: f,
+                    back9_key: b,
+                    routeKey: (f && b) ? `18:${f}|${b}` : "",
+                  };
+                }),
               },
             },
           }
