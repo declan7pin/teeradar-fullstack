@@ -6882,10 +6882,23 @@ router.get("/availability", async (req, res) => {
         : {}),
     });
   } catch (e) {
-    console.error("GET /availability error", e);
-    console.error(e?.stack || e); // ✅ ADD: show real stack in Render logs
-    return res.status(500).json({ ok: false, error: "internal_error" });
+  const debug = String(req.query.debug || "") === "1";
+
+  console.error("GET /availability error", e);
+  console.error(e?.stack || e);
+
+  // ✅ ADD: when debug=1, return real details to the browser
+  if (debug) {
+    return res.status(500).json({
+      ok: false,
+      error: "internal_error",
+      message: String(e?.message || e || "unknown_error"),
+      stack: String(e?.stack || ""),
+    });
   }
+
+  return res.status(500).json({ ok: false, error: "internal_error" });
+}
 });
 
 async function advisoryLockForSlot(client, { courseId, dateYmd, timeHhMm }) {
