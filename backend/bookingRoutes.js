@@ -6820,6 +6820,16 @@ router.get("/availability", async (req, res) => {
           time: r.tee_time,
           holes: Number(r.holes),
 
+          // ✅ ADD: include layout info so frontend can display it
+          layout_key: r.layout_key ?? null,
+          front_nine_key: r.front_nine_key ?? null,
+          back_nine_key: r.back_nine_key ?? null,
+
+          // ✅ ADD: camelCase aliases (frontend convenience)
+          layoutKey: r.layout_key ?? null,
+          frontNineKey: r.front_nine_key ?? null,
+          backNineKey: r.back_nine_key ?? null,
+
           maxPlayers: Number(r.max_players ?? 0),
 
           // raw (debug)
