@@ -6615,9 +6615,9 @@ router.get("/availability", async (req, res) => {
           COALESCE(bk.booked, 0)::int       AS booked
         FROM booking_times t
 
-        -- ✅ Manual slots (SUM players, layout-safe)
+        -- ✅ Manual slots (COUNT rows, layout-safe)
         LEFT JOIN LATERAL (
-          SELECT COALESCE(SUM(players),0)::int AS manual_count
+          SELECT COUNT(*)::int AS manual_count
           FROM booking_manual_slots
           WHERE course_id = t.course_id
             AND play_date = t.play_date
@@ -6725,7 +6725,7 @@ router.get("/availability", async (req, res) => {
         FROM booking_times t
 
         LEFT JOIN LATERAL (
-          SELECT COALESCE(SUM(players),0)::int AS manual_count
+          SELECT COUNT(*)::int AS manual_count
           FROM booking_manual_slots
           WHERE course_id = t.course_id
             AND play_date = t.play_date
@@ -6882,23 +6882,23 @@ router.get("/availability", async (req, res) => {
         : {}),
     });
   } catch (e) {
-  const debug = String(req.query.debug || "") === "1";
+    const debug = String(req.query.debug || "") === "1";
 
-  console.error("GET /availability error", e);
-  console.error(e?.stack || e);
+    console.error("GET /availability error", e);
+    console.error(e?.stack || e);
 
-  // ✅ ADD: when debug=1, return real details to the browser
-  if (debug) {
-    return res.status(500).json({
-      ok: false,
-      error: "internal_error",
-      message: String(e?.message || e || "unknown_error"),
-      stack: String(e?.stack || ""),
-    });
+    // ✅ ADD: when debug=1, return real details to the browser
+    if (debug) {
+      return res.status(500).json({
+        ok: false,
+        error: "internal_error",
+        message: String(e?.message || e || "unknown_error"),
+        stack: String(e?.stack || ""),
+      });
+    }
+
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
-
-  return res.status(500).json({ ok: false, error: "internal_error" });
-}
 });
 
 async function advisoryLockForSlot(client, { courseId, dateYmd, timeHhMm }) {
