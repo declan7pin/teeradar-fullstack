@@ -3445,50 +3445,61 @@ return tpl;
   }
 
   async function tplGenerate(){
-    try{
-      setTplStatus("Generating times…", "");
-      const startDate = String($("tplStartDate")?.value || todayISO()).trim();
-      const daysAhead = Number($("tplDaysAhead")?.value || 30);
-      const mode = String($("tplMode")?.value || "skip");
-      // ✅ VALIDATE: enabled days must have routing selected for 18-hole windows
-const tpl = readTemplateFromUI();
-const days = tpl?.days || {};
+  try{
+    setTplStatus("Generating times…", "");
 
-const dowName = { "1":"Mon","2":"Tue","3":"Wed","4":"Thu","5":"Fri","6":"Sat","7":"Sun" };
+    const startDate = String($("tplStartDate")?.value || todayISO()).trim();
+    const daysAhead = Number($("tplDaysAhead")?.value || 30);
+    const mode = String($("tplMode")?.value || "skip");
 
-for (const dow of Object.keys(days)) {
-  const day = days[dow];
-  if (!day || day.enabled === false) continue;
+    // ✅ Read the CURRENT UI (what you see on screen)
+    const template = readTemplateFromUI();
+    const timezone = String($("tplTimezone")?.value || "Australia/Perth").trim() || "Australia/Perth";
 
-  const wins = Array.isArray(day.windows) ? day.windows : [];
-  const w18 = wins.find(x => Number(x.holes) === 18);
+    // ✅ VALIDATE: enabled days must have routing selected for 18-hole windows
+    const days = template?.days || {};
+    const dowName = { "1":"Mon","2":"Tue","3":"Wed","4":"Thu","5":"Fri","6":"Sat","7":"Sun" };
 
-  if (w18) {
-  // ✅ use the NEW keys saved by readTemplateFromUI()
-  const f = String(w18.front_nine_key || "").trim();
-  const b = String(w18.back_nine_key  || "").trim();
+    for (const dow of Object.keys(days)) {
+      const day = days[dow];
+      if (!day || day.enabled === false) continue;
 
-  if (!f || !b) {
-    throw new Error(`Select Front 9 + Back 9 for ${dowName[dow] || ("DOW " + dow)} (18 holes)`);
-  }
-  if (f === b) {
-    throw new Error(`Front 9 and Back 9 cannot be the same on ${dowName[dow] || ("DOW " + dow)}`);
-  }
-}
-}
+      const wins = Array.isArray(day.windows) ? day.windows : [];
+      const w18 = wins.find(x => Number(x.holes) === 18);
 
-      const data = await j("/api/book/generate-from-template", {
-        method:"POST",
-        body: JSON.stringify({ startDate, daysAhead, mode })
-      });
+      if (w18) {
+        const f = String(w18.front_nine_key || "").trim();
+        const b = String(w18.back_nine_key  || "").trim();
 
-      if (!data || !data.ok) throw new Error(data?.error || "generate_failed");
-
-      setTplStatus(`✅ Generated. Inserted ${data.inserted}, skipped ${data.skipped}.`, "ok");
-    }catch(e){
-      setTplStatus("❌ " + (e?.message || "Failed to generate"), "err");
+        if (!f || !b) {
+          throw new Error(`Select Front 9 + Back 9 for ${dowName[dow] || ("DOW " + dow)} (18 holes)`);
+        }
+        if (f === b) {
+          throw new Error(`Front 9 and Back 9 cannot be the same on ${dowName[dow] || ("DOW " + dow)}`);
+        }
+      }
     }
+
+    // ✅ IMPORTANT: Save template to SERVER first so generator uses it
+    const saved = await j("/api/book/course-template", {
+      method:"PUT",
+      body: JSON.stringify({ timezone, template })
+    });
+    if (!saved || !saved.ok) throw new Error(saved?.error || "save_failed");
+
+    // ✅ Now generate
+    const data = await j("/api/book/generate-from-template", {
+      method:"POST",
+      body: JSON.stringify({ startDate, daysAhead, mode })
+    });
+
+    if (!data || !data.ok) throw new Error(data?.error || "generate_failed");
+
+    setTplStatus(`✅ Generated. Inserted ${data.inserted}, skipped ${data.skipped}.`, "ok");
+  }catch(e){
+    setTplStatus("❌ " + (e?.message || "Failed to generate"), "err");
   }
+}
 
   // ✅ expose a rerender hook (used after layouts load)
   window.__tplRerender = () => {
