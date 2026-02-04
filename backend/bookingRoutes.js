@@ -1093,6 +1093,28 @@ async function ensureBookingTables() {
       OR back_nine_key IS NULL;
   `);
 
+  // ✅ ADD: remove legacy blank-layout rows ONLY when real layout rows exist for same slot
+  // This fixes "Inserted 0, skipped X" after layouts are introduced.
+  await db.query(`
+    DELETE FROM booking_times bt
+    WHERE COALESCE(bt.layout_key,'') = ''
+      AND COALESCE(bt.front_nine_key,'') = ''
+      AND COALESCE(bt.back_nine_key,'') = ''
+      AND EXISTS (
+        SELECT 1
+        FROM booking_times bx
+        WHERE bx.course_id = bt.course_id
+          AND bx.play_date = bt.play_date
+          AND bx.tee_time  = bt.tee_time
+          AND bx.holes     = bt.holes
+          AND (
+            COALESCE(bx.layout_key,'') <> ''
+            OR COALESCE(bx.front_nine_key,'') <> ''
+            OR COALESCE(bx.back_nine_key,'') <> ''
+          )
+      );
+  `);
+
   // ✅ CRITICAL: drop the legacy unique constraint that ignores layout keys
   // (Postgres usually auto-names it like booking_times_course_id_play_date_tee_time_holes_key)
   await db.query(`
@@ -1111,6 +1133,7 @@ async function ensureBookingTables() {
     END
     $$;
   `);
+
   // ✅ ALSO drop any legacy UNIQUE INDEX that ignores layout keys
   // (some DBs have a unique index on course/date/time/holes with a different name)
   await db.query(`
@@ -1133,8 +1156,8 @@ async function ensureBookingTables() {
     END
     $$;
   `);
+
   // ✅ FIX #1: clean duplicates so we can add a unique constraint safely
-  // (keeps the earliest row per slot; prefers not deleting BOOKED rows)
   // ✅ UPDATED: duplicates are now determined INCLUDING layout/front/back keys
   await db.query(`
     WITH ranked AS (
@@ -1154,12 +1177,10 @@ async function ensureBookingTables() {
       AND r.status <> 'BOOKED';
   `);
 
-  // ✅ FIX #2: ensure ON CONFLICT has a matching unique constraint (works even if table existed already)
-  // ✅ UPDATED: treat each 9/18 combo as its own entity by including layout/front/back keys
+  // ✅ FIX #2: ensure ON CONFLICT has a matching unique constraint
   await db.query(`
     DO $$
     BEGIN
-      -- drop old constraint if it exists (older version used only course/date/time/holes)
       IF EXISTS (
         SELECT 1
         FROM pg_constraint
@@ -1169,7 +1190,6 @@ async function ensureBookingTables() {
         DROP CONSTRAINT booking_times_unique_slot;
       END IF;
 
-      -- create the correct constraint (idempotent)
       IF NOT EXISTS (
         SELECT 1
         FROM pg_constraint
@@ -1183,14 +1203,9 @@ async function ensureBookingTables() {
     $$;
   `);
 
-  // ✅ Extra safety: ensure a unique INDEX also exists (some older DBs end up missing the constraint)
-  // ✅ UPDATED: index matches the new uniqueness definition
-  // ❌ DROP any legacy unique indexes that still treat layouts as duplicates
   await db.query(`DROP INDEX IF EXISTS booking_times_unique_layout_idx;`);
   await db.query(`DROP INDEX IF EXISTS booking_times_unique_slot_idx;`);
 
-  // ✅ SINGLE source of truth for slot identity:
-  // each 9/18 + layout/front/back combo is its own entity
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS booking_times_unique_slot_idx
     ON booking_times (
@@ -1246,6 +1261,19 @@ async function ensureBookingTables() {
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS front_nine_key TEXT;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
   await db.query(`CREATE INDEX IF NOT EXISTS booking_bookings_layout_idx ON booking_bookings (course_id, play_date, holes, layout_key);`);
+
+  // ✅ ADD: normalize booking layout keys too (avoids NULL mismatches in availability joins)
+  await db.query(`
+    UPDATE booking_bookings
+    SET
+      layout_key = COALESCE(layout_key, ''),
+      front_nine_key = COALESCE(front_nine_key, ''),
+      back_nine_key = COALESCE(back_nine_key, '')
+    WHERE
+      layout_key IS NULL
+      OR front_nine_key IS NULL
+      OR back_nine_key IS NULL;
+  `);
 
   // ✅ NEW: store the "usage window" so inventory can be checked by overlap
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;`);
@@ -1350,6 +1378,74 @@ async function ensureBookingTables() {
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS layout_key TEXT;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS front_nine_key TEXT;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
+
+  // ✅ ADD: normalize manual slot layout keys (same reason as booking_times)
+  await db.query(`
+    UPDATE booking_manual_slots
+    SET
+      layout_key = COALESCE(layout_key, ''),
+      front_nine_key = COALESCE(front_nine_key, ''),
+      back_nine_key = COALESCE(back_nine_key, '')
+    WHERE
+      layout_key IS NULL
+      OR front_nine_key IS NULL
+      OR back_nine_key IS NULL;
+  `);
+
+  // ✅ ADD: drop the legacy unique constraint that ignores layout keys for manual slots
+  await db.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'booking_manual_slots'::regclass
+          AND contype = 'u'
+          AND conname = 'booking_manual_slots_course_id_play_date_tee_time_holes_slot_index_key'
+      ) THEN
+        ALTER TABLE booking_manual_slots
+        DROP CONSTRAINT booking_manual_slots_course_id_play_date_tee_time_holes_slot_index_key;
+      END IF;
+    END
+    $$;
+  `);
+
+  // ✅ ADD: drop any unique indexes that still ignore layout keys
+  await db.query(`
+    DO $$
+    DECLARE
+      r record;
+    BEGIN
+      FOR r IN
+        SELECT i.relname AS index_name
+        FROM pg_index x
+        JOIN pg_class t ON t.oid = x.indrelid
+        JOIN pg_class i ON i.oid = x.indexrelid
+        WHERE t.relname = 'booking_manual_slots'
+          AND x.indisunique = true
+          AND pg_get_indexdef(x.indexrelid) LIKE '%(course_id, play_date, tee_time, holes, slot_index)%'
+          AND pg_get_indexdef(x.indexrelid) NOT LIKE '%layout_key%'
+      LOOP
+        EXECUTE format('DROP INDEX IF EXISTS %I', r.index_name);
+      END LOOP;
+    END
+    $$;
+  `);
+
+  // ✅ ADD: create layout-aware unique index for manual slots
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS booking_manual_slots_unique_slot_idx
+    ON booking_manual_slots (
+      course_id,
+      play_date,
+      tee_time,
+      holes,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+      slot_index
+    );
+  `);
 
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;`);
