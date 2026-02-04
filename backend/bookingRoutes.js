@@ -4789,13 +4789,6 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
       return s;
     };
 
-    // ✅ NEW: DB-only tee_time suffix to avoid unique clashes WITHOUT DB changes
-    const makeDbTeeTime = (teeTime, suffix) => {
-      const base = String(teeTime || "").trim();
-      const suf = String(suffix || "").trim();
-      return suf ? `${base}|${suf}` : base;
-    };
-
     let inserted = 0;
     let skipped = 0;
 
@@ -4827,7 +4820,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          // ✅ IMPORTANT: REQUIRE real front/back keys (NO FALLBACKS)
+          // ✅ REQUIRE real front/back keys (NO FALLBACKS)
           const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
           const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
 
@@ -4836,11 +4829,11 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
           if (startMin === null || endMin === null || endMin <= startMin) continue;
 
-          // ✅ If keys are missing, skip this 18 window (prevents "18:front|back" collisions)
+          // ✅ If keys are missing, skip this 18 window (prevents collisions)
           if (!frontNineKey || !backNineKey) continue;
 
-          // ✅ stable "entity key" for 18s
-          const layoutKey18 = `18:${frontNineKey}|${backNineKey}`;
+          // ✅ stable identity for this 18 routing (DO NOT encode into tee_time)
+          const layoutKey18 = `18:${frontNineKey}+${backNineKey}`;
 
           for (let mins = startMin; mins < endMin; mins += interval) {
             const teeTime = _minutesToTime(mins);
@@ -4854,14 +4847,14 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
               course_id: courseId,
               play_date: playDate,
 
-              // ✅ CHANGE: store unique tee_time per layout without DB changes
-              tee_time: makeDbTeeTime(teeTime, layoutKey18),
+              // ✅ FIX: store CLEAN time (HH:MM)
+              tee_time: teeTime,
 
               holes: 18,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
 
-              // ✅ never store nulls
+              // ✅ keys differentiate layouts
               layout_key: layoutKey18,
               front_nine_key: frontNineKey,
               back_nine_key: backNineKey,
@@ -4883,7 +4876,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          // ✅ IMPORTANT: REQUIRE real layout key for 9s (NO FALLBACKS)
+          // ✅ REQUIRE real layout key for 9s (NO FALLBACKS)
           const layoutKey = cleanKey(w.layout_key || w.layoutKey).toLowerCase();
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
@@ -4902,14 +4895,14 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
               course_id: courseId,
               play_date: playDate,
 
-              // ✅ CHANGE: also suffix 9s so two different 9 layouts can share same time
-              tee_time: makeDbTeeTime(teeTime, `9:${layoutKey}`),
+              // ✅ FIX: store CLEAN time (HH:MM)
+              tee_time: teeTime,
 
               holes: 9,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
 
-              // ✅ never store nulls
+              // ✅ keys differentiate layouts
               layout_key: layoutKey,
               front_nine_key: "",
               back_nine_key: "",
