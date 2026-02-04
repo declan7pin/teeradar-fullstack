@@ -4845,8 +4845,43 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
       return s.toLowerCase();
     };
 
+    // ✅ NEW: normalize/validate window layout keys against saved course layouts
+    // This prevents "classic" accidentally being stored as "pines" because the template UI leaked stale keys.
+    const layoutsRow = await db.query(
+      `SELECT layouts, routes18
+       FROM booking_course_layouts
+       WHERE course_id = $1
+       LIMIT 1;`,
+      [courseId]
+    );
+
+    const layouts = Array.isArray(layoutsRow.rows?.[0]?.layouts) ? layoutsRow.rows[0].layouts : [];
+    const routes18 = Array.isArray(layoutsRow.rows?.[0]?.routes18) ? layoutsRow.rows[0].routes18 : [];
+
+    const layoutKeySet9 = new Set(layouts.map(x => cleanKey(x?.key)).filter(Boolean));
+    const routeKeySet18 = new Set(
+      routes18
+        .map(r => {
+          const f = cleanKey(r?.front9_key ?? r?.front9Key ?? r?.front_nine_key ?? r?.frontNineKey);
+          const b = cleanKey(r?.back9_key ?? r?.back9Key ?? r?.back_nine_key ?? r?.backNineKey);
+          return (f && b) ? `18:${f}|${b}` : "";
+        })
+        .filter(Boolean)
+    );
+
+    const firstDayCfg = daysCfg[String(_weekdayISO(start))] || null;
+
     dlog("🧪 generate-from-template START", {
-      slug, courseId, startDate, daysAhead, mode, dur9, dur18
+      slug,
+      courseId,
+      startDate,
+      daysAhead,
+      mode,
+      dur9,
+      dur18,
+      layoutKeySet9: Array.from(layoutKeySet9),
+      routeKeySet18: Array.from(routeKeySet18),
+      firstDayCfgWindows: Array.isArray(firstDayCfg?.windows) ? firstDayCfg.windows.length : null,
     });
 
     // Optional overwrite range
@@ -4910,6 +4945,12 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
 
           const layoutKey18 = `18:${frontNineKey}|${backNineKey}`;
 
+          // ✅ NEW: reject routes not in course layouts (prevents stale "pines+lakes" being injected)
+          if (routeKeySet18.size > 0 && !routeKeySet18.has(layoutKey18)) {
+            dlog("🧪 SKIP 18 window (route not in course layouts)", { playDate, layoutKey18, w });
+            continue;
+          }
+
           dlog("🧪 18 window parsed", {
             playDate, interval, maxPlayers, pricePerPlayerCents,
             start: w.start, end: w.end,
@@ -4961,6 +5002,12 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
 
           if (!layoutKey9) {
             dlog("🧪 SKIP 9 window (missing layout key)", { playDate, w });
+            continue;
+          }
+
+          // ✅ NEW: reject 9 keys not in course layouts (prevents stale 'pines' sticking around)
+          if (layoutKeySet9.size > 0 && !layoutKeySet9.has(layoutKey9)) {
+            dlog("🧪 SKIP 9 window (layout key not in course layouts)", { playDate, layoutKey9, w });
             continue;
           }
 
@@ -5150,6 +5197,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
         [courseId, startDate]
       );
       startDayDb = diag.rows;
+      dlog("🧪 startDayDb", startDayDb);
     }
 
     return res.json({
@@ -5160,7 +5208,27 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
       mode,
       inserted,
       skipped,
-      ...(debug ? { debug: { startDayDb, days: debugDays } } : {}),
+      ...(debug
+        ? {
+            debug: {
+              startDayDb,
+              days: debugDays,
+              courseLayouts: {
+                layouts: layouts.map(x => ({ key: cleanKey(x?.key), label: x?.label })),
+                routes18: routes18.map(r => ({
+                  label: r?.label,
+                  front9_key: cleanKey(r?.front9_key ?? r?.front9Key ?? r?.front_nine_key ?? r?.frontNineKey),
+                  back9_key: cleanKey(r?.back9_key ?? r?.back9Key ?? r?.back_nine_key ?? r?.backNineKey),
+                  routeKey: (() => {
+                    const f = cleanKey(r?.front9_key ?? r?.front9Key ?? r?.front_nine_key ?? r?.frontNineKey);
+                    const b = cleanKey(r?.back9_key ?? r?.back9Key ?? r?.back_nine_key ?? r?.backNineKey);
+                    return (f && b) ? `18:${f}|${b}` : "";
+                  })(),
+                })),
+              },
+            },
+          }
+        : {}),
     });
   } catch (err) {
     console.error("POST /generate-from-template error:", err);
@@ -6330,27 +6398,21 @@ router.post("/course-admin/generate-times", requireCourseAdmin, async (req, res)
 // - If time is provided: deletes that single tee time row
 // - If time is NOT provided: deletes all tee times for that date (optionally filtered by holes)
 // - NEVER deletes BOOKED times
+// delete tee times for a date (course admin) — FIXED
 router.delete("/course-admin/times", requireCourseAdmin, async (req, res) => {
   try {
-    const slug = req.courseAdmin.slug;
-
+    const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
     const date = String(req.query.date || "").trim();
     const holes = req.query.holes ? Number(req.query.holes) : null;
-    const teeTime = req.query.time ? String(req.query.time).trim() : ""; // optional
 
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return res.status(400).json({ ok: false, error: "date_invalid" });
-    }
-    if (holes !== null && ![9, 18].includes(holes)) {
-      return res.status(400).json({ ok: false, error: "holes_invalid" });
-    }
-    if (teeTime && !/^\d{2}:\d{2}$/.test(teeTime)) {
-      return res.status(400).json({ ok: false, error: "time_invalid" });
-    }
+    if (!slug) return res.status(401).json({ ok: false, error: "not_course_admin" });
+    if (!date) return res.status(400).json({ ok: false, error: "date_required" });
+    if (holes !== null && ![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
+    // ✅ delete everything for the day EXCEPT BOOKED
     const params = [courseId, date];
     let q = `
       DELETE FROM booking_times
@@ -6358,26 +6420,26 @@ router.delete("/course-admin/times", requireCourseAdmin, async (req, res) => {
         AND play_date = $2::date
         AND status <> 'BOOKED'
     `;
-
-    // optional filters
     if (holes !== null) {
       params.push(holes);
-      q += ` AND holes = $${params.length}`;
-    }
-    if (teeTime) {
-      params.push(teeTime);
-      q += ` AND tee_time = $${params.length}`;
+      q += ` AND holes = $3`;
     }
 
-    const r = await db.query(q + `;`, params);
+    const del = await db.query(q, params);
+
+    // ✅ optional: immediate sanity check (how many rows remain for that date)
+    const remain = await db.query(
+      `SELECT COUNT(*)::int AS c FROM booking_times WHERE course_id=$1 AND play_date=$2::date;`,
+      [courseId, date]
+    );
 
     return res.json({
       ok: true,
       slug,
       date,
-      holes: holes !== null ? holes : null,
-      time: teeTime || null,
-      deletedTimes: r.rowCount || 0,
+      holes,
+      deleted: Number(del.rowCount || 0),
+      remaining: Number(remain.rows?.[0]?.c || 0),
     });
   } catch (e) {
     console.error("course-admin/times DELETE", e);
