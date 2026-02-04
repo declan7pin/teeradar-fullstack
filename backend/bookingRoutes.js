@@ -6567,6 +6567,9 @@ router.get("/availability", async (req, res) => {
     const dur18 = Number(courseRow.duration_18_mins || 390);
     const courseId = courseRow.id;
 
+    // ✅ ADD (minimal): safe dlog fallback so this route can't crash if dlog isn't defined
+    const dlog = (...args) => { if (debug) console.log(...args); };
+
     dlog("🧪 GET /availability course matched", {
       courseId,
       slug,
@@ -6789,11 +6792,16 @@ router.get("/availability", async (req, res) => {
         const dur = durationMinsForHoles(courseRow, r.holes);
         const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-        const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(db, {
-          courseId,
-          startAtIso,
-          endAtIso,
-        });
+        // ✅ CHANGE (minimal): make this non-fatal so availability never 500s if this throws
+        let cartsUsed = 0;
+        let clubsUsed = 0;
+        try {
+          const usage = await countOverlappingAddonUsage(db, { courseId, startAtIso, endAtIso });
+          cartsUsed = Number(usage?.cartsUsed || 0);
+          clubsUsed = Number(usage?.clubsUsed || 0);
+        } catch (err) {
+          if (debug) console.log("🧪 countOverlappingAddonUsage failed (non-fatal)", err?.message || err);
+        }
 
         const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
         const clubsRemaining = Math.max(0, courseHireClubsQty - clubsUsed);
@@ -6875,6 +6883,7 @@ router.get("/availability", async (req, res) => {
     });
   } catch (e) {
     console.error("GET /availability error", e);
+    console.error(e?.stack || e); // ✅ ADD: show real stack in Render logs
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
