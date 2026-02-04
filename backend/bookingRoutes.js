@@ -4771,25 +4771,21 @@ if (req.body?.template && typeof req.body.template === "object") {
 });
 
 // POST generate times from saved template
-// Body: { startDate, daysAhead, mode }
+// Body: { startDate, daysAhead, mode, debug }
 // mode: "skip" (default) OR "overwrite-range"
 router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminManager, async (req, res) => {
   try {
-    // ✅ Course admins can ONLY generate for their own course
     const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
+    const debug = String(req.body?.debug || "") === "1" || req.body?.debug === 1 || req.body?.debug === true;
 
-    let startDate = String(
-      req.body?.startDate ||
-      req.body?.start_date ||
-      ""
-    ).trim(); // YYYY-MM-DD
-
+    let startDate = String(req.body?.startDate || req.body?.start_date || "").trim(); // YYYY-MM-DD
     const daysAhead = Math.max(1, Math.min(120, Number(req.body?.daysAhead || 30)));
     const mode = String(req.body?.mode || "skip").trim().toLowerCase();
 
+    const dlog = (...args) => { if (debug) console.log(...args); };
+
     if (!slug) return res.status(401).json({ ok: false, error: "not_course_admin" });
 
-    // ✅ fallback if frontend didn’t send startDate
     if (!startDate) {
       const d = new Date();
       const yyyy = d.getFullYear();
@@ -4803,7 +4799,6 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
       [slug]
     );
     if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
-
     const courseId = c.rows[0].id;
 
     const t = await db.query(
@@ -4816,7 +4811,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     if (!t.rows.length) return res.status(400).json({ ok: false, error: "no_template_saved" });
 
     const template = t.rows[0].template || {};
-    const daysCfg = template.days || {}; // expects keys "1".."7"
+    const daysCfg = template.days || {};
 
     // Parse startDate safely
     const m = startDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -4828,20 +4823,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     const end = new Date(start);
     end.setDate(end.getDate() + daysAhead);
 
-    // Optional overwrite range
-    if (mode === "overwrite-range") {
-      // ✅ Only delete non-booked times (never delete BOOKED)
-      await db.query(
-        `DELETE FROM booking_times
-         WHERE course_id = $1
-           AND play_date >= $2::date
-           AND play_date < $3::date
-           AND status <> 'BOOKED';`,
-        [courseId, startDate, _isoDate(end)]
-      );
-    }
-
-    // ✅ Load course durations (used for back-9 block calculation)
+    // durations (used for back-9 blocking)
     const s = await db.query(
       `SELECT duration_9_mins, duration_18_mins
        FROM booking_course_settings
@@ -4849,15 +4831,13 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
        LIMIT 1;`,
       [courseId]
     );
-
     const dur9 = Number(s.rows[0]?.duration_9_mins || 135) || 135;
-    const dur18 = Number(s.rows[0]?.duration_18_mins || 360) || 360; // (ok if unused)
+    const dur18 = Number(s.rows[0]?.duration_18_mins || 360) || 360;
 
-    // Back-9 window: center around (dur9 - 15) mins after 18 starts, and block ±15 mins.
     const back9CenterOffset = Math.max(0, dur9 - 15);
     const back9HalfWindow = 15;
 
-    // ✅ normalize keys (treat "Select" as empty) + keep them consistent (lowercase)
+    // normalize keys (treat "Select" as empty) + keep stable
     const cleanKey = (v) => {
       const s = String(v || "").trim();
       if (!s) return "";
@@ -4865,10 +4845,30 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
       return s.toLowerCase();
     };
 
+    dlog("🧪 generate-from-template START", {
+      slug, courseId, startDate, daysAhead, mode, dur9, dur18
+    });
+
+    // Optional overwrite range
+    if (mode === "overwrite-range") {
+      const del = await db.query(
+        `DELETE FROM booking_times
+         WHERE course_id = $1
+           AND play_date >= $2::date
+           AND play_date < $3::date
+           AND status <> 'BOOKED'
+         RETURNING id;`,
+        [courseId, startDate, _isoDate(end)]
+      );
+      dlog("🧪 overwrite-range deleted rows:", del.rowCount || 0);
+    }
+
     let inserted = 0;
     let skipped = 0;
 
-    // One transaction for the whole generation run
+    // Collect debug summary per-day (only first ~3 days to avoid huge payload)
+    const debugDays = [];
+
     await db.query("BEGIN");
     try {
       for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
@@ -4879,7 +4879,6 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
         if (!cfg || cfg.enabled === false) continue;
 
         const windows = Array.isArray(cfg.windows) ? cfg.windows : [];
-
         const windows18 = windows.filter(w => Number(w?.holes) === 18);
         const windows9 = windows.filter(w => Number(w?.holes) === 9);
 
@@ -4896,7 +4895,6 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          // ✅ IMPORTANT: read ANY of the possible field names, write ONLY the real DB column names
           const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
           const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
 
@@ -4905,11 +4903,18 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
           if (startMin === null || endMin === null || endMin <= startMin) continue;
 
-          // ✅ must have real routing keys
-          if (!frontNineKey || !backNineKey) continue;
+          if (!frontNineKey || !backNineKey) {
+            dlog("🧪 SKIP 18 window (missing routing keys)", { playDate, w });
+            continue;
+          }
 
-          // ✅ stable routing key for 18s
           const layoutKey18 = `18:${frontNineKey}|${backNineKey}`;
+
+          dlog("🧪 18 window parsed", {
+            playDate, interval, maxPlayers, pricePerPlayerCents,
+            start: w.start, end: w.end,
+            frontNineKey, backNineKey, layoutKey18
+          });
 
           for (let mins = startMin; mins < endMin; mins += interval) {
             const teeTime = _minutesToTime(mins);
@@ -4922,12 +4927,10 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             rows.push({
               course_id: courseId,
               play_date: playDate,
-              tee_time: teeTime, // ✅ ALWAYS store clean HH:MM
+              tee_time: teeTime,
               holes: 18,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
-
-              // ✅ REAL DB columns:
               layout_key: layoutKey18,
               front_nine_key: frontNineKey,
               back_nine_key: backNineKey,
@@ -4956,8 +4959,16 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
           if (startMin === null || endMin === null || endMin <= startMin) continue;
 
-          // ✅ must have a real 9 key
-          if (!layoutKey9) continue;
+          if (!layoutKey9) {
+            dlog("🧪 SKIP 9 window (missing layout key)", { playDate, w });
+            continue;
+          }
+
+          dlog("🧪 9 window parsed", {
+            playDate, interval, maxPlayers, pricePerPlayerCents,
+            start: w.start, end: w.end,
+            layoutKey9
+          });
 
           for (let mins = startMin; mins < endMin; mins += interval) {
             if (isBlocked9(mins)) continue;
@@ -4966,12 +4977,10 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             rows.push({
               course_id: courseId,
               play_date: playDate,
-              tee_time: teeTime, // ✅ ALWAYS store clean HH:MM
+              tee_time: teeTime,
               holes: 9,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
-
-              // ✅ REAL DB columns:
               layout_key: layoutKey9,
               front_nine_key: "",
               back_nine_key: "",
@@ -4980,6 +4989,27 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
         }
 
         if (!rows.length) continue;
+
+        // ✅ optional: check what already exists for that day (debug)
+        let beforeSummary = null;
+        if (debug) {
+          const before = await db.query(
+            `
+            SELECT
+              holes,
+              layout_key,
+              front_nine_key,
+              back_nine_key,
+              COUNT(*)::int AS c
+            FROM booking_times
+            WHERE course_id = $1 AND play_date = $2::date
+            GROUP BY holes, layout_key, front_nine_key, back_nine_key
+            ORDER BY holes, layout_key;
+            `,
+            [courseId, playDate]
+          );
+          beforeSummary = before.rows;
+        }
 
         const cols = [
           "course_id",
@@ -5035,19 +5065,91 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
            VALUES ${values.join(",")}
            ON CONFLICT ON CONSTRAINT booking_times_unique_slot
            ${onConflict}
-           RETURNING 1;`,
+           RETURNING holes, tee_time, layout_key, front_nine_key, back_nine_key;`,
           params
         );
 
         const ins = Number(q.rowCount || 0);
         inserted += ins;
         skipped += Math.max(0, rows.length - ins);
+
+        // ✅ after insert summary (debug)
+        let afterSummary = null;
+        let sample = null;
+        if (debug) {
+          const after = await db.query(
+            `
+            SELECT
+              holes,
+              layout_key,
+              front_nine_key,
+              back_nine_key,
+              COUNT(*)::int AS c
+            FROM booking_times
+            WHERE course_id = $1 AND play_date = $2::date
+            GROUP BY holes, layout_key, front_nine_key, back_nine_key
+            ORDER BY holes, layout_key;
+            `,
+            [courseId, playDate]
+          );
+          afterSummary = after.rows;
+
+          const samp = await db.query(
+            `
+            SELECT tee_time, holes, layout_key, front_nine_key, back_nine_key
+            FROM booking_times
+            WHERE course_id = $1 AND play_date = $2::date
+            ORDER BY tee_time ASC, holes ASC, layout_key ASC
+            LIMIT 10;
+            `,
+            [courseId, playDate]
+          );
+          sample = samp.rows;
+
+          // only keep a few days in response to avoid giant JSON
+          if (debugDays.length < 3) {
+            debugDays.push({
+              playDate,
+              windows18: windows18.length,
+              windows9: windows9.length,
+              rowsPrepared: rows.length,
+              inserted: ins,
+              skipped: Math.max(0, rows.length - ins),
+              beforeSummary,
+              afterSummary,
+              sample,
+            });
+          }
+        }
+
+        dlog("🧪 day result", { playDate, rowsPrepared: rows.length, inserted: ins, skipped: Math.max(0, rows.length - ins) });
       }
 
       await db.query("COMMIT");
     } catch (e) {
       await db.query("ROLLBACK");
       throw e;
+    }
+
+    // ✅ final: show what the DB currently has for the START DATE specifically (super useful)
+    let startDayDb = null;
+    if (debug) {
+      const diag = await db.query(
+        `
+        SELECT
+          holes,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+          COUNT(*)::int AS c
+        FROM booking_times
+        WHERE course_id = $1 AND play_date = $2::date
+        GROUP BY holes, layout_key, front_nine_key, back_nine_key
+        ORDER BY holes, layout_key;
+        `,
+        [courseId, startDate]
+      );
+      startDayDb = diag.rows;
     }
 
     return res.json({
@@ -5058,6 +5160,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
       mode,
       inserted,
       skipped,
+      ...(debug ? { debug: { startDayDb, days: debugDays } } : {}),
     });
   } catch (err) {
     console.error("POST /generate-from-template error:", err);
