@@ -3194,9 +3194,9 @@ function renderEighteenRoutingSelect(dow, w){
     `;
   }
 
-  const fSel = String(w.front9_key || "");
-  const bSel = String(w.back9_key || "");
-
+    const fSel = String(w.front_nine_key || w.front9_key || "");
+  const bSel = String(w.back_nine_key  || w.back9_key  || "");
+  
   const optsFront = [
   `<option value="" disabled ${fSel ? "" : "selected"}>Select</option>`,
   ...layouts.map(l => {
@@ -3220,14 +3220,14 @@ function renderEighteenRoutingSelect(dow, w){
   return `
     <div class="field sm3" style="grid-column:span 3">
       <label>18 front 9</label>
-      <select data-w="front9_key" data-dow="${dow}" data-holes="18">
+      <select data-w="front_nine_key" data-dow="${dow}" data-holes="18">
         ${optsFront}
       </select>
     </div>
 
     <div class="field sm3" style="grid-column:span 3">
       <label>18 back 9</label>
-      <select data-w="back9_key" data-dow="${dow}" data-holes="18">
+      <select data-w="back_nine_key" data-dow="${dow}" data-holes="18">
         ${optsBack}
       </select>
     </div>
@@ -3367,23 +3367,18 @@ ${holes === 9 ? renderNineLayoutSelect(dow, w) : ""}
         w.layout_key = String(obj.layout_key || "").trim();
       }
 
-      // ✅ 18-hole routing selection (Front 9 + Back 9)
+     // ✅ 18-hole routing selection (Front 9 + Back 9)
 if (holes === 18) {
-  const front = String(
-    obj.front9_key || obj.front_nine_key || ""
-  ).trim();
+  const front = String(obj.front_nine_key || obj.front9_key || "").trim().toLowerCase();
+  const back  = String(obj.back_nine_key  || obj.back9_key  || "").trim().toLowerCase();
 
-  const back = String(
-    obj.back9_key || obj.back_nine_key || ""
-  ).trim();
-
-  // UI naming (already used)
-  w.front9_key = front;
-  w.back9_key  = back;
-
-  // ✅ ADD: backend-compatible aliases
+  // ✅ single source of truth (matches backend + DB)
   w.front_nine_key = front;
   w.back_nine_key  = back;
+
+  // ✅ do NOT store front9_key/back9_key anymore
+  delete w.front9_key;
+  delete w.back9_key;
 }
 
 tpl.days[dow].windows.push(w);
@@ -3404,6 +3399,23 @@ return tpl;
 
       if ($("tplTimezone")) $("tplTimezone").value = data.timezone || "Australia/Perth";
       const tpl = (data.template && typeof data.template === "object") ? data.template : defaultTemplate();
+      try{
+  const days = tpl?.days || {};
+  Object.keys(days).forEach(dow => {
+    const wins = Array.isArray(days[dow]?.windows) ? days[dow].windows : [];
+    wins.forEach(w => {
+      if (Number(w.holes) === 18) {
+        // if older templates used front9_key/back9_key, map them across
+        if (!w.front_nine_key && w.front9_key) w.front_nine_key = String(w.front9_key).trim().toLowerCase();
+        if (!w.back_nine_key  && w.back9_key)  w.back_nine_key  = String(w.back9_key).trim().toLowerCase();
+
+        // remove legacy keys so we don't re-save junk
+        delete w.front9_key;
+        delete w.back9_key;
+      }
+    });
+  });
+}catch{}
       renderTemplate(tpl);
 
       setTplStatus(data.found ? "✅ Template loaded." : "✅ No saved template yet (showing defaults).", "ok");
