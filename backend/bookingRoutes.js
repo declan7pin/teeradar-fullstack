@@ -2495,7 +2495,7 @@ router.post("/admin/time", requirePlatformAdmin, async (req, res) => {
         (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, created_at, updated_at)
       VALUES
         ($1, $2::date, $3, $4, $5, 0, $6, $7, now(), now())
-      ON CONFLICT (course_id, play_date, tee_time, holes)
+      ON CONFLICT ON CONSTRAINT booking_times_unique_slot
       DO UPDATE SET
         max_players = EXCLUDED.max_players,
         price_per_player_cents = EXCLUDED.price_per_player_cents,
@@ -3497,7 +3497,7 @@ async function syncBookedPlayersForTime({ courseId, play_date, tee_time, holes }
       (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, created_at, updated_at)
     VALUES
       ($1, $2::date, $3, $4, 4, 0, 0, 'AVAILABLE', now(), now())
-    ON CONFLICT (course_id, play_date, tee_time, holes)
+    ON CONFLICT ON CONSTRAINT booking_times_unique_slot
     DO NOTHING;
     `,
     [courseId, play_date, tee_time, holes]
