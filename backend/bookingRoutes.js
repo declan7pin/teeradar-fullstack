@@ -6512,30 +6512,33 @@ router.get("/availability", async (req, res) => {
     const slug = normSlug(req.query.slug);
     const date = String(req.query.date || "").trim();
     const holes = Number(req.query.holes || 18);
-    const playersQuery = (req.query.players ?? req.query.partySize);
-const playersRaw = Array.isArray(playersQuery) ? playersQuery[0] : playersQuery;
-const playersParsed = parseInt(String(playersRaw ?? "2"), 10);
-const players = Math.min(4, Math.max(1, Number.isFinite(playersParsed) ? playersParsed : 2));
 
-const layoutKeyRaw = String(req.query.layoutKey || req.query.layout || "").trim().toLowerCase();
-const layoutKey = layoutKeyRaw ? layoutKeyRaw : null;
+    const playersQuery = (req.query.players ?? req.query.partySize);
+    const playersRaw = Array.isArray(playersQuery) ? playersQuery[0] : playersQuery;
+    const playersParsed = parseInt(String(playersRaw ?? "2"), 10);
+    const players = Math.min(4, Math.max(1, Number.isFinite(playersParsed) ? playersParsed : 2));
+
+    const layoutKeyRaw = String(req.query.layoutKey || req.query.layout || "").trim().toLowerCase();
+    const layoutKey = layoutKeyRaw ? layoutKeyRaw : null;
+
     const earliest = String(req.query.earliest || "06:00").trim();
     const latest = String(req.query.latest || "17:00").trim();
     const debug = String(req.query.debug || "") === "1";
 
-   if (debug) {
-  console.log("🧪 GET /availability DEBUG incoming", {
-    slug: req.query.slug,
-    date: req.query.date,
-    holes: req.query.holes,
-    players: req.query.players,
-    partySize: req.query.partySize,
-    playersRaw,
-    playersResolved: players,
-    earliest: req.query.earliest,
-    latest: req.query.latest,
-  });
-}
+    if (debug) {
+      console.log("🧪 GET /availability DEBUG incoming", {
+        slug: req.query.slug,
+        date: req.query.date,
+        holes: req.query.holes,
+        players: req.query.players,
+        partySize: req.query.partySize,
+        playersRaw,
+        playersResolved: players,
+        earliest: req.query.earliest,
+        latest: req.query.latest,
+        layoutKey,
+      });
+    }
 
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
@@ -6572,181 +6575,186 @@ const layoutKey = layoutKeyRaw ? layoutKeyRaw : null;
       players,
       earliest,
       latest,
+      layoutKey,
     });
 
-    // ✅ FIX: define these in THIS scope (used later below)
     const courseName = String(courseRow.name || "");
     const courseCartQty = Number(courseRow.cart_qty || 0);
     const courseHireClubsQty = Number(courseRow.hire_clubs_qty || 0);
-
-    // ✅ availability listing does not "want" any addons (those are chosen at booking time)
-    const cartQtyWanted = 0;
-    const hireClubsQtyWanted = 0;
-
-    // ✅ duration window helpers (used for add-on overlap checks)
-    const durationMins = durationMinsForHoles(courseRow, holes);
 
     // ✅ analytics: availability search
     recordEvent({
       type: "booking_availability_search",
       userId: getClientIp(req) || null,
       courseName: c.rows[0].name,
-      meta: { slug, date, holes, players, earliest, latest },
+      meta: { slug, date, holes, players, earliest, latest, layoutKey },
     }).catch(() => {});
     recordBookingEvent(req, {
       courseSlug: slug,
       eventType: "times_view",
-      payload: { slug, date, holes, players, earliest, latest },
+      payload: { slug, date, holes, players, earliest, latest, layoutKey },
     }).catch(() => {});
 
     // ✅ IMPORTANT: availability must be based on *effective remaining* (manual slots + confirmed bookings)
-const { rows } = await db.query(
-  `
-  WITH t AS (
-    SELECT
-      t.tee_time,
-      t.holes,
-      t.max_players,
-      t.price_per_player_cents,
-      t.status,
-      t.layout_key,
-      t.front_nine_key,
-      t.back_nine_key,
-      COALESCE(ms.manual_count, 0) AS manual_booked,
-      COALESCE(bk.booked, 0)       AS booked
-    FROM booking_times t
+    const { rows } = await db.query(
+      `
+      WITH t AS (
+        SELECT
+          t.tee_time,
+          t.holes,
+          COALESCE(t.max_players, 4)::int AS max_players,
+          t.price_per_player_cents,
+          t.status,
+          t.layout_key,
+          t.front_nine_key,
+          t.back_nine_key,
+          COALESCE(ms.manual_count, 0)::int AS manual_booked,
+          COALESCE(bk.booked, 0)::int       AS booked
+        FROM booking_times t
 
-    -- ✅ Manual slots (SUM players, layout-safe)
-    LEFT JOIN LATERAL (
-      SELECT COALESCE(SUM(players),0)::int AS manual_count
-      FROM booking_manual_slots
-      WHERE course_id = t.course_id
-        AND play_date = t.play_date
-        AND tee_time  = t.tee_time
-        AND holes     = t.holes
-        AND layout_key IS NOT DISTINCT FROM t.layout_key
-    ) ms ON true
+        -- ✅ Manual slots (SUM players, layout-safe)
+        LEFT JOIN LATERAL (
+          SELECT COALESCE(SUM(players),0)::int AS manual_count
+          FROM booking_manual_slots
+          WHERE course_id = t.course_id
+            AND play_date = t.play_date
+            AND tee_time  = t.tee_time
+            AND holes     = t.holes
+            AND layout_key IS NOT DISTINCT FROM t.layout_key
+        ) ms ON true
 
-    -- ✅ Confirmed bookings (layout-safe)
-    LEFT JOIN LATERAL (
-      SELECT COALESCE(SUM(players),0)::int AS booked
-      FROM booking_bookings b
-      WHERE b.course_id = t.course_id
-        AND b.play_date = t.play_date
-        AND b.tee_time  = t.tee_time
-        AND b.holes     = t.holes
-        AND b.status    = 'CONFIRMED'
-        AND b.layout_key IS NOT DISTINCT FROM t.layout_key
-    ) bk ON true
+        -- ✅ Confirmed bookings (layout-safe)
+        LEFT JOIN LATERAL (
+          SELECT COALESCE(SUM(players),0)::int AS booked
+          FROM booking_bookings b
+          WHERE b.course_id = t.course_id
+            AND b.play_date = t.play_date
+            AND b.tee_time  = t.tee_time
+            AND b.holes     = t.holes
+            AND b.status    = 'CONFIRMED'
+            AND b.layout_key IS NOT DISTINCT FROM t.layout_key
+        ) bk ON true
 
-    WHERE t.course_id = $1
-      AND t.play_date = $2
-      AND t.holes     = $3
-      AND t.status    = 'AVAILABLE'
-      AND ($7::text IS NULL OR t.layout_key = $7)
+        WHERE t.course_id = $1
+          AND t.play_date = $2::date
+          AND t.holes     = $3
+          AND t.status    = 'AVAILABLE'
+          AND ($4::text IS NULL OR t.layout_key = $4)
 
-      -- ✅ 18→9 overlap protection (unchanged logic)
-      AND (
-        $3 <> 9
-        OR $7::text IS NULL
-        OR NOT EXISTS (
-          SELECT 1
-          FROM booking_bookings bb18
-          WHERE bb18.course_id = t.course_id
-            AND bb18.play_date = t.play_date
-            AND bb18.holes     = 18
-            AND bb18.status    = 'CONFIRMED'
-            AND bb18.back_nine_key = $7
-            AND (
-              (
-                (split_part(t.tee_time, ':', 1)::int * 60 +
-                 split_part(t.tee_time, ':', 2)::int)
-                >=
-                (split_part(bb18.tee_time, ':', 1)::int * 60 +
-                 split_part(bb18.tee_time, ':', 2)::int) + $8
-              )
-              AND (
-                (split_part(t.tee_time, ':', 1)::int * 60 +
-                 split_part(t.tee_time, ':', 2)::int)
-                <
-                (split_part(bb18.tee_time, ':', 1)::int * 60 +
-                 split_part(bb18.tee_time, ':', 2)::int) + $9
-              )
+          -- ✅ apply time window
+          AND (
+            (split_part(t.tee_time, ':', 1)::int * 60 + split_part(t.tee_time, ':', 2)::int) >= $6
+            AND
+            (split_part(t.tee_time, ':', 1)::int * 60 + split_part(t.tee_time, ':', 2)::int) <  $7
+          )
+
+          -- ✅ 18→9 overlap protection (unchanged logic)
+          AND (
+            $3 <> 9
+            OR $4::text IS NULL
+            OR NOT EXISTS (
+              SELECT 1
+              FROM booking_bookings bb18
+              WHERE bb18.course_id = t.course_id
+                AND bb18.play_date = t.play_date
+                AND bb18.holes     = 18
+                AND bb18.status    = 'CONFIRMED'
+                AND bb18.back_nine_key = $4
+                AND (
+                  (
+                    (split_part(t.tee_time, ':', 1)::int * 60 +
+                     split_part(t.tee_time, ':', 2)::int)
+                    >=
+                    (split_part(bb18.tee_time, ':', 1)::int * 60 +
+                     split_part(bb18.tee_time, ':', 2)::int) + $8
+                  )
+                  AND (
+                    (split_part(t.tee_time, ':', 1)::int * 60 +
+                     split_part(t.tee_time, ':', 2)::int)
+                    <
+                    (split_part(bb18.tee_time, ':', 1)::int * 60 +
+                     split_part(bb18.tee_time, ':', 2)::int) + $9
+                  )
+                )
             )
-        )
+          )
       )
-  )
-  SELECT
-    tee_time,
-    holes,
-    max_players,
-    price_per_player_cents,
-    status,
-    layout_key,
-    front_nine_key,
-    back_nine_key,
-    (booked + manual_booked)                    AS booked_players,
-    (max_players - (booked + manual_booked))   AS available_players
-  FROM t
-  ORDER BY tee_time ASC;
-  `,
-  [courseId, playDate, holes, players, includeBooked, includeFull, layoutKey, dur9, dur18]
-);
+      SELECT
+        tee_time,
+        holes,
+        max_players,
+        price_per_player_cents,
+        status,
+        layout_key,
+        front_nine_key,
+        back_nine_key,
+        (booked + manual_booked)::int AS booked_players,
+        (booked + manual_booked)::int AS booked_effective,
+        GREATEST(0, (max_players - (booked + manual_booked)))::int AS available_players,
+        GREATEST(0, (max_players - (booked + manual_booked)))::int AS remaining_effective
+      FROM t
+      -- ✅ must fit the requested party size
+      WHERE (max_players - (booked + manual_booked)) >= $5
+      ORDER BY tee_time ASC;
+      `,
+      [courseId, date, holes, layoutKey, players, sM, eM, dur9, dur18]
+    );
 
-console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
+    console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
 
-// ✅ DEBUG: inspect exact slot to verify maths
-if (debug) {
-  const slotDiag = await db.query(
-    `
-    SELECT
-      t.tee_time,
-      t.holes,
-      t.max_players,
-      COALESCE(ms.manual_count,0)::int    AS manual_count,
-      COALESCE(bb.booking_players,0)::int AS booking_players,
-      (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0))::int AS booked_effective,
-      GREATEST(
-        0,
-        t.max_players - (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0))
-      )::int AS remaining_effective,
-      t.status,
-      t.layout_key
-    FROM booking_times t
+    // ✅ DEBUG: inspect exact slot to verify maths
+    if (debug) {
+      const slotDiag = await db.query(
+        `
+        SELECT
+          t.tee_time,
+          t.holes,
+          COALESCE(t.max_players,4)::int AS max_players,
+          COALESCE(ms.manual_count,0)::int    AS manual_count,
+          COALESCE(bb.booking_players,0)::int AS booking_players,
+          (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0))::int AS booked_effective,
+          GREATEST(
+            0,
+            COALESCE(t.max_players,4) - (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0))
+          )::int AS remaining_effective,
+          t.status,
+          t.layout_key
+        FROM booking_times t
 
-    LEFT JOIN LATERAL (
-      SELECT COALESCE(SUM(players),0)::int AS manual_count
-      FROM booking_manual_slots
-      WHERE course_id = t.course_id
-        AND play_date = t.play_date
-        AND tee_time  = t.tee_time
-        AND holes     = t.holes
-        AND layout_key IS NOT DISTINCT FROM t.layout_key
-    ) ms ON true
+        LEFT JOIN LATERAL (
+          SELECT COALESCE(SUM(players),0)::int AS manual_count
+          FROM booking_manual_slots
+          WHERE course_id = t.course_id
+            AND play_date = t.play_date
+            AND tee_time  = t.tee_time
+            AND holes     = t.holes
+            AND layout_key IS NOT DISTINCT FROM t.layout_key
+        ) ms ON true
 
-    LEFT JOIN LATERAL (
-      SELECT COALESCE(SUM(players),0)::int AS booking_players
-      FROM booking_bookings
-      WHERE course_id = t.course_id
-        AND play_date = t.play_date
-        AND tee_time  = t.tee_time
-        AND holes     = t.holes
-        AND status    = 'CONFIRMED'
-        AND layout_key IS NOT DISTINCT FROM t.layout_key
-    ) bb ON true
+        LEFT JOIN LATERAL (
+          SELECT COALESCE(SUM(players),0)::int AS booking_players
+          FROM booking_bookings
+          WHERE course_id = t.course_id
+            AND play_date = t.play_date
+            AND tee_time  = t.tee_time
+            AND holes     = t.holes
+            AND status    = 'CONFIRMED'
+            AND layout_key IS NOT DISTINCT FROM t.layout_key
+        ) bb ON true
 
-    WHERE t.course_id = $1
-      AND t.play_date = $2::date
-      AND t.holes     = $3
-      AND t.tee_time  = '06:00'
-    LIMIT 1;
-    `,
-    [courseId, date, holes]
-  );
+        WHERE t.course_id = $1
+          AND t.play_date = $2::date
+          AND t.holes     = $3
+          AND t.tee_time  = '06:00'
+        LIMIT 1;
+        `,
+        [courseId, date, holes]
+      );
 
-  console.log("🧪 SLOT DIAG 06:00", slotDiag.rows[0] || null);
-  console.log("🧪 computed players =", { playersRaw, playersParsed, players });
-}
+      console.log("🧪 SLOT DIAG 06:00", slotDiag.rows[0] || null);
+      console.log("🧪 computed players =", { playersRaw, playersParsed, players });
+    }
+
     // ✅ DEBUG: show what the availability query returned
     if (debug) {
       console.log("🧪 availability query returned", {
@@ -6781,7 +6789,6 @@ if (debug) {
         const dur = durationMinsForHoles(courseRow, r.holes);
         const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-        // ✅ don't throw 409 in a GET listing; just expose remaining counts
         const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(db, {
           courseId,
           startAtIso,
@@ -6841,7 +6848,6 @@ if (debug) {
       })
     );
 
-    // ✅ CLOSE THE GET /availability ROUTE **HERE**
     return res.json({
       ok: true,
       times,
@@ -6857,6 +6863,7 @@ if (debug) {
               players,
               earliest,
               latest,
+              layoutKey,
               courseId,
               courseName,
               rowsFound: Array.isArray(rows) ? rows.length : null,
@@ -6871,20 +6878,6 @@ if (debug) {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-// ✅ NEW: per-slot transaction lock key (prevents race + addon oversell)
-function advisoryKeyForSlot({ courseId, dateYmd, timeHhMm }) {
-  // key = courseId * 10^12 + yyyymmdd * 10^4 + minutes
-  const ymdNum = Number(String(dateYmd || "").replace(/-/g, ""));
-  const mins = toMinutes(timeHhMm);
-  if (!Number.isFinite(ymdNum) || mins === null) return null;
-
-  const key =
-    BigInt(courseId) * 1000000000000n +
-    BigInt(ymdNum) * 10000n +
-    BigInt(mins);
-
-  return key.toString(); // pass as string to pg bigint
-}
 
 async function advisoryLockForSlot(client, { courseId, dateYmd, timeHhMm }) {
   const key = advisoryKeyForSlot({ courseId, dateYmd, timeHhMm });
