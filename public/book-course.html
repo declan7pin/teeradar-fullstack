@@ -266,11 +266,19 @@
         </div>
 
         <div class="field sm6">
-          <label class="muted">Note</label>
-          <div class="note">
-            Live availability + bookings powered by TeeRadar.
-          </div>
-        </div>
+  <label class="muted">Note</label>
+  <div class="note">
+    Live availability + bookings powered by TeeRadar.
+  </div>
+
+  <!-- ✅ ADD: debug toggle -->
+  <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+    <input id="debugToggle" type="checkbox" style="width:auto;" />
+    <label for="debugToggle" style="margin:0;color:var(--muted);font-size:12px;">
+      Debug mode (shows backend error details)
+    </label>
+  </div>
+</div>
       </div>
 
       <div class="actions">
@@ -765,21 +773,26 @@ if (qtySel) {
     setHint("");
 
     try {
-      const qs = new URLSearchParams({
-        slug,
-        date,
-        holes: String(holes),
-        players: String(players),
-        earliest,
-        latest
-      });
+      const debugOn = !!$("debugToggle")?.checked;
+
+const qs = new URLSearchParams({
+  slug,
+  date,
+  holes: String(holes),
+  players: String(players),
+  earliest,
+  latest,
+  ...(debugOn ? { debug: "1" } : {})
+});
 
       const res = await apiFetch("/api/book/availability?" + qs.toString());
       const data = await res.json().catch(()=> ({}));
 
       if (!res.ok || !data || !data.ok) {
-        throw new Error((data && data.error) ? data.error : ("HTTP " + res.status));
-      }
+  const msg =
+    (data && (data.message || data.error)) ? (data.message || data.error) : ("HTTP " + res.status);
+  throw new Error(msg);
+}
 
       const slots = Array.isArray(data.slots) ? data.slots : [];
       renderTimes(slots);
@@ -990,8 +1003,10 @@ hireClubsQty: clubsQtySelected,
 
       const data = await res.json().catch(()=> ({}));
       if (!res.ok || !data || !data.ok) {
-        throw new Error((data && data.error) ? data.error : ("HTTP " + res.status));
-      }
+  const msg =
+    (data && (data.message || data.error)) ? (data.message || data.error) : ("HTTP " + res.status);
+  throw new Error(msg);
+}
 
       showBookingConfirmation(data, email);
       setStatus(`✅ Booking confirmed. Reference: ${data.reference}`, "ok");
