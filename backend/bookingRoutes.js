@@ -6603,6 +6603,9 @@ router.get("/availability", async (req, res) => {
       `
       WITH t AS (
         SELECT
+          -- ✅ FIX: tee_time may be stored like "06:00|18" so keep a clean time for comparisons + output
+          split_part(t.tee_time, '|', 1) AS tee_time_clean,
+
           t.tee_time,
           t.holes,
           COALESCE(t.max_players, 4)::int AS max_players,
@@ -6644,14 +6647,14 @@ router.get("/availability", async (req, res) => {
           AND t.status    = 'AVAILABLE'
           AND ($4::text IS NULL OR t.layout_key = $4)
 
-          -- ✅ apply time window
+          -- ✅ apply time window (use cleaned time)
           AND (
-            (split_part(t.tee_time, ':', 1)::int * 60 + split_part(t.tee_time, ':', 2)::int) >= $6
+            (split_part(split_part(t.tee_time, '|', 1), ':', 1)::int * 60 + split_part(split_part(t.tee_time, '|', 1), ':', 2)::int) >= $6
             AND
-            (split_part(t.tee_time, ':', 1)::int * 60 + split_part(t.tee_time, ':', 2)::int) <  $7
+            (split_part(split_part(t.tee_time, '|', 1), ':', 1)::int * 60 + split_part(split_part(t.tee_time, '|', 1), ':', 2)::int) <  $7
           )
 
-          -- ✅ 18→9 overlap protection (unchanged logic)
+          -- ✅ 18→9 overlap protection (unchanged logic, but use cleaned time)
           AND (
             $3 <> 9
             OR $4::text IS NULL
@@ -6665,15 +6668,15 @@ router.get("/availability", async (req, res) => {
                 AND bb18.back_nine_key = $4
                 AND (
                   (
-                    (split_part(t.tee_time, ':', 1)::int * 60 +
-                     split_part(t.tee_time, ':', 2)::int)
+                    (split_part(split_part(t.tee_time, '|', 1), ':', 1)::int * 60 +
+                     split_part(split_part(t.tee_time, '|', 1), ':', 2)::int)
                     >=
                     (split_part(bb18.tee_time, ':', 1)::int * 60 +
                      split_part(bb18.tee_time, ':', 2)::int) + $8
                   )
                   AND (
-                    (split_part(t.tee_time, ':', 1)::int * 60 +
-                     split_part(t.tee_time, ':', 2)::int)
+                    (split_part(split_part(t.tee_time, '|', 1), ':', 1)::int * 60 +
+                     split_part(split_part(t.tee_time, '|', 1), ':', 2)::int)
                     <
                     (split_part(bb18.tee_time, ':', 1)::int * 60 +
                      split_part(bb18.tee_time, ':', 2)::int) + $9
@@ -6683,7 +6686,9 @@ router.get("/availability", async (req, res) => {
           )
       )
       SELECT
-        tee_time,
+        -- ✅ FIX: return clean time to frontend
+        tee_time_clean AS tee_time,
+
         holes,
         max_players,
         price_per_player_cents,
@@ -6698,7 +6703,7 @@ router.get("/availability", async (req, res) => {
       FROM t
       -- ✅ must fit the requested party size
       WHERE (max_players - (booked + manual_booked)) >= $5
-      ORDER BY tee_time ASC;
+      ORDER BY tee_time_clean ASC;
       `,
       [courseId, date, holes, layoutKey, players, sM, eM, dur9, dur18]
     );
@@ -6710,6 +6715,7 @@ router.get("/availability", async (req, res) => {
       const slotDiag = await db.query(
         `
         SELECT
+          split_part(t.tee_time, '|', 1) AS tee_time_clean,
           t.tee_time,
           t.holes,
           COALESCE(t.max_players,4)::int AS max_players,
@@ -6748,7 +6754,7 @@ router.get("/availability", async (req, res) => {
         WHERE t.course_id = $1
           AND t.play_date = $2::date
           AND t.holes     = $3
-          AND t.tee_time  = '06:00'
+          AND split_part(t.tee_time, '|', 1) = '06:00'
         LIMIT 1;
         `,
         [courseId, date, holes]
