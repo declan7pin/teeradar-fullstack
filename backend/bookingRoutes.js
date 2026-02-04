@@ -1632,6 +1632,32 @@ router.get(
     return res.json({ ok: true, access: "manager" });
   }
 );
+// view saved template JSON (course admin) - DEBUG helper
+router.get("/course-admin/template", requireCourseAdmin, async (req, res) => {
+  try {
+    const slug = req.courseAdmin.slug;
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const t = await db.query(
+      `SELECT template, updated_at
+       FROM booking_time_templates
+       WHERE course_id = $1
+       LIMIT 1;`,
+      [courseId]
+    );
+
+    return res.json({
+      ok: true,
+      slug,
+      updatedAt: t.rows[0]?.updated_at || null,
+      template: t.rows[0]?.template || null,
+    });
+  } catch (e) {
+    console.error("course-admin/template GET", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // ✅ NEW: Course admin — fetch course settings (carts/clubs qty + fees + durations)
 router.get("/course-admin/course-settings", requireCourseAdmin, async (req, res) => {
   try {
