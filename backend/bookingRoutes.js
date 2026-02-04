@@ -4907,7 +4907,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           // ✅ must have real routing keys
           if (!front9Key || !back9Key) continue;
 
-          // ✅ CRITICAL: set layout_key for 18s so UI + availability knows the routing
+          // ✅ set layout_key for 18s so UI + availability knows the routing
           const layoutKey18 = `18:${front9Key}|${back9Key}`;
 
           for (let mins = startMin; mins < endMin; mins += interval) {
@@ -4925,9 +4925,9 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
               holes: 18,
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
-              layout_key: layoutKey18,         // ✅ FIX
-              front9_key: front9Key,
-              back9_key: back9Key,
+              layout_key: layoutKey18,
+              front_nine_key: front9Key,       // ✅ FIX: correct column name
+              back_nine_key: back9Key,         // ✅ FIX: correct column name
             });
           }
         }
@@ -4968,8 +4968,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
               max_players: maxPlayers,
               price_per_player_cents: pricePerPlayerCents,
               layout_key: layoutKey,
-              front9_key: "",
-              back9_key: "",
+              front_nine_key: "",              // ✅ FIX: correct column name
+              back_nine_key: "",               // ✅ FIX: correct column name
             });
           }
         }
@@ -4984,8 +4984,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           "max_players",
           "price_per_player_cents",
           "layout_key",
-          "front9_key",
-          "back9_key",
+          "front_nine_key",   // ✅ FIX
+          "back_nine_key",    // ✅ FIX
         ];
 
         const values = [];
@@ -5004,8 +5004,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             r.max_players,
             r.price_per_player_cents,
             r.layout_key,
-            r.front9_key,
-            r.back9_key
+            r.front_nine_key,
+            r.back_nine_key
           );
         }
 
@@ -5015,8 +5015,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
                  max_players = EXCLUDED.max_players,
                  price_per_player_cents = EXCLUDED.price_per_player_cents,
                  layout_key = EXCLUDED.layout_key,
-                 front9_key = EXCLUDED.front9_key,
-                 back9_key = EXCLUDED.back9_key,
+                 front_nine_key = EXCLUDED.front_nine_key,   -- ✅ FIX
+                 back_nine_key = EXCLUDED.back_nine_key,     -- ✅ FIX
                  status = CASE
                    WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
                    WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
