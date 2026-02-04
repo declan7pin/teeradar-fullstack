@@ -2158,6 +2158,18 @@ router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
     const pricePerPlayerCents = Number(_pickAny(req.body, ["pricePerPlayerCents"], 0));
     const status = String(_pickAny(req.body, ["status"], "AVAILABLE") || "AVAILABLE").trim().toUpperCase();
 
+    // ✅ NEW: allow admin to generate a specific layout (optional)
+    const cleanKey = (v) => {
+      const s = String(v ?? "").trim();
+      if (!s) return "";
+      if (s.toLowerCase() === "select") return "";
+      return s;
+    };
+
+    const layoutKey = cleanKey(_pickAny(req.body, ["layoutKey", "layout_key"], ""));
+    const frontNineKey = cleanKey(_pickAny(req.body, ["frontNineKey", "front_nine_key", "front9Key", "front9_key"], ""));
+    const backNineKey = cleanKey(_pickAny(req.body, ["backNineKey", "back_nine_key", "back9Key", "back9_key"], ""));
+
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!playDate) return res.status(400).json({ ok: false, error: "date_required" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_must_be_9_or_18" });
@@ -2173,6 +2185,20 @@ router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
 
     if (!["AVAILABLE", "BLOCKED"].includes(status))
       return res.status(400).json({ ok: false, error: "status_invalid" });
+
+    // ✅ NEW: validate layout requirements
+    // - for 18s: you MUST provide front+back keys (and a layoutKey if you want)
+    // - for 9s: you MUST provide layoutKey
+    if (holes === 18) {
+      if (!frontNineKey || !backNineKey) {
+        return res.status(400).json({ ok: false, error: "layout_required_for_18", detail: "frontNineKey and backNineKey are required for 18-hole generation" });
+      }
+    }
+    if (holes === 9) {
+      if (!layoutKey) {
+        return res.status(400).json({ ok: false, error: "layout_required_for_9", detail: "layoutKey is required for 9-hole generation" });
+      }
+    }
 
     const sM = toMinutes(start);
     const eM = toMinutes(end);
@@ -2191,35 +2217,47 @@ router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
     let skipped = 0;
 
     for (const t of times) {
+      // ✅ FIX: existence check MUST include layout identity
       const exists = await db.query(
         `
         SELECT 1
         FROM booking_times
-        WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+        WHERE course_id=$1
+          AND play_date=$2::date
+          AND tee_time=$3
+          AND holes=$4
+          AND layout_key=$5
+          AND front_nine_key=$6
+          AND back_nine_key=$7
         LIMIT 1;
         `,
-        [courseId, playDate, t, holes]
+        [courseId, playDate, t, holes, layoutKey, frontNineKey, backNineKey]
       );
 
       const isExisting = !!exists.rows.length;
 
+      // ✅ FIX: upsert MUST use the correct unique constraint
       await db.query(
         `
         INSERT INTO booking_times
-          (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, updated_at)
+          (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status,
+           layout_key, front_nine_key, back_nine_key, updated_at)
         VALUES
-          ($1, $2::date, $3, $4, $5, 0, $6, $7, now())
-        ON CONFLICT (course_id, play_date, tee_time, holes)
+          ($1, $2::date, $3, $4, $5, 0, $6, $7,
+           $8, $9, $10, now())
+        ON CONFLICT ON CONSTRAINT booking_times_unique_slot
         DO UPDATE SET
           max_players = EXCLUDED.max_players,
           price_per_player_cents = EXCLUDED.price_per_player_cents,
           status = CASE
             WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
+            WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
             ELSE EXCLUDED.status
           END,
           updated_at = now()
         `,
-        [courseId, playDate, t, holes, maxPlayers, pricePerPlayerCents, status]
+        [courseId, playDate, t, holes, maxPlayers, pricePerPlayerCents, status,
+         layoutKey, frontNineKey, backNineKey]
       );
 
       if (isExisting) skipped += 1;
@@ -2231,6 +2269,9 @@ router.post("/admin/generate-times", requirePlatformAdmin, async (req, res) => {
       slug,
       date: playDate,
       holes,
+      layoutKey,
+      frontNineKey,
+      backNineKey,
       generated: times.length,
       inserted,
       skipped,
@@ -2254,6 +2295,18 @@ router.post("/admin/times/generate", requirePlatformAdmin, async (req, res) => {
     const pricePerPlayerCents = Number(req.body?.pricePerPlayerCents || 0);
     const status = String(req.body?.status || "AVAILABLE").trim().toUpperCase();
 
+    // ✅ NEW: allow legacy generator to be layout-aware too
+    const cleanKey = (v) => {
+      const s = String(v ?? "").trim();
+      if (!s) return "";
+      if (s.toLowerCase() === "select") return "";
+      return s;
+    };
+
+    const layoutKey = cleanKey(req.body?.layoutKey || req.body?.layout_key || "");
+    const frontNineKey = cleanKey(req.body?.frontNineKey || req.body?.front_nine_key || req.body?.front9Key || req.body?.front9_key || "");
+    const backNineKey = cleanKey(req.body?.backNineKey || req.body?.back_nine_key || req.body?.back9Key || req.body?.back9_key || "");
+
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_must_be_9_or_18" });
@@ -2263,6 +2316,18 @@ router.post("/admin/times/generate", requirePlatformAdmin, async (req, res) => {
       return res.status(400).json({ ok: false, error: "maxPlayers_invalid" });
     if (!["AVAILABLE", "BLOCKED"].includes(status))
       return res.status(400).json({ ok: false, error: "status_invalid" });
+
+    // ✅ NEW: validate layout requirements
+    if (holes === 18) {
+      if (!frontNineKey || !backNineKey) {
+        return res.status(400).json({ ok: false, error: "layout_required_for_18", detail: "frontNineKey and backNineKey are required for 18-hole generation" });
+      }
+    }
+    if (holes === 9) {
+      if (!layoutKey) {
+        return res.status(400).json({ ok: false, error: "layout_required_for_9", detail: "layoutKey is required for 9-hole generation" });
+      }
+    }
 
     const sM = toMinutes(start);
     const eM = toMinutes(end);
@@ -2280,25 +2345,37 @@ router.post("/admin/times/generate", requirePlatformAdmin, async (req, res) => {
       const r = await db.query(
         `
         INSERT INTO booking_times
-          (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, updated_at)
+          (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status,
+           layout_key, front_nine_key, back_nine_key, updated_at)
         VALUES
-          ($1, $2::date, $3, $4, $5, 0, $6, $7, now())
-        ON CONFLICT (course_id, play_date, tee_time, holes)
+          ($1, $2::date, $3, $4, $5, 0, $6, $7,
+           $8, $9, $10, now())
+        ON CONFLICT ON CONSTRAINT booking_times_unique_slot
         DO UPDATE SET
           max_players = EXCLUDED.max_players,
           price_per_player_cents = EXCLUDED.price_per_player_cents,
           status = CASE
             WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
+            WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
             ELSE EXCLUDED.status
           END,
           updated_at = now()
         `,
-        [courseId, date, t, holes, maxPlayers, pricePerPlayerCents, status]
+        [courseId, date, t, holes, maxPlayers, pricePerPlayerCents, status,
+         layoutKey, frontNineKey, backNineKey]
       );
       upserts += r.rowCount || 0;
     }
 
-    res.json({ ok: true, generated: times.length, upserts });
+    res.json({
+      ok: true,
+      generated: times.length,
+      upserts,
+      holes,
+      layoutKey,
+      frontNineKey,
+      backNineKey,
+    });
   } catch (e) {
     console.error("admin/times/generate", e);
     res.status(500).json({ ok: false, error: "internal_error" });
