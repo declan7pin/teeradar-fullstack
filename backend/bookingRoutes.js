@@ -6390,27 +6390,164 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
     const slug = req.courseAdmin.slug;
     const date = String(req.query.date || "").trim();
     const holes = req.query.holes ? Number(req.query.holes) : null;
+    const debug = String(req.query.debug || "") === "1";
 
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
-    if (holes !== null && ![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+    if (holes !== null && ![9, 18].includes(holes)) {
+      return res.status(400).json({ ok: false, error: "holes_invalid" });
+    }
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
+    // ✅ Load course layout labels so the API can always return the correct display label,
+    // even if some legacy rows are missing front/back keys.
+    const layoutCfgQ = await db.query(
+      `
+      SELECT layouts, routes18
+      FROM booking_course_layouts
+      WHERE course_id = $1
+      LIMIT 1;
+      `,
+      [courseId]
+    );
+
+    const layoutCfg = layoutCfgQ.rows[0] || { layouts: [], routes18: [] };
+    const layouts9 = Array.isArray(layoutCfg.layouts) ? layoutCfg.layouts : [];
+    const routes18 = Array.isArray(layoutCfg.routes18) ? layoutCfg.routes18 : [];
+
+    const normKey = (v) => String(v || "").trim().toLowerCase();
+
+    // Map 9 key -> label
+    const label9ByKey = new Map();
+    for (const l of layouts9) {
+      const k = normKey(l?.key);
+      const lab = String(l?.label || l?.name || "").trim();
+      if (k) label9ByKey.set(k, lab || k);
+    }
+
+    // Map 18 routeKey -> label (routeKey = "18:front|back" unless an explicit key is provided)
+    const label18ByRouteKey = new Map();
+    for (const r of routes18) {
+      const front = normKey(r?.front9_key || r?.front_nine_key || r?.front9Key || r?.frontNineKey);
+      const back = normKey(r?.back9_key || r?.back_nine_key || r?.back9Key || r?.backNineKey);
+
+      const explicitKey = normKey(r?.key);
+      const routeKey = explicitKey || (front && back ? `18:${front}|${back}` : "");
+
+      const frontLab = label9ByKey.get(front) || front || "";
+      const backLab = label9ByKey.get(back) || back || "";
+      const fallbackLabel = frontLab && backLab ? `${frontLab} + ${backLab}` : "";
+
+      const lab = String(r?.label || r?.name || fallbackLabel || routeKey || "").trim();
+      if (routeKey) label18ByRouteKey.set(routeKey, lab || routeKey);
+    }
+
     const params = [courseId, date];
     let q = `
-      SELECT id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, layout_key, front_nine_key, back_nine_key
+      SELECT
+        id,
+        play_date,
+
+        -- ✅ IMPORTANT: tee_time may be stored as "HH:MM|suffix" - always return clean time for UI
+        split_part(tee_time, '|', 1) AS tee_time_clean,
+
+        tee_time,
+        holes,
+        max_players,
+        booked_players,
+        price_per_player_cents,
+        status,
+
+        layout_key,
+        front_nine_key,
+        back_nine_key
+
       FROM booking_times
       WHERE course_id = $1 AND play_date = $2::date
     `;
+
     if (holes) {
       params.push(holes);
       q += ` AND holes = $3`;
     }
-    q += ` ORDER BY tee_time ASC, holes DESC`;
+
+    // ✅ order by clean time so rows don't get weird when suffixes exist
+    q += ` ORDER BY tee_time_clean ASC, holes DESC`;
 
     const { rows } = await db.query(q, params);
-    res.json({ ok: true, times: rows || [] });
+
+    // ✅ Normalize + attach display label so the frontend can show the correct layout always
+    const times = (rows || []).map((r) => {
+      const holesN = Number(r.holes || 0);
+
+      // Normalize keys
+      let layoutKey = normKey(r.layout_key);
+      let frontKey = normKey(r.front_nine_key);
+      let backKey = normKey(r.back_nine_key);
+
+      // ✅ If legacy rows are missing front/back keys but layout_key is like "18:classic|lakes", parse it
+      if (holesN === 18 && layoutKey && (!frontKey || !backKey)) {
+        const m = layoutKey.match(/^18:([^|]+)\|([^|]+)$/);
+        if (m) {
+          frontKey = frontKey || normKey(m[1]);
+          backKey = backKey || normKey(m[2]);
+        }
+      }
+
+      // ✅ If layout_key is missing but front/back exist, rebuild it (keeps UI + availability consistent)
+      if (holesN === 18 && (!layoutKey) && frontKey && backKey) {
+        layoutKey = `18:${frontKey}|${backKey}`;
+      }
+
+      // Layout display label
+      let layoutLabel = "";
+      if (holesN === 18) {
+        layoutLabel =
+          label18ByRouteKey.get(layoutKey) ||
+          (() => {
+            const frontLab = label9ByKey.get(frontKey) || frontKey || "";
+            const backLab = label9ByKey.get(backKey) || backKey || "";
+            return frontLab && backLab ? `${frontLab} + ${backLab}` : "";
+          })();
+      } else if (holesN === 9) {
+        // for 9s, layout_key is the 9 key
+        layoutLabel = label9ByKey.get(layoutKey) || layoutKey || "";
+      }
+
+      return {
+        ...r,
+
+        // ✅ what UI should use for sorting + display time
+        tee_time: String(r.tee_time_clean || r.tee_time || ""),
+
+        // ✅ normalized keys (so UI never falls back to the wrong route)
+        layout_key: layoutKey || "",
+        front_nine_key: frontKey || "",
+        back_nine_key: backKey || "",
+
+        // ✅ NEW: explicit label for UI (this fixes "always shows Pines+Lakes" when keys are missing)
+        layout_label: layoutLabel || null,
+      };
+    });
+
+    if (debug) {
+      console.log("🧪 /course-admin/times layout debug", {
+        slug,
+        date,
+        holes,
+        sample: times.slice(0, 10).map((t) => ({
+          time: t.tee_time,
+          holes: t.holes,
+          layout_key: t.layout_key,
+          front_nine_key: t.front_nine_key,
+          back_nine_key: t.back_nine_key,
+          layout_label: t.layout_label,
+        })),
+      });
+    }
+
+    return res.json({ ok: true, times });
   } catch (e) {
     console.error("course-admin/times GET", e);
     res.status(500).json({ ok: false, error: "internal_error" });
