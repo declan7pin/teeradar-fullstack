@@ -7695,15 +7695,16 @@ async function handleBook(req, res) {
       return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
     }
 
+    // ✅ FIX: match times even if booking_times.tee_time includes provider suffix like "06:00|..."
     const t = await client.query(
       `
-      SELECT status, booked_players, max_players, price_per_player_cents,
+      SELECT tee_time, status, booked_players, max_players, price_per_player_cents,
              layout_key, front_nine_key, back_nine_key
       FROM booking_times
       WHERE course_id=$1
         AND play_date=$2::date
-        AND tee_time=$3
         AND holes=$4
+        AND split_part(tee_time,'|',1) = $3
         AND layout_key IS NOT DISTINCT FROM $5
         AND front_nine_key IS NOT DISTINCT FROM $6
         AND back_nine_key IS NOT DISTINCT FROM $7
@@ -7720,6 +7721,9 @@ async function handleBook(req, res) {
     }
 
     const timeRow = t.rows[0];
+
+    // ✅ IMPORTANT: preserve exact DB tee_time so joins + updates stay consistent
+    const teeTimeDb = String(timeRow.tee_time || time).trim();
 
     if (String(timeRow.status || "").toUpperCase() !== "AVAILABLE") {
       await client.query("ROLLBACK");
@@ -7773,7 +7777,7 @@ async function handleBook(req, res) {
       [
         courseId,
         date,
-        time,
+        teeTimeDb, // ✅ FIX: store exact DB tee_time
         holes,
         players,
         golfer_name || null,
@@ -7817,7 +7821,7 @@ async function handleBook(req, res) {
         AND front_nine_key IS NOT DISTINCT FROM $6
         AND back_nine_key IS NOT DISTINCT FROM $7;
       `,
-      [courseId, date, time, holes, layout_key, front_nine_key, back_nine_key, newBooked]
+      [courseId, date, teeTimeDb, holes, layout_key, front_nine_key, back_nine_key, newBooked] // ✅ FIX
     );
 
     await client.query("COMMIT");
