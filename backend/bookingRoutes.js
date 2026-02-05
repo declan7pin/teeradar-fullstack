@@ -7482,10 +7482,6 @@ async function handleBook(req, res) {
     const back_nine_key = req.body?.back_nine_key ? String(req.body.back_nine_key).trim().toLowerCase() : null;
 
     // ✅ cart / hire clubs selection (optional)
-    // Accept either:
-    // - addonIds: ["cart","hire_clubs"]
-    // - booleans: has_cart / has_hire_clubs
-    // - optional quantities: cartQty / hireClubsQty (or snake_case)
     const addonIds = Array.isArray(req.body?.addonIds)
       ? req.body.addonIds.map((x) => String(x))
       : [];
@@ -7494,14 +7490,12 @@ async function handleBook(req, res) {
       addonIds.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean)
     );
 
-    // addonIds wins, but booleans still supported
     const has_cart =
       picked.size > 0 ? picked.has("cart") : parseBool(req.body?.has_cart, false);
 
     const has_hire_clubs =
       picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
 
-    // quantities (default 1 if selected, clamp 0..4)
     const cart_qty_raw = Number(
       req.body?.cart_qty ?? req.body?.cartQty ?? (has_cart ? 1 : 0)
     );
@@ -7524,7 +7518,6 @@ async function handleBook(req, res) {
       )
     );
 
-    // final derived flags (qty can force false)
     const final_has_cart = cart_qty > 0;
     const final_has_hire_clubs = hire_clubs_qty > 0;
 
@@ -7535,6 +7528,14 @@ async function handleBook(req, res) {
     if (!Number.isFinite(players) || players < 1 || players > 4)
       return res.status(400).json({ ok: false, error: "players_invalid" });
 
+    // ✅ IMPORTANT: require routing keys so we never “double book” multiple layouts
+    if (holes === 18 && (!front_nine_key || !back_nine_key)) {
+      return res.status(400).json({ ok: false, error: "routing_required" });
+    }
+    if (holes === 9 && !layout_key) {
+      return res.status(400).json({ ok: false, error: "layout_required" });
+    }
+
     if (!hasFirstAndLastName(golfer_name)) {
       return res.status(400).json({ ok: false, error: "name_required_first_last" });
     }
@@ -7542,7 +7543,6 @@ async function handleBook(req, res) {
       return res.status(400).json({ ok: false, error: "email_required_valid" });
     }
 
-    // ✅ Load course (includes addon qty + durations)
     const c = await client.query(
       `
       SELECT id, slug, name, notes,
@@ -7560,11 +7560,9 @@ async function handleBook(req, res) {
     const courseRow = c.rows[0];
     const courseId = courseRow.id;
 
-    // ✅ begin transaction + lock this specific slot to prevent double-book + addon oversell
     await client.query("BEGIN");
     didBegin = true;
 
-    // ✅ lock per-slot INCLUDING routing keys so overlapping routings don't collide
     await advisoryLockForSlot(client, {
       courseId,
       dateYmd: date,
@@ -7575,21 +7573,17 @@ async function handleBook(req, res) {
       back_nine_key,
     });
 
-    // ✅ NEW: lock addon inventory per course BEFORE any overlap counting / enforcement
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
       `addons:${courseId}`,
     ]);
 
-    // ✅ compute booking window (needed for addon overlap inventory checks)
     let startAtIso = toIsoDateTimeLocal(date, time);
     const dur = durationMinsForHoles(courseRow, holes);
     const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-    // ✅ check addon overlap usage (confirmed bookings + filled manual slots)
     const courseCartQty = Number(courseRow.cart_qty || 0);
     const courseClubsQty = Number(courseRow.hire_clubs_qty || 0);
 
-    // ✅ NEW: if course doesn't offer the addon (qty=0), block selecting it
     if (cart_qty > 0 && courseCartQty <= 0) {
       await client.query("ROLLBACK");
       didBegin = false;
@@ -7611,7 +7605,6 @@ async function handleBook(req, res) {
     const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
     const clubsRemaining = Math.max(0, courseClubsQty - clubsUsed);
 
-    // if course has inventory configured (>0), enforce it
     if (cart_qty > 0 && courseCartQty > 0 && cart_qty > cartRemaining) {
       await client.query("ROLLBACK");
       didBegin = false;
@@ -7635,7 +7628,6 @@ async function handleBook(req, res) {
     const courseCartFeeCents = Number(courseRow.cart_fee_cents || 0);
     const courseHireClubsFeeCents = Number(courseRow.hire_clubs_fee_cents || 0);
 
-    // charge per unit (qty). if you want “per booking” instead, keep your old version.
     const cart_fee_cents = cart_qty > 0 ? courseCartFeeCents * cart_qty : 0;
     const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire_clubs_qty : 0;
 
@@ -7651,7 +7643,7 @@ async function handleBook(req, res) {
       return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
     }
 
-    // ✅ Lock the booking_times row for this slot (routing-aware)
+    // ✅ Lock EXACT booking_times row (routing-aware)
     const t = await client.query(
       `
       SELECT status, booked_players, max_players, price_per_player_cents,
@@ -7661,23 +7653,13 @@ async function handleBook(req, res) {
         AND play_date=$2::date
         AND tee_time=$3
         AND holes=$4
-        AND (
-          ($4 = 18 AND front_nine_key = $5 AND back_nine_key = $6)
-          OR
-          ($4 = 9 AND (layout_key IS NOT DISTINCT FROM $7))
-        )
+        AND layout_key IS NOT DISTINCT FROM $5
+        AND front_nine_key IS NOT DISTINCT FROM $6
+        AND back_nine_key IS NOT DISTINCT FROM $7
       LIMIT 1
       FOR UPDATE;
       `,
-      [
-        courseId,
-        date,
-        time,
-        holes,
-        holes === 18 ? front_nine_key : null,
-        holes === 18 ? back_nine_key : null,
-        holes === 9 ? layout_key : null,
-      ]
+      [courseId, date, time, holes, layout_key, front_nine_key, back_nine_key]
     );
 
     if (!t.rows.length) {
@@ -7703,20 +7685,16 @@ async function handleBook(req, res) {
       return res.status(409).json({ ok: false, error: "not_enough_spots" });
     }
 
-    // 3) Price calc
     const ppp = Number(timeRow.price_per_player_cents || 0);
     const baseTotalCents = ppp * players;
 
-    // add-ons are per-booking (not per-player) in your schema
     const addonsCents =
       (final_has_cart ? cart_fee_cents : 0) +
       (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
 
-    // ✅ store full total in DB
     const totalCents = baseTotalCents + addonsCents;
     const reference = makeRef("TR");
 
-    // 4) Insert booking
     const ins = await client.query(
       `
   INSERT INTO booking_bookings
@@ -7767,43 +7745,46 @@ async function handleBook(req, res) {
       ]
     );
 
-    // 5) Update booking_times booked_players + status
+    // ✅ Update ONLY this routing row (THIS FIXES THE “BOTH LAYOUTS BOOKED” BUG)
     const newBooked = bookedPlayers + players;
 
     await client.query(
       `
       UPDATE booking_times
       SET
-        booked_players = $5,
+        booked_players = $8,
         status = CASE
           WHEN status = 'BLOCKED' THEN 'BLOCKED'
-          WHEN $5 >= max_players THEN 'BOOKED'
+          WHEN $8 >= max_players THEN 'BOOKED'
           ELSE 'AVAILABLE'
         END,
         updated_at = now()
-      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4;
+      WHERE course_id=$1
+        AND play_date=$2::date
+        AND tee_time=$3
+        AND holes=$4
+        AND layout_key IS NOT DISTINCT FROM $5
+        AND front_nine_key IS NOT DISTINCT FROM $6
+        AND back_nine_key IS NOT DISTINCT FROM $7;
       `,
-      [courseId, date, time, holes, newBooked]
+      [courseId, date, time, holes, layout_key, front_nine_key, back_nine_key, newBooked]
     );
 
-    // 6) Commit
     await client.query("COMMIT");
     didBegin = false;
 
-    // ✅ analytics
     recordEvent({
       type: "booking_created",
       userId: getClientIp(req) || null,
       courseName: courseRow.name,
-      meta: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty },
+      meta: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty, layout_key, front_nine_key, back_nine_key },
     }).catch(() => {});
     recordBookingEvent(req, {
       courseSlug: slug,
       eventType: "booking_confirmed",
-      payload: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty },
+      payload: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty, layout_key, front_nine_key, back_nine_key },
     }).catch(() => {});
 
-    // 7) Email (non-fatal)
     const emailResult = await sendBookingEmail({
       to: golfer_email,
       courseName: courseRow.name,
@@ -7832,6 +7813,9 @@ async function handleBook(req, res) {
         addonsCents,
         cart_qty,
         hire_clubs_qty,
+        layout_key,
+        front_nine_key,
+        back_nine_key,
       },
       emailOk: emailResult.emailOk,
       emailReason: emailResult.emailReason || null,
@@ -7857,7 +7841,6 @@ async function handleBook(req, res) {
 }
 
 router.post("/book", handleBook);
-
 // keep /availability POST blocked so the frontend can’t accidentally use it
 router.post("/availability", (req, res) => {
   return res.status(405).json({
