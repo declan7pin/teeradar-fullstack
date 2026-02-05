@@ -1024,81 +1024,105 @@ const addonLines = chosenAddons.map(a => {
 }
 
   async function confirmBooking() {
-    if (!selectedSlot) return;
+  if (!selectedSlot) return;
 
-    const date = $("date").value;
-    const holes = Number($("holes").value);
-    const players = Number($("players").value);
+  const date = $("date").value;
+  const holes = Number($("holes").value);
+  const players = Number($("players").value);
 
-    const nameRaw = ($("bName").value || "").trim();
-    const name = nameRaw.replace(/\s+/g, " ");
-    const email = ($("bEmail").value || "").trim().toLowerCase();
-    const phone = ($("bPhone").value || "").trim();
+  const nameRaw = ($("bName").value || "").trim();
+  const name = nameRaw.replace(/\s+/g, " ");
+  const email = ($("bEmail").value || "").trim().toLowerCase();
+  const phone = ($("bPhone").value || "").trim();
 
-    if (!isFullName(name)) {
-      $("modalSub").textContent = "❌ Please enter your first and last name.";
-      return;
+  if (!isFullName(name)) {
+    $("modalSub").textContent = "❌ Please enter your first and last name.";
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    $("modalSub").textContent = "❌ Please enter a valid email address.";
+    return;
+  }
+
+  $("modalSub").textContent = "Booking…";
+  $("confirmBtn").disabled = true;
+
+  try {
+    // ✅ routing keys MUST be sent to backend (fixes routing_required + double-blocking)
+    const s = normalizeSlot(selectedSlot) || {};
+
+    const layout_key =
+      (s.layout_key ?? s.layoutKey ?? "").toString().trim().toLowerCase();
+
+    const front_nine_key =
+      (s.front_nine_key ?? s.frontNineKey ?? s.frontNine ?? "").toString().trim().toLowerCase();
+
+    const back_nine_key =
+      (s.back_nine_key ?? s.backNineKey ?? s.backNine ?? "").toString().trim().toLowerCase();
+
+    // enforce required routing depending on holes
+    if (holes === 18 && (!front_nine_key || !back_nine_key)) {
+      throw new Error("routing_required");
+    }
+    if (holes === 9 && !layout_key) {
+      throw new Error("routing_required");
     }
 
-    if (!isValidEmail(email)) {
-      $("modalSub").textContent = "❌ Please enter a valid email address.";
-      return;
+    const res = await apiFetch("/api/book/book", {
+      method: "POST",
+      headers: { "Content-Type":"application/json" },
+      body: JSON.stringify({
+        slug,
+        date,
+        time: (s.time || ""),
+        holes,
+        players,
+        name,
+        email,
+        phone,
+
+        // ✅ include routing keys
+        layout_key: holes === 9 ? layout_key : null,
+        front_nine_key: holes === 18 ? front_nine_key : null,
+        back_nine_key: holes === 18 ? back_nine_key : null,
+
+        addonIds: selectedAddonIds,
+        cartQty: cartQtySelected,
+        hireClubsQty: clubsQtySelected,
+      })
+    });
+
+    const data = await res.json().catch(()=> ({}));
+    if (!res.ok || !data || !data.ok) {
+      const msg =
+        (data && (data.message || data.error)) ? (data.message || data.error) : ("HTTP " + res.status);
+      throw new Error(msg);
     }
 
-    $("modalSub").textContent = "Booking…";
-    $("confirmBtn").disabled = true;
-
-    try {
-      const res = await apiFetch("/api/book/book", {
-        method: "POST",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify({
-          slug,
-          date,
-                    time: (normalizeSlot(selectedSlot).time || ""),
-          holes,
-          players,
-          name,
-          email,
-          phone,
-          addonIds: selectedAddonIds,
-          cartQty: cartQtySelected,
-hireClubsQty: clubsQtySelected,
-        })
-      });
-
-  
-
-      const data = await res.json().catch(()=> ({}));
-      if (!res.ok || !data || !data.ok) {
-  const msg =
-    (data && (data.message || data.error)) ? (data.message || data.error) : ("HTTP " + res.status);
-  throw new Error(msg);
+    showBookingConfirmation(data, email);
+    setStatus(`✅ Booking confirmed. Reference: ${data.reference}`, "ok");
+    await fetchAvailability();
+  } catch (e) {
+    $("modalSub").textContent = "❌ " + (e.message || "Booking failed");
+    $("confirmBtn").disabled = false;
+  }
 }
 
-      showBookingConfirmation(data, email);
-      setStatus(`✅ Booking confirmed. Reference: ${data.reference}`, "ok");
-      await fetchAvailability();
-    } catch (e) {
-      $("modalSub").textContent = "❌ " + (e.message || "Booking failed");
-      $("confirmBtn").disabled = false;
-    }
-  }
+function closeModal(){
+  $("modalWrap").style.display = "none";
+  selectedSlot = null;
+  selectedAddonIds = [];
+}
 
-  function closeModal(){
-    $("modalWrap").style.display = "none";
-    selectedSlot = null;
-    selectedAddonIds = [];
-  }
+$("cancelBtn").onclick = closeModal;
+$("modalWrap").addEventListener("click", (e) => {
+  if (e.target === $("modalWrap")) closeModal();
+});
 
-  $("cancelBtn").onclick = closeModal;
-  $("modalWrap").addEventListener("click", (e) => {
-    if (e.target === $("modalWrap")) closeModal();
-  });
+$("findBtn").onclick = fetchAvailability;
 
-  $("findBtn").onclick = fetchAvailability;
-
-  $("resetBtn").onclick = () => {
+$("resetBtn").onclick = () => {
   // reset back to whatever the URL intended (or fall back defaults)
   const q = new URLSearchParams(location.search);
 
@@ -1124,9 +1148,9 @@ hireClubsQty: clubsQtySelected,
   renderTimes([]);
 };
 
-  $("confirmBtn").onclick = confirmBooking;
+$("confirmBtn").onclick = confirmBooking;
 
-  (async () => {
+(async () => {
   await loadCourse();
   await loadAddons();
   renderTimes([]);
