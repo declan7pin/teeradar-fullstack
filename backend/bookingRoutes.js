@@ -7436,7 +7436,6 @@ function advisoryKeyForSlot({
   const fk = String(front_nine_key || "").trim().toLowerCase();
   const bk = String(back_nine_key || "").trim().toLowerCase();
 
-  // Include routing keys to avoid collisions when multiple routings share the same time
   return `slot:${c}:${d}:${t}:${h}:${lk}:${fk}:${bk}`;
 }
 
@@ -7454,10 +7453,52 @@ async function advisoryLockForSlot(
     back_nine_key,
   });
 
-  // Transaction-scoped advisory lock (auto released on COMMIT / ROLLBACK)
   await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [key]);
-
   return key;
+}
+
+// ✅ NEW: convert layout label like "Pines + Lakes" -> "pines" / "lakes"
+function nineKeyFromLabel(label) {
+  const s = String(label || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9 ]/g, ""); // keep letters/numbers/spaces only
+
+  // turn "classic pines" into "classic_pines" etc
+  return s.replace(/ /g, "_");
+}
+
+// ✅ NEW: try to extract routing keys from UI layout text
+function deriveRoutingKeysFromLayoutText({ holes, layoutTextRaw }) {
+  const layoutText = String(layoutTextRaw || "").trim();
+  if (!layoutText) return { layout_key: null, front_nine_key: null, back_nine_key: null };
+
+  // common formats we’ll accept: "Pines + Lakes", "Pines & Lakes", "Pines and Lakes"
+  const cleaned = layoutText
+    .replace(/&/g, "and")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (Number(holes) === 18) {
+    let parts = [];
+    if (cleaned.includes("+")) parts = cleaned.split("+");
+    else if (cleaned.toLowerCase().includes(" and ")) parts = cleaned.split(/ and /i);
+    else parts = cleaned.split("-"); // last-resort
+
+    parts = parts.map((p) => p.trim()).filter(Boolean);
+
+    if (parts.length >= 2) {
+      const front = nineKeyFromLabel(parts[0]);
+      const back = nineKeyFromLabel(parts[1]);
+      return { layout_key: null, front_nine_key: front || null, back_nine_key: back || null };
+    }
+    return { layout_key: null, front_nine_key: null, back_nine_key: null };
+  }
+
+  // holes === 9
+  return { layout_key: nineKeyFromLabel(cleaned) || null, front_nine_key: null, back_nine_key: null };
 }
 
 async function handleBook(req, res) {
@@ -7476,10 +7517,29 @@ async function handleBook(req, res) {
     const golfer_email = req.body?.email ? String(req.body.email).trim().toLowerCase() : "";
     const golfer_phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
-    // ✅ routing keys from UI (needed for multiple 9s / multiple 18 routings)
-    const layout_key = req.body?.layout_key ? String(req.body.layout_key).trim().toLowerCase() : null;
-    const front_nine_key = req.body?.front_nine_key ? String(req.body.front_nine_key).trim().toLowerCase() : null;
-    const back_nine_key = req.body?.back_nine_key ? String(req.body.back_nine_key).trim().toLowerCase() : null;
+    // ✅ routing keys from UI (if provided)
+    let layout_key = req.body?.layout_key ? String(req.body.layout_key).trim().toLowerCase() : null;
+    let front_nine_key = req.body?.front_nine_key ? String(req.body.front_nine_key).trim().toLowerCase() : null;
+    let back_nine_key = req.body?.back_nine_key ? String(req.body.back_nine_key).trim().toLowerCase() : null;
+
+    // ✅ ALSO accept layout label text (what the UI shows: "Pines + Lakes", "Classic + Lakes", etc.)
+    const layoutTextRaw =
+      req.body?.layout ||
+      req.body?.layoutText ||
+      req.body?.layout_name ||
+      req.body?.layoutLabel ||
+      "";
+
+    // ✅ If keys missing, derive from layout label text
+    if (holes === 18 && (!front_nine_key || !back_nine_key)) {
+      const derived = deriveRoutingKeysFromLayoutText({ holes, layoutTextRaw });
+      front_nine_key = front_nine_key || derived.front_nine_key;
+      back_nine_key = back_nine_key || derived.back_nine_key;
+    }
+    if (holes === 9 && !layout_key) {
+      const derived = deriveRoutingKeysFromLayoutText({ holes, layoutTextRaw });
+      layout_key = layout_key || derived.layout_key;
+    }
 
     // ✅ cart / hire clubs selection (optional)
     const addonIds = Array.isArray(req.body?.addonIds)
@@ -7528,7 +7588,7 @@ async function handleBook(req, res) {
     if (!Number.isFinite(players) || players < 1 || players > 4)
       return res.status(400).json({ ok: false, error: "players_invalid" });
 
-    // ✅ IMPORTANT: require routing keys so we never “double book” multiple layouts
+    // ✅ Now enforce routing keys exist (either from UI OR derived)
     if (holes === 18 && (!front_nine_key || !back_nine_key)) {
       return res.status(400).json({ ok: false, error: "routing_required" });
     }
@@ -7608,21 +7668,13 @@ async function handleBook(req, res) {
     if (cart_qty > 0 && courseCartQty > 0 && cart_qty > cartRemaining) {
       await client.query("ROLLBACK");
       didBegin = false;
-      return res.status(409).json({
-        ok: false,
-        error: "cart_sold_out",
-        cartRemaining,
-      });
+      return res.status(409).json({ ok: false, error: "cart_sold_out", cartRemaining });
     }
 
     if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining) {
       await client.query("ROLLBACK");
       didBegin = false;
-      return res.status(409).json({
-        ok: false,
-        error: "hire_clubs_sold_out",
-        clubsRemaining,
-      });
+      return res.status(409).json({ ok: false, error: "hire_clubs_sold_out", clubsRemaining });
     }
 
     const courseCartFeeCents = Number(courseRow.cart_fee_cents || 0);
@@ -7643,7 +7695,6 @@ async function handleBook(req, res) {
       return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
     }
 
-    // ✅ Lock EXACT booking_times row (routing-aware)
     const t = await client.query(
       `
       SELECT status, booked_players, max_players, price_per_player_cents,
@@ -7697,28 +7748,28 @@ async function handleBook(req, res) {
 
     const ins = await client.query(
       `
-  INSERT INTO booking_bookings
-    (course_id, play_date, tee_time, holes, players,
-     golfer_name, golfer_email, golfer_phone,
-     price_per_player_cents, total_cents, reference, status,
-     start_at, end_at,
-     paid, checked_in,
-     has_cart, cart_qty, cart_fee_cents,
-     has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
-     layout_key, front_nine_key, back_nine_key,
-     created_at)
-  VALUES
-    ($1,$2::date,$3,$4,$5,
-     $6,$7,$8,
-     $9,$10,$11,'CONFIRMED',
-     $12::timestamptz,$13::timestamptz,
-     false,false,
-     $14,$15,$16,
-     $17,$18,$19,
-     $20,$21,$22,
-     now())
-  RETURNING id, reference;
-  `,
+      INSERT INTO booking_bookings
+        (course_id, play_date, tee_time, holes, players,
+         golfer_name, golfer_email, golfer_phone,
+         price_per_player_cents, total_cents, reference, status,
+         start_at, end_at,
+         paid, checked_in,
+         has_cart, cart_qty, cart_fee_cents,
+         has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
+         layout_key, front_nine_key, back_nine_key,
+         created_at)
+      VALUES
+        ($1,$2::date,$3,$4,$5,
+         $6,$7,$8,
+         $9,$10,$11,'CONFIRMED',
+         $12::timestamptz,$13::timestamptz,
+         false,false,
+         $14,$15,$16,
+         $17,$18,$19,
+         $20,$21,$22,
+         now())
+      RETURNING id, reference;
+      `,
       [
         courseId,
         date,
@@ -7745,7 +7796,6 @@ async function handleBook(req, res) {
       ]
     );
 
-    // ✅ Update ONLY this routing row (THIS FIXES THE “BOTH LAYOUTS BOOKED” BUG)
     const newBooked = bookedPlayers + players;
 
     await client.query(
