@@ -7607,7 +7607,7 @@ async function handleBook(req, res) {
     // 1) Lock the booking_times row for this slot
     const t = await client.query(
       `
-        SELECT booked_players, max_players, price_per_player_cents, layout_key, front_nine_key, back_nine_key
+        SELECT status, booked_players, max_players, price_per_player_cents, layout_key, front_nine_key, back_nine_key
       FROM booking_times
       WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
       LIMIT 1
@@ -7654,7 +7654,7 @@ async function handleBook(req, res) {
 
     // 4) Insert booking
     const ins = await client.query(
-  `
+      `
   INSERT INTO booking_bookings
     (course_id, play_date, tee_time, holes, players,
      golfer_name, golfer_email, golfer_phone,
@@ -7677,31 +7677,31 @@ async function handleBook(req, res) {
      now())
   RETURNING id, reference;
   `,
-  [
-    courseId,
-    date,
-    time,
-    holes,
-    players,
-    golfer_name || null,
-    golfer_email || null,
-    golfer_phone || null,
-    ppp,
-    totalCents,
-    reference,
-    startAtIso,
-    endAtIso,
-    final_has_cart,
-    cart_qty,
-    cart_fee_cents,
-    final_has_hire_clubs,
-    hire_clubs_qty,
-    hire_clubs_fee_cents,
-    slotRow.layout_key || null,
-    slotRow.front_nine_key || null,
-    slotRow.back_nine_key || null,
-  ]
-);
+      [
+        courseId,
+        date,
+        time,
+        holes,
+        players,
+        golfer_name || null,
+        golfer_email || null,
+        golfer_phone || null,
+        ppp,
+        totalCents,
+        reference,
+        startAtIso,
+        endAtIso,
+        final_has_cart,
+        cart_qty,
+        cart_fee_cents,
+        final_has_hire_clubs,
+        hire_clubs_qty,
+        hire_clubs_fee_cents,
+        timeRow.layout_key || null,
+        timeRow.front_nine_key || null,
+        timeRow.back_nine_key || null,
+      ]
+    );
 
     // 5) Update booking_times booked_players + status
     const newBooked = bookedPlayers + players;
@@ -7793,7 +7793,6 @@ async function handleBook(req, res) {
 }
 
 router.post("/book", handleBook);
-
 // keep /availability POST blocked so the frontend can’t accidentally use it
 router.post("/availability", (req, res) => {
   return res.status(405).json({
