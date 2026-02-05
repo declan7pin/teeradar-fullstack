@@ -7418,11 +7418,22 @@ router.get("/availability", async (req, res) => {
   }
 });
 
+function advisoryKeyForSlot({ courseId, dateYmd, timeHhMm }) {
+  const c = Number(courseId) || 0;
+  const d = String(dateYmd || "").trim();
+  const t = String(timeHhMm || "").trim();
+  return `slot:${c}:${d}:${t}`;
+}
+
 async function advisoryLockForSlot(client, { courseId, dateYmd, timeHhMm }) {
   const key = advisoryKeyForSlot({ courseId, dateYmd, timeHhMm });
-  if (!key) return null;
-  // pg_advisory_xact_lock is released automatically on COMMIT/ROLLBACK
-  await client.query(`SELECT pg_advisory_xact_lock($1::bigint);`, [key]);
+
+  // Transaction-scoped advisory lock (auto released on COMMIT / ROLLBACK)
+  await client.query(
+    `SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`,
+    [key]
+  );
+
   return key;
 }
 
