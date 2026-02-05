@@ -7418,21 +7418,44 @@ router.get("/availability", async (req, res) => {
   }
 });
 
-function advisoryKeyForSlot({ courseId, dateYmd, timeHhMm }) {
+function advisoryKeyForSlot({
+  courseId,
+  dateYmd,
+  timeHhMm,
+  holes,
+  layout_key,
+  front_nine_key,
+  back_nine_key,
+}) {
   const c = Number(courseId) || 0;
   const d = String(dateYmd || "").trim();
   const t = String(timeHhMm || "").trim();
-  return `slot:${c}:${d}:${t}`;
+  const h = Number(holes) || 0;
+
+  const lk = String(layout_key || "").trim().toLowerCase();
+  const fk = String(front_nine_key || "").trim().toLowerCase();
+  const bk = String(back_nine_key || "").trim().toLowerCase();
+
+  // Include routing keys to avoid collisions when multiple routings share the same time
+  return `slot:${c}:${d}:${t}:${h}:${lk}:${fk}:${bk}`;
 }
 
-async function advisoryLockForSlot(client, { courseId, dateYmd, timeHhMm }) {
-  const key = advisoryKeyForSlot({ courseId, dateYmd, timeHhMm });
+async function advisoryLockForSlot(
+  client,
+  { courseId, dateYmd, timeHhMm, holes, layout_key, front_nine_key, back_nine_key }
+) {
+  const key = advisoryKeyForSlot({
+    courseId,
+    dateYmd,
+    timeHhMm,
+    holes,
+    layout_key,
+    front_nine_key,
+    back_nine_key,
+  });
 
   // Transaction-scoped advisory lock (auto released on COMMIT / ROLLBACK)
-  await client.query(
-    `SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`,
-    [key]
-  );
+  await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [key]);
 
   return key;
 }
@@ -7452,6 +7475,11 @@ async function handleBook(req, res) {
     const golfer_name = req.body?.name ? String(req.body.name).trim() : "";
     const golfer_email = req.body?.email ? String(req.body.email).trim().toLowerCase() : "";
     const golfer_phone = req.body?.phone ? String(req.body.phone).trim() : null;
+
+    // ✅ routing keys from UI (needed for multiple 9s / multiple 18 routings)
+    const layout_key = req.body?.layout_key ? String(req.body.layout_key).trim().toLowerCase() : null;
+    const front_nine_key = req.body?.front_nine_key ? String(req.body.front_nine_key).trim().toLowerCase() : null;
+    const back_nine_key = req.body?.back_nine_key ? String(req.body.back_nine_key).trim().toLowerCase() : null;
 
     // ✅ cart / hire clubs selection (optional)
     // Accept either:
@@ -7536,8 +7564,16 @@ async function handleBook(req, res) {
     await client.query("BEGIN");
     didBegin = true;
 
-    // lock per-slot (course+date+time). If two people try same tee time, one waits.
-    await advisoryLockForSlot(client, { courseId, dateYmd: date, timeHhMm: time });
+    // ✅ lock per-slot INCLUDING routing keys so overlapping routings don't collide
+    await advisoryLockForSlot(client, {
+      courseId,
+      dateYmd: date,
+      timeHhMm: time,
+      holes,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+    });
 
     // ✅ NEW: lock addon inventory per course BEFORE any overlap counting / enforcement
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
@@ -7615,16 +7651,33 @@ async function handleBook(req, res) {
       return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
     }
 
-    // 1) Lock the booking_times row for this slot
+    // ✅ Lock the booking_times row for this slot (routing-aware)
     const t = await client.query(
       `
-        SELECT status, booked_players, max_players, price_per_player_cents, layout_key, front_nine_key, back_nine_key
+      SELECT status, booked_players, max_players, price_per_player_cents,
+             layout_key, front_nine_key, back_nine_key
       FROM booking_times
-      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
+      WHERE course_id=$1
+        AND play_date=$2::date
+        AND tee_time=$3
+        AND holes=$4
+        AND (
+          ($4 = 18 AND front_nine_key = $5 AND back_nine_key = $6)
+          OR
+          ($4 = 9 AND (layout_key IS NOT DISTINCT FROM $7))
+        )
       LIMIT 1
       FOR UPDATE;
       `,
-      [courseId, date, time, holes]
+      [
+        courseId,
+        date,
+        time,
+        holes,
+        holes === 18 ? front_nine_key : null,
+        holes === 18 ? back_nine_key : null,
+        holes === 9 ? layout_key : null,
+      ]
     );
 
     if (!t.rows.length) {
@@ -7804,6 +7857,7 @@ async function handleBook(req, res) {
 }
 
 router.post("/book", handleBook);
+
 // keep /availability POST blocked so the frontend can’t accidentally use it
 router.post("/availability", (req, res) => {
   return res.status(405).json({
