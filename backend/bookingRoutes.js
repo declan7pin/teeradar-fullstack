@@ -7518,9 +7518,10 @@ async function handleBook(req, res) {
     const golfer_phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
     // ✅ routing keys from UI (if provided)
-    let layout_key = req.body?.layout_key ? String(req.body.layout_key).trim().toLowerCase() : null;
-    let front_nine_key = req.body?.front_nine_key ? String(req.body.front_nine_key).trim().toLowerCase() : null;
-    let back_nine_key = req.body?.back_nine_key ? String(req.body.back_nine_key).trim().toLowerCase() : null;
+    // ✅ IMPORTANT: DO NOT lowercase here — DB may store mixed case; we match case-insensitively in SQL.
+    let layout_key = req.body?.layout_key ? String(req.body.layout_key).trim() : null;
+    let front_nine_key = req.body?.front_nine_key ? String(req.body.front_nine_key).trim() : null;
+    let back_nine_key = req.body?.back_nine_key ? String(req.body.back_nine_key).trim() : null;
 
     // ✅ ALSO accept layout label text (what the UI shows: "Pines + Lakes", "Classic + Lakes", etc.)
     const layoutTextRaw =
@@ -7695,7 +7696,7 @@ async function handleBook(req, res) {
       return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
     }
 
-    // ✅ FIX: match times even if booking_times.tee_time includes provider suffix like "06:00|..."
+    // ✅ FIX: routing-aware + case-insensitive match + supports provider suffix "06:00|..."
     const t = await client.query(
       `
       SELECT tee_time, status, booked_players, max_players, price_per_player_cents,
@@ -7705,13 +7706,23 @@ async function handleBook(req, res) {
         AND play_date=$2::date
         AND holes=$4
         AND split_part(tee_time,'|',1) = $3
-        AND layout_key IS NOT DISTINCT FROM $5
-        AND front_nine_key IS NOT DISTINCT FROM $6
-        AND back_nine_key IS NOT DISTINCT FROM $7
+        AND (
+          ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
+          OR
+          ($4 = 9 AND lower(layout_key) = lower($5))
+        )
       LIMIT 1
       FOR UPDATE;
       `,
-      [courseId, date, time, holes, layout_key, front_nine_key, back_nine_key]
+      [
+        courseId,
+        date,
+        time,
+        holes,
+        layout_key || "",       // $5
+        front_nine_key || "",   // $6
+        back_nine_key || "",    // $7
+      ]
     );
 
     if (!t.rows.length) {
@@ -7802,6 +7813,7 @@ async function handleBook(req, res) {
 
     const newBooked = bookedPlayers + players;
 
+    // ✅ FIX: routing-aware + case-insensitive update (ONLY the chosen routing row)
     await client.query(
       `
       UPDATE booking_times
@@ -7817,11 +7829,22 @@ async function handleBook(req, res) {
         AND play_date=$2::date
         AND tee_time=$3
         AND holes=$4
-        AND layout_key IS NOT DISTINCT FROM $5
-        AND front_nine_key IS NOT DISTINCT FROM $6
-        AND back_nine_key IS NOT DISTINCT FROM $7;
+        AND (
+          ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
+          OR
+          ($4 = 9 AND lower(layout_key) = lower($5))
+        );
       `,
-      [courseId, date, teeTimeDb, holes, layout_key, front_nine_key, back_nine_key, newBooked] // ✅ FIX
+      [
+        courseId,
+        date,
+        teeTimeDb,
+        holes,
+        layout_key || "",
+        front_nine_key || "",
+        back_nine_key || "",
+        newBooked,
+      ]
     );
 
     await client.query("COMMIT");
