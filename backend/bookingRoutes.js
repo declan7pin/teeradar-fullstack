@@ -3541,8 +3541,9 @@ async function syncBookedPlayersForTime({
   const holesN = Number(holes || 0);
 
   const norm = (v) => {
-    const s = String(v || "").trim().toLowerCase();
-    return s ? s : null;
+    const s = String(v || "").trim();
+    if (!s) return null;
+    return s.toLowerCase();
   };
 
   layout_key = norm(layout_key);
@@ -3550,32 +3551,33 @@ async function syncBookedPlayersForTime({
   back_nine_key = norm(back_nine_key);
 
   if (DEBUG_SYNC) {
-    console.log("🟨 sync IN", {
+    console.log("🟨 syncBookedPlayersForTime IN", {
       courseId,
       play_date,
-      tee_time: cleanTime,
-      holes: holesN,
+      cleanTime,
+      holesN,
       layout_key,
       front_nine_key,
       back_nine_key,
     });
   }
 
-  // 🚫 HARD RULE: never sync without routing
+  // 🚫 HARD RULE: never sync without routing (prevents accidental generic 18 updates)
   if (holesN === 18 && (!front_nine_key || !back_nine_key) && !layout_key) {
-    if (DEBUG_SYNC) console.log("🟥 sync aborted: missing routing for 18");
+    if (DEBUG_SYNC) console.log("🟥 sync abort: missing routing for 18", { cleanTime, holesN });
     return { ok: true, skipped: true, reason: "routing_required_for_18" };
   }
 
   if (holesN === 9 && !layout_key) {
-    if (DEBUG_SYNC) console.log("🟥 sync aborted: missing routing for 9");
+    if (DEBUG_SYNC) console.log("🟥 sync abort: missing routing for 9", { cleanTime, holesN });
     return { ok: true, skipped: true, reason: "routing_required_for_9" };
   }
 
-  // ✅ STRICT match ONLY — no split_part, no fallback
+  // ✅ STRICT TARGET: match ONLY clean tee_time row that should exist for routed rows
+  // (If your booking_times stores suffixes, we will see it in the diagnostics below)
   const targetQ = await db.query(
     `
-    SELECT id, tee_time, max_players
+    SELECT id, tee_time, holes, max_players, layout_key, front_nine_key, back_nine_key, booked_players, status
     FROM booking_times
     WHERE course_id = $1
       AND play_date = $2::date
@@ -3586,30 +3588,72 @@ async function syncBookedPlayersForTime({
       AND back_nine_key IS NOT DISTINCT FROM $7
     LIMIT 1;
     `,
-    [
-      courseId,
-      play_date,
-      cleanTime,
-      holesN,
-      layout_key,
-      front_nine_key,
-      back_nine_key,
-    ]
+    [courseId, play_date, cleanTime, holesN, layout_key, front_nine_key, back_nine_key]
   );
 
   const target = targetQ.rows?.[0] || null;
 
+  // ✅ DIAGNOSTICS when target not found
   if (!target) {
     if (DEBUG_SYNC) {
-      console.log("🚫 sync: no exact booking_times row found — refusing to update", {
-        tee_time: cleanTime,
-        holes: holesN,
+      console.log("🟥 sync NO EXACT TARGET FOUND", {
+        courseId,
+        play_date,
+        cleanTime,
+        holesN,
         layout_key,
         front_nine_key,
         back_nine_key,
       });
+
+      // What booking_times rows exist for this time (including suffixed ones)?
+      const bt = await db.query(
+        `
+        SELECT id, tee_time, holes, max_players, booked_players, status, layout_key, front_nine_key, back_nine_key
+        FROM booking_times
+        WHERE course_id = $1
+          AND play_date = $2::date
+          AND holes = $4
+          AND split_part(tee_time,'|',1) = $3
+        ORDER BY id ASC;
+        `,
+        [courseId, play_date, cleanTime, holesN]
+      );
+
+      console.log("🧩 booking_times rows at this time (split_part match):", bt.rows || []);
+
+      // What manual slots exist for this time?
+      const ms = await db.query(
+        `
+        SELECT id, tee_time, holes, slot_index, name, layout_key, front_nine_key, back_nine_key, reference
+        FROM booking_manual_slots
+        WHERE course_id = $1
+          AND play_date = $2::date
+          AND holes = $4
+          AND tee_time = $3
+        ORDER BY slot_index ASC, id ASC;
+        `,
+        [courseId, play_date, cleanTime, holesN]
+      );
+
+      console.log("🧩 booking_manual_slots rows at this time:", ms.rows || []);
     }
+
     return { ok: true, skipped: true, reason: "no_exact_target" };
+  }
+
+  if (DEBUG_SYNC) {
+    console.log("🟩 sync TARGET FOUND", {
+      id: target.id,
+      tee_time: target.tee_time,
+      holes: target.holes,
+      max_players: target.max_players,
+      layout_key: target.layout_key,
+      front_nine_key: target.front_nine_key,
+      back_nine_key: target.back_nine_key,
+      booked_players: target.booked_players,
+      status: target.status,
+    });
   }
 
   // ✅ Count ONLINE bookings (layout-scoped)
@@ -3656,8 +3700,7 @@ async function syncBookedPlayersForTime({
   const status = totalBooked >= maxPlayers ? "BOOKED" : "AVAILABLE";
 
   if (DEBUG_SYNC) {
-    console.log("🟩 sync UPDATE", {
-      id: target.id,
+    console.log("🟦 sync COUNTS", {
       onlineBooked,
       manualBooked,
       totalBooked,
@@ -3677,13 +3720,21 @@ async function syncBookedPlayersForTime({
     [target.id, totalBooked, status]
   );
 
+  if (DEBUG_SYNC) {
+    console.log("✅ sync UPDATED booking_times", {
+      id: target.id,
+      booked_players: totalBooked,
+      status,
+    });
+  }
+
   return {
     ok: true,
     updated: true,
     id: target.id,
     booked_players: totalBooked,
     status,
-    matched_tee_time: target.tee_time,
+    matched_tee_time: target.tee_time || null,
   };
 }
 // -----------------------------
