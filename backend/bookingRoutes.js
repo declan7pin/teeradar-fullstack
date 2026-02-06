@@ -6,6 +6,7 @@ import { Resend } from "resend";
 import cookieParser from "cookie-parser"; // ✅ ADD
 import { recordEvent } from "./analytics.js";
 import jwt from "jsonwebtoken";
+import { courseIdFromSlug } from "./bookingViews.js";
 
 const router = express.Router();
 // ✅ CORS for booking admin + course admin UIs (fixes “buttons do nothing” due to blocked preflight)
