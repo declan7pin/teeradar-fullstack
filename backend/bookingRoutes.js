@@ -6761,6 +6761,39 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
     q += ` ORDER BY tee_time_clean ASC, t.holes DESC, t.id ASC`;
 
     const { rows } = await db.query(q, params);
+    // ✅ HIDE legacy generic 18-hole rows when a routed 18-hole row exists at same clean time
+// This prevents the UI showing BOTH:
+//   "09:50 (18 holes)" AND "09:50 (18 holes — Classic + Lakes)"
+const keyOf = (r) =>
+  `${String(r.play_date || "")}|${String(r.tee_time_clean || "")}|${Number(r.holes || 0)}`;
+
+const hasRouted18 = new Set();
+for (const r of rows || []) {
+  const holesN = Number(r.holes || 0);
+  if (holesN !== 18) continue;
+
+  const lk = String(r.layout_key || "").trim();
+  const fk = String(r.front_nine_key || "").trim();
+  const bk = String(r.back_nine_key || "").trim();
+
+  const isGeneric = !lk && !fk && !bk;
+  if (!isGeneric) hasRouted18.add(keyOf(r));
+}
+
+const filteredRows = (rows || []).filter((r) => {
+  const holesN = Number(r.holes || 0);
+  if (holesN !== 18) return true;
+
+  const lk = String(r.layout_key || "").trim();
+  const fk = String(r.front_nine_key || "").trim();
+  const bk = String(r.back_nine_key || "").trim();
+  const isGeneric = !lk && !fk && !bk;
+
+  // if a routed 18-hole exists at this time, drop the generic one
+  if (isGeneric && hasRouted18.has(keyOf(r))) return false;
+
+  return true;
+});
 
     // ✅ Normalize + attach display label so the frontend can show the correct layout always
     let times = (rows || []).map((r) => {
