@@ -6477,7 +6477,6 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
       layouts9 = Array.isArray(layoutCfg.layouts) ? layoutCfg.layouts : [];
       routes18 = Array.isArray(layoutCfg.routes18) ? layoutCfg.routes18 : [];
     } catch (e) {
-      // If booking_course_layouts isn't migrated in this environment yet, don't break daily sheet
       if (debug) console.warn("⚠️ booking_course_layouts unavailable (continuing):", e?.message || e);
       layouts9 = [];
       routes18 = [];
@@ -6516,7 +6515,8 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
         t.id,
         t.play_date,
 
-        split_part(t.tee_time, '|', 1) AS tee_time_clean,
+        -- ✅ IMPORTANT: tee_time may be stored as "HH:MM|suffix"
+        split_part(COALESCE(t.tee_time::text,''), '|', 1) AS tee_time_clean,
 
         t.tee_time,
         t.holes,
@@ -6529,6 +6529,7 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
         t.front_nine_key,
         t.back_nine_key,
 
+        -- ✅ booking details for daily sheet
         b.reference AS booking_reference,
         b.golfer_name AS booking_name,
         b.players AS booking_players,
@@ -6557,8 +6558,11 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
           AND bb.play_date = t.play_date
           AND bb.status = 'CONFIRMED'
           AND bb.holes = t.holes
-          AND split_part(COALESCE(bb.tee_time::text,''), '|', 1) = split_part(t.tee_time, '|', 1)
 
+          -- ✅ FIX: compare text-to-text (prevents time = text crash)
+          AND split_part(COALESCE(bb.tee_time::text,''), '|', 1) = split_part(COALESCE(t.tee_time::text,''), '|', 1)
+
+          -- layout matching (handles nulls safely)
           AND bb.layout_key IS NOT DISTINCT FROM t.layout_key
           AND bb.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
           AND bb.back_nine_key IS NOT DISTINCT FROM t.back_nine_key
@@ -6622,7 +6626,7 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
     });
 
     if (debug) {
-      console.log("🧪 /course-admin/times layout+booking debug", {
+      console.log("🧪 /course-admin/times debug", {
         slug,
         date,
         holes,
@@ -6634,8 +6638,6 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
           back_nine_key: t.back_nine_key,
           layout_label: t.layout_label,
           booking_name: t.booking_name,
-          booking_cart_qty: t.booking_cart_qty,
-          booking_hire_clubs_qty: t.booking_hire_clubs_qty,
         })),
       });
     }
@@ -6644,7 +6646,7 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
   } catch (e) {
     console.error("course-admin/times GET", e);
 
-    // ✅ helpful if you ever call with ?debug=1
+    // ✅ if you call with ?debug=1, return the real message
     if (String(req.query.debug || "") === "1") {
       return res.status(500).json({
         ok: false,
