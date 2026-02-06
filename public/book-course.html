@@ -1066,6 +1066,19 @@ const addonLines = chosenAddons.map(a => {
 
     const back_nine_key =
       (s.back_nine_key ?? s.backNineKey ?? s.backNine ?? "").toString().trim().toLowerCase();
+      
+      // ✅ build a stable route key for 18s (backend uses this to match the exact tee time row)
+const route18Key =
+  (holes === 18 && front_nine_key && back_nine_key)
+    ? `18:${front_nine_key}|${back_nine_key}`
+    : null;
+
+// ✅ for 9s, layout_key is the 9 key
+const layout9Key = (holes === 9 && layout_key) ? layout_key : null;
+
+// ✅ final key we send (9s use their 9 key, 18s use route18Key or the provided layout_key)
+const finalLayoutKey =
+  (holes === 9) ? layout9Key : (layout_key || route18Key);
 
     // ✅ ALSO send the human layout label as a fallback (backend can derive keys if needed)
     const layoutText = (getLayoutText(s) || "").toString().trim();
@@ -1092,9 +1105,10 @@ const addonLines = chosenAddons.map(a => {
         phone,
 
         // ✅ include routing keys (primary)
-        layout_key: holes === 9 ? (layout_key || null) : null,
-        front_nine_key: holes === 18 ? (front_nine_key || null) : null,
-        back_nine_key: holes === 18 ? (back_nine_key || null) : null,
+        // ✅ routing (ALWAYS send what we know, especially layout_key for 18s)
+layout_key: finalLayoutKey || null,
+front_nine_key: front_nine_key || null,
+back_nine_key: back_nine_key || null,
 
         // ✅ include label (fallback)
         layout: layoutText,
