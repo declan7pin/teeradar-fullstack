@@ -6549,34 +6549,74 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
     const params = [courseId, date];
     let q = `
       SELECT
-        id,
-        play_date,
+        t.id,
+        t.play_date,
 
         -- ✅ IMPORTANT: tee_time may be stored as "HH:MM|suffix" - always return clean time for UI
-        split_part(tee_time, '|', 1) AS tee_time_clean,
+        split_part(t.tee_time, '|', 1) AS tee_time_clean,
 
-        tee_time,
-        holes,
-        max_players,
-        booked_players,
-        price_per_player_cents,
-        status,
+        t.tee_time,
+        t.holes,
+        t.max_players,
+        t.booked_players,
+        t.price_per_player_cents,
+        t.status,
 
-        layout_key,
-        front_nine_key,
-        back_nine_key
+        t.layout_key,
+        t.front_nine_key,
+        t.back_nine_key,
 
-      FROM booking_times
-      WHERE course_id = $1 AND play_date = $2::date
+        -- ✅ NEW: attach booking details for the daily sheet UI
+        b.reference AS booking_reference,
+        b.golfer_name AS booking_name,
+        b.players AS booking_players,
+        b.paid AS booking_paid,
+        b.checked_in AS booking_checked_in,
+        b.has_cart AS booking_has_cart,
+        b.cart_qty AS booking_cart_qty,
+        b.has_hire_clubs AS booking_has_hire_clubs,
+        b.hire_clubs_qty AS booking_hire_clubs_qty
+
+      FROM booking_times t
+
+      -- ✅ Attach the latest CONFIRMED booking that matches this exact time + layout
+      LEFT JOIN LATERAL (
+        SELECT
+          bb.reference,
+          bb.golfer_name,
+          bb.players,
+          bb.paid,
+          bb.checked_in,
+          bb.has_cart,
+          bb.cart_qty,
+          bb.has_hire_clubs,
+          bb.hire_clubs_qty
+        FROM booking_bookings bb
+        WHERE bb.course_id = t.course_id
+          AND bb.play_date = t.play_date
+          AND bb.status = 'CONFIRMED'
+          AND bb.holes = t.holes
+          AND bb.tee_time = split_part(t.tee_time, '|', 1)
+
+          -- layout matching (handles nulls safely)
+          AND bb.layout_key IS NOT DISTINCT FROM t.layout_key
+          AND bb.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
+          AND bb.back_nine_key IS NOT DISTINCT FROM t.back_nine_key
+
+        ORDER BY bb.created_at DESC
+        LIMIT 1
+      ) b ON true
+
+      WHERE t.course_id = $1 AND t.play_date = $2::date
     `;
 
     if (holes) {
       params.push(holes);
-      q += ` AND holes = $3`;
+      q += ` AND t.holes = $3`;
     }
 
     // ✅ order by clean time so rows don't get weird when suffixes exist
-    q += ` ORDER BY tee_time_clean ASC, holes DESC`;
+    q += ` ORDER BY tee_time_clean ASC, t.holes DESC`;
 
     const { rows } = await db.query(q, params);
 
@@ -6629,13 +6669,13 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
         front_nine_key: frontKey || "",
         back_nine_key: backKey || "",
 
-        // ✅ NEW: explicit label for UI (this fixes "always shows Pines+Lakes" when keys are missing)
+        // ✅ NEW: explicit label for UI
         layout_label: layoutLabel || null,
       };
     });
 
     if (debug) {
-      console.log("🧪 /course-admin/times layout debug", {
+      console.log("🧪 /course-admin/times layout+booking debug", {
         slug,
         date,
         holes,
@@ -6646,6 +6686,9 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
           front_nine_key: t.front_nine_key,
           back_nine_key: t.back_nine_key,
           layout_label: t.layout_label,
+          booking_name: t.booking_name,
+          booking_cart_qty: t.booking_cart_qty,
+          booking_hire_clubs_qty: t.booking_hire_clubs_qty,
         })),
       });
     }
@@ -6679,6 +6722,10 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
         b.play_date::text AS play_date,
         b.tee_time,
         b.holes,
+        -- ✅ ADD: layout keys so daily sheet can match the booking to the correct routing
+        b.layout_key,
+        b.front_nine_key,
+        b.back_nine_key,
         b.players,
         b.golfer_name AS name,
         b.golfer_email AS email,
@@ -6703,7 +6750,7 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
       params
     );
 
-        // ✅ ADD: manual slots for course-admin daily sheet
+    // ✅ ADD: manual slots for course-admin daily sheet
     const ms = await db.query(
       `
       SELECT
