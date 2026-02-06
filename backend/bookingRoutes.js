@@ -3707,20 +3707,21 @@ back_nine_key = toNull(back_nine_key);
 
   // ✅ If no tee time row exists at all, insert one WITH routing keys if possible
   // (This is now much rarer because we match tee_time suffixes properly)
-  const ins = await db.query(
-    `
-    INSERT INTO booking_times
-      (course_id, play_date, tee_time, holes, max_players, booked_players, status,
-       layout_key, front_nine_key, back_nine_key, created_at, updated_at)
-    VALUES
-      ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())
-    RETURNING id;
-    `,
-    [courseId, play_date, cleanTime, holesN, maxPlayers, totalBooked, status, layout_key, front_nine_key, back_nine_key]
-  );
-
-  return { ok: true, inserted: true, id: ins.rows?.[0]?.id || null, booked_players: totalBooked, status };
+  // 🚫 ABSOLUTE SAFETY: never insert booking_times rows from sync
+// booking_times must be created ONLY by generate-times or admin tools
+if (DEBUG_SYNC) {
+  console.log("🚫 syncBookedPlayersForTime: refused to insert booking_times", {
+    courseId,
+    play_date,
+    tee_time: cleanTime,
+    holes: holesN,
+    layout_key,
+    front_nine_key,
+    back_nine_key,
+  });
 }
+
+return { ok: true, skipped: true, reason: "no_target_row" };
 // -----------------------------
 // ✅ Platform admin manual slots (book-admin.html)
 // -----------------------------
@@ -4416,15 +4417,21 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     // ✅ NEW: accept time row id from UI (BEST FIX)
     const timeId = Number(req.body?.time_id ?? req.body?.timeId ?? 0) || null;
 
+    // ✅ normalize helper (CRITICAL FIX)
+    const normKey = (v) => {
+      const s = String(v || "").trim().toLowerCase();
+      return s ? s : null;
+    };
+
     // routing keys (may be missing from frontend — we’ll derive from timeId if present)
     let layout_key =
-      String(req.body?.layout_key || req.body?.layoutKey || "").trim() || null;
+      normKey(req.body?.layout_key || req.body?.layoutKey || null);
 
     let front_nine_key =
-      String(req.body?.front_nine_key || req.body?.front9_key || req.body?.front9Key || "").trim() || null;
+      normKey(req.body?.front_nine_key || req.body?.front9_key || req.body?.front9Key || null);
 
     let back_nine_key =
-      String(req.body?.back_nine_key || req.body?.back9_key || req.body?.back9Key || "").trim() || null;
+      normKey(req.body?.back_nine_key || req.body?.back9_key || req.body?.back9Key || null);
 
     // players count
     const playersRaw = Number(req.body?.players || req.body?.numPlayers || 1);
@@ -4465,6 +4472,21 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
 
     const notes = req.body?.notes ? String(req.body.notes).trim() : null;
 
+    // ✅ DEBUG LOG (shows what UI sent BEFORE we derive)
+    console.log("🧾 course-admin/booking incoming", {
+      slug,
+      playDate,
+      tee_time_raw,
+      holes,
+      timeId,
+      keys_from_body: { layout_key, front_nine_key, back_nine_key },
+      players,
+      name_present: !!name,
+      email_present: !!email,
+      cart_qty,
+      hire_clubs_qty,
+    });
+
     // validation
     if (!playDate) return res.status(400).json({ ok: false, error: "date_required" });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(playDate)) return res.status(400).json({ ok: false, error: "date_invalid" });
@@ -4501,17 +4523,49 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
 
       tee_time = String(row.tee_time_clean || tee_time_raw).trim();
 
-      // override keys from the actual time row
-      layout_key = row.layout_key ? String(row.layout_key).trim() : null;
-      front_nine_key = row.front_nine_key ? String(row.front_nine_key).trim() : null;
-      back_nine_key = row.back_nine_key ? String(row.back_nine_key).trim() : null;
+      // ✅ override keys from the actual time row (AND normalize)
+      layout_key = normKey(row.layout_key);
+      front_nine_key = normKey(row.front_nine_key);
+      back_nine_key = normKey(row.back_nine_key);
+
+      console.log("🧩 course-admin/booking derived from timeId", {
+        timeId,
+        tee_time_clean: tee_time,
+        keys_from_time_row: { layout_key, front_nine_key, back_nine_key },
+      });
+    }
+
+    // ✅ Extra safety: if 18-hole and layout_key is in "18:front|back" form, derive front/back
+    if (holes === 18 && layout_key && (!front_nine_key || !back_nine_key)) {
+      const m = String(layout_key).match(/^18:([^|]+)\|([^|]+)$/);
+      if (m) {
+        front_nine_key = front_nine_key || normKey(m[1]);
+        back_nine_key = back_nine_key || normKey(m[2]);
+        console.log("🧩 course-admin/booking parsed 18:front|back", {
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+        });
+      }
     }
 
     // 🚫 never allow generic manual bookings
     if (holes === 18 && (!front_nine_key || !back_nine_key) && !layout_key) {
+      console.log("⛔ course-admin/booking routing_required (18)", {
+        tee_time,
+        holes,
+        layout_key,
+        front_nine_key,
+        back_nine_key,
+      });
       return res.status(400).json({ ok: false, error: "routing_required" });
     }
     if (holes === 9 && !layout_key) {
+      console.log("⛔ course-admin/booking routing_required (9)", {
+        tee_time,
+        holes,
+        layout_key,
+      });
       return res.status(400).json({ ok: false, error: "routing_required" });
     }
 
@@ -4540,6 +4594,19 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
 
     const takenSet = new Set((taken.rows || []).map(r => Number(r.slot_index)));
     const freeSlots = [1,2,3,4].filter(i => !takenSet.has(i));
+
+    console.log("🟩 course-admin/booking slot scan", {
+      courseId,
+      playDate,
+      tee_time,
+      holes,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+      taken: Array.from(takenSet.values()),
+      freeSlots,
+      playersRequested: players,
+    });
 
     if (freeSlots.length < players) {
       await client.query("ROLLBACK");
@@ -4600,7 +4667,18 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     await client.query("COMMIT");
     didBegin = false;
 
-    // ✅ IMPORTANT: allowInsert=false so we NEVER generate a new generic tee time row
+    // ✅ IMPORTANT: pass routing keys; allowInsert=false (if your sync supports it)
+    console.log("🔄 course-admin/booking calling syncBookedPlayersForTime", {
+      courseId,
+      play_date: playDate,
+      tee_time,
+      holes,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+      allowInsert: false,
+    });
+
     const sync = await syncBookedPlayersForTime({
       courseId,
       play_date: playDate,
@@ -4611,6 +4689,8 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       back_nine_key,
       allowInsert: false,
     });
+
+    console.log("✅ course-admin/booking sync result", sync);
 
     return res.json({ ok: true, reference, rows: filled, sync });
 
