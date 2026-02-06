@@ -3531,7 +3531,6 @@ async function syncBookedPlayersForTime({
   layout_key = null,
   front_nine_key = null,
   back_nine_key = null,
-  allowInsert = true, // ✅ NEW: when false, this function will NEVER create a new booking_times row
 }) {
   const cleanTime = String(tee_time || "").trim();
   const holesN = Number(holes || 0);
@@ -3545,21 +3544,26 @@ async function syncBookedPlayersForTime({
   front_nine_key = norm(front_nine_key);
   back_nine_key = norm(back_nine_key);
 
-  // ✅ If caller didn't pass routing keys, try to pick the existing tee time row (prefer routed rows)
+  // helper: match a tee_time that may be stored as "HH:MM|suffix"
+  // IMPORTANT: this prevents creating a new "HH:MM" row when "HH:MM|x" exists
+  const TIME_MATCH_SQL = `(t.tee_time = $3 OR split_part(t.tee_time,'|',1) = $3)`;
+
+  // ✅ Find the target booking_times row
   let target = null;
+
   if (!layout_key && !front_nine_key && !back_nine_key) {
+    // caller didn't pass keys → pick the best existing row at this time (prefer routed)
     const t = await db.query(
       `
-      SELECT id, layout_key, front_nine_key, back_nine_key, max_players
-      FROM booking_times
-      WHERE course_id = $1
-        AND play_date = $2::date
-        AND split_part(tee_time,'|',1) = $3
-        AND holes = $4
+      SELECT id, tee_time, layout_key, front_nine_key, back_nine_key, max_players
+      FROM booking_times t
+      WHERE t.course_id = $1
+        AND t.play_date = $2::date
+        AND ${TIME_MATCH_SQL}
+        AND t.holes = $4
       ORDER BY
-        -- prefer rows that have routing keys (so we don't "create" a blank row)
-        (layout_key IS NULL AND front_nine_key IS NULL AND back_nine_key IS NULL) ASC,
-        id ASC
+        (t.layout_key IS NULL AND t.front_nine_key IS NULL AND t.back_nine_key IS NULL) ASC,
+        t.id ASC
       LIMIT 1;
       `,
       [courseId, play_date, cleanTime, holesN]
@@ -3573,37 +3577,60 @@ async function syncBookedPlayersForTime({
       back_nine_key = norm(target.back_nine_key);
     }
   } else {
-    // caller provided keys — find exact row
+    // caller provided keys → find exact routed row (still time-match by split_part OR exact)
     const t = await db.query(
       `
-      SELECT id, max_players
-      FROM booking_times
-      WHERE course_id = $1
-        AND play_date = $2::date
-        AND split_part(tee_time,'|',1) = $3
-        AND holes = $4
-        AND layout_key IS NOT DISTINCT FROM $5
-        AND front_nine_key IS NOT DISTINCT FROM $6
-        AND back_nine_key IS NOT DISTINCT FROM $7
-      ORDER BY id ASC
+      SELECT id, tee_time, max_players
+      FROM booking_times t
+      WHERE t.course_id = $1
+        AND t.play_date = $2::date
+        AND ${TIME_MATCH_SQL}
+        AND t.holes = $4
+        AND t.layout_key IS NOT DISTINCT FROM $5
+        AND t.front_nine_key IS NOT DISTINCT FROM $6
+        AND t.back_nine_key IS NOT DISTINCT FROM $7
+      ORDER BY t.id ASC
       LIMIT 1;
       `,
       [courseId, play_date, cleanTime, holesN, layout_key, front_nine_key, back_nine_key]
     );
+
     target = t.rows?.[0] || null;
+
+    // ✅ fallback: if keys were provided but we didn't find a row,
+    // try again ignoring keys but still preferring routed rows (prevents accidental inserts)
+    if (!target) {
+      const t2 = await db.query(
+        `
+        SELECT id, tee_time, layout_key, front_nine_key, back_nine_key, max_players
+        FROM booking_times t
+        WHERE t.course_id = $1
+          AND t.play_date = $2::date
+          AND ${TIME_MATCH_SQL}
+          AND t.holes = $4
+        ORDER BY
+          (t.layout_key IS NULL AND t.front_nine_key IS NULL AND t.back_nine_key IS NULL) ASC,
+          t.id ASC
+        LIMIT 1;
+        `,
+        [courseId, play_date, cleanTime, holesN]
+      );
+      target = t2.rows?.[0] || null;
+      if (target) {
+        layout_key = norm(target.layout_key);
+        front_nine_key = norm(target.front_nine_key);
+        back_nine_key = norm(target.back_nine_key);
+      }
+    }
   }
 
-  // 🚫 SAFETY: if routing is missing, never insert a generic row
-  // 18 holes needs front+back or an explicit layout_key
+  // 🚫 SAFETY: never create/update a GENERIC 18-hole row
   if (holesN === 18 && (!front_nine_key || !back_nine_key) && !layout_key) {
     return { ok: true, skipped: true, reason: "routing_required_for_18" };
   }
-  // 9 holes needs a layout_key
-  if (holesN === 9 && !layout_key) {
-    return { ok: true, skipped: true, reason: "routing_required_for_9" };
-  }
 
-  // ✅ Count CONFIRMED online bookings for this exact routed tee time
+  // ✅ Count CONFIRMED online bookings for this exact routed time
+  // (booking_bookings.tee_time should already be clean HH:MM, so match cleanTime)
   const onlineBookedQ = await db.query(
     `
     SELECT COALESCE(SUM(players),0)::int AS c
@@ -3621,7 +3648,7 @@ async function syncBookedPlayersForTime({
   );
   const onlineBooked = Number(onlineBookedQ.rows?.[0]?.c || 0);
 
-  // ✅ Manual slots booked must ALSO be layout-scoped (manual table stores keys)
+  // ✅ Manual slots booked must be layout-scoped
   const manualSlotsBookedQ = await db.query(
     `
     SELECT COUNT(*)::int AS c
@@ -3648,7 +3675,7 @@ async function syncBookedPlayersForTime({
 
   const status = totalBooked >= maxPlayers ? "BOOKED" : "AVAILABLE";
 
-  // ✅ Update existing row if possible
+  // ✅ Update existing row (no inserts if target exists)
   if (target?.id) {
     await db.query(
       `
@@ -3661,19 +3688,23 @@ async function syncBookedPlayersForTime({
       [target.id, totalBooked, status]
     );
 
-    return { ok: true, updated: true, id: target.id, booked_players: totalBooked, status };
+    return {
+      ok: true,
+      updated: true,
+      id: target.id,
+      booked_players: totalBooked,
+      status,
+      matched_tee_time: target.tee_time || null,
+    };
   }
 
-  // ✅ NEW: if inserts are not allowed, STOP here (prevents the “new generic time row” bug)
-  if (!allowInsert) {
-    return { ok: true, skippedInsert: true, booked_players: totalBooked, status };
-  }
-
-  // ✅ If no tee time row exists at all, insert one *with routing keys*
+  // ✅ If no tee time row exists at all, insert one WITH routing keys if possible
+  // (This is now much rarer because we match tee_time suffixes properly)
   const ins = await db.query(
     `
     INSERT INTO booking_times
-      (course_id, play_date, tee_time, holes, max_players, booked_players, status, layout_key, front_nine_key, back_nine_key, created_at, updated_at)
+      (course_id, play_date, tee_time, holes, max_players, booked_players, status,
+       layout_key, front_nine_key, back_nine_key, created_at, updated_at)
     VALUES
       ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())
     RETURNING id;
