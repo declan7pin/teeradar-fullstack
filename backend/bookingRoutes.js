@@ -7,6 +7,8 @@ import cookieParser from "cookie-parser"; // ✅ ADD
 import { recordEvent } from "./analytics.js";
 import jwt from "jsonwebtoken";
 
+const DEBUG_SYNC = String(process.env.DEBUG_BOOKING || "") === "1";
+
 const router = express.Router();
 // ✅ CORS for booking admin + course admin UIs (fixes “buttons do nothing” due to blocked preflight)
 router.use((req, res, next) => {
