@@ -4307,7 +4307,7 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
   }
 });
 
-    //// ✅ Course admin — add booking (alias for frontend)
+// ✅ Course admin — add booking (alias for frontend)
 // POST /api/book/course-admin/booking
 // Uses SAME logic as /course-admin/manual-slot but NEVER creates generic tee times
 router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
@@ -4327,7 +4327,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
 
     const holes = Number(req.body?.holes || 18);
 
-    // ✅ ROUTING (CRITICAL FIX)
+    // ✅ ROUTING (CRITICAL)
     const layout_key =
       String(req.body?.layout_key || req.body?.layoutKey || "").trim() || null;
 
@@ -4355,7 +4355,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       return res.status(400).json({ ok: false, error: "routing_required" });
     }
 
-    // ✅ players count
+    // ✅ players
     const playersRaw = Number(req.body?.players || req.body?.numPlayers || 1);
     const players = Math.max(1, Math.min(4, Number.isFinite(playersRaw) ? playersRaw : 1));
 
@@ -4409,7 +4409,14 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     await client.query("BEGIN");
     didBegin = true;
 
-    // ⛔ layout-aware lock (prevents cross-layout collision)
+    // ✅ LOAD COURSE SETTINGS (FIX)
+    const courseRowQ = await client.query(
+      `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
+      [courseId]
+    );
+    const courseRow = courseRowQ.rows[0] || {};
+
+    // ⛔ layout-aware lock
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
       `manualslots:${courseId}:${playDate}:${tee_time}:${holes}:${layout_key || ""}:${front_nine_key || ""}:${back_nine_key || ""}`,
     ]);
@@ -4428,8 +4435,8 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       [courseId, playDate, tee_time, holes, layout_key, front_nine_key, back_nine_key]
     );
 
-    const takenSet = new Set((taken.rows || []).map(r => Number(r.slot_index)));
-    const freeSlots = [1,2,3,4].filter(i => !takenSet.has(i));
+    const takenSet = new Set(taken.rows.map(r => Number(r.slot_index)));
+    const freeSlots = [1, 2, 3, 4].filter(i => !takenSet.has(i));
 
     if (freeSlots.length < players) {
       await client.query("ROLLBACK");
@@ -4445,7 +4452,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const filled = [];
 
     const startAtIso = toIsoDateTimeLocal(playDate, tee_time);
-    const dur = durationMinsForHoles({}, holes);
+    const dur = durationMinsForHoles(courseRow, holes); // ✅ FIX
     const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60000).toISOString();
 
     for (let i = 0; i < players; i++) {
@@ -4490,7 +4497,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     await client.query("COMMIT");
     didBegin = false;
 
-    // ✅ layout-aware sync (FIX)
+    // ✅ layout-aware sync
     const sync = await syncBookedPlayersForTime({
       courseId,
       play_date: playDate,
