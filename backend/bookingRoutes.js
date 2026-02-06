@@ -3542,9 +3542,14 @@ async function syncBookedPlayersForTime({
     return s ? s : null;
   };
 
-  layout_key = norm(layout_key);
-  front_nine_key = norm(front_nine_key);
-  back_nine_key = norm(back_nine_key);
+  const toNull = (v) => {
+  const s = String(v || "").trim().toLowerCase();
+  return s === "" ? null : s;
+};
+
+layout_key = toNull(layout_key);
+front_nine_key = toNull(front_nine_key);
+back_nine_key = toNull(back_nine_key);
 
   // helper: match a tee_time that may be stored as "HH:MM|suffix"
   // IMPORTANT: this prevents creating a new "HH:MM" row when "HH:MM|x" exists
