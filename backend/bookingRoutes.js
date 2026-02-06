@@ -6552,7 +6552,9 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
           AND bb.play_date = t.play_date
           AND bb.status = 'CONFIRMED'
           AND bb.holes = t.holes
-          AND bb.tee_time = split_part(t.tee_time, '|', 1)
+
+          -- ✅ FIX: bb.tee_time may be "HH:MM" OR "HH:MM|suffix" OR a time type -> always match on clean HH:MM
+          AND split_part(COALESCE(bb.tee_time::text,''), '|', 1) = split_part(t.tee_time, '|', 1)
 
           -- layout matching (handles nulls safely)
           AND bb.layout_key IS NOT DISTINCT FROM t.layout_key
