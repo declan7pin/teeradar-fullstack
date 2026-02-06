@@ -64,6 +64,9 @@ router.use((req, res, next) => {
 // ✅ DEBUG flag (Render env var DEBUG_BOOKING=1)
 const debug = String(process.env.DEBUG_BOOKING || "").trim() === "1";
 console.log("🧪 DEBUG_BOOKING enabled?", debug, "raw=", process.env.DEBUG_BOOKING);
+// ✅ DEBUG flag for sync routing investigations (Render env var DEBUG_SYNC=1)
+const DEBUG_SYNC = String(process.env.DEBUG_SYNC || "").trim() === "1";
+console.log("🧪 DEBUG_SYNC enabled?", DEBUG_SYNC, "raw=", process.env.DEBUG_SYNC);
 router.use((req, res, next) => {
   console.log("📌 bookingRoutes hit:", req.method, req.originalUrl);
   next();
