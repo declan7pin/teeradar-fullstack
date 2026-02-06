@@ -92,6 +92,18 @@ async function getTeePricePerPlayerCents({ courseId, playDate, teeTime, holes })
   );
   return Number(r.rows[0]?.p || 0);
 }
+// ✅ helper: slug -> booking_courses.id
+async function courseIdFromSlug(slug) {
+  const s = String(slug || "").trim().toLowerCase();
+  if (!s) return null;
+
+  const r = await db.query(
+    `SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`,
+    [s]
+  );
+
+  return r.rows?.[0]?.id || null;
+}
 // ------------------------------
 // ✅ Course Admin JWT helpers
 // ------------------------------
