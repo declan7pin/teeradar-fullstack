@@ -3531,6 +3531,7 @@ async function syncBookedPlayersForTime({
   layout_key = null,
   front_nine_key = null,
   back_nine_key = null,
+  allowInsert = true, // ✅ NEW: when false, this function will NEVER create a new booking_times row
 }) {
   const cleanTime = String(tee_time || "").trim();
   const holesN = Number(holes || 0);
@@ -3556,7 +3557,7 @@ async function syncBookedPlayersForTime({
         AND split_part(tee_time,'|',1) = $3
         AND holes = $4
       ORDER BY
-        -- prefer rows that have routing keys (so we don't "create" a blank 18-hole row)
+        -- prefer rows that have routing keys (so we don't "create" a blank row)
         (layout_key IS NULL AND front_nine_key IS NULL AND back_nine_key IS NULL) ASC,
         id ASC
       LIMIT 1;
@@ -3592,13 +3593,17 @@ async function syncBookedPlayersForTime({
     target = t.rows?.[0] || null;
   }
 
-  // 🚫 SAFETY: never create/update a GENERIC 18-hole row (prevents the duplicate "18 holes" entry)
-  // If this is an 18 hole time and we still don't have routing keys, do not insert anything.
+  // 🚫 SAFETY: if routing is missing, never insert a generic row
+  // 18 holes needs front+back or an explicit layout_key
   if (holesN === 18 && (!front_nine_key || !back_nine_key) && !layout_key) {
     return { ok: true, skipped: true, reason: "routing_required_for_18" };
   }
+  // 9 holes needs a layout_key
+  if (holesN === 9 && !layout_key) {
+    return { ok: true, skipped: true, reason: "routing_required_for_9" };
+  }
 
-  // ✅ Count CONFIRMED online bookings for this *exact routed tee time*
+  // ✅ Count CONFIRMED online bookings for this exact routed tee time
   const onlineBookedQ = await db.query(
     `
     SELECT COALESCE(SUM(players),0)::int AS c
@@ -3616,7 +3621,7 @@ async function syncBookedPlayersForTime({
   );
   const onlineBooked = Number(onlineBookedQ.rows?.[0]?.c || 0);
 
-  // ✅ FIX: Manual slots booked must ALSO be layout-scoped (your manual table now stores keys)
+  // ✅ Manual slots booked must ALSO be layout-scoped (manual table stores keys)
   const manualSlotsBookedQ = await db.query(
     `
     SELECT COUNT(*)::int AS c
@@ -3643,7 +3648,7 @@ async function syncBookedPlayersForTime({
 
   const status = totalBooked >= maxPlayers ? "BOOKED" : "AVAILABLE";
 
-  // ✅ IMPORTANT: update existing row if possible — DO NOT create a new blank tee time
+  // ✅ Update existing row if possible
   if (target?.id) {
     await db.query(
       `
@@ -3659,8 +3664,12 @@ async function syncBookedPlayersForTime({
     return { ok: true, updated: true, id: target.id, booked_players: totalBooked, status };
   }
 
+  // ✅ NEW: if inserts are not allowed, STOP here (prevents the “new generic time row” bug)
+  if (!allowInsert) {
+    return { ok: true, skippedInsert: true, booked_players: totalBooked, status };
+  }
+
   // ✅ If no tee time row exists at all, insert one *with routing keys*
-  // (still safe for 9s; for 18s we already bailed unless routing exists)
   const ins = await db.query(
     `
     INSERT INTO booking_times
