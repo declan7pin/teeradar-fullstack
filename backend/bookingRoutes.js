@@ -3511,73 +3511,129 @@ router.get("/admin/analytics/export.csv", requirePlatformAdmin, async (req, res)
 // -----------------------------
 // ✅ Course admin endpoints
 // -----------------------------
-async function courseIdFromSlug(slug) {
-  const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
-  return c.rows.length ? c.rows[0].id : null;
-}
-async function syncBookedPlayersForTime({ courseId, play_date, tee_time, holes }) {
-  // ✅ Ensure the booking_times row exists (manual sheet can create slots before times exist)
-  await db.query(
+async function syncBookedPlayersForTime({ courseId, play_date, tee_time, holes, layout_key = null, front_nine_key = null, back_nine_key = null }) {
+  const cleanTime = String(tee_time || "").trim();
+
+  // ✅ If caller didn't pass routing keys, try to pick the existing tee time row (prefer routed rows)
+  let target = null;
+  if (!layout_key && !front_nine_key && !back_nine_key) {
+    const t = await db.query(
+      `
+      SELECT id, layout_key, front_nine_key, back_nine_key
+      FROM booking_times
+      WHERE course_id = $1
+        AND play_date = $2::date
+        AND split_part(tee_time,'|',1) = $3
+        AND holes = $4
+      ORDER BY
+        -- prefer rows that have routing keys (so we don't "create" a blank 18-hole row)
+        (layout_key IS NULL AND front_nine_key IS NULL AND back_nine_key IS NULL) ASC,
+        id ASC
+      LIMIT 1;
+      `,
+      [courseId, play_date, cleanTime, holes]
+    );
+    target = t.rows?.[0] || null;
+    if (target) {
+      layout_key = target.layout_key || null;
+      front_nine_key = target.front_nine_key || null;
+      back_nine_key = target.back_nine_key || null;
+    }
+  } else {
+    // caller provided keys — still try to find exact row id (optional but nice)
+    const t = await db.query(
+      `
+      SELECT id
+      FROM booking_times
+      WHERE course_id = $1
+        AND play_date = $2::date
+        AND split_part(tee_time,'|',1) = $3
+        AND holes = $4
+        AND layout_key IS NOT DISTINCT FROM $5
+        AND front_nine_key IS NOT DISTINCT FROM $6
+        AND back_nine_key IS NOT DISTINCT FROM $7
+      ORDER BY id ASC
+      LIMIT 1;
+      `,
+      [courseId, play_date, cleanTime, holes, layout_key, front_nine_key, back_nine_key]
+    );
+    target = t.rows?.[0] || null;
+  }
+
+  // ✅ Count CONFIRMED online bookings for this *exact routed tee time*
+  const onlineBookedQ = await db.query(
+    `
+    SELECT COALESCE(SUM(players),0)::int AS c
+    FROM booking_bookings
+    WHERE course_id = $1
+      AND play_date = $2::date
+      AND tee_time = $3
+      AND holes = $4
+      AND status = 'CONFIRMED'
+      AND layout_key IS NOT DISTINCT FROM $5
+      AND front_nine_key IS NOT DISTINCT FROM $6
+      AND back_nine_key IS NOT DISTINCT FROM $7
+    `,
+    [courseId, play_date, cleanTime, holes, layout_key, front_nine_key, back_nine_key]
+  );
+  const onlineBooked = Number(onlineBookedQ.rows?.[0]?.c || 0);
+
+  // ✅ Manual slots booked: still by time+holes (until manual table stores routing keys)
+  const manualSlotsBookedQ = await db.query(
+    `
+    SELECT COUNT(*)::int AS c
+    FROM booking_manual_slots
+    WHERE course_id = $1
+      AND play_date = $2::date
+      AND tee_time = $3
+      AND holes = $4
+      AND COALESCE(NULLIF(TRIM(name),''), NULLIF(TRIM(email),''), NULLIF(TRIM(phone),'')) IS NOT NULL
+    `,
+    [courseId, play_date, cleanTime, holes]
+  );
+  const manualBooked = Number(manualSlotsBookedQ.rows?.[0]?.c || 0);
+
+  const totalBooked = Math.max(0, onlineBooked + manualBooked);
+
+  // ✅ Decide status
+  // (keep your existing max_players logic; if you want we can also pull max_players from the target row)
+  let maxPlayers = 4;
+  if (target?.id) {
+    const mx = await db.query(`SELECT max_players FROM booking_times WHERE id=$1 LIMIT 1;`, [target.id]);
+    const mp = Number(mx.rows?.[0]?.max_players || 0);
+    if (mp > 0) maxPlayers = mp;
+  }
+
+  const status = totalBooked >= maxPlayers ? "BOOKED" : "AVAILABLE";
+
+  // ✅ IMPORTANT: update existing row if possible — DO NOT create a new blank tee time
+  if (target?.id) {
+    await db.query(
+      `
+      UPDATE booking_times
+      SET booked_players = $2,
+          status = $3
+      WHERE id = $1;
+      `,
+      [target.id, totalBooked, status]
+    );
+
+    return { ok: true, updated: true, id: target.id, booked_players: totalBooked, status };
+  }
+
+  // ✅ If no tee time row exists at all (rare), then insert one (but only in that case)
+  const ins = await db.query(
     `
     INSERT INTO booking_times
-      (course_id, play_date, tee_time, holes, max_players, booked_players, price_per_player_cents, status, created_at, updated_at)
+      (course_id, play_date, tee_time, holes, max_players, booked_players, status, layout_key, front_nine_key, back_nine_key)
     VALUES
-      ($1, $2::date, $3, $4, 4, 0, 0, 'AVAILABLE', now(), now())
-    ON CONFLICT ON CONSTRAINT booking_times_unique_slot
-    DO NOTHING;
+      ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10)
+    RETURNING id;
     `,
-    [courseId, play_date, tee_time, holes]
+    [courseId, play_date, cleanTime, holes, maxPlayers, totalBooked, status, layout_key, front_nine_key, back_nine_key]
   );
 
- // 1) Count manual slots (1 row = 1 player slot) ✅ count ALL rows
-const ms = await db.query(
-  `
-  SELECT COUNT(*)::int AS n
-  FROM booking_manual_slots
-  WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
-  `,
-  [courseId, play_date, tee_time, holes]
-);
-const manualCount = Number(ms.rows[0]?.n || 0);
-
-  // 2) Count CONFIRMED booking players for same time
-  const bb = await db.query(
-    `
-    SELECT COALESCE(SUM(players),0)::int AS n
-    FROM booking_bookings
-    WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
-      AND status='CONFIRMED'
-    `,
-    [courseId, play_date, tee_time, holes]
-  );
-  const bookingPlayers = Number(bb.rows[0]?.n || 0);
-
-  const totalBooked = manualCount + bookingPlayers;
-
-  // 3) Apply to booking_times (preserve BLOCKED)
-  const upd = await db.query(
-    `
-    UPDATE booking_times
-    SET
-      booked_players = $5,
-      status = CASE
-        WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
-        WHEN $5 >= max_players THEN 'BOOKED'
-        ELSE 'AVAILABLE'
-      END,
-      updated_at = now()
-    WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
-    RETURNING id, max_players, booked_players, status;
-    `,
-    [courseId, play_date, tee_time, holes, totalBooked]
-  );
-
-  return {
-    manualCount,
-    bookingPlayers,
-    totalBooked,
-    timeRow: upd.rows[0] || null,
-  };
+  return { ok: true, inserted: true, id: ins.rows?.[0]?.id || null, booked_players: totalBooked, status };
 }
 // -----------------------------
 // ✅ Platform admin manual slots (book-admin.html)
