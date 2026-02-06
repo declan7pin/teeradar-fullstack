@@ -3544,15 +3544,41 @@ async function syncBookedPlayersForTime({
   front_nine_key = norm(front_nine_key);
   back_nine_key = norm(back_nine_key);
 
-  // helper: match a tee_time that may be stored as "HH:MM|suffix"
-  // IMPORTANT: this prevents creating a new "HH:MM" row when "HH:MM|x" exists
+  if (DEBUG_SYNC) {
+    console.log("🧠 SYNC START", {
+      courseId,
+      play_date,
+      tee_time_raw: tee_time,
+      cleanTime,
+      holesN,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+    });
+  }
+
+  // 🔍 LOG ALL booking_times rows at this time BEFORE matching
+  if (DEBUG_SYNC) {
+    const all = await db.query(
+      `
+      SELECT id, tee_time, holes, layout_key, front_nine_key, back_nine_key, booked_players, status
+      FROM booking_times
+      WHERE course_id = $1
+        AND play_date = $2::date
+        AND split_part(tee_time,'|',1) = $3
+      ORDER BY id ASC;
+      `,
+      [courseId, play_date, cleanTime]
+    );
+
+    console.log("📋 EXISTING booking_times rows", all.rows);
+  }
+
   const TIME_MATCH_SQL = `(t.tee_time = $3 OR split_part(t.tee_time,'|',1) = $3)`;
 
-  // ✅ Find the target booking_times row
   let target = null;
 
   if (!layout_key && !front_nine_key && !back_nine_key) {
-    // caller didn't pass keys → pick the best existing row at this time (prefer routed)
     const t = await db.query(
       `
       SELECT id, tee_time, layout_key, front_nine_key, back_nine_key, max_players
@@ -3577,7 +3603,6 @@ async function syncBookedPlayersForTime({
       back_nine_key = norm(target.back_nine_key);
     }
   } else {
-    // caller provided keys → find exact routed row (still time-match by split_part OR exact)
     const t = await db.query(
       `
       SELECT id, tee_time, max_players
@@ -3596,41 +3621,20 @@ async function syncBookedPlayersForTime({
     );
 
     target = t.rows?.[0] || null;
-
-    // ✅ fallback: if keys were provided but we didn't find a row,
-    // try again ignoring keys but still preferring routed rows (prevents accidental inserts)
-    if (!target) {
-      const t2 = await db.query(
-        `
-        SELECT id, tee_time, layout_key, front_nine_key, back_nine_key, max_players
-        FROM booking_times t
-        WHERE t.course_id = $1
-          AND t.play_date = $2::date
-          AND ${TIME_MATCH_SQL}
-          AND t.holes = $4
-        ORDER BY
-          (t.layout_key IS NULL AND t.front_nine_key IS NULL AND t.back_nine_key IS NULL) ASC,
-          t.id ASC
-        LIMIT 1;
-        `,
-        [courseId, play_date, cleanTime, holesN]
-      );
-      target = t2.rows?.[0] || null;
-      if (target) {
-        layout_key = norm(target.layout_key);
-        front_nine_key = norm(target.front_nine_key);
-        back_nine_key = norm(target.back_nine_key);
-      }
-    }
   }
 
-  // 🚫 SAFETY: never create/update a GENERIC 18-hole row
+  if (DEBUG_SYNC) {
+    console.log("🎯 TARGET ROW", target || "NONE FOUND");
+  }
+
+  // 🚫 Safety: never create generic 18-hole row
   if (holesN === 18 && (!front_nine_key || !back_nine_key) && !layout_key) {
-    return { ok: true, skipped: true, reason: "routing_required_for_18" };
+    if (DEBUG_SYNC) {
+      console.log("⛔ SKIP: 18-hole without routing");
+    }
+    return { ok: true, skipped: true };
   }
 
-  // ✅ Count CONFIRMED online bookings for this exact routed time
-  // (booking_bookings.tee_time should already be clean HH:MM, so match cleanTime)
   const onlineBookedQ = await db.query(
     `
     SELECT COALESCE(SUM(players),0)::int AS c
@@ -3646,10 +3650,8 @@ async function syncBookedPlayersForTime({
     `,
     [courseId, play_date, cleanTime, holesN, layout_key, front_nine_key, back_nine_key]
   );
-  const onlineBooked = Number(onlineBookedQ.rows?.[0]?.c || 0);
 
-  // ✅ Manual slots booked must be layout-scoped
-  const manualSlotsBookedQ = await db.query(
+  const manualBookedQ = await db.query(
     `
     SELECT COUNT(*)::int AS c
     FROM booking_manual_slots
@@ -3660,23 +3662,27 @@ async function syncBookedPlayersForTime({
       AND COALESCE(layout_key,'') = COALESCE($5,'')
       AND COALESCE(front_nine_key,'') = COALESCE($6,'')
       AND COALESCE(back_nine_key,'') = COALESCE($7,'')
-      AND COALESCE(NULLIF(TRIM(name),''), NULLIF(TRIM(email),''), NULLIF(TRIM(phone),'')) IS NOT NULL
     `,
     [courseId, play_date, cleanTime, holesN, layout_key, front_nine_key, back_nine_key]
   );
-  const manualBooked = Number(manualSlotsBookedQ.rows?.[0]?.c || 0);
 
-  const totalBooked = Math.max(0, onlineBooked + manualBooked);
+  const totalBooked =
+    Number(onlineBookedQ.rows?.[0]?.c || 0) +
+    Number(manualBookedQ.rows?.[0]?.c || 0);
 
-  // ✅ Decide max players (prefer target row value, fallback 4)
-  let maxPlayers = 4;
-  const mp = Number(target?.max_players || 0);
-  if (mp > 0) maxPlayers = mp;
-
+  const maxPlayers = Number(target?.max_players || 4);
   const status = totalBooked >= maxPlayers ? "BOOKED" : "AVAILABLE";
 
-  // ✅ Update existing row (no inserts if target exists)
   if (target?.id) {
+    if (DEBUG_SYNC) {
+      console.log("✅ UPDATE booking_times", {
+        id: target.id,
+        tee_time: target.tee_time,
+        booked_players: totalBooked,
+        status,
+      });
+    }
+
     await db.query(
       `
       UPDATE booking_times
@@ -3688,31 +3694,45 @@ async function syncBookedPlayersForTime({
       [target.id, totalBooked, status]
     );
 
-    return {
-      ok: true,
-      updated: true,
-      id: target.id,
-      booked_players: totalBooked,
-      status,
-      matched_tee_time: target.tee_time || null,
-    };
+    return { ok: true, updated: true, id: target.id };
   }
 
-  // ✅ If no tee time row exists at all, insert one WITH routing keys if possible
-  // (This is now much rarer because we match tee_time suffixes properly)
+  if (DEBUG_SYNC) {
+    console.log("⚠️ INSERTING NEW booking_times ROW", {
+      courseId,
+      play_date,
+      cleanTime,
+      holesN,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+    });
+  }
+
   const ins = await db.query(
     `
     INSERT INTO booking_times
       (course_id, play_date, tee_time, holes, max_players, booked_players, status,
        layout_key, front_nine_key, back_nine_key, created_at, updated_at)
     VALUES
-      ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())
+      ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,now(),now())
     RETURNING id;
     `,
-    [courseId, play_date, cleanTime, holesN, maxPlayers, totalBooked, status, layout_key, front_nine_key, back_nine_key]
+    [
+      courseId,
+      play_date,
+      cleanTime,
+      holesN,
+      maxPlayers,
+      totalBooked,
+      status,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+    ]
   );
 
-  return { ok: true, inserted: true, id: ins.rows?.[0]?.id || null, booked_players: totalBooked, status };
+  return { ok: true, inserted: true, id: ins.rows?.[0]?.id };
 }
 // -----------------------------
 // ✅ Platform admin manual slots (book-admin.html)
