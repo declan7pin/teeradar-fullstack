@@ -6498,28 +6498,21 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-    // ✅ Load course layout labels (FAIL-SOFT if table doesn't exist yet)
-    let layouts9 = [];
-    let routes18 = [];
-    try {
-      const layoutCfgQ = await db.query(
-        `
-        SELECT layouts, routes18
-        FROM booking_course_layouts
-        WHERE course_id = $1
-        LIMIT 1;
-        `,
-        [courseId]
-      );
+    // ✅ Load course layout labels so the API can always return the correct display label,
+    // even if some legacy rows are missing front/back keys.
+    const layoutCfgQ = await db.query(
+      `
+      SELECT layouts, routes18
+      FROM booking_course_layouts
+      WHERE course_id = $1
+      LIMIT 1;
+      `,
+      [courseId]
+    );
 
-      const layoutCfg = layoutCfgQ.rows[0] || { layouts: [], routes18: [] };
-      layouts9 = Array.isArray(layoutCfg.layouts) ? layoutCfg.layouts : [];
-      routes18 = Array.isArray(layoutCfg.routes18) ? layoutCfg.routes18 : [];
-    } catch (e) {
-      if (debug) console.warn("⚠️ booking_course_layouts unavailable (continuing):", e?.message || e);
-      layouts9 = [];
-      routes18 = [];
-    }
+    const layoutCfg = layoutCfgQ.rows[0] || { layouts: [], routes18: [] };
+    const layouts9 = Array.isArray(layoutCfg.layouts) ? layoutCfg.layouts : [];
+    const routes18 = Array.isArray(layoutCfg.routes18) ? layoutCfg.routes18 : [];
 
     const normKey = (v) => String(v || "").trim().toLowerCase();
 
@@ -6553,22 +6546,18 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
       SELECT
         t.id,
         t.play_date,
-
-        -- ✅ IMPORTANT: tee_time may be stored as "HH:MM|suffix"
-        split_part(COALESCE(t.tee_time::text,''), '|', 1) AS tee_time_clean,
-
+        split_part(t.tee_time, '|', 1) AS tee_time_clean,
         t.tee_time,
         t.holes,
         t.max_players,
         t.booked_players,
         t.price_per_player_cents,
         t.status,
-
         t.layout_key,
         t.front_nine_key,
         t.back_nine_key,
 
-        -- ✅ booking details for daily sheet
+        -- attach booking details (online)
         b.reference AS booking_reference,
         b.golfer_name AS booking_name,
         b.players AS booking_players,
@@ -6597,15 +6586,10 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
           AND bb.play_date = t.play_date
           AND bb.status = 'CONFIRMED'
           AND bb.holes = t.holes
-
-          -- ✅ FIX: compare text-to-text (prevents time = text crash)
-          AND split_part(COALESCE(bb.tee_time::text,''), '|', 1) = split_part(COALESCE(t.tee_time::text,''), '|', 1)
-
-          -- layout matching (handles nulls safely)
+          AND bb.tee_time = split_part(t.tee_time, '|', 1)
           AND bb.layout_key IS NOT DISTINCT FROM t.layout_key
           AND bb.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
           AND bb.back_nine_key IS NOT DISTINCT FROM t.back_nine_key
-
         ORDER BY bb.created_at DESC
         LIMIT 1
       ) b ON true
@@ -6618,17 +6602,19 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
       q += ` AND t.holes = $3`;
     }
 
-    q += ` ORDER BY tee_time_clean ASC, t.holes DESC`;
+    q += ` ORDER BY tee_time_clean ASC, t.holes DESC, t.id ASC`;
 
     const { rows } = await db.query(q, params);
 
-    const times = (rows || []).map((r) => {
+    // ✅ Normalize + attach display label so the frontend can show the correct layout always
+    let times = (rows || []).map((r) => {
       const holesN = Number(r.holes || 0);
 
       let layoutKey = String(r.layout_key || "").trim().toLowerCase();
       let frontKey = String(r.front_nine_key || "").trim().toLowerCase();
       let backKey = String(r.back_nine_key || "").trim().toLowerCase();
 
+      // legacy parse from layout_key like "18:classic|lakes"
       if (holesN === 18 && layoutKey && (!frontKey || !backKey)) {
         const m = layoutKey.match(/^18:([^|]+)\|([^|]+)$/);
         if (m) {
@@ -6637,6 +6623,7 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
         }
       }
 
+      // rebuild layout_key if missing but front/back exist
       if (holesN === 18 && !layoutKey && frontKey && backKey) {
         layoutKey = `18:${frontKey}|${backKey}`;
       }
@@ -6664,8 +6651,40 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
       };
     });
 
+    // ✅✅ FIX: hide "generic 18 holes" rows when a routed row exists at the same time
+    // This removes the duplicate "06:10 (18 holes)" if "06:10 (18 holes — Classic + Lakes)" exists.
+    const groupHasRouted = new Map(); // key => true if any routed row exists
+    for (const t of times) {
+      const key = `${t.tee_time}|${t.holes}`;
+      const hasRouting =
+        (String(t.layout_key || "").trim() !== "") ||
+        (String(t.front_nine_key || "").trim() !== "") ||
+        (String(t.back_nine_key || "").trim() !== "");
+
+      if (hasRouting) groupHasRouted.set(key, true);
+    }
+
+    times = times.filter((t) => {
+      // only suppress for 18-hole rows
+      if (Number(t.holes) !== 18) return true;
+
+      const key = `${t.tee_time}|${t.holes}`;
+      const routedExists = groupHasRouted.get(key) === true;
+
+      // if routed exists, drop the generic row (no routing)
+      if (routedExists) {
+        const isGeneric =
+          (String(t.layout_key || "").trim() === "") &&
+          (String(t.front_nine_key || "").trim() === "") &&
+          (String(t.back_nine_key || "").trim() === "");
+        if (isGeneric) return false;
+      }
+
+      return true;
+    });
+
     if (debug) {
-      console.log("🧪 /course-admin/times debug", {
+      console.log("🧪 /course-admin/times layout+booking debug", {
         slug,
         date,
         holes,
@@ -6677,6 +6696,8 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
           back_nine_key: t.back_nine_key,
           layout_label: t.layout_label,
           booking_name: t.booking_name,
+          booking_cart_qty: t.booking_cart_qty,
+          booking_hire_clubs_qty: t.booking_hire_clubs_qty,
         })),
       });
     }
@@ -6684,16 +6705,6 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
     return res.json({ ok: true, times });
   } catch (e) {
     console.error("course-admin/times GET", e);
-
-    // ✅ if you call with ?debug=1, return the real message
-    if (String(req.query.debug || "") === "1") {
-      return res.status(500).json({
-        ok: false,
-        error: "internal_error",
-        message: String(e?.message || e),
-      });
-    }
-
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
