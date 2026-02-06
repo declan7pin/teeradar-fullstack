@@ -1049,7 +1049,7 @@ const addonLines = chosenAddons.map(a => {
   $("confirmBtn").disabled = true;
 
   try {
-    // ✅ routing keys MUST be sent to backend (fixes routing_required + double-blocking)
+    // ✅ routing keys MUST be sent to backend
     const s = normalizeSlot(selectedSlot) || {};
 
     const layout_key =
@@ -1061,17 +1061,20 @@ const addonLines = chosenAddons.map(a => {
     const back_nine_key =
       (s.back_nine_key ?? s.backNineKey ?? s.backNine ?? "").toString().trim().toLowerCase();
 
-    // enforce required routing depending on holes
-    if (holes === 18 && (!front_nine_key || !back_nine_key)) {
+    // ✅ ALSO send the human layout label as a fallback (backend can derive keys if needed)
+    const layoutText = (getLayoutText(s) || "").toString().trim();
+
+    // enforce required routing depending on holes (but allow fallback label to handle edge cases)
+    if (holes === 18 && ((!front_nine_key || !back_nine_key) && !layoutText)) {
       throw new Error("routing_required");
     }
-    if (holes === 9 && !layout_key) {
+    if (holes === 9 && (!layout_key && !layoutText)) {
       throw new Error("routing_required");
     }
 
     const res = await apiFetch("/api/book/book", {
       method: "POST",
-      headers: { "Content-Type":"application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         slug,
         date,
@@ -1082,21 +1085,27 @@ const addonLines = chosenAddons.map(a => {
         email,
         phone,
 
-        // ✅ include routing keys
-        layout_key: holes === 9 ? layout_key : null,
-        front_nine_key: holes === 18 ? front_nine_key : null,
-        back_nine_key: holes === 18 ? back_nine_key : null,
+        // ✅ include routing keys (primary)
+        layout_key: holes === 9 ? (layout_key || null) : null,
+        front_nine_key: holes === 18 ? (front_nine_key || null) : null,
+        back_nine_key: holes === 18 ? (back_nine_key || null) : null,
 
+        // ✅ include label (fallback)
+        layout: layoutText,
+
+        // ✅ add-ons
         addonIds: selectedAddonIds,
         cartQty: cartQtySelected,
         hireClubsQty: clubsQtySelected,
-      })
+      }),
     });
 
-    const data = await res.json().catch(()=> ({}));
+    const data = await res.json().catch(() => ({}));
     if (!res.ok || !data || !data.ok) {
       const msg =
-        (data && (data.message || data.error)) ? (data.message || data.error) : ("HTTP " + res.status);
+        (data && (data.message || data.error))
+          ? (data.message || data.error)
+          : ("HTTP " + res.status);
       throw new Error(msg);
     }
 
