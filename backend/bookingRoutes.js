@@ -6487,6 +6487,7 @@ router.delete("/course-admin/times", requireCourseAdmin, async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 // view times (course admin)
 router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
   try {
@@ -6625,16 +6626,16 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
       const holesN = Number(r.holes || 0);
 
       // Normalize keys
-      let layoutKey = normKey(r.layout_key);
-      let frontKey = normKey(r.front_nine_key);
-      let backKey = normKey(r.back_nine_key);
+      let layoutKey = (String(r.layout_key || "").trim().toLowerCase());
+      let frontKey = (String(r.front_nine_key || "").trim().toLowerCase());
+      let backKey = (String(r.back_nine_key || "").trim().toLowerCase());
 
       // ✅ If legacy rows are missing front/back keys but layout_key is like "18:classic|lakes", parse it
       if (holesN === 18 && layoutKey && (!frontKey || !backKey)) {
         const m = layoutKey.match(/^18:([^|]+)\|([^|]+)$/);
         if (m) {
-          frontKey = frontKey || normKey(m[1]);
-          backKey = backKey || normKey(m[2]);
+          frontKey = frontKey || (String(m[1] || "").trim().toLowerCase());
+          backKey = backKey || (String(m[2] || "").trim().toLowerCase());
         }
       }
 
@@ -6803,36 +6804,37 @@ router.post("/course-admin/booking-paid", requireCourseAdmin, async (req, res) =
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
     // 1) Try real bookings table first
-let r = await db.query(
-  `
-  UPDATE booking_bookings
-  SET paid=$3
-  WHERE reference=$1 AND course_id=$2
-  RETURNING reference, paid;
-  `,
-  [reference, courseId, paid]
-);
+    let r = await db.query(
+      `
+      UPDATE booking_bookings
+      SET paid=$3
+      WHERE reference=$1 AND course_id=$2
+      RETURNING reference, paid;
+      `,
+      [reference, courseId, paid]
+    );
 
-// 2) If not found, try manual slots table
-if (!r.rows.length) {
-  r = await db.query(
-    `
-    UPDATE booking_manual_slots
-    SET paid=$3, updated_at=now()
-    WHERE reference=$1 AND course_id=$2
-    RETURNING reference, paid;
-    `,
-    [reference, courseId, paid]
-  );
-}
+    // 2) If not found, try manual slots table
+    if (!r.rows.length) {
+      r = await db.query(
+        `
+        UPDATE booking_manual_slots
+        SET paid=$3, updated_at=now()
+        WHERE reference=$1 AND course_id=$2
+        RETURNING reference, paid;
+        `,
+        [reference, courseId, paid]
+      );
+    }
 
-if (!r.rows.length) return res.status(404).json({ ok: false, error: "booking_not_found" });
-res.json({ ok: true, reference, paid });
+    if (!r.rows.length) return res.status(404).json({ ok: false, error: "booking_not_found" });
+    res.json({ ok: true, reference, paid });
   } catch (e) {
     console.error("course-admin/booking-paid", e);
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 // ✅ NEW: cancel ONLINE booking (course admin)
 router.post("/course-admin/booking-cancel", requireCourseAdmin, async (req, res) => {
   try {
@@ -6853,15 +6855,15 @@ router.post("/course-admin/booking-cancel", requireCourseAdmin, async (req, res)
     const b = await db.query(
       `
       SELECT
-  id,
-  course_id,
-  play_date::text AS play_date,
-  tee_time,
-  holes,
-  layout_key,
-  front_nine_key,
-  back_nine_key,
-  status
+        id,
+        course_id,
+        play_date::text AS play_date,
+        tee_time,
+        holes,
+        layout_key,
+        front_nine_key,
+        back_nine_key,
+        status
       FROM booking_bookings
       WHERE reference=$1 AND course_id=$2
       LIMIT 1;
@@ -6882,6 +6884,10 @@ router.post("/course-admin/booking-cancel", requireCourseAdmin, async (req, res)
         play_date: row.play_date,
         tee_time: row.tee_time,
         holes: row.holes,
+        // ✅ pass layout keys for multi-routing courses
+        layout_key: row.layout_key || null,
+        front_nine_key: row.front_nine_key || null,
+        back_nine_key: row.back_nine_key || null,
       });
       return res.json({ ok: true, already: true, sync });
     }
@@ -6902,6 +6908,10 @@ router.post("/course-admin/booking-cancel", requireCourseAdmin, async (req, res)
       play_date: row.play_date,
       tee_time: row.tee_time,
       holes: row.holes,
+      // ✅ pass layout keys for multi-routing courses
+      layout_key: row.layout_key || null,
+      front_nine_key: row.front_nine_key || null,
+      back_nine_key: row.back_nine_key || null,
     });
 
     return res.json({ ok: true, reference, status: "CANCELLED", sync });
@@ -6910,6 +6920,7 @@ router.post("/course-admin/booking-cancel", requireCourseAdmin, async (req, res)
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 // ✅ ADD: toggle checked-in flag (course admin)
 // ✅ Course admin: mark a booking checked-in (supports TR- + MAN- refs)
 router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res) => {
