@@ -6852,7 +6852,16 @@ router.post("/course-admin/booking-cancel", requireCourseAdmin, async (req, res)
     // Load booking
     const b = await db.query(
       `
-      SELECT id, course_id, play_date::text AS play_date, tee_time, holes, status
+      SELECT
+  id,
+  course_id,
+  play_date::text AS play_date,
+  tee_time,
+  holes,
+  layout_key,
+  front_nine_key,
+  back_nine_key,
+  status
       FROM booking_bookings
       WHERE reference=$1 AND course_id=$2
       LIMIT 1;
