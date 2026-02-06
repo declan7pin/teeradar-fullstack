@@ -151,8 +151,15 @@
       cursor:pointer;
     }
     .bookBtn:hover{
-      background:#eef2f7;
-    }
+  background:#eef2f7;
+}
+.bookBtn:disabled{
+  cursor:not-allowed;
+  opacity:.55;
+}
+.bookBtn:disabled:hover{
+  background:#f8fafc; /* prevent hover looking clickable */
+}
 
     /* ✅ spot golfers (green = available, red = taken) */
     .spotsWrap{
@@ -738,91 +745,90 @@ if (qtySel) {
   }
 
   function renderTimes(list) {
-    const wrap = $("times");
-    wrap.innerHTML = "";
-    $("count").textContent = (list.length || 0) + " shown";
+  const wrap = $("times");
+  wrap.innerHTML = "";
+  $("count").textContent = (list.length || 0) + " shown";
 
-    if (!list.length) {
-      wrap.innerHTML = `<div class="sub">No times available in this window.</div>`;
-      return;
-    }
-
-    const wantPlayers = Number($("players").value);
-
-        list.map(normalizeSlot).forEach((t) => {
-      const div = document.createElement("div");
-      div.className = "timeCard";
-
-      const priceCents = _slotPerPlayerCents(t);
-      const price = priceCents / 100;
-      const maxPlayers = Math.max(1, Number(t.maxPlayers || 0));
-      const bookedPlayers = Number(t.bookedPlayers || 0);
-      const layoutText = getLayoutText(t);
-
-      const remaining = (typeof t.remaining !== "undefined")
-        ? Number(t.remaining || 0)
-        : Math.max(0, maxPlayers - bookedPlayers);
-
-      const spots = [];
-      const availCount = Math.max(0, Math.min(maxPlayers, remaining));
-      for (let i = 0; i < maxPlayers; i++) {
-        spots.push(`<span class="spotGolfer ${i < availCount ? "avail" : "taken"}" title="${i < availCount ? "Available" : "Taken"}"></span>`);
-      }
-      const spotsHtml = `
-        <span class="spotsWrap" title="${availCount}/${maxPlayers} available">
-          ${spots.join("")}
-          <span class="spotsText">${availCount}/${maxPlayers}</span>
-        </span>
-      `;
-
-            // ✅ NEW: show "X slots available" based on the green golfer count
-      const availText =
-        Number.isFinite(availCount)
-          ? `${availCount} slot${availCount === 1 ? "" : "s"} available`
-          : "";
-          
-      // ✅ NEW: show layout info (layout_key / front/back keys)
-      const layoutKey =
-        (t.layoutKey ?? t.layout_key ?? "").toString().trim();
-
-      const frontKey =
-        (t.frontNineKey ?? t.front_nine_key ?? "").toString().trim();
-
-      const backKey =
-        (t.backNineKey ?? t.back_nine_key ?? "").toString().trim();
-
-      let layoutLabel = "";
-      if (layoutKey) {
-        layoutLabel = layoutKey;
-      } else if (frontKey || backKey) {
-        // fallback label if you store front/back keys instead of layout_key
-        layoutLabel = [frontKey, backKey].filter(Boolean).join(" + ");
-      }
-
-      const layoutHtml = layoutLabel
-        ? `<span>🧩 ${layoutLabel}</span>`
-        : "";
-        
-      div.innerHTML = `
-        <div class="timeTop">
-          <div>
-            <div class="time">⏰ ${t.time}</div>
-            <div class="meta">
-                            <span>👥 up to ${maxPlayers}</span>
-              <span>⛳ ${t.holes} holes</span>
-              ${layoutText ? `<span>🧩 ${layoutText}</span>` : ""}
-              ${spotsHtml}
-              ${availText ? `<span>✅ ${availText}</span>` : ""}
-            </div>
-          </div>
-          <div class="price">$${price.toFixed(2)} / player</div>
-        </div>
-        <button class="bookBtn">Book this time</button>
-      `;
-      div.querySelector(".bookBtn").onclick = () => openModal(t);
-      wrap.appendChild(div);
-    });
+  if (!list.length) {
+    wrap.innerHTML = `<div class="sub">No times available in this window.</div>`;
+    return;
   }
+
+  const wantPlayers = Number($("players").value);
+
+  list.map(normalizeSlot).forEach((t) => {
+    const div = document.createElement("div");
+    div.className = "timeCard";
+
+    const priceCents = _slotPerPlayerCents(t);
+    const price = priceCents / 100;
+    const maxPlayers = Math.max(1, Number(t.maxPlayers || 0));
+    const bookedPlayers = Number(t.bookedPlayers || 0);
+    const layoutText = getLayoutText(t);
+
+    const remaining = (typeof t.remaining !== "undefined")
+      ? Number(t.remaining || 0)
+      : Math.max(0, maxPlayers - bookedPlayers);
+
+    // ✅ enforce selected players vs remaining spots
+    const canBook = remaining >= wantPlayers;
+    const notEnoughText = !canBook
+      ? `❌ Not enough spots for ${wantPlayers} player${wantPlayers === 1 ? "" : "s"}`
+      : "";
+
+    const spots = [];
+    const availCount = Math.max(0, Math.min(maxPlayers, remaining));
+    for (let i = 0; i < maxPlayers; i++) {
+      spots.push(
+        `<span class="spotGolfer ${i < availCount ? "avail" : "taken"}" title="${i < availCount ? "Available" : "Taken"}"></span>`
+      );
+    }
+    const spotsHtml = `
+      <span class="spotsWrap" title="${availCount}/${maxPlayers} available">
+        ${spots.join("")}
+        <span class="spotsText">${availCount}/${maxPlayers}</span>
+      </span>
+    `;
+
+    // ✅ show "X slots available"
+    const availText =
+      Number.isFinite(availCount)
+        ? `${availCount} slot${availCount === 1 ? "" : "s"} available`
+        : "";
+
+    // (optional) keys — you already show nice layoutText, so no need to show raw keys
+    // leaving your key parsing out to keep UI clean
+
+    div.innerHTML = `
+      <div class="timeTop">
+        <div>
+          <div class="time">⏰ ${t.time}</div>
+          <div class="meta">
+            <span>👥 up to ${maxPlayers}</span>
+            <span>⛳ ${t.holes} holes</span>
+            ${layoutText ? `<span>🧩 ${layoutText}</span>` : ""}
+            ${spotsHtml}
+            ${availText ? `<span>✅ ${availText}</span>` : ""}
+            ${notEnoughText ? `<span>${notEnoughText}</span>` : ""}
+          </div>
+        </div>
+        <div class="price">$${price.toFixed(2)} / player</div>
+      </div>
+
+      <button class="bookBtn" ${canBook ? "" : "disabled"}>
+        ${canBook ? "Book this time" : "Not available"}
+      </button>
+    `;
+
+    const btn = div.querySelector(".bookBtn");
+    btn.onclick = () => {
+      if (!canBook) return;
+      openModal(t);
+    };
+
+    wrap.appendChild(div);
+  });
+}
 
   async function fetchAvailability() {
     const date = $("date").value;
@@ -1095,8 +1101,8 @@ const addonLines = chosenAddons.map(a => {
 
         // ✅ add-ons
         addonIds: selectedAddonIds,
-        cartQty: cartQtySelected,
-        hireClubsQty: clubsQtySelected,
+        cartQty: cartAddonId ? cartQtySelected : 0,
+        hireClubsQty: clubsAddonId ? clubsQtySelected : 0,
       }),
     });
 
@@ -1130,6 +1136,18 @@ $("modalWrap").addEventListener("click", (e) => {
 });
 
 $("findBtn").onclick = fetchAvailability;
+// ✅ auto-refresh availability when filters change
+["players","holes","start","end","date"].forEach((id) => {
+  const el = $(id);
+  if (!el) return;
+  el.addEventListener("change", () => {
+    // if times are already shown, refresh automatically
+    // (prevents stale "Book this time" when players changes)
+    if (($("times")?.children?.length || 0) > 0) {
+  fetchAvailability().catch(()=>{});
+}
+  });
+});
 
 $("resetBtn").onclick = () => {
   // reset back to whatever the URL intended (or fall back defaults)
