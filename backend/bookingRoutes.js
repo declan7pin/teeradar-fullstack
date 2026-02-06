@@ -4369,41 +4369,26 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       req.body?.play_date || req.body?.playDate || req.body?.date || ""
     ).trim();
 
-    const tee_time = String(
+    const tee_time_raw = String(
       req.body?.tee_time || req.body?.teeTime || req.body?.time || ""
     ).trim();
 
     const holes = Number(req.body?.holes || 18);
 
-    // ✅ ROUTING (CRITICAL)
-    const layout_key =
+    // ✅ NEW: accept time row id from UI (BEST FIX)
+    const timeId = Number(req.body?.time_id ?? req.body?.timeId ?? 0) || null;
+
+    // routing keys (may be missing from frontend — we’ll derive from timeId if present)
+    let layout_key =
       String(req.body?.layout_key || req.body?.layoutKey || "").trim() || null;
 
-    const front_nine_key =
-      String(
-        req.body?.front_nine_key ||
-        req.body?.front9_key ||
-        req.body?.front9Key ||
-        ""
-      ).trim() || null;
+    let front_nine_key =
+      String(req.body?.front_nine_key || req.body?.front9_key || req.body?.front9Key || "").trim() || null;
 
-    const back_nine_key =
-      String(
-        req.body?.back_nine_key ||
-        req.body?.back9_key ||
-        req.body?.back9Key ||
-        ""
-      ).trim() || null;
+    let back_nine_key =
+      String(req.body?.back_nine_key || req.body?.back9_key || req.body?.back9Key || "").trim() || null;
 
-    // 🚫 never allow generic manual bookings
-    if (holes === 18 && (!front_nine_key || !back_nine_key) && !layout_key) {
-      return res.status(400).json({ ok: false, error: "routing_required" });
-    }
-    if (holes === 9 && !layout_key) {
-      return res.status(400).json({ ok: false, error: "routing_required" });
-    }
-
-    // ✅ players
+    // players count
     const playersRaw = Number(req.body?.players || req.body?.numPlayers || 1);
     const players = Math.max(1, Math.min(4, Number.isFinite(playersRaw) ? playersRaw : 1));
 
@@ -4445,7 +4430,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     // validation
     if (!playDate) return res.status(400).json({ ok: false, error: "date_required" });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(playDate)) return res.status(400).json({ ok: false, error: "date_invalid" });
-    if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+    if (!/^\d{2}:\d{2}$/.test(tee_time_raw)) return res.status(400).json({ ok: false, error: "time_invalid" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
     if (!name) return res.status(400).json({ ok: false, error: "name_required" });
     if (email && !isLikelyEmail(email)) return res.status(400).json({ ok: false, error: "email_invalid" });
@@ -4453,16 +4438,48 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
+    // ✅ If UI passed timeId, derive routing keys from booking_times (this is the key fix)
+    let tee_time = tee_time_raw;
+    if (timeId) {
+      const tr = await db.query(
+        `
+        SELECT
+          id,
+          holes,
+          split_part(tee_time,'|',1) AS tee_time_clean,
+          layout_key,
+          front_nine_key,
+          back_nine_key
+        FROM booking_times
+        WHERE id = $1 AND course_id = $2
+        LIMIT 1;
+        `,
+        [timeId, courseId]
+      );
+
+      const row = tr.rows?.[0] || null;
+      if (!row?.id) return res.status(400).json({ ok: false, error: "time_not_found" });
+      if (Number(row.holes) !== Number(holes)) return res.status(400).json({ ok: false, error: "holes_mismatch" });
+
+      tee_time = String(row.tee_time_clean || tee_time_raw).trim();
+
+      // override keys from the actual time row
+      layout_key = row.layout_key ? String(row.layout_key).trim() : null;
+      front_nine_key = row.front_nine_key ? String(row.front_nine_key).trim() : null;
+      back_nine_key = row.back_nine_key ? String(row.back_nine_key).trim() : null;
+    }
+
+    // 🚫 never allow generic manual bookings
+    if (holes === 18 && (!front_nine_key || !back_nine_key) && !layout_key) {
+      return res.status(400).json({ ok: false, error: "routing_required" });
+    }
+    if (holes === 9 && !layout_key) {
+      return res.status(400).json({ ok: false, error: "routing_required" });
+    }
+
     client = await db.connect();
     await client.query("BEGIN");
     didBegin = true;
-
-    // ✅ LOAD COURSE SETTINGS (FIX)
-    const courseRowQ = await client.query(
-      `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
-      [courseId]
-    );
-    const courseRow = courseRowQ.rows[0] || {};
 
     // ⛔ layout-aware lock
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
@@ -4475,16 +4492,16 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       SELECT slot_index
       FROM booking_manual_slots
       WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
-        AND COALESCE(layout_key,'') = COALESCE($5,'')
-        AND COALESCE(front_nine_key,'') = COALESCE($6,'')
-        AND COALESCE(back_nine_key,'') = COALESCE($7,'')
+        AND layout_key IS NOT DISTINCT FROM $5
+        AND front_nine_key IS NOT DISTINCT FROM $6
+        AND back_nine_key IS NOT DISTINCT FROM $7
         AND COALESCE(name,'') <> ''
       `,
       [courseId, playDate, tee_time, holes, layout_key, front_nine_key, back_nine_key]
     );
 
-    const takenSet = new Set(taken.rows.map(r => Number(r.slot_index)));
-    const freeSlots = [1, 2, 3, 4].filter(i => !takenSet.has(i));
+    const takenSet = new Set((taken.rows || []).map(r => Number(r.slot_index)));
+    const freeSlots = [1,2,3,4].filter(i => !takenSet.has(i));
 
     if (freeSlots.length < players) {
       await client.query("ROLLBACK");
@@ -4500,7 +4517,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const filled = [];
 
     const startAtIso = toIsoDateTimeLocal(playDate, tee_time);
-    const dur = durationMinsForHoles(courseRow, holes); // ✅ FIX
+    const dur = durationMinsForHoles({}, holes);
     const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60000).toISOString();
 
     for (let i = 0; i < players; i++) {
@@ -4545,7 +4562,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     await client.query("COMMIT");
     didBegin = false;
 
-    // ✅ layout-aware sync
+    // ✅ IMPORTANT: allowInsert=false so we NEVER generate a new generic tee time row
     const sync = await syncBookedPlayersForTime({
       courseId,
       play_date: playDate,
@@ -4554,15 +4571,14 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       layout_key,
       front_nine_key,
       back_nine_key,
+      allowInsert: false,
     });
 
     return res.json({ ok: true, reference, rows: filled, sync });
 
   } catch (e) {
     console.error("course-admin/booking POST", e);
-    try {
-      if (client && didBegin) await client.query("ROLLBACK");
-    } catch {}
+    try { if (client && didBegin) await client.query("ROLLBACK"); } catch {}
     return res.status(500).json({ ok: false, error: "internal_error" });
   } finally {
     try { if (client) client.release(); } catch {}
