@@ -7937,27 +7937,37 @@ router.get("/availability", async (req, res) => {
           COALESCE(bk.booked, 0)::int       AS booked
         FROM booking_times t
 
-        -- ✅ Manual slots (COUNT rows, layout-safe)
+        -- ✅ Manual slots (COUNT rows, routing-safe + CLEAN time)
         LEFT JOIN LATERAL (
           SELECT COUNT(*)::int AS manual_count
-          FROM booking_manual_slots
-          WHERE course_id = t.course_id
-            AND play_date = t.play_date
-            AND tee_time  = t.tee_time
-            AND holes     = t.holes
-            AND layout_key IS NOT DISTINCT FROM t.layout_key
+          FROM booking_manual_slots ms2
+          WHERE ms2.course_id = t.course_id
+            AND ms2.play_date = t.play_date
+            -- IMPORTANT: booking_times.tee_time may include "|..."
+            AND ms2.tee_time  = split_part(t.tee_time, '|', 1)
+            AND ms2.holes     = t.holes
+            AND COALESCE(ms2.name,'') <> ''
+
+            -- ✅ routing identity MUST match
+            AND ms2.layout_key     IS NOT DISTINCT FROM t.layout_key
+            AND ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
+            AND ms2.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
         ) ms ON true
 
-        -- ✅ Confirmed bookings (layout-safe)
+        -- ✅ Confirmed bookings (routing-safe + CLEAN time)
         LEFT JOIN LATERAL (
-          SELECT COALESCE(SUM(players),0)::int AS booked
+          SELECT COALESCE(SUM(b.players),0)::int AS booked
           FROM booking_bookings b
           WHERE b.course_id = t.course_id
             AND b.play_date = t.play_date
-            AND b.tee_time  = t.tee_time
+            AND b.tee_time  = split_part(t.tee_time, '|', 1)
             AND b.holes     = t.holes
             AND b.status    = 'CONFIRMED'
-            AND b.layout_key IS NOT DISTINCT FROM t.layout_key
+
+            -- ✅ routing identity MUST match
+            AND b.layout_key     IS NOT DISTINCT FROM t.layout_key
+            AND b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
+            AND b.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
         ) bk ON true
 
         WHERE t.course_id = $1
@@ -8046,28 +8056,37 @@ router.get("/availability", async (req, res) => {
             COALESCE(t.max_players,4) - (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0))
           )::int AS remaining_effective,
           t.status,
-          t.layout_key
+          t.layout_key,
+          t.front_nine_key,
+          t.back_nine_key
         FROM booking_times t
 
         LEFT JOIN LATERAL (
           SELECT COUNT(*)::int AS manual_count
-          FROM booking_manual_slots
-          WHERE course_id = t.course_id
-            AND play_date = t.play_date
-            AND tee_time  = t.tee_time
-            AND holes     = t.holes
-            AND layout_key IS NOT DISTINCT FROM t.layout_key
+          FROM booking_manual_slots ms2
+          WHERE ms2.course_id = t.course_id
+            AND ms2.play_date = t.play_date
+            AND ms2.tee_time  = split_part(t.tee_time, '|', 1)
+            AND ms2.holes     = t.holes
+            AND COALESCE(ms2.name,'') <> ''
+
+            AND ms2.layout_key     IS NOT DISTINCT FROM t.layout_key
+            AND ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
+            AND ms2.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
         ) ms ON true
 
         LEFT JOIN LATERAL (
           SELECT COALESCE(SUM(players),0)::int AS booking_players
-          FROM booking_bookings
-          WHERE course_id = t.course_id
-            AND play_date = t.play_date
-            AND tee_time  = t.tee_time
-            AND holes     = t.holes
-            AND status    = 'CONFIRMED'
-            AND layout_key IS NOT DISTINCT FROM t.layout_key
+          FROM booking_bookings b
+          WHERE b.course_id = t.course_id
+            AND b.play_date = t.play_date
+            AND b.tee_time  = split_part(t.tee_time, '|', 1)
+            AND b.holes     = t.holes
+            AND b.status    = 'CONFIRMED'
+
+            AND b.layout_key     IS NOT DISTINCT FROM t.layout_key
+            AND b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
+            AND b.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
         ) bb ON true
 
         WHERE t.course_id = $1
