@@ -7732,70 +7732,101 @@ router.post("/course-admin/booking-cancel", requireCourseAdmin, async (req, res)
 
 // ✅ ADD: toggle checked-in flag (course admin)
 // ✅ Course admin: mark a booking checked-in (supports TR- + MAN- refs)
+// ✅ Course admin: mark a booking checked-in (supports TR- + MAN- refs)
 router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res) => {
   try {
     const reference = String(req.body?.reference || "").trim();
     const slotRaw = req.body?.slot ?? req.body?.slotIndex ?? req.body?.slot_index ?? 0;
-    const slot = Number(slotRaw || 0) || 0; // 1–4 for MAN- slots
+    const slot_ui = Number(slotRaw || 0); // 1–4 (UI)
     const checkedIn = !!(req.body?.checked_in ?? req.body?.checkedIn ?? false);
 
     if (!reference) {
       return res.status(400).json({ ok: false, error: "reference_required" });
     }
 
-    // ✅ FIX: resolve courseId from token first (slug may not exist on token)
+    // ✅ Resolve courseId
     let courseId =
       Number(req.courseAdmin?.courseId || req.courseAdmin?.course_id || 0) || 0;
 
-    // Fallback: resolve courseId from slug
     if (!courseId) {
       const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
       if (!slug) {
         return res.status(400).json({ ok: false, error: "course_context_missing" });
       }
 
-      const courseQ = await db.query(
-        `SELECT id FROM booking_courses WHERE slug = $1 LIMIT 1;`,
+      const q = await db.query(
+        `SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`,
         [slug]
       );
-      courseId = Number(courseQ.rows?.[0]?.id || 0) || 0;
+      courseId = Number(q.rows?.[0]?.id || 0);
     }
 
     if (!courseId) {
       return res.status(404).json({ ok: false, error: "course_not_found" });
     }
 
+    // =========================
+    // ✅ MANUAL BOOKINGS
+    // =========================
     if (/^MAN-/.test(reference)) {
-      // Manual slots are per-slot rows
-      if (!slot || slot < 1 || slot > 4) {
+      if (!slot_ui || slot_ui < 1 || slot_ui > 4) {
         return res.status(400).json({ ok: false, error: "slot_required_for_manual" });
       }
+
+      // 🔑 IMPORTANT: derive bucketed slot_index (MATCHES insert logic)
+      const meta = await db.query(
+        `
+        SELECT holes, layout_key, front_nine_key, back_nine_key
+        FROM booking_manual_slots
+        WHERE course_id=$1 AND reference=$2
+        LIMIT 1;
+        `,
+        [courseId, reference]
+      );
+
+      const row = meta.rows[0];
+      if (!row) {
+        return res.status(404).json({ ok: false, error: "manual_slot_not_found" });
+      }
+
+      const layoutSig = `${row.holes}|${row.layout_key || ""}|${row.front_nine_key || ""}|${row.back_nine_key || ""}`;
+      const hex = require("crypto").createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+      const n = parseInt(hex, 16) || 0;
+      const base = (n % 2000) * 10;
+      const slot_index_db = base + slot_ui;
 
       const r = await db.query(
         `
         UPDATE booking_manual_slots
-        SET checked_in = $1, updated_at = now()
-        WHERE course_id = $2
-          AND reference = $3
-          AND slot_index = $4
+        SET checked_in=$1, updated_at=now()
+        WHERE course_id=$2
+          AND reference=$3
+          AND slot_index=$4
         `,
-        [checkedIn, courseId, reference, slot]
+        [checkedIn, courseId, reference, slot_index_db]
       );
 
       if (!r.rowCount) {
         return res.status(404).json({ ok: false, error: "manual_slot_not_found" });
       }
 
-      return res.json({ ok: true, kind: "manual", reference, slot, checked_in: checkedIn });
+      return res.json({
+        ok: true,
+        kind: "manual",
+        reference,
+        slot: slot_ui,
+        checked_in: checkedIn,
+      });
     }
 
-    // Normal bookings (TR- etc)
+    // =========================
+    // ✅ NORMAL BOOKINGS (TR-)
+    // =========================
     const r2 = await db.query(
       `
       UPDATE booking_bookings
-      SET checked_in = $1, updated_at = now()
-      WHERE course_id = $2
-        AND reference = $3
+      SET checked_in=$1, updated_at=now()
+      WHERE course_id=$2 AND reference=$3
       `,
       [checkedIn, courseId, reference]
     );
@@ -7805,6 +7836,7 @@ router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res
     }
 
     return res.json({ ok: true, kind: "booking", reference, checked_in: checkedIn });
+
   } catch (e) {
     console.error("course-admin/booking-checkin", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
