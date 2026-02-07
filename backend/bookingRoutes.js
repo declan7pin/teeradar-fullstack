@@ -4643,6 +4643,44 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
         });
       }
     }
+    // ✅ CANONICALIZE identity (prevents "generic 18" vs "routed 18" mismatch)
+if (holes === 18) {
+  // 18s must be front+back ONLY (layout_key must be NULL)
+  layout_key = null;
+
+  // normalize again just to be safe
+  front_nine_key = normKey(front_nine_key);
+  back_nine_key = normKey(back_nine_key);
+
+  if (!front_nine_key || !back_nine_key) {
+    console.log("⛔ course-admin/booking routing_required (18 after canonical)", {
+      tee_time_raw,
+      tee_time,
+      holes,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+      timeId,
+    });
+    return res.status(400).json({ ok: false, error: "routing_required" });
+  }
+} else if (holes === 9) {
+  // 9s must be layout_key ONLY (front/back must be NULL)
+  front_nine_key = null;
+  back_nine_key = null;
+  layout_key = normKey(layout_key);
+
+  if (!layout_key) {
+    console.log("⛔ course-admin/booking routing_required (9 after canonical)", {
+      tee_time_raw,
+      tee_time,
+      holes,
+      layout_key,
+      timeId,
+    });
+    return res.status(400).json({ ok: false, error: "routing_required" });
+  }
+}
 
     // 🚫 never allow generic manual bookings
     if (holes === 18 && (!front_nine_key || !back_nine_key) && !layout_key) {
