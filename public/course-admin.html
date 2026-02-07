@@ -1016,6 +1016,38 @@ function displayTime(v){
   // shows "06:00" even if DB stores "06:00|18:pines|lakes"
   return String(v || "").split("|")[0].trim();
 }
+// ✅ Hide generic 18-hole rows when a routed 18-hole row exists at the same time
+function filterShadowedGeneric18(rows){
+  const list = Array.isArray(rows) ? rows : [];
+
+  // collect times that have a routed 18
+  const routedTimes = new Set();
+  list.forEach(r => {
+    const holes = Number(r?.holes ?? r?.hole_count ?? r?.holeCount ?? 0);
+    if (holes !== 18) return;
+
+    const time = normTime(displayTime(r?.tee_time || r?.time || ""));
+    const f = String(r?.front_nine_key || r?.front9_key || r?.front9Key || "").trim();
+    const b = String(r?.back_nine_key  || r?.back9_key  || r?.back9Key  || "").trim();
+
+    if (time && f && b) routedTimes.add(time);
+  });
+
+  // remove generic 18 rows that are shadowed by routed 18 at same time
+  return list.filter(r => {
+    const holes = Number(r?.holes ?? r?.hole_count ?? r?.holeCount ?? 0);
+    if (holes !== 18) return true;
+
+    const time = normTime(displayTime(r?.tee_time || r?.time || ""));
+    const f = String(r?.front_nine_key || r?.front9_key || r?.front9Key || "").trim();
+    const b = String(r?.back_nine_key  || r?.back9_key  || r?.back9Key  || "").trim();
+
+    const isGeneric = !f && !b;
+    if (isGeneric && routedTimes.has(time)) return false;
+
+    return true;
+  });
+}
 let LAST_INSIGHTS = { total: null, online: null, manual: null };
 let ANALYTICS_MODE = "total"; // "total" | "online" | "manual"
 function getInsightsForMode(mode){
@@ -2005,7 +2037,8 @@ async function viewTimes(){
       { method:"GET" }
     );
 
-    const rows = (out && out.times) || [];
+    let rows = (out && out.times) || [];
+rows = filterShadowedGeneric18(rows);
     if (!Array.isArray(rows) || !rows.length){
       $("viewMsg").textContent = "✅ No tee times found for this date.";
       return;
@@ -2112,7 +2145,8 @@ async function viewTimes(){
       if (!date) throw new Error("play_date_required");
 
       const timesOut = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
-      const timesRows = (timesOut && timesOut.times) || [];
+      let timesRows = (timesOut && timesOut.times) || [];
+timesRows = filterShadowedGeneric18(timesRows);
       // ✅ Price lookup (time+holes+route/layout) so duplicates don't collide
 const priceByKey = new Map();
 try{
@@ -2180,6 +2214,7 @@ for (const r of timesRows) {
 deduped.sort((a,b) => (normTime(a.tee_time||a.time||"") > normTime(b.tee_time||b.time||"") ? 1 : -1));
 timesRows.length = 0;
 deduped.forEach(x => timesRows.push(x));
+timesRows = filterShadowedGeneric18(timesRows);
   }
 }catch(e){
   // ignore if manual endpoint missing; daily sheet will still work from normal times
