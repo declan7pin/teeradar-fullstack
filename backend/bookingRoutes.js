@@ -7773,40 +7773,17 @@ router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res
         return res.status(400).json({ ok: false, error: "slot_required_for_manual" });
       }
 
-      // 🔑 IMPORTANT: derive bucketed slot_index (MATCHES insert logic)
-      const meta = await db.query(
-        `
-        SELECT holes, layout_key, front_nine_key, back_nine_key
-        FROM booking_manual_slots
-        WHERE course_id=$1 AND reference=$2
-        LIMIT 1;
-        `,
-        [courseId, reference]
-      );
-
-      const row = meta.rows[0];
-      if (!row) {
-        return res.status(404).json({ ok: false, error: "manual_slot_not_found" });
-      }
-
-      const layoutSig = `${row.holes}|${row.layout_key || ""}|${row.front_nine_key || ""}|${row.back_nine_key || ""}`;
-
-      // ✅ FIX: ESM-safe (no require)
-      const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
-
-      const n = parseInt(hex, 16) || 0;
-      const base = (n % 2000) * 10;
-      const slot_index_db = base + slot_ui;
-
+      // ✅ FIX: don't re-derive slot_index (hashing/layout may not match)
+      // Manual slot_index is bucketed so the last digit maps to UI slot 1–4
       const r = await db.query(
         `
         UPDATE booking_manual_slots
         SET checked_in=$1, updated_at=now()
         WHERE course_id=$2
           AND reference=$3
-          AND slot_index=$4
+          AND (slot_index % 10) = $4
         `,
-        [checkedIn, courseId, reference, slot_index_db]
+        [checkedIn, courseId, reference, slot_ui]
       );
 
       if (!r.rowCount) {
