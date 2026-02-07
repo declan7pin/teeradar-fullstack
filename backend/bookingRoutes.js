@@ -5193,29 +5193,62 @@ router.post("/course-admin/manual-slot-paid", requireCourseAdmin, async (req, re
       if (!Number.isFinite(slot_index_ui) || slot_index_ui < 1 || slot_index_ui > 4)
         return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
 
-      // ✅ routing required for bucketed index
-      if (holes === 18) {
-        layout_key = null;
-        if (!front_nine_key || !back_nine_key) return res.status(400).json({ ok: false, error: "routing_required" });
+      // ✅ If routing keys are missing, try resolve uniquely by (slot_index % 10)
+      const hasRouting =
+        (holes === 9 && !!layout_key) ||
+        (holes === 18 && !!front_nine_key && !!back_nine_key);
+
+      if (!hasRouting) {
+        const cand = await db.query(
+          `
+          SELECT id
+          FROM booking_manual_slots
+          WHERE course_id=$1
+            AND play_date=$2::date
+            AND tee_time=$3
+            AND holes=$4
+            AND (slot_index % 10)=$5
+          LIMIT 3;
+          `,
+          [courseId, play_date, tee_time, holes, slot_index_ui]
+        );
+
+        if (cand.rows.length === 1) {
+          r = await db.query(
+            `UPDATE booking_manual_slots
+             SET paid=$3, updated_at=now()
+             WHERE id=$1 AND course_id=$2
+             RETURNING id, paid;`,
+            [cand.rows[0].id, courseId, paid]
+          );
+        } else if (cand.rows.length === 0) {
+          r = { rows: [] };
+        } else {
+          return res.status(400).json({ ok: false, error: "routing_required" });
+        }
       } else {
-        front_nine_key = null;
-        back_nine_key = null;
-        if (!layout_key) return res.status(400).json({ ok: false, error: "routing_required" });
+        // ✅ routing required for bucketed index (normal path)
+        if (holes === 18) {
+          layout_key = null;
+        } else {
+          front_nine_key = null;
+          back_nine_key = null;
+        }
+
+        const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
+        const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+        const n = parseInt(hex, 16) || 0;
+        const base = (n % 2000) * 10;
+        const slot_index = base + slot_index_ui;
+
+        r = await db.query(
+          `UPDATE booking_manual_slots
+           SET paid=$6, updated_at=now()
+           WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 AND slot_index=$5
+           RETURNING id, paid;`,
+          [courseId, play_date, tee_time, holes, slot_index, paid]
+        );
       }
-
-      const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
-      const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
-      const n = parseInt(hex, 16) || 0;
-      const base = (n % 2000) * 10;
-      const slot_index = base + slot_index_ui;
-
-      r = await db.query(
-        `UPDATE booking_manual_slots
-         SET paid=$6, updated_at=now()
-         WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 AND slot_index=$5
-         RETURNING id, paid;`,
-        [courseId, play_date, tee_time, holes, slot_index, paid]
-      );
     }
 
     if (!r.rows.length) return res.status(404).json({ ok: false, error: "manual_slot_not_found" });
@@ -5267,29 +5300,62 @@ router.post("/course-admin/manual-slot-checkin", requireCourseAdmin, async (req,
       if (!Number.isFinite(slot_index_ui) || slot_index_ui < 1 || slot_index_ui > 4)
         return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
 
-      // ✅ routing required for bucketed index
-      if (holes === 18) {
-        layout_key = null;
-        if (!front_nine_key || !back_nine_key) return res.status(400).json({ ok: false, error: "routing_required" });
+      // ✅ If routing keys are missing, try resolve uniquely by (slot_index % 10)
+      const hasRouting =
+        (holes === 9 && !!layout_key) ||
+        (holes === 18 && !!front_nine_key && !!back_nine_key);
+
+      if (!hasRouting) {
+        const cand = await db.query(
+          `
+          SELECT id
+          FROM booking_manual_slots
+          WHERE course_id=$1
+            AND play_date=$2::date
+            AND tee_time=$3
+            AND holes=$4
+            AND (slot_index % 10)=$5
+          LIMIT 3;
+          `,
+          [courseId, play_date, tee_time, holes, slot_index_ui]
+        );
+
+        if (cand.rows.length === 1) {
+          r = await db.query(
+            `UPDATE booking_manual_slots
+             SET checked_in=$3, updated_at=now()
+             WHERE id=$1 AND course_id=$2
+             RETURNING id, checked_in;`,
+            [cand.rows[0].id, courseId, checked_in]
+          );
+        } else if (cand.rows.length === 0) {
+          r = { rows: [] };
+        } else {
+          return res.status(400).json({ ok: false, error: "routing_required" });
+        }
       } else {
-        front_nine_key = null;
-        back_nine_key = null;
-        if (!layout_key) return res.status(400).json({ ok: false, error: "routing_required" });
+        // ✅ routing required for bucketed index (normal path)
+        if (holes === 18) {
+          layout_key = null;
+        } else {
+          front_nine_key = null;
+          back_nine_key = null;
+        }
+
+        const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
+        const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+        const n = parseInt(hex, 16) || 0;
+        const base = (n % 2000) * 10;
+        const slot_index = base + slot_index_ui;
+
+        r = await db.query(
+          `UPDATE booking_manual_slots
+           SET checked_in=$6, updated_at=now()
+           WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 AND slot_index=$5
+           RETURNING id, checked_in;`,
+          [courseId, play_date, tee_time, holes, slot_index, checked_in]
+        );
       }
-
-      const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
-      const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
-      const n = parseInt(hex, 16) || 0;
-      const base = (n % 2000) * 10;
-      const slot_index = base + slot_index_ui;
-
-      r = await db.query(
-        `UPDATE booking_manual_slots
-         SET checked_in=$6, updated_at=now()
-         WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 AND slot_index=$5
-         RETURNING id, checked_in;`,
-        [courseId, play_date, tee_time, holes, slot_index, checked_in]
-      );
     }
 
     if (!r.rows.length) return res.status(404).json({ ok: false, error: "manual_slot_not_found" });
