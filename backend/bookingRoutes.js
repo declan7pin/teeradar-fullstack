@@ -5119,7 +5119,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
   }
 });
 
-// DELETE manual slot (layout-aware + bucketed slot_index)
+// DELETE manual slot
 router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) => {
   try {
     const slug = req.courseAdmin.slug;
@@ -5127,6 +5127,7 @@ router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) 
     const play_date = String(req.query?.date || "").trim();
     const tee_time = String(req.query?.time || "").trim();
     const holes = Number(req.query?.holes || 18);
+
     const slot_index_ui = Number(req.query?.slotIndex || 0);
 
     const normKey = (v) => {
@@ -5145,40 +5146,98 @@ router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) 
       return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
     }
 
-    // ✅ enforce identity rules
-    if (holes === 18) {
-      layout_key = null;
-      if (!front_nine_key || !back_nine_key) {
-        return res.status(400).json({ ok: false, error: "routing_required" });
-      }
-    }
-    if (holes === 9) {
-      front_nine_key = null;
-      back_nine_key = null;
-      if (!layout_key) {
-        return res.status(400).json({ ok: false, error: "routing_required" });
-      }
-    }
-
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-    // ✅ convert UI slot (1..4) -> DB bucketed slot
-    const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
-    const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
-    const n = parseInt(hex, 16) || 0;
-    const base = (n % 2000) * 10;
-    const slot_index = base + slot_index_ui;
+    /**
+     * ✅ FIX:
+     * Frontend delete URL may NOT send routing keys.
+     * So if keys are missing, resolve the exact manual slot row by:
+     *  - course_id + date + time + holes
+     *  - and slot_index_ui via (slot_index % 10) = slotIndex
+     * Then delete by id and sync using the row’s stored routing keys.
+     */
+    let resolved = null;
 
-    const r = await db.query(
-      `
-      DELETE FROM booking_manual_slots
-      WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 AND slot_index=$5
-      `,
-      [courseId, play_date, tee_time, holes, slot_index]
+    if ((!layout_key && holes === 9) || ((holes === 18) && (!front_nine_key || !back_nine_key))) {
+      const rr = await db.query(
+        `
+        SELECT id, tee_time, holes, layout_key, front_nine_key, back_nine_key
+        FROM booking_manual_slots
+        WHERE course_id = $1
+          AND play_date = $2::date
+          AND tee_time  = $3
+          AND holes     = $4
+          AND (slot_index % 10) = $5
+        LIMIT 1;
+        `,
+        [courseId, play_date, tee_time, holes, slot_index_ui]
+      );
+
+      resolved = rr.rows[0] || null;
+
+      if (!resolved) {
+        return res.json({ ok: true, deleted: 0, sync: null });
+      }
+
+      layout_key = normKey(resolved.layout_key);
+      front_nine_key = normKey(resolved.front_nine_key);
+      back_nine_key = normKey(resolved.back_nine_key);
+    }
+
+    // ✅ If keys WERE provided, we still need to compute the hashed slot_index like before
+    // (keeps backwards compatibility with any callers sending routing keys)
+    if (!resolved) {
+      // Enforce identity rules only when we must compute the hash
+      if (holes === 18) {
+        layout_key = null;
+        if (!front_nine_key || !back_nine_key) {
+          return res.status(400).json({ ok: false, error: "routing_required" });
+        }
+      }
+      if (holes === 9) {
+        front_nine_key = null;
+        back_nine_key = null;
+        if (!layout_key) {
+          return res.status(400).json({ ok: false, error: "routing_required" });
+        }
+      }
+
+      const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
+      const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+      const n = parseInt(hex, 16) || 0;
+      const base = (n % 2000) * 10;
+      const slot_index = base + slot_index_ui;
+
+      // Delete by composite (legacy path)
+      const r = await db.query(
+        `
+        DELETE FROM booking_manual_slots
+        WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4 AND slot_index=$5
+        `,
+        [courseId, play_date, tee_time, holes, slot_index]
+      );
+
+      const sync = await syncBookedPlayersForTime({
+        courseId,
+        play_date,
+        tee_time,
+        holes,
+        layout_key,
+        front_nine_key,
+        back_nine_key,
+        allowInsert: false,
+      });
+
+      return res.json({ ok: true, deleted: r.rowCount || 0, sync });
+    }
+
+    // ✅ Resolved path: delete by id (no routing keys needed from frontend)
+    const del = await db.query(
+      `DELETE FROM booking_manual_slots WHERE id=$1 AND course_id=$2`,
+      [resolved.id, courseId]
     );
 
-    // ✅ IMPORTANT: MUST be allowInsert:true so public booking page reflects deletion too
     const sync = await syncBookedPlayersForTime({
       courseId,
       play_date,
@@ -5187,16 +5246,15 @@ router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) 
       layout_key,
       front_nine_key,
       back_nine_key,
-      allowInsert: true,
+      allowInsert: false,
     });
 
-    res.json({ ok: true, deleted: r.rowCount || 0, sync });
+    return res.json({ ok: true, deleted: del.rowCount || 0, sync });
   } catch (e) {
     console.error("course-admin/manual-slot DELETE", e);
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 // ✅ NEW: toggle PAID for MANUAL slots (course admin)
 router.post("/course-admin/manual-slot-paid", requireCourseAdmin, async (req, res) => {
   try {
