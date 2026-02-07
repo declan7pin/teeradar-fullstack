@@ -5039,7 +5039,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     await client.query("COMMIT");
     didBegin = false;
 
-    // ✅ IMPORTANT: pass routing keys; allowInsert=false (if your sync supports it)
+    // ✅ IMPORTANT: MUST be allowInsert:true so public booking page reflects taken slots
     console.log("🔄 course-admin/booking calling syncBookedPlayersForTime", {
       courseId,
       play_date: playDate,
@@ -5048,7 +5048,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       layout_key,
       front_nine_key,
       back_nine_key,
-      allowInsert: false,
+      allowInsert: true,
     });
 
     const sync = await syncBookedPlayersForTime({
@@ -5059,10 +5059,54 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       layout_key,
       front_nine_key,
       back_nine_key,
-      allowInsert: false,
+      allowInsert: true,
     });
 
     console.log("✅ course-admin/booking sync result", sync);
+
+    // ✅ NEW: send confirmation email when course admin creates a manual booking (if email provided)
+    try {
+      if (email && isLikelyEmail(email)) {
+        const courseInfo = await db.query(
+          `SELECT name, cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
+          [courseId]
+        );
+        const courseName = String(courseInfo.rows[0]?.name || slug);
+
+        const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
+        const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
+
+        const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
+        const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
+
+        const pricePerPlayerCents = await getTeePricePerPlayerCents({
+          courseId,
+          playDate: playDate,
+          teeTime: tee_time,
+          holes,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+        });
+
+        await sendBookingEmail({
+          to: email,
+          courseName,
+          date: playDate,
+          time: tee_time,
+          holes,
+          players,
+          reference,
+          pricePerPlayerCents: pricePerPlayerCents || 0,
+          totalCents: (pricePerPlayerCents || 0) * players,
+          cartCents,
+          hireClubsCents,
+          source: "manual",
+        });
+      }
+    } catch (e) {
+      console.warn("course-admin/booking email failed (non-fatal):", e?.message || e);
+    }
 
     return res.json({ ok: true, reference, rows: filled, sync });
 
@@ -5134,6 +5178,7 @@ router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) 
       [courseId, play_date, tee_time, holes, slot_index]
     );
 
+    // ✅ IMPORTANT: MUST be allowInsert:true so public booking page reflects deletion too
     const sync = await syncBookedPlayersForTime({
       courseId,
       play_date,
@@ -5142,7 +5187,7 @@ router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) 
       layout_key,
       front_nine_key,
       back_nine_key,
-      allowInsert: false,
+      allowInsert: true,
     });
 
     res.json({ ok: true, deleted: r.rowCount || 0, sync });
