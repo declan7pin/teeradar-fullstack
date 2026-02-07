@@ -78,8 +78,48 @@
 
     /* ✅ list (used by inventory card) */
     .list{margin:0;padding-left:18px}
+    /* --- Debug panel (toggle with ?debug=1) --- */
+#trDebugWrap{position:fixed;left:10px;right:10px;bottom:10px;z-index:99999;display:none}
+#trDebugWrap.on{display:block}
+#trDebug{
+  background:#0b1220;color:#e5e7eb;border:1px solid rgba(255,255,255,.15);
+  border-radius:12px;padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.35);
+  font:12px/1.35 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+}
+#trDebugTop{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px}
+#trDebugBtns{display:flex;gap:8px;align-items:center}
+#trDebugBtns button{
+  padding:6px 10px;border:1px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.06);color:#e5e7eb;border-radius:10px;cursor:pointer
+}
+#trDebugBtns button:hover{background:rgba(255,255,255,.10)}
+#trDebugMeta{opacity:.9}
+#trDebugLog{
+  max-height:220px;overflow:auto;white-space:pre-wrap;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);
+  border-radius:10px;padding:8px
+}
+#trDebugLog .err{color:#fecaca}
+#trDebugLog .ok{color:#bbf7d0}
+#trDebugLog .warn{color:#fde68a}
   </style>
 </head>
+<div id="trDebugWrap">
+  <div id="trDebug">
+    <div id="trDebugTop">
+      <div id="trDebugMeta">
+        <b>Debug</b> • <span id="trDebugPath">path</span>
+        <span id="trDebugEnv"></span>
+      </div>
+      <div id="trDebugBtns">
+        <button type="button" id="trDebugCopy">Copy</button>
+        <button type="button" id="trDebugClear">Clear</button>
+        <button type="button" id="trDebugHide">Hide</button>
+      </div>
+    </div>
+    <div id="trDebugLog"></div>
+  </div>
+</div>
 <body>
   <div class="wrap">
 
@@ -668,6 +708,69 @@
 <script>
 
   const $ = (id) => document.getElementById(id);
+  // --- Debug helpers (enable with ?debug=1 or localStorage.TR_DEBUG="1") ---
+(function initTRDebug(){
+  const params = new URLSearchParams(location.search);
+  const enabled = params.get("debug") === "1" || localStorage.getItem("TR_DEBUG") === "1";
+  if (params.get("debug") === "1") localStorage.setItem("TR_DEBUG","1");
+
+  const wrap = document.getElementById("trDebugWrap");
+  const logEl = document.getElementById("trDebugLog");
+  const pathEl = document.getElementById("trDebugPath");
+  const envEl  = document.getElementById("trDebugEnv");
+
+  if (!wrap || !logEl) return;
+
+  if (enabled) wrap.classList.add("on");
+  pathEl.textContent = location.pathname + location.search;
+  envEl.textContent = " • " + (location.host || "");
+
+  window.dbg = function dbg(tag, obj, level="ok"){
+    if (!wrap.classList.contains("on")) return;
+    const ts = new Date().toISOString().slice(11,19);
+    const line = document.createElement("div");
+    line.className = level;
+    let body = "";
+    try { body = obj === undefined ? "" : (typeof obj === "string" ? obj : JSON.stringify(obj, null, 2)); }
+    catch { body = String(obj); }
+    line.textContent = `[${ts}] ${tag}` + (body ? `\n${body}` : "");
+    logEl.prepend(line);
+  };
+
+  window.dbgFetch = async function dbgFetch(url, opts){
+    const method = (opts?.method || "GET").toUpperCase();
+    let bodyObj = null;
+    try { bodyObj = opts?.body ? JSON.parse(opts.body) : null; } catch {}
+    dbg("FETCH → " + method + " " + url, { headers: opts?.headers || null, body: bodyObj });
+
+    const t0 = performance.now();
+    let res, text;
+    try {
+      res = await fetch(url, opts);
+      text = await res.text();
+    } catch (e) {
+      dbg("FETCH ✖ network error", { url, method, message: e?.message || String(e) }, "err");
+      throw e;
+    }
+
+    const ms = Math.round(performance.now() - t0);
+    let json = null;
+    try { json = JSON.parse(text); } catch { json = { _raw: text }; }
+
+    dbg("FETCH ← " + res.status + " (" + ms + "ms)", json, res.ok ? "ok" : "err");
+    return { res, json, text };
+  };
+
+  document.getElementById("trDebugClear")?.addEventListener("click", () => (logEl.innerHTML=""));
+  document.getElementById("trDebugHide")?.addEventListener("click", () => wrap.classList.remove("on"));
+  document.getElementById("trDebugCopy")?.addEventListener("click", async () => {
+    const lines = Array.from(logEl.querySelectorAll("div")).map(d => d.textContent).join("\n\n");
+    try { await navigator.clipboard.writeText(lines); dbg("COPIED", "Debug log copied to clipboard"); }
+    catch { dbg("COPY ✖", "Clipboard failed", "warn"); }
+  });
+
+  dbg("DEBUG ENABLED", { host: location.host, path: location.pathname }, "warn");
+})();
   // ✅ Tap tracer (shows last tapped button id)
 document.addEventListener("click", (e) => {
   const b = e.target && e.target.closest ? e.target.closest("button") : null;
@@ -2195,6 +2298,29 @@ tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
       const playersRaw = prompt("Players (1-4):", "1") || "1";
       const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
 
+      // ✅ DEBUG: shows the exact path + payload we’re about to send
+      try{
+        window.dbg && dbg("ADD_BOOKING payload", {
+          slug: getSlug(),
+          endpoint: "/api/book/course-admin/booking",
+          date,
+          teeTime,
+          holes,
+          layoutKey,
+          frontNineKey,
+          backNineKey,
+          priceKey,
+          pricePerPlayerCents,
+          players,
+          name,
+          email,
+          phone,
+          cartQty,
+          hireClubsQty,
+          notes
+        }, "warn");
+      }catch{}
+
       await j("/api/book/course-admin/booking?slug=" + encodeURIComponent(getSlug()), {
         method:"POST",
         body: JSON.stringify({
@@ -2240,7 +2366,8 @@ tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
     }
   };
 });
-      // ✅ Edit / Delete buttons on each slot (daily sheet) — SINGLE handler (no duplicates)
+
+// ✅ Edit / Delete buttons on each slot (daily sheet) — SINGLE handler (no duplicates)
 tb.querySelectorAll('button[data-del-slot]').forEach(btn => {
   btn.onclick = async (ev) => {
     ev.preventDefault();
@@ -2248,11 +2375,12 @@ tb.querySelectorAll('button[data-del-slot]').forEach(btn => {
 
     try{
       await getMe();
-const ref = String(btn.getAttribute("data-ref") || "");
-if (!/^MAN-/.test(ref)) {
-  $("viewMsg").textContent = "❌ Only MAN- bookings can be edited/deleted here (TR- are online bookings).";
-  return;
-}
+      const ref = String(btn.getAttribute("data-ref") || "");
+      if (!/^MAN-/.test(ref)) {
+        $("viewMsg").textContent = "❌ Only MAN- bookings can be edited/deleted here (TR- are online bookings).";
+        return;
+      }
+
       const date = ($("date").value || "").trim();
       if (!date) throw new Error("play_date_required");
 
