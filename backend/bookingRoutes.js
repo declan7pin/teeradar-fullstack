@@ -7735,20 +7735,32 @@ router.post("/course-admin/booking-cancel", requireCourseAdmin, async (req, res)
 router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res) => {
   try {
     const reference = String(req.body?.reference || "").trim();
-    const slot = Number(req.body?.slot || 0) || 0; // 1–4 for MAN- slots
+    const slotRaw = req.body?.slot ?? req.body?.slotIndex ?? req.body?.slot_index ?? 0;
+    const slot = Number(slotRaw || 0) || 0; // 1–4 for MAN- slots
     const checkedIn = !!(req.body?.checked_in ?? req.body?.checkedIn ?? false);
 
     if (!reference) {
       return res.status(400).json({ ok: false, error: "reference_required" });
     }
 
-    // Resolve courseId from slug (works even if req.courseAdmin has no courseId)
-    const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
-    const courseQ = await db.query(
-      `SELECT id FROM booking_courses WHERE slug = $1 LIMIT 1;`,
-      [slug]
-    );
-    const courseId = Number(courseQ.rows?.[0]?.id || 0);
+    // ✅ FIX: resolve courseId from token first (slug may not exist on token)
+    let courseId =
+      Number(req.courseAdmin?.courseId || req.courseAdmin?.course_id || 0) || 0;
+
+    // Fallback: resolve courseId from slug
+    if (!courseId) {
+      const slug = String(req.courseAdmin?.slug || "").trim().toLowerCase();
+      if (!slug) {
+        return res.status(400).json({ ok: false, error: "course_context_missing" });
+      }
+
+      const courseQ = await db.query(
+        `SELECT id FROM booking_courses WHERE slug = $1 LIMIT 1;`,
+        [slug]
+      );
+      courseId = Number(courseQ.rows?.[0]?.id || 0) || 0;
+    }
+
     if (!courseId) {
       return res.status(404).json({ ok: false, error: "course_not_found" });
     }
@@ -7759,7 +7771,7 @@ router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res
         return res.status(400).json({ ok: false, error: "slot_required_for_manual" });
       }
 
-      await db.query(
+      const r = await db.query(
         `
         UPDATE booking_manual_slots
         SET checked_in = $1, updated_at = now()
@@ -7770,11 +7782,15 @@ router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res
         [checkedIn, courseId, reference, slot]
       );
 
+      if (!r.rowCount) {
+        return res.status(404).json({ ok: false, error: "manual_slot_not_found" });
+      }
+
       return res.json({ ok: true, kind: "manual", reference, slot, checked_in: checkedIn });
     }
 
     // Normal bookings (TR- etc)
-    await db.query(
+    const r2 = await db.query(
       `
       UPDATE booking_bookings
       SET checked_in = $1, updated_at = now()
@@ -7783,6 +7799,10 @@ router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res
       `,
       [checkedIn, courseId, reference]
     );
+
+    if (!r2.rowCount) {
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
 
     return res.json({ ok: true, kind: "booking", reference, checked_in: checkedIn });
   } catch (e) {
