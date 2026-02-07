@@ -7948,10 +7948,12 @@ router.get("/availability", async (req, res) => {
             AND ms2.holes     = t.holes
             AND COALESCE(ms2.name,'') <> ''
 
-            -- ✅ routing identity MUST match
-            AND ms2.layout_key     IS NOT DISTINCT FROM t.layout_key
-            AND ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
-            AND ms2.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
+            -- ✅ FIX: routing identity by hole-type
+            AND (
+              (t.holes = 18 AND ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key AND ms2.back_nine_key IS NOT DISTINCT FROM t.back_nine_key)
+              OR
+              (t.holes = 9  AND ms2.layout_key     IS NOT DISTINCT FROM t.layout_key)
+            )
         ) ms ON true
 
         -- ✅ Confirmed bookings (routing-safe + CLEAN time)
@@ -7964,10 +7966,12 @@ router.get("/availability", async (req, res) => {
             AND b.holes     = t.holes
             AND b.status    = 'CONFIRMED'
 
-            -- ✅ routing identity MUST match
-            AND b.layout_key     IS NOT DISTINCT FROM t.layout_key
-            AND b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
-            AND b.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
+            -- ✅ FIX: routing identity by hole-type
+            AND (
+              (t.holes = 18 AND b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key AND b.back_nine_key IS NOT DISTINCT FROM t.back_nine_key)
+              OR
+              (t.holes = 9  AND b.layout_key     IS NOT DISTINCT FROM t.layout_key)
+            )
         ) bk ON true
 
         WHERE t.course_id = $1
@@ -8070,9 +8074,12 @@ router.get("/availability", async (req, res) => {
             AND ms2.holes     = t.holes
             AND COALESCE(ms2.name,'') <> ''
 
-            AND ms2.layout_key     IS NOT DISTINCT FROM t.layout_key
-            AND ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
-            AND ms2.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
+            -- ✅ FIX: routing identity by hole-type
+            AND (
+              (t.holes = 18 AND ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key AND ms2.back_nine_key IS NOT DISTINCT FROM t.back_nine_key)
+              OR
+              (t.holes = 9  AND ms2.layout_key     IS NOT DISTINCT FROM t.layout_key)
+            )
         ) ms ON true
 
         LEFT JOIN LATERAL (
@@ -8084,9 +8091,12 @@ router.get("/availability", async (req, res) => {
             AND b.holes     = t.holes
             AND b.status    = 'CONFIRMED'
 
-            AND b.layout_key     IS NOT DISTINCT FROM t.layout_key
-            AND b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
-            AND b.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
+            -- ✅ FIX: routing identity by hole-type
+            AND (
+              (t.holes = 18 AND b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key AND b.back_nine_key IS NOT DISTINCT FROM t.back_nine_key)
+              OR
+              (t.holes = 9  AND b.layout_key     IS NOT DISTINCT FROM t.layout_key)
+            )
         ) bb ON true
 
         WHERE t.course_id = $1
