@@ -4364,7 +4364,18 @@ router.get("/course-admin/manual-slots", requireCourseAdmin, async (req, res) =>
         play_date::text AS play_date,
         tee_time,
         holes,
+
+        -- ✅ return UI slot 1..4 (daily sheet expects this)
         (slot_index % 10) AS slot_index,
+
+        -- keep db slot too (useful for debugging)
+        slot_index AS slot_index_db,
+
+        -- ✅ include routing identity so UI can match correct row
+        layout_key,
+        front_nine_key,
+        back_nine_key,
+
         reference,
         name,
         email,
@@ -4378,7 +4389,7 @@ router.get("/course-admin/manual-slots", requireCourseAdmin, async (req, res) =>
         notes
       FROM booking_manual_slots
       WHERE course_id=$1 AND play_date=$2::date
-      ORDER BY tee_time ASC, holes DESC, slot_index ASC;
+      ORDER BY tee_time ASC, holes DESC, (slot_index % 10) ASC;
       `,
       [courseId, date]
     );
