@@ -5075,7 +5075,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
   }
 });
 
-// DELETE manual slot
+// DELETE manual slot (layout-aware + bucketed slot_index)
 router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) => {
   try {
     const slug = req.courseAdmin.slug;
@@ -5083,7 +5083,6 @@ router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) 
     const play_date = String(req.query?.date || "").trim();
     const tee_time = String(req.query?.time || "").trim();
     const holes = Number(req.query?.holes || 18);
-
     const slot_index_ui = Number(req.query?.slotIndex || 0);
 
     const normKey = (v) => {
@@ -5102,7 +5101,7 @@ router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) 
       return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
     }
 
-    // ✅ ENFORCE identity rules (so we delete the correct layout bucket)
+    // ✅ enforce identity rules
     if (holes === 18) {
       layout_key = null;
       if (!front_nine_key || !back_nine_key) {
@@ -5120,6 +5119,7 @@ router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
+    // ✅ convert UI slot (1..4) -> DB bucketed slot
     const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
     const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
     const n = parseInt(hex, 16) || 0;
