@@ -4202,14 +4202,32 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     const holes = Number(_pickAny(req.body, ["holes"], 18));
 
     // ✅ NEW: layout identity (THIS IS THE IMPORTANT PART)
-    const layout_key =
-      String(_pickAny(req.body, ["layout_key", "layoutKey"], "") || "").trim() || null;
+    const _normKey = (v) => {
+      const s = String(v || "").trim().toLowerCase();
+      return s ? s : null;
+    };
 
-    const front_nine_key =
-      String(_pickAny(req.body, ["front_nine_key", "front9_key", "front9Key"], "") || "").trim() || null;
+    // ✅ read raw
+    let layout_key = _normKey(_pickAny(req.body, ["layout_key", "layoutKey"], ""));
+    let front_nine_key = _normKey(_pickAny(req.body, ["front_nine_key", "front9_key", "front9Key"], ""));
+    let back_nine_key  = _normKey(_pickAny(req.body, ["back_nine_key", "back9_key", "back9Key"], ""));
 
-    const back_nine_key =
-      String(_pickAny(req.body, ["back_nine_key", "back9_key", "back9Key"], "") || "").trim() || null;
+    // ✅ ENFORCE identity rules
+    if (holes === 18) {
+      // 18s are front+back ONLY
+      layout_key = null;
+      if (!front_nine_key || !back_nine_key) {
+        return res.status(400).json({ ok: false, error: "routing_required" });
+      }
+    }
+    if (holes === 9) {
+      // 9s are layout_key ONLY
+      front_nine_key = null;
+      back_nine_key = null;
+      if (!layout_key) {
+        return res.status(400).json({ ok: false, error: "routing_required" });
+      }
+    }
 
     const playersRaw = Number(_pickAny(req.body, ["players", "numPlayers"], 1));
     const players = Math.max(1, Math.min(4, Number.isFinite(playersRaw) ? playersRaw : 1));
@@ -4243,6 +4261,21 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    // ✅ DEBUG: prove what this route is actually inserting
+    console.log("🧾 course-admin/manual-slot incoming", {
+      slug,
+      courseId,
+      playDate,
+      tee_time,
+      holes,
+      players,
+      keys: { layout_key, front_nine_key, back_nine_key },
+      cart_qty,
+      hire_clubs_qty,
+      name_present: !!name,
+      email_present: !!email,
+    });
 
     client = await db.connect();
     await client.query("BEGIN");
@@ -4295,6 +4328,19 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     const takenSet = new Set((taken.rows || []).map((r) => Number(r.slot_index)));
     const freeSlots = [1, 2, 3, 4].filter((i) => !takenSet.has(i));
 
+    console.log("🟩 course-admin/manual-slot slot scan", {
+      courseId,
+      playDate,
+      tee_time,
+      holes,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+      taken: Array.from(takenSet),
+      freeSlots,
+      playersRequested: players,
+    });
+
     if (freeSlots.length < players) {
       await client.query("ROLLBACK");
       didBegin = false;
@@ -4313,11 +4359,15 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     for (let i = 0; i < players; i++) {
       const slot_index = freeSlots[i];
 
+      // ✅ IMPORTANT: price lookup must match the same routed tee-time identity
       const price_per_player_cents = await getTeePricePerPlayerCents({
         courseId,
         playDate,
         teeTime: tee_time,
         holes,
+        layout_key,
+        front_nine_key,
+        back_nine_key,
       });
 
       const ins = await client.query(
@@ -4379,6 +4429,37 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     await client.query("COMMIT");
     didBegin = false;
 
+    // ✅ ALSO sync booking_times booked_players/status for THIS exact routed slot
+    // (and never insert new booking_times rows)
+    let sync = null;
+    try {
+      console.log("🔄 course-admin/manual-slot calling syncBookedPlayersForTime", {
+        courseId,
+        play_date: playDate,
+        tee_time,
+        holes,
+        layout_key,
+        front_nine_key,
+        back_nine_key,
+        allowInsert: false,
+      });
+
+      sync = await syncBookedPlayersForTime({
+        courseId,
+        play_date: playDate,
+        tee_time,
+        holes,
+        layout_key,
+        front_nine_key,
+        back_nine_key,
+        allowInsert: false,
+      });
+
+      console.log("✅ course-admin/manual-slot sync result", sync);
+    } catch (e) {
+      console.error("⚠️ course-admin/manual-slot sync failed", e);
+    }
+
     return res.json({
       ok: true,
       course_slug: slug,
@@ -4391,6 +4472,7 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
       players,
       reference,
       manualSlotsInserted: insertedRows,
+      sync,
     });
   } catch (e) {
     console.error("course-admin/manual-slot POST", e);
