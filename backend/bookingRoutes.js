@@ -7790,7 +7790,10 @@ router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res
       }
 
       const layoutSig = `${row.holes}|${row.layout_key || ""}|${row.front_nine_key || ""}|${row.back_nine_key || ""}`;
-      const hex = require("crypto").createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+
+      // ✅ FIX: ESM-safe (no require)
+      const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+
       const n = parseInt(hex, 16) || 0;
       const base = (n % 2000) * 10;
       const slot_index_db = base + slot_ui;
