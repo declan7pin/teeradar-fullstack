@@ -119,7 +119,35 @@ function signCourseAdminToken(payload) {
   if (!secret) throw new Error("COURSE_ADMIN_JWT_SECRET_not_set");
   return jwt.sign(payload, secret, { expiresIn: "30d" });
 }
+// ✅ CODE-ONLY FIX: avoid manual-slot collisions across layouts without DB migrations
+function _layoutSig({ holes, layout_key, front_nine_key, back_nine_key }) {
+  const h = Number(holes || 0);
+  const lk = String(layout_key || "").trim().toLowerCase();
+  const fk = String(front_nine_key || "").trim().toLowerCase();
+  const bk = String(back_nine_key || "").trim().toLowerCase();
+  return `${h}|${lk}|${fk}|${bk}`;
+}
 
+// returns 0..19990 (step 10) so each layout gets 10-slot “bucket”
+function _layoutOffset({ holes, layout_key, front_nine_key, back_nine_key }) {
+  const sig = _layoutSig({ holes, layout_key, front_nine_key, back_nine_key });
+  const hex = crypto.createHash("md5").update(sig).digest("hex").slice(0, 6);
+  const n = parseInt(hex, 16) || 0;
+  return (n % 2000) * 10;
+}
+
+// UI slot 1..4 -> DB slot like 12341..12344
+function _toDbSlotIndex(slot_index_ui, layoutCtx) {
+  const base = _layoutOffset(layoutCtx);
+  const ui = Number(slot_index_ui || 0);
+  return base + ui;
+}
+
+// DB slot like 12341..12344 -> UI slot 1..4
+function _toUiSlotIndex(slot_index_db, layoutCtx) {
+  const base = _layoutOffset(layoutCtx);
+  return Number(slot_index_db || 0) - base;
+}
 function verifyCourseAdminToken(token) {
   const secret = getCourseAdminSecret();
   if (!secret) throw new Error("COURSE_ADMIN_JWT_SECRET_not_set");
@@ -4643,90 +4671,86 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
         });
       }
     }
+
     // ✅ CANONICALIZE identity (prevents "generic 18" vs "routed 18" mismatch)
-if (holes === 18) {
-  // 18s must be front+back ONLY (layout_key must be NULL)
-  layout_key = null;
+    if (holes === 18) {
+      // 18s must be front+back ONLY (layout_key must be NULL)
+      layout_key = null;
 
-  // normalize again just to be safe
-  front_nine_key = normKey(front_nine_key);
-  back_nine_key = normKey(back_nine_key);
+      front_nine_key = normKey(front_nine_key);
+      back_nine_key = normKey(back_nine_key);
 
-  if (!front_nine_key || !back_nine_key) {
-    console.log("⛔ course-admin/booking routing_required (18 after canonical)", {
-      tee_time_raw,
-      tee_time,
-      holes,
-      layout_key,
-      front_nine_key,
-      back_nine_key,
-      timeId,
-    });
-    return res.status(400).json({ ok: false, error: "routing_required" });
-  }
-} else if (holes === 9) {
-  // 9s must be layout_key ONLY (front/back must be NULL)
-  front_nine_key = null;
-  back_nine_key = null;
-  layout_key = normKey(layout_key);
+      if (!front_nine_key || !back_nine_key) {
+        console.log("⛔ course-admin/booking routing_required (18 after canonical)", {
+          tee_time_raw,
+          tee_time,
+          holes,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+          timeId,
+        });
+        return res.status(400).json({ ok: false, error: "routing_required" });
+      }
+    } else if (holes === 9) {
+      // 9s must be layout_key ONLY (front/back must be NULL)
+      front_nine_key = null;
+      back_nine_key = null;
+      layout_key = normKey(layout_key);
 
-  if (!layout_key) {
-    console.log("⛔ course-admin/booking routing_required (9 after canonical)", {
-      tee_time_raw,
-      tee_time,
-      holes,
-      layout_key,
-      timeId,
-    });
-    return res.status(400).json({ ok: false, error: "routing_required" });
-  }
-}
-
-    // 🚫 never allow generic manual bookings
-    if (holes === 18 && (!front_nine_key || !back_nine_key) && !layout_key) {
-      console.log("⛔ course-admin/booking routing_required (18)", {
-        tee_time,
-        holes,
-        layout_key,
-        front_nine_key,
-        back_nine_key,
-      });
-      return res.status(400).json({ ok: false, error: "routing_required" });
+      if (!layout_key) {
+        console.log("⛔ course-admin/booking routing_required (9 after canonical)", {
+          tee_time_raw,
+          tee_time,
+          holes,
+          layout_key,
+          timeId,
+        });
+        return res.status(400).json({ ok: false, error: "routing_required" });
+      }
     }
-    if (holes === 9 && !layout_key) {
-      console.log("⛔ course-admin/booking routing_required (9)", {
-        tee_time,
-        holes,
-        layout_key,
-      });
-      return res.status(400).json({ ok: false, error: "routing_required" });
-    }
+
+    // ----------------------------
+    // ✅ CODE-ONLY COLLISION FIX:
+    // slot_index must be unique per layout even without DB migration.
+    // We store db_slot_index = offset + ui_slot (1..4).
+    // ----------------------------
+    const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
+    const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+    const n = parseInt(hex, 16) || 0;
+    const base = (n % 2000) * 10; // each layout gets its own 10-slot bucket
+    const toDbSlotIndex = (uiSlot) => base + Number(uiSlot || 0);
+
+    console.log("🧠 course-admin/booking layout bucket", {
+      layoutSig,
+      base,
+      range: [base + 1, base + 4],
+      keys: { holes, layout_key, front_nine_key, back_nine_key },
+    });
 
     client = await db.connect();
     await client.query("BEGIN");
     didBegin = true;
 
-    // ⛔ layout-aware lock
+    // ⛔ lock includes layout identity (good)
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
       `manualslots:${courseId}:${playDate}:${tee_time}:${holes}:${layout_key || ""}:${front_nine_key || ""}:${back_nine_key || ""}`,
     ]);
 
-    // 🔍 find taken slots (layout-scoped)
+    // 🔍 find taken slots INSIDE this layout’s 4-slot bucket
     const taken = await client.query(
       `
       SELECT slot_index
       FROM booking_manual_slots
       WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
-        AND layout_key IS NOT DISTINCT FROM $5
-        AND front_nine_key IS NOT DISTINCT FROM $6
-        AND back_nine_key IS NOT DISTINCT FROM $7
         AND COALESCE(name,'') <> ''
+        AND slot_index BETWEEN $5 AND $6
       `,
-      [courseId, playDate, tee_time, holes, layout_key, front_nine_key, back_nine_key]
+      [courseId, playDate, tee_time, holes, base + 1, base + 4]
     );
 
-    const takenSet = new Set((taken.rows || []).map(r => Number(r.slot_index)));
-    const freeSlots = [1,2,3,4].filter(i => !takenSet.has(i));
+    const takenSetDb = new Set((taken.rows || []).map(r => Number(r.slot_index)));
+    const freeSlots = [1,2,3,4].filter(i => !takenSetDb.has(toDbSlotIndex(i)));
 
     console.log("🟩 course-admin/booking slot scan", {
       courseId,
@@ -4736,8 +4760,8 @@ if (holes === 18) {
       layout_key,
       front_nine_key,
       back_nine_key,
-      taken: Array.from(takenSet.values()),
-      freeSlots,
+      takenDb: Array.from(takenSetDb.values()),
+      freeSlotsUi: freeSlots,
       playersRequested: players,
     });
 
@@ -4759,7 +4783,8 @@ if (holes === 18) {
     const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60000).toISOString();
 
     for (let i = 0; i < players; i++) {
-      const slot_index = freeSlots[i];
+      const slot_index_ui = freeSlots[i];
+      const slot_index = toDbSlotIndex(slot_index_ui);
       const isFirst = i === 0;
 
       const r = await client.query(
@@ -4793,6 +4818,15 @@ if (holes === 18) {
           startAtIso, endAtIso,
         ]
       );
+
+      // helpful debug: show UI vs DB slot index used
+      console.log("🧾 inserted manual slot", {
+        slot_index_ui,
+        slot_index_db: slot_index,
+        tee_time,
+        holes,
+        keys: { layout_key, front_nine_key, back_nine_key },
+      });
 
       filled.push(r.rows[0]);
     }
