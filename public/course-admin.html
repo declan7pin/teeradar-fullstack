@@ -1884,7 +1884,7 @@ function initCourseAdminUI(){
     const v = ($("newNineLabel")?.value || "").trim();
     if (!v) { $("layoutsMsg").textContent = "❌ Enter a nine name"; return; }
 
-    COURSE_LAYOUTS.push({ label: v });
+        COURSE_LAYOUTS.push({ key: _slugKey(v), label: v });
     $("newNineLabel").value = "";
     renderLayouts();
     $("layoutsMsg").textContent = "✅ Added (not saved yet)";
@@ -1979,23 +1979,6 @@ function initCourseAdminUI(){
 
       renderRoutes18();
       $("layoutsMsg").textContent = "✅ Updated 18 option (not saved yet)";
-    }
-  });
-  // live edits
-  document.addEventListener("input", (e) => {
-    if (e.target?.classList?.contains("layoutLabel")) {
-      const idx = Number(e.target.getAttribute("data-layout-idx"));
-      if (COURSE_LAYOUTS[idx]) COURSE_LAYOUTS[idx].label = e.target.value;
-    }
-  });
-
-  // deletes
-  document.addEventListener("click", (e) => {
-    const idx = e.target?.getAttribute?.("data-del-layout");
-    if (idx != null) {
-      COURSE_LAYOUTS.splice(Number(idx), 1);
-      renderLayouts();
-      $("layoutsMsg").textContent = "✅ Removed (not saved yet)";
     }
   });
 
