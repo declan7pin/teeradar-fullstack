@@ -4012,6 +4012,42 @@ router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
       return res.status(400).json({ ok: false, error: "email_invalid" });
     }
 
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    // ✅ NEW: if routing keys not provided, infer them from the tee time row (so it shows on Daily Sheet)
+    // (Fixes: manual booking created but doesn't appear because routing keys don't match the time row)
+    try {
+      const need9 = (holes === 9 && !layout_key);
+      const need18 = (holes === 18 && (!front_nine_key || !back_nine_key));
+
+      if (need9 || need18) {
+        const t = await db.query(
+          `
+          SELECT layout_key, front_nine_key, back_nine_key
+          FROM booking_times
+          WHERE course_id=$1
+            AND play_date=$2::date
+            AND tee_time=$3
+            AND holes=$4
+          LIMIT 1;
+          `,
+          [courseId, play_date, tee_time, holes]
+        );
+
+        const row = t.rows?.[0];
+        if (row) {
+          if (holes === 9 && !layout_key) layout_key = row.layout_key || null;
+          if (holes === 18) {
+            if (!front_nine_key) front_nine_key = row.front_nine_key || null;
+            if (!back_nine_key) back_nine_key = row.back_nine_key || null;
+          }
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+
     // ✅ ENFORCE identity rules (match course-admin/manual-slot + /course-admin/booking)
     if (holes === 18) {
       layout_key = null;
@@ -4026,9 +4062,6 @@ router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
         return res.status(400).json({ ok: false, error: "routing_required" });
       }
     }
-
-    const courseId = await courseIdFromSlug(slug);
-    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
     // ----------------------------
     // ✅ CODE-ONLY COLLISION FIX:
@@ -4230,6 +4263,42 @@ router.delete("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
       return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
     }
 
+    const courseId = await courseIdFromSlug(slug);
+    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    // ✅ NEW: if routing keys not provided, infer them from the tee time row
+    // (So delete works even if UI didn't pass routing keys)
+    try {
+      const need9 = (holes === 9 && !layout_key);
+      const need18 = (holes === 18 && (!front_nine_key || !back_nine_key));
+
+      if (need9 || need18) {
+        const t = await db.query(
+          `
+          SELECT layout_key, front_nine_key, back_nine_key
+          FROM booking_times
+          WHERE course_id=$1
+            AND play_date=$2::date
+            AND tee_time=$3
+            AND holes=$4
+          LIMIT 1;
+          `,
+          [courseId, play_date, tee_time, holes]
+        );
+
+        const row = t.rows?.[0];
+        if (row) {
+          if (holes === 9 && !layout_key) layout_key = row.layout_key || null;
+          if (holes === 18) {
+            if (!front_nine_key) front_nine_key = row.front_nine_key || null;
+            if (!back_nine_key)  back_nine_key = row.back_nine_key || null;
+          }
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+
     // ✅ ENFORCE identity rules
     if (holes === 18) {
       layout_key = null;
@@ -4244,9 +4313,6 @@ router.delete("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
         return res.status(400).json({ ok: false, error: "routing_required" });
       }
     }
-
-    const courseId = await courseIdFromSlug(slug);
-    if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
     // ✅ bucketed slot index
     const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
