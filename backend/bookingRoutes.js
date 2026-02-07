@@ -3955,14 +3955,17 @@ res.json({ ok: true, row: r.rows[0] || null, sync });
 });
 // ✅ NEW: Admin "fill slot" (click empty daily-sheet slot -> enter name/email)
 // POST /api/book/admin/fill-slot
-// Body: { slug, date, time, holes, slotIndex, name, email, phone?, paid?, checked_in?, cartQty?, hireClubsQty? }
+// Body: { slug, date, time, holes, slotIndex, name, email, phone?, paid?, checked_in?, cartQty?, hireClubsQty?, notes?,
+//         layout_key? (9s) OR front_nine_key+back_nine_key (18s) }
 router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.body?.slug);
     const play_date = String(req.body?.date || "").trim(); // MUST be YYYY-MM-DD
     const tee_time = String(req.body?.time || "").trim();
     const holes = Number(req.body?.holes || 18);
-    const slot_index = Number(req.body?.slotIndex || 0);
+
+    // ✅ UI slot index (1..4)
+    const slot_index_ui = Number(req.body?.slotIndex || 0);
 
     const name = String(req.body?.name || "").trim();
     const email = String(req.body?.email || "").trim().toLowerCase();
@@ -3972,114 +3975,175 @@ router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
     const checked_in = parseBool(req.body?.checked_in, false);
 
     // ✅ quantities + notes (accept both snake_case + camelCase)
-const cart_qty = Math.max(0, Math.min(4, Number(req.body?.cart_qty ?? req.body?.cartQty ?? 0)));
-const hire_clubs_qty = Math.max(0, Math.min(4, Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? 0)));
-const notes = req.body?.notes ? String(req.body.notes).trim() : "";
+    const cart_qty = Math.max(0, Math.min(4, Number(req.body?.cart_qty ?? req.body?.cartQty ?? 0)));
+    const hire_clubs_qty = Math.max(0, Math.min(4, Number(req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? 0)));
+    const notes = req.body?.notes ? String(req.body.notes).trim() : "";
 
-// ✅ derive flags from qty (so SQL params always exist)
-const has_cart = cart_qty > 0;
-const has_hire_clubs = hire_clubs_qty > 0;
+    // ✅ derive flags from qty (so SQL params always exist)
+    const has_cart = cart_qty > 0;
+    const has_hire_clubs = hire_clubs_qty > 0;
+
+    // ✅ routing keys (needed for multi-9 / routed 18 identity)
+    const normKey = (v) => {
+      const s = String(v || "").trim().toLowerCase();
+      return s ? s : null;
+    };
+
+    let layout_key = normKey(req.body?.layout_key ?? req.body?.layoutKey ?? null);
+    let front_nine_key = normKey(req.body?.front_nine_key ?? req.body?.front9_key ?? req.body?.front9Key ?? null);
+    let back_nine_key = normKey(req.body?.back_nine_key ?? req.body?.back9_key ?? req.body?.back9Key ?? null);
+
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(play_date)) return res.status(400).json({ ok: false, error: "date_invalid" });
     if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
-    if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4) {
+    if (!Number.isFinite(slot_index_ui) || slot_index_ui < 1 || slot_index_ui > 4) {
       return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
     }
 
-    // ✅ name required (allow single name for walk-ins if you want)
-// If you still want first+last only, keep hasFirstAndLastName() instead.
-if (!String(name || "").trim()) {
-  return res.status(400).json({ ok: false, error: "name_required" });
-}
+    // ✅ name required
+    if (!String(name || "").trim()) {
+      return res.status(400).json({ ok: false, error: "name_required" });
+    }
 
-// ✅ email optional — only validate if provided
-if (email && !isLikelyEmail(email)) {
-  return res.status(400).json({ ok: false, error: "email_invalid" });
-}
+    // ✅ email optional — only validate if provided
+    if (email && !isLikelyEmail(email)) {
+      return res.status(400).json({ ok: false, error: "email_invalid" });
+    }
+
+    // ✅ ENFORCE identity rules (match course-admin/manual-slot + /course-admin/booking)
+    if (holes === 18) {
+      layout_key = null;
+      if (!front_nine_key || !back_nine_key) {
+        return res.status(400).json({ ok: false, error: "routing_required" });
+      }
+    }
+    if (holes === 9) {
+      front_nine_key = null;
+      back_nine_key = null;
+      if (!layout_key) {
+        return res.status(400).json({ ok: false, error: "routing_required" });
+      }
+    }
+
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
-const courseRowQ = await db.query(
-  `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
-  [courseId]
-);
-const courseRow = courseRowQ.rows[0] || {};
-const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
-const dur = durationMinsForHoles(courseRow, holes);
-const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
-// ✅ ENFORCE add-on inventory (carts/clubs) before upsert
-const inv = await enforceAddonInventory(db, {
-  courseId,
-  startAtIso,
-  endAtIso,
-  cartQtyWanted: cart_qty,
-  hireClubsQtyWanted: hire_clubs_qty,
-});
-if (!inv.ok) {
-  return res.status(409).json({ ok: false, ...inv });
-}
+
+    // ----------------------------
+    // ✅ CODE-ONLY COLLISION FIX:
+    // slot_index must be unique per layout even without DB migration.
+    // We store db_slot_index = base + ui_slot (1..4).
+    // ----------------------------
+    const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
+    const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+    const n = parseInt(hex, 16) || 0;
+    const base = (n % 2000) * 10; // each layout gets its own 10-slot bucket
+    const slot_index = base + slot_index_ui;
+
+    const courseRowQ = await db.query(
+      `SELECT duration_9_mins, duration_18_mins FROM booking_courses WHERE id=$1 LIMIT 1;`,
+      [courseId]
+    );
+    const courseRow = courseRowQ.rows[0] || {};
+    const startAtIso = toIsoDateTimeLocal(play_date, tee_time);
+    const dur = durationMinsForHoles(courseRow, holes);
+    const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
+
+    // ✅ ENFORCE add-on inventory (carts/clubs) before upsert
+    const inv = await enforceAddonInventory(db, {
+      courseId,
+      startAtIso,
+      endAtIso,
+      cartQtyWanted: cart_qty,
+      hireClubsQtyWanted: hire_clubs_qty,
+    });
+    if (!inv.ok) {
+      return res.status(409).json({ ok: false, ...inv });
+    }
+
     // One reference groups multiple manual slots (if you ever fill multiple slots for one booking)
     let reference = String(req.body?.reference || "").trim();
+    if (!reference) reference = makeRef("MS");
 
-    // Upsert into booking_manual_slots
+    // ✅ Upsert into booking_manual_slots (include routing keys + bucketed slot_index)
     const r = await db.query(
       `
       INSERT INTO booking_manual_slots
-  (course_id, play_date, tee_time, holes, slot_index, reference, name, email, phone,
-   paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes,
-   start_at, end_at,
-   updated_at)
-VALUES
-  ($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
-   $17::timestamptz, $18::timestamptz,
-   now())
-ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
-DO UPDATE SET
-  reference = EXCLUDED.reference,
-  name = EXCLUDED.name,
-  email = EXCLUDED.email,
-  phone = EXCLUDED.phone,
-  paid = EXCLUDED.paid,
-  checked_in = EXCLUDED.checked_in,
-  has_cart = EXCLUDED.has_cart,
-  has_hire_clubs = EXCLUDED.has_hire_clubs,
-  cart_qty = EXCLUDED.cart_qty,
-  hire_clubs_qty = EXCLUDED.hire_clubs_qty,
-  notes = EXCLUDED.notes,
-  start_at = EXCLUDED.start_at,
-  end_at = EXCLUDED.end_at,
-  updated_at = now()
-RETURNING *;
+        (course_id, play_date, tee_time, holes, slot_index,
+         layout_key, front_nine_key, back_nine_key,
+         reference, name, email, phone,
+         paid, checked_in, has_cart, has_hire_clubs, cart_qty, hire_clubs_qty, notes,
+         start_at, end_at,
+         updated_at)
+      VALUES
+        ($1,$2::date,$3,$4,$5,
+         $6,$7,$8,
+         $9,$10,$11,$12,
+         $13,$14,$15,$16,$17,$18,$19,
+         $20::timestamptz, $21::timestamptz,
+         now())
+      ON CONFLICT (course_id, play_date, tee_time, holes, slot_index)
+      DO UPDATE SET
+        layout_key = EXCLUDED.layout_key,
+        front_nine_key = EXCLUDED.front_nine_key,
+        back_nine_key = EXCLUDED.back_nine_key,
+        reference = EXCLUDED.reference,
+        name = EXCLUDED.name,
+        email = EXCLUDED.email,
+        phone = EXCLUDED.phone,
+        paid = EXCLUDED.paid,
+        checked_in = EXCLUDED.checked_in,
+        has_cart = EXCLUDED.has_cart,
+        has_hire_clubs = EXCLUDED.has_hire_clubs,
+        cart_qty = EXCLUDED.cart_qty,
+        hire_clubs_qty = EXCLUDED.hire_clubs_qty,
+        notes = EXCLUDED.notes,
+        start_at = EXCLUDED.start_at,
+        end_at = EXCLUDED.end_at,
+        updated_at = now()
+      RETURNING *;
       `,
       [
-  courseId,
-  play_date,
-  tee_time,
-  holes,
-  slot_index,
-  reference,
-  name || null,
-  email || null,
-  phone || null,
-  paid,
-  checked_in,
-  has_cart,
-  has_hire_clubs,
-  cart_qty,
-  hire_clubs_qty,
-  notes || null,
-  startAtIso,
-  endAtIso,
-]
+        courseId,
+        play_date,
+        tee_time,
+        holes,
+        slot_index,
+
+        layout_key,
+        front_nine_key,
+        back_nine_key,
+
+        reference,
+        name || null,
+        email || null,
+        phone || null,
+
+        paid,
+        checked_in,
+        has_cart,
+        has_hire_clubs,
+        cart_qty,
+        hire_clubs_qty,
+        notes || null,
+        startAtIso,
+        endAtIso,
+      ]
     );
 
+    // ✅ IMPORTANT: sync must be routing-scoped
     const sync = await syncBookedPlayersForTime({
-  courseId,
-  play_date,
-  tee_time,
-  holes,
-});
+      courseId,
+      play_date,
+      tee_time,
+      holes,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+      allowInsert: false,
+    });
+
     // ✅ NEW: send confirmation email when admin fills a slot (if email provided)
     try {
       if (email && isLikelyEmail(email)) {
@@ -4095,6 +4159,16 @@ RETURNING *;
         const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
         const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
 
+        const pricePerPlayerCents = await getTeePricePerPlayerCents({
+          courseId,
+          playDate: play_date,
+          teeTime: tee_time,
+          holes,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+        });
+
         await sendBookingEmail({
           to: email,
           courseName,
@@ -4103,19 +4177,8 @@ RETURNING *;
           holes,
           players: 1,
           reference,
-          pricePerPlayerCents: await getTeePricePerPlayerCents({
-  courseId,
-  playDate: play_date,
-  teeTime: tee_time,
-  holes,
-}),
-totalCents:
-  (await getTeePricePerPlayerCents({
-    courseId,
-    playDate: play_date,
-    teeTime: tee_time,
-    holes,
-  })) * (players || 1),
+          pricePerPlayerCents: pricePerPlayerCents || 0,
+          totalCents: (pricePerPlayerCents || 0) * 1,
           cartCents,
           hireClubsCents,
           source: "manual",
@@ -4124,32 +4187,73 @@ totalCents:
     } catch (e) {
       console.warn("admin fill-slot email failed (non-fatal):", e?.message || e);
     }
-return res.json({ ok: true, row: r.rows[0] || null, cart_qty, hire_clubs_qty, sync });
+
+    return res.json({
+      ok: true,
+      row: r.rows[0] || null,
+      cart_qty,
+      hire_clubs_qty,
+      sync,
+    });
   } catch (e) {
     console.error("admin/fill-slot POST", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 // DELETE manual slot (platform admin)
-// /api/book/admin/manual-slot?slug=xxx&date=YYYY-MM-DD&time=HH:MM&holes=18&slotIndex=1
+// /api/book/admin/manual-slot?slug=xxx&date=YYYY-MM-DD&time=HH:MM&holes=18&slotIndex=1&front_nine_key=...&back_nine_key=...
+// OR /api/book/admin/manual-slot?slug=xxx&date=YYYY-MM-DD&time=HH:MM&holes=9&slotIndex=1&layout_key=...
 router.delete("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.query.slug);
     const play_date = String(req.query?.date || "").trim();
     const tee_time = String(req.query?.time || "").trim();
     const holes = Number(req.query?.holes || 18);
-    const slot_index = Number(req.query?.slotIndex || 0);
+
+    const slot_index_ui = Number(req.query?.slotIndex || 0);
+
+    const normKey = (v) => {
+      const s = String(v || "").trim().toLowerCase();
+      return s ? s : null;
+    };
+
+    let layout_key = normKey(req.query?.layout_key ?? req.query?.layoutKey ?? null);
+    let front_nine_key = normKey(req.query?.front_nine_key ?? req.query?.front9_key ?? req.query?.front9Key ?? null);
+    let back_nine_key = normKey(req.query?.back_nine_key ?? req.query?.back9_key ?? req.query?.back9Key ?? null);
 
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
     if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
-    if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4) {
+    if (!Number.isFinite(slot_index_ui) || slot_index_ui < 1 || slot_index_ui > 4) {
       return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
+    }
+
+    // ✅ ENFORCE identity rules
+    if (holes === 18) {
+      layout_key = null;
+      if (!front_nine_key || !back_nine_key) {
+        return res.status(400).json({ ok: false, error: "routing_required" });
+      }
+    }
+    if (holes === 9) {
+      front_nine_key = null;
+      back_nine_key = null;
+      if (!layout_key) {
+        return res.status(400).json({ ok: false, error: "routing_required" });
+      }
     }
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    // ✅ bucketed slot index
+    const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
+    const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+    const n = parseInt(hex, 16) || 0;
+    const base = (n % 2000) * 10;
+    const slot_index = base + slot_index_ui;
 
     const r = await db.query(
       `
@@ -4160,13 +4264,17 @@ router.delete("/admin/manual-slot", requirePlatformAdmin, async (req, res) => {
     );
 
     const sync = await syncBookedPlayersForTime({
-  courseId,
-  play_date,
-  tee_time,
-  holes,
-});
+      courseId,
+      play_date,
+      tee_time,
+      holes,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+      allowInsert: false,
+    });
 
-res.json({ ok: true, deleted: r.rowCount || 0, sync });
+    res.json({ ok: true, deleted: r.rowCount || 0, sync });
   } catch (e) {
     console.error("admin/manual-slot DELETE", e);
     res.status(500).json({ ok: false, error: "internal_error" });
@@ -4190,7 +4298,7 @@ router.get("/course-admin/manual-slots", requireCourseAdmin, async (req, res) =>
         play_date::text AS play_date,
         tee_time,
         holes,
-        slot_index,
+        (slot_index % 10) AS slot_index,
         reference,
         name,
         email,
@@ -4898,17 +5006,48 @@ router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) 
     const play_date = String(req.query?.date || "").trim();
     const tee_time = String(req.query?.time || "").trim();
     const holes = Number(req.query?.holes || 18);
-    const slot_index = Number(req.query?.slotIndex || 0);
+
+    const slot_index_ui = Number(req.query?.slotIndex || 0);
+
+    const normKey = (v) => {
+      const s = String(v || "").trim().toLowerCase();
+      return s ? s : null;
+    };
+
+    let layout_key = normKey(req.query?.layout_key ?? req.query?.layoutKey ?? null);
+    let front_nine_key = normKey(req.query?.front_nine_key ?? req.query?.front9_key ?? req.query?.front9Key ?? null);
+    let back_nine_key = normKey(req.query?.back_nine_key ?? req.query?.back9_key ?? req.query?.back9Key ?? null);
 
     if (!play_date) return res.status(400).json({ ok: false, error: "date_required" });
     if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
-    if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4) {
+    if (!Number.isFinite(slot_index_ui) || slot_index_ui < 1 || slot_index_ui > 4) {
       return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
+    }
+
+    // ✅ ENFORCE identity rules (so we delete the correct layout bucket)
+    if (holes === 18) {
+      layout_key = null;
+      if (!front_nine_key || !back_nine_key) {
+        return res.status(400).json({ ok: false, error: "routing_required" });
+      }
+    }
+    if (holes === 9) {
+      front_nine_key = null;
+      back_nine_key = null;
+      if (!layout_key) {
+        return res.status(400).json({ ok: false, error: "routing_required" });
+      }
     }
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
+    const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+    const n = parseInt(hex, 16) || 0;
+    const base = (n % 2000) * 10;
+    const slot_index = base + slot_index_ui;
 
     const r = await db.query(
       `
@@ -4919,18 +5058,23 @@ router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) 
     );
 
     const sync = await syncBookedPlayersForTime({
-  courseId,
-  play_date,
-  tee_time,
-  holes,
-});
+      courseId,
+      play_date,
+      tee_time,
+      holes,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+      allowInsert: false,
+    });
 
-res.json({ ok: true, deleted: r.rowCount || 0, sync });
+    res.json({ ok: true, deleted: r.rowCount || 0, sync });
   } catch (e) {
     console.error("course-admin/manual-slot DELETE", e);
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 // ✅ NEW: toggle PAID for MANUAL slots (course admin)
 router.post("/course-admin/manual-slot-paid", requireCourseAdmin, async (req, res) => {
   try {
@@ -4955,13 +5099,38 @@ router.post("/course-admin/manual-slot-paid", requireCourseAdmin, async (req, re
       const play_date = String(req.body?.date || "").trim();
       const tee_time = String(req.body?.time || "").trim();
       const holes = Number(req.body?.holes || 18);
-      const slot_index = Number(req.body?.slotIndex || 0);
+      const slot_index_ui = Number(req.body?.slotIndex || 0);
+
+      const normKey = (v) => {
+        const s = String(v || "").trim().toLowerCase();
+        return s ? s : null;
+      };
+
+      let layout_key = normKey(req.body?.layout_key ?? req.body?.layoutKey ?? null);
+      let front_nine_key = normKey(req.body?.front_nine_key ?? req.body?.front9_key ?? req.body?.front9Key ?? null);
+      let back_nine_key = normKey(req.body?.back_nine_key ?? req.body?.back9_key ?? req.body?.back9Key ?? null);
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(play_date)) return res.status(400).json({ ok: false, error: "date_invalid" });
       if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
       if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
-      if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4)
+      if (!Number.isFinite(slot_index_ui) || slot_index_ui < 1 || slot_index_ui > 4)
         return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
+
+      // ✅ routing required for bucketed index
+      if (holes === 18) {
+        layout_key = null;
+        if (!front_nine_key || !back_nine_key) return res.status(400).json({ ok: false, error: "routing_required" });
+      } else {
+        front_nine_key = null;
+        back_nine_key = null;
+        if (!layout_key) return res.status(400).json({ ok: false, error: "routing_required" });
+      }
+
+      const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
+      const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+      const n = parseInt(hex, 16) || 0;
+      const base = (n % 2000) * 10;
+      const slot_index = base + slot_index_ui;
 
       r = await db.query(
         `UPDATE booking_manual_slots
@@ -5004,13 +5173,38 @@ router.post("/course-admin/manual-slot-checkin", requireCourseAdmin, async (req,
       const play_date = String(req.body?.date || "").trim();
       const tee_time = String(req.body?.time || "").trim();
       const holes = Number(req.body?.holes || 18);
-      const slot_index = Number(req.body?.slotIndex || 0);
+      const slot_index_ui = Number(req.body?.slotIndex || 0);
+
+      const normKey = (v) => {
+        const s = String(v || "").trim().toLowerCase();
+        return s ? s : null;
+      };
+
+      let layout_key = normKey(req.body?.layout_key ?? req.body?.layoutKey ?? null);
+      let front_nine_key = normKey(req.body?.front_nine_key ?? req.body?.front9_key ?? req.body?.front9Key ?? null);
+      let back_nine_key = normKey(req.body?.back_nine_key ?? req.body?.back9_key ?? req.body?.back9Key ?? null);
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(play_date)) return res.status(400).json({ ok: false, error: "date_invalid" });
       if (!/^\d{2}:\d{2}$/.test(tee_time)) return res.status(400).json({ ok: false, error: "time_invalid" });
       if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
-      if (!Number.isFinite(slot_index) || slot_index < 1 || slot_index > 4)
+      if (!Number.isFinite(slot_index_ui) || slot_index_ui < 1 || slot_index_ui > 4)
         return res.status(400).json({ ok: false, error: "slotIndex_invalid" });
+
+      // ✅ routing required for bucketed index
+      if (holes === 18) {
+        layout_key = null;
+        if (!front_nine_key || !back_nine_key) return res.status(400).json({ ok: false, error: "routing_required" });
+      } else {
+        front_nine_key = null;
+        back_nine_key = null;
+        if (!layout_key) return res.status(400).json({ ok: false, error: "routing_required" });
+      }
+
+      const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
+      const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+      const n = parseInt(hex, 16) || 0;
+      const base = (n % 2000) * 10;
+      const slot_index = base + slot_index_ui;
 
       r = await db.query(
         `UPDATE booking_manual_slots
@@ -5022,7 +5216,7 @@ router.post("/course-admin/manual-slot-checkin", requireCourseAdmin, async (req,
     }
 
     if (!r.rows.length) return res.status(404).json({ ok: false, error: "manual_slot_not_found" });
-    return res.json({ ok: true, id: r.rows[0].id, checked_in: r.rows[0].checked_in });
+    return res.status(200).json({ ok: true, id: r.rows[0].id, checked_in: r.rows[0].checked_in });
   } catch (e) {
     console.error("course-admin/manual-slot-checkin POST", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
