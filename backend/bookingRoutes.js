@@ -4290,6 +4290,17 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
+    // ----------------------------
+    // ✅ CODE-ONLY COLLISION FIX (same as Step 2):
+    // slot_index must be unique per layout even without DB migration.
+    // We store db_slot_index = base + ui_slot (1..4).
+    // ----------------------------
+    const layoutSig = `${holes}|${layout_key || ""}|${front_nine_key || ""}|${back_nine_key || ""}`;
+    const hex = crypto.createHash("md5").update(layoutSig).digest("hex").slice(0, 6);
+    const n = parseInt(hex, 16) || 0;
+    const base = (n % 2000) * 10; // each layout gets its own 10-slot bucket
+    const toDbSlotIndex = (uiSlot) => base + Number(uiSlot || 0);
+
     // ✅ DEBUG: prove what this route is actually inserting
     console.log("🧾 course-admin/manual-slot incoming", {
       slug,
@@ -4299,6 +4310,7 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
       holes,
       players,
       keys: { layout_key, front_nine_key, back_nine_key },
+      bucket: { base, range: [base + 1, base + 4] },
       cart_qty,
       hire_clubs_qty,
       name_present: !!name,
@@ -4340,21 +4352,20 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
       ]
     );
 
+    // ✅ IMPORTANT: find taken slots INSIDE this layout bucket (same approach as Step 2)
     const taken = await client.query(
       `
       SELECT slot_index
       FROM booking_manual_slots
       WHERE course_id=$1 AND play_date=$2::date AND tee_time=$3 AND holes=$4
-        AND COALESCE(layout_key,'') = COALESCE($5,'')
-        AND COALESCE(front_nine_key,'') = COALESCE($6,'')
-        AND COALESCE(back_nine_key,'') = COALESCE($7,'')
         AND COALESCE(name,'') <> ''
+        AND slot_index BETWEEN $5 AND $6
       `,
-      [courseId, playDate, tee_time, holes, layout_key, front_nine_key, back_nine_key]
+      [courseId, playDate, tee_time, holes, base + 1, base + 4]
     );
 
-    const takenSet = new Set((taken.rows || []).map((r) => Number(r.slot_index)));
-    const freeSlots = [1, 2, 3, 4].filter((i) => !takenSet.has(i));
+    const takenSetDb = new Set((taken.rows || []).map((r) => Number(r.slot_index)));
+    const freeSlots = [1, 2, 3, 4].filter((i) => !takenSetDb.has(toDbSlotIndex(i)));
 
     console.log("🟩 course-admin/manual-slot slot scan", {
       courseId,
@@ -4364,8 +4375,8 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
       layout_key,
       front_nine_key,
       back_nine_key,
-      taken: Array.from(takenSet),
-      freeSlots,
+      takenDb: Array.from(takenSetDb),
+      freeSlotsUi: freeSlots,
       playersRequested: players,
     });
 
@@ -4385,7 +4396,8 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
     const insertedRows = [];
 
     for (let i = 0; i < players; i++) {
-      const slot_index = freeSlots[i];
+      const slot_index_ui = freeSlots[i];
+      const slot_index = toDbSlotIndex(slot_index_ui);
 
       // ✅ IMPORTANT: price lookup must match the same routed tee-time identity
       const price_per_player_cents = await getTeePricePerPlayerCents({
@@ -4450,6 +4462,14 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
           endAtIso,
         ]
       );
+
+      console.log("🧾 inserted manual slot", {
+        slot_index_ui,
+        slot_index_db: slot_index,
+        tee_time,
+        holes,
+        keys: { layout_key, front_nine_key, back_nine_key },
+      });
 
       insertedRows.push(ins.rows[0]);
     }
