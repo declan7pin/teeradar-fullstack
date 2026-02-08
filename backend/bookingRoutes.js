@@ -7924,12 +7924,12 @@ router.get("/availability", async (req, res) => {
 
     // ✅ FIX: map page may send different param names (playerCount/numPlayers/etc)
     const playersQuery =
-      (req.query.players ??
-       req.query.partySize ??
-       req.query.playerCount ??
-       req.query.playersCount ??
-       req.query.numPlayers ??
-       req.query.num_players);
+  (req.query.partySize ??
+   req.query.players ??
+   req.query.playerCount ??
+   req.query.playersCount ??
+   req.query.numPlayers ??
+   req.query.num_players);
 
     const playersRaw = Array.isArray(playersQuery) ? playersQuery[0] : playersQuery;
 
