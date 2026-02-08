@@ -872,13 +872,35 @@
 
       try {
         const res = await fetch("/api/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(lastSearchCriteria),
-        });
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(lastSearchCriteria),
+});
 
-        const data = await res.json();
-        const slots = Array.isArray(data.slots) ? data.slots : [];
+// ✅ Read as text first so we can debug non-JSON responses (500/HTML/etc)
+const rawText = await res.text();
+
+let data = null;
+try {
+  data = rawText ? JSON.parse(rawText) : {};
+} catch (e) {
+  // Not JSON (likely HTML error page or frontend fallback)
+  console.error("❌ /api/search returned non-JSON:", rawText.slice(0, 400));
+  statusLine.textContent =
+    `Search failed (${res.status}). Server returned non-JSON. Check console.`;
+  statusLine.style.color = "#b03030";
+  return;
+}
+
+if (!res.ok) {
+  console.error("❌ /api/search error:", res.status, data);
+  statusLine.textContent =
+    `Search failed (${res.status}): ` + (data?.error || data?.detail || "unknown error");
+  statusLine.style.color = "#b03030";
+  return;
+}
+
+const slots = Array.isArray(data.slots) ? data.slots : [];
         console.log("SEARCH slots sample:", slots[0]);
 
         groupedSlots = {};
