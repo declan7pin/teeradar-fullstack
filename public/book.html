@@ -484,14 +484,22 @@
     slot.display ??
     slot.label;
 
-  if (typeof ratioText === "string") {
-    const m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
+    if (typeof ratioText === "string") {
+    // 2a) "3/4" format (booked/total)
+    let m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
     if (m) {
       const booked = num(m[1]);
       const total = num(m[2]);
       if (booked !== null && total !== null && total > 0) {
         return Math.max(0, total - booked);
       }
+    }
+
+    // 2b) "2 slots available" / "2 spots left" / "2 players remaining"
+    m = ratioText.match(/(\d+)\s*(slots?|spots?|players?)\s*(available|left|remain(ing)?)/i);
+    if (m) {
+      const n = num(m[1]);
+      if (n !== null) return Math.max(0, n);
     }
   }
 
@@ -532,7 +540,7 @@
   const rem = slotRemaining(slot);
 
   // ✅ If we can't confirm remaining, DO NOT treat as fitting for party > 1
-  if (rem === null) return false;
+    if (rem === null) return want === 1; // allow unknown only for singles
 
   return rem >= want;
 }
@@ -903,14 +911,14 @@
 
         // Existing overall search event (kept)
         trackEvent("search", {
-          date,
-          earliest,
-          latest,
-          holes,
-          partySize: Number(players) || 1,
-          state: selectedState || "",
-          slots: slots.length,
-        });
+  date,
+  earliest,
+  latest,
+  holes,
+  partySize: Number(players) || 1,
+  state: selectedState || "",
+  slots: totalSlots, // ✅ matches what user actually sees
+});
 
         const selectedHoles = Number(holes);
         let availableCourses = 0;
