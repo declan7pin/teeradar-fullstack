@@ -8254,6 +8254,10 @@ router.get("/availability", async (req, res) => {
         const bookedEffective = Number(r.booked_effective ?? 0);
         const remainingEffective = Number(r.remaining_effective ?? 0);
 
+        // ✅ FIX (minimal): expose "slots available" as groups-of-N players
+        const spotsRemaining = Math.max(0, remainingEffective);
+        const slotsAvailable = Math.max(0, Math.floor(spotsRemaining / players));
+
         return {
           time: r.tee_time,
           holes: Number(r.holes),
@@ -8273,17 +8277,22 @@ router.get("/availability", async (req, res) => {
           // raw (debug)
           bookedPlayers: Number(r.booked_players ?? 0),
 
-          // ✅ the values the frontend should use
+          // ✅ the values the frontend should use (unchanged)
           bookedEffective,
-          remaining: Math.max(0, remainingEffective),
-          remainingEffective: Math.max(0, remainingEffective),
+          remaining: spotsRemaining,
+          remainingEffective: spotsRemaining,
 
-          // ✅ aliases so slotRemaining() reads reliably
-          remainingPlayers: Math.max(0, remainingEffective),
-          playersRemaining: Math.max(0, remainingEffective),
+          // ✅ aliases so slotRemaining() reads reliably (unchanged)
+          remainingPlayers: spotsRemaining,
+          playersRemaining: spotsRemaining,
           booked_effective: bookedEffective,
-          remaining_effective: Math.max(0, remainingEffective),
+          remaining_effective: spotsRemaining,
           booked_players: Number(r.booked_players ?? 0),
+
+          // ✅ NEW aliases to prevent "2 spots" being shown as "2 slots"
+          spotsRemaining,
+          slotsAvailable,
+          bookableSlots: slotsAvailable,
 
           pricePerPlayerCents: r.price_per_player_cents,
           pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
