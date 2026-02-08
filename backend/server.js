@@ -2198,7 +2198,8 @@ app.post("/api/search", async (req, res) => {
     const filtered = slotsToUse.filter((s) => {
   const remaining = normalizeRemaining(s);
 
-  const prov = String(s?._provider || s?.provider || "").toLowerCase();
+  const provRaw = String(s?._provider || s?.provider || "");
+const prov = provRaw.toLowerCase();
 
   // ✅ Robust booking-engine detection:
   // - provider string OR
@@ -2213,12 +2214,12 @@ app.post("/api/search", async (req, res) => {
     Number.isFinite(Number(s?.bookedPlayers ?? s?.booked_players));
 
   const isBookingEngine =
-    prov.includes("teeradar") ||
-    prov.includes("booking") ||
-    prov.includes("teeradarbooking") ||
-    prov === "booking" ||
-    looksLikeOurBookingUrl ||
-    hasCapacityFields;
+  prov.includes("teeradarbooking") ||
+  prov.includes("teeradar") ||
+  prov === "booking" ||
+  prov.includes("booking") ||
+  looksLikeOurBookingUrl ||
+  hasCapacityFields;
 
   // ✅ If we know remaining, ALWAYS enforce it
   if (remaining !== null) return remaining >= party;
