@@ -399,9 +399,15 @@
       Number(s.bookedPlayers ?? s.booked_players ?? s.booked ?? s.bookedCount ?? 0);
 
     const remaining =
-      (typeof s.remaining !== "undefined")
-        ? Number(s.remaining || 0)
-        : Math.max(0, maxPlayers - bookedPlayers);
+  Number(
+    s.slotsAvailable ??
+    s.bookableSlots ??
+    s.remaining_effective ??
+    s.remainingEffective ??
+    0
+  );
+  
+  const slotsAvailable = Math.max(0, remaining);
 
     const pricePerPlayerCents =
       Number(
@@ -413,14 +419,15 @@
       );
 
     return {
-      ...s,
-      time,
-      holes,
-      maxPlayers,
-      bookedPlayers,
-      remaining,
-      pricePerPlayerCents,
-    };
+  ...s,
+  time,
+  holes,
+  maxPlayers,
+  bookedPlayers,
+  remaining,
+  slotsAvailable, // ✅ IMPORTANT
+  pricePerPlayerCents,
+};
   }
     // ✅ Layout helpers (show "Pines + Lakes", etc.)
   function _titleCaseKey(x){
@@ -766,18 +773,14 @@ if (qtySel) {
     const bookedPlayers = Number(t.bookedPlayers || 0);
     const layoutText = getLayoutText(t);
 
-    const remaining = (typeof t.remaining !== "undefined")
-      ? Number(t.remaining || 0)
-      : Math.max(0, maxPlayers - bookedPlayers);
-
-    // ✅ enforce selected players vs remaining spots
-    const canBook = remaining >= wantPlayers;
+    const slotsAvail = Number(t.slotsAvailable || 0);
+const canBook = slotsAvail >= wantPlayers;
     const notEnoughText = !canBook
       ? `❌ Not enough spots for ${wantPlayers} player${wantPlayers === 1 ? "" : "s"}`
       : "";
 
     const spots = [];
-    const availCount = Math.max(0, Math.min(maxPlayers, remaining));
+    const availCount = Math.max(0, Math.min(maxPlayers, slotsAvail));
     for (let i = 0; i < maxPlayers; i++) {
       spots.push(
         `<span class="spotGolfer ${i < availCount ? "avail" : "taken"}" title="${i < availCount ? "Available" : "Taken"}"></span>`
