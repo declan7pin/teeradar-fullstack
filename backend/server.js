@@ -2115,7 +2115,7 @@ function normalizeRemaining(s) {
         const normalizedCached = Array.isArray(cached)
           ? cached.map((s) => ({
               ...(s && typeof s === "object" ? s : { time: String(s) }),
-              _provider: provider,
+              _provider: String(s?._provider || s?.provider || provider || "Other"),
               _courseName: c.name,
               _courseId: courseId,
               _state: (c.state || "").toString().toUpperCase(),
@@ -2133,7 +2133,7 @@ function normalizeRemaining(s) {
         const normalized = Array.isArray(result)
           ? result.map((s) => ({
               ...(s && typeof s === "object" ? s : { time: String(s) }),
-              _provider: provider,
+              _provider: String(s?._provider || s?.provider || provider || "Other"),
               _courseName: c.name,
               _courseId: courseId,
               _state: (c.state || "").toString().toUpperCase(),
