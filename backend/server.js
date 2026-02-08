@@ -2196,26 +2196,40 @@ app.post("/api/search", async (req, res) => {
     // ✅ FIX (final): enforce party size whenever remaining is known.
     // Only allow "unknown remaining" for NON booking-engine providers.
     const filtered = slotsToUse.filter((s) => {
-      const remaining = normalizeRemaining(s);
+  const remaining = normalizeRemaining(s);
 
-      // ✅ if we know remaining, ALWAYS enforce it (this fixes your case)
-      if (remaining !== null) return remaining >= party;
+  const prov = String(s?._provider || s?.provider || "").toLowerCase();
 
-      // If unknown remaining:
-      // block anything that looks like TeeRadar booking engine (must always know remaining)
-      const prov = String(s?._provider || s?.provider || "").toLowerCase();
+  // ✅ Robust booking-engine detection:
+  // - provider string OR
+  // - booking URL points to our /book/ pages OR
+  // - slot contains booking engine capacity fields
+  const url = String(s?.url || s?.bookingUrl || s?.booking_url || "");
+  const looksLikeOurBookingUrl =
+    url.includes("/book/") || url.includes("teeradar-fullstack") || url.includes("teeradar.com.au/book/");
 
-      const isBookingEngine =
-        prov.includes("teeradar") ||
-        prov.includes("booking") ||
-        prov.includes("teeradarbooking") ||
-        prov === "booking";
+  const hasCapacityFields =
+    Number.isFinite(Number(s?.maxPlayers ?? s?.max_players)) ||
+    Number.isFinite(Number(s?.bookedPlayers ?? s?.booked_players));
 
-      if (isBookingEngine) return false;
+  const isBookingEngine =
+    prov.includes("teeradar") ||
+    prov.includes("booking") ||
+    prov.includes("teeradarbooking") ||
+    prov === "booking" ||
+    looksLikeOurBookingUrl ||
+    hasCapacityFields;
 
-      // allow unknown for external scrapers that don't supply capacity
-      return true;
-    });
+  // ✅ If we know remaining, ALWAYS enforce it
+  if (remaining !== null) return remaining >= party;
+
+  // ✅ If remaining is unknown:
+  // booking-engine slots MUST NOT be shown (they should always have capacity)
+  if (isBookingEngine) return false;
+
+  // external scrapers: allow unknown
+  return true;
+});
 
     const slotsOut = filtered.map((s) => {
       const remaining = normalizeRemaining(s);
