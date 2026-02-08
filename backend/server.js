@@ -1995,73 +1995,104 @@ app.post("/api/search", async (req, res) => {
     console.log("Incoming /api/search", criteria);
 
     // ✅ Party-size enforcement ONLY when remaining is confidently known
-    function normalizeRemaining(s) {
-      if (!s || typeof s !== "object") return null;
+function normalizeRemaining(s) {
+  if (!s || typeof s !== "object") return null;
 
-      const toNum = (v) => {
-        const n = Number(v);
-        return Number.isFinite(n) ? n : null;
-      };
+  const toNum = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
 
-      // 1) explicit remaining fields
-      const direct =
-        s.remaining ??
-        s.remainingPlayers ??
-        s.playersRemaining ??
-        s.spotsRemaining ??
-        s.playersAvailable ??
-        s.spotsAvailable ??
-        s.remaining_players ??
-        s.remainingSpots ??
-        s.spots_left ??
-        s.slots_left ??
-        s.players_left ??
-        s.openings;
+  // Helper: read capacity + booked early (TeeRadarBooking uses these reliably)
+  const maxPlayers = toNum(
+    s.maxPlayers ??
+    s.max_players ??
+    s.capacity ??
+    s.max ??
+    s.playersMax ??
+    s.maxPlayersPerSlot ??
+    s.max_players_per_slot
+  );
 
-      const dr = toNum(direct);
-      if (dr !== null) return Math.max(0, dr);
+  const bookedPlayers = toNum(
+    s.bookedPlayers ??
+    s.booked_players ??
+    s.booked ??
+    s.taken ??
+    s.playersBooked ??
+    s.bookedCount ??
+    s.booked_count
+  );
 
-      // 2) detect "3/4" style strings anywhere (booked/total)
-      const ratioText =
-        s.ratio ??
-        s.bookedRatio ??
-        s.spotsText ??
-        s.availability ??
-        s.capacityText ??
-        s.playersText ??
-        s.display ??
-        s.label;
+  // 1) explicit "remaining" fields (best case)
+  const direct =
+    s.remaining ??
+    s.remainingPlayers ??
+    s.playersRemaining ??
+    s.spotsRemaining ??
+    s.playersAvailable ??
+    s.spotsAvailable ??
+    s.remaining_players ??
+    s.remainingSpots ??
+    s.spots_left ??
+    s.slots_left ??
+    s.players_left ??
+    s.openings;
 
-      if (typeof ratioText === "string") {
-        // 2a) "3/4" format (booked/total)
-        let m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
-        if (m) {
-          const booked = toNum(m[1]);
-          const total = toNum(m[2]);
-          if (booked !== null && total !== null && total > 0) {
-            return Math.max(0, total - booked);
-          }
-        }
+  const dr = toNum(direct);
 
-        // 2b) "2 slots available" / "2 spots left" / "2 players left"
-        m = ratioText.match(
-          /(\d+)\s*(slots?|spots?|players?)\s*(available|left|remain(ing)?)/i
-        );
-        if (m) {
-          const n = toNum(m[1]);
-          if (n !== null) return Math.max(0, n);
-        }
+  // ✅ IMPORTANT FIX:
+  // If we ALSO have max+booked, and "remaining" suspiciously equals maxPlayers,
+  // treat it as CAPACITY (not remaining) and compute remaining = max - booked.
+  if (dr !== null) {
+    if (maxPlayers !== null && bookedPlayers !== null) {
+      // common bad-case: remaining=4 but booked=2 (actually 2 remaining)
+      if (dr === maxPlayers && bookedPlayers > 0) {
+        return Math.max(0, maxPlayers - bookedPlayers);
       }
-
-      // 3) compute from max - booked ONLY if BOTH are explicitly known
-      const maxPlayers = toNum(s.maxPlayers ?? s.max_players ?? s.capacity ?? s.max);
-      const bookedPlayers = toNum(s.bookedPlayers ?? s.booked_players ?? s.booked ?? s.taken);
-
-      // ✅ if either is missing, we don't know remaining
-      if (maxPlayers === null || bookedPlayers === null) return null;
-
-      return Math.max(0, maxPlayers - bookedPlayers);
+      // another bad-case: remaining > maxPlayers (clearly not remaining)
+      if (dr > maxPlayers) {
+        return Math.max(0, maxPlayers - bookedPlayers);
+      }
     }
+    return Math.max(0, dr);
+  }
+
+  // 2) detect "3/4" style strings anywhere (booked/total)
+  const ratioText =
+    s.ratio ??
+    s.bookedRatio ??
+    s.spotsText ??
+    s.availability ??
+    s.capacityText ??
+    s.playersText ??
+    s.display ??
+    s.label;
+
+  if (typeof ratioText === "string") {
+    // 2a) "3/4" format (booked/total)
+    let m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
+    if (m) {
+      const booked = toNum(m[1]);
+      const total = toNum(m[2]);
+      if (booked !== null && total !== null && total > 0) {
+        return Math.max(0, total - booked);
+      }
+    }
+
+    // 2b) "2 slots available" / "2 spots left" / "2 players left"
+    m = ratioText.match(/(\d+)\s*(slots?|spots?|players?)\s*(available|left|remain(ing)?)/i);
+    if (m) {
+      const n = toNum(m[1]);
+      if (n !== null) return Math.max(0, n);
+    }
+  }
+
+  // 3) compute from max - booked ONLY if BOTH are explicitly known
+  if (maxPlayers === null || bookedPlayers === null) return null;
+
+  return Math.max(0, maxPlayers - bookedPlayers);
+}
 
     const searchCourses = stateCode
       ? courses.filter((c) => (c.state || "").toString().toUpperCase() === stateCode)
