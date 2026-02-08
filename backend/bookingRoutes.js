@@ -8053,7 +8053,8 @@ router.get("/availability", async (req, res) => {
           FROM booking_manual_slots ms2
           WHERE ms2.course_id = t.course_id
             AND ms2.play_date = t.play_date
-            AND ms2.tee_time  = split_part(t.tee_time, '|', 1)
+            -- ✅ FIX TIME MATCH (handles 06:00 vs 06:00:00)
+            AND ms2.tee_time::time = split_part(t.tee_time, '|', 1)::time
             AND ms2.holes     = t.holes
             AND COALESCE(ms2.name,'') <> ''
             AND (
@@ -8087,7 +8088,8 @@ router.get("/availability", async (req, res) => {
           FROM booking_bookings b
           WHERE b.course_id = t.course_id
             AND b.play_date = t.play_date
-            AND b.tee_time  = split_part(t.tee_time, '|', 1)
+            -- ✅ FIX TIME MATCH (handles 06:00 vs 06:00:00)
+            AND b.tee_time::time = split_part(t.tee_time, '|', 1)::time
             AND b.holes     = t.holes
             AND b.status    = 'CONFIRMED'
             AND (
@@ -8200,7 +8202,6 @@ router.get("/availability", async (req, res) => {
         const remainingEffective = Math.max(0, Number(r.remaining_effective ?? 0));
         const maxPlayers = Number(r.max_players ?? 0);
 
-        // ✅ IMPORTANT: expose standard keys so /api/search + map can’t misread remaining
         const availablePlayers = remainingEffective;
 
         return {
@@ -8217,7 +8218,6 @@ router.get("/availability", async (req, res) => {
 
           maxPlayers,
 
-          // ✅ EFFECTIVE totals
           bookedPlayers: bookedEffective,
           booked_players: bookedEffective,
           bookedEffective,
@@ -8229,7 +8229,6 @@ router.get("/availability", async (req, res) => {
           remainingEffective: availablePlayers,
           remaining_effective: availablePlayers,
 
-          // ✅ ADD: aliases many callers use
           availablePlayers,
           available_players: availablePlayers,
           available: availablePlayers,
@@ -8261,7 +8260,6 @@ router.get("/availability", async (req, res) => {
       })
     );
 
-    // ✅ Trace what we returned (without breaking UI)
     if (logOn) {
       console.log("🧪 /availability returned", {
         slug,
@@ -8317,7 +8315,6 @@ router.get("/availability", async (req, res) => {
       });
     }
 
-    // ✅ if trace=1, at least expose the message so we can diagnose without frontend redirect behavior
     if (trace) {
       return res.status(500).json({
         ok: false,
