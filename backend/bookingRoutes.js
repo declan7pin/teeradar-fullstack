@@ -7924,12 +7924,12 @@ router.get("/availability", async (req, res) => {
 
     // ✅ FIX: map page may send different param names (playerCount/numPlayers/etc)
     const playersQuery =
-  (req.query.partySize ??
-   req.query.players ??
-   req.query.playerCount ??
-   req.query.playersCount ??
-   req.query.numPlayers ??
-   req.query.num_players);
+      (req.query.partySize ??
+       req.query.players ??
+       req.query.playerCount ??
+       req.query.playersCount ??
+       req.query.numPlayers ??
+       req.query.num_players);
 
     const playersRaw = Array.isArray(playersQuery) ? playersQuery[0] : playersQuery;
 
@@ -7944,20 +7944,30 @@ router.get("/availability", async (req, res) => {
 
     const earliest = String(req.query.earliest || "06:00").trim();
     const latest = String(req.query.latest || "17:00").trim();
-    const debug = String(req.query.debug || "") === "1";
 
-    if (debug) {
-      console.log("🧪 GET /availability DEBUG incoming", {
+    // ✅ debug=1 bounces you home, so add trace=1 for safe server logging
+    const debug = String(req.query.debug || "") === "1";
+    const trace = String(req.query.trace || "") === "1";
+    const logOn = debug || trace;
+
+    if (logOn) {
+      console.log("🧪 GET /availability incoming", {
         slug: req.query.slug,
         date: req.query.date,
         holes: req.query.holes,
         players: req.query.players,
         partySize: req.query.partySize,
+        playerCount: req.query.playerCount,
+        playersCount: req.query.playersCount,
+        numPlayers: req.query.numPlayers,
+        num_players: req.query.num_players,
         playersRaw,
         playersResolved: players,
         earliest: req.query.earliest,
         latest: req.query.latest,
         layoutKey,
+        trace,
+        debug,
       });
     }
 
@@ -7988,8 +7998,8 @@ router.get("/availability", async (req, res) => {
     const dur18 = Number(courseRow.duration_18_mins || 390);
     const courseId = courseRow.id;
 
-    // ✅ ADD (minimal): safe dlog fallback so this route can't crash if dlog isn't defined
-    const dlog = (...args) => { if (debug) console.log(...args); };
+    // ✅ dlog should log for trace too
+    const dlog = (...args) => { if (logOn) console.log(...args); };
 
     dlog("🧪 GET /availability course matched", {
       courseId,
@@ -8024,9 +8034,7 @@ router.get("/availability", async (req, res) => {
       `
       WITH t AS (
         SELECT
-          -- ✅ FIX: tee_time may be stored like "06:00|18" so keep a clean time for comparisons + output
           split_part(t.tee_time, '|', 1) AS tee_time_clean,
-
           t.tee_time,
           t.holes,
           COALESCE(t.max_players, 4)::int AS max_players,
@@ -8039,7 +8047,7 @@ router.get("/availability", async (req, res) => {
           COALESCE(bk.booked, 0)::int       AS booked
         FROM booking_times t
 
-        -- ✅ Manual slots (COUNT rows, routing-safe + CLEAN time)
+        -- ✅ Manual slots
         LEFT JOIN LATERAL (
           SELECT COUNT(*)::int AS manual_count
           FROM booking_manual_slots ms2
@@ -8048,8 +8056,6 @@ router.get("/availability", async (req, res) => {
             AND ms2.tee_time  = split_part(t.tee_time, '|', 1)
             AND ms2.holes     = t.holes
             AND COALESCE(ms2.name,'') <> ''
-
-            -- ✅ FIX: routing identity (18s must NOT match on NULL/NULL; fall back to layout_key)
             AND (
               (
                 t.holes = 18 AND (
@@ -8075,7 +8081,7 @@ router.get("/availability", async (req, res) => {
             )
         ) ms ON true
 
-        -- ✅ Confirmed bookings (routing-safe + CLEAN time)
+        -- ✅ Confirmed bookings
         LEFT JOIN LATERAL (
           SELECT COALESCE(SUM(b.players),0)::int AS booked
           FROM booking_bookings b
@@ -8084,8 +8090,6 @@ router.get("/availability", async (req, res) => {
             AND b.tee_time  = split_part(t.tee_time, '|', 1)
             AND b.holes     = t.holes
             AND b.status    = 'CONFIRMED'
-
-            -- ✅ FIX: routing identity (18s must NOT match on NULL/NULL; fall back to layout_key)
             AND (
               (
                 t.holes = 18 AND (
@@ -8116,15 +8120,11 @@ router.get("/availability", async (req, res) => {
           AND t.holes     = $3
           AND t.status    = 'AVAILABLE'
           AND ($4::text IS NULL OR t.layout_key = $4)
-
-          -- ✅ apply time window (use cleaned time)
           AND (
             (split_part(split_part(t.tee_time, '|', 1), ':', 1)::int * 60 + split_part(split_part(t.tee_time, '|', 1), ':', 2)::int) >= $6
             AND
             (split_part(split_part(t.tee_time, '|', 1), ':', 1)::int * 60 + split_part(split_part(t.tee_time, '|', 1), ':', 2)::int) <  $7
           )
-
-          -- ✅ 18→9 overlap protection (unchanged logic, but use cleaned time)
           AND (
             $3 <> 9
             OR $4::text IS NULL
@@ -8156,9 +8156,7 @@ router.get("/availability", async (req, res) => {
           )
       )
       SELECT
-        -- ✅ FIX: return clean time to frontend
         tee_time_clean AS tee_time,
-
         holes,
         max_players,
         price_per_player_cents,
@@ -8171,147 +8169,13 @@ router.get("/availability", async (req, res) => {
         GREATEST(0, (max_players - (booked + manual_booked)))::int AS available_players,
         GREATEST(0, (max_players - (booked + manual_booked)))::int AS remaining_effective
       FROM t
-      -- ✅ must fit the requested party size
       WHERE (max_players - (booked + manual_booked)) >= $5
       ORDER BY tee_time_clean ASC;
       `,
       [courseId, date, holes, layoutKey, players, sM, eM, dur9, dur18]
     );
 
-    console.log("🧪 availability rows.length =", Array.isArray(rows) ? rows.length : null);
-
-    // ✅ DEBUG: inspect exact slot to verify maths
-    if (debug) {
-      const slotDiag = await db.query(
-        `
-        SELECT
-          split_part(t.tee_time, '|', 1) AS tee_time_clean,
-          t.tee_time,
-          t.holes,
-          COALESCE(t.max_players,4)::int AS max_players,
-          COALESCE(ms.manual_count,0)::int    AS manual_count,
-          COALESCE(bb.booking_players,0)::int AS booking_players,
-          (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0))::int AS booked_effective,
-          GREATEST(
-            0,
-            COALESCE(t.max_players,4) - (COALESCE(ms.manual_count,0) + COALESCE(bb.booking_players,0))
-          )::int AS remaining_effective,
-          t.status,
-          t.layout_key,
-          t.front_nine_key,
-          t.back_nine_key
-        FROM booking_times t
-
-        LEFT JOIN LATERAL (
-          SELECT COUNT(*)::int AS manual_count
-          FROM booking_manual_slots ms2
-          WHERE ms2.course_id = t.course_id
-            AND ms2.play_date = t.play_date
-            AND ms2.tee_time  = split_part(t.tee_time, '|', 1)
-            AND ms2.holes     = t.holes
-            AND COALESCE(ms2.name,'') <> ''
-
-            -- ✅ FIX: routing identity (18s must NOT match on NULL/NULL; fall back to layout_key)
-            AND (
-              (
-                t.holes = 18 AND (
-                  (
-                    t.front_nine_key IS NOT NULL
-                    AND t.back_nine_key IS NOT NULL
-                    AND ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
-                    AND ms2.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
-                  )
-                  OR
-                  (
-                    (t.front_nine_key IS NULL OR t.back_nine_key IS NULL)
-                    AND t.layout_key IS NOT NULL
-                    AND ms2.layout_key IS NOT DISTINCT FROM t.layout_key
-                  )
-                )
-              )
-              OR
-              (
-                t.holes = 9
-                AND ms2.layout_key IS NOT DISTINCT FROM t.layout_key
-              )
-            )
-        ) ms ON true
-
-        LEFT JOIN LATERAL (
-          SELECT COALESCE(SUM(players),0)::int AS booking_players
-          FROM booking_bookings b
-          WHERE b.course_id = t.course_id
-            AND b.play_date = t.play_date
-            AND b.tee_time  = split_part(t.tee_time, '|', 1)
-            AND b.holes     = t.holes
-            AND b.status    = 'CONFIRMED'
-
-            -- ✅ FIX: routing identity (18s must NOT match on NULL/NULL; fall back to layout_key)
-            AND (
-              (
-                t.holes = 18 AND (
-                  (
-                    t.front_nine_key IS NOT NULL
-                    AND t.back_nine_key IS NOT NULL
-                    AND b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
-                    AND b.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
-                  )
-                  OR
-                  (
-                    (t.front_nine_key IS NULL OR t.back_nine_key IS NULL)
-                    AND t.layout_key IS NOT NULL
-                    AND b.layout_key IS NOT DISTINCT FROM t.layout_key
-                  )
-                )
-              )
-              OR
-              (
-                t.holes = 9
-                AND b.layout_key IS NOT DISTINCT FROM t.layout_key
-              )
-            )
-        ) bb ON true
-
-        WHERE t.course_id = $1
-          AND t.play_date = $2::date
-          AND t.holes     = $3
-          AND split_part(t.tee_time, '|', 1) = '06:00'
-        LIMIT 1;
-        `,
-        [courseId, date, holes]
-      );
-
-      console.log("🧪 SLOT DIAG 06:00", slotDiag.rows[0] || null);
-      console.log("🧪 computed players =", { playersRaw, playersParsed, players });
-    }
-
-    // ✅ DEBUG: show what the availability query returned
-    if (debug) {
-      console.log("🧪 availability query returned", {
-        rowCount: Array.isArray(rows) ? rows.length : null,
-        firstRow: Array.isArray(rows) && rows.length ? rows[0] : null,
-        lastRow: Array.isArray(rows) && rows.length ? rows[rows.length - 1] : null,
-      });
-    }
-
-    // ✅ DEBUG: if none returned, inspect what's in booking_times for that day regardless of filters
-    if (debug && (!rows || rows.length === 0)) {
-      const diag = await db.query(
-        `
-        SELECT status, holes, COUNT(*)::int AS c,
-               MIN(tee_time) AS first_time,
-               MAX(tee_time) AS last_time
-        FROM booking_times
-        WHERE course_id = $1
-          AND play_date = $2::date
-        GROUP BY status, holes
-        ORDER BY holes, status;
-        `,
-        [courseId, date]
-      );
-
-      console.log("🧪 availability DIAG booking_times summary", diag.rows);
-    }
+    dlog("🧪 availability rows.length", Array.isArray(rows) ? rows.length : null);
 
     const times = await Promise.all(
       (rows || []).map(async (r) => {
@@ -8319,7 +8183,6 @@ router.get("/availability", async (req, res) => {
         const dur = durationMinsForHoles(courseRow, r.holes);
         const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-        // ✅ CHANGE (minimal): make this non-fatal so availability never 500s if this throws
         let cartsUsed = 0;
         let clubsUsed = 0;
         try {
@@ -8327,46 +8190,51 @@ router.get("/availability", async (req, res) => {
           cartsUsed = Number(usage?.cartsUsed || 0);
           clubsUsed = Number(usage?.clubsUsed || 0);
         } catch (err) {
-          if (debug) console.log("🧪 countOverlappingAddonUsage failed (non-fatal)", err?.message || err);
+          if (logOn) console.log("🧪 countOverlappingAddonUsage failed (non-fatal)", err?.message || err);
         }
 
         const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
         const clubsRemaining = Math.max(0, courseHireClubsQty - clubsUsed);
 
-        // ✅ ONLY trust SQL-calculated effective fields
         const bookedEffective = Number(r.booked_effective ?? 0);
-        const remainingEffective = Number(r.remaining_effective ?? 0);
+        const remainingEffective = Math.max(0, Number(r.remaining_effective ?? 0));
+        const maxPlayers = Number(r.max_players ?? 0);
+
+        // ✅ IMPORTANT: expose standard keys so /api/search + map can’t misread remaining
+        const availablePlayers = remainingEffective;
 
         return {
           time: r.tee_time,
           holes: Number(r.holes),
 
-          // ✅ ADD: include layout info so frontend can display it
           layout_key: r.layout_key ?? null,
           front_nine_key: r.front_nine_key ?? null,
           back_nine_key: r.back_nine_key ?? null,
 
-          // ✅ ADD: camelCase aliases (frontend convenience)
           layoutKey: r.layout_key ?? null,
           frontNineKey: r.front_nine_key ?? null,
           backNineKey: r.back_nine_key ?? null,
 
-          maxPlayers: Number(r.max_players ?? 0),
+          maxPlayers,
 
-          // ✅ FIX: drive UI + map from EFFECTIVE numbers (manual + confirmed)
+          // ✅ EFFECTIVE totals
           bookedPlayers: bookedEffective,
           booked_players: bookedEffective,
-
-          // ✅ the values the frontend should use
           bookedEffective,
-          remaining: Math.max(0, remainingEffective),
-          remainingEffective: Math.max(0, remainingEffective),
-
-          // ✅ aliases so slotRemaining() reads reliably
-          remainingPlayers: Math.max(0, remainingEffective),
-          playersRemaining: Math.max(0, remainingEffective),
           booked_effective: bookedEffective,
-          remaining_effective: Math.max(0, remainingEffective),
+
+          remaining: availablePlayers,
+          remainingPlayers: availablePlayers,
+          playersRemaining: availablePlayers,
+          remainingEffective: availablePlayers,
+          remaining_effective: availablePlayers,
+
+          // ✅ ADD: aliases many callers use
+          availablePlayers,
+          available_players: availablePlayers,
+          available: availablePlayers,
+          spotsAvailable: availablePlayers,
+          slotsAvailable: availablePlayers,
 
           pricePerPlayerCents: r.price_per_player_cents,
           pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
@@ -8392,6 +8260,21 @@ router.get("/availability", async (req, res) => {
         };
       })
     );
+
+    // ✅ Trace what we returned (without breaking UI)
+    if (logOn) {
+      console.log("🧪 /availability returned", {
+        slug,
+        date,
+        holes,
+        players,
+        earliest,
+        latest,
+        layoutKey,
+        count: times.length,
+        sample: times[0] || null,
+      });
+    }
 
     return res.json({
       ok: true,
@@ -8420,17 +8303,26 @@ router.get("/availability", async (req, res) => {
     });
   } catch (e) {
     const debug = String(req.query.debug || "") === "1";
+    const trace = String(req.query.trace || "") === "1";
 
     console.error("GET /availability error", e);
     console.error(e?.stack || e);
 
-    // ✅ ADD: when debug=1, return real details to the browser
     if (debug) {
       return res.status(500).json({
         ok: false,
         error: "internal_error",
         message: String(e?.message || e || "unknown_error"),
         stack: String(e?.stack || ""),
+      });
+    }
+
+    // ✅ if trace=1, at least expose the message so we can diagnose without frontend redirect behavior
+    if (trace) {
+      return res.status(500).json({
+        ok: false,
+        error: "internal_error",
+        message: String(e?.message || e || "unknown_error"),
       });
     }
 
