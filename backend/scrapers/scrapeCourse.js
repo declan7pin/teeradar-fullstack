@@ -143,7 +143,6 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
       bt.holes,
       bt.max_players,
       bt.price_per_player_cents
-    HAVING (bt.max_players - COALESCE(SUM(bb.players), 0)) >= $3
     ORDER BY bt.tee_time ASC;
   `;
 
