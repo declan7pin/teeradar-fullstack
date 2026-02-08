@@ -8353,8 +8353,9 @@ router.get("/availability", async (req, res) => {
 
           maxPlayers: Number(r.max_players ?? 0),
 
-          // raw (debug)
-          bookedPlayers: Number(r.booked_players ?? 0),
+          // ✅ FIX: drive UI + map from EFFECTIVE numbers (manual + confirmed)
+          bookedPlayers: bookedEffective,
+          booked_players: bookedEffective,
 
           // ✅ the values the frontend should use
           bookedEffective,
@@ -8366,7 +8367,6 @@ router.get("/availability", async (req, res) => {
           playersRemaining: Math.max(0, remainingEffective),
           booked_effective: bookedEffective,
           remaining_effective: Math.max(0, remainingEffective),
-          booked_players: Number(r.booked_players ?? 0),
 
           pricePerPlayerCents: r.price_per_player_cents,
           pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
@@ -8437,7 +8437,6 @@ router.get("/availability", async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 function advisoryKeyForSlot({
   courseId,
   dateYmd,
