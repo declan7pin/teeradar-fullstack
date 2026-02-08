@@ -1973,13 +1973,13 @@ app.post("/api/search", async (req, res) => {
     if (!date) return res.status(400).json({ error: "date is required" });
 
     function parseHoles(v) {
-  if (v === "" || v === null || typeof v === "undefined") return "";
-  const m = String(v).match(/\d+/);      // pulls 18 from "18 holes"
-  const n = m ? Number(m[0]) : NaN;
-  return Number.isFinite(n) ? n : "";
-}
+      if (v === "" || v === null || typeof v === "undefined") return "";
+      const m = String(v).match(/\d+/); // pulls 18 from "18 holes"
+      const n = m ? Number(m[0]) : NaN;
+      return Number.isFinite(n) ? n : "";
+    }
 
-const holesValue = parseHoles(holes);
+    const holesValue = parseHoles(holes);
 
     const stateCode = (state || "").toString().toUpperCase();
 
@@ -1993,72 +1993,76 @@ const holesValue = parseHoles(holes);
     };
 
     console.log("Incoming /api/search", criteria);
-  // ✅ Party-size enforcement ONLY when remaining is confidently known
+
+    // ✅ Party-size enforcement ONLY when remaining is confidently known
     function normalizeRemaining(s) {
-  if (!s || typeof s !== "object") return null;
+      if (!s || typeof s !== "object") return null;
 
-  const toNum = (v) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  };
+      const toNum = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
 
-  // 1) explicit remaining fields
-  const direct =
-    s.remaining ??
-    s.remainingPlayers ??
-    s.playersRemaining ??
-    s.spotsRemaining ??
-    s.playersAvailable ??
-    s.spotsAvailable ??
-    s.remaining_players ??
-    s.remainingSpots ??
-    s.spots_left ??
-    s.slots_left ??
-    s.players_left ??
-    s.openings;
+      // 1) explicit remaining fields
+      const direct =
+        s.remaining ??
+        s.remainingPlayers ??
+        s.playersRemaining ??
+        s.spotsRemaining ??
+        s.playersAvailable ??
+        s.spotsAvailable ??
+        s.remaining_players ??
+        s.remainingSpots ??
+        s.spots_left ??
+        s.slots_left ??
+        s.players_left ??
+        s.openings;
 
-  const dr = toNum(direct);
-  if (dr !== null) return Math.max(0, dr);
+      const dr = toNum(direct);
+      if (dr !== null) return Math.max(0, dr);
 
-  // 2) detect "3/4" style strings anywhere (booked/total)
-  const ratioText =
-    s.ratio ??
-    s.bookedRatio ??
-    s.spotsText ??
-    s.availability ??
-    s.capacityText ??
-    s.playersText ??
-    s.display ??
-    s.label;
+      // 2) detect "3/4" style strings anywhere (booked/total)
+      const ratioText =
+        s.ratio ??
+        s.bookedRatio ??
+        s.spotsText ??
+        s.availability ??
+        s.capacityText ??
+        s.playersText ??
+        s.display ??
+        s.label;
 
-  if (typeof ratioText === "string") {
-  // 2) "3/4" format (booked/total)
-  let m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
-  if (m) {
-    const booked = toNum(m[1]);
-    const total = toNum(m[2]);
-    if (booked !== null && total !== null && total > 0) {
-      return Math.max(0, total - booked);
+      if (typeof ratioText === "string") {
+        // 2a) "3/4" format (booked/total)
+        let m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
+        if (m) {
+          const booked = toNum(m[1]);
+          const total = toNum(m[2]);
+          if (booked !== null && total !== null && total > 0) {
+            return Math.max(0, total - booked);
+          }
+        }
+
+        // 2b) "2 slots available" / "2 spots left" / "2 players left"
+        m = ratioText.match(
+          /(\d+)\s*(slots?|spots?|players?)\s*(available|left|remain(ing)?)/i
+        );
+        if (m) {
+          const n = toNum(m[1]);
+          if (n !== null) return Math.max(0, n);
+        }
+      }
+
+      // 3) compute from max - booked ONLY if BOTH are explicitly known
+      const maxPlayers = toNum(s.maxPlayers ?? s.max_players ?? s.capacity ?? s.max);
+      const bookedPlayers = toNum(s.bookedPlayers ?? s.booked_players ?? s.booked ?? s.taken);
+
+      // ✅ if either is missing, we don't know remaining
+      if (maxPlayers === null || bookedPlayers === null) return null;
+
+      return Math.max(0, maxPlayers - bookedPlayers);
     }
-  }
 
-  // 2b) "2 slots available" / "2 spots left" / "2 players left"
-  m = ratioText.match(/(\d+)\s*(slots?|spots?|players?)\s*(available|left|remain(ing)?)/i);
-  if (m) {
-    const n = toNum(m[1]);
-    if (n !== null) return Math.max(0, n);
-  }
-}
-
-   // 3) compute from max - booked ONLY if BOTH are explicitly known
-  const maxPlayers = toNum(s.maxPlayers ?? s.max_players ?? s.capacity ?? s.max);
-  const bookedPlayers = toNum(s.bookedPlayers ?? s.booked_players ?? s.booked ?? s.taken);
-
-  // ✅ if either is missing, we don't know remaining
-  if (maxPlayers === null || bookedPlayers === null) return null;
-
-  return Math.max(0, maxPlayers - bookedPlayers);
-}
     const searchCourses = stateCode
       ? courses.filter((c) => (c.state || "").toString().toUpperCase() === stateCode)
       : courses;
@@ -2076,50 +2080,50 @@ const holesValue = parseHoles(holes);
         partySize: criteria.partySize,
       });
 
-    if (cached) {
-  const normalizedCached = Array.isArray(cached)
-    ? cached.map((s) => ({
-        ...(s && typeof s === "object" ? s : { time: String(s) }),
-        _provider: provider,
-        _courseName: c.name,
-        _courseId: courseId,
-        _state: (c.state || "").toString().toUpperCase(),
-      }))
-    : [];
+      if (cached) {
+        const normalizedCached = Array.isArray(cached)
+          ? cached.map((s) => ({
+              ...(s && typeof s === "object" ? s : { time: String(s) }),
+              _provider: provider,
+              _courseName: c.name,
+              _courseId: courseId,
+              _state: (c.state || "").toString().toUpperCase(),
+            }))
+          : [];
 
-  console.log(`⚡ cache hit → ${c.name} (${normalizedCached.length} slots)`);
-  return normalizedCached;
-}
+        console.log(`⚡ cache hit → ${c.name} (${normalizedCached.length} slots)`);
+        return normalizedCached;
+      }
 
       try {
         const result = await scrapeCourse(c, criteria, feeGroups);
 
-// ✅ attach provider/course metadata to every slot so we can filter later
-const normalized = Array.isArray(result)
-  ? result.map((s) => ({
-      ...(s && typeof s === "object" ? s : { time: String(s) }),
-      _provider: provider,
-      _courseName: c.name,
-      _courseId: courseId,
-      _state: (c.state || "").toString().toUpperCase(),
-    }))
-  : [];
+        // ✅ attach provider/course metadata to every slot so we can filter later
+        const normalized = Array.isArray(result)
+          ? result.map((s) => ({
+              ...(s && typeof s === "object" ? s : { time: String(s) }),
+              _provider: provider,
+              _courseName: c.name,
+              _courseId: courseId,
+              _state: (c.state || "").toString().toUpperCase(),
+            }))
+          : [];
 
-console.log(`✅ scraped ${c.name} → ${normalized.length} slots`);
+        console.log(`✅ scraped ${c.name} → ${normalized.length} slots`);
 
-await saveSlotsToCache({
-  courseId,
-  courseName: c.name,
-  provider,
-  date,
-  holes: holesValue || null,
-  partySize: criteria.partySize,
-  earliest,
-  latest,
-  slots: normalized,
-});
+        await saveSlotsToCache({
+          courseId,
+          courseName: c.name,
+          provider,
+          date,
+          holes: holesValue || null,
+          partySize: criteria.partySize,
+          earliest,
+          latest,
+          slots: normalized,
+        });
 
-return normalized;
+        return normalized;
       } catch (err) {
         console.error(`❌ scrape error for ${c.name}:`, err.message);
 
@@ -2139,80 +2143,95 @@ return normalized;
       }
     });
 
-        const allResults = await Promise.all(jobs);
-const slots = allResults.flat();
-const seen = new Set();
-const dedupedSlots = [];
+    const allResults = await Promise.all(jobs);
+    const slots = allResults.flat();
 
-for (const s of slots) {
-  const key = [
-    s?._courseId || s?._courseName || s?.courseName || s?.course || "",
-    s?.date || "",
-    s?.time || "",
-    s?.holes || "",
-    s?._provider || s?.provider || "",
-  ].join("|");
+    // ✅ Dedup identical tee-times so we don't "double count" the same thing
+    const seen = new Set();
+    const dedupedSlots = [];
 
-  if (seen.has(key)) continue;
-  seen.add(key);
-  dedupedSlots.push(s);
-}
+    for (const s of slots) {
+      const key = [
+        s?._courseId || s?._courseName || s?.courseName || s?.course || "",
+        s?.date || date || "",
+        s?.time || "",
+        s?.holes || holesValue || "",
+        s?._provider || s?.provider || "",
+        // include layout if present so 2 different routings don't collapse
+        s?.layoutKey || s?.layout_key || "",
+        s?.frontNineKey || s?.front_nine_key || "",
+        s?.backNineKey || s?.back_nine_key || "",
+      ].join("|");
 
-// replace downstream `slots` usage with `dedupedSlots`
-const slotsToUse = dedupedSlots;
-const party = Number(criteria.partySize) || 1;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      dedupedSlots.push(s);
+    }
 
-let known = 0, unknown = 0, blocked = 0;
-for (const s of slots) {
-  const r = normalizeRemaining(s);
-  if (r === null) unknown++;
-  else {
-    known++;
-    if (r < party) blocked++;
-  }
-}
-console.log("🧪 partySize filter stats", { party, raw: slots.length, known, unknown, blocked });
+    const slotsToUse = dedupedSlots;
+    const party = Number(criteria.partySize) || 1;
 
-// ✅ Filter logic:
-// - For TeeRadarBooking: remaining SHOULD exist → enforce it strictly
-// - For other providers: only enforce if remaining can be confidently derived
+    // ✅ Stats should be computed on the same list we actually filter (deduped)
+    let known = 0,
+      unknown = 0,
+      blocked = 0;
 
-const filtered = slots.filter((s) => {
-  const remaining = normalizeRemaining(s);
+    for (const s of slotsToUse) {
+      const r = normalizeRemaining(s);
+      if (r === null) unknown++;
+      else {
+        known++;
+        if (r < party) blocked++;
+      }
+    }
 
-  const prov = String(s?._provider || s?.provider || "").toLowerCase();
-  const isTeeRadarBooking =
-    prov.includes("teeradarbooking") ||
-    prov.includes("teeradar booking") ||
-    prov === "booking";
+    console.log("🧪 partySize filter stats", {
+      party,
+      raw: slotsToUse.length,
+      known,
+      unknown,
+      blocked,
+    });
 
-  // ✅ STRICT: TeeRadarBooking must KNOW remaining
-  if (isTeeRadarBooking) {
-    if (remaining === null) return false;
-    return remaining >= party;
-  }
+    // ✅ FIX (final): enforce party size whenever remaining is known.
+    // Only allow "unknown remaining" for NON booking-engine providers.
+    const filtered = slotsToUse.filter((s) => {
+      const remaining = normalizeRemaining(s);
 
-  // ✅ Other providers: unknown remaining is allowed
-  if (remaining === null) return true;
-  return remaining >= party;
-});
+      // ✅ if we know remaining, ALWAYS enforce it (this fixes your case)
+      if (remaining !== null) return remaining >= party;
 
-const slotsOut = filtered.map((s) => {
-  const remaining = normalizeRemaining(s);
+      // If unknown remaining:
+      // block anything that looks like TeeRadar booking engine (must always know remaining)
+      const prov = String(s?._provider || s?.provider || "").toLowerCase();
 
-  return {
-    ...s,
-    remaining: typeof s.remaining === "number" ? s.remaining : remaining,
-    fitsParty: remaining === null ? null : remaining >= party,
-    _partyRequested: party,
-  };
-});
+      const isBookingEngine =
+        prov.includes("teeradar") ||
+        prov.includes("booking") ||
+        prov.includes("teeradarbooking") ||
+        prov === "booking";
 
-console.log(
-  `🔎 /api/search complete → ${slotsOut.length} slots (partySize=${party}, raw=${slots.length})`
-);
+      if (isBookingEngine) return false;
 
-return res.json({ slots: slotsOut });
+      // allow unknown for external scrapers that don't supply capacity
+      return true;
+    });
+
+    const slotsOut = filtered.map((s) => {
+      const remaining = normalizeRemaining(s);
+      return {
+        ...s,
+        remaining: typeof s.remaining === "number" ? s.remaining : remaining,
+        fitsParty: remaining === null ? null : remaining >= party,
+        _partyRequested: party,
+      };
+    });
+
+    console.log(
+      `🔎 /api/search complete → ${slotsOut.length} slots (partySize=${party}, raw=${slotsToUse.length})`
+    );
+
+    return res.json({ slots: slotsOut });
   } catch (err) {
     console.error("search error", err);
     return res.status(500).json({ error: "internal error", detail: err.message });
