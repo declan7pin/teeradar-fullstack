@@ -7922,9 +7922,21 @@ router.get("/availability", async (req, res) => {
     const date = String(req.query.date || "").trim();
     const holes = Number(req.query.holes || 18);
 
-    const playersQuery = (req.query.players ?? req.query.partySize);
+    // ✅ FIX: map page may send different param names (playerCount/numPlayers/etc)
+    const playersQuery =
+      (req.query.players ??
+       req.query.partySize ??
+       req.query.playerCount ??
+       req.query.playersCount ??
+       req.query.numPlayers ??
+       req.query.num_players);
+
     const playersRaw = Array.isArray(playersQuery) ? playersQuery[0] : playersQuery;
-    const playersParsed = parseInt(String(playersRaw ?? "2"), 10);
+
+    // ✅ FIX: handle values like "3 players" safely
+    const mPlayers = String(playersRaw ?? "2").match(/\d+/);
+    const playersParsed = mPlayers ? parseInt(mPlayers[0], 10) : 2;
+
     const players = Math.min(4, Math.max(1, Number.isFinite(playersParsed) ? playersParsed : 2));
 
     const layoutKeyRaw = String(req.query.layoutKey || req.query.layout || "").trim().toLowerCase();
