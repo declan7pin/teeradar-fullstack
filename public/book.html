@@ -533,14 +533,35 @@
     function slotFitsParty(slot, partySize) {
   const want = Math.max(1, Number(partySize || 1));
 
-  // ✅ TRUST BACKEND if it already decided
-  if (slot && typeof slot.fitsParty === "boolean") return slot.fitsParty;
+  // ✅ Only trust backend fitsParty IF it also provided a numeric remaining field.
+  // If backend sends fitsParty=true but doesn't include remaining, we compute locally.
+  const backendRemaining =
+    slot?.remaining ??
+    slot?.remainingPlayers ??
+    slot?.playersRemaining ??
+    slot?.playersAvailable ??
+    slot?.spotsRemaining ??
+    slot?.openings ??
+    slot?.spotsAvailable ??
+    slot?.spotsAvailable ??
+    slot?.playersAvailable;
 
-  // Fallback: calculate locally only if backend didn't provide fitsParty
+  const backendRemainingNum = Number(backendRemaining);
+
+  if (
+    slot &&
+    typeof slot.fitsParty === "boolean" &&
+    Number.isFinite(backendRemainingNum)
+  ) {
+    // Backend has both fitsParty + a numeric remaining value -> trust it
+    return slot.fitsParty;
+  }
+
+  // Fallback: calculate locally
   const rem = slotRemaining(slot);
 
   // ✅ If we can't confirm remaining, DO NOT treat as fitting for party > 1
-    if (rem === null) return want === 1; // allow unknown only for singles
+  if (rem === null) return want === 1; // allow unknown only for singles
 
   return rem >= want;
 }
