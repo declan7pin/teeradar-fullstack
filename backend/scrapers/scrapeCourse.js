@@ -184,8 +184,14 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
       holes,
       price: null,
 
+      // ✅ keep existing fields
       maxPlayers,
       playersBooked,
+
+      // ✅ ADD: emit snake_case + variants so normalizeRemaining() ALWAYS detects capacity
+      max_players: maxPlayers,
+      booked_players: playersBooked,
+      bookedPlayers: playersBooked,
 
       remaining, // ✅ your strict logic needs this
       spotsAvailable: remaining, // ✅ some UIs read this
