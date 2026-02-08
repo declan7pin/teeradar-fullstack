@@ -848,6 +848,39 @@
       const date = document.getElementById("date").value;
       const earliest = document.getElementById("earliest").value || "06:00";
       const latest = document.getElementById("latest").value || "17:00";
+      // ✅ GUARD: enforce a sensible time window (min 10 mins) + ensure latest > earliest
+function timeToMins(t) {
+  const m = String(t || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return (Number(m[1]) * 60) + Number(m[2]);
+}
+function minsToTime(mins) {
+  mins = Math.max(0, Math.min(23 * 60 + 59, mins));
+  const h = String(Math.floor(mins / 60)).padStart(2, "0");
+  const mm = String(mins % 60).padStart(2, "0");
+  return `${h}:${mm}`;
+}
+
+const eM = timeToMins(earliest);
+const lM = timeToMins(latest);
+
+if (eM === null || lM === null) {
+  alert("Please enter valid times.");
+  return;
+}
+
+// If latest <= earliest, bump latest
+let newLatestM = lM;
+if (lM <= eM) newLatestM = eM + 10;
+
+// If window < 10 mins, bump latest
+if ((newLatestM - eM) < 10) newLatestM = eM + 10;
+
+if (newLatestM !== lM) {
+  const latestInput = document.getElementById("latest");
+  const newLatest = minsToTime(newLatestM);
+  if (latestInput) latestInput.value = newLatest;
+}
       const holes = document.getElementById("holes").value;
       const players = document.getElementById("players").value;
 
@@ -931,7 +964,7 @@ const slots = Array.isArray(data.slots) ? data.slots : [];
           });
         });
 
-        // Existing overall search event (kept)
+ // Existing overall search event (kept)
         trackEvent("search", {
   date,
   earliest,
