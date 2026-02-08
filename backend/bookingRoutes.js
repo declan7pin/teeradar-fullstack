@@ -8027,8 +8027,7 @@ router.get("/availability", async (req, res) => {
           COALESCE(bk.booked, 0)::int       AS booked
         FROM booking_times t
 
-        -- ✅ Manual slots (COUNT rows, CLEAN time)
-        -- ✅ FIX: booking_manual_slots does NOT store routing keys, so do NOT require them here.
+        -- ✅ Manual slots (COUNT rows, routing-safe + CLEAN time)
         LEFT JOIN LATERAL (
           SELECT COUNT(*)::int AS manual_count
           FROM booking_manual_slots ms2
@@ -8037,6 +8036,31 @@ router.get("/availability", async (req, res) => {
             AND ms2.tee_time  = split_part(t.tee_time, '|', 1)
             AND ms2.holes     = t.holes
             AND COALESCE(ms2.name,'') <> ''
+
+            -- ✅ FIX: routing identity (18s must NOT match on NULL/NULL; fall back to layout_key)
+            AND (
+              (
+                t.holes = 18 AND (
+                  (
+                    t.front_nine_key IS NOT NULL
+                    AND t.back_nine_key IS NOT NULL
+                    AND ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
+                    AND ms2.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
+                  )
+                  OR
+                  (
+                    (t.front_nine_key IS NULL OR t.back_nine_key IS NULL)
+                    AND t.layout_key IS NOT NULL
+                    AND ms2.layout_key IS NOT DISTINCT FROM t.layout_key
+                  )
+                )
+              )
+              OR
+              (
+                t.holes = 9
+                AND ms2.layout_key IS NOT DISTINCT FROM t.layout_key
+              )
+            )
         ) ms ON true
 
         -- ✅ Confirmed bookings (routing-safe + CLEAN time)
@@ -8049,11 +8073,29 @@ router.get("/availability", async (req, res) => {
             AND b.holes     = t.holes
             AND b.status    = 'CONFIRMED'
 
-            -- ✅ FIX: routing identity by hole-type
+            -- ✅ FIX: routing identity (18s must NOT match on NULL/NULL; fall back to layout_key)
             AND (
-              (t.holes = 18 AND b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key AND b.back_nine_key IS NOT DISTINCT FROM t.back_nine_key)
+              (
+                t.holes = 18 AND (
+                  (
+                    t.front_nine_key IS NOT NULL
+                    AND t.back_nine_key IS NOT NULL
+                    AND b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
+                    AND b.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
+                  )
+                  OR
+                  (
+                    (t.front_nine_key IS NULL OR t.back_nine_key IS NULL)
+                    AND t.layout_key IS NOT NULL
+                    AND b.layout_key IS NOT DISTINCT FROM t.layout_key
+                  )
+                )
+              )
               OR
-              (t.holes = 9  AND b.layout_key     IS NOT DISTINCT FROM t.layout_key)
+              (
+                t.holes = 9
+                AND b.layout_key IS NOT DISTINCT FROM t.layout_key
+              )
             )
         ) bk ON true
 
@@ -8148,7 +8190,6 @@ router.get("/availability", async (req, res) => {
           t.back_nine_key
         FROM booking_times t
 
-        -- ✅ FIX: booking_manual_slots does NOT store routing keys, so do NOT require them here.
         LEFT JOIN LATERAL (
           SELECT COUNT(*)::int AS manual_count
           FROM booking_manual_slots ms2
@@ -8157,6 +8198,31 @@ router.get("/availability", async (req, res) => {
             AND ms2.tee_time  = split_part(t.tee_time, '|', 1)
             AND ms2.holes     = t.holes
             AND COALESCE(ms2.name,'') <> ''
+
+            -- ✅ FIX: routing identity (18s must NOT match on NULL/NULL; fall back to layout_key)
+            AND (
+              (
+                t.holes = 18 AND (
+                  (
+                    t.front_nine_key IS NOT NULL
+                    AND t.back_nine_key IS NOT NULL
+                    AND ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
+                    AND ms2.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
+                  )
+                  OR
+                  (
+                    (t.front_nine_key IS NULL OR t.back_nine_key IS NULL)
+                    AND t.layout_key IS NOT NULL
+                    AND ms2.layout_key IS NOT DISTINCT FROM t.layout_key
+                  )
+                )
+              )
+              OR
+              (
+                t.holes = 9
+                AND ms2.layout_key IS NOT DISTINCT FROM t.layout_key
+              )
+            )
         ) ms ON true
 
         LEFT JOIN LATERAL (
@@ -8168,11 +8234,29 @@ router.get("/availability", async (req, res) => {
             AND b.holes     = t.holes
             AND b.status    = 'CONFIRMED'
 
-            -- ✅ FIX: routing identity by hole-type
+            -- ✅ FIX: routing identity (18s must NOT match on NULL/NULL; fall back to layout_key)
             AND (
-              (t.holes = 18 AND b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key AND b.back_nine_key IS NOT DISTINCT FROM t.back_nine_key)
+              (
+                t.holes = 18 AND (
+                  (
+                    t.front_nine_key IS NOT NULL
+                    AND t.back_nine_key IS NOT NULL
+                    AND b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
+                    AND b.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
+                  )
+                  OR
+                  (
+                    (t.front_nine_key IS NULL OR t.back_nine_key IS NULL)
+                    AND t.layout_key IS NOT NULL
+                    AND b.layout_key IS NOT DISTINCT FROM t.layout_key
+                  )
+                )
+              )
               OR
-              (t.holes = 9  AND b.layout_key     IS NOT DISTINCT FROM t.layout_key)
+              (
+                t.holes = 9
+                AND b.layout_key IS NOT DISTINCT FROM t.layout_key
+              )
             )
         ) bb ON true
 
