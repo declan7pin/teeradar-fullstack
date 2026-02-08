@@ -8027,23 +8027,16 @@ router.get("/availability", async (req, res) => {
           COALESCE(bk.booked, 0)::int       AS booked
         FROM booking_times t
 
-        -- ✅ Manual slots (COUNT rows, routing-safe + CLEAN time)
+        -- ✅ Manual slots (COUNT rows, CLEAN time)
+        -- ✅ FIX: booking_manual_slots does NOT store routing keys, so do NOT require them here.
         LEFT JOIN LATERAL (
           SELECT COUNT(*)::int AS manual_count
           FROM booking_manual_slots ms2
           WHERE ms2.course_id = t.course_id
             AND ms2.play_date = t.play_date
-            -- IMPORTANT: booking_times.tee_time may include "|..."
             AND ms2.tee_time  = split_part(t.tee_time, '|', 1)
             AND ms2.holes     = t.holes
             AND COALESCE(ms2.name,'') <> ''
-
-            -- ✅ FIX: routing identity by hole-type
-            AND (
-              (t.holes = 18 AND ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key AND ms2.back_nine_key IS NOT DISTINCT FROM t.back_nine_key)
-              OR
-              (t.holes = 9  AND ms2.layout_key     IS NOT DISTINCT FROM t.layout_key)
-            )
         ) ms ON true
 
         -- ✅ Confirmed bookings (routing-safe + CLEAN time)
@@ -8155,6 +8148,7 @@ router.get("/availability", async (req, res) => {
           t.back_nine_key
         FROM booking_times t
 
+        -- ✅ FIX: booking_manual_slots does NOT store routing keys, so do NOT require them here.
         LEFT JOIN LATERAL (
           SELECT COUNT(*)::int AS manual_count
           FROM booking_manual_slots ms2
@@ -8163,13 +8157,6 @@ router.get("/availability", async (req, res) => {
             AND ms2.tee_time  = split_part(t.tee_time, '|', 1)
             AND ms2.holes     = t.holes
             AND COALESCE(ms2.name,'') <> ''
-
-            -- ✅ FIX: routing identity by hole-type
-            AND (
-              (t.holes = 18 AND ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key AND ms2.back_nine_key IS NOT DISTINCT FROM t.back_nine_key)
-              OR
-              (t.holes = 9  AND ms2.layout_key     IS NOT DISTINCT FROM t.layout_key)
-            )
         ) ms ON true
 
         LEFT JOIN LATERAL (
@@ -8254,10 +8241,6 @@ router.get("/availability", async (req, res) => {
         const bookedEffective = Number(r.booked_effective ?? 0);
         const remainingEffective = Number(r.remaining_effective ?? 0);
 
-        // ✅ FIX (minimal): expose "slots available" as groups-of-N players
-        const spotsRemaining = Math.max(0, remainingEffective);
-        const slotsAvailable = Math.max(0, Math.floor(spotsRemaining / players));
-
         return {
           time: r.tee_time,
           holes: Number(r.holes),
@@ -8277,22 +8260,17 @@ router.get("/availability", async (req, res) => {
           // raw (debug)
           bookedPlayers: Number(r.booked_players ?? 0),
 
-          // ✅ the values the frontend should use (unchanged)
+          // ✅ the values the frontend should use
           bookedEffective,
-          remaining: spotsRemaining,
-          remainingEffective: spotsRemaining,
+          remaining: Math.max(0, remainingEffective),
+          remainingEffective: Math.max(0, remainingEffective),
 
-          // ✅ aliases so slotRemaining() reads reliably (unchanged)
-          remainingPlayers: spotsRemaining,
-          playersRemaining: spotsRemaining,
+          // ✅ aliases so slotRemaining() reads reliably
+          remainingPlayers: Math.max(0, remainingEffective),
+          playersRemaining: Math.max(0, remainingEffective),
           booked_effective: bookedEffective,
-          remaining_effective: spotsRemaining,
+          remaining_effective: Math.max(0, remainingEffective),
           booked_players: Number(r.booked_players ?? 0),
-
-          // ✅ NEW aliases to prevent "2 spots" being shown as "2 slots"
-          spotsRemaining,
-          slotsAvailable,
-          bookableSlots: slotsAvailable,
 
           pricePerPlayerCents: r.price_per_player_cents,
           pricePerPlayer: Number(r.price_per_player_cents || 0) / 100,
