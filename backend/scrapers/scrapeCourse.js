@@ -151,13 +151,14 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
     WHERE bt.course_id = $1
       AND bt.play_date = $2::date
       AND bt.status = 'AVAILABLE'
-      ${requestedHoles ? "AND bt.holes = $4" : ""}
+      ${requestedHoles ? "AND bt.holes = $4::int" : ""}
     GROUP BY
       bt.play_date,
       bt.tee_time,
       bt.holes,
       bt.max_players,
       bt.price_per_player_cents
+    HAVING (bt.max_players - COALESCE(SUM(bb.players), 0)) >= $3::int
     ORDER BY bt.tee_time ASC;
   `;
 
@@ -172,7 +173,7 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
   const out = [];
   for (const row of r.rows || []) {
     const tRaw = String(row.tee_time || "").trim();
-    const t = normalizeHHMM(tRaw); // ✅ CRITICAL: match MiClub/Quick18 time format
+    const t = normalizeHHMM(tRaw);
     if (!t) continue;
 
     const mins = toMinutes(t);
@@ -188,11 +189,6 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
     const playersBooked = Number(row.booked_players || 0);
     const remaining = Math.max(0, maxPlayers - playersBooked);
 
-    // ✅ enforce partySize here too (keeps results consistent even if frontend re-filters)
-    if (remaining < partySize) continue;
-
-    const bookingLink = `${SITE_URL}/book/${slug}`;
-
     out.push({
       course: courseName,
       courseName,
@@ -202,7 +198,7 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
       provider: "TeeRadarBooking",
       date,
       time: t,
-      tee_time: t, // ✅ common alias some frontends use
+      tee_time: t,
       holes,
       price: null,
 
@@ -210,7 +206,7 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
       maxPlayers,
       playersBooked,
 
-      // ✅ emit snake_case + variants so normalizeRemaining() ALWAYS detects capacity
+      // ✅ ADD: emit snake_case + variants so normalizeRemaining() ALWAYS detects capacity
       max_players: maxPlayers,
       booked_players: playersBooked,
       bookedPlayers: playersBooked,
@@ -220,11 +216,10 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
       playersAvailable: remaining,
       availableSpots: remaining,
 
-      // ✅ URL variants (some UI uses url/bookingUrl)
-      url: bookingLink,
-      bookingUrl: bookingLink,
-      booking_url: bookingLink,
-      bookUrl: bookingLink,
+      bookUrl: `${SITE_URL}/book/${slug}`,
+      url: `${SITE_URL}/book/${slug}`,
+      bookingUrl: `${SITE_URL}/book/${slug}`,
+      booking_url: `${SITE_URL}/book/${slug}`,
 
       pricePerPlayerCents: Number(row.price_per_player_cents || 0),
     });
