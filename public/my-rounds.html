@@ -1839,7 +1839,11 @@
       const namesOut = [];
       for (let i = 0; i < pc; i++) namesOut.push(String(playerNames[i] || "").trim());
 
-      const payload = { holes: holesRows, player_names: namesOut, players_count: pc };
+      const payload = {
+  holes: holesRows,
+  players_count: getPlayersCountFromRound(currentRound),
+  player_names: playerNames
+};
 
       await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, {
         method:"PUT",
