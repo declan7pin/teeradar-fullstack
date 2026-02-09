@@ -507,7 +507,7 @@
             <label>Player names</label>
             <div class="namesGrid" id="namesGrid"></div>
             <div class="nameHint">
-              P1 is always your account (auto-filled). Names are saved per-round in this browser.
+              P1 is always your account (auto-filled). Names are saved with the round (and also cached in this browser).
             </div>
           </div>
 
@@ -1733,6 +1733,14 @@
       const round = data.round || data;
       const holesArr = data.holes || data.holesData || round.holesData || round.holes || [];
       round.holesData = holesArr || [];
+            // ✅ NEW: prefer backend-saved player_names if present
+      if (Array.isArray(round.player_names)) {
+        for (let i = 0; i < 4; i++) {
+          if (typeof round.player_names[i] === "string") playerNames[i] = round.player_names[i];
+        }
+        // cache locally too
+        try { localStorage.setItem(roundNamesKey(round.id), JSON.stringify(playerNames)); } catch {}
+      }
 
       // ✅ load + show names for this round
       loadNamesForRound(round.id);
@@ -1750,6 +1758,13 @@
       const par_mode = String(parModeEl.value || "published").trim();
       const notes = String(notesEl.value || "").trim();
       const players_count = clamp(playersEl?.value || 1, 1, 4);
+            // ✅ NEW: build player_names array for backend
+      const namesOut = [];
+      for (let i = 0; i < 4; i++) {
+        namesOut.push(String(playerNames[i] || "").trim());
+      }
+      // ensure length matches players_count
+      namesOut.length = players_count;
 
       if (!course) {
         setToast(leftToast, "Please enter a course name.", false);
@@ -1788,6 +1803,7 @@
         par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
         notes: notes || null,
         players_count,
+        player_names: namesOut,
         ...(holes === 9 && !hasNinesUI ? { nineLoop } : {}),
         ...(pars ? { pars } : {})
       };
@@ -1819,7 +1835,11 @@
       saveNamesForRound(currentRoundId);
 
       const holesRows = readTableHoles();
-      const payload = { holes: holesRows };
+            const pc = getPlayersCountFromRound(currentRound);
+      const namesOut = [];
+      for (let i = 0; i < pc; i++) namesOut.push(String(playerNames[i] || "").trim());
+
+      const payload = { holes: holesRows, player_names: namesOut, players_count: pc };
 
       await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, {
         method:"PUT",
