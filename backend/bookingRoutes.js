@@ -7848,13 +7848,17 @@ router.post("/course-admin/booking-checkin", requireCourseAdmin, async (req, res
     // =========================
     // ✅ NORMAL BOOKINGS (TR-)
     // =========================
+    // ✅ FIX: booking_bookings does NOT have checked_in/updated_at columns.
+    // Store "checked in" state via status instead.
+    const newStatus = checkedIn ? "CHECKED_IN" : "CONFIRMED";
+
     const r2 = await db.query(
       `
       UPDATE booking_bookings
-      SET checked_in=$1, updated_at=now()
+      SET status=$1
       WHERE course_id=$2 AND reference=$3
       `,
-      [checkedIn, courseId, reference]
+      [newStatus, courseId, reference]
     );
 
     if (!r2.rowCount) {
