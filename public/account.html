@@ -724,9 +724,8 @@
       if (Array.isArray(data)) {
         allCourses = data;
 
-        const allowed = ["MiClub","Quick18"];
-        searchableCourses = data.filter(
-          c => allowed.includes(c.provider || "")
+        const allowed = ["MiClub", "Quick18", "TeeRadarBooking", "TeeRadar"];
+searchableCourses = data.filter(c => allowed.includes((c.provider || "").trim()));
         );
       }
     } catch (err) {
@@ -800,7 +799,7 @@
       div.className = "autocomplete-item";
       div.innerHTML = `
         <div>${c.name}</div>
-        <small>${c.provider || "Course"}${c.state ? " • " + c.state : ""}</small>
+        <small>${((c.provider || "Course") === "TeeRadarBooking" ? "TeeRadar" : (c.provider || "Course"))}${c.state ? " • " + c.state : ""}</small>
       `;
       div.addEventListener("click", () => {
         setHomeCourse({ name: c.name, id: c.id || null, state: c.state || null });
