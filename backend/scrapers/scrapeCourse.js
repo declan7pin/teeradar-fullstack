@@ -171,6 +171,8 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
     const playersBooked = Number(row.booked_players || 0);
     const remaining = Math.max(0, maxPlayers - playersBooked);
 
+    const bookingLink = `${SITE_URL}/book/${slug}`;
+
     out.push({
       course: courseName,
       courseName,
@@ -197,7 +199,11 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
       playersAvailable: remaining, // ✅ some UIs read this too
       availableSpots: remaining, // keep your existing naming too
 
-      bookUrl: `${SITE_URL}/book/${slug}`,
+      // ✅ ADD: some UIs expect url/bookingUrl instead of bookUrl
+      url: bookingLink,
+      bookingUrl: bookingLink,
+      booking_url: bookingLink,
+      bookUrl: bookingLink,
 
       // optional extra (won't break anything if UI ignores it)
       pricePerPlayerCents: Number(row.price_per_player_cents || 0),
