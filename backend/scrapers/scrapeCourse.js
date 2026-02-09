@@ -187,7 +187,9 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
     const maxPlayers = Number(row.max_players || 4);
 
     const playersBooked = Number(row.booked_players || 0);
-    const remaining = Math.max(0, maxPlayers - playersBooked);
+
+    // ✅ ONLY CHANGE: TeeRadarBooking slot math (minus 1)
+    const remaining = Math.max(0, maxPlayers - playersBooked - 1);
 
     out.push({
       course: courseName,
