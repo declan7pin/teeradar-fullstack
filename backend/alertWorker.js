@@ -27,11 +27,21 @@ const PERTH_LNG = 115.8613;
 const coursesPath = path.join(__dirname, "data", "courses.json");
 const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 
-const courses = rawCourses.map((c) => ({
-  ...c,
-  lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
-  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG,
-}));
+const courses = rawCourses.map((c) => {
+  let provider = (c.provider || "").trim();
+
+  // ✅ NORMALISE TeeRadar providers
+  if (provider.toLowerCase() === "teeradarbooking") {
+    provider = "TeeRadar";
+  }
+
+  return {
+    ...c,
+    provider,
+    lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
+    lng: typeof c.lng === "number" ? c.lng : PERTH_LNG,
+  };
+});
 
 const feeGroupsPath = path.join(__dirname, "data", "fee_groups.json");
 let feeGroups = {};
