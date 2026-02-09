@@ -4826,8 +4826,54 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-    // ✅ If UI passed timeId, derive routing keys from booking_times (this is the key fix)
+    // ✅ NEW: if UI did NOT pass timeId, try to derive from booking_times by (date+time+holes)
+    // This fixes cases where the UI sends tee_time but not routing keys (or sends inconsistent ones),
+    // and avoids later "it becomes available" / mismatch behaviour.
     let tee_time = tee_time_raw;
+    if (!timeId) {
+      const tr2 = await db.query(
+        `
+        SELECT
+          id,
+          holes,
+          split_part(tee_time,'|',1) AS tee_time_clean,
+          layout_key,
+          front_nine_key,
+          back_nine_key
+        FROM booking_times
+        WHERE course_id = $1
+          AND play_date = $2::date
+          AND holes = $3::int
+          AND split_part(tee_time,'|',1) = $4
+        ORDER BY id DESC
+        LIMIT 1;
+        `,
+        [courseId, playDate, holes, tee_time_raw]
+      );
+
+      const row2 = tr2.rows?.[0] || null;
+      if (row2?.id) {
+        tee_time = String(row2.tee_time_clean || tee_time_raw).trim();
+
+        // Prefer DB truth if UI keys missing / partial
+        layout_key = layout_key ?? normKey(row2.layout_key);
+        front_nine_key = front_nine_key ?? normKey(row2.front_nine_key);
+        back_nine_key = back_nine_key ?? normKey(row2.back_nine_key);
+
+        console.log("🧩 course-admin/booking derived from booking_times (no timeId)", {
+          derivedTimeId: row2.id,
+          tee_time_clean: tee_time,
+          keys_from_time_row: {
+            layout_key: normKey(row2.layout_key),
+            front_nine_key: normKey(row2.front_nine_key),
+            back_nine_key: normKey(row2.back_nine_key),
+          },
+          keys_final: { layout_key, front_nine_key, back_nine_key },
+        });
+      }
+    }
+
+    // ✅ If UI passed timeId, derive routing keys from booking_times (this is the key fix)
     if (timeId) {
       const tr = await db.query(
         `
