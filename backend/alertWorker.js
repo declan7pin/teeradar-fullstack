@@ -613,7 +613,39 @@ function findCourseByFavourite(fav) {
   course = courses.find((c) => c.name.toLowerCase().includes(lower));
   return course || null;
 }
+// ✅ ADD: TeeRadar/manual courses don't scrape — read available slots from DB instead
+async function fetchTeeRadarSlotsFromDb(course, criteria) {
+  const date = criteria.date;
+  const earliest = criteria.earliest || "00:00";
+  const latest = criteria.latest || "23:59";
+  const holes = criteria.holes ? Number(criteria.holes) : null;
+  const partySize = criteria.partySize ? Number(criteria.partySize) : null;
 
+  // try slug first, fallback to name
+  const slug = course.slug || course.course_slug || null;
+
+  // NOTE: adjust column names here ONLY if your slots table differs.
+  const { rows } = await db.query(
+    `
+    SELECT *
+    FROM slots
+    WHERE date = $1
+      AND (
+        ($2::text IS NOT NULL AND course_slug = $2)
+        OR
+        ($2::text IS NULL AND course_name = $3)
+      )
+      AND (time >= $4 AND time <= $5)
+      AND ($6::int IS NULL OR holes = $6)
+      AND ($7::int IS NULL OR players = $7 OR party_size = $7)
+      AND (is_available = TRUE OR available = TRUE)
+    ORDER BY time ASC
+    `,
+    [date, slug, course.name, earliest, latest, holes, partySize]
+  );
+
+  return rows || [];
+}
 // ---------------------------------------------------------
 // Core alert tick
 // ---------------------------------------------------------
@@ -747,7 +779,15 @@ async function runAlertTick() {
           };
 
           try {
-            const result = await scrapeCourse(course, criteria, feeGroups);
+            let result = [];
+const prov = (course.provider || "").toLowerCase();
+
+if (prov === "miclub" || prov === "quick18") {
+  result = await scrapeCourse(course, criteria, feeGroups);
+} else {
+  // ✅ TeeRadar/manual courses: read availability from DB instead of scraping
+  result = await fetchTeeRadarSlotsFromDb(course, criteria);
+}
             const count = Array.isArray(result) ? result.length : 0;
 
             console.log(
