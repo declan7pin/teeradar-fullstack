@@ -209,6 +209,19 @@ function cleanPlayerMap(obj) {
   }
   return out;
 }
+// -------------------------------------------------
+// ✅ NEW: ensure rounds.player_names exists (Postgres)
+// -------------------------------------------------
+async function ensurePlayerNamesColumn() {
+  try {
+    await db.query(`
+      ALTER TABLE rounds
+      ADD COLUMN IF NOT EXISTS player_names jsonb DEFAULT '[]'::jsonb;
+    `);
+  } catch (e) {
+    console.warn("ensurePlayerNamesColumn failed:", e?.message || e);
+  }
+}
 
 // -------------------------------------------------
 // ✅ NEW: "complete" heuristic to count a round as played
@@ -298,7 +311,7 @@ async function getRoundWithHoles(roundId) {
   const roundRow = await db.query(
     `
     SELECT id, user_id, course, layout, state, holes, par_mode, created_at,
-           players_count
+                      players_count, player_names
     FROM rounds
     WHERE id = $1
     LIMIT 1;
@@ -573,6 +586,8 @@ router.post("/", requireAuth, async (req, res) => {
 
       // ✅ NEW: players count (1–4)
       players_count = 1,
+            // ✅ NEW: player names (optional)
+      player_names = null,
     } = req.body || {};
 
     const holesNum = Number(holes);
@@ -591,6 +606,13 @@ router.post("/", requireAuth, async (req, res) => {
 
     // ✅ NEW
     const playersCount = clampPlayers(players_count);
+        // ✅ NEW: normalize player_names (array of strings, length = playersCount)
+    let playerNames = [];
+    if (Array.isArray(player_names)) {
+      playerNames = player_names.map((x) => String(x || "").trim());
+    }
+    playerNames.length = playersCount;
+    if (typeof playerNames[0] !== "string") playerNames[0] = "";
 
     let pars = null;
     let dists = null;
@@ -654,16 +676,17 @@ router.post("/", requireAuth, async (req, res) => {
     }
 
     const finalParMode = pars ? "published" : "blank";
-
+    
+    await ensurePlayerNamesColumn();
     await db.query("BEGIN");
 
     const roundInsert = await db.query(
       `
-      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, players_count)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, user_id, course, layout, state, holes, par_mode, created_at, players_count;
+      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, players_count, player_names)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+RETURNING id, user_id, course, layout, state, holes, par_mode, created_at, players_count, player_names;
       `,
-      [userId, String(course).trim(), layoutName, stateCode, holesNum, finalParMode, playersCount]
+            [userId, String(course).trim(), layoutName, stateCode, holesNum, finalParMode, playersCount, JSON.stringify(playerNames)]
     );
 
     const round = roundInsert.rows[0];
@@ -723,7 +746,7 @@ router.get("/", requireAuth, async (req, res) => {
     const { rows } = await db.query(
       `
       SELECT id, course, layout, state, holes, par_mode, created_at,
-             players_count
+                    players_count, player_names
       FROM rounds
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -788,7 +811,28 @@ router.put("/:id", requireAuth, async (req, res) => {
     if (!Array.isArray(holes)) {
       return res.status(400).json({ ok: false, error: "holes array is required" });
     }
+    // ✅ NEW: allow updating players_count + player_names from frontend
+    const newPlayersCount = clampPlayers(
+      req.body?.players_count ?? req.body?.playersCount ?? owner.players_count ?? 1
+    );
 
+    let newPlayerNames = [];
+    if (Array.isArray(req.body?.player_names)) {
+      newPlayerNames = req.body.player_names.map((x) => String(x || "").trim());
+    }
+    newPlayerNames.length = newPlayersCount;
+
+    await ensurePlayerNamesColumn();
+
+    await db.query(
+      `
+      UPDATE rounds
+      SET players_count = $2,
+          player_names = $3::jsonb
+      WHERE id = $1;
+      `,
+      [roundId, newPlayersCount, JSON.stringify(newPlayerNames)]
+    );
     await db.query("BEGIN");
 
     for (const h of holes) {
