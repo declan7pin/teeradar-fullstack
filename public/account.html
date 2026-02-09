@@ -718,22 +718,27 @@
   let searchableCourses = [];
 
   async function loadCourses() {
-    try {
-      const res = await fetch("/api/courses");
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        allCourses = data;
+  try {
+    const res = await fetch("/api/courses");
+    const data = await res.json();
 
-        const allowed = ["MiClub", "Quick18", "TeeRadarBooking", "TeeRadar"];
-searchableCourses = data.filter(c => allowed.includes((c.provider || "").trim()));
-        );
-      }
-    } catch (err) {
-      console.error("Failed to load courses for account page", err);
+    if (Array.isArray(data)) {
+      allCourses = data;
+
+      const allowed = ["MiClub", "Quick18", "TeeRadarBooking", "TeeRadar"];
+      searchableCourses = data.filter((c) =>
+        allowed.includes(String(c.provider || "").trim())
+      );
+    } else {
       allCourses = [];
       searchableCourses = [];
     }
+  } catch (err) {
+    console.error("Failed to load courses for account page", err);
+    allCourses = [];
+    searchableCourses = [];
   }
+}
 
   function showCourseDropdown(matches) {
     favDropdown.innerHTML = "";
