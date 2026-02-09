@@ -855,16 +855,30 @@
     }
 
     async function loadCoursesOnce(){
-      if (coursesLoaded) return;
-      coursesLoaded = true;
-      try{
-        const res = await fetch("/api/courses");
-        const data = await res.json();
-        coursesCache = Array.isArray(data) ? data : [];
-      }catch(e){
-        coursesCache = [];
-      }
-    }
+  if (coursesLoaded) return;
+  coursesLoaded = true;
+
+  try{
+    // ✅ ONLY allow autofill from submitted/approved scorecard templates
+    const res = await fetch("/api/rounds/templates");
+    const data = await res.json();
+
+    // expected shape: { courses: [...] }
+    const arr = Array.isArray(data?.courses) ? data.courses : [];
+
+    // normalize to what the autocomplete expects
+    coursesCache = arr
+      .map((c) => ({
+        name: String(c?.name || c?.course || "").trim(),
+        state: String(c?.state || "").trim().toUpperCase(),
+        holes: Number(c?.holes) || null,
+      }))
+      .filter((c) => c.name && c.state);
+
+  }catch(e){
+    coursesCache = [];
+  }
+}
 
     async function loadScorecardsStateOnce(st){
       const state = String(st || "").trim().toUpperCase();
@@ -983,18 +997,25 @@
       items.forEach(c => {
         const div = document.createElement("div");
         div.className = "autocomplete-item";
-        const label = c.name || c.course || c.title || "";
-        const st = (c.state || "").toUpperCase();
-        const meta = st ? `State: ${st}` : "";
+        const baseName = c.name || c.course || c.title || "";
+const st = (c.state || "").toUpperCase();
+const h = Number(c.holes) || null;
+
+const label = h ? `${baseName} (${h} holes)` : baseName;
+const meta = st ? `State: ${st}` : "";
 
         div.innerHTML = `${escapeHtml(label)}${meta ? `<small>${escapeHtml(meta)}</small>` : ""}`;
 
         div.addEventListener("click", async () => {
           const nm = c.name || c.course || c.title || "";
-          const st2 = (c.state || "").toUpperCase();
+const st2 = (c.state || "").toUpperCase();
+const h2 = Number(c.holes) || null;
 
-          courseEl.value = nm;
-          if (st2 && stateEl) stateEl.value = st2;
+// ✅ set course WITHOUT "(18 holes)" suffix
+courseEl.value = nm;
+
+if (st2 && stateEl) stateEl.value = st2;
+if (h2 && holesEl) holesEl.value = String(h2);
 
           selectedCourseKey = courseKey(nm, st2 || stateEl.value);
           courseAutoList.style.display = "none";
