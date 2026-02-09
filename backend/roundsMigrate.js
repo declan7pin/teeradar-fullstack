@@ -16,6 +16,7 @@ export async function ensureRoundsTables() {
 
       holes INTEGER NOT NULL,
       par_mode TEXT NOT NULL,
+      players_count INTEGER NOT NULL DEFAULT 1,
 
       created_at TIMESTAMP DEFAULT NOW(),
 
@@ -31,8 +32,11 @@ export async function ensureRoundsTables() {
 
       hole_number INTEGER NOT NULL,
       par INTEGER,
+      distance_m INTEGER,
       strokes INTEGER,
       putts INTEGER,
+      strokes_by_player JSONB NOT NULL DEFAULT '{}'::jsonb,
+      putts_by_player JSONB NOT NULL DEFAULT '{}'::jsonb,
 
       CONSTRAINT fk_round
         FOREIGN KEY (round_id)
@@ -48,6 +52,19 @@ export async function ensureRoundsTables() {
 
     CREATE INDEX IF NOT EXISTS idx_round_holes_round
       ON round_holes(round_id);
+
+    -- ✅ MIGRATIONS / SAFE UPGRADES (won’t fail if column already exists)
+    ALTER TABLE rounds
+      ADD COLUMN IF NOT EXISTS players_count INTEGER NOT NULL DEFAULT 1;
+
+    ALTER TABLE round_holes
+      ADD COLUMN IF NOT EXISTS distance_m INTEGER;
+
+    ALTER TABLE round_holes
+      ADD COLUMN IF NOT EXISTS strokes_by_player JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+    ALTER TABLE round_holes
+      ADD COLUMN IF NOT EXISTS putts_by_player JSONB NOT NULL DEFAULT '{}'::jsonb;
   `;
 
   try {
