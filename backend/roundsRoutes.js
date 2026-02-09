@@ -9,10 +9,49 @@ import { requireAuth } from "./auth.js";
 // ✅ ADDED: record round_played into Postgres analytics
 import { recordEvent } from "./analytics.js";
 
+// ✅ OPTIONAL: email admin when a new course is submitted
+import { Resend } from "resend";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+
+// -------------------------------------------------
+// ✅ OPTIONAL: Admin email alerts (Resend)
+// -------------------------------------------------
+const resendKey = (process.env.RESEND_API_KEY || "").trim();
+const resend = resendKey ? new Resend(resendKey) : null;
+const ADMIN_ALERT_EMAIL = (process.env.ADMIN_ALERT_EMAIL || "").trim(); // set to your TeeRadar inbox
+
+async function sendAdminAlert(subject, html) {
+  if (!resend || !ADMIN_ALERT_EMAIL) return;
+  try {
+    await resend.emails.send({
+      from: "TeeRadar <no-reply@teeradar.com.au>", // must be a verified sender in Resend
+      to: [ADMIN_ALERT_EMAIL],
+      subject,
+      html,
+    });
+  } catch (e) {
+    console.warn("Admin alert email failed:", e?.message || e);
+  }
+}
+
+// -------------------------------------------------
+// ✅ Admin guard (uses req.isSuperAdmin set in server.js)
+// -------------------------------------------------
+function requireSuperAdmin(req, res, next) {
+  try {
+    const email = String(req.user?.email || "").trim().toLowerCase();
+    const fn = req.isSuperAdmin;
+    const ok = typeof fn === "function" ? !!fn(email) : false;
+    if (!ok) return res.status(403).json({ ok: false, error: "forbidden" });
+    return next();
+  } catch {
+    return res.status(403).json({ ok: false, error: "forbidden" });
+  }
+}
 
 // -------------------------------------------------
 // Scorecards loader (static JSON files in backend/data/scorecards)
@@ -173,18 +212,13 @@ function cleanPlayerMap(obj) {
 
 // -------------------------------------------------
 // ✅ NEW: "complete" heuristic to count a round as played
-// - We mark as played if ALL holes have a numeric strokes value for Player 1.
-// - This prevents logging while someone is mid-round.
-// - Deduped in analytics by round_id anyway.
 // -------------------------------------------------
 function isCompleteFromPayload(holesArr, holesCount) {
   if (!Array.isArray(holesArr)) return false;
   if (!Number.isFinite(Number(holesCount))) return false;
 
-  // Must contain at least the right number of holes (or more)
   if (holesArr.length < Number(holesCount)) return false;
 
-  // Build a map hole_number -> strokes for player 1
   const strokesByHole = new Map();
 
   for (const h of holesArr) {
@@ -210,11 +244,51 @@ function isCompleteFromPayload(holesArr, holesCount) {
 }
 
 // -------------------------------------------------
+// ✅ NEW: Scorecard templates in DB (global + pending)
+// -------------------------------------------------
+async function getTemplateFromDb(course, state, holes) {
+  const nameNorm = normaliseCourseName(course);
+  const st = String(state || "").trim().toUpperCase();
+  const h = Number(holes);
+
+  const { rows } = await db.query(
+    `
+    SELECT id, name, state, holes, pars_json, dists_json
+    FROM scorecard_courses
+    WHERE LOWER(name) = $1 AND state = $2 AND holes = $3
+    LIMIT 1;
+    `,
+    [nameNorm, st, h]
+  );
+
+  if (!rows.length) return null;
+
+  const r = rows[0];
+  const pars = Array.isArray(r.pars_json) ? r.pars_json : null;
+  const dists = Array.isArray(r.dists_json) ? r.dists_json : null;
+
+  return { id: r.id, name: r.name, state: r.state, holes: r.holes, pars, dists };
+}
+
+function isCompleteTemplateArrays(pars, dists, holes) {
+  if (!Array.isArray(pars) || pars.length !== holes) return false;
+  if (!Array.isArray(dists) || dists.length !== holes) return false;
+
+  for (let i = 0; i < holes; i++) {
+    const p = Number(pars[i]);
+    const d = Number(dists[i]);
+    if (!Number.isFinite(p) || p < 3 || p > 6) return false;
+    if (!Number.isFinite(d) || d < 40 || d > 800) return false;
+  }
+  return true;
+}
+
+// -------------------------------------------------
 // Helpers
 // -------------------------------------------------
 async function getRoundOwner(roundId) {
   const { rows } = await db.query(
-    `SELECT id, user_id FROM rounds WHERE id = $1 LIMIT 1`,
+    `SELECT id, user_id, course, state, holes FROM rounds WHERE id = $1 LIMIT 1`,
     [Number(roundId)]
   );
   return rows[0] || null;
@@ -236,7 +310,7 @@ async function getRoundWithHoles(roundId) {
 
   const holesRows = await db.query(
     `
-    SELECT hole_number, par, strokes, putts,
+    SELECT hole_number, par, distance_m, strokes, putts,
            strokes_by_player, putts_by_player
     FROM round_holes
     WHERE round_id = $1
@@ -247,6 +321,237 @@ async function getRoundWithHoles(roundId) {
 
   return { round: roundRow.rows[0], holes: holesRows.rows || [] };
 }
+
+// -------------------------------------------------
+// ✅ NEW: Template endpoints
+// Mounted at /api/rounds, so:
+// - GET  /api/rounds/templates
+// - POST /api/rounds/templates/submit/:roundId
+// - Admin: GET  /api/rounds/admin/pending-courses
+// - Admin: POST /api/rounds/admin/pending-courses/:id/approve
+// -------------------------------------------------
+router.get("/templates", async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `
+      SELECT id, name, state, holes, pars_json, dists_json, updated_at
+      FROM scorecard_courses
+      ORDER BY state ASC, name ASC, holes ASC;
+      `
+    );
+
+    return res.json({
+      ok: true,
+      courses: rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        state: r.state,
+        holes: r.holes,
+        pars: Array.isArray(r.pars_json) ? r.pars_json : [],
+        dists: Array.isArray(r.dists_json) ? r.dists_json : [],
+        updatedAt: r.updated_at,
+      })),
+    });
+  } catch (err) {
+    console.error("GET /api/rounds/templates error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// User submits a course template based on their saved round
+router.post("/templates/submit/:roundId", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const roundId = Number(req.params.roundId);
+
+    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
+    if (!Number.isFinite(roundId) || roundId <= 0) {
+      return res.status(400).json({ ok: false, error: "invalid round id" });
+    }
+
+    const owner = await getRoundOwner(roundId);
+    if (!owner) return res.status(404).json({ ok: false, error: "round not found" });
+    if (owner.user_id !== userId) return res.status(403).json({ ok: false, error: "forbidden" });
+
+    const holesCount = Number(owner.holes);
+    const courseName = String(owner.course || "").trim();
+    const stateCode = String(owner.state || "").trim().toUpperCase();
+
+    // Pull pars + distances from round_holes
+    const { rows } = await db.query(
+      `
+      SELECT hole_number, par, distance_m
+      FROM round_holes
+      WHERE round_id = $1
+      ORDER BY hole_number ASC;
+      `,
+      [roundId]
+    );
+
+    const pars = new Array(holesCount).fill(null);
+    const dists = new Array(holesCount).fill(null);
+
+    for (const r of rows) {
+      const i = Number(r.hole_number) - 1;
+      if (i < 0 || i >= holesCount) continue;
+      pars[i] = r.par === null || typeof r.par === "undefined" ? null : Number(r.par);
+      dists[i] = r.distance_m === null || typeof r.distance_m === "undefined" ? null : Number(r.distance_m);
+    }
+
+    if (!isCompleteTemplateArrays(pars, dists, holesCount)) {
+      return res.status(400).json({
+        ok: false,
+        error: "template_incomplete",
+        message: "Please enter par + distance for every hole before submitting this course.",
+      });
+    }
+
+    // If already approved template exists, short-circuit
+    const existing = await getTemplateFromDb(courseName, stateCode, holesCount);
+    if (existing?.id) {
+      return res.json({ ok: true, alreadyApproved: true, courseId: existing.id });
+    }
+
+    // Insert pending
+    const ins = await db.query(
+      `
+      INSERT INTO courses_pending (name, state, holes, pars_json, dists_json, submitted_by_user_id)
+      VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6)
+      RETURNING id;
+      `,
+      [
+        normaliseCourseName(courseName), // store normalized
+        stateCode,
+        holesCount,
+        JSON.stringify(pars),
+        JSON.stringify(dists),
+        Number(userId),
+      ]
+    );
+
+    const pendingId = ins.rows[0]?.id;
+
+    // Email admin (optional)
+    await sendAdminAlert(
+      `New user course submitted: ${courseName} (${holesCount})`,
+      `
+        <p><b>New course submitted</b></p>
+        <p>
+          <b>Name:</b> ${courseName}<br/>
+          <b>State:</b> ${stateCode}<br/>
+          <b>Holes:</b> ${holesCount}<br/>
+          <b>Pending ID:</b> ${pendingId}<br/>
+          <b>Submitted by user_id:</b> ${userId}
+        </p>
+        <p>Approve it in Course Admin → Pending Courses.</p>
+      `
+    );
+
+    return res.json({ ok: true, pendingId });
+  } catch (err) {
+    console.error("POST /api/rounds/templates/submit/:roundId error:", err);
+    return res.status(500).json({ ok: false, error: "internal error", detail: err?.message });
+  }
+});
+
+// Admin: list pending submissions
+router.get("/admin/pending-courses", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `
+      SELECT id, name, state, holes, submitted_by_user_id, created_at
+      FROM courses_pending
+      WHERE approved_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT 500;
+      `
+    );
+    return res.json({ ok: true, pending: rows });
+  } catch (err) {
+    console.error("GET /api/rounds/admin/pending-courses error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// Admin: approve pending -> upsert into scorecard_courses + reward user (once)
+router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ ok: false, error: "invalid_id" });
+
+    const { rows } = await db.query(
+      `
+      SELECT id, name, state, holes, pars_json, dists_json, submitted_by_user_id
+      FROM courses_pending
+      WHERE id = $1 AND approved_at IS NULL
+      LIMIT 1;
+      `,
+      [id]
+    );
+
+    if (!rows.length) return res.status(404).json({ ok: false, error: "not_found" });
+
+    const p = rows[0];
+
+    await db.query("BEGIN");
+
+    // Upsert into approved templates
+    await db.query(
+      `
+      INSERT INTO scorecard_courses (name, state, holes, pars_json, dists_json)
+      VALUES ($1,$2,$3,$4::jsonb,$5::jsonb)
+      ON CONFLICT (name, state, holes)
+      DO UPDATE SET
+        pars_json = EXCLUDED.pars_json,
+        dists_json = EXCLUDED.dists_json,
+        updated_at = now();
+      `,
+      [p.name, p.state, p.holes, JSON.stringify(p.pars_json), JSON.stringify(p.dists_json)]
+    );
+
+    // Mark approved
+    await db.query(`UPDATE courses_pending SET approved_at = now() WHERE id = $1;`, [id]);
+
+    // Reward: 1 month Basic free, once per user
+    if (p.submitted_by_user_id) {
+      const u = await db.query(
+        `SELECT id, course_bonus_used, basic_free_until FROM users WHERE id = $1 LIMIT 1;`,
+        [Number(p.submitted_by_user_id)]
+      );
+
+      if (u.rows.length) {
+        const user = u.rows[0];
+        const used = Number(user.course_bonus_used || 0);
+
+        if (used === 0) {
+          // Extend from later of now or existing basic_free_until
+          await db.query(
+            `
+            UPDATE users
+            SET
+              course_bonus_used = 1,
+              basic_free_until = CASE
+                WHEN basic_free_until IS NULL OR basic_free_until < now()
+                  THEN now() + interval '30 days'
+                ELSE basic_free_until + interval '30 days'
+              END
+            WHERE id = $1;
+            `,
+            [Number(user.id)]
+          );
+        }
+      }
+    }
+
+    await db.query("COMMIT");
+
+    return res.json({ ok: true });
+  } catch (err) {
+    try { await db.query("ROLLBACK"); } catch {}
+    console.error("POST /api/rounds/admin/pending-courses/:id/approve error:", err);
+    return res.status(500).json({ ok: false, error: "internal error", detail: err?.message });
+  }
+});
 
 // -------------------------------------------------
 // Routes (mounted at /api/rounds)
@@ -288,16 +593,23 @@ router.post("/", requireAuth, async (req, res) => {
     const playersCount = clampPlayers(players_count);
 
     let pars = null;
+    let dists = null;
+
+    // ✅ 0) First try DB template (global)
+    if (mode === "published" && stateCode) {
+      const t = await getTemplateFromDb(String(course), stateCode, holesNum);
+      if (t && Array.isArray(t.pars) && t.pars.length === holesNum) pars = t.pars.slice(0, holesNum);
+      if (t && Array.isArray(t.dists) && t.dists.length === holesNum) dists = t.dists.slice(0, holesNum);
+    }
 
     // 1) If frontend supplied publishedPars and it's valid length, accept it (optional)
-    if (mode === "published" && Array.isArray(publishedPars) && publishedPars.length === holesNum) {
+    if (mode === "published" && !pars && Array.isArray(publishedPars) && publishedPars.length === holesNum) {
       pars = publishedPars.map((p) => (p === null || p === undefined || p === "" ? null : Number(p)));
       if (!pars.every((p) => p === null || Number.isFinite(p))) pars = null;
     }
 
     // 2) Otherwise, load from backend/data/scorecards/*.json
     if (mode === "published" && !pars) {
-      // Try direct match (same holes)
       const cardSame = findScorecard({
         course: String(course),
         layout: layoutName || "",
@@ -324,7 +636,6 @@ router.post("/", requireAuth, async (req, res) => {
         if (card18 && Array.isArray(card18.pars) && card18.pars.length === 18) {
           pars = sliceParsForNineFromEighteen(card18.pars, nineLoop);
         } else {
-          // Try ignore layout for 18-hole
           const card18NoLayout = findScorecard({
             course: String(course),
             layout: "",
@@ -359,14 +670,15 @@ router.post("/", requireAuth, async (req, res) => {
 
     for (let i = 1; i <= holesNum; i++) {
       const parVal = pars ? (Number.isFinite(Number(pars[i - 1])) ? Number(pars[i - 1]) : null) : null;
+      const distVal = dists ? (Number.isFinite(Number(dists[i - 1])) ? Number(dists[i - 1]) : null) : null;
 
       await db.query(
         `
-        INSERT INTO round_holes (round_id, hole_number, par, strokes, putts, strokes_by_player, putts_by_player)
-        VALUES ($1, $2, $3, NULL, NULL, '{}'::jsonb, '{}'::jsonb)
+        INSERT INTO round_holes (round_id, hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player)
+        VALUES ($1, $2, $3, $4, NULL, NULL, '{}'::jsonb, '{}'::jsonb)
         ON CONFLICT (round_id, hole_number) DO NOTHING;
         `,
-        [round.id, i, parVal]
+        [round.id, i, parVal, distVal]
       );
     }
 
@@ -374,7 +686,7 @@ router.post("/", requireAuth, async (req, res) => {
 
     const holesRows = await db.query(
       `
-      SELECT hole_number, par, strokes, putts, strokes_by_player, putts_by_player
+      SELECT hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player
       FROM round_holes
       WHERE round_id = $1
       ORDER BY hole_number ASC;
@@ -387,6 +699,7 @@ router.post("/", requireAuth, async (req, res) => {
       round,
       holes: holesRows.rows,
       scorecardUsed: !!pars,
+      templateUsed: !!(pars && dists),
     });
   } catch (err) {
     try { await db.query("ROLLBACK"); } catch {}
@@ -487,6 +800,13 @@ router.put("/:id", requireAuth, async (req, res) => {
           ? null
           : Number(h.par);
 
+      const distVal =
+        h?.distance_m === null || typeof h?.distance_m === "undefined" || h?.distance_m === ""
+          ? (h?.distance === null || typeof h?.distance === "undefined" || h?.distance === ""
+              ? null
+              : Number(h.distance))
+          : Number(h.distance_m);
+
       // ✅ NEW: accept multi-player JSON maps
       const strokesMap = cleanPlayerMap(h?.strokes_by_player || h?.strokesByPlayer || {});
       const puttsMap = cleanPlayerMap(h?.putts_by_player || h?.puttsByPlayer || {});
@@ -506,10 +826,11 @@ router.put("/:id", requireAuth, async (req, res) => {
 
       await db.query(
         `
-        INSERT INTO round_holes (round_id, hole_number, par, strokes, putts, strokes_by_player, putts_by_player)
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
+        INSERT INTO round_holes (round_id, hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player)
+        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb)
         ON CONFLICT (round_id, hole_number) DO UPDATE SET
           par = EXCLUDED.par,
+          distance_m = EXCLUDED.distance_m,
           strokes = EXCLUDED.strokes,
           putts = EXCLUDED.putts,
           strokes_by_player = EXCLUDED.strokes_by_player,
@@ -519,6 +840,7 @@ router.put("/:id", requireAuth, async (req, res) => {
           roundId,
           holeNum,
           Number.isFinite(parVal) ? parVal : null,
+          Number.isFinite(distVal) ? distVal : null,
           Number.isFinite(strokesVal) ? strokesVal : null,
           Number.isFinite(puttsVal) ? puttsVal : null,
           JSON.stringify(strokesMap),
@@ -576,7 +898,7 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
     if (!owner) return res.status(404).json({ ok: false, error: "round not found" });
     if (owner.user_id !== userId) return res.status(403).json({ ok: false, error: "forbidden" });
 
-    const { strokes, putts, par } = req.body || {};
+    const { strokes, putts, par, distance_m, distance } = req.body || {};
 
     const strokesVal =
       strokes === null || typeof strokes === "undefined" || strokes === ""
@@ -593,10 +915,16 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
         ? null
         : Number(par);
 
+    const distValRaw = (typeof distance_m !== "undefined") ? distance_m : distance;
+    const distVal =
+      distValRaw === null || typeof distValRaw === "undefined" || distValRaw === ""
+        ? null
+        : Number(distValRaw);
+
     await db.query(
       `
-      INSERT INTO round_holes (round_id, hole_number, par, strokes, putts, strokes_by_player, putts_by_player)
-      VALUES ($1, $2, NULL, NULL, NULL, '{}'::jsonb, '{}'::jsonb)
+      INSERT INTO round_holes (round_id, hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player)
+      VALUES ($1, $2, NULL, NULL, NULL, NULL, '{}'::jsonb, '{}'::jsonb)
       ON CONFLICT (round_id, hole_number) DO NOTHING;
       `,
       [roundId, holeNum]
@@ -608,9 +936,10 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
       SET
         strokes = $3,
         putts = $4,
-        par = COALESCE($5, par)
+        par = COALESCE($5, par),
+        distance_m = COALESCE($6, distance_m)
       WHERE round_id = $1 AND hole_number = $2
-      RETURNING hole_number, par, strokes, putts, strokes_by_player, putts_by_player;
+      RETURNING hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player;
       `,
       [
         roundId,
@@ -618,6 +947,7 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
         Number.isFinite(strokesVal) ? strokesVal : null,
         Number.isFinite(puttsVal) ? puttsVal : null,
         Number.isFinite(parVal) ? parVal : null,
+        Number.isFinite(distVal) ? distVal : null,
       ]
     );
 
