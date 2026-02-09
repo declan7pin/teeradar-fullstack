@@ -20,6 +20,21 @@ function toMinutes(t) {
 }
 
 /**
+ * Normalize time strings to "HH:MM"
+ * Handles "HH:MM:SS" (Postgres TIME), "H:MM", etc.
+ */
+function normalizeHHMM(t) {
+  const s = String(t || "").trim();
+  if (!s) return "";
+  const parts = s.split(":");
+  if (parts.length < 2) return "";
+  const hh = String(parts[0] || "").padStart(2, "0");
+  const mm = String(parts[1] || "").padStart(2, "0");
+  if (!/^\d{2}$/.test(hh) || !/^\d{2}$/.test(mm)) return "";
+  return `${hh}:${mm}`;
+}
+
+/**
  * Build a MiClub timesheet URL for a course + date,
  * using fee_groups.json where available.
  *
@@ -156,7 +171,10 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
 
   const out = [];
   for (const row of r.rows || []) {
-    const t = String(row.tee_time || "").trim();
+    const tRaw = String(row.tee_time || "").trim();
+    const t = normalizeHHMM(tRaw); // ✅ CRITICAL: match MiClub/Quick18 time format
+    if (!t) continue;
+
     const mins = toMinutes(t);
 
     if (earliestMin !== null && mins !== null && mins < earliestMin) continue;
@@ -167,9 +185,11 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
 
     const maxPlayers = Number(row.max_players || 4);
 
-    // ✅ FIX: these were missing (caused Hillview to be red + broke builds)
     const playersBooked = Number(row.booked_players || 0);
     const remaining = Math.max(0, maxPlayers - playersBooked);
+
+    // ✅ enforce partySize here too (keeps results consistent even if frontend re-filters)
+    if (remaining < partySize) continue;
 
     const bookingLink = `${SITE_URL}/book/${slug}`;
 
@@ -182,6 +202,7 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
       provider: "TeeRadarBooking",
       date,
       time: t,
+      tee_time: t, // ✅ common alias some frontends use
       holes,
       price: null,
 
@@ -189,23 +210,22 @@ async function scrapeTeeRadarBookingCourse(course, criteria) {
       maxPlayers,
       playersBooked,
 
-      // ✅ ADD: emit snake_case + variants so normalizeRemaining() ALWAYS detects capacity
+      // ✅ emit snake_case + variants so normalizeRemaining() ALWAYS detects capacity
       max_players: maxPlayers,
       booked_players: playersBooked,
       bookedPlayers: playersBooked,
 
-      remaining, // ✅ your strict logic needs this
-      spotsAvailable: remaining, // ✅ some UIs read this
-      playersAvailable: remaining, // ✅ some UIs read this too
-      availableSpots: remaining, // keep your existing naming too
+      remaining,
+      spotsAvailable: remaining,
+      playersAvailable: remaining,
+      availableSpots: remaining,
 
-      // ✅ ADD: some UIs expect url/bookingUrl instead of bookUrl
+      // ✅ URL variants (some UI uses url/bookingUrl)
       url: bookingLink,
       bookingUrl: bookingLink,
       booking_url: bookingLink,
       bookUrl: bookingLink,
 
-      // optional extra (won't break anything if UI ignores it)
       pricePerPlayerCents: Number(row.price_per_player_cents || 0),
     });
   }
