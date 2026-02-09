@@ -2104,11 +2104,13 @@ function normalizeRemaining(s) {
       const courseId = `${(c.state || "NA").toString().toUpperCase()}::${c.id || c.name}`;
       const provider = c.provider || "Other";
 
-      const cached = getCachedSlots({
+            const cached = getCachedSlots({
         courseId,
         date,
         holes: holesValue || null,
         partySize: criteria.partySize,
+        earliest,   // ✅ ADD
+        latest,     // ✅ ADD
       });
 
       if (cached) {
