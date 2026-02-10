@@ -220,7 +220,7 @@
       width:100%;
       border-collapse:separate;
       border-spacing:0;
-      min-width:980px;
+      min-width:1060px;
     }
     th, td{
       padding:10px 10px;
@@ -358,6 +358,32 @@
       opacity:.95;
       background:#f8fafc !important;
     }
+
+    /* ✅ NEW: modal */
+    .modalBack{
+      position:fixed;
+      inset:0;
+      background:rgba(2,6,23,.45);
+      display:none;
+      z-index:999;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+    }
+    .modal{
+      width:min(520px, 100%);
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px;
+      box-shadow:0 20px 60px rgba(15,23,42,.25);
+    }
+    .modal h3{
+      margin:0 0 8px 0;
+      font-size:1.05rem;
+    }
+    .modal .muted{font-weight:800}
+    .modal .actions{justify-content:flex-end}
   </style>
 </head>
 <body>
@@ -544,6 +570,9 @@
               <div id="scPills"></div>
             </div>
             <div class="rightActions">
+              <!-- ✅ NEW: submit template button (only when needed) -->
+              <button class="btn2 secondary" id="submitCourseBtn" type="button" style="display:none;" disabled>Submit course for approval</button>
+
               <button class="btn2 secondary" id="saveAllBtn" type="button" disabled>Save</button>
               <button class="btn2 danger" id="deleteRoundBtn" type="button" disabled>Delete</button>
             </div>
@@ -575,11 +604,34 @@
       </div>
 
       <div class="notice" style="margin-top:16px;">
-        <strong>Important:</strong> Multi-player rounds require backend support (players_count + JSON per-hole fields).  
-        If Save doesn't persist multi-player columns, update backend files below.
+        <strong>Important:</strong> If your course doesn’t have published pars/distances yet, fill in <strong>Par + Distance</strong> for every hole, save, then click <strong>Submit course for approval</strong>.
       </div>
     </div>
   </main>
+
+  <!-- ✅ NEW: Submit modal (email required) -->
+  <div class="modalBack" id="submitModalBack" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="submitModalTitle">
+      <h3 id="submitModalTitle">Submit course for approval</h3>
+      <div class="muted">
+        We need an email address so Declan can send you your manual coupon code once your course is approved.
+      </div>
+
+      <label for="submitEmail">Your email</label>
+      <input id="submitEmail" type="email" placeholder="you@example.com" autocomplete="email" />
+
+      <div class="muted" style="margin-top:10px;">
+        Before submitting: make sure <strong>every hole</strong> has <strong>Par</strong> and <strong>Distance (m)</strong> filled in.
+      </div>
+
+      <div class="actions">
+        <button class="btn2 secondary" id="submitCancelBtn" type="button">Cancel</button>
+        <button class="btn2" id="submitConfirmBtn" type="button">Submit</button>
+      </div>
+
+      <div id="submitToast" class="toast" style="margin-top:10px;"></div>
+    </div>
+  </div>
 
   <script>
     // -----------------------------
@@ -738,6 +790,14 @@
       }catch{}
     }
 
+    // ✅ NEW: submission email cache
+    function getCachedSubmitEmail(){
+      try { return String(localStorage.getItem("scorecard_submit_email") || "").trim().toLowerCase(); } catch { return ""; }
+    }
+    function setCachedSubmitEmail(v){
+      try { localStorage.setItem("scorecard_submit_email", String(v||"").trim().toLowerCase()); } catch {}
+    }
+
     // -----------------------------
     // UI refs
     // -----------------------------
@@ -794,6 +854,14 @@
     // ✅ NEW refs
     const playerNamesWrap = document.getElementById("playerNamesWrap");
     const namesGrid = document.getElementById("namesGrid");
+
+    // ✅ NEW: submit UI
+    const submitCourseBtn = document.getElementById("submitCourseBtn");
+    const submitModalBack = document.getElementById("submitModalBack");
+    const submitEmail = document.getElementById("submitEmail");
+    const submitCancelBtn = document.getElementById("submitCancelBtn");
+    const submitConfirmBtn = document.getElementById("submitConfirmBtn");
+    const submitToast = document.getElementById("submitToast");
 
     // -----------------------------
     // Helpers
@@ -854,31 +922,37 @@
       return label;
     }
 
+    function isValidEmail(v){
+      const s = String(v||"").trim();
+      if (!s) return false;
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+    }
+
     async function loadCoursesOnce(){
-  if (coursesLoaded) return;
-  coursesLoaded = true;
+      if (coursesLoaded) return;
+      coursesLoaded = true;
 
-  try{
-    // ✅ ONLY allow autofill from submitted/approved scorecard templates
-    const res = await fetch("/api/rounds/templates");
-    const data = await res.json();
+      try{
+        // ✅ ONLY allow autofill from submitted/approved scorecard templates
+        const res = await fetch("/api/rounds/templates");
+        const data = await res.json();
 
-    // expected shape: { courses: [...] }
-    const arr = Array.isArray(data?.courses) ? data.courses : [];
+        // expected shape: { courses: [...] }
+        const arr = Array.isArray(data?.courses) ? data.courses : [];
 
-    // normalize to what the autocomplete expects
-    coursesCache = arr
-      .map((c) => ({
-        name: String(c?.name || c?.course || "").trim(),
-        state: String(c?.state || "").trim().toUpperCase(),
-        holes: Number(c?.holes) || null,
-      }))
-      .filter((c) => c.name && c.state);
+        // normalize to what the autocomplete expects
+        coursesCache = arr
+          .map((c) => ({
+            name: String(c?.name || c?.course || "").trim(),
+            state: String(c?.state || "").trim().toUpperCase(),
+            holes: Number(c?.holes) || null,
+          }))
+          .filter((c) => c.name && c.state);
 
-  }catch(e){
-    coursesCache = [];
-  }
-}
+      }catch(e){
+        coursesCache = [];
+      }
+    }
 
     async function loadScorecardsStateOnce(st){
       const state = String(st || "").trim().toUpperCase();
@@ -998,24 +1072,24 @@
         const div = document.createElement("div");
         div.className = "autocomplete-item";
         const baseName = c.name || c.course || c.title || "";
-const st = (c.state || "").toUpperCase();
-const h = Number(c.holes) || null;
+        const st = (c.state || "").toUpperCase();
+        const h = Number(c.holes) || null;
 
-const label = h ? `${baseName} (${h} holes)` : baseName;
-const meta = st ? `State: ${st}` : "";
+        const label = h ? `${baseName} (${h} holes)` : baseName;
+        const meta = st ? `State: ${st}` : "";
 
         div.innerHTML = `${escapeHtml(label)}${meta ? `<small>${escapeHtml(meta)}</small>` : ""}`;
 
         div.addEventListener("click", async () => {
           const nm = c.name || c.course || c.title || "";
-const st2 = (c.state || "").toUpperCase();
-const h2 = Number(c.holes) || null;
+          const st2 = (c.state || "").toUpperCase();
+          const h2 = Number(c.holes) || null;
 
-// ✅ set course WITHOUT "(18 holes)" suffix
-courseEl.value = nm;
+          // ✅ set course WITHOUT "(18 holes)" suffix
+          courseEl.value = nm;
 
-if (st2 && stateEl) stateEl.value = st2;
-if (h2 && holesEl) holesEl.value = String(h2);
+          if (st2 && stateEl) stateEl.value = st2;
+          if (h2 && holesEl) holesEl.value = String(h2);
 
           selectedCourseKey = courseKey(nm, st2 || stateEl.value);
           courseAutoList.style.display = "none";
@@ -1250,7 +1324,7 @@ if (h2 && holesEl) holesEl.value = String(h2);
 
     nineSingleEl.addEventListener("change", async () => {
       uiNineSingle = String(nineSingleEl.value || "").trim();
-      layoutEl.value = uiNineSingle || "";
+      layoutEl.value = uiNineSingle || layoutEl.value;
       await refreshNinesAndTeesUI();
     });
 
@@ -1492,6 +1566,16 @@ if (h2 && holesEl) holesEl.value = String(h2);
       scoreHead.innerHTML = th1 + th2;
     }
 
+    // ✅ NEW: detect if course needs submission (no published meta)
+    function shouldOfferSubmission(round, meta){
+      const mode = String(round?.par_mode || "").toLowerCase();
+      // only offer when user is in published mode AND we have no distances/par data available
+      const hasMetaPars = Array.isArray(meta?.pars) && meta.pars.length === Number(round?.holes || 0);
+      const hasMetaDists = Array.isArray(meta?.distances) && meta.distances.length === Number(round?.holes || 0);
+      const needs = (mode === "published" || mode === "user") && (!hasMetaPars || !hasMetaDists);
+      return !!needs;
+    }
+
     async function renderScorecard(round){
       currentRound = round;
       currentRoundId = round?.id || null;
@@ -1504,6 +1588,12 @@ if (h2 && holesEl) holesEl.value = String(h2);
         scorecardWrap.style.display = "none";
         saveAllBtn.disabled = true;
         deleteRoundBtn.disabled = true;
+
+        if (submitCourseBtn){
+          submitCourseBtn.style.display = "none";
+          submitCourseBtn.disabled = true;
+        }
+
         scTitleEl.textContent = "Scorecard";
         scSubEl.textContent = "Select a round to begin.";
         scPillsEl.innerHTML = "";
@@ -1586,6 +1676,13 @@ if (h2 && holesEl) holesEl.value = String(h2);
       const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
       const teeName = meta?.teeName || "";
 
+      // ✅ show submit button only when needed
+      if (submitCourseBtn){
+        const offer = shouldOfferSubmission(round, meta);
+        submitCourseBtn.style.display = offer ? "inline-flex" : "none";
+        submitCourseBtn.disabled = !offer;
+      }
+
       scTitleEl.textContent = round.course || "Round";
       scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
 
@@ -1605,17 +1702,20 @@ if (h2 && holesEl) holesEl.value = String(h2);
       const map = new Map();
       for (const h of holesData) map.set(Number(h.hole_number), h);
 
-      const isPublishedMode = String(round.par_mode || "").toLowerCase() === "published" || String(round.par_mode || "").toUpperCase() === "PUBLISHED";
+      const isPublishedMode =
+        String(round.par_mode || "").toLowerCase() === "published" ||
+        String(round.par_mode || "").toUpperCase() === "PUBLISHED";
 
       for (let i=1; i<=holesCount; i++){
-        const existing = map.get(i) || { hole_number: i, par: null };
+        const existing = map.get(i) || { hole_number: i, par: null, distance_m: null };
 
         let parValue = existing.par;
         if ((parValue === null || typeof parValue === "undefined" || parValue === "") && isPublishedMode && metaPars && Number.isFinite(Number(metaPars[i-1]))) {
           parValue = Number(metaPars[i-1]);
         }
 
-        const distVal = (metaDists && Number.isFinite(Number(metaDists[i-1]))) ? Number(metaDists[i-1]) : null;
+        const metaDistVal = (metaDists && Number.isFinite(Number(metaDists[i-1]))) ? Number(metaDists[i-1]) : null;
+        const savedDistVal = Number.isFinite(Number(existing.distance_m)) ? Number(existing.distance_m) : null;
 
         const tr = document.createElement("tr");
 
@@ -1638,10 +1738,15 @@ if (h2 && holesEl) holesEl.value = String(h2);
           `;
         }
 
+        // ✅ Distance: if we have published distance -> show it. Otherwise allow entry (needed for submission).
+        const distCellHtml = (metaDistVal != null)
+          ? `${metaDistVal}`
+          : `<input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="distance_m" data-hole="${i}" value="${savedDistVal ?? ""}" placeholder="m">`;
+
         tr.innerHTML = `
           <td>Hole ${i}</td>
           <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${parValue ?? ""}" placeholder="—"></td>
-          <td class="distCell">${distVal != null ? distVal : `<span class="distMuted">—</span>`}</td>
+          <td class="distCell">${distCellHtml}</td>
           ${playerTds}
         `;
 
@@ -1661,9 +1766,10 @@ if (h2 && holesEl) holesEl.value = String(h2);
       const pc = getPlayersCountFromRound(currentRound);
 
       for (let i=1;i<=holesCount;i++){
-        byHole.set(i, { hole_number: i, par: null, strokes_by_player: {}, putts_by_player: {} });
+        byHole.set(i, { hole_number: i, par: null, distance_m: null, strokes_by_player: {}, putts_by_player: {} });
       }
 
+      // par
       for (let i=1;i<=holesCount;i++){
         const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
         if (parInp){
@@ -1673,6 +1779,17 @@ if (h2 && holesEl) holesEl.value = String(h2);
         }
       }
 
+      // ✅ distance_m (only present when editable)
+      for (let i=1;i<=holesCount;i++){
+        const distInp = scoreBody.querySelector(`input[data-field="distance_m"][data-hole="${i}"]`);
+        if (distInp){
+          const v = String(distInp.value || "").trim();
+          const n = v === "" ? null : Number(v);
+          byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
+        }
+      }
+
+      // strokes/putts by player
       const inputs = scoreBody.querySelectorAll("input[data-player]");
       inputs.forEach(inp => {
         const hole = Number(inp.dataset.hole);
@@ -1737,6 +1854,96 @@ if (h2 && holesEl) holesEl.value = String(h2);
     }
 
     // -----------------------------
+    // ✅ NEW: course submission flow (email required)
+    // -----------------------------
+    function openSubmitModal(){
+      if (!submitModalBack) return;
+      submitEmail.value = getCachedSubmitEmail() || "";
+      submitToast.className = "toast";
+      submitToast.style.display = "none";
+      submitModalBack.style.display = "flex";
+      submitModalBack.setAttribute("aria-hidden", "false");
+      setTimeout(() => submitEmail.focus(), 40);
+    }
+
+    function closeSubmitModal(){
+      if (!submitModalBack) return;
+      submitModalBack.style.display = "none";
+      submitModalBack.setAttribute("aria-hidden", "true");
+    }
+
+    function holesHaveAllParAndDistance(holesRows){
+      const holesCount = Number(currentRound?.holes) || 18;
+      if (!Array.isArray(holesRows) || holesRows.length < holesCount) return false;
+
+      // We only require distance when it's not already published (i.e. user is entering it)
+      for (let i=1; i<=holesCount; i++){
+        const h = holesRows.find(x => Number(x?.hole_number) === i);
+        const p = Number(h?.par);
+        const d = (h?.distance_m === null || typeof h?.distance_m === "undefined") ? null : Number(h.distance_m);
+
+        if (!Number.isFinite(p) || p < 3 || p > 6) return false;
+        if (!Number.isFinite(d) || d < 40 || d > 800) return false;
+      }
+      return true;
+    }
+
+    async function submitCourseForApproval(){
+      if (!currentRoundId || !currentRound) return;
+
+      const email = String(submitEmail.value || "").trim().toLowerCase();
+      if (!isValidEmail(email)){
+        setToast(submitToast, "Please enter a valid email address.", false);
+        return;
+      }
+      setCachedSubmitEmail(email);
+
+      // Require Par + Distance for every hole
+      const holesRows = readTableHoles();
+      if (!holesHaveAllParAndDistance(holesRows)){
+        setToast(submitToast, "Missing data. Enter Par + Distance (m) for every hole, then Save, then Submit.", false);
+        return;
+      }
+
+      // Save first (so backend round_holes has pars + distances)
+      try{
+        await saveRoundAll();
+      }catch(e){
+        setToast(submitToast, "Could not save round before submit: " + (e?.message || "error"), false);
+        return;
+      }
+
+      // Now submit
+      try{
+        submitConfirmBtn.disabled = true;
+        await api(`/api/rounds/templates/submit/${encodeURIComponent(currentRoundId)}`, {
+          method:"POST",
+          body: JSON.stringify({ email }) // backend may ignore; UI requirement is enforced here
+        });
+
+        setToast(submitToast, "Submitted! Declan will email your coupon once approved.", true);
+
+        // also log analytics
+        try{
+          await logAnalyticsEvent("course_template_submitted", {
+            roundId: String(currentRoundId),
+            courseName: currentRound?.course || null,
+            state: currentRound?.state || null,
+            holes: Number(currentRound?.holes) || null,
+            email: email
+          });
+        }catch{}
+
+        setTimeout(() => closeSubmitModal(), 900);
+      }catch(e){
+        const msg = e?.data?.message || e?.message || "Submit failed";
+        setToast(submitToast, msg, false);
+      }finally{
+        submitConfirmBtn.disabled = false;
+      }
+    }
+
+    // -----------------------------
     // API calls
     // -----------------------------
     async function fetchRounds(){
@@ -1754,7 +1961,8 @@ if (h2 && holesEl) holesEl.value = String(h2);
       const round = data.round || data;
       const holesArr = data.holes || data.holesData || round.holesData || round.holes || [];
       round.holesData = holesArr || [];
-            // ✅ NEW: prefer backend-saved player_names if present
+
+      // ✅ NEW: prefer backend-saved player_names if present
       if (Array.isArray(round.player_names)) {
         for (let i = 0; i < 4; i++) {
           if (typeof round.player_names[i] === "string") playerNames[i] = round.player_names[i];
@@ -1779,7 +1987,8 @@ if (h2 && holesEl) holesEl.value = String(h2);
       const par_mode = String(parModeEl.value || "published").trim();
       const notes = String(notesEl.value || "").trim();
       const players_count = clamp(playersEl?.value || 1, 1, 4);
-            // ✅ NEW: build player_names array for backend
+
+      // ✅ NEW: build player_names array for backend
       const namesOut = [];
       for (let i = 0; i < 4; i++) {
         namesOut.push(String(playerNames[i] || "").trim());
@@ -1856,15 +2065,12 @@ if (h2 && holesEl) holesEl.value = String(h2);
       saveNamesForRound(currentRoundId);
 
       const holesRows = readTableHoles();
-            const pc = getPlayersCountFromRound(currentRound);
-      const namesOut = [];
-      for (let i = 0; i < pc; i++) namesOut.push(String(playerNames[i] || "").trim());
 
       const payload = {
-  holes: holesRows,
-  players_count: getPlayersCountFromRound(currentRound),
-  player_names: playerNames
-};
+        holes: holesRows,
+        players_count: getPlayersCountFromRound(currentRound),
+        player_names: playerNames
+      };
 
       await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, {
         method:"PUT",
@@ -1939,6 +2145,7 @@ if (h2 && holesEl) holesEl.value = String(h2);
     logoutBtn.addEventListener("click", logout);
     createRoundBtn.addEventListener("click", createRound);
     refreshBtn.addEventListener("click", safeFetchRounds);
+
     saveAllBtn.addEventListener("click", async () => {
       try{
         await saveRoundAll();
@@ -1946,6 +2153,7 @@ if (h2 && holesEl) holesEl.value = String(h2);
         setToast(rightToast, "Save failed: " + (err.message || "error"), false);
       }
     });
+
     deleteRoundBtn.addEventListener("click", async () => {
       const ok = confirm("Delete this round? This cannot be undone.");
       if (!ok) return;
@@ -1976,6 +2184,28 @@ if (h2 && holesEl) holesEl.value = String(h2);
       if (currentRoundId && currentRound) renderScorecard(currentRound);
     });
 
+    // ✅ NEW: submission button
+    if (submitCourseBtn){
+      submitCourseBtn.addEventListener("click", () => {
+        if (!currentRoundId) return;
+        openSubmitModal();
+      });
+    }
+
+    // ✅ NEW: modal actions
+    if (submitCancelBtn) submitCancelBtn.addEventListener("click", closeSubmitModal);
+    if (submitConfirmBtn) submitConfirmBtn.addEventListener("click", submitCourseForApproval);
+
+    if (submitModalBack){
+      submitModalBack.addEventListener("click", (e) => {
+        if (e.target === submitModalBack) closeSubmitModal();
+      });
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeSubmitModal();
+    });
+
     (async function init(){
       const token = getToken();
       if (!token) {
@@ -1987,6 +2217,11 @@ if (h2 && holesEl) holesEl.value = String(h2);
       // ✅ set P1 from token at boot
       ensureP1IsUser();
       renderPlayerNamesUI();
+
+      // ✅ prefill cached email (if any)
+      const u = getUserFromToken();
+      const existing = getCachedSubmitEmail();
+      if (!existing && u.email) setCachedSubmitEmail(u.email);
 
       authGate.style.display = "none";
       appEl.style.display = "block";
