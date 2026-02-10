@@ -431,17 +431,17 @@ async function ensureBookingTimesRoutingSchema() {
 
     // 3) Drop the OLD unique constraint (course_id, play_date, tee_time, holes)
     const oldUq = await db.query(`
-      SELECT c.conname
-      FROM pg_constraint c
-      JOIN pg_class t ON t.oid = c.conrelid
-      WHERE c.contype = 'u'
-        AND t.relname = 'booking_times'
-        AND (
-          SELECT array_agg(a.attname ORDER BY a.attname)
-          FROM unnest(c.conkey) AS k(attnum)
-          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
-        ) = ARRAY['course_id','holes','play_date','tee_time'];
-    `);
+  SELECT c.conname
+  FROM pg_constraint c
+  JOIN pg_class t ON t.oid = c.conrelid
+  WHERE c.contype = 'u'
+    AND t.relname = 'booking_times'
+    AND (
+      SELECT array_agg(a.attname::text ORDER BY a.attname::text)
+      FROM unnest(c.conkey) AS k(attnum)
+      JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+    ) = ARRAY['course_id','holes','play_date','tee_time']::text[];
+`);
 
     for (const r of oldUq.rows || []) {
       console.log("🧹 dropping old booking_times unique constraint:", r.conname);
