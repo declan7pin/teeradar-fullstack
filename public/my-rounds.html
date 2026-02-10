@@ -614,8 +614,8 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="submitModalTitle">
       <h3 id="submitModalTitle">Submit course for approval</h3>
       <div class="muted">
-  Enter your email. Once your course is approved, you’ll receive an email with a code for <strong>1 free month</strong> of TeeRadar.
-</div>
+        Enter your email. Once your course is approved, you’ll receive an email with a code for <strong>1 free month</strong> of TeeRadar.
+      </div>
 
       <label for="submitEmail">Your email</label>
       <input id="submitEmail" type="email" placeholder="you@example.com" autocomplete="email" />
@@ -1303,7 +1303,7 @@
           layoutEl.value = (uiNineFront && uiNineBack) ? `${uiNineFront} - ${uiNineBack}` : layoutEl.value;
         }
 
-                      nineLoopWrap.style.display = "none";
+        nineLoopWrap.style.display = "none";
       } else {
         ninesWrap.style.display = "none";
         teeWrap.style.display = "none";
@@ -1570,277 +1570,278 @@
 
     // ✅ NEW: detect if course needs submission (no published meta)
     function shouldOfferSubmission(round, meta){
-  const holesCount = Number(round?.holes || 0);
+      const holesCount = Number(round?.holes || 0);
 
-  const pars = Array.isArray(meta?.pars) ? meta.pars : null;
-  const dists = Array.isArray(meta?.distances) ? meta.distances : null;
+      const pars = Array.isArray(meta?.pars) ? meta.pars : null;
+      const dists = Array.isArray(meta?.distances) ? meta.distances : null;
 
-  // if no meta at all, offer submission
-  if (!pars || !dists) return true;
-  if (pars.length !== holesCount || dists.length !== holesCount) return true;
+      // if no meta at all, offer submission
+      if (!pars || !dists) return true;
+      if (pars.length !== holesCount || dists.length !== holesCount) return true;
 
-  // if any invalid values (including 0), offer submission
-  for (let i=0;i<holesCount;i++){
-    const p = Number(pars[i]);
-    const d = Number(dists[i]);
-    if (!Number.isFinite(p) || p < 3 || p > 6) return true;
-    if (!Number.isFinite(d) || d < 40 || d > 800) return true;
-  }
+      // if any invalid values (including 0), offer submission
+      for (let i=0;i<holesCount;i++){
+        const p = Number(pars[i]);
+        const d = Number(dists[i]);
+        if (!Number.isFinite(p) || p < 3 || p > 6) return true;
+        if (!Number.isFinite(d) || d < 40 || d > 800) return true;
+      }
 
-  // otherwise template is complete; no need to submit
-  return false;
-}
+      // otherwise template is complete; no need to submit
+      return false;
+    }
 
     async function renderScorecard(round){
-  currentRound = round;
-  currentRoundId = round?.id || null;
+      currentRound = round;
+      currentRoundId = round?.id || null;
 
-  // ✅ ensure P1 is user always
-  ensureP1IsUser();
+      // ✅ ensure P1 is user always
+      ensureP1IsUser();
 
-  if (!round || !currentRoundId) {
-    scorecardEmpty.style.display = "block";
-    scorecardWrap.style.display = "none";
-    saveAllBtn.disabled = true;
-    deleteRoundBtn.disabled = true;
+      if (!round || !currentRoundId) {
+        scorecardEmpty.style.display = "block";
+        scorecardWrap.style.display = "none";
+        saveAllBtn.disabled = true;
+        deleteRoundBtn.disabled = true;
 
-    // ✅ hide BOTH possible submit buttons
-    if (submitCourseBtn){
-      submitCourseBtn.style.display = "none";
-      submitCourseBtn.disabled = true;
-    }
+        // ✅ hide BOTH possible submit buttons
+        if (submitCourseBtn){
+          submitCourseBtn.style.display = "none";
+          submitCourseBtn.disabled = true;
+        }
 
-    scTitleEl.textContent = "Scorecard";
-    scSubEl.textContent = "Select a round to begin.";
-    scPillsEl.innerHTML = "";
-    totalsGrid.innerHTML = "";
-    scoreHead.innerHTML = "";
-    scoreBody.innerHTML = "";
-    return;
-  }
-
-  // ✅ load per-round names from localStorage
-  loadNamesForRound(currentRoundId);
-  ensureP1IsUser();
-  renderPlayerNamesUI();
-
-  scorecardEmpty.style.display = "none";
-  scorecardWrap.style.display = "block";
-  saveAllBtn.disabled = false;
-  deleteRoundBtn.disabled = false;
-
-  const course = String(round.course || "").trim();
-  const state = String(round.state || "").trim().toUpperCase();
-  const holes = Number(round.holes) || 18;
-
-  await loadScorecardsStateOnce(state);
-  const layouts9 = find9LayoutsForCourse(state, course);
-
-  if (layouts9.length){
-    ninesWrap.style.display = "block";
-    teeWrap.style.display = "block";
-    nineLoopWrap.style.display = "none";
-
-    if (holes === 9){
-      nines9Only.style.display = "block";
-      nines18Only.style.display = "none";
-      setSelectOptions(nineSingleEl, layouts9, null);
-
-      if (!uiNineSingle){
-        const lay = String(round.layout || "").trim();
-        uiNineSingle = layouts9.find(x => x.toLowerCase() === lay.toLowerCase()) || layouts9[0] || "";
-      }
-      nineSingleEl.value = uiNineSingle;
-    } else {
-      nines9Only.style.display = "none";
-      nines18Only.style.display = "block";
-
-      if (!uiNineFront || !uiNineBack){
-        const lay = String(round.layout || "").trim();
-        const parts = lay.split("-").map(s=>s.trim()).filter(Boolean);
-        uiNineFront = layouts9.find(x => parts[0] && x.toLowerCase() === parts[0].toLowerCase()) || layouts9[0] || "";
-        uiNineBack  = layouts9.find(x => parts[1] && x.toLowerCase() === parts[1].toLowerCase()) || layouts9[1] || layouts9[0] || "";
+        scTitleEl.textContent = "Scorecard";
+        scSubEl.textContent = "Select a round to begin.";
+        scPillsEl.innerHTML = "";
+        totalsGrid.innerHTML = "";
+        scoreHead.innerHTML = "";
+        scoreBody.innerHTML = "";
+        return;
       }
 
-      ensureDifferentFrontBack(layouts9);
+      // ✅ keep Players dropdown synced to the round
+      const pc = getPlayersCountFromRound(round);
+      if (playersEl) playersEl.value = String(pc);
 
-      setSelectOptions(nineFrontEl, layouts9, null);
-      nineFrontEl.value = uiNineFront;
+      // ✅ load per-round names from localStorage
+      loadNamesForRound(currentRoundId);
+      ensureP1IsUser();
+      renderPlayerNamesUI();
 
-      const frontLower = String(uiNineFront || "").toLowerCase();
-      let backOptions = layouts9.filter(x => x.toLowerCase() !== frontLower);
-      if (!backOptions.length) backOptions = layouts9.slice();
-      setSelectOptions(nineBackEl, backOptions, null);
+      scorecardEmpty.style.display = "none";
+      scorecardWrap.style.display = "block";
+      saveAllBtn.disabled = false;
+      deleteRoundBtn.disabled = false;
 
-      if (!backOptions.some(x => x.toLowerCase() === String(uiNineBack||"").toLowerCase())){
-        uiNineBack = backOptions[0] || "";
+      const course = String(round.course || "").trim();
+      const state = String(round.state || "").trim().toUpperCase();
+      const holes = Number(round.holes) || 18;
+
+      await loadScorecardsStateOnce(state);
+      const layouts9 = find9LayoutsForCourse(state, course);
+
+      if (layouts9.length){
+        ninesWrap.style.display = "block";
+        teeWrap.style.display = "block";
+        nineLoopWrap.style.display = "none";
+
+        if (holes === 9){
+          nines9Only.style.display = "block";
+          nines18Only.style.display = "none";
+          setSelectOptions(nineSingleEl, layouts9, null);
+
+          if (!uiNineSingle){
+            const lay = String(round.layout || "").trim();
+            uiNineSingle = layouts9.find(x => x.toLowerCase() === lay.toLowerCase()) || layouts9[0] || "";
+          }
+          nineSingleEl.value = uiNineSingle;
+        } else {
+          nines9Only.style.display = "none";
+          nines18Only.style.display = "block";
+
+          if (!uiNineFront || !uiNineBack){
+            const lay = String(round.layout || "").trim();
+            const parts = lay.split("-").map(s=>s.trim()).filter(Boolean);
+            uiNineFront = layouts9.find(x => parts[0] && x.toLowerCase() === parts[0].toLowerCase()) || layouts9[0] || "";
+            uiNineBack  = layouts9.find(x => parts[1] && x.toLowerCase() === parts[1].toLowerCase()) || layouts9[1] || layouts9[0] || "";
+          }
+
+          ensureDifferentFrontBack(layouts9);
+
+          setSelectOptions(nineFrontEl, layouts9, null);
+          nineFrontEl.value = uiNineFront;
+
+          const frontLower = String(uiNineFront || "").toLowerCase();
+          let backOptions = layouts9.filter(x => x.toLowerCase() !== frontLower);
+          if (!backOptions.length) backOptions = layouts9.slice();
+          setSelectOptions(nineBackEl, backOptions, null);
+
+          if (!backOptions.some(x => x.toLowerCase() === String(uiNineBack||"").toLowerCase())){
+            uiNineBack = backOptions[0] || "";
+          }
+          nineBackEl.value = uiNineBack;
+        }
+
+        await refreshNinesAndTeesUI();
+      } else {
+        ninesWrap.style.display = "none";
+        teeWrap.style.display = "none";
+        syncNineLoopVisibility();
       }
-      nineBackEl.value = uiNineBack;
-    }
 
-    await refreshNinesAndTeesUI();
-  } else {
-    ninesWrap.style.display = "none";
-    teeWrap.style.display = "none";
-    syncNineLoopVisibility();
-  }
+      const meta = await getPublishedMetaFromScorecards(round);
+      const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
+      const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
+      const teeName = meta?.teeName || "";
 
-  const pc = getPlayersCountFromRound(round);
+      // ✅ UNIFIED: show ONE "Submit" button only when needed
+      const offer = shouldOfferSubmission(round, meta);
 
-  const meta = await getPublishedMetaFromScorecards(round);
-  const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
-  const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
-  const teeName = meta?.teeName || "";
+      if (submitCourseBtn){
+        submitCourseBtn.style.display = offer ? "inline-flex" : "none";
+        submitCourseBtn.disabled = !offer;
+        if (offer) submitCourseBtn.textContent = "Submit";
+      }
 
-  // ✅ UNIFIED: show ONE "Submit" button (either id) only when needed
-  const offer = shouldOfferSubmission(round, meta);
+      scTitleEl.textContent = round.course || "Round";
+      scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
 
-  if (submitCourseBtn){
-    submitCourseBtn.style.display = offer ? "inline-flex" : "none";
-    submitCourseBtn.disabled = !offer;
-    if (offer) submitCourseBtn.textContent = "Submit";
-  }
-  
-
-  scTitleEl.textContent = round.course || "Round";
-  scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
-
-  scPillsEl.innerHTML = `
-    <span class="pill">${escapeHtml(round.par_mode || "")}</span>
-    <span class="pill">Players: ${pc}</span>
-    <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
-    <span class="pill">${teeName ? ("Tee: " + escapeHtml(teeName)) : "Tee: —"}</span>
-  `;
-
-  buildScoreHead(pc, teeName);
-  scoreBody.innerHTML = "";
-
-  const holesCount = Number(round.holes) || 18;
-  const holesData = Array.isArray(round.holesData) ? round.holesData : [];
-
-  const map = new Map();
-  for (const h of holesData) map.set(Number(h.hole_number), h);
-
-  const isPublishedMode =
-    String(round.par_mode || "").toLowerCase() === "published" ||
-    String(round.par_mode || "").toUpperCase() === "PUBLISHED";
-
-  for (let i=1; i<=holesCount; i++){
-    const existing = map.get(i) || { hole_number: i, par: null, distance_m: null };
-
-    let parValue = existing.par;
-    if ((parValue === null || typeof parValue === "undefined" || parValue === "") && isPublishedMode && metaPars && Number.isFinite(Number(metaPars[i-1]))) {
-      parValue = Number(metaPars[i-1]);
-    }
-
-    const metaDistVal = (metaDists && Number.isFinite(Number(metaDists[i-1]))) ? Number(metaDists[i-1]) : null;
-    const savedDistVal = Number.isFinite(Number(existing.distance_m)) ? Number(existing.distance_m) : null;
-
-    const tr = document.createElement("tr");
-
-    let playerTds = "";
-    for (let pi=0; pi<pc; pi++){
-      const s = getHolePlayerValue(existing, "strokes", pi);
-      const u = getHolePlayerValue(existing, "putts", pi);
-
-      playerTds += `
-        <td>
-          <input class="mini" inputmode="numeric" pattern="[0-9]*"
-            data-field="strokes" data-hole="${i}" data-player="${pi+1}"
-            value="${s ?? ""}" placeholder="—">
-        </td>
-        <td>
-          <input class="mini" inputmode="numeric" pattern="[0-9]*"
-            data-field="putts" data-hole="${i}" data-player="${pi+1}"
-            value="${u ?? ""}" placeholder="—">
-        </td>
+      scPillsEl.innerHTML = `
+        <span class="pill">${escapeHtml(round.par_mode || "")}</span>
+        <span class="pill">Players: ${pc}</span>
+        <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
+        <span class="pill">${teeName ? ("Tee: " + escapeHtml(teeName)) : "Tee: —"}</span>
       `;
+
+      buildScoreHead(pc, teeName);
+      scoreBody.innerHTML = "";
+
+      const holesCount = Number(round.holes) || 18;
+      const holesData = Array.isArray(round.holesData) ? round.holesData : [];
+
+      const map = new Map();
+      for (const h of holesData) map.set(Number(h.hole_number), h);
+
+      const isPublishedMode =
+        String(round.par_mode || "").toLowerCase() === "published" ||
+        String(round.par_mode || "").toUpperCase() === "PUBLISHED";
+
+      for (let i=1; i<=holesCount; i++){
+        const existing = map.get(i) || { hole_number: i, par: null, distance_m: null };
+
+        let parValue = existing.par;
+        if ((parValue === null || typeof parValue === "undefined" || parValue === "") && isPublishedMode && metaPars && Number.isFinite(Number(metaPars[i-1]))) {
+          parValue = Number(metaPars[i-1]);
+        }
+
+        const metaDistVal = (metaDists && Number.isFinite(Number(metaDists[i-1]))) ? Number(metaDists[i-1]) : null;
+        const savedDistVal = Number.isFinite(Number(existing.distance_m)) ? Number(existing.distance_m) : null;
+
+        const tr = document.createElement("tr");
+
+        let playerTds = "";
+        for (let pi=0; pi<pc; pi++){
+          const s = getHolePlayerValue(existing, "strokes", pi);
+          const u = getHolePlayerValue(existing, "putts", pi);
+
+          playerTds += `
+            <td>
+              <input class="mini" inputmode="numeric" pattern="[0-9]*"
+                data-field="strokes" data-hole="${i}" data-player="${pi+1}"
+                value="${s ?? ""}" placeholder="—">
+            </td>
+            <td>
+              <input class="mini" inputmode="numeric" pattern="[0-9]*"
+                data-field="putts" data-hole="${i}" data-player="${pi+1}"
+                value="${u ?? ""}" placeholder="—">
+            </td>
+          `;
+        }
+
+        // ✅ Distance: if we have published distance -> show it. Otherwise allow entry (needed for submission).
+        const distCellHtml = (metaDistVal != null)
+          ? `${metaDistVal}`
+          : `<input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="distance_m" data-hole="${i}" value="${savedDistVal ?? ""}" placeholder="m">`;
+
+        tr.innerHTML = `
+          <td>Hole ${i}</td>
+          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${parValue ?? ""}" placeholder="—"></td>
+          <td class="distCell">${distCellHtml}</td>
+          ${playerTds}
+        `;
+
+        scoreBody.appendChild(tr);
+      }
+
+      scoreBody.querySelectorAll("input").forEach((inp) => {
+        inp.addEventListener("input", () => updateTotalsFromTable());
+      });
+
+      updateTotalsFromTable();
     }
 
-    // ✅ Distance: if we have published distance -> show it. Otherwise allow entry (needed for submission).
-    const distCellHtml = (metaDistVal != null)
-      ? `${metaDistVal}`
-      : `<input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="distance_m" data-hole="${i}" value="${savedDistVal ?? ""}" placeholder="m">`;
+    function readTableHoles(){
+      const byHole = new Map();
+      const holesCount = Number(currentRound?.holes) || 18;
+      const pc = getPlayersCountFromRound(currentRound);
 
-    tr.innerHTML = `
-      <td>Hole ${i}</td>
-      <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${parValue ?? ""}" placeholder="—"></td>
-      <td class="distCell">${distCellHtml}</td>
-      ${playerTds}
-    `;
+      for (let i=1;i<=holesCount;i++){
+        byHole.set(i, { hole_number: i, par: null, distance_m: null, strokes_by_player: {}, putts_by_player: {} });
+      }
 
-    scoreBody.appendChild(tr);
-  }
+      // par
+      for (let i=1;i<=holesCount;i++){
+        const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
+        if (parInp){
+          const v = String(parInp.value || "").trim();
+          const n = v === "" ? null : Number(v);
+          byHole.get(i).par = Number.isFinite(n) ? n : null;
+        }
+      }
 
-  scoreBody.querySelectorAll("input").forEach((inp) => {
-    inp.addEventListener("input", () => updateTotalsFromTable());
-  });
+      // ✅ distance_m (only present when editable)
+      for (let i=1;i<=holesCount;i++){
+        const distInp = scoreBody.querySelector(`input[data-field="distance_m"][data-hole="${i}"]`);
+        if (distInp){
+          const v = String(distInp.value || "").trim();
+          const n = v === "" ? null : Number(v);
+          byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
+        }
+      }
 
-  updateTotalsFromTable();
-}
+      // strokes/putts by player
+      const inputs = scoreBody.querySelectorAll("input[data-player]");
+      inputs.forEach(inp => {
+        const hole = Number(inp.dataset.hole);
+        const field = String(inp.dataset.field || "");
+        const player = Number(inp.dataset.player);
+        if (!Number.isFinite(hole) || !byHole.has(hole)) return;
+        if (![ "strokes", "putts" ].includes(field)) return;
+        if (!Number.isFinite(player) || player < 1 || player > 4) return;
 
-function readTableHoles(){
-  const byHole = new Map();
-  const holesCount = Number(currentRound?.holes) || 18;
-  const pc = getPlayersCountFromRound(currentRound);
+        const v = String(inp.value || "").trim();
+        const n = v === "" ? null : Number(v);
+        const val = Number.isFinite(n) ? n : null;
 
-  for (let i=1;i<=holesCount;i++){
-    byHole.set(i, { hole_number: i, par: null, distance_m: null, strokes_by_player: {}, putts_by_player: {} });
-  }
+        if (field === "strokes") byHole.get(hole).strokes_by_player[String(player)] = val;
+        if (field === "putts") byHole.get(hole).putts_by_player[String(player)] = val;
+      });
 
-  // par
-  for (let i=1;i<=holesCount;i++){
-    const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
-    if (parInp){
-      const v = String(parInp.value || "").trim();
-      const n = v === "" ? null : Number(v);
-      byHole.get(i).par = Number.isFinite(n) ? n : null;
+      for (let i=1;i<=holesCount;i++){
+        const h = byHole.get(i);
+        h.strokes = (h.strokes_by_player && typeof h.strokes_by_player === "object") ? (h.strokes_by_player["1"] ?? null) : null;
+        h.putts = (h.putts_by_player && typeof h.putts_by_player === "object") ? (h.putts_by_player["1"] ?? null) : null;
+
+        for (let p=pc+1; p<=4; p++){
+          delete h.strokes_by_player[String(p)];
+          delete h.putts_by_player[String(p)];
+        }
+      }
+
+      const rows = [];
+      for (let i=1;i<=holesCount;i++) rows.push(byHole.get(i));
+      return rows;
     }
-  }
-
-  // ✅ distance_m (only present when editable)
-  for (let i=1;i<=holesCount;i++){
-    const distInp = scoreBody.querySelector(`input[data-field="distance_m"][data-hole="${i}"]`);
-    if (distInp){
-      const v = String(distInp.value || "").trim();
-      const n = v === "" ? null : Number(v);
-      byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
-    }
-  }
-
-  // strokes/putts by player
-  const inputs = scoreBody.querySelectorAll("input[data-player]");
-  inputs.forEach(inp => {
-    const hole = Number(inp.dataset.hole);
-    const field = String(inp.dataset.field || "");
-    const player = Number(inp.dataset.player);
-    if (!Number.isFinite(hole) || !byHole.has(hole)) return;
-    if (![ "strokes", "putts" ].includes(field)) return;
-    if (!Number.isFinite(player) || player < 1 || player > 4) return;
-
-    const v = String(inp.value || "").trim();
-    const n = v === "" ? null : Number(v);
-    const val = Number.isFinite(n) ? n : null;
-
-    if (field === "strokes") byHole.get(hole).strokes_by_player[String(player)] = val;
-    if (field === "putts") byHole.get(hole).putts_by_player[String(player)] = val;
-  });
-
-  for (let i=1;i<=holesCount;i++){
-    const h = byHole.get(i);
-    h.strokes = (h.strokes_by_player && typeof h.strokes_by_player === "object") ? (h.strokes_by_player["1"] ?? null) : null;
-    h.putts = (h.putts_by_player && typeof h.putts_by_player === "object") ? (h.putts_by_player["1"] ?? null) : null;
-
-    for (let p=pc+1; p<=4; p++){
-      delete h.strokes_by_player[String(p)];
-      delete h.putts_by_player[String(p)];
-    }
-  }
-
-  const rows = [];
-  for (let i=1;i<=holesCount;i++) rows.push(byHole.get(i));
-  return rows;
-}
 
     function updateTotalsFromTable(){
       const holesRows = readTableHoles();
@@ -1876,17 +1877,18 @@ function readTableHoles(){
     // ✅ NEW: course submission flow (email required)
     // -----------------------------
     function openSubmitModal(){
-  if (!submitModalBack) return;
+      if (!submitModalBack) return;
 
-  // ✅ always empty — force user to type it
-  submitEmail.value = "";
+      // ✅ prefill cached email if we have one (still editable)
+      const cached = getCachedSubmitEmail();
+      submitEmail.value = cached || "";
 
-  submitToast.className = "toast";
-  submitToast.style.display = "none";
-  submitModalBack.style.display = "flex";
-  submitModalBack.setAttribute("aria-hidden", "false");
-  setTimeout(() => submitEmail.focus(), 40);
-}
+      submitToast.className = "toast";
+      submitToast.style.display = "none";
+      submitModalBack.style.display = "flex";
+      submitModalBack.setAttribute("aria-hidden", "false");
+      setTimeout(() => submitEmail.focus(), 40);
+    }
 
     function closeSubmitModal(){
       if (!submitModalBack) return;
@@ -1898,7 +1900,6 @@ function readTableHoles(){
       const holesCount = Number(currentRound?.holes) || 18;
       if (!Array.isArray(holesRows) || holesRows.length < holesCount) return false;
 
-      // We only require distance when it's not already published (i.e. user is entering it)
       for (let i=1; i<=holesCount; i++){
         const h = holesRows.find(x => Number(x?.hole_number) === i);
         const p = Number(h?.par);
@@ -1940,7 +1941,7 @@ function readTableHoles(){
         submitConfirmBtn.disabled = true;
         await api(`/api/rounds/templates/submit/${encodeURIComponent(currentRoundId)}`, {
           method:"POST",
-          body: JSON.stringify({ email }) // backend may ignore; UI requirement is enforced here
+          body: JSON.stringify({ email })
         });
 
         setToast(submitToast, "Submitted! We will email your coupon once approved.", true);
@@ -1984,7 +1985,10 @@ function readTableHoles(){
       const holesArr = data.holes || data.holesData || round.holesData || round.holes || [];
       round.holesData = holesArr || [];
 
-      // ✅ NEW: prefer backend-saved player_names if present
+      // ✅ keep Players dropdown synced as soon as we load a round
+      if (playersEl) playersEl.value = String(getPlayersCountFromRound(round));
+
+      // ✅ prefer backend-saved player_names if present
       if (Array.isArray(round.player_names)) {
         for (let i = 0; i < 4; i++) {
           if (typeof round.player_names[i] === "string") playerNames[i] = round.player_names[i];
@@ -2010,12 +2014,11 @@ function readTableHoles(){
       const notes = String(notesEl.value || "").trim();
       const players_count = clamp(playersEl?.value || 1, 1, 4);
 
-      // ✅ NEW: build player_names array for backend
+      // ✅ build player_names array for backend
       const namesOut = [];
       for (let i = 0; i < 4; i++) {
         namesOut.push(String(playerNames[i] || "").trim());
       }
-      // ensure length matches players_count
       namesOut.length = players_count;
 
       if (!course) {
@@ -2185,7 +2188,6 @@ function readTableHoles(){
         setToast(rightToast, "Delete failed: " + (err.message || "error"), false);
       }
     });
-   
 
     holesEl.addEventListener("change", async () => {
       syncNineLoopVisibility();
@@ -2200,28 +2202,34 @@ function readTableHoles(){
       await refreshNinesAndTeesUI();
     });
 
-    // ✅ NEW: when players changes, show name inputs + re-render scorecard header if needed
+    // ✅ when players changes:
+    // - update currentRound.players_count so the scorecard can add/remove columns immediately
+    // - rerender (no save until user hits Save)
     playersEl.addEventListener("change", () => {
       ensureP1IsUser();
       renderPlayerNamesUI();
-      if (currentRoundId && currentRound) renderScorecard(currentRound);
+
+      if (currentRoundId && currentRound) {
+        const newPc = clamp(playersEl.value || 1, 1, 4);
+        currentRound.players_count = newPc; // ✅ keep in-memory round synced
+        renderScorecard(currentRound).catch(()=>{});
+      }
     });
 
-   // ✅ FIX: delegated click handler so it always works (even after re-renders)
-document.addEventListener("click", (e) => {
-  const btn = e.target.closest("#submitCourseBtn");
-  if (!btn) return;
+    // ✅ FIX: delegated click handler so it always works (even after re-renders)
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("#submitCourseBtn");
+      if (!btn) return;
 
-  e.preventDefault();
+      e.preventDefault();
 
-  // if your renderScorecard disables it, don’t open modal
-  if (btn.disabled) return;
+      if (btn.disabled) return;
+      if (!currentRoundId) return;
 
-  if (!currentRoundId) return;
-  openSubmitModal();
-});
+      openSubmitModal();
+    });
 
-    // ✅ NEW: modal actions
+    // ✅ modal actions
     if (submitCancelBtn) submitCancelBtn.addEventListener("click", closeSubmitModal);
     if (submitConfirmBtn) submitConfirmBtn.addEventListener("click", submitCourseForApproval);
 
@@ -2246,7 +2254,6 @@ document.addEventListener("click", (e) => {
       // ✅ set P1 from token at boot
       ensureP1IsUser();
       renderPlayerNamesUI();
-
 
       authGate.style.display = "none";
       appEl.style.display = "block";
