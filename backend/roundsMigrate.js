@@ -52,7 +52,7 @@ export async function ensureRoundsTables() {
     CREATE INDEX IF NOT EXISTS idx_round_holes_round
       ON round_holes(round_id);
 
-    -- ✅ MIGRATIONS / SAFE UPGRADES
+    -- Safe upgrades
     ALTER TABLE rounds
       ADD COLUMN IF NOT EXISTS players_count INTEGER NOT NULL DEFAULT 1;
 
@@ -69,38 +69,33 @@ export async function ensureRoundsTables() {
       ADD COLUMN IF NOT EXISTS putts_by_player JSONB NOT NULL DEFAULT '{}'::jsonb;
   `;
 
-  try {
-    await db.query(sql);
-    console.log("✅ Rounds tables ready (rounds, round_holes)");
-  } catch (err) {
-    console.error("❌ Failed creating rounds tables:", err);
-    throw err;
-  }
+  await db.query(sql);
+  console.log("✅ Rounds tables ready (rounds, round_holes)");
 }
 
 /**
- * ✅ NEW: Scorecard template + pending + contribution history tables
- * - No duplicates (pending + approved)
- * - Contributor history auto-linked
+ * Scorecard template + pending + contribution history tables
  */
 export async function ensureScorecardTemplatesTables() {
-  // prevent two instances racing on boot
   const LOCK_KEY = 246813579;
 
-  try {
-    const lockRes = await db.query("SELECT pg_try_advisory_lock($1) AS locked;", [LOCK_KEY]);
-    if (!lockRes.rows?.[0]?.locked) {
-      console.log("ℹ️ scorecard template migration: another instance is running it");
-      return;
-    }
+  const lockRes = await db.query(
+    "SELECT pg_try_advisory_lock($1) AS locked;",
+    [LOCK_KEY]
+  );
+  if (!lockRes.rows?.[0]?.locked) {
+    console.log("ℹ️ scorecard template migration already running elsewhere");
+    return;
+  }
 
+  try {
     const sql = `
       -- Approved templates (global)
       CREATE TABLE IF NOT EXISTS scorecard_courses (
         id BIGSERIAL PRIMARY KEY,
-        name TEXT NOT NULL,        -- normalized lower-case name stored by app
-        state TEXT NOT NULL,       -- e.g. 'WA'
-        holes INTEGER NOT NULL,    -- 9 or 18
+        name TEXT NOT NULL,
+        state TEXT NOT NULL,
+        holes INTEGER NOT NULL,
         pars_json JSONB NOT NULL DEFAULT '[]'::jsonb,
         dists_json JSONB NOT NULL DEFAULT '[]'::jsonb,
         created_at TIMESTAMPTZ DEFAULT now(),
@@ -111,14 +106,13 @@ export async function ensureScorecardTemplatesTables() {
       CREATE INDEX IF NOT EXISTS scorecard_courses_state_idx
         ON scorecard_courses (state);
 
-      -- ✅ enforce case-insensitive uniqueness too (belt + braces)
       CREATE UNIQUE INDEX IF NOT EXISTS scorecard_courses_uq_lower
         ON scorecard_courses (LOWER(name), state, holes);
 
-      -- Pending submissions awaiting approval
+      -- Pending submissions
       CREATE TABLE IF NOT EXISTS courses_pending (
         id BIGSERIAL PRIMARY KEY,
-        name TEXT NOT NULL,        -- normalized lower-case name stored by app
+        name TEXT NOT NULL,
         state TEXT NOT NULL,
         holes INTEGER NOT NULL,
         pars_json JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -131,7 +125,6 @@ export async function ensureScorecardTemplatesTables() {
         approved_at TIMESTAMPTZ,
         approved_by_user_id INTEGER,
         approved_by_email TEXT,
-
         rejected_at TIMESTAMPTZ,
         rejected_by_user_id INTEGER,
         rejected_by_email TEXT,
@@ -144,16 +137,15 @@ export async function ensureScorecardTemplatesTables() {
       CREATE INDEX IF NOT EXISTS courses_pending_created_idx
         ON courses_pending (created_at DESC);
 
-      -- ✅ No duplicate *open* pending records for same course/state/holes
+      -- 🔑 ONLY create this AFTER rejected_at exists
       CREATE UNIQUE INDEX IF NOT EXISTS courses_pending_uq_open
         ON courses_pending (name, state, holes)
         WHERE approved_at IS NULL AND rejected_at IS NULL;
 
-      -- Contributor history (submission/approval/rejection audit log)
+      -- Contributor history
       CREATE TABLE IF NOT EXISTS scorecard_course_contributions (
         id BIGSERIAL PRIMARY KEY,
-
-        action TEXT NOT NULL, -- 'SUBMITTED' | 'APPROVED' | 'REJECTED'
+        action TEXT NOT NULL,
         name TEXT NOT NULL,
         state TEXT NOT NULL,
         holes INTEGER NOT NULL,
@@ -168,47 +160,12 @@ export async function ensureScorecardTemplatesTables() {
       );
 
       CREATE INDEX IF NOT EXISTS scorecard_contrib_lookup_idx
-        ON scorecard_course_contributions (state, name, holes, created_at DESC);
-
-      -- ✅ helps auto-link contributor history lookups (case-insensitive)
-      CREATE INDEX IF NOT EXISTS scorecard_contrib_course_idx
-        ON scorecard_course_contributions (LOWER(name), state, holes);
-
-      -- ✅ Safe upgrades if you already had older versions
-      ALTER TABLE courses_pending
-        ADD COLUMN IF NOT EXISTS submitted_by_email TEXT;
-
-      ALTER TABLE courses_pending
-        ADD COLUMN IF NOT EXISTS approved_by_user_id INTEGER;
-
-      ALTER TABLE courses_pending
-        ADD COLUMN IF NOT EXISTS approved_by_email TEXT;
-
-      ALTER TABLE courses_pending
-        ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ;
-
-      ALTER TABLE courses_pending
-        ADD COLUMN IF NOT EXISTS rejected_by_user_id INTEGER;
-
-      ALTER TABLE courses_pending
-        ADD COLUMN IF NOT EXISTS rejected_by_email TEXT;
-
-      ALTER TABLE courses_pending
-        ADD COLUMN IF NOT EXISTS reject_reason TEXT;
-
-      ALTER TABLE scorecard_courses
-        ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
-
-      ALTER TABLE scorecard_courses
-        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+        ON scorecard_course_contributions (LOWER(name), state, holes, created_at DESC);
     `;
 
     await db.query(sql);
-    console.log("✅ scorecard templates tables ready (scorecard_courses, courses_pending, contributions)");
-  } catch (err) {
-    console.error("❌ Failed creating scorecard template tables:", err);
-    throw err;
+    console.log("✅ scorecard templates tables ready");
   } finally {
-    try { await db.query("SELECT pg_advisory_unlock($1);", [LOCK_KEY]); } catch {}
+    await db.query("SELECT pg_advisory_unlock($1);", [LOCK_KEY]);
   }
 }
