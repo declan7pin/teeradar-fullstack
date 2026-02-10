@@ -261,7 +261,21 @@
       opacity:0.6;
       cursor:default;
     }
-
+    
+    .approve-btn{
+      font-size:11px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid #bbf7d0;
+      background:#ecfdf5;
+      color:#166534;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .approve-btn:disabled{
+      opacity:0.6;
+      cursor:default;
+    }
     .user-email-pill {
       display:inline-flex;
       align-items:center;
@@ -616,7 +630,38 @@
       </table>
     </div>
   </section>
+  <section class="card" style="margin-top:14px;" id="pendingCoursesCard">
+    <div class="card-label">Pending courses (scorecard templates)</div>
 
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+      <button id="btnPendingRefresh" type="button" class="secondary">Refresh</button>
+      <span class="muted-note">Approve here to publish pars + distances.</span>
+    </div>
+
+    <div id="pendingEmpty" class="users-empty" style="display:none;">
+      No pending courses.
+    </div>
+    <div id="pendingError" class="users-empty" style="display:none;color:#b91c1c;">
+      Error loading pending courses.
+    </div>
+
+    <div style="overflow-x:auto;margin-top:8px;">
+      <table id="pendingCoursesTable" class="users-table" style="display:none;">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Course</th>
+            <th>State</th>
+            <th>Holes</th>
+            <th>Submitted email</th>
+            <th>Submitted at</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="pendingCoursesTbody"></tbody>
+      </table>
+    </div>
+  </section>
   <section class="card" id="userDetailCard" style="margin-top:14px; display:none;">
     <div class="card-label">User details</div>
     <div class="muted-note" style="margin-bottom:6px;">
@@ -1214,6 +1259,121 @@ document.addEventListener("click", (e) => {
 
   showUserDetails(u);
 });
+// ---------- Pending course templates (approve in analytics) ----------
+
+let PENDING_COURSES_CACHE = [];
+
+async function loadPendingCourses() {
+  if (!enforceAdmin()) return;
+
+  const table = document.getElementById("pendingCoursesTable");
+  const tbody = document.getElementById("pendingCoursesTbody");
+  const empty = document.getElementById("pendingEmpty");
+  const errorEl = document.getElementById("pendingError");
+
+  // reset UI
+  if (errorEl) errorEl.style.display = "none";
+  if (empty) empty.style.display = "none";
+  if (table) table.style.display = "none";
+
+  const data = await tryFetchJson("/api/rounds/admin/pending-courses");
+
+  if (!data || !data.ok) {
+    if (errorEl) {
+      errorEl.style.display = "block";
+      errorEl.textContent = "Error loading pending courses (check admin auth/JWT).";
+    }
+    return;
+  }
+
+  const rows = Array.isArray(data.pending) ? data.pending : [];
+  PENDING_COURSES_CACHE = rows;
+
+  if (!rows.length) {
+    if (empty) empty.style.display = "block";
+    return;
+  }
+
+  if (table) table.style.display = "table";
+
+  if (tbody) {
+    tbody.innerHTML = rows.map((p) => {
+      const id = p.id ?? "";
+      const name = p.name ?? "—";
+      const state = p.state ?? "—";
+      const holes = p.holes ?? "—";
+      const email = p.submitted_by_email ?? "—";
+      const created = p.created_at ? new Date(p.created_at).toLocaleString() : "";
+
+      return `
+        <tr data-pending-id="${id}">
+          <td>${id}</td>
+          <td>${name}</td>
+          <td>${state}</td>
+          <td>${holes}</td>
+          <td>${email}</td>
+          <td>${created}</td>
+          <td>
+            <button class="approve-btn" type="button" data-approve-id="${id}">Approve</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+}
+
+// Delegate approve click
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-approve-id]");
+  if (!btn) return;
+
+  const id = Number(btn.getAttribute("data-approve-id"));
+  if (!Number.isFinite(id) || id <= 0) return;
+
+  // confirm
+  const ok = window.confirm("Approve this course template? This will publish pars + distances.");
+  if (!ok) return;
+
+  btn.disabled = true;
+  const oldTxt = btn.textContent;
+  btn.textContent = "Approving…";
+
+  try {
+    const res = await fetch(`/api/rounds/admin/pending-courses/${id}/approve`, {
+      method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json"
+      },
+      credentials: "include"
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data || !data.ok) {
+      alert("Approve failed: " + (data?.error || res.status));
+      btn.disabled = false;
+      btn.textContent = oldTxt;
+      return;
+    }
+
+    // refresh list
+    await loadPendingCourses();
+  } catch (err) {
+    console.error("approve pending course failed", err);
+    alert("Approve failed (network/server error).");
+    btn.disabled = false;
+    btn.textContent = oldTxt;
+  }
+});
+
+// Wire refresh button
+function wirePendingCoursesRefresh() {
+  const btn = document.getElementById("btnPendingRefresh");
+  if (!btn || btn._wired) return;
+  btn._wired = true;
+  btn.addEventListener("click", () => loadPendingCourses());
+}
 
 
 // ---------- Booking analytics ----------
@@ -1534,6 +1694,8 @@ function wireBookingAnalyticsButtons() {
 window.addEventListener("load", () => {
   try { loadAnalytics(); } catch (e) { console.warn("loadAnalytics failed", e); }
   try { loadRegisteredUsers(); } catch (e) { console.warn("loadRegisteredUsers failed", e); }
+    try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
+  try { loadPendingCourses(); } catch (e) { console.warn("loadPendingCourses failed", e); }
 
   try {
     if (typeof wireBookingAnalyticsButtons === "function") wireBookingAnalyticsButtons();
