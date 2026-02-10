@@ -2205,9 +2205,7 @@ async function submitRound(){
         setToast(rightToast, "Delete failed: " + (err.message || "error"), false);
       }
     });
-    if (submitRoundBtn){
-  submitRoundBtn.addEventListener("click", submitRound);
-}
+   
 
     holesEl.addEventListener("change", async () => {
       syncNineLoopVisibility();
