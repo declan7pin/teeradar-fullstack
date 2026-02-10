@@ -131,7 +131,13 @@ export async function ensureScorecardTemplatesTables() {
         reject_reason TEXT
       );
 
-      -- ✅ Safe upgrades (if courses_pending existed before these columns)
+      CREATE INDEX IF NOT EXISTS courses_pending_state_idx
+        ON courses_pending (state);
+
+      CREATE INDEX IF NOT EXISTS courses_pending_created_idx
+        ON courses_pending (created_at DESC);
+
+      -- ✅ Safe upgrades (critical when courses_pending already existed from older version)
       ALTER TABLE courses_pending
         ADD COLUMN IF NOT EXISTS submitted_by_user_id INTEGER;
 
@@ -158,12 +164,6 @@ export async function ensureScorecardTemplatesTables() {
 
       ALTER TABLE courses_pending
         ADD COLUMN IF NOT EXISTS reject_reason TEXT;
-
-      CREATE INDEX IF NOT EXISTS courses_pending_state_idx
-        ON courses_pending (state);
-
-      CREATE INDEX IF NOT EXISTS courses_pending_created_idx
-        ON courses_pending (created_at DESC);
 
       -- 🔑 ONLY create this AFTER rejected_at exists
       CREATE UNIQUE INDEX IF NOT EXISTS courses_pending_uq_open
