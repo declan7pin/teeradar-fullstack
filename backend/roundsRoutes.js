@@ -417,7 +417,52 @@ router.get("/admin/pending-courses", requireAuth, requireSuperAdmin, async (req,
     return res.status(500).json({ ok: false, error: "internal error" });
   }
 });
+// ✅ Admin: get ONE pending submission (detail for modal)
+router.get("/admin/pending-courses/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ ok: false, error: "invalid_id" });
+    }
 
+    const { rows } = await db.query(
+      `
+      SELECT
+        id, name, state, holes,
+        pars_json, dists_json,
+        submitted_by_user_id, submitted_by_email,
+        created_at
+      FROM courses_pending
+      WHERE id = $1 AND approved_at IS NULL AND rejected_at IS NULL
+      LIMIT 1;
+      `,
+      [id]
+    );
+
+    if (!rows.length) return res.status(404).json({ ok: false, error: "not_found" });
+
+    const p = rows[0];
+
+    // ✅ shape matches your frontend normaliser: (data.ok && data.template)
+    return res.json({
+      ok: true,
+      template: {
+        id: p.id,
+        name: p.name,
+        state: p.state,
+        holes: p.holes,
+        pars: Array.isArray(p.pars_json) ? p.pars_json : [],
+        distances_m: Array.isArray(p.dists_json) ? p.dists_json : [], // flat distances array
+        submitted_by_user_id: p.submitted_by_user_id,
+        submitted_by_email: p.submitted_by_email,
+        created_at: p.created_at,
+      },
+    });
+  } catch (err) {
+    console.error("GET /api/rounds/admin/pending-courses/:id error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
 // Admin: approve pending -> upsert into scorecard_courses + log contribution
 router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
