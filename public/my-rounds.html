@@ -417,7 +417,7 @@
     <div id="app" style="display:none;">
       <div class="grid">
         <!-- LEFT -->
-        <section class="card">
+        <section class="card" id="createRoundSection">
           <h2>Create a new round</h2>
           <div class="muted" style="font-weight:700;">
             Track strokes + <strong>putts</strong>. If pars are missing, start a blank scorecard and fill as you go.
@@ -549,12 +549,13 @@
 
           <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;" />
 
-          <h2 style="margin-top:0;">Your rounds</h2>
-          <div class="muted" style="font-weight:700;">
-            Select a round to view/edit the scorecard.
-          </div>
+          <div id="yourRoundsSection">
+  <h2 style="margin-top:0;">Your rounds</h2>
+  <div class="muted" style="font-weight:700;">
+    Select a round to view/edit the scorecard.
+  </div>
 
-          <div id="roundsList" class="list" style="margin-top:12px;"></div>
+  <div id="roundsList" class="list" style="margin-top:12px;"></div>
 
           <div class="muted" id="roundsEmpty" style="margin-top:10px;font-weight:800;display:none;">
             No rounds yet — create your first one above.
@@ -877,7 +878,13 @@
         .replaceAll('"',"&quot;")
         .replaceAll("'","&#039;");
     }
+function setLeftPanelsVisibility(show){
+  const create = document.getElementById("createRoundSection");
+  const rounds = document.getElementById("yourRoundsSection");
 
+  if (create) create.style.display = show ? "block" : "none";
+  if (rounds) rounds.style.display = show ? "block" : "none";
+}
     function courseKey(name, state){
       return (norm(name) + "|" + String(state || "").trim().toUpperCase());
     }
@@ -1980,6 +1987,7 @@
     }
 
     async function loadRound(id){
+      setLeftPanelsVisibility(false);
       const data = await api(`/api/rounds/${encodeURIComponent(id)}`, { method:"GET" });
       const round = data.round || data;
       const holesArr = data.holes || data.holesData || round.holesData || round.holes || [];
@@ -2069,18 +2077,21 @@
       setToast(leftToast, "Round created.", true);
 
       await safeFetchRounds();
-      if (newId) {
-        // ✅ save names for this new round locally
-        saveNamesForRound(newId);
+if (newId) {
+  // ✅ save names for this new round locally
+  saveNamesForRound(newId);
 
-        await safeLoadRound(newId);
+  await safeLoadRound(newId);
 
-        await logAnalyticsEvent("round_created", {
-          roundId: String(newId),
-          round_id: String(newId),
-          courseName: course || null
-        });
-      }
+  await logAnalyticsEvent("round_created", {
+    roundId: String(newId),
+    round_id: String(newId),
+    courseName: course || null
+  });
+}
+
+// ✅ NEW: hide Create + Your rounds after round is created/loaded
+setLeftPanelsVisibility(false);
     }
 
     async function saveRoundAll(){
@@ -2257,6 +2268,8 @@
 
       authGate.style.display = "none";
       appEl.style.display = "block";
+      
+      setLeftPanelsVisibility(true);
 
       initCourseAutocomplete();
       syncNineLoopVisibility();
