@@ -111,6 +111,10 @@ export async function ensureScorecardTemplatesTables() {
       CREATE INDEX IF NOT EXISTS scorecard_courses_state_idx
         ON scorecard_courses (state);
 
+      -- ✅ enforce case-insensitive uniqueness too (belt + braces)
+      CREATE UNIQUE INDEX IF NOT EXISTS scorecard_courses_uq_lower
+        ON scorecard_courses (LOWER(name), state, holes);
+
       -- Pending submissions awaiting approval
       CREATE TABLE IF NOT EXISTS courses_pending (
         id BIGSERIAL PRIMARY KEY,
@@ -165,6 +169,10 @@ export async function ensureScorecardTemplatesTables() {
 
       CREATE INDEX IF NOT EXISTS scorecard_contrib_lookup_idx
         ON scorecard_course_contributions (state, name, holes, created_at DESC);
+
+      -- ✅ helps auto-link contributor history lookups (case-insensitive)
+      CREATE INDEX IF NOT EXISTS scorecard_contrib_course_idx
+        ON scorecard_course_contributions (LOWER(name), state, holes);
 
       -- ✅ Safe upgrades if you already had older versions
       ALTER TABLE courses_pending
