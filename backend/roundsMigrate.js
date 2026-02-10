@@ -3,8 +3,6 @@ import db from "./db.js";
 
 // Creates tables if they don't exist (safe to run every boot)
 export async function ensureRoundsTables() {
-  // If your db.js exposes `db.query`, this will work.
-  // If it exposes something different, tell me what `db.js` exports and I’ll adapt.
   const sql = `
     CREATE TABLE IF NOT EXISTS rounds (
       id SERIAL PRIMARY KEY,
@@ -53,7 +51,9 @@ export async function ensureRoundsTables() {
     CREATE INDEX IF NOT EXISTS idx_round_holes_round
       ON round_holes(round_id);
 
-    -- ✅ MIGRATIONS / SAFE UPGRADES (won’t fail if column already exists)
+    -- -----------------------------
+    -- SAFE UPGRADES (idempotent)
+    -- -----------------------------
     ALTER TABLE rounds
       ADD COLUMN IF NOT EXISTS players_count INTEGER NOT NULL DEFAULT 1;
 
@@ -72,6 +72,78 @@ export async function ensureRoundsTables() {
     console.log("✅ Rounds tables ready (rounds, round_holes)");
   } catch (err) {
     console.error("❌ Failed creating rounds tables:", err);
+    throw err;
+  }
+}
+
+// -------------------------------------------------
+// ✅ NEW: Scorecard templates (approved + pending)
+// Enforced at DB level – no bad data can enter
+// -------------------------------------------------
+export async function ensureScorecardTemplatesTables() {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS scorecard_courses (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      state TEXT NOT NULL,
+      holes INTEGER NOT NULL CHECK (holes IN (9,18)),
+      pars_json JSONB NOT NULL,
+      dists_json JSONB NOT NULL,
+      updated_at TIMESTAMP DEFAULT now(),
+      UNIQUE (name, state, holes)
+    );
+
+    CREATE TABLE IF NOT EXISTS courses_pending (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      state TEXT NOT NULL,
+      holes INTEGER NOT NULL CHECK (holes IN (9,18)),
+      pars_json JSONB NOT NULL,
+      dists_json JSONB NOT NULL,
+      submitted_by_user_id INTEGER,
+      created_at TIMESTAMP DEFAULT now(),
+      approved_at TIMESTAMP,
+      UNIQUE (name, state, holes)
+    );
+
+    -- -----------------------------
+    -- HARD VALIDATION CONSTRAINTS
+    -- -----------------------------
+
+    -- Arrays only
+    ALTER TABLE scorecard_courses
+      ADD CONSTRAINT IF NOT EXISTS scorecard_pars_array
+      CHECK (jsonb_typeof(pars_json) = 'array'),
+      ADD CONSTRAINT IF NOT EXISTS scorecard_dists_array
+      CHECK (jsonb_typeof(dists_json) = 'array');
+
+    ALTER TABLE courses_pending
+      ADD CONSTRAINT IF NOT EXISTS pending_pars_array
+      CHECK (jsonb_typeof(pars_json) = 'array'),
+      ADD CONSTRAINT IF NOT EXISTS pending_dists_array
+      CHECK (jsonb_typeof(dists_json) = 'array');
+
+    -- Length must match holes
+    ALTER TABLE scorecard_courses
+      ADD CONSTRAINT IF NOT EXISTS scorecard_length_match
+      CHECK (
+        jsonb_array_length(pars_json) = holes AND
+        jsonb_array_length(dists_json) = holes
+      );
+
+    ALTER TABLE courses_pending
+      ADD CONSTRAINT IF NOT EXISTS pending_length_match
+      CHECK (
+        jsonb_array_length(pars_json) = holes AND
+        jsonb_array_length(dists_json) = holes
+      );
+  `;
+
+  try {
+    await db.query(sql);
+    console.log("✅ Scorecard template tables ready (approved + pending)");
+  } catch (err) {
+    console.error("❌ Failed creating scorecard template tables:", err);
     throw err;
   }
 }
