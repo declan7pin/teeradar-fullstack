@@ -292,6 +292,92 @@
         grid-template-columns:repeat(3,minmax(0,1fr));
       }
     }
+        /* ✅ Pending course details modal */
+    .modalBack{
+      position:fixed;
+      inset:0;
+      background:rgba(2,6,23,.45);
+      display:none;
+      z-index:9999;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+    }
+    .modal{
+      width:min(860px, 100%);
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px;
+      box-shadow:0 20px 60px rgba(15,23,42,.25);
+      max-height:85vh;
+      overflow:auto;
+    }
+    .modal h3{
+      margin:0 0 8px 0;
+      font-size:1.05rem;
+    }
+    .modal .muted{color:var(--muted); font-weight:700}
+    .modal .row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+      margin-top:10px;
+    }
+    .modal .actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      margin-top:12px;
+    }
+    .modal .btn2{
+      border:1px solid var(--border);
+      background:var(--teal);
+      color:#fff;
+      padding:8px 12px;
+      border-radius:10px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .modal .btn2.secondary{
+      background:#fff;
+      color:var(--text);
+    }
+
+    .pending-row-click{
+      cursor:pointer;
+    }
+    .pending-row-click:hover{
+      background:#f1f5f9;
+    }
+
+    .score-mini{
+      width:100%;
+      border-collapse:collapse;
+      margin-top:10px;
+      font-size:12px;
+    }
+    .score-mini th,.score-mini td{
+      padding:7px 6px;
+      border-bottom:1px solid #e5e7eb;
+      text-align:center;
+      white-space:nowrap;
+    }
+    .score-mini th{
+      background:#f8fafc;
+      position:sticky;
+      top:0;
+      z-index:1;
+      font-weight:800;
+    }
+    .score-mini td:first-child,
+    .score-mini th:first-child{
+      text-align:left;
+      font-weight:800;
+    }
   </style>
 </head>
 
@@ -662,6 +748,34 @@
       </table>
     </div>
   </section>
+    <!-- ✅ Pending course details modal -->
+  <div class="modalBack" id="pendingModalBack" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pendingModalTitle">
+      <h3 id="pendingModalTitle">Pending course</h3>
+      <div class="muted" id="pendingModalMeta">Loading…</div>
+
+      <div class="row" id="pendingModalControls" style="display:none;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <div id="pendingTeeWrap" style="display:none;">
+            <div class="muted" style="font-weight:800;">Tee</div>
+            <select id="pendingTeeSelect" style="padding:8px;border:1px solid var(--border);border-radius:10px;"></select>
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top:0;">
+          <button class="btn2 secondary" id="pendingCloseBtn" type="button">Close</button>
+        </div>
+      </div>
+
+      <div id="pendingModalBody" style="margin-top:10px;">
+        <!-- table injects here -->
+      </div>
+
+      <div class="actions" id="pendingModalFooter">
+        <button class="btn2 secondary" id="pendingCloseBtn2" type="button">Close</button>
+      </div>
+    </div>
+  </div>
   <section class="card" id="userDetailCard" style="margin-top:14px; display:none;">
     <div class="card-label">User details</div>
     <div class="muted-note" style="margin-bottom:6px;">
@@ -1306,7 +1420,7 @@ async function loadPendingCourses() {
       const created = p.created_at ? new Date(p.created_at).toLocaleString() : "";
 
       return `
-        <tr data-pending-id="${id}">
+          <tr data-pending-id="${id}" class="pending-row-click">
           <td>${id}</td>
           <td>${name}</td>
           <td>${state}</td>
@@ -1321,7 +1435,205 @@ async function loadPendingCourses() {
     }).join("");
   }
 }
+// ✅ Pending course detail modal helpers
+const pendingModalBack = document.getElementById("pendingModalBack");
+const pendingModalTitle = document.getElementById("pendingModalTitle");
+const pendingModalMeta = document.getElementById("pendingModalMeta");
+const pendingModalBody = document.getElementById("pendingModalBody");
+const pendingModalControls = document.getElementById("pendingModalControls");
+const pendingTeeWrap = document.getElementById("pendingTeeWrap");
+const pendingTeeSelect = document.getElementById("pendingTeeSelect");
 
+function openPendingModal(){
+  if (!pendingModalBack) return;
+  pendingModalBack.style.display = "flex";
+  pendingModalBack.setAttribute("aria-hidden", "false");
+}
+function closePendingModal(){
+  if (!pendingModalBack) return;
+  pendingModalBack.style.display = "none";
+  pendingModalBack.setAttribute("aria-hidden", "true");
+}
+
+function setSelectOptions(sel, values){
+  if (!sel) return;
+  sel.innerHTML = "";
+  (values || []).forEach(v => {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = v;
+    sel.appendChild(opt);
+  });
+}
+
+function extractPars(detail){
+  const pars =
+    detail?.pars ||
+    detail?.pars_array ||
+    detail?.parsArray ||
+    detail?.holes_pars ||
+    null;
+
+  if (Array.isArray(pars)) return pars.map(x => (x == null ? null : Number(x)));
+  return null;
+}
+
+function extractDistances(detail){
+  // supports either:
+  // 1) distances_m: { White:[...], Blue:[...] }
+  // 2) distances: [...]
+  // 3) distances_m: [...]
+  const distObj =
+    detail?.distances_m ||
+    detail?.distancesByTee ||
+    detail?.distances_by_tee ||
+    null;
+
+  if (distObj && typeof distObj === "object" && !Array.isArray(distObj)) {
+    const tees = Object.keys(distObj).filter(k => Array.isArray(distObj[k]));
+    return { type:"byTee", tees, byTee: distObj };
+  }
+
+  const arr =
+    (Array.isArray(distObj) ? distObj : null) ||
+    (Array.isArray(detail?.distances) ? detail.distances : null) ||
+    (Array.isArray(detail?.distance_m) ? detail.distance_m : null);
+
+  if (Array.isArray(arr)) return { type:"flat", arr: arr.map(x => (x == null ? null : Number(x))) };
+
+  return null;
+}
+
+function renderParsDistancesTable({ holes, pars, distances }){
+  const h = Number(holes) || (pars ? pars.length : (distances ? distances.length : 0)) || 0;
+  let rows = "";
+  for (let i=1;i<=h;i++){
+    const p = pars && pars[i-1] != null ? pars[i-1] : "—";
+    const d = distances && distances[i-1] != null ? distances[i-1] : "—";
+    rows += `<tr><td>Hole ${i}</td><td>${p}</td><td>${d}</td></tr>`;
+  }
+
+  return `
+    <table class="score-mini">
+      <thead>
+        <tr>
+          <th>Hole</th>
+          <th>Par</th>
+          <th>Distance (m)</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function fetchPendingDetail(id){
+  // ✅ try a few likely endpoints (keeps this frontend-only change safe)
+  const candidates = [
+    `/api/rounds/admin/pending-courses/${id}`,
+    `/api/rounds/admin/pending-courses/${id}/detail`,
+    `/api/rounds/templates/${id}`,
+    `/api/rounds/templates/pending/${id}`
+  ];
+
+  for (const url of candidates){
+    const data = await tryFetchJson(url);
+    if (!data) continue;
+
+    // normalise shapes
+    if (data.ok && data.template) return data.template;
+    if (data.ok && data.course) return data.course;
+    if (data.template) return data.template;
+    if (data.course) return data.course;
+    if (data.ok && data.item) return data.item;
+    if (data.item) return data.item;
+
+    // sometimes the object itself is the detail
+    if (typeof data === "object") return data;
+  }
+
+  return null;
+}
+
+async function openPendingCourseDetail(id){
+  const row = (PENDING_COURSES_CACHE || []).find(x => Number(x?.id) === Number(id)) || null;
+
+  pendingModalTitle.textContent = row?.name ? `Pending: ${row.name}` : `Pending course #${id}`;
+  pendingModalMeta.textContent = "Loading pars + distances…";
+  pendingModalBody.innerHTML = "";
+  pendingModalControls.style.display = "none";
+  pendingTeeWrap.style.display = "none";
+
+  openPendingModal();
+
+  const detail = await fetchPendingDetail(id);
+
+  if (!detail){
+    pendingModalMeta.textContent = "Could not load template details (missing endpoint).";
+    pendingModalBody.innerHTML = `<div class="users-empty" style="color:#b91c1c;">No detail endpoint found for this pending course ID.</div>`;
+    pendingModalControls.style.display = "block";
+    return;
+  }
+
+  const name = detail?.name || detail?.course || row?.name || "—";
+  const state = detail?.state || row?.state || "—";
+  const holes = Number(detail?.holes || row?.holes || 0) || 0;
+
+  const pars = extractPars(detail);
+  const distInfo = extractDistances(detail);
+
+  pendingModalTitle.textContent = `${name}`;
+  pendingModalMeta.textContent = `${state} • ${holes || (pars ? pars.length : "—")} holes`;
+
+  // tee handling
+  if (distInfo && distInfo.type === "byTee" && distInfo.tees && distInfo.tees.length){
+    pendingTeeWrap.style.display = "block";
+    setSelectOptions(pendingTeeSelect, distInfo.tees);
+
+    const renderWithTee = (tee) => {
+      const dists = Array.isArray(distInfo.byTee?.[tee]) ? distInfo.byTee[tee] : [];
+      pendingModalBody.innerHTML = renderParsDistancesTable({
+        holes,
+        pars: Array.isArray(pars) ? pars : null,
+        distances: dists
+      });
+    };
+
+    // default to first tee
+    renderWithTee(distInfo.tees[0]);
+    pendingTeeSelect.onchange = () => renderWithTee(pendingTeeSelect.value);
+
+  } else {
+    const flat = (distInfo && distInfo.type === "flat") ? distInfo.arr : null;
+    pendingModalBody.innerHTML = renderParsDistancesTable({
+      holes,
+      pars: Array.isArray(pars) ? pars : null,
+      distances: Array.isArray(flat) ? flat : null
+    });
+  }
+
+  pendingModalControls.style.display = "flex";
+}
+
+// wire close buttons + backdrop once
+(function wirePendingModalOnce(){
+  const b1 = document.getElementById("pendingCloseBtn");
+  const b2 = document.getElementById("pendingCloseBtn2");
+
+  if (b1 && !b1._wired){ b1._wired = true; b1.addEventListener("click", closePendingModal); }
+  if (b2 && !b2._wired){ b2._wired = true; b2.addEventListener("click", closePendingModal); }
+
+  if (pendingModalBack && !pendingModalBack._wired){
+    pendingModalBack._wired = true;
+    pendingModalBack.addEventListener("click", (e) => {
+      if (e.target === pendingModalBack) closePendingModal();
+    });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closePendingModal();
+  });
+})();
 // Delegate approve click
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-approve-id]");
@@ -1365,6 +1677,25 @@ document.addEventListener("click", async (e) => {
     btn.disabled = false;
     btn.textContent = oldTxt;
   }
+});
+
+// ✅ Delegate click on pending row (opens modal)
+// ✅ Ignore Approve button clicks AND clicks inside the Approve cell (last column)
+document.addEventListener("click", async (e) => {
+  // clicked approve button (or inside it)
+  if (e.target.closest("[data-approve-id]")) return;
+
+  const tr = e.target.closest("#pendingCoursesTable tbody tr[data-pending-id]");
+  if (!tr) return;
+
+  // ✅ if click happened inside the last <td> (actions column), ignore
+  const td = e.target.closest("td");
+  if (td && td === tr.lastElementChild) return;
+
+  const id = Number(tr.getAttribute("data-pending-id"));
+  if (!Number.isFinite(id) || id <= 0) return;
+
+  await openPendingCourseDetail(id);
 });
 
 // Wire refresh button
