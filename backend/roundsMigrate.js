@@ -131,6 +131,34 @@ export async function ensureScorecardTemplatesTables() {
         reject_reason TEXT
       );
 
+      -- ✅ Safe upgrades (if courses_pending existed before these columns)
+      ALTER TABLE courses_pending
+        ADD COLUMN IF NOT EXISTS submitted_by_user_id INTEGER;
+
+      ALTER TABLE courses_pending
+        ADD COLUMN IF NOT EXISTS submitted_by_email TEXT;
+
+      ALTER TABLE courses_pending
+        ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+
+      ALTER TABLE courses_pending
+        ADD COLUMN IF NOT EXISTS approved_by_user_id INTEGER;
+
+      ALTER TABLE courses_pending
+        ADD COLUMN IF NOT EXISTS approved_by_email TEXT;
+
+      ALTER TABLE courses_pending
+        ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ;
+
+      ALTER TABLE courses_pending
+        ADD COLUMN IF NOT EXISTS rejected_by_user_id INTEGER;
+
+      ALTER TABLE courses_pending
+        ADD COLUMN IF NOT EXISTS rejected_by_email TEXT;
+
+      ALTER TABLE courses_pending
+        ADD COLUMN IF NOT EXISTS reject_reason TEXT;
+
       CREATE INDEX IF NOT EXISTS courses_pending_state_idx
         ON courses_pending (state);
 
