@@ -8,7 +8,7 @@ import nodemailer from "nodemailer";
 import Stripe from "stripe"; // ✅ Stripe
 import jwt from "jsonwebtoken"; // ✅ NEW (only used to read email from Bearer token)
 import { ensureBookingTemplateSchema } from "./bookingTemplateMigrate.js";
-import { ensureRoundsTables } from "./roundsMigrate.js";
+import { ensureRoundsTables, ensureScorecardTemplatesTables } from "./roundsMigrate.js";
 // ✅ NEW: cookies (needed for booking admin auth cookie)
 import cookieParser from "cookie-parser";
 
@@ -299,6 +299,7 @@ async function ensureAlertHitsTable() {
 }
 ensureAlertHitsTable();
 ensureRoundsTables();
+ensureScorecardTemplatesTables();
 
 /* ✅✅✅ ONLY ADDITION (needed): ensure booking tables exist (so admin can create courses + generate times) ✅✅✅ */
 async function ensureBookingTables() {
