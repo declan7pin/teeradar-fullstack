@@ -10,6 +10,7 @@ import { recordEvent } from "./analytics.js";
 import { Resend } from "resend";
 
 const router = express.Router();
+router.use(express.json());
 
 // -------------------------------------------------
 // ✅ OPTIONAL: Admin email alerts (Resend)
@@ -218,7 +219,11 @@ async function getRoundWithHoles(roundId) {
 
   return { round: roundRow.rows[0], holes: holesRows.rows || [] };
 }
-
+function isValidEmail(v) {
+  const s = String(v || "").trim();
+  if (!s) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
 // -------------------------------------------------
 // ✅ Template endpoints
 // Mounted at /api/rounds, so:
@@ -309,9 +314,19 @@ router.post("/templates/submit/:roundId", requireAuth, async (req, res) => {
       return res.json({ ok: true, alreadyApproved: true, courseId: existing.id });
     }
 
-    // ✅ NO DUPES + capture email for manual coupon follow-up
-    const nameNorm = normaliseCourseName(courseName);
-    const userEmail = String(req.user?.email || "").trim().toLowerCase() || null;
+    // ✅ NO DUPES + capture *submitted* email (user must type it)
+const nameNorm = normaliseCourseName(courseName);
+
+const submittedEmailRaw = String(req.body?.email || "").trim().toLowerCase();
+const submittedEmail = submittedEmailRaw ? submittedEmailRaw : null;
+
+if (!submittedEmail || !isValidEmail(submittedEmail)) {
+  return res.status(400).json({
+    ok: false,
+    error: "email_required",
+    message: "Please enter a valid email address before submitting.",
+  });
+}
 
     // ✅ IMPORTANT:
     // courses_pending has a PARTIAL unique index for OPEN rows:
@@ -340,7 +355,7 @@ router.post("/templates/submit/:roundId", requireAuth, async (req, res) => {
         JSON.stringify(pars),
         JSON.stringify(dists),
         Number(userId),
-        userEmail,
+        submittedEmail,
       ]
     );
 
@@ -355,7 +370,7 @@ router.post("/templates/submit/:roundId", requireAuth, async (req, res) => {
         VALUES
           ('SUBMITTED', $1, $2, $3, $4, $5, $6);
         `,
-        [nameNorm, stateCode, holesCount, Number(pendingId), Number(userId), userEmail]
+        [nameNorm, stateCode, holesCount, Number(pendingId), Number(userId), submittedEmail]
       );
     } catch (e) {
       console.warn("contribution log (SUBMITTED) failed:", e?.message || e);
@@ -370,9 +385,10 @@ router.post("/templates/submit/:roundId", requireAuth, async (req, res) => {
           <b>State:</b> ${stateCode}<br/>
           <b>Holes:</b> ${holesCount}<br/>
           <b>Pending ID:</b> ${pendingId}<br/>
-          <b>Submitted by user_id:</b> ${userId}
+          <b>Submitted by user_id:</b> ${userId}<br/>
+<b>User email:</b> ${submittedEmail}
         </p>
-        <p>Approve it in Course Admin → Pending Courses.</p>
+        <p>Approve it in Analytics → Pending Courses.</p>
       `
     );
 
