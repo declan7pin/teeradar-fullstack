@@ -858,7 +858,10 @@
     const namesGrid = document.getElementById("namesGrid");
 
     // ✅ NEW: submit UI
-    const submitCourseBtn = document.getElementById("submitCourseBtn");
+    // ✅ accept either id (older builds used submitRoundBtn)
+const submitCourseBtn =
+  document.getElementById("submitCourseBtn") ||
+  document.getElementById("submitRoundBtn");
     const submitModalBack = document.getElementById("submitModalBack");
     const submitEmail = document.getElementById("submitEmail");
     const submitCancelBtn = document.getElementById("submitCancelBtn");
@@ -1579,266 +1582,263 @@
     }
 
     async function renderScorecard(round){
-      currentRound = round;
-      currentRoundId = round?.id || null;
+  currentRound = round;
+  currentRoundId = round?.id || null;
 
-      // ✅ ensure P1 is user always
-      ensureP1IsUser();
+  // ✅ ensure P1 is user always
+  ensureP1IsUser();
 
-      if (!round || !currentRoundId) {
-        scorecardEmpty.style.display = "block";
-        scorecardWrap.style.display = "none";
-        saveAllBtn.disabled = true;
-        deleteRoundBtn.disabled = true;
+  if (!round || !currentRoundId) {
+    scorecardEmpty.style.display = "block";
+    scorecardWrap.style.display = "none";
+    saveAllBtn.disabled = true;
+    deleteRoundBtn.disabled = true;
 
-        if (submitCourseBtn){
-          submitCourseBtn.style.display = "none";
-          submitCourseBtn.disabled = true;
-        }
-        if (submitRoundBtn){
-  submitRoundBtn.style.display = "none";
-  submitRoundBtn.disabled = true;
-}
+    // ✅ hide BOTH possible submit buttons
+    if (submitCourseBtn){
+      submitCourseBtn.style.display = "none";
+      submitCourseBtn.disabled = true;
+    }
+    if (submitRoundBtn){
+      submitRoundBtn.style.display = "none";
+      submitRoundBtn.disabled = true;
+    }
 
-        scTitleEl.textContent = "Scorecard";
-        scSubEl.textContent = "Select a round to begin.";
-        scPillsEl.innerHTML = "";
-        totalsGrid.innerHTML = "";
-        scoreHead.innerHTML = "";
-        scoreBody.innerHTML = "";
-        return;
+    scTitleEl.textContent = "Scorecard";
+    scSubEl.textContent = "Select a round to begin.";
+    scPillsEl.innerHTML = "";
+    totalsGrid.innerHTML = "";
+    scoreHead.innerHTML = "";
+    scoreBody.innerHTML = "";
+    return;
+  }
+
+  // ✅ load per-round names from localStorage
+  loadNamesForRound(currentRoundId);
+  ensureP1IsUser();
+  renderPlayerNamesUI();
+
+  scorecardEmpty.style.display = "none";
+  scorecardWrap.style.display = "block";
+  saveAllBtn.disabled = false;
+  deleteRoundBtn.disabled = false;
+
+  const course = String(round.course || "").trim();
+  const state = String(round.state || "").trim().toUpperCase();
+  const holes = Number(round.holes) || 18;
+
+  await loadScorecardsStateOnce(state);
+  const layouts9 = find9LayoutsForCourse(state, course);
+
+  if (layouts9.length){
+    ninesWrap.style.display = "block";
+    teeWrap.style.display = "block";
+    nineLoopWrap.style.display = "none";
+
+    if (holes === 9){
+      nines9Only.style.display = "block";
+      nines18Only.style.display = "none";
+      setSelectOptions(nineSingleEl, layouts9, null);
+
+      if (!uiNineSingle){
+        const lay = String(round.layout || "").trim();
+        uiNineSingle = layouts9.find(x => x.toLowerCase() === lay.toLowerCase()) || layouts9[0] || "";
+      }
+      nineSingleEl.value = uiNineSingle;
+    } else {
+      nines9Only.style.display = "none";
+      nines18Only.style.display = "block";
+
+      if (!uiNineFront || !uiNineBack){
+        const lay = String(round.layout || "").trim();
+        const parts = lay.split("-").map(s=>s.trim()).filter(Boolean);
+        uiNineFront = layouts9.find(x => parts[0] && x.toLowerCase() === parts[0].toLowerCase()) || layouts9[0] || "";
+        uiNineBack  = layouts9.find(x => parts[1] && x.toLowerCase() === parts[1].toLowerCase()) || layouts9[1] || layouts9[0] || "";
       }
 
-      // ✅ load per-round names from localStorage
-      loadNamesForRound(currentRoundId);
-      ensureP1IsUser();
-      renderPlayerNamesUI();
+      ensureDifferentFrontBack(layouts9);
 
-      scorecardEmpty.style.display = "none";
-      scorecardWrap.style.display = "block";
-      saveAllBtn.disabled = false;
-      deleteRoundBtn.disabled = false;
-      // ✅ NEW: show submit round button unless already published
-if (submitRoundBtn){
-  const status = String(round?.status || "").trim().toUpperCase();
-  const isPublished = status === "PUBLISHED" || status === "SUBMITTED";
+      setSelectOptions(nineFrontEl, layouts9, null);
+      nineFrontEl.value = uiNineFront;
 
-  submitRoundBtn.style.display = "inline-flex";
-  submitRoundBtn.disabled = isPublished;
+      const frontLower = String(uiNineFront || "").toLowerCase();
+      let backOptions = layouts9.filter(x => x.toLowerCase() !== frontLower);
+      if (!backOptions.length) backOptions = layouts9.slice();
+      setSelectOptions(nineBackEl, backOptions, null);
 
-  if (isPublished) submitRoundBtn.textContent = "Submitted";
-  else submitRoundBtn.textContent = "Submit";
-}
-
-      const course = String(round.course || "").trim();
-      const state = String(round.state || "").trim().toUpperCase();
-      const holes = Number(round.holes) || 18;
-
-      await loadScorecardsStateOnce(state);
-      const layouts9 = find9LayoutsForCourse(state, course);
-
-      if (layouts9.length){
-        ninesWrap.style.display = "block";
-        teeWrap.style.display = "block";
-        nineLoopWrap.style.display = "none";
-
-        if (holes === 9){
-          nines9Only.style.display = "block";
-          nines18Only.style.display = "none";
-          setSelectOptions(nineSingleEl, layouts9, null);
-
-          if (!uiNineSingle){
-            const lay = String(round.layout || "").trim();
-            uiNineSingle = layouts9.find(x => x.toLowerCase() === lay.toLowerCase()) || layouts9[0] || "";
-          }
-          nineSingleEl.value = uiNineSingle;
-        } else {
-          nines9Only.style.display = "none";
-          nines18Only.style.display = "block";
-
-          if (!uiNineFront || !uiNineBack){
-            const lay = String(round.layout || "").trim();
-            const parts = lay.split("-").map(s=>s.trim()).filter(Boolean);
-            uiNineFront = layouts9.find(x => parts[0] && x.toLowerCase() === parts[0].toLowerCase()) || layouts9[0] || "";
-            uiNineBack  = layouts9.find(x => parts[1] && x.toLowerCase() === parts[1].toLowerCase()) || layouts9[1] || layouts9[0] || "";
-          }
-
-          ensureDifferentFrontBack(layouts9);
-
-          setSelectOptions(nineFrontEl, layouts9, null);
-          nineFrontEl.value = uiNineFront;
-
-          const frontLower = String(uiNineFront || "").toLowerCase();
-          let backOptions = layouts9.filter(x => x.toLowerCase() !== frontLower);
-          if (!backOptions.length) backOptions = layouts9.slice();
-          setSelectOptions(nineBackEl, backOptions, null);
-
-          if (!backOptions.some(x => x.toLowerCase() === String(uiNineBack||"").toLowerCase())){
-            uiNineBack = backOptions[0] || "";
-          }
-          nineBackEl.value = uiNineBack;
-        }
-
-        await refreshNinesAndTeesUI();
-      } else {
-        ninesWrap.style.display = "none";
-        teeWrap.style.display = "none";
-        syncNineLoopVisibility();
+      if (!backOptions.some(x => x.toLowerCase() === String(uiNineBack||"").toLowerCase())){
+        uiNineBack = backOptions[0] || "";
       }
+      nineBackEl.value = uiNineBack;
+    }
 
-      const pc = getPlayersCountFromRound(round);
+    await refreshNinesAndTeesUI();
+  } else {
+    ninesWrap.style.display = "none";
+    teeWrap.style.display = "none";
+    syncNineLoopVisibility();
+  }
 
-      const meta = await getPublishedMetaFromScorecards(round);
-      const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
-      const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
-      const teeName = meta?.teeName || "";
+  const pc = getPlayersCountFromRound(round);
 
-      // ✅ show submit button only when needed
-      if (submitCourseBtn){
-        const offer = shouldOfferSubmission(round, meta);
-        submitCourseBtn.style.display = offer ? "inline-flex" : "none";
-        submitCourseBtn.disabled = !offer;
-      }
+  const meta = await getPublishedMetaFromScorecards(round);
+  const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
+  const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
+  const teeName = meta?.teeName || "";
 
-      scTitleEl.textContent = round.course || "Round";
-      scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
+  // ✅ UNIFIED: show ONE "Submit" button (either id) only when needed
+  const offer = shouldOfferSubmission(round, meta);
 
-      scPillsEl.innerHTML = `
-        <span class="pill">${escapeHtml(round.par_mode || "")}</span>
-        <span class="pill">Players: ${pc}</span>
-        <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
-        <span class="pill">${teeName ? ("Tee: " + escapeHtml(teeName)) : "Tee: —"}</span>
+  if (submitCourseBtn){
+    submitCourseBtn.style.display = offer ? "inline-flex" : "none";
+    submitCourseBtn.disabled = !offer;
+    if (offer) submitCourseBtn.textContent = "Submit";
+  }
+  if (submitRoundBtn){
+    submitRoundBtn.style.display = offer ? "inline-flex" : "none";
+    submitRoundBtn.disabled = !offer;
+    if (offer) submitRoundBtn.textContent = "Submit";
+  }
+
+  scTitleEl.textContent = round.course || "Round";
+  scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
+
+  scPillsEl.innerHTML = `
+    <span class="pill">${escapeHtml(round.par_mode || "")}</span>
+    <span class="pill">Players: ${pc}</span>
+    <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
+    <span class="pill">${teeName ? ("Tee: " + escapeHtml(teeName)) : "Tee: —"}</span>
+  `;
+
+  buildScoreHead(pc, teeName);
+  scoreBody.innerHTML = "";
+
+  const holesCount = Number(round.holes) || 18;
+  const holesData = Array.isArray(round.holesData) ? round.holesData : [];
+
+  const map = new Map();
+  for (const h of holesData) map.set(Number(h.hole_number), h);
+
+  const isPublishedMode =
+    String(round.par_mode || "").toLowerCase() === "published" ||
+    String(round.par_mode || "").toUpperCase() === "PUBLISHED";
+
+  for (let i=1; i<=holesCount; i++){
+    const existing = map.get(i) || { hole_number: i, par: null, distance_m: null };
+
+    let parValue = existing.par;
+    if ((parValue === null || typeof parValue === "undefined" || parValue === "") && isPublishedMode && metaPars && Number.isFinite(Number(metaPars[i-1]))) {
+      parValue = Number(metaPars[i-1]);
+    }
+
+    const metaDistVal = (metaDists && Number.isFinite(Number(metaDists[i-1]))) ? Number(metaDists[i-1]) : null;
+    const savedDistVal = Number.isFinite(Number(existing.distance_m)) ? Number(existing.distance_m) : null;
+
+    const tr = document.createElement("tr");
+
+    let playerTds = "";
+    for (let pi=0; pi<pc; pi++){
+      const s = getHolePlayerValue(existing, "strokes", pi);
+      const u = getHolePlayerValue(existing, "putts", pi);
+
+      playerTds += `
+        <td>
+          <input class="mini" inputmode="numeric" pattern="[0-9]*"
+            data-field="strokes" data-hole="${i}" data-player="${pi+1}"
+            value="${s ?? ""}" placeholder="—">
+        </td>
+        <td>
+          <input class="mini" inputmode="numeric" pattern="[0-9]*"
+            data-field="putts" data-hole="${i}" data-player="${pi+1}"
+            value="${u ?? ""}" placeholder="—">
+        </td>
       `;
-
-      buildScoreHead(pc, teeName);
-      scoreBody.innerHTML = "";
-
-      const holesCount = Number(round.holes) || 18;
-      const holesData = Array.isArray(round.holesData) ? round.holesData : [];
-
-      const map = new Map();
-      for (const h of holesData) map.set(Number(h.hole_number), h);
-
-      const isPublishedMode =
-        String(round.par_mode || "").toLowerCase() === "published" ||
-        String(round.par_mode || "").toUpperCase() === "PUBLISHED";
-
-      for (let i=1; i<=holesCount; i++){
-        const existing = map.get(i) || { hole_number: i, par: null, distance_m: null };
-
-        let parValue = existing.par;
-        if ((parValue === null || typeof parValue === "undefined" || parValue === "") && isPublishedMode && metaPars && Number.isFinite(Number(metaPars[i-1]))) {
-          parValue = Number(metaPars[i-1]);
-        }
-
-        const metaDistVal = (metaDists && Number.isFinite(Number(metaDists[i-1]))) ? Number(metaDists[i-1]) : null;
-        const savedDistVal = Number.isFinite(Number(existing.distance_m)) ? Number(existing.distance_m) : null;
-
-        const tr = document.createElement("tr");
-
-        let playerTds = "";
-        for (let pi=0; pi<pc; pi++){
-          const s = getHolePlayerValue(existing, "strokes", pi);
-          const u = getHolePlayerValue(existing, "putts", pi);
-
-          playerTds += `
-            <td>
-              <input class="mini" inputmode="numeric" pattern="[0-9]*"
-                data-field="strokes" data-hole="${i}" data-player="${pi+1}"
-                value="${s ?? ""}" placeholder="—">
-            </td>
-            <td>
-              <input class="mini" inputmode="numeric" pattern="[0-9]*"
-                data-field="putts" data-hole="${i}" data-player="${pi+1}"
-                value="${u ?? ""}" placeholder="—">
-            </td>
-          `;
-        }
-
-        // ✅ Distance: if we have published distance -> show it. Otherwise allow entry (needed for submission).
-        const distCellHtml = (metaDistVal != null)
-          ? `${metaDistVal}`
-          : `<input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="distance_m" data-hole="${i}" value="${savedDistVal ?? ""}" placeholder="m">`;
-
-        tr.innerHTML = `
-          <td>Hole ${i}</td>
-          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${parValue ?? ""}" placeholder="—"></td>
-          <td class="distCell">${distCellHtml}</td>
-          ${playerTds}
-        `;
-
-        scoreBody.appendChild(tr);
-      }
-
-      scoreBody.querySelectorAll("input").forEach((inp) => {
-        inp.addEventListener("input", () => updateTotalsFromTable());
-      });
-
-      updateTotalsFromTable();
     }
 
-    function readTableHoles(){
-      const byHole = new Map();
-      const holesCount = Number(currentRound?.holes) || 18;
-      const pc = getPlayersCountFromRound(currentRound);
+    // ✅ Distance: if we have published distance -> show it. Otherwise allow entry (needed for submission).
+    const distCellHtml = (metaDistVal != null)
+      ? `${metaDistVal}`
+      : `<input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="distance_m" data-hole="${i}" value="${savedDistVal ?? ""}" placeholder="m">`;
 
-      for (let i=1;i<=holesCount;i++){
-        byHole.set(i, { hole_number: i, par: null, distance_m: null, strokes_by_player: {}, putts_by_player: {} });
-      }
+    tr.innerHTML = `
+      <td>Hole ${i}</td>
+      <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${parValue ?? ""}" placeholder="—"></td>
+      <td class="distCell">${distCellHtml}</td>
+      ${playerTds}
+    `;
 
-      // par
-      for (let i=1;i<=holesCount;i++){
-        const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
-        if (parInp){
-          const v = String(parInp.value || "").trim();
-          const n = v === "" ? null : Number(v);
-          byHole.get(i).par = Number.isFinite(n) ? n : null;
-        }
-      }
+    scoreBody.appendChild(tr);
+  }
 
-      // ✅ distance_m (only present when editable)
-      for (let i=1;i<=holesCount;i++){
-        const distInp = scoreBody.querySelector(`input[data-field="distance_m"][data-hole="${i}"]`);
-        if (distInp){
-          const v = String(distInp.value || "").trim();
-          const n = v === "" ? null : Number(v);
-          byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
-        }
-      }
+  scoreBody.querySelectorAll("input").forEach((inp) => {
+    inp.addEventListener("input", () => updateTotalsFromTable());
+  });
 
-      // strokes/putts by player
-      const inputs = scoreBody.querySelectorAll("input[data-player]");
-      inputs.forEach(inp => {
-        const hole = Number(inp.dataset.hole);
-        const field = String(inp.dataset.field || "");
-        const player = Number(inp.dataset.player);
-        if (!Number.isFinite(hole) || !byHole.has(hole)) return;
-        if (![ "strokes", "putts" ].includes(field)) return;
-        if (!Number.isFinite(player) || player < 1 || player > 4) return;
+  updateTotalsFromTable();
+}
 
-        const v = String(inp.value || "").trim();
-        const n = v === "" ? null : Number(v);
-        const val = Number.isFinite(n) ? n : null;
+function readTableHoles(){
+  const byHole = new Map();
+  const holesCount = Number(currentRound?.holes) || 18;
+  const pc = getPlayersCountFromRound(currentRound);
 
-        if (field === "strokes") byHole.get(hole).strokes_by_player[String(player)] = val;
-        if (field === "putts") byHole.get(hole).putts_by_player[String(player)] = val;
-      });
+  for (let i=1;i<=holesCount;i++){
+    byHole.set(i, { hole_number: i, par: null, distance_m: null, strokes_by_player: {}, putts_by_player: {} });
+  }
 
-      for (let i=1;i<=holesCount;i++){
-        const h = byHole.get(i);
-        h.strokes = (h.strokes_by_player && typeof h.strokes_by_player === "object") ? (h.strokes_by_player["1"] ?? null) : null;
-        h.putts = (h.putts_by_player && typeof h.putts_by_player === "object") ? (h.putts_by_player["1"] ?? null) : null;
-
-        for (let p=pc+1; p<=4; p++){
-          delete h.strokes_by_player[String(p)];
-          delete h.putts_by_player[String(p)];
-        }
-      }
-
-      const rows = [];
-      for (let i=1;i<=holesCount;i++) rows.push(byHole.get(i));
-      return rows;
+  // par
+  for (let i=1;i<=holesCount;i++){
+    const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
+    if (parInp){
+      const v = String(parInp.value || "").trim();
+      const n = v === "" ? null : Number(v);
+      byHole.get(i).par = Number.isFinite(n) ? n : null;
     }
+  }
+
+  // ✅ distance_m (only present when editable)
+  for (let i=1;i<=holesCount;i++){
+    const distInp = scoreBody.querySelector(`input[data-field="distance_m"][data-hole="${i}"]`);
+    if (distInp){
+      const v = String(distInp.value || "").trim();
+      const n = v === "" ? null : Number(v);
+      byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
+    }
+  }
+
+  // strokes/putts by player
+  const inputs = scoreBody.querySelectorAll("input[data-player]");
+  inputs.forEach(inp => {
+    const hole = Number(inp.dataset.hole);
+    const field = String(inp.dataset.field || "");
+    const player = Number(inp.dataset.player);
+    if (!Number.isFinite(hole) || !byHole.has(hole)) return;
+    if (![ "strokes", "putts" ].includes(field)) return;
+    if (!Number.isFinite(player) || player < 1 || player > 4) return;
+
+    const v = String(inp.value || "").trim();
+    const n = v === "" ? null : Number(v);
+    const val = Number.isFinite(n) ? n : null;
+
+    if (field === "strokes") byHole.get(hole).strokes_by_player[String(player)] = val;
+    if (field === "putts") byHole.get(hole).putts_by_player[String(player)] = val;
+  });
+
+  for (let i=1;i<=holesCount;i++){
+    const h = byHole.get(i);
+    h.strokes = (h.strokes_by_player && typeof h.strokes_by_player === "object") ? (h.strokes_by_player["1"] ?? null) : null;
+    h.putts = (h.putts_by_player && typeof h.putts_by_player === "object") ? (h.putts_by_player["1"] ?? null) : null;
+
+    for (let p=pc+1; p<=4; p++){
+      delete h.strokes_by_player[String(p)];
+      delete h.putts_by_player[String(p)];
+    }
+  }
+
+  const rows = [];
+  for (let i=1;i<=holesCount;i++) rows.push(byHole.get(i));
+  return rows;
+}
 
     function updateTotalsFromTable(){
       const holesRows = readTableHoles();
