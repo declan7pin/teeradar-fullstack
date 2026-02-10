@@ -447,7 +447,23 @@ async function ensureBookingTimesRoutingSchema() {
       console.log("🧹 dropping old booking_times unique constraint:", r.conname);
       await db.query(`ALTER TABLE booking_times DROP CONSTRAINT IF EXISTS "${r.conname}";`);
     }
-
+// 3.5) ✅ DEDUPE existing rows so the new unique index can be created
+// Keeps the most recently updated/created row for each routing key.
+await db.query(`
+  WITH ranked AS (
+    SELECT
+      ctid,
+      ROW_NUMBER() OVER (
+        PARTITION BY course_id, play_date, tee_time, holes, layout_key, front9_key, back9_key
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
+      ) AS rn
+    FROM booking_times
+  )
+  DELETE FROM booking_times bt
+  USING ranked r
+  WHERE bt.ctid = r.ctid
+    AND r.rn > 1;
+`);
     // 4) Create the NEW unique index including routing keys
     await db.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS booking_times_uq_routing
