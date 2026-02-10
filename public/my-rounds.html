@@ -615,8 +615,8 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="submitModalTitle">
       <h3 id="submitModalTitle">Submit course for approval</h3>
       <div class="muted">
-        We need an email address so Declan can send you your manual coupon code once your course is approved.
-      </div>
+  Enter your email. Once your course is approved, you’ll receive an email with a code for <strong>1 free month</strong> of TeeRadar.
+</div>
 
       <label for="submitEmail">Your email</label>
       <input id="submitEmail" type="email" placeholder="you@example.com" autocomplete="email" />
@@ -2227,13 +2227,19 @@ async function submitRound(){
       if (currentRoundId && currentRound) renderScorecard(currentRound);
     });
 
-    // ✅ NEW: submission button
-    if (submitCourseBtn){
-      submitCourseBtn.addEventListener("click", () => {
-        if (!currentRoundId) return;
-        openSubmitModal();
-      });
-    }
+   // ✅ FIX: delegated click handler so it always works (even after re-renders)
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("#submitCourseBtn");
+  if (!btn) return;
+
+  e.preventDefault();
+
+  // if your renderScorecard disables it, don’t open modal
+  if (btn.disabled) return;
+
+  if (!currentRoundId) return;
+  openSubmitModal();
+});
 
     // ✅ NEW: modal actions
     if (submitCancelBtn) submitCancelBtn.addEventListener("click", closeSubmitModal);
