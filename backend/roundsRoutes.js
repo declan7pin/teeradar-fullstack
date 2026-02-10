@@ -311,23 +311,56 @@ router.post("/templates/submit/:roundId", requireAuth, async (req, res) => {
       return res.json({ ok: true, alreadyApproved: true, courseId: existing.id });
     }
 
-    const ins = await db.query(
-      `
-      INSERT INTO courses_pending (name, state, holes, pars_json, dists_json, submitted_by_user_id)
-      VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6)
-      RETURNING id;
-      `,
-      [
-        normaliseCourseName(courseName),
-        stateCode,
-        holesCount,
-        JSON.stringify(pars),
-        JSON.stringify(dists),
-        Number(userId),
-      ]
-    );
+    // ✅ NO DUPES + capture email for manual coupon follow-up
+const nameNorm = normaliseCourseName(courseName);
+const userEmail = String(req.user?.email || "").trim().toLowerCase() || null;
 
-    const pendingId = ins.rows[0]?.id;
+// Insert pending, but if one already exists (open), reuse it.
+// NOTE: requires the UNIQUE INDEX courses_pending_uq_open from migration.
+const ins = await db.query(
+  `
+  INSERT INTO courses_pending (
+    name, state, holes, pars_json, dists_json,
+    submitted_by_user_id, submitted_by_email
+  )
+  VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7)
+  ON CONFLICT (name, state, holes)
+  DO UPDATE SET
+    -- keep latest pars/dists in case they improved the template
+    pars_json = EXCLUDED.pars_json,
+    dists_json = EXCLUDED.dists_json,
+    submitted_by_user_id = COALESCE(courses_pending.submitted_by_user_id, EXCLUDED.submitted_by_user_id),
+    submitted_by_email   = COALESCE(courses_pending.submitted_by_email,   EXCLUDED.submitted_by_email)
+  WHERE courses_pending.approved_at IS NULL
+  RETURNING id;
+  `,
+  [
+    nameNorm,
+    stateCode,
+    holesCount,
+    JSON.stringify(pars),
+    JSON.stringify(dists),
+    Number(userId),
+    userEmail,
+  ]
+);
+
+const pendingId = ins.rows[0]?.id;
+
+// ✅ contributor history (auto-linked)
+try {
+  await db.query(
+    `
+    INSERT INTO scorecard_course_contributions
+      (action, name, state, holes, pending_id, actor_user_id, actor_email)
+    VALUES
+      ('SUBMITTED', $1, $2, $3, $4, $5, $6);
+    `,
+    [nameNorm, stateCode, holesCount, Number(pendingId), Number(userId), userEmail]
+  );
+} catch (e) {
+  console.warn("contribution log (SUBMITTED) failed:", e?.message || e);
+}
 
     await sendAdminAlert(
       `New user course submitted: ${courseName} (${holesCount})`,
@@ -356,7 +389,7 @@ router.get("/admin/pending-courses", requireAuth, requireSuperAdmin, async (req,
   try {
     const { rows } = await db.query(
       `
-      SELECT id, name, state, holes, submitted_by_user_id, created_at
+      SELECT id, name, state, holes, submitted_by_user_id, submitted_by_email, created_at
       FROM courses_pending
       WHERE approved_at IS NULL
       ORDER BY created_at DESC
@@ -405,37 +438,42 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
       [p.name, p.state, p.holes, JSON.stringify(p.pars_json), JSON.stringify(p.dists_json)]
     );
 
-    await db.query(`UPDATE courses_pending SET approved_at = now() WHERE id = $1;`, [id]);
+    // ✅ store who approved (manual coupon will be emailed by you later)
+const approverId = Number(req.user?.id || 0) || null;
+const approverEmail = String(req.user?.email || "").trim().toLowerCase() || null;
 
-    // Reward: 1 month Basic free, once per user
-    if (p.submitted_by_user_id) {
-      const u = await db.query(
-        `SELECT id, course_bonus_used, basic_free_until FROM users WHERE id = $1 LIMIT 1;`,
-        [Number(p.submitted_by_user_id)]
-      );
+await db.query(
+  `
+  UPDATE courses_pending
+  SET
+    approved_at = now(),
+    approved_by_user_id = $2,
+    approved_by_email = $3
+  WHERE id = $1;
+  `,
+  [id, approverId, approverEmail]
+);
 
-      if (u.rows.length) {
-        const user = u.rows[0];
-        const used = Number(user.course_bonus_used || 0);
+// ✅ contributor history (auto-linked)
+try {
+  const approved = await db.query(
+    `SELECT id FROM scorecard_courses WHERE name = $1 AND state = $2 AND holes = $3 LIMIT 1;`,
+    [p.name, p.state, p.holes]
+  );
+  const approvedCourseId = approved.rows[0]?.id || null;
 
-        if (used === 0) {
-          await db.query(
-            `
-            UPDATE users
-            SET
-              course_bonus_used = 1,
-              basic_free_until = CASE
-                WHEN basic_free_until IS NULL OR basic_free_until < now()
-                  THEN now() + interval '30 days'
-                ELSE basic_free_until + interval '30 days'
-              END
-            WHERE id = $1;
-            `,
-            [Number(user.id)]
-          );
-        }
-      }
-    }
+  await db.query(
+    `
+    INSERT INTO scorecard_course_contributions
+      (action, name, state, holes, pending_id, approved_course_id, actor_user_id, actor_email)
+    VALUES
+      ('APPROVED', $1, $2, $3, $4, $5, $6, $7);
+    `,
+    [p.name, p.state, p.holes, Number(id), approvedCourseId, approverId, approverEmail]
+  );
+} catch (e) {
+  console.warn("contribution log (APPROVED) failed:", e?.message || e);
+}
 
     await db.query("COMMIT");
 
