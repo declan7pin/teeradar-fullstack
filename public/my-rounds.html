@@ -153,6 +153,11 @@
       background:var(--danger);
       border-color:rgba(213,0,0,.3);
     }
+    #scPills{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
     .pill{
       display:inline-flex;
       align-items:center;
@@ -164,8 +169,7 @@
       font-weight:700;
       font-size:.85rem;
       color:var(--text);
-      margin-right:8px;
-      margin-top:8px;
+      margin:0;
     }
     .pill.ok{border-color:rgba(22,163,74,.25); background:rgba(22,163,74,.07)}
     .pill.bad{border-color:rgba(213,0,0,.25); background:rgba(213,0,0,.06)}
@@ -392,6 +396,7 @@
       TeeRadar <small>My Rounds</small>
     </div>
     <div class="navbtns">
+      <a class="btn secondary" href="/">Home</a>
       <a class="btn secondary" href="/book.html">Back to Book</a>
       <a class="btn secondary" href="/account.html">Account</a>
 
@@ -572,6 +577,7 @@
             </div>
             <div class="rightActions">
               <!-- ✅ NEW: submit template button (only when needed) -->
+              <button class="btn2 secondary" id="showLeftBtn" type="button" style="display:none;">Show setup</button>
               <button class="btn2 secondary" id="submitCourseBtn" type="button" style="display:none;" disabled>Submit course for approval</button>
 
               <button class="btn2 secondary" id="saveAllBtn" type="button" disabled>Save</button>
@@ -843,7 +849,8 @@
 
     const scoreHead = document.getElementById("scoreHead");
     const totalsGrid = document.getElementById("totalsGrid");
-
+    
+    const showLeftBtn = document.getElementById("showLeftBtn");
     const saveAllBtn = document.getElementById("saveAllBtn");
     const deleteRoundBtn = document.getElementById("deleteRoundBtn");
 
@@ -884,6 +891,11 @@ function setLeftPanelsVisibility(show){
 
   if (create) create.style.display = show ? "block" : "none";
   if (rounds) rounds.style.display = show ? "block" : "none";
+
+  // ✅ show "Show setup" button only when left side is hidden
+  if (typeof showLeftBtn !== "undefined" && showLeftBtn) {
+    showLeftBtn.style.display = show ? "none" : "inline-flex";
+  }
 }
     function courseKey(name, state){
       return (norm(name) + "|" + String(state || "").trim().toUpperCase());
@@ -2181,6 +2193,13 @@ setLeftPanelsVisibility(false);
     logoutBtn.addEventListener("click", logout);
     createRoundBtn.addEventListener("click", createRound);
     refreshBtn.addEventListener("click", safeFetchRounds);
+    if (showLeftBtn) {
+  showLeftBtn.addEventListener("click", () => {
+    setLeftPanelsVisibility(true);
+    // optional: scroll back to the top so the left card is visible
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
 
     saveAllBtn.addEventListener("click", async () => {
       try{
