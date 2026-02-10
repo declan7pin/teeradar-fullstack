@@ -123,16 +123,13 @@ function isCompleteFromPayload(holesArr, holesCount) {
 
     const strokesMap = cleanPlayerMap(h?.strokes_by_player || h?.strokesByPlayer || {});
     let strokesVal =
-      (typeof strokesMap["1"] !== "undefined")
+      typeof strokesMap["1"] !== "undefined"
         ? strokesMap["1"]
-        : (h?.strokes === null || typeof h?.strokes === "undefined" || h?.strokes === ""
-            ? null
-            : Number(h.strokes));
+        : h?.strokes === null || typeof h?.strokes === "undefined" || h?.strokes === ""
+          ? null
+          : Number(h.strokes);
 
-    strokesByHole.set(
-      holeNum,
-      Number.isFinite(Number(strokesVal)) ? Number(strokesVal) : null
-    );
+    strokesByHole.set(holeNum, Number.isFinite(Number(strokesVal)) ? Number(strokesVal) : null);
   }
 
   for (let i = 1; i <= Number(holesCount); i++) {
@@ -294,7 +291,8 @@ router.post("/templates/submit/:roundId", requireAuth, async (req, res) => {
       const i = Number(r.hole_number) - 1;
       if (i < 0 || i >= holesCount) continue;
       pars[i] = r.par === null || typeof r.par === "undefined" ? null : Number(r.par);
-      dists[i] = r.distance_m === null || typeof r.distance_m === "undefined" ? null : Number(r.distance_m);
+      dists[i] =
+        r.distance_m === null || typeof r.distance_m === "undefined" ? null : Number(r.distance_m);
     }
 
     if (!isCompleteTemplateArrays(pars, dists, holesCount)) {
@@ -312,55 +310,56 @@ router.post("/templates/submit/:roundId", requireAuth, async (req, res) => {
     }
 
     // ✅ NO DUPES + capture email for manual coupon follow-up
-const nameNorm = normaliseCourseName(courseName);
-const userEmail = String(req.user?.email || "").trim().toLowerCase() || null;
+    const nameNorm = normaliseCourseName(courseName);
+    const userEmail = String(req.user?.email || "").trim().toLowerCase() || null;
 
-// Insert pending, but if one already exists (open), reuse it.
-// NOTE: requires the UNIQUE INDEX courses_pending_uq_open from migration.
-const ins = await db.query(
-  `
-  INSERT INTO courses_pending (
-    name, state, holes, pars_json, dists_json,
-    submitted_by_user_id, submitted_by_email
-  )
-  VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7)
-  ON CONFLICT (name, state, holes)
-  DO UPDATE SET
-    -- keep latest pars/dists in case they improved the template
-    pars_json = EXCLUDED.pars_json,
-    dists_json = EXCLUDED.dists_json,
-    submitted_by_user_id = COALESCE(courses_pending.submitted_by_user_id, EXCLUDED.submitted_by_user_id),
-    submitted_by_email   = COALESCE(courses_pending.submitted_by_email,   EXCLUDED.submitted_by_email)
-  WHERE courses_pending.approved_at IS NULL
-  RETURNING id;
-  `,
-  [
-    nameNorm,
-    stateCode,
-    holesCount,
-    JSON.stringify(pars),
-    JSON.stringify(dists),
-    Number(userId),
-    userEmail,
-  ]
-);
+    // ✅ IMPORTANT:
+    // courses_pending has a PARTIAL unique index for OPEN rows:
+    // (name, state, holes) WHERE approved_at IS NULL AND rejected_at IS NULL
+    // So ON CONFLICT must include the same WHERE clause.
+    const ins = await db.query(
+      `
+      INSERT INTO courses_pending (
+        name, state, holes, pars_json, dists_json,
+        submitted_by_user_id, submitted_by_email
+      )
+      VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7)
+      ON CONFLICT (name, state, holes)
+      WHERE approved_at IS NULL AND rejected_at IS NULL
+      DO UPDATE SET
+        pars_json = EXCLUDED.pars_json,
+        dists_json = EXCLUDED.dists_json,
+        submitted_by_user_id = COALESCE(courses_pending.submitted_by_user_id, EXCLUDED.submitted_by_user_id),
+        submitted_by_email   = COALESCE(courses_pending.submitted_by_email,   EXCLUDED.submitted_by_email)
+      RETURNING id;
+      `,
+      [
+        nameNorm,
+        stateCode,
+        holesCount,
+        JSON.stringify(pars),
+        JSON.stringify(dists),
+        Number(userId),
+        userEmail,
+      ]
+    );
 
-const pendingId = ins.rows[0]?.id;
+    const pendingId = ins.rows[0]?.id;
 
-// ✅ contributor history (auto-linked)
-try {
-  await db.query(
-    `
-    INSERT INTO scorecard_course_contributions
-      (action, name, state, holes, pending_id, actor_user_id, actor_email)
-    VALUES
-      ('SUBMITTED', $1, $2, $3, $4, $5, $6);
-    `,
-    [nameNorm, stateCode, holesCount, Number(pendingId), Number(userId), userEmail]
-  );
-} catch (e) {
-  console.warn("contribution log (SUBMITTED) failed:", e?.message || e);
-}
+    // ✅ contributor history (auto-linked)
+    try {
+      await db.query(
+        `
+        INSERT INTO scorecard_course_contributions
+          (action, name, state, holes, pending_id, actor_user_id, actor_email)
+        VALUES
+          ('SUBMITTED', $1, $2, $3, $4, $5, $6);
+        `,
+        [nameNorm, stateCode, holesCount, Number(pendingId), Number(userId), userEmail]
+      );
+    } catch (e) {
+      console.warn("contribution log (SUBMITTED) failed:", e?.message || e);
+    }
 
     await sendAdminAlert(
       `New user course submitted: ${courseName} (${holesCount})`,
@@ -391,7 +390,7 @@ router.get("/admin/pending-courses", requireAuth, requireSuperAdmin, async (req,
       `
       SELECT id, name, state, holes, submitted_by_user_id, submitted_by_email, created_at
       FROM courses_pending
-      WHERE approved_at IS NULL
+      WHERE approved_at IS NULL AND rejected_at IS NULL
       ORDER BY created_at DESC
       LIMIT 500;
       `
@@ -403,7 +402,7 @@ router.get("/admin/pending-courses", requireAuth, requireSuperAdmin, async (req,
   }
 });
 
-// Admin: approve pending -> upsert into scorecard_courses + reward user (once)
+// Admin: approve pending -> upsert into scorecard_courses + log contribution
 router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -411,9 +410,9 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
 
     const { rows } = await db.query(
       `
-      SELECT id, name, state, holes, pars_json, dists_json, submitted_by_user_id
+      SELECT id, name, state, holes, pars_json, dists_json, submitted_by_user_id, submitted_by_email
       FROM courses_pending
-      WHERE id = $1 AND approved_at IS NULL
+      WHERE id = $1 AND approved_at IS NULL AND rejected_at IS NULL
       LIMIT 1;
       `,
       [id]
@@ -425,7 +424,7 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
 
     await db.query("BEGIN");
 
-    await db.query(
+    const up = await db.query(
       `
       INSERT INTO scorecard_courses (name, state, holes, pars_json, dists_json)
       VALUES ($1,$2,$3,$4::jsonb,$5::jsonb)
@@ -433,51 +432,48 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
       DO UPDATE SET
         pars_json = EXCLUDED.pars_json,
         dists_json = EXCLUDED.dists_json,
-        updated_at = now();
+        updated_at = now()
+      RETURNING id;
       `,
       [p.name, p.state, p.holes, JSON.stringify(p.pars_json), JSON.stringify(p.dists_json)]
     );
 
+    const approvedCourseId = up.rows[0]?.id || null;
+
     // ✅ store who approved (manual coupon will be emailed by you later)
-const approverId = Number(req.user?.id || 0) || null;
-const approverEmail = String(req.user?.email || "").trim().toLowerCase() || null;
+    const approverId = Number(req.user?.id || 0) || null;
+    const approverEmail = String(req.user?.email || "").trim().toLowerCase() || null;
 
-await db.query(
-  `
-  UPDATE courses_pending
-  SET
-    approved_at = now(),
-    approved_by_user_id = $2,
-    approved_by_email = $3
-  WHERE id = $1;
-  `,
-  [id, approverId, approverEmail]
-);
+    await db.query(
+      `
+      UPDATE courses_pending
+      SET
+        approved_at = now(),
+        approved_by_user_id = $2,
+        approved_by_email = $3
+      WHERE id = $1;
+      `,
+      [id, approverId, approverEmail]
+    );
 
-// ✅ contributor history (auto-linked)
-try {
-  const approved = await db.query(
-    `SELECT id FROM scorecard_courses WHERE name = $1 AND state = $2 AND holes = $3 LIMIT 1;`,
-    [p.name, p.state, p.holes]
-  );
-  const approvedCourseId = approved.rows[0]?.id || null;
-
-  await db.query(
-    `
-    INSERT INTO scorecard_course_contributions
-      (action, name, state, holes, pending_id, approved_course_id, actor_user_id, actor_email)
-    VALUES
-      ('APPROVED', $1, $2, $3, $4, $5, $6, $7);
-    `,
-    [p.name, p.state, p.holes, Number(id), approvedCourseId, approverId, approverEmail]
-  );
-} catch (e) {
-  console.warn("contribution log (APPROVED) failed:", e?.message || e);
-}
+    // ✅ contributor history (auto-linked)
+    try {
+      await db.query(
+        `
+        INSERT INTO scorecard_course_contributions
+          (action, name, state, holes, pending_id, approved_course_id, actor_user_id, actor_email)
+        VALUES
+          ('APPROVED', $1, $2, $3, $4, $5, $6, $7);
+        `,
+        [p.name, p.state, p.holes, Number(id), approvedCourseId, approverId, approverEmail]
+      );
+    } catch (e) {
+      console.warn("contribution log (APPROVED) failed:", e?.message || e);
+    }
 
     await db.query("COMMIT");
 
-    return res.json({ ok: true });
+    return res.json({ ok: true, approvedCourseId });
   } catch (err) {
     try { await db.query("ROLLBACK"); } catch {}
     console.error("POST /api/rounds/admin/pending-courses/:id/approve error:", err);
@@ -731,9 +727,9 @@ router.put("/:id", requireAuth, async (req, res) => {
 
       const distVal =
         h?.distance_m === null || typeof h?.distance_m === "undefined" || h?.distance_m === ""
-          ? (h?.distance === null || typeof h?.distance === "undefined" || h?.distance === ""
-              ? null
-              : Number(h.distance))
+          ? h?.distance === null || typeof h?.distance === "undefined" || h?.distance === ""
+            ? null
+            : Number(h.distance)
           : Number(h.distance_m);
 
       const strokesMap = cleanPlayerMap(h?.strokes_by_player || h?.strokesByPlayer || {});
@@ -741,16 +737,18 @@ router.put("/:id", requireAuth, async (req, res) => {
 
       // keep old compatibility: strokes/putts represent Player 1
       const strokesVal =
-        (typeof strokesMap["1"] !== "undefined") ? strokesMap["1"] :
-        (h?.strokes === null || typeof h?.strokes === "undefined" || h?.strokes === ""
-          ? null
-          : Number(h.strokes));
+        typeof strokesMap["1"] !== "undefined"
+          ? strokesMap["1"]
+          : h?.strokes === null || typeof h?.strokes === "undefined" || h?.strokes === ""
+            ? null
+            : Number(h.strokes);
 
       const puttsVal =
-        (typeof puttsMap["1"] !== "undefined") ? puttsMap["1"] :
-        (h?.putts === null || typeof h?.putts === "undefined" || h?.putts === ""
-          ? null
-          : Number(h.putts));
+        typeof puttsMap["1"] !== "undefined"
+          ? puttsMap["1"]
+          : h?.putts === null || typeof h?.putts === "undefined" || h?.putts === ""
+            ? null
+            : Number(h.putts);
 
       await db.query(
         `
@@ -828,21 +826,14 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
     const { strokes, putts, par, distance_m, distance } = req.body || {};
 
     const strokesVal =
-      strokes === null || typeof strokes === "undefined" || strokes === ""
-        ? null
-        : Number(strokes);
+      strokes === null || typeof strokes === "undefined" || strokes === "" ? null : Number(strokes);
 
     const puttsVal =
-      putts === null || typeof putts === "undefined" || putts === ""
-        ? null
-        : Number(putts);
+      putts === null || typeof putts === "undefined" || putts === "" ? null : Number(putts);
 
-    const parVal =
-      par === null || typeof par === "undefined" || par === ""
-        ? null
-        : Number(par);
+    const parVal = par === null || typeof par === "undefined" || par === "" ? null : Number(par);
 
-    const distValRaw = (typeof distance_m !== "undefined") ? distance_m : distance;
+    const distValRaw = typeof distance_m !== "undefined" ? distance_m : distance;
     const distVal =
       distValRaw === null || typeof distValRaw === "undefined" || distValRaw === ""
         ? null
