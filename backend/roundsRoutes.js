@@ -463,6 +463,91 @@ router.get("/admin/pending-courses/:id", requireAuth, requireSuperAdmin, async (
     return res.status(500).json({ ok: false, error: "internal error" });
   }
 });
+// -------------------------------------------------
+// ✅ Admin: manage APPROVED scorecard courses (edit / delete)
+// -------------------------------------------------
+
+// List approved scorecard courses
+router.get("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `
+      SELECT id, name, state, holes, updated_at
+      FROM scorecard_courses
+      ORDER BY state ASC, name ASC, holes ASC;
+      `
+    );
+    return res.json({ ok: true, courses: rows });
+  } catch (err) {
+    console.error("GET /api/rounds/admin/scorecard-courses error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// Rename an approved scorecard course
+router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ ok: false, error: "invalid_id" });
+    }
+
+    const nameRaw = String(req.body?.name || "").trim();
+    if (!nameRaw) {
+      return res.status(400).json({ ok: false, error: "name_required" });
+    }
+
+    // keep consistent normalisation (and ensures lowercase / trimmed)
+    const newName = normaliseCourseName(nameRaw);
+
+    // load current record
+    const cur = await db.query(
+      `SELECT id, name, state, holes FROM scorecard_courses WHERE id = $1 LIMIT 1;`,
+      [id]
+    );
+    if (!cur.rows.length) return res.status(404).json({ ok: false, error: "not_found" });
+
+    // update (may conflict with unique(name,state,holes))
+    try {
+      const up = await db.query(
+        `
+        UPDATE scorecard_courses
+        SET name = $2, updated_at = now()
+        WHERE id = $1
+        RETURNING id, name, state, holes, updated_at;
+        `,
+        [id, newName]
+      );
+
+      return res.json({ ok: true, course: up.rows[0] });
+    } catch (e) {
+      const msg = String(e?.message || "").toLowerCase();
+      if (msg.includes("duplicate") || msg.includes("unique")) {
+        return res.status(409).json({ ok: false, error: "name_conflict" });
+      }
+      throw e;
+    }
+  } catch (err) {
+    console.error("PATCH /api/rounds/admin/scorecard-courses/:id error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// Delete an approved scorecard course
+router.delete("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ ok: false, error: "invalid_id" });
+    }
+
+    const del = await db.query(`DELETE FROM scorecard_courses WHERE id = $1;`, [id]);
+    return res.json({ ok: true, deleted: del.rowCount || 0 });
+  } catch (err) {
+    console.error("DELETE /api/rounds/admin/scorecard-courses/:id error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
 // Admin: approve pending -> upsert into scorecard_courses + log contribution
 router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
