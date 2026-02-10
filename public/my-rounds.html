@@ -573,6 +573,7 @@
               <!-- ✅ NEW: submit template button (only when needed) -->
               <button class="btn2 secondary" id="submitCourseBtn" type="button" style="display:none;" disabled>Submit course for approval</button>
 
+              <button class="btn2" id="submitRoundBtn" type="button" style="display:none;" disabled>Submit</button>
               <button class="btn2 secondary" id="saveAllBtn" type="button" disabled>Save</button>
               <button class="btn2 danger" id="deleteRoundBtn" type="button" disabled>Delete</button>
             </div>
@@ -845,6 +846,7 @@
 
     const saveAllBtn = document.getElementById("saveAllBtn");
     const deleteRoundBtn = document.getElementById("deleteRoundBtn");
+    const submitRoundBtn = document.getElementById("submitRoundBtn");
 
     const leftToast = document.getElementById("leftToast");
     const rightToast = document.getElementById("rightToast");
@@ -1593,6 +1595,10 @@
           submitCourseBtn.style.display = "none";
           submitCourseBtn.disabled = true;
         }
+        if (submitRoundBtn){
+  submitRoundBtn.style.display = "none";
+  submitRoundBtn.disabled = true;
+}
 
         scTitleEl.textContent = "Scorecard";
         scSubEl.textContent = "Select a round to begin.";
@@ -1612,6 +1618,17 @@
       scorecardWrap.style.display = "block";
       saveAllBtn.disabled = false;
       deleteRoundBtn.disabled = false;
+      // ✅ NEW: show submit round button unless already published
+if (submitRoundBtn){
+  const status = String(round?.status || "").trim().toUpperCase();
+  const isPublished = status === "PUBLISHED" || status === "SUBMITTED";
+
+  submitRoundBtn.style.display = "inline-flex";
+  submitRoundBtn.disabled = isPublished;
+
+  if (isPublished) submitRoundBtn.textContent = "Submitted";
+  else submitRoundBtn.textContent = "Submit";
+}
 
       const course = String(round.course || "").trim();
       const state = String(round.state || "").trim().toUpperCase();
@@ -1942,7 +1959,32 @@
         submitConfirmBtn.disabled = false;
       }
     }
+// -----------------------------
+// ✅ NEW: submit/publish round
+// -----------------------------
+async function submitRound(){
+  if (!currentRoundId) return;
 
+  const ok = confirm("Submit this scorecard? You won’t be able to edit it after submitting.");
+  if (!ok) return;
+
+  try{
+    // ✅ ensure latest inputs are saved first
+    await saveRoundAll();
+
+    // ✅ publish the round
+    await api("/api/rounds/submit", {
+      method: "POST",
+      body: JSON.stringify({ roundId: currentRoundId })
+    });
+
+    setToast(rightToast, "Submitted.", true);
+    await safeLoadRound(currentRoundId);
+    await safeFetchRounds();
+  }catch(err){
+    setToast(rightToast, "Submit failed: " + (err.message || "error"), false);
+  }
+}
     // -----------------------------
     // API calls
     // -----------------------------
@@ -2163,6 +2205,9 @@
         setToast(rightToast, "Delete failed: " + (err.message || "error"), false);
       }
     });
+    if (submitRoundBtn){
+  submitRoundBtn.addEventListener("click", submitRound);
+}
 
     holesEl.addEventListener("change", async () => {
       syncNineLoopVisibility();
