@@ -573,7 +573,6 @@
               <!-- ✅ NEW: submit template button (only when needed) -->
               <button class="btn2 secondary" id="submitCourseBtn" type="button" style="display:none;" disabled>Submit course for approval</button>
 
-              <button class="btn2" id="submitRoundBtn" type="button" style="display:none;" disabled>Submit</button>
               <button class="btn2 secondary" id="saveAllBtn" type="button" disabled>Save</button>
               <button class="btn2 danger" id="deleteRoundBtn" type="button" disabled>Delete</button>
             </div>
@@ -846,7 +845,6 @@
 
     const saveAllBtn = document.getElementById("saveAllBtn");
     const deleteRoundBtn = document.getElementById("deleteRoundBtn");
-    const submitRoundBtn = document.getElementById("submitRoundBtn");
 
     const leftToast = document.getElementById("leftToast");
     const rightToast = document.getElementById("rightToast");
@@ -858,10 +856,7 @@
     const namesGrid = document.getElementById("namesGrid");
 
     // ✅ NEW: submit UI
-    // ✅ accept either id (older builds used submitRoundBtn)
-const submitCourseBtn =
-  document.getElementById("submitCourseBtn") ||
-  document.getElementById("submitRoundBtn");
+    const submitCourseBtn = document.getElementById("submitCourseBtn");
     const submitModalBack = document.getElementById("submitModalBack");
     const submitEmail = document.getElementById("submitEmail");
     const submitCancelBtn = document.getElementById("submitCancelBtn");
@@ -1308,15 +1303,11 @@ const submitCourseBtn =
           layoutEl.value = (uiNineFront && uiNineBack) ? `${uiNineFront} - ${uiNineBack}` : layoutEl.value;
         }
 
-        nineLoopWrap.style.display = "none";
+              nineLoopWrap.style.display = "none";
       } else {
         ninesWrap.style.display = "none";
         teeWrap.style.display = "none";
         syncNineLoopVisibility();
-      }
-
-      if (currentRoundId && currentRound) {
-        await renderScorecard(currentRound);
       }
     }
 
@@ -1573,13 +1564,26 @@ const submitCourseBtn =
 
     // ✅ NEW: detect if course needs submission (no published meta)
     function shouldOfferSubmission(round, meta){
-      const mode = String(round?.par_mode || "").toLowerCase();
-      // only offer when user is in published mode AND we have no distances/par data available
-      const hasMetaPars = Array.isArray(meta?.pars) && meta.pars.length === Number(round?.holes || 0);
-      const hasMetaDists = Array.isArray(meta?.distances) && meta.distances.length === Number(round?.holes || 0);
-      const needs = (mode === "published" || mode === "user") && (!hasMetaPars || !hasMetaDists);
-      return !!needs;
-    }
+  const holesCount = Number(round?.holes || 0);
+
+  const pars = Array.isArray(meta?.pars) ? meta.pars : null;
+  const dists = Array.isArray(meta?.distances) ? meta.distances : null;
+
+  // if no meta at all, offer submission
+  if (!pars || !dists) return true;
+  if (pars.length !== holesCount || dists.length !== holesCount) return true;
+
+  // if any invalid values (including 0), offer submission
+  for (let i=0;i<holesCount;i++){
+    const p = Number(pars[i]);
+    const d = Number(dists[i]);
+    if (!Number.isFinite(p) || p < 3 || p > 6) return true;
+    if (!Number.isFinite(d) || d < 40 || d > 800) return true;
+  }
+
+  // otherwise template is complete; no need to submit
+  return false;
+}
 
     async function renderScorecard(round){
   currentRound = round;
@@ -1598,10 +1602,6 @@ const submitCourseBtn =
     if (submitCourseBtn){
       submitCourseBtn.style.display = "none";
       submitCourseBtn.disabled = true;
-    }
-    if (submitRoundBtn){
-      submitRoundBtn.style.display = "none";
-      submitRoundBtn.disabled = true;
     }
 
     scTitleEl.textContent = "Scorecard";
@@ -1694,11 +1694,7 @@ const submitCourseBtn =
     submitCourseBtn.disabled = !offer;
     if (offer) submitCourseBtn.textContent = "Submit";
   }
-  if (submitRoundBtn){
-    submitRoundBtn.style.display = offer ? "inline-flex" : "none";
-    submitRoundBtn.disabled = !offer;
-    if (offer) submitRoundBtn.textContent = "Submit";
-  }
+  
 
   scTitleEl.textContent = round.course || "Round";
   scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
@@ -1959,32 +1955,7 @@ function readTableHoles(){
         submitConfirmBtn.disabled = false;
       }
     }
-// -----------------------------
-// ✅ NEW: submit/publish round
-// -----------------------------
-async function submitRound(){
-  if (!currentRoundId) return;
 
-  const ok = confirm("Submit this scorecard? You won’t be able to edit it after submitting.");
-  if (!ok) return;
-
-  try{
-    // ✅ ensure latest inputs are saved first
-    await saveRoundAll();
-
-    // ✅ publish the round
-    await api("/api/rounds/submit", {
-      method: "POST",
-      body: JSON.stringify({ roundId: currentRoundId })
-    });
-
-    setToast(rightToast, "Submitted.", true);
-    await safeLoadRound(currentRoundId);
-    await safeFetchRounds();
-  }catch(err){
-    setToast(rightToast, "Submit failed: " + (err.message || "error"), false);
-  }
-}
     // -----------------------------
     // API calls
     // -----------------------------
