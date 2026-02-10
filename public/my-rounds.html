@@ -1303,16 +1303,22 @@
           layoutEl.value = (uiNineFront && uiNineBack) ? `${uiNineFront} - ${uiNineBack}` : layoutEl.value;
         }
 
-              nineLoopWrap.style.display = "none";
+                      nineLoopWrap.style.display = "none";
       } else {
         ninesWrap.style.display = "none";
         teeWrap.style.display = "none";
         syncNineLoopVisibility();
       }
+
+      // ✅ IMPORTANT:
+      // DO NOT call renderScorecard() from here — renderScorecard() already calls refreshNinesAndTeesUI()
+      // and that can cause loops / double work.
     }
 
     teeSelect.addEventListener("change", async () => {
       uiSelectedTee = String(teeSelect.value || "").trim();
+
+      // ✅ re-render scorecard to update distance column label + published distances by tee
       if (currentRoundId && currentRound) {
         await renderScorecard(currentRound);
       }
@@ -1870,14 +1876,17 @@ function readTableHoles(){
     // ✅ NEW: course submission flow (email required)
     // -----------------------------
     function openSubmitModal(){
-      if (!submitModalBack) return;
-      submitEmail.value = getCachedSubmitEmail() || "";
-      submitToast.className = "toast";
-      submitToast.style.display = "none";
-      submitModalBack.style.display = "flex";
-      submitModalBack.setAttribute("aria-hidden", "false");
-      setTimeout(() => submitEmail.focus(), 40);
-    }
+  if (!submitModalBack) return;
+
+  // ✅ always empty — force user to type it
+  submitEmail.value = "";
+
+  submitToast.className = "toast";
+  submitToast.style.display = "none";
+  submitModalBack.style.display = "flex";
+  submitModalBack.setAttribute("aria-hidden", "false");
+  setTimeout(() => submitEmail.focus(), 40);
+}
 
     function closeSubmitModal(){
       if (!submitModalBack) return;
@@ -2238,10 +2247,6 @@ document.addEventListener("click", (e) => {
       ensureP1IsUser();
       renderPlayerNamesUI();
 
-      // ✅ prefill cached email (if any)
-      const u = getUserFromToken();
-      const existing = getCachedSubmitEmail();
-      if (!existing && u.email) setCachedSubmitEmail(u.email);
 
       authGate.style.display = "none";
       appEl.style.display = "block";
