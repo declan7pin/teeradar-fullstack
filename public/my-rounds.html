@@ -701,27 +701,27 @@ button, a, .btn, .btn2, input, select {
           </div>
 
           <!-- ✅ NEW: Player names (P1 auto = logged-in user; others editable) -->
-          <div id="playerNamesWrap" style="display:none;">
-            <label>Player names</label>
-            <div class="namesGrid" id="namesGrid"></div>
-            <div class="nameHint">
-              P1 is always your account (auto-filled). Names are saved with the round (and also cached in this browser).
-            </div>
-          </div>
+<div id="playerNamesWrap" style="display:none;">
+  <label>Player names</label>
+  <div class="namesGrid" id="namesGrid"></div>
+  <div class="nameHint">
+    P1 is always your account (auto-filled). Names are saved with the round (and also cached in this browser).
+  </div>
+</div>
 
-          <label for="notes">Notes (optional)</label>
-          <textarea id="notes" placeholder="Weather, tees, playing partners, etc."></textarea>
+<label for="notes">Notes (optional)</label>
+<textarea id="notes" placeholder="Weather, tees, playing partners, etc."></textarea>
 
-          <div class="actions">
-            <button class="btn2" id="createRoundBtn" type="button">Create round</button>
-            <button class="btn2 secondary" id="refreshBtn" type="button">Refresh list</button>
-          </div>
+<div class="actions">
+  <button class="btn2" id="createRoundBtn" type="button">Create round</button>
+  <button class="btn2 secondary" id="refreshBtn" type="button">Refresh list</button>
+</div>
 
-          <div id="leftToast" class="toast"></div>
+<div id="leftToast" class="toast"></div>
 
-          <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;" />
+<hr style="border:none;border-top:1px solid var(--border);margin:14px 0;" />
 
-          <div id="yourRoundsSection">
+<div id="yourRoundsSection">
   <h2 style="margin-top:0;">Your rounds</h2>
   <div class="muted" style="font-weight:700;">
     Select a round to view/edit the scorecard.
@@ -729,10 +729,11 @@ button, a, .btn, .btn2, input, select {
 
   <div id="roundsList" class="list" style="margin-top:12px;"></div>
 
-          <div class="muted" id="roundsEmpty" style="margin-top:10px;font-weight:800;display:none;">
-            No rounds yet — create your first one above.
-          </div>
-        </section>
+  <div class="muted" id="roundsEmpty" style="margin-top:10px;font-weight:800;display:none;">
+    No rounds yet — create your first one above.
+  </div>
+</div>
+</section>
 
         <!-- RIGHT -->
         <section class="card">
@@ -2076,30 +2077,29 @@ function enablePremiumMode(round, metaPars, metaDists, teeName){
       const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
       const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
       const teeName = meta?.teeName || "";
-      // ✅ PREMIUM only when: published mode AND meta is complete (i.e. no submission needed)
-const isPublishedMode =
-  String(round.par_mode || "").toLowerCase() === "published" ||
-  String(round.par_mode || "").toUpperCase() === "PUBLISHED";
-
-const offer = shouldOfferSubmission(round, meta);
-const canUsePremium = isPublishedMode && !offer && metaPars && metaDists;
+           // ✅ PREMIUM only when: published mode AND meta is complete (i.e. no submission needed)
+      const isPublishedMode =
+        String(round.par_mode || "").toLowerCase() === "published" ||
+        String(round.par_mode || "").toUpperCase() === "PUBLISHED";
 
       // ✅ UNIFIED: show ONE "Submit" button only when needed
       const offer = shouldOfferSubmission(round, meta);
+      const canUsePremium = isPublishedMode && !offer && metaPars && metaDists;
 
       if (submitCourseBtn){
         submitCourseBtn.style.display = offer ? "inline-flex" : "none";
         submitCourseBtn.disabled = !offer;
         if (offer) submitCourseBtn.textContent = "Submit";
       }
+
       // ✅ toggle premium UI
-if (canUsePremium) {
-  enablePremiumMode(round, metaPars, metaDists, teeName);
-} else {
-  premiumHoleIndex = 0;
-  premiumShowingTable = false;
-  setPremiumVisible(false);
-}
+      if (canUsePremium) {
+        enablePremiumMode(round, metaPars, metaDists, teeName);
+      } else {
+        premiumHoleIndex = 0;
+        premiumShowingTable = false;
+        setPremiumVisible(false);
+      }
 
       scTitleEl.textContent = round.course || "Round";
       scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
@@ -2120,9 +2120,6 @@ if (canUsePremium) {
       const map = new Map();
       for (const h of holesData) map.set(Number(h.hole_number), h);
 
-      const isPublishedMode =
-        String(round.par_mode || "").toLowerCase() === "published" ||
-        String(round.par_mode || "").toUpperCase() === "PUBLISHED";
 
       for (let i=1; i<=holesCount; i++){
         const existing = map.get(i) || { hole_number: i, par: null, distance_m: null };
