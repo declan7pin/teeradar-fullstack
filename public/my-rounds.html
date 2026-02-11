@@ -2074,45 +2074,49 @@ function enablePremiumMode(round, metaPars, metaDists, teeName){
       }
 
       const meta = await getPublishedMetaFromScorecards(round);
-      const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
-      const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
-      const teeName = meta?.teeName || "";
-           // ✅ PREMIUM only when: published mode AND meta is complete (i.e. no submission needed)
-      const isPublishedMode =
-        String(round.par_mode || "").toLowerCase() === "published" ||
-        String(round.par_mode || "").toUpperCase() === "PUBLISHED";
+const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
+const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
+const teeName = meta?.teeName || "";
 
-      // ✅ UNIFIED: show ONE "Submit" button only when needed
-      const offer = shouldOfferSubmission(round, meta);
-      const canUsePremium = isPublishedMode && !offer && metaPars && metaDists;
+// ✅ Published mode?
+const isPublishedMode =
+  String(round.par_mode || "").toLowerCase() === "published" ||
+  String(round.par_mode || "").toUpperCase() === "PUBLISHED";
 
-      if (submitCourseBtn){
-        submitCourseBtn.style.display = offer ? "inline-flex" : "none";
-        submitCourseBtn.disabled = !offer;
-        if (offer) submitCourseBtn.textContent = "Submit";
-      }
+// ✅ UNIFIED: show ONE "Submit" button only when needed
+const offer = shouldOfferSubmission(round, meta);
 
-      // ✅ toggle premium UI
-      if (canUsePremium) {
-        enablePremiumMode(round, metaPars, metaDists, teeName);
-      } else {
-        premiumHoleIndex = 0;
-        premiumShowingTable = false;
-        setPremiumVisible(false);
-      }
+// ✅ CHANGE: allow hole-by-hole premium UI even when submission is needed.
+// (If pars/distances aren't fully published, pills will show "—" for those, but strokes/putts entry works.)
+const canUsePremium = isPublishedMode; // was: isPublishedMode && !offer && metaPars && metaDists
 
-      scTitleEl.textContent = round.course || "Round";
-      scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
+if (submitCourseBtn){
+  submitCourseBtn.style.display = offer ? "inline-flex" : "none";
+  submitCourseBtn.disabled = !offer;
+  if (offer) submitCourseBtn.textContent = "Submit";
+}
 
-      scPillsEl.innerHTML = `
-        <span class="pill">${escapeHtml(round.par_mode || "")}</span>
-        <span class="pill">Players: ${pc}</span>
-        <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
-        <span class="pill">${teeName ? ("Tee: " + escapeHtml(teeName)) : "Tee: —"}</span>
-      `;
+// ✅ toggle premium UI
+if (canUsePremium) {
+  enablePremiumMode(round, metaPars, metaDists, teeName);
+} else {
+  premiumHoleIndex = 0;
+  premiumShowingTable = false;
+  setPremiumVisible(false);
+}
 
-      buildScoreHead(pc, teeName);
-      scoreBody.innerHTML = "";
+scTitleEl.textContent = round.course || "Round";
+scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
+
+scPillsEl.innerHTML = `
+  <span class="pill">${escapeHtml(round.par_mode || "")}</span>
+  <span class="pill">Players: ${pc}</span>
+  <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
+  <span class="pill">${teeName ? ("Tee: " + escapeHtml(teeName)) : "Tee: —"}</span>
+`;
+
+buildScoreHead(pc, teeName);
+scoreBody.innerHTML = "";
 
       const holesCount = Number(round.holes) || 18;
       const holesData = Array.isArray(round.holesData) ? round.holesData : [];
