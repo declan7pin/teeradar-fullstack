@@ -388,6 +388,173 @@
     }
     .modal .muted{font-weight:800}
     .modal .actions{justify-content:flex-end}
+    /* ✅ iOS tap polish (removes “glitchy” tap highlight + improves responsiveness) */
+button, a, .btn, .btn2, input, select {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* ✅ PREMIUM play-mode (hole-by-hole) */
+#premiumWrap{
+  display:none;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:#fff;
+  overflow:hidden;
+}
+
+.premTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px;
+  background:linear-gradient(180deg,#0b3f39,#07332e);
+  color:#fff;
+}
+
+.premPills{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.premPill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:7px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.10);
+  font-weight:900;
+  font-size:.9rem;
+  white-space:nowrap;
+}
+
+.premBody{
+  padding:14px;
+}
+
+.premGrid{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:14px;
+}
+
+.premPanel{
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:14px;
+  background:#fff;
+}
+
+.premRow{
+  display:grid;
+  grid-template-columns: 120px 1fr;
+  gap:12px;
+  align-items:center;
+  margin-top:10px;
+}
+@media (max-width:520px){
+  .premRow{ grid-template-columns: 1fr; }
+}
+
+.premRow label{
+  margin:0;
+  font-size:1rem;
+  font-weight:1000;
+}
+
+.premBtns{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.pickBtn{
+  width:64px;
+  height:64px;
+  border-radius:16px;
+  border:2px solid #e2e8f0;
+  background:#f8fafc;
+  font-weight:1000;
+  font-size:20px;
+  color:#0f172a;
+  cursor:pointer;
+  position:relative;
+}
+
+.pickBtn.active{
+  border-color:#0ea5a4;
+  box-shadow:0 0 0 4px rgba(0,121,107,.12);
+  background:#ecfeff;
+}
+
+.pickBtn.birdie{
+  border:3px solid #16a34a;
+  background:#e8f5e9;
+  color:#166534;
+}
+.pickBtn.eagle{
+  border:4px double #166534;
+  background:#e8f5e9;
+  color:#166534;
+}
+
+.pickBtn.bogey::after{
+  content:"▲";
+  position:absolute;
+  bottom:6px;
+  right:8px;
+  font-size:16px;
+  opacity:.9;
+}
+
+.pickBtn.double::after{
+  content:"▲▲";
+  position:absolute;
+  bottom:6px;
+  right:8px;
+  font-size:16px;
+  opacity:.9;
+}
+
+.pickBtn.triple{
+  border-color:rgba(185,28,28,.35);
+  background:rgba(185,28,28,.06);
+  color:#b91c1c;
+}
+.pickBtn.triple::after{
+  content:"▲▲";
+  position:absolute;
+  bottom:6px;
+  right:8px;
+  font-size:16px;
+  opacity:.9;
+}
+
+.premNav{
+  display:flex;
+  gap:10px;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  margin-top:12px;
+}
+.premNav .btn2{
+  flex:1;
+  min-width:140px;
+}
+
+.premMiniNote{
+  margin-top:10px;
+  color:var(--muted);
+  font-weight:800;
+}
+
+/* ✅ Hide table cleanly when premium is active */
+.tableWrap.hidden{ display:none; }
   </style>
 </head>
 <body>
@@ -593,12 +760,46 @@
           </div>
 
           <div id="scorecardWrap" style="display:none;">
-            <div class="tableWrap">
-              <table id="scoreTable">
-                <thead id="scoreHead"></thead>
-                <tbody id="scoreBody"></tbody>
-              </table>
-            </div>
+
+  <!-- ✅ PREMIUM hole-by-hole (only for published + complete courses) -->
+  <div id="premiumWrap">
+    <div class="premTop">
+      <div class="premPills" id="premPills"></div>
+      <div class="premPills">
+        <button class="btn2 secondary" id="toggleTableBtn" type="button" style="display:none;">View table</button>
+      </div>
+    </div>
+
+    <div class="premBody">
+      <div class="premGrid">
+        <div class="premPanel">
+          <div class="premRow">
+            <label>Score</label>
+            <div class="premBtns" id="premScoreBtns"></div>
+          </div>
+
+          <div class="premRow">
+            <label>Putts</label>
+            <div class="premBtns" id="premPuttBtns"></div>
+          </div>
+
+          <div class="premNav">
+            <button class="btn2 secondary" id="premPrevBtn" type="button">← Prev hole</button>
+            <button class="btn2" id="premNextBtn" type="button">Next hole →</button>
+          </div>
+
+          <div class="premMiniNote" id="premNote"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tableWrap" id="tableWrap">
+    <table id="scoreTable">
+      <thead id="scoreHead"></thead>
+      <tbody id="scoreBody"></tbody>
+    </table>
+  </div>
 
             <!-- ✅ per-player totals -->
             <div class="totalsGrid" id="totalsGrid"></div>
@@ -849,6 +1050,20 @@
 
     const scoreHead = document.getElementById("scoreHead");
     const totalsGrid = document.getElementById("totalsGrid");
+    // ✅ PREMIUM play-mode refs
+const premiumWrap = document.getElementById("premiumWrap");
+const tableWrapEl = document.getElementById("tableWrap");
+const premPills = document.getElementById("premPills");
+const premScoreBtns = document.getElementById("premScoreBtns");
+const premPuttBtns = document.getElementById("premPuttBtns");
+const premPrevBtn = document.getElementById("premPrevBtn");
+const premNextBtn = document.getElementById("premNextBtn");
+const premNote = document.getElementById("premNote");
+const toggleTableBtn = document.getElementById("toggleTableBtn");
+
+// ✅ premium state
+let premiumHoleIndex = 0; // 0-based
+let premiumShowingTable = false;
     
     const showLeftBtn = document.getElementById("showLeftBtn");
     const saveAllBtn = document.getElementById("saveAllBtn");
@@ -1609,7 +1824,156 @@ function setLeftPanelsVisibility(show){
       // otherwise template is complete; no need to submit
       return false;
     }
+function scoreDiffClass(strokes, par){
+  const s = Number(strokes);
+  const p = Number(par);
+  if (!Number.isFinite(s) || !Number.isFinite(p)) return "";
+  const diff = s - p;
+  if (diff <= -2) return "eagle";
+  if (diff === -1) return "birdie";
+  if (diff === 1) return "bogey";
+  if (diff === 2) return "double";
+  if (diff >= 3) return "triple";
+  return "";
+}
 
+function setPremiumVisible(on){
+  if (!premiumWrap || !tableWrapEl) return;
+
+  premiumWrap.style.display = on ? "block" : "none";
+
+  // table is hidden by default in premium, unless user toggles it
+  const hideTable = on && !premiumShowingTable;
+  tableWrapEl.classList.toggle("hidden", hideTable);
+
+  if (toggleTableBtn){
+    toggleTableBtn.style.display = on ? "inline-flex" : "none";
+    toggleTableBtn.textContent = premiumShowingTable ? "Play mode" : "View table";
+  }
+}
+
+function getHoleRowFromTable(holeNum){
+  const holesRows = readTableHoles();
+  return holesRows.find(h => Number(h.hole_number) === Number(holeNum)) || null;
+}
+
+function setHoleValueInTable(holeNum, field, playerNum, value){
+  const sel = `input[data-field="${field}"][data-hole="${holeNum}"]` + (playerNum ? `[data-player="${playerNum}"]` : "");
+  const inp = scoreBody.querySelector(sel);
+  if (!inp) return;
+  inp.value = (value == null) ? "" : String(value);
+  inp.dispatchEvent(new Event("input", { bubbles:true }));
+}
+
+function renderPremiumForHole(round, metaPars, metaDists, teeName){
+  const holesCount = Number(round?.holes) || 18;
+  premiumHoleIndex = clamp(premiumHoleIndex, 0, holesCount - 1);
+
+  const holeNum = premiumHoleIndex + 1;
+  const par = metaPars ? metaPars[premiumHoleIndex] : null;
+  const dist = metaDists ? metaDists[premiumHoleIndex] : null;
+
+  // pills header
+  if (premPills){
+    const toPar = (function(){
+      const holesRows = readTableHoles();
+      const totals = calcTotalsForPlayer(holesRows, 0);
+      if (totals.toPar == null) return "—";
+      return totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+"+totals.toPar : ""+totals.toPar);
+    })();
+
+    premPills.innerHTML = `
+      <span class="premPill">Hole ${holeNum} / ${holesCount}</span>
+      <span class="premPill">Par ${Number.isFinite(Number(par)) ? par : "—"}</span>
+      <span class="premPill">${Number.isFinite(Number(dist)) ? (dist + "m") : "—"}</span>
+      <span class="premPill">${teeName ? ("Tee " + escapeHtml(teeName)) : "Tee —"}</span>
+      <span class="premPill">To Par: ${toPar}</span>
+    `;
+  }
+
+  // current values from table (source of truth)
+  const holeRow = getHoleRowFromTable(holeNum);
+  const curStrokes = holeRow ? getHolePlayerValue(holeRow, "strokes", 0) : null;
+  const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", 0) : null;
+
+  // build score buttons (par-2 .. par+4, with sane min/max)
+  const basePar = Number.isFinite(Number(par)) ? Number(par) : 4;
+  const scoreVals = [];
+  for (let v = basePar - 2; v <= basePar + 4; v++) {
+    if (v >= 1 && v <= 12) scoreVals.push(v);
+  }
+
+  if (premScoreBtns){
+    premScoreBtns.innerHTML = "";
+    scoreVals.forEach(v => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pickBtn " + scoreDiffClass(v, basePar) + ((Number(curStrokes) === v) ? " active" : "");
+      b.textContent = String(v);
+      b.addEventListener("click", () => {
+        setHoleValueInTable(holeNum, "strokes", 1, v);
+        renderPremiumForHole(round, metaPars, metaDists, teeName);
+      });
+      premScoreBtns.appendChild(b);
+    });
+  }
+
+  // putts 0..4
+  if (premPuttBtns){
+    premPuttBtns.innerHTML = "";
+    [0,1,2,3,4].forEach(v => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pickBtn " + ((Number(curPutts) === v) ? " active" : "");
+      b.textContent = String(v);
+      b.addEventListener("click", () => {
+        setHoleValueInTable(holeNum, "putts", 1, v);
+        renderPremiumForHole(round, metaPars, metaDists, teeName);
+      });
+      premPuttBtns.appendChild(b);
+    });
+  }
+
+  if (premNote){
+    const cls = scoreDiffClass(curStrokes, basePar);
+    let msg = "Tap a score and putts. Use Next hole →";
+    if (cls === "birdie") msg = "Birdie 👌";
+    if (cls === "eagle") msg = "Eagle 🦅";
+    if (cls === "bogey") msg = "Bogey ▲";
+    if (cls === "double") msg = "Double bogey ▲▲";
+    if (cls === "triple") msg = "Triple+ ▲▲";
+    premNote.textContent = msg;
+  }
+
+  if (premPrevBtn) premPrevBtn.disabled = (premiumHoleIndex <= 0);
+  if (premNextBtn) premNextBtn.disabled = (premiumHoleIndex >= holesCount - 1);
+}
+
+function enablePremiumMode(round, metaPars, metaDists, teeName){
+  premiumShowingTable = false;
+  setPremiumVisible(true);
+  renderPremiumForHole(round, metaPars, metaDists, teeName);
+
+  if (premPrevBtn){
+    premPrevBtn.onclick = () => {
+      premiumHoleIndex = Math.max(0, premiumHoleIndex - 1);
+      renderPremiumForHole(round, metaPars, metaDists, teeName);
+    };
+  }
+  if (premNextBtn){
+    premNextBtn.onclick = () => {
+      const holesCount = Number(round?.holes) || 18;
+      premiumHoleIndex = Math.min(holesCount - 1, premiumHoleIndex + 1);
+      renderPremiumForHole(round, metaPars, metaDists, teeName);
+    };
+  }
+  if (toggleTableBtn){
+    toggleTableBtn.onclick = () => {
+      premiumShowingTable = !premiumShowingTable;
+      setPremiumVisible(true);
+    };
+  }
+}
     async function renderScorecard(round){
       currentRound = round;
       currentRoundId = round?.id || null;
@@ -1712,6 +2076,13 @@ function setLeftPanelsVisibility(show){
       const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
       const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
       const teeName = meta?.teeName || "";
+      // ✅ PREMIUM only when: published mode AND meta is complete (i.e. no submission needed)
+const isPublishedMode =
+  String(round.par_mode || "").toLowerCase() === "published" ||
+  String(round.par_mode || "").toUpperCase() === "PUBLISHED";
+
+const offer = shouldOfferSubmission(round, meta);
+const canUsePremium = isPublishedMode && !offer && metaPars && metaDists;
 
       // ✅ UNIFIED: show ONE "Submit" button only when needed
       const offer = shouldOfferSubmission(round, meta);
@@ -1721,6 +2092,14 @@ function setLeftPanelsVisibility(show){
         submitCourseBtn.disabled = !offer;
         if (offer) submitCourseBtn.textContent = "Submit";
       }
+      // ✅ toggle premium UI
+if (canUsePremium) {
+  enablePremiumMode(round, metaPars, metaDists, teeName);
+} else {
+  premiumHoleIndex = 0;
+  premiumShowingTable = false;
+  setPremiumVisible(false);
+}
 
       scTitleEl.textContent = round.course || "Round";
       scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
