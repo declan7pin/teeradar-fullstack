@@ -1104,13 +1104,14 @@ let premiumShowingTable = false;
 function setLeftPanelsVisibility(show){
   const create = document.getElementById("createRoundSection");
   const rounds = document.getElementById("yourRoundsSection");
+  const showBtn = document.getElementById("showLeftBtn");
 
   if (create) create.style.display = show ? "block" : "none";
   if (rounds) rounds.style.display = show ? "block" : "none";
 
   // ✅ show "Show setup" button only when left side is hidden
-  if (typeof showLeftBtn !== "undefined" && showLeftBtn) {
-    showLeftBtn.style.display = show ? "none" : "inline-flex";
+  if (showBtn) {
+    showBtn.style.display = show ? "none" : "inline-flex";
   }
 }
     function courseKey(name, state){
@@ -2086,23 +2087,14 @@ const isPublishedMode =
 // ✅ UNIFIED: show ONE "Submit" button only when needed
 const offer = shouldOfferSubmission(round, meta);
 
-// ✅ CHANGE: allow hole-by-hole premium UI even when submission is needed.
-// (If pars/distances aren't fully published, pills will show "—" for those, but strokes/putts entry works.)
-const canUsePremium = isPublishedMode; // was: isPublishedMode && !offer && metaPars && metaDists
+// ✅ allow hole-by-hole premium UI even when submission is needed
+const canUsePremium = isPublishedMode;
 
+// ✅ show/hide submit button
 if (submitCourseBtn){
   submitCourseBtn.style.display = offer ? "inline-flex" : "none";
   submitCourseBtn.disabled = !offer;
   if (offer) submitCourseBtn.textContent = "Submit";
-}
-
-// ✅ toggle premium UI
-if (canUsePremium) {
-  enablePremiumMode(round, metaPars, metaDists, teeName);
-} else {
-  premiumHoleIndex = 0;
-  premiumShowingTable = false;
-  setPremiumVisible(false);
 }
 
 scTitleEl.textContent = round.course || "Round";
@@ -2118,66 +2110,73 @@ scPillsEl.innerHTML = `
 buildScoreHead(pc, teeName);
 scoreBody.innerHTML = "";
 
-      const holesCount = Number(round.holes) || 18;
-      const holesData = Array.isArray(round.holesData) ? round.holesData : [];
+const holesCount = Number(round.holes) || 18;
+const holesData = Array.isArray(round.holesData) ? round.holesData : [];
 
-      const map = new Map();
-      for (const h of holesData) map.set(Number(h.hole_number), h);
+const map = new Map();
+for (const h of holesData) map.set(Number(h.hole_number), h);
 
+for (let i=1; i<=holesCount; i++){
+  const existing = map.get(i) || { hole_number: i, par: null, distance_m: null };
 
-      for (let i=1; i<=holesCount; i++){
-        const existing = map.get(i) || { hole_number: i, par: null, distance_m: null };
+  let parValue = existing.par;
+  if ((parValue === null || typeof parValue === "undefined" || parValue === "") && isPublishedMode && metaPars && Number.isFinite(Number(metaPars[i-1]))) {
+    parValue = Number(metaPars[i-1]);
+  }
 
-        let parValue = existing.par;
-        if ((parValue === null || typeof parValue === "undefined" || parValue === "") && isPublishedMode && metaPars && Number.isFinite(Number(metaPars[i-1]))) {
-          parValue = Number(metaPars[i-1]);
-        }
+  const metaDistVal = (metaDists && Number.isFinite(Number(metaDists[i-1]))) ? Number(metaDists[i-1]) : null;
+  const savedDistVal = Number.isFinite(Number(existing.distance_m)) ? Number(existing.distance_m) : null;
 
-        const metaDistVal = (metaDists && Number.isFinite(Number(metaDists[i-1]))) ? Number(metaDists[i-1]) : null;
-        const savedDistVal = Number.isFinite(Number(existing.distance_m)) ? Number(existing.distance_m) : null;
+  const tr = document.createElement("tr");
 
-        const tr = document.createElement("tr");
+  let playerTds = "";
+  for (let pi=0; pi<pc; pi++){
+    const s = getHolePlayerValue(existing, "strokes", pi);
+    const u = getHolePlayerValue(existing, "putts", pi);
 
-        let playerTds = "";
-        for (let pi=0; pi<pc; pi++){
-          const s = getHolePlayerValue(existing, "strokes", pi);
-          const u = getHolePlayerValue(existing, "putts", pi);
+    playerTds += `
+      <td>
+        <input class="mini" inputmode="numeric" pattern="[0-9]*"
+          data-field="strokes" data-hole="${i}" data-player="${pi+1}"
+          value="${s ?? ""}" placeholder="—">
+      </td>
+      <td>
+        <input class="mini" inputmode="numeric" pattern="[0-9]*"
+          data-field="putts" data-hole="${i}" data-player="${pi+1}"
+          value="${u ?? ""}" placeholder="—">
+      </td>
+    `;
+  }
 
-          playerTds += `
-            <td>
-              <input class="mini" inputmode="numeric" pattern="[0-9]*"
-                data-field="strokes" data-hole="${i}" data-player="${pi+1}"
-                value="${s ?? ""}" placeholder="—">
-            </td>
-            <td>
-              <input class="mini" inputmode="numeric" pattern="[0-9]*"
-                data-field="putts" data-hole="${i}" data-player="${pi+1}"
-                value="${u ?? ""}" placeholder="—">
-            </td>
-          `;
-        }
+  // ✅ Distance: if we have published distance -> show it. Otherwise allow entry (needed for submission).
+  const distCellHtml = (metaDistVal != null)
+  ? `${metaDistVal}`
+  : `<input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="distance_m" data-hole="${i}" value="${savedDistVal ?? ""}" placeholder="m">`;
 
-        // ✅ Distance: if we have published distance -> show it. Otherwise allow entry (needed for submission).
-        const distCellHtml = (metaDistVal != null)
-          ? `${metaDistVal}`
-          : `<input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="distance_m" data-hole="${i}" value="${savedDistVal ?? ""}" placeholder="m">`;
+  tr.innerHTML = `
+    <td>Hole ${i}</td>
+    <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${parValue ?? ""}" placeholder="—"></td>
+    <td class="distCell" data-meta-dist="${metaDistVal ?? ""}">${distCellHtml}</td>
+    ${playerTds}
+  `;
 
-        tr.innerHTML = `
-          <td>Hole ${i}</td>
-          <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${parValue ?? ""}" placeholder="—"></td>
-          <td class="distCell">${distCellHtml}</td>
-          ${playerTds}
-        `;
+  scoreBody.appendChild(tr);
+}
 
-        scoreBody.appendChild(tr);
-      }
+scoreBody.querySelectorAll("input").forEach((inp) => {
+  inp.addEventListener("input", () => updateTotalsFromTable());
+});
 
-      scoreBody.querySelectorAll("input").forEach((inp) => {
-        inp.addEventListener("input", () => updateTotalsFromTable());
-      });
+updateTotalsFromTable();
 
-      updateTotalsFromTable();
-    }
+// ✅ IMPORTANT: enable premium ONLY AFTER table inputs exist
+if (canUsePremium) {
+  enablePremiumMode(round, metaPars, metaDists, teeName);
+} else {
+  premiumHoleIndex = 0;
+  premiumShowingTable = false;
+  setPremiumVisible(false);
+}
 
     function readTableHoles(){
       const byHole = new Map();
@@ -2200,13 +2199,21 @@ scoreBody.innerHTML = "";
 
       // ✅ distance_m (only present when editable)
       for (let i=1;i<=holesCount;i++){
-        const distInp = scoreBody.querySelector(`input[data-field="distance_m"][data-hole="${i}"]`);
-        if (distInp){
-          const v = String(distInp.value || "").trim();
-          const n = v === "" ? null : Number(v);
-          byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
-        }
-      }
+  const distInp = scoreBody.querySelector(`input[data-field="distance_m"][data-hole="${i}"]`);
+  if (distInp){
+    const v = String(distInp.value || "").trim();
+    const n = v === "" ? null : Number(v);
+    byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
+  } else {
+    // ✅ if distance is shown as published text, read from td data attribute
+    const td = scoreBody.querySelector(`td.distCell[data-meta-dist][data-hole="${i}"]`);
+    // (td won't match because td has no data-hole; read via row instead)
+    const row = scoreBody.querySelector(`tr:nth-child(${i}) td.distCell[data-meta-dist]`);
+    const raw = row ? String(row.getAttribute("data-meta-dist") || "").trim() : "";
+    const n = raw === "" ? null : Number(raw);
+    byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
+  }
+}
 
       // strokes/putts by player
       const inputs = scoreBody.querySelectorAll("input[data-player]");
