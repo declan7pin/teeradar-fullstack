@@ -222,20 +222,30 @@
             <div class="right" id="frontBack">—</div>
           </div>
 
-          <div class="row">
-            <div class="left">
-              <div style="font-weight:900">Consistency</div>
-              <div class="mini">Std dev of total scores (lower = more consistent)</div>
+          <!-- ✅ CHANGED: wrap holes-only rows so they can be hidden when "All rounds" is selected -->
+          <div id="holesOnlyRows" style="display:none;">
+
+            <div class="row">
+              <div class="left">
+                <div style="font-weight:900">Consistency</div>
+                <div class="mini">Std dev of total scores (lower = more consistent)</div>
+              </div>
+              <div class="right" id="consistency">—</div>
             </div>
-            <div class="right" id="consistency">—</div>
+
+            <div class="row">
+              <div class="left">
+                <div style="font-weight:900">Trend</div>
+                <div class="mini">Last 5 avg score vs previous 5 (needs 10 rounds)</div>
+              </div>
+              <div class="right" id="trend">—</div>
+            </div>
+
           </div>
 
-          <div class="row">
-            <div class="left">
-              <div style="font-weight:900">Trend</div>
-              <div class="mini">Last 5 avg score vs previous 5 (needs 10 rounds)</div>
-            </div>
-            <div class="right" id="trend">—</div>
+          <!-- ✅ CHANGED: hint shown only when "All rounds" is selected -->
+          <div id="holesOnlyHint" class="empty" style="margin-top:12px; display:none;">
+            Select <strong>9 holes</strong> or <strong>18 holes</strong> to view Avg/Best/Worst/Consistency/Trend.
           </div>
         </div>
       </div>
@@ -884,14 +894,21 @@
     }
 
     function setKpis(stats){
+      const holesSpecific = (currentHoles === "9" || currentHoles === "18");
+
       const items = [
         { label: "Rounds", value: stats.totalRounds, hint: "Rounds included in this range" },
         { label: "Total shots", value: stats.totalShots, hint: "Sum of all strokes recorded" },
         { label: "Total putts", value: stats.totalPutts, hint: "Sum of all putts recorded" },
-        { label: "Avg per round", value: stats.avgRound !== null ? fmt1(stats.avgRound) : "—", hint: "Average total score" },
-        { label: "Best round", value: stats.bestRound !== null ? stats.bestRound : "—", hint: "Lowest score in range" },
-        { label: "Worst round", value: stats.worstRound !== null ? stats.worstRound : "—", hint: "Highest score in range" },
+
+        // ✅ Only show these when 9 or 18 selected
+        ...(holesSpecific ? [
+          { label: "Avg per round", value: stats.avgRound !== null ? fmt1(stats.avgRound) : "—", hint: "Average total score" },
+          { label: "Best round", value: stats.bestRound !== null ? stats.bestRound : "—", hint: "Lowest score in range" },
+          { label: "Worst round", value: stats.worstRound !== null ? stats.worstRound : "—", hint: "Highest score in range" },
+        ] : [])
       ];
+
       document.getElementById("kpis").innerHTML = items.map(x => `
         <div class="kpi">
           <div class="label">${escapeHtml(x.label)}</div>
@@ -1154,6 +1171,13 @@
         "Last year";
       document.getElementById("rangePill").textContent = `Range: ${rangeText} • ${holesLabel()}`;
 
+      // ✅ ADDED: show/hide holes-only sections (Avg/Best/Worst handled in setKpis)
+      const holesSpecific = (currentHoles === "9" || currentHoles === "18");
+      const rowsWrap = document.getElementById("holesOnlyRows");
+      const hint = document.getElementById("holesOnlyHint");
+      if (rowsWrap) rowsWrap.style.display = holesSpecific ? "block" : "none";
+      if (hint) hint.style.display = holesSpecific ? "none" : "block";
+
       const stats = computeStats(rounds);
 
       setKpis(stats);
@@ -1166,8 +1190,12 @@
       setVsPar(stats);
       setPuttSplit(stats);
       setFrontBack(stats);
-      setConsistency(stats);
-      setTrend(stats);
+
+      // ✅ CHANGED: only compute/show these when 9/18 selected
+      if (holesSpecific){
+        setConsistency(stats);
+        setTrend(stats);
+      }
 
       setBreakdown(stats);
       setPutting(stats);
