@@ -559,26 +559,27 @@ button, a, .btn, .btn2, input, select {
     <div class="navbtns">
       <a class="btn secondary" href="/">Home</a>
       <a class="btn secondary" href="/book.html">Back to Book</a>
-      <a class="btn secondary" href="/account.html">Account</a>
+      <a class="btn secondary" id="accountLink" href="/account.html">Account</a>
 
-      <a class="btn secondary"
-        href="/mystats.html"
-        onclick="sessionStorage.setItem('fromMyRounds','1')">
-        My Stats
-      </a>
+<a class="btn secondary"
+  id="myStatsLink"
+  href="/mystats.html"
+  onclick="sessionStorage.setItem('fromMyRounds','1')">
+  My Stats
+</a>
 
-      <button class="btn danger" id="logoutBtn" type="button">Logout</button>
+<button class="btn danger" id="logoutBtn" type="button">Logout</button>
     </div>
   </header>
 
   <main>
     <div id="authGate" class="notice" style="display:none;">
-      <strong>Login required.</strong><br/>
-      This page is only available to logged-in users. Please log in, then come back here.
-      <div class="actions" style="margin-top:12px;">
-        <a class="btn2" href="/account.html">Go to Account / Login</a>
-      </div>
-    </div>
+  <strong>You’re in Guest mode.</strong><br/>
+  You can create and use scorecards without logging in. To sync rounds across devices and access <strong>My Stats</strong>, please log in.
+  <div class="actions" style="margin-top:12px;">
+    <a class="btn2" href="/account.html">Log in / Create account</a>
+  </div>
+</div>
 
     <div id="app" style="display:none;">
       <div class="grid">
@@ -1031,7 +1032,38 @@ button, a, .btn, .btn2, input, select {
     const createRoundBtn = document.getElementById("createRoundBtn");
     const refreshBtn = document.getElementById("refreshBtn");
     const logoutBtn = document.getElementById("logoutBtn");
+    
+    const accountLink = document.getElementById("accountLink");
+const myStatsLink = document.getElementById("myStatsLink");
 
+function isLoggedIn(){
+  return !!getToken();
+}
+
+function renderHeaderAuthState(){
+  const loggedIn = isLoggedIn();
+
+  // Account button text
+  if (accountLink){
+    accountLink.textContent = loggedIn ? "Account" : "Log in";
+    accountLink.href = "/account.html";
+  }
+
+  // My Stats hidden unless logged in
+  if (myStatsLink){
+    myStatsLink.style.display = loggedIn ? "inline-flex" : "none";
+    if (!loggedIn){
+      // safety: stop any accidental nav
+      myStatsLink.onclick = (e) => { e.preventDefault(); window.location.href="/account.html"; };
+    }
+  }
+
+  // Logout hidden unless logged in
+  if (logoutBtn){
+    logoutBtn.style.display = loggedIn ? "inline-flex" : "none";
+  }
+}
+             
     const roundsListEl = document.getElementById("roundsList");
     const roundsEmptyEl = document.getElementById("roundsEmpty");
 
@@ -2642,10 +2674,14 @@ setLeftPanelsVisibility(false);
     function logout(){
       ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"].forEach(k => localStorage.removeItem(k));
       setToast(leftToast, "Logged out.", true);
+      renderHeaderAuthState();
       setTimeout(() => window.location.href = "/account.html", 450);
     }
 
-    logoutBtn.addEventListener("click", logout);
+    if (logoutBtn) logoutBtn.addEventListener("click", () => {
+  if (!isLoggedIn()) return;
+  logout();
+});
     createRoundBtn.addEventListener("click", createRound);
     refreshBtn.addEventListener("click", safeFetchRounds);
     if (showLeftBtn) {
@@ -2729,27 +2765,32 @@ setLeftPanelsVisibility(false);
     });
 
     (async function init(){
-      const token = getToken();
-      if (!token) {
-        authGate.style.display = "block";
-        appEl.style.display = "none";
-        return;
-      }
+  // Always show the app now (Guest mode supported)
+  appEl.style.display = "block";
 
-      // ✅ set P1 from token at boot
-      ensureP1IsUser();
-      renderPlayerNamesUI();
+  const token = getToken();
+  const loggedIn = !!token;
+  renderHeaderAuthState();
 
-      authGate.style.display = "none";
-      appEl.style.display = "block";
-      
-      setLeftPanelsVisibility(true);
+  // Header buttons
+  renderHeaderAuthState();
 
-      initCourseAutocomplete();
-      syncNineLoopVisibility();
+  // Guest notice
+  authGate.style.display = loggedIn ? "none" : "block";
 
-      await safeFetchRounds();
-    })();
+  // P1 name (only auto-fill when logged in)
+  if (loggedIn){
+    ensureP1IsUser();
+  }
+  renderPlayerNamesUI();
+
+  setLeftPanelsVisibility(true);
+
+  initCourseAutocomplete();
+  syncNineLoopVisibility();
+
+  await safeFetchRounds();
+})();
   </script>
 </body>
 </html>
