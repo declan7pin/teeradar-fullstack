@@ -116,6 +116,21 @@
 </head>
 <body>
   <div class="wrap">
+    <!-- ✅ Login gate (My Stats requires login) -->
+<div id="authGate" class="card" style="display:none;">
+  <h2>Login required.</h2>
+  <div class="muted" style="font-weight:800;">
+    My Stats is only available to logged-in users.
+    <br/>Please log in, then come back here.
+  </div>
+  <div class="actions" style="margin-top:12px;">
+    <a class="btn primary" href="/account.html">Go to Account / Login</a>
+    <a class="btn" href="/my-rounds.html">← Back to My Rounds</a>
+  </div>
+</div>
+
+<!-- ✅ App wrapper -->
+<div id="app">
     <header>
       <div class="title">
         <h1>My Stats</h1>
@@ -323,14 +338,39 @@
       </div>
     </div>
 
-  </div>
+  </div> <!-- ✅ keep this line; we’ll close #app properly below -->
 
   <script>
-    // --- soft-gate: only accessible from my-rounds page ---
+    /* ✅✅✅ ONLY CHANGES BELOW ✅✅✅ */
+
+    /* ✅ MOVE getToken ABOVE gate + refresh use */
+    function getToken(){
+      const keys = ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"];
+      for (const k of keys){
+        const v = localStorage.getItem(k);
+        if (v && String(v).trim().length > 10) return String(v).trim();
+      }
+      return "";
+    }
+
+    // ✅ HARD gate: My Stats requires login (My Rounds can be public)
     (function gate(){
-      const ok = sessionStorage.getItem("fromMyRounds") === "1";
-      if (!ok) { window.location.replace("/my-rounds.html"); return; }
-      sessionStorage.removeItem("fromMyRounds");
+      try { sessionStorage.removeItem("fromMyRounds"); } catch {}
+
+      const token = getToken();
+      const loggedIn = !!token;
+
+      const authGate = document.getElementById("authGate");
+      const app = document.getElementById("app");
+
+      if (!loggedIn){
+        if (authGate) authGate.style.display = "block";
+        if (app) app.style.display = "none";
+        return;
+      }
+
+      if (authGate) authGate.style.display = "none";
+      if (app) app.style.display = "block";
     })();
 
     // ---------- Helpers ----------
@@ -381,15 +421,6 @@
     }
 
     /* ✅✅✅ ONLY ADDITIONS (needed): load rounds from backend (Postgres) using JWT token ✅✅✅ */
-    function getToken(){
-      const keys = ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"];
-      for (const k of keys){
-        const v = localStorage.getItem(k);
-        if (v && String(v).trim().length > 10) return String(v).trim();
-      }
-      return "";
-    }
-
     async function api(path, options = {}){
       const token = getToken();
       const headers = Object.assign({}, options.headers || {});
@@ -1211,6 +1242,10 @@
     }
 
     async function refresh(){
+      // ✅ CHANGE: don’t load anything if logged out (gate is showing)
+      const token = getToken();
+      if (!token) return;
+
       /* ✅✅✅ ONLY CHANGE (needed): async load rounds (backend first, then local) ✅✅✅ */
       ALL = await loadAllRounds();
       applyRange();
@@ -1243,5 +1278,8 @@
     refresh();
     /* ✅✅✅ END ONLY CHANGE ✅✅✅ */
   </script>
+
+  <!-- ✅ close the #app wrapper -->
+  </div>
 </body>
 </html>
