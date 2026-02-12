@@ -739,8 +739,11 @@
       <a href="/about.html">About</a>
       <a href="/analytics" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
 
-      <!-- ✅ NEW: My Rounds (only visible when logged in) -->
-      <a href="/my-rounds.html" id="navMyRounds" style="display:none;">My Rounds</a>
+      <!-- ✅ My Rounds: visible even when logged out -->
+<a href="/my-rounds.html" id="navMyRounds">My Rounds</a>
+
+<!-- ✅ My Stats: only visible when logged in -->
+<a href="/my-stats.html" id="navMyStats" style="display:none;">My Stats</a>
 
       <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
     </nav>
@@ -761,10 +764,10 @@
         Find a tee time across Australia, in one place.
       </h1>
       <p class="hero-sub">
-        Search public golf courses across Australia by date, time window, 9/18
-        holes and players. Tap through to the official course booking page — you stay
-        compliant, we save you the legwork.
-      </p>
+  Search public golf courses across Australia by date, time window, 9/18 holes and players.
+  Tap through to the official course booking page — we save you the legwork.
+  Plus, log your round with TeeRadar scorecards, and for courses we offer a modern booking platform.
+</p>
 
       <div class="hero-actions">
         <button class="btn-primary" onclick="window.location.href='/book.html'">
@@ -978,34 +981,40 @@
   }
 
   function renderNavState() {
-    const analyticsLink = document.getElementById("navAnalytics");
-    const loginBtn = document.getElementById("navLoginBtn");
-    const roundsLink = document.getElementById("navMyRounds"); // ✅ NEW
-    if (!analyticsLink || !loginBtn) return;
+  const analyticsLink = document.getElementById("navAnalytics");
+  const loginBtn = document.getElementById("navLoginBtn");
+  const roundsLink = document.getElementById("navMyRounds");
+  const statsLink = document.getElementById("navMyStats");
+  if (!loginBtn) return;
 
-    const email = localStorage.getItem("teeradar_user_email");
+  const email = localStorage.getItem("teeradar_user_email");
 
-    if (!email) {
-      analyticsLink.style.display = "none";
-      if (roundsLink) roundsLink.style.display = "none"; // ✅ NEW
-      loginBtn.textContent = "Log in";
-      loginBtn.onclick = handleLogin;
-      return;
-    }
+  // ✅ My Rounds is always visible now
+  if (roundsLink) roundsLink.style.display = "inline-flex";
 
-    if (roundsLink) roundsLink.style.display = "inline-flex"; // ✅ NEW
+  // ✅ Default: hide gated links
+  if (analyticsLink) analyticsLink.style.display = "none";
+  if (statsLink) statsLink.style.display = "none";
 
-    if (email === ADMIN_EMAIL) {
-      analyticsLink.style.display = "inline-flex";
-    } else {
-      analyticsLink.style.display = "none";
-    }
-
-    loginBtn.textContent = "My account";
-    loginBtn.onclick = () => {
-      window.location.href = "/account.html";
-    };
+  // Logged out
+  if (!email) {
+    loginBtn.textContent = "Log in";
+    loginBtn.onclick = handleLogin;
+    return;
   }
+
+  // Logged in
+  if (statsLink) statsLink.style.display = "inline-flex";
+
+  if (analyticsLink && email === ADMIN_EMAIL) {
+    analyticsLink.style.display = "inline-flex";
+  }
+
+  loginBtn.textContent = "My account";
+  loginBtn.onclick = () => {
+    window.location.href = "/account.html";
+  };
+}
 
   function trackInitialHome() {
     if (!localStorage.getItem("teeradar_seen")) {
