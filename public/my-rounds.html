@@ -1607,18 +1607,28 @@ function setLeftPanelsVisibility(show){
     const s = getHolePlayerValue(h, "strokes", playerIndex);
     const u = getHolePlayerValue(h, "putts", playerIndex);
 
-    if (Number.isFinite(p) && p > 0) { par += p; parCount++; }
-    if (Number.isFinite(s)) { strokes += s; strokesCount++; }
+    // ✅ Only count par when that player's strokes is entered for that hole
+    if (Number.isFinite(s)) {
+      strokes += s;
+      strokesCount++;
+
+      if (Number.isFinite(p) && p > 0) {
+        par += p;
+        parCount++;
+      }
+    }
+
+    // ✅ Putts can still be counted when entered (independent of strokes)
     if (Number.isFinite(u)) { putts += u; puttsCount++; }
   }
 
-  const toPar = (strokesCount ? strokes : null) - (parCount ? par : 0);
+  const toPar = (strokesCount && parCount) ? (strokes - par) : null;
 
   return {
     par: parCount ? par : null,
     strokes: strokesCount ? strokes : null,
     putts: puttsCount ? putts : null,
-    toPar: (strokesCount && parCount) ? toPar : null
+    toPar
   };
 }
 
