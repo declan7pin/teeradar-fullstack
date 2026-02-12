@@ -262,6 +262,32 @@
       font-weight:800;
       text-align:center;
     }
+    /* ✅ table-only score colours (no shapes) */
+.mini.birdie{
+  border-color:#16a34a;
+  background:#e8f5e9;
+  color:#166534;
+}
+.mini.eagle{
+  border-color:#166534;
+  background:#e8f5e9;
+  color:#166534;
+}
+.mini.bogey{
+  border-color:rgba(245,158,11,.55);
+  background:rgba(245,158,11,.10);
+  color:#92400e;
+}
+.mini.double{
+  border-color:rgba(239,68,68,.55);
+  background:rgba(239,68,68,.10);
+  color:#991b1b;
+}
+.mini.triple{
+  border-color:rgba(185,28,28,.50);
+  background:rgba(185,28,28,.08);
+  color:#b91c1c;
+}
     .mini:focus{border-color:#9ad7cf; box-shadow:0 0 0 3px rgba(0,121,107,.10)}
     .rightActions{
       display:flex;
@@ -501,38 +527,6 @@ button, a, .btn, .btn2, input, select {
   border:4px double #166534;
   background:#e8f5e9;
   color:#166534;
-}
-
-.pickBtn.bogey::after{
-  content:"▲";
-  position:absolute;
-  bottom:6px;
-  right:8px;
-  font-size:16px;
-  opacity:.9;
-}
-
-.pickBtn.double::after{
-  content:"▲▲";
-  position:absolute;
-  bottom:6px;
-  right:8px;
-  font-size:16px;
-  opacity:.9;
-}
-
-.pickBtn.triple{
-  border-color:rgba(185,28,28,.35);
-  background:rgba(185,28,28,.06);
-  color:#b91c1c;
-}
-.pickBtn.triple::after{
-  content:"▲▲";
-  position:absolute;
-  bottom:6px;
-  right:8px;
-  font-size:16px;
-  opacity:.9;
 }
 
 .premNav{
@@ -1603,28 +1597,30 @@ function setLeftPanelsVisibility(show){
     }
 
     function calcTotalsForPlayer(holesData, playerIndex){
-      let par=0, strokes=0, putts=0;
-      let parCount=0, strokesCount=0, puttsCount=0;
+  let par=0, strokes=0, putts=0;
+  let parCount=0, strokesCount=0, puttsCount=0;
 
-      for (const h of holesData || []) {
-        const p = Number(h.par);
-        const s = getHolePlayerValue(h, "strokes", playerIndex);
-        const u = getHolePlayerValue(h, "putts", playerIndex);
+  for (const h of holesData || []) {
+    const rawPar = (h && typeof h === "object") ? h.par : null;
+    const p = (rawPar === null || typeof rawPar === "undefined" || rawPar === "") ? null : Number(rawPar);
 
-        if (Number.isFinite(p)) { par += p; parCount++; }
-        if (Number.isFinite(s)) { strokes += s; strokesCount++; }
-        if (Number.isFinite(u)) { putts += u; puttsCount++; }
-      }
+    const s = getHolePlayerValue(h, "strokes", playerIndex);
+    const u = getHolePlayerValue(h, "putts", playerIndex);
 
-      const toPar = (strokesCount ? strokes : null) - (parCount ? par : 0);
+    if (Number.isFinite(p) && p > 0) { par += p; parCount++; }
+    if (Number.isFinite(s)) { strokes += s; strokesCount++; }
+    if (Number.isFinite(u)) { putts += u; puttsCount++; }
+  }
 
-      return {
-        par: parCount ? par : null,
-        strokes: strokesCount ? strokes : null,
-        putts: puttsCount ? putts : null,
-        toPar: (strokesCount && parCount) ? toPar : null
-      };
-    }
+  const toPar = (strokesCount ? strokes : null) - (parCount ? par : 0);
+
+  return {
+    par: parCount ? par : null,
+    strokes: strokesCount ? strokes : null,
+    putts: puttsCount ? putts : null,
+    toPar: (strokesCount && parCount) ? toPar : null
+  };
+}
 
     // -----------------------------
     // Scorecard meta (pars + distances)
@@ -1838,6 +1834,31 @@ function scoreDiffClass(strokes, par){
   if (diff >= 3) return "triple";
   return "";
 }
+function applyTableScoreColours(){
+  if (!currentRound) return;
+
+  const holesCount = Number(currentRound?.holes) || 18;
+  const pc = getPlayersCountFromRound(currentRound);
+
+  for (let i=1; i<=holesCount; i++){
+    const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
+    const parRaw = parInp ? String(parInp.value || "").trim() : "";
+    const parVal = parRaw === "" ? null : Number(parRaw);
+
+    for (let p=1; p<=pc; p++){
+      const sInp = scoreBody.querySelector(`input[data-field="strokes"][data-hole="${i}"][data-player="${p}"]`);
+      if (!sInp) continue;
+
+      sInp.classList.remove("birdie","eagle","bogey","double","triple");
+
+      const sRaw = String(sInp.value || "").trim();
+      const sVal = sRaw === "" ? null : Number(sRaw);
+
+      const cls = scoreDiffClass(sVal, parVal);
+      if (cls) sInp.classList.add(cls);
+    }
+  }
+}
 
 function setPremiumVisible(on){
   if (!premiumWrap || !tableWrapEl) return;
@@ -1872,79 +1893,113 @@ function renderPremiumForHole(round, metaPars, metaDists, teeName){
   premiumHoleIndex = clamp(premiumHoleIndex, 0, holesCount - 1);
 
   const holeNum = premiumHoleIndex + 1;
-  const par = metaPars ? metaPars[premiumHoleIndex] : null;
-  const dist = metaDists ? metaDists[premiumHoleIndex] : null;
 
-  // pills header
+  // determine par: published meta -> table -> fallback 4
+  const metaPar = (metaPars && Number.isFinite(Number(metaPars[premiumHoleIndex])))
+    ? Number(metaPars[premiumHoleIndex])
+    : null;
+
+  const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${holeNum}"]`);
+  const tableParRaw = parInp ? String(parInp.value || "").trim() : "";
+  const tablePar = tableParRaw === "" ? null : Number(tableParRaw);
+
+  const basePar = Number.isFinite(metaPar) ? metaPar : (Number.isFinite(tablePar) ? tablePar : 4);
+
+  const metaDist = (metaDists && Number.isFinite(Number(metaDists[premiumHoleIndex])))
+    ? Number(metaDists[premiumHoleIndex])
+    : null;
+
+  // header pills
   if (premPills){
-    const toPar = (function(){
-      const holesRows = readTableHoles();
-      const totals = calcTotalsForPlayer(holesRows, 0);
-      if (totals.toPar == null) return "—";
-      return totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+"+totals.toPar : ""+totals.toPar);
-    })();
+    const holesRows = readTableHoles();
+    const totals = calcTotalsForPlayer(holesRows, 0);
+    const toParLabel = (totals.toPar == null) ? "—" : (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+"+totals.toPar : ""+totals.toPar));
 
     premPills.innerHTML = `
       <span class="premPill">Hole ${holeNum} / ${holesCount}</span>
-      <span class="premPill">Par ${Number.isFinite(Number(par)) ? par : "—"}</span>
-      <span class="premPill">${Number.isFinite(Number(dist)) ? (dist + "m") : "—"}</span>
+      <span class="premPill">Par ${Number.isFinite(basePar) ? basePar : "—"}</span>
+      <span class="premPill">${Number.isFinite(metaDist) ? (metaDist + "m") : "—"}</span>
       <span class="premPill">${teeName ? ("Tee " + escapeHtml(teeName)) : "Tee —"}</span>
-      <span class="premPill">To Par: ${toPar}</span>
+      <span class="premPill">To Par: ${toParLabel}</span>
     `;
   }
 
-  // current values from table (source of truth)
+  // current values from table
   const holeRow = getHoleRowFromTable(holeNum);
   const curStrokes = holeRow ? getHolePlayerValue(holeRow, "strokes", 0) : null;
   const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", 0) : null;
 
-  // build score buttons (par-2 .. par+4, with sane min/max)
-  const basePar = Number.isFinite(Number(par)) ? Number(par) : 4;
-  const scoreVals = [];
-  for (let v = basePar - 2; v <= basePar + 4; v++) {
-    if (v >= 1 && v <= 12) scoreVals.push(v);
+  // ✅ defaults you requested
+  const startStrokes = Number.isFinite(Number(curStrokes)) ? Number(curStrokes) : Number(basePar);
+  const startPutts = Number.isFinite(Number(curPutts)) ? Number(curPutts) : 2;
+
+  // strokes options: par-2 .. par+4
+  const strokeVals = [];
+  for (let v = basePar - 2; v <= basePar + 4; v++){
+    if (v >= 1 && v <= 12) strokeVals.push(v);
   }
 
+  // wheel picker for strokes
   if (premScoreBtns){
     premScoreBtns.innerHTML = "";
-    scoreVals.forEach(v => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "pickBtn " + scoreDiffClass(v, basePar) + ((Number(curStrokes) === v) ? " active" : "");
-      b.textContent = String(v);
-      b.addEventListener("click", () => {
-        setHoleValueInTable(holeNum, "strokes", 1, v);
-        renderPremiumForHole(round, metaPars, metaDists, teeName);
-      });
-      premScoreBtns.appendChild(b);
+    const sel = document.createElement("select");
+    sel.style.width = "100%";
+    sel.style.padding = "12px";
+    sel.style.borderRadius = "12px";
+    sel.style.border = "1px solid var(--border)";
+    sel.style.fontWeight = "900";
+    sel.style.fontSize = "18px";
+
+    strokeVals.forEach(v => {
+      const opt = document.createElement("option");
+      opt.value = String(v);
+      opt.textContent = String(v);
+      sel.appendChild(opt);
     });
+
+    sel.value = String(startStrokes);
+
+    sel.addEventListener("change", () => {
+      const v = Number(sel.value);
+      setHoleValueInTable(holeNum, "strokes", 1, Number.isFinite(v) ? v : null);
+      renderPremiumForHole(round, metaPars, metaDists, teeName);
+    });
+
+    premScoreBtns.appendChild(sel);
   }
 
-  // putts 0..4
+  // wheel picker for putts (defaults to 2)
   if (premPuttBtns){
     premPuttBtns.innerHTML = "";
+    const sel = document.createElement("select");
+    sel.style.width = "100%";
+    sel.style.padding = "12px";
+    sel.style.borderRadius = "12px";
+    sel.style.border = "1px solid var(--border)";
+    sel.style.fontWeight = "900";
+    sel.style.fontSize = "18px";
+
     [0,1,2,3,4].forEach(v => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "pickBtn " + ((Number(curPutts) === v) ? " active" : "");
-      b.textContent = String(v);
-      b.addEventListener("click", () => {
-        setHoleValueInTable(holeNum, "putts", 1, v);
-        renderPremiumForHole(round, metaPars, metaDists, teeName);
-      });
-      premPuttBtns.appendChild(b);
+      const opt = document.createElement("option");
+      opt.value = String(v);
+      opt.textContent = String(v);
+      sel.appendChild(opt);
     });
+
+    sel.value = String(startPutts);
+
+    sel.addEventListener("change", () => {
+      const v = Number(sel.value);
+      setHoleValueInTable(holeNum, "putts", 1, Number.isFinite(v) ? v : null);
+      renderPremiumForHole(round, metaPars, metaDists, teeName);
+    });
+
+    premPuttBtns.appendChild(sel);
   }
 
+  // no colours / shapes in play mode
   if (premNote){
-    const cls = scoreDiffClass(curStrokes, basePar);
-    let msg = "Tap a score and putts. Use Next hole →";
-    if (cls === "birdie") msg = "Birdie 👌";
-    if (cls === "eagle") msg = "Eagle 🦅";
-    if (cls === "bogey") msg = "Bogey ▲";
-    if (cls === "double") msg = "Double bogey ▲▲";
-    if (cls === "triple") msg = "Triple+ ▲▲";
-    premNote.textContent = msg;
+    premNote.textContent = "Use the wheels, then Next hole →";
   }
 
   if (premPrevBtn) premPrevBtn.disabled = (premiumHoleIndex <= 0);
@@ -2278,6 +2333,7 @@ if (canUsePremium) {
         pill.className = "pill";
         pill.textContent = `${label}: Strokes ${totals.strokes ?? "—"} • Putts ${totals.putts ?? "—"} • To Par ${toParLabel}`;
         totalsGrid.appendChild(pill);
+        applyTableScoreColours();
       }
     }
 
