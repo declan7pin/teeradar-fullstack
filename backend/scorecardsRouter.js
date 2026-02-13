@@ -105,7 +105,7 @@ async function fetchScorecardsFromDbAuto(state) {
     "par_by_hole",
   ];
 
-  // ✅ EXPANDED: tons of real-world variants
+  // "distance-ish" explicit list (still used first)
   const distCols = [
     "distances_m",
     "distances",
@@ -140,7 +140,11 @@ async function fetchScorecardsFromDbAuto(state) {
     const hasCourse = courseCols.some((c) => cols.has(c));
     const hasHoles = holesCols.some((c) => cols.has(c));
     const hasPars = parsCols.some((c) => cols.has(c));
-    const hasDist = distCols.some((c) => cols.has(c));
+
+    // ✅ distance detection: explicit OR regex
+    const hasDistExplicit = distCols.some((c) => cols.has(c));
+    const hasDistRegex = Array.from(cols).some((c) => /(dist|metre|meter|yard)/i.test(c));
+    const hasDist = hasDistExplicit || hasDistRegex;
 
     // We want at least state+course+holes and (pars OR distances)
     if (hasState && hasCourse && hasHoles && (hasPars || hasDist)) {
@@ -149,7 +153,7 @@ async function fetchScorecardsFromDbAuto(state) {
         cols: Array.from(cols),
         score:
           (hasPars ? 2 : 0) +
-          (hasDist ? 3 : 0) + // ✅ bias toward distance-capable tables
+          (hasDist ? 3 : 0) +
           (layoutCols.some((c) => cols.has(c)) ? 1 : 0) +
           (pubCols.some((c) => cols.has(c)) ? 1 : 0),
       });
@@ -181,7 +185,6 @@ async function fetchScorecardsFromDbAuto(state) {
   const colHoles = pickCol(holesCols);
   const colLayout = pickCol(layoutCols);
   const colPars = pickCol(parsCols);
-  const colDist = pickCol(distCols);
 
   const colStatus = colsSet.has("status") ? "status" : null;
   const colPublished = colsSet.has("published") ? "published" : null;
@@ -192,8 +195,20 @@ async function fetchScorecardsFromDbAuto(state) {
   if (colStatus) pubWheres.push(`UPPER(COALESCE("${colStatus}", '')) = 'PUBLISHED'`);
   if (colPublished) pubWheres.push(`COALESCE("${colPublished}", false) = true`);
   if (colIsPublished) pubWheres.push(`COALESCE("${colIsPublished}", false) = true`);
-
   const wherePublished = pubWheres.length ? `AND (${pubWheres.join(" OR ")})` : "";
+
+  // ✅ pick ALL columns that look like distances (not just one)
+  const distanceColNames = chosen.cols
+    .filter((c) => safeIdent(c))
+    .filter((c) => /(dist|metre|meter|yard)/i.test(c))
+    // prefer "m" variants first
+    .sort((a, b) => {
+      const aM = /(_m\b|meters|metres|meter|metre)/i.test(a) ? 1 : 0;
+      const bM = /(_m\b|meters|metres|meter|metre)/i.test(b) ? 1 : 0;
+      if (aM !== bM) return bM - aM;
+      return a.localeCompare(b);
+    })
+    .slice(0, 12); // ✅ don’t go crazy; 12 is plenty
 
   // ✅ loose numeric parsing (handles "332m", "332 m", 332, {m:332}, etc.)
   function toNumLoose(v) {
@@ -286,25 +301,24 @@ async function fetchScorecardsFromDbAuto(state) {
   function normalizeNumberArray(arr, holes) {
     if (!Array.isArray(arr)) return null;
 
-    // if it’s an array but everything is unparseable, return null (don’t show fake 0s)
     let parsedAny = false;
-
     const out = [];
     for (let i = 0; i < holes; i++) {
       const n = toNumLoose(arr[i]);
       if (n != null) parsedAny = true;
       out.push(n != null ? n : 0);
     }
-
     return parsedAny ? out : null;
   }
 
+  // Select only needed columns (that exist)
   const selectCols = [
     `"${colCourse}" AS course`,
     `"${colHoles}" AS holes`,
     colLayout ? `"${colLayout}" AS layout` : `''::text AS layout`,
     colPars ? `"${colPars}" AS pars` : `NULL AS pars`,
-    colDist ? `"${colDist}" AS distances_raw` : `NULL AS distances_raw`,
+    // ✅ select all distance-ish columns so we can choose per-row
+    ...distanceColNames.map((c) => `"${c}" AS "__dist__${c}"`),
     `"state" AS state`,
   ].join(", ");
 
@@ -325,7 +339,20 @@ async function fetchScorecardsFromDbAuto(state) {
       if (!course || !holes) return null;
 
       const parsArr = normalizeNumberArray(toArr(r.pars), holes);
-      const distArr = normalizeNumberArray(toArr(r.distances_raw), holes);
+
+      // ✅ find the first distance column that actually yields a parseable array
+      let distArr = null;
+      let usedDistCol = null;
+
+      for (const c of distanceColNames) {
+        const key = `__dist__${c}`;
+        const candidate = normalizeNumberArray(toArr(r[key]), holes);
+        if (candidate && candidate.some((n) => Number(n) > 0)) {
+          distArr = candidate;
+          usedDistCol = c;
+          break;
+        }
+      }
 
       return {
         course,
@@ -334,8 +361,10 @@ async function fetchScorecardsFromDbAuto(state) {
         holes,
         layout: String(r.layout || "").trim(),
         pars: parsArr,
-        distances_m: distArr, // ✅ what your UI wants
-        distances: distArr,   // ✅ compatibility if anywhere reads `distances`
+        distances_m: distArr,
+        distances: distArr,
+        // ✅ for debug only (removed in non-debug response below)
+        __used_distance_col: usedDistCol,
       };
     })
     .filter(Boolean);
@@ -345,7 +374,16 @@ async function fetchScorecardsFromDbAuto(state) {
     debug: {
       chosenTable: chosen.table,
       chosenCols: chosen.cols,
-      used: { colCourse, colHoles, colLayout, colPars, colDist, colStatus, colPublished, colIsPublished },
+      distanceCandidates: distanceColNames,
+      used: {
+        colCourse,
+        colHoles,
+        colLayout,
+        colPars,
+        colStatus,
+        colPublished,
+        colIsPublished,
+      },
       publishFilterApplied: !!wherePublished,
       candidateCount: candidates.length,
     },
@@ -355,12 +393,29 @@ async function fetchScorecardsFromDbAuto(state) {
 // GET /api/scorecards/:state
 router.get("/:state", async (req, res) => {
   const state = normalizeStateParam(req.params.state);
+  const debugMode = String(req.query.debug || "") === "1";
 
   // ✅ 1) DB first (so guests see published templates)
   try {
     const dbRes = await fetchScorecardsFromDbAuto(state);
     if (Array.isArray(dbRes.rows) && dbRes.rows.length) {
-      return res.json(dbRes.rows);
+      if (debugMode) {
+        // keep debug fields in debug mode
+        return res.json({
+          ok: true,
+          source: "db",
+          debug: dbRes.debug || null,
+          sample: dbRes.rows.slice(0, 3),
+        });
+      }
+
+      // strip internal debug key
+      const clean = dbRes.rows.map((x) => {
+        const { __used_distance_col, ...rest } = x || {};
+        return rest;
+      });
+
+      return res.json(clean);
     }
   } catch (e) {
     console.log("ℹ️ scorecardsRouter DB failed, falling back:", e?.message || e);
