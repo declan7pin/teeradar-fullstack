@@ -1450,18 +1450,41 @@ function setLeftPanelsVisibility(show){
         inp.dataset.player = String(num);
 
         if (num === 1){
-          inp.readOnly = true;
-          inp.classList.add("readonly");
-          inp.title = "P1 is always your account";
-        } else {
-          inp.addEventListener("input", () => {
-            playerNames[i] = String(inp.value || "").trim();
-            // if a round is selected, save immediately to that round
-            if (currentRoundId) saveNamesForRound(currentRoundId);
-            // also refresh header labels
-            if (currentRoundId && currentRound) renderScorecard(currentRound);
-          });
-        }
+  const loggedIn = !!getToken();
+
+  if (loggedIn){
+    // ✅ logged in: lock P1 to account
+    inp.readOnly = true;
+    inp.classList.add("readonly");
+    inp.title = "P1 is always your account";
+  } else {
+    // ✅ guest mode: allow typing
+    inp.readOnly = false;
+    inp.classList.remove("readonly");
+    inp.title = "Enter your name (guest mode)";
+
+    // optional: restore cached guest name
+    try{
+      if (!inp.value) inp.value = String(localStorage.getItem("teeradar_guest_p1_name") || "").trim();
+      if (inp.value) playerNames[0] = String(inp.value || "").trim();
+    }catch{}
+
+    inp.addEventListener("input", () => {
+      playerNames[0] = String(inp.value || "").trim();
+      try{ localStorage.setItem("teeradar_guest_p1_name", playerNames[0]); }catch{}
+      // refresh headers if a round is open
+      if (currentRoundId && currentRound) renderScorecard(currentRound);
+    });
+  }
+} else {
+  inp.addEventListener("input", () => {
+    playerNames[i] = String(inp.value || "").trim();
+    // if a round is selected, save immediately to that round
+    if (currentRoundId) saveNamesForRound(currentRoundId);
+    // also refresh header labels
+    if (currentRoundId && currentRound) renderScorecard(currentRound);
+  });
+}
 
         wrap.appendChild(lab);
         wrap.appendChild(inp);
@@ -2536,6 +2559,14 @@ if (canUsePremium) {
       // ✅ ensure names UI is synced + P1 user
       ensureP1IsUser();
       renderPlayerNamesUI();
+      // ✅ guest mode requires a Player 1 name
+if (!isLoggedIn()){
+  const p1 = String(playerNames[0] || "").trim();
+  if (!p1){
+    setToast(leftToast, "Please enter your name (Player 1) to continue.", false);
+    return;
+  }
+}
 
       const hasNinesUI = ninesWrap && ninesWrap.style.display !== "none";
 
