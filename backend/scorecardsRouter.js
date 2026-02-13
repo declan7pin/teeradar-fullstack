@@ -66,13 +66,6 @@ function safeIdent(x) {
   return s;
 }
 
-function pickFirst(obj, keys) {
-  for (const k of keys) {
-    if (obj && Object.prototype.hasOwnProperty.call(obj, k) && obj[k] !== undefined) return obj[k];
-  }
-  return undefined;
-}
-
 // ✅ AUTO detect the real table/columns where you store published templates
 async function fetchScorecardsFromDbAuto(state) {
   const st = normalizeStateParam(state);
@@ -100,8 +93,42 @@ async function fetchScorecardsFromDbAuto(state) {
   const courseCols = ["course", "course_name", "name", "title"];
   const holesCols = ["holes", "hole_count", "num_holes"];
   const layoutCols = ["layout", "layout_name", "nine_name"];
-  const parsCols = ["pars", "pars_json", "pars_arr", "pars_array", "par_json", "par"];
-  const distCols = ["distances_m", "distances", "distances_json", "distances_arr", "distances_array"];
+
+  const parsCols = [
+    "pars",
+    "pars_json",
+    "pars_arr",
+    "pars_array",
+    "par_json",
+    "par",
+    "hole_pars",
+    "par_by_hole",
+  ];
+
+  // ✅ EXPANDED: tons of real-world variants
+  const distCols = [
+    "distances_m",
+    "distances",
+    "distances_json",
+    "distances_arr",
+    "distances_array",
+    "distance_m",
+    "distance",
+    "dist_m",
+    "dist",
+    "meters",
+    "metres",
+    "yards",
+    "tee_distances",
+    "tee_distances_m",
+    "hole_distances",
+    "hole_distances_m",
+    "distance_by_hole",
+    "distances_by_hole",
+    "distances_meters",
+    "distance_meters",
+  ];
+
   const stateCols = ["state"];
   const pubCols = ["status", "published", "is_published"];
 
@@ -122,14 +149,13 @@ async function fetchScorecardsFromDbAuto(state) {
         cols: Array.from(cols),
         score:
           (hasPars ? 2 : 0) +
-          (hasDist ? 2 : 0) +
+          (hasDist ? 3 : 0) + // ✅ bias toward distance-capable tables
           (layoutCols.some((c) => cols.has(c)) ? 1 : 0) +
           (pubCols.some((c) => cols.has(c)) ? 1 : 0),
       });
     }
   }
 
-  // Prefer best match
   candidates.sort((a, b) => b.score - a.score);
 
   if (!candidates.length) {
@@ -142,7 +168,6 @@ async function fetchScorecardsFromDbAuto(state) {
     };
   }
 
-  // Use the top candidate
   const chosen = candidates[0];
   const table = safeIdent(chosen.table);
   if (!table) {
@@ -156,20 +181,7 @@ async function fetchScorecardsFromDbAuto(state) {
   const colHoles = pickCol(holesCols);
   const colLayout = pickCol(layoutCols);
   const colPars = pickCol(parsCols);
-
-  // ✅ IMPORTANT: support multiple possible distance column names + shapes
-  const colDistM = pickCol(distCols);
-  const colDistAlt = pickCol([
-    "distances",
-    "distance",
-    "distance_m",
-    "dist_m",
-    "dist",
-    "meters",
-    "m",
-    "yards",
-    "y",
-  ]);
+  const colDist = pickCol(distCols);
 
   const colStatus = colsSet.has("status") ? "status" : null;
   const colPublished = colsSet.has("published") ? "published" : null;
@@ -183,13 +195,52 @@ async function fetchScorecardsFromDbAuto(state) {
 
   const wherePublished = pubWheres.length ? `AND (${pubWheres.join(" OR ")})` : "";
 
-  // ✅ helpers to normalize JSONB / stringified JSON / object-wrapped arrays
+  // ✅ loose numeric parsing (handles "332m", "332 m", 332, {m:332}, etc.)
+  function toNumLoose(v) {
+    if (v == null) return null;
+
+    if (typeof v === "number") return Number.isFinite(v) ? v : null;
+
+    if (typeof v === "string") {
+      const s = v.trim();
+      if (!s) return null;
+      const m = s.match(/-?\d+(\.\d+)?/);
+      if (!m) return null;
+      const n = Number(m[0]);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    if (typeof v === "object") {
+      const keys = [
+        "m",
+        "meters",
+        "metres",
+        "distance_m",
+        "distance",
+        "dist_m",
+        "dist",
+        "yards",
+        "y",
+      ];
+      for (const k of keys) {
+        if (Object.prototype.hasOwnProperty.call(v, k)) {
+          const n = toNumLoose(v[k]);
+          if (n != null) return n;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  // ✅ normalize JSONB / stringified JSON / object-wrapped arrays / hole-keyed objects
   function toArr(val) {
     if (val == null) return null;
 
     if (Array.isArray(val)) return val;
 
     if (typeof val === "object") {
+      // common wrapper objects
       const inner =
         val.distances_m ??
         val.distances ??
@@ -199,10 +250,23 @@ async function fetchScorecardsFromDbAuto(state) {
         val.dist ??
         val.m ??
         val.meters ??
+        val.metres ??
         val.y ??
         val.yards ??
+        val.hole_distances ??
+        val.hole_distances_m ??
+        val.distance_by_hole ??
+        val.distances_by_hole ??
         null;
+
       if (Array.isArray(inner)) return inner;
+
+      // object keyed by hole numbers: { "1": 332, "2": 154, ... }
+      const numKeys = Object.keys(val).filter((k) => /^\d+$/.test(k));
+      if (numKeys.length) {
+        numKeys.sort((a, b) => Number(a) - Number(b));
+        return numKeys.map((k) => val[k]);
+      }
     }
 
     if (typeof val === "string") {
@@ -221,25 +285,26 @@ async function fetchScorecardsFromDbAuto(state) {
 
   function normalizeNumberArray(arr, holes) {
     if (!Array.isArray(arr)) return null;
+
+    // if it’s an array but everything is unparseable, return null (don’t show fake 0s)
+    let parsedAny = false;
+
     const out = [];
     for (let i = 0; i < holes; i++) {
-      const n = Number(arr[i]);
-      out.push(Number.isFinite(n) ? n : 0);
+      const n = toNumLoose(arr[i]);
+      if (n != null) parsedAny = true;
+      out.push(n != null ? n : 0);
     }
-    return out;
+
+    return parsedAny ? out : null;
   }
 
-  // Select only needed columns (that exist)
   const selectCols = [
     `"${colCourse}" AS course`,
     `"${colHoles}" AS holes`,
     colLayout ? `"${colLayout}" AS layout` : `''::text AS layout`,
     colPars ? `"${colPars}" AS pars` : `NULL AS pars`,
-
-    // ✅ prefer the best distance column we found; also include an alternate if present
-    colDistM ? `"${colDistM}" AS distances_m_raw` : `NULL AS distances_m_raw`,
-    colDistAlt && colDistAlt !== colDistM ? `"${colDistAlt}" AS distances_alt_raw` : `NULL AS distances_alt_raw`,
-
+    colDist ? `"${colDist}" AS distances_raw` : `NULL AS distances_raw`,
     `"state" AS state`,
   ].join(", ");
 
@@ -253,7 +318,6 @@ async function fetchScorecardsFromDbAuto(state) {
 
   const res = await db.query(q, [st]);
 
-  // Normalize into the shape your frontend expects
   const out = (res.rows || [])
     .map((r) => {
       const course = String(r.course || "").trim();
@@ -261,10 +325,7 @@ async function fetchScorecardsFromDbAuto(state) {
       if (!course || !holes) return null;
 
       const parsArr = normalizeNumberArray(toArr(r.pars), holes);
-
-      // ✅ IMPORTANT: pick whichever distance field actually has data
-      const rawDist = r.distances_m_raw ?? r.distances_alt_raw ?? null;
-      const distArr = normalizeNumberArray(toArr(rawDist), holes);
+      const distArr = normalizeNumberArray(toArr(r.distances_raw), holes);
 
       return {
         course,
@@ -273,8 +334,8 @@ async function fetchScorecardsFromDbAuto(state) {
         holes,
         layout: String(r.layout || "").trim(),
         pars: parsArr,
-        distances_m: distArr, // ✅ new
-        distances: distArr, // ✅ compatibility (if frontend reads `distances`)
+        distances_m: distArr, // ✅ what your UI wants
+        distances: distArr,   // ✅ compatibility if anywhere reads `distances`
       };
     })
     .filter(Boolean);
@@ -284,17 +345,7 @@ async function fetchScorecardsFromDbAuto(state) {
     debug: {
       chosenTable: chosen.table,
       chosenCols: chosen.cols,
-      used: {
-        colCourse,
-        colHoles,
-        colLayout,
-        colPars,
-        colDistM,
-        colDistAlt,
-        colStatus,
-        colPublished,
-        colIsPublished,
-      },
+      used: { colCourse, colHoles, colLayout, colPars, colDist, colStatus, colPublished, colIsPublished },
       publishFilterApplied: !!wherePublished,
       candidateCount: candidates.length,
     },
@@ -311,7 +362,6 @@ router.get("/:state", async (req, res) => {
     if (Array.isArray(dbRes.rows) && dbRes.rows.length) {
       return res.json(dbRes.rows);
     }
-    // no DB rows, continue to file fallback
   } catch (e) {
     console.log("ℹ️ scorecardsRouter DB failed, falling back:", e?.message || e);
   }
@@ -321,7 +371,6 @@ router.get("/:state", async (req, res) => {
   const found = pickExistingFile(tried);
 
   if (!found) {
-    // return a helpful error + DB auto-detect debug
     let dbDebug = null;
     try {
       const dbg = await fetchScorecardsFromDbAuto(state);
