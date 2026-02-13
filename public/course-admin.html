@@ -2986,34 +2986,35 @@ async function saveCourseSettingsFromUI(){
 
       const totalCarts = Number(cs.cart_qty ?? cs.cartQty ?? 0);
       const totalClubs = Number(cs.hire_clubs_qty ?? cs.hireClubsQty ?? 0);
-const dur9 = Number(cs.duration_9_mins ?? cs.duration9 ?? 180) || 180;
-const dur18 = Number(cs.duration_18_mins ?? cs.duration18 ?? 360) || 360;
+      const dur9 = Number(cs.duration_9_mins ?? cs.duration9 ?? 180) || 180;
+      const dur18 = Number(cs.duration_18_mins ?? cs.duration18 ?? 360) || 360;
 
-// window selection (All day OR Custom start + duration)
-const winMode = String($("iWindow")?.value || "all");
-const holesSel = String($("iHoles")?.value || "18").toLowerCase();
+      // window selection (All day OR Custom start + duration)
+      const winMode = String($("iWindow")?.value || "all");
+      const holesSel = String($("iHoles")?.value || "18").toLowerCase();
 
-// we will support 1 or 2 windows
-let windows = [{ label: "All day", start: 0, end: 24 * 60 }];
+      // we will support 1 or 2 windows
+      let windows = [{ label: "All day", start: 0, end: 24 * 60 }];
 
-if (winMode === "custom") {
-  const startMins = timeToMins($("iStartTime")?.value || "");
-  if (startMins == null) throw new Error("custom_start_time_required (e.g. 06:00)");
+      if (winMode === "custom") {
+        const startMins = timeToMins($("iStartTime")?.value || "");
+        if (startMins == null) throw new Error("custom_start_time_required (e.g. 06:00)");
 
-  const end18 = Math.min(24 * 60, startMins + dur18);
-  const end9  = Math.min(24 * 60, startMins + dur9);
+        const end18 = Math.min(24 * 60, startMins + dur18);
+        const end9  = Math.min(24 * 60, startMins + dur9);
 
-  if (holesSel === "both") {
-    windows = [
-      { label: "18 holes", start: startMins, end: end18 },
-      { label: "9 holes",  start: startMins, end: end9  },
-    ];
-  } else {
-    const holesNum = Number(holesSel || 18);
-    const end = Math.min(24 * 60, startMins + (holesNum === 9 ? dur9 : dur18));
-    windows = [{ label: holesNum === 9 ? "9 holes" : "18 holes", start: startMins, end }];
-  }
-}
+        if (holesSel === "both") {
+          windows = [
+            { label: "18 holes", start: startMins, end: end18 },
+            { label: "9 holes",  start: startMins, end: end9  },
+          ];
+        } else {
+          const holesNum = Number(holesSel || 18);
+          const end = Math.min(24 * 60, startMins + (holesNum === 9 ? dur9 : dur18));
+          windows = [{ label: holesNum === 9 ? "9 holes" : "18 holes", start: startMins, end }];
+        }
+      }
+
       // 2️⃣ Load bookings for date
       const bookingsOut = await j(
         "/api/book/course-admin/bookings?" + new URLSearchParams({ slug: getSlug(), date }).toString(),
@@ -3025,74 +3026,94 @@ if (winMode === "custom") {
 
       const bookings = bookingsOut.bookings || [];
 
-// ✅ NEW: include manual slots too (your response already contains manualSlots)
-const manualSlots =
-  bookingsOut.manualSlots ||
-  bookingsOut.manual_slots ||
-  bookingsOut.slots ||
-  bookingsOut.rows ||
-  [];
+      // ✅ NEW: include manual slots too (your response already contains manualSlots)
+      const manualSlots =
+        bookingsOut.manualSlots ||
+        bookingsOut.manual_slots ||
+        bookingsOut.slots ||
+        bookingsOut.rows ||
+        [];
 
-let cartsUsed = 0;
-let clubsUsed = 0;
+      function calcUsedForWindow(winStart, winEnd){
+        let cartsUsed = 0;
+        let clubsUsed = 0;
 
-function bookingStartMins(row){
-  // prefer start_at if present, fallback to tee_time
-  const a = row.start_at || row.startAt;
-  const aM = a ? dateObjToMins(a) : null;
-  if (aM != null) return aM;
+        function bookingStartMins(row){
+          // prefer start_at if present, fallback to tee_time
+          const a = row.start_at || row.startAt;
+          const aM = a ? dateObjToMins(a) : null;
+          if (aM != null) return aM;
 
-  const t = row.tee_time || row.teeTime || row.time;
-  return timeToMins(t);
-}
+          const t = row.tee_time || row.teeTime || row.time;
+          return timeToMins(t);
+        }
 
-function bookingDurationMins(row){
-  const h = Number(row.holes ?? row.hole_count ?? row.holeCount ?? 18);
-  return h === 9 ? dur9 : dur18;
-}
+        function bookingDurationMins(row){
+          const h = Number(row.holes ?? row.hole_count ?? row.holeCount ?? 18);
+          return h === 9 ? dur9 : dur18;
+        }
 
-function rowOverlapsWindow(row){
-  const s = bookingStartMins(row);
-  if (s == null) return false;
-  const e = Math.min(24 * 60, s + bookingDurationMins(row));
-  return minsOverlap(s, e, winStart, winEnd);
-}
+        function rowOverlapsWindow(row){
+          const s = bookingStartMins(row);
+          if (s == null) return false;
+          const e = Math.min(24 * 60, s + bookingDurationMins(row));
+          return minsOverlap(s, e, winStart, winEnd);
+        }
 
-// ✅ online bookings
-bookings.forEach(b => {
-  if (!rowOverlapsWindow(b)) return;
-  cartsUsed += Number(b.cart_qty ?? (b.has_cart ? 1 : 0));
-  clubsUsed += Number(b.hire_clubs_qty ?? (b.has_hire_clubs ? 1 : 0));
-});
+        // ✅ online bookings
+        bookings.forEach(b => {
+          if (!rowOverlapsWindow(b)) return;
+          cartsUsed += Number(b.cart_qty ?? (b.has_cart ? 1 : 0));
+          clubsUsed += Number(b.hire_clubs_qty ?? (b.has_hire_clubs ? 1 : 0));
+        });
 
-// ✅ manual bookings/holds
-// Count add-ons ONCE per manual booking reference (use the lowest slot_index row per reference)
-if (Array.isArray(manualSlots) && manualSlots.length) {
-  const byRef = new Map();
+        // ✅ manual bookings/holds
+        // Count add-ons ONCE per manual booking reference (use the lowest slot_index row per reference)
+        if (Array.isArray(manualSlots) && manualSlots.length) {
+          const byRef = new Map();
 
-  manualSlots.forEach(s => {
-    const ref = String(s.reference || "").trim();
-    if (!ref) return;
+          manualSlots.forEach(s => {
+            const ref = String(s.reference || "").trim();
+            if (!ref) return;
 
-    const prev = byRef.get(ref);
-    const sIdx = Number(s.slot_index ?? 999);
-    const pIdx = prev ? Number(prev.slot_index ?? 999) : 999;
+            const prev = byRef.get(ref);
+            const sIdx = Number(s.slot_index ?? 999);
+            const pIdx = prev ? Number(prev.slot_index ?? 999) : 999;
 
-    if (!prev || sIdx < pIdx) byRef.set(ref, s);
-  });
+            if (!prev || sIdx < pIdx) byRef.set(ref, s);
+          });
 
-  for (const s of byRef.values()) {
-    if (!rowOverlapsWindow(s)) continue;
-    cartsUsed += Number(s.cart_qty || 0);
-    clubsUsed += Number(s.hire_clubs_qty || 0);
-  }
-}
+          for (const s of byRef.values()) {
+            if (!rowOverlapsWindow(s)) continue;
+            cartsUsed += Number(s.cart_qty || 0);
+            clubsUsed += Number(s.hire_clubs_qty || 0);
+          }
+        }
 
-      const cartsLeft = Math.max(0, totalCarts - cartsUsed);
-      const clubsLeft = Math.max(0, totalClubs - clubsUsed);
+        return { cartsUsed, clubsUsed };
+      }
 
-      $("invCarts").textContent = `${cartsLeft} remaining (of ${totalCarts})`;
-      $("invClubs").textContent = `${clubsLeft} remaining (of ${totalClubs})`;
+      // ✅ compute 1 or 2 windows depending on selection
+      const results = windows.map(w => {
+        const used = calcUsedForWindow(w.start, w.end);
+        const cartsLeft = Math.max(0, totalCarts - used.cartsUsed);
+        const clubsLeft = Math.max(0, totalClubs - used.clubsUsed);
+        return { ...w, ...used, cartsLeft, clubsLeft };
+      });
+
+      // ✅ render
+      if (results.length === 1) {
+        $("invCarts").textContent = `${results[0].cartsLeft} remaining (of ${totalCarts})`;
+        $("invClubs").textContent = `${results[0].clubsLeft} remaining (of ${totalClubs})`;
+      } else {
+        $("invCarts").textContent =
+          `18 window: ${results[0].cartsLeft} remaining (of ${totalCarts}) • ` +
+          `9 window: ${results[1].cartsLeft} remaining (of ${totalCarts})`;
+
+        $("invClubs").textContent =
+          `18 window: ${results[0].clubsLeft} remaining (of ${totalClubs}) • ` +
+          `9 window: ${results[1].clubsLeft} remaining (of ${totalClubs})`;
+      }
 
       $("inventoryBox").style.display = "block";
       $("inventoryMsg").textContent = "✅ Inventory loaded";
@@ -3100,7 +3121,6 @@ if (Array.isArray(manualSlots) && manualSlots.length) {
       $("inventoryMsg").textContent = "❌ " + e.message;
     }
   };
-
   // set today
   (function(){
     try{
