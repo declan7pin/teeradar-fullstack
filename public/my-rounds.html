@@ -2327,14 +2327,13 @@ if (canUsePremium) {
     const n = v === "" ? null : Number(v);
     byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
   } else {
-    // ✅ if distance is shown as published text, read from td data attribute
-    const td = scoreBody.querySelector(`td.distCell[data-meta-dist][data-hole="${i}"]`);
-    // (td won't match because td has no data-hole; read via row instead)
-    const row = scoreBody.querySelector(`tr:nth-child(${i}) td.distCell[data-meta-dist]`);
-    const raw = row ? String(row.getAttribute("data-meta-dist") || "").trim() : "";
-    const n = raw === "" ? null : Number(raw);
-    byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
-  }
+  // ✅ distance shown as published text (read from the td attribute)
+  const tr = scoreBody.querySelector(`tr:nth-child(${i})`);
+  const cell = tr ? tr.querySelector(`td.distCell[data-meta-dist]`) : null;
+  const raw = cell ? String(cell.getAttribute("data-meta-dist") || "").trim() : "";
+  const n = raw === "" ? null : Number(raw);
+  byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
+}
 }
 
       // strokes/putts by player
@@ -2494,46 +2493,121 @@ if (canUsePremium) {
         submitConfirmBtn.disabled = false;
       }
     }
+    // -----------------------------
+// ✅ Guest mode storage (no login)
+// -----------------------------
+const GUEST_ROUNDS_KEY = "teeradar_guest_rounds_v1";
+
+function guestReadRounds(){
+  try{
+    const raw = localStorage.getItem(GUEST_ROUNDS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  }catch{
+    return [];
+  }
+}
+
+function guestWriteRounds(arr){
+  try{
+    localStorage.setItem(GUEST_ROUNDS_KEY, JSON.stringify(Array.isArray(arr) ? arr : []));
+  }catch{}
+}
+
+function guestMakeId(){
+  return "g_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8);
+}
+
+function guestUpsertRound(round){
+  const arr = guestReadRounds();
+  const id = String(round?.id || "").trim();
+  if (!id) return;
+
+  const idx = arr.findIndex(r => String(r?.id) === id);
+  if (idx >= 0) arr[idx] = round;
+  else arr.unshift(round);
+
+  guestWriteRounds(arr);
+}
+
+function guestDeleteRound(id){
+  const arr = guestReadRounds().filter(r => String(r?.id) !== String(id));
+  guestWriteRounds(arr);
+}
 
     // -----------------------------
     // API calls
     // -----------------------------
     async function fetchRounds(){
-      const data = await api("/api/rounds", { method:"GET" });
-      const rounds = (data && data.rounds) ? data.rounds : [];
-      roundsCache = rounds.map(r => ({
-        ...r,
-        holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
-      }));
-      renderRoundsList();
-    }
+  // ✅ Guest mode: read from localStorage
+  if (!isLoggedIn()){
+    const rounds = guestReadRounds();
+    roundsCache = rounds.map(r => ({
+      ...r,
+      holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
+    }));
+    renderRoundsList();
+    return;
+  }
+
+  // ✅ Logged in: read from backend
+  const data = await api("/api/rounds", { method:"GET" });
+  const rounds = (data && data.rounds) ? data.rounds : [];
+  roundsCache = rounds.map(r => ({
+    ...r,
+    holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
+  }));
+  renderRoundsList();
+}
 
     async function loadRound(id){
-      setLeftPanelsVisibility(false);
-      const data = await api(`/api/rounds/${encodeURIComponent(id)}`, { method:"GET" });
-      const round = data.round || data;
-      const holesArr = data.holes || data.holesData || round.holesData || round.holes || [];
-      round.holesData = holesArr || [];
+  setLeftPanelsVisibility(false);
 
-      // ✅ keep Players dropdown synced as soon as we load a round
-      if (playersEl) playersEl.value = String(getPlayersCountFromRound(round));
-
-      // ✅ prefer backend-saved player_names if present
-      if (Array.isArray(round.player_names)) {
-        for (let i = 0; i < 4; i++) {
-          if (typeof round.player_names[i] === "string") playerNames[i] = round.player_names[i];
-        }
-        // cache locally too
-        try { localStorage.setItem(roundNamesKey(round.id), JSON.stringify(playerNames)); } catch {}
-      }
-
-      // ✅ load + show names for this round
-      loadNamesForRound(round.id);
-      ensureP1IsUser();
-      renderPlayerNamesUI();
-
-      await renderScorecard(round);
+  // ✅ Guest mode
+  if (!isLoggedIn()){
+    const rounds = guestReadRounds();
+    const round = rounds.find(r => String(r?.id) === String(id));
+    if (!round){
+      setToast(rightToast, "Round not found (guest).", false);
+      return;
     }
+
+    currentRoundId = round.id;
+    currentRound = round;
+
+    // ✅ keep Players dropdown synced
+    if (playersEl) playersEl.value = String(getPlayersCountFromRound(round));
+
+    // ✅ load + show names
+    loadNamesForRound(round.id);
+    if (isLoggedIn()) ensureP1IsUser(); // (won’t run in guest)
+    renderPlayerNamesUI();
+
+    await renderScorecard(round);
+    return;
+  }
+
+  // ✅ Logged in mode
+  const data = await api(`/api/rounds/${encodeURIComponent(id)}`, { method:"GET" });
+  const round = data.round || data;
+  const holesArr = data.holes || data.holesData || round.holesData || round.holes || [];
+  round.holesData = holesArr || [];
+
+  if (playersEl) playersEl.value = String(getPlayersCountFromRound(round));
+
+  if (Array.isArray(round.player_names)) {
+    for (let i = 0; i < 4; i++) {
+      if (typeof round.player_names[i] === "string") playerNames[i] = round.player_names[i];
+    }
+    try { localStorage.setItem(roundNamesKey(round.id), JSON.stringify(playerNames)); } catch {}
+  }
+
+  loadNamesForRound(round.id);
+  ensureP1IsUser();
+  renderPlayerNamesUI();
+
+  await renderScorecard(round);
+}
 
     async function createRound(){
       const course = String(courseEl.value || "").trim();
@@ -2601,7 +2675,46 @@ if (!isLoggedIn()){
         ...(pars ? { pars } : {})
       };
 
-      const data = await api("/api/rounds", { method:"POST", body: JSON.stringify(payload) });
+      // ✅ Guest mode: create locally (no backend)
+if (!isLoggedIn()){
+  const newId = guestMakeId();
+  const nowIso = new Date().toISOString();
+
+  const roundLocal = {
+    id: newId,
+    course,
+    state,
+    holes,
+    layout: layout || null,
+    par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
+    notes: notes || null,
+    players_count,
+    player_names: namesOut,
+    created_at: nowIso,
+    holesData: Array.from({ length: holes }, (_, i) => ({
+      hole_number: i + 1,
+      par: (pars && Number.isFinite(Number(pars[i]))) ? Number(pars[i]) : null,
+      distance_m: null,
+      strokes_by_player: {},
+      putts_by_player: {}
+    }))
+  };
+
+  // cache names + save round
+  saveNamesForRound(newId);
+  guestUpsertRound(roundLocal);
+
+  setToast(leftToast, "Round created (guest).", true);
+
+  await safeFetchRounds();
+  await safeLoadRound(newId);
+
+  setLeftPanelsVisibility(false);
+  return;
+}
+
+// ✅ Logged in: create via backend
+const data = await api("/api/rounds", { method:"POST", body: JSON.stringify(payload) });
 
       const newId = data.roundId || (data.round && data.round.id);
       setToast(leftToast, "Round created.", true);
@@ -2626,6 +2739,22 @@ setLeftPanelsVisibility(false);
 
     async function saveRoundAll(){
       if (!currentRoundId) return;
+      // ✅ Guest mode: save locally
+if (!isLoggedIn()){
+  saveNamesForRound(currentRoundId);
+
+  const holesRows = readTableHoles();
+
+  currentRound.holesData = holesRows;
+  currentRound.players_count = getPlayersCountFromRound(currentRound);
+  currentRound.player_names = playerNames.slice(0, currentRound.players_count);
+
+  guestUpsertRound(currentRound);
+
+  setToast(rightToast, "Saved (guest).", true);
+  await safeFetchRounds();
+  return;
+}
 
       // ✅ save names per-round before saving scores (so it's never lost)
       saveNamesForRound(currentRoundId);
@@ -2667,6 +2796,19 @@ setLeftPanelsVisibility(false);
 
     async function deleteRound(){
       if (!currentRoundId) return;
+      // ✅ Guest mode: delete locally
+if (!isLoggedIn()){
+  guestDeleteRound(currentRoundId);
+  try { localStorage.removeItem(roundNamesKey(currentRoundId)); } catch {}
+
+  setToast(rightToast, "Round deleted (guest).", true);
+
+  currentRoundId = null;
+  currentRound = null;
+  await renderScorecard(null);
+  await safeFetchRounds();
+  return;
+}
 
       await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, { method:"DELETE" });
 
@@ -2713,7 +2855,14 @@ setLeftPanelsVisibility(false);
   if (!isLoggedIn()) return;
   logout();
 });
-    createRoundBtn.addEventListener("click", createRound);
+    createRoundBtn.addEventListener("click", async () => {
+  try{
+    await createRound();
+  }catch(err){
+    console.error("createRound failed:", err);
+    setToast(leftToast, "Create failed: " + (err?.message || "error"), false);
+  }
+});
     refreshBtn.addEventListener("click", safeFetchRounds);
     if (showLeftBtn) {
   showLeftBtn.addEventListener("click", () => {
