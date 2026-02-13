@@ -158,7 +158,21 @@ async function fetchScorecardsFromDbAuto(state) {
   const colHoles = pickCol(holesCols);
   const colLayout = pickCol(layoutCols);
   const colPars = pickCol(parsCols);
-  const colDist = pickCol(distCols);
+
+  // ✅ IMPORTANT: support multiple possible distance column names + shapes
+  // (some DB rows may store it under distances, distance_m, dist_m, etc.)
+  const colDistM = pickCol(distCols); // keep your existing distCols list
+  const colDistAlt = pickCol([
+    "distances",
+    "distance",
+    "distance_m",
+    "dist_m",
+    "dist",
+    "meters",
+    "m",
+    "yards",
+    "y",
+  ]);
 
   const colStatus = colsSet.has("status") ? "status" : null;
   const colPublished = colsSet.has("published") ? "published" : null;
@@ -172,13 +186,63 @@ async function fetchScorecardsFromDbAuto(state) {
 
   const wherePublished = pubWheres.length ? `AND (${pubWheres.join(" OR ")})` : "";
 
+  // ✅ helpers to normalize JSONB / stringified JSON / object-wrapped arrays
+  function toArr(val) {
+    if (val == null) return null;
+
+    if (Array.isArray(val)) return val;
+
+    if (typeof val === "object") {
+      const inner =
+        val.distances_m ??
+        val.distances ??
+        val.distance_m ??
+        val.distance ??
+        val.dist_m ??
+        val.dist ??
+        val.m ??
+        val.meters ??
+        val.y ??
+        val.yards ??
+        null;
+      if (Array.isArray(inner)) return inner;
+    }
+
+    if (typeof val === "string") {
+      const s = val.trim();
+      if (!s) return null;
+      try {
+        const parsed = JSON.parse(s);
+        return toArr(parsed);
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  function normalizeNumberArray(arr, holes) {
+    if (!Array.isArray(arr)) return null;
+    const out = [];
+    for (let i = 0; i < holes; i++) {
+      const n = Number(arr[i]);
+      out.push(Number.isFinite(n) ? n : 0);
+    }
+    return out;
+  }
+
   // Select only needed columns (that exist)
   const selectCols = [
     `"${colCourse}" AS course`,
     `"${colHoles}" AS holes`,
     colLayout ? `"${colLayout}" AS layout` : `''::text AS layout`,
     colPars ? `"${colPars}" AS pars` : `NULL AS pars`,
-    colDist ? `"${colDist}" AS distances_m` : `NULL AS distances_m`,
+
+    // ✅ prefer the best distance column we found; also include an alternate if present
+    colDistM ? `"${colDistM}" AS distances_m_raw` : `NULL AS distances_m_raw`,
+    colDistAlt && colDistAlt !== colDistM ? `"${colDistAlt}" AS distances_alt_raw` : `NULL AS distances_alt_raw`,
+
     `"state" AS state`,
   ].join(", ");
 
@@ -199,14 +263,21 @@ async function fetchScorecardsFromDbAuto(state) {
       const holes = Number(r.holes) || null;
       if (!course || !holes) return null;
 
+      const parsArr = normalizeNumberArray(toArr(r.pars), holes);
+
+      // ✅ IMPORTANT: pick whichever distance field actually has data
+      const rawDist = r.distances_m_raw ?? r.distances_alt_raw ?? null;
+      const distArr = normalizeNumberArray(toArr(rawDist), holes);
+
       return {
         course,
         name: course,
         state: st,
         holes,
         layout: String(r.layout || "").trim(),
-        pars: r.pars ?? null,
-        distances_m: r.distances_m ?? null,
+        pars: parsArr,
+        distances_m: distArr, // ✅ new
+        distances: distArr,   // ✅ compatibility (if frontend reads `distances`)
       };
     })
     .filter(Boolean);
@@ -216,12 +287,21 @@ async function fetchScorecardsFromDbAuto(state) {
     debug: {
       chosenTable: chosen.table,
       chosenCols: chosen.cols,
-      used: { colCourse, colHoles, colLayout, colPars, colDist, colStatus, colPublished, colIsPublished },
+      used: {
+        colCourse,
+        colHoles,
+        colLayout,
+        colPars,
+        colDistM,
+        colDistAlt,
+        colStatus,
+        colPublished,
+        colIsPublished,
+      },
       publishFilterApplied: !!wherePublished,
       candidateCount: candidates.length,
     },
   };
-}
 
 // GET /api/scorecards/:state
 router.get("/:state", async (req, res) => {
