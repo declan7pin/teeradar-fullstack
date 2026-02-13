@@ -963,6 +963,26 @@ button, a, .btn, .btn2, input, select {
     const scorecardsByState = new Map(); // st -> array
     const scorecardIndexByState = new Map(); // st -> Map(key -> array of scorecards)
 
+function scorecardsLsKey(st){ return `teeradar_scorecards_${String(st||"").toUpperCase()}`; }
+
+function readScorecardsFromLS(st){
+  try{
+    const raw = localStorage.getItem(scorecardsLsKey(st));
+    const arr = raw ? JSON.parse(raw) : null;
+    return Array.isArray(arr) ? arr : null;
+  }catch{
+    return null;
+  }
+}
+
+function writeScorecardsToLS(st, arr){
+  try{
+    if (Array.isArray(arr) && arr.length){
+      localStorage.setItem(scorecardsLsKey(st), JSON.stringify(arr));
+    }
+  }catch{}
+}
+
     // ✅ UI selection state
     let uiSelectedTee = "";
     let uiNineSingle = "";
@@ -1091,6 +1111,7 @@ const toggleTableBtn = document.getElementById("toggleTableBtn");
 // ✅ premium state
 let premiumHoleIndex = 0; // 0-based
 let premiumShowingTable = false;
+let premiumPlayerIndex = 0; // 0-based (0=P1)
     
     const showLeftBtn = document.getElementById("showLeftBtn");
     const saveAllBtn = document.getElementById("saveAllBtn");
@@ -1217,40 +1238,87 @@ function setLeftPanelsVisibility(show){
     }
 
     async function loadScorecardsStateOnce(st){
-      const state = String(st || "").trim().toUpperCase();
-      if (!state) return [];
-      if (scorecardsByState.has(state)) return scorecardsByState.get(state);
+  const state = String(st || "").trim().toUpperCase();
+  if (!state) return [];
+  if (scorecardsByState.has(state)) return scorecardsByState.get(state);
 
-      try{
-        const res = await fetch(`/api/scorecards/${encodeURIComponent(state)}`);
-        const data = await res.json();
-        const arr = Array.isArray(data) ? data : (data && Array.isArray(data.scorecards) ? data.scorecards : []);
-        scorecardsByState.set(state, arr);
-
-        const idx = new Map();
-        for (const sc of arr){
-          const courseNm = sc.course || sc.name || "";
-          const holes = Number(sc.holes) || null;
-          const layout = String(sc.layout || "").trim().toLowerCase();
-          if (!courseNm || !holes) continue;
-
-          const base = `${cleanCourseNameForMatch(courseNm)}|${holes}`;
-          const k1 = base + `|${layout || ""}`;
-          const k2 = base + `|`;
-          if (!idx.has(k1)) idx.set(k1, []);
-          idx.get(k1).push(sc);
-          if (!idx.has(k2)) idx.set(k2, []);
-          idx.get(k2).push(sc);
-        }
-        scorecardIndexByState.set(state, idx);
-
-        return arr;
-      }catch{
-        scorecardsByState.set(state, []);
-        scorecardIndexByState.set(state, new Map());
-        return [];
-      }
+  // ✅ localStorage fallback cache (so meta still works in guest mode)
+  function scorecardsLsKey(s){ return `teeradar_scorecards_${String(s||"").toUpperCase()}`; }
+  function readScorecardsFromLS(s){
+    try{
+      const raw = localStorage.getItem(scorecardsLsKey(s));
+      const arr = raw ? JSON.parse(raw) : null;
+      return Array.isArray(arr) ? arr : null;
+    }catch{
+      return null;
     }
+  }
+  function writeScorecardsToLS(s, arr){
+    try{
+      if (Array.isArray(arr) && arr.length){
+        localStorage.setItem(scorecardsLsKey(s), JSON.stringify(arr));
+      }
+    }catch{}
+  }
+
+  try{
+    const res = await fetch(`/api/scorecards/${encodeURIComponent(state)}`);
+
+    let arr = [];
+    if (!res.ok){
+      // ✅ backend blocked/errored → use cached copy if available
+      arr = readScorecardsFromLS(state) || [];
+    } else {
+      const data = await res.json();
+      arr = Array.isArray(data) ? data : (data && Array.isArray(data.scorecards) ? data.scorecards : []);
+      writeScorecardsToLS(state, arr);
+    }
+
+    scorecardsByState.set(state, arr);
+
+    const idx = new Map();
+    for (const sc of arr){
+      const courseNm = sc.course || sc.name || "";
+      const holes = Number(sc.holes) || null;
+      const layout = String(sc.layout || "").trim().toLowerCase();
+      if (!courseNm || !holes) continue;
+
+      const base = `${cleanCourseNameForMatch(courseNm)}|${holes}`;
+      const k1 = base + `|${layout || ""}`;
+      const k2 = base + `|`;
+      if (!idx.has(k1)) idx.set(k1, []);
+      idx.get(k1).push(sc);
+      if (!idx.has(k2)) idx.set(k2, []);
+      idx.get(k2).push(sc);
+    }
+    scorecardIndexByState.set(state, idx);
+
+    return arr;
+  }catch{
+    // ✅ last-resort fallback: cached copy
+    const arr = readScorecardsFromLS(state) || [];
+    scorecardsByState.set(state, arr);
+
+    const idx = new Map();
+    for (const sc of arr){
+      const courseNm = sc.course || sc.name || "";
+      const holes = Number(sc.holes) || null;
+      const layout = String(sc.layout || "").trim().toLowerCase();
+      if (!courseNm || !holes) continue;
+
+      const base = `${cleanCourseNameForMatch(courseNm)}|${holes}`;
+      const k1 = base + `|${layout || ""}`;
+      const k2 = base + `|`;
+      if (!idx.has(k1)) idx.set(k1, []);
+      idx.get(k1).push(sc);
+      if (!idx.has(k2)) idx.set(k2, []);
+      idx.get(k2).push(sc);
+    }
+    scorecardIndexByState.set(state, idx);
+
+    return arr;
+  }
+}
 
     function pickTeeNameFromDistancesObj(distObj){
       if (!distObj || typeof distObj !== "object") return "";
@@ -1975,24 +2043,35 @@ function renderPremiumForHole(round, metaPars, metaDists, teeName){
     : null;
 
   // header pills
-  if (premPills){
-    const holesRows = readTableHoles();
-    const totals = calcTotalsForPlayer(holesRows, 0);
-    const toParLabel = (totals.toPar == null) ? "—" : (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+"+totals.toPar : ""+totals.toPar));
+const pc = getPlayersCountFromRound(round);
+premiumPlayerIndex = clamp(premiumPlayerIndex, 0, pc - 1);
+const pLabel = playerLabel(premiumPlayerIndex);
+const nextIsPlayer = premiumPlayerIndex < pc - 1;
 
-    premPills.innerHTML = `
-      <span class="premPill">Hole ${holeNum} / ${holesCount}</span>
-      <span class="premPill">Par ${Number.isFinite(basePar) ? basePar : "—"}</span>
-      <span class="premPill">${Number.isFinite(metaDist) ? (metaDist + "m") : "—"}</span>
-      <span class="premPill">${teeName ? ("Tee " + escapeHtml(teeName)) : "Tee —"}</span>
-      <span class="premPill">To Par: ${toParLabel}</span>
-    `;
-  }
+if (premPills){
+  // To Par shown for CURRENT player (not always P1)
+  const holesRows = readTableHoles();
+  const totals = calcTotalsForPlayer(holesRows, premiumPlayerIndex);
+  const toParLabel = (totals.toPar == null) ? "—" : (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+"+totals.toPar : ""+totals.toPar));
 
-  // current values from table
-  const holeRow = getHoleRowFromTable(holeNum);
-  const curStrokes = holeRow ? getHolePlayerValue(holeRow, "strokes", 0) : null;
-  const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", 0) : null;
+  premPills.innerHTML = `
+    <span class="premPill">${escapeHtml(pLabel)}</span>
+    <span class="premPill">Hole ${holeNum} / ${holesCount}</span>
+    <span class="premPill">Par ${Number.isFinite(basePar) ? basePar : "—"}</span>
+    <span class="premPill">${Number.isFinite(metaDist) ? (metaDist + "m") : "—"}</span>
+    <span class="premPill">${teeName ? ("Tee " + escapeHtml(teeName)) : "Tee —"}</span>
+    <span class="premPill">To Par: ${toParLabel}</span>
+  `;
+}
+
+// ✅ button text
+if (premNextBtn) premNextBtn.textContent = nextIsPlayer ? "Next player →" : "Next hole →";
+if (premPrevBtn) premPrevBtn.textContent = (premiumPlayerIndex > 0) ? "← Prev player" : "← Prev hole";
+
+  // current values from table (current player)
+const holeRow = getHoleRowFromTable(holeNum);
+const curStrokes = holeRow ? getHolePlayerValue(holeRow, "strokes", premiumPlayerIndex) : null;
+const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerIndex) : null;
 
   // ✅ defaults you requested
   const startStrokes = Number.isFinite(Number(curStrokes)) ? Number(curStrokes) : Number(basePar);
@@ -2026,7 +2105,7 @@ function renderPremiumForHole(round, metaPars, metaDists, teeName){
 
     sel.addEventListener("change", () => {
       const v = Number(sel.value);
-      setHoleValueInTable(holeNum, "strokes", 1, Number.isFinite(v) ? v : null);
+      setHoleValueInTable(holeNum, "strokes", premiumPlayerIndex + 1, Number.isFinite(v) ? v : null);
       renderPremiumForHole(round, metaPars, metaDists, teeName);
     });
 
@@ -2055,7 +2134,7 @@ function renderPremiumForHole(round, metaPars, metaDists, teeName){
 
     sel.addEventListener("change", () => {
       const v = Number(sel.value);
-      setHoleValueInTable(holeNum, "putts", 1, Number.isFinite(v) ? v : null);
+      setHoleValueInTable(holeNum, "putts", premiumPlayerIndex + 1, Number.isFinite(v) ? v : null);
       renderPremiumForHole(round, metaPars, metaDists, teeName);
     });
 
@@ -2064,31 +2143,68 @@ function renderPremiumForHole(round, metaPars, metaDists, teeName){
 
   // no colours / shapes in play mode
   if (premNote){
-    premNote.textContent = "Use the wheels, then Next hole →";
+    premNote.textContent = (premiumPlayerIndex < (getPlayersCountFromRound(round) - 1))
+  ? "Use the wheels, then Next player →"
+  : "Use the wheels, then Next hole →";
   }
 
-  if (premPrevBtn) premPrevBtn.disabled = (premiumHoleIndex <= 0);
-  if (premNextBtn) premNextBtn.disabled = (premiumHoleIndex >= holesCount - 1);
+  const pc2 = getPlayersCountFromRound(round);
+if (premPrevBtn) premPrevBtn.disabled = (premiumHoleIndex <= 0 && premiumPlayerIndex <= 0);
+if (premNextBtn) premNextBtn.disabled = (premiumHoleIndex >= holesCount - 1 && premiumPlayerIndex >= pc2 - 1);
 }
 
 function enablePremiumMode(round, metaPars, metaDists, teeName){
   premiumShowingTable = false;
+  premiumPlayerIndex = 0;
   setPremiumVisible(true);
   renderPremiumForHole(round, metaPars, metaDists, teeName);
 
   if (premPrevBtn){
     premPrevBtn.onclick = () => {
-      premiumHoleIndex = Math.max(0, premiumHoleIndex - 1);
+      const holesCount = Number(round?.holes) || 18;
+      const pc = getPlayersCountFromRound(round);
+
+      // back a player first
+      if (premiumPlayerIndex > 0){
+        premiumPlayerIndex -= 1;
+        renderPremiumForHole(round, metaPars, metaDists, teeName);
+        return;
+      }
+
+      // otherwise back a hole and go to last player
+      if (premiumHoleIndex > 0){
+        premiumHoleIndex = Math.max(0, premiumHoleIndex - 1);
+        premiumPlayerIndex = Math.max(0, pc - 1);
+        renderPremiumForHole(round, metaPars, metaDists, teeName);
+        return;
+      }
+
+      // start
+      premiumHoleIndex = 0;
+      premiumPlayerIndex = 0;
       renderPremiumForHole(round, metaPars, metaDists, teeName);
     };
   }
+
   if (premNextBtn){
     premNextBtn.onclick = () => {
       const holesCount = Number(round?.holes) || 18;
+      const pc = getPlayersCountFromRound(round);
+
+      // next player first
+      if (premiumPlayerIndex < pc - 1){
+        premiumPlayerIndex += 1;
+        renderPremiumForHole(round, metaPars, metaDists, teeName);
+        return;
+      }
+
+      // last player -> next hole
+      premiumPlayerIndex = 0;
       premiumHoleIndex = Math.min(holesCount - 1, premiumHoleIndex + 1);
       renderPremiumForHole(round, metaPars, metaDists, teeName);
     };
   }
+
   if (toggleTableBtn){
     toggleTableBtn.onclick = () => {
       premiumShowingTable = !premiumShowingTable;
