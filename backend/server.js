@@ -40,6 +40,8 @@ import { startAlertWorker, runAlertTickOnce } from "./alertWorker.js"; // ✅ AD
 
 // ✅ NEW: Rounds router
 import roundsRouter from "./roundsRoutes.js";
+// ✅ NEW: Scorecards router (public)
+import scorecardsRouter from "./scorecardsRouter.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -720,6 +722,8 @@ app.use((req, res, next) => {
 });
 // ✅ Rounds API
 app.use("/api/rounds", roundsRouter);
+// ✅ Scorecards API (PUBLIC – no auth)
+app.use("/api/scorecards", scorecardsRouter);
 // ✅ NEW: booking API router
 app.use("/api/book", (req, res, next) => {
   // Try to get slug from header OR query OR /api/book/:slug style param
