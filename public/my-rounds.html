@@ -1330,10 +1330,15 @@ function setLeftPanelsVisibility(show){
     }
 
     function getTeesFromScorecard(sc){
-      const distObj = sc && (sc.distances_m || sc.distancesByTee);
-      if (!distObj || typeof distObj !== "object") return [];
-      return Object.keys(distObj).filter(k => Array.isArray(distObj[k]) && distObj[k].length);
-    }
+  // ✅ If distances are stored as a flat array, there are no tees to choose from
+  const distAny = sc && (sc.distancesByTee ?? sc.distances_m ?? sc.distances);
+  if (!distAny) return [];
+
+  if (Array.isArray(distAny)) return []; // ✅ flat distances array
+
+  if (typeof distAny !== "object") return [];
+  return Object.keys(distAny).filter(k => Array.isArray(distAny[k]) && distAny[k].length);
+}
 
     function find9LayoutsForCourse(state, course){
       const st = String(state || "").toUpperCase();
@@ -1759,108 +1764,124 @@ function setLeftPanelsVisibility(show){
     // Scorecard meta (pars + distances)
     // -----------------------------
     async function getPublishedMetaFromScorecards(roundLike){
-      const course = roundLike?.course || "";
-      const state = String(roundLike?.state || "").trim().toUpperCase();
-      const holes = Number(roundLike?.holes) || 18;
+  const course = roundLike?.course || "";
+  const state = String(roundLike?.state || "").trim().toUpperCase();
+  const holes = Number(roundLike?.holes) || 18;
 
-      await loadScorecardsStateOnce(state);
+  await loadScorecardsStateOnce(state);
 
-      const layouts9 = find9LayoutsForCourse(state, course);
-      const usingExplicitNines = layouts9.length > 0;
+  const layouts9 = find9LayoutsForCourse(state, course);
+  const usingExplicitNines = layouts9.length > 0;
 
-      const chosenTee = String(uiSelectedTee || "").trim();
+  const chosenTee = String(uiSelectedTee || "").trim();
 
-      if (usingExplicitNines) {
-        if (holes === 9) {
-          const lay = String(uiNineSingle || "").trim();
-          const sc9 = lay ? getScorecard9(state, course, lay) : null;
+  // ✅ helper: supports both tee-objects and flat arrays
+  function extractDistances(sc, holesWanted, nineLoop, teeName){
+    if (!sc) return { distances: null, teeName: teeName || "" };
 
-          let pars = null, distances = null, teeName = chosenTee;
+    // prefer tee-based object if present
+    const distAny = sc.distancesByTee ?? sc.distances_m ?? sc.distances;
 
-          if (sc9 && Array.isArray(sc9.pars)) pars = sc9.pars.slice(0,9);
-
-          const distObj = sc9 && (sc9.distances_m || sc9.distancesByTee);
-          if (distObj && typeof distObj === "object") {
-            if (!teeName) teeName = pickTeeNameFromDistancesObj(distObj);
-            const arr = Array.isArray(distObj[teeName]) ? distObj[teeName] : null;
-            if (arr) distances = arr.slice(0,9);
-          }
-
-          return { pars, distances, teeName, nines: { nine: lay || "" } };
-        }
-
-        if (holes === 18) {
-          const layA = String(uiNineFront || "").trim();
-          const layB = String(uiNineBack || "").trim();
-          const scA = layA ? getScorecard9(state, course, layA) : null;
-          const scB = layB ? getScorecard9(state, course, layB) : null;
-
-          let pars = null, distances = null, teeName = chosenTee;
-
-          if (scA && scB && Array.isArray(scA.pars) && Array.isArray(scB.pars)) {
-            pars = scA.pars.slice(0,9).concat(scB.pars.slice(0,9));
-          }
-
-          const distA = scA && (scA.distances_m || scA.distancesByTee);
-          const distB = scB && (scB.distances_m || scB.distancesByTee);
-
-          if (distA && distB && typeof distA === "object" && typeof distB === "object") {
-            if (!teeName) {
-              const a = Object.keys(distA);
-              const b = Object.keys(distB);
-              const inter = a.filter(x => b.includes(x));
-              teeName = inter[0] || pickTeeNameFromDistancesObj(distA) || pickTeeNameFromDistancesObj(distB) || "";
-            }
-            const arrA = Array.isArray(distA[teeName]) ? distA[teeName].slice(0,9) : null;
-            const arrB = Array.isArray(distB[teeName]) ? distB[teeName].slice(0,9) : null;
-            if (arrA && arrB) distances = arrA.concat(arrB);
-          }
-
-          return { pars, distances, teeName, nines: { front: layA || "", back: layB || "" } };
-        }
+    // ✅ Case A: flat array already (your DB output)
+    if (Array.isArray(distAny)) {
+      let arr = distAny.slice();
+      if (holesWanted === 18) return { distances: arr.slice(0, 18), teeName: "" };
+      if (holesWanted === 9) {
+        if (arr.length === 9) return { distances: arr.slice(0, 9), teeName: "" };
+        if (arr.length >= 18) return { distances: (nineLoop === "back") ? arr.slice(9,18) : arr.slice(0,9), teeName: "" };
+        return { distances: arr.slice(0, 9), teeName: "" };
       }
+      return { distances: null, teeName: "" };
+    }
 
-      const layout = String(roundLike?.layout || "").trim().toLowerCase();
-      const nineLoop = String(roundLike?.nineLoop || "").trim().toLowerCase();
+    // ✅ Case B: tee-keyed object
+    if (distAny && typeof distAny === "object") {
+      let tn = teeName || "";
+      if (!tn) tn = pickTeeNameFromDistancesObj(distAny);
 
-      const idx = scorecardIndexByState.get(state) || new Map();
-      const base = `${cleanCourseNameForMatch(course)}|${holes}`;
-      const kLayout = base + `|${layout || ""}`;
-      const kFallback = base + `|`;
+      const arr = Array.isArray(distAny[tn]) ? distAny[tn].slice() : null;
+      if (!arr || !arr.length) return { distances: null, teeName: tn || "" };
 
-      let list = idx.get(kLayout) || [];
-      if (!list.length) list = idx.get(kFallback) || [];
+      if (holesWanted === 18) return { distances: arr.slice(0,18), teeName: tn || "" };
+      if (holesWanted === 9) {
+        if (arr.length === 9) return { distances: arr.slice(0,9), teeName: tn || "" };
+        if (arr.length >= 18) return { distances: (nineLoop === "back") ? arr.slice(9,18) : arr.slice(0,9), teeName: tn || "" };
+        return { distances: arr.slice(0,9), teeName: tn || "" };
+      }
+    }
 
-      const sc = list.length ? list[0] : null;
+    return { distances: null, teeName: teeName || "" };
+  }
+
+  if (usingExplicitNines) {
+    if (holes === 9) {
+      const lay = String(uiNineSingle || "").trim();
+      const sc9 = lay ? getScorecard9(state, course, lay) : null;
 
       let pars = null;
-      if (sc && Array.isArray(sc.pars)) {
-        if (holes === 18) pars = sc.pars.slice(0, 18);
-        if (holes === 9) {
-          if (sc.pars.length === 9) pars = sc.pars.slice(0, 9);
-          else if (sc.pars.length >= 18) pars = (nineLoop === "back") ? sc.pars.slice(9,18) : sc.pars.slice(0,9);
-          else pars = sc.pars.slice(0, 9);
-        }
-      }
+      if (sc9 && Array.isArray(sc9.pars)) pars = sc9.pars.slice(0,9);
 
-      let teeName = chosenTee || "";
-      let distances = null;
-      const distObj = sc && (sc.distances_m || sc.distancesByTee);
-      if (distObj && typeof distObj === "object") {
-        if (!teeName) teeName = pickTeeNameFromDistancesObj(distObj);
-        const arr = Array.isArray(distObj[teeName]) ? distObj[teeName].slice() : null;
-        if (arr && arr.length) {
-          if (holes === 18) distances = arr.slice(0,18);
-          if (holes === 9) {
-            if (arr.length === 9) distances = arr.slice(0,9);
-            else if (arr.length >= 18) distances = (nineLoop === "back") ? arr.slice(9,18) : arr.slice(0,9);
-            else distances = arr.slice(0,9);
-          }
-        }
-      }
+      // ✅ distances: supports flat array OR tee-object
+      const distRes = extractDistances(sc9, 9, "front", chosenTee);
 
-      return { pars, distances, teeName };
+      return { pars, distances: distRes.distances, teeName: distRes.teeName, nines: { nine: lay || "" } };
     }
+
+    if (holes === 18) {
+      const layA = String(uiNineFront || "").trim();
+      const layB = String(uiNineBack || "").trim();
+      const scA = layA ? getScorecard9(state, course, layA) : null;
+      const scB = layB ? getScorecard9(state, course, layB) : null;
+
+      let pars = null;
+      if (scA && scB && Array.isArray(scA.pars) && Array.isArray(scB.pars)) {
+        pars = scA.pars.slice(0,9).concat(scB.pars.slice(0,9));
+      }
+
+      // ✅ distances: supports flat arrays OR tee-objects
+      const distA = extractDistances(scA, 9, "front", chosenTee);
+      const distB = extractDistances(scB, 9, "front", chosenTee);
+
+      let distances = null;
+      if (Array.isArray(distA.distances) && Array.isArray(distB.distances)) {
+        distances = distA.distances.concat(distB.distances);
+      }
+
+      // If either side had a teeName, keep it (otherwise blank)
+      const teeName = distA.teeName || distB.teeName || "";
+
+      return { pars, distances, teeName, nines: { front: layA || "", back: layB || "" } };
+    }
+  }
+
+  const layout = String(roundLike?.layout || "").trim().toLowerCase();
+  const nineLoop = String(roundLike?.nineLoop || "").trim().toLowerCase();
+
+  const idx = scorecardIndexByState.get(state) || new Map();
+  const base = `${cleanCourseNameForMatch(course)}|${holes}`;
+  const kLayout = base + `|${layout || ""}`;
+  const kFallback = base + `|`;
+
+  let list = idx.get(kLayout) || [];
+  if (!list.length) list = idx.get(kFallback) || [];
+
+  const sc = list.length ? list[0] : null;
+
+  let pars = null;
+  if (sc && Array.isArray(sc.pars)) {
+    if (holes === 18) pars = sc.pars.slice(0, 18);
+    if (holes === 9) {
+      if (sc.pars.length === 9) pars = sc.pars.slice(0, 9);
+      else if (sc.pars.length >= 18) pars = (nineLoop === "back") ? sc.pars.slice(9,18) : sc.pars.slice(0,9);
+      else pars = sc.pars.slice(0, 9);
+    }
+  }
+
+  // ✅ distances: supports flat array OR tee-object
+  const distRes = extractDistances(sc, holes, nineLoop, chosenTee);
+
+  return { pars, distances: distRes.distances, teeName: distRes.teeName };
+}
 
     // -----------------------------
     // Round list
