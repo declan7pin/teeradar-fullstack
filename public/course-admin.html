@@ -187,10 +187,11 @@
 
         <div>
           <label class="muted">Holes (Custom only)</label>
-          <select id="iHoles">
-            <option value="18" selected>18 holes</option>
-            <option value="9">9 holes</option>
-          </select>
+<select id="iHoles">
+  <option value="both">Both (9 + 18)</option>
+  <option value="18" selected>18 holes</option>
+  <option value="9">9 holes</option>
+</select>
         </div>
       </div>
 
@@ -2990,17 +2991,28 @@ const dur18 = Number(cs.duration_18_mins ?? cs.duration18 ?? 360) || 360;
 
 // window selection (All day OR Custom start + duration)
 const winMode = String($("iWindow")?.value || "all");
-let winStart = 0;
-let winEnd = 24 * 60;
+const holesSel = String($("iHoles")?.value || "18").toLowerCase();
+
+// we will support 1 or 2 windows
+let windows = [{ label: "All day", start: 0, end: 24 * 60 }];
 
 if (winMode === "custom") {
   const startMins = timeToMins($("iStartTime")?.value || "");
-  const holes = Number($("iHoles")?.value || 18);
-  const dur = holes === 9 ? dur9 : dur18;
-
   if (startMins == null) throw new Error("custom_start_time_required (e.g. 06:00)");
-  winStart = startMins;
-  winEnd = Math.min(24 * 60, startMins + dur);
+
+  const end18 = Math.min(24 * 60, startMins + dur18);
+  const end9  = Math.min(24 * 60, startMins + dur9);
+
+  if (holesSel === "both") {
+    windows = [
+      { label: "18 holes", start: startMins, end: end18 },
+      { label: "9 holes",  start: startMins, end: end9  },
+    ];
+  } else {
+    const holesNum = Number(holesSel || 18);
+    const end = Math.min(24 * 60, startMins + (holesNum === 9 ? dur9 : dur18));
+    windows = [{ label: holesNum === 9 ? "9 holes" : "18 holes", start: startMins, end }];
+  }
 }
       // 2️⃣ Load bookings for date
       const bookingsOut = await j(
