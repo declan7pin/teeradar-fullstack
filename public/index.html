@@ -742,9 +742,6 @@
       <!-- ✅ My Rounds: visible even when logged out -->
 <a href="/my-rounds.html" id="navMyRounds">My Rounds</a>
 
-<!-- ✅ My Stats: only visible when logged in -->
-<a href="/my-stats.html" id="navMyStats" style="display:none;">My Stats</a>
-
       <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
     </nav>
   </div>
@@ -897,19 +894,20 @@
     <h2 class="tr-alert-title">Unlock instant tee time alerts</h2>
 
     <p class="tr-alert-text">
-      Get real-time notifications when new tee times open up at your favourite
-      courses. This feature is available exclusively to
-      <strong>TeeRadar subscribers</strong>.
-    </p>
+  Get real-time notifications when new tee times open up at your favourite
+  courses. Plus, subscribers unlock <strong>My Stats</strong> for your submitted rounds.
+  This feature is available exclusively to <strong>TeeRadar subscribers</strong>.
+</p>
 
     <ul class="tr-alert-benefits">
       <li>Track your favourite golf courses</li>
       <li>Alerts the moment new tee times appear</li>
       <li>Never miss the tee times you actually want</li>
+      <li>Receive performance stats on each round played</li>
     </ul>
 
     <div class="tr-alert-actions">
-      <a href="/subscribe.html" id="tr-alert-cta" class="tr-alert-primary">Unlock with Subscription</a>
+      <a href="/subscribe.html" id="tr-alert-cta" class="tr-alert-primary">Unlock alerts + stats</a>
       <button id="tr-alert-later" class="tr-alert-secondary">Maybe later</button>
     </div>
 
@@ -984,7 +982,6 @@
   const analyticsLink = document.getElementById("navAnalytics");
   const loginBtn = document.getElementById("navLoginBtn");
   const roundsLink = document.getElementById("navMyRounds");
-  const statsLink = document.getElementById("navMyStats");
   if (!loginBtn) return;
 
   const email = localStorage.getItem("teeradar_user_email");
@@ -994,7 +991,6 @@
 
   // ✅ Default: hide gated links
   if (analyticsLink) analyticsLink.style.display = "none";
-  if (statsLink) statsLink.style.display = "none";
 
   // Logged out
   if (!email) {
@@ -1002,9 +998,6 @@
     loginBtn.onclick = handleLogin;
     return;
   }
-
-  // Logged in
-  if (statsLink) statsLink.style.display = "inline-flex";
 
   if (analyticsLink && email === ADMIN_EMAIL) {
     analyticsLink.style.display = "inline-flex";
