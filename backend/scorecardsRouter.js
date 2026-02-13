@@ -61,7 +61,6 @@ function pickExistingFile(paths) {
 }
 
 function safeIdent(x) {
-  // allow only safe SQL identifiers
   const s = String(x || "");
   if (!/^[a-zA-Z0-9_]+$/.test(s)) return null;
   return s;
@@ -151,7 +150,6 @@ async function fetchScorecardsFromDbAuto(state) {
   }
 
   const colsSet = new Set(chosen.cols);
-
   const pickCol = (options) => options.find((c) => colsSet.has(c)) || null;
 
   const colCourse = pickCol(courseCols);
@@ -160,8 +158,7 @@ async function fetchScorecardsFromDbAuto(state) {
   const colPars = pickCol(parsCols);
 
   // ✅ IMPORTANT: support multiple possible distance column names + shapes
-  // (some DB rows may store it under distances, distance_m, dist_m, etc.)
-  const colDistM = pickCol(distCols); // keep your existing distCols list
+  const colDistM = pickCol(distCols);
   const colDistAlt = pickCol([
     "distances",
     "distance",
@@ -277,7 +274,7 @@ async function fetchScorecardsFromDbAuto(state) {
         layout: String(r.layout || "").trim(),
         pars: parsArr,
         distances_m: distArr, // ✅ new
-        distances: distArr,   // ✅ compatibility (if frontend reads `distances`)
+        distances: distArr, // ✅ compatibility (if frontend reads `distances`)
       };
     })
     .filter(Boolean);
@@ -302,6 +299,7 @@ async function fetchScorecardsFromDbAuto(state) {
       candidateCount: candidates.length,
     },
   };
+}
 
 // GET /api/scorecards/:state
 router.get("/:state", async (req, res) => {
