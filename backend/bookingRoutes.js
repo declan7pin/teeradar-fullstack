@@ -8201,12 +8201,7 @@ router.get("/availability", async (req, res) => {
                 AND bb18.play_date = t.play_date
                 AND bb18.holes = 18
 AND bb18.status IN ('CONFIRMED','BOOKED')
-AND lower(trim(COALESCE(
-  bb18.back_nine_key,
-  bb18.back9_key,
-  bb18.back9Key,
-  bb18.backNineKey
-))) = lower(trim($4))
+AND lower(trim(bb18.back_nine_key)) = lower(trim($4))
                 AND (
                   (
                     (split_part(split_part(t.tee_time, '|', 1), ':', 1)::int * 60 +
