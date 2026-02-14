@@ -5673,8 +5673,9 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     const dur9 = Number(s.rows[0]?.duration_9_mins || 135) || 135;
     const dur18 = Number(s.rows[0]?.duration_18_mins || 360) || 360;
 
-    const back9CenterOffset = Math.max(0, dur9 - 15);
-    const back9HalfWindow = 15;
+    // ✅ FIX: these were old + now unused for correct blocking
+    // const back9CenterOffset = Math.max(0, dur9 - 15);
+    // const back9HalfWindow = 15;
 
     // normalize keys (treat "Select" as empty) + keep stable
     const cleanKey = (v) => {
@@ -5769,7 +5770,9 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
-            const blockMins = Number(w.block_mins ?? 30) || 30;  // ✅ define block window
+
+          // ✅ FIX: define per-window block mins (fallback 30)
+          const blockMins = Number(w.block_mins ?? w.blockMins ?? w.back9_block_mins ?? 30) || 30;
 
           const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
           const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
@@ -5795,25 +5798,25 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           dlog("🧪 18 window parsed", {
             playDate, interval, maxPlayers, pricePerPlayerCents,
             start: w.start, end: w.end,
-            frontNineKey, backNineKey, layoutKey18
+            frontNineKey, backNineKey, layoutKey18,
+            blockMins
           });
 
           for (let mins = startMin; mins < endMin; mins += interval) {
             const teeTime = _minutesToTime(mins);
 
-            // ✅ FIX: block ONLY the SECOND nine,
-// starting when players reach it (start + dur9),
-// and only for blockMins
+            // ✅ FIX: block ONLY the SECOND nine of this 18-hole route
+            // Start when players *reach* the second nine (mins + dur9)
+            // End after blockMins
+            const blockStart = Math.max(0, Math.min(24 * 60, mins + dur9));
+            const blockEnd   = Math.max(0, Math.min(24 * 60, blockStart + blockMins));
 
-const blockStart = Math.max(0, Math.min(24 * 60, mins + dur9));
-const blockEnd   = Math.max(0, Math.min(24 * 60, blockStart + blockMins));
-
-const k = String(backNineKey || "").trim();
-if (k) {
-  const arr = blocked9ByKey.get(k) || [];
-  arr.push([blockStart, blockEnd]);
-  blocked9ByKey.set(k, arr);
-}
+            const k = String(backNineKey || "").trim();
+            if (k) {
+              const arr = blocked9ByKey.get(k) || [];
+              arr.push([blockStart, blockEnd]);
+              blocked9ByKey.set(k, arr);
+            }
 
             rows.push({
               course_id: courseId,
@@ -5833,12 +5836,12 @@ if (k) {
         // 9-hole times
         // -----------------------
         function isBlocked9(layoutKey9, mins) {
-  const k = String(layoutKey9 || "").trim();
-  if (!k) return false;
-  const arr = blocked9ByKey.get(k);
-  if (!arr || !arr.length) return false;
-  return arr.some(([a, b]) => mins >= a && mins < b);
-}
+          const k = String(layoutKey9 || "").trim();
+          if (!k) return false;
+          const arr = blocked9ByKey.get(k);
+          if (!arr || !arr.length) return false;
+          return arr.some(([a, b]) => mins >= a && mins < b);
+        }
 
         for (const w of windows9) {
           const interval = Number(w.intervalMins || w.interval || 10);
