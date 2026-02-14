@@ -5771,8 +5771,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
-          const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
+          const frontNineKey = layoutKey(cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey));
+const backNineKey  = layoutKey(cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey));
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
@@ -5830,7 +5830,7 @@ if (k) {
         // 9-hole times
         // -----------------------
         function isBlocked9(layoutKey9, mins) {
-  const k = String(layoutKey9 || "").trim();
+  const k = layoutKey(cleanKey(layoutKey9));
   if (!k) return false;
   const arr = blocked9ByKey.get(k);
   if (!arr || !arr.length) return false;
@@ -5844,7 +5844,7 @@ if (k) {
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          const layoutKey9 = cleanKey(w.layout_key || w.layoutKey);
+          const layoutKey9 = layoutKey(cleanKey(w.layout_key || w.layoutKey));
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
