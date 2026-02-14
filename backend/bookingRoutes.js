@@ -5679,16 +5679,11 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
 
     // normalize keys (treat "Select" as empty) + keep stable
     const cleanKey = (v) => {
-  const s = String(v || "").trim();
-  if (!s) return "";
-  if (s.toLowerCase() === "select") return "";
-  // IMPORTANT: make keys match booking_course_layouts keys
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 40);
-};
+      const s = String(v || "").trim();
+      if (!s) return "";
+      if (s.toLowerCase() === "select") return "";
+      return s.toLowerCase();
+    };
 
     // ✅ NEW: normalize/validate window layout keys against saved course layouts
     // This prevents stale template keys generating old layouts.
@@ -5776,8 +5771,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          const frontNineKey = layoutKey(cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey));
-const backNineKey  = layoutKey(cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey));
+          const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
+          const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
@@ -5806,12 +5801,9 @@ const backNineKey  = layoutKey(cleanKey(w.back_nine_key  || w.back9_key  || w.ba
           for (let mins = startMin; mins < endMin; mins += interval) {
             const teeTime = _minutesToTime(mins);
 
-            const bufferBefore = 10; // mins
-const bufferAfter  = 10; // mins
-
-// back-nine is occupied from (tee + dur9) to (tee + dur9 + dur9)
-const bStart = Math.max(0, mins + dur9 - bufferBefore);
-const bEnd   = Math.min(24 * 60, mins + dur9 + dur9 + bufferAfter);
+            const center = mins + back9CenterOffset;
+            const bStart = Math.max(0, center - back9HalfWindow);
+            const bEnd = Math.min(24 * 60, center + back9HalfWindow);
             // ✅ block ONLY the 9-hole layout that matches the SECOND nine of this 18-hole route
 const k = String(backNineKey || "").trim();
 if (k) {
@@ -5838,12 +5830,13 @@ if (k) {
         // 9-hole times
         // -----------------------
         function isBlocked9(layoutKey9, mins) {
-  const k = cleanKey(layoutKey9);   // ✅ this is the important part
+  const k = String(layoutKey9 || "").trim();
   if (!k) return false;
   const arr = blocked9ByKey.get(k);
   if (!arr || !arr.length) return false;
   return arr.some(([a, b]) => mins >= a && mins < b);
 }
+
         for (const w of windows9) {
           const interval = Number(w.intervalMins || w.interval || 10);
           const maxPlayers = Number(w.maxPlayers || 4);
@@ -5851,7 +5844,7 @@ if (k) {
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
 
-          const layoutKey9 = layoutKey(cleanKey(w.layout_key || w.layoutKey));
+          const layoutKey9 = cleanKey(w.layout_key || w.layoutKey);
 
           if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
           if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
