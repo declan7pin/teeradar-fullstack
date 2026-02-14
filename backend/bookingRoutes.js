@@ -5769,6 +5769,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
+            const blockMins = Number(w.block_mins ?? 30) || 30;  // ✅ define block window
 
           const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
           const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
