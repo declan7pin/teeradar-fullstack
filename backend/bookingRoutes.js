@@ -5679,11 +5679,16 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
 
     // normalize keys (treat "Select" as empty) + keep stable
     const cleanKey = (v) => {
-      const s = String(v || "").trim();
-      if (!s) return "";
-      if (s.toLowerCase() === "select") return "";
-      return s.toLowerCase();
-    };
+  const s = String(v || "").trim();
+  if (!s) return "";
+  if (s.toLowerCase() === "select") return "";
+  // IMPORTANT: make keys match booking_course_layouts keys
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+};
 
     // ✅ NEW: normalize/validate window layout keys against saved course layouts
     // This prevents stale template keys generating old layouts.
