@@ -8526,12 +8526,15 @@ async function handleBook(req, res) {
     const has_hire_clubs =
       picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
 
-    const cart_qty_raw = Number(
-      req.body?.cart_qty ?? req.body?.cartQty ?? (has_cart ? 1 : 0)
-    );
-    const hire_clubs_qty_raw = Number(
-      req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? (has_hire_clubs ? 1 : 0)
-    );
+    // ✅ IMPORTANT: public bookings must NOT accept camelCase qty fields,
+// because the UI can accidentally send cartQty = players.
+// Only accept snake_case qty fields (cart_qty / hire_clubs_qty).
+const cart_qty_raw = Number(
+  req.body?.cart_qty ?? (has_cart ? 1 : 0)
+);
+const hire_clubs_qty_raw = Number(
+  req.body?.hire_clubs_qty ?? (has_hire_clubs ? 1 : 0)
+);
 
     const cart_qty = Math.max(
       0,
