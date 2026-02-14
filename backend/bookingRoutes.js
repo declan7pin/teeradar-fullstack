@@ -5757,7 +5757,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
         const windows18 = windows.filter(w => Number(w?.holes) === 18);
         const windows9 = windows.filter(w => Number(w?.holes) === 9);
 
-        const blocked9 = [];
+        const blocked9ByKey = new Map(); // key -> array of [start,end]
         const rows = [];
 
         // -----------------------
@@ -5803,7 +5803,13 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             const center = mins + back9CenterOffset;
             const bStart = Math.max(0, center - back9HalfWindow);
             const bEnd = Math.min(24 * 60, center + back9HalfWindow);
-            blocked9.push([bStart, bEnd]);
+            // ✅ block ONLY the 9-hole layout that matches the SECOND nine of this 18-hole route
+const k = String(backNineKey || "").trim();
+if (k) {
+  const arr = blocked9ByKey.get(k) || [];
+  arr.push([bStart, bEnd]);
+  blocked9ByKey.set(k, arr);
+}
 
             rows.push({
               course_id: courseId,
@@ -5822,9 +5828,13 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
         // -----------------------
         // 9-hole times
         // -----------------------
-        function isBlocked9(mins) {
-          return blocked9.some(([a, b]) => mins >= a && mins < b);
-        }
+        function isBlocked9(layoutKey9, mins) {
+  const k = String(layoutKey9 || "").trim();
+  if (!k) return false;
+  const arr = blocked9ByKey.get(k);
+  if (!arr || !arr.length) return false;
+  return arr.some(([a, b]) => mins >= a && mins < b);
+}
 
         for (const w of windows9) {
           const interval = Number(w.intervalMins || w.interval || 10);
@@ -5858,7 +5868,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           });
 
           for (let mins = startMin; mins < endMin; mins += interval) {
-            if (isBlocked9(mins)) continue;
+            if (isBlocked9(layoutKey9, mins)) continue;
             const teeTime = _minutesToTime(mins);
 
             rows.push({
