@@ -5800,14 +5800,17 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           for (let mins = startMin; mins < endMin; mins += interval) {
             const teeTime = _minutesToTime(mins);
 
-            const center = mins + back9CenterOffset;
-            const bStart = Math.max(0, center - back9HalfWindow);
-            const bEnd = Math.min(24 * 60, center + back9HalfWindow);
-            // ✅ block ONLY the 9-hole layout that matches the SECOND nine of this 18-hole route
+            // ✅ FIX: block ONLY the SECOND nine,
+// starting when players reach it (start + dur9),
+// and only for blockMins
+
+const blockStart = Math.max(0, Math.min(24 * 60, mins + dur9));
+const blockEnd   = Math.max(0, Math.min(24 * 60, blockStart + blockMins));
+
 const k = String(backNineKey || "").trim();
 if (k) {
   const arr = blocked9ByKey.get(k) || [];
-  arr.push([bStart, bEnd]);
+  arr.push([blockStart, blockEnd]);
   blocked9ByKey.set(k, arr);
 }
 
