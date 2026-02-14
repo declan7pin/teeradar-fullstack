@@ -5673,9 +5673,8 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     const dur9 = Number(s.rows[0]?.duration_9_mins || 135) || 135;
     const dur18 = Number(s.rows[0]?.duration_18_mins || 360) || 360;
 
-    // ✅ FIX: these were old + now unused for correct blocking
-    // const back9CenterOffset = Math.max(0, dur9 - 15);
-    // const back9HalfWindow = 15;
+    const back9CenterOffset = Math.max(0, dur9 - 15);
+    const back9HalfWindow = 15;
 
     // normalize keys (treat "Select" as empty) + keep stable
     const cleanKey = (v) => {
@@ -5770,9 +5769,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
           const startMin = _timeToMinutes(w.start);
           const endMin = _timeToMinutes(w.end);
-
-          // ✅ FIX: define per-window block mins (fallback 30)
-          const blockMins = Number(w.block_mins ?? w.blockMins ?? w.back9_block_mins ?? 30) || 30;
+            const blockMins = Number(w.block_mins ?? 30) || 30;  // ✅ define block window
 
           const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
           const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
@@ -5798,25 +5795,25 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
           dlog("🧪 18 window parsed", {
             playDate, interval, maxPlayers, pricePerPlayerCents,
             start: w.start, end: w.end,
-            frontNineKey, backNineKey, layoutKey18,
-            blockMins
+            frontNineKey, backNineKey, layoutKey18
           });
 
           for (let mins = startMin; mins < endMin; mins += interval) {
             const teeTime = _minutesToTime(mins);
 
-            // ✅ FIX: block ONLY the SECOND nine of this 18-hole route
-            // Start when players *reach* the second nine (mins + dur9)
-            // End after blockMins
-            const blockStart = Math.max(0, Math.min(24 * 60, mins + dur9));
-            const blockEnd   = Math.max(0, Math.min(24 * 60, blockStart + blockMins));
+            // ✅ FIX: block ONLY the SECOND nine,
+// starting when players reach it (start + dur9),
+// and only for blockMins
 
-            const k = String(backNineKey || "").trim();
-            if (k) {
-              const arr = blocked9ByKey.get(k) || [];
-              arr.push([blockStart, blockEnd]);
-              blocked9ByKey.set(k, arr);
-            }
+const blockStart = Math.max(0, Math.min(24 * 60, mins + dur9));
+const blockEnd   = Math.max(0, Math.min(24 * 60, blockStart + blockMins));
+
+const k = String(backNineKey || "").trim();
+if (k) {
+  const arr = blocked9ByKey.get(k) || [];
+  arr.push([blockStart, blockEnd]);
+  blocked9ByKey.set(k, arr);
+}
 
             rows.push({
               course_id: courseId,
@@ -5836,12 +5833,12 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
         // 9-hole times
         // -----------------------
         function isBlocked9(layoutKey9, mins) {
-          const k = String(layoutKey9 || "").trim();
-          if (!k) return false;
-          const arr = blocked9ByKey.get(k);
-          if (!arr || !arr.length) return false;
-          return arr.some(([a, b]) => mins >= a && mins < b);
-        }
+  const k = String(layoutKey9 || "").trim();
+  if (!k) return false;
+  const arr = blocked9ByKey.get(k);
+  if (!arr || !arr.length) return false;
+  return arr.some(([a, b]) => mins >= a && mins < b);
+}
 
         for (const w of windows9) {
           const interval = Number(w.intervalMins || w.interval || 10);
@@ -8241,7 +8238,8 @@ AND lower(trim(bb18.back_nine_key)) = lower(trim($4))
       WHERE (max_players - (booked + manual_booked)) >= $5
       ORDER BY tee_time_clean ASC;
       `,
-      [courseId, date, holes, layoutKey, players, sM, eM, dur9, dur18]
+      [courseId, date, holes, layoutKey, players, sM, eM, dur9, dur9 + blockMins]
+);
     );
 
     dlog("🧪 availability rows.length", Array.isArray(rows) ? rows.length : null);
