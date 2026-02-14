@@ -5673,16 +5673,14 @@ const s = await db.query(
 const dur9 = Number(s.rows[0]?.duration_9_mins || 135) || 135;
 const dur18 = Number(s.rows[0]?.duration_18_mins || 360) || 360;
 
-const back9CenterOffset = Math.max(0, dur9 - 15);
-const back9HalfWindow = 15;
-
-// normalize keys (treat "Select" as empty) + keep stable
+// ✅ normalize keys HARD (so "Back 9", "back_9", "back-9" => "back9")
 const cleanKey = (v) => {
   const s = String(v ?? "").trim();
   if (!s) return "";
   if (s.toLowerCase() === "select") return "";
-  // ✅ IMPORTANT: normalize so "Front 9" == "front_9" == "front9"
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ""); // <<< KEY FIX
 };
 
 // ✅ NEW: normalize/validate window layout keys against saved course layouts
@@ -5770,7 +5768,9 @@ try {
       const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
       const startMin = _timeToMinutes(w.start);
       const endMin = _timeToMinutes(w.end);
-      const blockMins = Number(w.block_mins ?? 30) || 30; // ✅ define block window
+
+      // ✅ per-window block window (mins) for SECOND nine conflict
+      const blockMins = Math.max(0, Number(w.block_mins ?? w.blockMins ?? 30) || 30);
 
       const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
       const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
@@ -5796,24 +5796,26 @@ try {
       dlog("🧪 18 window parsed", {
         playDate, interval, maxPlayers, pricePerPlayerCents,
         start: w.start, end: w.end,
-        frontNineKey, backNineKey, layoutKey18
+        frontNineKey, backNineKey, layoutKey18,
+        blockMins
       });
 
       for (let mins = startMin; mins < endMin; mins += interval) {
         const teeTime = _minutesToTime(mins);
 
-        // ✅ FIX: block ONLY the SECOND nine,
-        // starting when players reach it (start + dur9),
-        // and only for blockMins
-        const blockStart = Math.max(0, Math.min(24 * 60, mins + dur9));
-        const blockEnd   = Math.max(0, Math.min(24 * 60, blockStart + blockMins));
+        // ✅ FIX: block ONLY the SECOND nine layout key, in the *given window*
+        // Your example: dur9=135 and blockMins=30 => 6:00 booking blocks 8:00–8:30
+        const half = Math.floor(blockMins / 2);
+        const centerOffset = Math.max(0, dur9 - half); // center sits at (start + dur9 - half)
+        const center = mins + centerOffset;
 
-        // ✅ IMPORTANT: store under normalized key that matches 9-hole layout_key
-        const k = cleanKey(backNineKey);
-        if (k) {
-          const arr = blocked9ByKey.get(k) || [];
+        const blockStart = Math.max(0, Math.min(24 * 60, center - half));
+        const blockEnd   = Math.max(0, Math.min(24 * 60, center + half));
+
+        if (backNineKey) {
+          const arr = blocked9ByKey.get(backNineKey) || [];
           arr.push([blockStart, blockEnd]);
-          blocked9ByKey.set(k, arr);
+          blocked9ByKey.set(backNineKey, arr);
         }
 
         rows.push({
@@ -6014,6 +6016,8 @@ try {
         beforeSummary,
         afterSummary: after.rows,
         sample: samp.rows,
+        // helpful: show what we actually blocked
+        blocked9ByKey: Array.from(blocked9ByKey.entries()).map(([k, v]) => ({ k, v })),
       });
     }
 
