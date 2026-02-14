@@ -5806,9 +5806,12 @@ const backNineKey  = layoutKey(cleanKey(w.back_nine_key  || w.back9_key  || w.ba
           for (let mins = startMin; mins < endMin; mins += interval) {
             const teeTime = _minutesToTime(mins);
 
-            const center = mins + back9CenterOffset;
-            const bStart = Math.max(0, center - back9HalfWindow);
-            const bEnd = Math.min(24 * 60, center + back9HalfWindow);
+            const bufferBefore = 10; // mins
+const bufferAfter  = 10; // mins
+
+// back-nine is occupied from (tee + dur9) to (tee + dur9 + dur9)
+const bStart = Math.max(0, mins + dur9 - bufferBefore);
+const bEnd   = Math.min(24 * 60, mins + dur9 + dur9 + bufferAfter);
             // ✅ block ONLY the 9-hole layout that matches the SECOND nine of this 18-hole route
 const k = String(backNineKey || "").trim();
 if (k) {
