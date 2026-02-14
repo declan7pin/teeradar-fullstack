@@ -5148,7 +5148,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
         await sendBookingEmail({
   to: email,
   courseName,
-  date: play_date,
+  date: playDate, // ✅ FIX: was play_date (undefined in this route)
   time: tee_time,
   holes,
   players: 1,
@@ -5162,7 +5162,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
   cartCents: cartCents || 0,
   hireClubsCents: hireClubsCents || 0,
 
-  // ✅ NEW: pass quantities so the email can show "Cart (xN)" / "Hire Clubs (xN)"
+  // ✅ quantities for email display
   cartQty: cart_qty || 0,
   hireClubsQty: hire_clubs_qty || 0,
 
