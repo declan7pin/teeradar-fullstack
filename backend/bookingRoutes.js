@@ -8512,161 +8512,158 @@ async function handleBook(req, res) {
     }
 
     // ✅ cart / hire clubs selection (optional)
-    const addonIds = Array.isArray(req.body?.addonIds)
-      ? req.body.addonIds.map((x) => String(x))
-      : [];
+const addonIds = Array.isArray(req.body?.addonIds)
+  ? req.body.addonIds.map((x) => String(x))
+  : [];
 
-    const picked = new Set(
-      addonIds.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean)
-    );
-
-    const has_cart =
-      picked.size > 0 ? picked.has("cart") : parseBool(req.body?.has_cart, false);
-
-    const has_hire_clubs =
-      picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
-
-    // ✅ IMPORTANT: public bookings must NOT accept camelCase qty fields,
-// because the UI can accidentally send cartQty = players.
-// Only accept snake_case qty fields (cart_qty / hire_clubs_qty).
-const cart_qty_raw = Number(
-  req.body?.cart_qty ?? (has_cart ? 1 : 0)
-);
-const hire_clubs_qty_raw = Number(
-  req.body?.hire_clubs_qty ?? (has_hire_clubs ? 1 : 0)
+const picked = new Set(
+  addonIds.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean)
 );
 
-    const cart_qty = Math.max(
-      0,
-      Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : (has_cart ? 1 : 0))
-    );
+const has_cart =
+  picked.size > 0 ? picked.has("cart") : parseBool(req.body?.has_cart, false);
 
-    const hire_clubs_qty = Math.max(
-      0,
-      Math.min(
-        4,
-        Number.isFinite(hire_clubs_qty_raw)
-          ? hire_clubs_qty_raw
-          : (has_hire_clubs ? 1 : 0)
-      )
-    );
+const has_hire_clubs =
+  picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
 
-    const final_has_cart = cart_qty > 0;
-    const final_has_hire_clubs = hire_clubs_qty > 0;
+// ✅ Qty handling (public bookings)
+// - allow multiple quantities
+// - do NOT accept camelCase qty fields (cartQty/hireClubsQty), as UI can accidentally send players
+// - only accept snake_case: cart_qty / hire_clubs_qty
+const cart_qty_raw = Number(req.body?.cart_qty);
+const hire_clubs_qty_raw = Number(req.body?.hire_clubs_qty);
 
-    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
-    if (!date) return res.status(400).json({ ok: false, error: "date_required" });
-    if (!time || !/^\d{2}:\d{2}$/.test(time)) return res.status(400).json({ ok: false, error: "time_invalid" });
-    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
-    if (!Number.isFinite(players) || players < 1 || players > 4)
-      return res.status(400).json({ ok: false, error: "players_invalid" });
+// clamp qty between 0 and 4 (integer)
+let cart_qty = Math.max(
+  0,
+  Math.min(4, Number.isFinite(cart_qty_raw) ? Math.floor(cart_qty_raw) : 0)
+);
 
-    // ✅ Now enforce routing keys exist (either from UI OR derived)
-    if (holes === 18 && (!front_nine_key || !back_nine_key)) {
-      return res.status(400).json({ ok: false, error: "routing_required" });
-    }
-    if (holes === 9 && !layout_key) {
-      return res.status(400).json({ ok: false, error: "layout_required" });
-    }
+let hire_clubs_qty = Math.max(
+  0,
+  Math.min(4, Number.isFinite(hire_clubs_qty_raw) ? Math.floor(hire_clubs_qty_raw) : 0)
+);
 
-    if (!hasFirstAndLastName(golfer_name)) {
-      return res.status(400).json({ ok: false, error: "name_required_first_last" });
-    }
-    if (!isLikelyEmail(golfer_email)) {
-      return res.status(400).json({ ok: false, error: "email_required_valid" });
-    }
+// if checkbox selected but qty missing/0, default to 1
+if (has_cart && cart_qty === 0) cart_qty = 1;
+if (has_hire_clubs && hire_clubs_qty === 0) hire_clubs_qty = 1;
 
-    const c = await client.query(
-      `
-      SELECT id, slug, name, notes,
-        cart_fee_cents, hire_clubs_fee_cents,
-        cart_qty, hire_clubs_qty,
-        duration_9_mins, duration_18_mins
-      FROM booking_courses
-      WHERE slug=$1
-      LIMIT 1;
-      `,
-      [slug]
-    );
-    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+const final_has_cart = cart_qty > 0;
+const final_has_hire_clubs = hire_clubs_qty > 0;
 
-    const courseRow = c.rows[0];
-    const courseId = courseRow.id;
+if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+if (!date) return res.status(400).json({ ok: false, error: "date_required" });
+if (!time || !/^\d{2}:\d{2}$/.test(time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+if (!Number.isFinite(players) || players < 1 || players > 4)
+  return res.status(400).json({ ok: false, error: "players_invalid" });
 
-    await client.query("BEGIN");
-    didBegin = true;
+// ✅ Now enforce routing keys exist (either from UI OR derived)
+if (holes === 18 && (!front_nine_key || !back_nine_key)) {
+  return res.status(400).json({ ok: false, error: "routing_required" });
+}
+if (holes === 9 && !layout_key) {
+  return res.status(400).json({ ok: false, error: "layout_required" });
+}
 
-    await advisoryLockForSlot(client, {
-      courseId,
-      dateYmd: date,
-      timeHhMm: time,
-      holes,
-      layout_key,
-      front_nine_key,
-      back_nine_key,
-    });
+if (!hasFirstAndLastName(golfer_name)) {
+  return res.status(400).json({ ok: false, error: "name_required_first_last" });
+}
+if (!isLikelyEmail(golfer_email)) {
+  return res.status(400).json({ ok: false, error: "email_required_valid" });
+}
 
-    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
-      `addons:${courseId}`,
-    ]);
+const c = await client.query(
+  `
+  SELECT id, slug, name, notes,
+    cart_fee_cents, hire_clubs_fee_cents,
+    cart_qty, hire_clubs_qty,
+    duration_9_mins, duration_18_mins
+  FROM booking_courses
+  WHERE slug=$1
+  LIMIT 1;
+  `,
+  [slug]
+);
+if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-    let startAtIso = toIsoDateTimeLocal(date, time);
-    const dur = durationMinsForHoles(courseRow, holes);
-    const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
+const courseRow = c.rows[0];
+const courseId = courseRow.id;
 
-    const courseCartQty = Number(courseRow.cart_qty || 0);
-    const courseClubsQty = Number(courseRow.hire_clubs_qty || 0);
+await client.query("BEGIN");
+didBegin = true;
 
-    if (cart_qty > 0 && courseCartQty <= 0) {
-      await client.query("ROLLBACK");
-      didBegin = false;
-      return res.status(400).json({ ok: false, error: "cart_not_offered" });
-    }
+await advisoryLockForSlot(client, {
+  courseId,
+  dateYmd: date,
+  timeHhMm: time,
+  holes,
+  layout_key,
+  front_nine_key,
+  back_nine_key,
+});
 
-    if (hire_clubs_qty > 0 && courseClubsQty <= 0) {
-      await client.query("ROLLBACK");
-      didBegin = false;
-      return res.status(400).json({ ok: false, error: "hire_clubs_not_offered" });
-    }
+await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
+  `addons:${courseId}`,
+]);
 
-    const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(client, {
-      courseId,
-      startAtIso,
-      endAtIso,
-    });
+let startAtIso = toIsoDateTimeLocal(date, time);
+const dur = durationMinsForHoles(courseRow, holes);
+const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
-    const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
-    const clubsRemaining = Math.max(0, courseClubsQty - clubsUsed);
+const courseCartQty = Number(courseRow.cart_qty || 0);
+const courseClubsQty = Number(courseRow.hire_clubs_qty || 0);
 
-    if (cart_qty > 0 && courseCartQty > 0 && cart_qty > cartRemaining) {
-      await client.query("ROLLBACK");
-      didBegin = false;
-      return res.status(409).json({ ok: false, error: "cart_sold_out", cartRemaining });
-    }
+if (cart_qty > 0 && courseCartQty <= 0) {
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(400).json({ ok: false, error: "cart_not_offered" });
+}
 
-    if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining) {
-      await client.query("ROLLBACK");
-      didBegin = false;
-      return res.status(409).json({ ok: false, error: "hire_clubs_sold_out", clubsRemaining });
-    }
+if (hire_clubs_qty > 0 && courseClubsQty <= 0) {
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(400).json({ ok: false, error: "hire_clubs_not_offered" });
+}
 
-    const courseCartFeeCents = Number(courseRow.cart_fee_cents || 0);
-    const courseHireClubsFeeCents = Number(courseRow.hire_clubs_fee_cents || 0);
+const { cartsUsed, clubsUsed } = await countOverlappingAddonUsage(client, {
+  courseId,
+  startAtIso,
+  endAtIso,
+});
 
-    const cart_fee_cents = cart_qty > 0 ? courseCartFeeCents * cart_qty : 0;
-    const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire_clubs_qty : 0;
+const cartRemaining = Math.max(0, courseCartQty - cartsUsed);
+const clubsRemaining = Math.max(0, courseClubsQty - clubsUsed);
 
-    if (!Number.isFinite(cart_fee_cents) || cart_fee_cents < 0 || cart_fee_cents > 10000000) {
-      await client.query("ROLLBACK");
-      didBegin = false;
-      return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
-    }
+if (cart_qty > 0 && courseCartQty > 0 && cart_qty > cartRemaining) {
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(409).json({ ok: false, error: "cart_sold_out", cartRemaining });
+}
 
-    if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_clubs_fee_cents > 10000000) {
-      await client.query("ROLLBACK");
-      didBegin = false;
-      return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
-    }
+if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining) {
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(409).json({ ok: false, error: "hire_clubs_sold_out", clubsRemaining });
+}
+
+const courseCartFeeCents = Number(courseRow.cart_fee_cents || 0);
+const courseHireClubsFeeCents = Number(courseRow.hire_clubs_fee_cents || 0);
+
+const cart_fee_cents = cart_qty > 0 ? courseCartFeeCents * cart_qty : 0;
+const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire_clubs_qty : 0;
+
+if (!Number.isFinite(cart_fee_cents) || cart_fee_cents < 0 || cart_fee_cents > 10000000) {
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
+}
+
+if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_clubs_fee_cents > 10000000) {
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
+}
 
     // ✅ FIX: routing-aware + case-insensitive match + supports provider suffix "06:00|..."
     const t = await client.query(
