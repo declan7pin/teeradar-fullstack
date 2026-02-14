@@ -5835,13 +5835,12 @@ if (k) {
         // 9-hole times
         // -----------------------
         function isBlocked9(layoutKey9, mins) {
-  const k = layoutKey(cleanKey(layoutKey9));
+  const k = cleanKey(layoutKey9);   // ✅ this is the important part
   if (!k) return false;
   const arr = blocked9ByKey.get(k);
   if (!arr || !arr.length) return false;
   return arr.some(([a, b]) => mins >= a && mins < b);
 }
-
         for (const w of windows9) {
           const interval = Number(w.intervalMins || w.interval || 10);
           const maxPlayers = Number(w.maxPlayers || 4);
