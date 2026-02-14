@@ -5663,442 +5663,438 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
     end.setDate(end.getDate() + daysAhead);
 
     // durations (used for back-9 blocking)
-    const s = await db.query(
-      `SELECT duration_9_mins, duration_18_mins
-       FROM booking_course_settings
-       WHERE course_id = $1
-       LIMIT 1;`,
-      [courseId]
-    );
-    const dur9 = Number(s.rows[0]?.duration_9_mins || 135) || 135;
-    const dur18 = Number(s.rows[0]?.duration_18_mins || 360) || 360;
+const s = await db.query(
+  `SELECT duration_9_mins, duration_18_mins
+   FROM booking_course_settings
+   WHERE course_id = $1
+   LIMIT 1;`,
+  [courseId]
+);
+const dur9 = Number(s.rows[0]?.duration_9_mins || 135) || 135;
+const dur18 = Number(s.rows[0]?.duration_18_mins || 360) || 360;
 
-    const back9CenterOffset = Math.max(0, dur9 - 15);
-    const back9HalfWindow = 15;
+const back9CenterOffset = Math.max(0, dur9 - 15);
+const back9HalfWindow = 15;
 
-    // normalize keys (treat "Select" as empty) + keep stable
-    const cleanKey = (v) => {
-      const s = String(v || "").trim();
-      if (!s) return "";
-      if (s.toLowerCase() === "select") return "";
-      return s.toLowerCase();
-    };
+// normalize keys (treat "Select" as empty) + keep stable
+const cleanKey = (v) => {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  if (s.toLowerCase() === "select") return "";
+  // ✅ IMPORTANT: normalize so "Front 9" == "front_9" == "front9"
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+};
 
-    // ✅ NEW: normalize/validate window layout keys against saved course layouts
-    // This prevents stale template keys generating old layouts.
-    const layoutsRow = await db.query(
-      `SELECT layouts, routes18
-       FROM booking_course_layouts
-       WHERE course_id = $1
-       LIMIT 1;`,
-      [courseId]
-    );
+// ✅ NEW: normalize/validate window layout keys against saved course layouts
+// This prevents stale template keys generating old layouts.
+const layoutsRow = await db.query(
+  `SELECT layouts, routes18
+   FROM booking_course_layouts
+   WHERE course_id = $1
+   LIMIT 1;`,
+  [courseId]
+);
 
-    const layouts = Array.isArray(layoutsRow.rows?.[0]?.layouts) ? layoutsRow.rows[0].layouts : [];
-    const routes18 = Array.isArray(layoutsRow.rows?.[0]?.routes18) ? layoutsRow.rows[0].routes18 : [];
+const layouts = Array.isArray(layoutsRow.rows?.[0]?.layouts) ? layoutsRow.rows[0].layouts : [];
+const routes18 = Array.isArray(layoutsRow.rows?.[0]?.routes18) ? layoutsRow.rows[0].routes18 : [];
 
-    const layoutKeySet9 = new Set(layouts.map(x => cleanKey(x?.key)).filter(Boolean));
-    const routeKeySet18 = new Set(
-      routes18
-        .map(r => {
-          const f = cleanKey(r?.front9_key ?? r?.front9Key ?? r?.front_nine_key ?? r?.frontNineKey);
-          const b = cleanKey(r?.back9_key ?? r?.back9Key ?? r?.back_nine_key ?? r?.backNineKey);
-          return (f && b) ? `18:${f}|${b}` : "";
-        })
-        .filter(Boolean)
-    );
+const layoutKeySet9 = new Set(layouts.map(x => cleanKey(x?.key)).filter(Boolean));
+const routeKeySet18 = new Set(
+  routes18
+    .map(r => {
+      const f = cleanKey(r?.front9_key ?? r?.front9Key ?? r?.front_nine_key ?? r?.frontNineKey);
+      const b = cleanKey(r?.back9_key ?? r?.back9Key ?? r?.back_nine_key ?? r?.backNineKey);
+      return (f && b) ? `18:${f}|${b}` : "";
+    })
+    .filter(Boolean)
+);
 
-    const firstDayCfg = daysCfg[String(_weekdayISO(start))] || null;
+const firstDayCfg = daysCfg[String(_weekdayISO(start))] || null;
 
-    alog(`🧪 [${runId}] generate-from-template START`, {
-      slug,
-      courseId,
-      startDate,
-      daysAhead,
-      mode,
-      debug,
-      dur9,
-      dur18,
-      layoutKeySet9: Array.from(layoutKeySet9),
-      routeKeySet18: Array.from(routeKeySet18),
-      firstDayCfgWindows: Array.isArray(firstDayCfg?.windows) ? firstDayCfg.windows.length : null,
-    });
+alog(`🧪 [${runId}] generate-from-template START`, {
+  slug,
+  courseId,
+  startDate,
+  daysAhead,
+  mode,
+  debug,
+  dur9,
+  dur18,
+  layoutKeySet9: Array.from(layoutKeySet9),
+  routeKeySet18: Array.from(routeKeySet18),
+  firstDayCfgWindows: Array.isArray(firstDayCfg?.windows) ? firstDayCfg.windows.length : null,
+});
 
-    // Optional overwrite range
-    if (mode === "overwrite-range") {
-      const del = await db.query(
-        `DELETE FROM booking_times
-         WHERE course_id = $1
-           AND play_date >= $2::date
-           AND play_date < $3::date
-           AND status <> 'BOOKED'
-         RETURNING id;`,
-        [courseId, startDate, _isoDate(end)]
-      );
-      alog(`🧪 [${runId}] overwrite-range deleted rows`, { rowCount: del.rowCount || 0 });
-    }
-
-    let inserted = 0;
-    let skipped = 0;
-
-    // Collect debug summary per-day (only first ~3 days to avoid huge payload)
-    const debugDays = [];
-
-    await db.query("BEGIN");
-    try {
-      for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
-        const playDate = _isoDate(d);
-        const wd = String(_weekdayISO(d)); // "1".."7"
-        const cfg = daysCfg[wd];
-
-        if (!cfg || cfg.enabled === false) continue;
-
-        const windows = Array.isArray(cfg.windows) ? cfg.windows : [];
-        const windows18 = windows.filter(w => Number(w?.holes) === 18);
-        const windows9 = windows.filter(w => Number(w?.holes) === 9);
-
-        const blocked9ByKey = new Map(); // key -> array of [start,end]
-        const rows = [];
-
-        // -----------------------
-        // 18-hole times
-        // -----------------------
-        for (const w of windows18) {
-          const interval = Number(w.intervalMins || w.interval || 10);
-          const maxPlayers = Number(w.maxPlayers || 4);
-          const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
-          const startMin = _timeToMinutes(w.start);
-          const endMin = _timeToMinutes(w.end);
-            const blockMins = Number(w.block_mins ?? 30) || 30;  // ✅ define block window
-
-          const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
-          const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
-
-          if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
-          if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
-          if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
-          if (startMin === null || endMin === null || endMin <= startMin) continue;
-
-          if (!frontNineKey || !backNineKey) {
-            dlog("🧪 SKIP 18 window (missing routing keys)", { playDate, w });
-            continue;
-          }
-
-          const layoutKey18 = `18:${frontNineKey}|${backNineKey}`;
-
-          // ✅ reject routes not in course layouts (prevents stale "pines|lakes")
-          if (routeKeySet18.size > 0 && !routeKeySet18.has(layoutKey18)) {
-            dlog("🧪 SKIP 18 window (route not in course layouts)", { playDate, layoutKey18, w });
-            continue;
-          }
-
-          dlog("🧪 18 window parsed", {
-            playDate, interval, maxPlayers, pricePerPlayerCents,
-            start: w.start, end: w.end,
-            frontNineKey, backNineKey, layoutKey18
-          });
-
-          for (let mins = startMin; mins < endMin; mins += interval) {
-            const teeTime = _minutesToTime(mins);
-
-            // ✅ FIX: block ONLY the SECOND nine,
-// starting when players reach it (start + dur9),
-// and only for blockMins
-
-const blockStart = Math.max(0, Math.min(24 * 60, mins + dur9));
-const blockEnd   = Math.max(0, Math.min(24 * 60, blockStart + blockMins));
-
-const k = String(backNineKey || "").trim();
-if (k) {
-  const arr = blocked9ByKey.get(k) || [];
-  arr.push([blockStart, blockEnd]);
-  blocked9ByKey.set(k, arr);
+// Optional overwrite range
+if (mode === "overwrite-range") {
+  const del = await db.query(
+    `DELETE FROM booking_times
+     WHERE course_id = $1
+       AND play_date >= $2::date
+       AND play_date < $3::date
+       AND status <> 'BOOKED'
+     RETURNING id;`,
+    [courseId, startDate, _isoDate(end)]
+  );
+  alog(`🧪 [${runId}] overwrite-range deleted rows`, { rowCount: del.rowCount || 0 });
 }
 
-            rows.push({
-              course_id: courseId,
-              play_date: playDate,
-              tee_time: teeTime,
-              holes: 18,
-              max_players: maxPlayers,
-              price_per_player_cents: pricePerPlayerCents,
-              layout_key: layoutKey18,
-              front_nine_key: frontNineKey,
-              back_nine_key: backNineKey,
-            });
-          }
-        }
+let inserted = 0;
+let skipped = 0;
 
-        // -----------------------
-        // 9-hole times
-        // -----------------------
-        function isBlocked9(layoutKey9, mins) {
-  const k = String(layoutKey9 || "").trim();
-  if (!k) return false;
-  const arr = blocked9ByKey.get(k);
-  if (!arr || !arr.length) return false;
-  return arr.some(([a, b]) => mins >= a && mins < b);
-}
+// Collect debug summary per-day (only first ~3 days to avoid huge payload)
+const debugDays = [];
 
-        for (const w of windows9) {
-          const interval = Number(w.intervalMins || w.interval || 10);
-          const maxPlayers = Number(w.maxPlayers || 4);
-          const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
-          const startMin = _timeToMinutes(w.start);
-          const endMin = _timeToMinutes(w.end);
+await db.query("BEGIN");
+try {
+  for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+    const playDate = _isoDate(d);
+    const wd = String(_weekdayISO(d)); // "1".."7"
+    const cfg = daysCfg[wd];
 
-          const layoutKey9 = cleanKey(w.layout_key || w.layoutKey);
+    if (!cfg || cfg.enabled === false) continue;
 
-          if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
-          if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
-          if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
-          if (startMin === null || endMin === null || endMin <= startMin) continue;
+    const windows = Array.isArray(cfg.windows) ? cfg.windows : [];
+    const windows18 = windows.filter(w => Number(w?.holes) === 18);
+    const windows9 = windows.filter(w => Number(w?.holes) === 9);
 
-          if (!layoutKey9) {
-            dlog("🧪 SKIP 9 window (missing layout key)", { playDate, w });
-            continue;
-          }
+    const blocked9ByKey = new Map(); // key -> array of [start,end]
+    const rows = [];
 
-          // ✅ reject 9 keys not in course layouts (prevents stale 'pines')
-          if (layoutKeySet9.size > 0 && !layoutKeySet9.has(layoutKey9)) {
-            dlog("🧪 SKIP 9 window (layout key not in course layouts)", { playDate, layoutKey9, w });
-            continue;
-          }
+    // -----------------------
+    // 18-hole times
+    // -----------------------
+    for (const w of windows18) {
+      const interval = Number(w.intervalMins || w.interval || 10);
+      const maxPlayers = Number(w.maxPlayers || 4);
+      const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
+      const startMin = _timeToMinutes(w.start);
+      const endMin = _timeToMinutes(w.end);
+      const blockMins = Number(w.block_mins ?? 30) || 30; // ✅ define block window
 
-          dlog("🧪 9 window parsed", {
-            playDate, interval, maxPlayers, pricePerPlayerCents,
-            start: w.start, end: w.end,
-            layoutKey9
-          });
+      const frontNineKey = cleanKey(w.front_nine_key || w.front9_key || w.front9Key || w.frontNineKey);
+      const backNineKey  = cleanKey(w.back_nine_key  || w.back9_key  || w.back9Key  || w.backNineKey);
 
-          for (let mins = startMin; mins < endMin; mins += interval) {
-            if (isBlocked9(layoutKey9, mins)) continue;
-            const teeTime = _minutesToTime(mins);
+      if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
+      if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
+      if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
+      if (startMin === null || endMin === null || endMin <= startMin) continue;
 
-            rows.push({
-              course_id: courseId,
-              play_date: playDate,
-              tee_time: teeTime,
-              holes: 9,
-              max_players: maxPlayers,
-              price_per_player_cents: pricePerPlayerCents,
-              layout_key: layoutKey9,
-              front_nine_key: "",
-              back_nine_key: "",
-            });
-          }
-        }
-
-        if (!rows.length) continue;
-
-        // optional: check what already exists for that day (debug)
-        let beforeSummary = null;
-        if (debug) {
-          const before = await db.query(
-            `
-            SELECT
-              holes,
-              layout_key,
-              front_nine_key,
-              back_nine_key,
-              COUNT(*)::int AS c
-            FROM booking_times
-            WHERE course_id = $1 AND play_date = $2::date
-            GROUP BY holes, layout_key, front_nine_key, back_nine_key
-            ORDER BY holes, layout_key;
-            `,
-            [courseId, playDate]
-          );
-          beforeSummary = before.rows;
-        }
-
-        const cols = [
-          "course_id",
-          "play_date",
-          "tee_time",
-          "holes",
-          "max_players",
-          "price_per_player_cents",
-          "layout_key",
-          "front_nine_key",
-          "back_nine_key",
-        ];
-
-        const values = [];
-        const params = [];
-        let p = 1;
-
-        for (const r of rows) {
-          values.push(
-            `($${p++}, $${p++}::date, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++})`
-          );
-          params.push(
-            r.course_id,
-            r.play_date,
-            r.tee_time,
-            r.holes,
-            r.max_players,
-            r.price_per_player_cents,
-            r.layout_key,
-            r.front_nine_key,
-            r.back_nine_key
-          );
-        }
-
-        const onConflict =
-          mode === "overwrite-range"
-            ? `DO UPDATE SET
-                 max_players = EXCLUDED.max_players,
-                 price_per_player_cents = EXCLUDED.price_per_player_cents,
-                 layout_key = EXCLUDED.layout_key,
-                 front_nine_key = EXCLUDED.front_nine_key,
-                 back_nine_key = EXCLUDED.back_nine_key,
-                 status = CASE
-                   WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
-                   WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
-                   ELSE 'AVAILABLE'
-                 END,
-                 updated_at = now()`
-            : `DO NOTHING`;
-
-        const q = await db.query(
-          `INSERT INTO booking_times (${cols.join(", ")})
-           VALUES ${values.join(",")}
-           ON CONFLICT ON CONSTRAINT booking_times_unique_slot
-           ${onConflict}
-           RETURNING 1;`,
-          params
-        );
-
-        const ins = Number(q.rowCount || 0);
-        inserted += ins;
-        skipped += Math.max(0, rows.length - ins);
-
-        if (debug && debugDays.length < 3) {
-          // after insert snapshot for this day
-          const after = await db.query(
-            `
-            SELECT
-              holes,
-              layout_key,
-              front_nine_key,
-              back_nine_key,
-              COUNT(*)::int AS c
-            FROM booking_times
-            WHERE course_id = $1 AND play_date = $2::date
-            GROUP BY holes, layout_key, front_nine_key, back_nine_key
-            ORDER BY holes, layout_key;
-            `,
-            [courseId, playDate]
-          );
-
-          const samp = await db.query(
-            `
-            SELECT tee_time, holes, layout_key, front_nine_key, back_nine_key
-            FROM booking_times
-            WHERE course_id = $1 AND play_date = $2::date
-            ORDER BY tee_time ASC, holes DESC, layout_key ASC
-            LIMIT 10;
-            `,
-            [courseId, playDate]
-          );
-
-          debugDays.push({
-            playDate,
-            windows18: windows18.length,
-            windows9: windows9.length,
-            rowsPrepared: rows.length,
-            inserted: ins,
-            skipped: Math.max(0, rows.length - ins),
-            beforeSummary,
-            afterSummary: after.rows,
-            sample: samp.rows,
-          });
-        }
-
-        dlog("🧪 day result", {
-          playDate,
-          rowsPrepared: rows.length,
-          inserted: ins,
-          skipped: Math.max(0, rows.length - ins),
-        });
+      if (!frontNineKey || !backNineKey) {
+        dlog("🧪 SKIP 18 window (missing routing keys)", { playDate, w });
+        continue;
       }
 
-      await db.query("COMMIT");
-    } catch (e) {
-      await db.query("ROLLBACK");
-      throw e;
+      const layoutKey18 = `18:${frontNineKey}|${backNineKey}`;
+
+      // ✅ reject routes not in course layouts (prevents stale "pines|lakes")
+      if (routeKeySet18.size > 0 && !routeKeySet18.has(layoutKey18)) {
+        dlog("🧪 SKIP 18 window (route not in course layouts)", { playDate, layoutKey18, w });
+        continue;
+      }
+
+      dlog("🧪 18 window parsed", {
+        playDate, interval, maxPlayers, pricePerPlayerCents,
+        start: w.start, end: w.end,
+        frontNineKey, backNineKey, layoutKey18
+      });
+
+      for (let mins = startMin; mins < endMin; mins += interval) {
+        const teeTime = _minutesToTime(mins);
+
+        // ✅ FIX: block ONLY the SECOND nine,
+        // starting when players reach it (start + dur9),
+        // and only for blockMins
+        const blockStart = Math.max(0, Math.min(24 * 60, mins + dur9));
+        const blockEnd   = Math.max(0, Math.min(24 * 60, blockStart + blockMins));
+
+        // ✅ IMPORTANT: store under normalized key that matches 9-hole layout_key
+        const k = cleanKey(backNineKey);
+        if (k) {
+          const arr = blocked9ByKey.get(k) || [];
+          arr.push([blockStart, blockEnd]);
+          blocked9ByKey.set(k, arr);
+        }
+
+        rows.push({
+          course_id: courseId,
+          play_date: playDate,
+          tee_time: teeTime,
+          holes: 18,
+          max_players: maxPlayers,
+          price_per_player_cents: pricePerPlayerCents,
+          layout_key: layoutKey18,
+          front_nine_key: frontNineKey,
+          back_nine_key: backNineKey,
+        });
+      }
     }
 
-    // ✅ ALWAYS log + (optionally) return what the DB actually has for startDate
-    const snapSummary = await db.query(
-      `
-      SELECT
-        holes,
-        layout_key,
-        front_nine_key,
-        back_nine_key,
-        COUNT(*)::int AS c
-      FROM booking_times
-      WHERE course_id = $1 AND play_date = $2::date
-      GROUP BY holes, layout_key, front_nine_key, back_nine_key
-      ORDER BY holes, layout_key;
-      `,
-      [courseId, startDate]
+    // -----------------------
+    // 9-hole times
+    // -----------------------
+    function isBlocked9(layoutKey9, mins) {
+      const k = cleanKey(layoutKey9);
+      if (!k) return false;
+      const arr = blocked9ByKey.get(k);
+      if (!arr || !arr.length) return false;
+      return arr.some(([a, b]) => mins >= a && mins < b);
+    }
+
+    for (const w of windows9) {
+      const interval = Number(w.intervalMins || w.interval || 10);
+      const maxPlayers = Number(w.maxPlayers || 4);
+      const pricePerPlayerCents = Number(w.pricePerPlayerCents || w.price_per_player_cents || 0);
+      const startMin = _timeToMinutes(w.start);
+      const endMin = _timeToMinutes(w.end);
+
+      const layoutKey9 = cleanKey(w.layout_key || w.layoutKey);
+
+      if (!Number.isFinite(interval) || interval < 5 || interval > 60) continue;
+      if (!Number.isFinite(maxPlayers) || maxPlayers < 1 || maxPlayers > 4) continue;
+      if (!Number.isFinite(pricePerPlayerCents) || pricePerPlayerCents < 0) continue;
+      if (startMin === null || endMin === null || endMin <= startMin) continue;
+
+      if (!layoutKey9) {
+        dlog("🧪 SKIP 9 window (missing layout key)", { playDate, w });
+        continue;
+      }
+
+      // ✅ reject 9 keys not in course layouts (prevents stale 'pines')
+      if (layoutKeySet9.size > 0 && !layoutKeySet9.has(layoutKey9)) {
+        dlog("🧪 SKIP 9 window (layout key not in course layouts)", { playDate, layoutKey9, w });
+        continue;
+      }
+
+      dlog("🧪 9 window parsed", {
+        playDate, interval, maxPlayers, pricePerPlayerCents,
+        start: w.start, end: w.end,
+        layoutKey9
+      });
+
+      for (let mins = startMin; mins < endMin; mins += interval) {
+        if (isBlocked9(layoutKey9, mins)) continue;
+        const teeTime = _minutesToTime(mins);
+
+        rows.push({
+          course_id: courseId,
+          play_date: playDate,
+          tee_time: teeTime,
+          holes: 9,
+          max_players: maxPlayers,
+          price_per_player_cents: pricePerPlayerCents,
+          layout_key: layoutKey9,
+          front_nine_key: "",
+          back_nine_key: "",
+        });
+      }
+    }
+
+    if (!rows.length) continue;
+
+    // optional: check what already exists for that day (debug)
+    let beforeSummary = null;
+    if (debug) {
+      const before = await db.query(
+        `
+        SELECT
+          holes,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+          COUNT(*)::int AS c
+        FROM booking_times
+        WHERE course_id = $1 AND play_date = $2::date
+        GROUP BY holes, layout_key, front_nine_key, back_nine_key
+        ORDER BY holes, layout_key;
+        `,
+        [courseId, playDate]
+      );
+      beforeSummary = before.rows;
+    }
+
+    const cols = [
+      "course_id",
+      "play_date",
+      "tee_time",
+      "holes",
+      "max_players",
+      "price_per_player_cents",
+      "layout_key",
+      "front_nine_key",
+      "back_nine_key",
+    ];
+
+    const values = [];
+    const params = [];
+    let p = 1;
+
+    for (const r of rows) {
+      values.push(
+        `($${p++}, $${p++}::date, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++})`
+      );
+      params.push(
+        r.course_id,
+        r.play_date,
+        r.tee_time,
+        r.holes,
+        r.max_players,
+        r.price_per_player_cents,
+        r.layout_key,
+        r.front_nine_key,
+        r.back_nine_key
+      );
+    }
+
+    const onConflict =
+      mode === "overwrite-range"
+        ? `DO UPDATE SET
+             max_players = EXCLUDED.max_players,
+             price_per_player_cents = EXCLUDED.price_per_player_cents,
+             layout_key = EXCLUDED.layout_key,
+             front_nine_key = EXCLUDED.front_nine_key,
+             back_nine_key = EXCLUDED.back_nine_key,
+             status = CASE
+               WHEN booking_times.status = 'BOOKED' THEN 'BOOKED'
+               WHEN booking_times.status = 'BLOCKED' THEN 'BLOCKED'
+               ELSE 'AVAILABLE'
+             END,
+             updated_at = now()`
+        : `DO NOTHING`;
+
+    const q = await db.query(
+      `INSERT INTO booking_times (${cols.join(", ")})
+       VALUES ${values.join(",")}
+       ON CONFLICT ON CONSTRAINT booking_times_unique_slot
+       ${onConflict}
+       RETURNING 1;`,
+      params
     );
 
-    const snapSample = await db.query(
-      `
-      SELECT tee_time, holes, layout_key, front_nine_key, back_nine_key
-      FROM booking_times
-      WHERE course_id = $1 AND play_date = $2::date
-      ORDER BY tee_time ASC, holes DESC, layout_key ASC
-      LIMIT 12;
-      `,
-      [courseId, startDate]
-    );
+    const ins = Number(q.rowCount || 0);
+    inserted += ins;
+    skipped += Math.max(0, rows.length - ins);
 
-    alog(`🧪 [${runId}] DB SNAPSHOT startDate=${startDate}`, {
-      summary: snapSummary.rows || [],
-      sample: snapSample.rows || [],
-    });
+    if (debug && debugDays.length < 3) {
+      // after insert snapshot for this day
+      const after = await db.query(
+        `
+        SELECT
+          holes,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+          COUNT(*)::int AS c
+        FROM booking_times
+        WHERE course_id = $1 AND play_date = $2::date
+        GROUP BY holes, layout_key, front_nine_key, back_nine_key
+        ORDER BY holes, layout_key;
+        `,
+        [courseId, playDate]
+      );
 
-    return res.json({
-      ok: true,
-      course: c.rows[0],
-      startDate,
-      daysAhead,
-      mode,
-      inserted,
-      skipped,
-      ...(debug
-        ? {
-            debug: {
-              runId,
-              startDayDb: snapSummary.rows || [],
-              sample: snapSample.rows || [],
-              days: debugDays,
-              courseLayouts: {
-                layouts: layouts.map(x => ({ key: cleanKey(x?.key), label: x?.label })),
-                routes18: routes18.map(r => {
-                  const f = cleanKey(r?.front9_key ?? r?.front9Key ?? r?.front_nine_key ?? r?.frontNineKey);
-                  const b = cleanKey(r?.back9_key ?? r?.back9Key ?? r?.back_nine_key ?? r?.backNineKey);
-                  return {
-                    label: r?.label,
-                    front9_key: f,
-                    back9_key: b,
-                    routeKey: (f && b) ? `18:${f}|${b}` : "",
-                  };
-                }),
-              },
-            },
-          }
-        : {}),
+      const samp = await db.query(
+        `
+        SELECT tee_time, holes, layout_key, front_nine_key, back_nine_key
+        FROM booking_times
+        WHERE course_id = $1 AND play_date = $2::date
+        ORDER BY tee_time ASC, holes DESC, layout_key ASC
+        LIMIT 10;
+        `,
+        [courseId, playDate]
+      );
+
+      debugDays.push({
+        playDate,
+        windows18: windows18.length,
+        windows9: windows9.length,
+        rowsPrepared: rows.length,
+        inserted: ins,
+        skipped: Math.max(0, rows.length - ins),
+        beforeSummary,
+        afterSummary: after.rows,
+        sample: samp.rows,
+      });
+    }
+
+    dlog("🧪 day result", {
+      playDate,
+      rowsPrepared: rows.length,
+      inserted: ins,
+      skipped: Math.max(0, rows.length - ins),
     });
-  } catch (err) {
-    console.error("POST /generate-from-template error:", err);
-    return res.status(500).json({ ok: false, error: "internal_error", detail: err.message });
   }
+
+  await db.query("COMMIT");
+} catch (e) {
+  await db.query("ROLLBACK");
+  throw e;
+}
+
+// ✅ ALWAYS log + (optionally) return what the DB actually has for startDate
+const snapSummary = await db.query(
+  `
+  SELECT
+    holes,
+    layout_key,
+    front_nine_key,
+    back_nine_key,
+    COUNT(*)::int AS c
+  FROM booking_times
+  WHERE course_id = $1 AND play_date = $2::date
+  GROUP BY holes, layout_key, front_nine_key, back_nine_key
+  ORDER BY holes, layout_key;
+  `,
+  [courseId, startDate]
+);
+
+const snapSample = await db.query(
+  `
+  SELECT tee_time, holes, layout_key, front_nine_key, back_nine_key
+  FROM booking_times
+  WHERE course_id = $1 AND play_date = $2::date
+  ORDER BY tee_time ASC, holes DESC, layout_key ASC
+  LIMIT 12;
+  `,
+  [courseId, startDate]
+);
+
+alog(`🧪 [${runId}] DB SNAPSHOT startDate=${startDate}`, {
+  summary: snapSummary.rows || [],
+  sample: snapSample.rows || [],
+});
+
+return res.json({
+  ok: true,
+  course: c.rows[0],
+  startDate,
+  daysAhead,
+  mode,
+  inserted,
+  skipped,
+  ...(debug
+    ? {
+        debug: {
+          runId,
+          startDayDb: snapSummary.rows || [],
+          sample: snapSample.rows || [],
+          days: debugDays,
+          courseLayouts: {
+            layouts: layouts.map(x => ({ key: cleanKey(x?.key), label: x?.label })),
+            routes18: routes18.map(r => {
+              const f = cleanKey(r?.front9_key ?? r?.front9Key ?? r?.front_nine_key ?? r?.frontNineKey);
+              const b = cleanKey(r?.back9_key ?? r?.back9Key ?? r?.back_nine_key ?? r?.backNineKey);
+              return {
+                label: r?.label,
+                front9_key: f,
+                back9_key: b,
+                routeKey: (f && b) ? `18:${f}|${b}` : "",
+              };
+            }),
+          },
+        },
+      }
+    : {}),
 });
 // ✅ NEW: Course admin — booking analytics summary (scoped)
 // Uses booking_bookings + booking_analytics_events (source of truth)
