@@ -4452,9 +4452,21 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
       }
     }
 
-    const playersRaw = Number(_pickAny(req.body, ["players", "numPlayers"], 1));
-    const players = Math.max(1, Math.min(4, Number.isFinite(playersRaw) ? playersRaw : 1));
+    // ✅ players (manual bookings): accept all possible field names
+const playersRaw = Number(
+  _pickAny(req.body, [
+    "players",
+    "numPlayers",
+    "playerCount",
+    "player_count",
+    "num_players"
+  ], 1)
+);
 
+const players = Math.max(
+  1,
+  Math.min(4, Number.isFinite(playersRaw) ? Math.floor(playersRaw) : 1)
+);
     const name = String(_pickAny(req.body, ["name"], "") || "").trim();
     const email = String(_pickAny(req.body, ["email"], "") || "").trim().toLowerCase();
     const phone = req.body?.phone ? String(req.body.phone).trim() : null;
