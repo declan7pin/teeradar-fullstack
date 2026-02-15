@@ -5163,7 +5163,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
   date: playDate, // ✅ FIX: was play_date (undefined in this route)
   time: tee_time,
   holes,
-  players: 1,
+  player,
   reference,
   pricePerPlayerCents: pricePerPlayerCents || 0,
 
