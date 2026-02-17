@@ -1,4 +1,3 @@
-
 // backend/bookingRoutes.js
 import express from "express";
 import crypto from "crypto";
@@ -4203,57 +4202,18 @@ router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
           back_nine_key,
         });
 
-        // ✅ FIX: players is NOT in this route body. Derive it from how many slots share this reference
-        // at this exact tee time + routing identity.
-        let players = 1;
-        try {
-          const pc = await db.query(
-            `
-            SELECT COUNT(*)::int AS players
-            FROM booking_manual_slots
-            WHERE course_id=$1
-              AND play_date=$2::date
-              AND tee_time=$3
-              AND holes=$4
-              AND reference=$5
-              AND (
-                ($4=9  AND layout_key IS NOT DISTINCT FROM $6 AND front_nine_key IS NULL AND back_nine_key IS NULL)
-                OR
-                ($4=18 AND layout_key IS NULL AND front_nine_key IS NOT DISTINCT FROM $7 AND back_nine_key IS NOT DISTINCT FROM $8)
-              );
-            `,
-            [courseId, play_date, tee_time, holes, reference, layout_key, front_nine_key, back_nine_key]
-          );
-          const n = Number(pc.rows?.[0]?.players || 0);
-          if (Number.isFinite(n) && n > 0) players = n;
-        } catch {
-          // non-fatal, fallback stays 1
-        }
-
-        // ✅ GREEN FEES ONLY (email adds extras separately)
-        const playersCents = (pricePerPlayerCents || 0) * players;
-
         await sendBookingEmail({
           to: email,
           courseName,
           date: play_date,
           time: tee_time,
           holes,
-          players, // ✅ FIX (derived)
+          players: 1,
           reference,
           pricePerPlayerCents: pricePerPlayerCents || 0,
-
-          // ✅ IMPORTANT: pass GREEN FEES ONLY here (email adds extras separately)
-          totalCents: playersCents,
-
-          // ✅ These should already be "unit * qty" totals
-          cartCents: cartCents || 0,
-          hireClubsCents: hireClubsCents || 0,
-
-          // ✅ pass quantities so the email can show "Cart (xN)" / "Hire Clubs (xN)"
-          cartQty: cart_qty || 0,
-          hireClubsQty: hire_clubs_qty || 0,
-
+          totalCents: (pricePerPlayerCents || 0) * 1,
+          cartCents,
+          hireClubsCents,
           source: "manual",
         });
       }
@@ -4269,7 +4229,7 @@ router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
       sync,
     });
   } catch (e) {
-    console.error("admin fill-slot", e);
+    console.error("admin/fill-slot POST", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -4482,21 +4442,9 @@ router.post("/course-admin/manual-slot", requireCourseAdmin, async (req, res) =>
       }
     }
 
-    // ✅ players (manual bookings): accept all possible field names
-const playersRaw = Number(
-  _pickAny(req.body, [
-    "players",
-    "numPlayers",
-    "playerCount",
-    "player_count",
-    "num_players"
-  ], 1)
-);
+    const playersRaw = Number(_pickAny(req.body, ["players", "numPlayers"], 1));
+    const players = Math.max(1, Math.min(4, Number.isFinite(playersRaw) ? playersRaw : 1));
 
-const players = Math.max(
-  1,
-  Math.min(4, Number.isFinite(playersRaw) ? Math.floor(playersRaw) : 1)
-);
     const name = String(_pickAny(req.body, ["name"], "") || "").trim();
     const email = String(_pickAny(req.body, ["email"], "") || "").trim().toLowerCase();
     const phone = req.body?.phone ? String(req.body.phone).trim() : null;
@@ -5163,67 +5111,60 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     console.log("✅ course-admin/booking sync result", sync);
 
     // ✅ NEW: send confirmation email when course admin creates a manual booking (if email provided)
-try {
-  if (email && isLikelyEmail(email)) {
-    const courseInfo = await db.query(
-      `SELECT name, cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
-      [courseId]
-    );
+    try {
+      if (email && isLikelyEmail(email)) {
+        const courseInfo = await db.query(
+          `SELECT name, cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
+          [courseId]
+        );
+        const courseName = String(courseInfo.rows[0]?.name || slug);
 
-    const courseName = String(courseInfo.rows[0]?.name || slug);
+        const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
+        const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
 
-    const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
-    const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
+        const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
+        const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
 
-    const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
-    const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
+        const pricePerPlayerCents = await getTeePricePerPlayerCents({
+          courseId,
+          playDate: playDate,
+          teeTime: tee_time,
+          holes,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+        });
 
-    const pricePerPlayerCents = await getTeePricePerPlayerCents({
-      courseId,
-      playDate: playDate,
-      teeTime: tee_time,
-      holes,
-      layout_key,
-      front_nine_key,
-      back_nine_key,
-    });
+        await sendBookingEmail({
+          to: email,
+          courseName,
+          date: playDate,
+          time: tee_time,
+          holes,
+          players,
+          reference,
+          pricePerPlayerCents: pricePerPlayerCents || 0,
+          totalCents: (pricePerPlayerCents || 0) * players,
+          cartCents,
+          hireClubsCents,
+          source: "manual",
+        });
+      }
+    } catch (e) {
+      console.warn("course-admin/booking email failed (non-fatal):", e?.message || e);
+    }
 
-    // ✅ correct total green fees
-    const playersCents = (pricePerPlayerCents || 0) * players;
+    return res.json({ ok: true, reference, rows: filled, sync });
 
-    await sendBookingEmail({
-      to: email,
-      courseName,
-      date: playDate, // ✅ FIXED (was play_date)
-      time: tee_time,
-      holes,
-      players,
-      reference,
-      pricePerPlayerCents: pricePerPlayerCents || 0,
-
-      // green fees only
-      totalCents: playersCents,
-
-      cartCents: cartCents || 0,
-      hireClubsCents: hireClubsCents || 0,
-      cartQty: cart_qty || 0,
-      hireClubsQty: hire_clubs_qty || 0,
-
-      source: "manual",
-    });
+  } catch (e) {
+    console.error("course-admin/booking POST", e);
+    try { if (client && didBegin) await client.query("ROLLBACK"); } catch {}
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  } finally {
+    try { if (client) client.release(); } catch {}
   }
-} catch (e) {
-  console.warn("course-admin booking email failed (non-fatal):", e?.message || e);
-}
-
-return res.json({
-  ok: true,
-  row: filled[0] || null,
-  rows: filled,
-  cart_qty,
-  hire_clubs_qty,
-  sync,
 });
+
 // DELETE manual slot
 router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) => {
   try {
@@ -5816,7 +5757,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
         const windows18 = windows.filter(w => Number(w?.holes) === 18);
         const windows9 = windows.filter(w => Number(w?.holes) === 9);
 
-        const blocked9ByKey = new Map(); // key -> array of [start,end]
+        const blocked9 = [];
         const rows = [];
 
         // -----------------------
@@ -5862,13 +5803,7 @@ router.post("/generate-from-template", requireCourseAdmin, requireCourseAdminMan
             const center = mins + back9CenterOffset;
             const bStart = Math.max(0, center - back9HalfWindow);
             const bEnd = Math.min(24 * 60, center + back9HalfWindow);
-            // ✅ block ONLY the 9-hole layout that matches the SECOND nine of this 18-hole route
-const k = String(backNineKey || "").trim();
-if (k) {
-  const arr = blocked9ByKey.get(k) || [];
-  arr.push([bStart, bEnd]);
-  blocked9ByKey.set(k, arr);
-}
+            blocked9.push([bStart, bEnd]);
 
             rows.push({
               course_id: courseId,
@@ -5887,13 +5822,9 @@ if (k) {
         // -----------------------
         // 9-hole times
         // -----------------------
-        function isBlocked9(layoutKey9, mins) {
-  const k = String(layoutKey9 || "").trim();
-  if (!k) return false;
-  const arr = blocked9ByKey.get(k);
-  if (!arr || !arr.length) return false;
-  return arr.some(([a, b]) => mins >= a && mins < b);
-}
+        function isBlocked9(mins) {
+          return blocked9.some(([a, b]) => mins >= a && mins < b);
+        }
 
         for (const w of windows9) {
           const interval = Number(w.intervalMins || w.interval || 10);
@@ -5927,7 +5858,7 @@ if (k) {
           });
 
           for (let mins = startMin; mins < endMin; mins += interval) {
-            if (isBlocked9(layoutKey9, mins)) continue;
+            if (isBlocked9(mins)) continue;
             const teeTime = _minutesToTime(mins);
 
             rows.push({
@@ -8584,15 +8515,12 @@ async function handleBook(req, res) {
     const has_hire_clubs =
       picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
 
-    // ✅ IMPORTANT: public bookings must NOT accept camelCase qty fields,
-// because the UI can accidentally send cartQty = players.
-// Only accept snake_case qty fields (cart_qty / hire_clubs_qty).
-const cart_qty_raw = Number(
-  req.body?.cart_qty ?? (has_cart ? 1 : 0)
-);
-const hire_clubs_qty_raw = Number(
-  req.body?.hire_clubs_qty ?? (has_hire_clubs ? 1 : 0)
-);
+    const cart_qty_raw = Number(
+      req.body?.cart_qty ?? req.body?.cartQty ?? (has_cart ? 1 : 0)
+    );
+    const hire_clubs_qty_raw = Number(
+      req.body?.hire_clubs_qty ?? req.body?.hireClubsQty ?? (has_hire_clubs ? 1 : 0)
+    );
 
     const cart_qty = Math.max(
       0,
@@ -8893,26 +8821,19 @@ const hire_clubs_qty_raw = Number(
     }).catch(() => {});
 
     const emailResult = await sendBookingEmail({
-  to: golfer_email,
-  courseName: courseRow.name,
-  date,
-  time,
-  holes,
-  players,
-  reference,
-  pricePerPlayerCents: ppp,
+      to: golfer_email,
+      courseName: courseRow.name,
+      date,
+      time,
+      holes,
+      players,
+      reference,
+      pricePerPlayerCents: ppp,
+      totalCents: totalCents,
+      cartCents: cart_fee_cents,
+      hireClubsCents: hire_clubs_fee_cents,
+    });
 
-  // ✅ IMPORTANT: pass GREEN FEES ONLY here (email adds extras separately)
-  totalCents: baseTotalCents,
-
-  // ✅ These should already be "unit * qty" totals
-  cartCents: cart_fee_cents,
-  hireClubsCents: hire_clubs_fee_cents,
-
-  // ✅ NEW: pass quantities so the email can show "Cart (xN)" / "Hire Clubs (xN)"
-  cartQty: cart_qty,
-  hireClubsQty: hire_clubs_qty,
-});
     return res.json({
       ok: true,
       reference,
