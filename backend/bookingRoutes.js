@@ -5147,7 +5147,7 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
 
     const pricePerPlayerCents = await getTeePricePerPlayerCents({
       courseId,
-      playDate: play_date,
+      playDate: playDate,
       teeTime: tee_time,
       holes,
       layout_key,
@@ -5188,7 +5188,8 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
 
 return res.json({
   ok: true,
-  row: r.rows[0] || null,
+  row: filled[0] || null,   // ✅ first inserted row
+  rows: filled,             // ✅ optional: all inserted rows
   cart_qty,
   hire_clubs_qty,
   sync,
