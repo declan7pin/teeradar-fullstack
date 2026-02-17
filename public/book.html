@@ -590,6 +590,13 @@
       if (!digits) return "";
       return "tel:" + digits;
     }
+    // ✅ NEW: consistent slugify used for TeeRadarBooking routes
+function slugifyCourseName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
     // ✅ NEW: safely get logged-in email from localStorage (no assumptions)
     function getLoggedInEmail() {
@@ -1268,14 +1275,20 @@ if (isPhone) {
 
       // ✅ TeeRadarBooking
       if (providerLower === "teeradarbooking") {
-        let slug = (course.slug || course.bookingSlug || course.courseSlug || "").toString().trim();
+        // ✅ Prefer explicit slugs from API, fallback to slugify
+let slug = (
+  course.slug ||
+  course.bookingSlug ||
+  course.booking_slug ||
+  course.courseSlug ||
+  course.course_slug ||
+  ""
+).toString().trim();
 
-        if (!slug) {
-          slug = String(courseName)
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-+|-+$/g, "");
-        }
+if (!slug) slug = slugifyCourseName(courseName);
+
+// ✅ IMPORTANT: also include courseId so booking page can’t default to Hillview
+const courseId = course.id || course.courseId || course.course_id || null;
 
         const date =
           (lastSearchCriteria && lastSearchCriteria.date) ||
@@ -1299,6 +1312,7 @@ if (isPhone) {
           ((document.getElementById("latest") && document.getElementById("latest").value) || "17:00");
 
         const u = new URL(window.location.origin + "/book/" + encodeURIComponent(slug));
+        if (courseId) u.searchParams.set("courseId", String(courseId));
 
         if (date) u.searchParams.set("date", date);
 
