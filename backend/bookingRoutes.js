@@ -4180,66 +4180,98 @@ router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
 
     // ✅ NEW: send confirmation email when admin fills a slot (if email provided)
     try {
-  if (email && isLikelyEmail(email)) {
-    const courseInfo = await db.query(
-      `SELECT name, cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
-      [courseId]
-    );
-    const courseName = String(courseInfo.rows[0]?.name || slug);
+      if (email && isLikelyEmail(email)) {
+        const courseInfo = await db.query(
+          `SELECT name, cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
+          [courseId]
+        );
+        const courseName = String(courseInfo.rows[0]?.name || slug);
 
-    const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
-    const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
+        const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
+        const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
 
-    const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
-    const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
+        const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
+        const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
 
-    const pricePerPlayerCents = await getTeePricePerPlayerCents({
-      courseId,
-      playDate: play_date,
-      teeTime: tee_time,
-      holes,
-      layout_key,
-      front_nine_key,
-      back_nine_key,
+        const pricePerPlayerCents = await getTeePricePerPlayerCents({
+          courseId,
+          playDate: play_date,
+          teeTime: tee_time,
+          holes,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+        });
+
+        // ✅ FIX: players is NOT in this route body. Derive it from how many slots share this reference
+        // at this exact tee time + routing identity.
+        let players = 1;
+        try {
+          const pc = await db.query(
+            `
+            SELECT COUNT(*)::int AS players
+            FROM booking_manual_slots
+            WHERE course_id=$1
+              AND play_date=$2::date
+              AND tee_time=$3
+              AND holes=$4
+              AND reference=$5
+              AND (
+                ($4=9  AND layout_key IS NOT DISTINCT FROM $6 AND front_nine_key IS NULL AND back_nine_key IS NULL)
+                OR
+                ($4=18 AND layout_key IS NULL AND front_nine_key IS NOT DISTINCT FROM $7 AND back_nine_key IS NOT DISTINCT FROM $8)
+              );
+            `,
+            [courseId, play_date, tee_time, holes, reference, layout_key, front_nine_key, back_nine_key]
+          );
+          const n = Number(pc.rows?.[0]?.players || 0);
+          if (Number.isFinite(n) && n > 0) players = n;
+        } catch {
+          // non-fatal, fallback stays 1
+        }
+
+        // ✅ GREEN FEES ONLY (email adds extras separately)
+        const playersCents = (pricePerPlayerCents || 0) * players;
+
+        await sendBookingEmail({
+          to: email,
+          courseName,
+          date: play_date,
+          time: tee_time,
+          holes,
+          players, // ✅ FIX (derived)
+          reference,
+          pricePerPlayerCents: pricePerPlayerCents || 0,
+
+          // ✅ IMPORTANT: pass GREEN FEES ONLY here (email adds extras separately)
+          totalCents: playersCents,
+
+          // ✅ These should already be "unit * qty" totals
+          cartCents: cartCents || 0,
+          hireClubsCents: hireClubsCents || 0,
+
+          // ✅ pass quantities so the email can show "Cart (xN)" / "Hire Clubs (xN)"
+          cartQty: cart_qty || 0,
+          hireClubsQty: hire_clubs_qty || 0,
+
+          source: "manual",
+        });
+      }
+    } catch (e) {
+      console.warn("admin fill-slot email failed (non-fatal):", e?.message || e);
+    }
+
+    return res.json({
+      ok: true,
+      row: r.rows[0] || null,
+      cart_qty,
+      hire_clubs_qty,
+      sync,
     });
-
-    // ✅ FIX: use the actual players for this booking (not hardcoded 1)
-    const playersCents = (pricePerPlayerCents || 0) * players;
-
-    await sendBookingEmail({
-      to: email,
-      courseName,
-      date: play_date,
-      time: tee_time,
-      holes,
-      players, // ✅ FIX
-      reference,
-      pricePerPlayerCents: pricePerPlayerCents || 0,
-
-      // ✅ IMPORTANT: pass GREEN FEES ONLY here (email adds extras separately)
-      totalCents: playersCents, // ✅ FIX
-
-      // ✅ These should already be "unit * qty" totals
-      cartCents: cartCents || 0,
-      hireClubsCents: hireClubsCents || 0,
-
-      // ✅ pass quantities so the email can show "Cart (xN)" / "Hire Clubs (xN)"
-      cartQty: cart_qty || 0,
-      hireClubsQty: hire_clubs_qty || 0,
-
-      source: "manual",
-    });
+  } catch (e) {
+    console.error("admin fill-slot", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
-} catch (e) {
-  console.warn("admin fill-slot email failed (non-fatal):", e?.message || e);
-}
-
-return res.json({
-  ok: true,
-  row: r.rows[0] || null,
-  cart_qty,
-  hire_clubs_qty,
-  sync,
 });
 
 // DELETE manual slot (platform admin)
