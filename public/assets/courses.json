@@ -464,12 +464,21 @@
   },
   {
     "name": "Marri Park Golf Course",
-    "provider": "Phone",
+    "provider": "TeeRadarBooking",
     "state": "WA",
     "holes": 18,
     "lat": -32.23155852419737,
     "lng": 115.86931428104657,
-    "phone": "08 9419 3037"
+    "bookingSlug": "hillview"
+  },
+  {
+    "name": "Marri Park Golf Course",
+    "provider": "TeeRadarBooking",
+    "state": "WA",
+    "holes": 9,
+    "lat": -32.23155852419737,
+    "lng": 115.86931428104657,
+    "bookingSlug": "marri-park"
   },
   {
     "name": "Altone Park Golf Course",
