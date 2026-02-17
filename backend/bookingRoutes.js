@@ -8985,4 +8985,4 @@ router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req,
   }
 });
 
-export default router;
+module.exports = router;
