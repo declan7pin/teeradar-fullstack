@@ -5163,12 +5163,13 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     console.log("✅ course-admin/booking sync result", sync);
 
     // ✅ NEW: send confirmation email when course admin creates a manual booking (if email provided)
-    try {
+try {
   if (email && isLikelyEmail(email)) {
     const courseInfo = await db.query(
       `SELECT name, cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
       [courseId]
     );
+
     const courseName = String(courseInfo.rows[0]?.name || slug);
 
     const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
@@ -5187,27 +5188,24 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       back_nine_key,
     });
 
-    // ✅ FIX: use the actual players for this booking (not hardcoded 1)
+    // ✅ correct total green fees
     const playersCents = (pricePerPlayerCents || 0) * players;
 
     await sendBookingEmail({
       to: email,
       courseName,
-      date: play_date,
+      date: playDate, // ✅ FIXED (was play_date)
       time: tee_time,
       holes,
-      players, // ✅ FIX
+      players,
       reference,
       pricePerPlayerCents: pricePerPlayerCents || 0,
 
-      // ✅ IMPORTANT: pass GREEN FEES ONLY here (email adds extras separately)
-      totalCents: playersCents, // ✅ FIX
+      // green fees only
+      totalCents: playersCents,
 
-      // ✅ These should already be "unit * qty" totals
       cartCents: cartCents || 0,
       hireClubsCents: hireClubsCents || 0,
-
-      // ✅ pass quantities so the email can show "Cart (xN)" / "Hire Clubs (xN)"
       cartQty: cart_qty || 0,
       hireClubsQty: hire_clubs_qty || 0,
 
@@ -5215,18 +5213,17 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     });
   }
 } catch (e) {
-  console.warn("admin fill-slot email failed (non-fatal):", e?.message || e);
+  console.warn("course-admin booking email failed (non-fatal):", e?.message || e);
 }
 
 return res.json({
   ok: true,
-  row: filled[0] || null,   // ✅ first inserted row
-  rows: filled,             // ✅ optional: all inserted rows
+  row: filled[0] || null,
+  rows: filled,
   cart_qty,
   hire_clubs_qty,
   sync,
 });
-
 // DELETE manual slot
 router.delete("/course-admin/manual-slot", requireCourseAdmin, async (req, res) => {
   try {
