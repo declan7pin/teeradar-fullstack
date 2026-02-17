@@ -1501,8 +1501,7 @@ app.get("/book/admin", (req, res) => {
 });
 
 app.get("/book/:slug", (req, res) => {
-  const slug = String(req.params.slug || "").trim().toLowerCase();
-  return res.redirect(`/book-course.html?slug=${encodeURIComponent(slug)}`);
+  res.sendFile(path.join(__dirname, "..", "public", "book-course.html"));
 });
 
 // ✅ Explicit admin pages (must be BEFORE frontend fallback)
