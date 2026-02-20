@@ -11,7 +11,7 @@
   --muted:#64748b;
 }
     body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;background:#f4f7fb;color:#0f172a}
-    .wrap{max-width:900px;margin:24px auto;padding:0 16px}
+    .wrap{max-width:1400px;margin:24px auto;padding:0 16px}
     .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:12px}
         input,button,textarea,select{font:inherit}
     input,textarea,select{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:#fff}
@@ -76,6 +76,10 @@
     .note{font-size:13px;color:#64748b}
     .sub{color:#64748b;font-size:13px}
 
+/* ✅ Make Course Admin use full width on large screens */
+@media (min-width: 1200px){
+  .wrap{ max-width: 1600px; }
+}
     /* ✅ list (used by inventory card) */
     .list{margin:0;padding-left:18px}
     /* --- Debug panel (toggle with ?debug=1) --- */
@@ -330,7 +334,7 @@
           <table class="sheetTable">
             <thead>
               <tr>
-                <th style="width:90px;">Time</th>
+                <th style="width:140px;">Time</th>
                 <th>Slot 1</th>
                 <th>Slot 2</th>
                 <th>Slot 3</th>
