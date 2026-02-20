@@ -329,26 +329,28 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
       [slug, days]
     );
 
+    // ✅ confirmed bookings (manual + online)
     const confirmed = await qOne(
       `
       SELECT COUNT(*)::int AS n
       FROM booking_analytics_events
       WHERE course_slug = $1
-        AND event_type IN ('booking_confirmed','course_booking_click')
+        AND event_type = ANY($3::text[])
         AND occurred_at >= now() - ($2::int || ' days')::interval
       `,
-      [slug, days]
+      [slug, days, BOOKING_CONFIRMED_EVENT_TYPES]
     );
 
+    // ✅ revenue (manual + online)
     const revenue = await qOne(
       `
-      SELECT COALESCE(SUM((payload->>'total_cents')::int),0)::int AS total_cents
+      SELECT COALESCE(SUM(NULLIF((payload->>'total_cents')::text,'')::int),0)::int AS total_cents
       FROM booking_analytics_events
       WHERE course_slug = $1
-        AND event_type IN ('booking_confirmed','course_booking_click')
+        AND event_type = ANY($3::text[])
         AND occurred_at >= now() - ($2::int || ' days')::interval
       `,
-      [slug, days]
+      [slug, days, BOOKING_CONFIRMED_EVENT_TYPES]
     );
 
     const v = Number(views?.n || 0);
