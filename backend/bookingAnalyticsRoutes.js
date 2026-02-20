@@ -132,7 +132,7 @@ function isBookingAdminReq(req) {
     .trim()
     .toLowerCase();
 
-    const authedEmail =
+  const authedEmail =
     String(req.user?.email || req.user?.user?.email || req.auth?.email || "")
       .trim()
       .toLowerCase();
@@ -184,6 +184,7 @@ function normaliseSlug(raw) {
   if (!/^[a-z0-9-]+$/.test(slug)) return "";
   return slug;
 }
+
 // ✅ booking event types that represent a confirmed booking
 // Add to this list if you introduce new names later.
 const BOOKING_CONFIRMED_EVENT_TYPES = [
@@ -329,10 +330,12 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
       [slug, days]
     );
 
-    // ✅ confirmed bookings (manual + online)
+    const keySql = bookingKeySql();
+
+    // ✅ confirmed bookings (manual + online) — ✅ deduped
     const confirmed = await qOne(
       `
-      SELECT COUNT(*)::int AS n
+      SELECT COUNT(DISTINCT ${keySql})::int AS n
       FROM booking_analytics_events
       WHERE course_slug = $1
         AND event_type = ANY($3::text[])
@@ -390,21 +393,18 @@ router.get("/api/book/course-admin/analytics/daily", requireCourseAdminOrBypass,
         to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') AS day,
         event_type,
         COUNT(*)::int AS n,
-        COALESCE(SUM(CASE WHEN event_type IN ('booking_confirmed','course_booking_click') THEN (payload->>'total_cents')::int ELSE 0 END),0)::int AS revenue_cents
+        COALESCE(SUM(CASE WHEN event_type = ANY($3::text[]) THEN NULLIF((payload->>'total_cents')::text,'')::int ELSE 0 END),0)::int AS revenue_cents
       FROM booking_analytics_events
       WHERE course_slug = $1
         AND occurred_at >= now() - ($2::int || ' days')::interval
-        AND event_type IN (
-          'course_page_view',
-          'times_view',
-          'booking_started',
-          'booking_confirmed',
-          'course_booking_click'
+        AND (
+          event_type IN ('course_page_view','times_view','booking_started')
+          OR event_type = ANY($3::text[])
         )
       GROUP BY 1,2
       ORDER BY 1 ASC
       `,
-      [slug, days]
+      [slug, days, BOOKING_CONFIRMED_EVENT_TYPES]
     );
 
     return res.json({ ok: true, courseSlug: slug, days, rows });
@@ -429,35 +429,37 @@ router.get("/api/book/admin/analytics/summary", async (req, res) => {
     const whereSlug = slug ? `AND course_slug = $2` : ``;
     const params = slug ? [days, slug] : [days];
 
+    const keySql = bookingKeySql();
+
     const totals = await qOne(
       `
       SELECT
         COUNT(*) FILTER (WHERE event_type='course_page_view')::int AS views,
         COUNT(*) FILTER (WHERE event_type='times_view')::int AS times_view,
         COUNT(*) FILTER (WHERE event_type='booking_started')::int AS started,
-        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS confirmed,
-        COALESCE(SUM(CASE WHEN event_type IN ('booking_confirmed','course_booking_click') THEN (payload->>'total_cents')::int ELSE 0 END),0)::int AS revenue_cents
+        COUNT(DISTINCT ${keySql}) FILTER (WHERE event_type = ANY($3::text[]))::int AS confirmed,
+        COALESCE(SUM(CASE WHEN event_type = ANY($3::text[]) THEN NULLIF((payload->>'total_cents')::text,'')::int ELSE 0 END),0)::int AS revenue_cents
       FROM booking_analytics_events
       WHERE occurred_at >= now() - ($1::int || ' days')::interval
       ${whereSlug}
       `,
-      params
+      [...params, BOOKING_CONFIRMED_EVENT_TYPES]
     );
 
     const top = await qAll(
       `
       SELECT
         course_slug,
-        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS bookings,
-        COALESCE(SUM(CASE WHEN event_type IN ('booking_confirmed','course_booking_click') THEN (payload->>'total_cents')::int ELSE 0 END),0)::int AS revenue_cents
+        COUNT(DISTINCT ${keySql}) FILTER (WHERE event_type = ANY($2::text[]))::int AS bookings,
+        COALESCE(SUM(CASE WHEN event_type = ANY($2::text[]) THEN NULLIF((payload->>'total_cents')::text,'')::int ELSE 0 END),0)::int AS revenue_cents
       FROM booking_analytics_events
       WHERE occurred_at >= now() - ($1::int || ' days')::interval
-      ${whereSlug}
+      ${slug ? "AND course_slug = $3" : ""}
       GROUP BY course_slug
       ORDER BY revenue_cents DESC NULLS LAST, bookings DESC
       LIMIT 20
       `,
-      params
+      slug ? [days, BOOKING_CONFIRMED_EVENT_TYPES, slug] : [days, BOOKING_CONFIRMED_EVENT_TYPES]
     );
 
     return res.json({
@@ -493,15 +495,14 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
     const start = String(req.query.start || "").trim(); // YYYY-MM-DD
     const end = String(req.query.end || "").trim();     // YYYY-MM-DD
 
-    // ✅ include manual + online booking-confirmed event types
-    // (BOOKING_CONFIRMED_EVENT_TYPES should be defined once near top of file)
     const eventTypes = BOOKING_CONFIRMED_EVENT_TYPES;
+    const keySql = bookingKeySql();
 
     // ---- TODAY ----
     const todayParams = slug ? [eventTypes, slug] : [eventTypes];
     const today = await qOne(
       `
-      SELECT COUNT(*)::int AS n
+      SELECT COUNT(DISTINCT ${keySql})::int AS n
       FROM booking_analytics_events
       WHERE event_type = ANY($1::text[])
         AND occurred_at >= date_trunc('day', now())
@@ -515,7 +516,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
     const weekParams = slug ? [eventTypes, slug] : [eventTypes];
     const week = await qOne(
       `
-      SELECT COUNT(*)::int AS n
+      SELECT COUNT(DISTINCT ${keySql})::int AS n
       FROM booking_analytics_events
       WHERE event_type = ANY($1::text[])
         AND occurred_at >= date_trunc('week', now())
@@ -529,7 +530,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
     const monthParams = slug ? [eventTypes, slug] : [eventTypes];
     const month = await qOne(
       `
-      SELECT COUNT(*)::int AS n
+      SELECT COUNT(DISTINCT ${keySql})::int AS n
       FROM booking_analytics_events
       WHERE event_type = ANY($1::text[])
         AND occurred_at >= date_trunc('month', now())
@@ -545,7 +546,7 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
       const params = slug ? [eventTypes, start, end, slug] : [eventTypes, start, end];
       rangeCount = await qOne(
         `
-        SELECT COUNT(*)::int AS n
+        SELECT COUNT(DISTINCT ${keySql})::int AS n
         FROM booking_analytics_events
         WHERE event_type = ANY($1::text[])
           AND occurred_at >= $2::date
@@ -557,12 +558,12 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
     }
 
     // ---- Course list (for dropdown) ----
-    // last 90d confirmed bookings per slug
+    // last 90d confirmed bookings per slug (deduped)
     const courses = await qAll(
       `
       SELECT
         course_slug,
-        COUNT(*) FILTER (WHERE event_type = ANY($1::text[]))::int AS bookings
+        COUNT(DISTINCT ${keySql}) FILTER (WHERE event_type = ANY($1::text[]))::int AS bookings
       FROM booking_analytics_events
       WHERE occurred_at >= now() - interval '90 days'
       GROUP BY course_slug
@@ -603,25 +604,24 @@ router.get("/api/book/admin/analytics/funnel", async (req, res) => {
     const whereSlug = slug ? `AND course_slug = $2` : ``;
     const params = slug ? [days, slug] : [days];
 
+    const keySql = bookingKeySql();
+
     const row = await qOne(
       `
       SELECT
         COUNT(*) FILTER (WHERE event_type='course_page_view')::int AS views,
         COUNT(*) FILTER (WHERE event_type='times_view')::int AS times_view,
         COUNT(*) FILTER (WHERE event_type='booking_started')::int AS started,
-        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS confirmed
+        COUNT(DISTINCT ${keySql}) FILTER (WHERE event_type = ANY($3::text[]))::int AS confirmed
       FROM booking_analytics_events
       WHERE occurred_at >= now() - ($1::int || ' days')::interval
-        AND event_type IN (
-          'course_page_view',
-          'times_view',
-          'booking_started',
-          'booking_confirmed',
-          'course_booking_click'
+        AND (
+          event_type IN ('course_page_view','times_view','booking_started')
+          OR event_type = ANY($3::text[])
         )
       ${whereSlug}
       `,
-      params
+      [...params, BOOKING_CONFIRMED_EVENT_TYPES]
     );
 
     const views = Number(row?.views || 0);
@@ -677,33 +677,33 @@ router.get("/api/book/admin/analytics/daily", async (req, res) => {
 
     const keySql = bookingKeySql();
 
-const rows = await qAll(
-  `
-  SELECT
-    to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') AS day,
+    const rows = await qAll(
+      `
+      SELECT
+        to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') AS day,
 
-    -- ✅ bookings = distinct bookings (dedupes click+confirmed if payload has a ref)
-    COUNT(DISTINCT ${keySql}) FILTER (
-      WHERE event_type = ANY($${params.length + 1}::text[])
-    )::int AS bookings,
+        -- ✅ bookings = distinct bookings (dedupes click+confirmed if payload has a ref)
+        COUNT(DISTINCT ${keySql}) FILTER (
+          WHERE event_type = ANY($${params.length + 1}::text[])
+        )::int AS bookings,
 
-    -- ✅ revenue = sum of total_cents for booking-type events (no dedupe, assumes only one event carries cents)
-    COALESCE(SUM(
-      CASE WHEN event_type = ANY($${params.length + 1}::text[])
-        THEN NULLIF((payload->>'total_cents')::text,'')::int
-        ELSE 0
-      END
-    ),0)::int AS revenue_cents
+        -- ✅ revenue = sum of total_cents for booking-type events (no dedupe, assumes only one event carries cents)
+        COALESCE(SUM(
+          CASE WHEN event_type = ANY($${params.length + 1}::text[])
+            THEN NULLIF((payload->>'total_cents')::text,'')::int
+            ELSE 0
+          END
+        ),0)::int AS revenue_cents
 
-  FROM booking_analytics_events
-  WHERE occurred_at >= ${startSql}
-    AND occurred_at <  ${endSql}
-  ${slugWhere}
-  GROUP BY 1
-  ORDER BY 1 ASC
-  `,
-  [...params, BOOKING_CONFIRMED_EVENT_TYPES]
-);
+      FROM booking_analytics_events
+      WHERE occurred_at >= ${startSql}
+        AND occurred_at <  ${endSql}
+      ${slugWhere}
+      GROUP BY 1
+      ORDER BY 1 ASC
+      `,
+      [...params, BOOKING_CONFIRMED_EVENT_TYPES]
+    );
 
     return res.json({
       ok: true,
@@ -735,14 +735,16 @@ router.get("/api/book/admin/analytics/top", async (req, res) => {
     if (start) params.push(start);
     if (end) params.push(end);
 
+    const keySql = bookingKeySql();
+
     const rows = await qAll(
       `
       SELECT
         course_slug,
-        COUNT(*) FILTER (WHERE event_type IN ('booking_confirmed','course_booking_click'))::int AS bookings,
+        COUNT(DISTINCT ${keySql}) FILTER (WHERE event_type = ANY($${params.length + 1}::text[]))::int AS bookings,
         COALESCE(SUM(
-          CASE WHEN event_type IN ('booking_confirmed','course_booking_click')
-            THEN (payload->>'total_cents')::int
+          CASE WHEN event_type = ANY($${params.length + 1}::text[])
+            THEN NULLIF((payload->>'total_cents')::text,'')::int
             ELSE 0
           END
         ),0)::int AS revenue_cents
@@ -753,7 +755,7 @@ router.get("/api/book/admin/analytics/top", async (req, res) => {
       ORDER BY revenue_cents DESC NULLS LAST, bookings DESC
       LIMIT 50
       `,
-      params
+      [...params, BOOKING_CONFIRMED_EVENT_TYPES]
     );
 
     return res.json({ ok: true, rows: rows || [] });
@@ -800,11 +802,14 @@ router.get("/api/book/admin/analytics/export.csv", async (req, res) => {
       FROM booking_analytics_events
       WHERE occurred_at >= ${startSql}
         AND occurred_at <  ${endSql}
-        AND event_type IN ('booking_confirmed','course_booking_click','booking_started','times_view','course_page_view')
+        AND (
+          event_type IN ('booking_started','times_view','course_page_view')
+          OR event_type = ANY($${params.length + 1}::text[])
+        )
       ${slugWhere}
       ORDER BY occurred_at DESC
       `,
-      params
+      [...params, BOOKING_CONFIRMED_EVENT_TYPES]
     );
 
     // CSV
