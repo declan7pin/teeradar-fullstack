@@ -7,10 +7,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 // Map plan names from the frontend → real Stripe price IDs
 const PRICE_IDS = {
-  BASIC_MONTHLY: "price_1SdnQTASm4geYL4WeBGAEEkA",
-  BASIC_ANNUAL:  "price_1SdnRLASm4geYL4W23IKreHO",
-  PRO_MONTHLY:   "price_1SdnSGASm4geYL4WBWsFWUNe",
-  PRO_ANNUAL:    "price_1SdnSpASm4geYL4W1yxaZf2i",
+  BASIC_MONTHLY: "price_1ScbpVASm4geYL4WJmSABxlb",
+  BASIC_ANNUAL:  "price_1Scbq9ASm4geYL4WyjPjX8Go",
+  PRO_MONTHLY:   "price_1ScbklASm4geYL4WPpbT6PtL",
+  PRO_ANNUAL:    "price_1ScbmCASm4geYL4W0EQZBrvf",
 };
 
 export async function createCheckoutSession(req, res) {
@@ -22,19 +22,8 @@ export async function createCheckoutSession(req, res) {
       return res.status(400).json({ error: "Invalid plan selected" });
     }
 
-    // ✅ Ensure we store a clean email in Stripe (so Option B portal lookup works)
-    const customerEmail =
-      email && email.toString().trim() !== ""
-        ? email.toString().trim().toLowerCase()
-        : undefined;
-
-    // ✅ Single source of truth for where Stripe sends users back
-    const successUrl =
-      process.env.STRIPE_SUCCESS_URL ||
-      "https://teeradar.com.au/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}";
-    const cancelUrl =
-      process.env.STRIPE_CANCEL_URL ||
-      "https://teeradar.com.au/subscribe-cancel.html";
+    // Fallback email in case you don't send one yet
+    const customerEmail = email && email.trim() !== "" ? email : undefined;
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -47,8 +36,11 @@ export async function createCheckoutSession(req, res) {
       ],
       customer_email: customerEmail,
       allow_promotion_codes: true,
-      success_url: successUrl,
-      cancel_url: cancelUrl,
+
+      // TODO: replace YOUR_DOMAIN with your test/prod URL
+      success_url:
+        "https://YOUR_DOMAIN/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://YOUR_DOMAIN/subscribe-cancel.html",
     });
 
     return res.json({ url: session.url });
