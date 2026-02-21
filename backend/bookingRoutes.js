@@ -1453,27 +1453,42 @@ async function ensureBookingTables() {
     $$;
   `);
 
-  // ✅ ADD: drop any unique indexes that still ignore layout keys
-  await db.query(`
-    DO $$
-    DECLARE
-      r record;
-    BEGIN
-      FOR r IN
-        SELECT i.relname AS index_name
-        FROM pg_index x
-        JOIN pg_class t ON t.oid = x.indrelid
-        JOIN pg_class i ON i.oid = x.indexrelid
-        WHERE t.relname = 'booking_manual_slots'
-          AND x.indisunique = true
-          AND pg_get_indexdef(x.indexrelid) LIKE '%(course_id, play_date, tee_time, holes, slot_index)%'
-          AND pg_get_indexdef(x.indexrelid) NOT LIKE '%layout_key%'
-      LOOP
+ // ✅ ADD: drop any legacy UNIQUE constraints / indexes that still ignore layout keys
+// (some “unique indexes” are actually backing indexes for UNIQUE constraints — must drop constraint first)
+await db.query(`
+  DO $$
+  DECLARE
+    r record;
+    c record;
+  BEGIN
+    FOR r IN
+      SELECT
+        i.oid AS index_oid,
+        i.relname AS index_name
+      FROM pg_index x
+      JOIN pg_class t ON t.oid = x.indrelid
+      JOIN pg_class i ON i.oid = x.indexrelid
+      WHERE t.relname = 'booking_manual_slots'
+        AND x.indisunique = true
+        AND pg_get_indexdef(x.indexrelid) LIKE '%(course_id, play_date, tee_time, holes, slot_index)%'
+        AND pg_get_indexdef(x.indexrelid) NOT LIKE '%layout_key%'
+    LOOP
+      -- If this unique index belongs to a UNIQUE constraint, drop the constraint(s) instead of the index
+      IF EXISTS (SELECT 1 FROM pg_constraint pc WHERE pc.conindid = r.index_oid) THEN
+        FOR c IN
+          SELECT conname
+          FROM pg_constraint
+          WHERE conindid = r.index_oid
+        LOOP
+          EXECUTE format('ALTER TABLE booking_manual_slots DROP CONSTRAINT IF EXISTS %I', c.conname);
+        END LOOP;
+      ELSE
         EXECUTE format('DROP INDEX IF EXISTS %I', r.index_name);
-      END LOOP;
-    END
-    $$;
-  `);
+      END IF;
+    END LOOP;
+  END
+  $$;
+`);
 
   // ✅ ADD: create layout-aware unique index for manual slots
   await db.query(`
