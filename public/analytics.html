@@ -795,6 +795,7 @@
             <th>Course</th>
             <th>State</th>
             <th>Holes</th>
+            <th>Played</th>
             <th>Updated</th>
             <th></th>
           </tr>
@@ -940,6 +941,35 @@ window.addEventListener("unhandledrejection", (e) => {
     const n = Number(v);
     return Number.isFinite(n) ? Math.trunc(n) : 0;
   }
+  // ✅ Played (scorecards submitted) map, keyed by normalised course name
+const PLAYED_COUNT_MAP = new Map();
+
+function normCourseNameKey(s) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[–—]/g, "-"); // normalise long dashes to hyphen
+}
+
+function rebuildPlayedCountMapFromSummary(summary) {
+  PLAYED_COUNT_MAP.clear();
+
+  const topPlayed = getAny(summary, ["topPlayedCourses"], []);
+  const arr = Array.isArray(topPlayed) ? topPlayed : [];
+
+  arr.forEach((r) => {
+    const name = r.courseName || r.course || r.name || "";
+    const n = toInt(r.n ?? r.count ?? r.plays ?? 0);
+    if (!name) return;
+    PLAYED_COUNT_MAP.set(normCourseNameKey(name), n);
+  });
+}
+
+function getPlayedCountForCourseName(name) {
+  const k = normCourseNameKey(name);
+  return PLAYED_COUNT_MAP.has(k) ? (PLAYED_COUNT_MAP.get(k) || 0) : 0;
+}
 
   function toFloat(v) {
     const n = Number(v);
@@ -1197,6 +1227,11 @@ else setText("metricHitRate7d", "—");
 
     const summary = wrapped.data;
     updatedAt.textContent = "Loaded from " + wrapped.url + " • " + new Date().toLocaleString();
+    // ✅ Build the played-count map for later use in Approved courses table
+try { rebuildPlayedCountMapFromSummary(summary); } catch (e) {}
+
+// ✅ If approved courses already rendered, refresh so "Played" updates
+try { await loadApprovedCourses(); } catch (e) {}
 
     const homeViewsVal = toInt(getAny(summary, ["homePageViews","homeViews","home_page_views"], 0));
     const bookingClicksVal = toInt(getAny(summary, ["courseBookingClicks","bookingClicks","booking_clicks"], 0));
@@ -1472,20 +1507,22 @@ async function loadApprovedCourses() {
       const state = c.state ?? "—";
       const holes = c.holes ?? "—";
       const updated = c.updated_at ? new Date(c.updated_at).toLocaleString() : "";
+      const played = getPlayedCountForCourseName(name);
 
       return `
-        <tr data-approved-id="${id}">
-          <td>${id}</td>
-          <td>${name}</td>
-          <td>${state}</td>
-          <td>${holes}</td>
-          <td>${updated}</td>
-          <td style="white-space:nowrap;">
-            <button class="edit-btn" type="button" data-edit-course-id="${id}">Edit</button>
-            <button class="delete-btn" type="button" data-delete-course-id="${id}">Delete</button>
-          </td>
-        </tr>
-      `;
+  <tr data-approved-id="${id}">
+    <td>${id}</td>
+    <td>${name}</td>
+    <td>${state}</td>
+    <td>${holes}</td>
+    <td>${played}</td>
+    <td>${updated}</td>
+    <td style="white-space:nowrap;">
+      <button class="edit-btn" type="button" data-edit-course-id="${id}">Edit</button>
+      <button class="delete-btn" type="button" data-delete-course-id="${id}">Delete</button>
+    </td>
+  </tr>
+`;
     }).join("");
   }
 }
