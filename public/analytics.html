@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -134,6 +135,15 @@
       color:var(--muted);
     }
 
+    .section-title{
+      margin:22px 0 10px;
+      font-size:14px;
+      font-weight:800;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      color:#0f172a;
+    }
+
     .cards-grid{
       display:grid;
       grid-template-columns:1fr;
@@ -252,7 +262,21 @@
       opacity:0.6;
       cursor:default;
     }
-
+    
+    .approve-btn{
+      font-size:11px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid #bbf7d0;
+      background:#ecfdf5;
+      color:#166534;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .approve-btn:disabled{
+      opacity:0.6;
+      cursor:default;
+    }
     .user-email-pill {
       display:inline-flex;
       align-items:center;
@@ -263,11 +287,121 @@
       color:#166534;
       cursor:pointer;
     }
+        .edit-btn{
+      font-size:11px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid #bfdbfe;
+      background:#eff6ff;
+      color:#1d4ed8;
+      cursor:pointer;
+      white-space:nowrap;
+      margin-right:6px;
+    }
+    .edit-btn:disabled{opacity:0.6;cursor:default;}
+
+    .delete-btn{
+      font-size:11px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid #fecaca;
+      background:#fef2f2;
+      color:#b91c1c;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .delete-btn:disabled{opacity:0.6;cursor:default;}
 
     @media (min-width: 768px) {
       .cards-grid{
         grid-template-columns:repeat(3,minmax(0,1fr));
       }
+    }
+        /* ✅ Pending course details modal */
+    .modalBack{
+      position:fixed;
+      inset:0;
+      background:rgba(2,6,23,.45);
+      display:none;
+      z-index:9999;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+    }
+    .modal{
+      width:min(860px, 100%);
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px;
+      box-shadow:0 20px 60px rgba(15,23,42,.25);
+      max-height:85vh;
+      overflow:auto;
+    }
+    .modal h3{
+      margin:0 0 8px 0;
+      font-size:1.05rem;
+    }
+    .modal .muted{color:var(--muted); font-weight:700}
+    .modal .row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+      margin-top:10px;
+    }
+    .modal .actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      margin-top:12px;
+    }
+    .modal .btn2{
+      border:1px solid var(--border);
+      background:var(--teal);
+      color:#fff;
+      padding:8px 12px;
+      border-radius:10px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .modal .btn2.secondary{
+      background:#fff;
+      color:var(--text);
+    }
+
+    .pending-row-click{
+      cursor:pointer;
+    }
+    .pending-row-click:hover{
+      background:#f1f5f9;
+    }
+
+    .score-mini{
+      width:100%;
+      border-collapse:collapse;
+      margin-top:10px;
+      font-size:12px;
+    }
+    .score-mini th,.score-mini td{
+      padding:7px 6px;
+      border-bottom:1px solid #e5e7eb;
+      text-align:center;
+      white-space:nowrap;
+    }
+    .score-mini th{
+      background:#f8fafc;
+      position:sticky;
+      top:0;
+      z-index:1;
+      font-weight:800;
+    }
+    .score-mini td:first-child,
+    .score-mini th:first-child{
+      text-align:left;
+      font-weight:800;
     }
   </style>
 </head>
@@ -284,7 +418,7 @@
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
-      <a href="/analytics.html" class="nav-analytics">Analytics</a>
+      <a href="/analytics" class="nav-analytics">Analytics</a>
     </nav>
   </div>
 </header>
@@ -298,9 +432,7 @@
   </div>
 
   <h1>Analytics dashboard</h1>
-  <p class="page-sub">
-    Live tee-time engagement across Western Australia.
-  </p>
+  <p class="page-sub">Live tee-time engagement across Western Australia.</p>
 
   <section class="cards-grid" aria-label="Key metrics">
     <article class="card">
@@ -321,6 +453,12 @@
     <article class="card">
       <div class="card-label">New users</div>
       <div id="metricNewUsers" class="card-value">0</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Rounds played</div>
+      <div id="metricRoundsPlayed" class="card-value">0</div>
+      <div class="card-hint">Deduped by round ID</div>
     </article>
 
     <article class="card">
@@ -390,6 +528,194 @@
   </section>
 
   <section class="card" style="margin-top:14px;">
+    <div class="card-label">Most-played courses</div>
+    <div class="muted-note">All time • Last 30 days</div>
+    <ul id="topPlayedCoursesList" class="top-courses-list">
+      <li><span class="label">No rounds logged yet</span><span class="value">—</span></li>
+    </ul>
+  </section>
+
+  <div class="section-title">Alerts</div>
+  <section class="cards-grid" aria-label="Alerts metrics">
+    <article class="card">
+      <div class="card-label">Alerts sent (7d)</div>
+      <div id="metricAlertsSent7d" class="card-value">—</div>
+      <div class="card-hint">Emails delivered to users</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Alert hits (7d)</div>
+      <div id="metricAlertHits7d" class="card-value">—</div>
+      <div class="card-hint">Availability found matching alert rules</div>
+    </article>
+    
+    <article class="card">
+      <div class="card-label">Alerts sent (all time)</div>
+      <div id="metricAlertsSentAllTime" class="card-value">—</div>
+      <div class="card-hint">Total emails delivered</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Alert hits (all time)</div>
+      <div id="metricAlertHitsAllTime" class="card-value">—</div>
+      <div class="card-hint">Total matches found</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Delivery rate (7d)</div>
+      <div id="metricHitRate7d" class="card-value">—</div>
+      <div class="card-hint">Sent ÷ hits</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Avg time-to-hit</div>
+      <div id="metricAvgTimeToHit" class="card-value">—</div>
+      <div class="card-hint">Minutes</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Alerts by plan</div>
+      <div id="metricAlertsByPlan" class="card-value">—</div>
+      <div class="card-hint">Basic / Pro</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Top alert courses (7d)</div>
+      <div id="metricTopAlertCourses" class="card-value">—</div>
+      <div class="card-hint">Based on hits</div>
+    </article>
+  </section>
+
+  <section class="card" style="margin-top:14px;">
+    <div class="card-label">Top alert courses (7d)</div>
+    <ul id="topAlertCoursesList" class="top-courses-list">
+      <li><span class="label">Not configured</span><span class="value">—</span></li>
+    </ul>
+  </section>
+
+<div class="section-title">Booking analytics</div>
+
+<section class="card" style="margin-top:14px;">
+  <div class="card-label">Bookings made through TeeRadar booking pages</div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
+    <div>
+      <div class="muted-note">Course</div>
+      <select id="bookCourseSlug" style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+        <option value="">All courses</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="muted-note">Start</div>
+      <input id="bookStart" type="date" style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+    </div>
+
+    <div>
+      <div class="muted-note">End</div>
+      <input id="bookEnd" type="date" style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+    </div>
+
+    <button id="btnBookToday" type="button">Today</button>
+    <button id="btnBookWeek" type="button">This week</button>
+    <button id="btnBookMonth" type="button">This month</button>
+    <button id="btnBookApply" type="button" class="secondary">Apply range</button>
+    <button id="btnBookCsv" type="button" class="secondary">Download CSV</button>
+  </div>
+
+  <div class="cards-grid" style="margin-top:14px;">
+    <article class="card">
+      <div class="card-label">Bookings today</div>
+      <div id="metricBookToday" class="card-value">—</div>
+    </article>
+    <article class="card">
+      <div class="card-label">Bookings this week</div>
+      <div id="metricBookWeek" class="card-value">—</div>
+    </article>
+    <article class="card">
+      <div class="card-label">Bookings this month</div>
+      <div id="metricBookMonth" class="card-value">—</div>
+    </article>
+  </div>
+
+  <div class="cards-grid" style="margin-top:14px;">
+    <article class="card">
+      <div class="card-label">Funnel (last 30 days)</div>
+      <div class="muted-note">Views → Times → Started → Confirmed</div>
+      <div style="margin-top:8px;font-size:13px;line-height:1.6;">
+        <div><strong>Views:</strong> <span id="fViews">—</span></div>
+        <div><strong>Times:</strong> <span id="fTimes">—</span></div>
+        <div><strong>Started:</strong> <span id="fStarted">—</span></div>
+        <div><strong>Confirmed:</strong> <span id="fConfirmed">—</span></div>
+        <div style="margin-top:6px;">
+          <strong>View→Confirmed:</strong> <span id="fConvVC">—</span><br>
+          <strong>Times→Confirmed:</strong> <span id="fConvTC">—</span><br>
+          <strong>Started→Confirmed:</strong> <span id="fConvSC">—</span>
+        </div>
+      </div>
+    </article>
+
+        <article class="card">
+  <div class="card-label">Bookings (selected range)</div>
+  <div id="metricBookRange" class="card-value">—</div>
+  <div class="card-hint">Sum of bookings for the selected filter/range</div>
+</article>
+
+<article class="card">
+  <div class="card-label">Revenue (selected range)</div>
+  <div id="metricRevRange" class="card-value">—</div>
+  <div class="card-hint">Sum of revenue for the selected filter/range</div>
+</article>
+
+<!-- keep canvases present (hidden) so existing JS can’t break the page -->
+<article class="card" style="display:none;">
+  <canvas id="chartBookings" height="160"></canvas>
+</article>
+<article class="card" style="display:none;">
+  <canvas id="chartRevenue" height="160"></canvas>
+</article>
+</section>
+
+  <div class="section-title">Subscriptions</div>
+  <section class="cards-grid" aria-label="Subscription metrics">
+    <article class="card">
+      <div class="card-label">Subscribers active</div>
+      <div id="metricSubscribersActive" class="card-value">—</div>
+      <div class="card-hint">Derived from registered users + plan lookup</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Basic / Pro</div>
+      <div id="metricSubscribersByPlan" class="card-value">—</div>
+      <div class="card-hint">Derived from registered users + plan lookup</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">MRR (estimate)</div>
+      <div id="metricMRR" class="card-value">—</div>
+      <div class="card-hint">Configured in code</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Trials → paid</div>
+      <div id="metricTrialToPaid" class="card-value">—</div>
+      <div class="card-hint">Only if backend provides trial data</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Churn (30d)</div>
+      <div id="metricChurn30d" class="card-value">—</div>
+      <div class="card-hint">Only if backend provides churn data</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">Coupon usage</div>
+      <div id="metricCouponUsage" class="card-value">—</div>
+      <div class="card-hint">Only if backend provides coupon data</div>
+    </article>
+  </section>
+
+  <section class="card" style="margin-top:14px;">
     <div class="card-label">Registered users</div>
     <div id="usersEmpty" class="users-empty" style="display:none;">
       No registered users yet.
@@ -415,8 +741,97 @@
       </table>
     </div>
   </section>
+  <section class="card" style="margin-top:14px;" id="pendingCoursesCard">
+    <div class="card-label">Pending courses (scorecard templates)</div>
 
-  <!-- detail card populated when you click a user row -->
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+      <button id="btnPendingRefresh" type="button" class="secondary">Refresh</button>
+      <span class="muted-note">Approve here to publish pars + distances.</span>
+    </div>
+
+    <div id="pendingEmpty" class="users-empty" style="display:none;">
+      No pending courses.
+    </div>
+    <div id="pendingError" class="users-empty" style="display:none;color:#b91c1c;">
+      Error loading pending courses.
+    </div>
+
+    <div style="overflow-x:auto;margin-top:8px;">
+      <table id="pendingCoursesTable" class="users-table" style="display:none;">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Course</th>
+            <th>State</th>
+            <th>Holes</th>
+            <th>Submitted email</th>
+            <th>Submitted at</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="pendingCoursesTbody"></tbody>
+      </table>
+    </div>
+  </section>
+    <section class="card" style="margin-top:14px;" id="approvedCoursesCard">
+    <div class="card-label">Approved courses (scorecard templates)</div>
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+      <button id="btnApprovedRefresh" type="button" class="secondary">Refresh</button>
+      <span class="muted-note">Edit names for multi-nines (e.g. “collier park golf course - lakes”).</span>
+    </div>
+
+    <div id="approvedEmpty" class="users-empty" style="display:none;">
+      No approved courses found.
+    </div>
+    <div id="approvedError" class="users-empty" style="display:none;color:#b91c1c;">
+      Error loading approved courses.
+    </div>
+
+    <div style="overflow-x:auto;margin-top:8px;">
+      <table id="approvedCoursesTable" class="users-table" style="display:none;">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Course</th>
+            <th>State</th>
+            <th>Holes</th>
+            <th>Updated</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="approvedCoursesTbody"></tbody>
+      </table>
+    </div>
+  </section>
+    <!-- ✅ Pending course details modal -->
+  <div class="modalBack" id="pendingModalBack" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pendingModalTitle">
+      <h3 id="pendingModalTitle">Pending course</h3>
+      <div class="muted" id="pendingModalMeta">Loading…</div>
+
+      <div class="row" id="pendingModalControls" style="display:none;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <div id="pendingTeeWrap" style="display:none;">
+            <div class="muted" style="font-weight:800;">Tee</div>
+            <select id="pendingTeeSelect" style="padding:8px;border:1px solid var(--border);border-radius:10px;"></select>
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top:0;">
+          <button class="btn2 secondary" id="pendingCloseBtn" type="button">Close</button>
+        </div>
+      </div>
+
+      <div id="pendingModalBody" style="margin-top:10px;">
+        <!-- table injects here -->
+      </div>
+
+      <div class="actions" id="pendingModalFooter">
+        <button class="btn2 secondary" id="pendingCloseBtn2" type="button">Close</button>
+      </div>
+    </div>
+  </div>
   <section class="card" id="userDetailCard" style="margin-top:14px; display:none;">
     <div class="card-label">User details</div>
     <div class="muted-note" style="margin-bottom:6px;">
@@ -442,38 +857,131 @@
     </div>
   </section>
 </main>
-
+<div id="chartTip" style="
+  position:fixed;
+  display:none;
+  z-index:9999;
+  pointer-events:none;
+  background:#0f172a;
+  color:#fff;
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:12px;
+  line-height:1.25;
+  box-shadow:0 10px 20px rgba(0,0,0,.18);
+  transform:translate(-50%,-110%);
+  max-width:260px;
+"></div>
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
+  // ✅ Needed for booking admin analytics routes (requirePlatformAdmin)
+const BOOKING_ADMIN_SECRET = ""; 
+// put the same value as your Render env var BOOKING_ADMIN_SECRET
+window.addEventListener("error", (e) => {
+  console.error("Analytics page JS error:", e?.error || e?.message || e);
+});
+window.addEventListener("unhandledrejection", (e) => {
+  console.error("Unhandled promise rejection:", e?.reason || e);
+});
+  // ======= Subscription config (edit these) =======
+  const BASIC_MRR = 5; // e.g. 9.99
+  const PRO_MRR = 10;   // e.g. 19.99
 
   function isAdminEmail(email) {
     return (email || "").trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
   }
 
+  function getAuthHeaders() {
+  const h = { "Accept": "application/json" };
+
+  // keep your normal JWT (used by other analytics endpoints)
+  try {
+    const token = localStorage.getItem("teeradar_jwt") || "";
+    if (token) h["Authorization"] = "Bearer " + token;
+  } catch (e) {}
+
+  // ✅ add booking admin secret (used by /api/book/admin/analytics/*)
+  if (BOOKING_ADMIN_SECRET && BOOKING_ADMIN_SECRET.trim()) {
+    h["x-booking-admin-secret"] = BOOKING_ADMIN_SECRET.trim();
+  }
+
+  return h;
+}
+
   function enforceAdmin() {
-    try {
-      const storedEmail = localStorage.getItem("teeradar_user_email");
-      if (!isAdminEmail(storedEmail)) {
-        throw new Error("Not admin");
+  const updatedAt = document.getElementById("summaryUpdated");
+  try {
+    const storedEmail = localStorage.getItem("teeradar_user_email");
+
+    // ✅ Don’t block rendering — backend auth should protect endpoints anyway
+    if (!isAdminEmail(storedEmail)) {
+      if (updatedAt) {
+        updatedAt.textContent =
+          "Note: admin email not detected in localStorage. If you just logged in, refresh. Stored: " +
+          (storedEmail || "none");
       }
-      console.log("[analytics] Admin access granted:", storedEmail);
-    } catch (err) {
-      console.warn("[analytics] Access blocked:", err.message);
-      window.location.href = "/index.html";
+      return true;
+    }
+
+    return true;
+  } catch (err) {
+    if (updatedAt) updatedAt.textContent = "Note: couldn’t read localStorage (continuing).";
+    return true;
+  }
+}
+
+  function getAny(obj, keys, fallback = null) {
+    for (const k of keys) {
+      if (obj && Object.prototype.hasOwnProperty.call(obj, k) && obj[k] != null) return obj[k];
+    }
+    return fallback;
+  }
+
+  function toInt(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.trunc(n) : 0;
+  }
+
+  function toFloat(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function fmtPct(n) {
+    if (!Number.isFinite(n)) return "—";
+    return (n * 100).toFixed(1).replace(/\.0$/, "") + "%";
+  }
+
+  function fmtMoney(n) {
+    if (!Number.isFinite(n)) return "—";
+    return "$" + n.toFixed(0);
+  }
+
+  async function tryFetchJson(url) {
+    try {
+      const res = await fetch(url, {
+  headers: getAuthHeaders(),
+  credentials: "include", // ✅ ensures cookies flow if you ever use cookie login
+});
+      if (!res.ok) return null;
+      const data = await res.json().catch(() => null);
+      return data || null;
+    } catch (e) {
+      return null;
     }
   }
 
   async function fetchAnalyticsSummary() {
-    try {
-      const res = await fetch("/api/analytics", {
-        headers: { "Accept": "application/json" }
-      });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch (err) {
-      console.error("analytics fetch failed:", err);
-      return null;
+    const candidates = [
+      "/api/analytics/summary",
+      "/api/analytics",
+      "/api/analytics/summary.json"
+    ];
+    for (const url of candidates) {
+      const data = await tryFetchJson(url);
+      if (data) return { data, url };
     }
+    return null;
   }
 
   function formatHourRange(hourStr) {
@@ -492,157 +1000,170 @@
     return `${fmt(h)}–${fmt(next)}`;
   }
 
-  async function loadAnalytics() {
-    enforceAdmin();
+  function setText(id, txt) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  }
 
-    const summary = await fetchAnalyticsSummary();
-    const updatedAt = document.getElementById("summaryUpdated");
+  function renderTopList(listElId, rows, emptyLabel) {
+    const el = document.getElementById(listElId);
+    if (!el) return;
 
-    if (!summary) {
-      updatedAt.textContent = "Analytics backend not configured.";
+    const arr = Array.isArray(rows) ? rows : [];
+    if (!arr.length) {
+      el.innerHTML = `<li><span class="label">${emptyLabel}</span><span class="value">—</span></li>`;
       return;
     }
 
-    const homeViewsVal =
-      summary.homePageViews ?? summary.homeViews ?? 0;
-    const bookingClicksVal =
-      summary.courseBookingClicks ?? summary.bookingClicks ?? 0;
-    const searchesVal =
-      summary.searches ?? 0;
-    const newUsersVal =
-      summary.newUsers ?? 0;
-    const usersAllTimeVal =
-      summary.usersAllTime ?? 0;
-    const usersTodayVal =
-      summary.usersToday ?? 0;
-    const usersWeekVal =
-      summary.usersWeek ?? 0;
+    el.innerHTML = "";
+    arr.slice(0, 12).forEach((row) => {
+      const name = row.courseName || row.course || row.name || "—";
+      const n = row.hits ?? row.count ?? row.n ?? row.clicks ?? row.searches ?? 0;
+      el.innerHTML += `
+        <li>
+          <span class="label">${name}</span>
+          <span class="value">${toInt(n)}</span>
+        </li>
+      `;
+    });
+  }
 
-    document.getElementById("metricHomeViews").textContent = homeViewsVal;
-    document.getElementById("metricBookingClicks").textContent = bookingClicksVal;
-    document.getElementById("metricSearches").textContent = searchesVal;
-    document.getElementById("metricNewUsers").textContent = newUsersVal;
-    document.getElementById("usersAllTime").textContent = usersAllTimeVal;
-    document.getElementById("usersToday").textContent = usersTodayVal;
-    document.getElementById("usersWeek").textContent = usersWeekVal;
+  // ✅ FIXED: match All-time vs 30d by course name (not array index)
+  function renderPlayedCourses(listElId, allTimeRows, last30Rows) {
+    const el = document.getElementById(listElId);
+    if (!el) return;
 
-    let convHome = summary.conversionHomeToBooking;
-    if (convHome == null) {
-      convHome = homeViewsVal > 0 ? bookingClicksVal / homeViewsVal : 0;
+    const allArr = Array.isArray(allTimeRows) ? allTimeRows : [];
+    const d30Arr = Array.isArray(last30Rows) ? last30Rows : [];
+
+    if (!allArr.length && !d30Arr.length) {
+      el.innerHTML = `<li><span class="label">No rounds logged yet</span><span class="value">—</span></li>`;
+      return;
     }
 
-    let convSearch = summary.conversionSearchToBooking;
-    if (convSearch == null) {
-      convSearch = searchesVal > 0 ? bookingClicksVal / searchesVal : 0;
+    const map30 = new Map();
+    d30Arr.forEach((r) => {
+      const name = r.courseName || r.course || r.name || "";
+      if (!name) return;
+      map30.set(name, toInt(r.n ?? r.count ?? r.plays ?? 0));
+    });
+
+    el.innerHTML = "";
+
+    // Keep ordering from all-time, then append any 30d-only courses
+    const used = new Set();
+
+    const ordered = [];
+    allArr.forEach((r) => {
+      const name = r.courseName || r.course || r.name || "—";
+      const aN = toInt(r.n ?? r.count ?? r.plays ?? 0);
+      const bN = map30.has(name) ? map30.get(name) : 0;
+      ordered.push({ name, aN, bN });
+      used.add(name);
+    });
+
+    d30Arr.forEach((r) => {
+      const name = r.courseName || r.course || r.name || "";
+      if (!name || used.has(name)) return;
+      const bN = toInt(r.n ?? r.count ?? r.plays ?? 0);
+      ordered.push({ name, aN: 0, bN });
+    });
+
+    ordered.slice(0, 12).forEach((row) => {
+      el.innerHTML += `
+        <li>
+          <span class="label">${row.name}</span>
+          <span class="value">${row.aN} • ${row.bN}</span>
+        </li>
+      `;
+    });
+  }
+
+  // ✅ FIXED: 0 should show "0", not "Not configured"
+  function wireAlerts(summary) {
+    const sentRaw = getAny(summary, ["alertsSent7d","alerts_sent_7d","alerts_sent7d","alertsSent"], null);
+    const hitsRaw = getAny(summary, ["alertHits7d","alert_hits_7d","alert_hits7d","alertHits"], null);
+    const sentAllRaw = getAny(summary, ["alertsSentAllTime","alerts_sent_all_time"], null);
+    const hitsAllRaw = getAny(summary, ["alertHitsAllTime","alert_hits_all_time"], null);
+    const avgRaw = getAny(summary, ["avgTimeToHitMins","avg_time_to_hit_mins","avgTimeToHitMins","avgTimeToHit"], null);
+    const alertsByPlan = getAny(summary, ["alertsByPlan","alerts_by_plan"], null);
+    const topAlertCourses = getAny(summary, ["topAlertCourses","top_alert_courses","topAlertCourses7d","top_alert_courses_7d"], null);
+
+    const hasAlertsMetrics = (sentRaw != null) || (hitsRaw != null) || (avgRaw != null) || (topAlertCourses != null);
+
+    if (!hasAlertsMetrics) {
+      setText("metricAlertsSent7d", "Not configured");
+      setText("metricAlertHits7d", "Not configured");
+      setText("metricAlertsSentAllTime", "Not configured");
+      setText("metricAlertHitsAllTime", "Not configured");
+      setText("metricHitRate7d", "Not configured");
+      setText("metricAvgTimeToHit", "Not configured");
+      setText("metricAlertsByPlan", "Not configured");
+      setText("metricTopAlertCourses", "Not configured");
+
+      const listEl = document.getElementById("topAlertCoursesList");
+      if (listEl) listEl.innerHTML = `<li><span class="label">Not configured</span><span class="value">—</span></li>`;
+      return;
     }
 
-    const convHomeEl = document.getElementById("metricConvHomeBooking");
-    if (convHomeEl) {
-      const pct = (convHome * 100).toFixed(1).replace(/\.0$/, "");
-      convHomeEl.textContent = pct + "%";
-    }
+    const alertsSent7d = sentRaw == null ? 0 : toInt(sentRaw);
+    const alertHits7d = hitsRaw == null ? 0 : toInt(hitsRaw);
+    const avgTimeToHitMins = avgRaw == null ? null : toFloat(avgRaw);
 
-    const convSearchEl = document.getElementById("metricConvSearchBooking");
-    if (convSearchEl) {
-      const pct = (convSearch * 100).toFixed(1).replace(/\.0$/, "");
-      convSearchEl.textContent = pct + "%";
-    }
+    setText("metricAlertsSent7d", String(alertsSent7d));
+    setText("metricAlertHits7d", String(alertHits7d));
+    const alertsSentAllTime = sentAllRaw == null ? 0 : toInt(sentAllRaw);
+const alertHitsAllTime = hitsAllRaw == null ? 0 : toInt(hitsAllRaw);
 
-    const users30d = summary.users30d ?? summary.users_30d ?? 0;
-    const returning7d = summary.returningUsers7d ?? summary.returning_users_7d ?? 0;
+setText("metricAlertsSentAllTime", String(alertsSentAllTime));
+setText("metricAlertHitsAllTime", String(alertHitsAllTime));
+    // ✅ Delivery rate = sent ÷ hits
+if (alertHits7d > 0) setText("metricHitRate7d", fmtPct(alertsSent7d / alertHits7d));
+else setText("metricHitRate7d", "—");
 
-    const users30dEl = document.getElementById("users30d");
-    if (users30dEl) users30dEl.textContent = users30d;
+    if (avgTimeToHitMins != null && avgTimeToHitMins > 0) setText("metricAvgTimeToHit", avgTimeToHitMins.toFixed(0) + "m");
+    else setText("metricAvgTimeToHit", "—");
 
-    const returning7dEl = document.getElementById("returning7d");
-    if (returning7dEl) returning7dEl.textContent = returning7d;
-
-    const repeatBookersVal = summary.repeatBookers ?? summary.repeat_bookers ?? 0;
-    const repeatEl = document.getElementById("metricRepeatBookers");
-    if (repeatEl) repeatEl.textContent = repeatBookersVal;
-
-    const peak = summary.peakBookingHour ?? summary.peak_booking_hour ?? null;
-    const peakEl = document.getElementById("metricPeakHour");
-    if (peakEl) {
-      if (peak && peak.hour != null) {
-        peakEl.textContent = `${formatHourRange(peak.hour)} (${peak.clicks} clicks)`;
-      } else {
-        peakEl.textContent = "–";
+    let byPlanText = "—";
+    if (alertsByPlan) {
+      if (typeof alertsByPlan === "string") {
+        byPlanText = alertsByPlan;
+      } else if (Array.isArray(alertsByPlan)) {
+        const basic = alertsByPlan.find(x => String(x.plan||x.name||"").toLowerCase().includes("basic"));
+        const pro = alertsByPlan.find(x => String(x.plan||x.name||"").toLowerCase().includes("pro"));
+        const b = basic ? (basic.count ?? basic.alerts ?? basic.n ?? 0) : 0;
+        const p = pro ? (pro.count ?? pro.alerts ?? pro.n ?? 0) : 0;
+        byPlanText = `${b} / ${p}`;
+      } else if (typeof alertsByPlan === "object") {
+        const b = alertsByPlan.basic ?? alertsByPlan.BASIC ?? 0;
+        const p = alertsByPlan.pro ?? alertsByPlan.PRO ?? 0;
+        byPlanText = `${toInt(b)} / ${toInt(p)}`;
       }
     }
+    setText("metricAlertsByPlan", byPlanText);
 
-    const healthEl = document.getElementById("healthSummary");
-    if (healthEl) {
-      let signupRateRaw = 0;
-      const activeBase = users30d > 0 ? users30d : usersAllTimeVal;
-      if (activeBase > 0) {
-        signupRateRaw = newUsersVal / activeBase;
-      }
-      if (!Number.isFinite(signupRateRaw)) signupRateRaw = 0;
-
-      const bookingClickRatePct = (convHome * 100).toFixed(1).replace(/\.0$/, "");
-      const signupRatePct = (signupRateRaw * 100).toFixed(1).replace(/\.0$/, "");
-
-      healthEl.textContent =
-        `${bookingClickRatePct}% of visitors click a booking, ` +
-        `${signupRatePct}% sign up, ` +
-        `${returning7d} users returned in the last 7 days.`;
-    }
-
-    updatedAt.textContent = "Last updated " + new Date().toLocaleString();
-
-    const topList = document.getElementById("topCoursesList");
-    topList.innerHTML = "";
-
-    const top = summary.topCourses || [];
-    if (top.length === 0) {
-      topList.innerHTML =
-        `<li><span class="label">No course clicks yet</span><span class="value">—</span></li>`;
+    if (topAlertCourses && Array.isArray(topAlertCourses) && topAlertCourses.length) {
+      const top1 = topAlertCourses[0];
+      const name = top1.courseName || top1.course || top1.name || "—";
+      const hits = top1.hits ?? top1.count ?? top1.n ?? 0;
+      setText("metricTopAlertCourses", `${name} (${toInt(hits)})`);
     } else {
-      top.forEach((row) => {
-        topList.innerHTML += `
-          <li>
-            <span class="label">${row.courseName}</span>
-            <span class="value">${row.clicks} clicks</span>
-          </li>
-        `;
-      });
+      setText("metricTopAlertCourses", "—");
     }
 
-    const topSearchList = document.getElementById("topSearchedCoursesList");
-    if (topSearchList) {
-      topSearchList.innerHTML = "";
-      const topSearched = summary.topSearchedCourses || summary.top_searched_courses || [];
-      if (!topSearched.length) {
-        topSearchList.innerHTML =
-          `<li><span class="label">No searches yet</span><span class="value">—</span></li>`;
+    const listEl = document.getElementById("topAlertCoursesList");
+    if (listEl) {
+      listEl.innerHTML = "";
+      if (!topAlertCourses || !Array.isArray(topAlertCourses) || !topAlertCourses.length) {
+        listEl.innerHTML = `<li><span class="label">No alerts yet</span><span class="value">—</span></li>`;
       } else {
-        topSearched.forEach((row) => {
-          topSearchList.innerHTML += `
+        topAlertCourses.slice(0, 12).forEach((row) => {
+          const name = row.courseName || row.course || row.name || "—";
+          const hits = row.hits ?? row.count ?? row.n ?? 0;
+          listEl.innerHTML += `
             <li>
-              <span class="label">${row.courseName}</span>
-              <span class="value">${row.searches} searches</span>
-            </li>
-          `;
-        });
-      }
-    }
-
-    const demandList = document.getElementById("demandRankList");
-    if (demandList) {
-      demandList.innerHTML = "";
-      const demand = summary.demandRank || summary.demand_rank || [];
-      if (!demand.length) {
-        demandList.innerHTML =
-          `<li><span class="label">No demand data yet</span><span class="value">—</span></li>`;
-      } else {
-        demand.forEach((row) => {
-          demandList.innerHTML += `
-            <li>
-              <span class="label">${row.courseName}</span>
-              <span class="value">
-                ${row.score} pts · ${row.clicks} clicks · ${row.searches} searches
-              </span>
+              <span class="label">${name}</span>
+              <span class="value">${toInt(hits)} hits</span>
             </li>
           `;
         });
@@ -650,7 +1171,81 @@
     }
   }
 
-  // ---------- Registered users + detail card + plan lookup ----------
+  function renderAllLists(summary) {
+    const topCourses = getAny(summary, ["topCourses","top_courses"], []);
+    const topSearched = getAny(summary, ["topSearchedCourses","top_searched_courses"], []);
+    const demandRank = getAny(summary, ["demandRank","demand_rank"], []);
+    const topPlayed = getAny(summary, ["topPlayedCourses"], []);
+    const topPlayed30d = getAny(summary, ["topPlayedCourses30d"], []);
+
+    renderTopList("topCoursesList", topCourses, "No clicks yet");
+    renderTopList("topSearchedCoursesList", topSearched, "No searches yet");
+    renderTopList("demandRankList", demandRank, "No demand data yet");
+    renderPlayedCourses("topPlayedCoursesList", topPlayed, topPlayed30d);
+  }
+
+  async function loadAnalytics() {
+    if (!enforceAdmin()) return;
+
+    const updatedAt = document.getElementById("summaryUpdated");
+
+    const wrapped = await fetchAnalyticsSummary();
+    if (!wrapped) {
+      updatedAt.textContent =
+        "Analytics is blank because the backend summary endpoint wasn’t found. Expected /api/analytics/summary or /api/analytics.";
+      return;
+    }
+
+    const summary = wrapped.data;
+    updatedAt.textContent = "Loaded from " + wrapped.url + " • " + new Date().toLocaleString();
+
+    const homeViewsVal = toInt(getAny(summary, ["homePageViews","homeViews","home_page_views"], 0));
+    const bookingClicksVal = toInt(getAny(summary, ["courseBookingClicks","bookingClicks","booking_clicks"], 0));
+    const searchesVal = toInt(getAny(summary, ["searches"], 0));
+    const newUsersVal = toInt(getAny(summary, ["newUsers","new_users"], 0));
+    const usersAllTimeVal = toInt(getAny(summary, ["usersAllTime","unique_users"], 0));
+    const usersTodayVal = toInt(getAny(summary, ["usersToday","users_today"], 0));
+    const usersWeekVal = toInt(getAny(summary, ["usersWeek","users_week"], 0));
+
+    setText("metricHomeViews", String(homeViewsVal));
+    setText("metricBookingClicks", String(bookingClicksVal));
+    setText("metricSearches", String(searchesVal));
+    setText("metricNewUsers", String(newUsersVal));
+    setText("usersAllTime", String(usersAllTimeVal));
+    setText("usersToday", String(usersTodayVal));
+    setText("usersWeek", String(usersWeekVal));
+
+    const roundsPlayedVal = toInt(getAny(summary, ["roundsPlayed","rounds","rounds_played"], 0));
+    setText("metricRoundsPlayed", String(roundsPlayedVal));
+
+    const convHome = homeViewsVal > 0 ? (bookingClicksVal / homeViewsVal) : 0;
+    setText("metricConvHomeBooking", fmtPct(convHome));
+
+    const convSearch = searchesVal > 0 ? (bookingClicksVal / searchesVal) : 0;
+    setText("metricConvSearchBooking", fmtPct(convSearch));
+
+    const users30d = toInt(getAny(summary, ["users30d","users_30d"], 0));
+    const returning7d = toInt(getAny(summary, ["returningUsers7d","returning_users_7d"], 0));
+    setText("users30d", String(users30d));
+    setText("returning7d", String(returning7d));
+
+    const repeatBookersVal = toInt(getAny(summary, ["repeatBookers","repeat_bookers"], 0));
+    setText("metricRepeatBookers", String(repeatBookersVal));
+
+    const peak = getAny(summary, ["peakBookingHour","peak_booking_hour"], null);
+    if (peak != null && typeof peak === "number") {
+      setText("metricPeakHour", formatHourRange(peak));
+    } else if (peak && peak.hour != null) {
+      setText("metricPeakHour", `${formatHourRange(peak.hour)} (${peak.clicks} clicks)`);
+    } else {
+      setText("metricPeakHour", "–");
+    }
+
+    renderAllLists(summary);
+    wireAlerts(summary);
+  }
+
+  // ---------- Registered users ----------
 
   let USERS_CACHE = [];
 
@@ -659,8 +1254,7 @@
     if (Array.isArray(raw)) return raw;
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-      return [];
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
@@ -687,102 +1281,82 @@
     if (p === "PRO") return "Pro";
     if (p === "BASIC") return "Basic";
     if (p === "FREE") return "Unsubscribed";
+    if (p.includes("TRIAL")) return "Trial";
     return plan;
   }
 
-  function showUserDetail(u) {
-    const card = document.getElementById("userDetailCard");
-    if (!card || !u) return;
+  function computeSubscriptionMetrics() {
+    let basic = 0;
+    let pro = 0;
 
-    const favString = favouritesToString(u.favourites || u.favourite_courses);
-    const planLabel = normalisePlanLabel(u.plan);
+    USERS_CACHE.forEach((u) => {
+      const p = normalisePlanLabel(u.plan);
+      if (p === "Basic") basic += 1;
+      if (p === "Pro") pro += 1;
+    });
 
-    document.getElementById("detailEmail").textContent = u.email || "—";
-    document.getElementById("detailPlan").textContent = planLabel;
-    document.getElementById("detailHomeState").textContent = u.home_state || "Not set";
-    document.getElementById("detailFavs").textContent = favString || "None yet";
+    const active = basic + pro;
+    setText("metricSubscribersActive", String(active));
+    setText("metricSubscribersByPlan", `${basic} / ${pro}`);
 
-    document.getElementById("detailDays").textContent =
-      u.alert_days || "Not set";
-    document.getElementById("detailTimeRange").textContent =
-      u.alert_time_range || "Not set";
-    document.getElementById("detailHoles").textContent =
-      u.alert_holes != null ? u.alert_holes : "Any";
-    document.getElementById("detailPlayers").textContent =
-      u.alert_players != null ? u.alert_players : "Any";
-
-    const created = u.created_at || u.createdAt || "";
-    const lastSeen = u.last_seen_at || u.lastLogin || "";
-
-    document.getElementById("detailCreatedAt").textContent =
-      created ? new Date(created).toLocaleString() : "—";
-    document.getElementById("detailLastSeen").textContent =
-      lastSeen ? new Date(lastSeen).toLocaleString() : "—";
-
-    card.style.display = "block";
+    const mrr = (basic * BASIC_MRR) + (pro * PRO_MRR);
+    setText("metricMRR", fmtMoney(mrr));
   }
 
-  async function refreshPlansForUsers(users) {
-    await Promise.all(
-      users.map(async (u, idx) => {
-        if (!u.email) return;
-        try {
-          const res = await fetch(
-            `/api/account/plan?email=${encodeURIComponent(u.email)}`,
-            { headers: { "Accept": "application/json" } }
-          );
-          if (!res.ok) return;
-          const data = await res.json();
-          const plan = normalisePlanLabel(data.plan);
-          USERS_CACHE[idx].plan = plan;
+  async function tryFetchJsonAny(urls) {
+    for (const url of urls) {
+      const data = await tryFetchJson(url);
+      if (data) return { data, url };
+    }
+    return null;
+  }
 
-          const row = document.querySelector(`tr.user-row[data-idx="${idx}"]`);
-          if (row) {
-            const cell = row.querySelector("td[data-col='plan']");
-            if (cell) cell.textContent = plan;
-          }
-        } catch (err) {
-          console.error("plan lookup failed for", u.email, err);
-        }
-      })
-    );
+  async function fetchUsersFromAnyEndpoint() {
+    const candidates = [
+      "/api/analytics/users",
+      "/api/analytics/registered-users",
+      "/api/analytics/registeredUsers"
+    ];
+    return await tryFetchJsonAny(candidates);
   }
 
   async function loadRegisteredUsers() {
-    try {
-      const res = await fetch("/api/analytics/users", {
-        headers: { "Accept": "application/json" }
-      });
+    if (!enforceAdmin()) return;
 
-      const table = document.getElementById("usersTable");
-      const tbody = document.getElementById("usersTbody");
-      const empty = document.getElementById("usersEmpty");
-      const errorEl = document.getElementById("usersError");
+    const table = document.getElementById("usersTable");
+    const tbody = document.getElementById("usersTbody");
+    const empty = document.getElementById("usersEmpty");
+    const errorEl = document.getElementById("usersError");
 
-      if (!res.ok) {
-        console.warn("Failed to load users:", res.status);
-        table.style.display = "none";
-        empty.style.display = "none";
+    const wrapped = await fetchUsersFromAnyEndpoint();
+    if (!wrapped) {
+      if (table) table.style.display = "none";
+      if (empty) empty.style.display = "none";
+      if (errorEl) {
         errorEl.style.display = "block";
-        return;
+        errorEl.textContent = "Users endpoint not found. Tried /api/analytics/users and common variants.";
       }
+      computeSubscriptionMetrics();
+      return;
+    }
 
-      const data = await res.json();
-      const users = data.users || [];
-      USERS_CACHE = users;
+    const data = wrapped.data;
+    const users = data.users || data.registeredUsers || data.items || [];
+    USERS_CACHE = users;
 
-      if (!users.length) {
-        table.style.display = "none";
-        empty.style.display = "block";
-        errorEl.style.display = "none";
-        document.getElementById("userDetailCard").style.display = "none";
-        return;
-      }
+    if (!users.length) {
+      if (table) table.style.display = "none";
+      if (empty) empty.style.display = "block";
+      if (errorEl) errorEl.style.display = "none";
+      computeSubscriptionMetrics();
+      return;
+    }
 
-      empty.style.display = "none";
-      errorEl.style.display = "none";
-      table.style.display = "table";
+    if (empty) empty.style.display = "none";
+    if (errorEl) errorEl.style.display = "none";
+    if (table) table.style.display = "table";
 
+    if (tbody) {
       tbody.innerHTML = users.map((u, idx) => {
         const created = u.created_at || u.createdAt || "";
         const lastSeen = u.last_seen_at || u.lastLogin || "";
@@ -791,97 +1365,902 @@
         const planLabel = normalisePlanLabel(u.plan);
 
         return `
-          <tr class="user-row" data-idx="${idx}">
-            <td>${u.id}</td>
-            <td><span class="user-email-pill">${u.email}</span></td>
+  <tr data-user-idx="${idx}">
+    <td>${u.id ?? ""}</td>
+            <td><span class="user-email-pill">${u.email ?? ""}</span></td>
             <td data-col="plan">${planLabel}</td>
             <td>${homeState}</td>
             <td>${favDisplay || ""}</td>
             <td>${created ? new Date(created).toLocaleString() : ""}</td>
             <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
-            <td>
-              <button
-                type="button"
-                class="user-delete-btn"
-                data-user-id="${u.id}"
-                data-user-email="${u.email}"
-              >
-                Delete
-              </button>
-            </td>
+            <td></td>
           </tr>
         `;
       }).join("");
+    }
 
-      // row click → detail card
-      document.querySelectorAll(".user-row").forEach((row) => {
-        row.addEventListener("click", (e) => {
-          // ignore clicks on the Delete button
-          if (e.target && e.target.classList.contains("user-delete-btn")) return;
-          const idx = Number(row.getAttribute("data-idx"));
-          const user = USERS_CACHE[idx];
-          if (user) {
-            showUserDetail(user);
-          }
-        });
-      });
+    computeSubscriptionMetrics();
+  }
 
-      // delete buttons
-      document.querySelectorAll(".user-delete-btn").forEach((btn) => {
-        btn.addEventListener("click", async (event) => {
-          event.stopPropagation();
+function showUserDetails(u) {
+  const card = document.getElementById("userDetailCard");
+  if (!card) return;
 
-          const id = btn.getAttribute("data-user-id");
-          const email = btn.getAttribute("data-user-email");
+  card.style.display = "block";
 
-          const sure = window.confirm(
-            `Are you sure you want to delete user:\n\n${email}\n\nThis cannot be undone.`
-          );
-          if (!sure) return;
+  setText("detailEmail", u.email ?? "—");
+  setText("detailPlan", normalisePlanLabel(u.plan));
+  setText("detailHomeState", u.home_state ?? "—");
 
-          const originalText = btn.textContent;
-          btn.disabled = true;
-          btn.textContent = "Deleting…";
+  const favs = favouritesToString(u.favourites || u.favourite_courses);
+  setText("detailFavs", favs || "—");
 
-          try {
-            const res = await fetch(`/api/analytics/users/${id}`, {
-              method: "DELETE",
-            });
-            if (!res.ok) {
-              alert("Failed to delete user. Please try again.");
-              btn.disabled = false;
-              btn.textContent = originalText;
-              return;
-            }
+  // Alert settings (only if your backend returns them; otherwise show —)
+  const days = u.alert_days ?? u.days ?? u.alertDays ?? null;
+  const timeRange = u.alert_time_range ?? u.time_range ?? u.alertTimeRange ?? null;
+  const holes = u.alert_holes ?? u.holes ?? u.alertHoles ?? null;
+  const players = u.alert_players ?? u.players ?? u.alertPlayers ?? null;
 
-            await loadRegisteredUsers();
-          } catch (err) {
-            console.error("delete user error:", err);
-            alert("Error deleting user.");
-            btn.disabled = false;
-            btn.textContent = originalText;
-          }
-        });
-      });
+  setText("detailDays", days != null ? String(days) : "—");
+  setText("detailTimeRange", timeRange != null ? String(timeRange) : "—");
+  setText("detailHoles", holes != null ? String(holes) : "—");
+  setText("detailPlayers", players != null ? String(players) : "—");
 
-      // pull live plan from Stripe for each user
-      await refreshPlansForUsers(users);
+  const created = u.created_at || u.createdAt || "";
+  const lastSeen = u.last_seen_at || u.lastLogin || u.last_seen || "";
 
-    } catch (err) {
-      console.error("Error loading registered users:", err);
-      const table = document.getElementById("usersTable");
-      const empty = document.getElementById("usersEmpty");
-      const errorEl = document.getElementById("usersError");
-      table.style.display = "none";
-      empty.style.display = "none";
+  setText("detailCreatedAt", created ? new Date(created).toLocaleString() : "—");
+  setText("detailLastSeen", lastSeen ? new Date(lastSeen).toLocaleString() : "—");
+
+  // scroll to the details card on mobile
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// Delegate click for any row in the users table
+document.addEventListener("click", (e) => {
+  const tr = e.target.closest("#usersTable tbody tr");
+  if (!tr) return;
+
+  const idx = Number(tr.getAttribute("data-user-idx"));
+  if (!Number.isFinite(idx)) return;
+
+  const u = USERS_CACHE[idx];
+  if (!u) return;
+
+  showUserDetails(u);
+});
+// ---------- Approved scorecard courses (edit / delete) ----------
+
+let APPROVED_COURSES_CACHE = [];
+
+async function loadApprovedCourses() {
+  if (!enforceAdmin()) return;
+
+  const table = document.getElementById("approvedCoursesTable");
+  const tbody = document.getElementById("approvedCoursesTbody");
+  const empty = document.getElementById("approvedEmpty");
+  const errorEl = document.getElementById("approvedError");
+
+  // reset UI
+  if (errorEl) errorEl.style.display = "none";
+  if (empty) empty.style.display = "none";
+  if (table) table.style.display = "none";
+
+  const data = await tryFetchJson("/api/rounds/admin/scorecard-courses");
+
+  if (!data || !data.ok) {
+    if (errorEl) {
       errorEl.style.display = "block";
+      errorEl.textContent = "Error loading approved courses (check admin auth/JWT).";
+    }
+    return;
+  }
+
+  const rows = Array.isArray(data.courses) ? data.courses : [];
+  APPROVED_COURSES_CACHE = rows;
+
+  if (!rows.length) {
+    if (empty) empty.style.display = "block";
+    return;
+  }
+
+  if (table) table.style.display = "table";
+
+  if (tbody) {
+    tbody.innerHTML = rows.map((c) => {
+      const id = c.id ?? "";
+      const name = c.name ?? "—";
+      const state = c.state ?? "—";
+      const holes = c.holes ?? "—";
+      const updated = c.updated_at ? new Date(c.updated_at).toLocaleString() : "";
+
+      return `
+        <tr data-approved-id="${id}">
+          <td>${id}</td>
+          <td>${name}</td>
+          <td>${state}</td>
+          <td>${holes}</td>
+          <td>${updated}</td>
+          <td style="white-space:nowrap;">
+            <button class="edit-btn" type="button" data-edit-course-id="${id}">Edit</button>
+            <button class="delete-btn" type="button" data-delete-course-id="${id}">Delete</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+}
+
+function wireApprovedCoursesRefresh() {
+  const btn = document.getElementById("btnApprovedRefresh");
+  if (!btn || btn._wired) return;
+  btn._wired = true;
+  btn.addEventListener("click", () => loadApprovedCourses());
+}
+
+// Delegate edit/delete clicks for approved courses
+document.addEventListener("click", async (e) => {
+  const editBtn = e.target.closest("[data-edit-course-id]");
+  const delBtn = e.target.closest("[data-delete-course-id]");
+
+  if (!editBtn && !delBtn) return;
+
+  // EDIT
+  if (editBtn) {
+    const id = Number(editBtn.getAttribute("data-edit-course-id"));
+    if (!Number.isFinite(id) || id <= 0) return;
+
+    const row = (APPROVED_COURSES_CACHE || []).find(x => Number(x?.id) === id) || null;
+    const currentName = row?.name || "";
+
+    const newNameRaw = window.prompt(
+      "Enter the new course name.\n\nTip: use a suffix for nines, e.g.\ncollier park golf course - lakes\ncollier park golf course - pines\ncollier park golf course - lakes/pines",
+      currentName
+    );
+
+    if (newNameRaw == null) return; // cancelled
+    const newName = String(newNameRaw || "").trim();
+    if (!newName) return alert("Name cannot be blank.");
+
+    editBtn.disabled = true;
+    const oldTxt = editBtn.textContent;
+    editBtn.textContent = "Saving…";
+
+    try {
+      const res = await fetch(`/api/rounds/admin/scorecard-courses/${id}`, {
+        method: "PATCH",
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ name: newName }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data || !data.ok) {
+        const msg = data?.error === "name_conflict"
+          ? "That name already exists for the same state + holes."
+          : (data?.error || res.status);
+        alert("Rename failed: " + msg);
+      } else {
+        await loadApprovedCourses();
+      }
+    } catch (err) {
+      console.error("rename approved course failed", err);
+      alert("Rename failed (network/server error).");
+    } finally {
+      editBtn.disabled = false;
+      editBtn.textContent = oldTxt;
+    }
+
+    return;
+  }
+
+  // DELETE
+  if (delBtn) {
+    const id = Number(delBtn.getAttribute("data-delete-course-id"));
+    if (!Number.isFinite(id) || id <= 0) return;
+
+    const row = (APPROVED_COURSES_CACHE || []).find(x => Number(x?.id) === id) || null;
+    const name = row?.name || `#${id}`;
+
+    const ok = window.confirm(`Delete this approved scorecard course?\n\n${name}\n\nThis cannot be undone.`);
+    if (!ok) return;
+
+    delBtn.disabled = true;
+    const oldTxt = delBtn.textContent;
+    delBtn.textContent = "Deleting…";
+
+    try {
+      const res = await fetch(`/api/rounds/admin/scorecard-courses/${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+        credentials: "include",
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data || !data.ok) {
+        alert("Delete failed: " + (data?.error || res.status));
+      } else {
+        await loadApprovedCourses();
+      }
+    } catch (err) {
+      console.error("delete approved course failed", err);
+      alert("Delete failed (network/server error).");
+    } finally {
+      delBtn.disabled = false;
+      delBtn.textContent = oldTxt;
+    }
+  }
+});
+// ---------- Pending course templates (approve in analytics) ----------
+
+let PENDING_COURSES_CACHE = [];
+
+async function loadPendingCourses() {
+  if (!enforceAdmin()) return;
+
+  const table = document.getElementById("pendingCoursesTable");
+  const tbody = document.getElementById("pendingCoursesTbody");
+  const empty = document.getElementById("pendingEmpty");
+  const errorEl = document.getElementById("pendingError");
+
+  // reset UI
+  if (errorEl) errorEl.style.display = "none";
+  if (empty) empty.style.display = "none";
+  if (table) table.style.display = "none";
+
+  const data = await tryFetchJson("/api/rounds/admin/pending-courses");
+
+  if (!data || !data.ok) {
+    if (errorEl) {
+      errorEl.style.display = "block";
+      errorEl.textContent = "Error loading pending courses (check admin auth/JWT).";
+    }
+    return;
+  }
+
+  const rows = Array.isArray(data.pending) ? data.pending : [];
+  PENDING_COURSES_CACHE = rows;
+
+  if (!rows.length) {
+    if (empty) empty.style.display = "block";
+    return;
+  }
+
+  if (table) table.style.display = "table";
+
+  if (tbody) {
+    tbody.innerHTML = rows.map((p) => {
+      const id = p.id ?? "";
+      const name = p.name ?? "—";
+      const state = p.state ?? "—";
+      const holes = p.holes ?? "—";
+      const email = p.submitted_by_email ?? "—";
+      const created = p.created_at ? new Date(p.created_at).toLocaleString() : "";
+
+      return `
+          <tr data-pending-id="${id}" class="pending-row-click">
+          <td>${id}</td>
+          <td>${name}</td>
+          <td>${state}</td>
+          <td>${holes}</td>
+          <td>${email}</td>
+          <td>${created}</td>
+          <td>
+            <button class="approve-btn" type="button" data-approve-id="${id}">Approve</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+}
+// ✅ Pending course detail modal helpers
+const pendingModalBack = document.getElementById("pendingModalBack");
+const pendingModalTitle = document.getElementById("pendingModalTitle");
+const pendingModalMeta = document.getElementById("pendingModalMeta");
+const pendingModalBody = document.getElementById("pendingModalBody");
+const pendingModalControls = document.getElementById("pendingModalControls");
+const pendingTeeWrap = document.getElementById("pendingTeeWrap");
+const pendingTeeSelect = document.getElementById("pendingTeeSelect");
+
+function openPendingModal(){
+  if (!pendingModalBack) return;
+  pendingModalBack.style.display = "flex";
+  pendingModalBack.setAttribute("aria-hidden", "false");
+}
+function closePendingModal(){
+  if (!pendingModalBack) return;
+  pendingModalBack.style.display = "none";
+  pendingModalBack.setAttribute("aria-hidden", "true");
+}
+
+function setSelectOptions(sel, values){
+  if (!sel) return;
+  sel.innerHTML = "";
+  (values || []).forEach(v => {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = v;
+    sel.appendChild(opt);
+  });
+}
+
+function extractPars(detail){
+  const pars =
+    detail?.pars ||
+    detail?.pars_array ||
+    detail?.parsArray ||
+    detail?.holes_pars ||
+    null;
+
+  if (Array.isArray(pars)) return pars.map(x => (x == null ? null : Number(x)));
+  return null;
+}
+
+function extractDistances(detail){
+  // supports either:
+  // 1) distances_m: { White:[...], Blue:[...] }
+  // 2) distances: [...]
+  // 3) distances_m: [...]
+  const distObj =
+    detail?.distances_m ||
+    detail?.distancesByTee ||
+    detail?.distances_by_tee ||
+    null;
+
+  if (distObj && typeof distObj === "object" && !Array.isArray(distObj)) {
+    const tees = Object.keys(distObj).filter(k => Array.isArray(distObj[k]));
+    return { type:"byTee", tees, byTee: distObj };
+  }
+
+  const arr =
+    (Array.isArray(distObj) ? distObj : null) ||
+    (Array.isArray(detail?.distances) ? detail.distances : null) ||
+    (Array.isArray(detail?.distance_m) ? detail.distance_m : null);
+
+  if (Array.isArray(arr)) return { type:"flat", arr: arr.map(x => (x == null ? null : Number(x))) };
+
+  return null;
+}
+
+function renderParsDistancesTable({ holes, pars, distances }){
+  const h = Number(holes) || (pars ? pars.length : (distances ? distances.length : 0)) || 0;
+  let rows = "";
+  for (let i=1;i<=h;i++){
+    const p = pars && pars[i-1] != null ? pars[i-1] : "—";
+    const d = distances && distances[i-1] != null ? distances[i-1] : "—";
+    rows += `<tr><td>Hole ${i}</td><td>${p}</td><td>${d}</td></tr>`;
+  }
+
+  return `
+    <table class="score-mini">
+      <thead>
+        <tr>
+          <th>Hole</th>
+          <th>Par</th>
+          <th>Distance (m)</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function fetchPendingDetail(id){
+  // ✅ try a few likely endpoints (keeps this frontend-only change safe)
+  const candidates = [
+    `/api/rounds/admin/pending-courses/${id}`,
+    `/api/rounds/admin/pending-courses/${id}/detail`,
+    `/api/rounds/templates/${id}`,
+    `/api/rounds/templates/pending/${id}`
+  ];
+
+  for (const url of candidates){
+    const data = await tryFetchJson(url);
+    if (!data) continue;
+
+    // normalise shapes
+    if (data.ok && data.template) return data.template;
+    if (data.ok && data.course) return data.course;
+    if (data.template) return data.template;
+    if (data.course) return data.course;
+    if (data.ok && data.item) return data.item;
+    if (data.item) return data.item;
+
+    // sometimes the object itself is the detail
+    if (typeof data === "object") return data;
+  }
+
+  return null;
+}
+
+async function openPendingCourseDetail(id){
+  const row = (PENDING_COURSES_CACHE || []).find(x => Number(x?.id) === Number(id)) || null;
+
+  pendingModalTitle.textContent = row?.name ? `Pending: ${row.name}` : `Pending course #${id}`;
+  pendingModalMeta.textContent = "Loading pars + distances…";
+  pendingModalBody.innerHTML = "";
+  pendingModalControls.style.display = "none";
+  pendingTeeWrap.style.display = "none";
+
+  openPendingModal();
+
+  const detail = await fetchPendingDetail(id);
+
+  if (!detail){
+    pendingModalMeta.textContent = "Could not load template details (missing endpoint).";
+    pendingModalBody.innerHTML = `<div class="users-empty" style="color:#b91c1c;">No detail endpoint found for this pending course ID.</div>`;
+    pendingModalControls.style.display = "block";
+    return;
+  }
+
+  const name = detail?.name || detail?.course || row?.name || "—";
+  const state = detail?.state || row?.state || "—";
+  const holes = Number(detail?.holes || row?.holes || 0) || 0;
+
+  const pars = extractPars(detail);
+  const distInfo = extractDistances(detail);
+
+  pendingModalTitle.textContent = `${name}`;
+  pendingModalMeta.textContent = `${state} • ${holes || (pars ? pars.length : "—")} holes`;
+
+  // tee handling
+  if (distInfo && distInfo.type === "byTee" && distInfo.tees && distInfo.tees.length){
+    pendingTeeWrap.style.display = "block";
+    setSelectOptions(pendingTeeSelect, distInfo.tees);
+
+    const renderWithTee = (tee) => {
+      const dists = Array.isArray(distInfo.byTee?.[tee]) ? distInfo.byTee[tee] : [];
+      pendingModalBody.innerHTML = renderParsDistancesTable({
+        holes,
+        pars: Array.isArray(pars) ? pars : null,
+        distances: dists
+      });
+    };
+
+    // default to first tee
+    renderWithTee(distInfo.tees[0]);
+    pendingTeeSelect.onchange = () => renderWithTee(pendingTeeSelect.value);
+
+  } else {
+    const flat = (distInfo && distInfo.type === "flat") ? distInfo.arr : null;
+    pendingModalBody.innerHTML = renderParsDistancesTable({
+      holes,
+      pars: Array.isArray(pars) ? pars : null,
+      distances: Array.isArray(flat) ? flat : null
+    });
+  }
+
+  pendingModalControls.style.display = "flex";
+}
+
+// wire close buttons + backdrop once
+(function wirePendingModalOnce(){
+  const b1 = document.getElementById("pendingCloseBtn");
+  const b2 = document.getElementById("pendingCloseBtn2");
+
+  if (b1 && !b1._wired){ b1._wired = true; b1.addEventListener("click", closePendingModal); }
+  if (b2 && !b2._wired){ b2._wired = true; b2.addEventListener("click", closePendingModal); }
+
+  if (pendingModalBack && !pendingModalBack._wired){
+    pendingModalBack._wired = true;
+    pendingModalBack.addEventListener("click", (e) => {
+      if (e.target === pendingModalBack) closePendingModal();
+    });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closePendingModal();
+  });
+})();
+// Delegate approve click
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-approve-id]");
+  if (!btn) return;
+
+  const id = Number(btn.getAttribute("data-approve-id"));
+  if (!Number.isFinite(id) || id <= 0) return;
+
+  // confirm
+  const ok = window.confirm("Approve this course template? This will publish pars + distances.");
+  if (!ok) return;
+
+  btn.disabled = true;
+  const oldTxt = btn.textContent;
+  btn.textContent = "Approving…";
+
+  try {
+    const res = await fetch(`/api/rounds/admin/pending-courses/${id}/approve`, {
+      method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json"
+      },
+      credentials: "include"
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data || !data.ok) {
+      alert("Approve failed: " + (data?.error || res.status));
+      btn.disabled = false;
+      btn.textContent = oldTxt;
+      return;
+    }
+
+    // refresh list
+    await loadPendingCourses();
+  } catch (err) {
+    console.error("approve pending course failed", err);
+    alert("Approve failed (network/server error).");
+    btn.disabled = false;
+    btn.textContent = oldTxt;
+  }
+});
+
+// ✅ Delegate click on pending row (opens modal)
+// ✅ Ignore Approve button clicks AND clicks inside the Approve cell (last column)
+document.addEventListener("click", async (e) => {
+  // clicked approve button (or inside it)
+  if (e.target.closest("[data-approve-id]")) return;
+
+  const tr = e.target.closest("#pendingCoursesTable tbody tr[data-pending-id]");
+  if (!tr) return;
+
+  // ✅ if click happened inside the last <td> (actions column), ignore
+  const td = e.target.closest("td");
+  if (td && td === tr.lastElementChild) return;
+
+  const id = Number(tr.getAttribute("data-pending-id"));
+  if (!Number.isFinite(id) || id <= 0) return;
+
+  await openPendingCourseDetail(id);
+});
+
+// Wire refresh button
+function wirePendingCoursesRefresh() {
+  const btn = document.getElementById("btnPendingRefresh");
+  if (!btn || btn._wired) return;
+  btn._wired = true;
+  btn.addEventListener("click", () => loadPendingCourses());
+}
+
+
+// ---------- Booking analytics ----------
+
+function yyyyMmDd(d) {
+  const x = new Date(d);
+  if (isNaN(x.getTime())) return "";
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, "0");
+  const day = String(x.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function buildBookUrl(path, paramsObj) {
+  const u = new URL(path, window.location.origin);
+  Object.entries(paramsObj || {}).forEach(([k, v]) => {
+    if (v !== null && v !== undefined && String(v).trim() !== "") u.searchParams.set(k, v);
+  });
+  return u.pathname + "?" + u.searchParams.toString();
+}
+
+// --- simple tooltip helpers ---
+function showChartTip(clientX, clientY, html) {
+  const tip = document.getElementById("chartTip");
+  if (!tip) return;
+  tip.innerHTML = html;
+  tip.style.left = clientX + "px";
+  tip.style.top = clientY + "px";
+  tip.style.display = "block";
+}
+function hideChartTip() {
+  const tip = document.getElementById("chartTip");
+  if (!tip) return;
+  tip.style.display = "none";
+}
+
+// Store hit targets per canvas
+const CHART_HITS = {}; // { [canvasId]: { points: [{cx,cy,r,label,value}], dpr } }
+
+function drawSimpleLine(canvasId, labels, values, opts = {}) {
+  const c = document.getElementById(canvasId);
+  if (!c) return;
+
+  const ctx = c.getContext("2d");
+  const dpr = (window.devicePixelRatio || 1);
+
+  const cssW = c.clientWidth || 300;
+  const cssH = (c.getAttribute("height") ? Number(c.getAttribute("height")) : 160);
+
+  // set internal size for crisp drawing
+  c.width = Math.round(cssW * dpr);
+  c.height = Math.round(cssH * dpr);
+
+  const w = c.width, h = c.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const pad = 18 * dpr;
+
+  const nums = (values || []).map(v => Number(v || 0));
+  const max = Math.max(1, ...nums);
+  const min = 0;
+
+  // axes
+  ctx.globalAlpha = 0.25;
+  ctx.beginPath();
+  ctx.moveTo(pad, pad);
+  ctx.lineTo(pad, h - pad);
+  ctx.lineTo(w - pad, h - pad);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  if (!nums.length) {
+    CHART_HITS[canvasId] = { points: [], dpr };
+    return;
+  }
+
+  const xStep = (w - pad * 2) / Math.max(1, nums.length - 1);
+  const yScale = (h - pad * 2) / (max - min || 1);
+
+  // line
+  ctx.beginPath();
+  nums.forEach((v, i) => {
+    const x = pad + xStep * i;
+    const y = (h - pad) - (v - min) * yScale;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // dots + record hit targets
+  const points = [];
+  const dotR = 2.8 * dpr;
+  nums.forEach((v, i) => {
+    const x = pad + xStep * i;
+    const y = (h - pad) - (v - min) * yScale;
+
+    ctx.beginPath();
+    ctx.arc(x, y, dotR, 0, Math.PI * 2);
+    ctx.fill();
+
+    points.push({
+      cx: x,
+      cy: y,
+      r: 10 * dpr, // hit radius (bigger than visible dot)
+      label: (labels && labels[i]) ? String(labels[i]) : "",
+      value: v
+    });
+  });
+
+  CHART_HITS[canvasId] = { points, dpr };
+
+  // wire once
+  if (!c._hitWired) {
+    c._hitWired = true;
+
+    const handler = (ev) => {
+      // support mouse + touch
+      const e = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+      const rect = c.getBoundingClientRect();
+
+      // coords in canvas pixels
+      const x = (e.clientX - rect.left) * dpr;
+      const y = (e.clientY - rect.top) * dpr;
+
+      const hit = CHART_HITS[canvasId];
+      if (!hit || !hit.points || !hit.points.length) return;
+
+      let best = null;
+      let bestDist = Infinity;
+
+      hit.points.forEach((p) => {
+        const dx = x - p.cx;
+        const dy = y - p.cy;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist <= p.r && dist < bestDist) {
+          best = p;
+          bestDist = dist;
+        }
+      });
+
+      if (best) {
+        const fmt = opts.valueFormatter || ((n) => String(n));
+        const title = best.label ? `<div style="opacity:.85">${best.label}</div>` : "";
+        const val = `<div style="font-weight:800;font-size:13px;margin-top:2px;">${fmt(best.value)}</div>`;
+        showChartTip(e.clientX, e.clientY, title + val);
+
+        // hide after a moment
+        clearTimeout(c._tipTimer);
+        c._tipTimer = setTimeout(hideChartTip, 2200);
+
+        ev.preventDefault?.();
+      } else {
+        hideChartTip();
+      }
+    };
+
+    // click + touch
+    c.addEventListener("click", handler, { passive: false });
+    c.addEventListener("touchstart", handler, { passive: false });
+  }
+}
+
+// hide tooltip when scrolling / tapping elsewhere
+window.addEventListener("scroll", hideChartTip, { passive: true });
+document.addEventListener("click", (e) => {
+  const tip = document.getElementById("chartTip");
+  if (!tip) return;
+  if (!e.target.closest || !e.target.closest("canvas")) hideChartTip();
+});
+
+async function loadBookingAnalytics(mode = "default") {
+  if (!enforceAdmin()) return;
+
+  const slugSel = document.getElementById("bookCourseSlug");
+  const slug = slugSel ? String(slugSel.value || "").trim() : "";
+
+  if (slugSel && slugSel.options.length <= 1) {
+    const top = await tryFetchJson("/api/book/admin/analytics/top");
+    if (top && Array.isArray(top.rows)) {
+      top.rows
+        .map(r => r.course_slug)
+        .filter(Boolean)
+        .forEach(s => {
+          const opt = document.createElement("option");
+          opt.value = s;
+          opt.textContent = s;
+          slugSel.appendChild(opt);
+        });
     }
   }
 
-  window.addEventListener("load", () => {
-    loadAnalytics();
-    loadRegisteredUsers();
+  const startEl = document.getElementById("bookStart");
+  const endEl = document.getElementById("bookEnd");
+
+  const start = startEl ? startEl.value : "";
+  const end = endEl ? endEl.value : "";
+
+  const bookingsUrl = buildBookUrl("/api/book/admin/analytics/bookings", {
+    slug,
+    start: mode === "range" ? start : "",
+    end: mode === "range" ? end : ""
   });
+
+  const counts = await tryFetchJson(bookingsUrl);
+  if (counts && counts.ok) {
+    setText("metricBookToday", String(counts.bookings?.today ?? 0));
+    setText("metricBookWeek", String(counts.bookings?.week ?? 0));
+    setText("metricBookMonth", String(counts.bookings?.month ?? 0));
+  } else {
+    setText("metricBookToday", "—");
+    setText("metricBookWeek", "—");
+    setText("metricBookMonth", "—");
+  }
+
+  const funnelUrl = buildBookUrl("/api/book/admin/analytics/funnel", { slug, days: 30 });
+  const funnel = await tryFetchJson(funnelUrl);
+  if (funnel && funnel.ok) {
+    setText("fViews", String(funnel.funnel?.views ?? 0));
+    setText("fTimes", String(funnel.funnel?.times ?? 0));
+    setText("fStarted", String(funnel.funnel?.started ?? 0));
+    setText("fConfirmed", String(funnel.funnel?.confirmed ?? 0));
+
+    setText("fConvVC", fmtPct(funnel.conversion?.view_to_confirmed ?? 0));
+    setText("fConvTC", fmtPct(funnel.conversion?.times_to_confirmed ?? 0));
+    setText("fConvSC", fmtPct(funnel.conversion?.started_to_confirmed ?? 0));
+  } else {
+    setText("fViews", "—"); setText("fTimes", "—"); setText("fStarted", "—"); setText("fConfirmed", "—");
+    setText("fConvVC", "—"); setText("fConvTC", "—"); setText("fConvSC", "—");
+  }
+
+  const dailyUrl = buildBookUrl("/api/book/admin/analytics/daily", {
+    slug,
+    start: mode === "range" ? start : "",
+    end: mode === "range" ? end : ""
+  });
+    const daily = await tryFetchJson(dailyUrl);
+
+if (daily && daily.ok && Array.isArray(daily.rows)) {
+  const totalBookings = daily.rows.reduce((sum, r) => sum + Number(r.bookings || 0), 0);
+  const totalRevenue = daily.rows.reduce((sum, r) => sum + Number(r.revenue_cents || 0), 0) / 100;
+
+  setText("metricBookRange", String(Math.trunc(totalBookings)));
+  setText("metricRevRange", "$" + Number(totalRevenue || 0).toFixed(0));
+
+  // (Optional) keep old charts updated but hidden:
+  // const labels = daily.rows.map(r => r.day);
+  // const bookingsSeries = daily.rows.map(r => Number(r.bookings || 0));
+  // const revenueSeries = daily.rows.map(r => Number(r.revenue_cents || 0) / 100);
+  // drawSimpleLine("chartBookings", labels, bookingsSeries);
+  // drawSimpleLine("chartRevenue", labels, revenueSeries);
+
+} else {
+  setText("metricBookRange", "—");
+  setText("metricRevRange", "—");
+}
+
+  const btnCsv = document.getElementById("btnBookCsv");
+  if (btnCsv && !btnCsv._wired) {
+    btnCsv._wired = true;
+    btnCsv.addEventListener("click", () => {
+      const s = (document.getElementById("bookStart") || {}).value || "";
+      const e = (document.getElementById("bookEnd") || {}).value || "";
+      const sl = (document.getElementById("bookCourseSlug") || {}).value || "";
+
+      const url = buildBookUrl("/api/book/admin/analytics/export.csv", { slug: sl, start: s, end: e });
+      window.open(url, "_blank");
+    });
+  }
+}
+
+function wireBookingAnalyticsButtons() {
+  const btnToday = document.getElementById("btnBookToday");
+  const btnWeek = document.getElementById("btnBookWeek");
+  const btnMonth = document.getElementById("btnBookMonth");
+  const btnApply = document.getElementById("btnBookApply");
+  const slugSel = document.getElementById("bookCourseSlug");
+
+  const startEl = document.getElementById("bookStart");
+  const endEl = document.getElementById("bookEnd");
+
+  const setRange = (s, e) => {
+    if (startEl) startEl.value = s;
+    if (endEl) endEl.value = e;
+  };
+
+  if (btnToday) btnToday.addEventListener("click", () => {
+    const d = yyyyMmDd(new Date());
+    setRange(d, d);
+    loadBookingAnalytics("range");
+  });
+
+  if (btnWeek) btnWeek.addEventListener("click", () => {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMon = (day === 0 ? -6 : 1 - day);
+    const mon = new Date(now);
+    mon.setDate(now.getDate() + diffToMon);
+    const sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    setRange(yyyyMmDd(mon), yyyyMmDd(sun));
+    loadBookingAnalytics("range");
+  });
+
+  if (btnMonth) btnMonth.addEventListener("click", () => {
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    setRange(yyyyMmDd(first), yyyyMmDd(last));
+    loadBookingAnalytics("range");
+  });
+
+  if (btnApply) btnApply.addEventListener("click", () => loadBookingAnalytics("range"));
+  if (slugSel) slugSel.addEventListener("change", () => loadBookingAnalytics("range"));
+}
+
+
+// ✅ ONE load handler ONLY (safe)
+window.addEventListener("load", () => {
+  try { loadAnalytics(); } catch (e) { console.warn("loadAnalytics failed", e); }
+  try { loadRegisteredUsers(); } catch (e) { console.warn("loadRegisteredUsers failed", e); }
+    try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
+  try { loadPendingCourses(); } catch (e) { console.warn("loadPendingCourses failed", e); }
+    try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
+  try { loadApprovedCourses(); } catch (e) { console.warn("loadApprovedCourses failed", e); }
+
+  try {
+    if (typeof wireBookingAnalyticsButtons === "function") wireBookingAnalyticsButtons();
+    if (typeof loadBookingAnalytics === "function") loadBookingAnalytics();
+  } catch (e) {
+    console.warn("booking analytics failed (non-fatal)", e);
+  }
+});
 </script>
+
 </body>
 </html>
