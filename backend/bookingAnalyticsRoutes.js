@@ -143,7 +143,6 @@ function isBookingAdminReq(req) {
   } catch {}
 
   // 3) ✅ allow your normal JWT admin user through if server set req.user
-  // (most auth middleware attaches req.user after verifying Bearer token)
   const adminEmail = String(process.env.ADMIN_EMAIL || "declan7pin@gmail.com")
     .trim()
     .toLowerCase();
@@ -162,8 +161,6 @@ function isBookingAdminReq(req) {
 }
 
 function getCourseAdminSlugFromReq(req) {
-  // bookingViews.js sets req.courseAdmin when using requireCourseAdmin;
-  // BUT for analytics we’ll also accept bypass header.
   const bypassKey = String(process.env.COURSE_ADMIN_BYPASS_KEY || "").trim();
   const providedBypass = String(req.headers["x-course-admin-key"] || "").trim();
   if (bypassKey && providedBypass && providedBypass === bypassKey) {
@@ -173,7 +170,6 @@ function getCourseAdminSlugFromReq(req) {
     return slug || "";
   }
 
-  // if another middleware set it
   const slug = String(req.courseAdmin?.slug || "").trim();
   return slug;
 }
@@ -196,17 +192,14 @@ function getClientIp(req) {
 function normaliseSlug(raw) {
   const slug = String(raw || "").trim().toLowerCase();
   if (!slug) return "";
-  // sane chars only
   if (!/^[a-z0-9-]+$/.test(slug)) return "";
   return slug;
 }
 
-// ✅ booking event types that represent a confirmed booking (online analytics)
+// ✅ booking event types that represent a confirmed ONLINE booking in analytics
 const BOOKING_CONFIRMED_EVENT_TYPES = [
   "booking_confirmed",
   "course_booking_click",
-
-  // manual variants if you ever emit analytics for them
   "manual_booking_confirmed",
   "booking_confirmed_manual",
   "booking_manual_confirmed",
@@ -223,7 +216,6 @@ function bookingKeySql() {
       payload->>'bookingId',
       payload->>'payment_intent',
       payload->>'paymentIntent',
-
       CONCAT_WS('|',
         course_slug,
         COALESCE(payload->>'date', payload->>'booking_date', payload->>'day'),
@@ -232,37 +224,110 @@ function bookingKeySql() {
         COALESCE(payload->>'holes',''),
         COALESCE(payload->>'players','')
       ),
-
       id::text
     )
   `;
 }
 
-// ✅ NEW: manual bookings aggregator for selected range
-// Tries common TeeRadar booking tables/columns and returns { bookings, revenue_cents }.
-// If none exist, it safely returns zeros.
-async function getManualBookingsRange({ start, end, slug }) {
-  // only makes sense if both start/end provided (selected range UI)
-  if (!start || !end) return { bookings: 0, revenue_cents: 0 };
+// -----------------------------
+// ✅ NEW: auto-detect manual bookings table/columns (Postgres only)
+// -----------------------------
+let _manualSpecCache = null;
 
-  // We try a few common table names + column patterns.
-  // IMPORTANT: this is "best effort" and won’t crash if a table/column doesn’t exist.
-  const candidates = [
-    // (table, time_col, slug_col, cents_col)
-    ["bookings", "created_at", "course_slug", "total_cents"],
-    ["bookings", "created_at", "course_slug", "total_amount_cents"],
-    ["booking_bookings", "created_at", "course_slug", "total_cents"],
-    ["booking_bookings", "created_at", "course_slug", "gross_cents"],
-    ["course_bookings", "created_at", "course_slug", "total_cents"],
-    ["tee_bookings", "created_at", "course_slug", "total_cents"],
+async function getManualSpecPg() {
+  if (_manualSpecCache) return _manualSpecCache;
+  if (typeof db.query !== "function") return null;
 
-    // Sometimes time column differs
-    ["bookings", "booked_at", "course_slug", "total_cents"],
-    ["booking_bookings", "booked_at", "course_slug", "total_cents"],
-    ["course_bookings", "booked_at", "course_slug", "total_cents"],
+  const hasTable = async (t) => {
+    const r = await safeQOne(
+      `SELECT 1 AS ok FROM information_schema.tables WHERE table_schema='public' AND table_name=$1 LIMIT 1`,
+      [t]
+    );
+    return !!r?.ok;
+  };
+
+  const hasCol = async (t, c) => {
+    const r = await safeQOne(
+      `SELECT 1 AS ok FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 AND column_name=$2 LIMIT 1`,
+      [t, c]
+    );
+    return !!r?.ok;
+  };
+
+  // Try common tables (most likely first)
+  const tables = [
+    "bookings",
+    "booking_bookings",
+    "course_bookings",
+    "tee_bookings",
+    "manual_bookings",
   ];
 
-  for (const [table, tcol, scol, ccol] of candidates) {
+  for (const table of tables) {
+    if (!(await hasTable(table))) continue;
+
+    // time column
+    const timeCols = ["created_at", "booked_at", "occurred_at", "date_created"];
+    let tcol = null;
+    for (const c of timeCols) {
+      if (await hasCol(table, c)) { tcol = c; break; }
+    }
+    if (!tcol) continue;
+
+    // slug column
+    const slugCols = ["course_slug", "slug", "course", "course_id"];
+    let scol = null;
+    for (const c of slugCols) {
+      if (await hasCol(table, c)) { scol = c; break; }
+    }
+    if (!scol) continue;
+
+    // cents column
+    const centsCols = ["total_cents", "total_amount_cents", "gross_cents", "amount_cents"];
+    let ccol = null;
+    for (const c of centsCols) {
+      if (await hasCol(table, c)) { ccol = c; break; }
+    }
+    // revenue is optional; bookings count still useful
+    // manual flag/source (optional)
+    let manualWhere = "";
+    const manualCandidates = [
+      ["is_manual", `is_manual = true`],
+      ["manual", `manual = true`],
+      ["booking_source", `booking_source = 'manual'`],
+      ["source", `source = 'manual'`],
+      ["type", `type = 'manual'`],
+      ["booking_type", `booking_type = 'manual'`],
+      ["channel", `channel = 'manual'`],
+      ["is_online", `is_online = false`],
+    ];
+    for (const [col, expr] of manualCandidates) {
+      if (await hasCol(table, col)) {
+        manualWhere = `AND ${expr}`;
+        break;
+      }
+    }
+
+    _manualSpecCache = { table, tcol, scol, ccol: ccol || null, manualWhere };
+    console.log("✅ manual bookings spec detected:", _manualSpecCache);
+    return _manualSpecCache;
+  }
+
+  _manualSpecCache = null;
+  console.log("⚠️ manual bookings spec NOT detected (will show 0 manual bookings)");
+  return null;
+}
+
+async function getManualBookingsRange({ start, end, slug }) {
+  if (!start || !end) return { bookings: 0, revenue_cents: 0 };
+
+  // Postgres path (best)
+  const spec = await getManualSpecPg();
+  if (spec) {
+    const { table, tcol, scol, ccol, manualWhere } = spec;
+
+    // slug filter: only if slug is provided AND slug column is text-ish; if it’s course_id it won’t match.
+    // We still apply it; if it errors, safeQOne will null and we fall through to 0.
     const whereSlug = slug ? `AND ${scol} = $3` : ``;
     const params = slug ? [start, end, slug] : [start, end];
 
@@ -270,16 +335,17 @@ async function getManualBookingsRange({ start, end, slug }) {
       `
       SELECT
         COUNT(*)::int AS bookings,
-        COALESCE(SUM(COALESCE(${ccol},0)),0)::int AS revenue_cents
+        ${ccol ? `COALESCE(SUM(COALESCE(${ccol},0)),0)::int` : `0::int`} AS revenue_cents
       FROM ${table}
       WHERE ${tcol} >= $1::date
         AND ${tcol} <  ($2::date + interval '1 day')
-      ${whereSlug}
+        ${manualWhere}
+        ${whereSlug}
       `,
       params
     );
 
-    if (row && (row.bookings !== null || row.revenue_cents !== null)) {
+    if (row) {
       return {
         bookings: Number(row.bookings || 0),
         revenue_cents: Number(row.revenue_cents || 0),
@@ -287,6 +353,7 @@ async function getManualBookingsRange({ start, end, slug }) {
     }
   }
 
+  // Fallback (no spec) — show 0 manual rather than breaking
   return { bookings: 0, revenue_cents: 0 };
 }
 
@@ -307,10 +374,7 @@ router.post("/api/book/analytics/event", express.json(), async (req, res) => {
     const slug = normaliseSlug(courseSlug);
 
     if (!type) return res.status(400).json({ ok: false, error: "eventType is required" });
-
-    if (courseSlug && !slug) {
-      return res.status(400).json({ ok: false, error: "Invalid courseSlug" });
-    }
+    if (courseSlug && !slug) return res.status(400).json({ ok: false, error: "Invalid courseSlug" });
 
     const ua = String(req.headers["user-agent"] || "");
     const ref = String(req.headers["referer"] || "");
@@ -407,7 +471,7 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
 
     const keySql = bookingKeySql();
 
-    const confirmed = await qOne(
+    const onlineConfirmed = await qOne(
       `
       SELECT COUNT(DISTINCT ${keySql})::int AS n
       FROM booking_analytics_events
@@ -418,7 +482,7 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
       [slug, days, BOOKING_CONFIRMED_EVENT_TYPES]
     );
 
-    const revenue = await qOne(
+    const onlineRevenue = await qOne(
       `
       SELECT COALESCE(SUM(x.total_cents),0)::int AS total_cents
       FROM (
@@ -435,8 +499,9 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
       [slug, days, BOOKING_CONFIRMED_EVENT_TYPES]
     );
 
+    // Note: course-admin summary is “through booking pages” — keep it online-only
     const v = Number(views?.n || 0);
-    const c = Number(confirmed?.n || 0);
+    const c = Number(onlineConfirmed?.n || 0);
     const conversion = v > 0 ? c / v : 0;
 
     return res.json({
@@ -448,7 +513,7 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
         times_view: Number(times?.n || 0),
         booking_started: Number(started?.n || 0),
         booking_confirmed: c,
-        revenue_cents: Number(revenue?.total_cents || 0),
+        revenue_cents: Number(onlineRevenue?.total_cents || 0),
         conversion_rate: conversion,
       },
     });
@@ -494,64 +559,6 @@ router.get("/api/book/course-admin/analytics/daily", requireCourseAdminOrBypass,
 });
 
 // -----------------------------
-// Platform admin: overall summary
-// -----------------------------
-router.get("/api/book/admin/analytics/summary", async (req, res) => {
-  try {
-    if (!isBookingAdminReq(req)) {
-      return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
-    }
-
-    const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
-    const slug = normaliseSlug(req.query.slug);
-
-    const whereSlug = slug ? `AND course_slug = $2` : ``;
-    const params = slug ? [days, slug] : [days];
-
-    const keySql = bookingKeySql();
-
-    const totals = await qOne(
-      `
-      SELECT
-        COUNT(*) FILTER (WHERE event_type='course_page_view')::int AS views,
-        COUNT(*) FILTER (WHERE event_type='times_view')::int AS times_view,
-        COUNT(*) FILTER (WHERE event_type='booking_started')::int AS started,
-        COUNT(DISTINCT ${keySql}) FILTER (WHERE event_type = ANY($3::text[]))::int AS confirmed,
-        COALESCE(SUM(CASE WHEN event_type = ANY($3::text[]) THEN NULLIF((payload->>'total_cents')::text,'')::int ELSE 0 END),0)::int AS revenue_cents
-      FROM booking_analytics_events
-      WHERE occurred_at >= now() - ($1::int || ' days')::interval
-      ${whereSlug}
-      `,
-      [...params, BOOKING_CONFIRMED_EVENT_TYPES]
-    );
-
-    // ✅ add manual bookings for summary window as well (keeps cards consistent)
-    const manual = await getManualBookingsRange({
-      start: null,
-      end: null,
-      slug: slug || null,
-    });
-
-    return res.json({
-      ok: true,
-      days,
-      filter: { courseSlug: slug || null },
-      metrics: {
-        course_page_view: Number(totals?.views || 0),
-        times_view: Number(totals?.times_view || 0),
-        booking_started: Number(totals?.started || 0),
-        booking_confirmed: Number(totals?.confirmed || 0),
-        revenue_cents: Number(totals?.revenue_cents || 0),
-      },
-      topCourses: [],
-    });
-  } catch (e) {
-    console.error("admin analytics summary error:", e?.message || e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-// -----------------------------
 // Platform admin: booking counts (calendar-based)
 // today / week / month / optional custom range + optional slug
 // -----------------------------
@@ -568,9 +575,9 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
     const eventTypes = BOOKING_CONFIRMED_EVENT_TYPES;
     const keySql = bookingKeySql();
 
-    // ---- TODAY (analytics only) ----
-    const todayParams = slug ? [eventTypes, slug] : [eventTypes];
-    const today = await qOne(
+    // Online (analytics) counts
+    const onlineTodayParams = slug ? [eventTypes, slug] : [eventTypes];
+    const onlineToday = await qOne(
       `
       SELECT COUNT(DISTINCT ${keySql})::int AS n
       FROM booking_analytics_events
@@ -579,12 +586,11 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
         AND occurred_at <  date_trunc('day', now()) + interval '1 day'
       ${slug ? "AND course_slug = $2" : ""}
       `,
-      todayParams
+      onlineTodayParams
     );
 
-    // ---- THIS WEEK (analytics only) ----
-    const weekParams = slug ? [eventTypes, slug] : [eventTypes];
-    const week = await qOne(
+    const onlineWeekParams = slug ? [eventTypes, slug] : [eventTypes];
+    const onlineWeek = await qOne(
       `
       SELECT COUNT(DISTINCT ${keySql})::int AS n
       FROM booking_analytics_events
@@ -593,12 +599,11 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
         AND occurred_at <  date_trunc('week', now()) + interval '7 days'
       ${slug ? "AND course_slug = $2" : ""}
       `,
-      weekParams
+      onlineWeekParams
     );
 
-    // ---- THIS MONTH (analytics only) ----
-    const monthParams = slug ? [eventTypes, slug] : [eventTypes];
-    const month = await qOne(
+    const onlineMonthParams = slug ? [eventTypes, slug] : [eventTypes];
+    const onlineMonth = await qOne(
       `
       SELECT COUNT(DISTINCT ${keySql})::int AS n
       FROM booking_analytics_events
@@ -607,14 +612,17 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
         AND occurred_at <  date_trunc('month', now()) + interval '1 month'
       ${slug ? "AND course_slug = $2" : ""}
       `,
-      monthParams
+      onlineMonthParams
     );
 
-    // ---- CUSTOM RANGE (selected range) ----
+    // Manual (real bookings table) — only reliable for custom range without knowing the exact “today/week/month” semantics
+    // So we keep those cards online-only and FIX the “selected range” totals (your issue).
     let rangeCount = null;
+    let rangeBreakdown = null;
+
     if (start && end) {
-      const params = slug ? [eventTypes, start, end, slug] : [eventTypes, start, end];
-      const analyticsRange = await qOne(
+      const onlineRangeParams = slug ? [eventTypes, start, end, slug] : [eventTypes, start, end];
+      const onlineRange = await qOne(
         `
         SELECT COUNT(DISTINCT ${keySql})::int AS n
         FROM booking_analytics_events
@@ -623,17 +631,20 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
           AND occurred_at <  ($3::date + interval '1 day')
         ${slug ? "AND course_slug = $4" : ""}
         `,
-        params
+        onlineRangeParams
       );
 
       const manualRange = await getManualBookingsRange({ start, end, slug: slug || null });
 
-      rangeCount = {
-        n: Number(analyticsRange?.n || 0) + Number(manualRange.bookings || 0),
-      };
+      const onlineN = Number(onlineRange?.n || 0);
+      const manualN = Number(manualRange.bookings || 0);
+      const totalN = onlineN + manualN;
+
+      rangeCount = totalN;
+      rangeBreakdown = { online: onlineN, manual: manualN, total: totalN };
     }
 
-    // ---- Course list (for dropdown) ----
+    // course list (dropdown) stays online-based (fine)
     const courses = await qAll(
       `
       SELECT
@@ -650,77 +661,27 @@ router.get("/api/book/admin/analytics/bookings", async (req, res) => {
     return res.json({
       ok: true,
       filter: { courseSlug: slug || "all" },
+
+      // legacy shape (unchanged)
       bookings: {
-        today: Number(today?.n || 0),
-        week: Number(week?.n || 0),
-        month: Number(month?.n || 0),
-        range: rangeCount ? Number(rangeCount.n || 0) : null,
+        today: Number(onlineToday?.n || 0),
+        week: Number(onlineWeek?.n || 0),
+        month: Number(onlineMonth?.n || 0),
+        range: rangeCount !== null ? Number(rangeCount) : null,
       },
+
+      // ✅ NEW: explicit breakdown (use this for UI)
+      breakdown: {
+        today: { online: Number(onlineToday?.n || 0), manual: 0, total: Number(onlineToday?.n || 0) },
+        week: { online: Number(onlineWeek?.n || 0), manual: 0, total: Number(onlineWeek?.n || 0) },
+        month: { online: Number(onlineMonth?.n || 0), manual: 0, total: Number(onlineMonth?.n || 0) },
+        range: rangeBreakdown,
+      },
+
       courses: (courses || []).filter((c) => c.course_slug),
     });
   } catch (e) {
     console.error("admin bookings analytics error:", e?.message || e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-// -----------------------------
-// Platform admin: funnel (last N days) + optional slug
-// -----------------------------
-router.get("/api/book/admin/analytics/funnel", async (req, res) => {
-  try {
-    if (!isBookingAdminReq(req)) {
-      return res.status(401).json({ ok: false, error: "Not logged in as booking admin" });
-    }
-
-    const days = Math.max(1, Math.min(365, Number(req.query.days) || 30));
-    const slug = normaliseSlug(req.query.slug);
-
-    const whereSlug = slug ? `AND course_slug = $2` : ``;
-    const params = slug ? [days, slug] : [days];
-
-    const keySql = bookingKeySql();
-
-    const row = await qOne(
-      `
-      SELECT
-        COUNT(*) FILTER (WHERE event_type='course_page_view')::int AS views,
-        COUNT(*) FILTER (WHERE event_type='times_view')::int AS times_view,
-        COUNT(*) FILTER (WHERE event_type='booking_started')::int AS started,
-        COUNT(DISTINCT ${keySql}) FILTER (WHERE event_type = ANY($3::text[]))::int AS confirmed
-      FROM booking_analytics_events
-      WHERE occurred_at >= now() - ($1::int || ' days')::interval
-        AND (
-          event_type IN ('course_page_view','times_view','booking_started')
-          OR event_type = ANY($3::text[])
-        )
-      ${whereSlug}
-      `,
-      [...params, BOOKING_CONFIRMED_EVENT_TYPES]
-    );
-
-    const views = Number(row?.views || 0);
-    const times = Number(row?.times_view || 0);
-    const started = Number(row?.started || 0);
-    const confirmed = Number(row?.confirmed || 0);
-
-    const convViewToConfirmed = views > 0 ? confirmed / views : 0;
-    const convTimesToConfirmed = times > 0 ? confirmed / times : 0;
-    const convStartedToConfirmed = started > 0 ? confirmed / started : 0;
-
-    return res.json({
-      ok: true,
-      days,
-      filter: { courseSlug: slug || null },
-      funnel: { views, times, started, confirmed },
-      conversion: {
-        view_to_confirmed: convViewToConfirmed,
-        times_to_confirmed: convTimesToConfirmed,
-        started_to_confirmed: convStartedToConfirmed,
-      },
-    });
-  } catch (e) {
-    console.error("admin funnel error:", e?.message || e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -751,7 +712,8 @@ router.get("/api/book/admin/analytics/daily", async (req, res) => {
 
     const keySql = bookingKeySql();
 
-    const analyticsRows = await qAll(
+    // ONLINE rows (analytics)
+    const onlineRows = await qAll(
       `
       WITH per_booking AS (
         SELECT
@@ -767,8 +729,8 @@ router.get("/api/book/admin/analytics/daily", async (req, res) => {
       )
       SELECT
         day,
-        COUNT(*)::int AS bookings,
-        COALESCE(SUM(total_cents),0)::int AS revenue_cents
+        COUNT(*)::int AS online_bookings,
+        COALESCE(SUM(total_cents),0)::int AS online_revenue_cents
       FROM per_booking
       GROUP BY day
       ORDER BY day ASC
@@ -776,25 +738,44 @@ router.get("/api/book/admin/analytics/daily", async (req, res) => {
       [...params, BOOKING_CONFIRMED_EVENT_TYPES]
     );
 
-    // ✅ manual bookings: we’ll add them as a single “bucket” if we can’t reliably daily-split by table schema
-    // But we CAN still correctly fix your "selected range" total on the UI because it sums rows.
-    const manual = await getManualBookingsRange({ start, end, slug: slug || null });
+    // MANUAL totals for range (we add them as separate fields; UI can sum)
+    const manualRange = await getManualBookingsRange({
+      start: start || null,
+      end: end || null,
+      slug: slug || null,
+    });
 
-    // If there are no analytics rows, we still need at least one row so UI total includes manual.
-    let rows = Array.isArray(analyticsRows) ? analyticsRows.slice() : [];
-    if (manual.bookings > 0 || manual.revenue_cents > 0) {
+    // ✅ For now: add manual totals onto the last day so your existing “sum rows” UI works immediately
+    let rows = Array.isArray(onlineRows) ? onlineRows.map((r) => ({ ...r })) : [];
+    if ((manualRange.bookings || 0) > 0 || (manualRange.revenue_cents || 0) > 0) {
       if (rows.length === 0) {
-        // put it on the start day so sum works
-        rows.push({ day: start || "", bookings: manual.bookings, revenue_cents: manual.revenue_cents });
-      } else {
-        // add manual totals onto the last day row so sum works
-        rows[rows.length - 1] = {
-          ...rows[rows.length - 1],
-          bookings: Number(rows[rows.length - 1].bookings || 0) + manual.bookings,
-          revenue_cents: Number(rows[rows.length - 1].revenue_cents || 0) + manual.revenue_cents,
-        };
+        rows.push({
+          day: start || "",
+          online_bookings: 0,
+          online_revenue_cents: 0,
+        });
       }
+      const last = rows[rows.length - 1];
+      last.manual_bookings = Number(manualRange.bookings || 0);
+      last.manual_revenue_cents = Number(manualRange.revenue_cents || 0);
     }
+
+    // Fill missing manual fields with 0s + add totals
+    rows = rows.map((r) => {
+      const onlineB = Number(r.online_bookings || 0);
+      const onlineR = Number(r.online_revenue_cents || 0);
+      const manualB = Number(r.manual_bookings || 0);
+      const manualR = Number(r.manual_revenue_cents || 0);
+      return {
+        ...r,
+        manual_bookings: manualB,
+        manual_revenue_cents: manualR,
+        bookings: onlineB + manualB,              // legacy compatible
+        revenue_cents: onlineR + manualR,         // legacy compatible
+        total_bookings: onlineB + manualB,
+        total_revenue_cents: onlineR + manualR,
+      };
+    });
 
     return res.json({
       ok: true,
