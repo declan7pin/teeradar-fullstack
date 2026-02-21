@@ -53,31 +53,38 @@
     }
     h1{font-size:20px;margin:0 0 4px}
     .sub{color:var(--muted);font-size:13px;line-height:1.35}
-    .grid{
+    /* ✅ Keep the ORIGINAL look: 2-up on mobile, but prevent iOS overflow overlap */
+.grid{
   display:grid;
-  grid-template-columns:repeat(12,1fr);
   gap:10px;
   margin-top:12px;
-  align-items:start; /* ✅ prevents weird stretching/overlap */
+  align-items:start;
+
+  /* 2 columns on mobile (original look) */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-/* ✅ Mobile-first: ONE column (fixes Date/Players overlap + Note/Time-to overlap) */
-.field{ grid-column: span 12; min-width:0; }
-
-/* ✅ Two columns once there’s room */
-@media (min-width:520px){
-  .field{ grid-column: span 6; }
+.field{
+  min-width:0; /* ✅ critical: stops date/select overflowing into neighbor */
 }
 
-/* Keep your existing desktop layout */
+/* Note: keep your .full class working on mobile too */
+.field.full{
+  grid-column: 1 / -1 !important; /* span both columns */
+}
+
+/* Desktop/tablet: restore your 12-col system */
 @media (min-width:720px){
+  .grid{ grid-template-columns:repeat(12,1fr); }
+
+  .field{ grid-column:span 6; }
   .field.sm3{grid-column:span 3}
   .field.sm4{grid-column:span 4}
   .field.sm6{grid-column:span 6}
-}
 
-/* ✅ Force specific fields to always be full-width when needed */
-.field.full{ grid-column: span 12 !important; }
+  /* full-width on desktop when you use .full */
+  .field.full{ grid-column: span 12 !important; }
+}
     label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px}
     input, select{
       width:100%;
@@ -96,28 +103,19 @@
     .actions{
   display:flex;
   gap:10px;
-  flex-wrap:wrap;          /* allows wrap instead of overlap */
-  align-items:stretch;
+  flex-wrap:wrap;
+  align-items:center;
   margin-top:12px;
 }
+
 .actions .btn{
-  flex:1 1 220px;          /* buttons share row when space allows */
-  min-width:0;
+  flex:0 0 auto;      /* ✅ stop giant buttons */
+  width:auto;
   white-space:nowrap;
 }
-.actions #hint{
-  flex:1 0 100%;           /* hint always drops to its own line */
-}
 
-/* ✅ Mobile: stack buttons full width */
-@media (max-width: 520px){
-  .actions{
-    flex-direction:column;
-    align-items:stretch;
-  }
-  .actions .btn{
-    width:100%;
-  }
+.actions #hint{
+  flex:1 0 100%;
 }
     .btn{
       border:0;border-radius:12px;
@@ -309,12 +307,14 @@
           <input id="end" type="time" value="17:00" />
         </div>
 
-        <div class="field sm6 full">
+                <div class="field sm6 full">
          <label class="muted">Note</label>
          <div class="note">
           Live availability + bookings powered by TeeRadar.
          </div>
         </div>
+
+      </div> <!-- ✅ ADD THIS: closes .grid -->
 
       <div class="actions">
         <button class="btn" id="findBtn">Find available times</button>
