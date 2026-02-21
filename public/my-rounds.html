@@ -1,0 +1,3113 @@
+<!-- public/my-rounds.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TeeRadar — My Rounds</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --teal:#00796b;
+      --teal-dark:#005e55;
+      --bg:#f4f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e2e8f0;
+      --danger:#d50000;
+      --ok:#16a34a;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      min-height:100vh;
+    }
+    header{
+      position:sticky;
+      top:0;
+      z-index:5;
+      background:linear-gradient(180deg,var(--teal),var(--teal-dark));
+      color:#fff;
+      padding:14px 18px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .brand{
+      font-weight:800;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size:1.15rem;
+      white-space:nowrap;
+    }
+    .brand small{
+      opacity:.9;
+      font-weight:600;
+      font-size:.9rem;
+    }
+    .navbtns{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .btn{
+      border:1px solid rgba(255,255,255,.25);
+      background:rgba(255,255,255,.14);
+      color:#fff;
+      padding:9px 12px;
+      border-radius:10px;
+      font-weight:700;
+      cursor:pointer;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      transition:transform .06s ease, background .15s ease;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn.secondary{
+      border-color:rgba(255,255,255,.18);
+      background:rgba(255,255,255,.10);
+    }
+    .btn.danger{
+      border-color:rgba(255,255,255,.18);
+      background:rgba(213,0,0,.25);
+    }
+
+    main{
+      max-width:1100px;
+      margin:0 auto;
+      padding:18px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap:16px;
+    }
+    @media (max-width: 980px){
+      .grid{grid-template-columns:1fr}
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:14px;
+      box-shadow:0 2px 16px rgba(15,23,42,.04);
+    }
+    .card h2{
+      margin:0 0 10px 0;
+      font-size:1.05rem;
+    }
+    .muted{color:var(--muted)}
+    .row{display:grid; grid-template-columns: 1fr 1fr; gap:10px}
+    .row3{display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px}
+    @media (max-width:520px){
+      .row,.row3{grid-template-columns:1fr}
+    }
+    label{
+      display:block;
+      font-size:.85rem;
+      font-weight:700;
+      margin:10px 0 6px;
+    }
+    input, select, textarea{
+      width:100%;
+      padding:10px 11px;
+      border:1px solid var(--border);
+      border-radius:10px;
+      outline:none;
+      font-size:1rem;
+      background:#fff;
+      color:var(--text);
+    }
+    textarea{min-height:74px; resize:vertical}
+    input:focus, select:focus, textarea:focus{border-color:#9ad7cf; box-shadow:0 0 0 3px rgba(0,121,107,.10)}
+    .actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:12px;
+    }
+    .actions .btn2{
+      border:1px solid var(--border);
+      background:var(--teal);
+      color:#fff;
+      padding:10px 12px;
+      border-radius:10px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .actions .btn2.secondary{
+      background:#fff;
+      color:var(--text);
+    }
+    .actions .btn2.danger{
+      background:var(--danger);
+      border-color:rgba(213,0,0,.3);
+    }
+    #scPills{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:7px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#fff;
+      font-weight:700;
+      font-size:.85rem;
+      color:var(--text);
+      margin:0;
+    }
+    .pill.ok{border-color:rgba(22,163,74,.25); background:rgba(22,163,74,.07)}
+    .pill.bad{border-color:rgba(213,0,0,.25); background:rgba(213,0,0,.06)}
+    .list{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      margin-top:10px;
+    }
+    .roundItem{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:12px;
+      cursor:pointer;
+      background:#fff;
+      transition:transform .06s ease, box-shadow .15s ease;
+    }
+    .roundItem:hover{
+      box-shadow:0 10px 28px rgba(15,23,42,.07);
+      transform:translateY(-1px);
+    }
+    .roundItem .top{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-start;
+    }
+    .roundItem .title{font-weight:900}
+    .roundItem .meta{color:var(--muted); font-size:.88rem; margin-top:4px}
+    .roundItem .score{
+      font-weight:900;
+      white-space:nowrap;
+    }
+
+    .scorecardHeader{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .scorecardHeader h2{margin:0}
+    .scorecardHeader .sub{color:var(--muted); font-weight:700}
+    .tableWrap{
+      overflow:auto;
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:#fff;
+    }
+    table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      min-width:1060px;
+    }
+    th, td{
+      padding:10px 10px;
+      border-bottom:1px solid var(--border);
+      text-align:center;
+      font-size:.95rem;
+      white-space:nowrap;
+    }
+    th{
+      position:sticky;
+      top:0;
+      background:#f8fafc;
+      z-index:2;
+      font-weight:900;
+    }
+    td:first-child, th:first-child{
+      text-align:left;
+      position:sticky;
+      left:0;
+      background:#fff;
+      z-index:1;
+      border-right:1px solid var(--border);
+      font-weight:900;
+    }
+    th:first-child{
+      background:#f8fafc;
+      z-index:3;
+    }
+    tr:last-child td{border-bottom:none}
+    .mini{
+      width:86px;
+      padding:8px 8px;
+      border-radius:10px;
+      border:1px solid var(--border);
+      font-weight:800;
+      text-align:center;
+    }
+    /* ✅ table-only score colours (no shapes) */
+.mini.birdie{
+  border-color:#16a34a;
+  background:#e8f5e9;
+  color:#166534;
+}
+.mini.eagle{
+  border-color:#166534;
+  background:#e8f5e9;
+  color:#166534;
+}
+.mini.bogey{
+  border-color:rgba(245,158,11,.55);
+  background:rgba(245,158,11,.10);
+  color:#92400e;
+}
+.mini.double{
+  border-color:rgba(239,68,68,.55);
+  background:rgba(239,68,68,.10);
+  color:#991b1b;
+}
+.mini.triple{
+  border-color:rgba(185,28,28,.50);
+  background:rgba(185,28,28,.08);
+  color:#b91c1c;
+}
+    .mini:focus{border-color:#9ad7cf; box-shadow:0 0 0 3px rgba(0,121,107,.10)}
+    .rightActions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .notice{
+      border:1px solid var(--border);
+      background:#fff;
+      border-radius:14px;
+      padding:12px;
+      color:var(--muted);
+      font-weight:700;
+      line-height:1.35;
+    }
+    .notice strong{color:var(--text)}
+    .toast{
+      margin-top:10px;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#fff;
+      font-weight:800;
+      display:none;
+    }
+    .toast.ok{display:block; border-color:rgba(22,163,74,.25); background:rgba(22,163,74,.07); color:var(--ok)}
+    .toast.bad{display:block; border-color:rgba(213,0,0,.25); background:rgba(213,0,0,.06); color:var(--danger)}
+
+    /* ✅ course autocomplete */
+    #courseRow{ position:relative; }
+    .autocomplete-list{
+      position:absolute;
+      left:0;
+      right:0;
+      top:100%;
+      margin-top:2px;
+      background:#ffffff;
+      border:1px solid var(--border);
+      border-radius:0 0 10px 10px;
+      max-height:200px;
+      overflow-y:auto;
+      z-index:50;
+      box-shadow:0 10px 20px rgba(15,23,42,0.12);
+    }
+    .autocomplete-item{
+      padding:8px 10px;
+      cursor:pointer;
+      font-weight:800;
+      font-size:.92rem;
+    }
+    .autocomplete-item:hover{
+      background:#f3f4f6;
+    }
+    .autocomplete-item small{
+      display:block;
+      font-weight:800;
+      color:var(--muted);
+      font-size:.8rem;
+      margin-top:2px;
+    }
+
+    /* ✅ compact totals grid for multi-player */
+    .totalsGrid{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      margin-top:12px;
+    }
+
+    /* ✅ distance cell style */
+    .distCell{
+      font-weight:900;
+      color:#0f172a;
+    }
+    .distMuted{
+      color:var(--muted);
+      font-weight:800;
+    }
+
+    /* ✅ NEW: player names inputs */
+    .namesGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top:10px;
+    }
+    @media (max-width:520px){
+      .namesGrid{grid-template-columns:1fr}
+    }
+    .nameHint{
+      margin-top:6px;
+      font-weight:800;
+      color:var(--muted);
+    }
+    .readonly{
+      opacity:.95;
+      background:#f8fafc !important;
+    }
+
+    /* ✅ NEW: modal */
+    .modalBack{
+      position:fixed;
+      inset:0;
+      background:rgba(2,6,23,.45);
+      display:none;
+      z-index:999;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+    }
+    .modal{
+      width:min(520px, 100%);
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px;
+      box-shadow:0 20px 60px rgba(15,23,42,.25);
+    }
+    .modal h3{
+      margin:0 0 8px 0;
+      font-size:1.05rem;
+    }
+    .modal .muted{font-weight:800}
+    .modal .actions{justify-content:flex-end}
+    /* ✅ iOS tap polish (removes “glitchy” tap highlight + improves responsiveness) */
+button, a, .btn, .btn2, input, select {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* ✅ PREMIUM play-mode (hole-by-hole) */
+#premiumWrap{
+  display:none;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:#fff;
+  overflow:hidden;
+}
+
+.premTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px;
+  background:linear-gradient(180deg,#0b3f39,#07332e);
+  color:#fff;
+}
+
+.premPills{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.premPill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:7px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.10);
+  font-weight:900;
+  font-size:.9rem;
+  white-space:nowrap;
+}
+
+.premBody{
+  padding:14px;
+}
+
+.premGrid{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:14px;
+}
+
+.premPanel{
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:14px;
+  background:#fff;
+}
+
+.premRow{
+  display:grid;
+  grid-template-columns: 120px 1fr;
+  gap:12px;
+  align-items:center;
+  margin-top:10px;
+}
+@media (max-width:520px){
+  .premRow{ grid-template-columns: 1fr; }
+}
+
+.premRow label{
+  margin:0;
+  font-size:1rem;
+  font-weight:1000;
+}
+
+.premBtns{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.pickBtn{
+  width:64px;
+  height:64px;
+  border-radius:16px;
+  border:2px solid #e2e8f0;
+  background:#f8fafc;
+  font-weight:1000;
+  font-size:20px;
+  color:#0f172a;
+  cursor:pointer;
+  position:relative;
+}
+
+.pickBtn.active{
+  border-color:#0ea5a4;
+  box-shadow:0 0 0 4px rgba(0,121,107,.12);
+  background:#ecfeff;
+}
+
+.pickBtn.birdie{
+  border:3px solid #16a34a;
+  background:#e8f5e9;
+  color:#166534;
+}
+.pickBtn.eagle{
+  border:4px double #166534;
+  background:#e8f5e9;
+  color:#166534;
+}
+
+.premNav{
+  display:flex;
+  gap:10px;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  margin-top:12px;
+}
+.premNav .btn2{
+  flex:1;
+  min-width:140px;
+}
+
+.premMiniNote{
+  margin-top:10px;
+  color:var(--muted);
+  font-weight:800;
+}
+
+/* ✅ Hide table cleanly when premium is active */
+.tableWrap.hidden{ display:none; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      TeeRadar <small>My Rounds</small>
+    </div>
+    <div class="navbtns">
+      <a class="btn secondary" href="/">Home</a>
+      <a class="btn secondary" href="/book.html">Back to Book</a>
+      <a class="btn secondary" id="accountLink" href="/account.html">Account</a>
+
+<a class="btn secondary"
+  id="myStatsLink"
+  href="/mystats.html"
+  onclick="sessionStorage.setItem('fromMyRounds','1')">
+  My Stats
+</a>
+
+<button class="btn danger" id="logoutBtn" type="button">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="authGate" class="notice" style="display:none;">
+  <strong>You’re in Guest mode.</strong><br/>
+  You can create and use scorecards without logging in. To sync rounds across devices and access <strong>My Stats</strong>, please log in.
+  <div class="actions" style="margin-top:12px;">
+    <a class="btn2" href="/account.html">Log in / Create account</a>
+  </div>
+</div>
+
+    <div id="app" style="display:none;">
+      <div class="grid">
+        <!-- LEFT -->
+        <section class="card" id="createRoundSection">
+          <h2>Create a new round</h2>
+          <div class="muted" style="font-weight:700;">
+            Track strokes + <strong>putts</strong>. If pars are missing, start a blank scorecard and fill as you go.
+          </div>
+
+          <label for="course">Course</label>
+          <div id="courseRow">
+            <input id="course" placeholder="e.g. Collier Park Golf Course" />
+            <div id="courseAutoList" class="autocomplete-list" style="display:none;"></div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="state">State</label>
+              <select id="state">
+                <option value="WA">WA</option>
+                <option value="NT">NT</option>
+                <option value="QLD">QLD</option>
+                <option value="NSW">NSW</option>
+                <option value="VIC">VIC</option>
+                <option value="SA">SA</option>
+                <option value="TAS">TAS</option>
+                <option value="ACT">ACT</option>
+              </select>
+            </div>
+            <div>
+              <label for="holes">Holes</label>
+              <select id="holes">
+                <option value="18">18</option>
+                <option value="9">9</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- ✅ NEW: tee selector -->
+          <div id="teeWrap" style="display:none;">
+            <label for="teeSelect">Tee colour</label>
+            <select id="teeSelect"></select>
+            <div class="muted" style="margin-top:6px;font-weight:800;">
+              Distances on the scorecard update when you change tee colour.
+            </div>
+          </div>
+
+          <!-- ✅ NEW: 9s selector -->
+          <div id="ninesWrap" style="display:none;">
+            <div id="nines9Only" style="display:none;">
+              <label for="nineSingle">Which 9 are you playing?</label>
+              <select id="nineSingle"></select>
+            </div>
+
+            <div id="nines18Only" style="display:none;">
+              <div class="row">
+                <div>
+                  <label for="nineFront">Front 9</label>
+                  <select id="nineFront"></select>
+                </div>
+                <div>
+                  <label for="nineBack">Back 9</label>
+                  <select id="nineBack"></select>
+                </div>
+              </div>
+              <div class="muted" style="margin-top:6px;font-weight:800;">
+                For courses with 3+ nines (e.g. Collier Park / Hillview), select exactly which 9s you played.
+              </div>
+            </div>
+          </div>
+
+          <!-- ✅ front/back selector (only when 9 holes) -->
+          <div id="nineLoopWrap" style="display:none;">
+            <label for="nineLoop">9 holes (front or back?)</label>
+            <select id="nineLoop">
+              <option value="front">Front 9</option>
+              <option value="back">Back 9</option>
+            </select>
+            <div class="muted" style="margin-top:6px;font-weight:800;">
+              If the course only has an 18-hole scorecard saved, this picks which 9 pars to use.
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="layout">Layout (optional)</label>
+              <input id="layout" placeholder="e.g. Island–Lakes / Old Course / Lakeside" />
+            </div>
+            <div>
+              <label for="parMode">Par mode</label>
+              <select id="parMode">
+                <option value="published">Use published pars (if available)</option>
+                <option value="blank">Blank scorecard (fill pars as you go)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- ✅ Players selector -->
+          <div class="row">
+            <div>
+              <label for="players">Players</label>
+              <select id="players">
+                <option value="1">1 player</option>
+                <option value="2">2 players</option>
+                <option value="3">3 players</option>
+                <option value="4">4 players</option>
+              </select>
+              <div class="muted" style="margin-top:6px;font-weight:800;">
+                Adds columns for Player 1–4 (strokes + putts) on the scorecard.
+              </div>
+            </div>
+            <div></div>
+          </div>
+
+          <!-- ✅ NEW: Player names (P1 auto = logged-in user; others editable) -->
+<div id="playerNamesWrap" style="display:none;">
+  <label>Player names</label>
+  <div class="namesGrid" id="namesGrid"></div>
+  <div class="nameHint">
+    P1 is always your account (auto-filled). Names are saved with the round (and also cached in this browser).
+  </div>
+</div>
+
+<label for="notes">Notes (optional)</label>
+<textarea id="notes" placeholder="Weather, tees, playing partners, etc."></textarea>
+
+<div class="actions">
+  <button class="btn2" id="createRoundBtn" type="button">Create round</button>
+  <button class="btn2 secondary" id="refreshBtn" type="button">Refresh list</button>
+</div>
+
+<div id="leftToast" class="toast"></div>
+
+<hr style="border:none;border-top:1px solid var(--border);margin:14px 0;" />
+
+<div id="yourRoundsSection">
+  <h2 style="margin-top:0;">Your rounds</h2>
+  <div class="muted" style="font-weight:700;">
+    Select a round to view/edit the scorecard.
+  </div>
+
+  <div id="roundsList" class="list" style="margin-top:12px;"></div>
+
+  <div class="muted" id="roundsEmpty" style="margin-top:10px;font-weight:800;display:none;">
+    No rounds yet — create your first one above.
+  </div>
+</div>
+</section>
+
+        <!-- RIGHT -->
+        <section class="card">
+          <div class="scorecardHeader">
+            <div>
+              <h2 id="scTitle">Scorecard</h2>
+              <div class="sub" id="scSub">Select a round to begin.</div>
+              <div id="scPills"></div>
+            </div>
+            <div class="rightActions">
+              <!-- ✅ NEW: submit template button (only when needed) -->
+              <button class="btn2 secondary" id="showLeftBtn" type="button" style="display:none;">Show setup</button>
+              <button class="btn2 secondary" id="submitCourseBtn" type="button" style="display:none;" disabled>Submit course for approval</button>
+
+              <button class="btn2 secondary" id="saveAllBtn" type="button" disabled>Save</button>
+              <button class="btn2 danger" id="deleteRoundBtn" type="button" disabled>Delete</button>
+            </div>
+          </div>
+
+          <div id="rightToast" class="toast"></div>
+
+          <div id="scorecardEmpty" class="notice">
+            <strong>No round selected.</strong><br/>
+            Create a round on the left, then click it to load the hole-by-hole scorecard.
+          </div>
+
+          <div id="scorecardWrap" style="display:none;">
+
+  <!-- ✅ PREMIUM hole-by-hole (only for published + complete courses) -->
+  <div id="premiumWrap">
+    <div class="premTop">
+      <div class="premPills" id="premPills"></div>
+      <div class="premPills">
+        <button class="btn2 secondary" id="toggleTableBtn" type="button" style="display:none;">View table</button>
+      </div>
+    </div>
+
+    <div class="premBody">
+      <div class="premGrid">
+        <div class="premPanel">
+          <div class="premRow">
+            <label>Score</label>
+            <div class="premBtns" id="premScoreBtns"></div>
+          </div>
+
+          <div class="premRow">
+            <label>Putts</label>
+            <div class="premBtns" id="premPuttBtns"></div>
+          </div>
+
+          <div class="premNav">
+            <button class="btn2 secondary" id="premPrevBtn" type="button">← Prev hole</button>
+            <button class="btn2" id="premNextBtn" type="button">Next hole →</button>
+          </div>
+
+          <div class="premMiniNote" id="premNote"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tableWrap" id="tableWrap">
+    <table id="scoreTable">
+      <thead id="scoreHead"></thead>
+      <tbody id="scoreBody"></tbody>
+    </table>
+  </div>
+
+            <!-- ✅ per-player totals -->
+            <div class="totalsGrid" id="totalsGrid"></div>
+
+            <div class="muted" style="margin-top:10px; font-weight:800;">
+              Tip: enter strokes + putts each hole. Pars can be blank if you don’t know them yet.
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="notice" style="margin-top:16px;">
+        <strong>Important:</strong> If your course doesn’t have published pars/distances yet, fill in <strong>Par + Distance</strong> for every hole, save, then click <strong>Submit course for approval</strong>.
+      </div>
+    </div>
+  </main>
+
+  <!-- ✅ NEW: Submit modal (email required) -->
+  <div class="modalBack" id="submitModalBack" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="submitModalTitle">
+      <h3 id="submitModalTitle">Submit course for approval</h3>
+      <div class="muted">
+        Enter your email. Once your course is approved, you’ll receive an email with a code for <strong>1 free month</strong> of TeeRadar.
+      </div>
+
+      <label for="submitEmail">Your email</label>
+      <input id="submitEmail" type="email" placeholder="you@example.com" autocomplete="email" />
+
+      <div class="muted" style="margin-top:10px;">
+        Before submitting: make sure <strong>every hole</strong> has <strong>Par</strong> and <strong>Distance (m)</strong> filled in.
+      </div>
+
+      <div class="actions">
+        <button class="btn2 secondary" id="submitCancelBtn" type="button">Cancel</button>
+        <button class="btn2" id="submitConfirmBtn" type="button">Submit</button>
+      </div>
+
+      <div id="submitToast" class="toast" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <script>
+    // -----------------------------
+    // Auth helpers
+    // -----------------------------
+    function getToken() {
+      const keys = ["teeradar_jwt", "teeradar_token", "token", "authToken", "jwt", "access_token"];
+      for (const k of keys) {
+        const v = localStorage.getItem(k);
+        if (v && String(v).trim().length > 10) return String(v).trim();
+      }
+      return "";
+    }
+
+    // ✅ NEW: decode JWT payload safely (no verification needed client-side)
+    function decodeJwtPayload(token){
+      try{
+        const parts = String(token||"").split(".");
+        if (parts.length < 2) return null;
+        const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const pad = b64.length % 4 ? "=".repeat(4 - (b64.length % 4)) : "";
+        const json = atob(b64 + pad);
+        return JSON.parse(json);
+      }catch{
+        return null;
+      }
+    }
+
+    // ✅ NEW: get logged-in email/name from token
+    function getUserFromToken(){
+      const token = getToken();
+      const p = decodeJwtPayload(token) || {};
+      const email = String(p.email || p.userEmail || p.sub || "").trim().toLowerCase();
+      // prefer explicit name fields if present
+      const nice =
+        String(p.name || p.fullName || p.displayName || "").trim() ||
+        (email ? email.split("@")[0] : "");
+      return { email: email || "", name: nice || "" };
+    }
+
+    function setToast(el, msg, ok=true){
+      el.className = "toast " + (ok ? "ok" : "bad");
+      el.textContent = msg;
+      setTimeout(() => {
+        el.className = "toast";
+        el.style.display = "none";
+      }, 2600);
+      el.style.display = "block";
+    }
+
+    async function api(path, options = {}) {
+      const token = getToken();
+      const headers = Object.assign({}, options.headers || {});
+      headers["Content-Type"] = headers["Content-Type"] || "application/json";
+      if (token) headers["Authorization"] = "Bearer " + token;
+
+      const res = await fetch(path, { ...options, headers });
+      let data = null;
+      try { data = await res.json(); } catch { /* ignore */ }
+      if (!res.ok) {
+        const message = (data && (data.error || data.detail)) ? (data.error || data.detail) : (res.status + " " + res.statusText);
+        const err = new Error(message);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    }
+
+    // -----------------------------
+    // ✅ Analytics (minimal + safe)
+    // -----------------------------
+    async function logAnalyticsEvent(type, payload = {}) {
+      try {
+        const safePayload = payload && typeof payload === "object" ? payload : {};
+        if (safePayload.roundId != null && safePayload.round_id == null) safePayload.round_id = safePayload.roundId;
+        if (safePayload.round_id != null && safePayload.roundId == null) safePayload.roundId = safePayload.round_id;
+
+        await api("/api/analytics/event", {
+          method: "POST",
+          body: JSON.stringify({
+            type,
+            at: new Date().toISOString(),
+            payload: safePayload
+          })
+        });
+      } catch (e) {
+        console.warn("Analytics event failed:", type, e?.message || e);
+      }
+    }
+
+    function hasAnyStrokesEntered(holesRows) {
+      try {
+        return (holesRows || []).some(h => {
+          const s1 = (h && typeof h === "object")
+            ? (h.strokes ?? (h.strokes_by_player && h.strokes_by_player["1"]))
+            : null;
+          return Number.isFinite(Number(s1));
+        });
+      } catch {
+        return false;
+      }
+    }
+
+    function markRoundPlayedLogged(roundId) {
+      try { localStorage.setItem(`round_played_logged_${String(roundId)}`, "1"); } catch {}
+    }
+    function wasRoundPlayedLogged(roundId) {
+      try { return localStorage.getItem(`round_played_logged_${String(roundId)}`) === "1"; } catch { return false; }
+    }
+
+    // -----------------------------
+    // State
+    // -----------------------------
+    let currentRoundId = null;
+    let currentRound = null;
+    let roundsCache = [];
+
+    // course cache (optional)
+    let coursesCache = [];
+    let coursesLoaded = false;
+    let selectedCourseKey = "";
+
+    // scorecards cache
+    const scorecardsByState = new Map(); // st -> array
+    const scorecardIndexByState = new Map(); // st -> Map(key -> array of scorecards)
+
+function scorecardsLsKey(st){ return `teeradar_scorecards_${String(st||"").toUpperCase()}`; }
+
+function readScorecardsFromLS(st){
+  try{
+    const raw = localStorage.getItem(scorecardsLsKey(st));
+    const arr = raw ? JSON.parse(raw) : null;
+    return Array.isArray(arr) ? arr : null;
+  }catch{
+    return null;
+  }
+}
+
+function writeScorecardsToLS(st, arr){
+  try{
+    if (Array.isArray(arr) && arr.length){
+      localStorage.setItem(scorecardsLsKey(st), JSON.stringify(arr));
+    }
+  }catch{}
+}
+
+    // ✅ UI selection state
+    let uiSelectedTee = "";
+    let uiNineSingle = "";
+    let uiNineFront = "";
+    let uiNineBack = "";
+
+    // ✅ NEW: player names (P1 is user and readonly)
+    const playerNames = ["","","",""]; // indexes 0..3 for P1..P4
+    function roundNamesKey(roundId){ return `round_player_names_${String(roundId)}`; }
+    function saveNamesForRound(roundId){
+      try{
+        const id = String(roundId||"").trim();
+        if (!id) return;
+        localStorage.setItem(roundNamesKey(id), JSON.stringify(playerNames));
+      }catch{}
+    }
+    function loadNamesForRound(roundId){
+      try{
+        const id = String(roundId||"").trim();
+        if (!id) return;
+        const raw = localStorage.getItem(roundNamesKey(id));
+        if (!raw) return;
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)){
+          for (let i=0;i<4;i++){
+            if (typeof arr[i] === "string") playerNames[i] = arr[i];
+          }
+        }
+      }catch{}
+    }
+
+    // ✅ NEW: submission email cache
+    function getCachedSubmitEmail(){
+      try { return String(localStorage.getItem("scorecard_submit_email") || "").trim().toLowerCase(); } catch { return ""; }
+    }
+    function setCachedSubmitEmail(v){
+      try { localStorage.setItem("scorecard_submit_email", String(v||"").trim().toLowerCase()); } catch {}
+    }
+
+    // -----------------------------
+    // UI refs
+    // -----------------------------
+    const authGate = document.getElementById("authGate");
+    const appEl = document.getElementById("app");
+
+    const courseEl = document.getElementById("course");
+    const stateEl = document.getElementById("state");
+    const holesEl = document.getElementById("holes");
+    const layoutEl = document.getElementById("layout");
+    const parModeEl = document.getElementById("parMode");
+    const notesEl = document.getElementById("notes");
+    const playersEl = document.getElementById("players");
+
+    const teeWrap = document.getElementById("teeWrap");
+    const teeSelect = document.getElementById("teeSelect");
+
+    const ninesWrap = document.getElementById("ninesWrap");
+    const nines9Only = document.getElementById("nines9Only");
+    const nines18Only = document.getElementById("nines18Only");
+    const nineSingleEl = document.getElementById("nineSingle");
+    const nineFrontEl = document.getElementById("nineFront");
+    const nineBackEl = document.getElementById("nineBack");
+
+    const nineLoopWrap = document.getElementById("nineLoopWrap");
+    const nineLoopEl = document.getElementById("nineLoop");
+
+    const createRoundBtn = document.getElementById("createRoundBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    
+    const accountLink = document.getElementById("accountLink");
+const myStatsLink = document.getElementById("myStatsLink");
+
+function isLoggedIn(){
+  return !!getToken();
+}
+
+function renderHeaderAuthState(){
+  const loggedIn = isLoggedIn();
+
+  // Account button text
+  if (accountLink){
+    accountLink.textContent = loggedIn ? "Account" : "Log in";
+    accountLink.href = "/account.html";
+  }
+
+  // My Stats hidden unless logged in
+  if (myStatsLink){
+    myStatsLink.style.display = loggedIn ? "inline-flex" : "none";
+    if (!loggedIn){
+      // safety: stop any accidental nav
+      myStatsLink.onclick = (e) => { e.preventDefault(); window.location.href="/account.html"; };
+    }
+  }
+
+  // Logout hidden unless logged in
+  if (logoutBtn){
+    logoutBtn.style.display = loggedIn ? "inline-flex" : "none";
+  }
+}
+             
+    const roundsListEl = document.getElementById("roundsList");
+    const roundsEmptyEl = document.getElementById("roundsEmpty");
+
+    const scTitleEl = document.getElementById("scTitle");
+    const scSubEl = document.getElementById("scSub");
+    const scPillsEl = document.getElementById("scPills");
+
+    const scorecardEmpty = document.getElementById("scorecardEmpty");
+    const scorecardWrap = document.getElementById("scorecardWrap");
+    const scoreBody = document.getElementById("scoreBody");
+
+    const scoreHead = document.getElementById("scoreHead");
+    const totalsGrid = document.getElementById("totalsGrid");
+    // ✅ PREMIUM play-mode refs
+const premiumWrap = document.getElementById("premiumWrap");
+const tableWrapEl = document.getElementById("tableWrap");
+const premPills = document.getElementById("premPills");
+const premScoreBtns = document.getElementById("premScoreBtns");
+const premPuttBtns = document.getElementById("premPuttBtns");
+const premPrevBtn = document.getElementById("premPrevBtn");
+const premNextBtn = document.getElementById("premNextBtn");
+const premNote = document.getElementById("premNote");
+const toggleTableBtn = document.getElementById("toggleTableBtn");
+
+// ✅ premium state
+let premiumHoleIndex = 0; // 0-based
+let premiumShowingTable = false;
+let premiumPlayerIndex = 0; // 0-based (0=P1)
+    
+    const showLeftBtn = document.getElementById("showLeftBtn");
+    const saveAllBtn = document.getElementById("saveAllBtn");
+    const deleteRoundBtn = document.getElementById("deleteRoundBtn");
+
+    const leftToast = document.getElementById("leftToast");
+    const rightToast = document.getElementById("rightToast");
+
+    const courseAutoList = document.getElementById("courseAutoList");
+
+    // ✅ NEW refs
+    const playerNamesWrap = document.getElementById("playerNamesWrap");
+    const namesGrid = document.getElementById("namesGrid");
+
+    // ✅ NEW: submit UI
+    const submitCourseBtn = document.getElementById("submitCourseBtn");
+    const submitModalBack = document.getElementById("submitModalBack");
+    const submitEmail = document.getElementById("submitEmail");
+    const submitCancelBtn = document.getElementById("submitCancelBtn");
+    const submitConfirmBtn = document.getElementById("submitConfirmBtn");
+    const submitToast = document.getElementById("submitToast");
+
+    // -----------------------------
+    // Helpers
+    // -----------------------------
+    function norm(s){ return String(s || "").trim().toLowerCase(); }
+    function clamp(n, a, b){ n = Number(n); if (!Number.isFinite(n)) return a; return Math.max(a, Math.min(b, n)); }
+
+    function escapeHtml(s){
+      return String(s || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+function setLeftPanelsVisibility(show){
+  const create = document.getElementById("createRoundSection");
+  const rounds = document.getElementById("yourRoundsSection");
+  const showBtn = document.getElementById("showLeftBtn");
+
+  if (create) create.style.display = show ? "block" : "none";
+  if (rounds) rounds.style.display = show ? "block" : "none";
+
+  // ✅ show "Show setup" button only when left side is hidden
+  if (showBtn) {
+    showBtn.style.display = show ? "none" : "inline-flex";
+  }
+}
+    function courseKey(name, state){
+      return (norm(name) + "|" + String(state || "").trim().toUpperCase());
+    }
+
+    function cleanCourseNameForMatch(name){
+      let s = String(name || "").trim().toLowerCase();
+      s = s.replace(/\s*\([^)]*\)\s*$/, "");
+      s = s.replace(/\s*\b(18|9)\s*holes?\b\s*$/, "");
+      s = s.replace(/\s+/g, " ").trim();
+      return s;
+    }
+
+    function normalizeCourseForMatch(name){
+      let s = String(name || "").toLowerCase().trim();
+      s = s.replace(/\s*\([^)]*\)\s*$/g, " ");
+      s = s.replace(/\b(9|18)\s*holes?\b/g, " ");
+      s = s.replace(/\b(golf\s*course|golf\s*club|golf\s*complex|golf\s*links|golf)\b/g, " ");
+      s = s.replace(/[^a-z0-9\s]/g, " ");
+      s = s.replace(/\s+/g, " ").trim();
+      return s;
+    }
+
+    function courseNamesMatch(a, b){
+      const A = normalizeCourseForMatch(a);
+      const B = normalizeCourseForMatch(b);
+      if (!A || !B) return false;
+      if (A === B) return true;
+      if (A.length >= 6 && B.length >= 6){
+        if (A.includes(B) || B.includes(A)) return true;
+      }
+      return false;
+    }
+
+    function nineLabelFromScorecard(sc){
+      const raw = String(sc?.course || sc?.name || "").trim();
+      const m = raw.match(/\(([^)]+)\)\s*$/);
+      let label = m ? String(m[1] || "").trim() : "";
+      if (!label) label = String(sc?.layout || "").trim();
+      if (!label) label = raw;
+      label = label.replace(/\b(9|18)\s*holes?\b/ig, "").replace(/\s*-\s*$/g, "").trim();
+      label = label.replace(/\s+/g, " ").trim();
+      return label;
+    }
+
+    function isValidEmail(v){
+      const s = String(v||"").trim();
+      if (!s) return false;
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+    }
+
+    async function loadCoursesOnce(){
+      if (coursesLoaded) return;
+      coursesLoaded = true;
+
+      try{
+        // ✅ ONLY allow autofill from submitted/approved scorecard templates
+        const res = await fetch("/api/rounds/templates");
+        const data = await res.json();
+
+        // expected shape: { courses: [...] }
+        const arr = Array.isArray(data?.courses) ? data.courses : [];
+
+        // normalize to what the autocomplete expects
+        coursesCache = arr
+          .map((c) => ({
+            name: String(c?.name || c?.course || "").trim(),
+            state: String(c?.state || "").trim().toUpperCase(),
+            holes: Number(c?.holes) || null,
+          }))
+          .filter((c) => c.name && c.state);
+
+      }catch(e){
+        coursesCache = [];
+      }
+    }
+
+    async function loadScorecardsStateOnce(st){
+  const state = String(st || "").trim().toUpperCase();
+  if (!state) return [];
+  if (scorecardsByState.has(state)) return scorecardsByState.get(state);
+
+  // ✅ localStorage fallback cache (so meta still works in guest mode)
+  function scorecardsLsKey(s){ return `teeradar_scorecards_${String(s||"").toUpperCase()}`; }
+  function readScorecardsFromLS(s){
+    try{
+      const raw = localStorage.getItem(scorecardsLsKey(s));
+      const arr = raw ? JSON.parse(raw) : null;
+      return Array.isArray(arr) ? arr : null;
+    }catch{
+      return null;
+    }
+  }
+  function writeScorecardsToLS(s, arr){
+    try{
+      if (Array.isArray(arr) && arr.length){
+        localStorage.setItem(scorecardsLsKey(s), JSON.stringify(arr));
+      }
+    }catch{}
+  }
+
+  try{
+    const res = await fetch(`/api/scorecards/${encodeURIComponent(state)}`);
+
+    let arr = [];
+    if (!res.ok){
+      // ✅ backend blocked/errored → use cached copy if available
+      arr = readScorecardsFromLS(state) || [];
+    } else {
+      const data = await res.json();
+      arr = Array.isArray(data) ? data : (data && Array.isArray(data.scorecards) ? data.scorecards : []);
+      writeScorecardsToLS(state, arr);
+    }
+
+    scorecardsByState.set(state, arr);
+
+    const idx = new Map();
+    for (const sc of arr){
+      const courseNm = sc.course || sc.name || "";
+      const holes = Number(sc.holes) || null;
+      const layout = String(sc.layout || "").trim().toLowerCase();
+      if (!courseNm || !holes) continue;
+
+      const base = `${cleanCourseNameForMatch(courseNm)}|${holes}`;
+      const k1 = base + `|${layout || ""}`;
+      const k2 = base + `|`;
+      if (!idx.has(k1)) idx.set(k1, []);
+      idx.get(k1).push(sc);
+      if (!idx.has(k2)) idx.set(k2, []);
+      idx.get(k2).push(sc);
+    }
+    scorecardIndexByState.set(state, idx);
+
+    return arr;
+  }catch{
+    // ✅ last-resort fallback: cached copy
+    const arr = readScorecardsFromLS(state) || [];
+    scorecardsByState.set(state, arr);
+
+    const idx = new Map();
+    for (const sc of arr){
+      const courseNm = sc.course || sc.name || "";
+      const holes = Number(sc.holes) || null;
+      const layout = String(sc.layout || "").trim().toLowerCase();
+      if (!courseNm || !holes) continue;
+
+      const base = `${cleanCourseNameForMatch(courseNm)}|${holes}`;
+      const k1 = base + `|${layout || ""}`;
+      const k2 = base + `|`;
+      if (!idx.has(k1)) idx.set(k1, []);
+      idx.get(k1).push(sc);
+      if (!idx.has(k2)) idx.set(k2, []);
+      idx.get(k2).push(sc);
+    }
+    scorecardIndexByState.set(state, idx);
+
+    return arr;
+  }
+}
+
+    function pickTeeNameFromDistancesObj(distObj){
+      if (!distObj || typeof distObj !== "object") return "";
+      const tees = Object.keys(distObj).filter(Boolean);
+      if (!tees.length) return "";
+      const preferred = ["White","Yellow","Blue","Red","Green","Black"];
+      for (const t of preferred) if (tees.includes(t)) return t;
+      return tees[0];
+    }
+
+    function getTeesFromScorecard(sc){
+  // ✅ If distances are stored as a flat array, there are no tees to choose from
+  const distAny = sc && (sc.distancesByTee ?? sc.distances_m ?? sc.distances);
+  if (!distAny) return [];
+
+  if (Array.isArray(distAny)) return []; // ✅ flat distances array
+
+  if (typeof distAny !== "object") return [];
+  return Object.keys(distAny).filter(k => Array.isArray(distAny[k]) && distAny[k].length);
+}
+
+    function find9LayoutsForCourse(state, course){
+      const st = String(state || "").toUpperCase();
+      const arr = scorecardsByState.get(st) || [];
+
+      const labels = new Map(); // lower -> display
+      for (const sc of arr){
+        if (Number(sc.holes) !== 9) continue;
+        const scName = sc.course || sc.name || "";
+        if (!courseNamesMatch(scName, course)) continue;
+        const lab = nineLabelFromScorecard(sc);
+        if (!lab) continue;
+        labels.set(lab.toLowerCase(), lab);
+      }
+      return Array.from(labels.values()).sort((a,b)=>a.localeCompare(b));
+    }
+
+    function getScorecard9(state, course, nineLabel){
+      const st = String(state || "").toUpperCase();
+      const arr = scorecardsByState.get(st) || [];
+      const target = String(nineLabel || "").trim().toLowerCase();
+      if (!target) return null;
+
+      for (const sc of arr){
+        if (Number(sc.holes) !== 9) continue;
+        const scName = sc.course || sc.name || "";
+        if (!courseNamesMatch(scName, course)) continue;
+        const lab = nineLabelFromScorecard(sc).toLowerCase();
+        if (lab === target) return sc;
+      }
+      return null;
+    }
+
+    function setSelectOptions(sel, values, placeholder){
+      sel.innerHTML = "";
+      if (placeholder){
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = placeholder;
+        sel.appendChild(opt);
+      }
+      for (const v of values){
+        const opt = document.createElement("option");
+        opt.value = v;
+        opt.textContent = v;
+        sel.appendChild(opt);
+      }
+    }
+
+    function ensureDifferentFrontBack(layouts9){
+      if (!Array.isArray(layouts9) || layouts9.length < 2) return;
+      if (uiNineFront && uiNineBack && uiNineFront.toLowerCase() === uiNineBack.toLowerCase()){
+        const next = layouts9.find(x => x.toLowerCase() !== uiNineFront.toLowerCase());
+        uiNineBack = next || uiNineBack;
+      }
+    }
+
+    function showCourseAutocomplete(items){
+      if (!courseAutoList) return;
+      courseAutoList.innerHTML = "";
+      if (!items.length){
+        courseAutoList.style.display = "none";
+        return;
+      }
+      items.forEach(c => {
+        const div = document.createElement("div");
+        div.className = "autocomplete-item";
+        const baseName = c.name || c.course || c.title || "";
+        const st = (c.state || "").toUpperCase();
+        const h = Number(c.holes) || null;
+
+        const label = h ? `${baseName} (${h} holes)` : baseName;
+        const meta = st ? `State: ${st}` : "";
+
+        div.innerHTML = `${escapeHtml(label)}${meta ? `<small>${escapeHtml(meta)}</small>` : ""}`;
+
+        div.addEventListener("click", async () => {
+          const nm = c.name || c.course || c.title || "";
+          const st2 = (c.state || "").toUpperCase();
+          const h2 = Number(c.holes) || null;
+
+          // ✅ set course WITHOUT "(18 holes)" suffix
+          courseEl.value = nm;
+
+          if (st2 && stateEl) stateEl.value = st2;
+          if (h2 && holesEl) holesEl.value = String(h2);
+
+          selectedCourseKey = courseKey(nm, st2 || stateEl.value);
+          courseAutoList.style.display = "none";
+          courseAutoList.innerHTML = "";
+
+          await refreshNinesAndTeesUI();
+        });
+
+        courseAutoList.appendChild(div);
+      });
+      courseAutoList.style.display = "block";
+    }
+
+    async function initCourseAutocomplete(){
+      if (!courseEl || !courseAutoList) return;
+
+      courseEl.addEventListener("input", async () => {
+        const q = norm(courseEl.value);
+        selectedCourseKey = "";
+        courseAutoList.style.display = "none";
+        courseAutoList.innerHTML = "";
+        if (!q || q.length < 2) return;
+
+        await loadCoursesOnce();
+
+        const stateNow = (stateEl?.value || "").trim().toUpperCase();
+
+        const matches = coursesCache
+          .filter(c => norm(c.name || c.course || c.title).includes(q))
+          .sort((a,b) => {
+            const aState = String(a.state || "").toUpperCase();
+            const bState = String(b.state || "").toUpperCase();
+            const aBoost = (stateNow && aState === stateNow) ? -1 : 0;
+            const bBoost = (stateNow && bState === stateNow) ? -1 : 0;
+            if (aBoost !== bBoost) return aBoost - bBoost;
+            return norm(a.name).localeCompare(norm(b.name));
+          })
+          .slice(0, 10);
+
+        showCourseAutocomplete(matches);
+      });
+
+      document.addEventListener("click", (e) => {
+        if (e.target === courseEl) return;
+        if (courseAutoList.contains(e.target)) return;
+        courseAutoList.style.display = "none";
+        courseAutoList.innerHTML = "";
+      });
+    }
+
+    function syncNineLoopVisibility(){
+      const holesNow = Number(holesEl?.value || 18);
+      if (!nineLoopWrap) return;
+      nineLoopWrap.style.display = (holesNow === 9) ? "block" : "none";
+    }
+
+    function formatDate(d) {
+      try {
+        const dt = new Date(d);
+        return dt.toLocaleString(undefined, { year:"numeric", month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit" });
+      } catch {
+        return d || "";
+      }
+    }
+
+    // -----------------------------
+    // ✅ NEW: Player names UI (P1 always user)
+    // -----------------------------
+    function ensureP1IsUser(){
+      const u = getUserFromToken();
+      const display = (u.name || u.email || "").trim();
+      if (display) playerNames[0] = display;
+    }
+
+    function renderPlayerNamesUI(){
+      const pc = clamp(playersEl?.value || 1, 1, 4);
+
+      ensureP1IsUser();
+
+      if (!playerNamesWrap || !namesGrid) return;
+
+      playerNamesWrap.style.display = (pc >= 1) ? "block" : "none";
+      namesGrid.innerHTML = "";
+
+      for (let i=0; i<pc; i++){
+        const num = i+1;
+        const wrap = document.createElement("div");
+
+        const lab = document.createElement("label");
+        lab.textContent = `Player ${num} name`;
+        lab.style.margin = "0 0 6px 0";
+
+        const inp = document.createElement("input");
+        inp.placeholder = (num === 1) ? "Your name" : `Enter Player ${num} name`;
+        inp.value = playerNames[i] || "";
+        inp.dataset.player = String(num);
+
+        if (num === 1){
+  const loggedIn = !!getToken();
+
+  if (loggedIn){
+    // ✅ logged in: lock P1 to account
+    inp.readOnly = true;
+    inp.classList.add("readonly");
+    inp.title = "P1 is always your account";
+  } else {
+    // ✅ guest mode: allow typing
+    inp.readOnly = false;
+    inp.classList.remove("readonly");
+    inp.title = "Enter your name (guest mode)";
+
+    // optional: restore cached guest name
+    try{
+      if (!inp.value) inp.value = String(localStorage.getItem("teeradar_guest_p1_name") || "").trim();
+      if (inp.value) playerNames[0] = String(inp.value || "").trim();
+    }catch{}
+
+    inp.addEventListener("input", () => {
+      playerNames[0] = String(inp.value || "").trim();
+      try{ localStorage.setItem("teeradar_guest_p1_name", playerNames[0]); }catch{}
+      // refresh headers if a round is open
+      if (currentRoundId && currentRound) renderScorecard(currentRound);
+    });
+  }
+} else {
+  inp.addEventListener("input", () => {
+    playerNames[i] = String(inp.value || "").trim();
+    // if a round is selected, save immediately to that round
+    if (currentRoundId) saveNamesForRound(currentRoundId);
+    // also refresh header labels
+    if (currentRoundId && currentRound) renderScorecard(currentRound);
+  });
+}
+
+        wrap.appendChild(lab);
+        wrap.appendChild(inp);
+        namesGrid.appendChild(wrap);
+      }
+    }
+
+    // -----------------------------
+    // ✅ Build the nines + tee dropdowns from scorecards
+    // -----------------------------
+    async function refreshNinesAndTeesUI(){
+      const course = String(courseEl.value || "").trim();
+      const state = String(stateEl.value || "").trim().toUpperCase();
+      const holes = Number(holesEl.value || 18);
+
+      if (!course || !state) {
+        ninesWrap.style.display = "none";
+        teeWrap.style.display = "none";
+        return;
+      }
+
+      await loadScorecardsStateOnce(state);
+
+      const layouts9 = find9LayoutsForCourse(state, course);
+
+      if (layouts9.length){
+        ninesWrap.style.display = "block";
+        teeWrap.style.display = "block";
+
+        if (holes === 9){
+          nines9Only.style.display = "block";
+          nines18Only.style.display = "none";
+
+          setSelectOptions(nineSingleEl, layouts9, null);
+          if (!uiNineSingle || !layouts9.some(x => x.toLowerCase() === uiNineSingle.toLowerCase())) uiNineSingle = layouts9[0] || "";
+          nineSingleEl.value = uiNineSingle;
+        } else {
+          nines9Only.style.display = "none";
+          nines18Only.style.display = "block";
+
+          setSelectOptions(nineFrontEl, layouts9, null);
+
+          const frontLower = String(uiNineFront || "").toLowerCase();
+          let backOptions = layouts9.slice();
+          if (frontLower) backOptions = layouts9.filter(x => x.toLowerCase() !== frontLower);
+          if (backOptions.length === 0) backOptions = layouts9.slice();
+          setSelectOptions(nineBackEl, backOptions, null);
+
+          if (!uiNineFront || !layouts9.some(x => x.toLowerCase() === uiNineFront.toLowerCase())) uiNineFront = layouts9[0] || "";
+          if (!uiNineBack || !layouts9.some(x => x.toLowerCase() === uiNineBack.toLowerCase())) uiNineBack = layouts9[1] || layouts9[0] || "";
+
+          ensureDifferentFrontBack(layouts9);
+
+          nineFrontEl.value = uiNineFront;
+
+          const frontLower2 = String(uiNineFront || "").toLowerCase();
+          let backOptions2 = layouts9.filter(x => x.toLowerCase() !== frontLower2);
+          if (!backOptions2.length) backOptions2 = layouts9.slice();
+          setSelectOptions(nineBackEl, backOptions2, null);
+
+          if (!backOptions2.some(x => x.toLowerCase() === String(uiNineBack||"").toLowerCase())){
+            uiNineBack = backOptions2[0] || "";
+          }
+          nineBackEl.value = uiNineBack;
+        }
+
+        let tees = [];
+        if (holes === 9){
+          const sc9 = getScorecard9(state, course, uiNineSingle);
+          tees = sc9 ? getTeesFromScorecard(sc9) : [];
+        } else {
+          const scA = getScorecard9(state, course, uiNineFront);
+          const scB = getScorecard9(state, course, uiNineBack);
+          const a = scA ? getTeesFromScorecard(scA) : [];
+          const b = scB ? getTeesFromScorecard(scB) : [];
+          const inter = a.filter(x => b.includes(x));
+          tees = inter.length ? inter : Array.from(new Set([...a, ...b]));
+        }
+
+        if (!tees.length){
+          const arr = scorecardsByState.get(state) || [];
+          for (const sc of arr){
+            const scName = sc.course || sc.name || "";
+            if (!courseNamesMatch(scName, course)) continue;
+            tees.push(...getTeesFromScorecard(sc));
+          }
+          tees = Array.from(new Set(tees));
+        }
+
+        tees.sort((a,b)=>a.localeCompare(b));
+        setSelectOptions(teeSelect, tees.length ? tees : [""], null);
+
+        if (!uiSelectedTee || (tees.length && !tees.includes(uiSelectedTee))){
+          uiSelectedTee = tees.length ? tees[0] : "";
+        }
+        teeSelect.value = uiSelectedTee;
+
+        if (holes === 9){
+          layoutEl.value = uiNineSingle || layoutEl.value;
+        } else {
+          layoutEl.value = (uiNineFront && uiNineBack) ? `${uiNineFront} - ${uiNineBack}` : layoutEl.value;
+        }
+
+        nineLoopWrap.style.display = "none";
+      } else {
+        ninesWrap.style.display = "none";
+        teeWrap.style.display = "none";
+        syncNineLoopVisibility();
+      }
+
+      // ✅ IMPORTANT:
+      // DO NOT call renderScorecard() from here — renderScorecard() already calls refreshNinesAndTeesUI()
+      // and that can cause loops / double work.
+    }
+
+    teeSelect.addEventListener("change", async () => {
+      uiSelectedTee = String(teeSelect.value || "").trim();
+
+      // ✅ re-render scorecard to update distance column label + published distances by tee
+      if (currentRoundId && currentRound) {
+        await renderScorecard(currentRound);
+      }
+    });
+
+    nineSingleEl.addEventListener("change", async () => {
+      uiNineSingle = String(nineSingleEl.value || "").trim();
+      layoutEl.value = uiNineSingle || layoutEl.value;
+      await refreshNinesAndTeesUI();
+    });
+
+    nineFrontEl.addEventListener("change", async () => {
+      uiNineFront = String(nineFrontEl.value || "").trim();
+      await refreshNinesAndTeesUI();
+    });
+
+    nineBackEl.addEventListener("change", async () => {
+      uiNineBack = String(nineBackEl.value || "").trim();
+      layoutEl.value = (uiNineFront && uiNineBack) ? `${uiNineFront} - ${uiNineBack}` : layoutEl.value;
+      await refreshNinesAndTeesUI();
+    });
+
+    // -----------------------------
+    // Multi-player helpers
+    // -----------------------------
+    function getPlayersCountFromRound(r){
+      const pc = Number(r?.players_count ?? r?.players ?? 1);
+      return clamp(pc, 1, 4);
+    }
+
+    function getHolePlayerValue(holeObj, field, playerIndex){
+      const pNum = String(playerIndex + 1);
+
+      const by = holeObj && holeObj[`${field}_by_player`];
+      if (by && typeof by === "object") {
+        const v = by[pNum];
+        return (v === null || typeof v === "undefined") ? null : Number(v);
+      }
+
+      if (playerIndex === 0) {
+        const v = holeObj ? holeObj[field] : null;
+        return (v === null || typeof v === "undefined") ? null : Number(v);
+      }
+
+      return null;
+    }
+
+    function calcTotalsForPlayer(holesData, playerIndex){
+  let par=0, strokes=0, putts=0;
+  let parCount=0, strokesCount=0, puttsCount=0;
+
+  for (const h of holesData || []) {
+    const rawPar = (h && typeof h === "object") ? h.par : null;
+    const p = (rawPar === null || typeof rawPar === "undefined" || rawPar === "") ? null : Number(rawPar);
+
+    const s = getHolePlayerValue(h, "strokes", playerIndex);
+    const u = getHolePlayerValue(h, "putts", playerIndex);
+
+    // ✅ Only count par when that player's strokes is entered for that hole
+    if (Number.isFinite(s)) {
+      strokes += s;
+      strokesCount++;
+
+      if (Number.isFinite(p) && p > 0) {
+        par += p;
+        parCount++;
+      }
+    }
+
+    // ✅ Putts can still be counted when entered (independent of strokes)
+    if (Number.isFinite(u)) { putts += u; puttsCount++; }
+  }
+
+  const toPar = (strokesCount && parCount) ? (strokes - par) : null;
+
+  return {
+    par: parCount ? par : null,
+    strokes: strokesCount ? strokes : null,
+    putts: puttsCount ? putts : null,
+    toPar
+  };
+}
+
+    // -----------------------------
+    // Scorecard meta (pars + distances)
+    // -----------------------------
+    async function getPublishedMetaFromScorecards(roundLike){
+  const course = roundLike?.course || "";
+  const state = String(roundLike?.state || "").trim().toUpperCase();
+  const holes = Number(roundLike?.holes) || 18;
+
+  await loadScorecardsStateOnce(state);
+
+  const layouts9 = find9LayoutsForCourse(state, course);
+  const usingExplicitNines = layouts9.length > 0;
+
+  const chosenTee = String(uiSelectedTee || "").trim();
+
+  // ✅ helper: supports both tee-objects and flat arrays
+  function extractDistances(sc, holesWanted, nineLoop, teeName){
+    if (!sc) return { distances: null, teeName: teeName || "" };
+
+    // prefer tee-based object if present
+    const distAny = sc.distancesByTee ?? sc.distances_m ?? sc.distances;
+
+    // ✅ Case A: flat array already (your DB output)
+    if (Array.isArray(distAny)) {
+      let arr = distAny.slice();
+      if (holesWanted === 18) return { distances: arr.slice(0, 18), teeName: "" };
+      if (holesWanted === 9) {
+        if (arr.length === 9) return { distances: arr.slice(0, 9), teeName: "" };
+        if (arr.length >= 18) return { distances: (nineLoop === "back") ? arr.slice(9,18) : arr.slice(0,9), teeName: "" };
+        return { distances: arr.slice(0, 9), teeName: "" };
+      }
+      return { distances: null, teeName: "" };
+    }
+
+    // ✅ Case B: tee-keyed object
+    if (distAny && typeof distAny === "object") {
+      let tn = teeName || "";
+      if (!tn) tn = pickTeeNameFromDistancesObj(distAny);
+
+      const arr = Array.isArray(distAny[tn]) ? distAny[tn].slice() : null;
+      if (!arr || !arr.length) return { distances: null, teeName: tn || "" };
+
+      if (holesWanted === 18) return { distances: arr.slice(0,18), teeName: tn || "" };
+      if (holesWanted === 9) {
+        if (arr.length === 9) return { distances: arr.slice(0,9), teeName: tn || "" };
+        if (arr.length >= 18) return { distances: (nineLoop === "back") ? arr.slice(9,18) : arr.slice(0,9), teeName: tn || "" };
+        return { distances: arr.slice(0,9), teeName: tn || "" };
+      }
+    }
+
+    return { distances: null, teeName: teeName || "" };
+  }
+
+  if (usingExplicitNines) {
+    if (holes === 9) {
+      const lay = String(uiNineSingle || "").trim();
+      const sc9 = lay ? getScorecard9(state, course, lay) : null;
+
+      let pars = null;
+      if (sc9 && Array.isArray(sc9.pars)) pars = sc9.pars.slice(0,9);
+
+      // ✅ distances: supports flat array OR tee-object
+      const distRes = extractDistances(sc9, 9, "front", chosenTee);
+
+      return { pars, distances: distRes.distances, teeName: distRes.teeName, nines: { nine: lay || "" } };
+    }
+
+    if (holes === 18) {
+      const layA = String(uiNineFront || "").trim();
+      const layB = String(uiNineBack || "").trim();
+      const scA = layA ? getScorecard9(state, course, layA) : null;
+      const scB = layB ? getScorecard9(state, course, layB) : null;
+
+      let pars = null;
+      if (scA && scB && Array.isArray(scA.pars) && Array.isArray(scB.pars)) {
+        pars = scA.pars.slice(0,9).concat(scB.pars.slice(0,9));
+      }
+
+      // ✅ distances: supports flat arrays OR tee-objects
+      const distA = extractDistances(scA, 9, "front", chosenTee);
+      const distB = extractDistances(scB, 9, "front", chosenTee);
+
+      let distances = null;
+      if (Array.isArray(distA.distances) && Array.isArray(distB.distances)) {
+        distances = distA.distances.concat(distB.distances);
+      }
+
+      // If either side had a teeName, keep it (otherwise blank)
+      const teeName = distA.teeName || distB.teeName || "";
+
+      return { pars, distances, teeName, nines: { front: layA || "", back: layB || "" } };
+    }
+  }
+
+  const layout = String(roundLike?.layout || "").trim().toLowerCase();
+  const nineLoop = String(roundLike?.nineLoop || "").trim().toLowerCase();
+
+  const idx = scorecardIndexByState.get(state) || new Map();
+  const base = `${cleanCourseNameForMatch(course)}|${holes}`;
+  const kLayout = base + `|${layout || ""}`;
+  const kFallback = base + `|`;
+
+  let list = idx.get(kLayout) || [];
+  if (!list.length) list = idx.get(kFallback) || [];
+
+  const sc = list.length ? list[0] : null;
+
+  let pars = null;
+  if (sc && Array.isArray(sc.pars)) {
+    if (holes === 18) pars = sc.pars.slice(0, 18);
+    if (holes === 9) {
+      if (sc.pars.length === 9) pars = sc.pars.slice(0, 9);
+      else if (sc.pars.length >= 18) pars = (nineLoop === "back") ? sc.pars.slice(9,18) : sc.pars.slice(0,9);
+      else pars = sc.pars.slice(0, 9);
+    }
+  }
+
+  // ✅ distances: supports flat array OR tee-object
+  const distRes = extractDistances(sc, holes, nineLoop, chosenTee);
+
+  return { pars, distances: distRes.distances, teeName: distRes.teeName };
+}
+
+    // -----------------------------
+    // Round list
+    // -----------------------------
+    function renderRoundsList(){
+      roundsListEl.innerHTML = "";
+      roundsEmptyEl.style.display = roundsCache.length ? "none" : "block";
+
+      for (const r of roundsCache) {
+        const item = document.createElement("div");
+        item.className = "roundItem";
+        item.dataset.id = r.id;
+
+        const totalsP1 = calcTotalsForPlayer(r.holesData || [], 0);
+        const scoreLabel = (totalsP1.strokes != null) ? totalsP1.strokes : "—";
+        const toParLabel = (totalsP1.toPar != null)
+          ? (totalsP1.toPar === 0 ? "E" : (totalsP1.toPar > 0 ? "+"+totalsP1.toPar : ""+totalsP1.toPar))
+          : "—";
+
+        const pc = getPlayersCountFromRound(r);
+
+        item.innerHTML = `
+          <div class="top">
+            <div>
+              <div class="title">${escapeHtml(r.course || "Round")}${r.layout ? " — " + escapeHtml(r.layout) : ""}</div>
+              <div class="meta">
+                ${escapeHtml(r.state || "")} • ${r.holes || ""} holes • Players: ${pc}
+                • ${escapeHtml(r.par_mode || "")} • ${formatDate(r.created_at)}
+              </div>
+            </div>
+            <div class="score">${scoreLabel} <span class="muted" style="font-weight:900;">(${toParLabel})</span></div>
+          </div>
+        `;
+
+        item.addEventListener("click", () => loadRound(r.id));
+        roundsListEl.appendChild(item);
+      }
+    }
+
+    // -----------------------------
+    // Scorecard rendering
+    // -----------------------------
+    function playerLabel(pIndex){
+      const n = String(playerNames[pIndex] || "").trim();
+      if (!n) return `P${pIndex+1}`;
+      // keep headers compact
+      const short = n.length > 14 ? (n.slice(0, 14) + "…") : n;
+      return `P${pIndex+1} • ${short}`;
+    }
+
+    function buildScoreHead(playersCount, teeLabel){
+      const pc = clamp(playersCount, 1, 4);
+
+      let th1 = `<tr>
+        <th rowspan="2">Hole</th>
+        <th rowspan="2">Par</th>
+        <th rowspan="2">Dist <span class="distMuted">(m${teeLabel ? " • " + escapeHtml(teeLabel) : ""})</span></th>
+      `;
+      for (let p=1; p<=pc; p++){
+        th1 += `<th colspan="2">${escapeHtml(playerLabel(p-1))}</th>`;
+      }
+      th1 += `</tr>`;
+
+      let th2 = `<tr>`;
+      for (let p=1; p<=pc; p++){
+        th2 += `<th>Strokes</th><th>Putts</th>`;
+      }
+      th2 += `</tr>`;
+
+      scoreHead.innerHTML = th1 + th2;
+    }
+
+    // ✅ NEW: detect if course needs submission (no published meta)
+    function shouldOfferSubmission(round, meta){
+      const holesCount = Number(round?.holes || 0);
+
+      const pars = Array.isArray(meta?.pars) ? meta.pars : null;
+      const dists = Array.isArray(meta?.distances) ? meta.distances : null;
+
+      // if no meta at all, offer submission
+      if (!pars || !dists) return true;
+      if (pars.length !== holesCount || dists.length !== holesCount) return true;
+
+      // if any invalid values (including 0), offer submission
+      for (let i=0;i<holesCount;i++){
+        const p = Number(pars[i]);
+        const d = Number(dists[i]);
+        if (!Number.isFinite(p) || p < 3 || p > 6) return true;
+        if (!Number.isFinite(d) || d < 40 || d > 800) return true;
+      }
+
+      // otherwise template is complete; no need to submit
+      return false;
+    }
+function scoreDiffClass(strokes, par){
+  const s = Number(strokes);
+  const p = Number(par);
+  if (!Number.isFinite(s) || !Number.isFinite(p)) return "";
+  const diff = s - p;
+  if (diff <= -2) return "eagle";
+  if (diff === -1) return "birdie";
+  if (diff === 1) return "bogey";
+  if (diff === 2) return "double";
+  if (diff >= 3) return "triple";
+  return "";
+}
+function applyTableScoreColours(){
+  if (!currentRound) return;
+
+  const holesCount = Number(currentRound?.holes) || 18;
+  const pc = getPlayersCountFromRound(currentRound);
+
+  for (let i=1; i<=holesCount; i++){
+    const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
+    const parRaw = parInp ? String(parInp.value || "").trim() : "";
+    const parVal = parRaw === "" ? null : Number(parRaw);
+
+    for (let p=1; p<=pc; p++){
+      const sInp = scoreBody.querySelector(`input[data-field="strokes"][data-hole="${i}"][data-player="${p}"]`);
+      if (!sInp) continue;
+
+      sInp.classList.remove("birdie","eagle","bogey","double","triple");
+
+      const sRaw = String(sInp.value || "").trim();
+      const sVal = sRaw === "" ? null : Number(sRaw);
+
+      const cls = scoreDiffClass(sVal, parVal);
+      if (cls) sInp.classList.add(cls);
+    }
+  }
+}
+
+function setPremiumVisible(on){
+  if (!premiumWrap || !tableWrapEl) return;
+
+  premiumWrap.style.display = on ? "block" : "none";
+
+  // table is hidden by default in premium, unless user toggles it
+  const hideTable = on && !premiumShowingTable;
+  tableWrapEl.classList.toggle("hidden", hideTable);
+
+  if (toggleTableBtn){
+    toggleTableBtn.style.display = on ? "inline-flex" : "none";
+    toggleTableBtn.textContent = premiumShowingTable ? "Play mode" : "View table";
+  }
+}
+
+function getHoleRowFromTable(holeNum){
+  const holesRows = readTableHoles();
+  return holesRows.find(h => Number(h.hole_number) === Number(holeNum)) || null;
+}
+
+function setHoleValueInTable(holeNum, field, playerNum, value){
+  const sel = `input[data-field="${field}"][data-hole="${holeNum}"]` + (playerNum ? `[data-player="${playerNum}"]` : "");
+  const inp = scoreBody.querySelector(sel);
+  if (!inp) return;
+  inp.value = (value == null) ? "" : String(value);
+  inp.dispatchEvent(new Event("input", { bubbles:true }));
+}
+
+function renderPremiumForHole(round, metaPars, metaDists, teeName){
+  const holesCount = Number(round?.holes) || 18;
+  premiumHoleIndex = clamp(premiumHoleIndex, 0, holesCount - 1);
+
+  const holeNum = premiumHoleIndex + 1;
+
+  // determine par: published meta -> table -> fallback 4
+  const metaPar = (metaPars && Number.isFinite(Number(metaPars[premiumHoleIndex])))
+    ? Number(metaPars[premiumHoleIndex])
+    : null;
+
+  const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${holeNum}"]`);
+  const tableParRaw = parInp ? String(parInp.value || "").trim() : "";
+  const tablePar = tableParRaw === "" ? null : Number(tableParRaw);
+
+  const basePar = Number.isFinite(metaPar) ? metaPar : (Number.isFinite(tablePar) ? tablePar : 4);
+
+  const metaDist = (metaDists && Number.isFinite(Number(metaDists[premiumHoleIndex])))
+    ? Number(metaDists[premiumHoleIndex])
+    : null;
+
+  // header pills
+const pc = getPlayersCountFromRound(round);
+premiumPlayerIndex = clamp(premiumPlayerIndex, 0, pc - 1);
+const pLabel = playerLabel(premiumPlayerIndex);
+const nextIsPlayer = premiumPlayerIndex < pc - 1;
+
+if (premPills){
+  // To Par shown for CURRENT player (not always P1)
+  const holesRows = readTableHoles();
+  const totals = calcTotalsForPlayer(holesRows, premiumPlayerIndex);
+  const toParLabel = (totals.toPar == null) ? "—" : (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+"+totals.toPar : ""+totals.toPar));
+
+  premPills.innerHTML = `
+    <span class="premPill">${escapeHtml(pLabel)}</span>
+    <span class="premPill">Hole ${holeNum} / ${holesCount}</span>
+    <span class="premPill">Par ${Number.isFinite(basePar) ? basePar : "—"}</span>
+    <span class="premPill">${Number.isFinite(metaDist) ? (metaDist + "m") : "—"}</span>
+    <span class="premPill">${teeName ? ("Tee " + escapeHtml(teeName)) : "Tee —"}</span>
+    <span class="premPill">To Par: ${toParLabel}</span>
+  `;
+}
+
+// ✅ button text
+if (premNextBtn) premNextBtn.textContent = nextIsPlayer ? "Next player →" : "Next hole →";
+if (premPrevBtn) premPrevBtn.textContent = (premiumPlayerIndex > 0) ? "← Prev player" : "← Prev hole";
+
+  // current values from table (current player)
+const holeRow = getHoleRowFromTable(holeNum);
+const curStrokes = holeRow ? getHolePlayerValue(holeRow, "strokes", premiumPlayerIndex) : null;
+const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerIndex) : null;
+
+  // ✅ defaults you requested
+  const startStrokes = Number.isFinite(Number(curStrokes)) ? Number(curStrokes) : Number(basePar);
+  const startPutts = Number.isFinite(Number(curPutts)) ? Number(curPutts) : 2;
+
+  // strokes options: par-2 .. par+4
+  const strokeVals = [];
+  for (let v = basePar - 2; v <= basePar + 4; v++){
+    if (v >= 1 && v <= 12) strokeVals.push(v);
+  }
+
+  // wheel picker for strokes
+  if (premScoreBtns){
+    premScoreBtns.innerHTML = "";
+    const sel = document.createElement("select");
+    sel.style.width = "100%";
+    sel.style.padding = "12px";
+    sel.style.borderRadius = "12px";
+    sel.style.border = "1px solid var(--border)";
+    sel.style.fontWeight = "900";
+    sel.style.fontSize = "18px";
+
+    strokeVals.forEach(v => {
+      const opt = document.createElement("option");
+      opt.value = String(v);
+      opt.textContent = String(v);
+      sel.appendChild(opt);
+    });
+
+    sel.value = String(startStrokes);
+
+    sel.addEventListener("change", () => {
+      const v = Number(sel.value);
+      setHoleValueInTable(holeNum, "strokes", premiumPlayerIndex + 1, Number.isFinite(v) ? v : null);
+      renderPremiumForHole(round, metaPars, metaDists, teeName);
+    });
+
+    premScoreBtns.appendChild(sel);
+  }
+
+  // wheel picker for putts (defaults to 2)
+  if (premPuttBtns){
+    premPuttBtns.innerHTML = "";
+    const sel = document.createElement("select");
+    sel.style.width = "100%";
+    sel.style.padding = "12px";
+    sel.style.borderRadius = "12px";
+    sel.style.border = "1px solid var(--border)";
+    sel.style.fontWeight = "900";
+    sel.style.fontSize = "18px";
+
+    [0,1,2,3,4].forEach(v => {
+      const opt = document.createElement("option");
+      opt.value = String(v);
+      opt.textContent = String(v);
+      sel.appendChild(opt);
+    });
+
+    sel.value = String(startPutts);
+
+    sel.addEventListener("change", () => {
+      const v = Number(sel.value);
+      setHoleValueInTable(holeNum, "putts", premiumPlayerIndex + 1, Number.isFinite(v) ? v : null);
+      renderPremiumForHole(round, metaPars, metaDists, teeName);
+    });
+
+    premPuttBtns.appendChild(sel);
+  }
+
+  // no colours / shapes in play mode
+  if (premNote){
+    premNote.textContent = (premiumPlayerIndex < (getPlayersCountFromRound(round) - 1))
+  ? "Use the wheels, then Next player →"
+  : "Use the wheels, then Next hole →";
+  }
+
+  const pc2 = getPlayersCountFromRound(round);
+if (premPrevBtn) premPrevBtn.disabled = (premiumHoleIndex <= 0 && premiumPlayerIndex <= 0);
+if (premNextBtn) premNextBtn.disabled = (premiumHoleIndex >= holesCount - 1 && premiumPlayerIndex >= pc2 - 1);
+}
+
+function enablePremiumMode(round, metaPars, metaDists, teeName){
+  premiumShowingTable = false;
+  premiumPlayerIndex = 0;
+  setPremiumVisible(true);
+  renderPremiumForHole(round, metaPars, metaDists, teeName);
+
+  if (premPrevBtn){
+    premPrevBtn.onclick = () => {
+      const holesCount = Number(round?.holes) || 18;
+      const pc = getPlayersCountFromRound(round);
+
+      // back a player first
+      if (premiumPlayerIndex > 0){
+        premiumPlayerIndex -= 1;
+        renderPremiumForHole(round, metaPars, metaDists, teeName);
+        return;
+      }
+
+      // otherwise back a hole and go to last player
+      if (premiumHoleIndex > 0){
+        premiumHoleIndex = Math.max(0, premiumHoleIndex - 1);
+        premiumPlayerIndex = Math.max(0, pc - 1);
+        renderPremiumForHole(round, metaPars, metaDists, teeName);
+        return;
+      }
+
+      // start
+      premiumHoleIndex = 0;
+      premiumPlayerIndex = 0;
+      renderPremiumForHole(round, metaPars, metaDists, teeName);
+    };
+  }
+
+  if (premNextBtn){
+    premNextBtn.onclick = () => {
+      const holesCount = Number(round?.holes) || 18;
+      const pc = getPlayersCountFromRound(round);
+
+      // next player first
+      if (premiumPlayerIndex < pc - 1){
+        premiumPlayerIndex += 1;
+        renderPremiumForHole(round, metaPars, metaDists, teeName);
+        return;
+      }
+
+      // last player -> next hole
+      premiumPlayerIndex = 0;
+      premiumHoleIndex = Math.min(holesCount - 1, premiumHoleIndex + 1);
+      renderPremiumForHole(round, metaPars, metaDists, teeName);
+    };
+  }
+
+  if (toggleTableBtn){
+    toggleTableBtn.onclick = () => {
+      premiumShowingTable = !premiumShowingTable;
+      setPremiumVisible(true);
+    };
+  }
+}
+    async function renderScorecard(round){
+      currentRound = round;
+      currentRoundId = round?.id || null;
+
+      // ✅ ensure P1 is user always
+      ensureP1IsUser();
+
+      if (!round || !currentRoundId) {
+        scorecardEmpty.style.display = "block";
+        scorecardWrap.style.display = "none";
+        saveAllBtn.disabled = true;
+        deleteRoundBtn.disabled = true;
+
+        // ✅ hide BOTH possible submit buttons
+        if (submitCourseBtn){
+          submitCourseBtn.style.display = "none";
+          submitCourseBtn.disabled = true;
+        }
+
+        scTitleEl.textContent = "Scorecard";
+        scSubEl.textContent = "Select a round to begin.";
+        scPillsEl.innerHTML = "";
+        totalsGrid.innerHTML = "";
+        scoreHead.innerHTML = "";
+        scoreBody.innerHTML = "";
+        return;
+      }
+
+      // ✅ keep Players dropdown synced to the round
+      const pc = getPlayersCountFromRound(round);
+      if (playersEl) playersEl.value = String(pc);
+
+      // ✅ load per-round names from localStorage
+      loadNamesForRound(currentRoundId);
+      ensureP1IsUser();
+      renderPlayerNamesUI();
+
+      scorecardEmpty.style.display = "none";
+      scorecardWrap.style.display = "block";
+      saveAllBtn.disabled = false;
+      deleteRoundBtn.disabled = false;
+
+      const course = String(round.course || "").trim();
+      const state = String(round.state || "").trim().toUpperCase();
+      const holes = Number(round.holes) || 18;
+
+      await loadScorecardsStateOnce(state);
+      const layouts9 = find9LayoutsForCourse(state, course);
+
+      if (layouts9.length){
+        ninesWrap.style.display = "block";
+        teeWrap.style.display = "block";
+        nineLoopWrap.style.display = "none";
+
+        if (holes === 9){
+          nines9Only.style.display = "block";
+          nines18Only.style.display = "none";
+          setSelectOptions(nineSingleEl, layouts9, null);
+
+          if (!uiNineSingle){
+            const lay = String(round.layout || "").trim();
+            uiNineSingle = layouts9.find(x => x.toLowerCase() === lay.toLowerCase()) || layouts9[0] || "";
+          }
+          nineSingleEl.value = uiNineSingle;
+        } else {
+          nines9Only.style.display = "none";
+          nines18Only.style.display = "block";
+
+          if (!uiNineFront || !uiNineBack){
+            const lay = String(round.layout || "").trim();
+            const parts = lay.split("-").map(s=>s.trim()).filter(Boolean);
+            uiNineFront = layouts9.find(x => parts[0] && x.toLowerCase() === parts[0].toLowerCase()) || layouts9[0] || "";
+            uiNineBack  = layouts9.find(x => parts[1] && x.toLowerCase() === parts[1].toLowerCase()) || layouts9[1] || layouts9[0] || "";
+          }
+
+          ensureDifferentFrontBack(layouts9);
+
+          setSelectOptions(nineFrontEl, layouts9, null);
+          nineFrontEl.value = uiNineFront;
+
+          const frontLower = String(uiNineFront || "").toLowerCase();
+          let backOptions = layouts9.filter(x => x.toLowerCase() !== frontLower);
+          if (!backOptions.length) backOptions = layouts9.slice();
+          setSelectOptions(nineBackEl, backOptions, null);
+
+          if (!backOptions.some(x => x.toLowerCase() === String(uiNineBack||"").toLowerCase())){
+            uiNineBack = backOptions[0] || "";
+          }
+          nineBackEl.value = uiNineBack;
+        }
+
+        await refreshNinesAndTeesUI();
+      } else {
+        ninesWrap.style.display = "none";
+        teeWrap.style.display = "none";
+        syncNineLoopVisibility();
+      }
+
+      const meta = await getPublishedMetaFromScorecards(round);
+const metaPars = Array.isArray(meta?.pars) ? meta.pars : null;
+const metaDists = Array.isArray(meta?.distances) ? meta.distances : null;
+const teeName = meta?.teeName || "";
+
+// ✅ Published mode?
+const isPublishedMode =
+  String(round.par_mode || "").toLowerCase() === "published" ||
+  String(round.par_mode || "").toUpperCase() === "PUBLISHED";
+
+// ✅ UNIFIED: show ONE "Submit" button only when needed
+const offer = shouldOfferSubmission(round, meta);
+
+// ✅ allow hole-by-hole premium UI even when submission is needed
+const canUsePremium = isPublishedMode;
+
+// ✅ show/hide submit button
+if (submitCourseBtn){
+  submitCourseBtn.style.display = offer ? "inline-flex" : "none";
+  submitCourseBtn.disabled = !offer;
+  if (offer) submitCourseBtn.textContent = "Submit";
+}
+
+scTitleEl.textContent = round.course || "Round";
+scSubEl.textContent = `${round.state || ""} • ${round.holes || ""} holes • ${round.layout ? round.layout + " • " : ""}${formatDate(round.created_at)}`;
+
+scPillsEl.innerHTML = `
+  <span class="pill">${escapeHtml(round.par_mode || "")}</span>
+  <span class="pill">Players: ${pc}</span>
+  <span class="pill">${round.layout ? escapeHtml(round.layout) : "Layout: —"}</span>
+  <span class="pill">${teeName ? ("Tee: " + escapeHtml(teeName)) : "Tee: —"}</span>
+`;
+
+buildScoreHead(pc, teeName);
+scoreBody.innerHTML = "";
+
+const holesCount = Number(round.holes) || 18;
+const holesData = Array.isArray(round.holesData) ? round.holesData : [];
+
+const map = new Map();
+for (const h of holesData) map.set(Number(h.hole_number), h);
+
+for (let i=1; i<=holesCount; i++){
+  const existing = map.get(i) || { hole_number: i, par: null, distance_m: null };
+
+  let parValue = existing.par;
+  if ((parValue === null || typeof parValue === "undefined" || parValue === "") && isPublishedMode && metaPars && Number.isFinite(Number(metaPars[i-1]))) {
+    parValue = Number(metaPars[i-1]);
+  }
+
+  const metaDistVal = (metaDists && Number.isFinite(Number(metaDists[i-1]))) ? Number(metaDists[i-1]) : null;
+  const savedDistVal = Number.isFinite(Number(existing.distance_m)) ? Number(existing.distance_m) : null;
+
+  const tr = document.createElement("tr");
+
+  let playerTds = "";
+  for (let pi=0; pi<pc; pi++){
+    const s = getHolePlayerValue(existing, "strokes", pi);
+    const u = getHolePlayerValue(existing, "putts", pi);
+
+    playerTds += `
+      <td>
+        <input class="mini" inputmode="numeric" pattern="[0-9]*"
+          data-field="strokes" data-hole="${i}" data-player="${pi+1}"
+          value="${s ?? ""}" placeholder="—">
+      </td>
+      <td>
+        <input class="mini" inputmode="numeric" pattern="[0-9]*"
+          data-field="putts" data-hole="${i}" data-player="${pi+1}"
+          value="${u ?? ""}" placeholder="—">
+      </td>
+    `;
+  }
+
+  // ✅ Distance: if we have published distance -> show it. Otherwise allow entry (needed for submission).
+  const distCellHtml = (metaDistVal != null)
+  ? `${metaDistVal}`
+  : `<input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="distance_m" data-hole="${i}" value="${savedDistVal ?? ""}" placeholder="m">`;
+
+  tr.innerHTML = `
+    <td>Hole ${i}</td>
+    <td><input class="mini" inputmode="numeric" pattern="[0-9]*" data-field="par" data-hole="${i}" value="${parValue ?? ""}" placeholder="—"></td>
+    <td class="distCell" data-meta-dist="${metaDistVal ?? ""}">${distCellHtml}</td>
+    ${playerTds}
+  `;
+
+  scoreBody.appendChild(tr);
+}
+
+scoreBody.querySelectorAll("input").forEach((inp) => {
+  inp.addEventListener("input", () => updateTotalsFromTable());
+});
+
+updateTotalsFromTable();
+
+// ✅ IMPORTANT: enable premium ONLY AFTER table inputs exist
+if (canUsePremium) {
+  enablePremiumMode(round, metaPars, metaDists, teeName);
+} else {
+  premiumHoleIndex = 0;
+  premiumShowingTable = false;
+  setPremiumVisible(false);
+}
+
+}
+
+    function readTableHoles(){
+      const byHole = new Map();
+      const holesCount = Number(currentRound?.holes) || 18;
+      const pc = getPlayersCountFromRound(currentRound);
+
+      for (let i=1;i<=holesCount;i++){
+        byHole.set(i, { hole_number: i, par: null, distance_m: null, strokes_by_player: {}, putts_by_player: {} });
+      }
+
+      // par
+      for (let i=1;i<=holesCount;i++){
+        const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${i}"]`);
+        if (parInp){
+          const v = String(parInp.value || "").trim();
+          const n = v === "" ? null : Number(v);
+          byHole.get(i).par = Number.isFinite(n) ? n : null;
+        }
+      }
+
+      // ✅ distance_m (only present when editable)
+      for (let i=1;i<=holesCount;i++){
+  const distInp = scoreBody.querySelector(`input[data-field="distance_m"][data-hole="${i}"]`);
+  if (distInp){
+    const v = String(distInp.value || "").trim();
+    const n = v === "" ? null : Number(v);
+    byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
+  } else {
+  // ✅ distance shown as published text (read from the td attribute)
+  const tr = scoreBody.querySelector(`tr:nth-child(${i})`);
+  const cell = tr ? tr.querySelector(`td.distCell[data-meta-dist]`) : null;
+  const raw = cell ? String(cell.getAttribute("data-meta-dist") || "").trim() : "";
+  const n = raw === "" ? null : Number(raw);
+  byHole.get(i).distance_m = Number.isFinite(n) ? n : null;
+}
+}
+
+      // strokes/putts by player
+      const inputs = scoreBody.querySelectorAll("input[data-player]");
+      inputs.forEach(inp => {
+        const hole = Number(inp.dataset.hole);
+        const field = String(inp.dataset.field || "");
+        const player = Number(inp.dataset.player);
+        if (!Number.isFinite(hole) || !byHole.has(hole)) return;
+        if (![ "strokes", "putts" ].includes(field)) return;
+        if (!Number.isFinite(player) || player < 1 || player > 4) return;
+
+        const v = String(inp.value || "").trim();
+        const n = v === "" ? null : Number(v);
+        const val = Number.isFinite(n) ? n : null;
+
+        if (field === "strokes") byHole.get(hole).strokes_by_player[String(player)] = val;
+        if (field === "putts") byHole.get(hole).putts_by_player[String(player)] = val;
+      });
+
+      for (let i=1;i<=holesCount;i++){
+        const h = byHole.get(i);
+        h.strokes = (h.strokes_by_player && typeof h.strokes_by_player === "object") ? (h.strokes_by_player["1"] ?? null) : null;
+        h.putts = (h.putts_by_player && typeof h.putts_by_player === "object") ? (h.putts_by_player["1"] ?? null) : null;
+
+        for (let p=pc+1; p<=4; p++){
+          delete h.strokes_by_player[String(p)];
+          delete h.putts_by_player[String(p)];
+        }
+      }
+
+      const rows = [];
+      for (let i=1;i<=holesCount;i++) rows.push(byHole.get(i));
+      return rows;
+    }
+
+    function updateTotalsFromTable(){
+      const holesRows = readTableHoles();
+      const pc = getPlayersCountFromRound(currentRound);
+
+      totalsGrid.innerHTML = "";
+
+      for (let pi=0; pi<pc; pi++){
+        const holesForCalc = holesRows.map(h => ({
+          hole_number: h.hole_number,
+          par: h.par,
+          strokes: (pi===0 ? h.strokes : null),
+          putts: (pi===0 ? h.putts : null),
+          strokes_by_player: h.strokes_by_player,
+          putts_by_player: h.putts_by_player
+        }));
+
+        const totals = calcTotalsForPlayer(holesForCalc, pi);
+
+        const toParLabel = (totals.toPar == null)
+          ? "—"
+          : (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+" + totals.toPar : "" + totals.toPar));
+
+        const label = playerLabel(pi);
+        const pill = document.createElement("span");
+        pill.className = "pill";
+        pill.textContent = `${label}: Strokes ${totals.strokes ?? "—"} • Putts ${totals.putts ?? "—"} • To Par ${toParLabel}`;
+        totalsGrid.appendChild(pill);
+        applyTableScoreColours();
+      }
+    }
+
+    // -----------------------------
+    // ✅ NEW: course submission flow (email required)
+    // -----------------------------
+    function openSubmitModal(){
+      if (!submitModalBack) return;
+
+      // ✅ prefill cached email if we have one (still editable)
+      const cached = getCachedSubmitEmail();
+      submitEmail.value = cached || "";
+
+      submitToast.className = "toast";
+      submitToast.style.display = "none";
+      submitModalBack.style.display = "flex";
+      submitModalBack.setAttribute("aria-hidden", "false");
+      setTimeout(() => submitEmail.focus(), 40);
+    }
+
+    function closeSubmitModal(){
+      if (!submitModalBack) return;
+      submitModalBack.style.display = "none";
+      submitModalBack.setAttribute("aria-hidden", "true");
+    }
+
+    function holesHaveAllParAndDistance(holesRows){
+      const holesCount = Number(currentRound?.holes) || 18;
+      if (!Array.isArray(holesRows) || holesRows.length < holesCount) return false;
+
+      for (let i=1; i<=holesCount; i++){
+        const h = holesRows.find(x => Number(x?.hole_number) === i);
+        const p = Number(h?.par);
+        const d = (h?.distance_m === null || typeof h?.distance_m === "undefined") ? null : Number(h.distance_m);
+
+        if (!Number.isFinite(p) || p < 3 || p > 6) return false;
+        if (!Number.isFinite(d) || d < 40 || d > 800) return false;
+      }
+      return true;
+    }
+
+    async function submitCourseForApproval(){
+      if (!currentRoundId || !currentRound) return;
+
+      const email = String(submitEmail.value || "").trim().toLowerCase();
+      if (!isValidEmail(email)){
+        setToast(submitToast, "Please enter a valid email address.", false);
+        return;
+      }
+      setCachedSubmitEmail(email);
+
+      // Require Par + Distance for every hole
+      const holesRows = readTableHoles();
+      if (!holesHaveAllParAndDistance(holesRows)){
+        setToast(submitToast, "Missing data. Enter Par + Distance (m) for every hole, then Save, then Submit.", false);
+        return;
+      }
+
+      // Save first (so backend round_holes has pars + distances)
+      try{
+        await saveRoundAll();
+      }catch(e){
+        setToast(submitToast, "Could not save round before submit: " + (e?.message || "error"), false);
+        return;
+      }
+
+      // Now submit
+      try{
+        submitConfirmBtn.disabled = true;
+        await api(`/api/rounds/templates/submit/${encodeURIComponent(currentRoundId)}`, {
+          method:"POST",
+          body: JSON.stringify({ email })
+        });
+
+        setToast(submitToast, "Submitted! We will email your coupon once approved.", true);
+
+        // also log analytics
+        try{
+          await logAnalyticsEvent("course_template_submitted", {
+            roundId: String(currentRoundId),
+            courseName: currentRound?.course || null,
+            state: currentRound?.state || null,
+            holes: Number(currentRound?.holes) || null,
+            email: email
+          });
+        }catch{}
+
+        setTimeout(() => closeSubmitModal(), 900);
+      }catch(e){
+        const msg = e?.data?.message || e?.message || "Submit failed";
+        setToast(submitToast, msg, false);
+      }finally{
+        submitConfirmBtn.disabled = false;
+      }
+    }
+    // -----------------------------
+// ✅ Guest mode storage (no login)
+// -----------------------------
+const GUEST_ROUNDS_KEY = "teeradar_guest_rounds_v1";
+
+function guestReadRounds(){
+  try{
+    const raw = localStorage.getItem(GUEST_ROUNDS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  }catch{
+    return [];
+  }
+}
+
+function guestWriteRounds(arr){
+  try{
+    localStorage.setItem(GUEST_ROUNDS_KEY, JSON.stringify(Array.isArray(arr) ? arr : []));
+  }catch{}
+}
+
+function guestMakeId(){
+  return "g_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8);
+}
+
+function guestUpsertRound(round){
+  const arr = guestReadRounds();
+  const id = String(round?.id || "").trim();
+  if (!id) return;
+
+  const idx = arr.findIndex(r => String(r?.id) === id);
+  if (idx >= 0) arr[idx] = round;
+  else arr.unshift(round);
+
+  guestWriteRounds(arr);
+}
+
+function guestDeleteRound(id){
+  const arr = guestReadRounds().filter(r => String(r?.id) !== String(id));
+  guestWriteRounds(arr);
+}
+
+    // -----------------------------
+    // API calls
+    // -----------------------------
+    async function fetchRounds(){
+  // ✅ Guest mode: read from localStorage
+  if (!isLoggedIn()){
+    const rounds = guestReadRounds();
+    roundsCache = rounds.map(r => ({
+      ...r,
+      holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
+    }));
+    renderRoundsList();
+    return;
+  }
+
+  // ✅ Logged in: read from backend
+  const data = await api("/api/rounds", { method:"GET" });
+  const rounds = (data && data.rounds) ? data.rounds : [];
+  roundsCache = rounds.map(r => ({
+    ...r,
+    holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
+  }));
+  renderRoundsList();
+}
+
+    async function loadRound(id){
+  setLeftPanelsVisibility(false);
+
+  // ✅ Guest mode
+  if (!isLoggedIn()){
+    const rounds = guestReadRounds();
+    const round = rounds.find(r => String(r?.id) === String(id));
+    if (!round){
+      setToast(rightToast, "Round not found (guest).", false);
+      return;
+    }
+
+    currentRoundId = round.id;
+    currentRound = round;
+
+    // ✅ keep Players dropdown synced
+    if (playersEl) playersEl.value = String(getPlayersCountFromRound(round));
+
+    // ✅ load + show names
+    loadNamesForRound(round.id);
+    if (isLoggedIn()) ensureP1IsUser(); // (won’t run in guest)
+    renderPlayerNamesUI();
+
+    await renderScorecard(round);
+    return;
+  }
+
+  // ✅ Logged in mode
+  const data = await api(`/api/rounds/${encodeURIComponent(id)}`, { method:"GET" });
+  const round = data.round || data;
+  const holesArr = data.holes || data.holesData || round.holesData || round.holes || [];
+  round.holesData = holesArr || [];
+
+  if (playersEl) playersEl.value = String(getPlayersCountFromRound(round));
+
+  if (Array.isArray(round.player_names)) {
+    for (let i = 0; i < 4; i++) {
+      if (typeof round.player_names[i] === "string") playerNames[i] = round.player_names[i];
+    }
+    try { localStorage.setItem(roundNamesKey(round.id), JSON.stringify(playerNames)); } catch {}
+  }
+
+  loadNamesForRound(round.id);
+  ensureP1IsUser();
+  renderPlayerNamesUI();
+
+  await renderScorecard(round);
+}
+
+    async function createRound(){
+      const course = String(courseEl.value || "").trim();
+      const state = String(stateEl.value || "WA").trim().toUpperCase();
+      const holes = Number(holesEl.value || 18);
+      let layout = String(layoutEl.value || "").trim();
+      const par_mode = String(parModeEl.value || "published").trim();
+      const notes = String(notesEl.value || "").trim();
+      const players_count = clamp(playersEl?.value || 1, 1, 4);
+
+      // ✅ build player_names array for backend
+      const namesOut = [];
+      for (let i = 0; i < 4; i++) {
+        namesOut.push(String(playerNames[i] || "").trim());
+      }
+      namesOut.length = players_count;
+
+      if (!course) {
+        setToast(leftToast, "Please enter a course name.", false);
+        return;
+      }
+
+      // ✅ ensure names UI is synced + P1 user
+      ensureP1IsUser();
+      renderPlayerNamesUI();
+      // ✅ guest mode requires a Player 1 name
+if (!isLoggedIn()){
+  const p1 = String(playerNames[0] || "").trim();
+  if (!p1){
+    setToast(leftToast, "Please enter your name (Player 1) to continue.", false);
+    return;
+  }
+}
+
+      const hasNinesUI = ninesWrap && ninesWrap.style.display !== "none";
+
+      if (hasNinesUI) {
+        if (holes === 9) {
+          layout = String(uiNineSingle || "").trim() || layout;
+        } else {
+          const a = String(uiNineFront || "").trim();
+          const b = String(uiNineBack || "").trim();
+          layout = (a && b) ? `${a} - ${b}` : layout;
+        }
+      }
+
+      const nineLoop = (holes === 9 && !hasNinesUI) ? String(nineLoopEl?.value || "front").trim().toLowerCase() : null;
+
+      let pars = null;
+      if (par_mode === "published") {
+        const meta = await getPublishedMetaFromScorecards({ course, state, holes, nineLoop, layout });
+        pars = Array.isArray(meta?.pars) ? meta.pars : null;
+      }
+
+      const payload = {
+        course,
+        state,
+        holes,
+        layout: layout || null,
+        par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
+        notes: notes || null,
+        players_count,
+        player_names: namesOut,
+        ...(holes === 9 && !hasNinesUI ? { nineLoop } : {}),
+        ...(pars ? { pars } : {})
+      };
+
+      // ✅ Guest mode: create locally (no backend)
+if (!isLoggedIn()){
+  const newId = guestMakeId();
+  const nowIso = new Date().toISOString();
+
+  const roundLocal = {
+    id: newId,
+    course,
+    state,
+    holes,
+    layout: layout || null,
+    par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
+    notes: notes || null,
+    players_count,
+    player_names: namesOut,
+    created_at: nowIso,
+    holesData: Array.from({ length: holes }, (_, i) => ({
+      hole_number: i + 1,
+      par: (pars && Number.isFinite(Number(pars[i]))) ? Number(pars[i]) : null,
+      distance_m: null,
+      strokes_by_player: {},
+      putts_by_player: {}
+    }))
+  };
+
+  // cache names + save round
+  saveNamesForRound(newId);
+  guestUpsertRound(roundLocal);
+
+  setToast(leftToast, "Round created (guest).", true);
+
+  await safeFetchRounds();
+  await safeLoadRound(newId);
+
+  setLeftPanelsVisibility(false);
+  return;
+}
+
+// ✅ Logged in: create via backend
+const data = await api("/api/rounds", { method:"POST", body: JSON.stringify(payload) });
+
+      const newId = data.roundId || (data.round && data.round.id);
+      setToast(leftToast, "Round created.", true);
+
+      await safeFetchRounds();
+if (newId) {
+  // ✅ save names for this new round locally
+  saveNamesForRound(newId);
+
+  await safeLoadRound(newId);
+
+  await logAnalyticsEvent("round_created", {
+    roundId: String(newId),
+    round_id: String(newId),
+    courseName: course || null
+  });
+}
+
+// ✅ NEW: hide Create + Your rounds after round is created/loaded
+setLeftPanelsVisibility(false);
+    }
+
+    async function saveRoundAll(){
+      if (!currentRoundId) return;
+      // ✅ Guest mode: save locally
+if (!isLoggedIn()){
+  saveNamesForRound(currentRoundId);
+
+  const holesRows = readTableHoles();
+
+  currentRound.holesData = holesRows;
+  currentRound.players_count = getPlayersCountFromRound(currentRound);
+  currentRound.player_names = playerNames.slice(0, currentRound.players_count);
+
+  guestUpsertRound(currentRound);
+
+  setToast(rightToast, "Saved (guest).", true);
+  await safeFetchRounds();
+  return;
+}
+
+      // ✅ save names per-round before saving scores (so it's never lost)
+      saveNamesForRound(currentRoundId);
+
+      const holesRows = readTableHoles();
+
+      const payload = {
+        holes: holesRows,
+        players_count: getPlayersCountFromRound(currentRound),
+        player_names: playerNames
+      };
+
+      await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, {
+        method:"PUT",
+        body: JSON.stringify(payload)
+      });
+
+      const rid = String(currentRoundId || "").trim();
+      if (rid) {
+        const already = wasRoundPlayedLogged(rid);
+        const hasStrokes = hasAnyStrokesEntered(holesRows);
+
+        if (!already && hasStrokes) {
+          await logAnalyticsEvent("round_played", {
+            roundId: rid,
+            round_id: rid,
+            course: currentRound?.course || null,
+            courseName: currentRound?.course || null,
+            state: currentRound?.state || null,
+            holes: Number(currentRound?.holes) || null
+          });
+          markRoundPlayedLogged(rid);
+        }
+      }
+
+      setToast(rightToast, "Saved.", true);
+      await safeFetchRounds();
+    }
+
+    async function deleteRound(){
+      if (!currentRoundId) return;
+      // ✅ Guest mode: delete locally
+if (!isLoggedIn()){
+  guestDeleteRound(currentRoundId);
+  try { localStorage.removeItem(roundNamesKey(currentRoundId)); } catch {}
+
+  setToast(rightToast, "Round deleted (guest).", true);
+
+  currentRoundId = null;
+  currentRound = null;
+  await renderScorecard(null);
+  await safeFetchRounds();
+  return;
+}
+
+      await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, { method:"DELETE" });
+
+      // ✅ clean up local names for this round
+      try { localStorage.removeItem(roundNamesKey(currentRoundId)); } catch {}
+
+      setToast(rightToast, "Round deleted.", true);
+
+      currentRoundId = null;
+      currentRound = null;
+      await renderScorecard(null);
+      await safeFetchRounds();
+    }
+
+    // -----------------------------
+    // Safe wrappers
+    // -----------------------------
+    async function safeFetchRounds(){
+      try{
+        await fetchRounds();
+      }catch(err){
+        setToast(leftToast, "Rounds API not ready: " + (err.message || "error"), false);
+      }
+    }
+    async function safeLoadRound(id){
+      try{
+        await loadRound(id);
+      }catch(err){
+        setToast(rightToast, "Load failed: " + (err.message || "error"), false);
+      }
+    }
+
+    // -----------------------------
+    // Init + events
+    // -----------------------------
+    function logout(){
+      ["teeradar_jwt","teeradar_token","token","authToken","jwt","access_token"].forEach(k => localStorage.removeItem(k));
+      setToast(leftToast, "Logged out.", true);
+      renderHeaderAuthState();
+      setTimeout(() => window.location.href = "/account.html", 450);
+    }
+
+    if (logoutBtn) logoutBtn.addEventListener("click", () => {
+  if (!isLoggedIn()) return;
+  logout();
+});
+    createRoundBtn.addEventListener("click", async () => {
+  try{
+    await createRound();
+  }catch(err){
+    console.error("createRound failed:", err);
+    setToast(leftToast, "Create failed: " + (err?.message || "error"), false);
+  }
+});
+    refreshBtn.addEventListener("click", safeFetchRounds);
+    if (showLeftBtn) {
+  showLeftBtn.addEventListener("click", () => {
+    setLeftPanelsVisibility(true);
+    // optional: scroll back to the top so the left card is visible
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+
+    saveAllBtn.addEventListener("click", async () => {
+      try{
+        await saveRoundAll();
+      }catch(err){
+        setToast(rightToast, "Save failed: " + (err.message || "error"), false);
+      }
+    });
+
+    deleteRoundBtn.addEventListener("click", async () => {
+      const ok = confirm("Delete this round? This cannot be undone.");
+      if (!ok) return;
+      try{
+        await deleteRound();
+      }catch(err){
+        setToast(rightToast, "Delete failed: " + (err.message || "error"), false);
+      }
+    });
+
+    holesEl.addEventListener("change", async () => {
+      syncNineLoopVisibility();
+      await refreshNinesAndTeesUI();
+    });
+
+    stateEl.addEventListener("change", async () => {
+      await refreshNinesAndTeesUI();
+    });
+
+    courseEl.addEventListener("blur", async () => {
+      await refreshNinesAndTeesUI();
+    });
+
+    // ✅ when players changes:
+    // - update currentRound.players_count so the scorecard can add/remove columns immediately
+    // - rerender (no save until user hits Save)
+    playersEl.addEventListener("change", () => {
+      ensureP1IsUser();
+      renderPlayerNamesUI();
+
+      if (currentRoundId && currentRound) {
+        const newPc = clamp(playersEl.value || 1, 1, 4);
+        currentRound.players_count = newPc; // ✅ keep in-memory round synced
+        renderScorecard(currentRound).catch(()=>{});
+      }
+    });
+
+    // ✅ FIX: delegated click handler so it always works (even after re-renders)
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("#submitCourseBtn");
+      if (!btn) return;
+
+      e.preventDefault();
+
+      if (btn.disabled) return;
+      if (!currentRoundId) return;
+
+      openSubmitModal();
+    });
+
+    // ✅ modal actions
+    if (submitCancelBtn) submitCancelBtn.addEventListener("click", closeSubmitModal);
+    if (submitConfirmBtn) submitConfirmBtn.addEventListener("click", submitCourseForApproval);
+
+    if (submitModalBack){
+      submitModalBack.addEventListener("click", (e) => {
+        if (e.target === submitModalBack) closeSubmitModal();
+      });
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeSubmitModal();
+    });
+
+    (async function init(){
+  // Always show the app now (Guest mode supported)
+  appEl.style.display = "block";
+
+  const token = getToken();
+  const loggedIn = !!token;
+  renderHeaderAuthState();
+
+  // Header buttons
+  renderHeaderAuthState();
+
+  // Guest notice
+  authGate.style.display = loggedIn ? "none" : "block";
+
+  // P1 name (only auto-fill when logged in)
+  if (loggedIn){
+    ensureP1IsUser();
+  }
+  renderPlayerNamesUI();
+
+  setLeftPanelsVisibility(true);
+
+  initCourseAutocomplete();
+  syncNineLoopVisibility();
+
+  await safeFetchRounds();
+})();
+  </script>
+</body>
+</html>
