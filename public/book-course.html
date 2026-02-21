@@ -80,8 +80,31 @@
       box-shadow:0 0 0 3px rgba(56,189,248,.25);
     }
     .actions{
-      display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px
-    }
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;          /* allows wrap instead of overlap */
+  align-items:stretch;
+  margin-top:12px;
+}
+.actions .btn{
+  flex:1 1 220px;          /* buttons share row when space allows */
+  min-width:0;
+  white-space:nowrap;
+}
+.actions #hint{
+  flex:1 0 100%;           /* hint always drops to its own line */
+}
+
+/* ✅ Mobile: stack buttons full width */
+@media (max-width: 520px){
+  .actions{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .actions .btn{
+    width:100%;
+  }
+}
     .btn{
       border:0;border-radius:12px;
       padding:11px 14px;
