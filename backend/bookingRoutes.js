@@ -3398,8 +3398,7 @@ router.get("/admin/analytics/funnel", requirePlatformAdmin, async (req, res) => 
   }
 });
 
-// 4) Daily series for charts (bookings + revenue)
-// ✅ FIX: include MANUAL bookings too (deduped by reference), same as /admin/analytics/bookings
+// 4) Daily series for charts (bookings + revenue) — ONLINE + MANUAL (manual deduped by reference)
 router.get("/admin/analytics/daily", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.query.slug || "");
@@ -3413,74 +3412,112 @@ router.get("/admin/analytics/daily", requirePlatformAdmin, async (req, res) => {
       courseId = c.id;
     }
 
+    // ✅ We keep your existing pattern: build a single params array and re-use it
     const params = [];
-    let where = `WHERE 1=1`;
+    let whereOnline = `WHERE 1=1`;
+    let whereManual = `WHERE 1=1`;
 
-    // ✅ scope to course if provided
+    // scope to course if provided
     if (courseId) {
       params.push(courseId);
-      where += ` AND b.course_id = $${params.length}`;
+      whereOnline += ` AND b.course_id = $${params.length}`;
+      whereManual += ` AND m.course_id = $${params.length}`;
     }
 
-    // ✅ IMPORTANT: filter by BOOKING DATE (play_date), not created_at
+    // ✅ IMPORTANT: use PLAY DATE for reporting (your code is using play_date)
     if (start && end) {
       params.push(start, end);
-      where += ` AND b.booking_date BETWEEN $${params.length - 1}::date AND $${params.length}::date`;
+      whereOnline += ` AND b.play_date::date BETWEEN $${params.length - 1}::date AND $${params.length}::date`;
+      whereManual += ` AND m.play_date::date BETWEEN $${params.length - 1}::date AND $${params.length}::date`;
     } else if (start && !end) {
       params.push(start);
-      where += ` AND b.booking_date >= $${params.length}::date`;
+      whereOnline += ` AND b.play_date::date >= $${params.length}::date`;
+      whereManual += ` AND m.play_date::date >= $${params.length}::date`;
     } else if (!start && end) {
       params.push(end);
-      where += ` AND b.booking_date <= $${params.length}::date`;
+      whereOnline += ` AND b.play_date::date <= $${params.length}::date`;
+      whereManual += ` AND m.play_date::date <= $${params.length}::date`;
     } else {
-      // default last 30 days (by booking date)
-      where += ` AND b.booking_date >= (CURRENT_DATE - INTERVAL '30 days')::date`;
+      // default last 30 days (by play date)
+      whereOnline += ` AND b.play_date::date >= (CURRENT_DATE - INTERVAL '30 days')::date`;
+      whereManual += ` AND m.play_date::date >= (CURRENT_DATE - INTERVAL '30 days')::date`;
     }
 
     const q = `
-      WITH all_bookings AS (
-        -- online bookings
+      WITH
+      fees AS (
         SELECT
-          b.course_id,
-          b.play_date::date AS booking_date,
-          COALESCE(b.total_cents,0)
+          id AS course_id,
+          COALESCE(cart_fee_cents,0)::int AS cart_fee_cents,
+          COALESCE(hire_clubs_fee_cents,0)::int AS clubs_fee_cents
+        FROM booking_courses
+        ${courseId ? `WHERE id = $1` : ``}
+      ),
+
+      online AS (
+        SELECT
+          b.play_date::date::text AS day,
+          COUNT(*)::int AS bookings,
+          COALESCE(SUM(
+            COALESCE(b.total_cents,0)
             + COALESCE(b.cart_fee_cents,0)
-            + COALESCE(b.hire_clubs_fee_cents,0) AS revenue_cents
+            + COALESCE(b.hire_clubs_fee_cents,0)
+          ), 0)::bigint AS revenue_cents
         FROM booking_bookings b
+        ${whereOnline}
+        GROUP BY b.play_date::date
+      ),
 
-        UNION ALL
-
-        -- manual bookings: many rows per booking, collapse to 1 row per reference
+      mb AS (
+        -- ✅ group manual slots by reference so add-ons aren't double-counted
         SELECT
+          m.play_date::date::text AS day,
           m.course_id,
-          m.play_date::date AS booking_date,
-          0::bigint AS revenue_cents
-        FROM (
-          SELECT
-            course_id,
-            play_date,
-            MIN(created_at) AS created_at,
-            reference
-          FROM booking_manual_slots
-          WHERE reference IS NOT NULL AND reference <> ''
-          GROUP BY course_id, play_date, reference
-        ) m
+          m.reference,
+          COUNT(*) FILTER (WHERE COALESCE(NULLIF(m.name,''),'') <> '')::int AS players,
+          MAX(COALESCE(m.cart_qty,0))::int AS carts,
+          MAX(COALESCE(m.hire_clubs_qty,0))::int AS clubs,
+          MAX(COALESCE(m.price_per_player_cents,0))::int AS ppp
+        FROM booking_manual_slots m
+        ${whereManual}
+          AND m.reference IS NOT NULL AND m.reference <> ''
+        GROUP BY m.play_date::date, m.course_id, m.reference
+      ),
+
+      manual AS (
+        SELECT
+          mb.day,
+          COUNT(*)::int AS bookings,
+          COALESCE(SUM(
+            (mb.players * mb.ppp)
+            + (mb.carts * f.cart_fee_cents)
+            + (mb.clubs * f.clubs_fee_cents)
+          ), 0)::bigint AS revenue_cents
+        FROM mb
+        JOIN fees f ON f.course_id = mb.course_id
+        GROUP BY mb.day
+      ),
+
+      combined AS (
+        SELECT * FROM online
+        UNION ALL
+        SELECT * FROM manual
       )
+
       SELECT
-        b.booking_date::text AS day,
-        COUNT(*)::int AS bookings,
-        COALESCE(SUM(b.revenue_cents), 0)::bigint AS revenue_cents
-      FROM all_bookings b
-      ${where}
-      GROUP BY b.booking_date
-      ORDER BY b.booking_date ASC;
+        day,
+        COALESCE(SUM(bookings),0)::int AS bookings,
+        COALESCE(SUM(revenue_cents),0)::bigint AS revenue_cents
+      FROM combined
+      GROUP BY day
+      ORDER BY day ASC;
     `;
 
     const r = await db.query(q, params);
-    res.json({ ok: true, rows: r.rows || [] });
+    return res.json({ ok: true, rows: r.rows || [] });
   } catch (e) {
     console.error("admin/analytics/daily", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
