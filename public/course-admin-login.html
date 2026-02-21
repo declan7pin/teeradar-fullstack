@@ -52,6 +52,40 @@
       text-align:center;
       color:#b91c1c;
     }
+
+    /* ✅ Forgot password UI */
+    .forgotRow{
+      margin-top:10px;
+      text-align:center;
+    }
+    .linkBtn{
+      background:transparent;
+      border:0;
+      padding:0;
+      margin:0;
+      color:#00796b;
+      font-weight:700;
+      cursor:pointer;
+      width:auto;
+    }
+    .linkBtn:hover{ text-decoration: underline; }
+
+    .forgotWrap{
+      margin-top:12px;
+      padding-top:12px;
+      border-top:1px solid #e2e8f0;
+    }
+    .secondaryBtn{
+      margin-top:12px;
+      width:100%;
+      padding:12px;
+      border:1px solid #cbd5e1;
+      border-radius:12px;
+      background:#fff;
+      color:#0f172a;
+      font-weight:700;
+      cursor:pointer;
+    }
   </style>
 </head>
 <body>
@@ -67,13 +101,81 @@
 
     <button id="loginBtn">Sign in</button>
 
+    <!-- ✅ Forgot password -->
+    <div class="forgotRow">
+      <button type="button" id="forgotBtn" class="linkBtn">Forgot password?</button>
+    </div>
+
+    <div id="forgotWrap" class="forgotWrap" style="display:none;">
+      <label style="margin-top:10px;">Reset email</label>
+      <input id="forgotEmail" type="email" placeholder="admin@course.com" />
+      <button type="button" id="forgotSendBtn" class="secondaryBtn">Send reset link</button>
+    </div>
+
     <div id="msg" class="msg"></div>
   </div>
 
 <script>
 const msg = document.getElementById("msg");
 
+/* ✅ Forgot password handlers */
+const forgotBtn = document.getElementById("forgotBtn");
+const forgotWrap = document.getElementById("forgotWrap");
+const forgotEmail = document.getElementById("forgotEmail");
+const forgotSendBtn = document.getElementById("forgotSendBtn");
+
+forgotBtn.onclick = () => {
+  const open = forgotWrap.style.display !== "none";
+  forgotWrap.style.display = open ? "none" : "block";
+
+  // prefill with login email if present
+  const cur = document.getElementById("email").value.trim();
+  if (!forgotEmail.value.trim() && cur) forgotEmail.value = cur;
+
+  // reset message
+  msg.style.color = "#b91c1c";
+  msg.textContent = "";
+};
+
+forgotSendBtn.onclick = async () => {
+  msg.style.color = "#0f172a";
+  msg.textContent = "Sending reset link…";
+
+  const email = (forgotEmail.value || "").trim() || (document.getElementById("email").value || "").trim();
+  if (!email) {
+    msg.style.color = "#b91c1c";
+    msg.textContent = "Enter your email first";
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/book/course-admin/forgot-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email })
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      msg.style.color = "#b91c1c";
+      msg.textContent = data.error || "Reset failed";
+      return;
+    }
+
+    // ✅ Don't reveal if the email exists
+    msg.style.color = "#00796b";
+    msg.textContent = "✅ If that email exists, a reset link has been sent.";
+    forgotWrap.style.display = "none";
+  } catch (e) {
+    msg.style.color = "#b91c1c";
+    msg.textContent = "Network error";
+  }
+};
+
 document.getElementById("loginBtn").onclick = async () => {
+  msg.style.color = "#b91c1c";
   msg.textContent = "Signing in…";
 
   const email = document.getElementById("email").value.trim();
@@ -99,14 +201,13 @@ document.getElementById("loginBtn").onclick = async () => {
       return;
     }
 
-    // ✅ NEW: persist token/slug so course-admin.html can auto-use it (no second login)
+    // ✅ persist token/slug so course-admin.html can auto-use it (no second login)
     const token = data.token || data.jwt || data.accessToken || "";
     const slug = data.slug || data.courseSlug || data.course_slug || "";
 
     if (token) localStorage.setItem("course_admin_token", token);
     if (slug) localStorage.setItem("course_admin_slug", slug);
 
-    // success
     window.location.href = "/course-admin.html";
   } catch (e) {
     msg.textContent = "Network error";
