@@ -1,29 +1,134 @@
 // backend/analyticsRoutes.js
 import express from "express";
-import {
-  logAnalyticsEvent,
-  getAnalyticsSummary,
-  getAllEvents,
-  getRegisteredUsers,
-  recordRegisteredUser,
-  deleteRegisteredUser,
-} from "./db/analyticsDb.js";
+
+/**
+ * ✅ FIX:
+ * analyticsDb.js in your repo may not export all named functions consistently.
+ * Use namespace import so missing exports never crash boot.
+ */
+import * as analyticsDb from "./db/analyticsDb.js";
+
+/**
+ * ✅ Postgres (source of truth)
+ */
+import db from "./db.js";
+
+/**
+ * ✅ ALSO write Postgres analytics (backend/analytics.js) if present
+ * Use namespace import so missing exports never crash boot.
+ */
+import * as pgAnalytics from "./analytics.js";
+import Stripe from "stripe";
 
 const router = express.Router();
 
+// ✅ Stripe (for plan healing in /api/analytics/users)
+const stripeKey = String(process.env.STRIPE_SECRET_KEY || "").trim();
+const stripe = stripeKey ? new Stripe(stripeKey) : null;
+
+// ✅ priceId → plan
+const PRICE_TO_PLAN = {
+  "price_1SdnQTASm4geYL4WeBGAEEkA": "BASIC",
+  "price_1SdnRLASm4geYL4W23IKreHO": "BASIC",
+  "price_1SdnSGASm4geYL4WBWsFWUNe": "PRO",
+  "price_1SdnSpASm4geYL4W1yxaZf2i": "PRO",
+};
+
+// pull the functions that DO exist (no hard failure)
+const logAnalyticsEvent = analyticsDb.logAnalyticsEvent;
+const getAnalyticsSummarySqlite = analyticsDb.getAnalyticsSummary;
+const getAllEvents = analyticsDb.getAllEvents;
+const getRegisteredUsers = analyticsDb.getRegisteredUsers;
+const recordRegisteredUser = analyticsDb.recordRegisteredUser;
+
+// ✅ Try common delete export names (so it works across versions)
+const deleteRegisteredUser =
+  analyticsDb.deleteRegisteredUser ||
+  analyticsDb.deleteRegisteredUserById ||
+  analyticsDb.deleteUser ||
+  analyticsDb.deleteUserById ||
+  analyticsDb.removeRegisteredUser ||
+  null;
+
 /**
  * POST /api/analytics/event
- * Body: { type, at?, payload? }
+ * Body: { type, at?, payload? } OR { type, at?, userId?, courseName?, roundId?, ... }
  */
-router.post("/event", (req, res) => {
+router.post("/event", async (req, res) => {
   try {
-    const { type, at, payload } = req.body || {};
+    const body = req.body || {};
+    const { type } = body;
 
     if (!type) {
       return res.status(400).json({ error: "Missing event type" });
     }
 
-    logAnalyticsEvent({ type, at, payload });
+    const at = body.at || new Date().toISOString();
+
+    // ✅ Merge top-level fields into payload (keep backwards compatibility)
+    const incomingPayload =
+      body.payload && typeof body.payload === "object" ? body.payload : {};
+
+    const mergedPayload = {
+      ...incomingPayload,
+      ...body,
+    };
+
+    delete mergedPayload.type;
+    delete mergedPayload.at;
+    delete mergedPayload.payload;
+
+    console.log("\nIncoming analytics event:", { type, at, ...mergedPayload });
+
+    // legacy SQLite (non-blocking)
+    try {
+      if (typeof logAnalyticsEvent === "function") {
+        const r = logAnalyticsEvent({ type, at, payload: mergedPayload });
+        if (r && typeof r.then === "function") await r;
+      }
+    } catch (e) {
+      console.warn("SQLite analytics insert failed (non-fatal):", e?.message || e);
+    }
+
+    // ✅ Postgres insert (preferred)
+    try {
+      const recordPgEvent = pgAnalytics.recordEvent || pgAnalytics.recordPgEvent || null;
+
+      if (typeof recordPgEvent === "function") {
+        const userId =
+          mergedPayload.userId ??
+          mergedPayload.user_id ??
+          mergedPayload.uid ??
+          null;
+
+        const courseName =
+          mergedPayload.courseName ??
+          mergedPayload.course_name ??
+          mergedPayload.course ??
+          null;
+
+        const roundId =
+          mergedPayload.roundId ??
+          mergedPayload.round_id ??
+          null;
+
+        await recordPgEvent({
+          type,
+          at,
+          occurredAt: at,
+          occurred_at: at,
+          userId,
+          user_id: userId,
+          courseName,
+          course_name: courseName,
+          roundId,
+          round_id: roundId,
+        });
+      }
+    } catch (e) {
+      console.warn("Postgres analytics insert failed (non-fatal):", e?.message || e);
+    }
+
     return res.json({ ok: true });
   } catch (err) {
     console.error("Error logging analytics event", err);
@@ -31,61 +136,383 @@ router.post("/event", (req, res) => {
   }
 });
 
+/**
+ * ✅ Build summary directly from Postgres analytics table
+ */
+async function buildPgSummary() {
+  const q = async (sql, params = []) => (await db.query(sql, params)).rows;
+
+  // totals by type (all-time)
+  const totals = await q(
+    `
+    SELECT type, COUNT(*)::int AS n
+    FROM analytics
+    GROUP BY type
+    `
+  );
+  const byType = Object.fromEntries(totals.map((r) => [r.type, Number(r.n) || 0]));
+
+  const homeViews = byType.home_view || 0;
+  const bookingClicks = byType.course_booking_click || 0;
+
+  /**
+   * ✅ IMPORTANT FIX:
+   * - "search" = real user pressing Search (what you want on the Searches card)
+   * - "search_course" = background scanning / course checks (alerts worker)
+   */
+  const searches = byType.search || 0; // ✅ USER searches only
+  const alertSearches = byType.search_course || 0; // ✅ background scans
+
+  const newUsers = byType.new_user || 0;
+
+  // uniques
+  const usersAllTime = await q(
+    `SELECT COUNT(DISTINCT user_id)::int AS n
+     FROM analytics
+     WHERE user_id IS NOT NULL AND user_id <> '';`
+  );
+  const usersToday = await q(
+    `SELECT COUNT(DISTINCT user_id)::int AS n
+     FROM analytics
+     WHERE user_id IS NOT NULL AND user_id <> ''
+       AND occurred_at >= date_trunc('day', now());`
+  );
+  const usersWeek = await q(
+    `SELECT COUNT(DISTINCT user_id)::int AS n
+     FROM analytics
+     WHERE user_id IS NOT NULL AND user_id <> ''
+       AND occurred_at >= now() - interval '7 days';`
+  );
+  const users30d = await q(
+    `SELECT COUNT(DISTINCT user_id)::int AS n
+     FROM analytics
+     WHERE user_id IS NOT NULL AND user_id <> ''
+       AND occurred_at >= now() - interval '30 days';`
+  );
+
+  // returning users in last 7d (users with 2+ events in last 7d)
+  const returningUsers7d = await q(
+    `SELECT COUNT(*)::int AS n FROM (
+        SELECT user_id
+        FROM analytics
+        WHERE user_id IS NOT NULL AND user_id <> ''
+          AND occurred_at >= now() - interval '7 days'
+        GROUP BY user_id
+        HAVING COUNT(*) >= 2
+     ) t;`
+  );
+
+  // repeat bookers (users with 2+ booking clicks all-time)
+  const repeatBookers = await q(
+    `SELECT COUNT(*)::int AS n FROM (
+        SELECT user_id
+        FROM analytics
+        WHERE type = 'course_booking_click'
+          AND user_id IS NOT NULL AND user_id <> ''
+        GROUP BY user_id
+        HAVING COUNT(*) >= 2
+     ) t;`
+  );
+
+  // peak booking hour
+  const peakBookingHour = await q(
+    `SELECT EXTRACT(HOUR FROM occurred_at)::int AS hr, COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'course_booking_click'
+     GROUP BY hr
+     ORDER BY n DESC
+     LIMIT 1;`
+  );
+
+  // top booked courses (all-time)
+  const topCourses = await q(
+    `SELECT course_name AS course, COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'course_booking_click'
+       AND course_name IS NOT NULL AND course_name <> ''
+     GROUP BY course_name
+     ORDER BY n DESC
+     LIMIT 10;`
+  );
+
+  // top scanned courses (all-time) - this is still your search_course bucket
+  const topSearchedCourses = await q(
+    `SELECT course_name AS course, COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'search_course'
+       AND course_name IS NOT NULL AND course_name <> ''
+     GROUP BY course_name
+     ORDER BY n DESC
+     LIMIT 10;`
+  );
+
+  // rounds played
+  const roundsPlayed = byType.round_played || 0;
+  const roundsPlayed7dRows = await q(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'round_played'
+       AND occurred_at >= now() - interval '7 days';`
+  );
+
+  // most played courses
+  const topPlayedCourses = await q(
+    `SELECT course_name AS course, COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'round_played'
+       AND course_name IS NOT NULL AND course_name <> ''
+     GROUP BY course_name
+     ORDER BY n DESC
+     LIMIT 10;`
+  );
+
+  const topPlayedCourses30d = await q(
+    `SELECT course_name AS course, COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'round_played'
+       AND course_name IS NOT NULL AND course_name <> ''
+       AND occurred_at >= now() - interval '30 days'
+     GROUP BY course_name
+     ORDER BY n DESC
+     LIMIT 10;`
+  );
+
+  // ✅ Alerts (7d) — based on analytics event types
+  const alertsSent7dRows = await q(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'alert_sent'
+       AND occurred_at >= now() - interval '7 days';`
+  );
+  const alertHits7dRows = await q(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'alert_hit'
+       AND occurred_at >= now() - interval '7 days';`
+  );
+
+  // ✅ Alerts (all-time)
+  const alertsSentAllTimeRows = await q(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'alert_sent';`
+  );
+
+  const alertHitsAllTimeRows = await q(
+    `SELECT COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'alert_hit';`
+  );
+
+  const topAlertCourses7d = await q(
+    `SELECT course_name AS course, COUNT(*)::int AS n
+     FROM analytics
+     WHERE type = 'alert_hit'
+       AND occurred_at >= now() - interval '7 days'
+       AND course_name IS NOT NULL AND course_name <> ''
+     GROUP BY course_name
+     ORDER BY n DESC
+     LIMIT 10;`
+  );
+
+  const alertsSent7d = alertsSent7dRows[0]?.n ?? 0;
+  const alertHits7d = alertHits7dRows[0]?.n ?? 0;
+  const alertsSentAllTime = alertsSentAllTimeRows[0]?.n ?? 0;
+  const alertHitsAllTime = alertHitsAllTimeRows[0]?.n ?? 0;
+
+  return {
+    homePageViews: homeViews,
+    courseBookingClicks: bookingClicks,
+
+    // ✅ clean user number
+    searches,
+
+    // ✅ background scans count
+    alertSearches,
+
+    newUsers,
+
+    homeViews,
+    bookingClicks,
+
+    usersAllTime: usersAllTime[0]?.n ?? 0,
+    usersToday: usersToday[0]?.n ?? 0,
+    usersWeek: usersWeek[0]?.n ?? 0,
+    users30d: users30d[0]?.n ?? 0,
+    returningUsers7d: returningUsers7d[0]?.n ?? 0,
+    repeatBookers: repeatBookers[0]?.n ?? 0,
+    peakBookingHour: peakBookingHour[0]?.hr ?? null,
+
+    topCourses: topCourses.map((r) => ({ course: r.course, n: r.n })),
+    topSearchedCourses: topSearchedCourses.map((r) => ({ course: r.course, n: r.n })),
+
+    demandRank: [],
+
+    roundsPlayed,
+    roundsPlayed7d: roundsPlayed7dRows[0]?.n ?? 0,
+    topPlayedCourses: topPlayedCourses.map((r) => ({ course: r.course, n: r.n })),
+    topPlayedCourses30d: topPlayedCourses30d.map((r) => ({ course: r.course, n: r.n })),
+
+    // ✅ Alerts summary fields analytics.html expects
+    alertsSent7d,
+    alertHits7d,
+    alertsSentAllTime,
+    alertHitsAllTime,
+    avgTimeToHitMins: null,
+    alertsByPlan: null,
+    topAlertCourses: topAlertCourses7d.map((r) => ({ course: r.course, hits: r.n })),
+  };
+}
+
+function buildSqliteSummaryFromEvents(events = []) {
+  const byType = {};
+  for (const e of events) {
+    const t = String(e?.type || "").trim();
+    if (!t) continue;
+    byType[t] = (byType[t] || 0) + 1;
+  }
+
+  const homeViews = byType.home_view || 0;
+  const bookingClicks = byType.course_booking_click || 0;
+
+  // "search" = user pressed search
+  const searches = byType.search || 0;
+
+  // background scans (alerts worker)
+  const alertSearches = byType.search_course || 0;
+
+  const newUsers = byType.new_user || 0;
+  const roundsPlayed = byType.round_played || 0;
+
+  // top booked courses (from course_name)
+  const topCoursesMap = new Map();
+  for (const e of events) {
+    if (e?.type !== "course_booking_click") continue;
+    const name = e?.course_name || e?.courseName || e?.course || null;
+    if (!name) continue;
+    topCoursesMap.set(name, (topCoursesMap.get(name) || 0) + 1);
+  }
+
+  const topCourses = [...topCoursesMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([course, n]) => ({ course, n }));
+
+  // top scanned courses (search_course)
+  const topScannedMap = new Map();
+  for (const e of events) {
+    if (e?.type !== "search_course") continue;
+    const name = e?.course_name || e?.courseName || e?.course || null;
+    if (!name) continue;
+    topScannedMap.set(name, (topScannedMap.get(name) || 0) + 1);
+  }
+
+  const topSearchedCourses = [...topScannedMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([course, n]) => ({ course, n }));
+
+  return {
+    homePageViews: homeViews,
+    courseBookingClicks: bookingClicks,
+    searches,
+    alertSearches,
+    newUsers,
+
+    homeViews,
+    bookingClicks,
+
+    // these can stay 0 if you aren’t tracking user_id yet
+    usersAllTime: 0,
+    usersToday: 0,
+    usersWeek: 0,
+    users30d: 0,
+    returningUsers7d: 0,
+    repeatBookers: 0,
+    peakBookingHour: null,
+
+    topCourses,
+    topSearchedCourses,
+    demandRank: [],
+
+    roundsPlayed,
+    roundsPlayed7d: 0,
+    topPlayedCourses: [],
+    topPlayedCourses30d: [],
+
+    // alerts if you emit these event types
+    alertsSent7d: byType.alert_sent || 0,
+    alertsHits7d: byType.alert_hit || 0,
+    alertsSentAllTime: byType.alert_sent || 0,
+    alertsHitAllTime: byType.alert_hit || 0,
+    avgTimeToHitMins: null,
+    alertsByPlan: null,
+    topAlertCourses: [],
+  };
+}
+
 // shared handler for summary so we can serve both "/" and "/summary"
-function handleSummary(req, res) {
+async function handleSummary(req, res) {
   try {
-    const s = getAnalyticsSummary();
+    // ✅ Prefer Postgres as source of truth
+    const pg = await buildPgSummary();
 
-    const response = {
-      // backwards-compatible fields you already use
-      homePageViews: s.home_page_views,
-      courseBookingClicks: s.booking_clicks,
-      searches: s.searches,
-      newUsers: s.new_users,
-      homeViews: s.home_page_views,
-      bookingClicks: s.booking_clicks,
-      usersAllTime: s.unique_users,
-      usersToday: s.users_today,
-      usersWeek: s.users_week,
+    const pgHasSignal =
+      Number(pg.homePageViews || 0) > 0 ||
+      Number(pg.courseBookingClicks || 0) > 0 ||
+      Number(pg.searches || 0) > 0 ||
+      Number(pg.newUsers || 0) > 0 ||
+      Number(pg.roundsPlayed || 0) > 0 ||
+      Number(pg.alertsSent7d || 0) > 0 ||
+      Number(pg.alertHits7d || 0) > 0 ||
+      Number(pg.alertsSentAllTime || 0) > 0 ||
+      Number(pg.alertHitsAllTime || 0) > 0;
 
-      // extra fields for new cards/metrics
-      users30d: s.users30d,
-      returningUsers7d: s.returning_users_7d,
-      repeatBookers: s.repeat_bookers,
-      peakBookingHour: s.peak_booking_hour,
+    if (pgHasSignal) return res.json(pg);
 
-      topCourses: s.top_courses,
-      topSearchedCourses: s.top_searched_courses,
-      demandRank: s.demand_rank,
-    };
+    // ✅ If Postgres is truly empty, fall back to SQLite (if available)
+    const events =
+      typeof getAllEvents === "function"
+        ? await Promise.resolve(getAllEvents(20000))
+        : [];
 
-    return res.json(response);
-  } catch (err) {
-    console.error("Error building analytics summary", err);
-    return res.status(500).json({ error: "Failed to load analytics summary" });
+    const sqliteSummary = buildSqliteSummaryFromEvents(events || []);
+    return res.json(sqliteSummary);
+  } catch (e) {
+    console.warn("Postgres summary failed, falling back to SQLite:", e?.message || e);
+
+    try {
+      const events =
+        typeof getAllEvents === "function"
+          ? await Promise.resolve(getAllEvents(20000))
+          : [];
+
+      const sqliteSummary = buildSqliteSummaryFromEvents(events || []);
+      return res.json(sqliteSummary);
+    } catch (err) {
+      console.error("Error building analytics summary", err);
+      return res.status(500).json({ error: "Failed to load analytics summary" });
+    }
   }
 }
 
 /**
  * GET /api/analytics
- * Main endpoint used by analytics.html
  */
 router.get("/", handleSummary);
 
 /**
  * GET /api/analytics/summary
- * Backwards-compatible alias
  */
 router.get("/summary", handleSummary);
 
 /**
  * GET /api/analytics/events
- * For debugging – recent raw events.
  */
 router.get("/events", (req, res) => {
   try {
     const limit = Number(req.query.limit) || 200;
-    const events = getAllEvents(limit);
+    const events = typeof getAllEvents === "function" ? getAllEvents(limit) : [];
     return res.json({ events });
   } catch (err) {
     console.error("Error fetching analytics events", err);
@@ -95,7 +522,6 @@ router.get("/events", (req, res) => {
 
 /**
  * PUT /api/analytics/register-user
- * Call this from your auth flow when someone signs up / logs in.
  * Body: { email }
  */
 router.put("/register-user", (req, res) => {
@@ -104,7 +530,9 @@ router.put("/register-user", (req, res) => {
     if (!email) {
       return res.status(400).json({ error: "Missing email" });
     }
-    recordRegisteredUser(email);
+    if (typeof recordRegisteredUser === "function") {
+      recordRegisteredUser(email);
+    }
     return res.json({ ok: true });
   } catch (err) {
     console.error("Error recording registered user", err);
@@ -113,53 +541,254 @@ router.put("/register-user", (req, res) => {
 });
 
 /**
- * GET /api/analytics/users
- * Used by the admin dashboard table (analytics.html).
+ * ✅ DEBUG: check Stripe + DB plan for one email
+ * GET /api/analytics/users/stripe-check?email=someone@gmail.com
  */
-router.get("/users", (req, res) => {
+router.get("/users/stripe-check", async (req, res) => {
   try {
-    const limit = Number(req.query.limit) || 500;
-    const users = getRegisteredUsers(limit);
+    const email = String(req.query.email || "").trim().toLowerCase();
+    if (!email) return res.status(400).json({ ok: false, error: "email is required" });
 
-    // Add alert frequency (mins) so admin dashboard can show it.
-    // - If your DB already has alert_frequency_mins, we pass it through.
-    // - If not, we infer a sane default based on plan/tier/subscription if present.
-    const getAlertFrequencyMinsForPlan = (plan) => {
-      const p = String(plan || "").toLowerCase();
-      if (p === "pro") return 5;
-      if (p === "basic") return 15;
-      return 30; // free/default
+    const cols = await db.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='users';`
+    );
+    const hasPlan = new Set(cols.rows.map((r) => r.column_name)).has("plan");
+
+    const dbRow = hasPlan
+      ? await db.query(`SELECT id, email, plan FROM users WHERE LOWER(email) = $1 LIMIT 1;`, [email])
+      : await db.query(`SELECT id, email FROM users WHERE LOWER(email) = $1 LIMIT 1;`, [email]);
+
+    const out = {
+      ok: true,
+      stripeEnabled: !!stripe,
+      stripeKeyPresent: !!stripeKey,
+      email,
+      dbUser: dbRow.rows[0] || null,
+      stripe: {
+        customerFound: false,
+        customerId: null,
+        activeSubFound: false,
+        priceId: null,
+        mappedPlan: null,
+      },
     };
 
-    const usersWithFreq = Array.isArray(users)
-      ? users.map((u) => {
-          const direct =
-            u.alert_frequency_mins ??
-            u.alertFrequencyMins ??
-            u.alert_frequency ??
-            u.alertFrequency ??
-            null;
+    if (!stripe) return res.json(out);
 
-          const mins = Number(direct);
-          if (Number.isFinite(mins) && mins > 0) {
-            return { ...u, alert_frequency_mins: mins };
-          }
+    const custList = await stripe.customers.list({ email, limit: 1 });
+    if (!custList.data.length) return res.json(out);
 
-          const plan = u.plan ?? u.tier ?? u.subscription ?? "";
-          return { ...u, alert_frequency_mins: getAlertFrequencyMinsForPlan(plan) };
-        })
-      : users;
+    const customer = custList.data[0];
+    out.stripe.customerFound = true;
+    out.stripe.customerId = customer.id;
 
-    return res.json({ users: usersWithFreq });
+    const subs = await stripe.subscriptions.list({
+      customer: customer.id,
+      status: "active",
+      limit: 1,
+      expand: ["data.items.data.price"],
+    });
+
+    if (!subs.data.length) return res.json(out);
+
+    out.stripe.activeSubFound = true;
+
+    const priceId = subs.data[0]?.items?.data?.[0]?.price?.id || null;
+    out.stripe.priceId = priceId;
+    out.stripe.mappedPlan = priceId ? PRICE_TO_PLAN[priceId] : null;
+
+    return res.json(out);
   } catch (err) {
-    console.error("Error fetching registered users", err);
-    return res.status(500).json({ error: "Failed to fetch users" });
+    console.error("stripe-check error:", err);
+    return res.status(500).json({ ok: false, error: "internal error", detail: err.message });
+  }
+});
+
+/**
+ * GET /api/analytics/users
+ * ✅ Robust: works even if your users table schema differs
+ */
+router.get("/users", async (req, res) => {
+  const limit = Math.max(1, Math.min(1000, Number(req.query.limit) || 500));
+
+  try {
+    // ---- helpers ----
+    const tableExists = async (name) => {
+      const r = await db.query(`SELECT to_regclass($1::text) AS t;`, [name]);
+      return !!r.rows[0]?.t;
+    };
+
+    const getCols = async (tableName) => {
+      const r = await db.query(
+        `
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1
+        `,
+        [tableName]
+      );
+      return new Set((r.rows || []).map((x) => x.column_name));
+    };
+
+    // ---- must have users table ----
+    const hasUsers = await tableExists("public.users");
+    if (!hasUsers) {
+      // Return 200 so frontend doesn't treat as "endpoint missing"
+      return res.json({
+        users: [],
+        warning: "users_table_missing",
+      });
+    }
+
+    const usersCols = await getCols("users");
+    const hasPlanCol = usersCols.has("plan");
+
+    // Safe column picks
+    const colId = usersCols.has("id") ? "u.id" : "NULL::int AS id";
+    const colEmail = usersCols.has("email") ? "u.email" : "NULL::text AS email";
+
+    // ✅ Normalise DB values to FREE/BASIC/PRO (not "Unsubscribed")
+    const colPlan = hasPlanCol
+      ? `
+        CASE
+          WHEN u.plan IS NULL OR NULLIF(TRIM(u.plan), '') IS NULL THEN 'FREE'
+          WHEN UPPER(TRIM(u.plan)) IN ('FREE','BASIC','PRO') THEN UPPER(TRIM(u.plan))
+          WHEN LOWER(TRIM(u.plan)) IN ('unsubscribed','unsubscribed ') THEN 'FREE'
+          WHEN LOWER(u.plan) LIKE '%pro%' THEN 'PRO'
+          WHEN LOWER(u.plan) LIKE '%basic%' THEN 'BASIC'
+          WHEN LOWER(u.plan) LIKE '%free%' THEN 'FREE'
+          ELSE 'FREE'
+        END AS plan
+      `
+      : "'FREE'::text AS plan";
+
+    const colCreatedAt = usersCols.has("created_at")
+      ? "u.created_at"
+      : "NULL::timestamptz AS created_at";
+
+    const colLastSeen = usersCols.has("last_seen_at")
+      ? "u.last_seen_at"
+      : (usersCols.has("last_login") ? "u.last_login AS last_seen_at" : "NULL::timestamptz AS last_seen_at");
+
+    // Optional join to preferences (if table exists)
+    const hasPrefs = await tableExists("public.user_preferences");
+
+    let sql = "";
+    if (hasPrefs) {
+      const prefsCols = await getCols("user_preferences");
+
+      const colHomeState =
+        prefsCols.has("home_state")
+          ? "COALESCE(p.home_state, '') AS home_state"
+          : "''::text AS home_state";
+
+      const colFavs =
+        prefsCols.has("favourites")
+          ? "COALESCE(p.favourites, '[]'::jsonb) AS favourites"
+          : "'[]'::jsonb AS favourites";
+
+      sql = `
+        SELECT
+          ${colId},
+          ${colEmail},
+          ${colPlan},
+          ${colHomeState},
+          ${colFavs},
+          ${colCreatedAt},
+          ${colLastSeen}
+        FROM users u
+        LEFT JOIN user_preferences p
+          ON LOWER(p.email) = LOWER(u.email)
+        ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
+        LIMIT $1;
+      `;
+    } else {
+      // no prefs table - still return users
+      sql = `
+        SELECT
+          ${colId},
+          ${colEmail},
+          ${colPlan},
+          ''::text AS home_state,
+          '[]'::jsonb AS favourites,
+          ${colCreatedAt},
+          ${colLastSeen}
+        FROM users u
+        ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
+        LIMIT $1;
+      `;
+    }
+
+    const r = await db.query(sql, [limit]);
+
+    // ✅ Display-friendly labels: Free/Basic/Pro
+    let users = (r.rows || []).map((u) => {
+      const raw = String(u.plan || "").trim().toUpperCase();
+      let plan = "Free";
+      if (raw === "PRO" || raw.includes("PRO")) plan = "Pro";
+      else if (raw === "BASIC" || raw.includes("BASIC")) plan = "Basic";
+      else plan = "Free";
+      return { ...u, plan };
+    });
+
+    // ✅ Stripe-heal: if Stripe is set up, correct plans for users showing Free
+    // (cap to avoid rate limits)
+    if (stripe && hasPlanCol) {
+      const toCheck = users
+        .filter((u) => u.plan === "Free" && u.email)
+        .slice(0, 50);
+
+      for (const u of toCheck) {
+        try {
+          const email = String(u.email || "").trim().toLowerCase();
+          if (!email) continue;
+
+          const custList = await stripe.customers.list({ email, limit: 1 });
+          if (!custList.data.length) continue;
+
+          const customer = custList.data[0];
+
+          const subs = await stripe.subscriptions.list({
+            customer: customer.id,
+            status: "active",
+            limit: 1,
+            expand: ["data.items.data.price"],
+          });
+
+          if (!subs.data.length) continue;
+
+          const priceId = subs.data[0]?.items?.data?.[0]?.price?.id || null;
+          const mappedPlan = priceId ? PRICE_TO_PLAN[priceId] : null;
+
+          // ✅ store canonical values
+          const finalPlanDb = mappedPlan || "BASIC";
+
+          await db.query(
+            `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
+            [email, finalPlanDb]
+          );
+
+          // ✅ update response label
+          u.plan = finalPlanDb === "PRO" ? "Pro" : "Basic";
+        } catch (e) {
+          console.warn("Stripe heal failed for", u.email, e?.message || e);
+        }
+      }
+    }
+
+    return res.json({ users });
+  } catch (err) {
+    console.error("❌ /api/analytics/users error:", err);
+    return res.json({
+      users: [],
+      error: "users_query_failed",
+      detail: err?.message || String(err),
+    });
   }
 });
 
 /**
  * DELETE /api/analytics/users/:id
- * Used by the "Delete" button in the admin UI.
  */
 router.delete("/users/:id", (req, res) => {
   try {
@@ -167,6 +796,16 @@ router.delete("/users/:id", (req, res) => {
     if (!id) {
       return res.status(400).json({ error: "Invalid id" });
     }
+
+    if (typeof deleteRegisteredUser !== "function") {
+      return res.status(501).json({
+        error: "delete_not_supported",
+        message:
+          "Your analyticsDb.js does not export a delete user function. Add one (e.g. deleteRegisteredUser) or rename the export.",
+        availableExports: Object.keys(analyticsDb || {}).sort(),
+      });
+    }
+
     deleteRegisteredUser(id);
     return res.json({ ok: true });
   } catch (err) {
