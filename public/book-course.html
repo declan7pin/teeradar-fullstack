@@ -864,16 +864,13 @@ const canBook = slotsAvail >= wantPlayers;
     setHint("");
 
     try {
-      const debugOn = !!$("debugToggle")?.checked;
-
-const qs = new URLSearchParams({
+      const qs = new URLSearchParams({
   slug,
   date,
   holes: String(holes),
   players: String(players),
   earliest,
-  latest,
-  ...(debugOn ? { debug: "1" } : {})
+  latest
 });
 
       const res = await apiFetch("/api/book/availability?" + qs.toString());
