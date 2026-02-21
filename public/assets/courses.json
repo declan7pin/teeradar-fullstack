@@ -454,10 +454,28 @@
     "phone": "08 9454 5554"
   },
   {
+    "name": "Hillview Golf Course",
+    "provider": "Phone",
+    "state": "WA",
+    "holes": 9,
+    "lat": -31.939010380955974,
+    "lng": 116.01996930968141,
+    "phone": "08 9454 5554"
+  },
+  {
     "name": "Marri Park Golf Course",
     "provider": "Phone",
     "state": "WA",
     "holes": 18,
+    "lat": -32.23155852419737,
+    "lng": 115.86931428104657,
+    "phone": "08 9419 3037"
+  },
+  {
+    "name": "Marri Park Golf Course",
+    "provider": "Phone",
+    "state": "WA",
+    "holes": 9,
     "lat": -32.23155852419737,
     "lng": 115.86931428104657,
     "phone": "08 9419 3037"
