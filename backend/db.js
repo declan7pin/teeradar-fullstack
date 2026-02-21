@@ -29,6 +29,9 @@ pool
 
 const db = {
   query: (text, params) => pool.query(text, params),
+
+  // ✅ ADDED: allow transaction-safe usage (client.query + client.release)
+  connect: () => pool.connect(),
 };
 
 export default db;
