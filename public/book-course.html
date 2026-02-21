@@ -1,0 +1,1244 @@
+<!-- public/book-course.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar Booking</title>
+
+  <style>
+    :root{
+      --teal:#00796b;
+      --teal-dark:#005e55;
+      --bg:#f4f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e2e8f0;
+      --danger:#b91c1c;
+      --ok:#16a34a;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+    .wrap{max-width:980px;margin:20px auto;padding:0 14px 28px}
+    .topbar{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+      margin-bottom:12px;
+    }
+    .brand{
+      display:flex;align-items:center;gap:10px;
+      font-weight:800;
+      color:var(--teal);
+      letter-spacing:.2px;
+    }
+    .pill{
+      font-size:12px;color:var(--teal-dark);
+      background:#ecfeff;border:1px solid #a5f3fc;
+      padding:6px 10px;border-radius:999px;
+      white-space:nowrap;
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:14px;
+      margin-bottom:12px;
+      box-shadow:0 1px 0 rgba(15,23,42,.02);
+    }
+    h1{font-size:20px;margin:0 0 4px}
+    .sub{color:var(--muted);font-size:13px;line-height:1.35}
+    /* ✅ Keep the ORIGINAL look: 2-up on mobile, but prevent iOS overflow overlap */
+.grid{
+  display:grid;
+  gap:10px;
+  margin-top:12px;
+  align-items:start;
+
+  /* 2 columns on mobile (original look) */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field{
+  min-width:0; /* ✅ critical: stops date/select overflowing into neighbor */
+}
+
+/* Note: keep your .full class working on mobile too */
+.field.full{
+  grid-column: 1 / -1 !important; /* span both columns */
+}
+
+/* Desktop/tablet: restore your 12-col system */
+@media (min-width:720px){
+  .grid{ grid-template-columns:repeat(12,1fr); }
+
+  .field{ grid-column:span 6; }
+  .field.sm3{grid-column:span 3}
+  .field.sm4{grid-column:span 4}
+  .field.sm6{grid-column:span 6}
+
+  /* full-width on desktop when you use .full */
+  .field.full{ grid-column: span 12 !important; }
+}
+    label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px}
+    input, select{
+      width:100%;
+      padding:11px 12px;
+      border:1px solid #cbd5e1;
+      border-radius:12px;
+      background:#fff;
+      font:inherit;
+      outline:none;
+      min-width:0; /* ✅ add this */
+    }
+    input:focus, select:focus{
+      border-color:#38bdf8;
+      box-shadow:0 0 0 3px rgba(56,189,248,.25);
+    }
+    .actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+  margin-top:12px;
+}
+
+.actions .btn{
+  flex:0 0 auto;      /* ✅ stop giant buttons */
+  width:auto;
+  white-space:nowrap;
+}
+
+.actions #hint{
+  flex:1 0 100%;
+}
+    .btn{
+      border:0;border-radius:12px;
+      padding:11px 14px;
+      background:var(--teal);
+      color:#fff;
+      font-weight:700;
+      cursor:pointer;
+    }
+    .btn:hover{background:var(--teal-dark)}
+    .btn.secondary{
+      background:#475569;
+    }
+    .btn.secondary:hover{background:#334155}
+    .note{font-size:12px;color:var(--muted)}
+    .status{margin-top:10px;font-size:13px}
+    .status.ok{color:var(--ok)}
+    .status.err{color:var(--danger)}
+
+    /* time results */
+    .timesHeader{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+      margin-bottom:10px;
+    }
+    .timesHeader h2{font-size:16px;margin:0}
+    .count{color:var(--muted);font-size:12px}
+    .timesGrid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:10px;
+    }
+    @media (min-width:720px){
+      .timesGrid{grid-template-columns:1fr 1fr}
+    }
+    .timeCard{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      background:#fff;
+      display:flex;flex-direction:column;gap:8px;
+    }
+    .timeTop{
+      display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    }
+    .time{
+      font-size:18px;font-weight:800;
+      letter-spacing:.2px;
+    }
+    .meta{
+      display:flex;gap:10px;flex-wrap:wrap;
+      color:var(--muted);font-size:12px;
+      align-items:center;
+    }
+    .price{
+      font-weight:800;
+      color:#0f172a;
+      white-space:nowrap;
+    }
+    .bookBtn{
+      margin-top:2px;
+      width:100%;
+      border:1px solid #0f172a10;
+      background:#f8fafc;
+      color:#0f172a;
+      border-radius:12px;
+      padding:10px 12px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .bookBtn:hover{
+  background:#eef2f7;
+}
+.bookBtn:disabled{
+  cursor:not-allowed;
+  opacity:.55;
+}
+.bookBtn:disabled:hover{
+  background:#f8fafc; /* prevent hover looking clickable */
+}
+
+    /* ✅ spot golfers (green = available, red = taken) */
+    .spotsWrap{
+      display:inline-flex;
+      gap:4px;
+      align-items:center;
+      padding:2px 8px;
+      border:1px solid var(--border);
+      border-radius:999px;
+      background:#f8fafc;
+    }
+    .spotGolfer{
+      width:16px;
+      height:16px;
+      display:inline-block;
+      border-radius:999px;
+      background:#cbd5e1;
+      -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M44 10a6 6 0 1 1-12 0a6 6 0 0 1 12 0ZM26 58h8l-3-20l7-8l2 4l-5 6l2 18h8l-3-22l7-8c1-1 1-3 0-4l-4-7c-1-2-3-3-5-3H29c-2 0-4 1-5 3l-5 10c-1 2 0 4 2 5l6 3l-1 6l-6 7c-1 1-1 3 0 4l2 2c1 1 3 1 4 0l6-7l2 11Zm30-48h2v44h-2z'/></svg>");
+      -webkit-mask-repeat: no-repeat;
+      -webkit-mask-position: center;
+      -webkit-mask-size: 85% 85%;
+      mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M44 10a6 6 0 1 1-12 0a6 6 0 0 1 12 0ZM26 58h8l-3-20l7-8l2 4l-5 6l2 18h8l-3-22l7-8c1-1 1-3 0-4l-4-7c-1-2-3-3-5-3H29c-2 0-4 1-5 3l-5 10c-1 2 0 4 2 5l6 3l-1 6l-6 7c-1 1-1 3 0 4l2 2c1 1 3 1 4 0l6-7l2 11Zm30-48h2v44h-2z'/></svg>");
+      mask-repeat: no-repeat;
+      mask-position: center;
+      mask-size: 85% 85%;
+    }
+    .spotGolfer.avail{ background: var(--ok); }
+    .spotGolfer.taken{ background: var(--danger); }
+    .spotsText{
+      font-size:12px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+
+    /* modal */
+    .modalWrap{
+      position:fixed;inset:0;
+      background:rgba(15,23,42,.45);
+      display:none;
+      align-items:center;justify-content:center;
+      padding:16px;
+    }
+    .modal{
+      width:min(520px, 100%);
+      background:#fff;border-radius:16px;
+      border:1px solid var(--border);
+      padding:14px;
+    }
+    .modal h3{margin:0 0 6px;font-size:16px}
+    .kv{
+      display:grid;grid-template-columns:120px 1fr;
+      gap:6px 10px;
+      font-size:13px;
+      margin-top:10px;
+    }
+    .k{color:var(--muted)}
+    .modalActions{display:flex;gap:10px;margin-top:14px}
+    .modalActions .btn{flex:1}
+    .foot{
+      margin-top:10px;
+      font-size:11px;color:var(--muted);
+      line-height:1.35;
+    }
+    a{color:var(--teal);text-decoration:none}
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">TeeRadar Booking</div>
+      <div class="pill">Independent booking platform</div>
+    </div>
+
+    <div class="card">
+      <h1 id="courseName">Loading course…</h1>
+      <div class="sub" id="courseSub">Public bookings powered by TeeRadar.</div>
+
+      <div class="grid">
+        <div class="field sm3">
+          <label for="date">Date</label>
+          <input id="date" type="date" />
+        </div>
+
+        <div class="field sm3">
+          <label for="players">Players</label>
+          <select id="players">
+            <option value="1">1 player</option>
+            <option value="2" selected>2 players</option>
+            <option value="3">3 players</option>
+            <option value="4">4 players</option>
+          </select>
+        </div>
+
+        <div class="field sm3">
+          <label for="holes">Holes</label>
+          <select id="holes">
+            <option value="18" selected>18 holes</option>
+            <option value="9">9 holes</option>
+          </select>
+        </div>
+
+        <div class="field sm3">
+          <label for="start">Time from</label>
+          <input id="start" type="time" value="06:00" />
+        </div>
+
+        <div class="field sm3">
+          <label for="end">Time to</label>
+          <input id="end" type="time" value="17:00" />
+        </div>
+
+                <div class="field sm6 full">
+         <label class="muted">Note</label>
+         <div class="note">
+          Live availability + bookings powered by TeeRadar.
+         </div>
+        </div>
+
+      </div> <!-- ✅ ADD THIS: closes .grid -->
+
+      <div class="actions">
+        <button class="btn" id="findBtn">Find available times</button>
+        <button class="btn secondary" id="resetBtn">Reset</button>
+        <div class="note" id="hint"></div>
+      </div>
+
+      <div id="status" class="status"></div>
+    </div>
+
+    <div class="card">
+      <div class="timesHeader">
+        <h2>Available times</h2>
+        <div class="count" id="count">0 shown</div>
+      </div>
+      <div class="timesGrid" id="times"></div>
+
+      <div class="foot">
+        TeeRadar is an independent booking platform and is not affiliated with MiClub, Quick18, or other providers.
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm modal -->
+  <div class="modalWrap" id="modalWrap">
+    <div class="modal">
+      <h3 id="modalTitle">Confirm booking</h3>
+      <div class="sub" id="modalSub">Enter your details to confirm.</div>
+
+      <div class="kv">
+  <div class="k">Course</div><div id="mCourse"></div>
+  <div class="k">Date</div><div id="mDate"></div>
+  <div class="k">Time</div><div id="mTime"></div>
+  <div class="k">Players</div><div id="mPlayers"></div>
+  <div class="k">Holes</div><div id="mHoles"></div>
+  <div class="k">Layout</div><div id="mLayout"></div>
+  <div class="k">Price</div><div id="mPrice"></div>
+</div>
+
+      <div class="grid" id="detailsGrid" style="margin-top:12px">
+        <div class="field sm6">
+          <label for="bName">Full name (first + last)</label>
+          <input id="bName" placeholder="e.g. John Smith" autocomplete="name" required />
+        </div>
+        <div class="field sm6">
+          <label for="bEmail">Email</label>
+          <input id="bEmail" type="email" placeholder="john.smith@example.com" autocomplete="email" required />
+        </div>
+        <div class="field sm6">
+          <label for="bPhone">Phone (optional)</label>
+          <input id="bPhone" placeholder="04xx xxx xxx" autocomplete="tel" />
+        </div>
+
+        <!-- ✅ FIX: add-ons must be inside the grid -->
+        <div class="field sm6">
+          <label class="muted">Add-ons</label>
+
+<!-- ✅ Dynamic add-ons go here -->
+<div id="addonsWrap" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;"></div>
+
+<div style="margin-top:8px;font-size:13px;">
+  <strong>Total:</strong> <span id="mTotal">—</span>
+  <span style="color:var(--muted);font-size:12px;margin-left:6px;">(includes add-ons)</span>
+</div>
+        </div>
+        <!-- ✅ END FIX -->
+      </div>
+
+      <div class="modalActions">
+        <button class="btn" id="confirmBtn">Confirm booking</button>
+        <button class="btn secondary" id="cancelBtn">Cancel</button>
+      </div>
+      <div class="foot" id="modalFoot">
+        You’ll receive a reference after confirming.
+      </div>
+    </div>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  // ✅ IMPORTANT: slug from URL path
+  const COURSE_SLUG = location.pathname.replace(/\/+$/,"").split("/").pop().toLowerCase().trim();
+  const slug = COURSE_SLUG;
+
+  // ✅ IMPORTANT: always include X-Course-Slug header so backend can find course
+  function apiFetch(url, opts = {}) {
+    const o = opts || {};
+    const headers = new Headers(o.headers || {});
+    if (COURSE_SLUG) headers.set("X-Course-Slug", COURSE_SLUG);
+    return fetch(url, { ...o, headers });
+  }
+  // ✅ Normalize backend slot shape (snake_case vs camelCase)
+  function normalizeSlot(s){
+    if (!s || typeof s !== "object") return s;
+
+    const time =
+      s.time ??
+      s.tee_time ??
+      s.teeTime ??
+      "";
+
+    const holes =
+      Number(s.holes ?? s.num_holes ?? s.hole_count ?? s.holeCount ?? 18);
+
+    const maxPlayers =
+      Number(s.maxPlayers ?? s.max_players ?? s.max_players_per_slot ?? s.maxPlayersPerSlot ?? 4);
+
+    const bookedPlayers =
+      Number(s.bookedPlayers ?? s.booked_players ?? s.booked ?? s.bookedCount ?? 0);
+
+    const remaining =
+  Number(
+    s.slotsAvailable ??
+    s.bookableSlots ??
+    s.remaining_effective ??
+    s.remainingEffective ??
+    0
+  );
+  
+  const slotsAvailable = Math.max(0, remaining);
+
+    const pricePerPlayerCents =
+      Number(
+        s.pricePerPlayerCents ??
+        s.price_per_player_cents ??
+        s.priceCents ??
+        s.price_cents ??
+        0
+      );
+
+    return {
+  ...s,
+  time,
+  holes,
+  maxPlayers,
+  bookedPlayers,
+  remaining,
+  slotsAvailable, // ✅ IMPORTANT
+  pricePerPlayerCents,
+};
+  }
+    // ✅ Layout helpers (show "Pines + Lakes", etc.)
+  function _titleCaseKey(x){
+    return String(x || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[+]/g, " + ")
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .split(" ")
+      .filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  }
+
+  function getLayoutText(slot){
+    const s = slot || {};
+    const holes = Number(s.holes || 0);
+
+    const layoutKey =
+      s.layout_key ?? s.layoutKey ?? null;
+
+    const front =
+      s.front_nine_key ?? s.frontNineKey ?? s.frontNine ?? null;
+
+    const back =
+      s.back_nine_key ?? s.backNineKey ?? s.backNine ?? null;
+
+    if (holes === 18){
+      if (front && back) return `${_titleCaseKey(front)} + ${_titleCaseKey(back)}`;
+      if (layoutKey) return _titleCaseKey(layoutKey);
+      return "";
+    }
+
+    // 9 holes
+    if (holes === 9){
+      const nine = layoutKey || front || back;
+      return nine ? _titleCaseKey(nine) : "";
+    }
+
+    return "";
+  }
+  let course = { slug, name: "Course", notes: "" };
+  let addons = [];           // list from backend (active add-ons for this course)
+  let selectedAddonIds = []; // what the user picked for this booking
+let cartQtySelected = 0;
+let clubsQtySelected = 0;
+let cartAddonId = null;
+let clubsAddonId = null;
+  // basic validators (match backend requirements)
+  function isValidEmail(email){
+    const e = String(email || "").trim();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  }
+  function isFullName(name){
+    const n = String(name || "").trim().replace(/\s+/g, " ");
+    if (!n) return false;
+    const parts = n.split(" ").filter(Boolean);
+    return parts.length >= 2 && parts[0].length >= 2 && parts[1].length >= 2;
+  }
+
+  // ✅ ADD-ONS helpers (course-settings model: cart + clubs)
+  function _slotPerPlayerCents(slot){
+    const cents = Number(slot?.pricePerPlayerCents ?? slot?.price_per_player_cents);
+    if (Number.isFinite(cents) && cents >= 0) return cents;
+
+    const raw = Number(slot?.pricePerPlayer ?? slot?.price_per_player ?? 0);
+    if (!Number.isFinite(raw) || raw < 0) return 0;
+
+    if (raw >= 500) return Math.round(raw);
+    return Math.round(raw * 100);
+  }
+
+  function computeTotalCents(slot){
+    const players = Number($("players").value || 1);
+
+    const perPlayerCents = _slotPerPlayerCents(slot);
+    let total = perPlayerCents * players;
+
+    // qty-aware add-ons
+const idToQty = new Map();
+if (cartAddonId) idToQty.set(String(cartAddonId), Number(cartQtySelected || 0));
+if (clubsAddonId) idToQty.set(String(clubsAddonId), Number(clubsQtySelected || 0));
+
+(addons || []).forEach(a => {
+  const id = String(a.id || "");
+  if (!id || a.active === false) return;
+
+  const qty = Math.max(0, Math.min(4, Number(idToQty.get(id) || 0)));
+  if (!qty) return;
+
+  const priceCents = Number(a.price_cents ?? a.priceCents ?? 0);
+  if (!Number.isFinite(priceCents) || priceCents < 0) return;
+
+  total += priceCents * qty;
+});
+
+    return total;
+  }
+
+  function moneyFromCents(cents){
+    const n = Number(cents || 0) / 100;
+    return "$" + n.toFixed(2);
+  }
+
+  function updateModalTotal(){
+    if (!selectedSlot) return;
+    const totalCents = computeTotalCents(selectedSlot);
+    const mTotal = $("mTotal");
+    if (mTotal) mTotal.textContent = moneyFromCents(totalCents);
+  }
+
+  // Render add-ons into the modal
+  function renderAddons(){
+    const wrap = $("addonsWrap");
+    if (!wrap) return;
+
+    wrap.innerHTML = "";
+selectedAddonIds = [];
+cartQtySelected = 0;
+clubsQtySelected = 0;
+cartAddonId = null;
+clubsAddonId = null;
+
+    const active = (addons || []).filter(a => a && a.active !== false);
+    // detect cart / clubs addon IDs by label or id
+const findBy = (needle) =>
+  active.find(a =>
+    String(a.id || "").toLowerCase() === needle ||
+    String(a.label || "").toLowerCase().includes(needle.replace("_"," "))
+  );
+
+const cartA = findBy("cart");
+const clubsA = findBy("hire_clubs") || findBy("clubs");
+
+cartAddonId = cartA ? String(cartA.id) : null;
+clubsAddonId = clubsA ? String(clubsA.id) : null;
+    if (!active.length){
+      wrap.innerHTML = `<span class="note">No add-ons for this course.</span>`;
+      return;
+    }
+
+    active.forEach(a => {
+      const id = String(a.id);
+      const label = String(a.label || "Add-on");
+      const priceCents = Number(a.price_cents ?? a.priceCents ?? 0);
+      const perPlayer = false;
+
+      const el = document.createElement("label");
+      el.style.display = "flex";
+      el.style.gap = "8px";
+      el.style.alignItems = "center";
+      el.style.fontSize = "13px";
+      el.style.color = "var(--text)";
+
+      el.innerHTML = `
+  <input type="checkbox" data-addon-id="${id}" style="width:auto;" />
+
+  ${label}
+
+  <select data-addon-qty="${id}" style="width:64px;">
+    <option value="0">0</option>
+    <option value="1">1</option>
+    <option value="2">2</option>
+    <option value="3">3</option>
+    <option value="4">4</option>
+  </select>
+
+  <span style="color:var(--muted);font-size:12px;">
+    (+${moneyFromCents(priceCents)})
+  </span>
+`;
+
+      const cb = el.querySelector("input[type='checkbox']");
+const qtySel = el.querySelector(`select[data-addon-qty="${id}"]`);
+
+cb.addEventListener("change", () => {
+  // rebuild selectedAddonIds
+  selectedAddonIds = Array.from(
+    wrap.querySelectorAll("input[type='checkbox'][data-addon-id]")
+  )
+    .filter(x => x.checked)
+    .map(x => String(x.getAttribute("data-addon-id") || ""))
+    .filter(Boolean);
+
+  // ✅ FIX B: if unchecked, force qty back to 0
+  if (!cb.checked && qtySel) {
+    qtySel.value = "0";
+
+    if (cartAddonId && id === String(cartAddonId)) cartQtySelected = 0;
+    if (clubsAddonId && id === String(clubsAddonId)) clubsQtySelected = 0;
+  }
+
+  updateModalTotal();
+});
+
+
+/* ✅ FIX 2 + FIX 3 — ADD THIS BLOCK HERE (before wrap.appendChild) */
+if (qtySel) {
+  qtySel.addEventListener("change", () => {
+    const qty = Math.max(0, Math.min(4, Number(qtySel.value || 0)));
+
+    // ✅ store qty in the right variable
+    if (cartAddonId && id === String(cartAddonId)) cartQtySelected = qty;
+    if (clubsAddonId && id === String(clubsAddonId)) clubsQtySelected = qty;
+
+    // ✅ FIX 3: auto-sync checkbox with qty
+    cb.checked = qty > 0;
+
+    // ✅ keep selectedAddonIds in sync too
+    selectedAddonIds = Array.from(wrap.querySelectorAll("input[type='checkbox'][data-addon-id]"))
+      .filter(x => x.checked)
+      .map(x => String(x.getAttribute("data-addon-id") || ""))
+      .filter(Boolean);
+
+    updateModalTotal();
+  });
+}
+/* ✅ END FIX 2 + FIX 3 */
+
+      wrap.appendChild(el);
+    });
+  }
+
+  async function loadAddons(){
+    try{
+      const res = await apiFetch("/api/book/addons?" + new URLSearchParams({ slug }).toString());
+      const data = await res.json().catch(()=> ({}));
+
+      if (res.ok && data && data.ok && Array.isArray(data.addons)){
+        addons = data.addons.map(a => ({
+          id: String(a.id || ""),
+          label: String(a.label || "Add-on"),
+          price_cents: Number(a.price_cents ?? a.priceCents ?? 0),
+          active: a.active !== false
+        })).filter(a => a.id);
+      } else {
+        addons = [];
+      }
+    }catch{
+      addons = [];
+    }
+  }
+
+  // default date = today (local)
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth()+1).padStart(2,"0");
+  const dd = String(today.getDate()).padStart(2,"0");
+  $("date").value = `${yyyy}-${mm}-${dd}`;
+
+// ✅ NEW: read query params sent from /book.html and prefill the form
+(function applyQueryParamsToForm(){
+  try {
+    const q = new URLSearchParams(location.search);
+
+    // Accept BOTH naming styles (because /book.html sends both)
+    const qpDate = q.get("date") || "";
+    const qpPlayers = q.get("players") || q.get("partySize") || "";
+    const qpHoles = q.get("holes") || "";
+    const qpStart = q.get("earliest") || q.get("timeFrom") || q.get("start") || "";
+    const qpEnd = q.get("latest") || q.get("timeTo") || q.get("end") || "";
+
+    // date (YYYY-MM-DD)
+    if (qpDate && /^\d{4}-\d{2}-\d{2}$/.test(qpDate)) {
+      $("date").value = qpDate;
+    }
+
+    // players (1..4)
+    const p = Number(qpPlayers);
+    if (Number.isFinite(p) && p >= 1 && p <= 4) {
+      $("players").value = String(p);
+    }
+
+    // holes (9 or 18)
+    const h = Number(qpHoles);
+    if (h === 9 || h === 18) {
+      $("holes").value = String(h);
+    }
+
+    // times (HH:MM)
+    if (qpStart && /^\d{2}:\d{2}$/.test(qpStart)) {
+      $("start").value = qpStart;
+    }
+    if (qpEnd && /^\d{2}:\d{2}$/.test(qpEnd)) {
+      $("end").value = qpEnd;
+    }
+  } catch (e) {
+    // silent fail
+  }
+})();
+  // Load course info (if it exists in DB)
+  async function loadCourse() {
+    try {
+      // ✅ Use slug param + header (covers both backend styles)
+      const res = await apiFetch("/api/book/course?slug=" + encodeURIComponent(slug));
+      const data = await res.json().catch(()=> ({}));
+      if (res.ok && data && data.ok && data.course) {
+        course = data.course;
+      } else {
+        // optional fallback if your router uses /course/:slug
+        const r2 = await apiFetch("/api/book/course/" + encodeURIComponent(slug));
+        const d2 = await r2.json().catch(()=> ({}));
+        if (r2.ok && d2 && d2.ok && d2.course) course = d2.course;
+      }
+    } catch {}
+    $("courseName").textContent = course.name || "Course";
+    $("courseSub").textContent = course.notes
+      ? course.notes
+      : "Public bookings powered by TeeRadar.";
+    document.title = "TeeRadar Booking — " + (course.name || slug);
+  }
+
+  function setStatus(msg, type) {
+    const el = $("status");
+    el.textContent = msg || "";
+    el.className = "status " + (type || "");
+  }
+
+  function setHint(msg) {
+    $("hint").textContent = msg || "";
+  }
+
+  function renderTimes(list) {
+  const wrap = $("times");
+  wrap.innerHTML = "";
+  $("count").textContent = (list.length || 0) + " shown";
+
+  if (!list.length) {
+    wrap.innerHTML = `<div class="sub">No times available in this window.</div>`;
+    return;
+  }
+
+  const wantPlayers = Number($("players").value);
+
+  list.map(normalizeSlot).forEach((t) => {
+    const div = document.createElement("div");
+    div.className = "timeCard";
+
+    const priceCents = _slotPerPlayerCents(t);
+    const price = priceCents / 100;
+    const maxPlayers = Math.max(1, Number(t.maxPlayers || 0));
+    const bookedPlayers = Number(t.bookedPlayers || 0);
+    const layoutText = getLayoutText(t);
+
+    const slotsAvail = Number(t.slotsAvailable || 0);
+const canBook = slotsAvail >= wantPlayers;
+    const notEnoughText = !canBook
+      ? `❌ Not enough spots for ${wantPlayers} player${wantPlayers === 1 ? "" : "s"}`
+      : "";
+
+    const spots = [];
+    const availCount = Math.max(0, Math.min(maxPlayers, slotsAvail));
+    for (let i = 0; i < maxPlayers; i++) {
+      spots.push(
+        `<span class="spotGolfer ${i < availCount ? "avail" : "taken"}" title="${i < availCount ? "Available" : "Taken"}"></span>`
+      );
+    }
+    const spotsHtml = `
+      <span class="spotsWrap" title="${availCount}/${maxPlayers} available">
+        ${spots.join("")}
+        <span class="spotsText">${availCount}/${maxPlayers}</span>
+      </span>
+    `;
+
+    // ✅ show "X slots available"
+    const availText =
+      Number.isFinite(availCount)
+        ? `${availCount} slot${availCount === 1 ? "" : "s"} available`
+        : "";
+
+    // (optional) keys — you already show nice layoutText, so no need to show raw keys
+    // leaving your key parsing out to keep UI clean
+
+    div.innerHTML = `
+      <div class="timeTop">
+        <div>
+          <div class="time">⏰ ${t.time}</div>
+          <div class="meta">
+            <span>👥 up to ${maxPlayers}</span>
+            <span>⛳ ${t.holes} holes</span>
+            ${layoutText ? `<span>🧩 ${layoutText}</span>` : ""}
+            ${spotsHtml}
+            ${availText ? `<span>✅ ${availText}</span>` : ""}
+            ${notEnoughText ? `<span>${notEnoughText}</span>` : ""}
+          </div>
+        </div>
+        <div class="price">$${price.toFixed(2)} / player</div>
+      </div>
+
+      <button class="bookBtn" ${canBook ? "" : "disabled"}>
+        ${canBook ? "Book this time" : "Not available"}
+      </button>
+    `;
+
+    const btn = div.querySelector(".bookBtn");
+    btn.onclick = () => {
+      if (!canBook) return;
+      openModal(t);
+    };
+
+    wrap.appendChild(div);
+  });
+}
+
+  async function fetchAvailability() {
+    const date = $("date").value;
+    const players = Number($("players").value);
+    const holes = Number($("holes").value);
+    const earliest = $("start").value || "06:00";
+    const latest = $("end").value || "17:00";
+
+    if (!date) {
+      setStatus("❌ Please choose a date.", "err");
+      return;
+    }
+
+    setStatus("Searching…", "");
+    setHint("");
+
+    try {
+      const qs = new URLSearchParams({
+  slug,
+  date,
+  holes: String(holes),
+  players: String(players),
+  earliest,
+  latest
+});
+
+      const res = await apiFetch("/api/book/availability?" + qs.toString());
+      const data = await res.json().catch(()=> ({}));
+
+      if (!res.ok || !data || !data.ok) {
+  const msg =
+    (data && (data.message || data.error)) ? (data.message || data.error) : ("HTTP " + res.status);
+  throw new Error(msg);
+}
+
+      const slots = Array.isArray(data.slots) ? data.slots : [];
+      renderTimes(slots);
+
+      if (slots.length) {
+        setStatus("✅ Times loaded.", "ok");
+      } else {
+        setStatus("No times available in this window.", "");
+        setHint("Tip: widen your time range or try another date.");
+      }
+    } catch (e) {
+      renderTimes([]);
+      setStatus("❌ " + (e.message || "Failed to load availability"), "err");
+      setHint("If this is your first setup: create the course in /book/admin and generate times for the selected date.");
+    }
+  }
+
+  let selectedSlot = null;
+
+  function resetModalToForm() {
+    $("modalTitle").textContent = "Confirm booking";
+    $("detailsGrid").style.display = "";
+    $("cancelBtn").style.display = "";
+    $("confirmBtn").textContent = "Confirm booking";
+    $("confirmBtn").disabled = false;
+
+    $("modalSub").textContent = "Enter your details to confirm.";
+    $("modalFoot").textContent = "You’ll receive a reference after confirming.";
+  }
+
+  async function openModal(slot) {
+        selectedSlot = normalizeSlot(slot);
+
+    resetModalToForm();
+
+    await loadAddons();
+    renderAddons();
+
+    $("mCourse").textContent = course.name || slug;
+    $("mDate").textContent = $("date").value;
+    $("mTime").textContent = selectedSlot.time;
+    $("mPlayers").textContent = $("players").value;
+    $("mHoles").textContent = $("holes").value;
+        $("mLayout").textContent = getLayoutText(selectedSlot) || "—";
+
+    const priceCents = _slotPerPlayerCents(selectedSlot);
+$("mPrice").textContent = `${moneyFromCents(priceCents)} per player`;
+
+    $("bName").value = "";
+    $("bEmail").value = "";
+    $("bPhone").value = "";
+
+    if ($("players") && !$("players")._wiredForTotal){
+      $("players")._wiredForTotal = true;
+      $("players").addEventListener("change", updateModalTotal);
+    }
+
+    updateModalTotal();
+
+    $("modalWrap").style.display = "flex";
+  }
+
+   function showBookingConfirmation(data, email) {
+  $("modalTitle").textContent = "✅ Booking confirmed";
+  $("detailsGrid").style.display = "none";
+
+  const emailOk = !!(data && data.emailOk);
+  const reason = (data && data.emailReason) ? String(data.emailReason) : "";
+  const emailMsg = emailOk
+    ? `📧 Confirmation email sent to ${email}`
+    : `📧 Email not sent${reason ? ` (${reason})` : ""}`;
+
+  // --- Build add-ons breakdown (what the user picked) ---
+  const picked = new Set((selectedAddonIds || []).map(String));
+  const chosenAddons = (addons || []).filter(a => a && picked.has(String(a.id)));
+
+  const qtyForAddon = (id) => {
+  const sid = String(id || "");
+  if (cartAddonId && sid === String(cartAddonId)) return Number(cartQtySelected || 0);
+  if (clubsAddonId && sid === String(clubsAddonId)) return Number(clubsQtySelected || 0);
+  return 0;
+};
+
+const addonLines = chosenAddons.map(a => {
+  const id = String(a.id || "");
+  const label = String(a.label || a.id || "Add-on");
+  const cents = Number(a.price_cents ?? a.priceCents ?? 0);
+  const qty = Math.max(0, Math.min(4, qtyForAddon(id)));
+  const lineTotal = cents * qty;
+
+  return `
+    <div style="display:flex;justify-content:space-between;gap:10px;">
+      <span>${label} ${qty ? `(x${qty})` : ""}</span>
+      <b>${moneyFromCents(lineTotal)}</b>
+    </div>
+  `;
+}).join("");
+
+  // --- Prices ---
+  const perPlayerCents = selectedSlot ? _slotPerPlayerCents(selectedSlot) : 0;
+  const totalCents = selectedSlot ? computeTotalCents(selectedSlot) : null;
+
+  const baseBlock = `
+    <div style="margin-top:10px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;">
+        <span>Price (per player)</span>
+        <b>${moneyFromCents(perPlayerCents)}</b>
+      </div>
+    </div>
+  `;
+
+  const addonsBlock = addonLines
+    ? `
+      <div style="margin-top:10px;">
+        <div style="font-weight:800;margin-bottom:6px;">Add-ons</div>
+        ${addonLines}
+      </div>
+    `
+    : "";
+
+  const totalBlock = (typeof totalCents === "number")
+    ? `
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;">
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <span>Total</span>
+          <b>${moneyFromCents(totalCents)}</b>
+        </div>
+        <div style="color:var(--muted);font-size:12px;margin-top:4px;">
+          (includes add-ons)
+        </div>
+      </div>
+    `
+    : "";
+
+  // --- Summary block (keeps your existing details) ---
+  $("modalSub").innerHTML =
+    `Reference: <b>${data.reference}</b><br/>` +
+    `${emailMsg}` +
+    `<div style="margin-top:10px;">
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:6px 10px;font-size:13px;">
+        <div style="color:var(--muted)">Course</div><div>${course?.name || slug}</div>
+        <div style="color:var(--muted)">Date</div><div>${$("date").value}</div>
+        <div style="color:var(--muted)">Time</div><div>${selectedSlot?.time || ""}</div>
+        <div style="color:var(--muted)">Players</div><div>${$("players").value}</div>
+        <div style="color:var(--muted)">Holes</div><div>${$("holes").value}</div>
+      </div>
+    </div>` +
+    baseBlock +
+    addonsBlock +
+    totalBlock;
+
+  $("modalFoot").textContent = "You can screenshot this reference for your records.";
+
+  $("confirmBtn").textContent = "Close";
+  $("confirmBtn").disabled = false;
+  $("cancelBtn").style.display = "none";
+
+  $("confirmBtn").onclick = () => {
+    $("modalWrap").style.display = "none";
+    $("confirmBtn").onclick = confirmBooking;
+  };
+}
+
+  async function confirmBooking() {
+  if (!selectedSlot) return;
+
+  const date = $("date").value;
+  const holes = Number($("holes").value);
+  const players = Number($("players").value);
+
+  const nameRaw = ($("bName").value || "").trim();
+  const name = nameRaw.replace(/\s+/g, " ");
+  const email = ($("bEmail").value || "").trim().toLowerCase();
+  const phone = ($("bPhone").value || "").trim();
+
+  if (!isFullName(name)) {
+    $("modalSub").textContent = "❌ Please enter your first and last name.";
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    $("modalSub").textContent = "❌ Please enter a valid email address.";
+    return;
+  }
+
+  $("modalSub").textContent = "Booking…";
+  $("confirmBtn").disabled = true;
+
+  try {
+    // ✅ routing keys MUST be sent to backend
+    const s = normalizeSlot(selectedSlot) || {};
+
+    const layout_key =
+      (s.layout_key ?? s.layoutKey ?? "").toString().trim().toLowerCase();
+
+    const front_nine_key =
+      (s.front_nine_key ?? s.frontNineKey ?? s.frontNine ?? "").toString().trim().toLowerCase();
+
+    const back_nine_key =
+      (s.back_nine_key ?? s.backNineKey ?? s.backNine ?? "").toString().trim().toLowerCase();
+      
+      // ✅ build a stable route key for 18s (backend uses this to match the exact tee time row)
+const route18Key =
+  (holes === 18 && front_nine_key && back_nine_key)
+    ? `18:${front_nine_key}|${back_nine_key}`
+    : null;
+
+// ✅ for 9s, layout_key is the 9 key
+const layout9Key = (holes === 9 && layout_key) ? layout_key : null;
+
+// ✅ final key we send (9s use their 9 key, 18s use route18Key or the provided layout_key)
+const finalLayoutKey =
+  (holes === 9) ? layout9Key : (layout_key || route18Key);
+
+    // ✅ ALSO send the human layout label as a fallback (backend can derive keys if needed)
+    const layoutText = (getLayoutText(s) || "").toString().trim();
+
+    // enforce required routing depending on holes (but allow fallback label to handle edge cases)
+    if (holes === 18 && ((!front_nine_key || !back_nine_key) && !layoutText)) {
+      throw new Error("routing_required");
+    }
+    if (holes === 9 && (!layout_key && !layoutText)) {
+      throw new Error("routing_required");
+    }
+
+    const res = await apiFetch("/api/book/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slug,
+        date,
+        time: (s.time || ""),
+        holes,
+        players,
+        name,
+        email,
+        phone,
+
+        // ✅ include routing keys (primary)
+        // ✅ routing (ALWAYS send what we know, especially layout_key for 18s)
+layout_key: finalLayoutKey || null,
+front_nine_key: front_nine_key || null,
+back_nine_key: back_nine_key || null,
+
+        // ✅ include label (fallback)
+        layout: layoutText,
+
+        // ✅ add-ons
+        addonIds: selectedAddonIds,
+        cartQty: cartAddonId ? cartQtySelected : 0,
+        hireClubsQty: clubsAddonId ? clubsQtySelected : 0,
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data || !data.ok) {
+      const msg =
+        (data && (data.message || data.error))
+          ? (data.message || data.error)
+          : ("HTTP " + res.status);
+      throw new Error(msg);
+    }
+
+    showBookingConfirmation(data, email);
+    setStatus(`✅ Booking confirmed. Reference: ${data.reference}`, "ok");
+    await fetchAvailability();
+  } catch (e) {
+    $("modalSub").textContent = "❌ " + (e.message || "Booking failed");
+    $("confirmBtn").disabled = false;
+  }
+}
+
+function closeModal(){
+  $("modalWrap").style.display = "none";
+  selectedSlot = null;
+  selectedAddonIds = [];
+}
+
+$("cancelBtn").onclick = closeModal;
+$("modalWrap").addEventListener("click", (e) => {
+  if (e.target === $("modalWrap")) closeModal();
+});
+
+$("findBtn").onclick = fetchAvailability;
+// ✅ auto-refresh availability when filters change
+["players","holes","start","end","date"].forEach((id) => {
+  const el = $(id);
+  if (!el) return;
+  el.addEventListener("change", () => {
+    // if times are already shown, refresh automatically
+    // (prevents stale "Book this time" when players changes)
+    if (($("times")?.children?.length || 0) > 0) {
+  fetchAvailability().catch(()=>{});
+}
+  });
+});
+
+$("resetBtn").onclick = () => {
+  // reset back to whatever the URL intended (or fall back defaults)
+  const q = new URLSearchParams(location.search);
+
+  const qpPlayers = q.get("players") || q.get("partySize") || "2";
+  const qpHoles = q.get("holes") || "18";
+  const qpStart = q.get("earliest") || q.get("timeFrom") || "06:00";
+  const qpEnd = q.get("latest") || q.get("timeTo") || "17:00";
+  const qpDate = q.get("date") || "";
+
+  if (qpDate && /^\d{4}-\d{2}-\d{2}$/.test(qpDate)) $("date").value = qpDate;
+
+  const p = Number(qpPlayers);
+  $("players").value = (p >= 1 && p <= 4) ? String(p) : "2";
+
+  const h = Number(qpHoles);
+  $("holes").value = (h === 9 || h === 18) ? String(h) : "18";
+
+  $("start").value = /^\d{2}:\d{2}$/.test(qpStart) ? qpStart : "06:00";
+  $("end").value = /^\d{2}:\d{2}$/.test(qpEnd) ? qpEnd : "17:00";
+
+  setStatus("");
+  setHint("");
+  renderTimes([]);
+};
+
+$("confirmBtn").onclick = confirmBooking;
+
+(async () => {
+  await loadCourse();
+  await loadAddons();
+  renderTimes([]);
+
+  // ✅ NEW (optional): auto-run search if we arrived with query params
+  try {
+    const q = new URLSearchParams(location.search);
+    const hasPrefill =
+      q.get("date") ||
+      q.get("players") || q.get("partySize") ||
+      q.get("earliest") || q.get("timeFrom") ||
+      q.get("latest") || q.get("timeTo") ||
+      q.get("holes");
+
+    if (hasPrefill) {
+      await fetchAvailability();
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
