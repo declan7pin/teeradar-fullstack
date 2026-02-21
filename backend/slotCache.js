@@ -1,134 +1,53 @@
-// backend/slotCache.js
-import Database from "better-sqlite3";
-import path from "path";
-import { fileURLToPath } from "url";
+// backend/stripeRoutes.js
+import Stripe from "stripe";
 
-// Create NEW cache file (forces reset)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2024-06-20", // ok if Stripe ignores / updates this
+});
 
-// 💥 IMPORTANT: NEW CACHE FILE (forces a clean rebuild)
-const DB_FILE = path.join(__dirname, "slotCache_v3.db");
+// Map plan names from the frontend → real Stripe price IDs
+const PRICE_IDS = {
+  BASIC_MONTHLY: "price_1ScbpVASm4geYL4WJmSABxlb",
+  BASIC_ANNUAL:  "price_1Scbq9ASm4geYL4WyjPjX8Go",
+  PRO_MONTHLY:   "price_1ScbklASm4geYL4WPpbT6PtL",
+  PRO_ANNUAL:    "price_1ScbmCASm4geYL4W0EQZBrvf",
+};
 
-const db = new Database(DB_FILE);
-
-// NOTE: courseId is already state-aware (e.g. "WA::123" or "QLD::CourseName")
-// This is handled in server.js when building the courseId.
-
-// Create tables if missing
-db.exec(`
-  CREATE TABLE IF NOT EXISTS slot_cache (
-    courseId TEXT,
-    date TEXT,
-    holes INTEGER,
-    partySize INTEGER,
-    earliest TEXT,
-    latest TEXT,
-    provider TEXT,
-    slots TEXT,
-    updatedAt INTEGER,
-    PRIMARY KEY(courseId, date, holes, partySize, earliest, latest)
-  );
-`);
-
-// Cached slot lifetime: 10 minutes
-const CACHE_TTL_MS = 10 * 60 * 1000;
-
-// -------------------------------
-// Normalizers (keeps cache keys consistent)
-// -------------------------------
-function normInt(v, fallback = null) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function normPartySize(v) {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
-}
-
-function normHHMM(t, fallback) {
-  const s = String(t || "").trim();
-  if (!s) return fallback;
-  const parts = s.split(":");
-  if (parts.length < 2) return fallback;
-  const hh = String(parts[0] || "").padStart(2, "0");
-  const mm = String(parts[1] || "").padStart(2, "0");
-  if (!/^\d{2}$/.test(hh) || !/^\d{2}$/.test(mm)) return fallback;
-  return `${hh}:${mm}`;
-}
-
-// -------------------------------
-// GET cached result
-// -------------------------------
-export function getCachedSlots({
-  courseId,
-  date,
-  holes,
-  partySize,
-  earliest,
-  latest,
-}) {
-  const h = Number.isFinite(Number(holes)) ? Number(holes) : null;
-  const ps = normPartySize(partySize);
-  const e = normHHMM(earliest, "06:00");
-  const l = normHHMM(latest, "17:00");
-
-  const row = db
-    .prepare(
-      `SELECT slots, updatedAt FROM slot_cache
-       WHERE courseId=? AND date=? AND holes IS ? AND partySize=? AND earliest=? AND latest=?`
-    )
-    .get(courseId, date, h, ps, e, l);
-
-  if (!row) return null;
-
-  const age = Date.now() - row.updatedAt;
-  if (age > CACHE_TTL_MS) {
-    return null; // expired
-  }
-
+export async function createCheckoutSession(req, res) {
   try {
-    return JSON.parse(row.slots);
-  } catch {
-    return null;
+    const { plan, email } = req.body;
+
+    const priceId = PRICE_IDS[plan];
+    if (!priceId) {
+      return res.status(400).json({ error: "Invalid plan selected" });
+    }
+
+    // Fallback email in case you don't send one yet
+    const customerEmail = email && email.trim() !== "" ? email : undefined;
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      customer_email: customerEmail,
+      allow_promotion_codes: true,
+
+      // TODO: replace YOUR_DOMAIN with your test/prod URL
+      success_url:
+        "https://YOUR_DOMAIN/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://YOUR_DOMAIN/subscribe-cancel.html",
+    });
+
+    return res.json({ url: session.url });
+  } catch (err) {
+    console.error("Error creating Stripe Checkout session:", err);
+    return res
+      .status(500)
+      .json({ error: "Unable to create checkout session right now." });
   }
 }
-
-// -------------------------------
-// SAVE scraped result to cache
-// -------------------------------
-export function saveSlotsToCache({
-  courseId,
-  courseName,
-  provider,
-  date,
-  holes,
-  partySize,
-  earliest,
-  latest,
-  slots,
-}) {
-  const h = Number.isFinite(Number(holes)) ? Number(holes) : null;
-  const ps = normPartySize(partySize);
-  const e = normHHMM(earliest, "06:00");
-  const l = normHHMM(latest, "17:00");
-
-  db.prepare(
-    `INSERT OR REPLACE INTO slot_cache
-    (courseId, date, holes, partySize, earliest, latest, provider, slots, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    courseId,
-    date,
-    h,
-    ps,
-    e,
-    l,
-    provider,
-    JSON.stringify(slots || []),
-    Date.now()
-  );
-}
-
-export default db;
