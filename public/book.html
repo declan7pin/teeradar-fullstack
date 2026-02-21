@@ -424,11 +424,147 @@
     const statusLine = document.getElementById("status-line");
     const coursesStrip = document.getElementById("courses-strip");
 
+    // ✅ DEBUG: show JS errors on-screen (mobile-friendly)
+    window.addEventListener("error", (e) => {
+      try {
+        console.error("JS error:", e.error || e.message);
+        if (statusLine) {
+          statusLine.textContent = "JS error: " + (e.message || "unknown");
+          statusLine.style.color = "#b03030";
+        }
+      } catch (_) {}
+    });
+
+    window.addEventListener("unhandledrejection", (e) => {
+      try {
+        console.error("Promise error:", e.reason);
+        if (statusLine) {
+          statusLine.textContent = "Promise error: " + (e.reason?.message || String(e.reason));
+          statusLine.style.color = "#b03030";
+        }
+      } catch (_) {}
+    });
+
     // ✅ NEW: coerce string/number -> number (or null)
     function toNum(v) {
       const n = Number(v);
       return Number.isFinite(n) ? n : null;
     }
+
+    // ✅ FIXED: normalize slot remaining (return null if unknown — no guessing)
+    function slotRemaining(slot) {
+  if (!slot || typeof slot !== "object") return null;
+
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  // 1) explicit remaining (best case)
+  const directRemaining =
+    slot.remaining ??
+    slot.remainingPlayers ??
+    slot.playersRemaining ??
+    slot.spotsRemaining ??
+    slot.openings ??
+    slot.spotsAvailable ??
+    slot.playersAvailable;
+
+  const dr = num(directRemaining);
+  if (dr !== null) return Math.max(0, dr);
+
+  // 2) booked/total string like "3/4"
+  const ratioText =
+    slot.ratio ??
+    slot.bookedRatio ??
+    slot.spotsText ??
+    slot.availability ??
+    slot.capacityText ??
+    slot.playersText ??
+    slot.display ??
+    slot.label;
+
+    if (typeof ratioText === "string") {
+    // 2a) "3/4" format (booked/total)
+    let m = ratioText.match(/(\d+)\s*\/\s*(\d+)/);
+    if (m) {
+      const booked = num(m[1]);
+      const total = num(m[2]);
+      if (booked !== null && total !== null && total > 0) {
+        return Math.max(0, total - booked);
+      }
+    }
+
+    // 2b) "2 slots available" / "2 spots left" / "2 players remaining"
+    m = ratioText.match(/(\d+)\s*(slots?|spots?|players?)\s*(available|left|remain(ing)?)/i);
+    if (m) {
+      const n = num(m[1]);
+      if (n !== null) return Math.max(0, n);
+    }
+  }
+
+  // 3) compute max - booked ONLY if BOTH values are explicitly numeric
+  const maxPlayers = num(
+    slot.maxPlayers ??
+    slot.max_players ??
+    slot.capacity ??
+    slot.max ??
+    slot.playersMax ??
+    slot.max_players_per_slot ??
+    slot.maxPlayersPerSlot
+  );
+
+  const bookedPlayers = num(
+    slot.bookedPlayers ??
+    slot.booked_players ??
+    slot.booked ??
+    slot.taken ??
+    slot.playersBooked ??
+    slot.bookedCount ??
+    slot.players_booked ??
+    slot.booked_count
+  );
+
+  // ✅ if either is missing/not numeric, we don't know remaining
+  if (maxPlayers === null || bookedPlayers === null) return null;
+
+  return Math.max(0, maxPlayers - bookedPlayers);
+}
+    function slotFitsParty(slot, partySize) {
+  const want = Math.max(1, Number(partySize || 1));
+
+  // ✅ Only trust backend fitsParty IF it also provided a numeric remaining field.
+  // If backend sends fitsParty=true but doesn't include remaining, we compute locally.
+  const backendRemaining =
+    slot?.remaining ??
+    slot?.remainingPlayers ??
+    slot?.playersRemaining ??
+    slot?.playersAvailable ??
+    slot?.spotsRemaining ??
+    slot?.openings ??
+    slot?.spotsAvailable ??
+    slot?.spotsAvailable ??
+    slot?.playersAvailable;
+
+  const backendRemainingNum = Number(backendRemaining);
+
+  if (
+    slot &&
+    typeof slot.fitsParty === "boolean" &&
+    Number.isFinite(backendRemainingNum)
+  ) {
+    // Backend has both fitsParty + a numeric remaining value -> trust it
+    return slot.fitsParty;
+  }
+
+  // Fallback: calculate locally
+  const rem = slotRemaining(slot);
+
+  // ✅ If we can't confirm remaining, DO NOT treat as fitting for party > 1
+  if (rem === null) return want === 1; // allow unknown only for singles
+
+  return rem >= want;
+}
 
     // analytics helper (used for searches + booking clicks)
     function trackEvent(type, payload) {
@@ -454,6 +590,13 @@
       if (!digits) return "";
       return "tel:" + digits;
     }
+    // ✅ NEW: consistent slugify used for TeeRadarBooking routes
+function slugifyCourseName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
     // ✅ NEW: safely get logged-in email from localStorage (no assumptions)
     function getLoggedInEmail() {
@@ -491,7 +634,6 @@
 
         const me = await res.json();
 
-        // Update / create tr_user so existing applyHomeCourseDefaults() works
         let obj = { email };
         try {
           const raw = localStorage.getItem("tr_user");
@@ -505,10 +647,20 @@
 
         localStorage.setItem("tr_user", JSON.stringify(obj));
       } catch (err) {
-        // silent fail (no breaking)
         console.warn("hydrateUserFromServer error", err);
       }
     }
+
+    // ✅ set default date BEFORE init() runs
+    (function setDefaultDate() {
+      const input = document.getElementById("date");
+      if (!input) return;
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      input.value = `${yyyy}-${mm}-${dd}`;
+    })();
 
     init();
 
@@ -555,29 +707,18 @@
         if (raw) {
           return JSON.parse(raw);
         }
-      } catch (e) {
-        // ignore parse errors and fall back
-      }
+      } catch (e) {}
 
       // Fallback: older storage where we only saved "teeradar_home_course"
       const legacyHomeRaw = localStorage.getItem("teeradar_home_course");
       if (!legacyHomeRaw) return null;
 
-      // Normalise course names so "Darwin Golf Club (18 holes weekday) (NT)"
-      // will still match the actual course name.
       function cleanName(str) {
         if (!str) return "";
         let s = String(str).toLowerCase();
-
-        // remove explicit state like "(nt)" or "(wa)"
         s = s.replace(/\(\s*(wa|nt|qld|nsw|vic|sa|tas|act)\s*\)/gi, "");
-
-        // drop anything from first "(" onwards
         const idx = s.indexOf("(");
-        if (idx >= 0) {
-          s = s.slice(0, idx);
-        }
-
+        if (idx >= 0) s = s.slice(0, idx);
         return s.trim();
       }
 
@@ -591,19 +732,12 @@
         });
       }
 
-      // Try to infer state from the string, e.g. "(NT)"
       let inferredState = null;
       const stateMatch = legacyHomeRaw.match(/\b(WA|NT|QLD|NSW|VIC|SA|TAS|ACT)\b/i);
-      if (stateMatch) {
-        inferredState = stateMatch[1].toUpperCase();
-      }
+      if (stateMatch) inferredState = stateMatch[1].toUpperCase();
 
       if (!match) {
-        return {
-          homeCourse: legacyHomeRaw,
-          homeCourseId: null,
-          homeCourseState: inferredState
-        };
+        return { homeCourse: legacyHomeRaw, homeCourseId: null, homeCourseState: inferredState };
       }
 
       return {
@@ -614,9 +748,7 @@
     }
 
     function applyHomeCourseDefaults() {
-      if (!map || !Array.isArray(allCourses) || allCourses.length === 0) {
-        return;
-      }
+      if (!map || !Array.isArray(allCourses) || allCourses.length === 0) return;
 
       const user = getStoredUser();
 
@@ -632,7 +764,6 @@
         return;
       }
 
-      // helper to clean names, same logic as above
       function cleanName(str) {
         if (!str) return "";
         let s = String(str).toLowerCase();
@@ -651,28 +782,20 @@
           const cname = cleanName(c.name || "");
           if (!cname) continue;
           if (cname === target) return c;
-          if (!best && (cname.includes(target) || target.includes(cname))) {
-            best = c;
-          }
+          if (!best && (cname.includes(target) || target.includes(cname))) best = c;
         }
         return best;
       }
 
-      // Use the user's homeCourseState if it's one of the active states
       if (user.homeCourseState && ACTIVE_STATES.includes(user.homeCourseState)) {
         selectedState = user.homeCourseState;
       }
 
       applyStateFilter();
 
-      // Prefer homeCourseId, fall back to fuzzy match by name
       let homeCourse = null;
-      if (user.homeCourseId) {
-        homeCourse = allCourses.find((c) => c.id === user.homeCourseId);
-      }
-      if (!homeCourse && user.homeCourse) {
-        homeCourse = findCourseFromHome(user.homeCourse);
-      }
+      if (user.homeCourseId) homeCourse = allCourses.find((c) => c.id === user.homeCourseId);
+      if (!homeCourse && user.homeCourse) homeCourse = findCourseFromHome(user.homeCourse);
 
       const hLat = homeCourse ? toNum(homeCourse.lat) : null;
       const hLng = homeCourse ? toNum(homeCourse.lng) : null;
@@ -691,9 +814,7 @@
       }
 
       const labelEl = document.getElementById("stateSelectorLabel");
-      if (labelEl) {
-        labelEl.textContent = `State: ${selectedState}`;
-      }
+      if (labelEl) labelEl.textContent = `State: ${selectedState}`;
     }
 
     // ---- state helpers ----
@@ -725,7 +846,6 @@
       }
     }
 
-    // 🔹 Zoom map to all courses in the current state
     function zoomToStateCourses() {
       if (!map || !Array.isArray(courses) || courses.length === 0) return;
 
@@ -744,7 +864,6 @@
       map.fitBounds(bounds, { padding: [40, 40] });
     }
 
-    // ---- date helper: is the search date a weekend? ----
     function isWeekendDateStr(dateStr) {
       if (!dateStr) return false;
       const d = new Date(dateStr);
@@ -757,6 +876,39 @@
       const date = document.getElementById("date").value;
       const earliest = document.getElementById("earliest").value || "06:00";
       const latest = document.getElementById("latest").value || "17:00";
+      // ✅ GUARD: enforce a sensible time window (min 10 mins) + ensure latest > earliest
+function timeToMins(t) {
+  const m = String(t || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return (Number(m[1]) * 60) + Number(m[2]);
+}
+function minsToTime(mins) {
+  mins = Math.max(0, Math.min(23 * 60 + 59, mins));
+  const h = String(Math.floor(mins / 60)).padStart(2, "0");
+  const mm = String(mins % 60).padStart(2, "0");
+  return `${h}:${mm}`;
+}
+
+const eM = timeToMins(earliest);
+const lM = timeToMins(latest);
+
+if (eM === null || lM === null) {
+  alert("Please enter valid times.");
+  return;
+}
+
+// If latest <= earliest, bump latest
+let newLatestM = lM;
+if (lM <= eM) newLatestM = eM + 10;
+
+// If window < 10 mins, bump latest
+if ((newLatestM - eM) < 10) newLatestM = eM + 10;
+
+if (newLatestM !== lM) {
+  const latestInput = document.getElementById("latest");
+  const newLatest = minsToTime(newLatestM);
+  if (latestInput) latestInput.value = newLatest;
+}
       const holes = document.getElementById("holes").value;
       const players = document.getElementById("players").value;
 
@@ -781,70 +933,102 @@
 
       try {
         const res = await fetch("/api/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(lastSearchCriteria),
-        });
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(lastSearchCriteria),
+});
 
-        const data = await res.json();
-        const slots = Array.isArray(data.slots) ? data.slots : [];
+// ✅ Read as text first so we can debug non-JSON responses (500/HTML/etc)
+const rawText = await res.text();
+
+let data = null;
+try {
+  data = rawText ? JSON.parse(rawText) : {};
+} catch (e) {
+  // Not JSON (likely HTML error page or frontend fallback)
+  console.error("❌ /api/search returned non-JSON:", rawText.slice(0, 400));
+  statusLine.textContent =
+    `Search failed (${res.status}). Server returned non-JSON. Check console.`;
+  statusLine.style.color = "#b03030";
+  return;
+}
+
+if (!res.ok) {
+  console.error("❌ /api/search error:", res.status, data);
+  statusLine.textContent =
+    `Search failed (${res.status}): ` + (data?.error || data?.detail || "unknown error");
+  statusLine.style.color = "#b03030";
+  return;
+}
+
+const slots = Array.isArray(data.slots) ? data.slots : [];
+        console.log("SEARCH slots sample:", slots[0]);
 
         groupedSlots = {};
+        const want = Number(players) || 1;
+
+        // ✅ group ONLY slots that fit party size (no duplicate const want)
         slots.forEach((s) => {
+          if (!slotFitsParty(s, want)) return;
+
           const name = s.course || s.courseName || s.courseTitle || s.course_name;
           if (!name) return;
+
           if (!groupedSlots[name]) groupedSlots[name] = [];
           groupedSlots[name].push(s);
         });
 
         // 🔹 NEW: log one search_course event per course with slots
-        Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
-          trackEvent("search_course", {
-            courseName,
-            date,
-            earliest,
-            latest,
-            holes,
-            partySize: Number(players) || 1,
-            state: selectedState || "",
-            slots: cSlots.length,
-          });
-        });
+Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
+  trackEvent("search_course", {
+    courseName,
+    date,
+    earliest,
+    latest,
+    holes,
+    partySize: Number(players) || 1,
+    state: selectedState || "",
+    slots: cSlots.length,
+  });
+});
 
-        // Existing overall search event (kept)
-        trackEvent("search", {
-          date,
-          earliest,
-          latest,
-          holes,
-          partySize: Number(players) || 1,
-          state: selectedState || "",
-          slots: slots.length,
-        });
+const selectedHoles = Number(holes);
+let availableCourses = 0;
+let totalSlots = 0;
 
-        const selectedHoles = Number(holes);
-        let availableCourses = 0;
-        let totalSlots = 0;
+Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
+  const course = courses.find((c) => c.name === courseName);
+  if (!course) return;
 
-        Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
-          const course = courses.find((c) => c.name === courseName);
-          if (!course) return;
+  const provider = course.provider || "Other";
+  const isPhone = provider === "Phone";
 
-          const provider = course.provider || "Other";
-          const isPhone = provider === "Phone";
+  if (
+    !isPhone &&
+    selectedHoles &&
+    typeof course.holes === "number" &&
+    Number(course.holes) !== selectedHoles
+  ) {
+    return;
+  }
 
-          if (
-            !isPhone &&
-            selectedHoles &&
-            typeof course.holes === "number" &&
-            Number(course.holes) !== selectedHoles
-          ) {
-            return;
-          }
+  const fitSlots = Array.isArray(cSlots) ? cSlots : [];
+  if (fitSlots.length > 0) {
+    availableCourses++;
+    totalSlots += fitSlots.length;
+  }
+});
 
-          availableCourses++;
-          totalSlots += cSlots.length;
-        });
+// 🔹 OVERALL search event — MUST come AFTER totals are calculated
+trackEvent("search", {
+  date,
+  earliest,
+  latest,
+  holes,
+  partySize: Number(players) || 1,
+  state: selectedState || "",
+  slots: totalSlots, // ✅ now safe
+});
 
         if (totalSlots === 0) {
           statusLine.textContent =
@@ -893,22 +1077,19 @@
 
       courses.forEach((course) => {
         const name = course.name || "";
-        const provider = course.provider || "Other";
-        const isPhone = provider === "Phone";
-        const isTeeItUp = provider === "TeeItUp";
-        const isChronogolf = provider === "Chronogolf";
+        const provider = String(course.provider || "Other").trim();
+        const providerLower = provider.toLowerCase();
+        const isPhone = providerLower === "phone";
+        const isTeeItUp = providerLower === "teeitup";
+        const isChronogolf = providerLower === "chronogolf";
         const isClickThroughOnly = isTeeItUp || isChronogolf;
 
         if (searchDate) {
           const hasWeekendWord = /weekend/i.test(name);
           const hasWeekdayWord = /weekday/i.test(name);
 
-          if (hasWeekendWord && dateIsWeekend === false) {
-            return;
-          }
-          if (hasWeekdayWord && dateIsWeekend === true) {
-            return;
-          }
+          if (hasWeekendWord && dateIsWeekend === false) return;
+          if (hasWeekdayWord && dateIsWeekend === true) return;
         }
 
         const isUnconfirmed =
@@ -927,16 +1108,27 @@
         }
 
         const slots = groupedSlots[name] || [];
-        const hasSlots = slots.length > 0;
 
-        let markerKind = "unavailable";
-        if (isPhone) {
-          markerKind = "phone";
-        } else if ((isClickThroughOnly && !hasSlots) || isUnconfirmed) {
-          markerKind = "unknown";
-        } else if (hasSlots) {
-          markerKind = "available";
-        }
+        const want = Number(
+          (lastSearchCriteria && lastSearchCriteria.partySize) ||
+          document.getElementById("players").value ||
+          1
+        );
+
+        const fitSlots = (Array.isArray(slots) ? slots : []).filter(s => slotFitsParty(s, want));
+        const hasSlots = fitSlots.length > 0;
+
+        // ✅ STRICT marker logic — fixes Hillview green bug
+let markerKind = "unavailable";
+
+if (isPhone) {
+  markerKind = "phone";
+} else if (hasSlots === true) {
+  // ONLY green if at least one slot fits party size
+  markerKind = "available";
+} else if (isClickThroughOnly || isUnconfirmed) {
+  markerKind = "unknown";
+}
 
         const cLat = toNum(course.lat);
         const cLng = toNum(course.lng);
@@ -952,7 +1144,7 @@
           if (isClickThroughOnly || isUnconfirmed) {
             popupHtml += `<br><strong>Unable to confirm availability</strong>`;
           } else if (hasSlots) {
-            popupHtml += `<br>${slots.length} slots`;
+            popupHtml += `<br>${fitSlots.length} slots`;
           } else if (isPhone) {
             popupHtml += `<br>Phone booking`;
             if (course.phone) {
@@ -1006,15 +1198,15 @@
         }
 
         const providerLabel =
-          provider === "MiClub"
+          providerLower === "miclub"
             ? "MiClub • live check"
-            : provider === "Quick18"
+            : providerLower === "quick18"
             ? "Quick18 • live check"
-            : provider === "TeeItUp"
+            : providerLower === "teeitup"
             ? "TeeItUp"
-            : provider === "Chronogolf"
+            : providerLower === "chronogolf"
             ? "Chronogolf"
-            : provider === "Phone"
+            : providerLower === "phone"
             ? "Phone booking"
             : provider;
 
@@ -1036,7 +1228,7 @@
               isClickThroughOnly || isUnconfirmed
                 ? "Check course site"
                 : hasSlots
-                ? slots.length + " slots"
+                ? fitSlots.length + " slots"
                 : isPhone
                 ? (phoneHref ? `<a href="${phoneHref}">${phoneText}</a>` : phoneText)
                 : ""
@@ -1078,7 +1270,76 @@
       const course = courses.find((c) => c.name === courseName);
       if (!course) return;
 
-      const provider = course.provider || "Other";
+      const provider = String(course.provider || "Other").trim();
+      const providerLower = provider.toLowerCase();
+
+      // ✅ TeeRadarBooking
+      if (providerLower === "teeradarbooking") {
+        // ✅ Prefer explicit slugs from API, fallback to slugify
+let slug = (
+  course.slug ||
+  course.bookingSlug ||
+  course.booking_slug ||
+  course.courseSlug ||
+  course.course_slug ||
+  ""
+).toString().trim();
+
+if (!slug) slug = slugifyCourseName(courseName);
+
+// ✅ IMPORTANT: also include courseId so booking page can’t default to Hillview
+const courseId = course.id || course.courseId || course.course_id || null;
+
+        const date =
+          (lastSearchCriteria && lastSearchCriteria.date) ||
+          (document.getElementById("date") && document.getElementById("date").value) ||
+          "";
+
+        const players =
+          (lastSearchCriteria && lastSearchCriteria.partySize) ||
+          Number((document.getElementById("players") && document.getElementById("players").value) || 1);
+
+        const holes =
+          (lastSearchCriteria && lastSearchCriteria.holes) ||
+          ((document.getElementById("holes") && document.getElementById("holes").value) || "");
+
+        const earliest =
+          (lastSearchCriteria && lastSearchCriteria.earliest) ||
+          ((document.getElementById("earliest") && document.getElementById("earliest").value) || "06:00");
+
+        const latest =
+          (lastSearchCriteria && lastSearchCriteria.latest) ||
+          ((document.getElementById("latest") && document.getElementById("latest").value) || "17:00");
+
+        const u = new URL(window.location.origin + "/book/" + encodeURIComponent(slug));
+        if (courseId) u.searchParams.set("courseId", String(courseId));
+
+        if (date) u.searchParams.set("date", date);
+
+        u.searchParams.set("players", String(players));
+        u.searchParams.set("partySize", String(players));
+
+        if (holes) u.searchParams.set("holes", String(holes));
+
+        u.searchParams.set("earliest", earliest);
+        u.searchParams.set("latest", latest);
+        u.searchParams.set("timeFrom", earliest);
+        u.searchParams.set("timeTo", latest);
+
+        const finalUrl = u.toString();
+
+        trackEvent("course_booking_click", {
+          courseName,
+          provider,
+          url: finalUrl,
+          state: course.state || null,
+        });
+
+        window.open(finalUrl, "_blank");
+        return;
+      }
+
+      // Default providers
       const slots = groupedSlots[courseName] || [];
       const exampleSlot = slots[0] || {};
       const searchDate =
@@ -1087,20 +1348,20 @@
 
       let baseUrl = "";
 
-      if (provider === "TeeItUp" && course.url) {
+      if (providerLower === "teeitup" && course.url) {
         try {
           const u = new URL(course.url);
-          if (searchDate) {
-            u.searchParams.set("date", searchDate);
-          }
+          if (searchDate) u.searchParams.set("date", searchDate);
           baseUrl = u.toString();
         } catch (e) {
           baseUrl = course.url;
         }
       } else {
         baseUrl =
+          exampleSlot.bookUrl ||
           exampleSlot.bookingUrl ||
           exampleSlot.url ||
+          course.bookUrl ||
           course.url ||
           "";
       }
@@ -1109,15 +1370,19 @@
 
       let finalUrl = baseUrl;
 
-      try {
-        const u = new URL(baseUrl);
+      if (finalUrl.startsWith("/")) {
+        finalUrl = window.location.origin + finalUrl;
+      }
 
-        if (provider === "MiClub") {
+      try {
+        const u = new URL(finalUrl);
+
+        if (providerLower === "miclub") {
           if (searchDate) u.searchParams.set("selectedDate", searchDate);
           u.searchParams.delete("recaptchaResponse");
           u.searchParams.delete("mobile");
           finalUrl = u.toString();
-        } else if (provider === "Quick18") {
+        } else if (providerLower === "quick18") {
           if (searchDate) {
             const yyyymmdd = searchDate.replace(/-/g, "");
             u.searchParams.set("teedate", yyyymmdd);
@@ -1138,16 +1403,6 @@
       window.open(finalUrl, "_blank");
     });
 
-    (function setDefaultDate() {
-      const input = document.getElementById("date");
-      if (!input) return;
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, "0");
-      const dd = String(today.getDate()).padStart(2, "0");
-      input.value = `${yyyy}-${mm}-${dd}`;
-    })();
-
     // State selector behaviour
     (function setupStateSelector() {
       const btn = document.getElementById("stateSelectorButton");
@@ -1156,11 +1411,9 @@
 
       if (!btn || !dropdown) return;
 
-      function setState(stateCode, stateLabel) {
+      function setState(stateCode) {
         selectedState = stateCode;
-        if (label) {
-          label.textContent = `State: ${stateCode}`;
-        }
+        if (label) label.textContent = `State: ${stateCode}`;
 
         const prettyName = getPrettyStateName(stateCode);
 
@@ -1182,8 +1435,7 @@
           courses = [];
           renderCourses();
           if (statusLine) {
-            statusLine.textContent =
-              `${prettyName} is coming soon to TeeRadar.`;
+            statusLine.textContent = `${prettyName} is coming soon to TeeRadar.`;
             statusLine.style.color = "#9a3412";
           }
         }
@@ -1198,23 +1450,18 @@
         const option = e.target.closest(".state-option");
         if (!option) return;
         const stateCode = option.getAttribute("data-state");
-        const stateLabel = option.textContent.trim();
         dropdown.classList.remove("open");
         if (!stateCode) return;
-        setState(stateCode, stateLabel);
+        setState(stateCode);
       });
 
       document.addEventListener("click", function (e) {
         if (!dropdown.classList.contains("open")) return;
-        if (!e.target.closest(".state-selector")) {
-          dropdown.classList.remove("open");
-        }
+        if (!e.target.closest(".state-selector")) dropdown.classList.remove("open");
       });
 
       const initialState = selectedState || "WA";
-      if (label) {
-        label.textContent = `State: ${initialState}`;
-      }
+      if (label) label.textContent = `State: ${initialState}`;
     })();
   </script>
 </body>
