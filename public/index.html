@@ -726,18 +726,22 @@
 <body>
 <header>
   <div class="nav-wrap">
-    <div class="brand">
-      <div class="brand-logo">
-        <img src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png" alt="TeeRadar" />
-      </div>
-      <div class="brand-text">TeeRadar</div>
-    </div>
+    <a class="brand" href="/course-admin-login.html" aria-label="Course admin login">
+  <div class="brand-logo">
+    <img src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png" alt="TeeRadar" />
+  </div>
+  <div class="brand-text">TeeRadar</div>
+</a>
     <nav>
       <a href="/index.html">Home</a>
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
-      <a href="/analytics.html" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
+      <a href="/analytics" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
+
+      <!-- ✅ My Rounds: visible even when logged out -->
+<a href="/my-rounds.html" id="navMyRounds">My Rounds</a>
+
       <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
     </nav>
   </div>
@@ -757,10 +761,10 @@
         Find a tee time across Australia, in one place.
       </h1>
       <p class="hero-sub">
-        Search public golf courses across Australia by date, time window, 9/18
-        holes and players. Tap through to the official course booking page — you stay
-        compliant, we save you the legwork.
-      </p>
+  Search public golf courses across Australia by date, time window, 9/18 holes and players.
+  Tap through to the official course booking page — we save you the legwork.
+  Plus, log your round with TeeRadar scorecards, and for courses we offer a modern booking platform.
+</p>
 
       <div class="hero-actions">
         <button class="btn-primary" onclick="window.location.href='/book.html'">
@@ -890,19 +894,20 @@
     <h2 class="tr-alert-title">Unlock instant tee time alerts</h2>
 
     <p class="tr-alert-text">
-      Get real-time notifications when new tee times open up at your favourite
-      courses. This feature is available exclusively to
-      <strong>TeeRadar subscribers</strong>.
-    </p>
+  Get real-time notifications when new tee times open up at your favourite
+  courses. Plus, subscribers unlock <strong>My Stats</strong> for your submitted rounds.
+  This feature is available exclusively to <strong>TeeRadar subscribers</strong>.
+</p>
 
     <ul class="tr-alert-benefits">
       <li>Track your favourite golf courses</li>
       <li>Alerts the moment new tee times appear</li>
       <li>Never miss the tee times you actually want</li>
+      <li>Receive performance stats on each round played</li>
     </ul>
 
     <div class="tr-alert-actions">
-      <a href="/subscribe.html" id="tr-alert-cta" class="tr-alert-primary">Unlock with Subscription</a>
+      <a href="/subscribe.html" id="tr-alert-cta" class="tr-alert-primary">Unlock alerts + stats</a>
       <button id="tr-alert-later" class="tr-alert-secondary">Maybe later</button>
     </div>
 
@@ -974,30 +979,35 @@
   }
 
   function renderNavState() {
-    const analyticsLink = document.getElementById("navAnalytics");
-    const loginBtn = document.getElementById("navLoginBtn");
-    if (!analyticsLink || !loginBtn) return;
+  const analyticsLink = document.getElementById("navAnalytics");
+  const loginBtn = document.getElementById("navLoginBtn");
+  const roundsLink = document.getElementById("navMyRounds");
+  if (!loginBtn) return;
 
-    const email = localStorage.getItem("teeradar_user_email");
+  const email = localStorage.getItem("teeradar_user_email");
 
-    if (!email) {
-      analyticsLink.style.display = "none";
-      loginBtn.textContent = "Log in";
-      loginBtn.onclick = handleLogin;
-      return;
-    }
+  // ✅ My Rounds is always visible now
+  if (roundsLink) roundsLink.style.display = "inline-flex";
 
-    if (email === ADMIN_EMAIL) {
-      analyticsLink.style.display = "inline-flex";
-    } else {
-      analyticsLink.style.display = "none";
-    }
+  // ✅ Default: hide gated links
+  if (analyticsLink) analyticsLink.style.display = "none";
 
-    loginBtn.textContent = "My account";
-    loginBtn.onclick = () => {
-      window.location.href = "/account.html";
-    };
+  // Logged out
+  if (!email) {
+    loginBtn.textContent = "Log in";
+    loginBtn.onclick = handleLogin;
+    return;
   }
+
+  if (analyticsLink && email === ADMIN_EMAIL) {
+    analyticsLink.style.display = "inline-flex";
+  }
+
+  loginBtn.textContent = "My account";
+  loginBtn.onclick = () => {
+    window.location.href = "/account.html";
+  };
+}
 
   function trackInitialHome() {
     if (!localStorage.getItem("teeradar_seen")) {
