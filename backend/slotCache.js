@@ -35,6 +35,30 @@ db.exec(`
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
 // -------------------------------
+// Normalizers (keeps cache keys consistent)
+// -------------------------------
+function normInt(v, fallback = null) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normPartySize(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
+}
+
+function normHHMM(t, fallback) {
+  const s = String(t || "").trim();
+  if (!s) return fallback;
+  const parts = s.split(":");
+  if (parts.length < 2) return fallback;
+  const hh = String(parts[0] || "").padStart(2, "0");
+  const mm = String(parts[1] || "").padStart(2, "0");
+  if (!/^\d{2}$/.test(hh) || !/^\d{2}$/.test(mm)) return fallback;
+  return `${hh}:${mm}`;
+}
+
+// -------------------------------
 // GET cached result
 // -------------------------------
 export function getCachedSlots({
@@ -45,12 +69,17 @@ export function getCachedSlots({
   earliest,
   latest,
 }) {
+  const h = Number.isFinite(Number(holes)) ? Number(holes) : null;
+  const ps = normPartySize(partySize);
+  const e = normHHMM(earliest, "06:00");
+  const l = normHHMM(latest, "17:00");
+
   const row = db
     .prepare(
       `SELECT slots, updatedAt FROM slot_cache
        WHERE courseId=? AND date=? AND holes IS ? AND partySize=? AND earliest=? AND latest=?`
     )
-    .get(courseId, date, holes, partySize, earliest, latest);
+    .get(courseId, date, h, ps, e, l);
 
   if (!row) return null;
 
@@ -80,6 +109,11 @@ export function saveSlotsToCache({
   latest,
   slots,
 }) {
+  const h = Number.isFinite(Number(holes)) ? Number(holes) : null;
+  const ps = normPartySize(partySize);
+  const e = normHHMM(earliest, "06:00");
+  const l = normHHMM(latest, "17:00");
+
   db.prepare(
     `INSERT OR REPLACE INTO slot_cache
     (courseId, date, holes, partySize, earliest, latest, provider, slots, updatedAt)
@@ -87,10 +121,10 @@ export function saveSlotsToCache({
   ).run(
     courseId,
     date,
-    holes,
-    partySize,
-    earliest,
-    latest,
+    h,
+    ps,
+    e,
+    l,
     provider,
     JSON.stringify(slots || []),
     Date.now()
