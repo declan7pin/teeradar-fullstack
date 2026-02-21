@@ -198,7 +198,7 @@ const BOOKING_CONFIRMED_EVENT_TYPES = [
 ];
 
 // ✅ best-effort dedupe key so 1 booking isn't counted twice
-// falls back to event id if payload doesn't contain identifiers
+// ✅ UPDATED: adds a synthetic fallback so click+confirmed dedupe even without a reference
 function bookingKeySql() {
   return `
     COALESCE(
@@ -209,6 +209,17 @@ function bookingKeySql() {
       payload->>'bookingId',
       payload->>'payment_intent',
       payload->>'paymentIntent',
+
+      -- ✅ synthetic fallback (make this as stable as possible)
+      CONCAT_WS('|',
+        course_slug,
+        COALESCE(payload->>'date', payload->>'booking_date', payload->>'day'),
+        COALESCE(payload->>'time', payload->>'tee_time', payload->>'teeTime', payload->>'start_time'),
+        COALESCE(payload->>'email', payload->>'userEmail'),
+        COALESCE(payload->>'holes',''),
+        COALESCE(payload->>'players','')
+      ),
+
       id::text
     )
   `;
@@ -344,14 +355,20 @@ router.get("/api/book/course-admin/analytics/summary", requireCourseAdminOrBypas
       [slug, days, BOOKING_CONFIRMED_EVENT_TYPES]
     );
 
-    // ✅ revenue (manual + online)
+    // ✅ revenue (manual + online) — ✅ avoid double-count by summing MAX per booking_key
     const revenue = await qOne(
       `
-      SELECT COALESCE(SUM(NULLIF((payload->>'total_cents')::text,'')::int),0)::int AS total_cents
-      FROM booking_analytics_events
-      WHERE course_slug = $1
-        AND event_type = ANY($3::text[])
-        AND occurred_at >= now() - ($2::int || ' days')::interval
+      SELECT COALESCE(SUM(x.total_cents),0)::int AS total_cents
+      FROM (
+        SELECT
+          ${keySql} AS booking_key,
+          MAX(NULLIF((payload->>'total_cents')::text,'')::int) AS total_cents
+        FROM booking_analytics_events
+        WHERE course_slug = $1
+          AND event_type = ANY($3::text[])
+          AND occurred_at >= now() - ($2::int || ' days')::interval
+        GROUP BY 1
+      ) x
       `,
       [slug, days, BOOKING_CONFIRMED_EVENT_TYPES]
     );
@@ -679,28 +696,25 @@ router.get("/api/book/admin/analytics/daily", async (req, res) => {
 
     const rows = await qAll(
       `
+      WITH per_booking AS (
+        SELECT
+          to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') AS day,
+          ${keySql} AS booking_key,
+          MAX(NULLIF((payload->>'total_cents')::text,'')::int) AS total_cents
+        FROM booking_analytics_events
+        WHERE occurred_at >= ${startSql}
+          AND occurred_at <  ${endSql}
+          ${slugWhere}
+          AND event_type = ANY($${params.length + 1}::text[])
+        GROUP BY 1,2
+      )
       SELECT
-        to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') AS day,
-
-        -- ✅ bookings = distinct bookings (dedupes click+confirmed if payload has a ref)
-        COUNT(DISTINCT ${keySql}) FILTER (
-          WHERE event_type = ANY($${params.length + 1}::text[])
-        )::int AS bookings,
-
-        -- ✅ revenue = sum of total_cents for booking-type events (no dedupe, assumes only one event carries cents)
-        COALESCE(SUM(
-          CASE WHEN event_type = ANY($${params.length + 1}::text[])
-            THEN NULLIF((payload->>'total_cents')::text,'')::int
-            ELSE 0
-          END
-        ),0)::int AS revenue_cents
-
-      FROM booking_analytics_events
-      WHERE occurred_at >= ${startSql}
-        AND occurred_at <  ${endSql}
-      ${slugWhere}
-      GROUP BY 1
-      ORDER BY 1 ASC
+        day,
+        COUNT(*)::int AS bookings,
+        COALESCE(SUM(total_cents),0)::int AS revenue_cents
+      FROM per_booking
+      GROUP BY day
+      ORDER BY day ASC
       `,
       [...params, BOOKING_CONFIRMED_EVENT_TYPES]
     );
@@ -739,18 +753,22 @@ router.get("/api/book/admin/analytics/top", async (req, res) => {
 
     const rows = await qAll(
       `
+      WITH per_booking AS (
+        SELECT
+          course_slug,
+          ${keySql} AS booking_key,
+          MAX(NULLIF((payload->>'total_cents')::text,'')::int) AS total_cents
+        FROM booking_analytics_events
+        WHERE occurred_at >= ${startSql}
+          AND occurred_at <  ${endSql}
+          AND event_type = ANY($${params.length + 1}::text[])
+        GROUP BY 1,2
+      )
       SELECT
         course_slug,
-        COUNT(DISTINCT ${keySql}) FILTER (WHERE event_type = ANY($${params.length + 1}::text[]))::int AS bookings,
-        COALESCE(SUM(
-          CASE WHEN event_type = ANY($${params.length + 1}::text[])
-            THEN NULLIF((payload->>'total_cents')::text,'')::int
-            ELSE 0
-          END
-        ),0)::int AS revenue_cents
-      FROM booking_analytics_events
-      WHERE occurred_at >= ${startSql}
-        AND occurred_at <  ${endSql}
+        COUNT(*)::int AS bookings,
+        COALESCE(SUM(total_cents),0)::int AS revenue_cents
+      FROM per_booking
       GROUP BY course_slug
       ORDER BY revenue_cents DESC NULLS LAST, bookings DESC
       LIMIT 50
