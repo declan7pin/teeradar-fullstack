@@ -1453,8 +1453,8 @@ async function ensureBookingTables() {
     $$;
   `);
 
-  // ✅ ADD: drop any legacy UNIQUE constraints / indexes that still ignore layout keys
-// Some “unique indexes” are backing indexes for UNIQUE constraints -> must drop the constraint first.
+ // ✅ ADD: drop any legacy UNIQUE constraints / indexes that still ignore layout keys
+// (some “unique indexes” are actually backing indexes for UNIQUE constraints — must drop constraint first)
 await db.query(`
   DO $$
   DECLARE
@@ -1473,7 +1473,7 @@ await db.query(`
         AND pg_get_indexdef(x.indexrelid) LIKE '%(course_id, play_date, tee_time, holes, slot_index)%'
         AND pg_get_indexdef(x.indexrelid) NOT LIKE '%layout_key%'
     LOOP
-      -- If the index is owned by a UNIQUE constraint, drop the constraint(s) instead
+      -- If this unique index belongs to a UNIQUE constraint, drop the constraint(s) instead of the index
       IF EXISTS (SELECT 1 FROM pg_constraint pc WHERE pc.conindid = r.index_oid) THEN
         FOR c IN
           SELECT conname
