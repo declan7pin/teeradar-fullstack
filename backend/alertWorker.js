@@ -7,6 +7,9 @@ import db from "./db.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 import { Resend } from "resend"; // ✅ use Resend instead of nodemailer
 
+// ✅ ADDED: analytics event logger (used by analytics dashboard)
+import { recordEvent } from "./analytics.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -24,11 +27,21 @@ const PERTH_LNG = 115.8613;
 const coursesPath = path.join(__dirname, "data", "courses.json");
 const rawCourses = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
 
-const courses = rawCourses.map((c) => ({
-  ...c,
-  lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
-  lng: typeof c.lng === "number" ? c.lng : PERTH_LNG,
-}));
+const courses = rawCourses.map((c) => {
+  let provider = (c.provider || "").trim();
+
+  // ✅ NORMALISE TeeRadar providers
+  if (provider.toLowerCase() === "teeradarbooking") {
+    provider = "TeeRadar";
+  }
+
+  return {
+    ...c,
+    provider,
+    lat: typeof c.lat === "number" ? c.lat : PERTH_LAT,
+    lng: typeof c.lng === "number" ? c.lng : PERTH_LNG,
+  };
+});
 
 const feeGroupsPath = path.join(__dirname, "data", "fee_groups.json");
 let feeGroups = {};
@@ -69,6 +82,61 @@ async function ensureUserAlertHitsTable() {
   }
 }
 ensureUserAlertHitsTable();
+
+// ---------------------------------------------------------
+// ✅ ADDED: schema helpers (safe plan pickup, no breaking changes)
+// ---------------------------------------------------------
+let _schemaCache = null;
+
+async function getSchemaFlags() {
+  if (_schemaCache) return _schemaCache;
+
+  async function columnExists(tableName, columnName) {
+    try {
+      const { rows } = await db.query(
+        `
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = $1
+          AND column_name = $2
+        LIMIT 1
+        `,
+        [tableName, columnName]
+      );
+      return rows.length > 0;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  const usersHasPlan = await columnExists("users", "plan");
+  const prefsHasPlan = await columnExists("user_preferences", "plan");
+
+  _schemaCache = { usersHasPlan, prefsHasPlan };
+  return _schemaCache;
+}
+
+// ---------------------------------------------------------
+// ✅ ADDED: JSONB normalisers (fixes favourites/preferred_days being returned as strings)
+// ---------------------------------------------------------
+function normaliseJsonArray(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+
+  // Postgres JSONB sometimes arrives as a string depending on driver/config
+  if (typeof val === "string") {
+    try {
+      const parsed = JSON.parse(val);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  // Sometimes JSONB can come back as an object wrapper — we only accept arrays
+  return [];
+}
 
 // ---------------------------------------------------------
 // Alert email helpers
@@ -201,9 +269,12 @@ function buildBookingLinkForDate(course, date) {
  * Send ONE email that includes ALL favourites with availability for this tick.
  * If none found, still send a "no matches" email (digest/heartbeat).
  * Also updates user_preferences.alert_last_sent when it sends.
+ *
+ * ✅ WIRED: logs analytics event "alert_sent" only if email succeeds
  */
 async function sendAlertEmailSummaryForUser({
   email,
+  plan,
   hits,
   earliest,
   latest,
@@ -304,6 +375,21 @@ async function sendAlertEmailSummaryForUser({
       [email]
     );
 
+    // ✅ WIRED: analytics "alert_sent" (counts emails sent)
+    await recordEvent("alert_sent", {
+      userId: email,
+      courseName: safeHits.length > 0 ? "MULTI" : null,
+      plan: plan || null,
+      at: new Date().toISOString(),
+      meta: {
+        hitsCount: safeHits.length,
+        earliest,
+        latest,
+        holes: userHoles || null,
+        partySize: partySize || null,
+      },
+    });
+
     console.log(
       `📧 Summary alert email sent to ${email} (${safeHits.length} hit(s))`
     );
@@ -318,9 +404,12 @@ async function sendAlertEmailSummaryForUser({
 /**
  * Send a single alert email for a user / course / date.
  * Also updates user_preferences.alert_last_sent when it sends.
+ *
+ * ✅ WIRED: logs analytics event "alert_sent" only if email succeeds
  */
 async function sendAlertEmailForHit({
   email,
+  plan,
   course,
   date,
   count,
@@ -399,6 +488,22 @@ TeeRadar
       `,
       [email]
     );
+
+    // ✅ WIRED: analytics "alert_sent"
+    await recordEvent("alert_sent", {
+      userId: email,
+      courseName: course?.name || null,
+      plan: plan || null,
+      at: new Date().toISOString(),
+      meta: {
+        date,
+        count,
+        earliest,
+        latest,
+        holes: userHoles || null,
+        partySize: partySize || null,
+      },
+    });
 
     console.log(`📧 Alert email sent to ${email} for ${course.name} on ${date}`);
   } catch (err) {
@@ -518,7 +623,39 @@ function findCourseByFavourite(fav) {
   course = courses.find((c) => c.name.toLowerCase().includes(lower));
   return course || null;
 }
+// ✅ ADD: TeeRadar/manual courses don't scrape — read available slots from DB instead
+async function fetchTeeRadarSlotsFromDb(course, criteria) {
+  const date = criteria.date;
+  const earliest = criteria.earliest || "00:00";
+  const latest = criteria.latest || "23:59";
+  const holes = criteria.holes ? Number(criteria.holes) : null;
+  const partySize = criteria.partySize ? Number(criteria.partySize) : null;
 
+  // try slug first, fallback to name
+  const slug = course.slug || course.course_slug || null;
+
+  // NOTE: adjust column names here ONLY if your slots table differs.
+  const { rows } = await db.query(
+    `
+    SELECT *
+    FROM slots
+    WHERE date = $1
+      AND (
+        ($2::text IS NOT NULL AND course_slug = $2)
+        OR
+        ($2::text IS NULL AND course_name = $3)
+      )
+      AND (time >= $4 AND time <= $5)
+      AND ($6::int IS NULL OR holes = $6)
+      AND ($7::int IS NULL OR players = $7 OR party_size = $7)
+      AND (is_available = TRUE OR available = TRUE)
+    ORDER BY time ASC
+    `,
+    [date, slug, course.name, earliest, latest, holes, partySize]
+  );
+
+  return rows || [];
+}
 // ---------------------------------------------------------
 // Core alert tick
 // ---------------------------------------------------------
@@ -527,11 +664,20 @@ async function runAlertTick() {
   console.log("🔔 Alert tick starting…");
 
   try {
+    const schema = await getSchemaFlags();
+
+    // Build plan select safely (won't break if column doesn't exist)
+    const planSelect =
+      schema.usersHasPlan
+        ? "u.plan AS plan"
+        : (schema.prefsHasPlan ? "p.plan AS plan" : "NULL::text AS plan");
+
     // Pull users + preferences
     const { rows } = await db.query(`
       SELECT
         u.email,
         u.home_course,
+        ${planSelect},
         p.home_state,
         p.favourites,
         p.preferred_days,
@@ -558,8 +704,12 @@ async function runAlertTick() {
 
     for (const row of rows) {
       const email = (row.email || "").toLowerCase();
-      const favourites = row.favourites || [];
-      const preferredDays = row.preferred_days || [];
+      const plan = row.plan || null;
+
+      // ✅ FIX: normalise JSONB/string values to arrays so users don't get skipped
+      const favourites = normaliseJsonArray(row.favourites);
+      const preferredDays = normaliseJsonArray(row.preferred_days);
+
       const earliest = row.preferred_earliest || "06:00";
       const latest = row.preferred_latest || "17:00";
       const holes = row.preferred_holes || "";
@@ -639,7 +789,15 @@ async function runAlertTick() {
           };
 
           try {
-            const result = await scrapeCourse(course, criteria, feeGroups);
+            let result = [];
+const prov = (course.provider || "").toLowerCase();
+
+if (prov === "miclub" || prov === "quick18") {
+  result = await scrapeCourse(course, criteria, feeGroups);
+} else {
+  // ✅ TeeRadar/manual courses: read availability from DB instead of scraping
+  result = await fetchTeeRadarSlotsFromDb(course, criteria);
+}
             const count = Array.isArray(result) ? result.length : 0;
 
             console.log(
@@ -687,6 +845,23 @@ async function runAlertTick() {
                 );
               }
 
+              // ✅ WIRED: analytics "alert_hit" (availability found)
+              await recordEvent("alert_hit", {
+                userId: email,
+                courseName: course.name,
+                plan: plan || null,
+                at: new Date().toISOString(),
+                meta: {
+                  date,
+                  count,
+                  provider: course.provider || null,
+                  earliest,
+                  latest,
+                  holes: userHoles || null,
+                  partySize: partySize || null,
+                },
+              });
+
               // ✅ Add to the email summary list (date-correct URL)
               const bookingLink =
                 buildBookingLinkForDate(course, date) ||
@@ -718,6 +893,7 @@ async function runAlertTick() {
       if (emailsAllowed && canSendEmailForUser) {
         await sendAlertEmailSummaryForUser({
           email,
+          plan,
           hits: emailHits,
           earliest,
           latest,
