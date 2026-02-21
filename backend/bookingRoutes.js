@@ -3398,7 +3398,8 @@ router.get("/admin/analytics/funnel", requirePlatformAdmin, async (req, res) => 
   }
 });
 
-// 4) Daily series for charts (bookings + revenue) from booking_bookings
+// 4) Daily series for charts (bookings + revenue)
+// ✅ FIX: include MANUAL bookings too (deduped by reference), same as /admin/analytics/bookings
 router.get("/admin/analytics/daily", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.query.slug || "");
@@ -3415,39 +3416,67 @@ router.get("/admin/analytics/daily", requirePlatformAdmin, async (req, res) => {
     const params = [];
     let where = `WHERE 1=1`;
 
+    // ✅ scope to course if provided
     if (courseId) {
       params.push(courseId);
       where += ` AND b.course_id = $${params.length}`;
     }
 
+    // ✅ IMPORTANT: filter by BOOKING DATE (play_date), not created_at
     if (start && end) {
       params.push(start, end);
-      where += ` AND b.created_at::date BETWEEN $${params.length - 1}::date AND $${params.length}::date`;
+      where += ` AND b.booking_date BETWEEN $${params.length - 1}::date AND $${params.length}::date`;
     } else if (start && !end) {
       params.push(start);
-      where += ` AND b.created_at::date >= $${params.length}::date`;
+      where += ` AND b.booking_date >= $${params.length}::date`;
     } else if (!start && end) {
       params.push(end);
-      where += ` AND b.created_at::date <= $${params.length}::date`;
+      where += ` AND b.booking_date <= $${params.length}::date`;
     } else {
-      // default last 30 days
-      where += ` AND b.created_at >= NOW() - INTERVAL '30 days'`;
+      // default last 30 days (by booking date)
+      where += ` AND b.booking_date >= (CURRENT_DATE - INTERVAL '30 days')::date`;
     }
 
-    const r = await db.query(
-      `
-      SELECT
-        b.created_at::date::text AS day,
-        COUNT(*)::int AS bookings,
-        COALESCE(SUM(b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents), 0)::bigint AS revenue_cents
-      FROM booking_bookings b
-      ${where}
-      GROUP BY b.created_at::date
-      ORDER BY b.created_at::date ASC;
-      `,
-      params
-    );
+    const q = `
+      WITH all_bookings AS (
+        -- online bookings
+        SELECT
+          b.course_id,
+          b.play_date::date AS booking_date,
+          COALESCE(b.total_cents,0)
+            + COALESCE(b.cart_fee_cents,0)
+            + COALESCE(b.hire_clubs_fee_cents,0) AS revenue_cents
+        FROM booking_bookings b
 
+        UNION ALL
+
+        -- manual bookings: many rows per booking, collapse to 1 row per reference
+        SELECT
+          m.course_id,
+          m.play_date::date AS booking_date,
+          0::bigint AS revenue_cents
+        FROM (
+          SELECT
+            course_id,
+            play_date,
+            MIN(created_at) AS created_at,
+            reference
+          FROM booking_manual_slots
+          WHERE reference IS NOT NULL AND reference <> ''
+          GROUP BY course_id, play_date, reference
+        ) m
+      )
+      SELECT
+        b.booking_date::text AS day,
+        COUNT(*)::int AS bookings,
+        COALESCE(SUM(b.revenue_cents), 0)::bigint AS revenue_cents
+      FROM all_bookings b
+      ${where}
+      GROUP BY b.booking_date
+      ORDER BY b.booking_date ASC;
+    `;
+
+    const r = await db.query(q, params);
     res.json({ ok: true, rows: r.rows || [] });
   } catch (e) {
     console.error("admin/analytics/daily", e);
