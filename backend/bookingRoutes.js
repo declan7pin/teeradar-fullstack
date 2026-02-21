@@ -1739,8 +1739,8 @@ router.post("/course-admin/forgot-password", async (req, res) => {
       String(process.env.PUBLIC_BASE_URL || "").trim() ||
       `${isHttps(req) ? "https" : "http"}://${req.headers.host}`;
 
-    // You can create this page next (simple form that POSTs token+new password)
-    const resetUrl = `${baseUrl}/course-admin-reset.html?token=${encodeURIComponent(token)}`;
+    // ✅ IMPORTANT: points to backend GET page that serves the reset form
+    const resetUrl = `${baseUrl}/api/book/course-admin/reset?token=${encodeURIComponent(token)}`;
 
     // Send email (Resend must be configured)
     if (!resend?.emails?.send) {
@@ -1779,6 +1779,139 @@ router.post("/course-admin/forgot-password", async (req, res) => {
     console.error("course-admin/forgot-password", e);
     // Still return ok:true so UI doesn't leak anything
     return res.json({ ok: true });
+  }
+});
+
+/**
+ * ✅ ADD THIS:
+ * GET /course-admin/reset?token=...
+ * Serves a simple reset-password page so the email link doesn't fall back to "/"
+ */
+router.get("/course-admin/reset", async (req, res) => {
+  try {
+    const token = String(req.query?.token || "").trim();
+    if (!token) return res.status(400).send("Missing reset token.");
+
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    return res.send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar — Reset Course Admin Password</title>
+  <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+  <style>
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,sans-serif;
+      background:#f4f7fb;
+      color:#0f172a;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      height:100vh;
+    }
+    .card{
+      background:#fff;
+      border:1px solid #e2e8f0;
+      border-radius:14px;
+      padding:28px;
+      width:100%;
+      max-width:420px;
+    }
+    h2{margin:0 0 8px;text-align:center}
+    p{color:#64748b;font-size:14px;text-align:center;margin:0 0 14px}
+    label{display:block;margin-top:14px;font-size:13px;color:#475569}
+    input{
+      width:100%;
+      padding:12px;
+      border:1px solid #cbd5e1;
+      border-radius:10px;
+      margin-top:6px;
+      font-size:14px;
+    }
+    button{
+      margin-top:18px;
+      width:100%;
+      padding:12px;
+      border:0;
+      border-radius:12px;
+      background:#00796b;
+      color:#fff;
+      font-weight:700;
+      cursor:pointer;
+    }
+    .msg{
+      margin-top:12px;
+      font-size:13px;
+      text-align:center;
+      color:#b91c1c;
+      min-height:18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Reset password</h2>
+    <p>Enter a new password for your Course Admin account</p>
+
+    <label>New password</label>
+    <input id="pw1" type="password" placeholder="Minimum 8 characters" />
+
+    <label>Confirm password</label>
+    <input id="pw2" type="password" placeholder="Re-enter password" />
+
+    <button id="saveBtn">Set new password</button>
+    <div id="msg" class="msg"></div>
+  </div>
+
+<script>
+  const TOKEN = ${JSON.stringify(token)};
+  const msg = document.getElementById("msg");
+
+  document.getElementById("saveBtn").onclick = async () => {
+    msg.textContent = "Saving…";
+    const pw1 = document.getElementById("pw1").value || "";
+    const pw2 = document.getElementById("pw2").value || "";
+
+    if (pw1.length < 8) {
+      msg.textContent = "Password must be at least 8 characters.";
+      return;
+    }
+    if (pw1 !== pw2) {
+      msg.textContent = "Passwords do not match.";
+      return;
+    }
+
+    try {
+      // IMPORTANT: relative URL because we are at /api/book/course-admin/reset
+      const res = await fetch("./reset-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: TOKEN, password: pw1 })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        msg.textContent = data?.error || "Reset failed.";
+        return;
+      }
+
+      msg.style.color = "#16a34a";
+      msg.textContent = "Password updated. Redirecting to login…";
+      setTimeout(() => {
+        window.location.href = "/course-admin-login.html";
+      }, 900);
+    } catch (e) {
+      msg.textContent = "Network error.";
+    }
+  };
+</script>
+</body>
+</html>`);
+  } catch (e) {
+    console.error("course-admin/reset page", e);
+    return res.status(500).send("Internal error.");
   }
 });
 
