@@ -1655,6 +1655,202 @@ router.post("/course-admin/logout", async (req, res) => {
   res.clearCookie("tr_course_admin_role", { path: "/" });
   res.json({ ok: true });
 });
+// -----------------------------
+// ✅ Course admin forgot/reset password
+// -----------------------------
+
+function sha256Hex(s) {
+  return crypto.createHash("sha256").update(String(s || ""), "utf8").digest("hex");
+}
+
+let _resetTableEnsured = false;
+async function ensureCourseAdminResetTable() {
+  if (_resetTableEnsured) return;
+  // Create a simple reset-token table (no schema migration needed)
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_course_password_resets (
+      id BIGSERIAL PRIMARY KEY,
+      course_user_id BIGINT NOT NULL,
+      token_hash TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_booking_course_password_resets_token_hash
+    ON booking_course_password_resets(token_hash);
+  `);
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_booking_course_password_resets_course_user_id
+    ON booking_course_password_resets(course_user_id);
+  `);
+
+  _resetTableEnsured = true;
+}
+
+// POST /course-admin/forgot-password
+// Body: { email }
+// Response: { ok: true } (always, to avoid account enumeration)
+router.post("/course-admin/forgot-password", async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!isLikelyEmail(email)) {
+      return res.status(400).json({ ok: false, error: "invalid_email" });
+    }
+
+    await ensureCourseAdminResetTable();
+
+    // Find latest matching course admin user
+    const u = await db.query(
+      `
+      SELECT cu.id, cu.email, cu.course_id, c.slug
+      FROM booking_course_users cu
+      JOIN booking_courses c ON c.id = cu.course_id
+      WHERE lower(cu.email) = $1
+      ORDER BY cu.id DESC
+      LIMIT 1;
+      `,
+      [email]
+    );
+
+    // Always return ok:true (even if not found)
+    if (!u.rows.length) {
+      return res.json({ ok: true });
+    }
+
+    const user = u.rows[0];
+
+    // Create token + store hash
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = sha256Hex(token);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 mins
+
+    await db.query(
+      `
+      INSERT INTO booking_course_password_resets (course_user_id, token_hash, expires_at)
+      VALUES ($1, $2, $3);
+      `,
+      [user.id, tokenHash, expiresAt.toISOString()]
+    );
+
+    // Build reset URL (prefer explicit public base URL if you set one)
+    const baseUrl =
+      String(process.env.PUBLIC_BASE_URL || "").trim() ||
+      `${isHttps(req) ? "https" : "http"}://${req.headers.host}`;
+
+    // You can create this page next (simple form that POSTs token+new password)
+    const resetUrl = `${baseUrl}/course-admin-reset.html?token=${encodeURIComponent(token)}`;
+
+    // Send email (Resend must be configured)
+    if (!resend?.emails?.send) {
+      console.warn("⚠️ Resend not configured; cannot send reset email.");
+      return res.json({ ok: true });
+    }
+
+    const fromEmail =
+      String(process.env.BOOKING_EMAIL_FROM || "").trim() ||
+      "TeeRadar <no-reply@teeradar.com.au>";
+
+    await resend.emails.send({
+      from: fromEmail,
+      to: [user.email],
+      subject: "Reset your TeeRadar Course Admin password",
+      html: `
+        <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.5">
+          <h2 style="margin:0 0 8px">Reset your password</h2>
+          <p style="margin:0 0 14px">
+            We received a request to reset the Course Admin password for <b>${user.slug}</b>.
+          </p>
+          <p style="margin:0 0 14px">
+            <a href="${resetUrl}" style="display:inline-block;padding:10px 14px;border-radius:10px;background:#00796b;color:#fff;text-decoration:none;font-weight:700">
+              Reset password
+            </a>
+          </p>
+          <p style="margin:0;color:#64748b;font-size:13px">
+            This link expires in 60 minutes. If you didn’t request this, you can ignore this email.
+          </p>
+        </div>
+      `,
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("course-admin/forgot-password", e);
+    // Still return ok:true so UI doesn't leak anything
+    return res.json({ ok: true });
+  }
+});
+
+// POST /course-admin/reset-password
+// Body: { token, password }
+router.post("/course-admin/reset-password", async (req, res) => {
+  try {
+    const token = String(req.body?.token || "").trim();
+    const password = String(req.body?.password || "");
+
+    if (!token || password.length < 8) {
+      return res.status(400).json({ ok: false, error: "invalid_request" });
+    }
+
+    await ensureCourseAdminResetTable();
+
+    const tokenHash = sha256Hex(token);
+
+    // Find a valid, unused reset token
+    const r = await db.query(
+      `
+      SELECT pr.id AS reset_id, pr.course_user_id
+      FROM booking_course_password_resets pr
+      WHERE pr.token_hash = $1
+        AND pr.used_at IS NULL
+        AND pr.expires_at > NOW()
+      ORDER BY pr.id DESC
+      LIMIT 1;
+      `,
+      [tokenHash]
+    );
+
+    if (!r.rows.length) {
+      return res.status(400).json({ ok: false, error: "invalid_or_expired_token" });
+    }
+
+    const resetRow = r.rows[0];
+
+    // Update password on booking_course_users
+    const { saltHex, hashHex } = hashPassword(password);
+
+    await db.query(
+      `
+      UPDATE booking_course_users
+      SET salt_hex = $1, hash_hex = $2
+      WHERE id = $3;
+      `,
+      [saltHex, hashHex, resetRow.course_user_id]
+    );
+
+    // Mark token used
+    await db.query(
+      `
+      UPDATE booking_course_password_resets
+      SET used_at = NOW()
+      WHERE id = $1;
+      `,
+      [resetRow.reset_id]
+    );
+
+    // Optional: clear admin cookies so they re-login cleanly
+    res.clearCookie("tr_course_admin_slug", { path: "/" });
+    res.clearCookie("tr_course_admin_email", { path: "/" });
+    res.clearCookie("tr_course_admin_token", { path: "/" });
+    res.clearCookie("tr_course_admin_role", { path: "/" });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("course-admin/reset-password", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 
 // ✅ ADD THIS (course admin "who am I")
 // Place this EXACTLY where the stray res.json block currently is.
