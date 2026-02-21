@@ -2165,11 +2165,27 @@ async function loadBookingAnalytics(mode = "default") {
     const daily = await tryFetchJson(dailyUrl);
 
 if (daily && daily.ok && Array.isArray(daily.rows)) {
-  const totalBookings = daily.rows.reduce((sum, r) => sum + Number(r.bookings || 0), 0);
-  const totalRevenue = daily.rows.reduce((sum, r) => sum + Number(r.revenue_cents || 0), 0) / 100;
+
+  // ✅ use NEW backend fields
+  const totalBookings = daily.rows.reduce(
+    (sum, r) => sum + Number(r.total_bookings ?? r.bookings ?? 0),
+    0
+  );
+
+  const totalRevenueCents = daily.rows.reduce(
+    (sum, r) => sum + Number(r.total_revenue_cents ?? r.revenue_cents ?? 0),
+    0
+  );
+
+  const totalRevenue = totalRevenueCents / 100;
 
   setText("metricBookRange", String(Math.trunc(totalBookings)));
   setText("metricRevRange", "$" + Number(totalRevenue || 0).toFixed(0));
+
+} else {
+  setText("metricBookRange", "—");
+  setText("metricRevRange", "—");
+}
 
   // (Optional) keep old charts updated but hidden:
   // const labels = daily.rows.map(r => r.day);
