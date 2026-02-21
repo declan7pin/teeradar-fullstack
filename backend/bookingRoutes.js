@@ -3470,14 +3470,16 @@ router.get("/admin/analytics/daily", requirePlatformAdmin, async (req, res) => {
 
       mb AS (
         -- ✅ group manual slots by reference so add-ons aren't double-counted
+        -- ✅ also keep tee_time + holes so we can price via booking_times
         SELECT
-          m.play_date::date::text AS day,
+          m.play_date::date AS day_date,
           m.course_id,
           m.reference,
+          MIN(m.tee_time) AS tee_time,
+          MIN(m.holes)::int AS holes,
           COUNT(*) FILTER (WHERE COALESCE(NULLIF(m.name,''),'') <> '')::int AS players,
           MAX(COALESCE(m.cart_qty,0))::int AS carts,
-          MAX(COALESCE(m.hire_clubs_qty,0))::int AS clubs,
-          MAX(COALESCE(m.price_per_player_cents,0))::int AS ppp
+          MAX(COALESCE(m.hire_clubs_qty,0))::int AS clubs
         FROM booking_manual_slots m
         ${whereManual}
           AND m.reference IS NOT NULL AND m.reference <> ''
@@ -3486,16 +3488,24 @@ router.get("/admin/analytics/daily", requirePlatformAdmin, async (req, res) => {
 
       manual AS (
         SELECT
-          mb.day,
+          mb.day_date::text AS day,
           COUNT(*)::int AS bookings,
           COALESCE(SUM(
-            (mb.players * mb.ppp)
-            + (mb.carts * f.cart_fee_cents)
-            + (mb.clubs * f.clubs_fee_cents)
+            (mb.players * COALESCE(t.price_per_player_cents,0))
+            + (mb.carts * COALESCE(f.cart_fee_cents,0))
+            + (mb.clubs * COALESCE(f.clubs_fee_cents,0))
           ), 0)::bigint AS revenue_cents
         FROM mb
-        JOIN fees f ON f.course_id = mb.course_id
-        GROUP BY mb.day
+        -- ✅ price manual bookings from booking_times (this is why revenue was not changing)
+        LEFT JOIN booking_times t
+          ON t.course_id = mb.course_id
+         AND t.play_date::date = mb.day_date
+         AND t.tee_time = mb.tee_time
+         AND t.holes = mb.holes
+        -- ✅ don't drop rows if fees row missing
+        LEFT JOIN fees f
+          ON f.course_id = mb.course_id
+        GROUP BY mb.day_date
       ),
 
       combined AS (
