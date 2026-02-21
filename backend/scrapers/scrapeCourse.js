@@ -1,4 +1,6 @@
 // backend/scrapers/scrapeCourse.js
+import db from "../db.js"; // ✅ needed for TeeRadarBooking provider
+
 import { parseMiClub } from "./parseMiClub.js";
 import { parseQuick18 } from "./parseQuick18.js";
 import { scrapeChronogolfCourse } from "./parseChronogolf.js";
@@ -8,8 +10,28 @@ import { scrapeTeeItUpCourse } from "./parseTeeItUp.js";
  * Turn "HH:MM" into minutes from midnight
  */
 function toMinutes(t) {
-  const [h, m] = t.split(":").map((n) => parseInt(n, 10));
-  return h * 60 + m;
+  const s = String(t || "").trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10);
+  if (!Number.isFinite(h) || !Number.isFinite(mm)) return null;
+  return h * 60 + mm;
+}
+
+/**
+ * Normalize time strings to "HH:MM"
+ * Handles "HH:MM:SS" (Postgres TIME), "H:MM", etc.
+ */
+function normalizeHHMM(t) {
+  const s = String(t || "").trim();
+  if (!s) return "";
+  const parts = s.split(":");
+  if (parts.length < 2) return "";
+  const hh = String(parts[0] || "").padStart(2, "0");
+  const mm = String(parts[1] || "").padStart(2, "0");
+  if (!/^\d{2}$/.test(hh) || !/^\d{2}$/.test(mm)) return "";
+  return `${hh}:${mm}`;
 }
 
 /**
@@ -37,10 +59,7 @@ function buildMiClubUrl(course, criteria, feeGroups = {}) {
     existingParams.get("bookingResourceId") ||
     "3000000";
 
-  const feeGroupId =
-    cfg.feeGroupId ||
-    existingParams.get("feeGroupId") ||
-    null;
+  const feeGroupId = cfg.feeGroupId || existingParams.get("feeGroupId") || null;
 
   const params = new URLSearchParams();
   params.set("bookingResourceId", bookingResourceId);
@@ -59,6 +78,161 @@ function buildQuick18Url(course, criteria) {
   if (!criteria.date) return base;
   const yyyymmdd = criteria.date.replace(/-/g, "");
   return `${base}?teedate=${yyyymmdd}`;
+}
+
+/**
+ * ✅ Pull availability from TeeRadar Booking system (your own DB)
+ * This lets Hillview show up in the map search results like MiClub/Quick18.
+ */
+async function scrapeTeeRadarBookingCourse(course, criteria) {
+  const date = criteria?.date;
+  if (!date) return [];
+
+  const earliest = criteria.earliest || "06:00";
+  const latest = criteria.latest || "17:00";
+  const earliestMin = toMinutes(earliest);
+  const latestMin = toMinutes(latest);
+
+  const partySize = Number(criteria.partySize || 1);
+  const requestedHoles = criteria.holes ? Number(criteria.holes) : null;
+
+  // booking slug can come from course.bookingSlug, or fallback to id/name
+  const slug = String(
+    course.bookingSlug || course.slug || course.id || course.name || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (!slug) {
+    console.warn(
+      "TeeRadarBooking: missing bookingSlug/slug/id for course:",
+      course?.name
+    );
+    return [];
+  }
+
+  const c = await db.query(
+    `SELECT id, name FROM booking_courses WHERE LOWER(slug) = LOWER($1) LIMIT 1;`,
+    [slug]
+  );
+
+  const courseId = c.rows[0]?.id || null;
+
+  // ✅ IMPORTANT: emit the exact courses.json name so frontend grouping matches markers
+  const courseName = String(course.name || c.rows[0]?.name || slug);
+
+  console.log("🟦 TeeRadarBooking name check:", {
+    coursesJsonName: course.name,
+    bookingCoursesName: c.rows[0]?.name,
+    emittedSlotCourseName: courseName,
+    slug,
+  });
+
+  if (!courseId) {
+    console.warn("TeeRadarBooking: booking_courses not found for slug:", slug);
+    return [];
+  }
+
+  const q = `
+    SELECT
+      bt.play_date,
+      bt.tee_time,
+      bt.holes,
+      bt.max_players,
+      bt.price_per_player_cents,
+      COALESCE(SUM(bb.players), 0)::int AS booked_players
+    FROM booking_times bt
+    LEFT JOIN booking_bookings bb
+      ON bb.course_id = bt.course_id
+     AND bb.play_date = bt.play_date
+     AND bb.tee_time  = bt.tee_time
+     AND bb.holes     = bt.holes
+     AND bb.status    = 'CONFIRMED'
+    WHERE bt.course_id = $1
+      AND bt.play_date = $2::date
+      AND bt.status = 'AVAILABLE'
+      ${requestedHoles ? "AND bt.holes = $4::int" : ""}
+    GROUP BY
+      bt.play_date,
+      bt.tee_time,
+      bt.holes,
+      bt.max_players,
+      bt.price_per_player_cents
+    HAVING (bt.max_players - COALESCE(SUM(bb.players), 0)) >= $3::int
+    ORDER BY bt.tee_time ASC;
+  `;
+
+  const params = requestedHoles
+    ? [courseId, date, partySize, requestedHoles]
+    : [courseId, date, partySize];
+
+  const r = await db.query(q, params);
+
+  const SITE_URL = (process.env.SITE_URL || "https://teeradar.com.au").trim();
+
+  const out = [];
+  for (const row of r.rows || []) {
+    const tRaw = String(row.tee_time || "").trim();
+    const t = normalizeHHMM(tRaw);
+    if (!t) continue;
+
+    const mins = toMinutes(t);
+
+    if (earliestMin !== null && mins !== null && mins < earliestMin) continue;
+    if (latestMin !== null && mins !== null && mins > latestMin) continue;
+
+    const holes =
+      Number(row.holes) || (course.holes ? Number(course.holes) : null) || 18;
+
+    const maxPlayers = Number(row.max_players || 4);
+
+    const playersBooked = Number(row.booked_players || 0);
+
+    // ✅ ONLY CHANGE: TeeRadarBooking "remaining" math is off-by-1 in UI
+    // So we emit remaining = (maxPlayers - booked) - 1 (floored at 0)
+    const remaining = Math.max(0, (maxPlayers - playersBooked) - 1);
+
+    out.push({
+      course: courseName,
+      courseName,
+      courseTitle: courseName,
+      course_name: courseName,
+
+      provider: "TeeRadarBooking",
+      date,
+      time: t,
+      tee_time: t,
+      holes,
+      price: null,
+
+      // ✅ keep existing fields
+      maxPlayers,
+      playersBooked,
+
+      // ✅ ADD: emit snake_case + variants so normalizeRemaining() ALWAYS detects capacity
+      max_players: maxPlayers,
+      booked_players: playersBooked,
+      bookedPlayers: playersBooked,
+
+      remaining,
+      spotsAvailable: remaining,
+      playersAvailable: remaining,
+      availableSpots: remaining,
+
+      bookUrl: `${SITE_URL}/book/${slug}`,
+      url: `${SITE_URL}/book/${slug}`,
+      bookingUrl: `${SITE_URL}/book/${slug}`,
+      booking_url: `${SITE_URL}/book/${slug}`,
+
+      pricePerPlayerCents: Number(row.price_per_player_cents || 0),
+    });
+  }
+
+  console.log(
+    `TeeRadarBooking → ${courseName} → ${out.length} slots (after partySize filter)`
+  );
+
+  return out;
 }
 
 /**
@@ -87,6 +261,7 @@ async function scrapeMiClubCourse(course, criteria, feeGroups) {
     if (!slot.time) return false;
 
     const mins = toMinutes(slot.time);
+    if (mins === null || earliestMin === null || latestMin === null) return false;
     if (mins < earliestMin || mins > latestMin) return false;
 
     // Only enforce holes filter for MiClub (courses are explicitly 9 or 18)
@@ -161,6 +336,7 @@ async function scrapeQuick18Course(course, criteria) {
   const filtered = rawSlots.filter((slot) => {
     if (!slot.time) return false;
     const mins = toMinutes(slot.time);
+    if (mins === null || earliestMin === null || latestMin === null) return false;
     if (mins < earliestMin || mins > latestMin) return false;
 
     const maxPlayers = slot.spots || 4;
@@ -211,6 +387,11 @@ export async function scrapeCourse(course, criteria, feeGroups = {}) {
       return [];
     }
 
+    // ✅ TeeRadar booking system (Hillview etc.)
+    if (course.provider === "TeeRadarBooking") {
+      return await scrapeTeeRadarBookingCourse(course, criteria);
+    }
+
     const requestedHoles = criteria.holes ? Number(criteria.holes) : null;
 
     // 🔹 Skip MiClub courses that don't match the requested holes,
@@ -239,7 +420,7 @@ export async function scrapeCourse(course, criteria, feeGroups = {}) {
       return await scrapeTeeItUpCourse(course, criteria);
     }
 
-    // ✅ NEW: Chronogolf support
+    // ✅ Chronogolf support
     if (course.provider === "Chronogolf") {
       return await scrapeChronogolfCourse(course, criteria);
     }
