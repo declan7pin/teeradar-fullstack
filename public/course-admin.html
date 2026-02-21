@@ -248,7 +248,6 @@
       </div>
 
       <div id="inventoryMsg" class="muted" style="margin-top:10px;"></div>
-      <div id="inventoryDebug" class="muted mini" style="margin-top:8px;white-space:pre-wrap;"></div>
 
       <div id="inventoryBox" style="display:none;margin-top:10px">
         <ul class="list">
@@ -2957,7 +2956,6 @@ async function saveCourseSettingsFromUI(){
   $("checkInventoryBtn").onclick = async () => {
     $("inventoryMsg").textContent = "Checking inventory...";
     $("inventoryBox").style.display = "none";
-    $("inventoryDebug").textContent = "";
 
     try {
       await getMe();
@@ -2975,9 +2973,6 @@ async function saveCourseSettingsFromUI(){
         // Try (B) query-based endpoint
         settingsRes = await j("/api/book/course-admin/course-settings?slug=" + encodeURIComponent(getSlug()), { method:"GET" });
       }
-
-      $("inventoryDebug").textContent =
-        "course-settings response:\n" + JSON.stringify(settingsRes, null, 2);
 
       // ✅ support different backend response shapes
       const cs =
@@ -3024,9 +3019,6 @@ async function saveCourseSettingsFromUI(){
         "/api/book/course-admin/bookings?" + new URLSearchParams({ slug: getSlug(), date }).toString(),
         { method:"GET" }
       );
-
-      $("inventoryDebug").textContent +=
-        "\n\nbookings response:\n" + JSON.stringify(bookingsOut, null, 2);
 
       const bookings = bookingsOut.bookings || [];
 
