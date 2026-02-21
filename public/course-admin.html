@@ -1,0 +1,3751 @@
+<!-- public/course-admin.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar — Course Admin</title>
+  <style>
+  :root{
+  --border:#e2e8f0;
+  --muted:#64748b;
+}
+    body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;background:#f4f7fb;color:#0f172a}
+    .wrap{max-width:1400px;margin:24px auto;padding:0 16px}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:12px}
+        input,button,textarea,select{font:inherit}
+    input,textarea,select{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:#fff}
+    button{padding:10px 12px;border:0;border-radius:10px;background:#00796b;color:#fff;cursor:pointer}
+    button.secondary{background:#475569}
+    button{ touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.btnGroup{ display:flex; gap:8px; align-items:flex-end; justify-content:flex-end; flex-wrap:wrap; }
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .muted{color:#64748b;font-size:13px}
+    code{background:#f1f5f9;padding:2px 6px;border-radius:8px}
+    .pill{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;font-size:12px;background:#ecfeff;color:#0f766e;border:1px solid #a7f3d0}
+    .mini{font-size:12px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+    /* ✅ Analytics mode toggle */
+.seg {
+  display: inline-flex;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
+}
+.seg button{
+  background:#fff;
+  color:#0f172a;
+  border:0;
+  padding:8px 12px;
+  font-size:13px;
+  cursor:pointer;
+}
+.seg button.active{
+  background:#00796b;
+  color:#fff;
+}
+    .actions button{font-size:13px}
+    .tableWrap{overflow:auto;border:1px solid #e2e8f0;border-radius:12px;background:#fff;margin-top:10px}
+    table{width:100%;border-collapse:separate;border-spacing:0;min-width:760px}
+    th,td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;font-size:13px;white-space:nowrap}
+    th{background:#f8fafc;font-weight:800;position:sticky;top:0;z-index:1}
+    tr:last-child td{border-bottom:none}
+    .right{text-align:right}
+
+    .sheetWrap{overflow:auto;border:1px solid #e2e8f0;border-radius:12px;background:#fff;margin-top:10px}
+    .sheetTable{width:100%;border-collapse:separate;border-spacing:0;min-width:980px}
+    .sheetTable th,.sheetTable td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;font-size:13px;vertical-align:top}
+    .sheetTable th{background:#f8fafc;font-weight:900;position:sticky;top:0;z-index:1}
+    .sheetTime{font-weight:900;white-space:nowrap}
+    .slotBox{border:1px solid #e2e8f0;border-radius:12px;background:#fff;padding:8px}
+    .slotTop{display:flex;gap:8px;align-items:center;justify-content:space-between}
+    .slotName{font-weight:800}
+    .slotMeta{margin-top:6px;color:#64748b;font-size:12px;display:flex;gap:10px;flex-wrap:wrap}
+    .slotEmpty{color:#94a3b8;font-size:12px}
+    .paidWrap{display:flex;gap:8px;align-items:center;font-size:12px;color:#0f172a}
+    .paidWrap input{width:auto;padding:0;border:0}
+    .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid #e2e8f0;background:#f8fafc;color:#0f172a}
+    .badge.ok{background:#ecfeff;border-color:#a7f3d0;color:#0f766e}
+    .badge.warn{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+
+    /* ✅ Weekly template status + note */
+    .status{margin:8px 0;padding:10px 12px;border-radius:10px;border:1px solid #e2e8f0;background:#f8fafc;color:#0f172a}
+    .status.ok{border-color:#a7f3d0;background:#ecfeff;color:#0f766e}
+    .status.err{border-color:#fecaca;background:#fef2f2;color:#991b1b}
+    .note{font-size:13px;color:#64748b}
+    .sub{color:#64748b;font-size:13px}
+
+/* ✅ Make Course Admin use full width on large screens */
+@media (min-width: 1200px){
+  .wrap{ max-width: 1600px; }
+}
+    /* ✅ list (used by inventory card) */
+    .list{margin:0;padding-left:18px}
+    /* --- Debug panel (toggle with ?debug=1) --- */
+#trDebugWrap{position:fixed;left:10px;right:10px;bottom:10px;z-index:99999;display:none}
+#trDebugWrap.on{display:block}
+#trDebug{
+  background:#0b1220;color:#e5e7eb;border:1px solid rgba(255,255,255,.15);
+  border-radius:12px;padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.35);
+  font:12px/1.35 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+}
+#trDebugTop{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px}
+#trDebugBtns{display:flex;gap:8px;align-items:center}
+#trDebugBtns button{
+  padding:6px 10px;border:1px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.06);color:#e5e7eb;border-radius:10px;cursor:pointer
+}
+#trDebugBtns button:hover{background:rgba(255,255,255,.10)}
+#trDebugMeta{opacity:.9}
+#trDebugLog{
+  max-height:220px;overflow:auto;white-space:pre-wrap;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);
+  border-radius:10px;padding:8px
+}
+#trDebugLog .err{color:#fecaca}
+#trDebugLog .ok{color:#bbf7d0}
+#trDebugLog .warn{color:#fde68a}
+  </style>
+</head>
+<div id="trDebugWrap">
+  <div id="trDebug">
+    <div id="trDebugTop">
+      <div id="trDebugMeta">
+        <b>Debug</b> • <span id="trDebugPath">path</span>
+        <span id="trDebugEnv"></span>
+      </div>
+      <div id="trDebugBtns">
+        <button type="button" id="trDebugCopy">Copy</button>
+        <button type="button" id="trDebugClear">Clear</button>
+        <button type="button" id="trDebugHide">Hide</button>
+      </div>
+    </div>
+    <div id="trDebugLog"></div>
+  </div>
+</div>
+<body>
+  <div class="wrap">
+
+    <!-- 1) Login -->
+<div class="card">
+  <h2>Course Admin</h2>
+  <p class="muted">Log in with your course email & password.</p>
+
+  <div class="row">
+    <div>
+      <label class="muted">Course Slug</label>
+      <input id="slug" placeholder="e.g. hillview-gc" />
+    </div>
+    <div>
+      <label class="muted">Email</label>
+      <input id="email" placeholder="proshop@course.com" />
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label class="muted">Password</label>
+      <input id="password" type="password" placeholder="••••••••" />
+    </div>
+    <div class="btnGroup">
+      <button id="loginBtn" type="button">Log in</button>
+      <button id="logoutBtn" type="button" class="secondary">Log out</button>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:10px">
+    <button id="testBtn" type="button" class="secondary">Test /me</button>
+    <button id="clearBtn" type="button" class="secondary">Clear</button>
+  </div>
+
+  <div id="msg" class="muted" style="margin-top:10px;"></div>
+  <div id="who" class="muted mini" style="margin-top:6px;"></div>
+</div>
+
+    <!-- 2) Cart availability (Inventory) -->
+    <div class="card">
+      <h3>Inventory (Carts & Hire Clubs)</h3>
+      <p class="muted">Quick check for bookings on a specific date.</p>
+
+      <div class="row">
+        <div>
+          <label class="muted">Play Date</label>
+          <input id="iDate" type="date" />
+        </div>
+
+        <div>
+          <label class="muted">Window</label>
+          <select id="iWindow">
+            <option value="all" selected>All day</option>
+            <option value="custom">Custom start (duration)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label class="muted">Start time (Custom only)</label>
+          <input id="iStartTime" placeholder="06:00" value="06:00" />
+        </div>
+
+        <div>
+          <label class="muted">Holes (Custom only)</label>
+<select id="iHoles">
+  <option value="both">Both (9 + 18)</option>
+  <option value="18" selected>18 holes</option>
+  <option value="9">9 holes</option>
+</select>
+        </div>
+      </div>
+
+<!-- ✅ NEW: Stock levels (saved to your course settings) -->
+<div style="margin-top:12px;">
+  <div class="muted" style="font-weight:700;">Stock levels (used for availability calc)</div>
+
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label class="muted">Total carts available</label>
+      <input id="csTotalCarts" type="number" min="0" step="1" value="0" />
+    </div>
+    <div>
+      <label class="muted">Total hire clubs available</label>
+      <input id="csTotalClubs" type="number" min="0" step="1" value="0" />
+    </div>
+  </div>
+  
+  <div class="row" style="margin-top:10px">
+  <div>
+    <label class="muted">Cart fee ($)</label>
+    <input id="csCartFee" type="number" min="0" step="0.01" value="0.00" />
+  </div>
+  <div>
+    <label class="muted">Hire clubs fee ($)</label>
+    <input id="csClubsFee" type="number" min="0" step="0.01" value="0.00" />
+  </div>
+</div>
+
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label class="muted">18-hole booking duration (mins)</label>
+      <input id="csDur18" type="number" min="30" step="10" value="360" />
+    </div>
+    <div>
+      <label class="muted">9-hole booking duration (mins)</label>
+      <input id="csDur9" type="number" min="30" step="10" value="180" />
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:10px">
+    <button id="csLoadBtn" type="button" class="secondary">Load stock</button>
+    <button id="csSaveBtn" type="button">Save stock</button>
+  </div>
+
+  <div id="csMsg" class="muted" style="margin-top:10px;"></div>
+</div>
+      <div class="actions" style="margin-top:10px">
+        <button id="checkInventoryBtn" type="button" class="secondary">Check availability</button>
+      </div>
+
+      <div id="inventoryMsg" class="muted" style="margin-top:10px;"></div>
+
+      <div id="inventoryBox" style="display:none;margin-top:10px">
+        <ul class="list">
+          <li><b>Carts:</b> <span id="invCarts"></span></li>
+          <li><b>Hire clubs:</b> <span id="invClubs"></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 3) View tee times / bookings / sheet / manual -->
+    <div class="card">
+      <h3>View Tee Times / Bookings</h3>
+
+      <div class="row">
+        <div>
+          <label class="muted">Play Date</label>
+          <input id="date" type="date" />
+        </div>
+        <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;justify-content:flex-end">
+          <button id="viewTimesBtn" type="button" class="secondary">View tee times</button>
+<button id="viewBookingsBtn" type="button" class="secondary">View bookings</button>
+<button id="viewSheetBtn" type="button" class="secondary">Daily sheet</button>
+<button id="deleteTimesBtn" type="button" class="secondary" style="background:#b91c1c">Delete tee times (date)</button>
+        </div>
+      </div>
+
+      <div id="viewMsg" class="muted" style="margin-top:10px;"></div>
+
+      <div id="timesBox" style="display:none;">
+        <div class="muted" style="margin-top:10px;font-weight:700;">Tee times</div>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Holes</th>
+                <th>Status</th>
+                <th class="right">Max</th>
+                <th class="right">Booked</th>
+                <th class="right">Remaining</th>
+                <th class="right">Price (c)</th>
+              </tr>
+            </thead>
+            <tbody id="timesBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="bookingsBox" style="display:none;">
+        <div class="muted" style="margin-top:12px;font-weight:700;">Bookings</div>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Holes</th>
+                <th class="right">Players</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th class="right">Gross (c)</th>
+                <th>Paid</th>
+                <th>Checked in</th>
+                <th>Add-ons</th>
+                <th>Ref</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="bookingsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="sheetBox" style="display:none;">
+        <div class="muted" style="margin-top:12px;font-weight:700;">
+          Daily sheet <span class="pill" id="sheetPill"></span>
+        </div>
+        <div class="muted mini" id="sheetHint" style="margin-top:6px;"></div>
+        <div class="sheetWrap">
+          <table class="sheetTable">
+            <thead>
+              <tr>
+                <th style="width:140px;">Time</th>
+                <th>Slot 1</th>
+                <th>Slot 2</th>
+                <th>Slot 3</th>
+                <th>Slot 4</th>
+              </tr>
+            </thead>
+            <tbody id="sheetBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ✅ Manual tee times (Course Admin) -->
+     <div style="margin-top:12px;">
+        <h3>Manual Tee Times</h3>
+        <p class="muted">Add one-off tee times for a specific date (without generating a full batch). You can also view/delete manual slots.</p>
+
+        <div class="row">
+          <div>
+            <label class="muted">Play Date</label>
+            <input id="mDate" type="date" />
+          </div>
+          <div>
+            <label class="muted">Tee Time</label>
+            <input id="mTime" placeholder="06:30" value="06:30" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+  <div>
+    <label class="muted">Holes</label>
+    <input id="mHoles" type="number" min="1" step="1" value="18" />
+  </div>
+  <div>
+    <label class="muted">Max players</label>
+    <input id="mMaxPlayers" type="number" min="1" step="1" value="4" />
+  </div>
+</div>
+
+<div class="row" style="margin-top:10px">
+  <div>
+    <label class="muted">Players (manual booking)</label>
+    <input id="mPlayers" type="number" min="1" max="4" step="1" value="1" />
+  </div>
+  <div></div>
+</div>
+<div class="row" style="margin-top:10px">
+  <div>
+    <label class="muted">Hold name (shows on daily sheet)</label>
+    <input id="mHoldName" placeholder="e.g. John Smith" />
+  </div>
+  <div>
+    <label class="muted">Email (for confirmation)</label>
+    <input id="mEmail" placeholder="player@email.com" />
+  </div>
+</div>
+
+<div class="row" style="margin-top:10px">
+  <div>
+    <label class="muted">Phone (optional)</label>
+    <input id="mPhone" placeholder="0400 000 000" />
+  </div>
+  <div>
+    <label class="muted">Cart qty (0–4)</label>
+    <input id="mCartQty" type="number" min="0" max="4" step="1" value="0" />
+  </div>
+</div>
+
+<div class="row" style="margin-top:10px">
+  <div>
+    <label class="muted">Clubs qty (0–4)</label>
+    <input id="mClubsQty" type="number" min="0" max="4" step="1" value="0" />
+  </div>
+  <div></div>
+</div>
+        <div class="row" style="margin-top:10px">
+          <div>
+            <label class="muted">Price per player (cents) — e.g. $25.00 = 2500</label>
+            <input id="mPrice" type="number" min="0" step="1" value="0" />
+          </div>
+          <div></div>
+        </div>
+
+        <div class="actions" style="margin-top:12px">
+          <button id="mAddBtn" type="button">Add manual tee time</button>
+<button id="mBookBtn" type="button">Add manual BOOKING (ref + email)</button>
+<button id="mLoadBtn" type="button" class="secondary">View manual tee times</button>
+        </div>
+
+        <div id="manualMsg" class="muted" style="margin-top:10px;"></div>
+
+        <div id="manualBox" style="display:none;margin-top:10px">
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Holes</th>
+                  <th class="right">Max</th>
+                  <th class="right">Price (c)</th>
+                  <th>ID</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="manualBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+<!-- 3.5) Course layouts (Nines & 18-hole routing) -->
+<div class="card">
+  <h3>Course layouts</h3>
+  <p class="muted">Define your 9-hole loops (e.g. Pines, Lakes). Then create 18-hole options by selecting a Front 9 + Back 9.</p>
+
+  <div style="font-weight:800;margin-top:6px;">9-hole loops</div>
+  <div id="layoutsList" style="display:grid;gap:8px;margin-top:8px;"></div>
+
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label class="muted">New 9 name</label>
+      <input id="newNineLabel" placeholder="e.g. Pines" />
+    </div>
+    <div style="display:flex;align-items:end">
+      <button id="addNineBtn" type="button">Add nine</button>
+    </div>
+  </div>
+
+  <hr style="border:0;border-top:1px solid #e2e8f0;margin:14px 0;" />
+
+  <div style="font-weight:800;margin-top:6px;">18-hole options (Front 9 + Back 9)</div>
+  <div class="muted mini" style="margin-top:6px;">
+    Users booking 18 will pick one of these. We’ll also use the Back 9 to auto-block a 9-hole “return window”.
+  </div>
+
+  <div id="routes18List" style="display:grid;gap:8px;margin-top:10px;"></div>
+
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label class="muted">18 option label</label>
+      <input id="new18Label" placeholder="e.g. Pines + Lakes" />
+    </div>
+    <div>
+      <label class="muted">Front 9</label>
+      <select id="new18Front"></select>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label class="muted">Back 9</label>
+      <select id="new18Back"></select>
+    </div>
+    <div>
+      <label class="muted">Return window block (mins)</label>
+      <input id="new18BlockMins" type="number" min="0" step="5" value="30" />
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:10px">
+    <button id="add18Btn" type="button" class="secondary">Add 18 option</button>
+    <button id="saveLayoutsBtn" type="button">Save layouts</button>
+  </div>
+
+  <div id="layoutsMsg" class="muted" style="margin-top:10px;"></div>
+</div>
+   <!-- 4) Weekly schedule template (manager only) -->
+<div class="card" id="managerOnlyTemplate" style="display:none;">
+  <h2 style="margin:0 0 6px;">Weekly schedule template</h2>
+  <div class="sub" style="margin-bottom:10px;">
+    Save a weekly pattern once, then generate tee times for the next 30 days in one click.
+  </div>
+
+  <div id="tplStatus" class="status"></div>
+
+  <!-- ✅ ALL controls live inside ONE grid -->
+  <div style="display:grid;gap:10px;">
+
+    <!-- Row 1: saved cards + timezone -->
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
+
+      <div style="flex:1;min-width:220px;">
+        <label>Saved card</label>
+        <select id="tplCardSelect"></select>
+      </div>
+
+      <div style="flex:1;min-width:220px;">
+        <label>Card name</label>
+        <input id="tplCardName" placeholder="e.g. Pines AM" />
+      </div>
+
+      <div class="actions" style="margin:0;gap:8px;">
+        <button class="secondary" id="tplCardSaveBtn" type="button">Save card</button>
+        <button
+          class="secondary"
+          id="tplCardDeleteBtn"
+          type="button"
+          style="background:#b91c1c"
+        >
+          Delete card
+        </button>
+      </div>
+
+      <div style="flex:1;min-width:220px;">
+        <label>Timezone</label>
+        <input id="tplTimezone" value="Australia/Perth" />
+      </div>
+
+    </div>
+
+    <!-- Row 2: generation settings -->
+    <div class="row">
+      <div>
+        <label>Generate from date</label>
+        <input id="tplStartDate" type="date" />
+      </div>
+
+      <div>
+        <label>Days ahead</label>
+        <input id="tplDaysAhead" type="number" min="1" max="120" value="30" />
+      </div>
+    </div>
+
+    <div style="width:220px;">
+      <label>Mode</label>
+      <select id="tplMode">
+        <option value="skip" selected>Skip duplicates</option>
+        <option value="overwrite-range">Overwrite range</option>
+      </select>
+    </div>
+
+  </div>
+
+  <!-- Weekly grid -->
+  <div id="tplGrid" style="display:grid;gap:10px;margin-top:10px;"></div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button id="tplLoadBtn" type="button">Load template</button>
+<button class="secondary" id="tplSaveBtn" type="button">Save template</button>
+<button id="tplGenerateBtn" type="button">Generate next days</button>
+  </div>
+
+  <div class="note">
+    Tip: set different windows for 18 and 9 so 18-hole groups can roll through without clashes.
+  </div>
+</div>
+<!-- ✅ 5) Analytics (manager only) -->
+<div class="card" id="managerOnlyAnalytics" style="display:none;">
+  <h2 style="margin:0 0 6px;">Analytics</h2>
+  <div class="sub" style="margin-bottom:10px;">
+    Manager only — shows analytics for your course only.
+  </div>
+  <!-- ✅ Date range -->
+  <div class="row">
+    <div>
+      <label class="muted">From</label>
+      <input id="aStart" type="date" />
+    </div>
+    <div>
+      <label class="muted">To</label>
+      <input id="aEnd" type="date" />
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:10px">
+    <button id="analyticsLoadBtn" type="button">Load analytics</button>
+    <button id="analyticsExportBtn" type="button" class="secondary">Export CSV</button>
+  </div>
+<!-- ✅ NEW: Online vs Manual toggle -->
+<div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+  <div class="muted mini">View</div>
+  <div class="seg" role="tablist" aria-label="Analytics mode">
+    <button type="button" id="aModeTotal" class="active" data-amode="total">Total</button>
+    <button type="button" id="aModeOnline" data-amode="online">Online</button>
+    <button type="button" id="aModeManual" data-amode="manual">Manual</button>
+  </div>
+  <div class="muted mini" id="aModeHint"></div>
+</div>
+  <div id="analyticsMsg" class="muted" style="margin-top:10px;"></div>
+
+  <div id="analyticsBox" style="display:none;margin-top:10px">
+    <div class="row">
+      <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+        <div class="muted mini">Bookings</div>
+        <div style="font-weight:900;font-size:22px" id="aBookings">0</div>
+      </div>
+      <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+        <div class="muted mini">Revenue</div>
+        <div style="font-weight:900;font-size:22px" id="aRevenue">$0.00</div>
+      </div>
+    </div>
+
+    <!-- ✅ NEW: Selling-factor tiles -->
+    <div class="row" style="margin-top:10px">
+      <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+        <div class="muted mini">Fill rate</div>
+        <div style="font-weight:900;font-size:18px" id="aFillRate">—</div>
+      </div>
+      <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+        <div class="muted mini">Add-on revenue</div>
+        <div style="font-weight:900;font-size:18px" id="aAddonRev">—</div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <div class="muted" style="font-weight:700;">Popularity</div>
+
+      <div class="row" style="margin-top:10px">
+        <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+          <div class="muted mini">Popular day</div>
+          <div style="font-weight:900;font-size:18px" id="aPopDay">—</div>
+          <div class="muted mini" id="aPopDayN"></div>
+        </div>
+        <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+          <div class="muted mini">Popular tee time</div>
+          <div style="font-weight:900;font-size:18px" id="aPopTime">—</div>
+          <div class="muted mini" id="aPopTimeN"></div>
+        </div>
+      </div>
+
+      <!-- ✅ NEW: Top 3 -->
+      <div class="row" style="margin-top:10px">
+        <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+          <div class="muted mini">Top 3 days</div>
+          <div class="mini" id="aTopDays">—</div>
+        </div>
+        <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+          <div class="muted mini">Top 3 tee times</div>
+          <div class="mini" id="aTopTimes">—</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+          <div class="muted mini">Cart attach rate</div>
+          <div style="font-weight:900;font-size:18px" id="aCartRate">—</div>
+        </div>
+        <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+          <div class="muted mini">Clubs attach rate</div>
+          <div style="font-weight:900;font-size:18px" id="aClubsRate">—</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+          <div class="muted mini">Avg booking value</div>
+          <div style="font-weight:900;font-size:22px" id="aAov">$0.00</div>
+        </div>
+        <div class="card" style="margin:0;border-radius:12px;background:#f8fafc">
+          <div class="muted mini">Gross cents</div>
+          <div style="font-weight:900;font-size:22px" id="aGrossCents">0</div>
+        </div>
+      </div>
+
+      <div class="muted" style="margin-top:12px;font-weight:700;">Per-day</div>
+<div class="tableWrap" style="margin-top:10px">
+  <table>
+    <thead>
+      <tr>
+        <th>Day</th>
+        <th class="right">Bookings</th>
+        <th class="right">Players</th>
+        <th class="right">Carts</th>
+        <th class="right">Clubs</th>
+        <th class="right">Gross</th>
+      </tr>
+    </thead>
+    <tbody id="aPerDayBody"></tbody>
+  </table>
+</div>
+
+</div> <!-- ✅ closes #analyticsBox -->
+</div> <!-- ✅ closes #managerOnlyAnalytics -->
+
+<script>
+
+  const $ = (id) => document.getElementById(id);
+  // --- Debug helpers (enable with ?debug=1 or localStorage.TR_DEBUG="1") ---
+(function initTRDebug(){
+  const params = new URLSearchParams(location.search);
+  const enabled = params.get("debug") === "1" || localStorage.getItem("TR_DEBUG") === "1";
+  if (params.get("debug") === "1") localStorage.setItem("TR_DEBUG","1");
+
+  const wrap = document.getElementById("trDebugWrap");
+  const logEl = document.getElementById("trDebugLog");
+  const pathEl = document.getElementById("trDebugPath");
+  const envEl  = document.getElementById("trDebugEnv");
+
+  if (!wrap || !logEl) return;
+
+  if (enabled) wrap.classList.add("on");
+  pathEl.textContent = location.pathname + location.search;
+  envEl.textContent = " • " + (location.host || "");
+
+  window.dbg = function dbg(tag, obj, level="ok"){
+    if (!wrap.classList.contains("on")) return;
+    const ts = new Date().toISOString().slice(11,19);
+    const line = document.createElement("div");
+    line.className = level;
+    let body = "";
+    try { body = obj === undefined ? "" : (typeof obj === "string" ? obj : JSON.stringify(obj, null, 2)); }
+    catch { body = String(obj); }
+    line.textContent = `[${ts}] ${tag}` + (body ? `\n${body}` : "");
+    logEl.prepend(line);
+  };
+
+  window.dbgFetch = async function dbgFetch(url, opts){
+    const method = (opts?.method || "GET").toUpperCase();
+    let bodyObj = null;
+    try { bodyObj = opts?.body ? JSON.parse(opts.body) : null; } catch {}
+    dbg("FETCH → " + method + " " + url, { headers: opts?.headers || null, body: bodyObj });
+
+    const t0 = performance.now();
+    let res, text;
+    try {
+      res = await fetch(url, opts);
+      text = await res.text();
+    } catch (e) {
+      dbg("FETCH ✖ network error", { url, method, message: e?.message || String(e) }, "err");
+      throw e;
+    }
+
+    const ms = Math.round(performance.now() - t0);
+    let json = null;
+    try { json = JSON.parse(text); } catch { json = { _raw: text }; }
+
+    dbg("FETCH ← " + res.status + " (" + ms + "ms)", json, res.ok ? "ok" : "err");
+    return { res, json, text };
+  };
+
+  document.getElementById("trDebugClear")?.addEventListener("click", () => (logEl.innerHTML=""));
+  document.getElementById("trDebugHide")?.addEventListener("click", () => wrap.classList.remove("on"));
+  document.getElementById("trDebugCopy")?.addEventListener("click", async () => {
+    const lines = Array.from(logEl.querySelectorAll("div")).map(d => d.textContent).join("\n\n");
+    try { await navigator.clipboard.writeText(lines); dbg("COPIED", "Debug log copied to clipboard"); }
+    catch { dbg("COPY ✖", "Clipboard failed", "warn"); }
+  });
+
+  dbg("DEBUG ENABLED", { host: location.host, path: location.pathname }, "warn");
+})();
+  // ✅ Tap tracer (shows last tapped button id)
+document.addEventListener("click", (e) => {
+  const b = e.target && e.target.closest ? e.target.closest("button") : null;
+  if (!b) return;
+  const msg = document.getElementById("msg");
+  if (msg) msg.textContent = `🟢 tapped: #${b.id || "(no id)"} (${b.textContent.trim().slice(0,40)})`;
+}, true);
+window.onerror = function(message, source, lineno, colno){
+  try{
+    const el = document.getElementById("viewMsg") || document.getElementById("msg");
+    if (el) el.textContent = "❌ JS error: " + message + " (line " + lineno + ")";
+  }catch{}
+};
+// =======================
+// Course layouts (9-hole loops + 18-hole routes)
+// =======================
+let COURSE_LAYOUTS = [];   // [{key,label}]
+let COURSE_ROUTES18 = [];  // [{key,label,front9_key,back9_key,block_mins}]
+
+function _slugKey(s){
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function renderNineSelectOptions(selectEl, selectedKey){
+  if (!selectEl) return;
+  const sel = String(selectedKey || "");
+  const opts = [];
+
+  if (!COURSE_LAYOUTS.length){
+    opts.push(`<option value="">No 9s defined</option>`);
+  } else {
+    opts.push(`<option value="">Select</option>`);
+    COURSE_LAYOUTS.forEach(l => {
+      const key = String(l.key || "");
+      const label = String(l.label || key || "");
+      const s = (key && key === sel) ? " selected" : "";
+      opts.push(`<option value="${_escape(key)}"${s}>${_escape(label)}</option>`);
+    });
+  }
+
+  selectEl.innerHTML = opts.join("");
+}
+
+function renderLayouts(){
+  const wrap = $("layoutsList");
+  if (!wrap) return;
+
+  wrap.innerHTML = "";
+  COURSE_LAYOUTS.forEach((l, idx) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `
+      <div>
+        <input
+          value="${_escape(l.label || "")}"
+          data-nine-idx="${idx}"
+          class="nineLabel"
+        />
+      </div>
+      <div style="display:flex;align-items:end">
+        <button type="button" class="secondary" data-del-nine="${idx}">Delete</button>
+      </div>
+    `;
+    wrap.appendChild(row);
+  });
+
+  // keep the add-18 selects in sync
+  renderNineSelectOptions($("new18Front"), "");
+  renderNineSelectOptions($("new18Back"), "");
+}
+
+function renderRoutes18(){
+  const wrap = $("routes18List");
+  if (!wrap) return;
+
+  wrap.innerHTML = "";
+  COURSE_ROUTES18.forEach((r, idx) => {
+    const frontLabel = (COURSE_LAYOUTS.find(x => x.key === r.front9_key)?.label) || r.front9_key || "";
+    const backLabel  = (COURSE_LAYOUTS.find(x => x.key === r.back9_key)?.label) || r.back9_key || "";
+
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `
+      <div>
+        <input
+          value="${_escape(r.label || "")}"
+          data-r18-idx="${idx}"
+          class="r18Label"
+          placeholder="e.g. Pines + Lakes"
+        />
+        <div class="muted mini" style="margin-top:6px;">
+          Front: <b>${_escape(frontLabel)}</b> • Back: <b>${_escape(backLabel)}</b> • Block: <b>${_escape(r.block_mins ?? 30)}</b> mins
+        </div>
+      </div>
+      <div style="display:flex;align-items:end;gap:8px;justify-content:flex-end;">
+        <button type="button" class="secondary" data-edit-r18="${idx}">Edit</button>
+        <button type="button" class="secondary" style="background:#b91c1c" data-del-r18="${idx}">Delete</button>
+      </div>
+    `;
+    wrap.appendChild(row);
+  });
+}
+  const SLUG_KEY = "tr_course_admin_slug";
+const TOKEN_KEY = "tr_course_admin_token";
+const ROLE_KEY = "tr_course_admin_role";
+// ✅ Accept tokens saved by the separate login page (backwards compatible)
+const LEGACY_SLUG_KEY = "course_admin_slug";
+const LEGACY_TOKEN_KEY = "course_admin_token";
+
+(function migrateLegacyAuthKeys(){
+  try{
+    const legacySlug = (localStorage.getItem(LEGACY_SLUG_KEY) || "").trim().toLowerCase();
+    const legacyTok  = (localStorage.getItem(LEGACY_TOKEN_KEY) || "").trim();
+
+    if (legacySlug && !localStorage.getItem(SLUG_KEY)) localStorage.setItem(SLUG_KEY, legacySlug);
+    if (legacyTok  && !localStorage.getItem(TOKEN_KEY)) localStorage.setItem(TOKEN_KEY, legacyTok);
+  }catch{}
+})();
+function getSlug(){ try { return (localStorage.getItem(SLUG_KEY) || "").trim().toLowerCase(); } catch { return ""; } }
+function setSlug(v){ try { localStorage.setItem(SLUG_KEY, String(v||"").trim().toLowerCase()); } catch {} }
+
+function getToken(){ try { return (localStorage.getItem(TOKEN_KEY) || "").trim(); } catch { return ""; } }
+function setToken(v){ try { localStorage.setItem(TOKEN_KEY, String(v||"").trim()); } catch {} }
+
+function getRole(){ try { return (localStorage.getItem(ROLE_KEY) || "").trim().toLowerCase(); } catch { return ""; } }
+function setRole(v){ try { localStorage.setItem(ROLE_KEY, String(v||"").trim().toLowerCase()); } catch {} }
+
+function clearAuth(){
+  try {
+    localStorage.removeItem(SLUG_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(ROLE_KEY);
+  } catch {}
+}
+function applyRoleUI(){
+  const role = getRole(); // "manager" | "proshop" | ""
+  const mgrTpl = document.getElementById("managerOnlyTemplate");
+  const mgrAna = document.getElementById("managerOnlyAnalytics");
+
+  if (mgrTpl) mgrTpl.style.display = (role === "manager") ? "block" : "none";
+  if (mgrAna) mgrAna.style.display = (role === "manager") ? "block" : "none";
+}
+  
+  async function j(url, opts = {}) {
+    const slug = getSlug();
+const token = getToken();
+// allow unauthenticated calls if needed (login uses fetch anyway)
+if (!slug && !url.includes("/api/book/course-admin/login")) {
+  throw new Error("slug_required");
+}
+
+const method = String(opts.method || "GET").toUpperCase();
+const hasBody = opts.body != null;
+
+const headers = {
+  ...(hasBody && method !== "GET" && method !== "HEAD"
+    ? { "content-type": "application/json" }
+    : {}),
+  ...(token ? { "Authorization": "Bearer " + token } : {}),
+  "x-course-slug": slug,
+  ...(opts.headers || {}),
+};
+
+  let res;
+  try {
+    res = await fetch(url, {
+      ...opts,
+      headers,
+      credentials: "include",
+      cache: "no-store",
+    });
+  } catch (e) {
+    throw new Error(`network_error @ ${url}`);
+  }
+
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  let data = null;
+
+  if (ct.includes("application/json")) {
+    data = await res.json().catch(() => null);
+  } else {
+    const preview = (await res.text().catch(() => "")).slice(0, 200);
+    throw new Error(
+      `non_json_response (HTTP ${res.status}) @ ${url} — ` +
+        preview.replace(/\s+/g, " ").slice(0, 140)
+    );
+  }
+
+  if (!res.ok) {
+  const err = (data && (data.error || data.message)) || `HTTP_${res.status}`;
+  const detail =
+    (data && (data.details || data.detail || data.reason)) ? 
+      (" — " + String(data.details || data.detail || data.reason)) : "";
+  throw new Error(`${err}${detail} @ ${url}`);
+}
+
+  return data || {};
+}
+
+  function fmtDT(s){
+    try{
+      const d = new Date(s);
+      if (String(d) === "Invalid Date") return s || "";
+      return d.toLocaleString();
+    }catch{ return s || ""; }
+  }
+  // ✅ convert HH:MM → minutes since midnight
+function timeToMins(v){
+  const s = String(v || "").trim();
+  const m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const hh = Math.max(0, Math.min(23, Number(m[1])));
+  const mm = Math.max(0, Math.min(59, Number(m[2])));
+  return hh * 60 + mm;
+}
+
+// ✅ Date → minutes since midnight (for timestamps)
+function dateObjToMins(d){
+  try{
+    const dt = new Date(d);
+    if (String(dt) === "Invalid Date") return null;
+    return dt.getHours() * 60 + dt.getMinutes();
+  }catch{
+    return null;
+  }
+}
+
+// ✅ overlap test
+function minsOverlap(aStart, aEnd, bStart, bEnd){
+  return Math.max(aStart, bStart) < Math.min(aEnd, bEnd);
+}
+function normTime(v){
+  const s = String(v || "").trim();
+  const m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return s;
+  return String(m[1]).padStart(2,"0") + ":" + m[2];
+}
+function displayTime(v){
+  // shows "06:00" even if DB stores "06:00|18:pines|lakes"
+  return String(v || "").split("|")[0].trim();
+}
+// ✅ Hide generic 18-hole rows when a routed 18-hole row exists at the same time
+function filterShadowedGeneric18(rows){
+  const list = Array.isArray(rows) ? rows : [];
+
+  // collect times that have a routed 18
+  const routedTimes = new Set();
+  list.forEach(r => {
+    const holes = Number(r?.holes ?? r?.hole_count ?? r?.holeCount ?? 0);
+    if (holes !== 18) return;
+
+    const time = normTime(displayTime(r?.tee_time || r?.time || ""));
+    const f = String(r?.front_nine_key || r?.front9_key || r?.front9Key || "").trim();
+    const b = String(r?.back_nine_key  || r?.back9_key  || r?.back9Key  || "").trim();
+
+    if (time && f && b) routedTimes.add(time);
+  });
+
+  // remove generic 18 rows that are shadowed by routed 18 at same time
+  return list.filter(r => {
+    const holes = Number(r?.holes ?? r?.hole_count ?? r?.holeCount ?? 0);
+    if (holes !== 18) return true;
+
+    const time = normTime(displayTime(r?.tee_time || r?.time || ""));
+    const f = String(r?.front_nine_key || r?.front9_key || r?.front9Key || "").trim();
+    const b = String(r?.back_nine_key  || r?.back9_key  || r?.back9Key  || "").trim();
+
+    const isGeneric = !f && !b;
+    if (isGeneric && routedTimes.has(time)) return false;
+
+    return true;
+  });
+}
+let LAST_INSIGHTS = { total: null, online: null, manual: null };
+let ANALYTICS_MODE = "total"; // "total" | "online" | "manual"
+function getInsightsForMode(mode){
+  const m = (mode === "online" || mode === "manual") ? mode : "total";
+  return LAST_INSIGHTS?.[m] || null;
+}
+
+function getActiveInsights(){
+  return getInsightsForMode(ANALYTICS_MODE) || getInsightsForMode("total") || null;
+}
+
+// Fetch insights for a specific mode.
+// If backend ignores mode, all 3 calls will return the same shape (still fine).
+async function fetchInsights(mode, start, end){
+  const qs = new URLSearchParams();
+  if (start) qs.set("start", start);
+  if (end) qs.set("end", end);
+  qs.set("mode", mode); // ✅ key change (backend can use or ignore)
+
+  return await j(
+    "/api/book/course-admin/analytics/insights" + (qs.toString() ? "?" + qs.toString() : ""),
+    { method:"GET" }
+  );
+}
+
+function renderAnalyticsFromCurrentMode(){
+  const out = getActiveInsights();
+  const msg = $("analyticsMsg");
+  const box = $("analyticsBox");
+
+  if (!out){
+    if (box) box.style.display = "none";
+    if (msg) msg.textContent = "❌ No analytics loaded yet.";
+    return;
+  }
+
+  // Use your existing render function, but pass the active dataset
+  loadInsightsToUI(out);
+
+  // Totals derived from the selected mode's perDay
+  try{
+    const perDay = pickPerDay(out);
+    const bookings = perDay.reduce((a, r) => a + Number(r.bookings || 0), 0);
+    const grossCents = perDay.reduce((a, r) => a + Number(r.gross_cents || 0), 0);
+
+    $("aBookings").textContent = String(bookings);
+    $("aRevenue").textContent = moneyAUD(grossCents);
+    $("aGrossCents").textContent = String(grossCents);
+
+    const aov = bookings > 0 ? Math.round(grossCents / bookings) : 0;
+    $("aAov").textContent = moneyAUD(aov);
+  }catch{}
+
+  if (box) box.style.display = "block";
+}
+function setAnalyticsMode(mode){
+  ANALYTICS_MODE = (mode === "online" || mode === "manual") ? mode : "total";
+
+  // toggle button active state
+  ["total","online","manual"].forEach(m => {
+    const el = document.getElementById(
+      m === "total" ? "aModeTotal" : (m === "online" ? "aModeOnline" : "aModeManual")
+    );
+    if (el) el.classList.toggle("active", ANALYTICS_MODE === m);
+  });
+
+  // hint
+  const hint = document.getElementById("aModeHint");
+  if (hint){
+    hint.textContent =
+      ANALYTICS_MODE === "total" ? "Combined online + manual." :
+      ANALYTICS_MODE === "online" ? "Online bookings only." :
+      "Manual bookings/holds only.";
+  }
+
+  // ✅ re-render from the selected dataset (no mixed fallbacks)
+  renderAnalyticsFromCurrentMode();
+}
+
+function pickPerDay(out){
+  // ✅ supports multiple backend shapes
+  if (ANALYTICS_MODE === "online") {
+    return Array.isArray(out?.perDayOnline) ? out.perDayOnline :
+           Array.isArray(out?.perDay_online) ? out.perDay_online :
+           Array.isArray(out?.online?.perDay) ? out.online.perDay :
+           [];
+  }
+  if (ANALYTICS_MODE === "manual") {
+    return Array.isArray(out?.perDayManual) ? out.perDayManual :
+           Array.isArray(out?.perDay_manual) ? out.perDay_manual :
+           Array.isArray(out?.manual?.perDay) ? out.manual.perDay :
+           [];
+  }
+  return Array.isArray(out?.perDayTotal) ? out.perDayTotal :
+         Array.isArray(out?.perDay_total) ? out.perDay_total :
+         Array.isArray(out?.total?.perDay) ? out.total.perDay :
+         Array.isArray(out?.perDay) ? out.perDay :
+         [];
+}
+
+function pickPopular(out){
+  if (ANALYTICS_MODE === "online") {
+    return out?.popularOnline || out?.popular_online || out?.online?.popular || out?.popular || {};
+  }
+  if (ANALYTICS_MODE === "manual") {
+    return out?.popularManual || out?.popular_manual || out?.manual?.popular || out?.popular || {};
+  }
+  return out?.popularTotal || out?.popular_total || out?.total?.popular || out?.popular || {};
+}
+
+function pickTotals(out){
+  if (ANALYTICS_MODE === "online") {
+    return out?.totalsOnline || out?.totals_online || out?.online?.totals || out?.totals || {};
+  }
+  if (ANALYTICS_MODE === "manual") {
+    return out?.totalsManual || out?.totals_manual || out?.manual?.totals || out?.totals || {};
+  }
+  return out?.totalsTotal || out?.totals_total || out?.total?.totals || out?.totals || {};
+}
+// =======================
+// Manager Analytics helpers
+// =======================
+function moneyAUD(cents){
+  const n = Number(cents || 0) / 100;
+  return n.toLocaleString(undefined, { style:"currency", currency:"AUD" });
+}
+function pct(v){
+  const n = Number(v || 0) * 100;
+  return (isFinite(n) ? n : 0).toFixed(0) + "%";
+}
+
+function loadInsightsToUI(out){
+    const perDay = pickPerDay(out);
+  const pop = pickPopular(out);
+  const totals = pickTotals(out);
+  $("aPopDay").textContent = pop.dayOfWeek || "—";
+  $("aPopDayN").textContent = pop.dayOfWeekBookings ? `(${pop.dayOfWeekBookings} bookings)` : "";
+
+  $("aPopTime").textContent = pop.teeTime || "—";
+  $("aPopTimeN").textContent = pop.teeTimeBookings ? `(${pop.teeTimeBookings} bookings)` : "";
+
+  $("aCartRate").textContent = pct(pop.attachRateCart);
+  $("aClubsRate").textContent = pct(pop.attachRateClubs);
+  // ✅ NEW: selling-factor tiles
+  if ($("aFillRate")) $("aFillRate").textContent = pct(totals.fillRate || 0);
+  if ($("aAddonRev")) $("aAddonRev").textContent = moneyAUD(totals.addOnRevenueCents || 0);
+
+  // ✅ NEW: Top 3 lists
+  const topDays = Array.isArray(pop.topDays) ? pop.topDays.slice(0,3) : [];
+  const topTimes = Array.isArray(pop.topTimes) ? pop.topTimes.slice(0,3) : [];
+
+  if ($("aTopDays")) {
+    $("aTopDays").textContent = topDays.length
+      ? topDays.map(x => `${_escape(x.day || "")} (${Number(x.bookings || 0)})`).join(" • ")
+      : "—";
+  }
+
+  if ($("aTopTimes")) {
+    $("aTopTimes").textContent = topTimes.length
+      ? topTimes.map(x => `${_escape(x.teeTime || "")} (${Number(x.bookings || 0)})`).join(" • ")
+      : "—";
+  }
+  const tb = $("aPerDayBody");
+  if (!tb) return;
+  tb.innerHTML = "";
+
+  perDay.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${_escape(r.day || "")}</td>
+      <td class="right">${_escape(r.bookings ?? 0)}</td>
+      <td class="right">${_escape(r.players ?? 0)}</td>
+      <td class="right">${_escape(r.carts ?? 0)}</td>
+      <td class="right">${_escape(r.clubs ?? 0)}</td>
+      <td class="right">${moneyAUD(r.gross_cents ?? 0)}</td>
+    `;
+    tb.appendChild(tr);
+  });
+}
+function isoMinusDays(days){
+  const d = new Date();
+  d.setDate(d.getDate() - Number(days || 0));
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const dd = String(d.getDate()).padStart(2,"0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+async function loadAnalytics(){
+  const msg = $("analyticsMsg");
+  const box = $("analyticsBox");
+  if (msg) msg.textContent = "Loading analytics...";
+  if (box) box.style.display = "none";
+
+  try{
+    await getMe();
+
+    // ✅ hard gate in UI
+    if (getRole() !== "manager") throw new Error("manager_only");
+
+    const start = ($("aStart")?.value || "").trim();
+    const end = ($("aEnd")?.value || "").trim();
+
+    // ✅ Load ALL modes so toggles are consistent
+    const [totalOut, onlineOut, manualOut] = await Promise.all([
+      fetchInsights("total", start, end),
+      fetchInsights("online", start, end),
+      fetchInsights("manual", start, end),
+    ]);
+
+    LAST_INSIGHTS = {
+      total: totalOut,
+      online: onlineOut,
+      manual: manualOut,
+    };
+
+    // ✅ Render current mode (default = total)
+    renderAnalyticsFromCurrentMode();
+
+    if (msg) msg.textContent = "✅ Analytics loaded";
+  }catch(e){
+    if (msg) msg.textContent = "❌ " + (e?.message || "analytics_failed");
+  }
+}
+
+function exportAnalyticsCSV(){
+  try{
+    const start = ($("aStart")?.value || "").trim();
+    const end = ($("aEnd")?.value || "").trim();
+
+    const out = getActiveInsights() || {};
+    const perDay = pickPerDay(out);
+
+    const header = ["mode","day","bookings","players","carts","clubs","gross_cents"].join(",");
+    const lines = (perDay || []).map(r => [
+      ANALYTICS_MODE,
+      r.day || "",
+      Number(r.bookings || 0),
+      Number(r.players || 0),
+      Number(r.carts || 0),
+      Number(r.clubs || 0),
+      Number(r.gross_cents || 0),
+    ].map(x => `"${String(x).replace(/"/g,'""')}"`).join(","));
+
+    const meta = [
+      ["start", start],
+      ["end", end],
+      ["slug", getSlug()],
+      ["mode", ANALYTICS_MODE],
+    ].map(r => r.map(x => `"${String(x).replace(/"/g,'""')}"`).join(",")).join("\n");
+
+    const csv = meta + "\n\n" + header + "\n" + lines.join("\n") + "\n";
+
+    const blob = new Blob([csv], { type:"text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `course-analytics-${getSlug() || "course"}-${ANALYTICS_MODE}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }catch(e){
+    const msg = $("analyticsMsg");
+    if (msg) msg.textContent = "❌ export_failed: " + (e?.message || "");
+  }
+}
+  function clearView(){
+    $("viewMsg").textContent = "";
+    $("timesBody").innerHTML = "";
+    $("bookingsBody").innerHTML = "";
+    $("timesBox").style.display = "none";
+    $("bookingsBox").style.display = "none";
+    $("sheetBody").innerHTML = "";
+    $("sheetBox").style.display = "none";
+  }
+
+  function _escape(s){
+    return String(s ?? "")
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#039;");
+  }
+  // =======================
+// ✅ Layout labels for Daily Sheet (9/18 routing)
+// Uses already-loaded COURSE_LAYOUTS + COURSE_ROUTES18
+// =======================
+function layoutLabelByKey(key){
+  const k = String(key || "").trim().toLowerCase();
+  if (!k) return "";
+  const hit = (Array.isArray(COURSE_LAYOUTS) ? COURSE_LAYOUTS : []).find(x => String(x.key || "").toLowerCase() === k);
+  return hit ? String(hit.label || hit.key || k) : k;
+}
+
+function route18Label(frontKey, backKey){
+  const f = String(frontKey || "").trim().toLowerCase();
+  const b = String(backKey || "").trim().toLowerCase();
+  if (!f || !b) return "";
+
+  const routes = Array.isArray(COURSE_ROUTES18) ? COURSE_ROUTES18 : [];
+  const hit = routes.find(r =>
+    String(r.front9_key || "").toLowerCase() === f &&
+    String(r.back9_key || "").toLowerCase() === b
+  );
+  if (hit && hit.label) return String(hit.label);
+
+  // fallback: "Front + Back"
+  return `${layoutLabelByKey(f)} + ${layoutLabelByKey(b)}`.trim();
+}
+
+function fmtSheetHolesLabelFromTimeRow(t){
+  const holes = Number(t?.holes ?? t?.hole_count ?? t?.holeCount ?? 0);
+
+  if (holes === 9) {
+    const lk = String(t?.layout_key || t?.layoutKey || "").trim();
+    return lk ? `9 holes — ${layoutLabelByKey(lk)}` : `9 holes`;
+  }
+
+  if (holes === 18) {
+    const f = String(t?.front_nine_key || t?.front9_key || t?.front9Key || t?.front || "").trim();
+    const b = String(t?.back_nine_key || t?.back9_key || t?.back9Key || t?.back || "").trim();
+    if (f && b) return `18 holes — ${route18Label(f, b)}`;
+    return `18 holes`;
+  }
+
+  return holes ? `${holes} holes` : `holes`;
+}
+// ✅ normalize booking-like rows into the shape the sheet expects
+function normalizeBookingLikeRow(b){
+  const ref = String(
+    b.reference ??
+    b.ref ??
+    b.booking_reference ??
+    b.bookingReference ??
+    b.booking_ref ??
+    b.reference_code ??
+    b.referenceCode ??
+    b.code ??
+    b.confirmation ??
+    b.confirmation_code ??
+    b.confirmationCode ??
+    b.id ??
+    ""
+  ).trim();
+
+  return {
+    reference: ref,
+    name: String(b.name ?? b.hold_name ?? b.holdName ?? "Booking").trim(),
+    email: String(b.email ?? "").trim(),
+    phone: String(b.phone ?? "").trim(),
+
+    paid: !!(b.paid ?? b.is_paid ?? b.paid_flag ?? false),
+    checked_in: !!(b.checked_in ?? b.checkedIn ?? b.is_checked_in ?? false),
+
+    cart_qty: Number(b.cart_qty ?? b.cartQty ?? 0) || 0,
+    hire_clubs_qty: Number(b.hire_clubs_qty ?? b.hireClubsQty ?? 0) || 0,
+
+    has_cart: !!(b.has_cart || b.hasCart || (Number(b.cart_qty ?? b.cartQty ?? 0) > 0)),
+    has_hire_clubs: !!(b.has_hire_clubs || b.hasHireClubs || (Number(b.hire_clubs_qty ?? b.hireClubsQty ?? 0) > 0)),
+
+    notes: String(b.notes ?? b.note ?? "").trim(),
+  };
+}
+  function buildSlotCell(item, slotIndex){
+  if (!item){
+  return `
+    <div class="slotBox">
+      <div class="slotEmpty">—</div>
+      <div style="margin-top:8px;">
+        <button
+          type="button"
+          class="secondary"
+          style="font-size:12px;padding:8px 10px;border-radius:10px;"
+          data-addbooking="1"
+          data-slot="${slotIndex}"
+        >
+          Add booking
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+  const name = _escape(item.name || "");
+  const email = _escape(item.email || "");
+  const phone = _escape(item.phone || "");
+
+  // ✅ RAW ref for API calls / selectors, escaped only for display
+  const refRaw = String(
+  item.reference ??
+  item.ref ??
+  item.booking_reference ??
+  item.bookingReference ??
+  item.booking_ref ??
+  item.reference_code ??
+  item.referenceCode ??
+  item.code ??
+  item.confirmation ??
+  item.confirmation_code ??
+  item.confirmationCode ??
+  ""
+).trim();
+
+  const refDisp = _escape(refRaw);
+const isManualRef = /^MAN-/.test(refRaw);
+    // ✅ supports per-slot flags if backend returns them later (fallback to old fields)
+  const paid =
+    !!(item.paid_slot ?? item.paidSlot ?? (Array.isArray(item.paid_slots) ? item.paid_slots[slotIndex-1] : null) ?? item.paid);
+
+  const checkedIn =
+    !!(item.checked_in_slot ?? item.checkedInSlot ?? (Array.isArray(item.checked_in_slots) ? item.checked_in_slots[slotIndex-1] : null) ?? item.checked_in);
+
+    // ✅ qty-first (supports manual holds + bookings)
+  const cartQty = Number(item.cart_qty ?? item.cartQty ?? 0) || 0;
+  const clubsQty = Number(item.hire_clubs_qty ?? item.hireClubsQty ?? 0) || 0;
+
+  // ✅ show add-ons if either boolean OR qty > 0
+  const hasCart = !!(item.has_cart || item.hasCart || cartQty > 0);
+  const hasClubs = !!(item.has_hire_clubs || item.hasHireClubs || clubsQty > 0);
+  const notes = _escape(item.notes || "");
+    const key = refRaw || `empty_${slotIndex}`;
+  const slotKey = `${key}__slot${slotIndex}`; // ✅ unique per slot for selectors
+
+  const paidId = `paid_${key}_${slotIndex}`;
+  const checkinId = `checkin_${key}_${slotIndex}`;
+
+    const badge =
+    paid
+      ? `<span class="badge ok" data-badge="${_escape(slotKey)}">PAID</span>`
+      : `<span class="badge warn" data-badge="${_escape(slotKey)}">UNPAID</span>`;
+
+    const addonBits = [];
+    if (hasCart) addonBits.push(`<span class="badge">Cart${cartQty > 0 ? " x" + cartQty : ""}</span>`);
+    if (hasClubs) addonBits.push(`<span class="badge">Clubs${clubsQty > 0 ? " x" + clubsQty : ""}</span>`);
+
+  return `
+    <div class="slotBox">
+      <div class="slotTop">
+        <div class="slotName">${name || "Booking"}</div>
+        ${badge}
+      </div>
+
+      <div class="slotMeta">
+        ${email ? `<span>${email}</span>` : ""}
+        ${phone ? `<span>${phone}</span>` : ""}
+        ${refRaw ? `<span><code>${refDisp}</code></span>` : ""}
+        ${addonBits.length ? `<span style="display:flex;gap:6px;flex-wrap:wrap">${addonBits.join("")}</span>` : ""}
+                ${notes ? `<span style="width:100%"><span class="muted">Notes:</span> ${notes}</span>` : ""}
+      </div>
+
+            <div style="margin-top:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <label class="paidWrap" for="${paidId}">
+          <input
+  id="${paidId}"
+  type="checkbox"
+  data-ref="${_escape(refRaw)}"
+  data-kind="paid"
+  data-slot="${slotIndex}"
+  data-slotkey="${_escape(slotKey)}"
+  ${paid ? "checked" : ""}
+  ${refRaw ? "" : 'disabled title="No reference on this slot"'}
+/>
+          Paid
+        </label>
+
+        <label class="paidWrap" for="${checkinId}">
+          <input
+  id="${checkinId}"
+  type="checkbox"
+  data-ref="${_escape(refRaw)}"
+  data-kind="checkin"
+  data-slot="${slotIndex}"
+  data-slotkey="${_escape(slotKey)}"
+  ${checkedIn ? "checked" : ""}
+  ${refRaw ? "" : 'disabled title="No reference on this slot"'}
+/>
+          Checked in
+        </label>
+
+        <div class="mini muted" data-msg="${_escape(slotKey)}"></div>
+      </div>
+
+            ${isManualRef ? `
+      <div class="actions" style="margin-top:10px">
+        <button
+          type="button"
+          class="secondary"
+          style="font-size:12px;padding:8px 10px;border-radius:10px;"
+          data-edit-slot="1"
+          data-ref="${_escape(refRaw)}"
+          data-slot="${slotIndex}"
+        >Edit</button>
+
+        <button
+          type="button"
+          class="secondary"
+          style="font-size:12px;padding:8px 10px;border-radius:10px;background:#b91c1c"
+          data-del-slot="1"
+          data-ref="${_escape(refRaw)}"
+          data-slot="${slotIndex}"
+        >Delete</button>
+      </div>
+      ` : ``}
+    </div>
+  `;
+}
+
+  function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
+  // ✅ normalize "06:10", "6:10", "06:10:00" -> "06:10"
+  const normTime = (v) => {
+    const s = String(v || "").trim();
+    const m = s.match(/(\d{1,2}):(\d{2})/);
+    if (!m) return s;
+    return String(m[1]).padStart(2,"0") + ":" + m[2];
+  };
+
+  // ✅ IMPORTANT: differentiate tee times by routing/layout
+  function slotKeyFor(time, holes, layoutKey, frontKey, backKey){
+    const t = normTime(time);
+    const h = String(holes ?? "");
+    const lk = String(layoutKey || "").trim().toLowerCase();
+    const f  = String(frontKey || "").trim().toLowerCase();
+    const b  = String(backKey || "").trim().toLowerCase();
+
+    if (Number(holes) === 9) return `${t}__${h}__lk:${lk || ""}`;
+    if (Number(holes) === 18) return `${t}__${h}__f:${f || ""}__b:${b || ""}`;
+    return `${t}__${h}`;
+  }
+
+  const byKey = new Map();
+
+  // ✅ Manual rows: treat as booking-like rows and preserve routing keys if present
+  (manualRows || []).forEach(m => {
+    const time = normTime(m.tee_time || m.time || m.teeTime || "");
+    const holes = Number(m.holes ?? m.hole_count ?? m.num_holes ?? m.holeCount ?? "");
+    const layoutKey = String(m.layout_key || m.layoutKey || "").trim();
+    const frontKey  = String(m.front_nine_key || m.front9_key || m.front9Key || "").trim();
+    const backKey   = String(m.back_nine_key  || m.back9_key  || m.back9Key  || "").trim();
+
+    const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
+    if (!byKey.has(key)) byKey.set(key, []);
+
+    const hasSlotIndex = (m.slot_index != null || m.slotIndex != null);
+
+    // If backend did not expand per-slot → expand here using players
+    if (!hasSlotIndex) {
+      const players = Math.max(1, Math.min(4, Number(
+        m.players ?? m.num_players ?? m.player_count ?? m.playerCount ?? 1
+      )));
+
+      for (let i = 0; i < players; i++) {
+        const row = normalizeBookingLikeRow(m);
+
+        // ✅ only show add-ons once (slot 1)
+        if (i > 0) {
+          row.cart_qty = 0;
+          row.hire_clubs_qty = 0;
+          row.has_cart = false;
+          row.has_hire_clubs = false;
+        }
+
+        // ✅ keep routing keys on the row too (handy later)
+        row.layout_key = layoutKey;
+        row.front_nine_key = frontKey;
+        row.back_nine_key = backKey;
+
+        byKey.get(key).push(row);
+      }
+      return;
+    }
+
+    const row = normalizeBookingLikeRow(m);
+    row.layout_key = layoutKey;
+    row.front_nine_key = frontKey;
+    row.back_nine_key = backKey;
+
+    byKey.get(key).push(row);
+  });
+
+  // ✅ Online bookings: preserve routing keys if present (booking_bookings has these columns)
+  (bookingsRows || []).forEach(b => {
+    const time = normTime(b.tee_time || b.time || b.teeTime || "");
+    const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
+    const layoutKey = String(b.layout_key || b.layoutKey || "").trim();
+    const frontKey  = String(b.front_nine_key || b.front9_key || b.front9Key || "").trim();
+    const backKey   = String(b.back_nine_key  || b.back9_key  || b.back9Key  || "").trim();
+
+    const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
+
+    const players = Math.max(1, Number(b.players || 1));
+
+    for (let i = 0; i < players; i++) {
+      if (!byKey.has(key)) byKey.set(key, []);
+
+      const row = normalizeBookingLikeRow(b);
+
+      // ✅ only show add-ons on Slot 1 for that booking
+      if (i > 0) {
+        row.cart_qty = 0;
+        row.hire_clubs_qty = 0;
+        row.has_cart = false;
+        row.has_hire_clubs = false;
+      }
+
+      row.layout_key = layoutKey;
+      row.front_nine_key = frontKey;
+      row.back_nine_key = backKey;
+
+      byKey.get(key).push(row);
+    }
+  });
+
+  // =======================
+  // Daily sheet builder
+  // =======================
+  const out = [];
+
+  (timesRows || []).forEach(t => {
+    const time = normTime(t.tee_time || t.time || "");
+    const holes = Number(t.holes ?? "");
+
+    const layoutKey = String(t.layout_key || t.layoutKey || "").trim();
+    const frontKey  = String(t.front_nine_key || t.front9_key || t.front9Key || "").trim();
+    const backKey   = String(t.back_nine_key  || t.back9_key  || t.back9Key  || "").trim();
+
+    const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
+
+    const arr = (byKey.get(key) || []).slice(0, 4);
+
+    const bookedCount = Number(
+      t.booked_players ?? t.bookedPlayers ?? t.booked ?? 0
+    );
+
+    while (arr.length < Math.min(4, bookedCount)) {
+      arr.push({
+        reference: "",
+        name: "Booked",
+        email: "",
+        phone: "",
+        paid: false,
+        cart_qty: 0,
+        hire_clubs_qty: 0,
+        has_cart: false,
+        has_hire_clubs: false,
+        notes: "",
+        checked_in: false,
+
+        // keep routing info
+        layout_key: layoutKey,
+        front_nine_key: frontKey,
+        back_nine_key: backKey,
+      });
+    }
+
+    const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
+
+    // ✅ include routing/layout on the row so UI renders correctly without doing find(...)
+    out.push({
+      time,
+      holes,
+      layout_key: layoutKey,
+      front_nine_key: frontKey,
+      back_nine_key: backKey,
+      slots
+    });
+  });
+
+  return out;
+}
+
+// =======================
+// Auth helpers
+// =======================
+async function getMe(){
+  const out = await j(
+    "/api/book/course-admin/me?slug=" + encodeURIComponent(getSlug()),
+    { method: "GET" }
+  );
+
+  $("who").textContent =
+    `✅ ${out.slug || ""} — ${out.email || ""} (${out.role || ""})`;
+
+  return out;
+}
+
+// =======================
+// Page init (robust - works on Safari even if DOMContentLoaded timing is weird)
+// =======================
+let __inited = false;
+
+function initCourseAdminUI(){
+  if (__inited) return;
+  __inited = true;
+
+  // quick sanity: proves JS ran
+  try { $("msg").textContent = $("msg").textContent || ""; } catch {}
+
+  // 🔐 LOGIN
+  const loginBtn = $("loginBtn");
+  if (loginBtn) loginBtn.onclick = async () => {
+    $("msg").textContent = "Logging in...";
+    try {
+      const slug = String($("slug").value || "").trim().toLowerCase();
+      const email = String($("email").value || "").trim();
+      const password = String($("password").value || "").trim();
+
+      if (!slug) throw new Error("slug_required");
+      if (!email) throw new Error("email_required");
+      if (!password) throw new Error("password_required");
+
+      setSlug(slug);
+
+      const res = await fetch("/api/book/course-admin/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-course-slug": slug,
+        },
+        body: JSON.stringify({ slug, email, password }),
+        credentials: "include",
+      });
+
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      const data = ct.includes("application/json")
+        ? await res.json().catch(() => null)
+        : null;
+
+      if (!res.ok) {
+        throw new Error((data && (data.error || data.message)) || `HTTP_${res.status}`);
+      }
+
+      if (!data?.token) throw new Error("missing_token");
+
+      setToken(data.token);
+      setRole(String(data.role || "").toLowerCase());
+
+      $("msg").textContent = "✅ Logged in";
+      $("who").textContent = `✅ ${data.slug || slug} — ${data.email || email} (${data.role || ""})`;
+
+      applyRoleUI();
+
+      // auto-load template for managers
+      if (getRole() === "manager") {
+        setTimeout(() => document.querySelector("#tplLoadBtn")?.click(), 0);
+      }
+      setTimeout(() => loadLayouts(), 0);
+    } catch (e) {
+      $("msg").textContent = "❌ " + (e?.message || "login_failed");
+      clearAuth();
+      applyRoleUI();
+    }
+  };
+
+  // 🔓 LOGOUT
+  const logoutBtn = $("logoutBtn");
+  if (logoutBtn) logoutBtn.onclick = async () => {
+    try {
+      await fetch("/api/book/course-admin/logout", { method: "POST", credentials: "include" });
+    } catch {}
+    clearAuth();
+    $("msg").textContent = "Logged out";
+    $("who").textContent = "";
+    applyRoleUI();
+  };
+
+  // 🧪 TEST /me
+  const testBtn = $("testBtn");
+  if (testBtn) testBtn.onclick = async () => {
+    $("msg").textContent = "Testing...";
+    try {
+      await getMe();
+      $("msg").textContent = "✅ /me OK";
+    } catch (e) {
+      $("msg").textContent = "❌ " + (e?.message || "me_failed");
+    }
+  };
+
+  // 🧹 CLEAR
+  const clearBtn = $("clearBtn");
+  if (clearBtn) clearBtn.onclick = () => {
+    clearAuth();
+    $("slug").value = "";
+    $("email").value = "";
+    $("password").value = "";
+    $("msg").textContent = "Cleared";
+    $("who").textContent = "";
+    clearView();
+    applyRoleUI();
+  };
+
+  // ✅ View buttons
+  const viewTimesBtn = $("viewTimesBtn");
+  if (viewTimesBtn) viewTimesBtn.onclick = viewTimes;
+
+  const viewBookingsBtn = $("viewBookingsBtn");
+  if (viewBookingsBtn) viewBookingsBtn.onclick = viewBookings;
+
+  const viewSheetBtn = $("viewSheetBtn");
+  if (viewSheetBtn) viewSheetBtn.onclick = viewSheet;
+
+  const deleteTimesBtn = $("deleteTimesBtn");
+  if (deleteTimesBtn) deleteTimesBtn.onclick = async () => {
+    try{
+      await getMe();
+
+      const date = ($("date").value || "").trim();
+      if (!date) throw new Error("play_date_required");
+
+      if (!confirm(`Delete ALL tee times for ${date}? This cannot be undone.`)) return;
+
+      await j(
+        "/api/book/course-admin/times?" + new URLSearchParams({ date }).toString(),
+        { method:"DELETE" }
+      );
+
+      $("viewMsg").textContent = `✅ Tee times deleted for ${date}`;
+      clearView();
+    }catch(e){
+      $("viewMsg").textContent = "❌ " + (e?.message || "delete_failed");
+    }
+  };
+  
+    // ✅ Manager-only analytics buttons
+  const analyticsLoadBtn = $("analyticsLoadBtn");
+  if (analyticsLoadBtn) analyticsLoadBtn.onclick = loadAnalytics;
+
+  const analyticsExportBtn = $("analyticsExportBtn");
+  if (analyticsExportBtn) analyticsExportBtn.onclick = exportAnalyticsCSV;
+    // ✅ Analytics mode toggle
+  const aModeTotal = $("aModeTotal");
+  const aModeOnline = $("aModeOnline");
+  const aModeManual = $("aModeManual");
+
+  if (aModeTotal) aModeTotal.onclick = () => setAnalyticsMode("total");
+  if (aModeOnline) aModeOnline.onclick = () => setAnalyticsMode("online");
+  if (aModeManual) aModeManual.onclick = () => setAnalyticsMode("manual");
+
+  // default hint
+  setAnalyticsMode("total");
+
+  // ✅ Manual: view manual tee times
+  const mLoadBtn = $("mLoadBtn");
+  if (mLoadBtn) mLoadBtn.onclick = async () => {
+    _manualDateDefault();
+    await loadManualSlots();
+  };
+
+  // ✅ Stock buttons
+  const csLoadBtn = $("csLoadBtn");
+  if (csLoadBtn) csLoadBtn.onclick = loadCourseSettingsToUI;
+
+  const csSaveBtn = $("csSaveBtn");
+  if (csSaveBtn) csSaveBtn.onclick = saveCourseSettingsFromUI;
+
+  // ✅ Inventory button
+  // (The real handler is defined later as $("checkInventoryBtn").onclick = async () => {...})
+  // So DON'T bind a click-to-click recursion here.
+  // =======================
+  // Course layouts (wire buttons once on page init)
+  // =======================
+  const addNineBtn = $("addNineBtn");
+  if (addNineBtn) addNineBtn.onclick = () => {
+    const v = ($("newNineLabel")?.value || "").trim();
+    if (!v) { $("layoutsMsg").textContent = "❌ Enter a nine name"; return; }
+
+        COURSE_LAYOUTS.push({ key: _slugKey(v), label: v });
+    $("newNineLabel").value = "";
+    renderLayouts();
+    $("layoutsMsg").textContent = "✅ Added (not saved yet)";
+  };
+
+  const saveLayoutsBtn = $("saveLayoutsBtn");
+  if (saveLayoutsBtn) saveLayoutsBtn.onclick = saveLayouts;
+
+  const add18Btn = $("add18Btn");
+  if (add18Btn) add18Btn.onclick = () => {
+    const label = ($("new18Label")?.value || "").trim();
+    const front9 = String($("new18Front")?.value || "").trim().toLowerCase();
+    const back9  = String($("new18Back")?.value || "").trim().toLowerCase();
+    const blockMins = Number($("new18BlockMins")?.value || 30) || 30;
+
+    if (!label) { $("layoutsMsg").textContent = "❌ Enter an 18 option label"; return; }
+    if (!front9 || !back9) { $("layoutsMsg").textContent = "❌ Select front 9 and back 9"; return; }
+    if (front9 === back9) { $("layoutsMsg").textContent = "❌ Front and back cannot be the same"; return; }
+
+    const key = _slugKey(label);
+    COURSE_ROUTES18.push({ key, label, front9_key: front9, back9_key: back9, block_mins: blockMins });
+
+    $("new18Label").value = "";
+    $("layoutsMsg").textContent = "✅ Added 18 option (not saved yet)";
+    renderRoutes18();
+  };
+
+  // live edit 9 labels
+  document.addEventListener("input", (e) => {
+    if (e.target?.classList?.contains("nineLabel")) {
+      const idx = Number(e.target.getAttribute("data-nine-idx"));
+      if (COURSE_LAYOUTS[idx]) {
+        COURSE_LAYOUTS[idx].label = e.target.value;
+        COURSE_LAYOUTS[idx].key = _slugKey(COURSE_LAYOUTS[idx].label);
+        renderLayouts();      // keep selects in sync
+        renderRoutes18();
+      }
+    }
+    if (e.target?.classList?.contains("r18Label")) {
+      const idx = Number(e.target.getAttribute("data-r18-idx"));
+      if (COURSE_ROUTES18[idx]) {
+        COURSE_ROUTES18[idx].label = e.target.value;
+        COURSE_ROUTES18[idx].key = _slugKey(COURSE_ROUTES18[idx].label);
+      }
+    }
+  });
+
+  // deletes + edit route
+  document.addEventListener("click", (e) => {
+    const nineIdx = e.target?.getAttribute?.("data-del-nine");
+    if (nineIdx != null) {
+      const del = COURSE_LAYOUTS.splice(Number(nineIdx), 1)[0];
+      // also remove any 18 routes referencing it
+      if (del?.key) {
+        COURSE_ROUTES18 = COURSE_ROUTES18.filter(r => r.front9_key !== del.key && r.back9_key !== del.key);
+      }
+      renderLayouts();
+      renderRoutes18();
+      $("layoutsMsg").textContent = "✅ Removed (not saved yet)";
+      return;
+    }
+
+    const rDel = e.target?.getAttribute?.("data-del-r18");
+    if (rDel != null) {
+      COURSE_ROUTES18.splice(Number(rDel), 1);
+      renderRoutes18();
+      $("layoutsMsg").textContent = "✅ Removed 18 option (not saved yet)";
+      return;
+    }
+
+    const rEdit = e.target?.getAttribute?.("data-edit-r18");
+    if (rEdit != null) {
+      const idx = Number(rEdit);
+      const r = COURSE_ROUTES18[idx];
+      if (!r) return;
+
+      const label = (prompt("18 option label:", r.label || "") || "").trim();
+      if (!label) return;
+
+      const front = (prompt("Front 9 key (e.g. pines):", r.front9_key || "") || "").trim().toLowerCase();
+      const back  = (prompt("Back 9 key (e.g. lakes):", r.back9_key || "") || "").trim().toLowerCase();
+      const bm    = Number(prompt("Return window block (mins):", String(r.block_mins ?? 30)) || "30") || 30;
+
+      if (!front || !back) return;
+      if (front === back) { $("layoutsMsg").textContent = "❌ Front and back cannot be the same"; return; }
+
+      r.label = label;
+      r.key = _slugKey(label);
+      r.front9_key = front;
+      r.back9_key = back;
+      r.block_mins = bm;
+
+      renderRoutes18();
+      $("layoutsMsg").textContent = "✅ Updated 18 option (not saved yet)";
+    }
+  });
+
+   // show empty state immediately
+  renderLayouts();
+  renderRoutes18();
+} // ✅ CLOSE initCourseAdminUI
+
+// ✅ run now + fallback (OUTSIDE the function)
+initCourseAdminUI();
+document.addEventListener("DOMContentLoaded", initCourseAdminUI);
+
+async function viewTimes(){
+  clearView();
+  $("viewMsg").textContent = "Loading tee times...";
+  try{
+    await getMe();
+
+    const date = ($("date").value || "").trim();
+    if (!date) throw new Error("play_date_required");
+
+    const out = await j(
+      "/api/book/course-admin/times?date=" + encodeURIComponent(date),
+      { method:"GET" }
+    );
+
+    let rows = (out && out.times) || [];
+rows = filterShadowedGeneric18(rows);
+    if (!Array.isArray(rows) || !rows.length){
+      $("viewMsg").textContent = "✅ No tee times found for this date.";
+      return;
+    }
+
+    // (rest of your existing rendering logic continues below unchanged)
+
+    $("viewMsg").textContent = `✅ Loaded ${rows.length} tee times`;
+    $("timesBox").style.display = "block";
+
+    const tb = $("timesBody");
+    tb.innerHTML = "";
+    rows.forEach(r => {
+            const maxP = Number(r.max_players ?? r.maxPlayers ?? 0);
+
+      // Some providers/backends provide a correct remaining/available field.
+      // Prefer it if present; fallback to max - booked.
+      const remainingRaw =
+        r.remaining_players ?? r.remainingPlayers ??
+        r.available_players ?? r.availablePlayers ??
+        r.remaining ?? r.available;
+
+      const bookedP = Number(r.booked_players ?? r.bookedPlayers ?? r.booked ?? 0);
+
+      const remaining = (remainingRaw != null && remainingRaw !== "")
+        ? Math.max(0, Number(remainingRaw) || 0)
+        : Math.max(0, maxP - bookedP);
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${String(r.play_date || "")}</td>
+        <td>${_escape(displayTime(r.tee_time || ""))}</td>
+        <td>${(r.holes ?? "")}</td>
+        <td>${String(r.status || "")}</td>
+        <td class="right">${(r.max_players ?? "")}</td>
+        <td class="right">${(r.booked_players ?? "")}</td>
+        <td class="right">${remaining}</td>
+        <td class="right">${(r.price_per_player_cents ?? "")}</td>
+      `;
+      tb.appendChild(tr);
+    });
+  }catch(e){
+    $("viewMsg").textContent = "❌ " + e.message;
+  }
+}
+  async function viewBookings(){
+    clearView();
+    $("viewMsg").textContent = "Loading bookings...";
+    try{
+      await getMe();
+      const date = ($("date").value || "").trim();
+      const qs = new URLSearchParams();
+      if (date) qs.set("date", date);
+
+      const out = await j("/api/book/course-admin/bookings?" + qs.toString(), { method:"GET" });
+
+      const rows = (out && out.bookings) || [];
+      if (!Array.isArray(rows) || !rows.length){
+        $("viewMsg").textContent = "✅ No bookings found for this course/date yet.";
+        return;
+      }
+
+      $("viewMsg").textContent = `✅ Loaded ${rows.length} bookings`;
+      $("bookingsBox").style.display = "block";
+
+      const tb = $("bookingsBody");
+      tb.innerHTML = "";
+      rows.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${fmtDT(r.created_at || "")}</td>
+          <td>${(r.play_date || "")}</td>
+          <td>${_escape(displayTime(r.tee_time || ""))}</td>
+          <td>${(r.holes ?? "")}</td>
+          <td class="right">${(r.players ?? "")}</td>
+          <td>${(r.name || "")}</td>
+          <td>${(r.email || "")}</td>
+          <td>${(r.phone || "")}</td>
+          <td class="right">${(r.gross_cents ?? r.total_cents ?? "")}</td>
+          <td>${r.paid ? "✅" : "—"}</td>
+          <td>${r.checked_in ? "✅" : "—"}</td>
+          <td>${
+  [
+    (Number(r.cart_qty ?? 0) > 0 ? `Cart x${Number(r.cart_qty)}` : (r.has_cart ? "Cart" : "")),
+    (Number(r.hire_clubs_qty ?? 0) > 0 ? `Clubs x${Number(r.hire_clubs_qty)}` : (r.has_hire_clubs ? "Clubs" : "")),
+    (r.notes ? `Notes: ${String(r.notes)}` : "")
+  ].filter(Boolean).join(", ") || "—"
+}</td>
+          <td><code>${(r.reference ?? r.ref ?? r.booking_reference ?? r.bookingReference ?? r.booking_ref ?? r.code ?? "")}</code></td>
+          <td>${(r.status || "")}</td>
+        `;
+        tb.appendChild(tr);
+      });
+    }catch(e){
+      $("viewMsg").textContent = "❌ " + e.message;
+    }
+  }
+
+  async function viewSheet(){
+    clearView();
+    $("viewMsg").textContent = "Loading daily sheet...";
+    try{
+      const date = ($("date").value || "").trim();
+      if (!date) throw new Error("play_date_required");
+
+      const timesOut = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
+      let timesRows = (timesOut && timesOut.times) || [];
+timesRows = filterShadowedGeneric18(timesRows);
+      // ✅ Price lookup (time+holes+route/layout) so duplicates don't collide
+const priceByKey = new Map();
+try{
+  (timesRows || []).forEach(t => {
+    const time = normTime(displayTime(t.tee_time || t.time || ""));
+    const holes = Number(t.holes ?? "");
+
+    const lk = String(t.layout_key || t.layoutKey || "").trim().toLowerCase();
+    const f  = String(t.front_nine_key || t.front9_key || t.front9Key || "").trim().toLowerCase();
+    const b  = String(t.back_nine_key  || t.back9_key  || t.back9Key  || "").trim().toLowerCase();
+
+    const k =
+      holes === 9
+        ? `${time}__9__lk:${lk || ""}`
+        : holes === 18
+          ? `${time}__18__f:${f || ""}__b:${b || ""}`
+          : `${time}__${holes}`;
+
+    const p = Number(t.price_per_player_cents ?? t.pricePerPlayerCents ?? 0) || 0;
+    priceByKey.set(k, p);
+  });
+}catch{}
+// ✅ Merge manual tee times into daily sheet
+try{
+  const manualOut = await j("/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date), { method:"GET" });
+  const manualRows = manualOut.manualSlots || manualOut.manual_slots || manualOut.slots || manualOut.rows || [];
+
+  if (Array.isArray(manualRows) && manualRows.length) {
+    manualRows.forEach(ms => {
+      timesRows.push({
+        play_date: ms.play_date ?? ms.date ?? date,
+        tee_time: ms.tee_time ?? ms.time ?? "",
+        holes: ms.holes ?? "",
+        max_players: ms.max_players ?? "",
+        booked_players: 0,
+        status: "open",
+        price_per_player_cents: ms.price_per_player_cents ?? ms.price_cents ?? ""
+      });
+    });
+
+    // ✅ de-dupe by time + holes + routing/layout keys (so 2 x 06:10 (18) can exist if routing differs)
+const seen = new Set();
+const deduped = [];
+
+for (const r of timesRows) {
+  const time = normTime(r.tee_time || r.time || "");
+  const holes = Number(r.holes ?? "");
+
+  const lk = String(r.layout_key || r.layoutKey || "").trim().toLowerCase();
+  const f  = String(r.front_nine_key || r.front9_key || r.front9Key || "").trim().toLowerCase();
+  const b  = String(r.back_nine_key  || r.back9_key  || r.back9Key  || "").trim().toLowerCase();
+
+  const key =
+    holes === 9
+      ? `${time}__${holes}__lk:${lk || ""}`
+      : holes === 18
+        ? `${time}__${holes}__f:${f || ""}__b:${b || ""}`
+        : `${time}__${holes}`;
+
+  if (seen.has(key)) continue;
+  seen.add(key);
+  deduped.push(r);
+}
+
+deduped.sort((a,b) => (normTime(a.tee_time||a.time||"") > normTime(b.tee_time||b.time||"") ? 1 : -1));
+timesRows.length = 0;
+deduped.forEach(x => timesRows.push(x));
+timesRows = filterShadowedGeneric18(timesRows);
+  }
+}catch(e){
+  // ignore if manual endpoint missing; daily sheet will still work from normal times
+}
+      const bookingsOut = await j("/api/book/course-admin/bookings?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
+      const bookingsRows = (bookingsOut && bookingsOut.bookings) || [];
+      // ✅ Load manual holds too (so the sheet shows taken slots)
+      let manualRows = [];
+      try{
+        const manualOut = await j("/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date), { method:"GET" });
+        manualRows = manualOut.manualSlots || manualOut.manual_slots || manualOut.slots || manualOut.rows || [];
+        if (!Array.isArray(manualRows)) manualRows = [];
+      }catch(e){
+        manualRows = []; // endpoint not available? sheet still works
+      }
+      if (!Array.isArray(timesRows) || !timesRows.length){
+        $("viewMsg").textContent = "✅ No tee times found (generate them in Booking Admin).";
+        return;
+      }
+
+      const sheet = groupBookingsToSheet(timesRows, bookingsRows, manualRows);
+
+      $("sheetPill").textContent = `${getSlug()} • ${date}`;
+      $("sheetHint").textContent = "Names fill into the 4 slots for each time. Tick Paid to mark payment.";
+
+      const tb = $("sheetBody");
+      tb.innerHTML = "";
+
+      sheet.forEach(row => {
+  const tr = document.createElement("tr");
+
+  // ✅ attach routing/layout to the row (so Add booking knows which exact slot)
+  tr.dataset.time = String(row.time || "").trim(); // "HH:MM"
+  tr.dataset.holes = String(row.holes || "");
+  tr.dataset.layoutKey = String(row.layout_key || "");
+  tr.dataset.frontKey = String(row.front_nine_key || "");
+  tr.dataset.backKey = String(row.back_nine_key || "");
+
+  tr.innerHTML = `
+    <td class="sheetTime">
+  ${_escape(row.time)}
+  <span class="muted mini">(${_escape(fmtSheetHolesLabelFromTimeRow(row))})</span>
+</td>
+          <td>${buildSlotCell(row.slots[0], 1)}</td>
+          <td>${buildSlotCell(row.slots[1], 2)}</td>
+          <td>${buildSlotCell(row.slots[2], 3)}</td>
+          <td>${buildSlotCell(row.slots[3], 4)}</td>
+        `;
+        tb.appendChild(tr);
+      });
+
+            // ✅ Allow creating a booking from an empty slot (Add booking buttons)
+tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
+  btn.onclick = async () => {
+    try{
+      await getMe();
+
+      const date = ($("date").value || "").trim();
+      if (!date) throw new Error("play_date_required");
+
+      // Find the row time/holes by walking up to the <tr>
+      const tr = btn.closest("tr");
+      if (!tr) throw new Error("row_not_found");
+
+      const teeTime = String(tr.dataset.time || "").trim();
+      const holes = Number(tr.dataset.holes || 18);
+
+      const layoutKey = String(tr.dataset.layoutKey || "").trim();
+      const frontNineKey = String(tr.dataset.frontKey || "").trim();
+      const backNineKey  = String(tr.dataset.backKey || "").trim();
+
+      if (!teeTime) throw new Error("tee_time_missing");
+
+      // ✅ routing-aware price key
+      const priceKey =
+        holes === 9
+          ? `${normTime(teeTime)}__9__lk:${String(layoutKey||"").trim().toLowerCase()}`
+          : holes === 18
+            ? `${normTime(teeTime)}__18__f:${String(frontNineKey||"").trim().toLowerCase()}__b:${String(backNineKey||"").trim().toLowerCase()}`
+            : `${normTime(teeTime)}__${holes}`;
+
+      const pricePerPlayerCents = Number(priceByKey.get(priceKey) || 0);
+
+      // ✅ Ask for details
+      const name = (prompt("Name:", "") || "").trim();
+      if (!name) return;
+
+      const email = (prompt("Email (needed for confirmation):", "") || "").trim();
+      if (!email) throw new Error("email_required");
+
+      const phone = (prompt("Phone (optional):", "") || "").trim();
+      const cartsRaw = prompt("Cart qty (0-4):", "0") || "0";
+      const clubsRaw = prompt("Clubs qty (0-4):", "0") || "0";
+      const notes = (prompt("Notes (optional):", "") || "").trim();
+
+      const cartQty = Math.max(0, Math.min(4, Number(cartsRaw || 0)));
+      const hireClubsQty = Math.max(0, Math.min(4, Number(clubsRaw || 0)));
+
+      const playersRaw = prompt("Players (1-4):", "1") || "1";
+      const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
+
+      // ✅ DEBUG: shows the exact path + payload we’re about to send
+      try{
+        window.dbg && dbg("ADD_BOOKING payload", {
+          slug: getSlug(),
+          endpoint: "/api/book/course-admin/booking",
+          date,
+          teeTime,
+          holes,
+          layoutKey,
+          frontNineKey,
+          backNineKey,
+          priceKey,
+          pricePerPlayerCents,
+          players,
+          name,
+          email,
+          phone,
+          cartQty,
+          hireClubsQty,
+          notes
+        }, "warn");
+      }catch{}
+
+      await j("/api/book/course-admin/booking?slug=" + encodeURIComponent(getSlug()), {
+        method:"POST",
+        body: JSON.stringify({
+          date,
+          playDate: date,
+          play_date: date,
+
+          teeTime,
+          tee_time: teeTime,
+
+          holes,
+          players,
+
+          layout_key: layoutKey,
+          front_nine_key: frontNineKey,
+          back_nine_key: backNineKey,
+
+          pricePerPlayerCents,
+          price_per_player_cents: pricePerPlayerCents,
+
+          name,
+
+          cartQty,
+          hireClubsQty,
+          cart_qty: cartQty,
+          hire_clubs_qty: hireClubsQty,
+
+          notes,
+          note: notes,
+
+          email,
+          phone,
+
+          paid: false,
+          checked_in: false
+        })
+      });
+
+      $("viewMsg").textContent = "✅ Booking added";
+      await viewSheet(); // refresh
+    }catch(e){
+      $("viewMsg").textContent = "❌ " + (e?.message || "Failed to add booking");
+    }
+  };
+});
+
+// ✅ Edit / Delete buttons on each slot (daily sheet) — SINGLE handler (no duplicates)
+tb.querySelectorAll('button[data-del-slot]').forEach(btn => {
+  btn.onclick = async (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    try{
+      await getMe();
+      const ref = String(btn.getAttribute("data-ref") || "");
+      if (!/^MAN-/.test(ref)) {
+        $("viewMsg").textContent = "❌ Only MAN- bookings can be edited/deleted here (TR- are online bookings).";
+        return;
+      }
+
+      const date = ($("date").value || "").trim();
+      if (!date) throw new Error("play_date_required");
+
+      const tr = btn.closest("tr");
+      if (!tr) throw new Error("row_not_found");
+
+      const timeCell = tr.querySelector(".sheetTime");
+      const timeText = (timeCell?.innerText || "").trim();
+
+      const timeMatch = timeText.match(/^(\d{1,2}:\d{2})/);
+      const holesMatch = timeText.match(/\((\d+)\s*holes\)/i);
+
+      const teeTime = timeMatch ? timeMatch[1] : "";
+      const holes = holesMatch ? Number(holesMatch[1]) : 18;
+
+      const slotIndex = Number(btn.getAttribute("data-slot") || 0);
+      if (!teeTime || !slotIndex) throw new Error("missing_time_or_slot");
+
+      if (!confirm(`Delete slot ${slotIndex} at ${teeTime} (${holes} holes)?`)) return;
+
+      // ✅ IMPORTANT: This assumes your backend supports delete by (date,time,holes,slotIndex).
+      // If your backend only deletes by {id}, you MUST add backend support OR return ids in the sheet.
+      await j(
+        "/api/book/course-admin/manual-slot?" +
+          new URLSearchParams({
+            reference: ref,
+            date,
+            time: teeTime,
+            holes: String(holes),
+            slotIndex: String(slotIndex),
+          }).toString(),
+        { method:"DELETE" }
+      );
+
+      $("viewMsg").textContent = "✅ Slot deleted";
+      await viewSheet();
+    }catch(e){
+      $("viewMsg").textContent = "❌ " + (e?.message || "Failed to delete slot");
+    }
+  };
+});
+
+tb.querySelectorAll('button[data-edit-slot]').forEach(btn => {
+  btn.onclick = async (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    try{
+      await getMe();
+const ref = String(btn.getAttribute("data-ref") || "");
+if (!/^MAN-/.test(ref)) {
+  $("viewMsg").textContent = "❌ Only MAN- bookings can be edited/deleted here (TR- are online bookings).";
+  return;
+}
+      const date = ($("date").value || "").trim();
+      if (!date) throw new Error("play_date_required");
+
+      const tr = btn.closest("tr");
+      if (!tr) throw new Error("row_not_found");
+
+      const timeCell = tr.querySelector(".sheetTime");
+      const timeText = (timeCell?.innerText || "").trim();
+
+      const timeMatch = timeText.match(/^(\d{1,2}:\d{2})/);
+      const holesMatch = timeText.match(/\((\d+)\s*holes\)/i);
+
+      const teeTime = timeMatch ? timeMatch[1] : "";
+      const holes = holesMatch ? Number(holesMatch[1]) : 18;
+
+      const slotIndex = Number(btn.getAttribute("data-slot") || 0);
+      if (!teeTime || !slotIndex) throw new Error("missing_time_or_slot");
+
+      const name = (prompt("Name:", "") || "").trim();
+      if (!name) return;
+
+      const email = (prompt("Email (optional):", "") || "").trim();
+      const phone = (prompt("Phone (optional):", "") || "").trim();
+      const cartQty = Math.max(0, Math.min(4, Number(prompt("Cart qty (0-4):", "0") || "0")));
+      const hireClubsQty = Math.max(0, Math.min(4, Number(prompt("Clubs qty (0-4):", "0") || "0")));
+      const notes = (prompt("Notes (optional):", "") || "").trim();
+
+      await j("/api/book/course-admin/manual-slot", {
+  method:"POST",
+  body: JSON.stringify({
+    reference: ref,
+    date,
+    time: teeTime,     // ✅ ADD THIS LINE
+    teeTime,
+    holes,
+    slotIndex,
+    name,
+    email,
+    phone,
+    cart_qty: cartQty,
+    hire_clubs_qty: hireClubsQty,
+    notes,
+  })
+});
+
+      $("viewMsg").textContent = "✅ Slot updated";
+      await viewSheet();
+    }catch(e){
+      $("viewMsg").textContent = "❌ " + (e?.message || "Failed to edit slot");
+    }
+  };
+});
+      tb.querySelectorAll('input[type="checkbox"][data-ref][data-kind]').forEach(cb => {
+  cb.onchange = async () => {
+    const ref = cb.getAttribute("data-ref") || "";
+    const kind = cb.getAttribute("data-kind") || "";
+    const val = cb.checked;
+
+    const slot = Number(cb.getAttribute("data-slot") || 0);        // ✅ which slot (1–4)
+    const slotKey = cb.getAttribute("data-slotkey") || "";         // ✅ unique UI key
+
+    const msgEl = tb.querySelector(`[data-msg="${CSS.escape(slotKey)}"]`);
+    if (msgEl) msgEl.textContent = "Saving...";
+
+   // ✅ If reference is missing (common for manual holds), allow entering it so Paid/Check-in can work.
+let refToUse = ref;
+
+if (!refToUse) {
+  const entered = (prompt("No reference on this slot.\n\nPaste the booking reference (e.g. MAN-P47PPU):", "") || "").trim();
+  if (!entered) {
+    cb.checked = !cb.checked;
+    if (msgEl) msgEl.textContent = "❌ reference_required";
+    return;
+  }
+  refToUse = entered;
+
+  // ✅ persist on the checkbox so future toggles don’t prompt again
+  cb.setAttribute("data-ref", refToUse);
+
+  // ✅ also show it in the UI (if the slot has a code element)
+  try{
+    const slotBox = cb.closest(".slotBox");
+    if (slotBox && !slotBox.querySelector("code")) {
+      const meta = slotBox.querySelector(".slotMeta");
+      if (meta) meta.insertAdjacentHTML("beforeend", `<span><code>${_escape(refToUse)}</code></span>`);
+    }
+  }catch{}
+}
+
+    try{
+      if (kind === "paid") {
+        await j("/api/book/course-admin/booking-paid", {
+          method:"POST",
+          body: JSON.stringify({ reference: refToUse, slot, paid: val }) // ✅ slot added
+        });
+
+        // ✅ update the correct badge (per slot)
+        const badgeEl = tb.querySelector(`[data-badge="${CSS.escape(slotKey)}"]`);
+        if (badgeEl) {
+          badgeEl.textContent = val ? "PAID" : "UNPAID";
+          badgeEl.classList.toggle("ok", !!val);
+          badgeEl.classList.toggle("warn", !val);
+        }
+      }
+
+      if (kind === "checkin") {
+        await j("/api/book/course-admin/booking-checkin", {
+          method:"POST",
+          body: JSON.stringify({ reference: refToUse, slot, checked_in: val }) // ✅ slot added
+        });
+      }
+
+      if (msgEl) msgEl.textContent = "✅ saved";
+    }catch(e){
+      cb.checked = !cb.checked;
+      if (msgEl) msgEl.textContent = "❌ " + e.message;
+    }
+  };
+});
+
+      $("sheetBox").style.display = "block";
+      $("viewMsg").textContent = `✅ Loaded daily sheet (${timesRows.length} tee times, ${bookingsRows.length} bookings)`;
+    }catch(e){
+      $("viewMsg").textContent = "❌ " + e.message;
+    }
+  }
+
+  // ✅ Manual tee times (Course Admin)
+  function _manualDateDefault(){
+    try{
+      const d = ($("date")?.value || "").trim();
+      if ($("mDate") && d) $("mDate").value = d;
+    }catch{}
+  }
+function isSheetOpenForDate(d){
+  try{
+    const open = $("sheetBox") && $("sheetBox").style.display !== "none";
+    const cur = ($("date")?.value || "").trim();
+    return open && cur && d && cur === d;
+  }catch{ return false; }
+}
+  async function loadManualSlots(){
+    $("manualMsg").textContent = "";
+    $("manualBody").innerHTML = "";
+    $("manualBox").style.display = "none";
+
+    const date = ($("mDate").value || "").trim();
+    if (!date) { $("manualMsg").textContent = "❌ play_date_required"; return; }
+
+    $("manualMsg").textContent = "Loading manual tee times...";
+    try{
+      await getMe();
+
+      const out = await j("/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date), { method:"GET" });
+
+      const rows = out.manualSlots || out.manual_slots || out.slots || out.rows || [];
+      if (!Array.isArray(rows) || !rows.length){
+        $("manualMsg").textContent = "✅ No manual tee times found for that date.";
+        return;
+      }
+
+      $("manualMsg").textContent = `✅ Loaded ${rows.length} manual tee times`;
+      $("manualBox").style.display = "block";
+
+      const tb = $("manualBody");
+      rows.forEach(r => {
+        const id = String(r.id ?? r.slot_id ?? r.manual_slot_id ?? "");
+        const playDate = String(r.play_date ?? r.date ?? "");
+        const teeTime = String(r.tee_time ?? r.time ?? "");
+        const holes = String(r.holes ?? "");
+        const maxPlayers = String(r.max_players ?? "");
+        const price = String(r.price_per_player_cents ?? r.price_cents ?? "");
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${_escape(playDate)}</td>
+          <td>${_escape(teeTime)}</td>
+          <td>${_escape(holes)}</td>
+          <td class="right">${_escape(maxPlayers)}</td>
+          <td class="right">${_escape(price)}</td>
+          <td><code>${_escape(id)}</code></td>
+          <td class="right">
+          <button class="secondary" style="background:#b91c1c" data-delmanual="${id}">Delete</button>
+          </td>
+        `;
+        tb.appendChild(tr);
+      });
+
+      tb.querySelectorAll("button[data-delmanual]").forEach(btn => {
+  btn.onclick = async (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    // Find the row so we can read date/time/holes (Option A)
+    const tr = btn.closest("tr");
+    if (!tr) return;
+
+    const playDate = (tr.children?.[0]?.innerText || "").trim();
+    const teeTime  = (tr.children?.[1]?.innerText || "").trim();
+    const holes    = (tr.children?.[2]?.innerText || "").trim();
+
+    // If your /manual-slots endpoint returns slot_index, use it (best)
+    // Otherwise default to slot 1 (still works if you only store slot 1 rows)
+    const id = btn.getAttribute("data-delmanual") || "";
+    const row = (rows || []).find(x => String(x.id ?? x.slot_id ?? x.manual_slot_id ?? "") === String(id));
+    const slotIndex = Number(row?.slot_index ?? row?.slotIndex ?? 1) || 1;
+
+    if (!confirm(`Delete manual slot ${slotIndex} at ${teeTime} (${holes} holes) on ${playDate}?`)) return;
+
+    try{
+      const ref = String(row?.reference || "").trim();
+if (!ref) throw new Error("missing_reference_for_manual_slot");
+
+await j(
+  "/api/book/course-admin/manual-slot?" +
+    new URLSearchParams({
+      reference: ref,
+      date: playDate,
+      time: teeTime,
+      holes: String(holes),
+      slotIndex: String(slotIndex),
+    }).toString(),
+  { method:"DELETE" }
+);
+
+            $("manualMsg").textContent = "✅ Deleted manual tee time";
+            await loadManualSlots();
+          }catch(e){
+            $("manualMsg").textContent = "❌ " + e.message;
+          }
+        };
+      });
+
+    }catch(e){
+      $("manualMsg").textContent = "❌ " + e.message;
+    }
+  }
+
+  // ✅ Manual BOOKING button (standalone) — this was wrongly nested before
+$("mBookBtn").onclick = async () => {
+  $("manualMsg").textContent = "Creating booking...";
+  try{
+    await getMe();
+
+    const playDate = ($("mDate").value || "").trim();
+    const teeTime = ($("mTime").value || "").trim();
+    const holes = Number($("mHoles").value || 18);
+    const maxPlayers = Number($("mMaxPlayers").value || 4);
+    const pricePerPlayerCents = Number($("mPrice").value || 0);
+const players = Math.max(1, Math.min(4, Number($("mPlayers")?.value || 1)));
+    const name = ($("mHoldName")?.value || "").trim();
+    const email = ($("mEmail")?.value || "").trim();
+    const phone = ($("mPhone")?.value || "").trim();
+
+    const cartQty = Math.max(0, Math.min(4, Number($("mCartQty")?.value || 0)));
+    const hireClubsQty = Math.max(0, Math.min(4, Number($("mClubsQty")?.value || 0)));
+
+    if (!playDate) throw new Error("play_date_required");
+    if (!teeTime) throw new Error("tee_time_required");
+    if (!/^(\d{1,2}):(\d{2})$/.test(teeTime)) throw new Error("tee_time must be HH:MM (e.g. 06:30)");
+    if (!name) throw new Error("name_required");
+    if (!email) throw new Error("email_required");
+
+    await j("/api/book/course-admin/manual-booking", {
+      method:"POST",
+      body: JSON.stringify({
+        date: playDate,
+        teeTime,
+        holes,
+        players,
+        name,
+        email,
+        phone,
+        maxPlayers,
+        pricePerPlayerCents,
+        cart_qty: cartQty,
+        hire_clubs_qty: hireClubsQty,
+      })
+    });
+
+    $("manualMsg").textContent = "✅ Booking created + email sent";
+    await loadManualSlots();
+    if (isSheetOpenForDate(playDate)) await viewSheet();
+  }catch(e){
+    $("manualMsg").textContent = "❌ " + (e?.message || "Failed to create booking");
+  }
+};
+
+// ✅ Manual tee time button
+$("mAddBtn").onclick = async () => {
+  $("manualMsg").textContent = "Adding manual tee time...";
+  $("manualBox").style.display = "none";
+  $("manualBody").innerHTML = "";
+
+  try{
+    await getMe();
+
+    const playDate = ($("mDate").value || "").trim();
+    const teeTime = ($("mTime").value || "").trim();
+    const holes = Number($("mHoles").value || 18);
+    const maxPlayers = Number($("mMaxPlayers").value || 4);
+    const pricePerPlayerCents = Number($("mPrice").value || 0);
+    const players = Math.max(1, Math.min(4, Number($("mPlayers")?.value || 1)));
+
+    const holdName = ($("mHoldName")?.value || "").trim();
+    const cartQty = Math.max(0, Math.min(4, Number($("mCartQty")?.value || 0)));
+    const hireClubsQty = Math.max(0, Math.min(4, Number($("mClubsQty")?.value || 0)));
+
+    if (!playDate) throw new Error("play_date_required");
+    if (!teeTime) throw new Error("tee_time_required");
+    if (!/^(\d{1,2}):(\d{2})$/.test(teeTime)) throw new Error("tee_time must be HH:MM (e.g. 06:30)");
+
+    await j("/api/book/course-admin/manual-slot", {
+      method:"POST",
+      body: JSON.stringify({
+        date: playDate,
+        teeTime,
+        holes,
+        maxPlayers,
+        pricePerPlayerCents,
+        
+        players,
+        num_players: players,
+        player_count: players,
+
+        holdName,
+        hold_name: holdName,
+        name: holdName,
+
+        cartQty,
+        hireClubsQty,
+        cart_qty: cartQty,
+        hire_clubs_qty: hireClubsQty
+      })
+    });
+
+    $("manualMsg").textContent = "✅ Added manual tee time";
+    await loadManualSlots();
+
+    if (isSheetOpenForDate(playDate)) {
+      $("viewMsg").textContent = "Refreshing daily sheet...";
+      await viewSheet();
+    }
+  }catch(e){
+    $("manualMsg").textContent = "❌ " + e.message;
+  }
+};
+
+// =======================
+// Course settings (stock levels) - carts/clubs + durations
+// =======================
+// =======================
+// Course layouts API
+// =======================
+async function loadLayouts(){
+  const msg = $("layoutsMsg");
+  try{
+    if (msg) msg.textContent = "Loading layouts...";
+    await getMe();
+
+    const out = await j("/api/book/course-admin/course-layouts", { method:"GET" });
+
+    // backend may return {layouts,routes18} OR older {layouts} only
+    COURSE_LAYOUTS = Array.isArray(out.layouts) ? out.layouts : [];
+    COURSE_ROUTES18 = Array.isArray(out.routes18) ? out.routes18 : [];
+
+    // normalize keys if missing
+    COURSE_LAYOUTS = COURSE_LAYOUTS
+      .filter(x => x && typeof x === "object")
+      .map(x => ({
+        key: String(x.key || _slugKey(x.label) || "").trim().toLowerCase(),
+        label: String(x.label || x.key || "").trim()
+      }))
+      .filter(x => x.key && x.label);
+
+    COURSE_ROUTES18 = COURSE_ROUTES18
+      .filter(x => x && typeof x === "object")
+      .map(x => ({
+        key: String(x.key || _slugKey(x.label) || "").trim().toLowerCase(),
+        label: String(x.label || x.key || "").trim(),
+        front9_key: String(x.front9_key || x.front || "").trim().toLowerCase(),
+        back9_key: String(x.back9_key || x.back || "").trim().toLowerCase(),
+        block_mins: Number(x.block_mins ?? x.blockMins ?? 30) || 30,
+      }))
+      .filter(x => x.key && x.label && x.front9_key && x.back9_key);
+
+    renderLayouts();
+    renderRoutes18();
+
+    // if weekly template is note visible, it still safely rerenders
+    try{ window.__tplRerender && window.__tplRerender(); }catch{}
+
+    if (msg) msg.textContent = "✅ Layouts loaded";
+  }catch(e){
+    if (msg) msg.textContent = "❌ " + e.message;
+  }
+}
+
+async function saveLayouts(){
+  const msg = $("layoutsMsg");
+  try{
+    if (msg) msg.textContent = "Saving layouts...";
+    await getMe();
+
+    // final clean before save
+    const layouts = (COURSE_LAYOUTS || [])
+      .map(x => ({
+        key: String(x.key || _slugKey(x.label) || "").trim().toLowerCase(),
+        label: String(x.label || "").trim(),
+      }))
+      .filter(x => x.key && x.label);
+
+    const routes18 = (COURSE_ROUTES18 || [])
+      .map(x => ({
+        key: String(x.key || _slugKey(x.label) || "").trim().toLowerCase(),
+        label: String(x.label || "").trim(),
+        front9_key: String(x.front9_key || "").trim().toLowerCase(),
+        back9_key: String(x.back9_key || "").trim().toLowerCase(),
+        block_mins: Number(x.block_mins ?? 30) || 30,
+      }))
+      .filter(x => x.key && x.label && x.front9_key && x.back9_key);
+
+    await j("/api/book/course-admin/course-layouts", {
+      method:"POST",
+      body: JSON.stringify({ layouts, routes18 })
+    });
+
+    COURSE_LAYOUTS = layouts;
+    COURSE_ROUTES18 = routes18;
+
+    renderLayouts();
+    renderRoutes18();
+
+    if (msg) msg.textContent = "✅ Layouts saved";
+  }catch(e){
+    if (msg) msg.textContent = "❌ " + e.message;
+  }
+}
+async function loadCourseSettingsToUI(){
+  const msg = $("csMsg");
+  try{
+    if (msg) msg.textContent = "Loading stock...";
+    await getMe();
+
+    const out = await j("/api/book/course-admin/course-settings", { method:"GET" });
+
+    const cs =
+      out.settings ||
+      out.course_settings ||
+      out.courseSettings ||
+      out.data ||
+      out ||
+      {};
+
+    if ($("csTotalCarts")) $("csTotalCarts").value = Number(cs.cart_qty ?? cs.cartQty ?? 0) || 0;
+    if ($("csTotalClubs")) $("csTotalClubs").value = Number(cs.hire_clubs_qty ?? cs.hireClubsQty ?? 0) || 0;
+    // ✅ fees (cents -> dollars)
+    if ($("csCartFee")) $("csCartFee").value = ((Number(cs.cart_fee_cents ?? cs.cartFeeCents ?? 0)) / 100).toFixed(2);
+    if ($("csClubsFee")) $("csClubsFee").value = ((Number(cs.hire_clubs_fee_cents ?? cs.hireClubsFeeCents ?? 0)) / 100).toFixed(2);
+    
+    if ($("csDur18")) $("csDur18").value = Number(cs.duration_18_mins ?? cs.duration18 ?? 360) || 360;
+    if ($("csDur9")) $("csDur9").value = Number(cs.duration_9_mins ?? cs.duration9 ?? 180) || 180;
+
+    if (msg) msg.textContent = "✅ Stock loaded";
+  }catch(e){
+    if (msg) msg.textContent = "❌ " + (e?.message || "load_failed");
+  }
+}
+
+async function saveCourseSettingsFromUI(){
+  const msg = $("csMsg");
+  try{
+    if (msg) msg.textContent = "Saving stock...";
+    await getMe();
+
+    const payload = {
+      cart_qty: Number($("csTotalCarts")?.value || 0) || 0,
+      hire_clubs_qty: Number($("csTotalClubs")?.value || 0) || 0,
+      cart_fee_cents: Math.max(0, Math.round(Number($("csCartFee")?.value || 0) * 100)),
+      hire_clubs_fee_cents: Math.max(0, Math.round(Number($("csClubsFee")?.value || 0) * 100)),
+       duration_18_mins: Number($("csDur18")?.value || 360) || 360,
+      duration_9_mins: Number($("csDur9")?.value || 180) || 180,
+    };
+
+    // Use POST or PUT depending on what your backend supports (POST is common)
+    await j("/api/book/course-admin/course-settings", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    if (msg) msg.textContent = "✅ Stock saved";
+  }catch(e){
+    if (msg) msg.textContent = "❌ " + (e?.message || "save_failed");
+  }
+}
+  // ✅ Inventory feature
+  $("checkInventoryBtn").onclick = async () => {
+    $("inventoryMsg").textContent = "Checking inventory...";
+    $("inventoryBox").style.display = "none";
+
+    try {
+      await getMe();
+
+      const date = ($("iDate").value || "").trim();
+      if (!date) throw new Error("play_date_required");
+
+      // 1️⃣ Load course settings (totals)
+      let settingsRes = null;
+
+      // Try (A) header-based endpoint
+      try{
+        settingsRes = await j("/api/book/course-admin/course-settings", { method:"GET" });
+      }catch(e1){
+        // Try (B) query-based endpoint
+        settingsRes = await j("/api/book/course-admin/course-settings?slug=" + encodeURIComponent(getSlug()), { method:"GET" });
+      }
+
+      // ✅ support different backend response shapes
+      const cs =
+        settingsRes.settings ||
+        settingsRes.course_settings ||
+        settingsRes.courseSettings ||
+        settingsRes.data ||
+        settingsRes ||
+        {};
+
+      const totalCarts = Number(cs.cart_qty ?? cs.cartQty ?? 0);
+      const totalClubs = Number(cs.hire_clubs_qty ?? cs.hireClubsQty ?? 0);
+      const dur9 = Number(cs.duration_9_mins ?? cs.duration9 ?? 180) || 180;
+      const dur18 = Number(cs.duration_18_mins ?? cs.duration18 ?? 360) || 360;
+
+      // window selection (All day OR Custom start + duration)
+      const winMode = String($("iWindow")?.value || "all");
+      const holesSel = String($("iHoles")?.value || "18").toLowerCase();
+
+      // we will support 1 or 2 windows
+      let windows = [{ label: "All day", start: 0, end: 24 * 60 }];
+
+      if (winMode === "custom") {
+        const startMins = timeToMins($("iStartTime")?.value || "");
+        if (startMins == null) throw new Error("custom_start_time_required (e.g. 06:00)");
+
+        const end18 = Math.min(24 * 60, startMins + dur18);
+        const end9  = Math.min(24 * 60, startMins + dur9);
+
+        if (holesSel === "both") {
+          windows = [
+            { label: "18 holes", start: startMins, end: end18 },
+            { label: "9 holes",  start: startMins, end: end9  },
+          ];
+        } else {
+          const holesNum = Number(holesSel || 18);
+          const end = Math.min(24 * 60, startMins + (holesNum === 9 ? dur9 : dur18));
+          windows = [{ label: holesNum === 9 ? "9 holes" : "18 holes", start: startMins, end }];
+        }
+      }
+
+      // 2️⃣ Load bookings for date
+      const bookingsOut = await j(
+        "/api/book/course-admin/bookings?" + new URLSearchParams({ slug: getSlug(), date }).toString(),
+        { method:"GET" }
+      );
+
+      const bookings = bookingsOut.bookings || [];
+
+      // ✅ NEW: include manual slots too (your response already contains manualSlots)
+      const manualSlots =
+        bookingsOut.manualSlots ||
+        bookingsOut.manual_slots ||
+        bookingsOut.slots ||
+        bookingsOut.rows ||
+        [];
+
+      function calcUsedForWindow(winStart, winEnd){
+        let cartsUsed = 0;
+        let clubsUsed = 0;
+
+        function bookingStartMins(row){
+          // prefer start_at if present, fallback to tee_time
+          const a = row.start_at || row.startAt;
+          const aM = a ? dateObjToMins(a) : null;
+          if (aM != null) return aM;
+
+          const t = row.tee_time || row.teeTime || row.time;
+          return timeToMins(t);
+        }
+
+        function bookingDurationMins(row){
+          const h = Number(row.holes ?? row.hole_count ?? row.holeCount ?? 18);
+          return h === 9 ? dur9 : dur18;
+        }
+
+        function rowOverlapsWindow(row){
+          const s = bookingStartMins(row);
+          if (s == null) return false;
+          const e = Math.min(24 * 60, s + bookingDurationMins(row));
+          return minsOverlap(s, e, winStart, winEnd);
+        }
+
+        // ✅ online bookings
+        bookings.forEach(b => {
+          if (!rowOverlapsWindow(b)) return;
+          cartsUsed += Number(b.cart_qty ?? (b.has_cart ? 1 : 0));
+          clubsUsed += Number(b.hire_clubs_qty ?? (b.has_hire_clubs ? 1 : 0));
+        });
+
+        // ✅ manual bookings/holds
+        // Count add-ons ONCE per manual booking reference (use the lowest slot_index row per reference)
+        if (Array.isArray(manualSlots) && manualSlots.length) {
+          const byRef = new Map();
+
+          manualSlots.forEach(s => {
+            const ref = String(s.reference || "").trim();
+            if (!ref) return;
+
+            const prev = byRef.get(ref);
+            const sIdx = Number(s.slot_index ?? 999);
+            const pIdx = prev ? Number(prev.slot_index ?? 999) : 999;
+
+            if (!prev || sIdx < pIdx) byRef.set(ref, s);
+          });
+
+          for (const s of byRef.values()) {
+            if (!rowOverlapsWindow(s)) continue;
+            cartsUsed += Number(s.cart_qty || 0);
+            clubsUsed += Number(s.hire_clubs_qty || 0);
+          }
+        }
+
+        return { cartsUsed, clubsUsed };
+      }
+
+      // ✅ compute 1 or 2 windows depending on selection
+      const results = windows.map(w => {
+        const used = calcUsedForWindow(w.start, w.end);
+        const cartsLeft = Math.max(0, totalCarts - used.cartsUsed);
+        const clubsLeft = Math.max(0, totalClubs - used.clubsUsed);
+        return { ...w, ...used, cartsLeft, clubsLeft };
+      });
+
+      // ✅ render
+      if (results.length === 1) {
+        $("invCarts").textContent = `${results[0].cartsLeft} remaining (of ${totalCarts})`;
+        $("invClubs").textContent = `${results[0].clubsLeft} remaining (of ${totalClubs})`;
+      } else {
+        $("invCarts").textContent =
+          `18 window: ${results[0].cartsLeft} remaining (of ${totalCarts}) • ` +
+          `9 window: ${results[1].cartsLeft} remaining (of ${totalCarts})`;
+
+        $("invClubs").textContent =
+          `18 window: ${results[0].clubsLeft} remaining (of ${totalClubs}) • ` +
+          `9 window: ${results[1].clubsLeft} remaining (of ${totalClubs})`;
+      }
+
+      $("inventoryBox").style.display = "block";
+      $("inventoryMsg").textContent = "✅ Inventory loaded";
+    } catch (e) {
+      $("inventoryMsg").textContent = "❌ " + e.message;
+    }
+  };
+  // set today
+  (function(){
+    try{
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,"0");
+      const dd = String(d.getDate()).padStart(2,"0");
+      const today = `${yyyy}-${mm}-${dd}`;
+      $("date").value = today;
+      if ($("mDate")) $("mDate").value = today;
+      if ($("iDate")) $("iDate").value = today;
+      if ($("aEnd")) $("aEnd").value = today;
+      if ($("aStart")) $("aStart").value = isoMinusDays(30);
+    }catch{}
+  })();
+
+// load saved
+(function(){
+  try{
+    $("slug").value = getSlug();
+
+    if (getSlug()) $("who").textContent = "Using: " + getSlug();
+
+    applyRoleUI();
+
+    // ✅ If we already have a token from the login page, validate it and set role automatically
+    if (getSlug() && getToken()){
+      $("msg").textContent = "✅ Logged in";
+      setTimeout(async () => {
+        try{
+          const me = await getMe();                 // confirms token works
+          setRole(String(me.role || "").toLowerCase());
+          applyRoleUI();
+          $("msg").textContent = "✅ Logged in";
+          loadLayouts();
+        }catch(e){
+          // token invalid/expired → clear so they can login normally
+          clearAuth();
+          applyRoleUI();
+          $("msg").textContent = "Session expired — please log in";
+          $("who").textContent = "";
+        }
+      }, 0);
+    }
+  }catch{}
+})();
+function getNineLayoutOptionsHTML(selectedKey){
+  const sel = String(selectedKey || "");
+  const layouts = Array.isArray(COURSE_LAYOUTS) ? COURSE_LAYOUTS : [];
+
+  // Treat all saved layouts as 9-hole layouts (your UI only creates 9s)
+  if (!layouts.length) {
+    return `<option value="">No layouts saved</option>`;
+  }
+
+  return [
+    `<option value="">Select layout</option>`,
+    ...layouts.map(l => {
+      const key = String(l.key || l.label || "").trim();
+      const label = String(l.label || l.key || "").trim();
+      const isSel = key && key === sel;
+      return `<option value="${_escape(key)}"${isSel ? " selected" : ""}>${_escape(label)}</option>`;
+    })
+  ].join("");
+}
+ // ✅ Weekly template feature (FIXED: all functions + button wiring live in the same scope)
+(function templateFeature(){
+  const DOW = [
+    { id:"1", name:"Mon" },
+    { id:"2", name:"Tue" },
+    { id:"3", name:"Wed" },
+    { id:"4", name:"Thu" },
+    { id:"5", name:"Fri" },
+    { id:"6", name:"Sat" },
+    { id:"7", name:"Sun" },
+  ];
+
+  function setTplStatus(msg, type){
+    const el = $("tplStatus");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.className = "status " + (type || "");
+  }
+
+  function todayISO(){
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  // -----------------------
+  // Saved "cards" (localStorage, per slug)
+  // -----------------------
+  function cardsStoreKey(){
+    return `tr_tpl_cards_${getSlug() || "noslug"}`;
+  }
+
+  function readCards(){
+    try{
+      const raw = localStorage.getItem(cardsStoreKey());
+      const data = raw ? JSON.parse(raw) : null;
+      return (data && typeof data === "object") ? data : {};
+    }catch{
+      return {};
+    }
+  }
+
+  function writeCards(cards){
+    try{
+      localStorage.setItem(cardsStoreKey(), JSON.stringify(cards || {}));
+    }catch{}
+  }
+
+  function listCardNames(){
+    const cards = readCards();
+    return Object.keys(cards).sort((a,b) => a.localeCompare(b));
+  }
+
+  function renderCardSelect(selectedName){
+    const sel = document.getElementById("tplCardSelect");
+    if (!sel) return;
+
+    const names = listCardNames();
+
+    // Always include a "Server template" option
+    const opts = [
+      `<option value="__server__">Server template</option>`,
+      ...names.map(n => `<option value="${_escape(n)}">${_escape(n)}</option>`)
+    ];
+
+    sel.innerHTML = opts.join("");
+    sel.value = selectedName ? selectedName : "__server__";
+  }
+
+  function applyCard(cardName){
+    // "__server__" means use whatever is currently loaded from server in tplLoad()
+    if (!cardName || cardName === "__server__") {
+      // just re-render current UI state (no change)
+      try{
+        const cur = readTemplateFromUI();
+        renderTemplate(cur);
+      }catch{}
+      return;
+    }
+
+    const cards = readCards();
+    const card = cards[cardName];
+    if (!card || typeof card !== "object") return;
+
+    // apply timezone + template
+    if (document.getElementById("tplTimezone") && card.timezone) {
+      document.getElementById("tplTimezone").value = String(card.timezone || "Australia/Perth");
+    }
+
+    const tpl = (card.template && typeof card.template === "object") ? card.template : defaultTemplate();
+    renderTemplate(tpl);
+
+    // set card name input
+    const nameInput = document.getElementById("tplCardName");
+    if (nameInput) nameInput.value = cardName;
+  }
+
+  function saveCurrentAsCard(){
+    const nameInput = document.getElementById("tplCardName");
+    const rawName = String(nameInput?.value || "").trim();
+    if (!rawName) throw new Error("card_name_required");
+
+    const timezone = String(document.getElementById("tplTimezone")?.value || "Australia/Perth").trim() || "Australia/Perth";
+    const template = readTemplateFromUI();
+
+    const cards = readCards();
+    cards[rawName] = { timezone, template, savedAt: new Date().toISOString() };
+    writeCards(cards);
+
+    renderCardSelect(rawName);
+    setTplStatus(`✅ Saved card: ${rawName}`, "ok");
+  }
+
+  function deleteCardByName(name){
+    const cardName = String(name || "").trim();
+    if (!cardName || cardName === "__server__") return;
+
+    const cards = readCards();
+    if (!cards[cardName]) return;
+
+    delete cards[cardName];
+    writeCards(cards);
+
+    renderCardSelect("__server__");
+    setTplStatus(`✅ Deleted card: ${cardName}`, "ok");
+  }
+  // -----------------------
+  // Default template
+  // -----------------------
+  function defaultTemplate(){
+    const days = {};
+    DOW.forEach(x => {
+      days[x.id] = {
+        enabled: !["6","7"].includes(x.id),
+        windows: [
+          { holes:18, start:"06:00", end:"10:00", intervalMins:10, maxPlayers:4, pricePerPlayerCents:2500 },
+          { holes:9,  start:"06:30", end:"11:00", intervalMins:10, maxPlayers:4, pricePerPlayerCents:1800, layout_key:"" },
+        ]
+      };
+    });
+    return { days };
+  }
+
+  // -----------------------
+  // Layout selector (9-hole only)
+  // -----------------------
+  function renderNineLayoutSelect(dow, w){
+  const layouts = Array.isArray(COURSE_LAYOUTS) ? COURSE_LAYOUTS : [];
+  if (!layouts.length) {
+    return `
+      <div class="field sm3" style="grid-column:span 3">
+        <label>9-hole layout</label>
+        <div class="muted mini">No layouts defined</div>
+      </div>
+    `;
+  }
+
+  const selected = String(w.layout_key || "");
+  return `
+    <div class="field sm3" style="grid-column:span 3">
+      <label>9-hole layout</label>
+      <select data-w="layout_key" data-dow="${dow}" data-holes="9">
+        <option value="">Auto / Any</option>
+        ${layouts.map(l => {
+          const key = String(l.key || l.label || "").trim();
+          const label = String(l.label || l.key || "").trim();
+          const sel = key && key === selected ? "selected" : "";
+          return `<option value="${_escape(key)}" ${sel}>${_escape(label)}</option>`;
+        }).join("")}
+      </select>
+    </div>
+  `;
+}
+
+function renderEighteenRoutingSelect(dow, w){
+  const layouts = Array.isArray(COURSE_LAYOUTS) ? COURSE_LAYOUTS : [];
+  if (!layouts.length) {
+    return `
+      <div class="field sm3" style="grid-column:span 6">
+        <label>18-hole routing</label>
+        <div class="muted mini">No layouts defined</div>
+      </div>
+    `;
+  }
+
+    const fSel = String(w.front_nine_key || w.front9_key || "");
+  const bSel = String(w.back_nine_key  || w.back9_key  || "");
+  
+  const optsFront = [
+  `<option value="" disabled ${fSel ? "" : "selected"}>Select</option>`,
+  ...layouts.map(l => {
+      const key = String(l.key || l.label || "").trim();
+      const label = String(l.label || l.key || "").trim();
+      const sel = key && key === fSel ? " selected" : "";
+      return `<option value="${_escape(key)}"${sel}>${_escape(label)}</option>`;
+    })
+  ].join("");
+
+  const optsBack = [
+  `<option value="" disabled ${bSel ? "" : "selected"}>Select</option>`,
+  ...layouts.map(l => {
+      const key = String(l.key || l.label || "").trim();
+      const label = String(l.label || l.key || "").trim();
+      const sel = key && key === bSel ? " selected" : "";
+      return `<option value="${_escape(key)}"${sel}>${_escape(label)}</option>`;
+    })
+  ].join("");
+
+  return `
+    <div class="field sm3" style="grid-column:span 3">
+      <label>18 front 9</label>
+      <select data-w="front_nine_key" data-dow="${dow}" data-holes="18">
+        ${optsFront}
+      </select>
+    </div>
+
+    <div class="field sm3" style="grid-column:span 3">
+      <label>18 back 9</label>
+      <select data-w="back_nine_key" data-dow="${dow}" data-holes="18">
+        ${optsBack}
+      </select>
+    </div>
+  `;
+}
+
+  // -----------------------
+  // Window inputs
+  // -----------------------
+  function renderWindowInputs(dow, cfg, holes){
+    const w =
+      (cfg.windows || []).find(x => Number(x.holes) === holes) ||
+      {
+        holes,
+        start: holes === 18 ? "06:00" : "06:30",
+        end:   holes === 18 ? "10:00" : "11:00",
+        intervalMins: 10,
+        maxPlayers: 4,
+        pricePerPlayerCents: holes === 18 ? 2500 : 1800,
+        layout_key: ""
+      };
+
+    return `
+      <div class="field sm3" style="grid-column:span 3">
+        <label>${holes} holes start</label>
+        <input data-w="start" data-dow="${dow}" data-holes="${holes}" value="${_escape(w.start || "")}" placeholder="06:00" />
+      </div>
+
+      <div class="field sm3" style="grid-column:span 3">
+        <label>${holes} holes end</label>
+        <input data-w="end" data-dow="${dow}" data-holes="${holes}" value="${_escape(w.end || "")}" placeholder="10:00" />
+      </div>
+
+      <div class="field sm3" style="grid-column:span 3">
+        <label>${holes} interval (mins)</label>
+        <input type="number" min="5" max="60"
+          data-w="intervalMins"
+          data-dow="${dow}"
+          data-holes="${holes}"
+          value="${Number(w.intervalMins || 10)}" />
+      </div>
+
+      <div class="field sm3" style="grid-column:span 3">
+        <label>${holes} price / player ($)</label>
+        <input type="number" min="0" step="0.01"
+          data-w="priceDollars"
+          data-dow="${dow}"
+          data-holes="${holes}"
+          value="${(Number(w.pricePerPlayerCents||0)/100).toFixed(2)}" />
+      </div>
+
+      ${holes === 18 ? renderEighteenRoutingSelect(dow, w) : ""}
+${holes === 9 ? renderNineLayoutSelect(dow, w) : ""}
+    `;
+  }
+
+  // -----------------------
+  // Render template
+  // -----------------------
+  function renderTemplate(tpl){
+    const grid = $("tplGrid");
+    if (!grid) return;
+
+    grid.innerHTML = "";
+    const days = tpl?.days || {};
+
+    DOW.forEach(d => {
+      const cfg = days[d.id] || { enabled:true, windows:[] };
+
+      const wrap = document.createElement("div");
+      wrap.style.border = "1px solid var(--border)";
+      wrap.style.borderRadius = "12px";
+      wrap.style.padding = "10px";
+      wrap.style.background = "#fff";
+
+      wrap.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <div style="font-weight:800;">${d.name}</div>
+          <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted);">
+            <input type="checkbox" data-dow="${d.id}" class="tplEnabled" ${cfg.enabled === false ? "" : "checked"} />
+            Enabled
+          </label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:10px;margin-top:10px;">
+          ${renderWindowInputs(d.id, cfg, 18)}
+          ${renderWindowInputs(d.id, cfg, 9)}
+        </div>
+      `;
+
+      grid.appendChild(wrap);
+    });
+  }
+
+  // -----------------------
+  // Read template from UI
+  // -----------------------
+  function readTemplateFromUI(){
+    const tpl = { days:{} };
+
+    document.querySelectorAll(".tplEnabled").forEach(cb => {
+      const dow = cb.getAttribute("data-dow");
+      tpl.days[dow] = tpl.days[dow] || { enabled:true, windows:[] };
+      tpl.days[dow].enabled = cb.checked;
+    });
+
+    const inputs = Array.from(document.querySelectorAll("[data-w][data-dow][data-holes]"));
+    const byKey = new Map();
+
+    inputs.forEach(inp => {
+      const dow = inp.getAttribute("data-dow");
+      const holes = Number(inp.getAttribute("data-holes"));
+      const key = `${dow}|${holes}`;
+      if (!byKey.has(key)) byKey.set(key, {});
+      byKey.get(key)[inp.getAttribute("data-w")] = inp.value;
+    });
+
+    for (const [k, obj] of byKey.entries()){
+      const [dow, holesStr] = k.split("|");
+      const holes = Number(holesStr);
+
+      tpl.days[dow] = tpl.days[dow] || { enabled:true, windows:[] };
+
+      const priceDollars = Number(obj.priceDollars || 0);
+
+            const w = {
+        holes,
+        start: String(obj.start || "").trim(),
+        end: String(obj.end || "").trim(),
+        intervalMins: Number(obj.intervalMins || 10),
+        maxPlayers: 4,
+        pricePerPlayerCents: Math.max(0, Math.round(priceDollars * 100)),
+      };
+
+      // ✅ 9-hole layout selection
+      if (holes === 9) {
+        w.layout_key = String(obj.layout_key || "").trim();
+      }
+
+     // ✅ 18-hole routing selection (Front 9 + Back 9)
+if (holes === 18) {
+  const front = String(obj.front_nine_key || obj.front9_key || "").trim().toLowerCase();
+  const back  = String(obj.back_nine_key  || obj.back9_key  || "").trim().toLowerCase();
+
+  // ✅ single source of truth (matches backend + DB)
+  w.front_nine_key = front;
+  w.back_nine_key  = back;
+
+  // ✅ do NOT store front9_key/back9_key anymore
+  delete w.front9_key;
+  delete w.back9_key;
+}
+
+tpl.days[dow].windows.push(w);
+}
+
+return tpl;
+}
+
+  // -----------------------
+  // API actions
+  // -----------------------
+  async function tplLoad(){
+    try{
+      setTplStatus("Loading template…", "");
+      const data = await j("/api/book/course-template?slug=" + encodeURIComponent(getSlug()), { method:"GET" });
+
+      if (!data || !data.ok) throw new Error(data?.error || "load_failed");
+
+      if ($("tplTimezone")) $("tplTimezone").value = data.timezone || "Australia/Perth";
+      const tpl = (data.template && typeof data.template === "object") ? data.template : defaultTemplate();
+      try{
+  const days = tpl?.days || {};
+  Object.keys(days).forEach(dow => {
+    const wins = Array.isArray(days[dow]?.windows) ? days[dow].windows : [];
+    wins.forEach(w => {
+      if (Number(w.holes) === 18) {
+        // if older templates used front9_key/back9_key, map them across
+        if (!w.front_nine_key && w.front9_key) w.front_nine_key = String(w.front9_key).trim().toLowerCase();
+        if (!w.back_nine_key  && w.back9_key)  w.back_nine_key  = String(w.back9_key).trim().toLowerCase();
+
+        // remove legacy keys so we don't re-save junk
+        delete w.front9_key;
+        delete w.back9_key;
+      }
+    });
+  });
+}catch{}
+      renderTemplate(tpl);
+
+      setTplStatus(data.found ? "✅ Template loaded." : "✅ No saved template yet (showing defaults).", "ok");
+    }catch(e){
+      renderTemplate(defaultTemplate());
+      setTplStatus("❌ " + (e?.message || "Failed to load template"), "err");
+    }
+  }
+
+  async function tplSave(){
+    try{
+      setTplStatus("Saving template…", "");
+      const template = readTemplateFromUI();
+      const timezone = String($("tplTimezone")?.value || "Australia/Perth").trim() || "Australia/Perth";
+
+      const data = await j("/api/book/course-template", {
+        method:"PUT",
+        body: JSON.stringify({ timezone, template })
+      });
+
+      if (!data || !data.ok) throw new Error(data?.error || "save_failed");
+
+      setTplStatus("✅ Template saved.", "ok");
+    }catch(e){
+      setTplStatus("❌ " + (e?.message || "Failed to save template"), "err");
+    }
+  }
+
+  async function tplGenerate(){
+  try{
+    setTplStatus("Generating times…", "");
+
+    const startDate = String($("tplStartDate")?.value || todayISO()).trim();
+    const daysAhead = Number($("tplDaysAhead")?.value || 30);
+    const mode = String($("tplMode")?.value || "skip");
+
+    // ✅ Read the CURRENT UI (what you see on screen)
+    const template = readTemplateFromUI();
+    const timezone = String($("tplTimezone")?.value || "Australia/Perth").trim() || "Australia/Perth";
+
+    // ✅ VALIDATE: enabled days must have routing selected for 18-hole windows
+    const days = template?.days || {};
+    const dowName = { "1":"Mon","2":"Tue","3":"Wed","4":"Thu","5":"Fri","6":"Sat","7":"Sun" };
+
+    for (const dow of Object.keys(days)) {
+      const day = days[dow];
+      if (!day || day.enabled === false) continue;
+
+      const wins = Array.isArray(day.windows) ? day.windows : [];
+      const w18 = wins.find(x => Number(x.holes) === 18);
+
+      if (w18) {
+        const f = String(w18.front_nine_key || "").trim();
+        const b = String(w18.back_nine_key  || "").trim();
+
+        if (!f || !b) {
+          throw new Error(`Select Front 9 + Back 9 for ${dowName[dow] || ("DOW " + dow)} (18 holes)`);
+        }
+        if (f === b) {
+          throw new Error(`Front 9 and Back 9 cannot be the same on ${dowName[dow] || ("DOW " + dow)}`);
+        }
+      }
+    }
+
+    // ✅ IMPORTANT: Save template to SERVER first so generator uses it
+    const saved = await j("/api/book/course-template", {
+      method:"PUT",
+      body: JSON.stringify({ timezone, template })
+    });
+    if (!saved || !saved.ok) throw new Error(saved?.error || "save_failed");
+
+    // ✅ Now generate
+    const data = await j("/api/book/generate-from-template", {
+      method:"POST",
+      body: JSON.stringify({ startDate, daysAhead, mode })
+    });
+
+    if (!data || !data.ok) throw new Error(data?.error || "generate_failed");
+
+    setTplStatus(`✅ Generated. Inserted ${data.inserted}, skipped ${data.skipped}.`, "ok");
+  }catch(e){
+    setTplStatus("❌ " + (e?.message || "Failed to generate"), "err");
+  }
+}
+
+  // ✅ expose a rerender hook (used after layouts load)
+  window.__tplRerender = () => {
+    try{
+      const cur = readTemplateFromUI();
+      renderTemplate(cur);
+    }catch{
+      renderTemplate(defaultTemplate());
+    }
+          // preserve dropdown options
+      try{ renderCardSelect(document.getElementById("tplCardSelect")?.value || "__server__"); }catch{}
+  };
+  
+
+  // -----------------------
+  // Wire buttons (ONCE)
+  // -----------------------
+  const loadBtn = $("tplLoadBtn");
+  const saveBtn = $("tplSaveBtn");
+  const genBtn  = $("tplGenerateBtn");
+
+  if (loadBtn) loadBtn.onclick = tplLoad;
+  if (saveBtn) saveBtn.onclick = tplSave;
+  if (genBtn)  genBtn.onclick  = tplGenerate;
+
+  if ($("tplStartDate")) $("tplStartDate").value = todayISO();
+  // -----------------------
+  // Wire card controls
+  // -----------------------
+  const cardSelect = document.getElementById("tplCardSelect");
+  const cardSaveBtn = document.getElementById("tplCardSaveBtn");
+  const cardDeleteBtn = document.getElementById("tplCardDeleteBtn");
+
+  // populate dropdown on first load
+  renderCardSelect("__server__");
+
+  if (cardSelect) {
+    cardSelect.onchange = () => {
+      const v = String(cardSelect.value || "__server__");
+      applyCard(v);
+    };
+  }
+
+  if (cardSaveBtn) {
+    cardSaveBtn.onclick = () => {
+      try{
+        saveCurrentAsCard();
+      }catch(e){
+        setTplStatus("❌ " + (e?.message || "save_card_failed"), "err");
+      }
+    };
+  }
+
+  if (cardDeleteBtn) {
+    cardDeleteBtn.onclick = () => {
+      try{
+        const cur = String(document.getElementById("tplCardSelect")?.value || "__server__");
+        if (cur === "__server__") {
+          setTplStatus("❌ Select a saved card to delete", "err");
+          return;
+        }
+        if (!confirm(`Delete saved card "${cur}"?`)) return;
+        deleteCardByName(cur);
+      }catch(e){
+        setTplStatus("❌ " + (e?.message || "delete_card_failed"), "err");
+      }
+    };
+  }
+  // first paint
+  renderTemplate(defaultTemplate());
+})();
+  
+</script>
+</body>
+</html>
