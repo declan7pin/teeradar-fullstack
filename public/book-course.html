@@ -54,17 +54,30 @@
     h1{font-size:20px;margin:0 0 4px}
     .sub{color:var(--muted);font-size:13px;line-height:1.35}
     .grid{
-      display:grid;
-      grid-template-columns:repeat(12,1fr);
-      gap:10px;
-      margin-top:12px;
-    }
-    .field{grid-column:span 6}
-    @media (min-width:720px){
-      .field.sm3{grid-column:span 3}
-      .field.sm4{grid-column:span 4}
-      .field.sm6{grid-column:span 6}
-    }
+  display:grid;
+  grid-template-columns:repeat(12,1fr);
+  gap:10px;
+  margin-top:12px;
+  align-items:start; /* ✅ prevents weird stretching/overlap */
+}
+
+/* ✅ Mobile-first: ONE column (fixes Date/Players overlap + Note/Time-to overlap) */
+.field{ grid-column: span 12; min-width:0; }
+
+/* ✅ Two columns once there’s room */
+@media (min-width:520px){
+  .field{ grid-column: span 6; }
+}
+
+/* Keep your existing desktop layout */
+@media (min-width:720px){
+  .field.sm3{grid-column:span 3}
+  .field.sm4{grid-column:span 4}
+  .field.sm6{grid-column:span 6}
+}
+
+/* ✅ Force specific fields to always be full-width when needed */
+.field.full{ grid-column: span 12 !important; }
     label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px}
     input, select{
       width:100%;
@@ -74,6 +87,7 @@
       background:#fff;
       font:inherit;
       outline:none;
+      min-width:0; /* ✅ add this */
     }
     input:focus, select:focus{
       border-color:#38bdf8;
@@ -295,13 +309,12 @@
           <input id="end" type="time" value="17:00" />
         </div>
 
-        <div class="field sm6">
-          <label class="muted">Note</label>
-          <div class="note">
-           Live availability + bookings powered by TeeRadar.
-          </div>
+        <div class="field sm6 full">
+         <label class="muted">Note</label>
+         <div class="note">
+          Live availability + bookings powered by TeeRadar.
+         </div>
         </div>
-      </div>
 
       <div class="actions">
         <button class="btn" id="findBtn">Find available times</button>
