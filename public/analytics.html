@@ -2164,37 +2164,12 @@ async function loadBookingAnalytics(mode = "default") {
   });
     const daily = await tryFetchJson(dailyUrl);
 
-try {
-  const rows =
-    (daily && daily.ok && Array.isArray(daily.rows)) ? daily.rows :
-    (daily && daily.ok && Array.isArray(daily.items)) ? daily.items :
-    [];
+if (daily && daily.ok && Array.isArray(daily.rows)) {
+  const totalBookings = daily.rows.reduce((sum, r) => sum + Number(r.bookings || 0), 0);
+  const totalRevenue = daily.rows.reduce((sum, r) => sum + Number(r.revenue_cents || 0), 0) / 100;
 
-  if (rows.length) {
-    // ✅ supports BOTH shapes:
-    // - old: { day, bookings, revenue_cents }
-    // - new: { day, total_bookings, total_revenue_cents }
-    const totalBookings = rows.reduce((sum, r) => {
-      const n = Number((r && (r.total_bookings ?? r.bookings)) || 0);
-      return sum + (Number.isFinite(n) ? n : 0);
-    }, 0);
-
-    const totalRevenueCents = rows.reduce((sum, r) => {
-      const n = Number((r && (r.total_revenue_cents ?? r.revenue_cents)) || 0);
-      return sum + (Number.isFinite(n) ? n : 0);
-    }, 0);
-
-    setText("metricBookRange", String(Math.trunc(totalBookings)));
-    setText("metricRevRange", "$" + Math.round(totalRevenueCents / 100));
-  } else {
-    setText("metricBookRange", "0");
-    setText("metricRevRange", "$0");
-  }
-} catch (e) {
-  console.error("booking analytics daily render failed:", e);
-  setText("metricBookRange", "—");
-  setText("metricRevRange", "—");
-}
+  setText("metricBookRange", String(Math.trunc(totalBookings)));
+  setText("metricRevRange", "$" + Number(totalRevenue || 0).toFixed(0));
 
   // (Optional) keep old charts updated but hidden:
   // const labels = daily.rows.map(r => r.day);
