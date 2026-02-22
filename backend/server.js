@@ -9,6 +9,7 @@ import Stripe from "stripe"; // ✅ Stripe
 import jwt from "jsonwebtoken"; // ✅ NEW (only used to read email from Bearer token)
 import { ensureBookingTemplateSchema } from "./bookingTemplateMigrate.js";
 import { ensureRoundsTables, ensureScorecardTemplatesTables } from "./roundsMigrate.js";
+import { ensureCoursePaymentModeSchema } from "./paymentMigrate.js";
 // ✅ NEW: cookies (needed for booking admin auth cookie)
 import cookieParser from "cookie-parser";
 
@@ -315,6 +316,7 @@ async function ensureBookingTables() {
         created_at TIMESTAMPTZ DEFAULT now()
       );
     `);
+    await ensureCoursePaymentModeSchema();
 
     await db.query(`
       CREATE TABLE IF NOT EXISTS booking_course_users (
