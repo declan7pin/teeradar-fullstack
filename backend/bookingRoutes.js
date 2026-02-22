@@ -1107,9 +1107,10 @@ async function ensureBookingTables() {
       updated_at TIMESTAMPTZ DEFAULT now()
     );
   `);
-}
 
-  // ✅ booking_times (base table)
+  // =============================
+  // booking_times (base table)
+  // =============================
   // ✅ IMPORTANT: DO NOT keep the old UNIQUE(course_id, play_date, tee_time, holes)
   // because it causes layouts to be treated as duplicates.
   await db.query(`
@@ -1138,8 +1139,7 @@ async function ensureBookingTables() {
     WHERE booked_players IS NULL;
   `);
 
-  // ✅ NEW: optional layout keys for named 9s + 18 routings (e.g. lakes, pines+lakes)
-  // (MUST exist before we enforce the new unique constraint)
+  // ✅ NEW: optional layout keys for named 9s + 18 routings
   await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS layout_key TEXT;`);
   await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS front_nine_key TEXT;`);
   await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
@@ -1158,7 +1158,6 @@ async function ensureBookingTables() {
   `);
 
   // ✅ ADD: remove legacy blank-layout rows ONLY when real layout rows exist for same slot
-  // This fixes "Inserted 0, skipped X" after layouts are introduced.
   await db.query(`
     DELETE FROM booking_times bt
     WHERE COALESCE(bt.layout_key,'') = ''
@@ -1180,7 +1179,6 @@ async function ensureBookingTables() {
   `);
 
   // ✅ CRITICAL: drop the legacy unique constraint that ignores layout keys
-  // (Postgres usually auto-names it like booking_times_course_id_play_date_tee_time_holes_key)
   await db.query(`
     DO $$
     BEGIN
@@ -1199,7 +1197,6 @@ async function ensureBookingTables() {
   `);
 
   // ✅ ALSO drop any legacy UNIQUE INDEX that ignores layout keys
-  // (some DBs have a unique index on course/date/time/holes with a different name)
   await db.query(`
     DO $$
     DECLARE
@@ -1222,7 +1219,6 @@ async function ensureBookingTables() {
   `);
 
   // ✅ FIX #1: clean duplicates so we can add a unique constraint safely
-  // ✅ UPDATED: duplicates are now determined INCLUDING layout/front/back keys
   await db.query(`
     WITH ranked AS (
       SELECT
@@ -1266,6 +1262,7 @@ async function ensureBookingTables() {
     END
     $$;
   `);
+}
 
   await db.query(`DROP INDEX IF EXISTS booking_times_unique_layout_idx;`);
   await db.query(`DROP INDEX IF EXISTS booking_times_unique_slot_idx;`);
