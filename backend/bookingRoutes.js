@@ -1035,55 +1035,48 @@ async function sendBookingEmail({
 // One-time table creation (safe)
 // -----------------------------
 async function ensureBookingTables() {
+  // =============================
+  // booking_courses
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_courses (
       id SERIAL PRIMARY KEY,
       slug TEXT UNIQUE NOT NULL,
       name TEXT NOT NULL,
       notes TEXT,
+      payment_mode TEXT NOT NULL DEFAULT 'PAY_AT_COURSE',
+      layouts JSONB NOT NULL DEFAULT '[]'::jsonb,
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
 
-  // ✅ NEW: course payment mode (PAY_AT_COURSE or PAY_ON_BOOKING)
-  // NOTE: Add column safely first (no NOT NULL here to avoid edge-case failures)
+  // Ensure payment_mode exists (safe on older DBs)
   await db.query(`
     ALTER TABLE booking_courses
-    ADD COLUMN IF NOT EXISTS payment_mode TEXT DEFAULT 'PAY_AT_COURSE';
+    ADD COLUMN IF NOT EXISTS payment_mode TEXT NOT NULL DEFAULT 'PAY_AT_COURSE';
   `);
 
-  // ✅ Ensure default + not-null (safe even if already set)
-  await db.query(`
-    ALTER TABLE booking_courses
-    ALTER COLUMN payment_mode SET DEFAULT 'PAY_AT_COURSE';
-  `);
-  await db.query(`
-    UPDATE booking_courses
-    SET payment_mode = 'PAY_AT_COURSE'
-    WHERE payment_mode IS NULL;
-  `);
-  await db.query(`
-    ALTER TABLE booking_courses
-    ALTER COLUMN payment_mode SET NOT NULL;
-  `);
-
-  // ✅ NEW: course layouts (9-hole loops + optional 18-hole routing)
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS booking_course_layouts (
-      course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
-      layouts JSONB NOT NULL DEFAULT '[]'::jsonb,   -- [{key,label}]
-      routes18 JSONB NOT NULL DEFAULT '[]'::jsonb,  -- [{key,label,front9_key,back9_key}]
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-  `);
-
-  // ✅ NEW: store named 9s + 18-hole routings (as JSON, editable by course)
+  // Ensure layouts exists (safe on older DBs)
   await db.query(`
     ALTER TABLE booking_courses
     ADD COLUMN IF NOT EXISTS layouts JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
 
-  // ✅ NEW: role-based access for course users (manager vs proshop)
+  // =============================
+  // booking_course_layouts
+  // =============================
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_course_layouts (
+      course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
+      layouts JSONB NOT NULL DEFAULT '[]'::jsonb,
+      routes18 JSONB NOT NULL DEFAULT '[]'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
+  // =============================
+  // booking_course_users
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_course_users (
       id SERIAL PRIMARY KEY,
@@ -1091,16 +1084,21 @@ async function ensureBookingTables() {
       email TEXT NOT NULL,
       salt_hex TEXT NOT NULL,
       hash_hex TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'proshop',
       created_at TIMESTAMPTZ DEFAULT now(),
       UNIQUE(course_id, email)
     );
   `);
 
+  // Ensure role exists (safe on older DBs)
   await db.query(`
     ALTER TABLE booking_course_users
     ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'proshop';
   `);
 
+  // =============================
+  // booking_time_templates
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_time_templates (
       course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
