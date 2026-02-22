@@ -518,6 +518,30 @@ TeeRadar
 // Helpers
 // ---------------------------------------------------------
 
+// ---------------------------------------------------------
+// ✅ BLOCKLIST: prevent alerts for certain courses (MiClub access issues)
+// ---------------------------------------------------------
+const BLOCKED_ALERT_COURSE_SLUGS = new Set([
+  "meadow-springs",
+  "wembley",
+]);
+
+const BLOCKED_ALERT_NAME_MATCHES = [
+  "meadow springs",
+  "wembley",
+];
+
+function isBlockedAlertCourse(course) {
+  if (!course) return false;
+
+  const slug = String(course.slug || course.course_slug || "").trim().toLowerCase();
+  if (slug && BLOCKED_ALERT_COURSE_SLUGS.has(slug)) return true;
+
+  const name = String(course.name || "").trim().toLowerCase();
+  if (!name) return false;
+
+  return BLOCKED_ALERT_NAME_MATCHES.some((needle) => name.includes(needle));
+}
 function normaliseDayToken(token) {
   if (!token) return null;
   const t = token.toString().trim().toLowerCase();
