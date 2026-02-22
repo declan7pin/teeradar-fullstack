@@ -2587,9 +2587,8 @@ if (canUsePremium) {
       setTimeout(() => submitEmail.focus(), 40);
     }
 // -----------------------------
-// ✅ NEW: Promo popup (shown once per device)
+// ✅ NEW: Promo popup (shown every time)
 // -----------------------------
-const PROMO_POP_KEY = "tr_promo_new_course_scorecard_v1";
 const promoModalBack = document.getElementById("promoModalBack");
 const promoCloseBtn = document.getElementById("promoCloseBtn");
 
@@ -2599,24 +2598,17 @@ function openPromoModal(){
   promoModalBack.setAttribute("aria-hidden", "false");
 }
 
-function closePromoModal(setSeen=true){
+function closePromoModal(){
   if (!promoModalBack) return;
   promoModalBack.style.display = "none";
   promoModalBack.setAttribute("aria-hidden", "true");
-  if (setSeen){
-    try{ localStorage.setItem(PROMO_POP_KEY, "1"); }catch{}
-  }
-}
-
-function hasSeenPromo(){
-  try{ return localStorage.getItem(PROMO_POP_KEY) === "1"; }catch{ return false; }
 }
 
 // close handlers
-if (promoCloseBtn) promoCloseBtn.addEventListener("click", () => closePromoModal(true));
+if (promoCloseBtn) promoCloseBtn.addEventListener("click", closePromoModal);
 if (promoModalBack){
   promoModalBack.addEventListener("click", (e) => {
-    if (e.target === promoModalBack) closePromoModal(true);
+    if (e.target === promoModalBack) closePromoModal();
   });
 }
     function closeSubmitModal(){
@@ -3148,11 +3140,8 @@ if (!isLoggedIn()){
     (async function init(){
   // Always show the app now (Guest mode supported)
   appEl.style.display = "block";
-    // ✅ NEW: show promo popup once per device
-  if (!hasSeenPromo()){
-    // small delay so page renders first
-    setTimeout(() => openPromoModal(), 450);
-  }
+    // ✅ NEW: show promo popup every time My Rounds opens
+setTimeout(() => openPromoModal(), 450);
 
   const token = getToken();
   const loggedIn = !!token;
