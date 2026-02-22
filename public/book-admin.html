@@ -727,11 +727,13 @@ async function loadCourseSettingsIntoForm(slug){
         slug: $("cSlug").value,
         name: $("cName").value,
         notes: $("cNotes").value,
-        paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE") // ✅ ADD
+        paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE")
       })
     });
 
-    $("courseMsg").textContent = "✅ Saved: " + out.course.slug + " — opens at /book/" + out.course.slug;
+    $("courseMsg").textContent =
+      "✅ Saved: " + out.course.slug + " — opens at /book/" + out.course.slug;
+
     $("gSlug").value = out.course.slug;
     $("sSlug").value = out.course.slug;
 
@@ -742,16 +744,6 @@ async function loadCourseSettingsIntoForm(slug){
     $("courseMsg").textContent = "❌ " + e.message;
   }
 };
-      $("courseMsg").textContent = "✅ Saved: " + out.course.slug + " — opens at /book/" + out.course.slug;
-      $("gSlug").value = out.course.slug;
-      $("sSlug").value = out.course.slug;
-     await loadCourseSettingsIntoForm(out.course.slug);
-       await refresh();
-      await refreshActiveView();
-    } catch (e) {
-      $("courseMsg").textContent = "❌ " + e.message;
-    }
-  };
 
   $("saveSettingsBtn").onclick = async () => {
     $("settingsMsg").textContent = "Saving settings...";
