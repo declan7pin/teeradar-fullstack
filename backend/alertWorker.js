@@ -521,21 +521,31 @@ TeeRadar
 // ---------------------------------------------------------
 // ✅ BLOCKLIST: prevent alerts for certain courses (MiClub access issues)
 // ---------------------------------------------------------
-const BLOCKED_ALERT_COURSE_SLUGS = new Set([
-  "meadow-springs",
-  "wembley",
+const BLOCKED_ALERT_HOSTS = new Set([
+  "wembleygolf.com.au",
+  "meadowsprings.miclub.com.au",
 ]);
 
 const BLOCKED_ALERT_NAME_MATCHES = [
+  "wembley golf course",
+  "meadow springs golf & country club",
   "meadow springs",
-  "wembley",
 ];
+
+function getHostFromUrl(raw) {
+  try {
+    const u = new URL(String(raw || "").trim());
+    return String(u.hostname || "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
 
 function isBlockedAlertCourse(course) {
   if (!course) return false;
 
-  const slug = String(course.slug || course.course_slug || "").trim().toLowerCase();
-  if (slug && BLOCKED_ALERT_COURSE_SLUGS.has(slug)) return true;
+  const host = getHostFromUrl(course.url || course.bookingUrl || course.bookUrl);
+  if (host && BLOCKED_ALERT_HOSTS.has(host)) return true;
 
   const name = String(course.name || "").trim().toLowerCase();
   if (!name) return false;
@@ -788,6 +798,11 @@ async function runAlertTick() {
           console.log(`  ⚠️ Could not match favourite to course.json:`, fav);
           continue;
         }
+          // ✅ BLOCKLIST: skip courses we cannot access (prevents scrape + emails)
+  if (isBlockedAlertCourse(course)) {
+    console.log(`  🚫 Skipping blocked alert course: ${course.name}`);
+    continue;
+  }
 
         // If user requested a specific hole count and course has a different fixed hole count, skip
         const courseHoles =
