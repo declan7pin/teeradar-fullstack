@@ -114,6 +114,13 @@
         <textarea id="cNotes" rows="2" placeholder="Phone-only course (pilot)"></textarea>
       </div>
       <div style="margin-top:10px">
+  <label class="muted">Payment option</label>
+  <select id="cPaymentMode" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;">
+    <option value="PAY_AT_COURSE">Pay at course</option>
+    <option value="PAY_ON_BOOKING">Pay at time of booking</option>
+  </select>
+</div>
+      <div style="margin-top:10px">
         <button id="createCourseBtn">Save Course</button>
       </div>
       <div id="courseMsg" class="muted" style="margin-top:10px;"></div>
@@ -712,16 +719,29 @@ async function loadCourseSettingsIntoForm(slug){
   };
 
   $("createCourseBtn").onclick = async () => {
-    $("courseMsg").textContent = "Saving...";
-    try {
-      const out = await j("/api/book/admin/courses", {
-        method:"POST",
-        body: JSON.stringify({
-          slug: $("cSlug").value,
-          name: $("cName").value,
-          notes: $("cNotes").value
-        })
-      });
+  $("courseMsg").textContent = "Saving...";
+  try {
+    const out = await j("/api/book/admin/courses", {
+      method:"POST",
+      body: JSON.stringify({
+        slug: $("cSlug").value,
+        name: $("cName").value,
+        notes: $("cNotes").value,
+        paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE") // ✅ ADD
+      })
+    });
+
+    $("courseMsg").textContent = "✅ Saved: " + out.course.slug + " — opens at /book/" + out.course.slug;
+    $("gSlug").value = out.course.slug;
+    $("sSlug").value = out.course.slug;
+
+    await loadCourseSettingsIntoForm(out.course.slug);
+    await refresh();
+    await refreshActiveView();
+  } catch (e) {
+    $("courseMsg").textContent = "❌ " + e.message;
+  }
+};
       $("courseMsg").textContent = "✅ Saved: " + out.course.slug + " — opens at /book/" + out.course.slug;
       $("gSlug").value = out.course.slug;
       $("sSlug").value = out.course.slug;
@@ -1472,26 +1492,38 @@ tb.querySelectorAll('button[data-addbooking="1"]').forEach(btn => {
       });
 
       ul.querySelectorAll("button[data-fill]").forEach(btn => {
-        btn.onclick = () => {
-          const s = btn.getAttribute("data-fill") || "";
-          $("gSlug").value = s;
-          $("aSlug").value = s;
-          $("cSlug").value = s;
-          $("dSlug").value = s;
-          $("vSlug").value = s;
-          $("sSlug").value = s;
-          $("iSlug").value = s; // ✅ also fill inventory slug
-          if ($("mSlug")) $("mSlug").value = s;
-          if ($("mDate")) $("mDate").value = $("vDate")?.value || $("gDate")?.value || $("mDate").value;
-loadCourseSettingsIntoForm(s); // ✅ auto-load fees/qty/durations
-          $("previewBox").textContent = "";
-          $("genMsg").textContent = "";
-          $("delMsg").textContent = "";
-          $("settingsMsg").textContent = "";
-          clearViewBoxes();
-        };
-      });
+  btn.onclick = () => {
+    const s = btn.getAttribute("data-fill") || "";
+    if (!s) return;
 
+    // ✅ Find the course object from the loaded list
+    const course = (list || []).find(x => String(x.slug || "") === s) || {};
+
+    $("gSlug").value = s;
+    $("aSlug").value = s;
+    $("cSlug").value = s;
+    $("dSlug").value = s;
+    $("vSlug").value = s;
+    $("sSlug").value = s;
+    $("iSlug").value = s; // ✅ also fill inventory slug
+    if ($("mSlug")) $("mSlug").value = s;
+    if ($("mDate")) $("mDate").value = $("vDate")?.value || $("gDate")?.value || $("mDate").value;
+
+    // ✅ ALSO fill the edit fields so Save Course edits, not overwrites
+    $("cName").value = course.name || "";
+    $("cNotes").value = course.notes || "";
+    if ($("cPaymentMode")) {
+      $("cPaymentMode").value = (course.payment_mode || "PAY_AT_COURSE");
+    }
+
+    loadCourseSettingsIntoForm(s); // ✅ auto-load fees/qty/durations
+    $("previewBox").textContent = "";
+    $("genMsg").textContent = "";
+    $("delMsg").textContent = "";
+    $("settingsMsg").textContent = "";
+    clearViewBoxes();
+  };
+});
       ul.querySelectorAll("button[data-viewtimes]").forEach(btn => {
         btn.onclick = async () => {
           const s = btn.getAttribute("data-viewtimes") || "";
