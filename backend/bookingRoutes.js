@@ -1044,6 +1044,11 @@ async function ensureBookingTables() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
+      // ✅ NEW: course payment mode (PAY_AT_COURSE or PAY_ON_BOOKING)
+    await db.query(`
+      ALTER TABLE booking_courses
+      ADD COLUMN IF NOT EXISTS payment_mode TEXT NOT NULL DEFAULT 'PAY_AT_COURSE';
+    `);
 
   // ✅ NEW: course layouts (9-hole loops + optional 18-hole routing)
   await db.query(`
@@ -2433,6 +2438,7 @@ router.get("/admin/course-settings", requirePlatformAdmin, async (req, res) => {
       SELECT
         slug,
         name,
+        payment_mode,
         cart_fee_cents,
         cart_qty,
         hire_clubs_fee_cents,
@@ -2446,7 +2452,9 @@ router.get("/admin/course-settings", requirePlatformAdmin, async (req, res) => {
       [slug]
     );
 
-    if (!r.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+    if (!r.rows.length) {
+      return res.status(404).json({ ok: false, error: "course_not_found" });
+    }
 
     // ✅ Return shape that your frontend can read safely
     return res.json({ ok: true, settings: r.rows[0] });
@@ -2461,20 +2469,41 @@ router.get("/admin/course-settings", requirePlatformAdmin, async (req, res) => {
 router.get("/admin/courses", requirePlatformAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT id, slug, name, notes, created_at FROM booking_courses ORDER BY id DESC LIMIT 500;`
+      `
+      SELECT
+        id,
+        slug,
+        name,
+        notes,
+        payment_mode,
+        created_at
+      FROM booking_courses
+      ORDER BY id DESC
+      LIMIT 500;
+      `
     );
+
     res.json({ ok: true, courses: rows || [] });
   } catch (e) {
     console.error("admin/courses GET", e);
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 router.post("/admin/courses", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.body?.slug);
     const name = String(req.body?.name || "").trim();
     const notes = req.body?.notes ? String(req.body.notes).trim() : null;
+
+    // ✅ NEW: payment mode (default PAY_AT_COURSE)
+    const pmRaw = String(
+      req.body?.payment_mode ?? req.body?.paymentMode ?? ""
+    )
+      .trim()
+      .toUpperCase();
+
+    const payment_mode =
+      pmRaw === "PAY_ON_BOOKING" ? "PAY_ON_BOOKING" : "PAY_AT_COURSE";
 
     if (!slug || !isValidSlug(slug)) {
       return res.status(400).json({ ok: false, error: "slug_invalid" });
@@ -2483,14 +2512,15 @@ router.post("/admin/courses", requirePlatformAdmin, async (req, res) => {
 
     const r = await db.query(
       `
-      INSERT INTO booking_courses (slug, name, notes)
-      VALUES ($1,$2,$3)
+      INSERT INTO booking_courses (slug, name, notes, payment_mode)
+      VALUES ($1,$2,$3,$4)
       ON CONFLICT (slug) DO UPDATE SET
         name = EXCLUDED.name,
-        notes = EXCLUDED.notes
-      RETURNING id, slug, name, notes, created_at;
+        notes = EXCLUDED.notes,
+        payment_mode = EXCLUDED.payment_mode
+      RETURNING id, slug, name, notes, payment_mode, created_at;
       `,
-      [slug, name, notes]
+      [slug, name, notes, payment_mode]
     );
 
     res.json({ ok: true, course: r.rows[0] });
