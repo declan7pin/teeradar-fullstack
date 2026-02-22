@@ -1262,8 +1262,8 @@ async function ensureBookingTables() {
     END
     $$;
   `);
-}
 
+  // ✅ IMPORTANT: these MUST be inside ensureBookingTables()
   await db.query(`DROP INDEX IF EXISTS booking_times_unique_layout_idx;`);
   await db.query(`DROP INDEX IF EXISTS booking_times_unique_slot_idx;`);
 
@@ -1323,7 +1323,7 @@ async function ensureBookingTables() {
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
   await db.query(`CREATE INDEX IF NOT EXISTS booking_bookings_layout_idx ON booking_bookings (course_id, play_date, holes, layout_key);`);
 
-  // ✅ ADD: normalize booking layout keys too (avoids NULL mismatches in availability joins)
+  // ✅ ADD: normalize booking layout keys too
   await db.query(`
     UPDATE booking_bookings
     SET
@@ -1392,7 +1392,7 @@ async function ensureBookingTables() {
     ON booking_analytics_events (event_type, occurred_at DESC);
   `);
 
-  // ✅ NEW: per-course settings (inventory + durations + add-on fees)
+  // ✅ NEW: per-course settings
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_course_settings (
       course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
@@ -1440,7 +1440,7 @@ async function ensureBookingTables() {
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS front_nine_key TEXT;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
 
-  // ✅ ADD: normalize manual slot layout keys (same reason as booking_times)
+  // ✅ Normalize manual slot layout keys
   await db.query(`
     UPDATE booking_manual_slots
     SET
@@ -1453,7 +1453,7 @@ async function ensureBookingTables() {
       OR back_nine_key IS NULL;
   `);
 
-  // ✅ ADD: drop the legacy unique constraint that ignores layout keys for manual slots
+  // ✅ Drop the legacy unique constraint that ignores layout keys for manual slots
   await db.query(`
     DO $$
     BEGIN
@@ -1471,44 +1471,42 @@ async function ensureBookingTables() {
     $$;
   `);
 
- // ✅ ADD: drop any legacy UNIQUE constraints / indexes that still ignore layout keys
-// (some “unique indexes” are actually backing indexes for UNIQUE constraints — must drop constraint first)
-await db.query(`
-  DO $$
-  DECLARE
-    r record;
-    c record;
-  BEGIN
-    FOR r IN
-      SELECT
-        i.oid AS index_oid,
-        i.relname AS index_name
-      FROM pg_index x
-      JOIN pg_class t ON t.oid = x.indrelid
-      JOIN pg_class i ON i.oid = x.indexrelid
-      WHERE t.relname = 'booking_manual_slots'
-        AND x.indisunique = true
-        AND pg_get_indexdef(x.indexrelid) LIKE '%(course_id, play_date, tee_time, holes, slot_index)%'
-        AND pg_get_indexdef(x.indexrelid) NOT LIKE '%layout_key%'
-    LOOP
-      -- If this unique index belongs to a UNIQUE constraint, drop the constraint(s) instead of the index
-      IF EXISTS (SELECT 1 FROM pg_constraint pc WHERE pc.conindid = r.index_oid) THEN
-        FOR c IN
-          SELECT conname
-          FROM pg_constraint
-          WHERE conindid = r.index_oid
-        LOOP
-          EXECUTE format('ALTER TABLE booking_manual_slots DROP CONSTRAINT IF EXISTS %I', c.conname);
-        END LOOP;
-      ELSE
-        EXECUTE format('DROP INDEX IF EXISTS %I', r.index_name);
-      END IF;
-    END LOOP;
-  END
-  $$;
-`);
+  // ✅ Drop any legacy UNIQUE constraints / indexes that still ignore layout keys
+  await db.query(`
+    DO $$
+    DECLARE
+      r record;
+      c record;
+    BEGIN
+      FOR r IN
+        SELECT
+          i.oid AS index_oid,
+          i.relname AS index_name
+        FROM pg_index x
+        JOIN pg_class t ON t.oid = x.indrelid
+        JOIN pg_class i ON i.oid = x.indexrelid
+        WHERE t.relname = 'booking_manual_slots'
+          AND x.indisunique = true
+          AND pg_get_indexdef(x.indexrelid) LIKE '%(course_id, play_date, tee_time, holes, slot_index)%'
+          AND pg_get_indexdef(x.indexrelid) NOT LIKE '%layout_key%'
+      LOOP
+        IF EXISTS (SELECT 1 FROM pg_constraint pc WHERE pc.conindid = r.index_oid) THEN
+          FOR c IN
+            SELECT conname
+            FROM pg_constraint
+            WHERE conindid = r.index_oid
+          LOOP
+            EXECUTE format('ALTER TABLE booking_manual_slots DROP CONSTRAINT IF EXISTS %I', c.conname);
+          END LOOP;
+        ELSE
+          EXECUTE format('DROP INDEX IF EXISTS %I', r.index_name);
+        END IF;
+      END LOOP;
+    END
+    $$;
+  `);
 
-  // ✅ ADD: create layout-aware unique index for manual slots
+  // ✅ Create layout-aware unique index for manual slots
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS booking_manual_slots_unique_slot_idx
     ON booking_manual_slots (
