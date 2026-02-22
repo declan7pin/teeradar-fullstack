@@ -2507,47 +2507,64 @@ router.get("/admin/courses", requirePlatformAdmin, async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-router.post("/admin/courses", requirePlatformAdmin, async (req, res) => {
+router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
   try {
-    const slug = normSlug(req.body?.slug);
-    const name = String(req.body?.name || "").trim();
-    const notes = req.body?.notes ? String(req.body.notes).trim() : null;
+    // ✅ ensure tables/columns exist (prevents cold start race issues)
+    await ensureBookingTables();
 
-    // ✅ NEW: payment mode (default PAY_AT_COURSE)
-    const pmRaw = String(
-      req.body?.payment_mode ?? req.body?.paymentMode ?? ""
-    )
-      .trim()
-      .toUpperCase();
+    const { slug, name, notes } = req.body || {};
 
-    const payment_mode =
-      pmRaw === "PAY_ON_BOOKING" ? "PAY_ON_BOOKING" : "PAY_AT_COURSE";
+    const slugClean = String(slug || "").trim().toLowerCase();
+    const nameClean = String(name || "").trim();
+    const notesClean = String(notes || "").trim();
 
-    if (!slug || !isValidSlug(slug)) {
-      return res.status(400).json({ ok: false, error: "slug_invalid" });
+    if (!slugClean || !nameClean) {
+      return res.status(400).json({ ok: false, error: "slug_and_name_required" });
     }
-    if (!name) return res.status(400).json({ ok: false, error: "name_required" });
 
-    const r = await db.query(
+    // ✅ accept UI variations for payment option
+    const pmRaw =
+      req.body?.payment_mode ??
+      req.body?.paymentMode ??
+      req.body?.payment_option ??
+      req.body?.paymentOption ??
+      "";
+
+    const pmNorm = String(pmRaw || "").trim().toUpperCase();
+
+    // UI strings like "Pay at course" / "Pay at time of booking" supported too
+    const payment_mode =
+      pmNorm === "PAY_ON_BOOKING" ||
+      pmNorm === "PAY_AT_TIME_OF_BOOKING" ||
+      pmNorm.includes("TIME") ||
+      pmNorm.includes("BOOKING")
+        ? "PAY_ON_BOOKING"
+        : "PAY_AT_COURSE";
+
+    await db.query(
       `
       INSERT INTO booking_courses (slug, name, notes, payment_mode)
-      VALUES ($1,$2,$3,$4)
-      ON CONFLICT (slug) DO UPDATE SET
-        name = EXCLUDED.name,
-        notes = EXCLUDED.notes,
-        payment_mode = EXCLUDED.payment_mode
-      RETURNING id, slug, name, notes, payment_mode, created_at;
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (slug) DO UPDATE
+      SET name = EXCLUDED.name,
+          notes = EXCLUDED.notes,
+          payment_mode = EXCLUDED.payment_mode
       `,
-      [slug, name, notes, payment_mode]
+      [slugClean, nameClean, notesClean, payment_mode]
     );
 
-    res.json({ ok: true, course: r.rows[0] });
+    return res.json({ ok: true });
   } catch (e) {
     console.error("admin/courses POST", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+
+    // ✅ show real error message to booking admin (helps you debug fast)
+    return res.status(500).json({
+      ok: false,
+      error: "internal_error",
+      detail: String(e?.message || e),
+    });
   }
 });
-
 router.delete("/admin/courses/:slug", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.params.slug);
