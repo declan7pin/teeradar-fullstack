@@ -716,6 +716,16 @@
   // --- course search ---
   let allCourses = [];
   let searchableCourses = [];
+  // ✅ Hide some courses from EMAIL ALERT selection only (do NOT remove from courses.json)
+const ALERT_COURSE_BLOCKLIST = [
+  "wembley golf course",
+  "meadow springs golf & country club",
+];
+
+function isBlockedForAlerts(course) {
+  const n = String(course?.name || "").toLowerCase();
+  return ALERT_COURSE_BLOCKLIST.some((x) => n.includes(x));
+}
 
   async function loadCourses() {
   try {
@@ -726,9 +736,15 @@
       allCourses = data;
 
       const allowed = ["MiClub", "Quick18", "TeeRadarBooking", "TeeRadar"];
-      searchableCourses = data.filter((c) =>
-        allowed.includes(String(c.provider || "").trim())
-      );
+searchableCourses = data.filter((c) => {
+  const prov = String(c.provider || "").trim();
+  if (!allowed.includes(prov)) return false;
+
+  // ✅ block only from email-alert favourites picker
+  if (isBlockedForAlerts(c)) return false;
+
+  return true;
+});
     } else {
       allCourses = [];
       searchableCourses = [];
