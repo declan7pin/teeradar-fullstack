@@ -549,6 +549,18 @@ button, a, .btn, .btn2, input, select {
 
 /* ✅ Hide table cleanly when premium is active */
 .tableWrap.hidden{ display:none; }
+/* ✅ NEW: promo popup */
+.promoNote{
+  margin-top:10px;
+  border:1px solid var(--border);
+  background:#f8fafc;
+  border-radius:12px;
+  padding:10px 12px;
+  font-weight:800;
+  color:var(--text);
+  line-height:1.35;
+}
+.promoNote .muted{font-weight:800}
   </style>
 </head>
 <body>
@@ -813,6 +825,26 @@ button, a, .btn, .btn2, input, select {
     </div>
   </main>
 
+<!-- ✅ NEW: Promo popup (1 month free for new course scorecard approvals) -->
+<div class="modalBack" id="promoModalBack" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="promoModalTitle">
+    <h3 id="promoModalTitle">Get 1 month free 🎁</h3>
+    <div class="muted" style="font-weight:800;">
+      If you create a scorecard at a <strong>new course</strong>, once it’s <strong>submitted</strong> and <strong>approved</strong> you’ll receive a code for <strong> 1 free month</strong> of TeeRadar subscription.
+    </div>
+
+    <div class="promoNote">
+      <div><strong>How to claim:</strong></div>
+      <div class="muted" style="margin-top:6px;">
+        Fill <strong>Par + Distance</strong> for every hole → <strong>Save</strong> → tap <strong>Submit</strong>.
+      </div>
+    </div>
+
+    <div class="actions" style="margin-top:12px;">
+      <button class="btn2 secondary" id="promoCloseBtn" type="button">Got it</button>
+    </div>
+  </div>
+</div>
   <!-- ✅ NEW: Submit modal (email required) -->
   <div class="modalBack" id="submitModalBack" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="submitModalTitle">
@@ -2554,7 +2586,31 @@ if (canUsePremium) {
       submitModalBack.setAttribute("aria-hidden", "false");
       setTimeout(() => submitEmail.focus(), 40);
     }
+// -----------------------------
+// ✅ NEW: Promo popup (shown every time)
+// -----------------------------
+const promoModalBack = document.getElementById("promoModalBack");
+const promoCloseBtn = document.getElementById("promoCloseBtn");
 
+function openPromoModal(){
+  if (!promoModalBack) return;
+  promoModalBack.style.display = "flex";
+  promoModalBack.setAttribute("aria-hidden", "false");
+}
+
+function closePromoModal(){
+  if (!promoModalBack) return;
+  promoModalBack.style.display = "none";
+  promoModalBack.setAttribute("aria-hidden", "true");
+}
+
+// close handlers
+if (promoCloseBtn) promoCloseBtn.addEventListener("click", closePromoModal);
+if (promoModalBack){
+  promoModalBack.addEventListener("click", (e) => {
+    if (e.target === promoModalBack) closePromoModal();
+  });
+}
     function closeSubmitModal(){
       if (!submitModalBack) return;
       submitModalBack.style.display = "none";
@@ -3084,6 +3140,8 @@ if (!isLoggedIn()){
     (async function init(){
   // Always show the app now (Guest mode supported)
   appEl.style.display = "block";
+    // ✅ NEW: show promo popup every time My Rounds opens
+setTimeout(() => openPromoModal(), 450);
 
   const token = getToken();
   const loggedIn = !!token;
