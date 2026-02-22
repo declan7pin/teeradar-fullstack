@@ -1044,11 +1044,28 @@ async function ensureBookingTables() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
-      // ✅ NEW: course payment mode (PAY_AT_COURSE or PAY_ON_BOOKING)
-    await db.query(`
-      ALTER TABLE booking_courses
-      ADD COLUMN IF NOT EXISTS payment_mode TEXT NOT NULL DEFAULT 'PAY_AT_COURSE';
-    `);
+
+  // ✅ NEW: course payment mode (PAY_AT_COURSE or PAY_ON_BOOKING)
+  // NOTE: Add column safely first (no NOT NULL here to avoid edge-case failures)
+  await db.query(`
+    ALTER TABLE booking_courses
+    ADD COLUMN IF NOT EXISTS payment_mode TEXT DEFAULT 'PAY_AT_COURSE';
+  `);
+
+  // ✅ Ensure default + not-null (safe even if already set)
+  await db.query(`
+    ALTER TABLE booking_courses
+    ALTER COLUMN payment_mode SET DEFAULT 'PAY_AT_COURSE';
+  `);
+  await db.query(`
+    UPDATE booking_courses
+    SET payment_mode = 'PAY_AT_COURSE'
+    WHERE payment_mode IS NULL;
+  `);
+  await db.query(`
+    ALTER TABLE booking_courses
+    ALTER COLUMN payment_mode SET NOT NULL;
+  `);
 
   // ✅ NEW: course layouts (9-hole loops + optional 18-hole routing)
   await db.query(`
@@ -1092,6 +1109,7 @@ async function ensureBookingTables() {
       updated_at TIMESTAMPTZ DEFAULT now()
     );
   `);
+}
 
   // ✅ booking_times (base table)
   // ✅ IMPORTANT: DO NOT keep the old UNIQUE(course_id, play_date, tee_time, holes)
