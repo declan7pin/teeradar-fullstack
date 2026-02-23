@@ -9136,11 +9136,15 @@ async function handleBook(req, res) {
     const payment_mode = String(courseRow.payment_mode || "PAY_AT_COURSE").trim().toUpperCase();
     const stripe_account_id = String(courseRow.stripe_account_id || "").trim();
 
+    // ✅ FIX: read env safely (avoid ReferenceError if PLATFORM_FEE_BPS/PUBLIC_BASE_URL aren’t globals)
+    const envPlatformFeeBps = Number(process.env.PLATFORM_FEE_BPS || 0);
+    const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || process.env.SITE_URL || "").trim();
+
     // ✅ NEW: per-course fee override (falls back to env PLATFORM_FEE_BPS)
     const courseFeeBpsRaw =
       courseRow.platform_fee_bps !== undefined && courseRow.platform_fee_bps !== null
         ? Number(courseRow.platform_fee_bps)
-        : Number(PLATFORM_FEE_BPS || 0);
+        : envPlatformFeeBps;
 
     const courseFeeBps = Number.isFinite(courseFeeBpsRaw)
       ? Math.max(0, Math.min(10000, Math.trunc(courseFeeBpsRaw)))
@@ -9389,7 +9393,7 @@ async function handleBook(req, res) {
       if (!stripe_account_id) {
         return res.status(400).json({ ok: false, error: "course_missing_stripe_account" });
       }
-      if (!PUBLIC_BASE_URL) {
+      if (!publicBaseUrl) {
         return res.status(500).json({ ok: false, error: "public_base_url_missing" });
       }
 
@@ -9430,8 +9434,8 @@ async function handleBook(req, res) {
           course_slug: slug,
           platform_fee_bps: String(courseFeeBps),
         },
-        success_url: `${PUBLIC_BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
-        cancel_url: `${PUBLIC_BASE_URL}/book/${slug}?paid=0&ref=${encodeURIComponent(reference)}`,
+        success_url: `${publicBaseUrl}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
+        cancel_url: `${publicBaseUrl}/book/${slug}?paid=0&ref=${encodeURIComponent(reference)}`,
       });
 
       return res.json({
