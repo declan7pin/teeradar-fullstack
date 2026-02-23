@@ -1114,6 +1114,22 @@ async function ensureBookingTables() {
     ADD COLUMN IF NOT EXISTS layouts JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
 
+  // ✅ NEW: Stripe Connect + platform fee config per course
+  await db.query(`
+    ALTER TABLE booking_courses
+    ADD COLUMN IF NOT EXISTS stripe_account_id TEXT;
+  `);
+
+  await db.query(`
+    ALTER TABLE booking_courses
+    ADD COLUMN IF NOT EXISTS platform_fee_bps INTEGER;
+  `);
+
+  await db.query(`
+    ALTER TABLE booking_courses
+    ADD COLUMN IF NOT EXISTS subscriber_discount_enabled BOOLEAN NOT NULL DEFAULT false;
+  `);
+
   // =============================
   // booking_course_layouts
   // =============================
@@ -2586,81 +2602,19 @@ router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
         ? "PAY_ON_BOOKING"
         : "PAY_AT_COURSE";
 
-    // ✅ Stripe Connect account id (course)
-    const stripe_account_id = String(
-      req.body?.stripe_account_id ??
-      req.body?.stripeAccountId ??
-      req.body?.stripe_account ??
-      req.body?.stripeAccount ??
-      ""
-    ).trim();
-
-    // ✅ Option A/B flag from UI (course offers 5% subscriber discount?)
-    const wantsSubscriberDiscount = !!(
-      req.body?.subscriber_discount_enabled ??
-      req.body?.subscriberDiscountEnabled ??
-      req.body?.subscriber_discount ??
-      req.body?.subscriberDiscount ??
-      false
-    );
-
-    // ✅ Two fee options (env defaults)
-    const standardBps = Number(process.env.STANDARD_PLATFORM_FEE_BPS || 300); // 3%
-    const discountBps = Number(process.env.DISCOUNT_PLATFORM_FEE_BPS || 100); // 1%
-
-    const chosenBps = wantsSubscriberDiscount ? discountBps : standardBps;
-
-    // ✅ Optional manual override from UI (if you ever want to force it)
-    const manualBpsRaw = Number(
-      req.body?.platform_fee_bps ??
-      req.body?.platformFeeBps ??
-      NaN
-    );
-
-    const finalBpsRaw = Number.isFinite(manualBpsRaw) ? manualBpsRaw : chosenBps;
-
-    // clamp 0..10000 bps
-    const platform_fee_bps = Number.isFinite(finalBpsRaw)
-      ? Math.max(0, Math.min(10000, Math.trunc(finalBpsRaw)))
-      : 0;
-
     await db.query(
       `
-      INSERT INTO booking_courses (
-        slug, name, notes,
-        payment_mode,
-        stripe_account_id,
-        platform_fee_bps,
-        subscriber_discount_enabled
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
-      ON CONFLICT (slug) DO UPDATE SET
-        name = EXCLUDED.name,
-        notes = EXCLUDED.notes,
-        payment_mode = EXCLUDED.payment_mode,
-        stripe_account_id = EXCLUDED.stripe_account_id,
-        platform_fee_bps = EXCLUDED.platform_fee_bps,
-        subscriber_discount_enabled = EXCLUDED.subscriber_discount_enabled
+      INSERT INTO booking_courses (slug, name, notes, payment_mode)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (slug) DO UPDATE
+      SET name = EXCLUDED.name,
+          notes = EXCLUDED.notes,
+          payment_mode = EXCLUDED.payment_mode
       `,
-      [
-        slugClean,
-        nameClean,
-        notesClean || null,
-        payment_mode,
-        stripe_account_id || null,
-        platform_fee_bps,
-        wantsSubscriberDiscount,
-      ]
+      [slugClean, nameClean, notesClean, payment_mode]
     );
 
-    return res.json({
-      ok: true,
-      slug: slugClean,
-      payment_mode,
-      stripe_account_id: stripe_account_id || null,
-      subscriber_discount_enabled: wantsSubscriberDiscount,
-      platform_fee_bps,
-    });
+    return res.json({ ok: true });
   } catch (e) {
     console.error("admin/courses POST", e);
 
