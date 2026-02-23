@@ -917,7 +917,12 @@ const canBook = slotsAvail >= wantPlayers;
     $("modalTitle").textContent = "Confirm booking";
     $("detailsGrid").style.display = "";
     $("cancelBtn").style.display = "";
-    $("confirmBtn").textContent = "Confirm booking";
+    // ✅ Change button text depending on payment mode
+if (course && course.payment_mode === "PAY_ON_BOOKING") {
+  $("confirmBtn").textContent = "Confirm & Pay";
+} else {
+  $("confirmBtn").textContent = "Confirm booking";
+}
     $("confirmBtn").disabled = false;
 
     $("modalSub").textContent = "Enter your details to confirm.";
@@ -1156,6 +1161,11 @@ back_nine_key: back_nine_key || null,
           : ("HTTP " + res.status);
       throw new Error(msg);
     }
+    // ✅ NEW: Stripe redirect for PAY_ON_BOOKING
+if (data.payment_mode === "PAY_ON_BOOKING" && data.checkoutUrl) {
+  window.location.href = data.checkoutUrl;
+  return;
+}
 
     showBookingConfirmation(data, email);
     setStatus(`✅ Booking confirmed. Reference: ${data.reference}`, "ok");
