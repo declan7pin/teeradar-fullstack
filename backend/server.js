@@ -394,6 +394,32 @@ async function ensureBookingTables() {
       );
     `);
 
+    // ✅ NEW: columns needed for PAY_ON_BOOKING + overlap + webhook confirmation
+    await db.query(`
+      ALTER TABLE booking_bookings
+      ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_bookings
+      ADD COLUMN IF NOT EXISTS checked_in BOOLEAN NOT NULL DEFAULT false;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_bookings
+      ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_bookings
+      ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_bookings
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+    `);
+
     await db.query(`
       CREATE INDEX IF NOT EXISTS booking_bookings_course_date_idx
       ON booking_bookings (course_id, play_date);
@@ -579,6 +605,27 @@ app.post(
       switch (event.type) {
         case "checkout.session.completed": {
           const session = event.data.object;
+          // ✅ PAY_ON_BOOKING tee-time payments (non-subscription)
+// We set booking_id + reference in session.metadata from bookingRoutes
+const bookingIdRaw = session?.metadata?.booking_id;
+const bookingId = bookingIdRaw ? Number(bookingIdRaw) : 0;
+
+if (bookingId && session?.payment_status === "paid") {
+  await db.query(
+    `
+    UPDATE booking_bookings
+    SET
+      status = 'CONFIRMED',
+      paid = true,
+      updated_at = now()
+    WHERE id = $1
+    `,
+    [bookingId]
+  );
+
+  console.log("✅ Tee-time booking paid + confirmed:", bookingId);
+  break;
+}
 
           const email = (session.customer_details?.email || session.customer_email || "")
             .toString()
