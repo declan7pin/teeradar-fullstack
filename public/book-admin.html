@@ -967,6 +967,11 @@ async function loadCourseSettingsIntoForm(slug){
       .replace(/"/g,"&quot;")
       .replace(/'/g,"&#039;");
   }
+  function paymentLabel(mode){
+  const m = String(mode || "").trim().toUpperCase();
+  if (m === "PAY_ON_BOOKING") return "Pay on booking";
+  return "Pay at course";
+}
 
   function clearViewBoxes(){
     $("viewMsg").textContent = "";
@@ -1519,15 +1524,15 @@ tb.querySelectorAll('button[data-addbooking="1"]').forEach(btn => {
       list.forEach(c => {
         const li = document.createElement("li");
         li.innerHTML =
-          `<b>${_escape(c.name)}</b> — <code>${_escape(c.slug)}</code> — <a href="/book/${_escape(c.slug)}">open</a>` +
-          `<div class="actions">` +
-          `<button class="small secondary" data-fill="${_escape(c.slug)}">Use for generator</button>` +
-          `<button class="small secondary" data-viewtimes="${_escape(c.slug)}">View times</button>` +
-          `<button class="small secondary" data-viewbookings="${_escape(c.slug)}">View bookings</button>` +
-          `<button class="small danger" data-delcourse="${_escape(c.slug)}">Delete course</button>` +
-          `</div>`;
-        ul.appendChild(li);
-      });
+  `<b>${_escape(c.name)}</b> — <code>${_escape(c.slug)}</code>` +
+  ` <span class="pill">${_escape(paymentLabel(c.payment_mode || c.paymentMode))}</span>` +
+  ` — <a href="/book/${_escape(c.slug)}">open</a>` +
+  `<div class="actions">` +
+  `<button class="small secondary" data-fill="${_escape(c.slug)}">Use for generator</button>` +
+  `<button class="small secondary" data-viewtimes="${_escape(c.slug)}">View times</button>` +
+  `<button class="small secondary" data-viewbookings="${_escape(c.slug)}">View bookings</button>` +
+  `<button class="small danger" data-delcourse="${_escape(c.slug)}">Delete course</button>` +
+  `</div>`;
 
       ul.querySelectorAll("button[data-fill]").forEach(btn => {
   btn.onclick = () => {
