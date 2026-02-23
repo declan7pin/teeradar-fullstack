@@ -120,9 +120,35 @@
     <option value="PAY_ON_BOOKING">Pay at time of booking</option>
   </select>
 </div>
-      <div style="margin-top:10px">
-        <button id="createCourseBtn">Save Course</button>
-      </div>
+
+<!-- ✅ Stripe Connect + Platform Fee Settings -->
+<!-- ✅ Advanced Payment Settings -->
+<div id="paymentAdvancedWrap" style="margin-top:12px;display:none">
+
+  <div style="margin-top:12px">
+    <label class="muted">Stripe Connect Account ID</label>
+    <input id="cStripeAccountId" placeholder="acct_XXXXXXXXXXXX" />
+  </div>
+
+  <div style="margin-top:12px">
+    <label class="muted">
+      <input type="checkbox" id="cSubscriberDiscountEnabled" />
+      Offer 5% TeeRadar Subscriber Discount (lower platform fee tier)
+    </label>
+  </div>
+
+  <div style="margin-top:12px">
+    <label class="muted">Manual Platform Fee (basis points, optional override)</label>
+    <input id="cPlatformFeeBps" type="number" min="0" step="1" placeholder="Leave blank for auto tier (300 = 3%)" />
+  </div>
+
+  <div id="cFeePreview" class="muted" style="margin-top:8px;font-weight:700;"></div>
+
+</div>
+
+<div style="margin-top:10px">
+  <button id="createCourseBtn">Save Course</button>
+</div>
       <div id="courseMsg" class="muted" style="margin-top:10px;"></div>
     </div>
 <!-- ✅ Inventory check (carts + clubs) -->
@@ -745,11 +771,18 @@ async function loadCourseSettingsIntoForm(slug){
   $("courseMsg").textContent = "Saving...";
   try {
     const payload = {
-      slug: ($("cSlug").value || "").trim(),
-      name: ($("cName").value || "").trim(),
-      notes: ($("cNotes").value || "").trim(),
-      paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
-    };
+  slug: ($("cSlug").value || "").trim(),
+  name: ($("cName").value || "").trim(),
+  notes: ($("cNotes").value || "").trim(),
+  paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
+
+  // ✅ NEW
+  stripeAccountId: ($("cStripeAccountId")?.value || "").trim(),
+  subscriberDiscountEnabled: $("cSubscriberDiscountEnabled")?.checked || false,
+  platformFeeBps: ($("cPlatformFeeBps")?.value || "").trim() === ""
+    ? undefined
+    : Number($("cPlatformFeeBps").value)
+};
 
     const out = await j("/api/book/admin/courses", {
       method: "POST",
@@ -1561,6 +1594,15 @@ tb.querySelectorAll('button[data-addbooking="1"]').forEach(btn => {
     if ($("cPaymentMode")) {
       $("cPaymentMode").value = (course.payment_mode || "PAY_AT_COURSE");
     }
+    if ($("cStripeAccountId")) {
+  $("cStripeAccountId").value = course.stripe_account_id || "";
+}
+if ($("cSubscriberDiscountEnabled")) {
+  $("cSubscriberDiscountEnabled").checked = !!course.subscriber_discount_enabled;
+}
+if ($("cPlatformFeeBps")) {
+  $("cPlatformFeeBps").value = course.platform_fee_bps || "";
+}
 
     loadCourseSettingsIntoForm(s); // ✅ auto-load fees/qty/durations
     $("previewBox").textContent = "";
