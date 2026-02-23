@@ -1533,6 +1533,9 @@ tb.querySelectorAll('button[data-addbooking="1"]').forEach(btn => {
   `<button class="small secondary" data-viewbookings="${_escape(c.slug)}">View bookings</button>` +
   `<button class="small danger" data-delcourse="${_escape(c.slug)}">Delete course</button>` +
   `</div>`;
+  
+  ul.appendChild(li);
+});
 
       ul.querySelectorAll("button[data-fill]").forEach(btn => {
   btn.onclick = () => {
