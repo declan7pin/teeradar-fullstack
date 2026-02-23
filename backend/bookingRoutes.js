@@ -6,6 +6,7 @@ import { Resend } from "resend";
 import cookieParser from "cookie-parser"; // ✅ ADD
 import { recordEvent } from "./analytics.js";
 import jwt from "jsonwebtoken";
+import Stripe from "stripe";
 
 const router = express.Router();
 // ✅ CORS for booking admin + course admin UIs (fixes “buttons do nothing” due to blocked preflight)
@@ -79,6 +80,12 @@ const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
 // ✅ ALSO support normal JWT secret if you already have it set
 const JWT_SECRET_FALLBACK = (process.env.JWT_SECRET || "").trim();
+const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
+const PLATFORM_FEE_BPS = Number(process.env.PLATFORM_FEE_BPS || 0); // e.g. 500 = 5%
+const PUBLIC_BASE_URL =
+  (process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || "").trim();
+
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
 async function getTeePricePerPlayerCents({ courseId, playDate, teeTime, holes }) {
   const r = await db.query(
@@ -1056,6 +1063,12 @@ async function ensureBookingTables() {
   await db.query(`
     ALTER TABLE booking_courses
     ADD COLUMN IF NOT EXISTS payment_mode TEXT NOT NULL DEFAULT 'PAY_AT_COURSE';
+  `);
+
+  // ✅ NEW: Stripe Connect destination (connected account id)
+  await db.query(`
+    ALTER TABLE booking_courses
+    ADD COLUMN IF NOT EXISTS stripe_account_id TEXT;
   `);
 
   // ✅ FIX: repair legacy CHECK constraint + normalize old values (robust + idempotent)
