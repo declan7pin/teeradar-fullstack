@@ -2597,7 +2597,9 @@ router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
       return res.status(400).json({ ok: false, error: "slug_and_name_required" });
     }
 
-    // ✅ accept UI variations for payment option
+    // ============================
+    // Payment Mode Normalisation
+    // ============================
     const pmRaw =
       req.body?.payment_mode ??
       req.body?.paymentMode ??
@@ -2607,7 +2609,6 @@ router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
 
     const pmNorm = String(pmRaw || "").trim().toUpperCase();
 
-    // UI strings like "Pay at course" / "Pay at time of booking" supported too
     const payment_mode =
       pmNorm === "PAY_ON_BOOKING" ||
       pmNorm === "PAY_AT_TIME_OF_BOOKING" ||
@@ -2616,23 +2617,88 @@ router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
         ? "PAY_ON_BOOKING"
         : "PAY_AT_COURSE";
 
+    // ============================
+    // Stripe Connect + Fee Tier
+    // ============================
+
+    const stripe_account_id = String(
+      req.body?.stripe_account_id ??
+      req.body?.stripeAccountId ??
+      ""
+    ).trim() || null;
+
+    const subscriber_discount_enabled = !!(
+      req.body?.subscriber_discount_enabled ??
+      req.body?.subscriberDiscountEnabled ??
+      false
+    );
+
+    // ENV controlled fee tiers (safe defaults)
+    const STANDARD_BPS = Number(process.env.STANDARD_PLATFORM_FEE_BPS || 300);   // 3%
+    const DISCOUNT_BPS = Number(process.env.DISCOUNT_PLATFORM_FEE_BPS || 100);   // 1%
+
+    // Auto choose tier
+    let platform_fee_bps = subscriber_discount_enabled
+      ? DISCOUNT_BPS
+      : STANDARD_BPS;
+
+    // Optional manual override (advanced usage)
+    const manualBps = Number(
+      req.body?.platform_fee_bps ??
+      req.body?.platformFeeBps
+    );
+
+    if (Number.isFinite(manualBps)) {
+      platform_fee_bps = Math.max(0, Math.min(10000, Math.trunc(manualBps)));
+    }
+
+    // ============================
+    // Insert / Update Course
+    // ============================
+
     await db.query(
       `
-      INSERT INTO booking_courses (slug, name, notes, payment_mode)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO booking_courses (
+        slug,
+        name,
+        notes,
+        payment_mode,
+        stripe_account_id,
+        platform_fee_bps,
+        subscriber_discount_enabled
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
       ON CONFLICT (slug) DO UPDATE
       SET name = EXCLUDED.name,
           notes = EXCLUDED.notes,
-          payment_mode = EXCLUDED.payment_mode
+          payment_mode = EXCLUDED.payment_mode,
+          stripe_account_id = EXCLUDED.stripe_account_id,
+          platform_fee_bps = EXCLUDED.platform_fee_bps,
+          subscriber_discount_enabled = EXCLUDED.subscriber_discount_enabled
       `,
-      [slugClean, nameClean, notesClean, payment_mode]
+      [
+        slugClean,
+        nameClean,
+        notesClean || null,
+        payment_mode,
+        stripe_account_id,
+        platform_fee_bps,
+        subscriber_discount_enabled
+      ]
     );
 
-    return res.json({ ok: true });
+    return res.json({
+      ok: true,
+      slug: slugClean,
+      payment_mode,
+      stripe_account_id,
+      platform_fee_bps,
+      subscriber_discount_enabled
+    });
+
   } catch (e) {
     console.error("admin/courses POST", e);
 
-    // ✅ show real error message to booking admin (helps you debug fast)
     return res.status(500).json({
       ok: false,
       error: "internal_error",
