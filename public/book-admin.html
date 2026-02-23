@@ -805,29 +805,31 @@ $("cPlatformFeeBps")?.addEventListener("input", updatePaymentUI);
   $("createCourseBtn").onclick = async () => {
   $("courseMsg").textContent = "Saving...";
   try {
+
     const payload = {
-  slug: ($("cSlug").value || "").trim(),
-  name: ($("cName").value || "").trim(),
-  notes: ($("cNotes").value || "").trim(),
-   paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
-};
+      slug: ($("cSlug").value || "").trim(),
+      name: ($("cName").value || "").trim(),
+      notes: ($("cNotes").value || "").trim(),
+      paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
+    };
 
-const isPayOnBooking = payload.paymentMode === "PAY_ON_BOOKING";
-if (isPayOnBooking) {
-  payload.stripeAccountId = ($("cStripeAccountId")?.value || "").trim();
-  payload.subscriberDiscountEnabled = $("cSubscriberDiscountEnabled")?.checked || false;
+    const isPayOnBooking = payload.paymentMode === "PAY_ON_BOOKING";
 
-  const bpsRaw = ($("cPlatformFeeBps")?.value || "").trim();
-  if (bpsRaw !== "") payload.platformFeeBps = Number(bpsRaw);
-}
-};
+    if (isPayOnBooking) {
+      payload.stripeAccountId = ($("cStripeAccountId")?.value || "").trim();
+      payload.subscriberDiscountEnabled = $("cSubscriberDiscountEnabled")?.checked || false;
+
+      const bpsRaw = ($("cPlatformFeeBps")?.value || "").trim();
+      if (bpsRaw !== "") {
+        payload.platformFeeBps = Number(bpsRaw);
+      }
+    }
 
     const out = await j("/api/book/admin/courses", {
       method: "POST",
       body: JSON.stringify(payload)
     });
 
-    // ✅ Be resilient to backend response shape
     const savedSlug =
       (out?.course?.slug ||
        out?.data?.course?.slug ||
@@ -845,7 +847,6 @@ if (isPayOnBooking) {
     $("courseMsg").textContent =
       "✅ Saved: " + savedSlug + " — opens at /book/" + savedSlug;
 
-    // Populate other fields with the slug
     $("gSlug").value = savedSlug;
     $("sSlug").value = savedSlug;
     if ($("vSlug")) $("vSlug").value = savedSlug;
