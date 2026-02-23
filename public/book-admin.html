@@ -744,33 +744,53 @@ async function loadCourseSettingsIntoForm(slug){
   $("createCourseBtn").onclick = async () => {
   $("courseMsg").textContent = "Saving...";
   try {
+    const payload = {
+      slug: ($("cSlug").value || "").trim(),
+      name: ($("cName").value || "").trim(),
+      notes: ($("cNotes").value || "").trim(),
+      paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
+    };
+
     const out = await j("/api/book/admin/courses", {
-      method:"POST",
-      body: JSON.stringify({
-        slug: $("cSlug").value,
-        name: $("cName").value,
-        notes: $("cNotes").value,
-        paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE")
-      })
+      method: "POST",
+      body: JSON.stringify(payload)
     });
 
-    const course = extractCourse(out);
-if (!course) throw new Error("Course saved but response did not include course.slug");
+    // ✅ Be resilient to backend response shape
+    const savedSlug =
+      (out?.course?.slug ||
+       out?.data?.course?.slug ||
+       out?.data?.slug ||
+       out?.slug ||
+       payload.slug ||
+       "").toString().trim();
 
-$("courseMsg").textContent =
-  "✅ Saved: " + course.slug + " — opens at /book/" + course.slug;
+    if (!savedSlug) {
+      $("courseMsg").textContent =
+        "❌ Course saved but response did not include course.slug";
+      return;
+    }
 
-$("gSlug").value = course.slug;
-$("sSlug").value = course.slug;
+    $("courseMsg").textContent =
+      "✅ Saved: " + savedSlug + " — opens at /book/" + savedSlug;
 
-await loadCourseSettingsIntoForm(course.slug);
+    // Populate other fields with the slug
+    $("gSlug").value = savedSlug;
+    $("sSlug").value = savedSlug;
+    if ($("vSlug")) $("vSlug").value = savedSlug;
+    if ($("dSlug")) $("dSlug").value = savedSlug;
+    if ($("iSlug")) $("iSlug").value = savedSlug;
+    if ($("mSlug")) $("mSlug").value = savedSlug;
+    if ($("aSlug")) $("aSlug").value = savedSlug;
+
+    await loadCourseSettingsIntoForm(savedSlug);
     await refresh();
     await refreshActiveView();
+
   } catch (e) {
     $("courseMsg").textContent = "❌ " + e.message;
   }
 };
-
   $("saveSettingsBtn").onclick = async () => {
     $("settingsMsg").textContent = "Saving settings...";
     try{
