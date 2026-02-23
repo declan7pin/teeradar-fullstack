@@ -1355,6 +1355,9 @@ async function ensureBookingTables() {
     ON booking_times (course_id, play_date, holes, status, tee_time);
   `);
 
+  // =============================
+  // booking_bookings
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_bookings (
       id BIGSERIAL PRIMARY KEY,
@@ -1409,13 +1412,16 @@ async function ensureBookingTables() {
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;`);
   await db.query(`CREATE INDEX IF NOT EXISTS booking_bookings_course_window_idx ON booking_bookings (course_id, start_at, end_at);`);
 
-  // ✅ ADD: paid flag + cart tracking
+  // ✅ ADD: paid flag + cart tracking + subscriber discount tracking
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS checked_in BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_cart BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cart_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS subscriber_discount_applied BOOLEAN NOT NULL DEFAULT false;`);
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS subscriber_discount_cents INTEGER NOT NULL DEFAULT 0;`);
 
   // ✅ ADD: add-ons pricing stored per course
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
@@ -1435,6 +1441,9 @@ async function ensureBookingTables() {
     ON booking_bookings (course_id, play_date);
   `);
 
+  // =============================
+  // booking_analytics_events
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_analytics_events (
       id BIGSERIAL PRIMARY KEY,
@@ -1460,7 +1469,9 @@ async function ensureBookingTables() {
     ON booking_analytics_events (event_type, occurred_at DESC);
   `);
 
-  // ✅ NEW: per-course settings
+  // =============================
+  // booking_course_settings
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_course_settings (
       course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
@@ -1478,6 +1489,9 @@ async function ensureBookingTables() {
     );
   `);
 
+  // =============================
+  // booking_manual_slots
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_manual_slots (
       id BIGSERIAL PRIMARY KEY,
