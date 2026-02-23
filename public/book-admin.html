@@ -568,6 +568,38 @@
   }
 
   const $ = (id) => document.getElementById(id);
+  function updatePaymentUI(){
+  const mode = $("cPaymentMode")?.value || "PAY_AT_COURSE";
+  const wrap = $("paymentAdvancedWrap");
+  if (!wrap) return;
+
+  if (mode === "PAY_ON_BOOKING") {
+    wrap.style.display = "block";
+  } else {
+    wrap.style.display = "none";
+
+    // Optional: clear fields when not using pay-on-booking
+    if ($("cStripeAccountId")) $("cStripeAccountId").value = "";
+    if ($("cSubscriberDiscountEnabled")) $("cSubscriberDiscountEnabled").checked = false;
+    if ($("cPlatformFeeBps")) $("cPlatformFeeBps").value = "";
+    if ($("cFeePreview")) $("cFeePreview").textContent = "";
+
+    return;
+  }
+
+  const manualRaw = ($("cPlatformFeeBps")?.value || "").trim();
+  const manual = manualRaw === "" ? null : Number(manualRaw);
+  const discount = !!$("cSubscriberDiscountEnabled")?.checked;
+
+  const STANDARD = 300; // 3%
+  const DISCOUNT = 100; // 1% (your “lower tier”)
+  let bps = discount ? DISCOUNT : STANDARD;
+
+  if (manual !== null && Number.isFinite(manual)) bps = manual;
+
+  const pct = (bps / 100).toFixed(2);
+  if ($("cFeePreview")) $("cFeePreview").textContent = `Platform fee: ${pct}%`;
+}
   // ✅ Robustly extract a {slug,name,notes,payment_mode} course object from any backend shape
 function extractCourse(out){
   const c =
@@ -734,6 +766,9 @@ async function loadCourseSettingsIntoForm(slug){
     }
     return { ok:true, times: out };
   }
+$("cPaymentMode")?.addEventListener("change", updatePaymentUI);
+$("cSubscriberDiscountEnabled")?.addEventListener("change", updatePaymentUI);
+$("cPlatformFeeBps")?.addEventListener("input", updatePaymentUI);
 
   $("loginBtn").onclick = async () => {
     $("loginMsg").textContent = "Logging in...";
@@ -774,14 +809,17 @@ async function loadCourseSettingsIntoForm(slug){
   slug: ($("cSlug").value || "").trim(),
   name: ($("cName").value || "").trim(),
   notes: ($("cNotes").value || "").trim(),
-  paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
+   paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
+};
 
-  // ✅ NEW
-  stripeAccountId: ($("cStripeAccountId")?.value || "").trim(),
-  subscriberDiscountEnabled: $("cSubscriberDiscountEnabled")?.checked || false,
-  platformFeeBps: ($("cPlatformFeeBps")?.value || "").trim() === ""
-    ? undefined
-    : Number($("cPlatformFeeBps").value)
+const isPayOnBooking = payload.paymentMode === "PAY_ON_BOOKING";
+if (isPayOnBooking) {
+  payload.stripeAccountId = ($("cStripeAccountId")?.value || "").trim();
+  payload.subscriberDiscountEnabled = $("cSubscriberDiscountEnabled")?.checked || false;
+
+  const bpsRaw = ($("cPlatformFeeBps")?.value || "").trim();
+  if (bpsRaw !== "") payload.platformFeeBps = Number(bpsRaw);
+}
 };
 
     const out = await j("/api/book/admin/courses", {
@@ -1612,6 +1650,8 @@ if ($("cPlatformFeeBps")) {
     clearViewBoxes();
   };
 });
+updatePaymentUI();
+
       ul.querySelectorAll("button[data-viewtimes]").forEach(btn => {
         btn.onclick = async () => {
           const s = btn.getAttribute("data-viewtimes") || "";
@@ -1718,6 +1758,7 @@ $("checkInventoryBtn").onclick = async () => {
     $("inventoryMsg").textContent = "❌ " + e.message;
   }
 };
+updatePaymentUI();
   refresh();
 </script>
 </body>
