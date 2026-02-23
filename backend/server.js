@@ -318,6 +318,20 @@ async function ensureBookingTables() {
     `);
     await ensureCoursePaymentModeSchema();
 
+    // ✅ NEW: per-course platform fee (basis points) so you can offer different deals per course
+    // 100 = 1%, 300 = 3%, 50 = 0.5%
+    await db.query(`
+      ALTER TABLE booking_courses
+      ADD COLUMN IF NOT EXISTS platform_fee_bps INTEGER NOT NULL DEFAULT 0;
+    `);
+
+    // ✅ Backfill safety (older rows)
+    await db.query(`
+      UPDATE booking_courses
+      SET platform_fee_bps = 0
+      WHERE platform_fee_bps IS NULL;
+    `);
+
     await db.query(`
       CREATE TABLE IF NOT EXISTS booking_course_users (
         id SERIAL PRIMARY KEY,
