@@ -1058,6 +1058,38 @@ async function ensureBookingTables() {
     ADD COLUMN IF NOT EXISTS payment_mode TEXT NOT NULL DEFAULT 'PAY_AT_COURSE';
   `);
 
+  // ✅ FIX: repair legacy CHECK constraint + normalize old values
+  // Your DB currently has booking_courses_payment_mode_check that rejects PAY_ON_BOOKING.
+  await db.query(`
+    UPDATE booking_courses
+    SET payment_mode = CASE
+      WHEN payment_mode IS NULL OR payment_mode = '' THEN 'PAY_AT_COURSE'
+      WHEN payment_mode IN ('PAY_AT_TIME_OF_BOOKING', 'PAY_AT_BOOKING', 'PAYMENT_ON_BOOKING') THEN 'PAY_ON_BOOKING'
+      ELSE payment_mode
+    END;
+  `);
+
+  await db.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'booking_courses_payment_mode_check'
+      ) THEN
+        ALTER TABLE booking_courses
+        DROP CONSTRAINT booking_courses_payment_mode_check;
+      END IF;
+    END
+    $$;
+  `);
+
+  await db.query(`
+    ALTER TABLE booking_courses
+    ADD CONSTRAINT booking_courses_payment_mode_check
+    CHECK (payment_mode IN ('PAY_AT_COURSE', 'PAY_ON_BOOKING'));
+  `);
+
   // Ensure layouts exists (safe on older DBs)
   await db.query(`
     ALTER TABLE booking_courses
