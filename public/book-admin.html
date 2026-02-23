@@ -1594,10 +1594,25 @@ tb.querySelectorAll('button[data-addbooking="1"]').forEach(btn => {
 
       list.forEach(c => {
         const li = document.createElement("li");
-        li.innerHTML =
+        const mode = c.payment_mode || c.paymentMode || "PAY_AT_COURSE";
+const bps = Number(c.platform_fee_bps || 0);
+const discount = !!c.subscriber_discount_enabled;
+const stripeConnected = !!c.stripe_account_id;
+
+const feePct = bps ? (bps / 100).toFixed(2) + "%" : "";
+
+li.innerHTML =
   `<b>${_escape(c.name)}</b> — <code>${_escape(c.slug)}</code>` +
-  ` <span class="pill">${_escape(paymentLabel(c.payment_mode || c.paymentMode))}</span>` +
+  ` <span class="pill">${_escape(paymentLabel(mode))}</span>` +
+
+  (mode === "PAY_ON_BOOKING"
+    ? ` <span class="pill">${_escape(feePct)}</span>` +
+      (discount ? ` <span class="pill">Subscriber Discount</span>` : ``) +
+      (stripeConnected ? ` <span class="pill">Stripe ✓</span>` : ` <span class="pill" style="background:#fee2e2;color:#991b1b;border-color:#fecaca">Stripe ✗</span>`)
+    : ``) +
+
   ` — <a href="/book/${_escape(c.slug)}">open</a>` +
+
   `<div class="actions">` +
   `<button class="small secondary" data-fill="${_escape(c.slug)}">Use for generator</button>` +
   `<button class="small secondary" data-viewtimes="${_escape(c.slug)}">View times</button>` +
