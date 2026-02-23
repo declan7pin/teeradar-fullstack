@@ -6,7 +6,6 @@ import { Resend } from "resend";
 import cookieParser from "cookie-parser"; // ✅ ADD
 import { recordEvent } from "./analytics.js";
 import jwt from "jsonwebtoken";
-import Stripe from "stripe";
 
 const router = express.Router();
 // ✅ CORS for booking admin + course admin UIs (fixes “buttons do nothing” due to blocked preflight)
@@ -80,12 +79,6 @@ const ADMIN_SECRET = (process.env.BOOKING_ADMIN_SECRET || "").trim();
 const COURSE_ADMIN_JWT_SECRET = (process.env.COURSE_ADMIN_JWT_SECRET || "").trim();
 // ✅ ALSO support normal JWT secret if you already have it set
 const JWT_SECRET_FALLBACK = (process.env.JWT_SECRET || "").trim();
-const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
-const PLATFORM_FEE_BPS = Number(process.env.PLATFORM_FEE_BPS || 0); // e.g. 500 = 5%
-const PUBLIC_BASE_URL =
-  (process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || "").trim();
-
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
 async function getTeePricePerPlayerCents({ courseId, playDate, teeTime, holes }) {
   const r = await db.query(
@@ -1063,12 +1056,6 @@ async function ensureBookingTables() {
   await db.query(`
     ALTER TABLE booking_courses
     ADD COLUMN IF NOT EXISTS payment_mode TEXT NOT NULL DEFAULT 'PAY_AT_COURSE';
-  `);
-
-  // ✅ NEW: Stripe Connect destination (connected account id)
-  await db.query(`
-    ALTER TABLE booking_courses
-    ADD COLUMN IF NOT EXISTS stripe_account_id TEXT;
   `);
 
   // ✅ FIX: repair legacy CHECK constraint + normalize old values (robust + idempotent)
@@ -8481,13 +8468,23 @@ router.get("/course/:slug", async (req, res) => {
   try {
     const slug = normSlug(req.params.slug);
     const { rows } = await db.query(
-      `SELECT id, slug, name, notes, cart_fee_cents, hire_clubs_fee_cents
+      `SELECT 
+         id, 
+         slug, 
+         name, 
+         notes, 
+         payment_mode,
+         stripe_account_id,
+         cart_fee_cents, 
+         hire_clubs_fee_cents
        FROM booking_courses
        WHERE slug=$1
        LIMIT 1;`,
       [slug]
     );
-    if (!rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    if (!rows.length)
+      return res.status(404).json({ ok: false, error: "course_not_found" });
 
     // ✅ analytics: booking course page viewed
     recordEvent({
@@ -8496,6 +8493,7 @@ router.get("/course/:slug", async (req, res) => {
       courseName: rows[0].name,
       meta: { slug },
     }).catch(() => {});
+
     recordBookingEvent(req, {
       courseSlug: slug,
       eventType: "course_view",
@@ -9107,17 +9105,28 @@ async function handleBook(req, res) {
 
     const c = await client.query(
       `
-      SELECT id, slug, name, notes,
-        cart_fee_cents, hire_clubs_fee_cents,
-        cart_qty, hire_clubs_qty,
-        duration_9_mins, duration_18_mins
+      SELECT 
+        id, 
+        slug, 
+        name, 
+        notes,
+        payment_mode,
+        stripe_account_id,
+        cart_fee_cents, 
+        hire_clubs_fee_cents,
+        cart_qty, 
+        hire_clubs_qty,
+        duration_9_mins, 
+        duration_18_mins
       FROM booking_courses
       WHERE slug=$1
       LIMIT 1;
       `,
       [slug]
     );
-    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+if (!c.rows.length)
+return res.status(404).json({ ok: false, error: "course_not_found" });
 
     const courseRow = c.rows[0];
     const courseId = courseRow.id;
