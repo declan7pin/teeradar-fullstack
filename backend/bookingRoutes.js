@@ -9112,6 +9112,7 @@ async function handleBook(req, res) {
         notes,
         payment_mode,
         stripe_account_id,
+        platform_fee_bps,
         cart_fee_cents, 
         hire_clubs_fee_cents,
         cart_qty, 
@@ -9134,6 +9135,16 @@ async function handleBook(req, res) {
     // ✅ NEW: payment branching
     const payment_mode = String(courseRow.payment_mode || "PAY_AT_COURSE").trim().toUpperCase();
     const stripe_account_id = String(courseRow.stripe_account_id || "").trim();
+
+    // ✅ NEW: per-course fee override (falls back to env PLATFORM_FEE_BPS)
+    const courseFeeBpsRaw =
+      courseRow.platform_fee_bps !== undefined && courseRow.platform_fee_bps !== null
+        ? Number(courseRow.platform_fee_bps)
+        : Number(PLATFORM_FEE_BPS || 0);
+
+    const courseFeeBps = Number.isFinite(courseFeeBpsRaw)
+      ? Math.max(0, Math.min(10000, Math.trunc(courseFeeBpsRaw)))
+      : 0;
 
     await client.query("BEGIN");
     didBegin = true;
@@ -9384,7 +9395,7 @@ async function handleBook(req, res) {
 
       const application_fee_amount = Math.max(
         0,
-        Math.round((totalCents * (Number(PLATFORM_FEE_BPS) || 0)) / 10000)
+        Math.round((totalCents * courseFeeBps) / 10000)
       );
 
       const session = await stripe.checkout.sessions.create({
@@ -9410,12 +9421,14 @@ async function handleBook(req, res) {
             booking_id: String(bookingId || ""),
             reference,
             course_slug: slug,
+            platform_fee_bps: String(courseFeeBps),
           },
         },
         metadata: {
           booking_id: String(bookingId || ""),
           reference,
           course_slug: slug,
+          platform_fee_bps: String(courseFeeBps),
         },
         success_url: `${PUBLIC_BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
         cancel_url: `${PUBLIC_BASE_URL}/book/${slug}?paid=0&ref=${encodeURIComponent(reference)}`,
