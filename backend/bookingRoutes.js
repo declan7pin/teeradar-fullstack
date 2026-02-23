@@ -9125,11 +9125,15 @@ async function handleBook(req, res) {
       [slug]
     );
 
-if (!c.rows.length)
-return res.status(404).json({ ok: false, error: "course_not_found" });
+    if (!c.rows.length)
+      return res.status(404).json({ ok: false, error: "course_not_found" });
 
     const courseRow = c.rows[0];
     const courseId = courseRow.id;
+
+    // ✅ NEW: payment branching
+    const payment_mode = String(courseRow.payment_mode || "PAY_AT_COURSE").trim().toUpperCase();
+    const stripe_account_id = String(courseRow.stripe_account_id || "").trim();
 
     await client.query("BEGIN");
     didBegin = true;
@@ -9271,6 +9275,9 @@ return res.status(404).json({ ok: false, error: "course_not_found" });
     const totalCents = baseTotalCents + addonsCents;
     const reference = makeRef("TR");
 
+    // ✅ NEW: status depends on payment mode
+    const bookingStatus = payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
+
     const ins = await client.query(
       `
       INSERT INTO booking_bookings
@@ -9286,12 +9293,12 @@ return res.status(404).json({ ok: false, error: "course_not_found" });
       VALUES
         ($1,$2::date,$3,$4,$5,
          $6,$7,$8,
-         $9,$10,$11,'CONFIRMED',
-         $12::timestamptz,$13::timestamptz,
+         $9,$10,$11,$12,
+         $13::timestamptz,$14::timestamptz,
          false,false,
-         $14,$15,$16,
-         $17,$18,$19,
-         $20,$21,$22,
+         $15,$16,$17,
+         $18,$19,$20,
+         $21,$22,$23,
          now())
       RETURNING id, reference;
       `,
@@ -9307,6 +9314,7 @@ return res.status(404).json({ ok: false, error: "course_not_found" });
         ppp,
         totalCents,
         reference,
+        bookingStatus, // ✅ NEW
         startAtIso,
         endAtIso,
         final_has_cart,
@@ -9320,6 +9328,8 @@ return res.status(404).json({ ok: false, error: "course_not_found" });
         timeRow.back_nine_key || null,
       ]
     );
+
+    const bookingId = ins.rows[0]?.id;
 
     const newBooked = bookedPlayers + players;
 
@@ -9360,6 +9370,83 @@ return res.status(404).json({ ok: false, error: "course_not_found" });
     await client.query("COMMIT");
     didBegin = false;
 
+    // ✅ NEW: if PAY_ON_BOOKING -> create Stripe session and return checkoutUrl
+    if (payment_mode === "PAY_ON_BOOKING") {
+      if (!stripe) {
+        return res.status(500).json({ ok: false, error: "stripe_not_configured" });
+      }
+      if (!stripe_account_id) {
+        return res.status(400).json({ ok: false, error: "course_missing_stripe_account" });
+      }
+      if (!PUBLIC_BASE_URL) {
+        return res.status(500).json({ ok: false, error: "public_base_url_missing" });
+      }
+
+      const application_fee_amount = Math.max(
+        0,
+        Math.round((totalCents * (Number(PLATFORM_FEE_BPS) || 0)) / 10000)
+      );
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        customer_email: golfer_email,
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: "aud",
+              unit_amount: totalCents,
+              product_data: {
+                name: `${courseRow.name} — ${holes} holes (${players} players)`,
+                description: `${date} ${time}`,
+              },
+            },
+          },
+        ],
+        payment_intent_data: {
+          application_fee_amount,
+          transfer_data: { destination: stripe_account_id },
+          metadata: {
+            booking_id: String(bookingId || ""),
+            reference,
+            course_slug: slug,
+          },
+        },
+        metadata: {
+          booking_id: String(bookingId || ""),
+          reference,
+          course_slug: slug,
+        },
+        success_url: `${PUBLIC_BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
+        cancel_url: `${PUBLIC_BASE_URL}/book/${slug}?paid=0&ref=${encodeURIComponent(reference)}`,
+      });
+
+      return res.json({
+        ok: true,
+        reference,
+        payment_mode: "PAY_ON_BOOKING",
+        checkoutUrl: session.url,
+        course: { slug: courseRow.slug, name: courseRow.name },
+        booking: {
+          date,
+          time,
+          holes,
+          players,
+          pricePerPlayerCents: ppp,
+          totalCents,
+          addonsCents,
+          cart_qty,
+          hire_clubs_qty,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+        },
+        emailOk: false,
+        emailReason: "pay_on_booking",
+      });
+    }
+
+    // ---- existing analytics/email/response stays unchanged for PAY_AT_COURSE ----
     recordEvent({
       type: "booking_created",
       userId: getClientIp(req) || null,
