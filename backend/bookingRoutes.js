@@ -840,6 +840,8 @@ function requirePlatformAdmin(req, res, next) {
 
   return res.status(401).json({ ok: false, error: "not_authorized" });
 }
+// ✅ Backwards-compatible alias (some routes still reference requireBookingAdmin)
+const requireBookingAdmin = requirePlatformAdmin;
 
 // ✅ accept both the old and new admin generator payload shapes
 function _pickAny(obj, keys, fallback = undefined) {
