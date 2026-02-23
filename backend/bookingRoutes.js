@@ -1058,24 +1058,29 @@ async function ensureBookingTables() {
     ADD COLUMN IF NOT EXISTS payment_mode TEXT NOT NULL DEFAULT 'PAY_AT_COURSE';
   `);
 
-  // ✅ FIX: repair legacy CHECK constraint + normalize old values
-  // Your DB currently has booking_courses_payment_mode_check that rejects PAY_ON_BOOKING.
+  // ✅ FIX: repair legacy CHECK constraint + normalize old values (robust + idempotent)
+  // 1) hard-normalize values so the CHECK constraint won't fail
   await db.query(`
     UPDATE booking_courses
     SET payment_mode = CASE
-      WHEN payment_mode IS NULL OR payment_mode = '' THEN 'PAY_AT_COURSE'
-      WHEN payment_mode IN ('PAY_AT_TIME_OF_BOOKING', 'PAY_AT_BOOKING', 'PAYMENT_ON_BOOKING') THEN 'PAY_ON_BOOKING'
-      ELSE payment_mode
+      WHEN payment_mode IS NULL THEN 'PAY_AT_COURSE'
+      WHEN BTRIM(payment_mode) = '' THEN 'PAY_AT_COURSE'
+      WHEN UPPER(BTRIM(payment_mode)) IN ('PAY_AT_TIME_OF_BOOKING', 'PAY_AT_BOOKING', 'PAYMENT_ON_BOOKING', 'PAY_ON_BOOKING') THEN 'PAY_ON_BOOKING'
+      WHEN UPPER(BTRIM(payment_mode)) IN ('PAY_AT_COURSE') THEN 'PAY_AT_COURSE'
+      ELSE 'PAY_AT_COURSE'
     END;
   `);
 
+  // 2) drop old constraint if it exists on this table
   await db.query(`
     DO $$
     BEGIN
       IF EXISTS (
         SELECT 1
         FROM pg_constraint
-        WHERE conname = 'booking_courses_payment_mode_check'
+        WHERE conrelid = 'booking_courses'::regclass
+          AND contype = 'c'
+          AND conname = 'booking_courses_payment_mode_check'
       ) THEN
         ALTER TABLE booking_courses
         DROP CONSTRAINT booking_courses_payment_mode_check;
@@ -1084,10 +1089,23 @@ async function ensureBookingTables() {
     $$;
   `);
 
+  // 3) add correct constraint only if missing
   await db.query(`
-    ALTER TABLE booking_courses
-    ADD CONSTRAINT booking_courses_payment_mode_check
-    CHECK (payment_mode IN ('PAY_AT_COURSE', 'PAY_ON_BOOKING'));
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'booking_courses'::regclass
+          AND contype = 'c'
+          AND conname = 'booking_courses_payment_mode_check'
+      ) THEN
+        ALTER TABLE booking_courses
+        ADD CONSTRAINT booking_courses_payment_mode_check
+        CHECK (payment_mode IN ('PAY_AT_COURSE', 'PAY_ON_BOOKING'));
+      END IF;
+    END
+    $$;
   `);
 
   // Ensure layouts exists (safe on older DBs)
