@@ -313,23 +313,39 @@ async function ensureBookingTables() {
         slug TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
         notes TEXT,
+
+        -- ✅ payment config
+        payment_mode TEXT NOT NULL DEFAULT 'PAY_AT_COURSE',
+        stripe_account_id TEXT,
+
+        -- ✅ per-course platform fee override (basis points)
+        -- NULL => fallback to env (PLATFORM_FEE_BPS)
+        platform_fee_bps INTEGER,
+
+        -- ✅ optional flag to indicate they offer subscriber discount (for your UI / reporting)
+        subscriber_discount_enabled BOOLEAN NOT NULL DEFAULT false,
+
         created_at TIMESTAMPTZ DEFAULT now()
       );
     `);
+
+    // If you already run this, keep it
     await ensureCoursePaymentModeSchema();
 
-    // ✅ NEW: per-course platform fee (basis points) so you can offer different deals per course
-    // 100 = 1%, 300 = 3%, 50 = 0.5%
+    // ✅ Safe adds for existing DBs
     await db.query(`
       ALTER TABLE booking_courses
-      ADD COLUMN IF NOT EXISTS platform_fee_bps INTEGER NOT NULL DEFAULT 0;
+      ADD COLUMN IF NOT EXISTS stripe_account_id TEXT;
     `);
 
-    // ✅ Backfill safety (older rows)
     await db.query(`
-      UPDATE booking_courses
-      SET platform_fee_bps = 0
-      WHERE platform_fee_bps IS NULL;
+      ALTER TABLE booking_courses
+      ADD COLUMN IF NOT EXISTS platform_fee_bps INTEGER;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_courses
+      ADD COLUMN IF NOT EXISTS subscriber_discount_enabled BOOLEAN NOT NULL DEFAULT false;
     `);
 
     await db.query(`
@@ -344,13 +360,11 @@ async function ensureBookingTables() {
       );
     `);
 
-    // ✅ NEW: role for course admin users (PROSHOP or MANAGER)
     await db.query(`
       ALTER TABLE booking_course_users
       ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'PROSHOP';
     `);
 
-    // ✅ Backfill safety (older rows)
     await db.query(`
       UPDATE booking_course_users
       SET role = 'PROSHOP'
@@ -370,7 +384,6 @@ async function ensureBookingTables() {
         price_per_player_cents INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'AVAILABLE',
 
-        -- ✅ NEW: routing/layout keys (empty string = not used)
         layout_key TEXT NOT NULL DEFAULT '',
         front9_key TEXT NOT NULL DEFAULT '',
         back9_key  TEXT NOT NULL DEFAULT '',
@@ -378,7 +391,6 @@ async function ensureBookingTables() {
         created_at TIMESTAMPTZ DEFAULT now(),
         updated_at TIMESTAMPTZ DEFAULT now(),
 
-        -- ✅ NEW: uniqueness includes routing keys
         UNIQUE(course_id, play_date, tee_time, holes, layout_key, front9_key, back9_key)
       );
     `);
@@ -408,7 +420,6 @@ async function ensureBookingTables() {
       );
     `);
 
-    // ✅ NEW: columns needed for PAY_ON_BOOKING + overlap + webhook confirmation
     await db.query(`
       ALTER TABLE booking_bookings
       ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;
