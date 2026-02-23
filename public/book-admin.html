@@ -542,6 +542,29 @@
   }
 
   const $ = (id) => document.getElementById(id);
+  // ✅ Robustly extract a {slug,name,notes,payment_mode} course object from any backend shape
+function extractCourse(out){
+  const c =
+    out?.course ||
+    out?.data?.course ||
+    out?.result?.course ||
+    out?.savedCourse ||
+    out?.courseRow ||
+    out?.row ||
+    out?.data ||
+    null;
+
+  // allow direct "out.slug" style too
+  const slug = String(c?.slug ?? out?.slug ?? "").trim();
+  if (!slug) return null;
+
+  return {
+    slug,
+    name: c?.name ?? out?.name ?? "",
+    notes: c?.notes ?? out?.notes ?? "",
+    payment_mode: c?.payment_mode ?? c?.paymentMode ?? out?.payment_mode ?? out?.paymentMode ?? "PAY_AT_COURSE",
+  };
+}
   // ✅ Create a booking and "take a slot" for a specific tee time
 async function adminFillSlot({ slug, playDate, teeTime, holes }) {
   const name = prompt("Player name:");
@@ -731,13 +754,16 @@ async function loadCourseSettingsIntoForm(slug){
       })
     });
 
-    $("courseMsg").textContent =
-      "✅ Saved: " + out.course.slug + " — opens at /book/" + out.course.slug;
+    const course = extractCourse(out);
+if (!course) throw new Error("Course saved but response did not include course.slug");
 
-    $("gSlug").value = out.course.slug;
-    $("sSlug").value = out.course.slug;
+$("courseMsg").textContent =
+  "✅ Saved: " + course.slug + " — opens at /book/" + course.slug;
 
-    await loadCourseSettingsIntoForm(out.course.slug);
+$("gSlug").value = course.slug;
+$("sSlug").value = course.slug;
+
+await loadCourseSettingsIntoForm(course.slug);
     await refresh();
     await refreshActiveView();
   } catch (e) {
