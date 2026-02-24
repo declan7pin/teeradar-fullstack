@@ -805,7 +805,6 @@ $("cPlatformFeeBps")?.addEventListener("input", updatePaymentUI);
   $("createCourseBtn").onclick = async () => {
   $("courseMsg").textContent = "Saving...";
   try {
-
     const payload = {
       slug: ($("cSlug").value || "").trim(),
       name: ($("cName").value || "").trim(),
@@ -814,15 +813,12 @@ $("cPlatformFeeBps")?.addEventListener("input", updatePaymentUI);
     };
 
     const isPayOnBooking = payload.paymentMode === "PAY_ON_BOOKING";
-
     if (isPayOnBooking) {
       payload.stripeAccountId = ($("cStripeAccountId")?.value || "").trim();
       payload.subscriberDiscountEnabled = $("cSubscriberDiscountEnabled")?.checked || false;
 
       const bpsRaw = ($("cPlatformFeeBps")?.value || "").trim();
-      if (bpsRaw !== "") {
-        payload.platformFeeBps = Number(bpsRaw);
-      }
+      if (bpsRaw !== "") payload.platformFeeBps = Number(bpsRaw);
     }
 
     const out = await j("/api/book/admin/courses", {
@@ -858,7 +854,6 @@ $("cPlatformFeeBps")?.addEventListener("input", updatePaymentUI);
     await loadCourseSettingsIntoForm(savedSlug);
     await refresh();
     await refreshActiveView();
-
   } catch (e) {
     $("courseMsg").textContent = "❌ " + e.message;
   }
