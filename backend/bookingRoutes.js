@@ -9209,6 +9209,7 @@ async function handleBook(req, res) {
         payment_mode,
         stripe_account_id,
         platform_fee_bps,
+        subscriber_discount_enabled, -- ✅ CHANGE A: ADD THIS
         cart_fee_cents, 
         hire_clubs_fee_cents,
         cart_qty, 
@@ -9232,15 +9233,25 @@ async function handleBook(req, res) {
     const payment_mode = String(courseRow.payment_mode || "PAY_AT_COURSE").trim().toUpperCase();
     const stripe_account_id = String(courseRow.stripe_account_id || "").trim();
 
+    // ✅ CHANGE B: replace ONLY this fee/env block
     // ✅ FIX: read env safely (avoid ReferenceError if PLATFORM_FEE_BPS/PUBLIC_BASE_URL aren’t globals)
-    const envPlatformFeeBps = Number(process.env.PLATFORM_FEE_BPS || 0);
+    const envStandardFeeBps = Number(
+      process.env.PLATFORM_FEE_BPS || process.env.STANDARD_PLATFORM_FEE_BPS || 300
+    ); // default 3%
+
+    const envDiscountFeeBps = Number(
+      process.env.DISCOUNT_PLATFORM_FEE_BPS || 100
+    ); // default 1%
+
     const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || process.env.SITE_URL || "").trim();
 
-    // ✅ NEW: per-course fee override (falls back to env PLATFORM_FEE_BPS)
+    const discountEnabled = !!courseRow.subscriber_discount_enabled;
+
+    // ✅ per-course override if set, else pick tier based on discount flag
     const courseFeeBpsRaw =
       courseRow.platform_fee_bps !== undefined && courseRow.platform_fee_bps !== null
         ? Number(courseRow.platform_fee_bps)
-        : envPlatformFeeBps;
+        : (discountEnabled ? envDiscountFeeBps : envStandardFeeBps);
 
     const courseFeeBps = Number.isFinite(courseFeeBpsRaw)
       ? Math.max(0, Math.min(10000, Math.trunc(courseFeeBpsRaw)))
