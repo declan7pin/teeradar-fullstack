@@ -9863,6 +9863,71 @@ router.post("/availability", (req, res) => {
   });
 });
 
+// ===============================
+// STRIPE WEBHOOK (PAY_ON_BOOKING)
+// ===============================
+router.post(
+  "/stripe-webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    if (!stripe) return res.status(400).send("Stripe not configured");
+
+    const sig = req.headers["stripe-signature"];
+    const endpointSecret = (process.env.STRIPE_WEBHOOK_SECRET || "").trim();
+
+    if (!endpointSecret) {
+      console.error("❌ Missing STRIPE_WEBHOOK_SECRET env var");
+      return res.status(500).send("Missing webhook secret");
+    }
+
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    } catch (err) {
+      console.error("❌ Stripe webhook signature verification failed:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // ✅ Mark booking as paid + confirmed when checkout completes
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+
+      const bookingId = session?.metadata?.booking_id
+        ? Number(session.metadata.booking_id)
+        : null;
+
+      const reference = session?.metadata?.reference
+        ? String(session.metadata.reference)
+        : null;
+
+      if (!bookingId) {
+        console.error("❌ Webhook missing booking_id metadata");
+        return res.status(400).send("Missing booking_id");
+      }
+
+      try {
+        await db.query(
+          `
+          UPDATE booking_bookings
+          SET paid = true,
+              status = 'CONFIRMED',
+              updated_at = now()
+          WHERE id = $1;
+          `,
+          [bookingId]
+        );
+
+        console.log("✅ Booking marked paid:", { bookingId, reference });
+      } catch (e) {
+        console.error("❌ Webhook DB update failed", e);
+        return res.status(500).send("DB error");
+      }
+    }
+
+    return res.json({ received: true });
+  }
+);
+
 // ✅ NEW: Booking Analytics (uses real bookings + existing analytics table)
 router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req, res) => {
   try {
