@@ -9446,8 +9446,42 @@ async function handleBook(req, res) {
 
     const bookingId = ins.rows[0]?.id;
 
-    // ✅ If PAY_ON_BOOKING: create Stripe session BEFORE we commit anything
-    let checkoutUrl = null;
+    const newBooked = bookedPlayers + players;
+
+    await client.query(
+      `
+      UPDATE booking_times
+      SET
+        booked_players = $8,
+        status = CASE
+          WHEN status = 'BLOCKED' THEN 'BLOCKED'
+          WHEN $8 >= max_players THEN 'BOOKED'
+          ELSE 'AVAILABLE'
+        END,
+        updated_at = now()
+      WHERE course_id=$1
+        AND play_date=$2::date
+        AND tee_time=$3
+        AND holes=$4
+        AND (
+          ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
+          OR
+          ($4 = 9 AND lower(layout_key) = lower($5))
+        );
+      `,
+      [
+        courseId,
+        date,
+        teeTimeDb,
+        holes,
+        layout_key || "",
+        front_nine_key || "",
+        back_nine_key || "",
+        newBooked,
+      ]
+    );
+
+    // ✅ CHANGE: create Stripe session AFTER UPDATE but BEFORE COMMIT
     if (payment_mode === "PAY_ON_BOOKING") {
       if (!stripe) {
         await client.query("ROLLBACK");
@@ -9506,54 +9540,14 @@ async function handleBook(req, res) {
         cancel_url: `${publicBaseUrl}/book/${slug}?paid=0&ref=${encodeURIComponent(reference)}`,
       });
 
-      checkoutUrl = session.url;
-    }
+      await client.query("COMMIT");
+      didBegin = false;
 
-    const newBooked = bookedPlayers + players;
-
-    await client.query(
-      `
-      UPDATE booking_times
-      SET
-        booked_players = $8,
-        status = CASE
-          WHEN status = 'BLOCKED' THEN 'BLOCKED'
-          WHEN $8 >= max_players THEN 'BOOKED'
-          ELSE 'AVAILABLE'
-        END,
-        updated_at = now()
-      WHERE course_id=$1
-        AND play_date=$2::date
-        AND tee_time=$3
-        AND holes=$4
-        AND (
-          ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
-          OR
-          ($4 = 9 AND lower(layout_key) = lower($5))
-        );
-      `,
-      [
-        courseId,
-        date,
-        teeTimeDb,
-        holes,
-        layout_key || "",
-        front_nine_key || "",
-        back_nine_key || "",
-        newBooked,
-      ]
-    );
-
-    await client.query("COMMIT");
-    didBegin = false;
-
-    // ✅ Return checkout for PAY_ON_BOOKING (no email yet)
-    if (payment_mode === "PAY_ON_BOOKING") {
       return res.json({
         ok: true,
         reference,
         payment_mode: "PAY_ON_BOOKING",
-        checkoutUrl,
+        checkoutUrl: session.url,
         course: { slug: courseRow.slug, name: courseRow.name },
         booking: {
           date,
@@ -9573,6 +9567,9 @@ async function handleBook(req, res) {
         emailReason: "pay_on_booking",
       });
     }
+
+    await client.query("COMMIT");
+    didBegin = false;
 
     // ---- PAY_AT_COURSE existing analytics/email/response ----
     recordEvent({
