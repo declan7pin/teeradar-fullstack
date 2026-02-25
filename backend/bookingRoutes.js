@@ -2794,6 +2794,70 @@ router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
     });
   }
 });
+// ✅ Stripe Connect onboarding (create Express account if missing, return onboarding URL)
+router.post("/admin/stripe/onboard", requireBookingAdmin, async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(500).json({ ok: false, error: "stripe_not_configured" });
+    }
+
+    const slug = normSlug(req.body?.slug || req.query?.slug || "");
+    if (!slug || !isValidSlug(slug)) {
+      return res.status(400).json({ ok: false, error: "slug_invalid" });
+    }
+
+    const c = await db.query(
+      `SELECT id, slug, stripe_account_id
+       FROM booking_courses
+       WHERE slug=$1
+       LIMIT 1;`,
+      [slug]
+    );
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    const courseId = Number(c.rows[0].id);
+    let acct = String(c.rows[0].stripe_account_id || "").trim();
+
+    // ✅ Create a Connect Express account if the course doesn't have one yet
+    if (!acct) {
+      const created = await stripe.accounts.create({
+        type: "express",
+        country: "AU",
+        capabilities: {
+          transfers: { requested: true },
+        },
+      });
+
+      acct = created.id;
+
+      await db.query(
+        `UPDATE booking_courses SET stripe_account_id=$1 WHERE id=$2`,
+        [acct, courseId]
+      );
+    }
+
+    const publicBaseUrl =
+      String(process.env.PUBLIC_BASE_URL || "").trim() ||
+      (req.get("origin") || "");
+
+    if (!publicBaseUrl) {
+      return res.status(500).json({ ok: false, error: "missing_PUBLIC_BASE_URL" });
+    }
+
+    // ✅ Stripe-hosted onboarding flow URL
+    const link = await stripe.accountLinks.create({
+      account: acct,
+      type: "account_onboarding",
+      refresh_url: `${publicBaseUrl}/book-admin.html`,
+      return_url: `${publicBaseUrl}/book-admin.html`,
+    });
+
+    return res.json({ ok: true, slug, stripe_account_id: acct, url: link.url });
+  } catch (e) {
+    console.error("admin/stripe/onboard", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 router.delete("/admin/courses/:slug", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.params.slug);
@@ -9616,6 +9680,38 @@ async function handleBook(req, res) {
         didBegin = false;
         return res.status(500).json({ ok: false, error: "public_base_url_missing" });
       }
+      // ✅ ADD: ensure connected account is fully onboarded for transfers
+try {
+  const acct = await stripe.accounts.retrieve(stripe_account_id);
+
+  // Stripe uses "transfers" capability on Connect accounts (this is the important one)
+  const transfersCap = acct?.capabilities?.transfers;
+
+  // If Stripe returns capabilities and transfers isn't active yet, block checkout creation
+  if (transfersCap && String(transfersCap) !== "active") {
+    await client.query("ROLLBACK");
+    didBegin = false;
+    return res.status(400).json({
+      ok: false,
+      error: "course_stripe_not_ready",
+      message: "Course Stripe Connect onboarding not completed (transfers not active).",
+    });
+  }
+
+  // Also catch the case where the account is restricted/disabled
+  if (acct?.charges_enabled === false || acct?.payouts_enabled === false) {
+    await client.query("ROLLBACK");
+    didBegin = false;
+    return res.status(400).json({
+      ok: false,
+      error: "course_stripe_not_ready",
+      message: "Course Stripe account is not enabled for charges/payouts yet.",
+    });
+  }
+} catch (e) {
+  console.warn("Stripe account readiness check failed:", e?.message || e);
+  // Don't hard-fail here; Stripe will still throw a clearer error if it truly can't proceed
+}
 
       const application_fee_amount = Math.max(
         0,
