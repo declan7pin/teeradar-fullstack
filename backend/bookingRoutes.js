@@ -10,9 +10,15 @@ import Stripe from "stripe";
 
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
 
+// ✅ Stripe API version pin (recommended)
+const STRIPE_API_VERSION = "2024-06-20";
+
+// ✅ Platform fee in basis points (e.g. 300 = 3%)
+const PLATFORM_FEE_BPS = Number(process.env.PLATFORM_FEE_BPS || 0);
+
 // ✅ Create Stripe client once (or null if not configured)
 const stripe = STRIPE_SECRET_KEY
-  ? new Stripe(STRIPE_SECRET_KEY)
+  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION })
   : null;
 
 const router = express.Router();
