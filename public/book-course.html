@@ -1248,6 +1248,48 @@ $("confirmBtn").onclick = confirmBooking;
       await fetchAvailability();
     }
   } catch (e) {}
+  // ✅ STRIPE RETURN HANDLER
+(async function handleStripeReturn(){
+  try {
+    const q = new URLSearchParams(location.search);
+    const success = q.get("success");
+    const sessionId = q.get("session_id");
+
+    if (!success || success !== "1" || !sessionId) return;
+
+    setStatus("Finalising payment…", "");
+
+    const res = await apiFetch("/api/book/confirm-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId })
+    });
+
+    const data = await res.json().catch(()=> ({}));
+
+    if (!res.ok || !data || !data.ok) {
+      throw new Error(data?.error || "Payment confirmation failed");
+    }
+
+    // Show confirmation modal
+    selectedSlot = {
+      time: data.time,
+      pricePerPlayerCents: data.pricePerPlayerCents
+    };
+
+    showBookingConfirmation(data, data.email);
+
+    setStatus(`✅ Booking confirmed. Reference: ${data.reference}`, "ok");
+
+    // Clean URL (remove Stripe params)
+    history.replaceState({}, "", location.pathname);
+
+    await fetchAvailability();
+
+  } catch (e) {
+    setStatus("❌ " + (e.message || "Payment confirmation failed"), "err");
+  }
+})();
 })();
 </script>
 </body>
