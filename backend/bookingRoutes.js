@@ -83,6 +83,80 @@ router.use((req, res, next) => {
   console.log("📌 bookingRoutes hit:", req.method, req.originalUrl);
   next();
 });
+// ✅ Stripe webhook MUST use raw body (so it must be registered BEFORE express.json())
+const STRIPE_WEBHOOK_SECRET = (process.env.STRIPE_WEBHOOK_SECRET || "").trim();
+
+router.post(
+  "/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    if (!stripe) return res.status(500).send("stripe_not_configured");
+
+    let event;
+    try {
+      const sig = req.headers["stripe-signature"];
+      if (!STRIPE_WEBHOOK_SECRET) return res.status(500).send("missing_webhook_secret");
+      event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+      console.error("stripe webhook signature verify failed", err?.message || err);
+      return res.status(400).send("bad_signature");
+    }
+
+    try {
+      // We only care about Checkout completing
+      if (event.type === "checkout.session.completed") {
+        const session = event.data?.object || {};
+        const meta = session.metadata || {};
+
+        // The metadata is what we’ll rely on to finalize booking
+        const slug = String(meta.slug || "").trim();
+        const date = String(meta.date || "").trim();
+        const time = String(meta.time || "").trim();
+        const holes = Number(meta.holes || 0);
+        const players = Number(meta.players || 0);
+
+        const golfer_name = String(meta.golfer_name || "").trim();
+        const golfer_email = String(meta.golfer_email || "").trim();
+        const golfer_phone = String(meta.golfer_phone || "").trim();
+
+        const cart_qty = Number(meta.cart_qty || 0);
+        const hire_clubs_qty = Number(meta.hire_clubs_qty || 0);
+
+        const layout_key = String(meta.layout_key || "").trim();
+        const front_nine_key = String(meta.front_nine_key || "").trim();
+        const back_nine_key = String(meta.back_nine_key || "").trim();
+
+        const reference = String(meta.reference || "").trim();
+
+        // ✅ Call your existing booking logic, but as "paid"
+        // We’ll add a tiny helper below that reuses your current code path.
+        await finalizePaidBooking({
+          slug,
+          date,
+          time,
+          holes,
+          players,
+          golfer_name,
+          golfer_email,
+          golfer_phone,
+          cart_qty,
+          hire_clubs_qty,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+          reference,
+          stripe_session_id: String(session.id || ""),
+          stripe_payment_intent: String(session.payment_intent || ""),
+        });
+      }
+
+      res.json({ received: true });
+    } catch (e) {
+      console.error("stripe webhook handler error", e);
+      res.status(500).send("webhook_handler_failed");
+    }
+  }
+);
 // ✅ ADD (needed): ensure JSON bodies work for ALL routes in this router
 router.use(express.json());
 
