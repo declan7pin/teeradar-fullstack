@@ -9184,6 +9184,44 @@ function deriveRoutingKeysFromLayoutText({ holes, layoutTextRaw }) {
   return { layout_key: nineKeyFromLabel(cleaned) || null, front_nine_key: null, back_nine_key: null };
 }
 
+async function finalizePaidBooking(payload) {
+  // This function runs the same DB path as PAY_AT_COURSE, but marks booking paid/confirmed
+  // and MUST be safe to call from the webhook.
+
+  const {
+    slug, date, time, holes, players,
+    golfer_name, golfer_email, golfer_phone,
+    cart_qty, hire_clubs_qty,
+    layout_key, front_nine_key, back_nine_key,
+    reference,
+    stripe_session_id,
+    stripe_payment_intent,
+  } = payload || {};
+
+  // We create a fake "req/res" minimal call into the same code path by calling the same internals.
+  // To keep changes minimal, we’ll call a new internal function you will create by extracting
+  // the “big transaction” part out of handleBook.
+
+  await createBookingTransaction({
+    slug,
+    date,
+    time,
+    holes,
+    players,
+    golfer_name,
+    golfer_email,
+    golfer_phone,
+    cart_qty,
+    hire_clubs_qty,
+    layout_key,
+    front_nine_key,
+    back_nine_key,
+    reference,
+    paid: true,
+    stripe_session_id,
+    stripe_payment_intent,
+  });
+}
 async function handleBook(req, res) {
   let client = null;
   let didBegin = false;
