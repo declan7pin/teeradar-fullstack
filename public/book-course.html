@@ -1248,40 +1248,47 @@ $("confirmBtn").onclick = confirmBooking;
       await fetchAvailability();
     }
   } catch (e) {}
-  // ✅ STRIPE RETURN HANDLER
+ // ✅ STRIPE RETURN HANDLER (uses ?paid=1&ref=XXXX from backend success_url)
 (async function handleStripeReturn(){
   try {
     const q = new URLSearchParams(location.search);
-    const success = q.get("success");
-    const sessionId = q.get("session_id");
+    const paid = q.get("paid");
+    const ref = (q.get("ref") || "").trim();
 
-    if (!success || success !== "1" || !sessionId) return;
+    if (paid !== "1" || !ref) return;
 
     setStatus("Finalising payment…", "");
 
-    const res = await apiFetch("/api/book/confirm-payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId })
-    });
-
+    // ✅ fetch booking details by reference (backend: GET /api/book/booking?ref=...)
+    const res = await apiFetch("/api/book/booking?" + new URLSearchParams({ ref }).toString());
     const data = await res.json().catch(()=> ({}));
 
-    if (!res.ok || !data || !data.ok) {
-      throw new Error(data?.error || "Payment confirmation failed");
+    if (!res.ok || !data || !data.ok || !data.booking) {
+      throw new Error(data?.error || "Could not load booking confirmation");
     }
 
-    // Show confirmation modal
+    const b = data.booking;
+
+    // ✅ populate enough data for your existing modal renderer
     selectedSlot = {
-      time: data.time,
-      pricePerPlayerCents: data.pricePerPlayerCents
+      time: b.time,
+      holes: Number(b.holes || 18),
+      pricePerPlayerCents: Number(b.price_per_player_cents || 0),
+      layout_key: null,
+      front_nine_key: null,
+      back_nine_key: null
     };
 
-    showBookingConfirmation(data, data.email);
+    // (Optional) sync add-on qty in the UI model so totals render nicely
+    cartQtySelected = Number(b.cart_qty || 0);
+    clubsQtySelected = Number(b.hire_clubs_qty || 0);
 
-    setStatus(`✅ Booking confirmed. Reference: ${data.reference}`, "ok");
+    // ✅ show confirmation using your existing function
+    showBookingConfirmation({ reference: b.reference, emailOk: true, emailReason: null }, b.golfer_email || "");
 
-    // Clean URL (remove Stripe params)
+    setStatus(`✅ Booking confirmed. Reference: ${b.reference}`, "ok");
+
+    // ✅ remove paid/ref from URL so refresh doesn't re-run
     history.replaceState({}, "", location.pathname);
 
     await fetchAvailability();
@@ -1289,7 +1296,6 @@ $("confirmBtn").onclick = confirmBooking;
   } catch (e) {
     setStatus("❌ " + (e.message || "Payment confirmation failed"), "err");
   }
-})();
 })();
 </script>
 </body>
