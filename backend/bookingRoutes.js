@@ -9434,6 +9434,95 @@ async function finalizePaidBooking(payload) {
 
   return { ok: true, bookingId: booking.id, reference: booking.reference, emailOk, emailReason };
 }
+router.post("/confirm-payment", async (req, res) => {
+  try {
+    if (!stripe) return res.status(500).json({ ok: false, error: "stripe_not_configured" });
+
+    const sessionId = String(req.body?.sessionId || "").trim();
+    if (!sessionId) return res.status(400).json({ ok: false, error: "session_id_required" });
+
+    // 1) Load session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    // Must be paid (Stripe uses payment_status: 'paid' for Checkout)
+    if (session.payment_status !== "paid") {
+      return res.status(409).json({
+        ok: false,
+        error: "not_paid_yet",
+        payment_status: session.payment_status || null,
+      });
+    }
+
+    const meta = session.metadata || {};
+    const reference = String(meta.reference || "").trim();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "missing_reference_in_metadata" });
+    }
+
+    // 2) Finalize booking (idempotent — safe if webhook already ran)
+    const fin = await finalizePaidBooking({
+      reference,
+      stripe_session_id: String(session.id || ""),
+      stripe_payment_intent: String(session.payment_intent || ""),
+    });
+
+    if (!fin || fin.ok !== true) {
+      return res.status(500).json({ ok: false, error: fin?.error || "finalize_failed" });
+    }
+
+    // 3) Return booking details for the frontend confirmation modal
+    const b = await db.query(
+      `
+      SELECT
+        b.reference,
+        b.play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.golfer_email,
+        b.price_per_player_cents,
+        b.total_cents,
+        b.cart_fee_cents,
+        b.hire_clubs_fee_cents,
+        c.name AS course_name
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      WHERE b.reference = $1
+      LIMIT 1;
+      `,
+      [reference]
+    );
+
+    const booking = b.rows[0];
+    if (!booking) return res.status(404).json({ ok: false, error: "booking_not_found" });
+
+    return res.json({
+      ok: true,
+      reference: booking.reference,
+      email: booking.golfer_email,
+      date: String(booking.play_date).slice(0, 10),
+      time: String(booking.tee_time || "").split("|")[0], // should already be HH:MM now
+      holes: Number(booking.holes || 0),
+      players: Number(booking.players || 0),
+      courseName: booking.course_name,
+
+      // used by your UI (selectedSlot in handleStripeReturn)
+      pricePerPlayerCents: Number(booking.price_per_player_cents || 0),
+
+      // nice-to-have for totals (your showBookingConfirmation uses these)
+      totalCents: Number(booking.total_cents || 0),
+      cartCents: Number(booking.cart_fee_cents || 0),
+      hireClubsCents: Number(booking.hire_clubs_fee_cents || 0),
+
+      // pass through finalize email result (if you return it)
+      emailOk: fin.emailOk === true,
+      emailReason: fin.emailReason || null,
+    });
+  } catch (e) {
+    console.error("confirm-payment error", e?.message || e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 async function handleBook(req, res) {
   let client = null;
   let didBegin = false;
