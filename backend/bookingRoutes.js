@@ -9399,7 +9399,10 @@ async function finalizePaidBooking(payload) {
     courseName = c.rows[0]?.name || courseName;
   } catch {}
 
-  // ✅ 3) Send confirmation email ONCE (only when we successfully updated)
+   // ✅ 3) Send confirmation email ONCE (only when we successfully updated)
+  let emailOk = false;
+  let emailReason = null;
+
   try {
     const emailResult = await sendBookingEmail({
       to: booking.golfer_email,
@@ -9415,16 +9418,21 @@ async function finalizePaidBooking(payload) {
       hireClubsCents: Number(booking.hire_clubs_fee_cents || 0),
     });
 
+    emailOk = !!emailResult?.emailOk;
+    emailReason = emailResult?.emailReason || null;
+
     console.log("📧 finalizePaidBooking email:", {
       reference: booking.reference,
-      emailOk: !!emailResult?.emailOk,
-      emailReason: emailResult?.emailReason || null,
+      emailOk,
+      emailReason,
     });
   } catch (e) {
+    emailOk = false;
+    emailReason = e?.message || "send_failed";
     console.error("❌ finalizePaidBooking email failed:", e?.message || e);
   }
 
-  return { ok: true, bookingId: booking.id, reference: booking.reference };
+  return { ok: true, bookingId: booking.id, reference: booking.reference, emailOk, emailReason };
 }
 async function handleBook(req, res) {
   let client = null;
