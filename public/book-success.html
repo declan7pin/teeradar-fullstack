@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Booking Confirmed</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f4f7fb;
+      padding: 40px;
+      text-align: center;
+    }
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 500px;
+      margin: auto;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+    }
+    h1 { color: #00796b; }
+    .ref { font-weight: bold; font-size: 18px; }
+    .btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 12px 20px;
+      background: #00796b;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>✅ Booking Confirmed</h1>
+    <p>Your booking has been successfully confirmed.</p>
+    <p>Reference:</p>
+    <div class="ref" id="ref"></div>
+
+    <a class="btn" href="/">Return Home</a>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("reference");
+    document.getElementById("ref").textContent = ref || "—";
+  </script>
+</body>
+</html>
