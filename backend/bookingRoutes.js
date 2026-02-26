@@ -10163,6 +10163,8 @@ router.post(
 }
 
 return res.json({ received: true });
+  }
+);
 
 // ✅ NEW: Booking Analytics (uses real bookings + existing analytics table)
 router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req, res) => {
