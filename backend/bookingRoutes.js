@@ -9249,42 +9249,129 @@ function deriveRoutingKeysFromLayoutText({ holes, layoutTextRaw }) {
 }
 
 async function finalizePaidBooking(payload) {
-  // This function runs the same DB path as PAY_AT_COURSE, but marks booking paid/confirmed
-  // and MUST be safe to call from the webhook.
+  // ✅ Webhook-safe finaliser:
+  // - DO NOT create a new booking/lock times again (that already happened in /book)
+  // - Just mark the EXISTING booking as paid/confirmed
+  // - Store Stripe IDs
+  // - Send the confirmation email
+  // - Must be idempotent (Stripe webhooks retry)
 
   const {
-    slug, date, time, holes, players,
-    golfer_name, golfer_email, golfer_phone,
-    cart_qty, hire_clubs_qty,
-    layout_key, front_nine_key, back_nine_key,
     reference,
     stripe_session_id,
     stripe_payment_intent,
   } = payload || {};
 
-  // We create a fake "req/res" minimal call into the same code path by calling the same internals.
-  // To keep changes minimal, we’ll call a new internal function you will create by extracting
-  // the “big transaction” part out of handleBook.
+  if (!reference) {
+    console.warn("⚠️ finalizePaidBooking: missing reference");
+    return;
+  }
 
-  await createBookingTransaction({
-    slug,
-    date,
-    time,
-    holes,
-    players,
-    golfer_name,
-    golfer_email,
-    golfer_phone,
-    cart_qty,
-    hire_clubs_qty,
-    layout_key,
-    front_nine_key,
-    back_nine_key,
-    reference,
-    paid: true,
-    stripe_session_id,
-    stripe_payment_intent,
-  });
+  // 1) Load existing booking (created earlier when checkout session was created)
+  const b = await db.query(
+    `
+    SELECT
+      b.id,
+      b.course_id,
+      b.play_date,
+      b.tee_time,
+      b.holes,
+      b.players,
+      b.golfer_name,
+      b.golfer_email,
+      b.golfer_phone,
+      b.price_per_player_cents,
+      b.total_cents,
+      b.cart_fee_cents,
+      b.hire_clubs_fee_cents,
+      b.paid,
+      b.status,
+      c.name AS course_name
+    FROM booking_bookings b
+    JOIN booking_courses c ON c.id = b.course_id
+    WHERE b.reference = $1
+    LIMIT 1;
+    `,
+    [reference]
+  );
+
+  const booking = b.rows[0];
+  if (!booking) {
+    console.warn("⚠️ finalizePaidBooking: booking not found for reference:", reference);
+    return;
+  }
+
+  // 2) Idempotency: if already paid/confirmed, do nothing
+  const alreadyPaid =
+    booking.paid === true || String(booking.status || "").toUpperCase() === "CONFIRMED";
+
+  if (alreadyPaid) {
+    console.log("🔁 finalizePaidBooking: already paid/confirmed:", reference);
+    return;
+  }
+
+  // 3) Mark paid + confirmed (store stripe ids if columns exist; if not, just ignore errors)
+  try {
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET
+        paid = true,
+        status = 'CONFIRMED',
+        updated_at = now(),
+        stripe_session_id = COALESCE($2, stripe_session_id),
+        stripe_payment_intent = COALESCE($3, stripe_payment_intent)
+      WHERE id = $1;
+      `,
+      [
+        booking.id,
+        stripe_session_id ? String(stripe_session_id) : null,
+        stripe_payment_intent ? String(stripe_payment_intent) : null,
+      ]
+    );
+  } catch (e) {
+    // ✅ If your table doesn't have stripe_session_id / stripe_payment_intent yet,
+    // fall back to a minimal update.
+    console.warn("finalizePaidBooking: stripe columns update failed, falling back:", e?.message || e);
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET
+        paid = true,
+        status = 'CONFIRMED',
+        updated_at = now()
+      WHERE id = $1;
+      `,
+      [booking.id]
+    );
+  }
+
+  console.log("✅ Booking marked paid/confirmed:", { id: booking.id, reference });
+
+  // 4) Send confirmation email (same template you already use)
+  try {
+    const emailResult = await sendBookingEmail({
+      to: booking.golfer_email,
+      courseName: booking.course_name,
+      date: String(booking.play_date).slice(0, 10),
+      time: String(booking.tee_time || "").split("|")[0],
+      holes: Number(booking.holes || 0),
+      players: Number(booking.players || 0),
+      reference,
+      pricePerPlayerCents: Number(booking.price_per_player_cents || 0),
+      totalCents: Number(booking.total_cents || 0),
+      cartCents: Number(booking.cart_fee_cents || 0),
+      hireClubsCents: Number(booking.hire_clubs_fee_cents || 0),
+    });
+
+    console.log("📧 finalizePaidBooking email:", {
+      reference,
+      emailOk: !!emailResult?.emailOk,
+      emailReason: emailResult?.emailReason || null,
+    });
+  } catch (e) {
+    console.error("❌ finalizePaidBooking email failed:", e?.message || e);
+  }
 }
 async function handleBook(req, res) {
   let client = null;
