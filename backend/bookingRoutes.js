@@ -8907,17 +8907,8 @@ router.get("/availability", async (req, res) => {
                   (
                     t.front_nine_key IS NOT NULL
                     AND t.back_nine_key IS NOT NULL
-                    AND (
-                      (
-                        ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
-                        AND ms2.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
-                      )
-                      OR
-                      (
-                        -- ✅ ALSO MATCH: when ms2 stores composite layout_key like "18:front|back"
-                        ms2.layout_key IS NOT DISTINCT FROM ('18:' || t.front_nine_key || '|' || t.back_nine_key)
-                      )
-                    )
+                    AND ms2.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
+                    AND ms2.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
                   )
                   OR
                   (
@@ -8954,17 +8945,8 @@ router.get("/availability", async (req, res) => {
                   (
                     t.front_nine_key IS NOT NULL
                     AND t.back_nine_key IS NOT NULL
-                    AND (
-                      (
-                        b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
-                        AND b.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
-                      )
-                      OR
-                      (
-                        -- ✅ ALSO MATCH: when booking stores composite layout_key like "18:front|back"
-                        b.layout_key IS NOT DISTINCT FROM ('18:' || t.front_nine_key || '|' || t.back_nine_key)
-                      )
-                    )
+                    AND b.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
+                    AND b.back_nine_key  IS NOT DISTINCT FROM t.back_nine_key
                   )
                   OR
                   (
@@ -9005,11 +8987,7 @@ router.get("/availability", async (req, res) => {
                   bb18.status = 'CONFIRMED'
                   OR (bb18.status = 'PENDING_PAYMENT' AND bb18.created_at > now() - interval '15 minutes')
                 )
-                AND (
-                  -- ✅ match 18s that store back_nine_key normally OR as composite layout_key "18:front|back"
-                  bb18.back_nine_key = $4
-                  OR bb18.layout_key LIKE ('18:%|' || $4)
-                )
+                AND bb18.back_nine_key = $4
                 AND (
                   (
                     (split_part(split_part(t.tee_time, '|', 1), ':', 1)::int * 60 +
@@ -9708,7 +9686,12 @@ async function handleBook(req, res) {
     }
 
     const timeRow = t.rows[0];
-    const teeTimeDb = String(timeRow.tee_time || time).trim();
+
+// ✅ IMPORTANT FIX:
+// booking_times.tee_time can be like "06:40|18:front|back".
+// booking_bookings.tee_time MUST be plain "HH:MM" so availability + daily sheet joins work.
+const teeTimeDbRaw = String(timeRow.tee_time || time || "").trim();
+const teeTimeDb = teeTimeDbRaw.split("|")[0].trim();
 
     if (String(timeRow.status || "").toUpperCase() !== "AVAILABLE") {
       await client.query("ROLLBACK");
