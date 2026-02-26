@@ -10161,14 +10161,25 @@ router.post(
     if (event.type === "checkout.session.completed") {
   const session = event.data.object;
 
+  // ✅ extra safety
+  if (session?.payment_status && session.payment_status !== "paid") {
+    return res.json({ received: true });
+  }
+
   const reference = session?.metadata?.reference
     ? String(session.metadata.reference).trim()
     : "";
 
-  if (!reference) {
-    console.error("❌ Webhook missing reference metadata");
-    return res.status(400).send("Missing reference");
-  }
+  if (!reference) return res.status(400).send("Missing reference");
+
+  await finalizePaidBooking({
+    reference,
+    stripe_session_id: String(session.id || ""),
+    stripe_payment_intent: String(session.payment_intent || ""),
+  });
+
+  return res.json({ received: true });
+}
 
   try {
     // ✅ This marks paid+confirmed AND sends email (idempotent / safe on retries)
