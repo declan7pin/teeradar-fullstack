@@ -1585,6 +1585,10 @@ app.get("/api/debug/rounds-db", async (req, res) => {
 app.get("/book/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "book-admin.html"));
 });
+// ✅ NEW: Booking success page (MUST be before /book/:slug)
+app.get("/book/success", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "book-success.html"));
+});
 
 app.get("/book/:slug", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "book-course.html"));
