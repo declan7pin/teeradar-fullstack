@@ -157,8 +157,13 @@ router.post(
     }
   }
 );
-// ✅ ADD (needed): ensure JSON bodies work for ALL routes in this router
-router.use(express.json());
+// ✅ JSON for everything EXCEPT Stripe webhooks (webhooks need RAW body)
+router.use((req, res, next) => {
+  if (req.originalUrl.includes("/stripe/webhook") || req.originalUrl.includes("/stripe-webhook")) {
+    return next();
+  }
+  return express.json()(req, res, next);
+});
 
 // ✅ ADD (needed): read cookies for admin auth
 router.use(cookieParser());
@@ -9837,8 +9842,8 @@ try {
           course_slug: slug,
           platform_fee_bps: String(courseFeeBps),
         },
-        success_url: `${publicBaseUrl}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
-        cancel_url: `${publicBaseUrl}/book/${slug}?paid=0&ref=${encodeURIComponent(reference)}`,
+        success_url: `${publicBaseUrl}/book/${slug}?success=1&session_id={CHECKOUT_SESSION_ID}&ref=${encodeURIComponent(reference)}`,
+        cancel_url: `${publicBaseUrl}/book/${slug}?success=0&ref=${encodeURIComponent(reference)}`,
       });
 
       await client.query("COMMIT");
@@ -9949,7 +9954,137 @@ router.post("/availability", (req, res) => {
     message: "Use GET /availability to list times and POST /book to confirm a booking.",
   });
 });
+// ===============================
+// CONFIRM PAYMENT (PAY_ON_BOOKING)
+// Called by book-course.html after Stripe redirect
+// ===============================
+router.post("/confirm-payment", async (req, res) => {
+  try {
+    if (!stripe) return res.status(500).json({ ok: false, error: "stripe_not_configured" });
 
+    const sessionId =
+      String(req.body?.sessionId || req.body?.session_id || "").trim();
+
+    if (!sessionId) {
+      return res.status(400).json({ ok: false, error: "session_id_required" });
+    }
+
+    // Expand PI so we can confirm it’s paid
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent"],
+    });
+
+    if (!session) {
+      return res.status(404).json({ ok: false, error: "session_not_found" });
+    }
+
+    // Only confirm if actually paid
+    const paid =
+      session.payment_status === "paid" ||
+      (session.payment_intent && session.payment_intent.status === "succeeded");
+
+    if (!paid) {
+      return res.status(400).json({
+        ok: false,
+        error: "not_paid",
+        message: "Payment not completed yet.",
+      });
+    }
+
+    const bookingId = session?.metadata?.booking_id
+      ? Number(session.metadata.booking_id)
+      : null;
+
+    const reference = session?.metadata?.reference
+      ? String(session.metadata.reference)
+      : null;
+
+    if (!bookingId) {
+      return res.status(400).json({ ok: false, error: "missing_booking_id_metadata" });
+    }
+
+    // Mark booking paid/confirmed (idempotent)
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET paid = true,
+          status = 'CONFIRMED',
+          updated_at = now()
+      WHERE id = $1
+      `,
+      [bookingId]
+    );
+
+    // Fetch booking details for UI + email
+    const b = await db.query(
+      `
+      SELECT
+        bb.id,
+        bb.reference,
+        bb.play_date,
+        bb.tee_time,
+        bb.holes,
+        bb.players,
+        bb.golfer_email,
+        bb.price_per_player_cents,
+        bb.total_cents,
+        bc.slug AS course_slug,
+        bc.name AS course_name
+      FROM booking_bookings bb
+      JOIN booking_courses bc ON bc.id = bb.course_id
+      WHERE bb.id = $1
+      LIMIT 1
+      `,
+      [bookingId]
+    );
+
+    const row = b.rows[0];
+    if (!row) return res.status(404).json({ ok: false, error: "booking_not_found" });
+
+    // Send confirmation email now that payment is confirmed (best-effort)
+    let emailOk = false;
+    let emailReason = null;
+
+    try {
+      const r = await sendBookingEmail({
+        to: row.golfer_email,
+        courseName: row.course_name,
+        date: String(row.play_date),
+        time: String(row.tee_time).split("|")[0], // keep your tee_time formatting safe
+        holes: Number(row.holes),
+        players: Number(row.players),
+        reference: row.reference,
+        pricePerPlayerCents: Number(row.price_per_player_cents || 0),
+        totalCents: Number(row.total_cents || 0),
+        cartCents: 0,
+        hireClubsCents: 0,
+      });
+      emailOk = !!r.emailOk;
+      emailReason = r.emailReason || null;
+    } catch (e) {
+      emailOk = false;
+      emailReason = "email_failed";
+    }
+
+    return res.json({
+      ok: true,
+      reference: row.reference || reference,
+      email: row.golfer_email,
+      date: String(row.play_date),
+      time: String(row.tee_time).split("|")[0],
+      holes: Number(row.holes),
+      players: Number(row.players),
+      pricePerPlayerCents: Number(row.price_per_player_cents || 0),
+      totalCents: Number(row.total_cents || 0),
+      course: { slug: row.course_slug, name: row.course_name },
+      emailOk,
+      emailReason,
+    });
+  } catch (e) {
+    console.error("confirm-payment", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // ===============================
 // STRIPE WEBHOOK (PAY_ON_BOOKING)
 // ===============================
