@@ -385,8 +385,8 @@ async function ensureBookingTables() {
         status TEXT NOT NULL DEFAULT 'AVAILABLE',
 
         layout_key TEXT NOT NULL DEFAULT '',
-        front9_key TEXT NOT NULL DEFAULT '',
-        back9_key  TEXT NOT NULL DEFAULT '',
+        front_nine_key TEXT NOT NULL DEFAULT '',
+        back_nine_key  TEXT NOT NULL DEFAULT '',
 
         created_at TIMESTAMPTZ DEFAULT now(),
         updated_at TIMESTAMPTZ DEFAULT now(),
@@ -469,60 +469,90 @@ async function ensureBookingTimesRoutingSchema() {
 
     console.log("🔧 booking_times routing migration: starting");
 
-    // 1) Ensure routing + booked_players columns exist
+    // 1) Ensure routing + booked_players columns exist (✅ correct names)
     await db.query(`
       ALTER TABLE booking_times
         ADD COLUMN IF NOT EXISTS booked_players integer NOT NULL DEFAULT 0,
         ADD COLUMN IF NOT EXISTS layout_key text NOT NULL DEFAULT '',
-        ADD COLUMN IF NOT EXISTS front9_key text NOT NULL DEFAULT '',
-        ADD COLUMN IF NOT EXISTS back9_key  text NOT NULL DEFAULT '';
+        ADD COLUMN IF NOT EXISTS front_nine_key text NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS back_nine_key  text NOT NULL DEFAULT '';
     `);
 
     // 2) Backfill any nulls (safety for older rows)
     await db.query(`UPDATE booking_times SET booked_players = 0 WHERE booked_players IS NULL;`);
     await db.query(`UPDATE booking_times SET layout_key = '' WHERE layout_key IS NULL;`);
-    await db.query(`UPDATE booking_times SET front9_key = '' WHERE front9_key IS NULL;`);
-    await db.query(`UPDATE booking_times SET back9_key  = '' WHERE back9_key  IS NULL;`);
+    await db.query(`UPDATE booking_times SET front_nine_key = '' WHERE front_nine_key IS NULL;`);
+    await db.query(`UPDATE booking_times SET back_nine_key  = '' WHERE back_nine_key  IS NULL;`);
 
-    // 3) Drop the OLD unique constraint (course_id, play_date, tee_time, holes)
+    // 2.5) If you previously used front9_key/back9_key, copy values across (safe + dynamic)
+    await db.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='booking_times' AND column_name='front9_key'
+        ) THEN
+          EXECUTE '
+            UPDATE booking_times
+            SET front_nine_key = COALESCE(NULLIF(front_nine_key, ''''), COALESCE(front9_key, ''''))
+            WHERE COALESCE(front_nine_key, '''') = '''';
+          ';
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='booking_times' AND column_name='back9_key'
+        ) THEN
+          EXECUTE '
+            UPDATE booking_times
+            SET back_nine_key = COALESCE(NULLIF(back_nine_key, ''''), COALESCE(back9_key, ''''))
+            WHERE COALESCE(back_nine_key, '''') = '''';
+          ';
+        END IF;
+      END
+      $$;
+    `);
+
+    // 3) Drop the OLD unique constraint (course_id, play_date, tee_time, holes) if it exists
     const oldUq = await db.query(`
-  SELECT c.conname
-  FROM pg_constraint c
-  JOIN pg_class t ON t.oid = c.conrelid
-  WHERE c.contype = 'u'
-    AND t.relname = 'booking_times'
-    AND (
-      SELECT array_agg(a.attname::text ORDER BY a.attname::text)
-      FROM unnest(c.conkey) AS k(attnum)
-      JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
-    ) = ARRAY['course_id','holes','play_date','tee_time']::text[];
-`);
+      SELECT c.conname
+      FROM pg_constraint c
+      JOIN pg_class t ON t.oid = c.conrelid
+      WHERE c.contype = 'u'
+        AND t.relname = 'booking_times'
+        AND (
+          SELECT array_agg(a.attname::text ORDER BY a.attname::text)
+          FROM unnest(c.conkey) AS k(attnum)
+          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+        ) = ARRAY['course_id','holes','play_date','tee_time']::text[];
+    `);
 
     for (const r of oldUq.rows || []) {
       console.log("🧹 dropping old booking_times unique constraint:", r.conname);
       await db.query(`ALTER TABLE booking_times DROP CONSTRAINT IF EXISTS "${r.conname}";`);
     }
-// 3.5) ✅ DEDUPE existing rows so the new unique index can be created
-// Keeps the most recently updated/created row for each routing key.
-await db.query(`
-  WITH ranked AS (
-    SELECT
-      ctid,
-      ROW_NUMBER() OVER (
-        PARTITION BY course_id, play_date, tee_time, holes, layout_key, front9_key, back9_key
-        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
-      ) AS rn
-    FROM booking_times
-  )
-  DELETE FROM booking_times bt
-  USING ranked r
-  WHERE bt.ctid = r.ctid
-    AND r.rn > 1;
-`);
-    // 4) Create the NEW unique index including routing keys
+
+    // 3.5) DEDUPE existing rows so the new unique index can be created
+    await db.query(`
+      WITH ranked AS (
+        SELECT
+          ctid,
+          ROW_NUMBER() OVER (
+            PARTITION BY course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
+          ) AS rn
+        FROM booking_times
+      )
+      DELETE FROM booking_times bt
+      USING ranked r
+      WHERE bt.ctid = r.ctid
+        AND r.rn > 1;
+    `);
+
+    // 4) Create the NEW unique index including routing keys (✅ correct names)
     await db.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS booking_times_uq_routing
-      ON booking_times (course_id, play_date, tee_time, holes, layout_key, front9_key, back9_key);
+      ON booking_times (course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key);
     `);
 
     console.log("✅ booking_times routing migration: done");
