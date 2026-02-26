@@ -1534,6 +1534,29 @@ async function ensureBookingTables() {
     ON booking_bookings (course_id, play_date);
   `);
 
+  // ✅✅✅ ADD (needed): Stripe IDs for webhook idempotency + audit
+  await db.query(`
+    ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS stripe_session_id TEXT;
+  `);
+
+  await db.query(`
+    ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT;
+  `);
+
+  // (optional but recommended) indexes
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_bookings_stripe_session_idx
+    ON booking_bookings (stripe_session_id);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_bookings_stripe_pi_idx
+    ON booking_bookings (stripe_payment_intent);
+  `);
+  // ✅✅✅ END ADD ✅✅✅
+
   // =============================
   // booking_analytics_events
   // =============================
