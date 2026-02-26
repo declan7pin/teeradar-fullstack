@@ -9927,8 +9927,8 @@ try {
           course_slug: slug,
           platform_fee_bps: String(courseFeeBps),
         },
-        success_url: `${publicBaseUrl}/book/${slug}?success=1&session_id={CHECKOUT_SESSION_ID}&ref=${encodeURIComponent(reference)}`,
-        cancel_url: `${publicBaseUrl}/book/${slug}?success=0&ref=${encodeURIComponent(reference)}`,
+        success_url: `${BASE_URL}/book-success.html?reference=${encodeURIComponent(reference)}`,
+        cancel_url: `${BASE_URL}/book/${slug}?cancelled=1`,
       });
 
       await client.query("COMMIT");
@@ -10161,25 +10161,14 @@ router.post(
     if (event.type === "checkout.session.completed") {
   const session = event.data.object;
 
-  // ✅ extra safety
-  if (session?.payment_status && session.payment_status !== "paid") {
-    return res.json({ received: true });
-  }
-
   const reference = session?.metadata?.reference
     ? String(session.metadata.reference).trim()
     : "";
 
-  if (!reference) return res.status(400).send("Missing reference");
-
-  await finalizePaidBooking({
-    reference,
-    stripe_session_id: String(session.id || ""),
-    stripe_payment_intent: String(session.payment_intent || ""),
-  });
-
-  return res.json({ received: true });
-}
+  if (!reference) {
+    console.error("❌ Webhook missing reference metadata");
+    return res.status(400).send("Missing reference");
+  }
 
   try {
     // ✅ This marks paid+confirmed AND sends email (idempotent / safe on retries)
