@@ -732,7 +732,19 @@ if (bookingId && session?.payment_status === "paid") {
     }
   }
 );
-app.use(express.json({ type: ["application/json", "text/plain"] }));
+// ✅ IMPORTANT: Stripe webhooks need RAW body for signature verification.
+// So we apply express.json() to everything EXCEPT webhook routes.
+app.use((req, res, next) => {
+  const url = req.originalUrl || "";
+
+  // ✅ skip JSON parsing for Stripe webhook endpoints
+  if (url === "/api/webhook" || url === "/api/book/stripe-webhook") {
+    return next();
+  }
+
+  // everything else can be JSON parsed normally
+  return express.json({ type: ["application/json", "text/plain"] })(req, res, next);
+});
 
 // ✅ NEW: cookies (needed for booking admin auth cookie)
 app.use(cookieParser());
