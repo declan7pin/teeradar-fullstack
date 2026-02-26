@@ -61,6 +61,13 @@ router.use((req, res, next) => {
 
   next();
 });
+// ✅ Base URL used for redirects / links (Stripe success/cancel, confirmation page, etc.)
+const BASE_URL = String(
+  process.env.PUBLIC_BASE_URL ||
+  process.env.SITE_URL ||
+  process.env.RENDER_EXTERNAL_URL ||
+  "https://teeradar.com.au"
+).trim().replace(/\/+$/, "");
 // ✅ Add request id + timing + end-of-request status log
 router.use((req, res, next) => {
   req._rid = Math.random().toString(16).slice(2, 10);
