@@ -4576,6 +4576,77 @@ async function syncBookedPlayersForTime({
     matched_tee_time: target.tee_time || null,
   };
 }
+// ✅ PUBLIC: fetch a booking summary for the confirmation screen (by reference)
+router.get("/book/confirmation", async (req, res) => {
+  try {
+    const reference = String(req.query?.reference || "").trim().toUpperCase();
+    if (!reference) return res.status(400).json({ ok: false, error: "reference_required" });
+
+    // IMPORTANT:
+    // Adjust these column names if yours differ.
+    // This assumes you store bookings in booking_bookings and courses in booking_courses.
+    const q = await db.query(
+      `
+      SELECT
+        b.reference,
+        b.slug,
+        COALESCE(b.course_name, c.name) AS course_name,
+        b.date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        COALESCE(b.carts_qty, 0) AS carts_qty,
+        COALESCE(b.hire_clubs_qty, 0) AS hire_clubs_qty,
+        COALESCE(b.carts_price_cents, 0) AS carts_price_cents,
+        COALESCE(b.hire_clubs_price_cents, 0) AS hire_clubs_price_cents,
+        COALESCE(b.green_fee_cents, 0) AS green_fee_cents,
+        COALESCE(b.gross_cents, 0) AS gross_cents,
+        COALESCE(b.payment_mode, c.payment_mode) AS payment_mode,
+        COALESCE(b.status, 'CONFIRMED') AS status,
+        b.name,
+        b.email,
+        b.phone
+      FROM booking_bookings b
+      LEFT JOIN booking_courses c ON c.slug = b.slug
+      WHERE UPPER(b.reference) = $1
+      LIMIT 1
+      `,
+      [reference]
+    );
+
+    const row = q.rows[0];
+    if (!row) return res.status(404).json({ ok: false, error: "not_found" });
+
+    res.json({
+      ok: true,
+      booking: {
+        reference: row.reference,
+        slug: row.slug,
+        courseName: row.course_name,
+        date: row.date,              // "YYYY-MM-DD" (ideal)
+        teeTime: row.tee_time,       // "HH:MM"
+        holes: Number(row.holes || 0),
+        players: Number(row.players || 0),
+        cartsQty: Number(row.carts_qty || 0),
+        hireClubsQty: Number(row.hire_clubs_qty || 0),
+        greenFeeCents: Number(row.green_fee_cents || 0),
+        cartsPriceCents: Number(row.carts_price_cents || 0),
+        hireClubsPriceCents: Number(row.hire_clubs_price_cents || 0),
+        grossCents: Number(row.gross_cents || 0),
+        paymentMode: row.payment_mode || "PAY_AT_COURSE",
+        status: row.status || "CONFIRMED",
+        customer: {
+          name: row.name || "",
+          email: row.email || "",
+          phone: row.phone || "",
+        },
+      },
+    });
+  } catch (e) {
+    console.error("GET /book/confirmation error", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // -----------------------------
 // ✅ Platform admin manual slots (book-admin.html)
 // -----------------------------
