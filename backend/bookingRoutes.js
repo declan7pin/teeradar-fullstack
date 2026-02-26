@@ -8183,9 +8183,9 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
         FROM booking_bookings bb
         WHERE bb.course_id = t.course_id
           AND bb.play_date = t.play_date
-          AND bb.status = 'CONFIRMED'
+          AND bb.status IN ('CONFIRMED','PENDING_PAYMENT')
           AND bb.holes = t.holes
-          AND bb.tee_time = split_part(t.tee_time, '|', 1)
+          AND split_part(bb.tee_time, '|', 1) = split_part(t.tee_time, '|', 1)
           AND bb.layout_key IS NOT DISTINCT FROM t.layout_key
           AND bb.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
           AND bb.back_nine_key IS NOT DISTINCT FROM t.back_nine_key
@@ -8935,7 +8935,10 @@ router.get("/availability", async (req, res) => {
             -- ✅ FIX TIME MATCH (handles 06:00 vs 06:00:00)
             AND b.tee_time::time = split_part(t.tee_time, '|', 1)::time
             AND b.holes     = t.holes
-            AND b.status    = 'CONFIRMED'
+            AND (
+  b.status = 'CONFIRMED'
+  OR (b.status = 'PENDING_PAYMENT' AND b.created_at > now() - interval '15 minutes')
+)
             AND (
               (
                 t.holes = 18 AND (
