@@ -9267,102 +9267,142 @@ async function finalizePaidBooking(payload) {
     stripe_payment_intent,
   } = payload || {};
 
-  if (!reference) {
+  const ref = String(reference || "").trim();
+  if (!ref) {
     console.warn("⚠️ finalizePaidBooking: missing reference");
-    return;
+    return { ok: false, error: "missing_reference" };
   }
 
-  // 1) Load existing booking (created earlier when checkout session was created)
-  const b = await db.query(
-    `
-    SELECT
-      b.id,
-      b.course_id,
-      b.play_date,
-      b.tee_time,
-      b.holes,
-      b.players,
-      b.golfer_name,
-      b.golfer_email,
-      b.golfer_phone,
-      b.price_per_player_cents,
-      b.total_cents,
-      b.cart_fee_cents,
-      b.hire_clubs_fee_cents,
-      b.paid,
-      b.status,
-      c.name AS course_name
-    FROM booking_bookings b
-    JOIN booking_courses c ON c.id = b.course_id
-    WHERE b.reference = $1
-    LIMIT 1;
-    `,
-    [reference]
-  );
+  // ✅ 1) ATOMIC idempotent update (only updates if not already confirmed)
+  //    RETURNING gives us everything needed to email without a separate SELECT.
+  let booking = null;
 
-  const booking = b.rows[0];
-  if (!booking) {
-    console.warn("⚠️ finalizePaidBooking: booking not found for reference:", reference);
-    return;
-  }
-
-  // 2) Idempotency: if already paid/confirmed, do nothing
-  const alreadyPaid =
-    booking.paid === true || String(booking.status || "").toUpperCase() === "CONFIRMED";
-
-  if (alreadyPaid) {
-    console.log("🔁 finalizePaidBooking: already paid/confirmed:", reference);
-    return;
-  }
-
-  // 3) Mark paid + confirmed (store stripe ids if columns exist; if not, just ignore errors)
   try {
-    await db.query(
+    const upd = await db.query(
       `
-      UPDATE booking_bookings
+      UPDATE booking_bookings b
       SET
         paid = true,
         status = 'CONFIRMED',
         updated_at = now(),
-        stripe_session_id = COALESCE($2, stripe_session_id),
-        stripe_payment_intent = COALESCE($3, stripe_payment_intent)
-      WHERE id = $1;
+        stripe_session_id = COALESCE($2, b.stripe_session_id),
+        stripe_payment_intent = COALESCE($3, b.stripe_payment_intent)
+      WHERE b.reference = $1
+        AND COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
+      RETURNING
+        b.id,
+        b.course_id,
+        b.play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.golfer_name,
+        b.golfer_email,
+        b.golfer_phone,
+        b.price_per_player_cents,
+        b.total_cents,
+        b.cart_fee_cents,
+        b.hire_clubs_fee_cents,
+        b.reference;
       `,
       [
-        booking.id,
+        ref,
         stripe_session_id ? String(stripe_session_id) : null,
         stripe_payment_intent ? String(stripe_payment_intent) : null,
       ]
     );
+
+    if (!upd.rows.length) {
+      // Already confirmed OR not found. Distinguish with a quick check.
+      const exists = await db.query(
+        `SELECT id, paid, status FROM booking_bookings WHERE reference=$1 LIMIT 1;`,
+        [ref]
+      );
+
+      if (!exists.rows.length) {
+        console.warn("⚠️ finalizePaidBooking: booking not found for reference:", ref);
+        return { ok: false, error: "booking_not_found" };
+      }
+
+      console.log("🔁 finalizePaidBooking: already paid/confirmed:", ref);
+      return { ok: true, alreadyConfirmed: true };
+    }
+
+    booking = upd.rows[0];
   } catch (e) {
     // ✅ If your table doesn't have stripe_session_id / stripe_payment_intent yet,
-    // fall back to a minimal update.
-    console.warn("finalizePaidBooking: stripe columns update failed, falling back:", e?.message || e);
-    await db.query(
+    // fall back to a minimal atomic update (still idempotent).
+    const msg = e?.message || String(e || "");
+    console.warn("finalizePaidBooking: stripe columns update failed, falling back:", msg);
+
+    const upd2 = await db.query(
       `
-      UPDATE booking_bookings
+      UPDATE booking_bookings b
       SET
         paid = true,
         status = 'CONFIRMED',
         updated_at = now()
-      WHERE id = $1;
+      WHERE b.reference = $1
+        AND COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
+      RETURNING
+        b.id,
+        b.course_id,
+        b.play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.golfer_name,
+        b.golfer_email,
+        b.golfer_phone,
+        b.price_per_player_cents,
+        b.total_cents,
+        b.cart_fee_cents,
+        b.hire_clubs_fee_cents,
+        b.reference;
       `,
-      [booking.id]
+      [ref]
     );
+
+    if (!upd2.rows.length) {
+      const exists = await db.query(
+        `SELECT id, paid, status FROM booking_bookings WHERE reference=$1 LIMIT 1;`,
+        [ref]
+      );
+
+      if (!exists.rows.length) {
+        console.warn("⚠️ finalizePaidBooking: booking not found for reference:", ref);
+        return { ok: false, error: "booking_not_found" };
+      }
+
+      console.log("🔁 finalizePaidBooking: already paid/confirmed:", ref);
+      return { ok: true, alreadyConfirmed: true };
+    }
+
+    booking = upd2.rows[0];
   }
 
-  console.log("✅ Booking marked paid/confirmed:", { id: booking.id, reference });
+  console.log("✅ Booking marked paid/confirmed:", { id: booking.id, reference: booking.reference });
 
-  // 4) Send confirmation email (same template you already use)
+  // ✅ 2) Fetch course name for email (small query; keeps changes minimal)
+  let courseName = "Golf Course";
+  try {
+    const c = await db.query(
+      `SELECT name FROM booking_courses WHERE id = $1 LIMIT 1;`,
+      [booking.course_id]
+    );
+    courseName = c.rows[0]?.name || courseName;
+  } catch {}
+
+  // ✅ 3) Send confirmation email ONCE (only when we successfully updated)
   try {
     const emailResult = await sendBookingEmail({
       to: booking.golfer_email,
-      courseName: booking.course_name,
+      courseName,
       date: String(booking.play_date).slice(0, 10),
       time: String(booking.tee_time || "").split("|")[0],
       holes: Number(booking.holes || 0),
       players: Number(booking.players || 0),
-      reference,
+      reference: booking.reference,
       pricePerPlayerCents: Number(booking.price_per_player_cents || 0),
       totalCents: Number(booking.total_cents || 0),
       cartCents: Number(booking.cart_fee_cents || 0),
@@ -9370,13 +9410,15 @@ async function finalizePaidBooking(payload) {
     });
 
     console.log("📧 finalizePaidBooking email:", {
-      reference,
+      reference: booking.reference,
       emailOk: !!emailResult?.emailOk,
       emailReason: emailResult?.emailReason || null,
     });
   } catch (e) {
     console.error("❌ finalizePaidBooking email failed:", e?.message || e);
   }
+
+  return { ok: true, bookingId: booking.id, reference: booking.reference };
 }
 async function handleBook(req, res) {
   let client = null;
