@@ -8936,9 +8936,9 @@ router.get("/availability", async (req, res) => {
             AND b.tee_time::time = split_part(t.tee_time, '|', 1)::time
             AND b.holes     = t.holes
             AND (
-  b.status = 'CONFIRMED'
-  OR (b.status = 'PENDING_PAYMENT' AND b.created_at > now() - interval '15 minutes')
-)
+              b.status = 'CONFIRMED'
+              OR (b.status = 'PENDING_PAYMENT' AND b.created_at > now() - interval '15 minutes')
+            )
             AND (
               (
                 t.holes = 18 AND (
@@ -8983,7 +8983,10 @@ router.get("/availability", async (req, res) => {
               WHERE bb18.course_id = t.course_id
                 AND bb18.play_date = t.play_date
                 AND bb18.holes     = 18
-                AND bb18.status    = 'CONFIRMED'
+                AND (
+                  bb18.status = 'CONFIRMED'
+                  OR (bb18.status = 'PENDING_PAYMENT' AND bb18.created_at > now() - interval '15 minutes')
+                )
                 AND bb18.back_nine_key = $4
                 AND (
                   (
