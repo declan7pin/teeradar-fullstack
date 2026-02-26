@@ -1,51 +1,200 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Booking Confirmed</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TeeRadar — Booking Confirmed</title>
   <style>
-    body {
-      font-family: system-ui, sans-serif;
-      background: #f4f7fb;
-      padding: 40px;
-      text-align: center;
+    :root{
+      --teal:#00796b;
+      --bg:#f4f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e2e8f0;
+      --ok:#16a34a;
     }
-    .card {
-      background: white;
-      padding: 30px;
-      border-radius: 12px;
-      max-width: 500px;
-      margin: auto;
-      box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:radial-gradient(circle at top,#e0f2f1,#f9fafb);
+      color:var(--text);
     }
-    h1 { color: #00796b; }
-    .ref { font-weight: bold; font-size: 18px; }
-    .btn {
-      display: inline-block;
-      margin-top: 20px;
-      padding: 12px 20px;
-      background: #00796b;
-      color: white;
-      text-decoration: none;
-      border-radius: 8px;
+    .wrap{max-width:560px;margin:32px auto;padding:0 16px}
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:22px;
+      box-shadow:0 10px 30px rgba(2,6,23,.06);
+      text-align:center;
     }
+    .title{display:flex;gap:10px;align-items:center;justify-content:center;margin:0 0 8px}
+    .check{
+      width:40px;height:40px;border-radius:10px;
+      display:grid;place-items:center;
+      background:rgba(22,163,74,.12);
+      color:var(--ok);
+      font-size:22px;
+    }
+    h1{font-size:34px;margin:0;color:#0b3b35}
+    .sub{color:var(--muted);margin:6px 0 16px;font-size:16px}
+    .ref{font-weight:800;font-size:26px;letter-spacing:.5px;margin:6px 0 18px}
+    .grid{
+      text-align:left;
+      border-top:1px solid var(--border);
+      margin-top:16px;
+      padding-top:16px;
+      display:grid;
+      gap:10px;
+    }
+    .row{display:flex;justify-content:space-between;gap:12px}
+    .k{color:var(--muted)}
+    .v{font-weight:650}
+    .pill{
+      display:inline-block;
+      background:#ecfeff;
+      border:1px solid #cffafe;
+      color:#0f766e;
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:13px;
+      font-weight:700;
+    }
+    .btn{
+      margin-top:18px;
+      display:inline-block;
+      background:#2f6f66;
+      color:#fff;
+      border:0;
+      border-radius:12px;
+      padding:12px 18px;
+      font-weight:700;
+      text-decoration:none;
+    }
+    .mutedSmall{color:var(--muted);font-size:13px;margin-top:10px}
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>✅ Booking Confirmed</h1>
-    <p>Your booking has been successfully confirmed.</p>
-    <p>Reference:</p>
-    <div class="ref" id="ref"></div>
+  <div class="wrap">
+    <div class="card">
+      <div class="title">
+        <div class="check">✅</div>
+        <h1>Booking Confirmed</h1>
+      </div>
 
-    <a class="btn" href="/">Return Home</a>
+      <div class="sub" id="subText">Loading your booking…</div>
+
+      <div class="k">Reference:</div>
+      <div class="ref" id="ref">—</div>
+
+      <div class="grid" id="details" style="display:none">
+        <div class="row"><div class="k">Course</div><div class="v" id="courseName">—</div></div>
+        <div class="row"><div class="k">Date</div><div class="v" id="date">—</div></div>
+        <div class="row"><div class="k">Tee time</div><div class="v" id="teeTime">—</div></div>
+        <div class="row"><div class="k">Holes</div><div class="v" id="holes">—</div></div>
+        <div class="row"><div class="k">Players</div><div class="v" id="players">—</div></div>
+        <div class="row"><div class="k">Carts</div><div class="v" id="carts">—</div></div>
+        <div class="row"><div class="k">Hire clubs</div><div class="v" id="clubs">—</div></div>
+
+        <div class="row"><div class="k">Payment</div><div class="v" id="payment">—</div></div>
+        <div class="row"><div class="k">Total</div><div class="v" id="total">—</div></div>
+
+        <div class="row" style="margin-top:6px">
+          <div class="k">Status</div>
+          <div class="v"><span class="pill" id="statusPill">CONFIRMED</span></div>
+        </div>
+
+        <div class="mutedSmall" id="customerLine"></div>
+      </div>
+
+      <a class="btn" href="/" id="homeBtn">Return Home</a>
+    </div>
   </div>
 
   <script>
-    const params = new URLSearchParams(window.location.search);
-    const ref = params.get("reference");
-    document.getElementById("ref").textContent = ref || "—";
+    const $ = (id) => document.getElementById(id);
+
+    function money(cents){
+      const n = Number(cents || 0) / 100;
+      return n.toLocaleString("en-AU", { style:"currency", currency:"AUD" });
+    }
+
+    function fmtDate(iso){
+      // If you already store pretty dates, this won’t break anything.
+      const s = String(iso || "").trim();
+      if (!s) return "—";
+      // Expecting YYYY-MM-DD
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return s;
+      const d = new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00`);
+      return d.toLocaleDateString("en-AU", { weekday:"short", year:"numeric", month:"short", day:"numeric" });
+    }
+
+    function qs(name){
+      const u = new URL(window.location.href);
+      return (u.searchParams.get(name) || "").trim();
+    }
+
+    async function load(){
+      const reference = qs("reference") || qs("ref");
+      $("ref").textContent = reference || "—";
+
+      if (!reference){
+        $("subText").textContent = "Missing booking reference.";
+        return;
+      }
+
+      try{
+        const r = await fetch(`/api/book/confirmation?reference=${encodeURIComponent(reference)}`, {
+          headers: { "Accept":"application/json" }
+        });
+        const j = await r.json().catch(()=>null);
+
+        if (!r.ok || !j || !j.ok){
+          $("subText").textContent = "Couldn’t load booking details (still confirmed).";
+          $("details").style.display = "none";
+          return;
+        }
+
+        const b = j.booking || {};
+        $("subText").textContent = "Your booking has been successfully confirmed.";
+        $("details").style.display = "grid";
+
+        $("courseName").textContent = b.courseName || "—";
+        $("date").textContent = fmtDate(b.date);
+        $("teeTime").textContent = b.teeTime || "—";
+        $("holes").textContent = b.holes ? `${b.holes}` : "—";
+        $("players").textContent = b.players ? `${b.players}` : "—";
+
+        $("carts").textContent = (b.cartsQty ? `${b.cartsQty}` : "0");
+        $("clubs").textContent = (b.hireClubsQty ? `${b.hireClubsQty}` : "0");
+
+        const payMode = String(b.paymentMode || "PAY_AT_COURSE");
+        $("payment").textContent =
+          payMode === "PAY_ON_BOOKING" ? "Paid online" :
+          payMode === "PAY_AT_COURSE" ? "Pay at course" : payMode;
+
+        $("total").textContent = money(b.grossCents || 0);
+
+        const status = String(b.status || "CONFIRMED").toUpperCase();
+        $("statusPill").textContent = status;
+
+        const cust = b.customer || {};
+        const bits = [];
+        if (cust.name) bits.push(cust.name);
+        if (cust.email) bits.push(cust.email);
+        if (cust.phone) bits.push(cust.phone);
+        $("customerLine").textContent = bits.length ? `Booked for: ${bits.join(" • ")}` : "";
+
+      }catch(e){
+        console.error(e);
+        $("subText").textContent = "Booking confirmed — details failed to load.";
+      }
+    }
+
+    load();
   </script>
 </body>
 </html>
