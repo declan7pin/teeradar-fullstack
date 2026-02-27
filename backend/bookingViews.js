@@ -504,7 +504,9 @@ router.get("/api/book/admin/bookings", requireBookingAdmin, async (req, res) => 
              b.reference,
              b.created_at
            FROM booking_bookings b
-           WHERE b.course_id = $2 AND b.play_date = $3::date
+           WHERE b.course_id = $2
+            AND b.play_date = $3::date
+            AND upper(coalesce(b.status,'')) = 'CONFIRMED'
            ORDER BY b.tee_time ASC, b.created_at DESC`,
           [slug, courseId, date]
         );
@@ -528,6 +530,7 @@ router.get("/api/book/admin/bookings", requireBookingAdmin, async (req, res) => 
              b.created_at
            FROM booking_bookings b
            WHERE b.course_id = $2
+             AND upper(coalesce(b.status,'')) = 'CONFIRMED'
            ORDER BY b.play_date DESC, b.tee_time ASC, b.created_at DESC
            LIMIT 500`,
           [slug, courseId]
@@ -608,7 +611,9 @@ router.get("/api/book/course-admin/bookings", requireCourseAdmin, async (req, re
              b.reference,
              b.created_at
            FROM booking_bookings b
-           WHERE b.course_id = $2 AND b.play_date = $3::date
+           WHERE b.course_id = $2
+            AND b.play_date = $3::date
+            AND upper(coalesce(b.status,'')) = 'CONFIRMED'
            ORDER BY b.tee_time ASC, b.created_at DESC`,
           [slug, courseId, date]
         );
@@ -632,6 +637,7 @@ router.get("/api/book/course-admin/bookings", requireCourseAdmin, async (req, re
              b.created_at
            FROM booking_bookings b
            WHERE b.course_id = $2
+             AND upper(coalesce(b.status,'')) = 'CONFIRMED'
            ORDER BY b.play_date DESC, b.tee_time ASC, b.created_at DESC
            LIMIT 500`,
           [slug, courseId]
