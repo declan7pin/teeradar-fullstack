@@ -10408,7 +10408,7 @@ router.post("/confirm-payment", async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-// ✅ Release a PAY_ON_BOOKING pending booking when user cancels Stripe checkout
+// ✅ Release a PAY_ON_BOOKING hold when user cancels Stripe checkout
 router.post("/payment-cancel", async (req, res) => {
   let client = null;
   let didBegin = false;
@@ -10444,27 +10444,88 @@ router.post("/payment-cancel", async (req, res) => {
     const status = String(row.status || "").toUpperCase();
     const paid = !!row.paid;
 
-    // If it already got paid/confirmed, don’t cancel it
+    // If already confirmed/paid, do not release
     if (paid || status === "CONFIRMED") {
       await client.query("ROLLBACK");
       didBegin = false;
       return res.json({ ok: true, released: false, reason: "already_paid_or_confirmed" });
     }
 
-    // ✅ Mark booking cancelled (this is what daily sheet must filter out)
+    // Mark booking cancelled
     await client.query(
-      `
-      UPDATE booking_bookings
-      SET status = 'CANCELLED',
-          updated_at = now()
-      WHERE id = $1;
-      `,
+      `UPDATE booking_bookings
+       SET status='CANCELLED', updated_at=now()
+       WHERE id=$1;`,
       [row.id]
     );
 
-    // ✅ IMPORTANT:
-    // We do NOT decrement booking_times here because best-practice PAY_ON_BOOKING
-    // should not consume capacity until webhook confirms payment.
+    // ✅ Only release capacity IF you ever reserved it.
+    // Best-practice: PAY_ON_BOOKING should NOT reserve booking_times at all,
+    // so this becomes a no-op in normal operation.
+    const holes = Number(row.holes || 0);
+    const players = Number(row.players || 0);
+
+    // If you previously reserved capacity for PAY_ON_BOOKING in booking_times,
+    // keep these updates. Otherwise, you can remove this entire section safely.
+
+    if (players > 0) {
+      if (holes === 18) {
+        await client.query(
+          `
+          UPDATE booking_times
+          SET
+            booked_players = GREATEST(0, COALESCE(booked_players,0) - $4),
+            status = CASE
+              WHEN status='BLOCKED' THEN 'BLOCKED'
+              WHEN GREATEST(0, COALESCE(booked_players,0) - $4) >= max_players THEN 'BOOKED'
+              ELSE 'AVAILABLE'
+            END,
+            updated_at = now()
+          WHERE course_id=$1
+            AND play_date=$2::date
+            AND split_part(tee_time,'|',1) = $3
+            AND holes=18
+            AND lower(front_nine_key)=lower($5)
+            AND lower(back_nine_key)=lower($6);
+          `,
+          [
+            row.course_id,
+            row.play_date,
+            row.tee_time,     // "HH:MM"
+            players,
+            String(row.front_nine_key || ""),
+            String(row.back_nine_key || ""),
+          ]
+        );
+      } else {
+        await client.query(
+          `
+          UPDATE booking_times
+          SET
+            booked_players = GREATEST(0, COALESCE(booked_players,0) - $4),
+            status = CASE
+              WHEN status='BLOCKED' THEN 'BLOCKED'
+              WHEN GREATEST(0, COALESCE(booked_players,0) - $4) >= max_players THEN 'BOOKED'
+              ELSE 'AVAILABLE'
+            END,
+            updated_at = now()
+          WHERE course_id=$1
+            AND play_date=$2::date
+            AND split_part(tee_time,'|',1) = $3
+            AND holes=9
+            AND lower(layout_key)=lower($5);
+          `,
+          [
+            row.course_id,
+            row.play_date,
+            row.tee_time,     // "HH:MM"
+            players,
+            String(row.layout_key || ""),
+          ]
+        );
+      }
+    }
+
     await client.query("COMMIT");
     didBegin = false;
 
