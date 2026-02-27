@@ -8332,7 +8332,7 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
         FROM booking_bookings bb
         WHERE bb.course_id = t.course_id
           AND bb.play_date = t.play_date
-          AND bb.status IN ('CONFIRMED','PENDING_PAYMENT')
+          AND bb.status = 'CONFIRMED'
           AND bb.holes = t.holes
           AND split_part(bb.tee_time, '|', 1) = split_part(t.tee_time, '|', 1)
           AND bb.layout_key IS NOT DISTINCT FROM t.layout_key
