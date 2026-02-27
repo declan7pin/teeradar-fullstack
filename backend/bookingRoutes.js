@@ -9756,56 +9756,56 @@ async function handleBook(req, res) {
       : 0;
 
     // ✅ Subscriber discount config (defaults to 5%)
-    const SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
-    const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
+const SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
+const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
 
-    // ✅ check subscriber inside same DB transaction (safe + consistent)
-    async function isSubscriberEmail(email) {
-      const e = String(email || "").trim().toLowerCase();
-      if (!e) return false;
+// ✅ Determine if booking email is an active subscriber
+async function isSubscriberEmail(email) {
+  const e = String(email || "").trim().toLowerCase();
+  if (!e) return false;
 
-      // env allowlist fallback
-      if (SUBSCRIBER_EMAILS.includes(e)) return true;
+  // 1) Env allowlist fallback (fastest to get live)
+  if (SUBSCRIBER_EMAILS.includes(e)) return true;
 
-      // try users table (if you have one)
-      try {
-        const r = await client.query(
-          `
-          SELECT 1
-          FROM users
-          WHERE lower(email) = lower($1)
-            AND (
-              COALESCE(is_pro,false) = true
-              OR lower(COALESCE(plan,'')) IN ('pro','subscriber','paid')
-              OR lower(COALESCE(subscription_status,'')) IN ('active','trialing')
-            )
-          LIMIT 1;
-          `,
-          [e]
-        );
-        if (r.rows?.length) return true;
-      } catch {}
+  // 2) Optional: users table
+  try {
+    const r = await client.query(
+      `
+      SELECT 1
+      FROM users
+      WHERE lower(email) = lower($1)
+        AND (
+          COALESCE(is_pro,false) = true
+          OR lower(COALESCE(plan,'')) IN ('pro','subscriber','paid')
+          OR lower(COALESCE(subscription_status,'')) IN ('active','trialing')
+        )
+      LIMIT 1;
+      `,
+      [e]
+    );
+    if (r.rows?.length) return true;
+  } catch {}
 
-      // try subscriptions table (if you have one)
-      try {
-        const r2 = await client.query(
-          `
-          SELECT 1
-          FROM subscriptions
-          WHERE lower(email) = lower($1)
-            AND status IN ('active','trialing')
-          LIMIT 1;
-          `,
-          [e]
-        );
-        if (r2.rows?.length) return true;
-      } catch {}
+  // 3) Optional: subscriptions table
+  try {
+    const r2 = await client.query(
+      `
+      SELECT 1
+      FROM subscriptions
+      WHERE lower(email) = lower($1)
+        AND status IN ('active','trialing')
+      LIMIT 1;
+      `,
+      [e]
+    );
+    if (r2.rows?.length) return true;
+  } catch {}
 
-      return false;
-    }
+  return false;
+}
 
     await client.query("BEGIN");
     didBegin = true;
