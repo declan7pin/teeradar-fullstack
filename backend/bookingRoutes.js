@@ -9607,7 +9607,7 @@ async function handleBook(req, res) {
           column: err?.column,
         });
 
-        // ✅ If schema mismatch, dump actual columns so we stop guessing front9_key vs front_nine_key etc.
+        // ✅ If schema mismatch, dump actual columns so we stop guessing
         try {
           const msg = String(err?.message || "");
           const looksLikeSchema =
@@ -9641,7 +9641,7 @@ async function handleBook(req, res) {
           console.error("⚠️ schema dump failed:", e2?.message || e2);
         }
 
-        throw err; // IMPORTANT: rethrow so we STOP immediately (no more queries => no 25P02 spam)
+        throw err; // IMPORTANT: stop immediately
       }
     };
 
@@ -9656,12 +9656,10 @@ async function handleBook(req, res) {
     const golfer_phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
     // ✅ routing keys from UI (if provided)
-    // ✅ IMPORTANT: DO NOT lowercase here — DB may store mixed case; we match case-insensitively in SQL.
     let layout_key = req.body?.layout_key ? String(req.body.layout_key).trim() : null;
     let front_nine_key = req.body?.front_nine_key ? String(req.body.front_nine_key).trim() : null;
     let back_nine_key = req.body?.back_nine_key ? String(req.body.back_nine_key).trim() : null;
 
-    // ✅ ALSO accept layout label text (what the UI shows)
     const layoutTextRaw =
       req.body?.layout ||
       req.body?.layoutText ||
@@ -9669,7 +9667,6 @@ async function handleBook(req, res) {
       req.body?.layoutLabel ||
       "";
 
-    // ✅ If keys missing, derive from layout label text
     if (holes === 18 && (!front_nine_key || !back_nine_key)) {
       const derived = deriveRoutingKeysFromLayoutText({ holes, layoutTextRaw });
       front_nine_key = front_nine_key || derived.front_nine_key;
@@ -9680,7 +9677,6 @@ async function handleBook(req, res) {
       layout_key = layout_key || derived.layout_key;
     }
 
-    // ✅ cart / hire clubs selection (optional)
     const addonIds = Array.isArray(req.body?.addonIds)
       ? req.body.addonIds.map((x) => String(x))
       : [];
@@ -9727,7 +9723,6 @@ async function handleBook(req, res) {
     if (!Number.isFinite(players) || players < 1 || players > 4)
       return res.status(400).json({ ok: false, error: "players_invalid" });
 
-    // ✅ Now enforce routing keys exist (either from UI OR derived)
     if (holes === 18 && (!front_nine_key || !back_nine_key)) {
       return res.status(400).json({ ok: false, error: "routing_required" });
     }
@@ -9772,15 +9767,12 @@ async function handleBook(req, res) {
     const courseRow = c.rows[0];
     const courseId = courseRow.id;
 
-    // ✅ NEW: payment branching
     const payment_mode = String(courseRow.payment_mode || "PAY_AT_COURSE").trim().toUpperCase();
     const stripe_account_id = String(courseRow.stripe_account_id || "").trim();
 
-    // ✅ FIX: read env safely
     const envPlatformFeeBps = Number(process.env.PLATFORM_FEE_BPS || 0);
     const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || process.env.SITE_URL || "").trim();
 
-    // ✅ per-course fee override
     const courseFeeBpsRaw =
       courseRow.platform_fee_bps !== undefined && courseRow.platform_fee_bps !== null
         ? Number(courseRow.platform_fee_bps)
@@ -9797,23 +9789,24 @@ async function handleBook(req, res) {
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
 
+    // ✅ Determine if booking email is an active subscriber
+    // IMPORTANT: must NOT reference columns that might not exist
     async function isSubscriberEmail(email) {
       const e = String(email || "").trim().toLowerCase();
       if (!e) return false;
+
+      // 1) Env allowlist fallback
       if (SUBSCRIBER_EMAILS.includes(e)) return true;
 
+      // 2) subscriber_status (best source)
       try {
         const r = await q(
-          "is_subscriber_users",
+          "is_subscriber_status",
           `
           SELECT 1
-          FROM users
-          WHERE lower(email) = lower($1)
-            AND (
-              COALESCE(is_pro,false) = true
-              OR lower(COALESCE(plan,'')) IN ('pro','subscriber','paid')
-              OR lower(COALESCE(subscription_status,'')) IN ('active','trialing')
-            )
+          FROM subscriber_status
+          WHERE lower(email)=lower($1)
+            AND status IN ('active','trialing')
           LIMIT 1;
           `,
           [e]
@@ -9821,14 +9814,15 @@ async function handleBook(req, res) {
         if (r.rows?.length) return true;
       } catch {}
 
+      // 3) users.plan fallback (optional)
       try {
         const r2 = await q(
-          "is_subscriber_subscriptions",
+          "is_subscriber_users_plan",
           `
           SELECT 1
-          FROM subscriptions
-          WHERE lower(email) = lower($1)
-            AND status IN ('active','trialing')
+          FROM users
+          WHERE lower(email)=lower($1)
+            AND lower(COALESCE(plan,'')) IN ('pro','basic')
           LIMIT 1;
           `,
           [e]
@@ -9838,6 +9832,9 @@ async function handleBook(req, res) {
 
       return false;
     }
+
+    // ✅ CRITICAL FIX: run subscriber check BEFORE BEGIN (so it cannot poison the booking txn)
+    const isSubscriber = await isSubscriberEmail(golfer_email);
 
     await q("BEGIN", "BEGIN");
     didBegin = true;
@@ -9975,7 +9972,6 @@ async function handleBook(req, res) {
       (final_has_cart ? cart_fee_cents : 0) +
       (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
 
-    const isSubscriber = await isSubscriberEmail(golfer_email);
     const baseGreenCents = Math.max(0, ppp * players);
 
     const discountCents =
@@ -10088,7 +10084,6 @@ async function handleBook(req, res) {
       ]
     );
 
-    // ✅ if PAY_ON_BOOKING, create Stripe session, then COMMIT + return
     if (payment_mode === "PAY_ON_BOOKING") {
       if (!stripe) {
         await q("ROLLBACK_stripe_not_configured", "ROLLBACK");
@@ -10188,7 +10183,6 @@ async function handleBook(req, res) {
     await q("COMMIT_pay_at_course", "COMMIT");
     didBegin = false;
 
-    // ---- PAY_AT_COURSE existing analytics/email/response ----
     recordEvent({
       type: "booking_created",
       userId: getClientIp(req) || null,
@@ -10260,7 +10254,6 @@ async function handleBook(req, res) {
       console.error("book POST rollback failed", rbErr);
     }
 
-    // ✅ Return the real PG code/message so you can act immediately
     return res.status(500).json({
       ok: false,
       error: "internal_error",
