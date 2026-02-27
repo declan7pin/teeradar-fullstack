@@ -70,7 +70,17 @@ function isSuperAdmin(email) {
 }
 
 // ✅ Stripe init
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const STRIPE_SECRET_KEY = String(process.env.STRIPE_SECRET_KEY || "")
+  .trim()
+  .replace(/^["']|["']$/g, "")     // remove surrounding quotes if Render stored them
+  .replace(/\s+/g, "");           // remove ALL whitespace/newlines inside the key
+
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+
+console.log("💳 stripe configured:", {
+  hasKey: !!STRIPE_SECRET_KEY,
+  keyPrefix: STRIPE_SECRET_KEY ? STRIPE_SECRET_KEY.slice(0, 7) : null,
+});
 
 // ✅ Map of plan keys → Stripe price IDs
 const PRICE_IDS = {
