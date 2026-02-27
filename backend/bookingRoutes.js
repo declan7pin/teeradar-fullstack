@@ -10082,43 +10082,41 @@ const totalCents = Math.max(0, totalBeforeDiscountCents - discountCents);
 // ✅ BEST PRACTICE:
 // Only consume capacity immediately for PAY_AT_COURSE.
 // PAY_ON_BOOKING should NOT take the time until webhook confirms payment.
-if (payment_mode === "PAY_AT_COURSE") {
   const newBooked = bookedPlayers + players;
 
   await q(
-    "update_booking_times_booked_players",
-    `
-    UPDATE booking_times
-    SET
-      booked_players = $8,
-      status = CASE
-        WHEN status = 'BLOCKED' THEN 'BLOCKED'
-        WHEN $8 >= max_players THEN 'BOOKED'
-        ELSE 'AVAILABLE'
-      END,
-      updated_at = now()
-    WHERE course_id=$1
-      AND play_date=$2::date
-      AND tee_time=$3
-      AND holes=$4
-      AND (
-        ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
-        OR
-        ($4 = 9 AND lower(layout_key) = lower($5))
-      );
-    `,
-    [
-      courseId,
-      date,
-      teeTimeDb,
-      holes,
-      layout_key || "",
-      front_nine_key || "",
-      back_nine_key || "",
-      newBooked,
-    ]
-  );
-}
+  "update_booking_times_booked_players",
+  `
+  UPDATE booking_times
+  SET
+    booked_players = $8,
+    status = CASE
+      WHEN status = 'BLOCKED' THEN 'BLOCKED'
+      WHEN $8 >= max_players THEN 'BOOKED'
+      ELSE 'AVAILABLE'
+    END,
+    updated_at = now()
+  WHERE course_id=$1
+    AND play_date=$2::date
+    AND split_part(tee_time,'|',1) = $3
+    AND holes=$4
+    AND (
+      ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
+      OR
+      ($4 = 9 AND lower(layout_key) = lower($5))
+    );
+  `,
+  [
+    courseId,
+    date,
+    teeTimeDb,              // "HH:MM"
+    holes,
+    layout_key || "",
+    front_nine_key || "",
+    back_nine_key || "",
+    newBooked,
+  ]
+);
 
     if (payment_mode === "PAY_ON_BOOKING") {
       if (!stripe) {
