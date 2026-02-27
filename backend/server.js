@@ -304,6 +304,7 @@ async function ensureAlertHitsTable() {
 ensureAlertHitsTable();
 ensureRoundsTables();
 ensureScorecardTemplatesTables();
+ensureSubscriberStatusSchema(); // ✅ ADD: creates subscriber_status table in code
 
 /* ✅✅✅ ONLY ADDITION (needed): ensure booking tables exist (so admin can create courses + generate times) ✅✅✅ */
 async function ensureBookingTables() {
@@ -392,7 +393,7 @@ async function ensureBookingTables() {
         created_at TIMESTAMPTZ DEFAULT now(),
         updated_at TIMESTAMPTZ DEFAULT now(),
 
-        UNIQUE(course_id, play_date, tee_time, holes, layout_key, front9_key, back9_key)
+        UNIQUE(course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key)
       );
     `);
 
@@ -694,6 +695,36 @@ if (bookingId && session?.payment_status === "paid") {
             const sub = await stripe.subscriptions.retrieve(subId, {
               expand: ["items.data.price"],
             });
+            // ✅ ADD: immediately upsert subscriber_status on successful subscription checkout
+try {
+  const customerId = String(sub?.customer || session.customer || "").trim();
+  const subscriptionId = String(sub?.id || subId || "").trim();
+  const status = String(sub?.status || "active").trim();
+
+  const currentPeriodEnd = sub?.current_period_end
+    ? new Date(sub.current_period_end * 1000).toISOString()
+    : null;
+
+  if (email && customerId && subscriptionId) {
+    await db.query(
+      `
+      INSERT INTO subscriber_status
+        (email, stripe_customer_id, subscription_id, status, current_period_end, updated_at)
+      VALUES ($1,$2,$3,$4,$5,now())
+      ON CONFLICT (email)
+      DO UPDATE SET
+        stripe_customer_id = EXCLUDED.stripe_customer_id,
+        subscription_id = EXCLUDED.subscription_id,
+        status = EXCLUDED.status,
+        current_period_end = EXCLUDED.current_period_end,
+        updated_at = now();
+      `,
+      [email, customerId, subscriptionId, status, currentPeriodEnd]
+    );
+  }
+} catch (e) {
+  console.warn("⚠️ checkout.session.completed subscriber upsert failed:", e?.message || e);
+}
 
             const priceId = sub?.items?.data?.[0]?.price?.id || null;
             const mapped = priceId ? PRICE_TO_PLAN[priceId] : null;
@@ -714,6 +745,7 @@ if (bookingId && session?.payment_status === "paid") {
           break;
         }
 
+        case "customer.subscription.created": // ✅ ADD
         case "customer.subscription.updated":
         case "customer.subscription.deleted": {
           const sub = event.data.object;
@@ -723,6 +755,35 @@ if (bookingId && session?.payment_status === "paid") {
 
           const cust = await stripe.customers.retrieve(customerId);
           const email = (cust?.email || "").toString().trim().toLowerCase();
+          // ✅ ADD: keep subscriber_status in sync for automatic booking discounts
+try {
+  const subscriptionId = String(sub?.id || "").trim();
+  const status = String(sub?.status || "").trim(); // active, trialing, canceled, etc.
+
+  const currentPeriodEnd = sub?.current_period_end
+    ? new Date(sub.current_period_end * 1000).toISOString()
+    : null;
+
+  if (email) {
+    await db.query(
+      `
+      INSERT INTO subscriber_status
+        (email, stripe_customer_id, subscription_id, status, current_period_end, updated_at)
+      VALUES ($1,$2,$3,$4,$5,now())
+      ON CONFLICT (email)
+      DO UPDATE SET
+        stripe_customer_id = EXCLUDED.stripe_customer_id,
+        subscription_id = EXCLUDED.subscription_id,
+        status = EXCLUDED.status,
+        current_period_end = EXCLUDED.current_period_end,
+        updated_at = now();
+      `,
+      [email, String(customerId), subscriptionId, status, currentPeriodEnd]
+    );
+  }
+} catch (e) {
+  console.warn("⚠️ subscriber_status upsert failed:", e?.message || e);
+}
 
           if (email) {
             let plan = "FREE";
