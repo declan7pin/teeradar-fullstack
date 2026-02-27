@@ -10410,32 +10410,72 @@ router.post("/confirm-payment", async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-// ✅ Best practice: PAY_ON_BOOKING should NOT consume booking_times until webhook.
-// So "cancel" just cancels the pending booking (no releasing of booking_times needed).
+// ✅ Release a PAY_ON_BOOKING pending booking when user cancels Stripe checkout
 router.post("/payment-cancel", async (req, res) => {
   let client = null;
+  let didBegin = false;
 
   try {
     const ref = String(req.body?.ref || req.query?.ref || "").trim();
     if (!ref) return res.status(400).json({ ok: false, error: "ref_required" });
 
     client = await db.connect();
+    await client.query("BEGIN");
+    didBegin = true;
 
-    const r = await client.query(
+    const b = await client.query(
       `
-      UPDATE booking_bookings
-      SET status = 'CANCELLED', updated_at = now()
-      WHERE reference = $1::text
-        AND status = 'PENDING_PAYMENT'
-        AND COALESCE(paid,false) = false
-      RETURNING id;
+      SELECT id, course_id, play_date, tee_time, holes, players,
+             layout_key, front_nine_key, back_nine_key,
+             status, paid
+      FROM booking_bookings
+      WHERE reference = $1
+      LIMIT 1
+      FOR UPDATE;
       `,
       [ref]
     );
 
-    return res.json({ ok: true, cancelled: r.rowCount });
+    if (!b.rows.length) {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    const row = b.rows[0];
+    const status = String(row.status || "").toUpperCase();
+    const paid = !!row.paid;
+
+    // If it already got paid/confirmed, don’t cancel it
+    if (paid || status === "CONFIRMED") {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.json({ ok: true, released: false, reason: "already_paid_or_confirmed" });
+    }
+
+    // ✅ Mark booking cancelled (this is what daily sheet must filter out)
+    await client.query(
+      `
+      UPDATE booking_bookings
+      SET status = 'CANCELLED',
+          updated_at = now()
+      WHERE id = $1;
+      `,
+      [row.id]
+    );
+
+    // ✅ IMPORTANT:
+    // We do NOT decrement booking_times here because best-practice PAY_ON_BOOKING
+    // should not consume capacity until webhook confirms payment.
+    await client.query("COMMIT");
+    didBegin = false;
+
+    return res.json({ ok: true, released: true });
   } catch (e) {
     console.error("payment-cancel error:", e);
+    try {
+      if (client && didBegin) await client.query("ROLLBACK");
+    } catch {}
     return res.status(500).json({ ok: false, error: "internal_error" });
   } finally {
     try { if (client) client.release(); } catch {}
