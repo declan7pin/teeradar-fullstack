@@ -10,6 +10,7 @@ import jwt from "jsonwebtoken"; // ✅ NEW (only used to read email from Bearer 
 import { ensureBookingTemplateSchema } from "./bookingTemplateMigrate.js";
 import { ensureRoundsTables, ensureScorecardTemplatesTables } from "./roundsMigrate.js";
 import { ensureCoursePaymentModeSchema } from "./paymentMigrate.js";
+import { ensureSubscriberStatusSchema } from "./subscriberMigrate.js";
 // ✅ NEW: cookies (needed for booking admin auth cookie)
 import cookieParser from "cookie-parser";
 
