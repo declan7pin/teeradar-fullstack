@@ -9591,6 +9591,60 @@ async function handleBook(req, res) {
   try {
     client = await db.connect();
 
+    // ✅ helper: labels each query so we can see the FIRST real error (not 25P02)
+    const q = async (label, sql, params) => {
+      try {
+        return await client.query(sql, params);
+      } catch (err) {
+        console.error(`❌ DB FAIL @ ${label}`, {
+          code: err?.code,
+          message: err?.message,
+          detail: err?.detail,
+          hint: err?.hint,
+          where: err?.where,
+          constraint: err?.constraint,
+          table: err?.table,
+          column: err?.column,
+        });
+
+        // ✅ If schema mismatch, dump actual columns so we stop guessing front9_key vs front_nine_key etc.
+        try {
+          const msg = String(err?.message || "");
+          const looksLikeSchema =
+            err?.code === "42703" || // undefined_column
+            err?.code === "42P01" || // undefined_table
+            /column .* does not exist/i.test(msg) ||
+            /relation .* does not exist/i.test(msg);
+
+          if (looksLikeSchema) {
+            const colsTimes = await client.query(
+              `
+              SELECT column_name
+              FROM information_schema.columns
+              WHERE table_schema='public' AND table_name='booking_times'
+              ORDER BY ordinal_position;
+              `
+            );
+            const colsBookings = await client.query(
+              `
+              SELECT column_name
+              FROM information_schema.columns
+              WHERE table_schema='public' AND table_name='booking_bookings'
+              ORDER BY ordinal_position;
+              `
+            );
+
+            console.error("🧾 booking_times columns:", colsTimes.rows.map(r => r.column_name));
+            console.error("🧾 booking_bookings columns:", colsBookings.rows.map(r => r.column_name));
+          }
+        } catch (e2) {
+          console.error("⚠️ schema dump failed:", e2?.message || e2);
+        }
+
+        throw err; // IMPORTANT: rethrow so we STOP immediately (no more queries => no 25P02 spam)
+      }
+    };
+
     const slug = normSlug(req.body?.slug);
     const date = String(req.body?.date || "").trim();
     const time = String(req.body?.time || "").trim();
@@ -9607,7 +9661,7 @@ async function handleBook(req, res) {
     let front_nine_key = req.body?.front_nine_key ? String(req.body.front_nine_key).trim() : null;
     let back_nine_key = req.body?.back_nine_key ? String(req.body.back_nine_key).trim() : null;
 
-    // ✅ ALSO accept layout label text (what the UI shows: "Pines + Lakes", "Classic + Lakes", etc.)
+    // ✅ ALSO accept layout label text (what the UI shows)
     const layoutTextRaw =
       req.body?.layout ||
       req.body?.layoutText ||
@@ -9639,9 +9693,7 @@ async function handleBook(req, res) {
       picked.size > 0 ? picked.has("cart") : parseBool(req.body?.has_cart, false);
 
     const has_hire_clubs =
-      picked.size > 0
-        ? picked.has("hire_clubs")
-        : parseBool(req.body?.has_hire_clubs, false);
+      picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
 
     const cart_qty_raw = Number(
       req.body?.cart_qty ?? req.body?.cartQty ?? (has_cart ? 1 : 0)
@@ -9652,7 +9704,7 @@ async function handleBook(req, res) {
 
     const cart_qty = Math.max(
       0,
-      Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : has_cart ? 1 : 0)
+      Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : (has_cart ? 1 : 0))
     );
 
     const hire_clubs_qty = Math.max(
@@ -9661,22 +9713,17 @@ async function handleBook(req, res) {
         4,
         Number.isFinite(hire_clubs_qty_raw)
           ? hire_clubs_qty_raw
-          : has_hire_clubs
-            ? 1
-            : 0
+          : (has_hire_clubs ? 1 : 0)
       )
     );
 
     const final_has_cart = cart_qty > 0;
     const final_has_hire_clubs = hire_clubs_qty > 0;
 
-    if (!slug || !isValidSlug(slug))
-      return res.status(400).json({ ok: false, error: "slug_invalid" });
+    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
-    if (!time || !/^\d{2}:\d{2}$/.test(time))
-      return res.status(400).json({ ok: false, error: "time_invalid" });
-    if (![9, 18].includes(holes))
-      return res.status(400).json({ ok: false, error: "holes_invalid" });
+    if (!time || !/^\d{2}:\d{2}$/.test(time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
     if (!Number.isFinite(players) || players < 1 || players > 4)
       return res.status(400).json({ ok: false, error: "players_invalid" });
 
@@ -9695,7 +9742,8 @@ async function handleBook(req, res) {
       return res.status(400).json({ ok: false, error: "email_required_valid" });
     }
 
-    const c = await client.query(
+    const c = await q(
+      "course_lookup",
       `
       SELECT 
         id, 
@@ -9725,16 +9773,12 @@ async function handleBook(req, res) {
     const courseId = courseRow.id;
 
     // ✅ NEW: payment branching
-    const payment_mode = String(courseRow.payment_mode || "PAY_AT_COURSE")
-      .trim()
-      .toUpperCase();
+    const payment_mode = String(courseRow.payment_mode || "PAY_AT_COURSE").trim().toUpperCase();
     const stripe_account_id = String(courseRow.stripe_account_id || "").trim();
 
     // ✅ FIX: read env safely
     const envPlatformFeeBps = Number(process.env.PLATFORM_FEE_BPS || 0);
-    const publicBaseUrl = String(
-      process.env.PUBLIC_BASE_URL || process.env.SITE_URL || ""
-    ).trim();
+    const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || process.env.SITE_URL || "").trim();
 
     // ✅ per-course fee override
     const courseFeeBpsRaw =
@@ -9753,17 +9797,14 @@ async function handleBook(req, res) {
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
 
-    // ✅ Determine if booking email is an active subscriber
     async function isSubscriberEmail(email) {
       const e = String(email || "").trim().toLowerCase();
       if (!e) return false;
-
-      // 1) Env allowlist fallback (fastest to get live)
       if (SUBSCRIBER_EMAILS.includes(e)) return true;
 
-      // 2) Optional: users table
       try {
-        const r = await client.query(
+        const r = await q(
+          "is_subscriber_users",
           `
           SELECT 1
           FROM users
@@ -9780,9 +9821,9 @@ async function handleBook(req, res) {
         if (r.rows?.length) return true;
       } catch {}
 
-      // 3) Optional: subscriptions table
       try {
-        const r2 = await client.query(
+        const r2 = await q(
+          "is_subscriber_subscriptions",
           `
           SELECT 1
           FROM subscriptions
@@ -9798,7 +9839,7 @@ async function handleBook(req, res) {
       return false;
     }
 
-    await client.query("BEGIN");
+    await q("BEGIN", "BEGIN");
     didBegin = true;
 
     await advisoryLockForSlot(client, {
@@ -9811,27 +9852,25 @@ async function handleBook(req, res) {
       back_nine_key,
     });
 
-    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
+    await q("addons_lock", `SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
       `addons:${courseId}`,
     ]);
 
-    const startAtIso = toIsoDateTimeLocal(date, time);
+    let startAtIso = toIsoDateTimeLocal(date, time);
     const dur = durationMinsForHoles(courseRow, holes);
-    const endAtIso = new Date(
-      new Date(startAtIso).getTime() + dur * 60 * 1000
-    ).toISOString();
+    const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
 
     const courseCartQty = Number(courseRow.cart_qty || 0);
     const courseClubsQty = Number(courseRow.hire_clubs_qty || 0);
 
     if (cart_qty > 0 && courseCartQty <= 0) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_cart_not_offered", "ROLLBACK");
       didBegin = false;
       return res.status(400).json({ ok: false, error: "cart_not_offered" });
     }
 
     if (hire_clubs_qty > 0 && courseClubsQty <= 0) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_hire_clubs_not_offered", "ROLLBACK");
       didBegin = false;
       return res.status(400).json({ ok: false, error: "hire_clubs_not_offered" });
     }
@@ -9846,13 +9885,13 @@ async function handleBook(req, res) {
     const clubsRemaining = Math.max(0, courseClubsQty - clubsUsed);
 
     if (cart_qty > 0 && courseCartQty > 0 && cart_qty > cartRemaining) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_cart_sold_out", "ROLLBACK");
       didBegin = false;
       return res.status(409).json({ ok: false, error: "cart_sold_out", cartRemaining });
     }
 
     if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_clubs_sold_out", "ROLLBACK");
       didBegin = false;
       return res.status(409).json({ ok: false, error: "hire_clubs_sold_out", clubsRemaining });
     }
@@ -9861,30 +9900,22 @@ async function handleBook(req, res) {
     const courseHireClubsFeeCents = Number(courseRow.hire_clubs_fee_cents || 0);
 
     const cart_fee_cents = cart_qty > 0 ? courseCartFeeCents * cart_qty : 0;
-    const hire_clubs_fee_cents =
-      hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire_clubs_qty : 0;
+    const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire_clubs_qty : 0;
 
-    if (
-      !Number.isFinite(cart_fee_cents) ||
-      cart_fee_cents < 0 ||
-      cart_fee_cents > 10000000
-    ) {
-      await client.query("ROLLBACK");
+    if (!Number.isFinite(cart_fee_cents) || cart_fee_cents < 0 || cart_fee_cents > 10000000) {
+      await q("ROLLBACK_cart_fee_invalid", "ROLLBACK");
       didBegin = false;
       return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
     }
 
-    if (
-      !Number.isFinite(hire_clubs_fee_cents) ||
-      hire_clubs_fee_cents < 0 ||
-      hire_clubs_fee_cents > 10000000
-    ) {
-      await client.query("ROLLBACK");
+    if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_clubs_fee_cents > 10000000) {
+      await q("ROLLBACK_hire_fee_invalid", "ROLLBACK");
       didBegin = false;
       return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
     }
 
-    const t = await client.query(
+    const t = await q(
+      "time_lookup_for_update",
       `
       SELECT tee_time, status, booked_players, max_players, price_per_player_cents,
              layout_key, front_nine_key, back_nine_key
@@ -9913,21 +9944,18 @@ async function handleBook(req, res) {
     );
 
     if (!t.rows.length) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_time_not_found", "ROLLBACK");
       didBegin = false;
       return res.status(404).json({ ok: false, error: "time_not_found" });
     }
 
     const timeRow = t.rows[0];
 
-    // ✅ IMPORTANT FIX:
-    // booking_times.tee_time can be like "06:40|18:front|back".
-    // booking_bookings.tee_time MUST be plain "HH:MM" so availability + daily sheet joins work.
     const teeTimeDbRaw = String(timeRow.tee_time || time || "").trim();
     const teeTimeDb = teeTimeDbRaw.split("|")[0].trim();
 
     if (String(timeRow.status || "").toUpperCase() !== "AVAILABLE") {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_time_not_available", "ROLLBACK");
       didBegin = false;
       return res.status(409).json({ ok: false, error: "time_not_available" });
     }
@@ -9935,20 +9963,18 @@ async function handleBook(req, res) {
     const maxPlayers = Number(timeRow.max_players || 0);
     const bookedPlayers = Number(timeRow.booked_players || 0);
 
-    if (players > maxPlayers - bookedPlayers) {
-      await client.query("ROLLBACK");
+    if (players > (maxPlayers - bookedPlayers)) {
+      await q("ROLLBACK_not_enough_spots", "ROLLBACK");
       didBegin = false;
       return res.status(409).json({ ok: false, error: "not_enough_spots" });
     }
 
     const ppp = Number(timeRow.price_per_player_cents || 0);
 
-    // ✅ addons total
     const addonsCents =
       (final_has_cart ? cart_fee_cents : 0) +
       (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
 
-    // ✅ SUBSCRIBER DISCOUNT (x% off green fees only)
     const isSubscriber = await isSubscriberEmail(golfer_email);
     const baseGreenCents = Math.max(0, ppp * players);
 
@@ -9958,25 +9984,19 @@ async function handleBook(req, res) {
         : 0;
 
     const greenAfterDiscountCents = Math.max(0, baseGreenCents - discountCents);
-
-    // ✅ final total stored + charged
     const totalCents = greenAfterDiscountCents + addonsCents;
 
     const reference = makeRef("TR");
-    const bookingStatus =
-      payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
+    const bookingStatus = payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
 
-    // ✅ PAY_AT_COURSE should show "amount due" on daily sheets (same as totalCents)
     const amountDueCents = payment_mode === "PAY_AT_COURSE" ? totalCents : 0;
 
-    // ✅ SAFETY: ensure discountCents exists in this scope (prevents ReferenceError)
     const discountCentsSafe = Number.isFinite(Number(discountCents)) ? Number(discountCents) : 0;
-
-    // ✅ define these so they exist + match DB columns
     const subscriber_discount_applied = discountCentsSafe > 0;
     const subscriber_discount_cents = discountCentsSafe;
 
-    const ins = await client.query(
+    const ins = await q(
+      "insert_booking",
       `
       INSERT INTO booking_bookings
         (course_id, play_date, tee_time, holes, players,
@@ -10015,25 +10035,16 @@ async function handleBook(req, res) {
         totalCents,
         reference,
         bookingStatus,
-
-        // ✅ subscriber discount fields
         subscriber_discount_applied,
         subscriber_discount_cents,
-
-        // start/end
         startAtIso,
         endAtIso,
-
-        // add-ons
         final_has_cart,
         cart_qty,
         cart_fee_cents,
-
         final_has_hire_clubs,
         hire_clubs_qty,
         hire_clubs_fee_cents,
-
-        // routing keys
         timeRow.layout_key || null,
         timeRow.front_nine_key || null,
         timeRow.back_nine_key || null,
@@ -10041,10 +10052,10 @@ async function handleBook(req, res) {
     );
 
     const bookingId = ins.rows[0]?.id;
-
     const newBooked = bookedPlayers + players;
 
-    await client.query(
+    await q(
+      "update_booking_times_booked_players",
       `
       UPDATE booking_times
       SET
@@ -10077,52 +10088,22 @@ async function handleBook(req, res) {
       ]
     );
 
-    // ✅ PAY_ON_BOOKING: create Stripe session AFTER UPDATE but BEFORE COMMIT
+    // ✅ if PAY_ON_BOOKING, create Stripe session, then COMMIT + return
     if (payment_mode === "PAY_ON_BOOKING") {
       if (!stripe) {
-        await client.query("ROLLBACK");
+        await q("ROLLBACK_stripe_not_configured", "ROLLBACK");
         didBegin = false;
         return res.status(500).json({ ok: false, error: "stripe_not_configured" });
       }
       if (!stripe_account_id) {
-        await client.query("ROLLBACK");
+        await q("ROLLBACK_course_missing_stripe", "ROLLBACK");
         didBegin = false;
-        return res
-          .status(400)
-          .json({ ok: false, error: "course_missing_stripe_account" });
+        return res.status(400).json({ ok: false, error: "course_missing_stripe_account" });
       }
       if (!publicBaseUrl) {
-        await client.query("ROLLBACK");
+        await q("ROLLBACK_public_base_url_missing", "ROLLBACK");
         didBegin = false;
         return res.status(500).json({ ok: false, error: "public_base_url_missing" });
-      }
-
-      const BASE_URL = publicBaseUrl.replace(/\/+$/, "");
-
-      // ✅ Optional readiness check (don’t hard-fail on API errors)
-      try {
-        const acct = await stripe.accounts.retrieve(stripe_account_id);
-        const transfersCap = acct?.capabilities?.transfers;
-        if (transfersCap && String(transfersCap) !== "active") {
-          await client.query("ROLLBACK");
-          didBegin = false;
-          return res.status(400).json({
-            ok: false,
-            error: "course_stripe_not_ready",
-            message: "Course Stripe Connect onboarding not completed (transfers not active).",
-          });
-        }
-        if (acct?.charges_enabled === false || acct?.payouts_enabled === false) {
-          await client.query("ROLLBACK");
-          didBegin = false;
-          return res.status(400).json({
-            ok: false,
-            error: "course_stripe_not_ready",
-            message: "Course Stripe account is not enabled for charges/payouts yet.",
-          });
-        }
-      } catch (e) {
-        console.warn("Stripe account readiness check failed:", e?.message || e);
       }
 
       const application_fee_amount = Math.max(
@@ -10138,7 +10119,7 @@ async function handleBook(req, res) {
             quantity: 1,
             price_data: {
               currency: "aud",
-              unit_amount: totalCents, // ✅ already discounted if subscriber
+              unit_amount: totalCents,
               product_data: {
                 name: `${courseRow.name} — ${holes} holes (${players} players)`,
                 description: `${date} ${time}`,
@@ -10154,11 +10135,9 @@ async function handleBook(req, res) {
             reference,
             course_slug: slug,
             platform_fee_bps: String(courseFeeBps),
-
-            // ✅ subscriber audit
             subscriber: isSubscriber ? "1" : "0",
             subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
-            discount_cents: String(discountCentsSafe),
+            discount_cents: String(discountCentsSafe || 0),
           },
         },
         metadata: {
@@ -10166,17 +10145,15 @@ async function handleBook(req, res) {
           reference,
           course_slug: slug,
           platform_fee_bps: String(courseFeeBps),
-
-          // ✅ subscriber audit
           subscriber: isSubscriber ? "1" : "0",
           subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
-          discount_cents: String(discountCentsSafe),
+          discount_cents: String(discountCentsSafe || 0),
         },
-        success_url: `${BASE_URL}/book-success.html?reference=${encodeURIComponent(reference)}`,
-        cancel_url: `${BASE_URL}/book/${slug}?cancelled=1`,
+        success_url: `${publicBaseUrl}/book-success.html?reference=${encodeURIComponent(reference)}`,
+        cancel_url: `${publicBaseUrl}/book/${slug}?cancelled=1`,
       });
 
-      await client.query("COMMIT");
+      await q("COMMIT_pay_on_booking", "COMMIT");
       didBegin = false;
 
       return res.json({
@@ -10191,14 +10168,12 @@ async function handleBook(req, res) {
           holes,
           players,
           pricePerPlayerCents: ppp,
-
           isSubscriber,
           discountPct: isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0,
           discountCents: discountCentsSafe,
-
           totalCents,
           addonsCents,
-          amountDueCents: 0, // ✅ prepaid
+          amountDueCents: 0,
           cart_qty,
           hire_clubs_qty,
           layout_key,
@@ -10210,44 +10185,20 @@ async function handleBook(req, res) {
       });
     }
 
-    // ✅ PAY_AT_COURSE flow
-    await client.query("COMMIT");
+    await q("COMMIT_pay_at_course", "COMMIT");
     didBegin = false;
 
+    // ---- PAY_AT_COURSE existing analytics/email/response ----
     recordEvent({
       type: "booking_created",
       userId: getClientIp(req) || null,
       courseName: courseRow.name,
-      meta: {
-        slug,
-        date,
-        time,
-        holes,
-        players,
-        reference,
-        cart_qty,
-        hire_clubs_qty,
-        layout_key,
-        front_nine_key,
-        back_nine_key,
-      },
+      meta: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty, layout_key, front_nine_key, back_nine_key },
     }).catch(() => {});
     recordBookingEvent(req, {
       courseSlug: slug,
       eventType: "booking_confirmed",
-      payload: {
-        slug,
-        date,
-        time,
-        holes,
-        players,
-        reference,
-        cart_qty,
-        hire_clubs_qty,
-        layout_key,
-        front_nine_key,
-        back_nine_key,
-      },
+      payload: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty, layout_key, front_nine_key, back_nine_key },
     }).catch(() => {});
 
     const emailResult = await sendBookingEmail({
@@ -10259,7 +10210,7 @@ async function handleBook(req, res) {
       players,
       reference,
       pricePerPlayerCents: ppp,
-      totalCents, // ✅ already discounted if subscriber
+      totalCents,
       cartCents: cart_fee_cents,
       hireClubsCents: hire_clubs_fee_cents,
     });
@@ -10267,7 +10218,6 @@ async function handleBook(req, res) {
     return res.json({
       ok: true,
       reference,
-      payment_mode: "PAY_AT_COURSE",
       course: { slug: courseRow.slug, name: courseRow.name },
       booking: {
         date,
@@ -10275,14 +10225,12 @@ async function handleBook(req, res) {
         holes,
         players,
         pricePerPlayerCents: ppp,
-
         isSubscriber,
         discountPct: isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0,
         discountCents: discountCentsSafe,
-
         totalCents,
         addonsCents,
-        amountDueCents, // ✅ shows what they owe at course
+        amountDueCents,
         cart_qty,
         hire_clubs_qty,
         layout_key,
@@ -10293,7 +10241,15 @@ async function handleBook(req, res) {
       emailReason: emailResult.emailReason || null,
     });
   } catch (e) {
-    console.error("book POST", e);
+    console.error("book POST (root)", {
+      code: e?.code,
+      message: e?.message,
+      detail: e?.detail,
+      hint: e?.hint,
+      constraint: e?.constraint,
+      table: e?.table,
+      column: e?.column,
+    });
 
     try {
       if (client && didBegin) {
@@ -10304,7 +10260,19 @@ async function handleBook(req, res) {
       console.error("book POST rollback failed", rbErr);
     }
 
-    return res.status(500).json({ ok: false, error: "internal_error" });
+    // ✅ Return the real PG code/message so you can act immediately
+    return res.status(500).json({
+      ok: false,
+      error: "internal_error",
+      pg: {
+        code: e?.code || null,
+        message: e?.message || null,
+        detail: e?.detail || null,
+        constraint: e?.constraint || null,
+        table: e?.table || null,
+        column: e?.column || null,
+      },
+    });
   } finally {
     try {
       if (client) client.release();
