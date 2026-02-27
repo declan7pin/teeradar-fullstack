@@ -9590,6 +9590,7 @@ async function handleBook(req, res) {
 
   try {
     client = await db.connect();
+
     const slug = normSlug(req.body?.slug);
     const date = String(req.body?.date || "").trim();
     const time = String(req.body?.time || "").trim();
@@ -9638,7 +9639,9 @@ async function handleBook(req, res) {
       picked.size > 0 ? picked.has("cart") : parseBool(req.body?.has_cart, false);
 
     const has_hire_clubs =
-      picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
+      picked.size > 0
+        ? picked.has("hire_clubs")
+        : parseBool(req.body?.has_hire_clubs, false);
 
     const cart_qty_raw = Number(
       req.body?.cart_qty ?? req.body?.cartQty ?? (has_cart ? 1 : 0)
@@ -9649,7 +9652,7 @@ async function handleBook(req, res) {
 
     const cart_qty = Math.max(
       0,
-      Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : (has_cart ? 1 : 0))
+      Math.min(4, Number.isFinite(cart_qty_raw) ? cart_qty_raw : has_cart ? 1 : 0)
     );
 
     const hire_clubs_qty = Math.max(
@@ -9658,17 +9661,22 @@ async function handleBook(req, res) {
         4,
         Number.isFinite(hire_clubs_qty_raw)
           ? hire_clubs_qty_raw
-          : (has_hire_clubs ? 1 : 0)
+          : has_hire_clubs
+            ? 1
+            : 0
       )
     );
 
     const final_has_cart = cart_qty > 0;
     const final_has_hire_clubs = hire_clubs_qty > 0;
 
-    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+    if (!slug || !isValidSlug(slug))
+      return res.status(400).json({ ok: false, error: "slug_invalid" });
     if (!date) return res.status(400).json({ ok: false, error: "date_required" });
-    if (!time || !/^\d{2}:\d{2}$/.test(time)) return res.status(400).json({ ok: false, error: "time_invalid" });
-    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+    if (!time || !/^\d{2}:\d{2}$/.test(time))
+      return res.status(400).json({ ok: false, error: "time_invalid" });
+    if (![9, 18].includes(holes))
+      return res.status(400).json({ ok: false, error: "holes_invalid" });
     if (!Number.isFinite(players) || players < 1 || players > 4)
       return res.status(400).json({ ok: false, error: "players_invalid" });
 
@@ -9717,12 +9725,16 @@ async function handleBook(req, res) {
     const courseId = courseRow.id;
 
     // ✅ NEW: payment branching
-    const payment_mode = String(courseRow.payment_mode || "PAY_AT_COURSE").trim().toUpperCase();
+    const payment_mode = String(courseRow.payment_mode || "PAY_AT_COURSE")
+      .trim()
+      .toUpperCase();
     const stripe_account_id = String(courseRow.stripe_account_id || "").trim();
 
     // ✅ FIX: read env safely
     const envPlatformFeeBps = Number(process.env.PLATFORM_FEE_BPS || 0);
-    const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || process.env.SITE_URL || "").trim();
+    const publicBaseUrl = String(
+      process.env.PUBLIC_BASE_URL || process.env.SITE_URL || ""
+    ).trim();
 
     // ✅ per-course fee override
     const courseFeeBpsRaw =
@@ -9735,56 +9747,56 @@ async function handleBook(req, res) {
       : 0;
 
     // ✅ Subscriber discount config (defaults to 5%)
-const SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
-const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
+    const SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
+    const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
 
-// ✅ Determine if booking email is an active subscriber
-async function isSubscriberEmail(email) {
-  const e = String(email || "").trim().toLowerCase();
-  if (!e) return false;
+    // ✅ Determine if booking email is an active subscriber
+    async function isSubscriberEmail(email) {
+      const e = String(email || "").trim().toLowerCase();
+      if (!e) return false;
 
-  // 1) Env allowlist fallback (fastest to get live)
-  if (SUBSCRIBER_EMAILS.includes(e)) return true;
+      // 1) Env allowlist fallback (fastest to get live)
+      if (SUBSCRIBER_EMAILS.includes(e)) return true;
 
-  // 2) Optional: users table
-  try {
-    const r = await client.query(
-      `
-      SELECT 1
-      FROM users
-      WHERE lower(email) = lower($1)
-        AND (
-          COALESCE(is_pro,false) = true
-          OR lower(COALESCE(plan,'')) IN ('pro','subscriber','paid')
-          OR lower(COALESCE(subscription_status,'')) IN ('active','trialing')
-        )
-      LIMIT 1;
-      `,
-      [e]
-    );
-    if (r.rows?.length) return true;
-  } catch {}
+      // 2) Optional: users table
+      try {
+        const r = await client.query(
+          `
+          SELECT 1
+          FROM users
+          WHERE lower(email) = lower($1)
+            AND (
+              COALESCE(is_pro,false) = true
+              OR lower(COALESCE(plan,'')) IN ('pro','subscriber','paid')
+              OR lower(COALESCE(subscription_status,'')) IN ('active','trialing')
+            )
+          LIMIT 1;
+          `,
+          [e]
+        );
+        if (r.rows?.length) return true;
+      } catch {}
 
-  // 3) Optional: subscriptions table
-  try {
-    const r2 = await client.query(
-      `
-      SELECT 1
-      FROM subscriptions
-      WHERE lower(email) = lower($1)
-        AND status IN ('active','trialing')
-      LIMIT 1;
-      `,
-      [e]
-    );
-    if (r2.rows?.length) return true;
-  } catch {}
+      // 3) Optional: subscriptions table
+      try {
+        const r2 = await client.query(
+          `
+          SELECT 1
+          FROM subscriptions
+          WHERE lower(email) = lower($1)
+            AND status IN ('active','trialing')
+          LIMIT 1;
+          `,
+          [e]
+        );
+        if (r2.rows?.length) return true;
+      } catch {}
 
-  return false;
-}
+      return false;
+    }
 
     await client.query("BEGIN");
     didBegin = true;
@@ -9803,9 +9815,11 @@ async function isSubscriberEmail(email) {
       `addons:${courseId}`,
     ]);
 
-    let startAtIso = toIsoDateTimeLocal(date, time);
+    const startAtIso = toIsoDateTimeLocal(date, time);
     const dur = durationMinsForHoles(courseRow, holes);
-    const endAtIso = new Date(new Date(startAtIso).getTime() + dur * 60 * 1000).toISOString();
+    const endAtIso = new Date(
+      new Date(startAtIso).getTime() + dur * 60 * 1000
+    ).toISOString();
 
     const courseCartQty = Number(courseRow.cart_qty || 0);
     const courseClubsQty = Number(courseRow.hire_clubs_qty || 0);
@@ -9847,15 +9861,24 @@ async function isSubscriberEmail(email) {
     const courseHireClubsFeeCents = Number(courseRow.hire_clubs_fee_cents || 0);
 
     const cart_fee_cents = cart_qty > 0 ? courseCartFeeCents * cart_qty : 0;
-    const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire_clubs_qty : 0;
+    const hire_clubs_fee_cents =
+      hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire_clubs_qty : 0;
 
-    if (!Number.isFinite(cart_fee_cents) || cart_fee_cents < 0 || cart_fee_cents > 10000000) {
+    if (
+      !Number.isFinite(cart_fee_cents) ||
+      cart_fee_cents < 0 ||
+      cart_fee_cents > 10000000
+    ) {
       await client.query("ROLLBACK");
       didBegin = false;
       return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
     }
 
-    if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_clubs_fee_cents > 10000000) {
+    if (
+      !Number.isFinite(hire_clubs_fee_cents) ||
+      hire_clubs_fee_cents < 0 ||
+      hire_clubs_fee_cents > 10000000
+    ) {
       await client.query("ROLLBACK");
       didBegin = false;
       return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
@@ -9910,147 +9933,151 @@ async function isSubscriberEmail(email) {
     }
 
     const maxPlayers = Number(timeRow.max_players || 0);
-const bookedPlayers = Number(timeRow.booked_players || 0);
+    const bookedPlayers = Number(timeRow.booked_players || 0);
 
-if (players > (maxPlayers - bookedPlayers)) {
-  await client.query("ROLLBACK");
-  didBegin = false;
-  return res.status(409).json({ ok: false, error: "not_enough_spots" });
-}
+    if (players > maxPlayers - bookedPlayers) {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(409).json({ ok: false, error: "not_enough_spots" });
+    }
 
-const ppp = Number(timeRow.price_per_player_cents || 0);
+    const ppp = Number(timeRow.price_per_player_cents || 0);
 
-// ✅ addons total
-const addonsCents =
-  (final_has_cart ? cart_fee_cents : 0) +
-  (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
+    // ✅ addons total
+    const addonsCents =
+      (final_has_cart ? cart_fee_cents : 0) +
+      (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
 
-// ✅ SUBSCRIBER DISCOUNT (5% off green fees only)
-const isSubscriber = await isSubscriberEmail(golfer_email);
-const baseGreenCents = Math.max(0, ppp * players);
+    // ✅ SUBSCRIBER DISCOUNT (x% off green fees only)
+    const isSubscriber = await isSubscriberEmail(golfer_email);
+    const baseGreenCents = Math.max(0, ppp * players);
 
-const discountCents =
-  isSubscriber && SUBSCRIBER_DISCOUNT_PCT > 0
-    ? Math.round((baseGreenCents * SUBSCRIBER_DISCOUNT_PCT) / 100)
-    : 0;
+    const discountCents =
+      isSubscriber && SUBSCRIBER_DISCOUNT_PCT > 0
+        ? Math.round((baseGreenCents * SUBSCRIBER_DISCOUNT_PCT) / 100)
+        : 0;
 
-const greenAfterDiscountCents = Math.max(0, baseGreenCents - discountCents);
+    const greenAfterDiscountCents = Math.max(0, baseGreenCents - discountCents);
 
-// ✅ final total stored + charged
-const totalCents = greenAfterDiscountCents + addonsCents;
+    // ✅ final total stored + charged
+    const totalCents = greenAfterDiscountCents + addonsCents;
 
-const reference = makeRef("TR");
-const bookingStatus = payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
+    const reference = makeRef("TR");
+    const bookingStatus =
+      payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
 
-// ✅ PAY_AT_COURSE should show "amount due" on daily sheets (same as totalCents)
-const amountDueCents = payment_mode === "PAY_AT_COURSE" ? totalCents : 0;
+    // ✅ PAY_AT_COURSE should show "amount due" on daily sheets (same as totalCents)
+    const amountDueCents = payment_mode === "PAY_AT_COURSE" ? totalCents : 0;
 
-// ✅ define these so they exist + match DB columns
-const subscriber_discount_applied = Number(discountCents || 0) > 0;
-const subscriber_discount_cents = Number(discountCents || 0);
+    // ✅ SAFETY: ensure discountCents exists in this scope (prevents ReferenceError)
+    const discountCentsSafe = Number.isFinite(Number(discountCents)) ? Number(discountCents) : 0;
 
-const ins = await client.query(
-  `
-  INSERT INTO booking_bookings
-    (course_id, play_date, tee_time, holes, players,
-     golfer_name, golfer_email, golfer_phone,
-     price_per_player_cents, total_cents, reference, status,
-     subscriber_discount_applied, subscriber_discount_cents,
-     start_at, end_at,
-     paid, checked_in,
-     has_cart, cart_qty, cart_fee_cents,
-     has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
-     layout_key, front_nine_key, back_nine_key,
-     created_at)
-  VALUES
-    ($1,$2::date,$3,$4,$5,
-     $6,$7,$8,
-     $9,$10,$11,$12,
-     $13,$14,
-     $15::timestamptz,$16::timestamptz,
-     false,false,
-     $17,$18,$19,
-     $20,$21,$22,
-     $23,$24,$25,
-     now())
-  RETURNING id, reference;
-  `,
-  [
-    courseId,
-    date,
-    teeTimeDb,
-    holes,
-    players,
-    golfer_name || null,
-    golfer_email || null,
-    golfer_phone || null,
-    ppp,
-    totalCents,
-    reference,
-    bookingStatus,
+    // ✅ define these so they exist + match DB columns
+    const subscriber_discount_applied = discountCentsSafe > 0;
+    const subscriber_discount_cents = discountCentsSafe;
 
-    // ✅ subscriber discount fields (these were missing)
-    subscriber_discount_applied,
-    subscriber_discount_cents,
+    const ins = await client.query(
+      `
+      INSERT INTO booking_bookings
+        (course_id, play_date, tee_time, holes, players,
+         golfer_name, golfer_email, golfer_phone,
+         price_per_player_cents, total_cents, reference, status,
+         subscriber_discount_applied, subscriber_discount_cents,
+         start_at, end_at,
+         paid, checked_in,
+         has_cart, cart_qty, cart_fee_cents,
+         has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
+         layout_key, front_nine_key, back_nine_key,
+         created_at)
+      VALUES
+        ($1,$2::date,$3,$4,$5,
+         $6,$7,$8,
+         $9,$10,$11,$12,
+         $13,$14,
+         $15::timestamptz,$16::timestamptz,
+         false,false,
+         $17,$18,$19,
+         $20,$21,$22,
+         $23,$24,$25,
+         now())
+      RETURNING id, reference;
+      `,
+      [
+        courseId,
+        date,
+        teeTimeDb,
+        holes,
+        players,
+        golfer_name || null,
+        golfer_email || null,
+        golfer_phone || null,
+        ppp,
+        totalCents,
+        reference,
+        bookingStatus,
 
-    // start/end
-    startAtIso,
-    endAtIso,
+        // ✅ subscriber discount fields
+        subscriber_discount_applied,
+        subscriber_discount_cents,
 
-    // add-ons
-    final_has_cart,
-    cart_qty,
-    cart_fee_cents,
+        // start/end
+        startAtIso,
+        endAtIso,
 
-    final_has_hire_clubs,
-    hire_clubs_qty,
-    hire_clubs_fee_cents,
+        // add-ons
+        final_has_cart,
+        cart_qty,
+        cart_fee_cents,
 
-    // routing keys
-    timeRow.layout_key || null,
-    timeRow.front_nine_key || null,
-    timeRow.back_nine_key || null,
-  ]
-);
+        final_has_hire_clubs,
+        hire_clubs_qty,
+        hire_clubs_fee_cents,
 
-const bookingId = ins.rows[0]?.id;
-
-const newBooked = bookedPlayers + players;
-
-await client.query(
-  `
-  UPDATE booking_times
-  SET
-    booked_players = $8,
-    status = CASE
-      WHEN status = 'BLOCKED' THEN 'BLOCKED'
-      WHEN $8 >= max_players THEN 'BOOKED'
-      ELSE 'AVAILABLE'
-    END,
-    updated_at = now()
-  WHERE course_id=$1
-    AND play_date=$2::date
-    AND tee_time=$3
-    AND holes=$4
-    AND (
-      ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
-      OR
-      ($4 = 9 AND lower(layout_key) = lower($5))
+        // routing keys
+        timeRow.layout_key || null,
+        timeRow.front_nine_key || null,
+        timeRow.back_nine_key || null,
+      ]
     );
-  `,
-  [
-    courseId,
-    date,
-    teeTimeDb,
-    holes,
-    layout_key || "",
-    front_nine_key || "",
-    back_nine_key || "",
-    newBooked,
-  ]
-);
 
-    // ✅ CHANGE: create Stripe session AFTER UPDATE but BEFORE COMMIT
+    const bookingId = ins.rows[0]?.id;
+
+    const newBooked = bookedPlayers + players;
+
+    await client.query(
+      `
+      UPDATE booking_times
+      SET
+        booked_players = $8,
+        status = CASE
+          WHEN status = 'BLOCKED' THEN 'BLOCKED'
+          WHEN $8 >= max_players THEN 'BOOKED'
+          ELSE 'AVAILABLE'
+        END,
+        updated_at = now()
+      WHERE course_id=$1
+        AND play_date=$2::date
+        AND tee_time=$3
+        AND holes=$4
+        AND (
+          ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
+          OR
+          ($4 = 9 AND lower(layout_key) = lower($5))
+        );
+      `,
+      [
+        courseId,
+        date,
+        teeTimeDb,
+        holes,
+        layout_key || "",
+        front_nine_key || "",
+        back_nine_key || "",
+        newBooked,
+      ]
+    );
+
+    // ✅ PAY_ON_BOOKING: create Stripe session AFTER UPDATE but BEFORE COMMIT
     if (payment_mode === "PAY_ON_BOOKING") {
       if (!stripe) {
         await client.query("ROLLBACK");
@@ -10060,7 +10087,9 @@ await client.query(
       if (!stripe_account_id) {
         await client.query("ROLLBACK");
         didBegin = false;
-        return res.status(400).json({ ok: false, error: "course_missing_stripe_account" });
+        return res
+          .status(400)
+          .json({ ok: false, error: "course_missing_stripe_account" });
       }
       if (!publicBaseUrl) {
         await client.query("ROLLBACK");
@@ -10068,11 +10097,12 @@ await client.query(
         return res.status(500).json({ ok: false, error: "public_base_url_missing" });
       }
 
-      // ✅ ADD: ensure connected account is fully onboarded for transfers
+      const BASE_URL = publicBaseUrl.replace(/\/+$/, "");
+
+      // ✅ Optional readiness check (don’t hard-fail on API errors)
       try {
         const acct = await stripe.accounts.retrieve(stripe_account_id);
         const transfersCap = acct?.capabilities?.transfers;
-
         if (transfersCap && String(transfersCap) !== "active") {
           await client.query("ROLLBACK");
           didBegin = false;
@@ -10082,7 +10112,6 @@ await client.query(
             message: "Course Stripe Connect onboarding not completed (transfers not active).",
           });
         }
-
         if (acct?.charges_enabled === false || acct?.payouts_enabled === false) {
           await client.query("ROLLBACK");
           didBegin = false;
@@ -10129,7 +10158,7 @@ await client.query(
             // ✅ subscriber audit
             subscriber: isSubscriber ? "1" : "0",
             subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
-            discount_cents: String(discountCents || 0),
+            discount_cents: String(discountCentsSafe),
           },
         },
         metadata: {
@@ -10141,7 +10170,7 @@ await client.query(
           // ✅ subscriber audit
           subscriber: isSubscriber ? "1" : "0",
           subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
-          discount_cents: String(discountCents || 0),
+          discount_cents: String(discountCentsSafe),
         },
         success_url: `${BASE_URL}/book-success.html?reference=${encodeURIComponent(reference)}`,
         cancel_url: `${BASE_URL}/book/${slug}?cancelled=1`,
@@ -10165,7 +10194,7 @@ await client.query(
 
           isSubscriber,
           discountPct: isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0,
-          discountCents,
+          discountCents: discountCentsSafe,
 
           totalCents,
           addonsCents,
@@ -10181,20 +10210,44 @@ await client.query(
       });
     }
 
+    // ✅ PAY_AT_COURSE flow
     await client.query("COMMIT");
     didBegin = false;
 
-    // ---- PAY_AT_COURSE existing analytics/email/response ----
     recordEvent({
       type: "booking_created",
       userId: getClientIp(req) || null,
       courseName: courseRow.name,
-      meta: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty, layout_key, front_nine_key, back_nine_key },
+      meta: {
+        slug,
+        date,
+        time,
+        holes,
+        players,
+        reference,
+        cart_qty,
+        hire_clubs_qty,
+        layout_key,
+        front_nine_key,
+        back_nine_key,
+      },
     }).catch(() => {});
     recordBookingEvent(req, {
       courseSlug: slug,
       eventType: "booking_confirmed",
-      payload: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty, layout_key, front_nine_key, back_nine_key },
+      payload: {
+        slug,
+        date,
+        time,
+        holes,
+        players,
+        reference,
+        cart_qty,
+        hire_clubs_qty,
+        layout_key,
+        front_nine_key,
+        back_nine_key,
+      },
     }).catch(() => {});
 
     const emailResult = await sendBookingEmail({
@@ -10206,7 +10259,7 @@ await client.query(
       players,
       reference,
       pricePerPlayerCents: ppp,
-      totalCents: totalCents, // ✅ already discounted if subscriber
+      totalCents, // ✅ already discounted if subscriber
       cartCents: cart_fee_cents,
       hireClubsCents: hire_clubs_fee_cents,
     });
@@ -10214,6 +10267,7 @@ await client.query(
     return res.json({
       ok: true,
       reference,
+      payment_mode: "PAY_AT_COURSE",
       course: { slug: courseRow.slug, name: courseRow.name },
       booking: {
         date,
@@ -10224,7 +10278,7 @@ await client.query(
 
         isSubscriber,
         discountPct: isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0,
-        discountCents,
+        discountCents: discountCentsSafe,
 
         totalCents,
         addonsCents,
