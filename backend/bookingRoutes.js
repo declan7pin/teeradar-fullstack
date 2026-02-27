@@ -9941,7 +9941,12 @@ async function isSubscriberEmail(email) {
 
     const reference = makeRef("TR");
     const bookingStatus = payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
+// ✅ subscriber discount vars must exist (avoid ReferenceError)
+const subscriber_discount_applied =
+  !!(discount?.applied ?? discountApplied ?? req.body?.subscriberDiscountApplied ?? false);
 
+const subscriber_discount_cents =
+  Number(discount?.cents ?? discountCents ?? req.body?.subscriberDiscountCents ?? 0) || 0;
     // ✅ PAY_AT_COURSE should show "amount due" on daily sheets (same as totalCents)
 const amountDueCents = payment_mode === "PAY_AT_COURSE" ? totalCents : 0;
 
