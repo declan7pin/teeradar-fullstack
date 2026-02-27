@@ -10078,41 +10078,47 @@ const totalCents = Math.max(0, totalBeforeDiscountCents - discountCents);
     );
 
     const bookingId = ins.rows[0]?.id;
-    const newBooked = bookedPlayers + players;
 
-    await q(
-      "update_booking_times_booked_players",
-      `
-      UPDATE booking_times
-      SET
-        booked_players = $8,
-        status = CASE
-          WHEN status = 'BLOCKED' THEN 'BLOCKED'
-          WHEN $8 >= max_players THEN 'BOOKED'
-          ELSE 'AVAILABLE'
-        END,
-        updated_at = now()
-      WHERE course_id=$1
-        AND play_date=$2::date
-        AND tee_time=$3
-        AND holes=$4
-        AND (
-          ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
-          OR
-          ($4 = 9 AND lower(layout_key) = lower($5))
-        );
-      `,
-      [
-        courseId,
-        date,
-        teeTimeDb,
-        holes,
-        layout_key || "",
-        front_nine_key || "",
-        back_nine_key || "",
-        newBooked,
-      ]
-    );
+// ✅ BEST PRACTICE:
+// Only consume capacity immediately for PAY_AT_COURSE.
+// PAY_ON_BOOKING should NOT take the time until webhook confirms payment.
+if (payment_mode === "PAY_AT_COURSE") {
+  const newBooked = bookedPlayers + players;
+
+  await q(
+    "update_booking_times_booked_players",
+    `
+    UPDATE booking_times
+    SET
+      booked_players = $8,
+      status = CASE
+        WHEN status = 'BLOCKED' THEN 'BLOCKED'
+        WHEN $8 >= max_players THEN 'BOOKED'
+        ELSE 'AVAILABLE'
+      END,
+      updated_at = now()
+    WHERE course_id=$1
+      AND play_date=$2::date
+      AND tee_time=$3
+      AND holes=$4
+      AND (
+        ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
+        OR
+        ($4 = 9 AND lower(layout_key) = lower($5))
+      );
+    `,
+    [
+      courseId,
+      date,
+      teeTimeDb,
+      holes,
+      layout_key || "",
+      front_nine_key || "",
+      back_nine_key || "",
+      newBooked,
+    ]
+  );
+}
 
     if (payment_mode === "PAY_ON_BOOKING") {
       if (!stripe) {
@@ -10404,136 +10410,32 @@ router.post("/confirm-payment", async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-// ✅ Release a PAY_ON_BOOKING hold when user cancels Stripe checkout
-// Frontend calls this after returning to /book/:slug?cancelled=1&ref=XXXX
+// ✅ Best practice: PAY_ON_BOOKING should NOT consume booking_times until webhook.
+// So "cancel" just cancels the pending booking (no releasing of booking_times needed).
 router.post("/payment-cancel", async (req, res) => {
   let client = null;
-  let didBegin = false;
 
   try {
-    const ref =
-      String(req.body?.ref || req.query?.ref || "").trim();
-
+    const ref = String(req.body?.ref || req.query?.ref || "").trim();
     if (!ref) return res.status(400).json({ ok: false, error: "ref_required" });
 
     client = await db.connect();
-    await client.query("BEGIN");
-    didBegin = true;
 
-    // Lock the booking row
-    const b = await client.query(
+    const r = await client.query(
       `
-      SELECT id, course_id, play_date, tee_time, holes, players,
-             layout_key, front_nine_key, back_nine_key,
-             status, paid
-      FROM booking_bookings
-      WHERE reference = $1
-      LIMIT 1
-      FOR UPDATE;
+      UPDATE booking_bookings
+      SET status = 'CANCELLED', updated_at = now()
+      WHERE reference = $1::text
+        AND status = 'PENDING_PAYMENT'
+        AND COALESCE(paid,false) = false
+      RETURNING id;
       `,
       [ref]
     );
 
-    if (!b.rows.length) {
-      await client.query("ROLLBACK");
-      didBegin = false;
-      return res.status(404).json({ ok: false, error: "booking_not_found" });
-    }
-
-    const row = b.rows[0];
-
-    // Only release if it's still pending + unpaid
-    const status = String(row.status || "").toUpperCase();
-    const paid = !!row.paid;
-
-    if (paid || status === "CONFIRMED") {
-      await client.query("ROLLBACK");
-      didBegin = false;
-      return res.json({ ok: true, released: false, reason: "already_paid_or_confirmed" });
-    }
-
-    // Mark booking cancelled
-    await client.query(
-      `
-      UPDATE booking_bookings
-      SET status='CANCELLED', updated_at=now()
-      WHERE id=$1;
-      `,
-      [row.id]
-    );
-
-    // Release booked_players from booking_times (same matching logic you used to reserve)
-    // ✅ IMPORTANT: tee_time in booking_bookings is plain "HH:MM" (you already fixed that)
-    const holes = Number(row.holes || 0);
-
-    if (holes === 18) {
-      await client.query(
-        `
-        UPDATE booking_times
-        SET
-          booked_players = GREATEST(0, COALESCE(booked_players,0) - $8),
-          status = CASE
-            WHEN status='BLOCKED' THEN 'BLOCKED'
-            WHEN GREATEST(0, COALESCE(booked_players,0) - $8) >= max_players THEN 'BOOKED'
-            ELSE 'AVAILABLE'
-          END,
-          updated_at = now()
-        WHERE course_id=$1
-          AND play_date=$2::date
-          AND split_part(tee_time,'|',1) = $3
-          AND holes=18
-          AND lower(front_nine_key)=lower($6)
-          AND lower(back_nine_key)=lower($7);
-        `,
-        [
-          row.course_id,
-          row.play_date,
-          row.tee_time,
-          null,
-          null,
-          row.front_nine_key || "",
-          row.back_nine_key || "",
-          Number(row.players || 0),
-        ]
-      );
-    } else {
-      await client.query(
-        `
-        UPDATE booking_times
-        SET
-          booked_players = GREATEST(0, COALESCE(booked_players,0) - $6),
-          status = CASE
-            WHEN status='BLOCKED' THEN 'BLOCKED'
-            WHEN GREATEST(0, COALESCE(booked_players,0) - $6) >= max_players THEN 'BOOKED'
-            ELSE 'AVAILABLE'
-          END,
-          updated_at = now()
-        WHERE course_id=$1
-          AND play_date=$2::date
-          AND split_part(tee_time,'|',1) = $3
-          AND holes=9
-          AND lower(layout_key)=lower($5);
-        `,
-        [
-          row.course_id,
-          row.play_date,
-          row.tee_time,
-          null,
-          row.layout_key || "",
-          Number(row.players || 0),
-        ]
-      );
-    }
-
-    await client.query("COMMIT");
-    didBegin = false;
-
-    return res.json({ ok: true, released: true });
+    return res.json({ ok: true, cancelled: r.rowCount });
   } catch (e) {
-    console.error("payment-cancel", e);
-    try {
-      if (client && didBegin) await client.query("ROLLBACK");
-    } catch {}
+    console.error("payment-cancel error:", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   } finally {
     try { if (client) client.release(); } catch {}
