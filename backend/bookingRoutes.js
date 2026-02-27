@@ -10000,8 +10000,6 @@ async function isSubscriberEmail(email) {
   (final_has_cart ? cart_fee_cents : 0) +
   (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
 
-const isSubscriber = await isSubscriberEmail(golfer_email);
-
 // ✅ total BEFORE discount = green fees + add-ons
 const totalBeforeDiscountCents = Math.max(0, (ppp * players) + addonsCents);
 
