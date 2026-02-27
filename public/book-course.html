@@ -1383,6 +1383,39 @@ $("confirmBtn").onclick = confirmBooking;
       await fetchAvailability();
     }
   } catch (e) {}
+  // ✅ STRIPE CANCEL RETURN HANDLER (uses ?cancelled=1&ref=XXXX)
+(async function handleStripeCancelReturn(){
+  try {
+    const q = new URLSearchParams(location.search);
+    const cancelled = q.get("cancelled");
+    const ref = (q.get("ref") || "").trim();
+
+    if (cancelled !== "1" || !ref) return;
+
+    setStatus("Releasing held tee time…", "");
+
+    const res = await apiFetch("/api/book/payment-cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref }),
+    });
+
+    const data = await res.json().catch(()=> ({}));
+    if (!res.ok || !data || !data.ok) {
+      throw new Error(data?.error || "Failed to release hold");
+    }
+
+    setStatus("✅ Booking cancelled — tee time released.", "ok");
+
+    // remove cancelled/ref from URL so refresh doesn't re-run
+    history.replaceState({}, "", location.pathname);
+
+    await fetchAvailability();
+
+  } catch (e) {
+    setStatus("❌ " + (e.message || "Cancel handling failed"), "err");
+  }
+})();
  // ✅ STRIPE RETURN HANDLER (uses ?paid=1&ref=XXXX from backend success_url)
 (async function handleStripeReturn(){
   try {
