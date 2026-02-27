@@ -9997,18 +9997,22 @@ async function isSubscriberEmail(email) {
     const ppp = Number(timeRow.price_per_player_cents || 0);
 
     const addonsCents =
-      (final_has_cart ? cart_fee_cents : 0) +
-      (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
+  (final_has_cart ? cart_fee_cents : 0) +
+  (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
 
-    const baseGreenCents = Math.max(0, ppp * players);
+const isSubscriber = await isSubscriberEmail(golfer_email);
 
-    const discountCents =
-      isSubscriber && SUBSCRIBER_DISCOUNT_PCT > 0
-        ? Math.round((baseGreenCents * SUBSCRIBER_DISCOUNT_PCT) / 100)
-        : 0;
+// ✅ total BEFORE discount = green fees + add-ons
+const totalBeforeDiscountCents = Math.max(0, (ppp * players) + addonsCents);
 
-    const greenAfterDiscountCents = Math.max(0, baseGreenCents - discountCents);
-    const totalCents = greenAfterDiscountCents + addonsCents;
+// ✅ SUBSCRIBER DISCOUNT (applies to WHOLE booking)
+const discountCents =
+  isSubscriber && SUBSCRIBER_DISCOUNT_PCT > 0
+    ? Math.round((totalBeforeDiscountCents * SUBSCRIBER_DISCOUNT_PCT) / 100)
+    : 0;
+
+// ✅ final total stored + charged
+const totalCents = Math.max(0, totalBeforeDiscountCents - discountCents);
 
     const reference = makeRef("TR");
     const bookingStatus = payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
