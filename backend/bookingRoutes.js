@@ -9910,44 +9910,44 @@ async function isSubscriberEmail(email) {
     }
 
     const maxPlayers = Number(timeRow.max_players || 0);
-    const bookedPlayers = Number(timeRow.booked_players || 0);
+const bookedPlayers = Number(timeRow.booked_players || 0);
 
-    if (players > (maxPlayers - bookedPlayers)) {
-      await client.query("ROLLBACK");
-      didBegin = false;
-      return res.status(409).json({ ok: false, error: "not_enough_spots" });
-    }
+if (players > (maxPlayers - bookedPlayers)) {
+  await client.query("ROLLBACK");
+  didBegin = false;
+  return res.status(409).json({ ok: false, error: "not_enough_spots" });
+}
 
-    const ppp = Number(timeRow.price_per_player_cents || 0);
+const ppp = Number(timeRow.price_per_player_cents || 0);
 
-    // ✅ addons total
-    const addonsCents =
-      (final_has_cart ? cart_fee_cents : 0) +
-      (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
+// ✅ addons total
+const addonsCents =
+  (final_has_cart ? cart_fee_cents : 0) +
+  (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
 
-    // ✅ SUBSCRIBER DISCOUNT (5% off green fees only)
-    const isSubscriber = await isSubscriberEmail(golfer_email);
-    const baseGreenCents = Math.max(0, ppp * players);
+// ✅ SUBSCRIBER DISCOUNT (5% off green fees only)
+const isSubscriber = await isSubscriberEmail(golfer_email);
+const baseGreenCents = Math.max(0, ppp * players);
 
-    const discountCents =
-      isSubscriber && SUBSCRIBER_DISCOUNT_PCT > 0
-        ? Math.round((baseGreenCents * SUBSCRIBER_DISCOUNT_PCT) / 100)
-        : 0;
+const discountCents =
+  isSubscriber && SUBSCRIBER_DISCOUNT_PCT > 0
+    ? Math.round((baseGreenCents * SUBSCRIBER_DISCOUNT_PCT) / 100)
+    : 0;
 
-    const greenAfterDiscountCents = Math.max(0, baseGreenCents - discountCents);
+const greenAfterDiscountCents = Math.max(0, baseGreenCents - discountCents);
 
-    // ✅ final total stored + charged
-    const totalCents = greenAfterDiscountCents + addonsCents;
+// ✅ final total stored + charged
+const totalCents = greenAfterDiscountCents + addonsCents;
 
-    const reference = makeRef("TR");
-    const bookingStatus = payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
+const reference = makeRef("TR");
+const bookingStatus = payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
 
-    // ✅ PAY_AT_COURSE should show "amount due" on daily sheets (same as totalCents)
+// ✅ PAY_AT_COURSE should show "amount due" on daily sheets (same as totalCents)
 const amountDueCents = payment_mode === "PAY_AT_COURSE" ? totalCents : 0;
 
-// ✅ Ensure these exist (safe defaults if your code didn't set them earlier)
-const subscriberDiscountApplied = !!(subscriber_discount_applied ?? false);
-const subscriberDiscountCents = Number(subscriber_discount_cents ?? 0) || 0;
+// ✅ subscriber discount flags come from the discount we just calculated
+const subscriberDiscountApplied = discountCents > 0;
+const subscriberDiscountCents = discountCents;
 
 const ins = await client.query(
   `
@@ -9978,32 +9978,32 @@ const ins = await client.query(
   RETURNING id, reference;
   `,
   [
-    courseId,                // $1
-    date,                    // $2
-    teeTimeDb,               // $3
-    holes,                   // $4
-    players,                 // $5
-    golfer_name || null,     // $6
-    golfer_email || null,    // $7
-    golfer_phone || null,    // $8
-    ppp,                     // $9
-    totalCents,              // $10
-    amountDueCents,          // $11
-    reference,               // $12
-    bookingStatus,           // $13
-    subscriberDiscountApplied, // $14
-    subscriberDiscountCents,   // $15
-    startAtIso,              // $16
-    endAtIso,                // $17
-    final_has_cart,          // $18
-    cart_qty,                // $19
-    cart_fee_cents,          // $20
-    final_has_hire_clubs,    // $21
-    hire_clubs_qty,          // $22
-    hire_clubs_fee_cents,    // $23
-    timeRow.layout_key || "",       // $24
-    timeRow.front_nine_key || "",   // $25
-    timeRow.back_nine_key || "",    // $26
+    courseId,                   // $1
+    date,                       // $2
+    teeTimeDb,                  // $3
+    holes,                      // $4
+    players,                    // $5
+    golfer_name || null,        // $6
+    golfer_email || null,       // $7
+    golfer_phone || null,       // $8
+    ppp,                        // $9
+    totalCents,                 // $10
+    amountDueCents,             // $11
+    reference,                  // $12
+    bookingStatus,              // $13
+    subscriberDiscountApplied,  // $14
+    subscriberDiscountCents,    // $15
+    startAtIso,                 // $16
+    endAtIso,                   // $17
+    final_has_cart,             // $18
+    cart_qty,                   // $19
+    cart_fee_cents,             // $20
+    final_has_hire_clubs,       // $21
+    hire_clubs_qty,             // $22
+    hire_clubs_fee_cents,       // $23
+    timeRow.layout_key || "",         // $24
+    timeRow.front_nine_key || "",     // $25
+    timeRow.back_nine_key || "",      // $26
   ]
 );
 
