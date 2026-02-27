@@ -16,6 +16,59 @@ const STRIPE_API_VERSION = "2024-06-20";
 // ✅ Platform fee in basis points (e.g. 300 = 3%)
 const PLATFORM_FEE_BPS = Number(process.env.PLATFORM_FEE_BPS || 0);
 
+// ✅ Subscriber discount (defaults to 5%)
+const SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
+
+// Optional: emergency override list (comma-separated emails) if DB lookup isn't ready
+const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+// ✅ Determine if an email is an active subscriber
+async function isSubscriberEmail(email) {
+  const e = String(email || "").trim().toLowerCase();
+  if (!e) return false;
+
+  // 1) Env allowlist fallback
+  if (SUBSCRIBER_EMAILS.includes(e)) return true;
+
+  // 2) Try common user table shapes (won't crash if table/cols don't exist)
+  try {
+    const r = await db.query(
+      `
+      SELECT 1
+      FROM users
+      WHERE lower(email) = lower($1)
+        AND (
+          COALESCE(is_pro,false) = true
+          OR lower(COALESCE(plan,'')) IN ('pro','subscriber','paid')
+          OR lower(COALESCE(subscription_status,'')) IN ('active','trialing')
+        )
+      LIMIT 1;
+      `,
+      [e]
+    );
+    if (r.rows?.length) return true;
+  } catch {}
+
+  // 3) Try a subscriptions table shape (Stripe sync style)
+  try {
+    const r2 = await db.query(
+      `
+      SELECT 1
+      FROM subscriptions
+      WHERE lower(email) = lower($1)
+        AND status IN ('active','trialing')
+      LIMIT 1;
+      `,
+      [e]
+    );
+    if (r2.rows?.length) return true;
+  } catch {}
+
+  return false;
+}
 // ✅ Create Stripe client once (or null if not configured)
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION })
@@ -9702,6 +9755,58 @@ async function handleBook(req, res) {
       ? Math.max(0, Math.min(10000, Math.trunc(courseFeeBpsRaw)))
       : 0;
 
+    // ✅ Subscriber discount config (defaults to 5%)
+    const SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
+    const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+
+    // ✅ check subscriber inside same DB transaction (safe + consistent)
+    async function isSubscriberEmail(email) {
+      const e = String(email || "").trim().toLowerCase();
+      if (!e) return false;
+
+      // env allowlist fallback
+      if (SUBSCRIBER_EMAILS.includes(e)) return true;
+
+      // try users table (if you have one)
+      try {
+        const r = await client.query(
+          `
+          SELECT 1
+          FROM users
+          WHERE lower(email) = lower($1)
+            AND (
+              COALESCE(is_pro,false) = true
+              OR lower(COALESCE(plan,'')) IN ('pro','subscriber','paid')
+              OR lower(COALESCE(subscription_status,'')) IN ('active','trialing')
+            )
+          LIMIT 1;
+          `,
+          [e]
+        );
+        if (r.rows?.length) return true;
+      } catch {}
+
+      // try subscriptions table (if you have one)
+      try {
+        const r2 = await client.query(
+          `
+          SELECT 1
+          FROM subscriptions
+          WHERE lower(email) = lower($1)
+            AND status IN ('active','trialing')
+          LIMIT 1;
+          `,
+          [e]
+        );
+        if (r2.rows?.length) return true;
+      } catch {}
+
+      return false;
+    }
+
     await client.query("BEGIN");
     didBegin = true;
 
@@ -9813,11 +9918,11 @@ async function handleBook(req, res) {
 
     const timeRow = t.rows[0];
 
-// ✅ IMPORTANT FIX:
-// booking_times.tee_time can be like "06:40|18:front|back".
-// booking_bookings.tee_time MUST be plain "HH:MM" so availability + daily sheet joins work.
-const teeTimeDbRaw = String(timeRow.tee_time || time || "").trim();
-const teeTimeDb = teeTimeDbRaw.split("|")[0].trim();
+    // ✅ IMPORTANT FIX:
+    // booking_times.tee_time can be like "06:40|18:front|back".
+    // booking_bookings.tee_time MUST be plain "HH:MM" so availability + daily sheet joins work.
+    const teeTimeDbRaw = String(timeRow.tee_time || time || "").trim();
+    const teeTimeDb = teeTimeDbRaw.split("|")[0].trim();
 
     if (String(timeRow.status || "").toUpperCase() !== "AVAILABLE") {
       await client.query("ROLLBACK");
@@ -9835,16 +9940,31 @@ const teeTimeDb = teeTimeDbRaw.split("|")[0].trim();
     }
 
     const ppp = Number(timeRow.price_per_player_cents || 0);
-    const baseTotalCents = ppp * players;
 
+    // ✅ addons total
     const addonsCents =
       (final_has_cart ? cart_fee_cents : 0) +
       (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
 
-    const totalCents = baseTotalCents + addonsCents;
-    const reference = makeRef("TR");
+    // ✅ SUBSCRIBER DISCOUNT (5% off green fees only)
+    const isSubscriber = await isSubscriberEmail(golfer_email);
+    const baseGreenCents = Math.max(0, ppp * players);
 
+    const discountCents =
+      isSubscriber && SUBSCRIBER_DISCOUNT_PCT > 0
+        ? Math.round((baseGreenCents * SUBSCRIBER_DISCOUNT_PCT) / 100)
+        : 0;
+
+    const greenAfterDiscountCents = Math.max(0, baseGreenCents - discountCents);
+
+    // ✅ final total stored + charged
+    const totalCents = greenAfterDiscountCents + addonsCents;
+
+    const reference = makeRef("TR");
     const bookingStatus = payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
+
+    // ✅ PAY_AT_COURSE should show "amount due" on daily sheets (same as totalCents)
+    const amountDueCents = payment_mode === "PAY_AT_COURSE" ? totalCents : 0;
 
     const ins = await client.query(
       `
@@ -9951,38 +10071,34 @@ const teeTimeDb = teeTimeDbRaw.split("|")[0].trim();
         didBegin = false;
         return res.status(500).json({ ok: false, error: "public_base_url_missing" });
       }
+
       // ✅ ADD: ensure connected account is fully onboarded for transfers
-try {
-  const acct = await stripe.accounts.retrieve(stripe_account_id);
+      try {
+        const acct = await stripe.accounts.retrieve(stripe_account_id);
+        const transfersCap = acct?.capabilities?.transfers;
 
-  // Stripe uses "transfers" capability on Connect accounts (this is the important one)
-  const transfersCap = acct?.capabilities?.transfers;
+        if (transfersCap && String(transfersCap) !== "active") {
+          await client.query("ROLLBACK");
+          didBegin = false;
+          return res.status(400).json({
+            ok: false,
+            error: "course_stripe_not_ready",
+            message: "Course Stripe Connect onboarding not completed (transfers not active).",
+          });
+        }
 
-  // If Stripe returns capabilities and transfers isn't active yet, block checkout creation
-  if (transfersCap && String(transfersCap) !== "active") {
-    await client.query("ROLLBACK");
-    didBegin = false;
-    return res.status(400).json({
-      ok: false,
-      error: "course_stripe_not_ready",
-      message: "Course Stripe Connect onboarding not completed (transfers not active).",
-    });
-  }
-
-  // Also catch the case where the account is restricted/disabled
-  if (acct?.charges_enabled === false || acct?.payouts_enabled === false) {
-    await client.query("ROLLBACK");
-    didBegin = false;
-    return res.status(400).json({
-      ok: false,
-      error: "course_stripe_not_ready",
-      message: "Course Stripe account is not enabled for charges/payouts yet.",
-    });
-  }
-} catch (e) {
-  console.warn("Stripe account readiness check failed:", e?.message || e);
-  // Don't hard-fail here; Stripe will still throw a clearer error if it truly can't proceed
-}
+        if (acct?.charges_enabled === false || acct?.payouts_enabled === false) {
+          await client.query("ROLLBACK");
+          didBegin = false;
+          return res.status(400).json({
+            ok: false,
+            error: "course_stripe_not_ready",
+            message: "Course Stripe account is not enabled for charges/payouts yet.",
+          });
+        }
+      } catch (e) {
+        console.warn("Stripe account readiness check failed:", e?.message || e);
+      }
 
       const application_fee_amount = Math.max(
         0,
@@ -9997,7 +10113,7 @@ try {
             quantity: 1,
             price_data: {
               currency: "aud",
-              unit_amount: totalCents,
+              unit_amount: totalCents, // ✅ already discounted if subscriber
               product_data: {
                 name: `${courseRow.name} — ${holes} holes (${players} players)`,
                 description: `${date} ${time}`,
@@ -10013,6 +10129,11 @@ try {
             reference,
             course_slug: slug,
             platform_fee_bps: String(courseFeeBps),
+
+            // ✅ subscriber audit
+            subscriber: isSubscriber ? "1" : "0",
+            subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
+            discount_cents: String(discountCents || 0),
           },
         },
         metadata: {
@@ -10020,6 +10141,11 @@ try {
           reference,
           course_slug: slug,
           platform_fee_bps: String(courseFeeBps),
+
+          // ✅ subscriber audit
+          subscriber: isSubscriber ? "1" : "0",
+          subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
+          discount_cents: String(discountCents || 0),
         },
         success_url: `${BASE_URL}/book-success.html?reference=${encodeURIComponent(reference)}`,
         cancel_url: `${BASE_URL}/book/${slug}?cancelled=1`,
@@ -10040,8 +10166,14 @@ try {
           holes,
           players,
           pricePerPlayerCents: ppp,
+
+          isSubscriber,
+          discountPct: isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0,
+          discountCents,
+
           totalCents,
           addonsCents,
+          amountDueCents: 0, // ✅ prepaid
           cart_qty,
           hire_clubs_qty,
           layout_key,
@@ -10078,7 +10210,7 @@ try {
       players,
       reference,
       pricePerPlayerCents: ppp,
-      totalCents: totalCents,
+      totalCents: totalCents, // ✅ already discounted if subscriber
       cartCents: cart_fee_cents,
       hireClubsCents: hire_clubs_fee_cents,
     });
@@ -10093,8 +10225,14 @@ try {
         holes,
         players,
         pricePerPlayerCents: ppp,
+
+        isSubscriber,
+        discountPct: isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0,
+        discountCents,
+
         totalCents,
         addonsCents,
+        amountDueCents, // ✅ shows what they owe at course
         cart_qty,
         hire_clubs_qty,
         layout_key,
@@ -10123,7 +10261,6 @@ try {
     } catch {}
   }
 }
-
 router.post("/book", handleBook);
 // keep /availability POST blocked so the frontend can’t accidentally use it
 router.post("/availability", (req, res) => {
