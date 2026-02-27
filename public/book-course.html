@@ -1282,9 +1282,21 @@ back_nine_key: back_nine_key || null,
         layout: layoutText,
 
         // ✅ add-ons
-        addonIds: selectedAddonIds,
-        cartQty: cartAddonId ? cartQtySelected : 0,
-        hireClubsQty: clubsAddonId ? clubsQtySelected : 0,
+        // ✅ prevent double-counting carts/clubs:
+// send qty via cartQty/hireClubsQty only, not also as addonIds
+const addonIdsNoQty = (selectedAddonIds || []).filter(id => {
+  const sid = String(id || "");
+  if (cartAddonId && sid === String(cartAddonId)) return false;
+  if (clubsAddonId && sid === String(clubsAddonId)) return false;
+  return true;
+});
+
+...
+
+// ✅ add-ons
+addonIds: addonIdsNoQty,
+cartQty: cartAddonId ? Number(cartQtySelected || 0) : 0,
+hireClubsQty: clubsAddonId ? Number(clubsQtySelected || 0) : 0,
       }),
     });
 
