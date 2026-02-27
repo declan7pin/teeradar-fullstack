@@ -9790,48 +9790,76 @@ async function handleBook(req, res) {
       .filter(Boolean);
 
     // ✅ Determine if booking email is an active subscriber
-    // IMPORTANT: must NOT reference columns that might not exist
-    async function isSubscriberEmail(email) {
-      const e = String(email || "").trim().toLowerCase();
-      if (!e) return false;
+// Source of truth: Stripe (active subscription). DB is fallback.
+// IMPORTANT: must NOT reference columns that might not exist (like users.is_pro)
+async function isSubscriberEmail(email) {
+  const e = String(email || "").trim().toLowerCase();
+  if (!e) return false;
 
-      // 1) Env allowlist fallback
-      if (SUBSCRIBER_EMAILS.includes(e)) return true;
+  // 1) Env allowlist fallback (fastest manual override)
+  if (SUBSCRIBER_EMAILS.includes(e)) return true;
 
-      // 2) subscriber_status (best source)
-      try {
-        const r = await q(
-          "is_subscriber_status",
-          `
-          SELECT 1
-          FROM subscriber_status
-          WHERE lower(email)=lower($1)
-            AND status IN ('active','trialing')
-          LIMIT 1;
-          `,
-          [e]
-        );
-        if (r.rows?.length) return true;
-      } catch {}
+  // 2) subscriber_status table (fast + no Stripe call)
+  // (server.js webhook keeps this in sync)
+  try {
+    const r = await client.query(
+      `
+      SELECT 1
+      FROM subscriber_status
+      WHERE lower(email)=lower($1)
+        AND status IN ('active','trialing')
+      LIMIT 1;
+      `,
+      [e]
+    );
+    if (r.rows?.length) return true;
+  } catch {}
 
-      // 3) users.plan fallback (optional)
-      try {
-        const r2 = await q(
-          "is_subscriber_users_plan",
-          `
-          SELECT 1
-          FROM users
-          WHERE lower(email)=lower($1)
-            AND lower(COALESCE(plan,'')) IN ('pro','basic')
-          LIMIT 1;
-          `,
-          [e]
-        );
-        if (r2.rows?.length) return true;
-      } catch {}
+  // 3) Stripe source of truth (active subscription by email)
+  // This fixes “discount didn’t apply” even if subscriber_status hasn't been populated yet.
+  try {
+    if (stripe) {
+      const customers = await stripe.customers.list({ email: e, limit: 1 });
+      const cust = customers?.data?.[0];
+      if (cust?.id) {
+        const subs = await stripe.subscriptions.list({
+          customer: cust.id,
+          status: "active",
+          limit: 1,
+        });
+        if (subs?.data?.length) return true;
 
-      return false;
+        // also treat trialing as subscriber
+        const trialSubs = await stripe.subscriptions.list({
+          customer: cust.id,
+          status: "trialing",
+          limit: 1,
+        });
+        if (trialSubs?.data?.length) return true;
+      }
     }
+  } catch (e3) {
+    console.warn("⚠️ Stripe subscriber lookup failed:", e3?.message || e3);
+  }
+
+  // 4) users.plan fallback (only if present + useful for your system)
+  // NOTE: this is NOT Stripe source of truth, just a fallback.
+  try {
+    const r2 = await client.query(
+      `
+      SELECT 1
+      FROM users
+      WHERE lower(email)=lower($1)
+        AND lower(COALESCE(plan,'')) IN ('basic','pro')
+      LIMIT 1;
+      `,
+      [e]
+    );
+    if (r2.rows?.length) return true;
+  } catch {}
+
+  return false;
+}
 
     // ✅ CRITICAL FIX: run subscriber check BEFORE BEGIN (so it cannot poison the booking txn)
     const isSubscriber = await isSubscriberEmail(golfer_email);
