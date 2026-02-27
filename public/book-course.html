@@ -1392,7 +1392,7 @@ $("confirmBtn").onclick = confirmBooking;
 
     if (cancelled !== "1" || !ref) return;
 
-    setStatus("Releasing held tee time…", "");
+    setStatus("Cancelling booking…", "");
 
     const res = await apiFetch("/api/book/payment-cancel", {
       method: "POST",
@@ -1405,7 +1405,7 @@ $("confirmBtn").onclick = confirmBooking;
       throw new Error(data?.error || "Failed to release hold");
     }
 
-    setStatus("✅ Booking cancelled — tee time released.", "ok");
+    setStatus("✅ Booking cancelled.", "ok");
 
     // remove cancelled/ref from URL so refresh doesn't re-run
     history.replaceState({}, "", location.pathname);
