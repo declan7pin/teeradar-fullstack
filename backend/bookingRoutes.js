@@ -25,49 +25,28 @@ const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 
-// ✅ Determine if an email is an active subscriber
+// ✅ Determine if an email is an active subscriber (subscriber_status table)
 async function isSubscriberEmail(email) {
   const e = String(email || "").trim().toLowerCase();
   if (!e) return false;
 
-  // 1) Env allowlist fallback
-  if (SUBSCRIBER_EMAILS.includes(e)) return true;
-
-  // 2) Try common user table shapes (won't crash if table/cols don't exist)
   try {
     const r = await db.query(
       `
       SELECT 1
-      FROM users
-      WHERE lower(email) = lower($1)
-        AND (
-          COALESCE(is_pro,false) = true
-          OR lower(COALESCE(plan,'')) IN ('pro','subscriber','paid')
-          OR lower(COALESCE(subscription_status,'')) IN ('active','trialing')
-        )
-      LIMIT 1;
-      `,
-      [e]
-    );
-    if (r.rows?.length) return true;
-  } catch {}
-
-  // 3) Try a subscriptions table shape (Stripe sync style)
-  try {
-    const r2 = await db.query(
-      `
-      SELECT 1
-      FROM subscriptions
+      FROM subscriber_status
       WHERE lower(email) = lower($1)
         AND status IN ('active','trialing')
       LIMIT 1;
       `,
       [e]
     );
-    if (r2.rows?.length) return true;
-  } catch {}
 
-  return false;
+    return r.rows.length > 0;
+  } catch (err) {
+    console.error("subscriber lookup error", err);
+    return false;
+  }
 }
 // ✅ Create Stripe client once (or null if not configured)
 const stripe = STRIPE_SECRET_KEY
@@ -9964,95 +9943,109 @@ async function isSubscriberEmail(email) {
     const bookingStatus = payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
 
     // ✅ PAY_AT_COURSE should show "amount due" on daily sheets (same as totalCents)
-    const amountDueCents = payment_mode === "PAY_AT_COURSE" ? totalCents : 0;
+const amountDueCents = payment_mode === "PAY_AT_COURSE" ? totalCents : 0;
 
-    const ins = await client.query(
-      `
-      INSERT INTO booking_bookings
-        (course_id, play_date, tee_time, holes, players,
-         golfer_name, golfer_email, golfer_phone,
-         price_per_player_cents, total_cents, reference, status,
-         start_at, end_at,
-         paid, checked_in,
-         has_cart, cart_qty, cart_fee_cents,
-         has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
-         layout_key, front_nine_key, back_nine_key,
-         created_at)
-      VALUES
-        ($1,$2::date,$3,$4,$5,
-         $6,$7,$8,
-         $9,$10,$11,$12,
-         $13::timestamptz,$14::timestamptz,
-         false,false,
-         $15,$16,$17,
-         $18,$19,$20,
-         $21,$22,$23,
-         now())
-      RETURNING id, reference;
-      `,
-      [
-        courseId,
-        date,
-        teeTimeDb,
-        holes,
-        players,
-        golfer_name || null,
-        golfer_email || null,
-        golfer_phone || null,
-        ppp,
-        totalCents,
-        reference,
-        bookingStatus,
-        startAtIso,
-        endAtIso,
-        final_has_cart,
-        cart_qty,
-        cart_fee_cents,
-        final_has_hire_clubs,
-        hire_clubs_qty,
-        hire_clubs_fee_cents,
-        timeRow.layout_key || null,
-        timeRow.front_nine_key || null,
-        timeRow.back_nine_key || null,
-      ]
+const ins = await client.query(
+  `
+  INSERT INTO booking_bookings
+    (course_id, play_date, tee_time, holes, players,
+     golfer_name, golfer_email, golfer_phone,
+     price_per_player_cents, total_cents, reference, status,
+     subscriber_discount_applied, subscriber_discount_cents,
+     start_at, end_at,
+     paid, checked_in,
+     has_cart, cart_qty, cart_fee_cents,
+     has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
+     layout_key, front_nine_key, back_nine_key,
+     created_at)
+  VALUES
+    ($1,$2::date,$3,$4,$5,
+     $6,$7,$8,
+     $9,$10,$11,$12,
+     $13,$14,
+     $15::timestamptz,$16::timestamptz,
+     false,false,
+     $17,$18,$19,
+     $20,$21,$22,
+     $23,$24,$25,
+     now())
+  RETURNING id, reference;
+  `,
+  [
+    courseId,
+    date,
+    teeTimeDb,
+    holes,
+    players,
+    golfer_name || null,
+    golfer_email || null,
+    golfer_phone || null,
+    ppp,
+    totalCents,
+    reference,
+    bookingStatus,
+
+    // ✅ NEW: subscriber discount fields
+    isSubscriber,
+    discountCents,
+
+    // ✅ start/end
+    startAtIso,
+    endAtIso,
+
+    // ✅ carts
+    final_has_cart,
+    cart_qty,
+    cart_fee_cents,
+
+    // ✅ hire clubs
+    final_has_hire_clubs,
+    hire_clubs_qty,
+    hire_clubs_fee_cents,
+
+    // ✅ routing keys
+    timeRow.layout_key || "",
+    timeRow.front_nine_key || "",
+    timeRow.back_nine_key || "",
+  ]
+);
+
+const bookingId = ins.rows[0]?.id;
+
+const newBooked = bookedPlayers + players;
+
+await client.query(
+  `
+  UPDATE booking_times
+  SET
+    booked_players = $8,
+    status = CASE
+      WHEN status = 'BLOCKED' THEN 'BLOCKED'
+      WHEN $8 >= max_players THEN 'BOOKED'
+      ELSE 'AVAILABLE'
+    END,
+    updated_at = now()
+  WHERE course_id=$1
+    AND play_date=$2::date
+    AND tee_time=$3
+    AND holes=$4
+    AND (
+      ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
+      OR
+      ($4 = 9 AND lower(layout_key) = lower($5))
     );
-
-    const bookingId = ins.rows[0]?.id;
-
-    const newBooked = bookedPlayers + players;
-
-    await client.query(
-      `
-      UPDATE booking_times
-      SET
-        booked_players = $8,
-        status = CASE
-          WHEN status = 'BLOCKED' THEN 'BLOCKED'
-          WHEN $8 >= max_players THEN 'BOOKED'
-          ELSE 'AVAILABLE'
-        END,
-        updated_at = now()
-      WHERE course_id=$1
-        AND play_date=$2::date
-        AND tee_time=$3
-        AND holes=$4
-        AND (
-          ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
-          OR
-          ($4 = 9 AND lower(layout_key) = lower($5))
-        );
-      `,
-      [
-        courseId,
-        date,
-        teeTimeDb,
-        holes,
-        layout_key || "",
-        front_nine_key || "",
-        back_nine_key || "",
-        newBooked,
-      ]
-    );
+  `,
+  [
+    courseId,
+    date,
+    teeTimeDb,
+    holes,
+    layout_key || "",
+    front_nine_key || "",
+    back_nine_key || "",
+    newBooked,
+  ]
+);
 
     // ✅ CHANGE: create Stripe session AFTER UPDATE but BEFORE COMMIT
     if (payment_mode === "PAY_ON_BOOKING") {
