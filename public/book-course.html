@@ -1259,6 +1259,15 @@ const finalLayoutKey =
       throw new Error("routing_required");
     }
 
+        // ✅ prevent double-counting carts/clubs:
+    // send qty via cartQty/hireClubsQty only, not also as addonIds
+    const addonIdsNoQty = (selectedAddonIds || []).filter(id => {
+      const sid = String(id || "");
+      if (cartAddonId && sid === String(cartAddonId)) return false;
+      if (clubsAddonId && sid === String(clubsAddonId)) return false;
+      return true;
+    });
+
     const res = await apiFetch("/api/book/book", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1272,25 +1281,20 @@ const finalLayoutKey =
         email,
         phone,
 
-        // ✅ include routing keys (primary)
         // ✅ routing (ALWAYS send what we know, especially layout_key for 18s)
-layout_key: finalLayoutKey || null,
-front_nine_key: front_nine_key || null,
-back_nine_key: back_nine_key || null,
+        layout_key: finalLayoutKey || null,
+        front_nine_key: front_nine_key || null,
+        back_nine_key: back_nine_key || null,
 
         // ✅ include label (fallback)
         layout: layoutText,
 
         // ✅ add-ons
-        // ✅ prevent double-counting carts/clubs:
-// send qty via cartQty/hireClubsQty only, not also as addonIds
-const addonIdsNoQty = (selectedAddonIds || []).filter(id => {
-  const sid = String(id || "");
-  if (cartAddonId && sid === String(cartAddonId)) return false;
-  if (clubsAddonId && sid === String(clubsAddonId)) return false;
-  return true;
-});
-
+        addonIds: addonIdsNoQty,
+        cartQty: cartAddonId ? Number(cartQtySelected || 0) : 0,
+        hireClubsQty: clubsAddonId ? Number(clubsQtySelected || 0) : 0,
+      }),
+    });
 ...
 
 // ✅ add-ons
