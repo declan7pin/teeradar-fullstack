@@ -1091,11 +1091,18 @@ if (banner) banner.style.display = "none";
   $("modalTitle").textContent = "✅ Booking confirmed";
   $("detailsGrid").style.display = "none";
 
-  const emailOk = !!(data && data.emailOk);
-  const reason = (data && data.emailReason) ? String(data.emailReason) : "";
-  const emailMsg = emailOk
-    ? `📧 Confirmation email sent to ${email}`
-    : `📧 Email not sent${reason ? ` (${reason})` : ""}`;
+  const emailOkRaw = (data && "emailOk" in data) ? data.emailOk : undefined;
+const reason = (data && data.emailReason) ? String(data.emailReason) : "";
+
+let emailMsg = "";
+if (emailOkRaw === true) {
+  emailMsg = `📧 Confirmation email sent to ${email}`;
+} else if (emailOkRaw === false) {
+  emailMsg = `📧 Email not sent${reason ? ` (${reason})` : ""}`;
+} else {
+  // unknown / webhook may still be processing
+  emailMsg = `📧 Confirmation email will be sent to ${email}`;
+}
 
   // --- Build add-ons breakdown (what the user picked) ---
   const picked = new Set((selectedAddonIds || []).map(String));
@@ -1177,13 +1184,21 @@ const totalBeforeDiscountCents =
     `Reference: <b>${data.reference}</b><br/>` +
     `${emailMsg}` +
     `<div style="margin-top:10px;">
-      <div style="display:grid;grid-template-columns:120px 1fr;gap:6px 10px;font-size:13px;">
-        <div style="color:var(--muted)">Course</div><div>${course?.name || slug}</div>
-        <div style="color:var(--muted)">Date</div><div>${$("date").value}</div>
-        <div style="color:var(--muted)">Time</div><div>${selectedSlot?.time || ""}</div>
-        <div style="color:var(--muted)">Players</div><div>${$("players").value}</div>
-        <div style="color:var(--muted)">Holes</div><div>${$("holes").value}</div>
-      </div>
+      const bookingObj = data?.booking || {};
+const showPlayers = Number(bookingObj.players ?? bookingObj.player_count ?? $("players").value);
+const showHoles   = Number(bookingObj.holes ?? $("holes").value);
+const showDate    = String(bookingObj.play_date ?? bookingObj.date ?? $("date").value || "");
+const showTime    =
+  String(bookingObj.time || bookingObj.tee_time || selectedSlot?.time || "")
+    .split("|")[0];
+
+<div style="display:grid;grid-template-columns:120px 1fr;gap:6px 10px;font-size:13px;">
+  <div style="color:var(--muted)">Course</div><div>${course?.name || slug}</div>
+  <div style="color:var(--muted)">Date</div><div>${showDate}</div>
+  <div style="color:var(--muted)">Time</div><div>${showTime}</div>
+  <div style="color:var(--muted)">Players</div><div>${showPlayers}</div>
+  <div style="color:var(--muted)">Holes</div><div>${showHoles}</div>
+</div>
     </div>` +
     baseBlock +
     addonsBlock +
@@ -1456,6 +1471,10 @@ $("confirmBtn").onclick = confirmBooking;
     }
 
     const b = data.booking;
+    // ✅ sync the form inputs to the ACTUAL booking (so UI never shows stale values)
+if (b.play_date && $("date")) $("date").value = String(b.play_date).slice(0, 10);
+if ($("players") && b.players) $("players").value = String(b.players);
+if ($("holes") && b.holes) $("holes").value = String(b.holes);
 
     // ✅ repopulate slot so modal renderer works
     selectedSlot = {
@@ -1475,21 +1494,29 @@ $("confirmBtn").onclick = confirmBooking;
 
     // ✅ CRITICAL FIX: pass booking data into confirmation
     showBookingConfirmation(
-      {
-        reference: b.reference,
-        emailOk: true,
-        emailReason: null,
-        booking: {
-          total_cents: Number(b.total_cents || 0),
-          discount_cents: Number(b.discount_cents || 0),
-          cart_fee_cents: Number(b.cart_fee_cents || 0),
-          hire_clubs_fee_cents: Number(b.hire_clubs_fee_cents || 0),
-          cart_qty: Number(b.cart_qty || 0),
-          hire_clubs_qty: Number(b.hire_clubs_qty || 0)
-        }
-      },
-      b.golfer_email || ""
-    );
+  {
+    reference: b.reference,
+    // ⚠️ Don't lie about email status on Stripe return (webhook may be delayed)
+    emailOk: null,
+    emailReason: null,
+    booking: {
+      play_date: b.play_date,
+      tee_time: b.tee_time,
+      time: b.time,
+      holes: Number(b.holes || 0),
+      players: Number(b.players || 0),
+
+      total_cents: Number(b.total_cents || 0),
+      discount_cents: Number(b.discount_cents || 0),
+
+      cart_fee_cents: Number(b.cart_fee_cents || 0),
+      hire_clubs_fee_cents: Number(b.hire_clubs_fee_cents || 0),
+      cart_qty: Number(b.cart_qty || 0),
+      hire_clubs_qty: Number(b.hire_clubs_qty || 0),
+    }
+  },
+  b.golfer_email || ""
+);
 
     setStatus(`✅ Booking confirmed. Reference: ${b.reference}`, "ok");
 
