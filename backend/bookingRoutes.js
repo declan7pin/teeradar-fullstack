@@ -10154,8 +10154,8 @@ return false;
 
   if (payment_mode === "PAY_ON_BOOKING") {
     // AU domestic estimate (tweak later if you want “safe mode”)
-    const STRIPE_PCT = 0.017;
-    const STRIPE_FIXED_CENTS = 30;
+    const STRIPE_PCT = 0.03;
+    const STRIPE_FIXED_CENTS = 40;
 
     const baseCents = Number(totalCents || 0);
 
