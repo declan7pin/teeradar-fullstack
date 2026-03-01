@@ -619,8 +619,8 @@ if (clubsAddonId) idToQty.set(String(clubsAddonId), Number(clubsQtySelected || 0
   let grossCents = baseAfterDiscountCents;
 
   if (isPayOnBooking) {
-    const STRIPE_PCT = 0.017;
-    const STRIPE_FIXED_CENTS = 30;
+    const STRIPE_PCT = 0.03;
+    const STRIPE_FIXED_CENTS = 40;
 
     grossCents = Math.max(
       baseAfterDiscountCents,
