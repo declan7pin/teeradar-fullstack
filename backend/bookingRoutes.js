@@ -9415,6 +9415,10 @@ async function finalizePaidBooking(payload) {
   // - Store Stripe IDs
   // - Send the confirmation email
   // - Must be idempotent (Stripe webhooks retry)
+  //
+  // ✅ IMPORTANT FIX:
+  // - If the booking was CANCELLED (user cancelled payment), NEVER flip it back to CONFIRMED.
+  // - If status is CONFIRMED but paid=false (edge/race), allow webhook to set paid=true.
 
   const {
     reference,
@@ -9428,8 +9432,9 @@ async function finalizePaidBooking(payload) {
     return { ok: false, error: "missing_reference" };
   }
 
-  // ✅ 1) ATOMIC idempotent update (only updates if not already confirmed)
-  //    RETURNING gives us everything needed to email without a separate SELECT.
+  // ✅ 1) ATOMIC idempotent update
+  // - Do not revive CANCELLED bookings
+  // - Do set paid=true even if already CONFIRMED (but paid=false)
   let booking = null;
 
   try {
@@ -9443,7 +9448,11 @@ async function finalizePaidBooking(payload) {
         stripe_session_id = COALESCE($2, b.stripe_session_id),
         stripe_payment_intent = COALESCE($3, b.stripe_payment_intent)
       WHERE b.reference = $1
-        AND COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
+        AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'
+        AND (
+          COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
+          OR COALESCE(b.paid,false) = false
+        )
       RETURNING
         b.id,
         b.course_id,
@@ -9458,7 +9467,9 @@ async function finalizePaidBooking(payload) {
         b.total_cents,
         b.cart_fee_cents,
         b.hire_clubs_fee_cents,
-        b.reference;
+        b.reference,
+        b.status,
+        b.paid;
       `,
       [
         ref,
@@ -9468,7 +9479,7 @@ async function finalizePaidBooking(payload) {
     );
 
     if (!upd.rows.length) {
-      // Already confirmed OR not found. Distinguish with a quick check.
+      // Already handled OR cancelled OR not found. Distinguish with a quick check.
       const exists = await db.query(
         `SELECT id, paid, status FROM booking_bookings WHERE reference=$1 LIMIT 1;`,
         [ref]
@@ -9477,6 +9488,12 @@ async function finalizePaidBooking(payload) {
       if (!exists.rows.length) {
         console.warn("⚠️ finalizePaidBooking: booking not found for reference:", ref);
         return { ok: false, error: "booking_not_found" };
+      }
+
+      const st = String(exists.rows[0]?.status || "").toUpperCase();
+      if (st === "CANCELLED") {
+        console.log("🛑 finalizePaidBooking: booking is CANCELLED, not confirming:", ref);
+        return { ok: true, cancelled: true };
       }
 
       console.log("🔁 finalizePaidBooking: already paid/confirmed:", ref);
@@ -9498,7 +9515,11 @@ async function finalizePaidBooking(payload) {
         status = 'CONFIRMED',
         updated_at = now()
       WHERE b.reference = $1
-        AND COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
+        AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'
+        AND (
+          COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
+          OR COALESCE(b.paid,false) = false
+        )
       RETURNING
         b.id,
         b.course_id,
@@ -9513,7 +9534,9 @@ async function finalizePaidBooking(payload) {
         b.total_cents,
         b.cart_fee_cents,
         b.hire_clubs_fee_cents,
-        b.reference;
+        b.reference,
+        b.status,
+        b.paid;
       `,
       [ref]
     );
@@ -9527,6 +9550,12 @@ async function finalizePaidBooking(payload) {
       if (!exists.rows.length) {
         console.warn("⚠️ finalizePaidBooking: booking not found for reference:", ref);
         return { ok: false, error: "booking_not_found" };
+      }
+
+      const st = String(exists.rows[0]?.status || "").toUpperCase();
+      if (st === "CANCELLED") {
+        console.log("🛑 finalizePaidBooking: booking is CANCELLED, not confirming:", ref);
+        return { ok: true, cancelled: true };
       }
 
       console.log("🔁 finalizePaidBooking: already paid/confirmed:", ref);
@@ -9548,7 +9577,7 @@ async function finalizePaidBooking(payload) {
     courseName = c.rows[0]?.name || courseName;
   } catch {}
 
-   // ✅ 3) Send confirmation email ONCE (only when we successfully updated)
+  // ✅ 3) Send confirmation email ONCE (only when we successfully updated)
   let emailOk = false;
   let emailReason = null;
 
