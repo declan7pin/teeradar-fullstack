@@ -10218,9 +10218,164 @@ const totalCents = Math.max(0, totalBeforeDiscountCents - discountCents);
 // ✅ BEST PRACTICE:
 // Only consume capacity immediately for PAY_AT_COURSE.
 // PAY_ON_BOOKING should NOT take the time until webhook confirms payment.
-  const newBooked = bookedPlayers + players;
 
-  await q(
+const newBooked = bookedPlayers + players;
+
+// ✅ MOVE booking_times update so it ONLY happens for PAY_AT_COURSE
+// (PAY_ON_BOOKING must NOT reserve capacity here)
+
+if (payment_mode === "PAY_ON_BOOKING") {
+  if (!stripe) {
+    await q("ROLLBACK_stripe_not_configured", "ROLLBACK");
+    didBegin = false;
+    return res.status(500).json({ ok: false, error: "stripe_not_configured" });
+  }
+  if (!stripe_account_id) {
+    await q("ROLLBACK_course_missing_stripe", "ROLLBACK");
+    didBegin = false;
+    return res.status(400).json({ ok: false, error: "course_missing_stripe_account" });
+  }
+  if (!publicBaseUrl) {
+    await q("ROLLBACK_public_base_url_missing", "ROLLBACK");
+    didBegin = false;
+    return res.status(500).json({ ok: false, error: "public_base_url_missing" });
+  }
+
+  const application_fee_amount = Math.max(
+    0,
+    Math.round((totalCents * courseFeeBps) / 10000)
+  );
+
+  // ✅ Golfer covers Stripe fee (AU domestic estimate)
+  // You can bump these for "safe mode" if you want to always be ahead for intl cards.
+  const STRIPE_PCT = 0.017;
+  const STRIPE_FIXED_CENTS = 30;
+
+  // base amount = green fees + add-ons AFTER discount (your existing totalCents)
+  const baseCents = Number(totalCents || 0);
+
+  // gross-up so Stripe fee is covered by golfer
+  const grossCents = Math.max(
+    baseCents,
+    Math.ceil((baseCents + STRIPE_FIXED_CENTS) / (1 - STRIPE_PCT))
+  );
+
+  const processingFeeCents = Math.max(0, grossCents - baseCents);
+
+  // ✅ course gets base - platform fee (NOT including processing fee)
+  const courseTransferCents = Math.max(0, baseCents - Number(application_fee_amount || 0));
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    customer_email: golfer_email,
+
+    line_items: [
+      // ✅ Base booking line item (what the course is actually charging for the round)
+      {
+        quantity: 1,
+        price_data: {
+          currency: "aud",
+          unit_amount: baseCents,
+          product_data: {
+            name: `${courseRow.name} — ${holes} holes (${players} players)`,
+            description: `${date} ${time}`,
+          },
+        },
+      },
+
+      // ✅ NEW: Processing fee paid by golfer
+      ...(processingFeeCents > 0
+        ? [
+            {
+              quantity: 1,
+              price_data: {
+                currency: "aud",
+                unit_amount: processingFeeCents,
+                product_data: {
+                  name: "Processing fee",
+                  description: "Card payment processing",
+                },
+              },
+            },
+          ]
+        : []),
+    ],
+
+    payment_intent_data: {
+      application_fee_amount,
+
+      // ✅ CRITICAL: course transfer is locked to base - platform fee
+      // so the course does NOT receive the processing fee line item.
+      transfer_data: {
+        destination: stripe_account_id,
+        amount: courseTransferCents,
+      },
+
+      metadata: {
+        booking_id: String(bookingId || ""),
+        reference,
+        course_slug: slug,
+        platform_fee_bps: String(courseFeeBps),
+        subscriber: isSubscriber ? "1" : "0",
+        subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
+        discount_cents: String(discountCentsSafe || 0),
+
+        // ✅ helpful debug fields
+        base_cents: String(baseCents),
+        processing_fee_cents: String(processingFeeCents),
+        gross_cents: String(grossCents),
+        course_transfer_cents: String(courseTransferCents),
+      },
+    },
+
+    metadata: {
+      booking_id: String(bookingId || ""),
+      reference,
+      course_slug: slug,
+      platform_fee_bps: String(courseFeeBps),
+      subscriber: isSubscriber ? "1" : "0",
+      subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
+      discount_cents: String(discountCentsSafe || 0),
+    },
+
+    success_url: `${BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
+    cancel_url: `${BASE_URL}/book/${slug}?cancelled=1&ref=${encodeURIComponent(reference)}`,
+  });
+
+  await q("COMMIT_pay_on_booking", "COMMIT");
+  didBegin = false;
+
+  return res.json({
+    ok: true,
+    reference,
+    payment_mode: "PAY_ON_BOOKING",
+    checkoutUrl: session.url,
+    course: { slug: courseRow.slug, name: courseRow.name },
+    booking: {
+      date,
+      time,
+      holes,
+      players,
+      pricePerPlayerCents: ppp,
+      isSubscriber,
+      discountPct: isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0,
+      discountCents: discountCentsSafe,
+      totalCents,
+      addonsCents,
+      amountDueCents: 0,
+      cart_qty,
+      hire_clubs_qty,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+    },
+    emailOk: false,
+    emailReason: "pay_on_booking",
+  });
+}
+
+// ✅ PAY_AT_COURSE ONLY: now we consume capacity
+await q(
   "update_booking_times_booked_players",
   `
   UPDATE booking_times
@@ -10254,194 +10409,60 @@ const totalCents = Math.max(0, totalBeforeDiscountCents - discountCents);
   ]
 );
 
-    if (payment_mode === "PAY_ON_BOOKING") {
-      if (!stripe) {
-        await q("ROLLBACK_stripe_not_configured", "ROLLBACK");
-        didBegin = false;
-        return res.status(500).json({ ok: false, error: "stripe_not_configured" });
-      }
-      if (!stripe_account_id) {
-        await q("ROLLBACK_course_missing_stripe", "ROLLBACK");
-        didBegin = false;
-        return res.status(400).json({ ok: false, error: "course_missing_stripe_account" });
-      }
-      if (!publicBaseUrl) {
-        await q("ROLLBACK_public_base_url_missing", "ROLLBACK");
-        didBegin = false;
-        return res.status(500).json({ ok: false, error: "public_base_url_missing" });
-      }
+await q("COMMIT_pay_at_course", "COMMIT");
+didBegin = false;
 
-      const application_fee_amount = Math.max(
-        0,
-        Math.round((totalCents * courseFeeBps) / 10000)
-      );
+recordEvent({
+  type: "booking_created",
+  userId: getClientIp(req) || null,
+  courseName: courseRow.name,
+  meta: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty, layout_key, front_nine_key, back_nine_key },
+}).catch(() => {});
+recordBookingEvent(req, {
+  courseSlug: slug,
+  eventType: "booking_confirmed",
+  payload: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty, layout_key, front_nine_key, back_nine_key },
+}).catch(() => {});
 
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        customer_email: golfer_email,
-        line_items: [
-          {
-            quantity: 1,
-            price_data: {
-              currency: "aud",
-              unit_amount: totalCents,
-              product_data: {
-                name: `${courseRow.name} — ${holes} holes (${players} players)`,
-                description: `${date} ${time}`,
-              },
-            },
-          },
-        ],
-        payment_intent_data: {
-          application_fee_amount,
-          transfer_data: { destination: stripe_account_id },
-          metadata: {
-            booking_id: String(bookingId || ""),
-            reference,
-            course_slug: slug,
-            platform_fee_bps: String(courseFeeBps),
-            subscriber: isSubscriber ? "1" : "0",
-            subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
-            discount_cents: String(discountCentsSafe || 0),
-          },
-        },
-        metadata: {
-          booking_id: String(bookingId || ""),
-          reference,
-          course_slug: slug,
-          platform_fee_bps: String(courseFeeBps),
-          subscriber: isSubscriber ? "1" : "0",
-          subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
-          discount_cents: String(discountCentsSafe || 0),
-        },
-        success_url: `${BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
-        cancel_url: `${BASE_URL}/book/${slug}?cancelled=1&ref=${encodeURIComponent(reference)}`,
-      });
+const emailResult = await sendBookingEmail({
+  to: golfer_email,
+  courseName: courseRow.name,
+  date,
+  time,
+  holes,
+  players,
+  reference,
+  pricePerPlayerCents: ppp,
+  totalCents,
+  cartCents: cart_fee_cents,
+  hireClubsCents: hire_clubs_fee_cents,
+});
 
-      await q("COMMIT_pay_on_booking", "COMMIT");
-      didBegin = false;
-
-      return res.json({
-        ok: true,
-        reference,
-        payment_mode: "PAY_ON_BOOKING",
-        checkoutUrl: session.url,
-        course: { slug: courseRow.slug, name: courseRow.name },
-        booking: {
-          date,
-          time,
-          holes,
-          players,
-          pricePerPlayerCents: ppp,
-          isSubscriber,
-          discountPct: isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0,
-          discountCents: discountCentsSafe,
-          totalCents,
-          addonsCents,
-          amountDueCents: 0,
-          cart_qty,
-          hire_clubs_qty,
-          layout_key,
-          front_nine_key,
-          back_nine_key,
-        },
-        emailOk: false,
-        emailReason: "pay_on_booking",
-      });
-    }
-
-    await q("COMMIT_pay_at_course", "COMMIT");
-    didBegin = false;
-
-    recordEvent({
-      type: "booking_created",
-      userId: getClientIp(req) || null,
-      courseName: courseRow.name,
-      meta: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty, layout_key, front_nine_key, back_nine_key },
-    }).catch(() => {});
-    recordBookingEvent(req, {
-      courseSlug: slug,
-      eventType: "booking_confirmed",
-      payload: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty, layout_key, front_nine_key, back_nine_key },
-    }).catch(() => {});
-
-    const emailResult = await sendBookingEmail({
-      to: golfer_email,
-      courseName: courseRow.name,
-      date,
-      time,
-      holes,
-      players,
-      reference,
-      pricePerPlayerCents: ppp,
-      totalCents,
-      cartCents: cart_fee_cents,
-      hireClubsCents: hire_clubs_fee_cents,
-    });
-
-    return res.json({
-      ok: true,
-      reference,
-      course: { slug: courseRow.slug, name: courseRow.name },
-      booking: {
-        date,
-        time,
-        holes,
-        players,
-        pricePerPlayerCents: ppp,
-        isSubscriber,
-        discountPct: isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0,
-        discountCents: discountCentsSafe,
-        totalCents,
-        addonsCents,
-        amountDueCents,
-        cart_qty,
-        hire_clubs_qty,
-        layout_key,
-        front_nine_key,
-        back_nine_key,
-      },
-      emailOk: emailResult.emailOk,
-      emailReason: emailResult.emailReason || null,
-    });
-  } catch (e) {
-    console.error("book POST (root)", {
-      code: e?.code,
-      message: e?.message,
-      detail: e?.detail,
-      hint: e?.hint,
-      constraint: e?.constraint,
-      table: e?.table,
-      column: e?.column,
-    });
-
-    try {
-      if (client && didBegin) {
-        await client.query("ROLLBACK");
-        didBegin = false;
-      }
-    } catch (rbErr) {
-      console.error("book POST rollback failed", rbErr);
-    }
-
-    return res.status(500).json({
-      ok: false,
-      error: "internal_error",
-      pg: {
-        code: e?.code || null,
-        message: e?.message || null,
-        detail: e?.detail || null,
-        constraint: e?.constraint || null,
-        table: e?.table || null,
-        column: e?.column || null,
-      },
-    });
-  } finally {
-    try {
-      if (client) client.release();
-    } catch {}
-  }
-}
+return res.json({
+  ok: true,
+  reference,
+  course: { slug: courseRow.slug, name: courseRow.name },
+  booking: {
+    date,
+    time,
+    holes,
+    players,
+    pricePerPlayerCents: ppp,
+    isSubscriber,
+    discountPct: isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0,
+    discountCents: discountCentsSafe,
+    totalCents,
+    addonsCents,
+    amountDueCents,
+    cart_qty,
+    hire_clubs_qty,
+    layout_key,
+    front_nine_key,
+    back_nine_key,
+  },
+  emailOk: emailResult.emailOk,
+  emailReason: emailResult.emailReason || null,
+});
 router.post("/book", handleBook);
 // keep /availability POST blocked so the frontend can’t accidentally use it
 router.post("/availability", (req, res) => {
