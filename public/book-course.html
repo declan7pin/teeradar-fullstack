@@ -1436,8 +1436,10 @@ $("confirmBtn").onclick = confirmBooking;
 
     setStatus("Finalising payment…", "");
 
-    // ✅ fetch booking details by reference (backend: GET /api/book/booking?ref=...)
-    const res = await apiFetch("/api/book/booking?" + new URLSearchParams({ ref }).toString());
+    const res = await apiFetch(
+      "/api/book/booking?" + new URLSearchParams({ ref }).toString()
+    );
+
     const data = await res.json().catch(()=> ({}));
 
     if (!res.ok || !data || !data.ok || !data.booking) {
@@ -1446,26 +1448,42 @@ $("confirmBtn").onclick = confirmBooking;
 
     const b = data.booking;
 
-    // ✅ populate enough data for your existing modal renderer
+    // ✅ repopulate slot so modal renderer works
     selectedSlot = {
       time: b.time,
       holes: Number(b.holes || 18),
       pricePerPlayerCents: Number(b.price_per_player_cents || 0),
-      layout_key: null,
-      front_nine_key: null,
-      back_nine_key: null
+      layout_key: b.layout_key || null,
+      front_nine_key: b.front_nine_key || null,
+      back_nine_key: b.back_nine_key || null
     };
 
-    // (Optional) sync add-on qty in the UI model so totals render nicely
     cartQtySelected = Number(b.cart_qty || 0);
     clubsQtySelected = Number(b.hire_clubs_qty || 0);
 
-    // ✅ show confirmation using your existing function
-    showBookingConfirmation({ reference: b.reference, emailOk: true, emailReason: null }, b.golfer_email || "");
+    // ✅ FORCE MODAL OPEN
+    $("modalWrap").style.display = "flex";
+
+    // ✅ CRITICAL FIX: pass booking data into confirmation
+    showBookingConfirmation(
+      {
+        reference: b.reference,
+        emailOk: true,
+        emailReason: null,
+        booking: {
+          total_cents: Number(b.total_cents || 0),
+          discount_cents: Number(b.discount_cents || 0),
+          cart_fee_cents: Number(b.cart_fee_cents || 0),
+          hire_clubs_fee_cents: Number(b.hire_clubs_fee_cents || 0),
+          cart_qty: Number(b.cart_qty || 0),
+          hire_clubs_qty: Number(b.hire_clubs_qty || 0)
+        }
+      },
+      b.golfer_email || ""
+    );
 
     setStatus(`✅ Booking confirmed. Reference: ${b.reference}`, "ok");
 
-    // ✅ remove paid/ref from URL so refresh doesn't re-run
     history.replaceState({}, "", location.pathname);
 
     await fetchAvailability();
