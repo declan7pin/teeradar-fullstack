@@ -3381,15 +3381,21 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
 
     const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
-    if (!c.rows.length) return res.json({ ok: true, bookings: [] });
+    if (!c.rows.length) return res.json({ ok: true, bookings: [], manualSlots: [] });
     const courseId = c.rows[0].id;
 
     const params = [courseId];
     let where = `WHERE b.course_id = $1`;
+
     if (date) {
       params.push(date);
       where += ` AND b.play_date = $${params.length}::date`;
     }
+
+    // ✅ KEY FIX:
+    // Hide Stripe-cancelled holds and unpaid checkout holds from "bookings" view.
+    // (Adjust the allowed statuses if your system uses different names.)
+    where += ` AND COALESCE(UPPER(b.status),'') IN ('CONFIRMED','PENDING','HOLD')`;
 
     const r = await db.query(
       `
@@ -3408,7 +3414,7 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
         b.cart_fee_cents,
         b.has_hire_clubs,
         b.hire_clubs_fee_cents,
-        (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents) AS gross_cents,
+        (COALESCE(b.total_cents,0) + COALESCE(b.cart_fee_cents,0) + COALESCE(b.hire_clubs_fee_cents,0)) AS gross_cents,
         b.status,
         b.created_at
       FROM booking_bookings b
@@ -3419,7 +3425,7 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
       params
     );
 
-        // ✅ ADD: also return manual slots so daily sheet can render walk-ins/phone-ins
+    // ✅ ADD: also return manual slots so daily sheet can render walk-ins/phone-ins
     const ms = await db.query(
       `
       SELECT
@@ -3451,7 +3457,7 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
     res.json({
       ok: true,
       bookings: r.rows || [],
-      manualSlots: ms.rows || [], // ✅ NEW
+      manualSlots: ms.rows || [],
     });
   } catch (e) {
     console.error("admin/bookings GET", e);
@@ -8501,10 +8507,16 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
 
     const params = [courseId];
     let where = `WHERE b.course_id=$1`;
+
     if (date) {
       params.push(date);
       where += ` AND b.play_date=$${params.length}::date`;
     }
+
+    // ✅ KEY FIX:
+    // Only show bookings that should appear on the sheet.
+    // This hides Stripe-cancelled holds (CANCELLED) and unpaid checkout holds (PENDING_PAYMENT).
+    where += ` AND COALESCE(UPPER(b.status),'') IN ('CONFIRMED','PENDING','HOLD')`;
 
     const r = await db.query(
       `
@@ -8528,7 +8540,7 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
         b.cart_fee_cents,
         b.has_hire_clubs,
         b.hire_clubs_fee_cents,
-        (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents) AS gross_cents,
+        (COALESCE(b.total_cents,0) + COALESCE(b.cart_fee_cents,0) + COALESCE(b.hire_clubs_fee_cents,0)) AS gross_cents,
         b.status,
         b.created_at
       FROM booking_bookings b
