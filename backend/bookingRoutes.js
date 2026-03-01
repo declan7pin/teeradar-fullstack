@@ -10470,7 +10470,8 @@ return res.json({
   } finally {
     try { if (client) client.release(); } catch {}
   }
-});
+};
+
 router.post("/book", handleBook);
 // keep /availability POST blocked so the frontend can’t accidentally use it
 router.post("/availability", (req, res) => {
