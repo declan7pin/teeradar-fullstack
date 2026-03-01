@@ -4701,6 +4701,99 @@ router.get("/confirmation", async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ PUBLIC: fetch booking details by reference (frontend expects this shape)
+// bookingRoutes is mounted at /api/book
+// GET /api/book/booking?ref=TR-XXXX  (or ?reference=TR-XXXX)
+router.get("/booking", async (req, res) => {
+  try {
+    const refRaw = String(req.query?.ref || req.query?.reference || "").trim();
+    const reference = refRaw.toUpperCase();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "ref_required" });
+    }
+
+    const q = await db.query(
+      `
+      SELECT
+        b.reference,
+        b.course_id,
+        c.slug,
+        c.name AS course_name,
+
+        b.play_date::text AS play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+
+        COALESCE(b.price_per_player_cents,0)::bigint AS price_per_player_cents,
+        COALESCE(b.total_cents,0)::bigint AS total_cents,
+        COALESCE(b.discount_cents,0)::bigint AS discount_cents,
+
+        COALESCE(b.cart_qty,0)::int AS cart_qty,
+        COALESCE(b.hire_clubs_qty,0)::int AS hire_clubs_qty,
+
+        COALESCE(b.cart_fee_cents,0)::bigint AS cart_fee_cents,
+        COALESCE(b.hire_clubs_fee_cents,0)::bigint AS hire_clubs_fee_cents,
+
+        COALESCE(b.paid,false) AS paid,
+        COALESCE(b.status,'') AS status,
+
+        COALESCE(b.golfer_name,'') AS golfer_name,
+        COALESCE(b.golfer_email,'') AS golfer_email,
+        COALESCE(b.golfer_phone,'') AS golfer_phone
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      WHERE UPPER(b.reference) = $1
+      LIMIT 1;
+      `,
+      [reference]
+    );
+
+    const row = q.rows[0];
+    if (!row) return res.status(404).json({ ok: false, error: "not_found" });
+
+    // If someone tries to load confirmation for a cancelled booking, treat as not found
+    const statusUpper = String(row.status || "").toUpperCase();
+    if (statusUpper === "CANCELLED") {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+
+    res.json({
+      ok: true,
+      booking: {
+        // ✅ frontend handler expects these keys
+        reference: row.reference,
+        time: String(row.tee_time || "").split("|")[0], // "HH:MM"
+        tee_time: row.tee_time,
+        play_date: row.play_date,
+        holes: Number(row.holes || 0),
+        players: Number(row.players || 0),
+
+        price_per_player_cents: Number(row.price_per_player_cents || 0),
+        total_cents: Number(row.total_cents || 0),
+        discount_cents: Number(row.discount_cents || 0),
+
+        cart_qty: Number(row.cart_qty || 0),
+        hire_clubs_qty: Number(row.hire_clubs_qty || 0),
+        cart_fee_cents: Number(row.cart_fee_cents || 0),
+        hire_clubs_fee_cents: Number(row.hire_clubs_fee_cents || 0),
+
+        paid: !!row.paid,
+        status: statusUpper,
+
+        golfer_name: row.golfer_name || "",
+        golfer_email: row.golfer_email || "",
+        golfer_phone: row.golfer_phone || "",
+
+        course_slug: row.slug,
+        course_name: row.course_name,
+      },
+    });
+  } catch (e) {
+    console.error("GET /api/book/booking error", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // -----------------------------
 // ✅ Platform admin manual slots (book-admin.html)
 // -----------------------------
@@ -8506,17 +8599,13 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
     const params = [courseId];
-    let where = `WHERE b.course_id=$1`;
+    let where = `WHERE b.course_id=$1
+                 AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'`; // ✅ exclude cancelled
 
     if (date) {
       params.push(date);
       where += ` AND b.play_date=$${params.length}::date`;
     }
-
-    // ✅ KEY FIX:
-    // Only show bookings that should appear on the sheet.
-    // This hides Stripe-cancelled holds (CANCELLED) and unpaid checkout holds (PENDING_PAYMENT).
-    where += ` AND COALESCE(UPPER(b.status),'') IN ('CONFIRMED','PENDING','HOLD')`;
 
     const r = await db.query(
       `
@@ -8540,7 +8629,7 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
         b.cart_fee_cents,
         b.has_hire_clubs,
         b.hire_clubs_fee_cents,
-        (COALESCE(b.total_cents,0) + COALESCE(b.cart_fee_cents,0) + COALESCE(b.hire_clubs_fee_cents,0)) AS gross_cents,
+        (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents) AS gross_cents,
         b.status,
         b.created_at
       FROM booking_bookings b
@@ -8590,7 +8679,6 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 // toggle paid (course admin)
 router.post("/course-admin/booking-paid", requireCourseAdmin, async (req, res) => {
   try {
