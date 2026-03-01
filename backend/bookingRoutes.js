@@ -1106,8 +1106,6 @@ async function sendBookingEmail({
       ? `TeeRadar manual booking confirmed — ${reference}`
       : `TeeRadar booking confirmed — ${reference}`;
 
-  const extrasCents = Number(cartCents || 0) + Number(hireClubsCents || 0);
-
   const cartLine =
     Number(cartCents || 0) > 0
       ? `<tr><td style="padding:6px 0;color:#64748b">Cart</td><td style="padding:6px 0">${fmtMoney(cartCents || 0)}</td></tr>`
@@ -1118,7 +1116,10 @@ async function sendBookingEmail({
       ? `<tr><td style="padding:6px 0;color:#64748b">Hire clubs</td><td style="padding:6px 0">${fmtMoney(hireClubsCents || 0)}</td></tr>`
       : "";
 
-  const totalAll = Number(totalCents || 0) + extrasCents;
+  // ✅ IMPORTANT:
+  // totalCents ALREADY includes add-ons in your booking flow.
+  // Do NOT add cart/hire again here.
+  const totalAll = Number(totalCents || 0);
 
   const badge =
     source === "manual"
@@ -1140,7 +1141,10 @@ async function sendBookingEmail({
         <tr><td style="padding:6px 0;color:#64748b">Price</td><td style="padding:6px 0">${fmtMoney(pricePerPlayerCents || 0)} per player</td></tr>
         ${cartLine}
         ${hireClubsLine}
-        <tr><td style="padding:6px 0;color:#64748b">Total</td><td style="padding:6px 0"><b>${fmtMoney(totalAll)}</b></td></tr>
+        <tr>
+          <td style="padding:6px 0;color:#64748b">Total</td>
+          <td style="padding:6px 0"><b>${fmtMoney(totalAll)}</b></td>
+        </tr>
       </table>
 
       <p style="margin:14px 0 0;color:#64748b;font-size:12px">
