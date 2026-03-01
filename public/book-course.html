@@ -363,7 +363,7 @@
       <h3 id="modalTitle">Confirm booking</h3>
       <div class="sub" id="modalSub">Enter your details to confirm.</div>
 
-      <<div class="kv" id="modalKv">
+      <div class="kv" id="modalKv">
   <div class="k">Course</div><div id="mCourse"></div>
   <div class="k">Date</div><div id="mDate"></div>
   <div class="k">Time</div><div id="mTime"></div>
@@ -395,9 +395,29 @@
 <!-- ✅ Dynamic add-ons go here -->
 <div id="addonsWrap" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;"></div>
 
-<div style="margin-top:8px;font-size:13px;">
-  <strong>Total:</strong> <span id="mTotal">—</span>
-  <span style="color:var(--muted);font-size:12px;margin-left:6px;">(includes add-ons)</span>
+<div style="margin-top:10px;font-size:13px;">
+  <div style="display:flex;justify-content:space-between;gap:10px;">
+    <span>Base total</span>
+    <b><span id="mBaseTotal">—</span></b>
+  </div>
+
+  <div id="mFeeRow" style="display:none;display:flex;justify-content:space-between;gap:10px;margin-top:6px;">
+    <span>Booking fee</span>
+    <b><span id="mBookingFee">—</span></b>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;">
+    <span><b>Total to pay</b></span>
+    <b><span id="mTotalPay">—</span></b>
+  </div>
+
+  <div id="mFeeNote" style="display:none;color:var(--muted);font-size:12px;margin-top:6px;">
+    Booking fee covers card processing.
+  </div>
+
+  <div style="color:var(--muted);font-size:12px;margin-top:4px;">
+    (includes add-ons)
+  </div>
 </div>
         </div>
         <!-- ✅ END FIX -->
@@ -584,21 +604,61 @@ if (clubsAddonId) idToQty.set(String(clubsAddonId), Number(clubsQtySelected || 0
   function updateModalTotal(){
   if (!selectedSlot) return;
 
-  // ✅ this is the whole booking total BEFORE discount (green fees + add-ons)
-  const totalBeforeDiscountCents = computeTotalCents(selectedSlot);
+  const totalBeforeDiscountCents = computeTotalCents(selectedSlot); // green fees + add-ons
 
+  // subscriber discount preview (applies to whole booking)
   const disc = applySubscriberDiscountToTotal(totalBeforeDiscountCents);
 
-  const mTotal = $("mTotal");
-  if (mTotal) {
+  const baseAfterDiscountCents = Number(disc.discounted || 0);
+
+  // payment mode (comes from course)
+  const isPayOnBooking = (course && course.payment_mode === "PAY_ON_BOOKING");
+
+  // estimate processing fee only for PAY_ON_BOOKING (must match backend)
+  let feeCents = 0;
+  let grossCents = baseAfterDiscountCents;
+
+  if (isPayOnBooking) {
+    const STRIPE_PCT = 0.017;
+    const STRIPE_FIXED_CENTS = 30;
+
+    grossCents = Math.max(
+      baseAfterDiscountCents,
+      Math.ceil((baseAfterDiscountCents + STRIPE_FIXED_CENTS) / (1 - STRIPE_PCT))
+    );
+    feeCents = Math.max(0, grossCents - baseAfterDiscountCents);
+  }
+
+  // --- render base total (with discount strike-through) ---
+  const baseEl = $("mBaseTotal");
+  if (baseEl) {
     if (disc.discount > 0) {
-      mTotal.innerHTML =
+      baseEl.innerHTML =
         `<span class="priceStrike">${moneyAUD(totalBeforeDiscountCents)}</span>` +
-        `<span class="priceNew">${moneyAUD(disc.discounted)}</span>`;
+        `<span class="priceNew">${moneyAUD(baseAfterDiscountCents)}</span>`;
     } else {
-      mTotal.textContent = moneyAUD(totalBeforeDiscountCents);
+      baseEl.textContent = moneyAUD(baseAfterDiscountCents);
     }
   }
+
+  // --- render fee row + note ---
+  const feeRow = $("mFeeRow");
+  const feeEl = $("mBookingFee");
+  const feeNote = $("mFeeNote");
+
+  if (isPayOnBooking && feeCents > 0) {
+    if (feeRow) feeRow.style.display = "flex";
+    if (feeNote) feeNote.style.display = "block";
+    if (feeEl) feeEl.textContent = moneyAUD(feeCents);
+  } else {
+    if (feeRow) feeRow.style.display = "none";
+    if (feeNote) feeNote.style.display = "none";
+    if (feeEl) feeEl.textContent = moneyAUD(0);
+  }
+
+  // --- render total payable ---
+  const payEl = $("mTotalPay");
+  if (payEl) payEl.textContent = moneyAUD(isPayOnBooking ? grossCents : baseAfterDiscountCents);
 }
 
   // Render add-ons into the modal
