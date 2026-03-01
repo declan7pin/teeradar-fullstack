@@ -1084,6 +1084,9 @@ if (banner) banner.style.display = "none";
   }
 
    function showBookingConfirmation(data, email) {
+    // ✅ hide original KV block (prevents duplicate lower section)
+const kv = $("modalKv");
+if (kv) kv.style.display = "none";
   $("modalTitle").textContent = "✅ Booking confirmed";
   $("detailsGrid").style.display = "none";
 
