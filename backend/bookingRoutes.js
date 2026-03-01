@@ -10485,13 +10485,6 @@ router.post("/payment-cancel", async (req, res) => {
     const status = String(row.status || "").toUpperCase();
     const paid = !!row.paid;
 
-    // ✅ idempotent: if already cancelled, ok
-    if (status === "CANCELLED") {
-      await client.query("ROLLBACK");
-      didBegin = false;
-      return res.json({ ok: true, released: false, reason: "already_cancelled" });
-    }
-
     // ✅ If already confirmed/paid, do not cancel/release (webhook may have won the race)
     if (paid || status === "CONFIRMED") {
       await client.query("ROLLBACK");
@@ -10500,44 +10493,58 @@ router.post("/payment-cancel", async (req, res) => {
     }
 
     // ✅ Mark booking cancelled
+    // NOTE: if you don't have cancelled_at, remove that one line.
     await client.query(
       `UPDATE booking_bookings
        SET status='CANCELLED',
-           paid=false,
+           cancelled_at = COALESCE(cancelled_at, now()),
            updated_at=now()
        WHERE id=$1;`,
       [row.id]
     );
 
-    // ✅ Release capacity (ONLY if your /book increments booking_times for PAY_ON_BOOKING)
     const holes = Number(row.holes || 0);
     const players = Number(row.players || 0);
-    const teeHHMM = String(row.tee_time || "").split("|")[0]; // ✅ critical
 
+    // ✅ IMPORTANT:
+    // If you reserved capacity in booking_times for PAY_ON_BOOKING holds,
+    // we must release it AND correctly recompute status based on NEW booked_players.
     if (players > 0) {
       if (holes === 18) {
         await client.query(
           `
-          UPDATE booking_times
+          WITH t AS (
+            SELECT
+              id,
+              max_players,
+              COALESCE(booked_players,0) AS old_booked,
+              GREATEST(0, COALESCE(booked_players,0) - $4) AS new_booked,
+              status AS old_status
+            FROM booking_times
+            WHERE course_id=$1
+              AND play_date=$2::date
+              AND split_part(tee_time,'|',1) = $3
+              AND holes=18
+              AND lower(front_nine_key)=lower($5)
+              AND lower(back_nine_key)=lower($6)
+            FOR UPDATE
+          )
+          UPDATE booking_times bt
           SET
-            booked_players = GREATEST(0, COALESCE(booked_players,0) - $4),
+            booked_players = t.new_booked,
             status = CASE
-              WHEN status='BLOCKED' THEN 'BLOCKED'
-              WHEN GREATEST(0, COALESCE(booked_players,0) - $4) >= max_players THEN 'BOOKED'
+              WHEN t.old_status='BLOCKED' THEN 'BLOCKED'
+              WHEN t.new_booked >= t.max_players THEN 'BOOKED'
               ELSE 'AVAILABLE'
             END,
             updated_at = now()
-          WHERE course_id=$1
-            AND play_date=$2::date
-            AND split_part(tee_time,'|',1) = $3
-            AND holes=18
-            AND lower(front_nine_key)=lower($5)
-            AND lower(back_nine_key)=lower($6);
+          FROM t
+          WHERE bt.id = t.id;
           `,
           [
             row.course_id,
             row.play_date,
-            teeHHMM,
+            row.tee_time, // "HH:MM"
             players,
             String(row.front_nine_key || ""),
             String(row.back_nine_key || ""),
@@ -10546,25 +10553,37 @@ router.post("/payment-cancel", async (req, res) => {
       } else {
         await client.query(
           `
-          UPDATE booking_times
+          WITH t AS (
+            SELECT
+              id,
+              max_players,
+              COALESCE(booked_players,0) AS old_booked,
+              GREATEST(0, COALESCE(booked_players,0) - $4) AS new_booked,
+              status AS old_status
+            FROM booking_times
+            WHERE course_id=$1
+              AND play_date=$2::date
+              AND split_part(tee_time,'|',1) = $3
+              AND holes=9
+              AND lower(layout_key)=lower($5)
+            FOR UPDATE
+          )
+          UPDATE booking_times bt
           SET
-            booked_players = GREATEST(0, COALESCE(booked_players,0) - $4),
+            booked_players = t.new_booked,
             status = CASE
-              WHEN status='BLOCKED' THEN 'BLOCKED'
-              WHEN GREATEST(0, COALESCE(booked_players,0) - $4) >= max_players THEN 'BOOKED'
+              WHEN t.old_status='BLOCKED' THEN 'BLOCKED'
+              WHEN t.new_booked >= t.max_players THEN 'BOOKED'
               ELSE 'AVAILABLE'
             END,
             updated_at = now()
-          WHERE course_id=$1
-            AND play_date=$2::date
-            AND split_part(tee_time,'|',1) = $3
-            AND holes=9
-            AND lower(layout_key)=lower($5);
+          FROM t
+          WHERE bt.id = t.id;
           `,
           [
             row.course_id,
             row.play_date,
-            teeHHMM,
+            row.tee_time, // "HH:MM"
             players,
             String(row.layout_key || ""),
           ]
