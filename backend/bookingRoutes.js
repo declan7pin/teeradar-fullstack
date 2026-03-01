@@ -10207,8 +10207,8 @@ const totalCents = Math.max(0, totalBeforeDiscountCents - discountCents);
           subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
           discount_cents: String(discountCentsSafe || 0),
         },
-        success_url: `${publicBaseUrl}/book-success.html?reference=${encodeURIComponent(reference)}`,
-        cancel_url: `${publicBaseUrl}/book/${slug}?cancelled=1&ref=${encodeURIComponent(reference)}`,
+        success_url: `${BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
+        cancel_url: `${BASE_URL}/book/${slug}?cancelled=1&ref=${encodeURIComponent(reference)}`,
       });
 
       await q("COMMIT_pay_on_booking", "COMMIT");
@@ -10473,6 +10473,13 @@ router.post("/payment-cancel", async (req, res) => {
     const status = String(row.status || "").toUpperCase();
     const paid = !!row.paid;
 
+    // ✅ idempotent: if already cancelled, ok
+    if (status === "CANCELLED") {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.json({ ok: true, released: false, reason: "already_cancelled" });
+    }
+
     // ✅ If already confirmed/paid, do not cancel/release (webhook may have won the race)
     if (paid || status === "CONFIRMED") {
       await client.query("ROLLBACK");
@@ -10480,25 +10487,20 @@ router.post("/payment-cancel", async (req, res) => {
       return res.json({ ok: true, released: false, reason: "already_paid_or_confirmed" });
     }
 
-    // ✅ Mark booking cancelled + set cancelled_at (if column exists; safe fallback if not)
-    // If you DON'T have cancelled_at, remove that line.
+    // ✅ Mark booking cancelled
     await client.query(
       `UPDATE booking_bookings
        SET status='CANCELLED',
-           cancelled_at = COALESCE(cancelled_at, now()),
+           paid=false,
            updated_at=now()
        WHERE id=$1;`,
       [row.id]
     );
 
-    // ✅ Only release capacity IF you ever reserved it.
-    // Best-practice: PAY_ON_BOOKING should NOT reserve booking_times at all,
-    // so this becomes a no-op in normal operation.
+    // ✅ Release capacity (ONLY if your /book increments booking_times for PAY_ON_BOOKING)
     const holes = Number(row.holes || 0);
     const players = Number(row.players || 0);
-
-    // If you previously reserved capacity for PAY_ON_BOOKING in booking_times,
-    // keep these updates. Otherwise, you can remove this entire section safely.
+    const teeHHMM = String(row.tee_time || "").split("|")[0]; // ✅ critical
 
     if (players > 0) {
       if (holes === 18) {
@@ -10523,7 +10525,7 @@ router.post("/payment-cancel", async (req, res) => {
           [
             row.course_id,
             row.play_date,
-            row.tee_time,     // "HH:MM"
+            teeHHMM,
             players,
             String(row.front_nine_key || ""),
             String(row.back_nine_key || ""),
@@ -10550,7 +10552,7 @@ router.post("/payment-cancel", async (req, res) => {
           [
             row.course_id,
             row.play_date,
-            row.tee_time,     // "HH:MM"
+            teeHHMM,
             players,
             String(row.layout_key || ""),
           ]
