@@ -4728,6 +4728,9 @@ router.get("/booking", async (req, res) => {
         COALESCE(b.price_per_player_cents,0)::bigint AS price_per_player_cents,
         COALESCE(b.total_cents,0)::bigint AS total_cents,
 
+        -- ✅ FIX: use your actual discount column (prevents "discount_cents does not exist")
+        COALESCE(b.subscriber_discount_cents,0)::bigint AS discount_cents,
+
         COALESCE(b.cart_qty,0)::int AS cart_qty,
         COALESCE(b.hire_clubs_qty,0)::int AS hire_clubs_qty,
 
@@ -4757,10 +4760,6 @@ router.get("/booking", async (req, res) => {
       return res.status(404).json({ ok: false, error: "not_found" });
     }
 
-    // ✅ If you don't store discount_cents in DB yet, just return 0.
-    // Frontend uses this only to display strike-through totals.
-    const discountCents = 0;
-
     res.json({
       ok: true,
       booking: {
@@ -4773,7 +4772,9 @@ router.get("/booking", async (req, res) => {
 
         price_per_player_cents: Number(row.price_per_player_cents || 0),
         total_cents: Number(row.total_cents || 0),
-        discount_cents: discountCents,
+
+        // ✅ FIX: now returned from DB
+        discount_cents: Number(row.discount_cents || 0),
 
         cart_qty: Number(row.cart_qty || 0),
         hire_clubs_qty: Number(row.hire_clubs_qty || 0),
