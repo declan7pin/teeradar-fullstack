@@ -10463,6 +10463,14 @@ return res.json({
   emailOk: emailResult.emailOk,
   emailReason: emailResult.emailReason || null,
 });
+  } catch (e) {
+    console.error("book POST (root)", e);
+    try { if (client && didBegin) await client.query("ROLLBACK"); } catch {}
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  } finally {
+    try { if (client) client.release(); } catch {}
+  }
+});
 router.post("/book", handleBook);
 // keep /availability POST blocked so the frontend can’t accidentally use it
 router.post("/availability", (req, res) => {
