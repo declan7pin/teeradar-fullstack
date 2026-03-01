@@ -10444,17 +10444,20 @@ router.post("/payment-cancel", async (req, res) => {
     const status = String(row.status || "").toUpperCase();
     const paid = !!row.paid;
 
-    // If already confirmed/paid, do not release
+    // ✅ If already confirmed/paid, do not cancel/release (webhook may have won the race)
     if (paid || status === "CONFIRMED") {
       await client.query("ROLLBACK");
       didBegin = false;
       return res.json({ ok: true, released: false, reason: "already_paid_or_confirmed" });
     }
 
-    // Mark booking cancelled
+    // ✅ Mark booking cancelled + set cancelled_at (if column exists; safe fallback if not)
+    // If you DON'T have cancelled_at, remove that line.
     await client.query(
       `UPDATE booking_bookings
-       SET status='CANCELLED', updated_at=now()
+       SET status='CANCELLED',
+           cancelled_at = COALESCE(cancelled_at, now()),
+           updated_at=now()
        WHERE id=$1;`,
       [row.id]
     );
