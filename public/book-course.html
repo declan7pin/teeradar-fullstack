@@ -363,7 +363,7 @@
       <h3 id="modalTitle">Confirm booking</h3>
       <div class="sub" id="modalSub">Enter your details to confirm.</div>
 
-      <div class="kv">
+      <<div class="kv" id="modalKv">
   <div class="k">Course</div><div id="mCourse"></div>
   <div class="k">Date</div><div id="mDate"></div>
   <div class="k">Time</div><div id="mTime"></div>
@@ -1084,6 +1084,10 @@ if (banner) banner.style.display = "none";
   }
 
    function showBookingConfirmation(data, email) {
+  // ✅ hide the old KV block so we don't get the duplicate blank section
+  const kv = $("modalKv");
+  if (kv) kv.style.display = "none";
+
   $("modalTitle").textContent = "✅ Booking confirmed";
   $("detailsGrid").style.display = "none";
 
@@ -1322,6 +1326,11 @@ const totalBeforeDiscountCents =
 
 function closeModal(){
   $("modalWrap").style.display = "none";
+
+  // ✅ restore KV block for next time user opens modal to book
+  const kv = $("modalKv");
+  if (kv) kv.style.display = "";
+
   selectedSlot = null;
   selectedAddonIds = [];
 }
