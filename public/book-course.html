@@ -1084,62 +1084,81 @@ if (banner) banner.style.display = "none";
   }
 
    function showBookingConfirmation(data, email) {
-  // ✅ hide the old KV block so we don't get the duplicate blank section
-  const kv = $("modalKv");
-  if (kv) kv.style.display = "none";
-
   $("modalTitle").textContent = "✅ Booking confirmed";
   $("detailsGrid").style.display = "none";
 
-  const emailOkRaw = (data && "emailOk" in data) ? data.emailOk : undefined;
-const reason = (data && data.emailReason) ? String(data.emailReason) : "";
+  // --- email message (3-state: true/false/unknown) ---
+  const emailOkRaw = (data && ("emailOk" in data)) ? data.emailOk : undefined;
+  const reason = (data && data.emailReason) ? String(data.emailReason) : "";
 
-let emailMsg = "";
-if (emailOkRaw === true) {
-  emailMsg = `📧 Confirmation email sent to ${email}`;
-} else if (emailOkRaw === false) {
-  emailMsg = `📧 Email not sent${reason ? ` (${reason})` : ""}`;
-} else {
-  // unknown / webhook may still be processing
-  emailMsg = `📧 Confirmation email will be sent to ${email}`;
-}
+  let emailMsg = "";
+  if (emailOkRaw === true) {
+    emailMsg = `📧 Confirmation email sent to ${email}`;
+  } else if (emailOkRaw === false) {
+    emailMsg = `📧 Email not sent${reason ? ` (${reason})` : ""}`;
+  } else {
+    emailMsg = `📧 Confirmation email will be sent to ${email}`;
+  }
 
-  // --- Build add-ons breakdown (what the user picked) ---
+  // --- booking values (prefer actual booking returned from backend) ---
+  const bookingObj = (data && data.booking) ? data.booking : {};
+
+  const showPlayers = Number(
+    bookingObj.players ?? bookingObj.player_count ?? $("players").value ?? 0
+  );
+
+  const showHoles = Number(
+    bookingObj.holes ?? $("holes").value ?? 0
+  );
+
+  const showDate = String(
+    bookingObj.play_date ?? bookingObj.date ?? $("date").value ?? ""
+  ).slice(0, 10);
+
+  const showTime = String(
+    bookingObj.time ?? bookingObj.tee_time ?? selectedSlot?.time ?? ""
+  ).split("|")[0];
+
+  // --- add-ons breakdown (what user picked in modal) ---
   const picked = new Set((selectedAddonIds || []).map(String));
   const chosenAddons = (addons || []).filter(a => a && picked.has(String(a.id)));
 
   const qtyForAddon = (id) => {
-  const sid = String(id || "");
-  if (cartAddonId && sid === String(cartAddonId)) return Number(cartQtySelected || 0);
-  if (clubsAddonId && sid === String(clubsAddonId)) return Number(clubsQtySelected || 0);
-  return 0;
-};
+    const sid = String(id || "");
+    if (cartAddonId && sid === String(cartAddonId)) return Number(cartQtySelected || 0);
+    if (clubsAddonId && sid === String(clubsAddonId)) return Number(clubsQtySelected || 0);
+    return 0;
+  };
 
-const addonLines = chosenAddons.map(a => {
-  const id = String(a.id || "");
-  const label = String(a.label || a.id || "Add-on");
-  const cents = Number(a.price_cents ?? a.priceCents ?? 0);
-  const qty = Math.max(0, Math.min(4, qtyForAddon(id)));
-  const lineTotal = cents * qty;
+  const addonLines = chosenAddons.map(a => {
+    const id = String(a.id || "");
+    const label = String(a.label || a.id || "Add-on");
+    const cents = Number(a.price_cents ?? a.priceCents ?? 0);
+    const qty = Math.max(0, Math.min(4, qtyForAddon(id)));
+    const lineTotal = cents * qty;
 
-  return `
-    <div style="display:flex;justify-content:space-between;gap:10px;">
-      <span>${label} ${qty ? `(x${qty})` : ""}</span>
-      <b>${moneyFromCents(lineTotal)}</b>
-    </div>
-  `;
-}).join("");
+    return `
+      <div style="display:flex;justify-content:space-between;gap:10px;">
+        <span>${label} ${qty ? `(x${qty})` : ""}</span>
+        <b>${moneyFromCents(lineTotal)}</b>
+      </div>
+    `;
+  }).join("");
 
-  // --- Prices ---
+  // --- totals ---
   const perPlayerCents = selectedSlot ? _slotPerPlayerCents(selectedSlot) : 0;
-  const totalCents =
-  Number(data?.booking?.totalCents ?? data?.booking?.total_cents);
 
-const discountCents =
-  Number(data?.booking?.discountCents ?? data?.booking?.discount_cents ?? 0);
+  const totalCents = Number(
+    bookingObj.total_cents ?? bookingObj.totalCents ?? data?.booking?.total_cents ?? data?.booking?.totalCents ?? 0
+  );
 
-const totalBeforeDiscountCents =
-  Number.isFinite(totalCents) ? (totalCents + Math.max(0, discountCents)) : null;
+  const discountCents = Number(
+    bookingObj.discount_cents ?? bookingObj.discountCents ?? 0
+  );
+
+  const totalBeforeDiscountCents = Number.isFinite(totalCents)
+    ? (totalCents + Math.max(0, discountCents))
+    : null;
 
   const baseBlock = `
     <div style="margin-top:10px;">
@@ -1160,45 +1179,37 @@ const totalBeforeDiscountCents =
     : "";
 
   const totalBlock = (Number.isFinite(totalCents))
-  ? `
-    <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;">
-      <div style="display:flex;justify-content:space-between;gap:10px;">
-        <span>Total</span>
-        <b>
-          ${
-            (discountCents > 0 && Number.isFinite(totalBeforeDiscountCents))
-              ? `<span class="priceStrike">${moneyFromCents(totalBeforeDiscountCents)}</span><span class="priceNew">${moneyFromCents(totalCents)}</span>`
-              : `${moneyFromCents(totalCents)}`
-          }
-        </b>
+    ? `
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;">
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <span>Total</span>
+          <b>
+            ${
+              (discountCents > 0 && Number.isFinite(totalBeforeDiscountCents))
+                ? `<span class="priceStrike">${moneyFromCents(totalBeforeDiscountCents)}</span><span class="priceNew">${moneyFromCents(totalCents)}</span>`
+                : `${moneyFromCents(totalCents)}`
+            }
+          </b>
+        </div>
+        <div style="color:var(--muted);font-size:12px;margin-top:4px;">
+          (includes add-ons)
+        </div>
       </div>
-      <div style="color:var(--muted);font-size:12px;margin-top:4px;">
-        (includes add-ons)
-      </div>
-    </div>
-  `
-  : "";
+    `
+    : "";
 
-  // --- Summary block (keeps your existing details) ---
+  // --- render confirmation ---
   $("modalSub").innerHTML =
     `Reference: <b>${data.reference}</b><br/>` +
     `${emailMsg}` +
     `<div style="margin-top:10px;">
-      const bookingObj = data?.booking || {};
-const showPlayers = Number(bookingObj.players ?? bookingObj.player_count ?? $("players").value);
-const showHoles   = Number(bookingObj.holes ?? $("holes").value);
-const showDate    = String(bookingObj.play_date ?? bookingObj.date ?? $("date").value || "");
-const showTime    =
-  String(bookingObj.time || bookingObj.tee_time || selectedSlot?.time || "")
-    .split("|")[0];
-
-<div style="display:grid;grid-template-columns:120px 1fr;gap:6px 10px;font-size:13px;">
-  <div style="color:var(--muted)">Course</div><div>${course?.name || slug}</div>
-  <div style="color:var(--muted)">Date</div><div>${showDate}</div>
-  <div style="color:var(--muted)">Time</div><div>${showTime}</div>
-  <div style="color:var(--muted)">Players</div><div>${showPlayers}</div>
-  <div style="color:var(--muted)">Holes</div><div>${showHoles}</div>
-</div>
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:6px 10px;font-size:13px;">
+        <div style="color:var(--muted)">Course</div><div>${course?.name || slug}</div>
+        <div style="color:var(--muted)">Date</div><div>${showDate}</div>
+        <div style="color:var(--muted)">Time</div><div>${showTime}</div>
+        <div style="color:var(--muted)">Players</div><div>${showPlayers}</div>
+        <div style="color:var(--muted)">Holes</div><div>${showHoles}</div>
+      </div>
     </div>` +
     baseBlock +
     addonsBlock +
