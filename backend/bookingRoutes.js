@@ -18,6 +18,24 @@ const PLATFORM_FEE_BPS = Number(process.env.PLATFORM_FEE_BPS || 0);
 
 // ✅ Subscriber discount (defaults to 5%)
 const SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
+// ✅ Course-level subscriber discount opt-in (adds columns if missing)
+(async function ensureSubscriberDiscountColumns() {
+  try {
+    await db.query(`
+      ALTER TABLE booking_courses
+        ADD COLUMN IF NOT EXISTS subscriber_discount_enabled boolean DEFAULT false;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_courses
+        ADD COLUMN IF NOT EXISTS subscriber_discount_pct int DEFAULT 5;
+    `);
+
+    console.log("✅ ensured booking_courses subscriber discount columns");
+  } catch (e) {
+    console.warn("⚠️ could not ensure subscriber discount columns", e?.message || e);
+  }
+})();
 
 // Optional: emergency override list (comma-separated emails) if DB lookup isn't ready
 const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
@@ -8032,7 +8050,9 @@ router.get(
         SELECT
           slug, name,
           cart_qty, hire_clubs_qty,
-          cart_fee_cents, hire_clubs_fee_cents
+          cart_fee_cents, hire_clubs_fee_cents,
+          COALESCE(subscriber_discount_enabled, false) AS subscriber_discount_enabled,
+          COALESCE(subscriber_discount_pct, 5) AS subscriber_discount_pct
         FROM booking_courses
         WHERE slug=$1
         LIMIT 1;
@@ -8040,7 +8060,8 @@ router.get(
         [slug]
       );
 
-      if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+      if (!c.rows.length)
+        return res.status(404).json({ ok: false, error: "course_not_found" });
 
       return res.json({ ok: true, course: c.rows[0] });
     } catch (e) {
@@ -8066,6 +8087,19 @@ router.post(
       const cartFeeCents = req.body?.cartFeeCents ?? req.body?.cart_fee_cents;
       const hireClubsFeeCents = req.body?.hireClubsFeeCents ?? req.body?.hire_clubs_fee_cents;
 
+      // ✅ NEW: subscriber discount settings
+      const subscriberDiscountEnabled =
+        req.body?.subscriberDiscountEnabled ??
+        req.body?.subscriber_discount_enabled ??
+        false;
+
+      const subscriberDiscountPctRaw =
+        req.body?.subscriberDiscountPct ??
+        req.body?.subscriber_discount_pct ??
+        5;
+
+      const subscriberDiscountPct = Number(subscriberDiscountPctRaw);
+
       if (!Number.isFinite(cartQty) || cartQty < 0 || cartQty > 100) {
         return res.status(400).json({ ok: false, error: "cart_qty_invalid" });
       }
@@ -8073,33 +8107,75 @@ router.post(
         return res.status(400).json({ ok: false, error: "hire_clubs_qty_invalid" });
       }
 
+      if (
+        !Number.isFinite(subscriberDiscountPct) ||
+        subscriberDiscountPct < 0 ||
+        subscriberDiscountPct > 50
+      ) {
+        return res
+          .status(400)
+          .json({ ok: false, error: "subscriber_discount_pct_invalid" });
+      }
+
       // fees are optional; if provided validate 0..10,000,000 cents
       let cartFeeVal = null;
       let clubsFeeVal = null;
 
-      if (cartFeeCents !== undefined && cartFeeCents !== null && cartFeeCents !== "") {
+      if (
+        cartFeeCents !== undefined &&
+        cartFeeCents !== null &&
+        cartFeeCents !== ""
+      ) {
         cartFeeVal = Number(cartFeeCents);
-        if (!Number.isFinite(cartFeeVal) || cartFeeVal < 0 || cartFeeVal > 10000000) {
+        if (
+          !Number.isFinite(cartFeeVal) ||
+          cartFeeVal < 0 ||
+          cartFeeVal > 10000000
+        ) {
           return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
         }
       }
 
-      if (hireClubsFeeCents !== undefined && hireClubsFeeCents !== null && hireClubsFeeCents !== "") {
+      if (
+        hireClubsFeeCents !== undefined &&
+        hireClubsFeeCents !== null &&
+        hireClubsFeeCents !== ""
+      ) {
         clubsFeeVal = Number(hireClubsFeeCents);
-        if (!Number.isFinite(clubsFeeVal) || clubsFeeVal < 0 || clubsFeeVal > 10000000) {
-          return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
+        if (
+          !Number.isFinite(clubsFeeVal) ||
+          clubsFeeVal < 0 ||
+          clubsFeeVal > 10000000
+        ) {
+          return res
+            .status(400)
+            .json({ ok: false, error: "hire_clubs_fee_invalid" });
         }
       }
 
-      // Build dynamic update: only overwrite fees if provided
-      const fields = ["cart_qty = $2", "hire_clubs_qty = $3"];
-      const params = [slug, cartQty, hireClubsQty];
-      let idx = 4;
+      // Build dynamic update
+      const fields = [
+        "cart_qty = $2",
+        "hire_clubs_qty = $3",
+        "subscriber_discount_enabled = $4",
+        "subscriber_discount_pct = $5"
+      ];
+
+      const params = [
+        slug,
+        cartQty,
+        hireClubsQty,
+        !!subscriberDiscountEnabled,
+        subscriberDiscountPct
+      ];
+
+      let idx = 6;
 
       if (cartFeeVal !== null) {
         fields.push(`cart_fee_cents = $${idx++}`);
         params.push(cartFeeVal);
       }
+
       if (clubsFeeVal !== null) {
         fields.push(`hire_clubs_fee_cents = $${idx++}`);
         params.push(clubsFeeVal);
@@ -8113,12 +8189,15 @@ router.post(
         RETURNING
           slug, name,
           cart_qty, hire_clubs_qty,
-          cart_fee_cents, hire_clubs_fee_cents;
+          cart_fee_cents, hire_clubs_fee_cents,
+          subscriber_discount_enabled,
+          subscriber_discount_pct;
         `,
         params
       );
 
-      if (!u.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+      if (!u.rows.length)
+        return res.status(404).json({ ok: false, error: "course_not_found" });
 
       return res.json({ ok: true, course: u.rows[0] });
     } catch (e) {
