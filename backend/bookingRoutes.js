@@ -10218,10 +10218,23 @@ return false;
   // ✅ total BEFORE discount = green fees + add-ons
   const totalBeforeDiscountCents = Math.max(0, (ppp * players) + addonsCents);
 
-  // ✅ SUBSCRIBER DISCOUNT (applies to WHOLE booking)
+    // ✅ SUBSCRIBER DISCOUNT (ONLY if subscriber AND course opted in)
+
+  const courseDiscountEnabled = !!courseRow?.subscriber_discount_enabled;
+
+  const courseDiscountPct =
+    Number.isFinite(Number(courseRow?.subscriber_discount_pct))
+      ? Number(courseRow.subscriber_discount_pct)
+      : SUBSCRIBER_DISCOUNT_PCT; // fallback safety
+
+  const effectiveDiscountPct =
+    isSubscriber && courseDiscountEnabled && courseDiscountPct > 0
+      ? courseDiscountPct
+      : 0;
+
   const discountCents =
-    isSubscriber && SUBSCRIBER_DISCOUNT_PCT > 0
-      ? Math.round((totalBeforeDiscountCents * SUBSCRIBER_DISCOUNT_PCT) / 100)
+    effectiveDiscountPct > 0
+      ? Math.round((totalBeforeDiscountCents * effectiveDiscountPct) / 100)
       : 0;
 
   // ✅ base total (what course is actually charging) AFTER discount
@@ -10408,7 +10421,7 @@ return false;
           course_slug: slug,
           platform_fee_bps: String(courseFeeBps),
           subscriber: isSubscriber ? "1" : "0",
-          subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
+          subscriber_discount_pct: String(effectiveDiscountPct || 0),
           discount_cents: String(discountCentsSafe || 0),
 
           base_cents: String(Number(totalCents || 0)),
@@ -10424,7 +10437,7 @@ return false;
         course_slug: slug,
         platform_fee_bps: String(courseFeeBps),
         subscriber: isSubscriber ? "1" : "0",
-        subscriber_discount_pct: String(isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0),
+        subscriber_discount_pct: String(effectiveDiscountPct || 0),
         discount_cents: String(discountCentsSafe || 0),
       },
 
@@ -10448,7 +10461,7 @@ return false;
         players,
         pricePerPlayerCents: ppp,
         isSubscriber,
-        discountPct: isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0,
+        discountPct: effectiveDiscountPct,
         discountCents: discountCentsSafe,
 
         // ✅ base + fee breakdown for UI
@@ -10568,7 +10581,7 @@ return false;
       players,
       pricePerPlayerCents: ppp,
       isSubscriber,
-      discountPct: isSubscriber ? SUBSCRIBER_DISCOUNT_PCT : 0,
+      discountPct: effectiveDiscountPct,
       discountCents: discountCentsSafe,
       totalCents,
       addonsCents,
