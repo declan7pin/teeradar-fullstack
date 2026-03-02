@@ -1178,6 +1178,11 @@ function moneyAUD(cents){
   const n = Number(cents || 0) / 100;
   return n.toLocaleString(undefined, { style:"currency", currency:"AUD" });
 }
+function moneyAUDpp(cents){
+  const v = Number(cents || 0);
+  if (!v) return "";               // hide if 0 / missing
+  return moneyAUD(v) + " pp";      // “per player”
+}
 function pct(v){
   const n = Number(v || 0) * 100;
   return (isFinite(n) ? n : 0).toFixed(0) + "%";
@@ -2142,252 +2147,276 @@ rows = filterShadowedGeneric18(rows);
   }
 
   async function viewSheet(){
-    clearView();
-    $("viewMsg").textContent = "Loading daily sheet...";
+  clearView();
+  $("viewMsg").textContent = "Loading daily sheet...";
+  try{
+    const date = ($("date").value || "").trim();
+    if (!date) throw new Error("play_date_required");
+
+    const slug = getSlug();
+
+    const timesOut = await j(
+      "/api/book/course-admin/times?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(slug),
+      { method:"GET" }
+    );
+
+    let timesRows = (timesOut && timesOut.times) || [];
+    timesRows = filterShadowedGeneric18(timesRows);
+
+    // ✅ Merge manual tee times into daily sheet
+    // (important so manually-held times still show as rows even if not generated in times table)
     try{
-      const date = ($("date").value || "").trim();
-      if (!date) throw new Error("play_date_required");
+      const manualOut = await j(
+        "/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(slug),
+        { method:"GET" }
+      );
 
-      const timesOut = await j("/api/book/course-admin/times?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
-      let timesRows = (timesOut && timesOut.times) || [];
-timesRows = filterShadowedGeneric18(timesRows);
-      // ✅ Price lookup (time+holes+route/layout) so duplicates don't collide
-const priceByKey = new Map();
-try{
-  (timesRows || []).forEach(t => {
-    const time = normTime(displayTime(t.tee_time || t.time || ""));
-    const holes = Number(t.holes ?? "");
+      const manualRowsMerged =
+        manualOut.manualSlots || manualOut.manual_slots || manualOut.slots || manualOut.rows || [];
 
-    const lk = String(t.layout_key || t.layoutKey || "").trim().toLowerCase();
-    const f  = String(t.front_nine_key || t.front9_key || t.front9Key || "").trim().toLowerCase();
-    const b  = String(t.back_nine_key  || t.back9_key  || t.back9Key  || "").trim().toLowerCase();
+      if (Array.isArray(manualRowsMerged) && manualRowsMerged.length) {
+        manualRowsMerged.forEach(ms => {
+          // normalize holes
+          let holesN = Number(ms.holes ?? "");
+          if (!Number.isFinite(holesN) || holesN <= 0) holesN = 18;
 
-    const k =
-      holes === 9
-        ? `${time}__9__lk:${lk || ""}`
-        : holes === 18
-          ? `${time}__18__f:${f || ""}__b:${b || ""}`
-          : `${time}__${holes}`;
+          timesRows.push({
+            play_date: ms.play_date ?? ms.date ?? date,
+            tee_time: ms.tee_time ?? ms.time ?? "",
+            holes: holesN,
 
-    const p = Number(t.price_per_player_cents ?? t.pricePerPlayerCents ?? 0) || 0;
-    priceByKey.set(k, p);
-  });
-}catch{}
-// ✅ Merge manual tee times into daily sheet
-try{
-  const manualOut = await j("/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date), { method:"GET" });
-  const manualRows = manualOut.manualSlots || manualOut.manual_slots || manualOut.slots || manualOut.rows || [];
+            // sensible defaults for sheet rendering
+            max_players: Number(ms.max_players ?? ms.maxPlayers ?? 4) || 4,
+            booked_players: 0,
+            status: "open",
 
-  if (Array.isArray(manualRows) && manualRows.length) {
-    manualRows.forEach(ms => {
-      timesRows.push({
-        play_date: ms.play_date ?? ms.date ?? date,
-        tee_time: ms.tee_time ?? ms.time ?? "",
-        holes: ms.holes ?? "",
-        max_players: ms.max_players ?? "",
-        booked_players: 0,
-        status: "open",
-        price_per_player_cents: ms.price_per_player_cents ?? ms.price_cents ?? ""
-      });
+            price_per_player_cents: ms.price_per_player_cents ?? ms.price_cents ?? ms.pricePerPlayerCents ?? 0,
+
+            // ✅ preserve routing/layout keys so duplicates at same time can coexist correctly
+            layout_key: ms.layout_key ?? ms.layoutKey ?? "",
+            front_nine_key: ms.front_nine_key ?? ms.front9_key ?? ms.front9Key ?? "",
+            back_nine_key: ms.back_nine_key ?? ms.back9_key ?? ms.back9Key ?? ""
+          });
+        });
+
+        // ✅ de-dupe by time + holes + routing/layout keys (so 2 x 06:10 (18) can exist if routing differs)
+        const seen = new Set();
+        const deduped = [];
+
+        for (const r of timesRows) {
+          const time = normTime(r.tee_time || r.time || "");
+          let holes = Number(r.holes ?? "");
+          if (!Number.isFinite(holes) || holes <= 0) holes = 18;
+
+          const lk = String(r.layout_key || r.layoutKey || "").trim().toLowerCase();
+          const f  = String(r.front_nine_key || r.front9_key || r.front9Key || "").trim().toLowerCase();
+          const b  = String(r.back_nine_key  || r.back9_key  || r.back9Key  || "").trim().toLowerCase();
+
+          const key =
+            holes === 9
+              ? `${time}__${holes}__lk:${lk || ""}`
+              : holes === 18
+                ? `${time}__${holes}__f:${f || ""}__b:${b || ""}`
+                : `${time}__${holes}`;
+
+          if (seen.has(key)) continue;
+          seen.add(key);
+          deduped.push(r);
+        }
+
+        deduped.sort((a,b) =>
+          (normTime(a.tee_time||a.time||"") > normTime(b.tee_time||b.time||"") ? 1 : -1)
+        );
+
+        timesRows.length = 0;
+        deduped.forEach(x => timesRows.push(x));
+        timesRows = filterShadowedGeneric18(timesRows);
+      }
+    }catch(e){
+      // ignore if manual endpoint missing; daily sheet will still work from normal times
+    }
+
+    const bookingsOut = await j(
+      "/api/book/course-admin/bookings?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(slug),
+      { method:"GET" }
+    );
+
+    const bookingsRows = (bookingsOut && bookingsOut.bookings) || [];
+
+    // ✅ Load manual holds too (so the sheet shows taken slots)
+    let manualRows = [];
+    try{
+      const manualOut = await j(
+        "/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(slug),
+        { method:"GET" }
+      );
+      manualRows = manualOut.manualSlots || manualOut.manual_slots || manualOut.slots || manualOut.rows || [];
+      if (!Array.isArray(manualRows)) manualRows = [];
+    }catch(e){
+      manualRows = []; // endpoint not available? sheet still works
+    }
+
+    if (!Array.isArray(timesRows) || !timesRows.length){
+      $("viewMsg").textContent = "✅ No tee times found (generate them in Booking Admin).";
+      return;
+    }
+
+    const sheet = groupBookingsToSheet(timesRows, bookingsRows, manualRows);
+
+    $("sheetPill").textContent = `${slug} • ${date}`;
+    $("sheetHint").textContent = "Names fill into the 4 slots for each time. Tick Paid to mark payment.";
+
+    const tb = $("sheetBody");
+    tb.innerHTML = "";
+
+    sheet.forEach(row => {
+      const tr = document.createElement("tr");
+
+      // ✅ attach routing/layout to the row (so Add booking knows which exact slot)
+      tr.dataset.time = String(row.time || "").trim(); // "HH:MM"
+      tr.dataset.holes = String(row.holes || "");
+      tr.dataset.layoutKey = String(row.layout_key || "");
+      tr.dataset.frontKey = String(row.front_nine_key || "");
+      tr.dataset.backKey = String(row.back_nine_key || "");
+
+      tr.innerHTML = `
+        <td class="sheetTime">
+          ${_escape(row.time)}
+          <span class="muted mini">(${_escape(fmtSheetHolesLabelFromTimeRow(row))})</span>
+        </td>
+        <td>${buildSlotCell(row.slots[0], 1)}</td>
+        <td>${buildSlotCell(row.slots[1], 2)}</td>
+        <td>${buildSlotCell(row.slots[2], 3)}</td>
+        <td>${buildSlotCell(row.slots[3], 4)}</td>
+      `;
+      tb.appendChild(tr);
     });
 
-    // ✅ de-dupe by time + holes + routing/layout keys (so 2 x 06:10 (18) can exist if routing differs)
-const seen = new Set();
-const deduped = [];
+    // ✅ Allow creating a booking from an empty slot (Add booking buttons)
+    tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
+      btn.onclick = async () => {
+        try{
+          await getMe();
 
-for (const r of timesRows) {
-  const time = normTime(r.tee_time || r.time || "");
-  const holes = Number(r.holes ?? "");
+          const date = ($("date").value || "").trim();
+          if (!date) throw new Error("play_date_required");
 
-  const lk = String(r.layout_key || r.layoutKey || "").trim().toLowerCase();
-  const f  = String(r.front_nine_key || r.front9_key || r.front9Key || "").trim().toLowerCase();
-  const b  = String(r.back_nine_key  || r.back9_key  || r.back9Key  || "").trim().toLowerCase();
+          const slug = getSlug();
 
-  const key =
-    holes === 9
-      ? `${time}__${holes}__lk:${lk || ""}`
-      : holes === 18
-        ? `${time}__${holes}__f:${f || ""}__b:${b || ""}`
-        : `${time}__${holes}`;
+          // Find the row time/holes by walking up to the <tr>
+          const tr = btn.closest("tr");
+          if (!tr) throw new Error("row_not_found");
 
-  if (seen.has(key)) continue;
-  seen.add(key);
-  deduped.push(r);
-}
+          const teeTime = String(tr.dataset.time || "").trim();
+          const holes = Number(tr.dataset.holes || 18);
 
-deduped.sort((a,b) => (normTime(a.tee_time||a.time||"") > normTime(b.tee_time||b.time||"") ? 1 : -1));
-timesRows.length = 0;
-deduped.forEach(x => timesRows.push(x));
-timesRows = filterShadowedGeneric18(timesRows);
+          const layoutKey = String(tr.dataset.layoutKey || "").trim();
+          const frontNineKey = String(tr.dataset.frontKey || "").trim();
+          const backNineKey  = String(tr.dataset.backKey || "").trim();
+
+          if (!teeTime) throw new Error("tee_time_missing");
+
+          // ✅ routing-aware price key
+          const priceKey =
+            holes === 9
+              ? `${normTime(teeTime)}__9__lk:${String(layoutKey||"").trim().toLowerCase()}`
+              : holes === 18
+                ? `${normTime(teeTime)}__18__f:${String(frontNineKey||"").trim().toLowerCase()}__b:${String(backNineKey||"").trim().toLowerCase()}`
+                : `${normTime(teeTime)}__${holes}`;
+
+          const pricePerPlayerCents = Number(priceByKey.get(priceKey) || 0);
+
+          // ✅ Ask for details
+          const name = (prompt("Name:", "") || "").trim();
+          if (!name) return;
+
+          const email = (prompt("Email (needed for confirmation):", "") || "").trim();
+          if (!email) throw new Error("email_required");
+
+          const phone = (prompt("Phone (optional):", "") || "").trim();
+          const cartsRaw = prompt("Cart qty (0-4):", "0") || "0";
+          const clubsRaw = prompt("Clubs qty (0-4):", "0") || "0";
+          const notes = (prompt("Notes (optional):", "") || "").trim();
+
+          const cartQty = Math.max(0, Math.min(4, Number(cartsRaw || 0)));
+          const hireClubsQty = Math.max(0, Math.min(4, Number(clubsRaw || 0)));
+
+          const playersRaw = prompt("Players (1-4):", "1") || "1";
+          const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
+
+          // ✅ DEBUG: shows the exact path + payload we’re about to send
+          try{
+            window.dbg && dbg("ADD_BOOKING payload", {
+              slug,
+              endpoint: "/api/book/course-admin/booking",
+              date,
+              teeTime,
+              holes,
+              layoutKey,
+              frontNineKey,
+              backNineKey,
+              priceKey,
+              pricePerPlayerCents,
+              players,
+              name,
+              email,
+              phone,
+              cartQty,
+              hireClubsQty,
+              notes
+            }, "warn");
+          }catch{}
+
+          await j("/api/book/course-admin/booking?slug=" + encodeURIComponent(slug), {
+            method:"POST",
+            body: JSON.stringify({
+              date,
+              playDate: date,
+              play_date: date,
+
+              teeTime,
+              tee_time: teeTime,
+
+              holes,
+              players,
+
+              layout_key: layoutKey,
+              front_nine_key: frontNineKey,
+              back_nine_key: backNineKey,
+
+              pricePerPlayerCents,
+              price_per_player_cents: pricePerPlayerCents,
+
+              name,
+
+              cartQty,
+              hireClubsQty,
+              cart_qty: cartQty,
+              hire_clubs_qty: hireClubsQty,
+
+              notes,
+              note: notes,
+
+              email,
+              phone,
+
+              paid: false,
+              checked_in: false
+            })
+          });
+
+          $("viewMsg").textContent = "✅ Booking added";
+          await viewSheet(); // refresh
+        }catch(e){
+          $("viewMsg").textContent = "❌ " + (e?.message || "Failed to add booking");
+        }
+      };
+    });
+
+  }catch(e){
+    $("viewMsg").textContent = "❌ " + (e?.message || "Failed to load daily sheet");
   }
-}catch(e){
-  // ignore if manual endpoint missing; daily sheet will still work from normal times
 }
-      const bookingsOut = await j("/api/book/course-admin/bookings?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(getSlug()), { method:"GET" });
-      const bookingsRows = (bookingsOut && bookingsOut.bookings) || [];
-      // ✅ Load manual holds too (so the sheet shows taken slots)
-      let manualRows = [];
-      try{
-        const manualOut = await j("/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date), { method:"GET" });
-        manualRows = manualOut.manualSlots || manualOut.manual_slots || manualOut.slots || manualOut.rows || [];
-        if (!Array.isArray(manualRows)) manualRows = [];
-      }catch(e){
-        manualRows = []; // endpoint not available? sheet still works
-      }
-      if (!Array.isArray(timesRows) || !timesRows.length){
-        $("viewMsg").textContent = "✅ No tee times found (generate them in Booking Admin).";
-        return;
-      }
-
-      const sheet = groupBookingsToSheet(timesRows, bookingsRows, manualRows);
-
-      $("sheetPill").textContent = `${getSlug()} • ${date}`;
-      $("sheetHint").textContent = "Names fill into the 4 slots for each time. Tick Paid to mark payment.";
-
-      const tb = $("sheetBody");
-      tb.innerHTML = "";
-
-      sheet.forEach(row => {
-  const tr = document.createElement("tr");
-
-  // ✅ attach routing/layout to the row (so Add booking knows which exact slot)
-  tr.dataset.time = String(row.time || "").trim(); // "HH:MM"
-  tr.dataset.holes = String(row.holes || "");
-  tr.dataset.layoutKey = String(row.layout_key || "");
-  tr.dataset.frontKey = String(row.front_nine_key || "");
-  tr.dataset.backKey = String(row.back_nine_key || "");
-
-  tr.innerHTML = `
-    <td class="sheetTime">
-  ${_escape(row.time)}
-  <span class="muted mini">(${_escape(fmtSheetHolesLabelFromTimeRow(row))})</span>
-</td>
-          <td>${buildSlotCell(row.slots[0], 1)}</td>
-          <td>${buildSlotCell(row.slots[1], 2)}</td>
-          <td>${buildSlotCell(row.slots[2], 3)}</td>
-          <td>${buildSlotCell(row.slots[3], 4)}</td>
-        `;
-        tb.appendChild(tr);
-      });
-
-            // ✅ Allow creating a booking from an empty slot (Add booking buttons)
-tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
-  btn.onclick = async () => {
-    try{
-      await getMe();
-
-      const date = ($("date").value || "").trim();
-      if (!date) throw new Error("play_date_required");
-
-      // Find the row time/holes by walking up to the <tr>
-      const tr = btn.closest("tr");
-      if (!tr) throw new Error("row_not_found");
-
-      const teeTime = String(tr.dataset.time || "").trim();
-      const holes = Number(tr.dataset.holes || 18);
-
-      const layoutKey = String(tr.dataset.layoutKey || "").trim();
-      const frontNineKey = String(tr.dataset.frontKey || "").trim();
-      const backNineKey  = String(tr.dataset.backKey || "").trim();
-
-      if (!teeTime) throw new Error("tee_time_missing");
-
-      // ✅ routing-aware price key
-      const priceKey =
-        holes === 9
-          ? `${normTime(teeTime)}__9__lk:${String(layoutKey||"").trim().toLowerCase()}`
-          : holes === 18
-            ? `${normTime(teeTime)}__18__f:${String(frontNineKey||"").trim().toLowerCase()}__b:${String(backNineKey||"").trim().toLowerCase()}`
-            : `${normTime(teeTime)}__${holes}`;
-
-      const pricePerPlayerCents = Number(priceByKey.get(priceKey) || 0);
-
-      // ✅ Ask for details
-      const name = (prompt("Name:", "") || "").trim();
-      if (!name) return;
-
-      const email = (prompt("Email (needed for confirmation):", "") || "").trim();
-      if (!email) throw new Error("email_required");
-
-      const phone = (prompt("Phone (optional):", "") || "").trim();
-      const cartsRaw = prompt("Cart qty (0-4):", "0") || "0";
-      const clubsRaw = prompt("Clubs qty (0-4):", "0") || "0";
-      const notes = (prompt("Notes (optional):", "") || "").trim();
-
-      const cartQty = Math.max(0, Math.min(4, Number(cartsRaw || 0)));
-      const hireClubsQty = Math.max(0, Math.min(4, Number(clubsRaw || 0)));
-
-      const playersRaw = prompt("Players (1-4):", "1") || "1";
-      const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
-
-      // ✅ DEBUG: shows the exact path + payload we’re about to send
-      try{
-        window.dbg && dbg("ADD_BOOKING payload", {
-          slug: getSlug(),
-          endpoint: "/api/book/course-admin/booking",
-          date,
-          teeTime,
-          holes,
-          layoutKey,
-          frontNineKey,
-          backNineKey,
-          priceKey,
-          pricePerPlayerCents,
-          players,
-          name,
-          email,
-          phone,
-          cartQty,
-          hireClubsQty,
-          notes
-        }, "warn");
-      }catch{}
-
-      await j("/api/book/course-admin/booking?slug=" + encodeURIComponent(getSlug()), {
-        method:"POST",
-        body: JSON.stringify({
-          date,
-          playDate: date,
-          play_date: date,
-
-          teeTime,
-          tee_time: teeTime,
-
-          holes,
-          players,
-
-          layout_key: layoutKey,
-          front_nine_key: frontNineKey,
-          back_nine_key: backNineKey,
-
-          pricePerPlayerCents,
-          price_per_player_cents: pricePerPlayerCents,
-
-          name,
-
-          cartQty,
-          hireClubsQty,
-          cart_qty: cartQty,
-          hire_clubs_qty: hireClubsQty,
-
-          notes,
-          note: notes,
-
-          email,
-          phone,
-
-          paid: false,
-          checked_in: false
-        })
-      });
-
-      $("viewMsg").textContent = "✅ Booking added";
-      await viewSheet(); // refresh
-    }catch(e){
-      $("viewMsg").textContent = "❌ " + (e?.message || "Failed to add booking");
-    }
-  };
-});
 
 // ✅ Edit / Delete buttons on each slot (daily sheet) — SINGLE handler (no duplicates)
 tb.querySelectorAll('button[data-del-slot]').forEach(btn => {
