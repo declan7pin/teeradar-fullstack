@@ -8796,65 +8796,70 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
     try {
       const mbParams = date ? [courseId, date] : [courseId];
 
-      const mb = await db.query(
-        `
-        WITH grouped AS (
-          SELECT
-            m.course_id,
-            m.play_date::date AS play_date,
-            m.reference,
-            MIN(m.tee_time) AS tee_time,
-            MIN(m.holes)::int AS holes,
-            SUM(CASE WHEN COALESCE(NULLIF(TRIM(m.name),''),'') <> '' THEN 1 ELSE 0 END)::int AS players,
-            MAX(COALESCE(m.cart_qty,0))::int AS cart_qty,
-            MAX(COALESCE(m.hire_clubs_qty,0))::int AS hire_clubs_qty,
-            MAX(COALESCE(m.paid,false)) AS paid,
-            MAX(COALESCE(m.checked_in,false)) AS checked_in,
-            MAX(NULLIF(TRIM(m.name),'')) AS name,
-            MAX(NULLIF(TRIM(m.email),'')) AS email,
-            MAX(NULLIF(TRIM(m.phone),'')) AS phone
-          FROM booking_manual_slots m
-          WHERE m.course_id = $1
-            ${date ? "AND m.play_date = $2::date" : ""}
-            AND m.reference IS NOT NULL
-            AND m.reference <> ''
-          GROUP BY m.course_id, m.play_date::date, m.reference
-        )
-        SELECT
-          g.play_date::text AS play_date,
-          g.tee_time,
-          g.holes,
-          g.reference,
-          g.players,
-          g.name,
-          g.email,
-          g.phone,
-          g.paid,
-          g.checked_in,
-          g.cart_qty,
-          g.hire_clubs_qty,
-          (
-            (COALESCE(g.players,0) * COALESCE(t.price_per_player_cents,0))
-            + (COALESCE(g.cart_qty,0) * COALESCE(c.cart_fee_cents,0))
-            + (COALESCE(g.hire_clubs_qty,0) * COALESCE(c.hire_clubs_fee_cents,0))
-          )::bigint AS gross_cents
-        FROM grouped g
-        LEFT JOIN booking_times t
-          ON t.course_id = g.course_id
-         AND t.play_date::date = g.play_date
-         AND split_part(t.tee_time,'|',1) = split_part(g.tee_time,'|',1)
-         AND t.holes = g.holes
-        LEFT JOIN booking_courses c
-          ON c.id = g.course_id
-        ORDER BY g.play_date DESC, g.tee_time ASC;
-        `,
-        mbParams
-      );
+const mb = await db.query(
+  `
+  WITH grouped AS (
+    SELECT
+      m.course_id,
+      m.play_date::date AS play_date,
+      m.reference,
+      MIN(m.tee_time) AS tee_time,
+      MIN(m.holes)::int AS holes,
+      SUM(CASE WHEN COALESCE(NULLIF(TRIM(m.name),''),'') <> '' THEN 1 ELSE 0 END)::int AS players,
+      MAX(COALESCE(m.cart_qty,0))::int AS cart_qty,
+      MAX(COALESCE(m.hire_clubs_qty,0))::int AS hire_clubs_qty,
+      MAX(COALESCE(m.paid,false)) AS paid,
+      MAX(COALESCE(m.checked_in,false)) AS checked_in,
+      MAX(NULLIF(TRIM(m.name),'')) AS name,
+      MAX(NULLIF(TRIM(m.email),'')) AS email,
+      MAX(NULLIF(TRIM(m.phone),'')) AS phone
+    FROM booking_manual_slots m
+    WHERE m.course_id = $1
+      ${date ? "AND m.play_date = $2::date" : ""}
+      AND m.reference IS NOT NULL
+      AND m.reference <> ''
+    GROUP BY m.course_id, m.play_date::date, m.reference
+  )
+  SELECT
+    g.play_date::text AS play_date,
+    g.tee_time,
+    g.holes,
+    g.reference,
+    g.players,
+    g.name,
+    g.email,
+    g.phone,
+    g.paid,
+    g.checked_in,
+    g.cart_qty,
+    g.hire_clubs_qty,
 
-      manualBookings = (mb.rows || []).map((b) => ({
-        ...b,
-        gross: Number((Number(b.gross_cents || 0) / 100).toFixed(2)),
-      }));
+    (
+      (COALESCE(g.players,0) * COALESCE(t.price_per_player_cents,0))
+      + (COALESCE(g.cart_qty,0) * COALESCE(c.cart_fee_cents,0))
+      + (COALESCE(g.hire_clubs_qty,0) * COALESCE(c.hire_clubs_fee_cents,0))
+    )::bigint AS gross_cents
+
+  FROM grouped g
+
+  LEFT JOIN booking_times t
+    ON t.course_id = g.course_id
+   AND t.play_date::date = g.play_date
+   AND left(trim(split_part(t.tee_time,'|',1)),5) = left(trim(split_part(g.tee_time,'|',1)),5)
+   AND t.holes = g.holes
+
+  LEFT JOIN booking_courses c
+    ON c.id = g.course_id
+
+  ORDER BY g.play_date DESC, g.tee_time ASC;
+  `,
+  mbParams
+);
+
+const manualBookings = (mb.rows || []).map((b) => ({
+  ...b,
+  gross: Number((Number(b.gross_cents || 0) / 100).toFixed(2)),
+}));
     } catch (e) {
       console.error("❌ /course-admin/bookings manualBookings query failed", {
         message: e?.message,
