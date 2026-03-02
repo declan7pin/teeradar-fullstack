@@ -8684,6 +8684,9 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
+    // ----------------------------
+    // ONLINE BOOKINGS (already 1 row per booking)
+    // ----------------------------
     const params = [courseId];
     let where = `WHERE b.course_id=$1
                  AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'`; // ✅ exclude cancelled
@@ -8726,6 +8729,14 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
       params
     );
 
+    const onlineBookings = (r.rows || []).map((b) => ({
+      ...b,
+      gross: Number((Number(b.gross_cents || 0) / 100).toFixed(2)), // ✅ dollars
+    }));
+
+    // ----------------------------
+    // MANUAL SLOTS (raw rows - keep for editing / visibility)
+    // ----------------------------
     const ms = await db.query(
       `
       SELECT
@@ -8754,11 +8765,80 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
       date ? [courseId, date] : [courseId]
     );
 
-    res.json({
+    // ----------------------------
+    // MANUAL BOOKINGS (GROUPED: 1 row per reference)
+    // ✅ This is what you use for "one card per booking"
+    // ----------------------------
+    const mbParams = date ? [courseId, date] : [courseId];
+    const mb = await db.query(
+      `
+      WITH grouped AS (
+        SELECT
+          m.course_id,
+          m.play_date::date AS play_date,
+          m.reference,
+          MIN(m.tee_time) AS tee_time,
+          MIN(m.holes)::int AS holes,
+          COUNT(*) FILTER (WHERE COALESCE(NULLIF(m.name,''),'') <> '')::int AS players,
+          MAX(COALESCE(m.cart_qty,0))::int AS cart_qty,
+          MAX(COALESCE(m.hire_clubs_qty,0))::int AS hire_clubs_qty,
+          MAX(COALESCE(m.paid,false)) AS paid,
+          MAX(COALESCE(m.checked_in,false)) AS checked_in,
+          MAX(NULLIF(TRIM(m.name),'')) AS name,
+          MAX(NULLIF(TRIM(m.email),'')) AS email,
+          MAX(NULLIF(TRIM(m.phone),'')) AS phone
+        FROM booking_manual_slots m
+        WHERE m.course_id = $1
+          ${date ? "AND m.play_date = $2::date" : ""}
+          AND m.reference IS NOT NULL AND m.reference <> ''
+        GROUP BY m.course_id, m.play_date::date, m.reference
+      )
+      SELECT
+        g.play_date::text AS play_date,
+        g.tee_time,
+        g.holes,
+        g.reference,
+        g.players,
+        g.name,
+        g.email,
+        g.phone,
+        g.paid,
+        g.checked_in,
+        g.cart_qty,
+        g.hire_clubs_qty,
+        (
+          (g.players * COALESCE(t.price_per_player_cents,0))
+          + (g.cart_qty * COALESCE(c.cart_fee_cents,0))
+          + (g.hire_clubs_qty * COALESCE(c.hire_clubs_fee_cents,0))
+        )::bigint AS gross_cents
+      FROM grouped g
+      LEFT JOIN booking_times t
+        ON t.course_id = g.course_id
+       AND t.play_date::date = g.play_date
+       AND split_part(t.tee_time,'|',1) = split_part(g.tee_time,'|',1)
+       AND t.holes = g.holes
+      LEFT JOIN booking_courses c
+        ON c.id = g.course_id
+      ORDER BY g.play_date DESC, g.tee_time ASC;
+      `,
+      mbParams
+    );
+
+    const manualBookings = (mb.rows || []).map((b) => ({
+      ...b,
+      gross: Number((Number(b.gross_cents || 0) / 100).toFixed(2)), // ✅ dollars
+    }));
+
+    return res.json({
       ok: true,
-      bookings: r.rows || [],
-      manualSlots: ms.rows || [],
       course_slug: slug,
+
+      // Existing payloads (keep them so nothing breaks)
+      bookings: onlineBookings,
+      manualSlots: ms.rows || [],
+
+      // ✅ NEW: use this for "one card per booking"
+      manualBookings,
     });
   } catch (e) {
     console.error("course-admin/bookings", e);
