@@ -3441,51 +3441,54 @@ function renderEighteenRoutingSelect(dow, w){
   // Window inputs
   // -----------------------
   function renderWindowInputs(dow, cfg, holes){
-    const w =
-      (cfg.windows || []).find(x => Number(x.holes) === holes) ||
-      {
-        holes,
-        start: holes === 18 ? "06:00" : "06:30",
-        end:   holes === 18 ? "10:00" : "11:00",
-        intervalMins: 10,
-        maxPlayers: 4,
-        pricePerPlayerCents: holes === 18 ? 2500 : 1800,
-        layout_key: ""
-      };
+  const w =
+    (cfg.windows || []).find(x => Number(x.holes) === holes) ||
+    {
+      holes,
+      start: holes === 18 ? "06:00" : "06:30",
+      end:   holes === 18 ? "10:00" : "11:00",
+      intervalMins: 10,
+      maxPlayers: 4,
+      pricePerPlayerCents: holes === 18 ? 2500 : 1800,
+      layout_key: ""
+    };
 
-    return `
-      <div class="field sm3" style="grid-column:span 3">
-        <label>${holes} holes start</label>
-        <input data-w="start" data-dow="${dow}" data-holes="${holes}" value="${_escape(w.start || "")}" placeholder="06:00" />
-      </div>
+  return `
+    <div class="field sm3" style="grid-column:span 3">
+      <label>${holes} holes start</label>
+      <input data-w="start" data-dow="${dow}" data-holes="${holes}" value="${_escape(w.start || "")}" placeholder="06:00" />
+    </div>
 
-      <div class="field sm3" style="grid-column:span 3">
-        <label>${holes} holes end</label>
-        <input data-w="end" data-dow="${dow}" data-holes="${holes}" value="${_escape(w.end || "")}" placeholder="10:00" />
-      </div>
+    <div class="field sm3" style="grid-column:span 3">
+      <label>${holes} holes end</label>
+      <input data-w="end" data-dow="${dow}" data-holes="${holes}" value="${_escape(w.end || "")}" placeholder="10:00" />
+    </div>
 
-      <div class="field sm3" style="grid-column:span 3">
-        <label>${holes} interval (mins)</label>
-        <input type="number" min="5" max="60"
-          data-w="intervalMins"
-          data-dow="${dow}"
-          data-holes="${holes}"
-          value="${Number(w.intervalMins || 10)}" />
-      </div>
+    <div class="field sm3" style="grid-column:span 3">
+      <label>${holes} interval (mins)</label>
+      <input type="number" min="5" max="60"
+        data-w="intervalMins"
+        data-dow="${dow}"
+        data-holes="${holes}"
+        value="${Number(w.intervalMins || 10)}" />
+    </div>
 
-      <div class="field sm3" style="grid-column:span 3">
-        <label>${holes} price / player ($)</label>
-        <input type="number" min="0" step="0.01"
-          data-w="priceDollars"
-          data-dow="${dow}"
-          data-holes="${holes}"
-          value="${(Number(w.pricePerPlayerCents||0)/100).toFixed(2)}" />
-      </div>
+    <div class="field sm3" style="grid-column:span 3">
+      <label>${holes} price / player ($)</label>
+      <input type="number" min="0" step="0.01"
+        data-w="priceDollars"
+        data-dow="${dow}"
+        data-holes="${holes}"
+        value="${(Number(w.pricePerPlayerCents||0)/100).toFixed(2)}" />
+    </div>
 
-      ${holes === 18 ? renderEighteenRoutingSelect(dow, w) : ""}
-${holes === 9 ? renderNineLayoutSelect(dow, w) : ""}
-    `;
-  }
+    ${
+      holes === 18
+        ? renderEighteenRoutingSelect(dow, w)
+        : renderNineLayoutSelect(dow, w)
+    }
+  `;
+}
 
   // -----------------------
   // Render template
