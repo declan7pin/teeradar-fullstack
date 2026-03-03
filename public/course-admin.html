@@ -1497,9 +1497,7 @@ function normalizeBookingLikeRow(b){
   if (hasCart) addonBits.push(`<span class="badge">Cart${cartQty > 0 ? " x" + cartQty : ""}</span>`);
   if (hasClubs) addonBits.push(`<span class="badge">Clubs${clubsQty > 0 ? " x" + clubsQty : ""}</span>`);
 
-  // =========================
-  // ✅ PRICE DISPLAY (NEW)
-  // =========================
+  // ✅ PRICE (this will now exist because groupBookingsToSheet stamps it onto each slot)
   const pricePerPlayerCents = Number(
     item.price_per_player_cents ??
     item.pricePerPlayerCents ??
@@ -1508,25 +1506,9 @@ function normalizeBookingLikeRow(b){
     0
   ) || 0;
 
-  const players = Math.max(
-    1,
-    Math.min(
-      4,
-      Number(item.players ?? item.num_players ?? item.player_count ?? 1) || 1
-    )
-  );
-
-  const totalCentsFallback = Number(item.total_cents ?? item.gross_cents ?? 0) || 0;
-
-  const money = (c) => `$${(Number(c || 0) / 100).toFixed(2)}`;
-
-  let priceHtml = "";
-  if (pricePerPlayerCents > 0) {
-    priceHtml = `<span style="width:100%"><span class="muted">Price:</span> <b>${money(pricePerPlayerCents)}</b> / player • <span class="muted">Total:</span> <b>${money(pricePerPlayerCents * players)}</b></span>`;
-  } else if (totalCentsFallback > 0) {
-    priceHtml = `<span style="width:100%"><span class="muted">Total:</span> <b>${money(totalCentsFallback)}</b></span>`;
-  }
-  // =========================
+  const priceHtml = pricePerPlayerCents > 0
+    ? `<span style="width:100%"><span class="muted">Price:</span> <b>$${(pricePerPlayerCents/100).toFixed(2)}</b> / player</span>`
+    : ``;
 
   return `
     <div class="slotBox">
@@ -1600,7 +1582,9 @@ function normalizeBookingLikeRow(b){
     </div>
   `;
 }
-  function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
+
+
+function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
   // ✅ normalize "06:10", "6:10", "06:10:00" -> "06:10"
   const normTime = (v) => {
     const s = String(v || "").trim();
@@ -1683,7 +1667,6 @@ function normalizeBookingLikeRow(b){
     const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
 
     const players = Math.max(1, Number(b.players || 1));
-
     for (let i = 0; i < players; i++) {
       if (!byKey.has(key)) byKey.set(key, []);
 
@@ -1720,6 +1703,15 @@ function normalizeBookingLikeRow(b){
 
     const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
 
+    // ✅ pull the tee time price (THIS is what was missing)
+    const timePricePerPlayerCents = Number(
+      t.price_per_player_cents ??
+      t.pricePerPlayerCents ??
+      t.price_cents ??
+      t.priceCents ??
+      0
+    ) || 0;
+
     const arr = (byKey.get(key) || []).slice(0, 4);
 
     const bookedCount = Number(
@@ -1744,18 +1736,32 @@ function normalizeBookingLikeRow(b){
         layout_key: layoutKey,
         front_nine_key: frontKey,
         back_nine_key: backKey,
+
+        // ✅ price on placeholders too
+        price_per_player_cents: timePricePerPlayerCents,
       });
     }
 
+    // ✅ STAMP PRICE ONTO EVERY SLOT ITEM (THIS is the key fix)
+    arr.forEach(x => {
+      if (!x || typeof x !== "object") return;
+      if (Number(x.price_per_player_cents ?? 0) <= 0) {
+        x.price_per_player_cents = timePricePerPlayerCents;
+      }
+    });
+
     const slots = [arr[0]||null, arr[1]||null, arr[2]||null, arr[3]||null];
 
-    // ✅ include routing/layout on the row so UI renders correctly without doing find(...)
     out.push({
       time,
       holes,
       layout_key: layoutKey,
       front_nine_key: frontKey,
       back_nine_key: backKey,
+
+      // ✅ optional: available at row level too
+      price_per_player_cents: timePricePerPlayerCents,
+
       slots
     });
   });
