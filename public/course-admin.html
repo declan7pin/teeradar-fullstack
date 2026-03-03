@@ -2229,6 +2229,7 @@ async function viewSheet(){
             booked_players: 0,
             status: "open",
 
+            // ✅ ensure price exists for manual rows too
             price_per_player_cents: ms.price_per_player_cents ?? ms.price_cents ?? ms.pricePerPlayerCents ?? 0,
 
             // ✅ preserve routing/layout keys so duplicates at same time can coexist correctly
@@ -2299,6 +2300,46 @@ async function viewSheet(){
       $("viewMsg").textContent = "✅ No tee times found (generate them in Booking Admin).";
       return;
     }
+
+    // ✅ FIX: priceByKey was never defined (Safari error)
+    // Build lookup: time + holes + routing/layout -> price_per_player_cents
+    const priceByKey = new Map();
+    (timesRows || []).forEach(r => {
+      const time = normTime(r.tee_time || r.time || "");
+      let holes = Number(r.holes ?? "");
+      if (!Number.isFinite(holes) || holes <= 0) holes = 18;
+
+      const lk = String(r.layout_key || r.layoutKey || "").trim().toLowerCase();
+      const f  = String(r.front_nine_key || r.front9_key || r.front9Key || "").trim().toLowerCase();
+      const b  = String(r.back_nine_key  || r.back9_key  || r.back9Key  || "").trim().toLowerCase();
+
+      const price = Number(
+        r.price_per_player_cents ??
+        r.pricePerPlayerCents ??
+        r.price_cents ??
+        r.priceCents ??
+        0
+      ) || 0;
+
+      const key =
+        holes === 9
+          ? `${time}__9__lk:${lk || ""}`
+          : holes === 18
+            ? `${time}__18__f:${f || ""}__b:${b || ""}`
+            : `${time}__${holes}`;
+
+      if (!priceByKey.has(key) || price > 0) priceByKey.set(key, price);
+
+      // ✅ fallback keys for when routing/layout keys are blank
+      if (holes === 9) {
+        const k2 = `${time}__9__lk:`;
+        if (!priceByKey.has(k2) || price > 0) priceByKey.set(k2, price);
+      }
+      if (holes === 18) {
+        const k2 = `${time}__18__f:__b:`;
+        if (!priceByKey.has(k2) || price > 0) priceByKey.set(k2, price);
+      }
+    });
 
     const sheet = groupBookingsToSheet(timesRows, bookingsRows, manualRows);
 
@@ -2451,6 +2492,11 @@ async function viewSheet(){
         }
       };
     });
+
+  }catch(e){
+    $("viewMsg").textContent = "❌ " + (e?.message || "Failed to load daily sheet");
+  }
+}
 
     // =========================================================
     // ✅ FIX: these MUST be inside viewSheet() because tb exists here
