@@ -1425,23 +1425,23 @@ function normalizeBookingLikeRow(b){
 }
   function buildSlotCell(item, slotIndex){
   if (!item){
-  return `
-    <div class="slotBox">
-      <div class="slotEmpty">—</div>
-      <div style="margin-top:8px;">
-        <button
-          type="button"
-          class="secondary"
-          style="font-size:12px;padding:8px 10px;border-radius:10px;"
-          data-addbooking="1"
-          data-slot="${slotIndex}"
-        >
-          Add booking
-        </button>
+    return `
+      <div class="slotBox">
+        <div class="slotEmpty">—</div>
+        <div style="margin-top:8px;">
+          <button
+            type="button"
+            class="secondary"
+            style="font-size:12px;padding:8px 10px;border-radius:10px;"
+            data-addbooking="1"
+            data-slot="${slotIndex}"
+          >
+            Add booking
+          </button>
+        </div>
       </div>
-    </div>
-  `;
-}
+    `;
+  }
 
   const name = _escape(item.name || "");
   const email = _escape(item.email || "");
@@ -1449,30 +1449,31 @@ function normalizeBookingLikeRow(b){
 
   // ✅ RAW ref for API calls / selectors, escaped only for display
   const refRaw = String(
-  item.reference ??
-  item.ref ??
-  item.booking_reference ??
-  item.bookingReference ??
-  item.booking_ref ??
-  item.reference_code ??
-  item.referenceCode ??
-  item.code ??
-  item.confirmation ??
-  item.confirmation_code ??
-  item.confirmationCode ??
-  ""
-).trim();
+    item.reference ??
+    item.ref ??
+    item.booking_reference ??
+    item.bookingReference ??
+    item.booking_ref ??
+    item.reference_code ??
+    item.referenceCode ??
+    item.code ??
+    item.confirmation ??
+    item.confirmation_code ??
+    item.confirmationCode ??
+    ""
+  ).trim();
 
   const refDisp = _escape(refRaw);
-const isManualRef = /^MAN-/.test(refRaw);
-    // ✅ supports per-slot flags if backend returns them later (fallback to old fields)
+  const isManualRef = /^MAN-/.test(refRaw);
+
+  // ✅ supports per-slot flags if backend returns them later (fallback to old fields)
   const paid =
     !!(item.paid_slot ?? item.paidSlot ?? (Array.isArray(item.paid_slots) ? item.paid_slots[slotIndex-1] : null) ?? item.paid);
 
   const checkedIn =
     !!(item.checked_in_slot ?? item.checkedInSlot ?? (Array.isArray(item.checked_in_slots) ? item.checked_in_slots[slotIndex-1] : null) ?? item.checked_in);
 
-    // ✅ qty-first (supports manual holds + bookings)
+  // ✅ qty-first (supports manual holds + bookings)
   const cartQty = Number(item.cart_qty ?? item.cartQty ?? 0) || 0;
   const clubsQty = Number(item.hire_clubs_qty ?? item.hireClubsQty ?? 0) || 0;
 
@@ -1480,20 +1481,52 @@ const isManualRef = /^MAN-/.test(refRaw);
   const hasCart = !!(item.has_cart || item.hasCart || cartQty > 0);
   const hasClubs = !!(item.has_hire_clubs || item.hasHireClubs || clubsQty > 0);
   const notes = _escape(item.notes || "");
-    const key = refRaw || `empty_${slotIndex}`;
+
+  const key = refRaw || `empty_${slotIndex}`;
   const slotKey = `${key}__slot${slotIndex}`; // ✅ unique per slot for selectors
 
   const paidId = `paid_${key}_${slotIndex}`;
   const checkinId = `checkin_${key}_${slotIndex}`;
 
-    const badge =
+  const badge =
     paid
       ? `<span class="badge ok" data-badge="${_escape(slotKey)}">PAID</span>`
       : `<span class="badge warn" data-badge="${_escape(slotKey)}">UNPAID</span>`;
 
-    const addonBits = [];
-    if (hasCart) addonBits.push(`<span class="badge">Cart${cartQty > 0 ? " x" + cartQty : ""}</span>`);
-    if (hasClubs) addonBits.push(`<span class="badge">Clubs${clubsQty > 0 ? " x" + clubsQty : ""}</span>`);
+  const addonBits = [];
+  if (hasCart) addonBits.push(`<span class="badge">Cart${cartQty > 0 ? " x" + cartQty : ""}</span>`);
+  if (hasClubs) addonBits.push(`<span class="badge">Clubs${clubsQty > 0 ? " x" + clubsQty : ""}</span>`);
+
+  // =========================
+  // ✅ PRICE DISPLAY (NEW)
+  // =========================
+  const pricePerPlayerCents = Number(
+    item.price_per_player_cents ??
+    item.pricePerPlayerCents ??
+    item.price_cents ??
+    item.priceCents ??
+    0
+  ) || 0;
+
+  const players = Math.max(
+    1,
+    Math.min(
+      4,
+      Number(item.players ?? item.num_players ?? item.player_count ?? 1) || 1
+    )
+  );
+
+  const totalCentsFallback = Number(item.total_cents ?? item.gross_cents ?? 0) || 0;
+
+  const money = (c) => `$${(Number(c || 0) / 100).toFixed(2)}`;
+
+  let priceHtml = "";
+  if (pricePerPlayerCents > 0) {
+    priceHtml = `<span style="width:100%"><span class="muted">Price:</span> <b>${money(pricePerPlayerCents)}</b> / player • <span class="muted">Total:</span> <b>${money(pricePerPlayerCents * players)}</b></span>`;
+  } else if (totalCentsFallback > 0) {
+    priceHtml = `<span style="width:100%"><span class="muted">Total:</span> <b>${money(totalCentsFallback)}</b></span>`;
+  }
+  // =========================
 
   return `
     <div class="slotBox">
@@ -1506,67 +1539,67 @@ const isManualRef = /^MAN-/.test(refRaw);
         ${email ? `<span>${email}</span>` : ""}
         ${phone ? `<span>${phone}</span>` : ""}
         ${refRaw ? `<span><code>${refDisp}</code></span>` : ""}
+        ${priceHtml}
         ${addonBits.length ? `<span style="display:flex;gap:6px;flex-wrap:wrap">${addonBits.join("")}</span>` : ""}
-                ${notes ? `<span style="width:100%"><span class="muted">Notes:</span> ${notes}</span>` : ""}
+        ${notes ? `<span style="width:100%"><span class="muted">Notes:</span> ${notes}</span>` : ""}
       </div>
 
-            <div style="margin-top:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <div style="margin-top:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
         <label class="paidWrap" for="${paidId}">
           <input
-  id="${paidId}"
-  type="checkbox"
-  data-ref="${_escape(refRaw)}"
-  data-kind="paid"
-  data-slot="${slotIndex}"
-  data-slotkey="${_escape(slotKey)}"
-  ${paid ? "checked" : ""}
-  ${refRaw ? "" : 'disabled title="No reference on this slot"'}
-/>
+            id="${paidId}"
+            type="checkbox"
+            data-ref="${_escape(refRaw)}"
+            data-kind="paid"
+            data-slot="${slotIndex}"
+            data-slotkey="${_escape(slotKey)}"
+            ${paid ? "checked" : ""}
+            ${refRaw ? "" : 'disabled title="No reference on this slot"'}
+          />
           Paid
         </label>
 
         <label class="paidWrap" for="${checkinId}">
           <input
-  id="${checkinId}"
-  type="checkbox"
-  data-ref="${_escape(refRaw)}"
-  data-kind="checkin"
-  data-slot="${slotIndex}"
-  data-slotkey="${_escape(slotKey)}"
-  ${checkedIn ? "checked" : ""}
-  ${refRaw ? "" : 'disabled title="No reference on this slot"'}
-/>
+            id="${checkinId}"
+            type="checkbox"
+            data-ref="${_escape(refRaw)}"
+            data-kind="checkin"
+            data-slot="${slotIndex}"
+            data-slotkey="${_escape(slotKey)}"
+            ${checkedIn ? "checked" : ""}
+            ${refRaw ? "" : 'disabled title="No reference on this slot"'}
+          />
           Checked in
         </label>
 
         <div class="mini muted" data-msg="${_escape(slotKey)}"></div>
       </div>
 
-            ${isManualRef ? `
-      <div class="actions" style="margin-top:10px">
-        <button
-          type="button"
-          class="secondary"
-          style="font-size:12px;padding:8px 10px;border-radius:10px;"
-          data-edit-slot="1"
-          data-ref="${_escape(refRaw)}"
-          data-slot="${slotIndex}"
-        >Edit</button>
+      ${isManualRef ? `
+        <div class="actions" style="margin-top:10px">
+          <button
+            type="button"
+            class="secondary"
+            style="font-size:12px;padding:8px 10px;border-radius:10px;"
+            data-edit-slot="1"
+            data-ref="${_escape(refRaw)}"
+            data-slot="${slotIndex}"
+          >Edit</button>
 
-        <button
-          type="button"
-          class="secondary"
-          style="font-size:12px;padding:8px 10px;border-radius:10px;background:#b91c1c"
-          data-del-slot="1"
-          data-ref="${_escape(refRaw)}"
-          data-slot="${slotIndex}"
-        >Delete</button>
-      </div>
+          <button
+            type="button"
+            class="secondary"
+            style="font-size:12px;padding:8px 10px;border-radius:10px;background:#b91c1c"
+            data-del-slot="1"
+            data-ref="${_escape(refRaw)}"
+            data-slot="${slotIndex}"
+          >Delete</button>
+        </div>
       ` : ``}
     </div>
   `;
 }
-
   function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
   // ✅ normalize "06:10", "6:10", "06:10:00" -> "06:10"
   const normTime = (v) => {
