@@ -2188,6 +2188,7 @@ rows = filterShadowedGeneric18(rows);
 async function viewSheet(){
   clearView();
   $("viewMsg").textContent = "Loading daily sheet...";
+
   try{
     const date = ($("date").value || "").trim();
     if (!date) throw new Error("play_date_required");
@@ -2203,7 +2204,6 @@ async function viewSheet(){
     timesRows = filterShadowedGeneric18(timesRows);
 
     // ✅ Merge manual tee times into daily sheet
-    // (important so manually-held times still show as rows even if not generated in times table)
     try{
       const manualOut = await j(
         "/api/book/course-admin/manual-slots?date=" + encodeURIComponent(date) + "&slug=" + encodeURIComponent(slug),
@@ -2215,7 +2215,6 @@ async function viewSheet(){
 
       if (Array.isArray(manualRowsMerged) && manualRowsMerged.length) {
         manualRowsMerged.forEach(ms => {
-          // normalize holes
           let holesN = Number(ms.holes ?? "");
           if (!Number.isFinite(holesN) || holesN <= 0) holesN = 18;
 
@@ -2224,22 +2223,20 @@ async function viewSheet(){
             tee_time: ms.tee_time ?? ms.time ?? "",
             holes: holesN,
 
-            // sensible defaults for sheet rendering
             max_players: Number(ms.max_players ?? ms.maxPlayers ?? 4) || 4,
             booked_players: 0,
             status: "open",
 
-            // ✅ ensure price exists for manual rows too
+            // ✅ keep price so daily sheet can display it
             price_per_player_cents: ms.price_per_player_cents ?? ms.price_cents ?? ms.pricePerPlayerCents ?? 0,
 
-            // ✅ preserve routing/layout keys so duplicates at same time can coexist correctly
             layout_key: ms.layout_key ?? ms.layoutKey ?? "",
             front_nine_key: ms.front_nine_key ?? ms.front9_key ?? ms.front9Key ?? "",
             back_nine_key: ms.back_nine_key ?? ms.back9_key ?? ms.back9Key ?? ""
           });
         });
 
-        // ✅ de-dupe by time + holes + routing/layout keys (so 2 x 06:10 (18) can exist if routing differs)
+        // ✅ de-dupe by time + holes + routing/layout keys
         const seen = new Set();
         const deduped = [];
 
@@ -2273,7 +2270,7 @@ async function viewSheet(){
         timesRows = filterShadowedGeneric18(timesRows);
       }
     }catch(e){
-      // ignore if manual endpoint missing; daily sheet will still work from normal times
+      // ignore if manual endpoint missing
     }
 
     const bookingsOut = await j(
@@ -2293,7 +2290,7 @@ async function viewSheet(){
       manualRows = manualOut.manualSlots || manualOut.manual_slots || manualOut.slots || manualOut.rows || [];
       if (!Array.isArray(manualRows)) manualRows = [];
     }catch(e){
-      manualRows = []; // endpoint not available? sheet still works
+      manualRows = [];
     }
 
     if (!Array.isArray(timesRows) || !timesRows.length){
@@ -2301,8 +2298,7 @@ async function viewSheet(){
       return;
     }
 
-    // ✅ FIX: priceByKey was never defined (Safari error)
-    // Build lookup: time + holes + routing/layout -> price_per_player_cents
+    // ✅ Build price lookup so "Add booking" can pre-fill the correct price
     const priceByKey = new Map();
     (timesRows || []).forEach(r => {
       const time = normTime(r.tee_time || r.time || "");
@@ -2330,7 +2326,7 @@ async function viewSheet(){
 
       if (!priceByKey.has(key) || price > 0) priceByKey.set(key, price);
 
-      // ✅ fallback keys for when routing/layout keys are blank
+      // fallback keys when routing/layout empty
       if (holes === 9) {
         const k2 = `${time}__9__lk:`;
         if (!priceByKey.has(k2) || price > 0) priceByKey.set(k2, price);
@@ -2352,8 +2348,7 @@ async function viewSheet(){
     sheet.forEach(row => {
       const tr = document.createElement("tr");
 
-      // ✅ attach routing/layout to the row (so Add booking knows which exact slot)
-      tr.dataset.time = String(row.time || "").trim(); // "HH:MM"
+      tr.dataset.time = String(row.time || "").trim();
       tr.dataset.holes = String(row.holes || "");
       tr.dataset.layoutKey = String(row.layout_key || "");
       tr.dataset.frontKey = String(row.front_nine_key || "");
@@ -2372,7 +2367,7 @@ async function viewSheet(){
       tb.appendChild(tr);
     });
 
-    // ✅ Allow creating a booking from an empty slot (Add booking buttons)
+    // ✅ Add booking buttons
     tb.querySelectorAll('button[data-addbooking]').forEach(btn => {
       btn.onclick = async () => {
         try{
@@ -2383,7 +2378,6 @@ async function viewSheet(){
 
           const slug = getSlug();
 
-          // Find the row time/holes by walking up to the <tr>
           const tr = btn.closest("tr");
           if (!tr) throw new Error("row_not_found");
 
@@ -2396,7 +2390,6 @@ async function viewSheet(){
 
           if (!teeTime) throw new Error("tee_time_missing");
 
-          // ✅ routing-aware price key
           const priceKey =
             holes === 9
               ? `${normTime(teeTime)}__9__lk:${String(layoutKey||"").trim().toLowerCase()}`
@@ -2406,7 +2399,6 @@ async function viewSheet(){
 
           const pricePerPlayerCents = Number(priceByKey.get(priceKey) || 0);
 
-          // ✅ Ask for details
           const name = (prompt("Name:", "") || "").trim();
           if (!name) return;
 
@@ -2423,29 +2415,6 @@ async function viewSheet(){
 
           const playersRaw = prompt("Players (1-4):", "1") || "1";
           const players = Math.max(1, Math.min(4, Number(playersRaw || 1)));
-
-          // ✅ DEBUG: shows the exact path + payload we’re about to send
-          try{
-            window.dbg && dbg("ADD_BOOKING payload", {
-              slug,
-              endpoint: "/api/book/course-admin/booking",
-              date,
-              teeTime,
-              holes,
-              layoutKey,
-              frontNineKey,
-              backNineKey,
-              priceKey,
-              pricePerPlayerCents,
-              players,
-              name,
-              email,
-              phone,
-              cartQty,
-              hireClubsQty,
-              notes
-            }, "warn");
-          }catch{}
 
           await j("/api/book/course-admin/booking?slug=" + encodeURIComponent(slug), {
             method:"POST",
@@ -2486,23 +2455,14 @@ async function viewSheet(){
           });
 
           $("viewMsg").textContent = "✅ Booking added";
-          await viewSheet(); // refresh
+          await viewSheet();
         }catch(e){
           $("viewMsg").textContent = "❌ " + (e?.message || "Failed to add booking");
         }
       };
     });
 
-  }catch(e){
-    $("viewMsg").textContent = "❌ " + (e?.message || "Failed to load daily sheet");
-  }
-}
-
-    // =========================================================
-    // ✅ FIX: these MUST be inside viewSheet() because tb exists here
-    // =========================================================
-
-    // ✅ Delete manual slot
+    // ✅ Delete manual slot (MAN- only)
     tb.querySelectorAll('button[data-del-slot]').forEach(btn => {
       btn.onclick = async (ev) => {
         ev.preventDefault();
@@ -2510,6 +2470,7 @@ async function viewSheet(){
 
         try{
           await getMe();
+
           const ref = String(btn.getAttribute("data-ref") || "");
           if (!/^MAN-/.test(ref)) {
             $("viewMsg").textContent = "❌ Only MAN- bookings can be edited/deleted here (TR- are online bookings).";
@@ -2522,14 +2483,8 @@ async function viewSheet(){
           const tr = btn.closest("tr");
           if (!tr) throw new Error("row_not_found");
 
-          const timeCell = tr.querySelector(".sheetTime");
-          const timeText = (timeCell?.innerText || "").trim();
-
-          const timeMatch = timeText.match(/^(\d{1,2}:\d{2})/);
-          const holesMatch = timeText.match(/\((\d+)\s*holes\)/i);
-
-          const teeTime = timeMatch ? timeMatch[1] : "";
-          const holes = holesMatch ? Number(holesMatch[1]) : 18;
+          const teeTime = String(tr.dataset.time || "").trim();
+          const holes = Number(tr.dataset.holes || 18);
 
           const slotIndex = Number(btn.getAttribute("data-slot") || 0);
           if (!teeTime || !slotIndex) throw new Error("missing_time_or_slot");
@@ -2556,7 +2511,7 @@ async function viewSheet(){
       };
     });
 
-    // ✅ Edit manual slot
+    // ✅ Edit manual slot (MAN- only)
     tb.querySelectorAll('button[data-edit-slot]').forEach(btn => {
       btn.onclick = async (ev) => {
         ev.preventDefault();
@@ -2577,14 +2532,8 @@ async function viewSheet(){
           const tr = btn.closest("tr");
           if (!tr) throw new Error("row_not_found");
 
-          const timeCell = tr.querySelector(".sheetTime");
-          const timeText = (timeCell?.innerText || "").trim();
-
-          const timeMatch = timeText.match(/^(\d{1,2}:\d{2})/);
-          const holesMatch = timeText.match(/\((\d+)\s*holes\)/i);
-
-          const teeTime = timeMatch ? timeMatch[1] : "";
-          const holes = holesMatch ? Number(holesMatch[1]) : 18;
+          const teeTime = String(tr.dataset.time || "").trim();
+          const holes = Number(tr.dataset.holes || 18);
 
           const slotIndex = Number(btn.getAttribute("data-slot") || 0);
           if (!teeTime || !slotIndex) throw new Error("missing_time_or_slot");
@@ -2603,8 +2552,8 @@ async function viewSheet(){
             body: JSON.stringify({
               reference: ref,
               date,
-              time: teeTime,     // ✅ keep
-              teeTime,
+              time: teeTime,     // ✅ backend expects this
+              teeTime,           // ✅ keep for compatibility
               holes,
               slotIndex,
               name,
@@ -2631,13 +2580,12 @@ async function viewSheet(){
         const kind = cb.getAttribute("data-kind") || "";
         const val = cb.checked;
 
-        const slot = Number(cb.getAttribute("data-slot") || 0);        // ✅ which slot (1–4)
-        const slotKey = cb.getAttribute("data-slotkey") || "";         // ✅ unique UI key
+        const slot = Number(cb.getAttribute("data-slot") || 0);
+        const slotKey = cb.getAttribute("data-slotkey") || "";
 
         const msgEl = tb.querySelector(`[data-msg="${CSS.escape(slotKey)}"]`);
         if (msgEl) msgEl.textContent = "Saving...";
 
-        // ✅ If reference is missing (common for manual holds), allow entering it so Paid/Check-in can work.
         let refToUse = ref;
 
         if (!refToUse) {
@@ -2648,11 +2596,8 @@ async function viewSheet(){
             return;
           }
           refToUse = entered;
-
-          // ✅ persist on the checkbox so future toggles don’t prompt again
           cb.setAttribute("data-ref", refToUse);
 
-          // ✅ also show it in the UI (if the slot has a code element)
           try{
             const slotBox = cb.closest(".slotBox");
             if (slotBox && !slotBox.querySelector("code")) {
@@ -2666,10 +2611,9 @@ async function viewSheet(){
           if (kind === "paid") {
             await j("/api/book/course-admin/booking-paid", {
               method:"POST",
-              body: JSON.stringify({ reference: refToUse, slot, paid: val }) // ✅ slot added
+              body: JSON.stringify({ reference: refToUse, slot, paid: val })
             });
 
-            // ✅ update the correct badge (per slot)
             const badgeEl = tb.querySelector(`[data-badge="${CSS.escape(slotKey)}"]`);
             if (badgeEl) {
               badgeEl.textContent = val ? "PAID" : "UNPAID";
@@ -2681,14 +2625,14 @@ async function viewSheet(){
           if (kind === "checkin") {
             await j("/api/book/course-admin/booking-checkin", {
               method:"POST",
-              body: JSON.stringify({ reference: refToUse, slot, checked_in: val }) // ✅ slot added
+              body: JSON.stringify({ reference: refToUse, slot, checked_in: val })
             });
           }
 
           if (msgEl) msgEl.textContent = "✅ saved";
         }catch(e){
           cb.checked = !cb.checked;
-          if (msgEl) msgEl.textContent = "❌ " + e.message;
+          if (msgEl) msgEl.textContent = "❌ " + (e?.message || "save_failed");
         }
       };
     });
