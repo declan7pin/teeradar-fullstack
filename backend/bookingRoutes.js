@@ -5808,14 +5808,15 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     };
 
     // routing keys (may be missing from frontend — we’ll derive from timeId if present)
-    let layout_key =
-      normKey(req.body?.layout_key || req.body?.layoutKey || null);
+    let layout_key = normKey(req.body?.layout_key || req.body?.layoutKey || null);
 
-    let front_nine_key =
-      normKey(req.body?.front_nine_key || req.body?.front9_key || req.body?.front9Key || null);
+    let front_nine_key = normKey(
+      req.body?.front_nine_key || req.body?.front9_key || req.body?.front9Key || null
+    );
 
-    let back_nine_key =
-      normKey(req.body?.back_nine_key || req.body?.back9_key || req.body?.back9Key || null);
+    let back_nine_key = normKey(
+      req.body?.back_nine_key || req.body?.back9_key || req.body?.back9Key || null
+    );
 
     // players count
     const playersRaw = Number(req.body?.players || req.body?.numPlayers || 1);
@@ -5833,13 +5834,12 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     const addonIds = Array.isArray(addonIdsRaw)
       ? addonIdsRaw
       : typeof addonIdsRaw === "string"
-      ? addonIdsRaw.split(",").map(s => s.trim()).filter(Boolean)
+      ? addonIdsRaw.split(",").map((s) => s.trim()).filter(Boolean)
       : [];
 
     const picked = new Set(addonIds);
 
-    const has_cart =
-      picked.size > 0 ? picked.has("cart") : parseBool(req.body?.has_cart, false);
+    const has_cart = picked.size > 0 ? picked.has("cart") : parseBool(req.body?.has_cart, false);
 
     const has_hire_clubs =
       picked.size > 0 ? picked.has("hire_clubs") : parseBool(req.body?.has_hire_clubs, false);
@@ -5873,8 +5873,10 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
 
     // validation
     if (!playDate) return res.status(400).json({ ok: false, error: "date_required" });
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(playDate)) return res.status(400).json({ ok: false, error: "date_invalid" });
-    if (!/^\d{2}:\d{2}$/.test(tee_time_raw)) return res.status(400).json({ ok: false, error: "time_invalid" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(playDate))
+      return res.status(400).json({ ok: false, error: "date_invalid" });
+    if (!/^\d{2}:\d{2}$/.test(tee_time_raw))
+      return res.status(400).json({ ok: false, error: "time_invalid" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
     if (!name) return res.status(400).json({ ok: false, error: "name_required" });
     if (email && !isLikelyEmail(email)) return res.status(400).json({ ok: false, error: "email_invalid" });
@@ -5883,8 +5885,6 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
     // ✅ NEW: if UI did NOT pass timeId, try to derive from booking_times by (date+time+holes)
-    // This fixes cases where the UI sends tee_time but not routing keys (or sends inconsistent ones),
-    // and avoids later "it becomes available" / mismatch behaviour.
     let tee_time = tee_time_raw;
     if (!timeId) {
       const tr2 = await db.query(
@@ -5949,7 +5949,8 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
 
       const row = tr.rows?.[0] || null;
       if (!row?.id) return res.status(400).json({ ok: false, error: "time_not_found" });
-      if (Number(row.holes) !== Number(holes)) return res.status(400).json({ ok: false, error: "holes_mismatch" });
+      if (Number(row.holes) !== Number(holes))
+        return res.status(400).json({ ok: false, error: "holes_mismatch" });
 
       tee_time = String(row.tee_time_clean || tee_time_raw).trim();
 
@@ -6041,7 +6042,9 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
 
     // ⛔ lock includes layout identity (good)
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
-      `manualslots:${courseId}:${playDate}:${tee_time}:${holes}:${layout_key || ""}:${front_nine_key || ""}:${back_nine_key || ""}`,
+      `manualslots:${courseId}:${playDate}:${tee_time}:${holes}:${layout_key || ""}:${front_nine_key || ""}:${
+        back_nine_key || ""
+      }`,
     ]);
 
     // 🔍 find taken slots INSIDE this layout’s 4-slot bucket
@@ -6056,8 +6059,8 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       [courseId, playDate, tee_time, holes, base + 1, base + 4]
     );
 
-    const takenSetDb = new Set((taken.rows || []).map(r => Number(r.slot_index)));
-    const freeSlots = [1,2,3,4].filter(i => !takenSetDb.has(toDbSlotIndex(i)));
+    const takenSetDb = new Set((taken.rows || []).map((r) => Number(r.slot_index)));
+    const freeSlots = [1, 2, 3, 4].filter((i) => !takenSetDb.has(toDbSlotIndex(i)));
 
     console.log("🟩 course-admin/booking slot scan", {
       courseId,
@@ -6113,16 +6116,27 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
         RETURNING *;
         `,
         [
-          courseId, playDate, tee_time, holes, slot_index,
-          layout_key, front_nine_key, back_nine_key,
-          reference, name, email || null, phone || null,
-          paid, checked_in,
+          courseId,
+          playDate,
+          tee_time,
+          holes,
+          slot_index,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+          reference,
+          name,
+          email || null,
+          phone || null,
+          paid,
+          checked_in,
           isFirst && cart_qty > 0,
           isFirst && hire_clubs_qty > 0,
           isFirst ? cart_qty : 0,
           isFirst ? hire_clubs_qty : 0,
           notes || null,
-          startAtIso, endAtIso,
+          startAtIso,
+          endAtIso,
         ]
       );
 
@@ -6166,22 +6180,35 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
 
     console.log("✅ course-admin/booking sync result", sync);
 
-    // ✅ NEW: send confirmation email when course admin creates a manual booking (if email provided)
+    // ============================================================
+    // ✅ NEW PRICING RULE (your request):
+    // green fee per player + (cart + clubs total) / players
+    // Applied to MANUAL bookings (and you should mirror this in ONLINE booking route too)
+    // ============================================================
+    let computed = {
+      greenPricePerPlayerCents: 0,
+      cartFeeCents: 0,
+      clubsFeeCents: 0,
+      cartCents: 0,
+      hireClubsCents: 0,
+      grossCents: 0,
+      perPlayerOwedCents: 0,
+    };
+
     try {
-      if (email && isLikelyEmail(email)) {
-        const courseInfo = await db.query(
-          `SELECT name, cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
-          [courseId]
-        );
-        const courseName = String(courseInfo.rows[0]?.name || slug);
+      const courseInfo = await db.query(
+        `SELECT name, cart_fee_cents, hire_clubs_fee_cents FROM booking_courses WHERE id=$1 LIMIT 1;`,
+        [courseId]
+      );
 
-        const cartFee = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
-        const clubsFee = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
+      const cartFeeCents = Number(courseInfo.rows[0]?.cart_fee_cents || 0);
+      const clubsFeeCents = Number(courseInfo.rows[0]?.hire_clubs_fee_cents || 0);
 
-        const cartCents = cart_qty > 0 ? cartFee * cart_qty : 0;
-        const hireClubsCents = hire_clubs_qty > 0 ? clubsFee * hire_clubs_qty : 0;
+      const cartCents = cart_qty > 0 ? cartFeeCents * cart_qty : 0;
+      const hireClubsCents = hire_clubs_qty > 0 ? clubsFeeCents * hire_clubs_qty : 0;
 
-        const pricePerPlayerCents = await getTeePricePerPlayerCents({
+      const greenPricePerPlayerCents = Number(
+        (await getTeePricePerPlayerCents({
           courseId,
           playDate: playDate,
           teeTime: tee_time,
@@ -6189,8 +6216,37 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
           layout_key,
           front_nine_key,
           back_nine_key,
-        });
+        })) || 0
+      );
 
+      const grossCents = greenPricePerPlayerCents * players + cartCents + hireClubsCents;
+      const perPlayerOwedCents = Math.round(grossCents / Math.max(1, players));
+
+      computed = {
+        greenPricePerPlayerCents,
+        cartFeeCents,
+        clubsFeeCents,
+        cartCents,
+        hireClubsCents,
+        grossCents,
+        perPlayerOwedCents,
+      };
+    } catch (e) {
+      console.warn("course-admin/booking pricing compute failed (non-fatal):", e?.message || e);
+    }
+
+    // ✅ NEW: send confirmation email when course admin creates a manual booking (if email provided)
+    try {
+      if (email && isLikelyEmail(email)) {
+        const courseInfo = await db.query(
+          `SELECT name FROM booking_courses WHERE id=$1 LIMIT 1;`,
+          [courseId]
+        );
+        const courseName = String(courseInfo.rows[0]?.name || slug);
+
+        // IMPORTANT:
+        // - pricePerPlayerCents should be the "owed per player" (includes add-ons spread)
+        // - totalCents should be the full gross booking total
         await sendBookingEmail({
           to: email,
           courseName,
@@ -6199,10 +6255,10 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
           holes,
           players,
           reference,
-          pricePerPlayerCents: pricePerPlayerCents || 0,
-          totalCents: (pricePerPlayerCents || 0) * players,
-          cartCents,
-          hireClubsCents,
+          pricePerPlayerCents: computed.perPlayerOwedCents || 0,
+          totalCents: computed.grossCents || 0,
+          cartCents: computed.cartCents || 0,
+          hireClubsCents: computed.hireClubsCents || 0,
           source: "manual",
         });
       }
@@ -6210,14 +6266,39 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
       console.warn("course-admin/booking email failed (non-fatal):", e?.message || e);
     }
 
-    return res.json({ ok: true, reference, rows: filled, sync });
+    // ✅ Return rows + computed pricing so UI can show "owed per player" immediately
+    const rowsWithPricing = (filled || []).map((r, idx) => ({
+      ...r,
+      players,
+      // base tee price per player (green fee only)
+      green_price_per_player_cents: computed.greenPricePerPlayerCents || 0,
+      // owed per player including add-ons spread across players
+      price_per_player_cents: computed.perPlayerOwedCents || 0,
+      // totals
+      cart_cents: computed.cartCents || 0,
+      hire_clubs_cents: computed.hireClubsCents || 0,
+      gross_cents: computed.grossCents || 0,
+      // keep add-ons only on first slot (matches how you store them)
+      _addons_on_slot_1_only: idx === 0,
+    }));
 
+    return res.json({
+      ok: true,
+      reference,
+      rows: rowsWithPricing,
+      pricing: computed,
+      sync,
+    });
   } catch (e) {
     console.error("course-admin/booking POST", e);
-    try { if (client && didBegin) await client.query("ROLLBACK"); } catch {}
+    try {
+      if (client && didBegin) await client.query("ROLLBACK");
+    } catch {}
     return res.status(500).json({ ok: false, error: "internal_error" });
   } finally {
-    try { if (client) client.release(); } catch {}
+    try {
+      if (client) client.release();
+    } catch {}
   }
 });
 
