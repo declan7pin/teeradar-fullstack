@@ -1086,6 +1086,7 @@ async function recordBookingEvent(req, { courseSlug, eventType, payload = {} }) 
 }
 
 // ✅ Send booking email via Resend (safe)
+// ✅ UPDATED: "Owes per player" includes add-ons spread across players
 async function sendBookingEmail({
   to,
   courseName,
@@ -1119,25 +1120,38 @@ async function sendBookingEmail({
     return result;
   }
 
+  const p = Math.max(1, Number(players || 1));
+  const basePpp = Number(pricePerPlayerCents || 0);
+  const cart = Number(cartCents || 0);
+  const clubs = Number(hireClubsCents || 0);
+  const addonsTotal = cart + clubs;
+
   const subject =
     source === "manual"
       ? `TeeRadar manual booking confirmed — ${reference}`
       : `TeeRadar booking confirmed — ${reference}`;
 
   const cartLine =
-    Number(cartCents || 0) > 0
-      ? `<tr><td style="padding:6px 0;color:#64748b">Cart</td><td style="padding:6px 0">${fmtMoney(cartCents || 0)}</td></tr>`
+    cart > 0
+      ? `<tr><td style="padding:6px 0;color:#64748b">Cart</td><td style="padding:6px 0">${fmtMoney(cart)}</td></tr>`
       : "";
 
   const hireClubsLine =
-    Number(hireClubsCents || 0) > 0
-      ? `<tr><td style="padding:6px 0;color:#64748b">Hire clubs</td><td style="padding:6px 0">${fmtMoney(hireClubsCents || 0)}</td></tr>`
+    clubs > 0
+      ? `<tr><td style="padding:6px 0;color:#64748b">Hire clubs</td><td style="padding:6px 0">${fmtMoney(clubs)}</td></tr>`
       : "";
 
   // ✅ IMPORTANT:
-  // totalCents ALREADY includes add-ons in your booking flow.
-  // Do NOT add cart/hire again here.
-  const totalAll = Number(totalCents || 0);
+  // totalCents should already include add-ons in your booking flow.
+  // But we also safely fall back if some caller forgot.
+  const baseTotal = basePpp * p;
+  const totalAll =
+    Number.isFinite(Number(totalCents)) && Number(totalCents) > 0
+      ? Number(totalCents)
+      : (baseTotal + addonsTotal);
+
+  // ✅ NEW: split total across players (includes add-ons)
+  const owesPerPlayerCents = Math.round(totalAll / p);
 
   const badge =
     source === "manual"
@@ -1154,11 +1168,24 @@ async function sendBookingEmail({
         <tr><td style="padding:6px 0;color:#64748b">Course</td><td style="padding:6px 0"><b>${courseName}</b></td></tr>
         <tr><td style="padding:6px 0;color:#64748b">Date</td><td style="padding:6px 0">${date}</td></tr>
         <tr><td style="padding:6px 0;color:#64748b">Time</td><td style="padding:6px 0">${time}</td></tr>
-        <tr><td style="padding:6px 0;color:#64748b">Players</td><td style="padding:6px 0">${players}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Players</td><td style="padding:6px 0">${p}</td></tr>
         <tr><td style="padding:6px 0;color:#64748b">Holes</td><td style="padding:6px 0">${holes}</td></tr>
-        <tr><td style="padding:6px 0;color:#64748b">Price</td><td style="padding:6px 0">${fmtMoney(pricePerPlayerCents || 0)} per player</td></tr>
+
+        <!-- Base green fee -->
+        <tr>
+          <td style="padding:6px 0;color:#64748b">Green fee</td>
+          <td style="padding:6px 0">${fmtMoney(basePpp)} per player</td>
+        </tr>
+
         ${cartLine}
         ${hireClubsLine}
+
+        <!-- ✅ NEW: what each player owes -->
+        <tr>
+          <td style="padding:6px 0;color:#64748b">Owes per player</td>
+          <td style="padding:6px 0"><b>${fmtMoney(owesPerPlayerCents)}</b></td>
+        </tr>
+
         <tr>
           <td style="padding:6px 0;color:#64748b">Total</td>
           <td style="padding:6px 0"><b>${fmtMoney(totalAll)}</b></td>
