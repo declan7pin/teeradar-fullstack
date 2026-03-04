@@ -123,6 +123,22 @@
 
 <!-- ✅ Stripe Connect + Platform Fee Settings -->
 <!-- ✅ Advanced Payment Settings -->
+<!-- ✅ Subscriber discount (applies to BOTH pay modes) -->
+<div style="margin-top:12px">
+  <label class="muted" style="display:flex;align-items:center;gap:10px">
+    <input type="checkbox" id="cSubscriberDiscountEnabled" />
+    Offer TeeRadar Subscriber Discount
+  </label>
+
+  <div style="margin-top:8px;display:flex;gap:10px;align-items:center">
+    <label class="muted" style="min-width:120px">Discount %</label>
+    <input id="cSubscriberDiscountPct" type="number" min="0" max="50" step="1" value="5"
+      style="max-width:120px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;" />
+    <span class="muted mini">Default 5%</span>
+  </div>
+</div>
+
+<!-- ✅ Advanced Payment Settings (ONLY relevant for PAY_ON_BOOKING) -->
 <div id="paymentAdvancedWrap" style="margin-top:12px;display:none">
 
   <div style="margin-top:12px">
@@ -131,15 +147,9 @@
   </div>
 
   <div style="margin-top:12px">
-    <label class="muted">
-      <input type="checkbox" id="cSubscriberDiscountEnabled" />
-      Offer 5% TeeRadar Subscriber Discount (lower platform fee tier)
-    </label>
-  </div>
-
-  <div style="margin-top:12px">
     <label class="muted">Manual Platform Fee (basis points, optional override)</label>
-    <input id="cPlatformFeeBps" type="number" min="0" step="1" placeholder="Leave blank for auto tier (300 = 3%)" />
+    <input id="cPlatformFeeBps" type="number" min="0" step="1"
+      placeholder="Leave blank for auto tier (300 = 3%)" />
   </div>
 
   <div id="cFeePreview" class="muted" style="margin-top:8px;font-weight:700;"></div>
@@ -568,24 +578,26 @@
   }
 
   const $ = (id) => document.getElementById(id);
-  function updatePaymentUI(){
+
+function updatePaymentUI() {
   const mode = $("cPaymentMode")?.value || "PAY_AT_COURSE";
   const wrap = $("paymentAdvancedWrap");
   if (!wrap) return;
 
+  // ✅ Only show Stripe/platform fee controls for PAY_ON_BOOKING
   if (mode === "PAY_ON_BOOKING") {
     wrap.style.display = "block";
   } else {
     wrap.style.display = "none";
 
-    // Optional: clear fields when not using pay-on-booking
+    // ✅ Clear ONLY Stripe/platform fields (DO NOT clear subscriber discount)
     if ($("cStripeAccountId")) $("cStripeAccountId").value = "";
-    if ($("cSubscriberDiscountEnabled")) $("cSubscriberDiscountEnabled").checked = false;
     if ($("cPlatformFeeBps")) $("cPlatformFeeBps").value = "";
     if ($("cFeePreview")) $("cFeePreview").textContent = "";
-
-    return;
   }
+
+  // ✅ Fee preview is only meaningful for PAY_ON_BOOKING
+  if (mode !== "PAY_ON_BOOKING") return;
 
   const manualRaw = ($("cPlatformFeeBps")?.value || "").trim();
   const manual = manualRaw === "" ? null : Number(manualRaw);
@@ -804,22 +816,24 @@ $("cPlatformFeeBps")?.addEventListener("input", updatePaymentUI);
 
   $("createCourseBtn").onclick = async () => {
   $("courseMsg").textContent = "Saving...";
-  try {
-    const payload = {
-      slug: ($("cSlug").value || "").trim(),
-      name: ($("cName").value || "").trim(),
-      notes: ($("cNotes").value || "").trim(),
-      paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
-    };
+  const payload = {
+  slug: ($("cSlug").value || "").trim(),
+  name: ($("cName").value || "").trim(),
+  notes: ($("cNotes").value || "").trim(),
+  paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
 
-    const isPayOnBooking = payload.paymentMode === "PAY_ON_BOOKING";
-    if (isPayOnBooking) {
-      payload.stripeAccountId = ($("cStripeAccountId")?.value || "").trim();
-      payload.subscriberDiscountEnabled = $("cSubscriberDiscountEnabled")?.checked || false;
+  // ✅ ALWAYS send subscriber discount fields (for BOTH pay modes)
+  subscriberDiscountEnabled: !!$("cSubscriberDiscountEnabled")?.checked,
+  subscriberDiscountPct: Number($("cSubscriberDiscountPct")?.value || 5),
+};
 
-      const bpsRaw = ($("cPlatformFeeBps")?.value || "").trim();
-      if (bpsRaw !== "") payload.platformFeeBps = Number(bpsRaw);
-    }
+const isPayOnBooking = payload.paymentMode === "PAY_ON_BOOKING";
+if (isPayOnBooking) {
+  payload.stripeAccountId = ($("cStripeAccountId")?.value || "").trim();
+
+  const bpsRaw = ($("cPlatformFeeBps")?.value || "").trim();
+  if (bpsRaw !== "") payload.platformFeeBps = Number(bpsRaw);
+}
 
     const out = await j("/api/book/admin/courses", {
       method: "POST",
@@ -1602,10 +1616,11 @@ li.innerHTML =
   ` <span class="pill">${_escape(paymentLabel(mode))}</span>` +
 
   (mode === "PAY_ON_BOOKING"
-    ? ` <span class="pill">${_escape(feePct)}</span>` +
-      (discount ? ` <span class="pill">Subscriber Discount</span>` : ``) +
-      (stripeConnected ? ` <span class="pill">Stripe ✓</span>` : ` <span class="pill" style="background:#fee2e2;color:#991b1b;border-color:#fecaca">Stripe ✗</span>`)
-    : ``) +
+  ? ` <span class="pill">${_escape(feePct)}</span>` +
+    (stripeConnected ? ` <span class="pill">Stripe ✓</span>` : ` <span class="pill" style="background:#fee2e2;color:#991b1b;border-color:#fecaca">Stripe ✗</span>`)
+  : ``) +
+
+(discount ? ` <span class="pill">Subscriber Discount</span>` : ``) +
 
   ` — <a href="/book/${_escape(c.slug)}">open</a>` +
 
@@ -1648,6 +1663,9 @@ li.innerHTML =
 }
 if ($("cSubscriberDiscountEnabled")) {
   $("cSubscriberDiscountEnabled").checked = !!course.subscriber_discount_enabled;
+}
+if ($("cSubscriberDiscountPct")) {
+  $("cSubscriberDiscountPct").value = Number(course.subscriber_discount_pct ?? course.subscriberDiscountPct ?? 5);
 }
 if ($("cPlatformFeeBps")) {
   $("cPlatformFeeBps").value = course.platform_fee_bps || "";
