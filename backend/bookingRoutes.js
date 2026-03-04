@@ -2339,7 +2339,9 @@ router.get("/course-admin/course-settings", requireCourseAdmin, async (req, res)
         hire_clubs_fee_cents,
         hire_clubs_qty,
         duration_9_mins,
-        duration_18_mins
+        duration_18_mins,
+        COALESCE(subscriber_discount_enabled, false) AS subscriber_discount_enabled,
+        COALESCE(subscriber_discount_pct, 5) AS subscriber_discount_pct
       FROM booking_courses
       WHERE slug = $1
       LIMIT 1;
@@ -2347,7 +2349,9 @@ router.get("/course-admin/course-settings", requireCourseAdmin, async (req, res)
       [slug]
     );
 
-    if (!r.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+    if (!r.rows.length) {
+      return res.status(404).json({ ok: false, error: "course_not_found" });
+    }
 
     return res.json({ ok: true, settings: r.rows[0] });
   } catch (e) {
@@ -2715,7 +2719,9 @@ router.get("/admin/course-settings", requirePlatformAdmin, async (req, res) => {
         hire_clubs_fee_cents,
         hire_clubs_qty,
         duration_9_mins,
-        duration_18_mins
+        duration_18_mins,
+        COALESCE(subscriber_discount_enabled, false) AS subscriber_discount_enabled,
+        COALESCE(subscriber_discount_pct, 5) AS subscriber_discount_pct
       FROM booking_courses
       WHERE slug = $1
       LIMIT 1;
