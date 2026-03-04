@@ -10676,18 +10676,23 @@ return false;
   }).catch(() => {});
 
   const emailResult = await sendBookingEmail({
-    to: golfer_email,
-    courseName: courseRow.name,
-    date,
-    time,
-    holes,
-    players,
-    reference,
-    pricePerPlayerCents: ppp,
-    totalCents,
-    cartCents: cart_fee_cents,
-    hireClubsCents: hire_clubs_fee_cents,
-  });
+  to: golfer_email,
+  courseName: courseRow.name,
+  date,
+  time,
+  holes,
+  players,
+  reference,
+  pricePerPlayerCents: ppp,
+  totalCents,
+  cartCents: cart_fee_cents,
+  hireClubsCents: hire_clubs_fee_cents,
+
+  // ✅ NEW: show subscriber discount in email
+  isSubscriber,
+  discountPct: effectiveDiscountPct,
+  discountCents: discountCentsSafe,
+});
 
   return res.json({
     ok: true,
