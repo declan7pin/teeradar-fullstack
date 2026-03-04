@@ -1036,9 +1036,11 @@ function moneyAUD(cents){
 }
 
 function applySubscriberDiscountToTotal(totalBeforeDiscountCents){
-  // ✅ MUST also require the course to have discount enabled
-  const courseAllows =
-    !!(course && (course.subscriber_discount_enabled || course.subscriberDiscountEnabled));
+  // ✅ allow discount if the course flag is missing (common when SELECT doesn't include it)
+  const courseAllowsRaw =
+    (course?.subscriber_discount_enabled ?? course?.subscriberDiscountEnabled);
+
+  const courseAllows = (courseAllowsRaw === undefined) ? true : !!courseAllowsRaw;
 
   const pctFromCourse =
     Number.isFinite(Number(course?.subscriber_discount_pct))
@@ -1058,40 +1060,65 @@ function applySubscriberDiscountToTotal(totalBeforeDiscountCents){
   };
 }
 
-// ✅ calls backend bookingRoutes subscriber-check (Stripe source of truth)
 async function checkSubscriberByEmail(email){
   const e = String(email || "").trim().toLowerCase();
   __subscriber.checkedEmail = e;
   __subscriber.isSubscriber = false;
 
   const banner = $("subBanner");
-  if (banner) banner.style.display = "none";
+  if (banner) {
+    banner.style.display = "block";
+    banner.textContent = "Checking subscriber status…";
+  }
 
   if (!isValidEmail(e)) {
+    if (banner) banner.style.display = "none";
     updateModalTotal();
     return;
   }
 
   try {
-    const res = await apiFetch("/api/book/subscriber-check?" + new URLSearchParams({ email: e }).toString());
-    const data = await res.json().catch(()=> ({}));
+    // ✅ try bookingRoutes endpoint first
+    let res = await apiFetch("/api/book/subscriber-check?" + new URLSearchParams({ email: e }).toString());
+    let data = await res.json().catch(()=> ({}));
 
-    const isSub = (data && data.ok && data.isSubscriber === true);
+    // ✅ fallback to account endpoint (older/likely already exists)
+    if (!res.ok || !data || (!data.ok && typeof data.ok !== "undefined")) {
+      res = await apiFetch("/api/account/plan?" + new URLSearchParams({ email: e }).toString());
+      data = await res.json().catch(()=> ({}));
+    }
+
+    const status = String(data?.status || data?.subscription_status || "").toLowerCase();
+    const plan = String(data?.plan || data?.tier || "").toLowerCase();
+
+    const isSub =
+      data?.isSubscriber === true ||
+      data?.subscriber === true ||
+      data?.pro === true ||
+      plan === "pro" ||
+      plan === "subscriber" ||
+      status === "active" ||
+      status === "trialing";
+
     __subscriber.isSubscriber = !!isSub;
 
-    // ✅ banner only if course allows discount
-    const courseAllows =
-      !!(course && (course.subscriber_discount_enabled || course.subscriberDiscountEnabled));
-
-    // use course pct if present, else fallback to 5
+    // ✅ use course pct if present, else default 5
     const pct =
       Number.isFinite(Number(course?.subscriber_discount_pct))
         ? Number(course.subscriber_discount_pct)
-        : Number(__subscriber.discountPct || 5);
+        : 5;
+
+    // ✅ allow banner even if course flag missing (same logic as applySubscriberDiscountToTotal)
+    const courseAllowsRaw =
+      (course?.subscriber_discount_enabled ?? course?.subscriberDiscountEnabled);
+    const courseAllows = (courseAllowsRaw === undefined) ? true : !!courseAllowsRaw;
 
     if (banner) {
       if (__subscriber.isSubscriber && courseAllows && pct > 0) {
         banner.textContent = `✅ Subscriber discount — ${pct}% applied`;
+        banner.style.display = "block";
+      } else if (!__subscriber.isSubscriber) {
+        banner.textContent = "Not a subscriber (no discount).";
         banner.style.display = "block";
       } else {
         banner.style.display = "none";
@@ -1099,9 +1126,12 @@ async function checkSubscriberByEmail(email){
     }
 
     updateModalTotal();
-  } catch (e2) {
+  } catch (err) {
     __subscriber.isSubscriber = false;
-    if (banner) banner.style.display = "none";
+    if (banner) {
+      banner.textContent = "Could not check subscriber status.";
+      banner.style.display = "block";
+    }
     updateModalTotal();
   }
 }
