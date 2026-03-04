@@ -847,13 +847,29 @@ if (qtySel) {
       const res = await apiFetch("/api/book/course?slug=" + encodeURIComponent(slug));
       const data = await res.json().catch(()=> ({}));
       if (res.ok && data && data.ok && data.course) {
-        course = data.course;
-      } else {
-        // optional fallback if your router uses /course/:slug
-        const r2 = await apiFetch("/api/book/course/" + encodeURIComponent(slug));
-        const d2 = await r2.json().catch(()=> ({}));
-        if (r2.ok && d2 && d2.ok && d2.course) course = d2.course;
-      }
+  course = data.course;
+
+  // ✅ ADD HERE (right after course is set)
+  __subscriber.discountPct =
+    Number.isFinite(Number(course?.subscriber_discount_pct))
+      ? Number(course.subscriber_discount_pct)
+      : 5;
+
+} else {
+  // optional fallback if your router uses /course/:slug
+  const r2 = await apiFetch("/api/book/course/" + encodeURIComponent(slug));
+  const d2 = await r2.json().catch(()=> ({}));
+
+  if (r2.ok && d2 && d2.ok && d2.course) {
+    course = d2.course;
+
+    // ✅ ADD HERE TOO (right after fallback course is set)
+    __subscriber.discountPct =
+      Number.isFinite(Number(course?.subscriber_discount_pct))
+        ? Number(course.subscriber_discount_pct)
+        : 5;
+  }
+}
     } catch {}
     $("courseName").textContent = course.name || "Course";
     $("courseSub").textContent = course.notes
@@ -1020,10 +1036,18 @@ function moneyAUD(cents){
 }
 
 function applySubscriberDiscountToTotal(totalBeforeDiscountCents){
-  const pct = Number(__subscriber.discountPct || 0);
+  // ✅ MUST also require the course to have discount enabled
+  const courseAllows =
+    !!(course && (course.subscriber_discount_enabled || course.subscriberDiscountEnabled));
 
-  // ✅ only apply if subscriber AND course has discount enabled
-  if (!__subscriber.isSubscriber || !__subscriber.discountEnabled || pct <= 0) {
+  const pctFromCourse =
+    Number.isFinite(Number(course?.subscriber_discount_pct))
+      ? Number(course.subscriber_discount_pct)
+      : Number(__subscriber.discountPct || 0);
+
+  const pct = Math.max(0, Number(pctFromCourse || 0));
+
+  if (!__subscriber.isSubscriber || !courseAllows || pct <= 0) {
     return { discounted: totalBeforeDiscountCents, discount: 0 };
   }
 
@@ -1034,62 +1058,49 @@ function applySubscriberDiscountToTotal(totalBeforeDiscountCents){
   };
 }
 
-// ✅ calls backend to check subscription + course discount settings
+// ✅ calls backend bookingRoutes subscriber-check (Stripe source of truth)
 async function checkSubscriberByEmail(email){
   const e = String(email || "").trim().toLowerCase();
   __subscriber.checkedEmail = e;
-
-  // reset state
   __subscriber.isSubscriber = false;
-  __subscriber.discountEnabled = false;
-  __subscriber.discountPct = 0;
 
   const banner = $("subBanner");
   if (banner) banner.style.display = "none";
 
   if (!isValidEmail(e)) {
-    updateModalTotal(); // removes discount
+    updateModalTotal();
     return;
   }
 
-  // we need a baseCents number for the endpoint (base includes add-ons)
-  const baseCents =
-    selectedSlot ? Number(computeTotalCents(selectedSlot) || 0) : 0;
-
   try {
-    const qs = new URLSearchParams({
-      slug,
-      email: e,
-      baseCents: String(Math.max(0, baseCents)),
-    });
-
-    const res = await apiFetch("/api/book/subscriber-status?" + qs.toString());
+    const res = await apiFetch("/api/book/subscriber-check?" + new URLSearchParams({ email: e }).toString());
     const data = await res.json().catch(()=> ({}));
 
-    if (!res.ok || !data || !data.ok) throw new Error(data?.error || "plan_lookup_failed");
+    const isSub = (data && data.ok && data.isSubscriber === true);
+    __subscriber.isSubscriber = !!isSub;
 
-    __subscriber.isSubscriber = !!data.isSubscriber;
-    __subscriber.discountEnabled = !!data.discountEnabled;
+    // ✅ banner only if course allows discount
+    const courseAllows =
+      !!(course && (course.subscriber_discount_enabled || course.subscriberDiscountEnabled));
 
-    const pct = Number(data.discountPct || 0);
-    __subscriber.discountPct = (Number.isFinite(pct) && pct > 0) ? pct : 0;
+    // use course pct if present, else fallback to 5
+    const pct =
+      Number.isFinite(Number(course?.subscriber_discount_pct))
+        ? Number(course.subscriber_discount_pct)
+        : Number(__subscriber.discountPct || 5);
 
-    // banner rules
     if (banner) {
-      if (__subscriber.isSubscriber && __subscriber.discountEnabled && __subscriber.discountPct > 0) {
-        banner.textContent = `✅ Subscriber discount — ${__subscriber.discountPct}% applied`;
+      if (__subscriber.isSubscriber && courseAllows && pct > 0) {
+        banner.textContent = `✅ Subscriber discount — ${pct}% applied`;
         banner.style.display = "block";
       } else {
         banner.style.display = "none";
       }
     }
 
-    updateModalTotal(); // re-render totals with strike-through if applicable
+    updateModalTotal();
   } catch (e2) {
-    // silent fail (no banner, no discount)
     __subscriber.isSubscriber = false;
-    __subscriber.discountEnabled = false;
-    __subscriber.discountPct = 0;
     if (banner) banner.style.display = "none";
     updateModalTotal();
   }
