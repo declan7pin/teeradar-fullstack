@@ -839,18 +839,16 @@ $("cPlatformFeeBps")?.addEventListener("input", updatePaymentUI);
 
     const out = await j("/api/book/admin/courses", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     });
 
     const savedSlug =
       (out?.course?.slug ||
-        out?.data?.course?.slug ||
-        out?.data?.slug ||
-        out?.slug ||
-        payload.slug ||
-        "")
-        .toString()
-        .trim();
+       out?.data?.course?.slug ||
+       out?.data?.slug ||
+       out?.slug ||
+       payload.slug ||
+       "").toString().trim();
 
     if (!savedSlug) {
       $("courseMsg").textContent =
@@ -873,7 +871,7 @@ $("cPlatformFeeBps")?.addEventListener("input", updatePaymentUI);
     await refresh();
     await refreshActiveView();
   } catch (e) {
-    $("courseMsg").textContent = "❌ " + (e?.message || String(e));
+    $("courseMsg").textContent = "❌ " + e.message;
   }
 };
   $("saveSettingsBtn").onclick = async () => {
