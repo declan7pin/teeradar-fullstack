@@ -814,39 +814,43 @@ $("cPlatformFeeBps")?.addEventListener("input", updatePaymentUI);
     }
   };
 
-  $("createCourseBtn").onclick = async () => {
+ $("createCourseBtn").onclick = async () => {
   $("courseMsg").textContent = "Saving...";
-  const payload = {
-  slug: ($("cSlug").value || "").trim(),
-  name: ($("cName").value || "").trim(),
-  notes: ($("cNotes").value || "").trim(),
-  paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
 
-  // ✅ ALWAYS send subscriber discount fields (for BOTH pay modes)
-  subscriberDiscountEnabled: !!$("cSubscriberDiscountEnabled")?.checked,
-  subscriberDiscountPct: Number($("cSubscriberDiscountPct")?.value || 5),
-};
+  try {
+    const payload = {
+      slug: ($("cSlug").value || "").trim(),
+      name: ($("cName").value || "").trim(),
+      notes: ($("cNotes").value || "").trim(),
+      paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
 
-const isPayOnBooking = payload.paymentMode === "PAY_ON_BOOKING";
-if (isPayOnBooking) {
-  payload.stripeAccountId = ($("cStripeAccountId")?.value || "").trim();
+      // ✅ ALWAYS send subscriber discount fields (for BOTH pay modes)
+      subscriberDiscountEnabled: !!$("cSubscriberDiscountEnabled")?.checked,
+      subscriberDiscountPct: Number($("cSubscriberDiscountPct")?.value || 5),
+    };
 
-  const bpsRaw = ($("cPlatformFeeBps")?.value || "").trim();
-  if (bpsRaw !== "") payload.platformFeeBps = Number(bpsRaw);
-}
+    const isPayOnBooking = payload.paymentMode === "PAY_ON_BOOKING";
+    if (isPayOnBooking) {
+      payload.stripeAccountId = ($("cStripeAccountId")?.value || "").trim();
+
+      const bpsRaw = ($("cPlatformFeeBps")?.value || "").trim();
+      if (bpsRaw !== "") payload.platformFeeBps = Number(bpsRaw);
+    }
 
     const out = await j("/api/book/admin/courses", {
       method: "POST",
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
     const savedSlug =
       (out?.course?.slug ||
-       out?.data?.course?.slug ||
-       out?.data?.slug ||
-       out?.slug ||
-       payload.slug ||
-       "").toString().trim();
+        out?.data?.course?.slug ||
+        out?.data?.slug ||
+        out?.slug ||
+        payload.slug ||
+        "")
+        .toString()
+        .trim();
 
     if (!savedSlug) {
       $("courseMsg").textContent =
@@ -869,7 +873,7 @@ if (isPayOnBooking) {
     await refresh();
     await refreshActiveView();
   } catch (e) {
-    $("courseMsg").textContent = "❌ " + e.message;
+    $("courseMsg").textContent = "❌ " + (e?.message || String(e));
   }
 };
   $("saveSettingsBtn").onclick = async () => {
