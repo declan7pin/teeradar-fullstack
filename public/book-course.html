@@ -1006,10 +1006,13 @@ const canBook = slotsAvail >= wantPlayers;
 
   let selectedSlot = null;
   // --- Subscriber discount (UI preview) ---
+// Uses backend source of truth + course settings:
+// GET /api/book/subscriber-status?slug=...&email=...&baseCents=...
 const __subscriber = {
   checkedEmail: "",
   isSubscriber: false,
-  discountPct: 5,
+  discountEnabled: false,
+  discountPct: 0,
 };
 
 function moneyAUD(cents){
@@ -1018,9 +1021,12 @@ function moneyAUD(cents){
 
 function applySubscriberDiscountToTotal(totalBeforeDiscountCents){
   const pct = Number(__subscriber.discountPct || 0);
-  if (!__subscriber.isSubscriber || pct <= 0) {
+
+  // ✅ only apply if subscriber AND course has discount enabled
+  if (!__subscriber.isSubscriber || !__subscriber.discountEnabled || pct <= 0) {
     return { discounted: totalBeforeDiscountCents, discount: 0 };
   }
+
   const discount = Math.round((totalBeforeDiscountCents * pct) / 100);
   return {
     discounted: Math.max(0, totalBeforeDiscountCents - discount),
@@ -1028,41 +1034,49 @@ function applySubscriberDiscountToTotal(totalBeforeDiscountCents){
   };
 }
 
-// ✅ calls backend to check plan by email (tolerant of different response shapes)
+// ✅ calls backend to check subscription + course discount settings
 async function checkSubscriberByEmail(email){
   const e = String(email || "").trim().toLowerCase();
   __subscriber.checkedEmail = e;
+
+  // reset state
   __subscriber.isSubscriber = false;
+  __subscriber.discountEnabled = false;
+  __subscriber.discountPct = 0;
 
   const banner = $("subBanner");
   if (banner) banner.style.display = "none";
 
   if (!isValidEmail(e)) {
-    updateModalTotal(); // update totals (removes discount display)
+    updateModalTotal(); // removes discount
     return;
   }
 
+  // we need a baseCents number for the endpoint (base includes add-ons)
+  const baseCents =
+    selectedSlot ? Number(computeTotalCents(selectedSlot) || 0) : 0;
+
   try {
-    const res = await apiFetch("/api/account/plan?" + new URLSearchParams({ email: e }).toString());
+    const qs = new URLSearchParams({
+      slug,
+      email: e,
+      baseCents: String(Math.max(0, baseCents)),
+    });
+
+    const res = await apiFetch("/api/book/subscriber-status?" + qs.toString());
     const data = await res.json().catch(()=> ({}));
 
-    // accept a few possible backend shapes
-    const status = String(data?.status || data?.subscription_status || "").toLowerCase();
-    const plan = String(data?.plan || data?.tier || "").toLowerCase();
+    if (!res.ok || !data || !data.ok) throw new Error(data?.error || "plan_lookup_failed");
 
-    const isSub =
-      data?.isSubscriber === true ||
-      data?.subscriber === true ||
-      data?.pro === true ||
-      plan === "pro" ||
-      plan === "subscriber" ||
-      status === "active" ||
-      status === "trialing";
+    __subscriber.isSubscriber = !!data.isSubscriber;
+    __subscriber.discountEnabled = !!data.discountEnabled;
 
-    __subscriber.isSubscriber = !!isSub;
+    const pct = Number(data.discountPct || 0);
+    __subscriber.discountPct = (Number.isFinite(pct) && pct > 0) ? pct : 0;
 
+    // banner rules
     if (banner) {
-      if (__subscriber.isSubscriber) {
+      if (__subscriber.isSubscriber && __subscriber.discountEnabled && __subscriber.discountPct > 0) {
         banner.textContent = `✅ Subscriber discount — ${__subscriber.discountPct}% applied`;
         banner.style.display = "block";
       } else {
@@ -1070,10 +1084,12 @@ async function checkSubscriberByEmail(email){
       }
     }
 
-    updateModalTotal(); // re-render total with strike-through if applicable
+    updateModalTotal(); // re-render totals with strike-through if applicable
   } catch (e2) {
-    // silent fail (no banner)
+    // silent fail (no banner, no discount)
     __subscriber.isSubscriber = false;
+    __subscriber.discountEnabled = false;
+    __subscriber.discountPct = 0;
     if (banner) banner.style.display = "none";
     updateModalTotal();
   }
@@ -1128,8 +1144,12 @@ if (!$("bEmail")._subWire) {
   });
 }
 
-// reset banner state each open
+// reset subscriber state each open
+__subscriber.checkedEmail = "";
 __subscriber.isSubscriber = false;
+__subscriber.discountEnabled = false;
+__subscriber.discountPct = 0;
+
 const banner = $("subBanner");
 if (banner) banner.style.display = "none";
 
