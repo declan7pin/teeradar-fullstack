@@ -2796,35 +2796,42 @@ router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
         : "PAY_AT_COURSE";
 
     // ============================
-    // Stripe Connect + Fee Tier
+    // Stripe Connect + Subscriber Discount + Fee Tier
     // ============================
-
     const stripe_account_id = String(
-      req.body?.stripe_account_id ??
-      req.body?.stripeAccountId ??
-      ""
+      req.body?.stripe_account_id ?? req.body?.stripeAccountId ?? ""
     ).trim() || null;
 
+    // ✅ NEW: subscriber discount toggle
     const subscriber_discount_enabled = !!(
       req.body?.subscriber_discount_enabled ??
       req.body?.subscriberDiscountEnabled ??
       false
     );
 
+    // ✅ NEW: subscriber discount percent (default 5)
+    const pctRaw =
+      req.body?.subscriber_discount_pct ??
+      req.body?.subscriberDiscountPct ??
+      req.body?.discount_pct ??
+      req.body?.discountPct;
+
+    let subscriber_discount_pct = Number.isFinite(Number(pctRaw))
+      ? Math.trunc(Number(pctRaw))
+      : 5;
+
+    // safety clamp
+    subscriber_discount_pct = Math.max(0, Math.min(50, subscriber_discount_pct));
+
     // ENV controlled fee tiers (safe defaults)
-    const STANDARD_BPS = Number(process.env.STANDARD_PLATFORM_FEE_BPS || 300);   // 3%
-    const DISCOUNT_BPS = Number(process.env.DISCOUNT_PLATFORM_FEE_BPS || 100);   // 1%
+    const STANDARD_BPS = Number(process.env.STANDARD_PLATFORM_FEE_BPS || 300); // 3%
+    const DISCOUNT_BPS = Number(process.env.DISCOUNT_PLATFORM_FEE_BPS || 100); // 1%
 
     // Auto choose tier
-    let platform_fee_bps = subscriber_discount_enabled
-      ? DISCOUNT_BPS
-      : STANDARD_BPS;
+    let platform_fee_bps = subscriber_discount_enabled ? DISCOUNT_BPS : STANDARD_BPS;
 
     // Optional manual override (advanced usage)
-    const manualBps = Number(
-      req.body?.platform_fee_bps ??
-      req.body?.platformFeeBps
-    );
+    const manualBps = Number(req.body?.platform_fee_bps ?? req.body?.platformFeeBps);
 
     if (Number.isFinite(manualBps)) {
       platform_fee_bps = Math.max(0, Math.min(10000, Math.trunc(manualBps)));
@@ -2833,7 +2840,6 @@ router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
     // ============================
     // Insert / Update Course
     // ============================
-
     await db.query(
       `
       INSERT INTO booking_courses (
@@ -2843,16 +2849,18 @@ router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
         payment_mode,
         stripe_account_id,
         platform_fee_bps,
-        subscriber_discount_enabled
+        subscriber_discount_enabled,
+        subscriber_discount_pct
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       ON CONFLICT (slug) DO UPDATE
       SET name = EXCLUDED.name,
           notes = EXCLUDED.notes,
           payment_mode = EXCLUDED.payment_mode,
           stripe_account_id = EXCLUDED.stripe_account_id,
           platform_fee_bps = EXCLUDED.platform_fee_bps,
-          subscriber_discount_enabled = EXCLUDED.subscriber_discount_enabled
+          subscriber_discount_enabled = EXCLUDED.subscriber_discount_enabled,
+          subscriber_discount_pct = EXCLUDED.subscriber_discount_pct
       `,
       [
         slugClean,
@@ -2861,7 +2869,8 @@ router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
         payment_mode,
         stripe_account_id,
         platform_fee_bps,
-        subscriber_discount_enabled
+        subscriber_discount_enabled,
+        subscriber_discount_pct,
       ]
     );
 
@@ -2871,9 +2880,9 @@ router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
       payment_mode,
       stripe_account_id,
       platform_fee_bps,
-      subscriber_discount_enabled
+      subscriber_discount_enabled,
+      subscriber_discount_pct,
     });
-
   } catch (e) {
     console.error("admin/courses POST", e);
 
