@@ -10209,6 +10209,63 @@ try {
 
 return false;
 }
+// ✅ Live subscriber check for the booking modal (debounced on email input)
+// GET /api/book/subscriber-status?slug=...&email=...&baseCents=...
+router.get("/subscriber-status", async (req, res) => {
+  try {
+    const slug = String(req.query?.slug || "").trim().toLowerCase();
+    const email = String(req.query?.email || "").trim().toLowerCase();
+    const baseCents = Number(req.query?.baseCents || 0);
+
+    if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
+    if (!email) return res.status(400).json({ ok: false, error: "email_required" });
+
+    // 1) Load course discount settings
+    const courseQ = await pool.query(
+      `SELECT subscriber_discount_enabled, subscriber_discount_pct
+         FROM booking_courses
+        WHERE slug=$1
+        LIMIT 1;`,
+      [slug]
+    );
+    const course = courseQ.rows?.[0];
+    const discountEnabled = !!course?.subscriber_discount_enabled;
+    const discountPct = Number(course?.subscriber_discount_pct ?? 0);
+
+    // 2) Check if this email is an active subscriber (your existing helper)
+    const isSubscriber = await isSubscriberEmail(email);
+
+    // 3) Compute preview totals (frontend can use this immediately)
+    let discountApplied = false;
+    let discountedCents = baseCents;
+
+    if (
+      isSubscriber &&
+      discountEnabled &&
+      Number.isFinite(discountPct) &&
+      discountPct > 0 &&
+      baseCents > 0
+    ) {
+      discountedCents = Math.max(0, Math.round(baseCents * (1 - discountPct / 100)));
+      discountApplied = true;
+    }
+
+    return res.json({
+      ok: true,
+      slug,
+      email,
+      isSubscriber,
+      discountEnabled,
+      discountPct,
+      discountApplied,
+      baseCents,
+      discountedCents,
+    });
+  } catch (e) {
+    console.error("subscriber-status", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 
   // ✅ CRITICAL FIX: run subscriber check BEFORE BEGIN (so it cannot poison the booking txn)
   const isSubscriber = await isSubscriberEmail(golfer_email);
