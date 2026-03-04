@@ -10266,6 +10266,19 @@ router.get("/subscriber-status", async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+// ✅ PUBLIC: check if an email is an active subscriber (Stripe + DB fallback)
+router.get("/subscriber-check", async (req, res) => {
+  try {
+    const email = String(req.query?.email || "").trim().toLowerCase();
+    if (!email) return res.json({ ok: true, isSubscriber: false });
+
+    const isSubscriber = await isSubscriberEmail(email);
+    return res.json({ ok: true, isSubscriber });
+  } catch (e) {
+    console.error("subscriber-check error", e);
+    return res.status(200).json({ ok: true, isSubscriber: false }); // fail-closed
+  }
+});
 
   // ✅ CRITICAL FIX: run subscriber check BEFORE BEGIN (so it cannot poison the booking txn)
   const isSubscriber = await isSubscriberEmail(golfer_email);
