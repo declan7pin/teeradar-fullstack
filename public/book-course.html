@@ -605,6 +605,18 @@ if (clubsAddonId) idToQty.set(String(clubsAddonId), Number(clubsQtySelected || 0
   if (!selectedSlot) return;
 
   const totalBeforeDiscountCents = computeTotalCents(selectedSlot); // green fees + add-ons
+  // ✅ if we already have a valid email, keep discount preview in sync with changes
+  const curEmail = String(($("bEmail")?.value || "")).trim().toLowerCase();
+  if (isValidEmail(curEmail)) {
+    const baseNow = Math.max(0, Math.trunc(totalBeforeDiscountCents));
+    if (baseNow !== __lastSubBaseCents || curEmail !== __subscriber.checkedEmail) {
+      __lastSubBaseCents = baseNow;
+      // debounce a little via reqId (function already handles stale)
+      checkSubscriberByEmail(curEmail, baseNow);
+      // NOTE: return is NOT needed; checkSubscriberByEmail will call updateModalTotal after it updates flags
+    }
+  }
+
 
   // subscriber discount preview (applies to whole booking)
   const disc = applySubscriberDiscountToTotal(totalBeforeDiscountCents);
@@ -1057,6 +1069,7 @@ function applySubscriberDiscountToTotal(totalBeforeDiscountCents) {
 }
 
 let __subReqId = 0;
+let __lastSubBaseCents = -1;
 
 async function checkSubscriberByEmail(email) {
   const e = String(email || "").trim().toLowerCase();
@@ -1203,7 +1216,7 @@ if (!$("bEmail")._subWire) {
   $("bEmail").addEventListener("input", () => {
     clearTimeout(tmr);
     tmr = setTimeout(() => {
-      checkSubscriberByEmail(($("bEmail").value || "").trim());
+      checkSubscriberByEmail(($("bEmail").value || "").trim(), computeTotalCents(selectedSlot));
     }, 250);
   });
 }
