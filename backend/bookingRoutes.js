@@ -10716,154 +10716,140 @@ if (payment_mode === "PAY_ON_BOOKING") {
     )
   );
 
-// ✅ DEBUG: verify Stripe is charging the discounted amount (NOT pre-discount)
-// ✅ DEBUG: verify Stripe is charging the discounted amount (NOT pre-discount)
-// IMPORTANT: "totalCents" MUST already be AFTER discount (base + addons - discount), excluding processing fee.
-// ✅ Stripe MUST charge the DISCOUNTED base + the processing fee (if any)
-const stripeBaseCents = Number(totalCents || 0);            // after-discount base
-const stripeFeeCents  = Number(processingFeeCents || 0);    // fee added on top
-const stripeGrossCents = stripeBaseCents + stripeFeeCents;  // what golfer pays
+  // ✅ DEBUG: verify Stripe is charging the discounted amount (NOT pre-discount)
+  // IMPORTANT: "totalCents" MUST already be AFTER discount (base + addons - discount), excluding processing fee.
 
-// ✅ build line items (base always, fee optional)
-const lineItems = [
-  {
-    quantity: 1,
-    price_data: {
-      currency: "aud",
-      unit_amount: stripeBaseCents,
-      product_data: {
-        name: `${courseRow.name} — ${holes} holes (${players} players)`,
-        description: `${date} ${time}`,
+  // ✅ Stripe MUST charge the DISCOUNTED base + the processing fee (if any)
+  const stripeBaseCents = Number(totalCents || 0);           // after-discount base
+  const stripeFeeCents  = Number(processingFeeCents || 0);   // fee added on top
+  const stripeGrossCents = stripeBaseCents + stripeFeeCents; // what golfer pays
+
+  // ✅ build line items (base always, fee optional)
+  const lineItems = [
+    {
+      quantity: 1,
+      price_data: {
+        currency: "aud",
+        unit_amount: stripeBaseCents,
+        product_data: {
+          name: `${courseRow.name} — ${holes} holes (${players} players)`,
+          description: `${date} ${time}`,
+        },
       },
     },
-  },
-];
+  ];
 
-// add fee as a separate line item so it can't accidentally overwrite the base
-if (stripeFeeCents > 0) {
-  lineItems.push({
-    quantity: 1,
-    price_data: {
-      currency: "aud",
-      unit_amount: stripeFeeCents,
-      product_data: {
-        name: "Booking fee",
-        description: "Covers card processing.",
+  // ✅ add fee as a separate line item so it can't overwrite the base
+  if (stripeFeeCents > 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency: "aud",
+        unit_amount: stripeFeeCents,
+        product_data: {
+          name: "Booking fee",
+          description: "Covers card processing.",
+        },
+      },
+    });
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    customer_email: golfer_email_norm,
+
+    line_items: lineItems,
+
+    // ✅ IMPORTANT: fee split uses the same discounted base
+    payment_intent_data: {
+      // ✅ app takes: platform fee (on discounted base) + processing fee recovery
+      application_fee_amount: appFeeCents,
+      transfer_data: { destination: stripe_account_id },
+
+      metadata: {
+        slug,
+        date,
+        time,
+        holes: String(holes),
+        players: String(players),
+        golfer_name: golfer_name || "",
+        golfer_email: golfer_email_norm || "",
+        golfer_phone: golfer_phone || "",
+        cart_qty: String(cart_qty || 0),
+        hire_clubs_qty: String(hire_clubs_qty || 0),
+        layout_key: String(layout_key || ""),
+        front_nine_key: String(front_nine_key || ""),
+        back_nine_key: String(back_nine_key || ""),
+        reference,
+
+        // ✅ amounts (source of truth)
+        base_cents: String(stripeBaseCents),
+        processing_fee_cents: String(stripeFeeCents),
+        gross_cents: String(stripeGrossCents),
+        platform_fee_cents: String(platformFeeCents),
+
+        // ✅ discount diagnostics
+        subscriber: isSubscriber ? "1" : "0",
+        subscriber_plan: String(subStatus?.plan || "FREE"),
+        subscriber_discount_pct: String(effectiveDiscountPct || 0),
+        discount_cents: String(discountCentsSafe || 0),
+        total_before_discount_cents: String(Number(totalBeforeDiscountCents || 0)),
       },
     },
-  });
-}
 
-// ✅ platform fee is on BASE only (not including processing fee)
-const platformFeeCents = Math.max(
-  0,
-  Math.round((Number(totalCents || 0) * courseFeeBps) / 10000)
-);
-
-// ✅ golfer pays gross; app fee = platform fee + processing fee
-const appFeeCents = Math.max(
-  0,
-  Math.min(
-    stripeGrossCents,
-    platformFeeCents + stripeFeeCents
-  )
-);
-
-const session = await stripe.checkout.sessions.create({
-  mode: "payment",
-  customer_email: golfer_email_norm,
-
-  line_items: lineItems,
-
-  // ✅ IMPORTANT: fee split uses the same discounted base
-  payment_intent_data: {
-    application_fee_amount: appFeeCents,
-    transfer_data: { destination: stripe_account_id },
-
-    // keep everything you already set in metadata, but ensure discount is included:
+    // (optional) duplicate at session-level metadata too (handy for debugging)
     metadata: {
-      slug,
-      date,
-      time,
-      holes: String(holes),
-      players: String(players),
-      golfer_name: golfer_name || "",
-      golfer_email: golfer_email_norm || "",
-      golfer_phone: golfer_phone || "",
-      cart_qty: String(cart_qty || 0),
-      hire_clubs_qty: String(hire_clubs_qty || 0),
-      layout_key: String(layout_key || ""),
-      front_nine_key: String(front_nine_key || ""),
-      back_nine_key: String(back_nine_key || ""),
+      booking_id: String(bookingId || ""),
       reference,
-
-      // ✅ amounts (source of truth)
-      base_cents: String(stripeBaseCents),
-      processing_fee_cents: String(stripeFeeCents),
-      gross_cents: String(stripeGrossCents),
-      platform_fee_cents: String(platformFeeCents),
-
-      // ✅ discount diagnostics
+      course_slug: slug,
       subscriber: isSubscriber ? "1" : "0",
       subscriber_plan: String(subStatus?.plan || "FREE"),
       subscriber_discount_pct: String(effectiveDiscountPct || 0),
       discount_cents: String(discountCentsSafe || 0),
-      total_before_discount_cents: String(Number(totalBeforeDiscountCents || 0)),
+      base_cents: String(stripeBaseCents),
+      processing_fee_cents: String(stripeFeeCents),
+      gross_cents: String(stripeGrossCents),
     },
-  },
 
-  // (optional) duplicate at session-level metadata too (handy for debugging)
-  metadata: {
-    booking_id: String(bookingId || ""),
+    success_url: `${BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
+    cancel_url: `${BASE_URL}/book/${slug}?cancelled=1&ref=${encodeURIComponent(reference)}`,
+  });
+
+  await q("COMMIT_pay_on_booking", "COMMIT");
+  didBegin = false;
+
+  return res.json({
+    ok: true,
     reference,
-    course_slug: slug,
-    subscriber: isSubscriber ? "1" : "0",
-    subscriber_plan: String(subStatus?.plan || "FREE"),
-    subscriber_discount_pct: String(effectiveDiscountPct || 0),
-    discount_cents: String(discountCentsSafe || 0),
-    base_cents: String(stripeBaseCents),
-    processing_fee_cents: String(stripeFeeCents),
-    gross_cents: String(stripeGrossCents),
-  },
+    payment_mode: "PAY_ON_BOOKING",
+    checkoutUrl: session.url,
+    course: { slug: courseRow.slug, name: courseRow.name },
+    booking: {
+      date,
+      time,
+      holes,
+      players,
+      pricePerPlayerCents: ppp,
+      isSubscriber,
+      discountPct: effectiveDiscountPct,
+      discountCents: discountCentsSafe,
 
-  success_url: `${BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
-  cancel_url: `${BASE_URL}/book/${slug}?cancelled=1&ref=${encodeURIComponent(reference)}`,
-});
-await q("COMMIT_pay_on_booking", "COMMIT");
-didBegin = false;
+      // ✅ base + fee breakdown for UI
+      totalCents, // base (course) AFTER discount
+      processingFeeCents,
+      grossTotalCents,
 
-return res.json({
-  ok: true,
-  reference,
-  payment_mode: "PAY_ON_BOOKING",
-  checkoutUrl: session.url,
-  course: { slug: courseRow.slug, name: courseRow.name },
-  booking: {
-    date,
-    time,
-    holes,
-    players,
-    pricePerPlayerCents: ppp,
-    isSubscriber,
-    discountPct: effectiveDiscountPct,
-    discountCents: discountCentsSafe,
-
-    // ✅ base + fee breakdown for UI
-    totalCents, // base (course) AFTER discount
-    processingFeeCents,
-    grossTotalCents,
-
-    addonsCents,
-    amountDueCents: 0,
-    cart_qty,
-    hire_clubs_qty,
-    layout_key,
-    front_nine_key,
-    back_nine_key,
-  },
-  emailOk: false,
-  emailReason: "pay_on_booking",
-});
+      addonsCents,
+      amountDueCents: 0,
+      cart_qty,
+      hire_clubs_qty,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+    },
+    emailOk: false,
+    emailReason: "pay_on_booking",
+  });
 }
 
 // ✅ PAY_AT_COURSE ONLY: now we consume capacity
@@ -10984,14 +10970,6 @@ return res.json({
   emailOk: emailResult.emailOk,
   emailReason: emailResult.emailReason || null,
 });
-} catch (e) {
-console.error("book POST (root)", e);
-try { if (client && didBegin) await client.query("ROLLBACK"); } catch {}
-return res.status(500).json({ ok: false, error: "internal_error" });
-} finally {
-try { if (client) client.release(); } catch {}
-}
-};
 
 router.post("/book", handleBook);
 // keep /availability POST blocked so the frontend can’t accidentally use it
