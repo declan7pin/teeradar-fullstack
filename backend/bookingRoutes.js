@@ -10731,7 +10731,7 @@ console.log("[stripe] session amounts", {
   totalBeforeDiscountCents,
   discountCents,
   discountCentsSafe,
-  totalCents,             // ✅ should be AFTER discount
+  totalCents, // ✅ should be AFTER discount
   processingFeeCents,
   grossTotalCents,
   stripeBaseCents,
@@ -10750,7 +10750,10 @@ if (payment_mode === "PAY_ON_BOOKING") {
 
   // This catches the exact bug you're seeing (Stripe charging pre-discount base)
   // It doesn't "fix" it silently, but it tells you immediately in logs.
-  if (Number.isFinite(Number(grossTotalCents || 0)) && stripeGrossCents !== Number(grossTotalCents || 0)) {
+  if (
+    Number.isFinite(Number(grossTotalCents || 0)) &&
+    stripeGrossCents !== Number(grossTotalCents || 0)
+  ) {
     console.warn("[stripe] MISMATCH: stripeGrossCents != grossTotalCents", {
       stripeGrossCents,
       grossTotalCents,
@@ -10759,105 +10762,46 @@ if (payment_mode === "PAY_ON_BOOKING") {
     });
   }
 }
-// ✅ DEBUG: verify Stripe is charging the discounted amount (NOT pre-discount)
-const stripeBaseCents = Number(totalCents || 0);
-const stripeFeeCents = Number(processingFeeCents || 0);
-const stripeGrossCents = stripeBaseCents + stripeFeeCents;
 
-console.log("[stripe] session amounts", {
-  email: golfer_email_norm,
-  isSubscriber,
-  plan: String(subStatus?.plan || "FREE"),
-  courseDiscountEnabled,
-  courseDiscountPct,
-  effectiveDiscountPct,
-  totalBeforeDiscountCents,
-  discountCents,
-  discountCentsSafe,
-  totalCents,             // ✅ should be AFTER discount
-  processingFeeCents,
-  grossTotalCents,
-  stripeBaseCents,
-  stripeFeeCents,
-  stripeGrossCents,
-});
+const session = await stripe.checkout.sessions.create({
+  mode: "payment",
+  customer_email: golfer_email_norm, // ✅ normalized
 
-// ✅ If these don't match, you're charging the wrong thing
-if (payment_mode === "PAY_ON_BOOKING") {
-  if (stripeBaseCents <= 0 || stripeGrossCents <= 0) {
-    console.warn("[stripe] invalid cents", { stripeBaseCents, stripeFeeCents, stripeGrossCents });
-    await q("ROLLBACK_invalid_payment_amount", "ROLLBACK");
-    didBegin = false;
-    return res.status(400).json({ ok: false, error: "invalid_payment_amount" });
-  }
-
-  // This catches the exact bug you're seeing (Stripe charging pre-discount base)
-  // It doesn't "fix" it silently, but it tells you immediately in logs.
-  if (Number.isFinite(Number(grossTotalCents || 0)) && stripeGrossCents !== Number(grossTotalCents || 0)) {
-    console.warn("[stripe] MISMATCH: stripeGrossCents != grossTotalCents", {
-      stripeGrossCents,
-      grossTotalCents,
-      stripeBaseCents,
-      stripeFeeCents,
-    });
-  }
-}
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    customer_email: golfer_email_norm, // ✅ normalized
-
-    line_items: [
-      // ✅ Base booking amount (what the course is charging)
-      {
-        quantity: 1,
-        price_data: {
-          currency: "aud",
-          unit_amount: Number(totalCents || 0),
-          product_data: {
-            name: `${courseRow.name} — ${holes} holes (${players} players)`,
-            description: `${date} ${time}`,
-          },
+  line_items: [
+    // ✅ Base booking amount (what the course is charging)
+    {
+      quantity: 1,
+      price_data: {
+        currency: "aud",
+        unit_amount: Number(totalCents || 0),
+        product_data: {
+          name: `${courseRow.name} — ${holes} holes (${players} players)`,
+          description: `${date} ${time}`,
         },
-      },
-
-      // ✅ Processing fee paid by golfer
-      ...(processingFeeCents > 0
-        ? [
-            {
-              quantity: 1,
-              price_data: {
-                currency: "aud",
-                unit_amount: Number(processingFeeCents || 0),
-                product_data: {
-                  name: "Processing fee",
-                  description: "Card payment processing",
-                },
-              },
-            },
-          ]
-        : []),
-    ],
-
-    payment_intent_data: {
-      transfer_data: { destination: stripe_account_id },
-      application_fee_amount: appFeeCents,
-      metadata: {
-        booking_id: String(bookingId || ""),
-        reference,
-        course_slug: slug,
-        platform_fee_bps: String(courseFeeBps),
-        subscriber: isSubscriber ? "1" : "0",
-        subscriber_plan: String(subStatus?.plan || "FREE"), // ✅ extra (handy)
-        subscriber_discount_pct: String(effectiveDiscountPct || 0),
-        discount_cents: String(discountCentsSafe || 0),
-
-        base_cents: String(Number(totalCents || 0)),
-        platform_fee_cents: String(Number(platformFeeCents || 0)),
-        processing_fee_cents: String(Number(processingFeeCents || 0)),
-        gross_cents: String(Number(grossTotalCents || 0)),
       },
     },
 
+    // ✅ Processing fee paid by golfer
+    ...(processingFeeCents > 0
+      ? [
+          {
+            quantity: 1,
+            price_data: {
+              currency: "aud",
+              unit_amount: Number(processingFeeCents || 0),
+              product_data: {
+                name: "Processing fee",
+                description: "Card payment processing",
+              },
+            },
+          },
+        ]
+      : []),
+  ],
+
+  payment_intent_data: {
+    transfer_data: { destination: stripe_account_id },
+    application_fee_amount: appFeeCents,
     metadata: {
       booking_id: String(bookingId || ""),
       reference,
@@ -10867,47 +10811,64 @@ if (payment_mode === "PAY_ON_BOOKING") {
       subscriber_plan: String(subStatus?.plan || "FREE"), // ✅ extra (handy)
       subscriber_discount_pct: String(effectiveDiscountPct || 0),
       discount_cents: String(discountCentsSafe || 0),
+
+      base_cents: String(Number(totalCents || 0)),
+      platform_fee_cents: String(Number(platformFeeCents || 0)),
+      processing_fee_cents: String(Number(processingFeeCents || 0)),
+      gross_cents: String(Number(grossTotalCents || 0)),
     },
+  },
 
-    success_url: `${BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
-    cancel_url: `${BASE_URL}/book/${slug}?cancelled=1&ref=${encodeURIComponent(reference)}`,
-  });
-
-  await q("COMMIT_pay_on_booking", "COMMIT");
-  didBegin = false;
-
-  return res.json({
-    ok: true,
+  metadata: {
+    booking_id: String(bookingId || ""),
     reference,
-    payment_mode: "PAY_ON_BOOKING",
-    checkoutUrl: session.url,
-    course: { slug: courseRow.slug, name: courseRow.name },
-    booking: {
-      date,
-      time,
-      holes,
-      players,
-      pricePerPlayerCents: ppp,
-      isSubscriber,
-      discountPct: effectiveDiscountPct,
-      discountCents: discountCentsSafe,
+    course_slug: slug,
+    platform_fee_bps: String(courseFeeBps),
+    subscriber: isSubscriber ? "1" : "0",
+    subscriber_plan: String(subStatus?.plan || "FREE"), // ✅ extra (handy)
+    subscriber_discount_pct: String(effectiveDiscountPct || 0),
+    discount_cents: String(discountCentsSafe || 0),
+  },
 
-      // ✅ base + fee breakdown for UI
-      totalCents, // base (course) AFTER discount
-      processingFeeCents,
-      grossTotalCents,
+  success_url: `${BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
+  cancel_url: `${BASE_URL}/book/${slug}?cancelled=1&ref=${encodeURIComponent(reference)}`,
+});
 
-      addonsCents,
-      amountDueCents: 0,
-      cart_qty,
-      hire_clubs_qty,
-      layout_key,
-      front_nine_key,
-      back_nine_key,
-    },
-    emailOk: false,
-    emailReason: "pay_on_booking",
-  });
+await q("COMMIT_pay_on_booking", "COMMIT");
+didBegin = false;
+
+return res.json({
+  ok: true,
+  reference,
+  payment_mode: "PAY_ON_BOOKING",
+  checkoutUrl: session.url,
+  course: { slug: courseRow.slug, name: courseRow.name },
+  booking: {
+    date,
+    time,
+    holes,
+    players,
+    pricePerPlayerCents: ppp,
+    isSubscriber,
+    discountPct: effectiveDiscountPct,
+    discountCents: discountCentsSafe,
+
+    // ✅ base + fee breakdown for UI
+    totalCents, // base (course) AFTER discount
+    processingFeeCents,
+    grossTotalCents,
+
+    addonsCents,
+    amountDueCents: 0,
+    cart_qty,
+    hire_clubs_qty,
+    layout_key,
+    front_nine_key,
+    back_nine_key,
+  },
+  emailOk: false,
+  emailReason: "pay_on_booking",
+});
 }
 
 // ✅ PAY_AT_COURSE ONLY: now we consume capacity
