@@ -45,7 +45,7 @@ const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
   .filter(Boolean);
 
 // ✅ Determine if an email is an active subscriber (subscriber_status table)
-async function isSubscriberEmailLegacy(email) {
+async function isSubscriberEmail(email) {
   const e = String(email || "").trim().toLowerCase();
   if (!e) return false;
 
@@ -10141,41 +10141,74 @@ async function handleBook(req, res) {
     // ✅ Determine if booking email is an active subscriber
 // Source of truth: Stripe (active subscription). DB is fallback.
 // IMPORTANT: must NOT reference columns that might not exist (like users.is_pro)
+//
+// ✅ FIX: You MUST NOT have TWO functions named `isSubscriberEmail` in this file.
+// Keep THIS one (below) and rename the other one later in this snip to avoid the SyntaxError.
+//
+// ✅ DEBUG: set SUBSCRIBER_DEBUG=true temporarily to see which path is being used.
+const SUBSCRIBER_DEBUG = true;
+
+// ✅ Keep a place to read debug info from (optional)
+function subDbg(...args) {
+  if (SUBSCRIBER_DEBUG) console.log("[subscriber]", ...args);
+}
+
 async function isSubscriberEmail(email) {
   const e = String(email || "").trim().toLowerCase();
-  if (!e) return false;
+  if (!e) {
+    subDbg("empty_email", { email });
+    return false;
+  }
 
   // 1) Env allowlist fallback (fastest manual override)
-  if (SUBSCRIBER_EMAILS.includes(e)) return true;
+  try {
+    const hit = Array.isArray(SUBSCRIBER_EMAILS) && SUBSCRIBER_EMAILS.includes(e);
+    subDbg("path=allowlist", { email: e, hit });
+    if (hit) return true;
+  } catch (err) {
+    subDbg("path=allowlist_error", { email: e, err: err?.message || err });
+  }
 
   // 2) subscriber_status table (fast + no Stripe call)
   // (server.js webhook keeps this in sync)
+  // ✅ DEBUG: log whether we found it + status
   try {
     const r = await client.query(
       `
-      SELECT 1
+      SELECT status
       FROM subscriber_status
       WHERE lower(email)=lower($1)
-        AND status IN ('active','trialing')
       LIMIT 1;
       `,
       [e]
     );
-    if (r.rows?.length) return true;
-  } catch {}
+    const status = String(r.rows?.[0]?.status || "").toLowerCase();
+    const ok = status === "active" || status === "trialing";
+    subDbg("path=subscriber_status", { email: e, found: !!r.rows?.length, status, ok });
+    if (ok) return true;
+  } catch (err) {
+    subDbg("path=subscriber_status_error", { email: e, err: err?.message || err });
+  }
 
   // 3) Stripe source of truth (active subscription by email)
   // This fixes “discount didn’t apply” even if subscriber_status hasn't been populated yet.
   try {
-    if (stripe) {
+    if (!stripe) {
+      subDbg("path=stripe", { email: e, configured: false });
+    } else {
+      subDbg("path=stripe", { email: e, configured: true });
+
       const customers = await stripe.customers.list({ email: e, limit: 1 });
       const cust = customers?.data?.[0];
+      subDbg("path=stripe_customers", { email: e, foundCustomer: !!cust?.id });
+
       if (cust?.id) {
         const subs = await stripe.subscriptions.list({
           customer: cust.id,
           status: "active",
           limit: 1,
         });
+        subDbg("path=stripe_subscriptions_active", { email: e, found: !!subs?.data?.length });
         if (subs?.data?.length) return true;
 
         // also treat trialing as subscriber
@@ -10184,31 +10217,39 @@ async function isSubscriberEmail(email) {
           status: "trialing",
           limit: 1,
         });
+        subDbg("path=stripe_subscriptions_trialing", { email: e, found: !!trialSubs?.data?.length });
         if (trialSubs?.data?.length) return true;
       }
     }
   } catch (e3) {
+    subDbg("path=stripe_error", { email: e, err: e3?.message || e3 });
     console.warn("⚠️ Stripe subscriber lookup failed:", e3?.message || e3);
   }
 
   // 4) users.plan fallback (only if present + useful for your system)
-// NOTE: this is NOT Stripe source of truth, just a fallback.
-try {
-  const r2 = await client.query(
-    `
-    SELECT 1
-    FROM users
-    WHERE lower(email)=lower($1)
-      AND lower(COALESCE(plan,'')) IN ('basic','pro')
-    LIMIT 1;
-    `,
-    [e]
-  );
-  if (r2.rows?.length) return true;
-} catch {}
+  // NOTE: this is NOT Stripe source of truth, just a fallback.
+  try {
+    const r2 = await client.query(
+      `
+      SELECT COALESCE(TRIM(plan),'') AS plan
+      FROM users
+      WHERE lower(trim(email))=lower($1)
+      LIMIT 1;
+      `,
+      [e]
+    );
+    const plan = String(r2.rows?.[0]?.plan || "").trim().toLowerCase();
+    const ok = plan === "basic" || plan === "pro";
+    subDbg("path=users_plan", { email: e, found: !!r2.rows?.length, plan, ok });
+    if (ok) return true;
+  } catch (err) {
+    subDbg("path=users_plan_error", { email: e, err: err?.message || err });
+  }
 
-return false;
+  subDbg("path=none", { email: e, isSubscriber: false });
+  return false;
 }
+
 // ✅ Live subscriber check for the booking modal (debounced on email input)
 // GET /api/book/subscriber-status?slug=...&email=...&baseCents=...
 router.get("/subscriber-status", async (req, res) => {
@@ -10234,6 +10275,16 @@ router.get("/subscriber-status", async (req, res) => {
 
     // 2) Check if this email is an active subscriber (your existing helper)
     const isSubscriber = await isSubscriberEmail(email);
+
+    // ✅ DEBUG: log decision from this route too
+    subDbg("route=subscriber-status", {
+      slug,
+      email,
+      isSubscriber,
+      discountEnabled,
+      discountPct,
+      baseCents,
+    });
 
     // 3) Compute preview totals (frontend can use this immediately)
     let discountApplied = false;
@@ -10266,6 +10317,7 @@ router.get("/subscriber-status", async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 // ===============================
 // ✅ Subscriber helpers + endpoints
 // ===============================
@@ -10334,7 +10386,9 @@ async function getSubscriberStatus(emailRaw) {
 }
 
 // ✅ Keep old name used elsewhere (drop-in)
-async function isSubscriberEmail(emailRaw) {
+// ❌ FIX: this used to be named `isSubscriberEmail` which DUPLICATED the function above.
+// ✅ Rename it to avoid "Identifier 'isSubscriberEmail' has already been declared".
+async function isSubscriberEmail_viaStatus(emailRaw) {
   const s = await getSubscriberStatus(emailRaw);
   return !!s.isSubscriber;
 }
@@ -10347,6 +10401,10 @@ router.get("/subscriber-check", async (req, res) => {
     if (!email) return res.json({ ok: true, email: "", plan: "FREE", isSubscriber: false });
 
     const s = await getSubscriberStatus(email);
+
+    // ✅ DEBUG: show which source this endpoint used
+    subDbg("route=subscriber-check", { email, plan: s.plan, isSubscriber: !!s.isSubscriber, source: s.source });
+
     return res.json({ ok: true, email: s.email, plan: s.plan, isSubscriber: !!s.isSubscriber, source: s.source });
   } catch (e) {
     console.error("subscriber-check error", e);
@@ -10354,11 +10412,18 @@ router.get("/subscriber-check", async (req, res) => {
   }
 });
 
-
 // ✅ CRITICAL FIX: run subscriber check BEFORE BEGIN (so it cannot poison the booking txn)
 const golfer_email_norm = String(golfer_email || "").trim().toLowerCase();
 const subStatus = await getSubscriberStatus(golfer_email_norm);
 const isSubscriber = !!subStatus.isSubscriber;
+
+// ✅ DEBUG: log what confirm-booking is using (this is the key one)
+subDbg("confirm-booking subscriber decision", {
+  email: golfer_email_norm,
+  isSubscriber,
+  source: subStatus.source,
+  plan: subStatus.plan,
+});
 
 await q("BEGIN", "BEGIN");
 didBegin = true;
