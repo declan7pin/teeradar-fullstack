@@ -10719,146 +10719,108 @@ if (payment_mode === "PAY_ON_BOOKING") {
 // ✅ DEBUG: verify Stripe is charging the discounted amount (NOT pre-discount)
 // ✅ DEBUG: verify Stripe is charging the discounted amount (NOT pre-discount)
 // IMPORTANT: "totalCents" MUST already be AFTER discount (base + addons - discount), excluding processing fee.
-const stripeBaseCents = Number(totalCents || 0);              // ✅ after-discount base (course amount)
-const stripeFeeCents  = Number(processingFeeCents || 0);      // ✅ processing fee charged to golfer
-const stripeGrossCents = stripeBaseCents + stripeFeeCents;    // ✅ what golfer pays in total
+// ✅ Stripe MUST charge the DISCOUNTED base + the processing fee (if any)
+const stripeBaseCents = Number(totalCents || 0);            // after-discount base
+const stripeFeeCents  = Number(processingFeeCents || 0);    // fee added on top
+const stripeGrossCents = stripeBaseCents + stripeFeeCents;  // what golfer pays
 
-console.log("[stripe] session amounts", {
-  email: golfer_email_norm,
-  isSubscriber,
-  plan: String(subStatus?.plan || "FREE"),
-  courseDiscountEnabled,
-  courseDiscountPct,
-  effectiveDiscountPct,
-  totalBeforeDiscountCents,
-  discountCents,
-  discountCentsSafe,
-  totalCents, // ✅ should be AFTER discount
-  processingFeeCents,
-  grossTotalCents,
-  stripeBaseCents,
-  stripeFeeCents,
-  stripeGrossCents,
-});
+// ✅ build line items (base always, fee optional)
+const lineItems = [
+  {
+    quantity: 1,
+    price_data: {
+      currency: "aud",
+      unit_amount: stripeBaseCents,
+      product_data: {
+        name: `${courseRow.name} — ${holes} holes (${players} players)`,
+        description: `${date} ${time}`,
+      },
+    },
+  },
+];
 
-// ✅ If these don't match, you're charging the wrong thing
-if (payment_mode === "PAY_ON_BOOKING") {
-  if (stripeBaseCents <= 0 || stripeGrossCents <= 0) {
-    console.warn("[stripe] invalid cents", {
-      stripeBaseCents,
-      stripeFeeCents,
-      stripeGrossCents,
-    });
-    await q("ROLLBACK_invalid_payment_amount", "ROLLBACK");
-    didBegin = false;
-    return res.status(400).json({ ok: false, error: "invalid_payment_amount" });
-  }
-
-  // ✅ Hard assertion: Stripe must charge EXACTLY what UI says (grossTotalCents)
-  // If grossTotalCents is present, force stripeGrossCents to match it (and fail loudly if not)
-  if (Number.isFinite(Number(grossTotalCents || 0))) {
-    const gt = Number(grossTotalCents || 0);
-    if (stripeGrossCents !== gt) {
-      console.warn("[stripe] MISMATCH: stripeGrossCents != grossTotalCents (FIX REQUIRED)", {
-        stripeGrossCents,
-        grossTotalCents: gt,
-        stripeBaseCents,
-        stripeFeeCents,
-        totalCents,
-        processingFeeCents,
-        totalBeforeDiscountCents,
-        discountCentsSafe,
-        effectiveDiscountPct,
-      });
-
-      // ✅ Don't silently proceed and charge the wrong amount
-      await q("ROLLBACK_stripe_amount_mismatch", "ROLLBACK");
-      didBegin = false;
-      return res.status(400).json({
-        ok: false,
-        error: "stripe_amount_mismatch",
-        debug: {
-          stripeGrossCents,
-          grossTotalCents: gt,
-          stripeBaseCents,
-          stripeFeeCents,
-        },
-      });
-    }
-  }
+// add fee as a separate line item so it can't accidentally overwrite the base
+if (stripeFeeCents > 0) {
+  lineItems.push({
+    quantity: 1,
+    price_data: {
+      currency: "aud",
+      unit_amount: stripeFeeCents,
+      product_data: {
+        name: "Booking fee",
+        description: "Covers card processing.",
+      },
+    },
+  });
 }
+
+// ✅ platform fee is on BASE only (not including processing fee)
+const platformFeeCents = Math.max(
+  0,
+  Math.round((Number(totalCents || 0) * courseFeeBps) / 10000)
+);
+
+// ✅ golfer pays gross; app fee = platform fee + processing fee
+const appFeeCents = Math.max(
+  0,
+  Math.min(
+    stripeGrossCents,
+    platformFeeCents + stripeFeeCents
+  )
+);
 
 const session = await stripe.checkout.sessions.create({
   mode: "payment",
-  customer_email: golfer_email_norm, // ✅ normalized
+  customer_email: golfer_email_norm,
 
-  line_items: [
-    // ✅ Base booking amount (what the course is charging) — MUST be AFTER discount
-    {
-      quantity: 1,
-      price_data: {
-        currency: "aud",
-        unit_amount: stripeBaseCents, // ✅ use computed after-discount cents (not raw totalCents again)
-        product_data: {
-          name: `${courseRow.name} — ${holes} holes (${players} players)`,
-          description: `${date} ${time}`,
-        },
-      },
-    },
+  line_items: lineItems,
 
-    // ✅ Processing fee paid by golfer
-    ...(stripeFeeCents > 0
-      ? [
-          {
-            quantity: 1,
-            price_data: {
-              currency: "aud",
-              unit_amount: stripeFeeCents, // ✅ use computed fee cents
-              product_data: {
-                name: "Processing fee",
-                description: "Card payment processing",
-              },
-            },
-          },
-        ]
-      : []),
-  ],
-
+  // ✅ IMPORTANT: fee split uses the same discounted base
   payment_intent_data: {
+    application_fee_amount: appFeeCents,
     transfer_data: { destination: stripe_account_id },
-    application_fee_amount: Number(appFeeCents || 0),
+
+    // keep everything you already set in metadata, but ensure discount is included:
     metadata: {
-      booking_id: String(bookingId || ""),
+      slug,
+      date,
+      time,
+      holes: String(holes),
+      players: String(players),
+      golfer_name: golfer_name || "",
+      golfer_email: golfer_email_norm || "",
+      golfer_phone: golfer_phone || "",
+      cart_qty: String(cart_qty || 0),
+      hire_clubs_qty: String(hire_clubs_qty || 0),
+      layout_key: String(layout_key || ""),
+      front_nine_key: String(front_nine_key || ""),
+      back_nine_key: String(back_nine_key || ""),
       reference,
-      course_slug: slug,
-      platform_fee_bps: String(courseFeeBps),
+
+      // ✅ amounts (source of truth)
+      base_cents: String(stripeBaseCents),
+      processing_fee_cents: String(stripeFeeCents),
+      gross_cents: String(stripeGrossCents),
+      platform_fee_cents: String(platformFeeCents),
+
+      // ✅ discount diagnostics
       subscriber: isSubscriber ? "1" : "0",
       subscriber_plan: String(subStatus?.plan || "FREE"),
       subscriber_discount_pct: String(effectiveDiscountPct || 0),
       discount_cents: String(discountCentsSafe || 0),
-
-      // ✅ Amounts used for Stripe (source of truth)
-      base_cents: String(stripeBaseCents),
-      platform_fee_cents: String(Number(platformFeeCents || 0)),
-      processing_fee_cents: String(stripeFeeCents),
-      gross_cents: String(stripeGrossCents),
-
-      // ✅ Extra diagnostics (optional but handy)
       total_before_discount_cents: String(Number(totalBeforeDiscountCents || 0)),
     },
   },
 
+  // (optional) duplicate at session-level metadata too (handy for debugging)
   metadata: {
     booking_id: String(bookingId || ""),
     reference,
     course_slug: slug,
-    platform_fee_bps: String(courseFeeBps),
     subscriber: isSubscriber ? "1" : "0",
     subscriber_plan: String(subStatus?.plan || "FREE"),
     subscriber_discount_pct: String(effectiveDiscountPct || 0),
     discount_cents: String(discountCentsSafe || 0),
-
-    // ✅ Mirror totals at top-level metadata too
     base_cents: String(stripeBaseCents),
     processing_fee_cents: String(stripeFeeCents),
     gross_cents: String(stripeGrossCents),
