@@ -1021,56 +1021,56 @@ const canBook = slotsAvail >= wantPlayers;
   }
 
   let selectedSlot = null;
-  // --- Subscriber discount (UI preview) ---
-// Uses backend source of truth + course settings:
-// GET /api/book/subscriber-status?slug=...&email=...&baseCents=...
+
 const __subscriber = {
   checkedEmail: "",
   isSubscriber: false,
-  discountEnabled: false,
+
+  // ✅ values returned by /subscriber-status
+  discountApplied: false,
   discountPct: 0,
+  baseCents: 0,
+  discountedCents: 0,
 };
 
 function moneyAUD(cents){
   return moneyFromCents(cents);
 }
 
-function applySubscriberDiscountToTotal(totalBeforeDiscountCents){
-  // ✅ allow discount if the course flag is missing (common when SELECT doesn't include it)
-  const courseAllowsRaw =
-    (course?.subscriber_discount_enabled ?? course?.subscriberDiscountEnabled);
+function applySubscriberDiscountToTotal(totalBeforeDiscountCents) {
+  const base = Number(totalBeforeDiscountCents || 0);
 
-  const courseAllows = (courseAllowsRaw === undefined) ? true : !!courseAllowsRaw;
-
-  const pctFromCourse =
-    Number.isFinite(Number(course?.subscriber_discount_pct))
-      ? Number(course.subscriber_discount_pct)
-      : Number(__subscriber.discountPct || 0);
-
-  const pct = Math.max(0, Number(pctFromCourse || 0));
-
-  if (!__subscriber.isSubscriber || !courseAllows || pct <= 0) {
-    return { discounted: totalBeforeDiscountCents, discount: 0 };
+  // ✅ If backend preview matches this baseCents, use backend as source of truth
+  if (
+    __subscriber.discountApplied === true &&
+    Number.isFinite(__subscriber.baseCents) &&
+    Number(__subscriber.baseCents) === base &&
+    Number.isFinite(__subscriber.discountedCents)
+  ) {
+    const discounted = Math.max(0, Number(__subscriber.discountedCents || 0));
+    const discount = Math.max(0, base - discounted);
+    return { discounted, discount };
   }
 
-  const discount = Math.round((totalBeforeDiscountCents * pct) / 100);
-  return {
-    discounted: Math.max(0, totalBeforeDiscountCents - discount),
-    discount: Math.max(0, discount),
-  };
+  // ✅ fallback (no discount)
+  return { discounted: base, discount: 0 };
 }
 
 let __subReqId = 0;
 
-async function checkSubscriberByEmail(email){
+async function checkSubscriberByEmail(email) {
   const e = String(email || "").trim().toLowerCase();
   __subscriber.checkedEmail = e;
+
+  // reset state
   __subscriber.isSubscriber = false;
+  __subscriber.discountApplied = false;
+  __subscriber.baseCents = 0;
+  __subscriber.discountedCents = 0;
 
   const banner = $("subBanner");
   const myReqId = ++__subReqId;
 
-  // show guidance while typing
   if (banner) {
     banner.style.display = "block";
     banner.textContent = "Enter your full email to check subscriber status…";
@@ -1081,42 +1081,66 @@ async function checkSubscriberByEmail(email){
     return;
   }
 
-  if (banner) {
-    banner.textContent = "Checking subscriber status…";
+  // ✅ must have selectedSlot to compute baseCents
+  if (!selectedSlot) {
+    if (banner) banner.textContent = "Checking subscriber status…";
+    updateModalTotal();
+    return;
   }
 
+  // ✅ Base BEFORE discount = green fees + add-ons
+  const baseCents = computeTotalCents(selectedSlot);
+
+  if (banner) banner.textContent = "Checking subscriber status…";
+
   try {
-    const res = await apiFetch("/api/book/subscriber-check?" + new URLSearchParams({ email: e }).toString());
-    const data = await res.json().catch(()=> ({}));
+    const qs = new URLSearchParams({
+      slug,
+      email: e,
+      baseCents: String(baseCents || 0),
+    });
 
-    // ✅ ignore stale responses
-    if (myReqId !== __subReqId) return;
+    const res = await apiFetch("/api/book/subscriber-status?" + qs.toString(), { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
 
-    const isSub = data?.isSubscriber === true;
-    __subscriber.isSubscriber = !!isSub;
+    if (myReqId !== __subReqId) return; // ignore stale response
 
-    const pct =
-      Number.isFinite(Number(course?.subscriber_discount_pct))
-        ? Number(course.subscriber_discount_pct)
-        : 5;
+    if (!res.ok || !data?.ok) {
+      __subscriber.isSubscriber = false;
+      __subscriber.discountApplied = false;
+      __subscriber.baseCents = baseCents;
+      __subscriber.discountedCents = baseCents;
 
-    const courseAllowsRaw = (course?.subscriber_discount_enabled ?? course?.subscriberDiscountEnabled);
-    const courseAllows = (courseAllowsRaw === undefined) ? true : !!courseAllowsRaw;
+      if (banner) banner.textContent = "Could not check subscriber status.";
+      updateModalTotal();
+      return;
+    }
+
+    __subscriber.isSubscriber = data.isSubscriber === true;
+    __subscriber.discountApplied = data.discountApplied === true;
+    __subscriber.discountPct = Number(data.discountPct || 0);
+    __subscriber.baseCents = Number(data.baseCents || baseCents);
+    __subscriber.discountedCents = Number(data.discountedCents || baseCents);
 
     if (banner) {
-      if (__subscriber.isSubscriber && courseAllows && pct > 0) {
-        banner.textContent = `✅ Subscriber discount — ${pct}% applied`;
+      if (__subscriber.discountApplied && __subscriber.discountPct > 0) {
+        banner.textContent = `✅ Subscriber discount — ${__subscriber.discountPct}% applied`;
       } else if (!__subscriber.isSubscriber) {
         banner.textContent = "Not a subscriber (no discount).";
       } else {
-        banner.style.display = "none";
+        banner.textContent = "Subscriber (no course discount).";
       }
     }
 
     updateModalTotal();
   } catch (err) {
     if (myReqId !== __subReqId) return;
+
     __subscriber.isSubscriber = false;
+    __subscriber.discountApplied = false;
+    __subscriber.baseCents = baseCents;
+    __subscriber.discountedCents = baseCents;
+
     if (banner) {
       banner.textContent = "Could not check subscriber status.";
       banner.style.display = "block";
