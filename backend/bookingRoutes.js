@@ -10717,9 +10717,11 @@ if (payment_mode === "PAY_ON_BOOKING") {
   );
 
 // ✅ DEBUG: verify Stripe is charging the discounted amount (NOT pre-discount)
-const stripeBaseCents = Number(totalCents || 0);
-const stripeFeeCents = Number(processingFeeCents || 0);
-const stripeGrossCents = stripeBaseCents + stripeFeeCents;
+// ✅ DEBUG: verify Stripe is charging the discounted amount (NOT pre-discount)
+// IMPORTANT: "totalCents" MUST already be AFTER discount (base + addons - discount), excluding processing fee.
+const stripeBaseCents = Number(totalCents || 0);              // ✅ after-discount base (course amount)
+const stripeFeeCents  = Number(processingFeeCents || 0);      // ✅ processing fee charged to golfer
+const stripeGrossCents = stripeBaseCents + stripeFeeCents;    // ✅ what golfer pays in total
 
 console.log("[stripe] session amounts", {
   email: golfer_email_norm,
@@ -10742,24 +10744,47 @@ console.log("[stripe] session amounts", {
 // ✅ If these don't match, you're charging the wrong thing
 if (payment_mode === "PAY_ON_BOOKING") {
   if (stripeBaseCents <= 0 || stripeGrossCents <= 0) {
-    console.warn("[stripe] invalid cents", { stripeBaseCents, stripeFeeCents, stripeGrossCents });
+    console.warn("[stripe] invalid cents", {
+      stripeBaseCents,
+      stripeFeeCents,
+      stripeGrossCents,
+    });
     await q("ROLLBACK_invalid_payment_amount", "ROLLBACK");
     didBegin = false;
     return res.status(400).json({ ok: false, error: "invalid_payment_amount" });
   }
 
-  // This catches the exact bug you're seeing (Stripe charging pre-discount base)
-  // It doesn't "fix" it silently, but it tells you immediately in logs.
-  if (
-    Number.isFinite(Number(grossTotalCents || 0)) &&
-    stripeGrossCents !== Number(grossTotalCents || 0)
-  ) {
-    console.warn("[stripe] MISMATCH: stripeGrossCents != grossTotalCents", {
-      stripeGrossCents,
-      grossTotalCents,
-      stripeBaseCents,
-      stripeFeeCents,
-    });
+  // ✅ Hard assertion: Stripe must charge EXACTLY what UI says (grossTotalCents)
+  // If grossTotalCents is present, force stripeGrossCents to match it (and fail loudly if not)
+  if (Number.isFinite(Number(grossTotalCents || 0))) {
+    const gt = Number(grossTotalCents || 0);
+    if (stripeGrossCents !== gt) {
+      console.warn("[stripe] MISMATCH: stripeGrossCents != grossTotalCents (FIX REQUIRED)", {
+        stripeGrossCents,
+        grossTotalCents: gt,
+        stripeBaseCents,
+        stripeFeeCents,
+        totalCents,
+        processingFeeCents,
+        totalBeforeDiscountCents,
+        discountCentsSafe,
+        effectiveDiscountPct,
+      });
+
+      // ✅ Don't silently proceed and charge the wrong amount
+      await q("ROLLBACK_stripe_amount_mismatch", "ROLLBACK");
+      didBegin = false;
+      return res.status(400).json({
+        ok: false,
+        error: "stripe_amount_mismatch",
+        debug: {
+          stripeGrossCents,
+          grossTotalCents: gt,
+          stripeBaseCents,
+          stripeFeeCents,
+        },
+      });
+    }
   }
 }
 
@@ -10768,12 +10793,12 @@ const session = await stripe.checkout.sessions.create({
   customer_email: golfer_email_norm, // ✅ normalized
 
   line_items: [
-    // ✅ Base booking amount (what the course is charging)
+    // ✅ Base booking amount (what the course is charging) — MUST be AFTER discount
     {
       quantity: 1,
       price_data: {
         currency: "aud",
-        unit_amount: Number(totalCents || 0),
+        unit_amount: stripeBaseCents, // ✅ use computed after-discount cents (not raw totalCents again)
         product_data: {
           name: `${courseRow.name} — ${holes} holes (${players} players)`,
           description: `${date} ${time}`,
@@ -10782,13 +10807,13 @@ const session = await stripe.checkout.sessions.create({
     },
 
     // ✅ Processing fee paid by golfer
-    ...(processingFeeCents > 0
+    ...(stripeFeeCents > 0
       ? [
           {
             quantity: 1,
             price_data: {
               currency: "aud",
-              unit_amount: Number(processingFeeCents || 0),
+              unit_amount: stripeFeeCents, // ✅ use computed fee cents
               product_data: {
                 name: "Processing fee",
                 description: "Card payment processing",
@@ -10801,21 +10826,25 @@ const session = await stripe.checkout.sessions.create({
 
   payment_intent_data: {
     transfer_data: { destination: stripe_account_id },
-    application_fee_amount: appFeeCents,
+    application_fee_amount: Number(appFeeCents || 0),
     metadata: {
       booking_id: String(bookingId || ""),
       reference,
       course_slug: slug,
       platform_fee_bps: String(courseFeeBps),
       subscriber: isSubscriber ? "1" : "0",
-      subscriber_plan: String(subStatus?.plan || "FREE"), // ✅ extra (handy)
+      subscriber_plan: String(subStatus?.plan || "FREE"),
       subscriber_discount_pct: String(effectiveDiscountPct || 0),
       discount_cents: String(discountCentsSafe || 0),
 
-      base_cents: String(Number(totalCents || 0)),
+      // ✅ Amounts used for Stripe (source of truth)
+      base_cents: String(stripeBaseCents),
       platform_fee_cents: String(Number(platformFeeCents || 0)),
-      processing_fee_cents: String(Number(processingFeeCents || 0)),
-      gross_cents: String(Number(grossTotalCents || 0)),
+      processing_fee_cents: String(stripeFeeCents),
+      gross_cents: String(stripeGrossCents),
+
+      // ✅ Extra diagnostics (optional but handy)
+      total_before_discount_cents: String(Number(totalBeforeDiscountCents || 0)),
     },
   },
 
@@ -10825,15 +10854,19 @@ const session = await stripe.checkout.sessions.create({
     course_slug: slug,
     platform_fee_bps: String(courseFeeBps),
     subscriber: isSubscriber ? "1" : "0",
-    subscriber_plan: String(subStatus?.plan || "FREE"), // ✅ extra (handy)
+    subscriber_plan: String(subStatus?.plan || "FREE"),
     subscriber_discount_pct: String(effectiveDiscountPct || 0),
     discount_cents: String(discountCentsSafe || 0),
+
+    // ✅ Mirror totals at top-level metadata too
+    base_cents: String(stripeBaseCents),
+    processing_fee_cents: String(stripeFeeCents),
+    gross_cents: String(stripeGrossCents),
   },
 
   success_url: `${BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
   cancel_url: `${BASE_URL}/book/${slug}?cancelled=1&ref=${encodeURIComponent(reference)}`,
 });
-
 await q("COMMIT_pay_on_booking", "COMMIT");
 didBegin = false;
 
