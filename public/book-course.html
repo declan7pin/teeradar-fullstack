@@ -1060,60 +1060,54 @@ function applySubscriberDiscountToTotal(totalBeforeDiscountCents){
   };
 }
 
+let __subReqId = 0;
+
 async function checkSubscriberByEmail(email){
   const e = String(email || "").trim().toLowerCase();
   __subscriber.checkedEmail = e;
   __subscriber.isSubscriber = false;
 
   const banner = $("subBanner");
+  const myReqId = ++__subReqId;
+
+  // show guidance while typing
   if (banner) {
     banner.style.display = "block";
-    banner.textContent = "Checking subscriber status…";
+    banner.textContent = "Enter your full email to check subscriber status…";
   }
 
   if (!isValidEmail(e)) {
-    if (banner) banner.style.display = "none";
     updateModalTotal();
     return;
   }
 
+  if (banner) {
+    banner.textContent = "Checking subscriber status…";
+  }
+
   try {
-    // ✅ source of truth: bookingRoutes endpoint
-    let res = await apiFetch(
-      "/api/book/subscriber-check?" + new URLSearchParams({ email: e }).toString()
-    );
-    let data = await res.json().catch(()=> ({}));
+    const res = await apiFetch("/api/book/subscriber-check?" + new URLSearchParams({ email: e }).toString());
+    const data = await res.json().catch(()=> ({}));
 
-    // ✅ OPTIONAL fallback if endpoint missing in some environments
-    // (keep if you want; otherwise you can delete this block)
-    if (!res.ok || !data || data.ok === false) {
-      res = await apiFetch("/api/account/plan?" + new URLSearchParams({ email: e }).toString());
-      data = await res.json().catch(()=> ({}));
-    }
+    // ✅ ignore stale responses
+    if (myReqId !== __subReqId) return;
 
-    // ✅ NEW: direct boolean from backend
-    const isSub = (data && data.isSubscriber === true);
-
+    const isSub = data?.isSubscriber === true;
     __subscriber.isSubscriber = !!isSub;
 
-    // ✅ discount pct (prefer course setting, fallback to stored)
     const pct =
       Number.isFinite(Number(course?.subscriber_discount_pct))
         ? Number(course.subscriber_discount_pct)
-        : Number(__subscriber.discountPct || 0) || 5;
+        : 5;
 
-    // ✅ allow discount if course flag missing (same as applySubscriberDiscountToTotal)
-    const courseAllowsRaw =
-      (course?.subscriber_discount_enabled ?? course?.subscriberDiscountEnabled);
+    const courseAllowsRaw = (course?.subscriber_discount_enabled ?? course?.subscriberDiscountEnabled);
     const courseAllows = (courseAllowsRaw === undefined) ? true : !!courseAllowsRaw;
 
     if (banner) {
       if (__subscriber.isSubscriber && courseAllows && pct > 0) {
         banner.textContent = `✅ Subscriber discount — ${pct}% applied`;
-        banner.style.display = "block";
       } else if (!__subscriber.isSubscriber) {
         banner.textContent = "Not a subscriber (no discount).";
-        banner.style.display = "block";
       } else {
         banner.style.display = "none";
       }
@@ -1121,6 +1115,7 @@ async function checkSubscriberByEmail(email){
 
     updateModalTotal();
   } catch (err) {
+    if (myReqId !== __subReqId) return;
     __subscriber.isSubscriber = false;
     if (banner) {
       banner.textContent = "Could not check subscriber status.";
