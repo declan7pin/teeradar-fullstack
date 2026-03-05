@@ -45,7 +45,7 @@ const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
   .filter(Boolean);
 
 // ✅ Determine if an email is an active subscriber (subscriber_status table)
-async function isSubscriberEmail(email) {
+async function isSubscriberEmailLegacy(email) {
   const e = String(email || "").trim().toLowerCase();
   if (!e) return false;
 
