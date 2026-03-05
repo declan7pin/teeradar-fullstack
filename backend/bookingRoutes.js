@@ -10138,143 +10138,37 @@ async function handleBook(req, res) {
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
 
-    // ✅ Determine if booking email is an active subscriber
-// Source of truth: Stripe (active subscription). DB is fallback.
-// IMPORTANT: must NOT reference columns that might not exist (like users.is_pro)
-async function isSubscriberEmail(email) {
-  const e = String(email || "").trim().toLowerCase();
-  if (!e) return false;
+   // ✅ Subscriber status (DB + optional Stripe fallback)
+// Single source of truth used by BOTH booking flow + modal preview
 
-  // 1) Env allowlist fallback (fastest manual override)
-  if (SUBSCRIBER_EMAILS.includes(e)) return true;
-
-  // 2) subscriber_status table (fast + no Stripe call)
-  // (server.js webhook keeps this in sync)
-  try {
-    const r = await client.query(
-      `
-      SELECT 1
-      FROM subscriber_status
-      WHERE lower(email)=lower($1)
-        AND status IN ('active','trialing')
-      LIMIT 1;
-      `,
-      [e]
-    );
-    if (r.rows?.length) return true;
-  } catch {}
-
-  // 3) Stripe source of truth (active subscription by email)
-  // This fixes “discount didn’t apply” even if subscriber_status hasn't been populated yet.
-  try {
-    if (stripe) {
-      const customers = await stripe.customers.list({ email: e, limit: 1 });
-      const cust = customers?.data?.[0];
-      if (cust?.id) {
-        const subs = await stripe.subscriptions.list({
-          customer: cust.id,
-          status: "active",
-          limit: 1,
-        });
-        if (subs?.data?.length) return true;
-
-        // also treat trialing as subscriber
-        const trialSubs = await stripe.subscriptions.list({
-          customer: cust.id,
-          status: "trialing",
-          limit: 1,
-        });
-        if (trialSubs?.data?.length) return true;
-      }
-    }
-  } catch (e3) {
-    console.warn("⚠️ Stripe subscriber lookup failed:", e3?.message || e3);
-  }
-
-  // 4) users.plan fallback (only if present + useful for your system)
-// NOTE: this is NOT Stripe source of truth, just a fallback.
-try {
-  const r2 = await client.query(
-    `
-    SELECT 1
-    FROM users
-    WHERE lower(email)=lower($1)
-      AND lower(COALESCE(plan,'')) IN ('basic','pro')
-    LIMIT 1;
-    `,
-    [e]
-  );
-  if (r2.rows?.length) return true;
-} catch {}
-
-return false;
-}
-// ✅ Live subscriber check for the booking modal (debounced on email input)
-// GET /api/book/subscriber-status?slug=...&email=...&baseCents=...
-router.get("/subscriber-status", async (req, res) => {
-  try {
-    const slug = String(req.query?.slug || "").trim().toLowerCase();
-    const email = String(req.query?.email || "").trim().toLowerCase();
-    const baseCents = Number(req.query?.baseCents || 0);
-
-    if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
-    if (!email) return res.status(400).json({ ok: false, error: "email_required" });
-
-    // 1) Load course discount settings
-    const courseQ = await pool.query(
-      `SELECT subscriber_discount_enabled, subscriber_discount_pct
-         FROM booking_courses
-        WHERE slug=$1
-        LIMIT 1;`,
-      [slug]
-    );
-    const course = courseQ.rows?.[0];
-    const discountEnabled = !!course?.subscriber_discount_enabled;
-    const discountPct = Number(course?.subscriber_discount_pct ?? 0);
-
-    // 2) Check if this email is an active subscriber (your existing helper)
-    const isSubscriber = await isSubscriberEmail(email);
-
-    // 3) Compute preview totals (frontend can use this immediately)
-    let discountApplied = false;
-    let discountedCents = baseCents;
-
-    if (
-      isSubscriber &&
-      discountEnabled &&
-      Number.isFinite(discountPct) &&
-      discountPct > 0 &&
-      baseCents > 0
-    ) {
-      discountedCents = Math.max(0, Math.round(baseCents * (1 - discountPct / 100)));
-      discountApplied = true;
-    }
-
-    return res.json({
-      ok: true,
-      slug,
-      email,
-      isSubscriber,
-      discountEnabled,
-      discountPct,
-      discountApplied,
-      baseCents,
-      discountedCents,
-    });
-  } catch (e) {
-    console.error("subscriber-status", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-// ✅ Helper: source of truth = DB users table (case-insensitive)
-// Optional Stripe fallback (ONLY if DB says not subscriber)
 async function getSubscriberStatus(emailRaw) {
   const email = String(emailRaw || "").trim().toLowerCase();
   if (!email) return { email: "", plan: "FREE", isSubscriber: false, source: "none" };
 
-  // 1) DB check (users table)
+  // 1) Fast DB table that webhook keeps in sync (recommended)
+  // If you don't have subscriber_status, this will just fall through safely.
   try {
     const r = await db.query(
+      `
+      SELECT status
+      FROM subscriber_status
+      WHERE lower(email)=lower($1)
+      LIMIT 1;
+      `,
+      [email]
+    );
+
+    const status = String(r.rows?.[0]?.status || "").toLowerCase();
+    if (status === "active" || status === "trialing") {
+      return { email, plan: "BASIC", isSubscriber: true, source: "subscriber_status" };
+    }
+  } catch {
+    // ignore (table may not exist)
+  }
+
+  // 2) users.plan fallback (only if your users table has plan populated)
+  try {
+    const r2 = await db.query(
       `
       SELECT
         CASE
@@ -10293,39 +10187,39 @@ async function getSubscriberStatus(emailRaw) {
       [email]
     );
 
-    const plan = String(r.rows[0]?.plan || "FREE").trim().toUpperCase();
+    const plan = String(r2.rows?.[0]?.plan || "FREE").trim().toUpperCase();
     const isSubscriber = plan === "BASIC" || plan === "PRO";
-
-    if (isSubscriber) return { email, plan, isSubscriber: true, source: "db" };
-  } catch (e) {
-    console.warn("getSubscriberStatus db check failed (non-fatal):", e?.message || e);
-    // fall through to Stripe fallback
+    if (isSubscriber) return { email, plan, isSubscriber: true, source: "users" };
+  } catch {
+    // ignore (users table/column may differ)
   }
 
-  // 2) Optional Stripe fallback (active subscription = subscriber)
+  // 3) Stripe fallback (source of truth if DB isn't populated yet)
   try {
     if (stripe) {
       const custList = await stripe.customers.list({ email, limit: 1 });
-      if (custList.data && custList.data.length) {
-        const customer = custList.data[0];
-
-        const subs = await stripe.subscriptions.list({
+      const customer = custList?.data?.[0];
+      if (customer?.id) {
+        const active = await stripe.subscriptions.list({
           customer: customer.id,
           status: "active",
           limit: 1,
         });
+        if (active?.data?.length) return { email, plan: "BASIC", isSubscriber: true, source: "stripe_active" };
 
-        if (subs.data && subs.data.length) {
-          // If you want, you can upgrade this to map priceId -> BASIC/PRO.
-          return { email, plan: "BASIC", isSubscriber: true, source: "stripe" };
-        }
+        const trialing = await stripe.subscriptions.list({
+          customer: customer.id,
+          status: "trialing",
+          limit: 1,
+        });
+        if (trialing?.data?.length) return { email, plan: "BASIC", isSubscriber: true, source: "stripe_trialing" };
       }
     }
   } catch (e) {
-    console.warn("getSubscriberStatus stripe fallback failed (non-fatal):", e?.message || e);
+    console.warn("⚠️ Stripe subscriber lookup failed:", e?.message || e);
   }
 
-  return { email, plan: "FREE", isSubscriber: false, source: "db" };
+  return { email, plan: "FREE", isSubscriber: false, source: "none" };
 }
 
 // ✅ Keep old name used elsewhere (drop-in)
@@ -10334,14 +10228,69 @@ async function isSubscriberEmail(emailRaw) {
   return !!s.isSubscriber;
 }
 
-// ✅ PUBLIC: check if an email is an active subscriber (DB users table + optional Stripe fallback)
+// ✅ Live subscriber check for the booking modal (debounced on email input)
+// GET /api/book/subscriber-status?slug=...&email=...&baseCents=...
+router.get("/subscriber-status", async (req, res) => {
+  try {
+    const slug = String(req.query?.slug || "").trim().toLowerCase();
+    const email = String(req.query?.email || "").trim().toLowerCase();
+    const baseCents = Number(req.query?.baseCents || 0);
+
+    if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
+    if (!email) return res.status(400).json({ ok: false, error: "email_required" });
+
+    // Load course discount settings
+    const courseQ = await db.query(
+      `SELECT subscriber_discount_enabled, subscriber_discount_pct
+         FROM booking_courses
+        WHERE slug=$1
+        LIMIT 1;`,
+      [slug]
+    );
+    const course = courseQ.rows?.[0];
+    const discountEnabled = !!course?.subscriber_discount_enabled;
+    const discountPct = Number(course?.subscriber_discount_pct ?? 0);
+
+    // Check subscriber
+    const s = await getSubscriberStatus(email);
+    const isSubscriber = !!s.isSubscriber;
+
+    // Compute preview
+    let discountApplied = false;
+    let discountedCents = baseCents;
+
+    if (isSubscriber && discountEnabled && discountPct > 0 && baseCents > 0) {
+      discountedCents = Math.max(0, Math.round(baseCents * (1 - discountPct / 100)));
+      discountApplied = true;
+    }
+
+    return res.json({
+      ok: true,
+      slug,
+      email,
+      isSubscriber,
+      plan: s.plan,
+      source: s.source,
+      discountEnabled,
+      discountPct,
+      discountApplied,
+      baseCents,
+      discountedCents,
+    });
+  } catch (e) {
+    console.error("subscriber-status", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// ✅ PUBLIC: check if an email is an active subscriber
 router.get("/subscriber-check", async (req, res) => {
   try {
     const email = String(req.query?.email || "").trim().toLowerCase();
     if (!email) return res.json({ ok: true, email: "", plan: "FREE", isSubscriber: false });
 
     const s = await getSubscriberStatus(email);
-    return res.json({ ok: true, email: s.email, plan: s.plan, isSubscriber: !!s.isSubscriber });
+    return res.json({ ok: true, email: s.email, plan: s.plan, isSubscriber: !!s.isSubscriber, source: s.source });
   } catch (e) {
     console.error("subscriber-check error", e);
     return res.status(200).json({ ok: true, email: "", plan: "FREE", isSubscriber: false }); // fail-closed
