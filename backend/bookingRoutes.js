@@ -10716,6 +10716,92 @@ if (payment_mode === "PAY_ON_BOOKING") {
     )
   );
 
+// ✅ DEBUG: verify Stripe is charging the discounted amount (NOT pre-discount)
+const stripeBaseCents = Number(totalCents || 0);
+const stripeFeeCents = Number(processingFeeCents || 0);
+const stripeGrossCents = stripeBaseCents + stripeFeeCents;
+
+console.log("[stripe] session amounts", {
+  email: golfer_email_norm,
+  isSubscriber,
+  plan: String(subStatus?.plan || "FREE"),
+  courseDiscountEnabled,
+  courseDiscountPct,
+  effectiveDiscountPct,
+  totalBeforeDiscountCents,
+  discountCents,
+  discountCentsSafe,
+  totalCents,             // ✅ should be AFTER discount
+  processingFeeCents,
+  grossTotalCents,
+  stripeBaseCents,
+  stripeFeeCents,
+  stripeGrossCents,
+});
+
+// ✅ If these don't match, you're charging the wrong thing
+if (payment_mode === "PAY_ON_BOOKING") {
+  if (stripeBaseCents <= 0 || stripeGrossCents <= 0) {
+    console.warn("[stripe] invalid cents", { stripeBaseCents, stripeFeeCents, stripeGrossCents });
+    await q("ROLLBACK_invalid_payment_amount", "ROLLBACK");
+    didBegin = false;
+    return res.status(400).json({ ok: false, error: "invalid_payment_amount" });
+  }
+
+  // This catches the exact bug you're seeing (Stripe charging pre-discount base)
+  // It doesn't "fix" it silently, but it tells you immediately in logs.
+  if (Number.isFinite(Number(grossTotalCents || 0)) && stripeGrossCents !== Number(grossTotalCents || 0)) {
+    console.warn("[stripe] MISMATCH: stripeGrossCents != grossTotalCents", {
+      stripeGrossCents,
+      grossTotalCents,
+      stripeBaseCents,
+      stripeFeeCents,
+    });
+  }
+}
+// ✅ DEBUG: verify Stripe is charging the discounted amount (NOT pre-discount)
+const stripeBaseCents = Number(totalCents || 0);
+const stripeFeeCents = Number(processingFeeCents || 0);
+const stripeGrossCents = stripeBaseCents + stripeFeeCents;
+
+console.log("[stripe] session amounts", {
+  email: golfer_email_norm,
+  isSubscriber,
+  plan: String(subStatus?.plan || "FREE"),
+  courseDiscountEnabled,
+  courseDiscountPct,
+  effectiveDiscountPct,
+  totalBeforeDiscountCents,
+  discountCents,
+  discountCentsSafe,
+  totalCents,             // ✅ should be AFTER discount
+  processingFeeCents,
+  grossTotalCents,
+  stripeBaseCents,
+  stripeFeeCents,
+  stripeGrossCents,
+});
+
+// ✅ If these don't match, you're charging the wrong thing
+if (payment_mode === "PAY_ON_BOOKING") {
+  if (stripeBaseCents <= 0 || stripeGrossCents <= 0) {
+    console.warn("[stripe] invalid cents", { stripeBaseCents, stripeFeeCents, stripeGrossCents });
+    await q("ROLLBACK_invalid_payment_amount", "ROLLBACK");
+    didBegin = false;
+    return res.status(400).json({ ok: false, error: "invalid_payment_amount" });
+  }
+
+  // This catches the exact bug you're seeing (Stripe charging pre-discount base)
+  // It doesn't "fix" it silently, but it tells you immediately in logs.
+  if (Number.isFinite(Number(grossTotalCents || 0)) && stripeGrossCents !== Number(grossTotalCents || 0)) {
+    console.warn("[stripe] MISMATCH: stripeGrossCents != grossTotalCents", {
+      stripeGrossCents,
+      grossTotalCents,
+      stripeBaseCents,
+      stripeFeeCents,
+    });
+  }
+}
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     customer_email: golfer_email_norm, // ✅ normalized
