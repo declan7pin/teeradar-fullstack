@@ -10063,92 +10063,86 @@ async function handleBook(req, res) {
     );
 
     const final_has_cart = cart_qty > 0;
-    const final_has_hire_clubs = hire_clubs_qty > 0;
+const final_has_hire_clubs = hire_clubs_qty > 0;
 
-    if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
-    if (!date) return res.status(400).json({ ok: false, error: "date_required" });
-    if (!time || !/^\d{2}:\d{2}$/.test(time)) return res.status(400).json({ ok: false, error: "time_invalid" });
-    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
-    if (!Number.isFinite(players) || players < 1 || players > 4)
-      return res.status(400).json({ ok: false, error: "players_invalid" });
+if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
+if (!date) return res.status(400).json({ ok: false, error: "date_required" });
+if (!time || !/^\d{2}:\d{2}$/.test(time)) return res.status(400).json({ ok: false, error: "time_invalid" });
+if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "holes_invalid" });
+if (!Number.isFinite(players) || players < 1 || players > 4)
+  return res.status(400).json({ ok: false, error: "players_invalid" });
 
-    if (holes === 18 && (!front_nine_key || !back_nine_key)) {
-      return res.status(400).json({ ok: false, error: "routing_required" });
-    }
-    if (holes === 9 && !layout_key) {
-      return res.status(400).json({ ok: false, error: "layout_required" });
-    }
+if (holes === 18 && (!front_nine_key || !back_nine_key)) {
+  return res.status(400).json({ ok: false, error: "routing_required" });
+}
+if (holes === 9 && !layout_key) {
+  return res.status(400).json({ ok: false, error: "layout_required" });
+}
 
-    if (!hasFirstAndLastName(golfer_name)) {
-      return res.status(400).json({ ok: false, error: "name_required_first_last" });
-    }
-    if (!isLikelyEmail(golfer_email)) {
-      return res.status(400).json({ ok: false, error: "email_required_valid" });
-    }
+if (!hasFirstAndLastName(golfer_name)) {
+  return res.status(400).json({ ok: false, error: "name_required_first_last" });
+}
+if (!isLikelyEmail(golfer_email)) {
+  return res.status(400).json({ ok: false, error: "email_required_valid" });
+}
 
-    const c = await q(
-      "course_lookup",
-      `
-      SELECT 
-        id, 
-        slug, 
-        name, 
-        notes,
-        payment_mode,
-        stripe_account_id,
-        platform_fee_bps,
-        cart_fee_cents, 
-        hire_clubs_fee_cents,
-        cart_qty, 
-        hire_clubs_qty,
-        duration_9_mins, 
-        duration_18_mins
-      FROM booking_courses
-      WHERE slug=$1
-      LIMIT 1;
-      `,
-      [slug]
-    );
+const c = await q(
+  "course_lookup",
+  `
+  SELECT 
+    id, 
+    slug, 
+    name, 
+    notes,
+    payment_mode,
+    stripe_account_id,
+    platform_fee_bps,
+    cart_fee_cents, 
+    hire_clubs_fee_cents,
+    cart_qty, 
+    hire_clubs_qty,
+    duration_9_mins, 
+    duration_18_mins,
+    subscriber_discount_enabled,
+    subscriber_discount_pct
+  FROM booking_courses
+  WHERE slug=$1
+  LIMIT 1;
+  `,
+  [slug]
+);
 
-    if (!c.rows.length)
-      return res.status(404).json({ ok: false, error: "course_not_found" });
+if (!c.rows.length)
+  return res.status(404).json({ ok: false, error: "course_not_found" });
 
-    const courseRow = c.rows[0];
-    const courseId = courseRow.id;
+const courseRow = c.rows[0];
+const courseId = courseRow.id;
 
-    const payment_mode = String(courseRow.payment_mode || "PAY_AT_COURSE").trim().toUpperCase();
-    const stripe_account_id = String(courseRow.stripe_account_id || "").trim();
+const payment_mode = String(courseRow.payment_mode || "PAY_AT_COURSE").trim().toUpperCase();
+const stripe_account_id = String(courseRow.stripe_account_id || "").trim();
 
-    const envPlatformFeeBps = Number(process.env.PLATFORM_FEE_BPS || 0);
-    const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || process.env.SITE_URL || "").trim();
+const envPlatformFeeBps = Number(process.env.PLATFORM_FEE_BPS || 0);
+const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || process.env.SITE_URL || "").trim();
 
-    const courseFeeBpsRaw =
-      courseRow.platform_fee_bps !== undefined && courseRow.platform_fee_bps !== null
-        ? Number(courseRow.platform_fee_bps)
-        : envPlatformFeeBps;
+const courseFeeBpsRaw =
+  courseRow.platform_fee_bps !== undefined && courseRow.platform_fee_bps !== null
+    ? Number(courseRow.platform_fee_bps)
+    : envPlatformFeeBps;
 
-    const courseFeeBps = Number.isFinite(courseFeeBpsRaw)
-      ? Math.max(0, Math.min(10000, Math.trunc(courseFeeBpsRaw)))
-      : 0;
+const courseFeeBps = Number.isFinite(courseFeeBpsRaw)
+  ? Math.max(0, Math.min(10000, Math.trunc(courseFeeBpsRaw)))
+  : 0;
 
-    // ✅ Subscriber discount config (defaults to 5%)
-    const SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
-    const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
+// ✅ Subscriber discount config (defaults to 5%)
+const SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
+const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
 
-    // ✅ Determine if booking email is an active subscriber
-// Source of truth: Stripe (active subscription). DB is fallback.
-// IMPORTANT: must NOT reference columns that might not exist (like users.is_pro)
-//
-// ✅ FIX: You MUST NOT have TWO functions named `isSubscriberEmail` in this file.
-// Keep THIS one (below) and rename the other one later in this snip to avoid the SyntaxError.
-//
 // ✅ DEBUG: set SUBSCRIBER_DEBUG=true temporarily to see which path is being used.
 const SUBSCRIBER_DEBUG = true;
 
-// ✅ Keep a place to read debug info from (optional)
 function subDbg(...args) {
   if (SUBSCRIBER_DEBUG) console.log("[subscriber]", ...args);
 }
@@ -10170,8 +10164,6 @@ async function isSubscriberEmail(email) {
   }
 
   // 2) subscriber_status table (fast + no Stripe call)
-  // (server.js webhook keeps this in sync)
-  // ✅ DEBUG: log whether we found it + status
   try {
     const r = await client.query(
       `
@@ -10190,33 +10182,19 @@ async function isSubscriberEmail(email) {
     subDbg("path=subscriber_status_error", { email: e, err: err?.message || err });
   }
 
-  // 3) Stripe source of truth (active subscription by email)
-  // This fixes “discount didn’t apply” even if subscriber_status hasn't been populated yet.
+  // 3) Stripe source of truth (active/trialing subscription by email)
   try {
-    if (!stripe) {
-      subDbg("path=stripe", { email: e, configured: false });
-    } else {
-      subDbg("path=stripe", { email: e, configured: true });
-
+    if (stripe) {
       const customers = await stripe.customers.list({ email: e, limit: 1 });
       const cust = customers?.data?.[0];
       subDbg("path=stripe_customers", { email: e, foundCustomer: !!cust?.id });
 
       if (cust?.id) {
-        const subs = await stripe.subscriptions.list({
-          customer: cust.id,
-          status: "active",
-          limit: 1,
-        });
+        const subs = await stripe.subscriptions.list({ customer: cust.id, status: "active", limit: 1 });
         subDbg("path=stripe_subscriptions_active", { email: e, found: !!subs?.data?.length });
         if (subs?.data?.length) return true;
 
-        // also treat trialing as subscriber
-        const trialSubs = await stripe.subscriptions.list({
-          customer: cust.id,
-          status: "trialing",
-          limit: 1,
-        });
+        const trialSubs = await stripe.subscriptions.list({ customer: cust.id, status: "trialing", limit: 1 });
         subDbg("path=stripe_subscriptions_trialing", { email: e, found: !!trialSubs?.data?.length });
         if (trialSubs?.data?.length) return true;
       }
@@ -10226,8 +10204,7 @@ async function isSubscriberEmail(email) {
     console.warn("⚠️ Stripe subscriber lookup failed:", e3?.message || e3);
   }
 
-  // 4) users.plan fallback (only if present + useful for your system)
-  // NOTE: this is NOT Stripe source of truth, just a fallback.
+  // 4) users.plan fallback
   try {
     const r2 = await client.query(
       `
@@ -10250,174 +10227,37 @@ async function isSubscriberEmail(email) {
   return false;
 }
 
-// ✅ Live subscriber check for the booking modal (debounced on email input)
-// GET /api/book/subscriber-status?slug=...&email=...&baseCents=...
-router.get("/subscriber-status", async (req, res) => {
+// ✅ CRITICAL: subscriber check BEFORE BEGIN
+const golfer_email_norm = String(golfer_email || "").trim().toLowerCase();
+
+// ✅ Use the SAME subscriber check as the UI route (/subscriber-status)
+let isSubscriber = await isSubscriberEmail(golfer_email_norm);
+
+// ✅ keep a tiny status object just for logs/metadata
+let subStatus = { plan: isSubscriber ? "BASIC" : "FREE", source: "isSubscriberEmail" };
+
+// ✅ Secondary precaution for Stripe-only courses: confirm via Stripe right now
+// (THIS MUST HAPPEN BEFORE discount is computed)
+if (payment_mode === "PAY_ON_BOOKING" && stripe && golfer_email_norm) {
   try {
-    const slug = String(req.query?.slug || "").trim().toLowerCase();
-    const email = String(req.query?.email || "").trim().toLowerCase();
-    const baseCents = Number(req.query?.baseCents || 0);
+    const customers = await stripe.customers.list({ email: golfer_email_norm, limit: 1 });
+    const cust = customers?.data?.[0];
 
-    if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
-    if (!email) return res.status(400).json({ ok: false, error: "email_required" });
+    if (cust?.id) {
+      const active = await stripe.subscriptions.list({ customer: cust.id, status: "active", limit: 1 });
+      const trial = await stripe.subscriptions.list({ customer: cust.id, status: "trialing", limit: 1 });
+      const stripeSaysSubscriber = !!(active?.data?.length || trial?.data?.length);
 
-    // 1) Load course discount settings
-    const courseQ = await pool.query(
-      `SELECT subscriber_discount_enabled, subscriber_discount_pct
-         FROM booking_courses
-        WHERE slug=$1
-        LIMIT 1;`,
-      [slug]
-    );
-    const course = courseQ.rows?.[0];
-    const discountEnabled = !!course?.subscriber_discount_enabled;
-    const discountPct = Number(course?.subscriber_discount_pct ?? 0);
-
-    // 2) Check if this email is an active subscriber (your existing helper)
-    const isSubscriber = await isSubscriberEmail(email);
-
-    // ✅ DEBUG: log decision from this route too
-    subDbg("route=subscriber-status", {
-      slug,
-      email,
-      isSubscriber,
-      discountEnabled,
-      discountPct,
-      baseCents,
-    });
-
-    // 3) Compute preview totals (frontend can use this immediately)
-    let discountApplied = false;
-    let discountedCents = baseCents;
-
-    if (
-      isSubscriber &&
-      discountEnabled &&
-      Number.isFinite(discountPct) &&
-      discountPct > 0 &&
-      baseCents > 0
-    ) {
-      discountedCents = Math.max(0, Math.round(baseCents * (1 - discountPct / 100)));
-      discountApplied = true;
-    }
-
-    return res.json({
-      ok: true,
-      slug,
-      email,
-      isSubscriber,
-      discountEnabled,
-      discountPct,
-      discountApplied,
-      baseCents,
-      discountedCents,
-    });
-  } catch (e) {
-    console.error("subscriber-status", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-// ===============================
-// ✅ Subscriber helpers + endpoints
-// ===============================
-
-// ✅ Helper: DB users.plan first (case-insensitive + TRIM), optional Stripe fallback
-async function getSubscriberStatus(emailRaw) {
-  const email = String(emailRaw || "").trim().toLowerCase();
-  if (!email) return { email: "", plan: "FREE", isSubscriber: false, source: "none" };
-
-  // 1) DB (users.plan) — fast + your canonical source in-app
-  try {
-    const r = await db.query(
-      `
-      SELECT
-        CASE
-          WHEN plan IS NULL OR NULLIF(TRIM(plan), '') IS NULL THEN 'FREE'
-          WHEN UPPER(TRIM(plan)) IN ('FREE','BASIC','PRO') THEN UPPER(TRIM(plan))
-          WHEN LOWER(TRIM(plan)) LIKE '%pro%' THEN 'PRO'
-          WHEN LOWER(TRIM(plan)) LIKE '%basic%' THEN 'BASIC'
-          WHEN LOWER(TRIM(plan)) LIKE '%free%' THEN 'FREE'
-          WHEN LOWER(TRIM(plan)) LIKE '%unsub%' THEN 'FREE'
-          ELSE 'FREE'
-        END AS plan
-      FROM users
-      WHERE LOWER(TRIM(email)) = $1
-      LIMIT 1;
-      `,
-      [email]
-    );
-
-    const plan = String(r.rows?.[0]?.plan || "FREE").trim().toUpperCase();
-    const isSubscriber = plan === "BASIC" || plan === "PRO";
-
-    if (isSubscriber) return { email, plan, isSubscriber: true, source: "db" };
-  } catch (e) {
-    console.warn("getSubscriberStatus db check failed (non-fatal):", e?.message || e);
-  }
-
-  // 2) Optional Stripe fallback (active/trialing subscription by email)
-  try {
-    if (stripe) {
-      const custList = await stripe.customers.list({ email, limit: 1 });
-      const customer = custList?.data?.[0];
-
-      if (customer?.id) {
-        const subsActive = await stripe.subscriptions.list({
-          customer: customer.id,
-          status: "active",
-          limit: 1,
-        });
-        if (subsActive?.data?.length) return { email, plan: "BASIC", isSubscriber: true, source: "stripe" };
-
-        const subsTrial = await stripe.subscriptions.list({
-          customer: customer.id,
-          status: "trialing",
-          limit: 1,
-        });
-        if (subsTrial?.data?.length) return { email, plan: "BASIC", isSubscriber: true, source: "stripe" };
+      if (stripeSaysSubscriber && !isSubscriber) {
+        isSubscriber = true;
+        subStatus = { plan: "BASIC", source: "stripe_confirm" };
       }
     }
   } catch (e) {
-    console.warn("getSubscriberStatus stripe fallback failed (non-fatal):", e?.message || e);
+    console.warn("[subscriber] stripe confirm failed (non-fatal)", e?.message || e);
   }
-
-  return { email, plan: "FREE", isSubscriber: false, source: "db" };
 }
 
-// ✅ Keep old name used elsewhere (drop-in)
-// ❌ FIX: this used to be named `isSubscriberEmail` which DUPLICATED the function above.
-// ✅ Rename it to avoid "Identifier 'isSubscriberEmail' has already been declared".
-async function isSubscriberEmail_viaStatus(emailRaw) {
-  const s = await getSubscriberStatus(emailRaw);
-  return !!s.isSubscriber;
-}
-
-// ✅ PUBLIC: check if an email is an active subscriber
-// GET /api/book/subscriber-check?email=someone@gmail.com
-router.get("/subscriber-check", async (req, res) => {
-  try {
-    const email = String(req.query?.email || "").trim().toLowerCase();
-    if (!email) return res.json({ ok: true, email: "", plan: "FREE", isSubscriber: false });
-
-    const s = await getSubscriberStatus(email);
-
-    // ✅ DEBUG: show which source this endpoint used
-    subDbg("route=subscriber-check", { email, plan: s.plan, isSubscriber: !!s.isSubscriber, source: s.source });
-
-    return res.json({ ok: true, email: s.email, plan: s.plan, isSubscriber: !!s.isSubscriber, source: s.source });
-  } catch (e) {
-    console.error("subscriber-check error", e);
-    return res.status(200).json({ ok: true, email: "", plan: "FREE", isSubscriber: false }); // fail-closed
-  }
-});
-
-// ✅ CRITICAL FIX: run subscriber check BEFORE BEGIN (so it cannot poison the booking txn)
-const golfer_email_norm = String(golfer_email || "").trim().toLowerCase();
-const subStatus = await getSubscriberStatus(golfer_email_norm);
-const isSubscriber = !!subStatus.isSubscriber;
-
-// ✅ DEBUG: log what confirm-booking is using (this is the key one)
 subDbg("confirm-booking subscriber decision", {
   email: golfer_email_norm,
   isSubscriber,
@@ -10590,7 +10430,6 @@ let processingFeeCents = 0;
 let grossTotalCents = totalCents;
 
 if (payment_mode === "PAY_ON_BOOKING") {
-  // AU domestic estimate (tweak later if you want “safe mode”)
   const STRIPE_PCT = 0.03;
   const STRIPE_FIXED_CENTS = 40;
 
@@ -10607,7 +10446,6 @@ if (payment_mode === "PAY_ON_BOOKING") {
 
 const reference = makeRef("TR");
 const bookingStatus = payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
-
 const amountDueCents = payment_mode === "PAY_AT_COURSE" ? totalCents : 0;
 
 const discountCentsSafe = Number.isFinite(Number(discountCents)) ? Number(discountCents) : 0;
@@ -10648,7 +10486,7 @@ const ins = await q(
     holes,
     players,
     golfer_name || null,
-    golfer_email_norm || null, // ✅ store normalized email
+    golfer_email_norm || null,
     golfer_phone || null,
     ppp,
 
@@ -10675,15 +10513,9 @@ const ins = await q(
 
 const bookingId = ins.rows[0]?.id;
 
-// ✅ BEST PRACTICE:
-// Only consume capacity immediately for PAY_AT_COURSE.
-// PAY_ON_BOOKING should NOT take the time until webhook confirms payment.
-
 const newBooked = bookedPlayers + players;
 
-// ✅ MOVE booking_times update so it ONLY happens for PAY_AT_COURSE
-// (PAY_ON_BOOKING must NOT reserve capacity here)
-
+// ✅ PAY_ON_BOOKING: create Stripe session (do NOT consume capacity here)
 if (payment_mode === "PAY_ON_BOOKING") {
   if (!stripe) {
     await q("ROLLBACK_stripe_not_configured", "ROLLBACK");
@@ -10701,13 +10533,11 @@ if (payment_mode === "PAY_ON_BOOKING") {
     return res.status(500).json({ ok: false, error: "public_base_url_missing" });
   }
 
-  // ✅ platform fee is on BASE only (not including processing fee)
   const platformFeeCents = Math.max(
     0,
     Math.round((Number(totalCents || 0) * courseFeeBps) / 10000)
   );
 
-  // ✅ golfer pays gross; app fee = platform fee + processing fee
   const appFeeCents = Math.max(
     0,
     Math.min(
@@ -10716,159 +10546,137 @@ if (payment_mode === "PAY_ON_BOOKING") {
     )
   );
 
-  // ✅ DEBUG: verify Stripe is charging the discounted amount (NOT pre-discount)
-const stripeBaseCents = Number(totalCents || 0);
-const stripeFeeCents = Number(processingFeeCents || 0);
-const stripeGrossCents = stripeBaseCents + stripeFeeCents;
+  const stripeBaseCents = Number(totalCents || 0);
+  const stripeFeeCents = Number(processingFeeCents || 0);
+  const stripeGrossCents = stripeBaseCents + stripeFeeCents;
 
-console.log("[stripe] session amounts", {
-  email: golfer_email_norm,
-  isSubscriber,
-  plan: String(subStatus?.plan || "FREE"),
-  courseDiscountEnabled,
-  courseDiscountPct,
-  effectiveDiscountPct,
-  totalBeforeDiscountCents,
-  discountCents,
-  discountCentsSafe,
-  totalCents, // ✅ should be AFTER discount
-  processingFeeCents,
-  grossTotalCents,
-  stripeBaseCents,
-  stripeFeeCents,
-  stripeGrossCents,
-});
+  console.log("[pricing] backend totals", {
+    email: golfer_email_norm,
+    isSubscriber,
+    subSource: subStatus?.source,
+    plan: String(subStatus?.plan || "FREE"),
+    courseDiscountEnabled,
+    courseDiscountPct,
+    effectiveDiscountPct,
+    totalBeforeDiscountCents,
+    discountCents,
+    discountCentsSafe,
+    totalCents,
+    processingFeeCents,
+    grossTotalCents,
+    stripeBaseCents,
+    stripeFeeCents,
+    stripeGrossCents,
+  });
 
-// ✅ If these don't match, you're charging the wrong thing
-if (payment_mode === "PAY_ON_BOOKING") {
   if (stripeBaseCents <= 0 || stripeGrossCents <= 0) {
-    console.warn("[stripe] invalid cents", { stripeBaseCents, stripeFeeCents, stripeGrossCents });
     await q("ROLLBACK_invalid_payment_amount", "ROLLBACK");
     didBegin = false;
     return res.status(400).json({ ok: false, error: "invalid_payment_amount" });
   }
 
-  // This catches the exact bug you're seeing (Stripe charging pre-discount base)
-  // It doesn't "fix" it silently, but it tells you immediately in logs.
-  if (
-    Number.isFinite(Number(grossTotalCents || 0)) &&
-    stripeGrossCents !== Number(grossTotalCents || 0)
-  ) {
-    console.warn("[stripe] MISMATCH: stripeGrossCents != grossTotalCents", {
-      stripeGrossCents,
-      grossTotalCents,
-      stripeBaseCents,
-      stripeFeeCents,
-    });
-  }
-}
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    customer_email: golfer_email_norm,
 
-const session = await stripe.checkout.sessions.create({
-  mode: "payment",
-  customer_email: golfer_email_norm, // ✅ normalized
-
-  line_items: [
-    // ✅ Base booking amount (what the course is charging)
-    {
-      quantity: 1,
-      price_data: {
-        currency: "aud",
-        unit_amount: Number(totalCents || 0),
-        product_data: {
-          name: `${courseRow.name} — ${holes} holes (${players} players)`,
-          description: `${date} ${time}`,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "aud",
+          unit_amount: stripeBaseCents, // ✅ discounted base
+          product_data: {
+            name: `${courseRow.name} — ${holes} holes (${players} players)`,
+            description: `${date} ${time}`,
+          },
         },
+      },
+      ...(stripeFeeCents > 0
+        ? [
+            {
+              quantity: 1,
+              price_data: {
+                currency: "aud",
+                unit_amount: stripeFeeCents,
+                product_data: {
+                  name: "Processing fee",
+                  description: "Card payment processing",
+                },
+              },
+            },
+          ]
+        : []),
+    ],
+
+    payment_intent_data: {
+      transfer_data: { destination: stripe_account_id },
+      application_fee_amount: appFeeCents,
+      metadata: {
+        booking_id: String(bookingId || ""),
+        reference,
+        course_slug: slug,
+        platform_fee_bps: String(courseFeeBps),
+        subscriber: isSubscriber ? "1" : "0",
+        subscriber_plan: String(subStatus?.plan || "FREE"),
+        subscriber_discount_pct: String(effectiveDiscountPct || 0),
+        discount_cents: String(discountCentsSafe || 0),
+
+        base_cents: String(stripeBaseCents),
+        platform_fee_cents: String(platformFeeCents),
+        processing_fee_cents: String(stripeFeeCents),
+        gross_cents: String(stripeGrossCents),
       },
     },
 
-    // ✅ Processing fee paid by golfer
-    ...(processingFeeCents > 0
-      ? [
-          {
-            quantity: 1,
-            price_data: {
-              currency: "aud",
-              unit_amount: Number(processingFeeCents || 0),
-              product_data: {
-                name: "Processing fee",
-                description: "Card payment processing",
-              },
-            },
-          },
-        ]
-      : []),
-  ],
-
-  payment_intent_data: {
-    transfer_data: { destination: stripe_account_id },
-    application_fee_amount: appFeeCents,
     metadata: {
       booking_id: String(bookingId || ""),
       reference,
       course_slug: slug,
       platform_fee_bps: String(courseFeeBps),
       subscriber: isSubscriber ? "1" : "0",
-      subscriber_plan: String(subStatus?.plan || "FREE"), // ✅ extra (handy)
+      subscriber_plan: String(subStatus?.plan || "FREE"),
       subscriber_discount_pct: String(effectiveDiscountPct || 0),
       discount_cents: String(discountCentsSafe || 0),
-
-      base_cents: String(Number(totalCents || 0)),
-      platform_fee_cents: String(Number(platformFeeCents || 0)),
-      processing_fee_cents: String(Number(processingFeeCents || 0)),
-      gross_cents: String(Number(grossTotalCents || 0)),
     },
-  },
 
-  metadata: {
-    booking_id: String(bookingId || ""),
+    success_url: `${BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
+    cancel_url: `${BASE_URL}/book/${slug}?cancelled=1&ref=${encodeURIComponent(reference)}`,
+  });
+
+  await q("COMMIT_pay_on_booking", "COMMIT");
+  didBegin = false;
+
+  return res.json({
+    ok: true,
     reference,
-    course_slug: slug,
-    platform_fee_bps: String(courseFeeBps),
-    subscriber: isSubscriber ? "1" : "0",
-    subscriber_plan: String(subStatus?.plan || "FREE"), // ✅ extra (handy)
-    subscriber_discount_pct: String(effectiveDiscountPct || 0),
-    discount_cents: String(discountCentsSafe || 0),
-  },
+    payment_mode: "PAY_ON_BOOKING",
+    checkoutUrl: session.url,
+    course: { slug: courseRow.slug, name: courseRow.name },
+    booking: {
+      date,
+      time,
+      holes,
+      players,
+      pricePerPlayerCents: ppp,
+      isSubscriber,
+      discountPct: effectiveDiscountPct,
+      discountCents: discountCentsSafe,
 
-  success_url: `${BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
-  cancel_url: `${BASE_URL}/book/${slug}?cancelled=1&ref=${encodeURIComponent(reference)}`,
-});
+      totalCents,
+      processingFeeCents,
+      grossTotalCents,
 
-await q("COMMIT_pay_on_booking", "COMMIT");
-didBegin = false;
-
-return res.json({
-  ok: true,
-  reference,
-  payment_mode: "PAY_ON_BOOKING",
-  checkoutUrl: session.url,
-  course: { slug: courseRow.slug, name: courseRow.name },
-  booking: {
-    date,
-    time,
-    holes,
-    players,
-    pricePerPlayerCents: ppp,
-    isSubscriber,
-    discountPct: effectiveDiscountPct,
-    discountCents: discountCentsSafe,
-
-    // ✅ base + fee breakdown for UI
-    totalCents, // base (course) AFTER discount
-    processingFeeCents,
-    grossTotalCents,
-
-    addonsCents,
-    amountDueCents: 0,
-    cart_qty,
-    hire_clubs_qty,
-    layout_key,
-    front_nine_key,
-    back_nine_key,
-  },
-  emailOk: false,
-  emailReason: "pay_on_booking",
-});
+      addonsCents,
+      amountDueCents: 0,
+      cart_qty,
+      hire_clubs_qty,
+      layout_key,
+      front_nine_key,
+      back_nine_key,
+    },
+    emailOk: false,
+    emailReason: "pay_on_booking",
+  });
 }
 
 // ✅ PAY_AT_COURSE ONLY: now we consume capacity
@@ -10897,7 +10705,7 @@ await q(
   [
     courseId,
     date,
-    teeTimeDb, // "HH:MM"
+    teeTimeDb,
     holes,
     layout_key || "",
     front_nine_key || "",
@@ -10913,40 +10721,16 @@ recordEvent({
   type: "booking_created",
   userId: getClientIp(req) || null,
   courseName: courseRow.name,
-  meta: {
-    slug,
-    date,
-    time,
-    holes,
-    players,
-    reference,
-    cart_qty,
-    hire_clubs_qty,
-    layout_key,
-    front_nine_key,
-    back_nine_key,
-  },
+  meta: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty, layout_key, front_nine_key, back_nine_key },
 }).catch(() => {});
 recordBookingEvent(req, {
   courseSlug: slug,
   eventType: "booking_confirmed",
-  payload: {
-    slug,
-    date,
-    time,
-    holes,
-    players,
-    reference,
-    cart_qty,
-    hire_clubs_qty,
-    layout_key,
-    front_nine_key,
-    back_nine_key,
-  },
+  payload: { slug, date, time, holes, players, reference, cart_qty, hire_clubs_qty, layout_key, front_nine_key, back_nine_key },
 }).catch(() => {});
 
 const emailResult = await sendBookingEmail({
-  to: golfer_email_norm, // ✅ normalized
+  to: golfer_email_norm,
   courseName: courseRow.name,
   date,
   time,
@@ -10957,8 +10741,6 @@ const emailResult = await sendBookingEmail({
   totalCents,
   cartCents: cart_fee_cents,
   hireClubsCents: hire_clubs_fee_cents,
-
-  // ✅ NEW: show subscriber discount in email
   isSubscriber,
   discountPct: effectiveDiscountPct,
   discountCents: discountCentsSafe,
@@ -10990,14 +10772,13 @@ return res.json({
   emailReason: emailResult.emailReason || null,
 });
 } catch (e) {
-console.error("book POST (root)", e);
-try { if (client && didBegin) await client.query("ROLLBACK"); } catch {}
-return res.status(500).json({ ok: false, error: "internal_error" });
+  console.error("book POST (root)", e);
+  try { if (client && didBegin) await client.query("ROLLBACK"); } catch {}
+  return res.status(500).json({ ok: false, error: "internal_error" });
 } finally {
-try { if (client) client.release(); } catch {}
+  try { if (client) client.release(); } catch {}
 }
 };
-
 router.post("/book", handleBook);
 // keep /availability POST blocked so the frontend can’t accidentally use it
 router.post("/availability", (req, res) => {
