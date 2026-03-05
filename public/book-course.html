@@ -1179,11 +1179,11 @@ if (!$("bEmail")._subWire) {
   });
 }
 
-// reset subscriber state each open
+// reset subscriber state each open (DO NOT reset discountPct)
 __subscriber.checkedEmail = "";
 __subscriber.isSubscriber = false;
 __subscriber.discountEnabled = false;
-__subscriber.discountPct = 0;
+// ✅ keep __subscriber.discountPct as set by loadCourse()
 
 const banner = $("subBanner");
 if (banner) banner.style.display = "none";
