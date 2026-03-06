@@ -9932,7 +9932,112 @@ async function finalizePaidBooking(payload) {
 
   return { ok: true, bookingId: booking.id, reference: booking.reference, emailOk, emailReason };
 }
+// ===============================
+// SUBSCRIBER HELPERS
+// ===============================
 
+// ✅ Subscriber discount config (defaults to 5%)
+const SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
+const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+// ✅ DEBUG: set SUBSCRIBER_DEBUG=true temporarily to see which path is being used.
+const SUBSCRIBER_DEBUG = true;
+
+function subDbg(...args) {
+  if (SUBSCRIBER_DEBUG) console.log("[subscriber]", ...args);
+}
+
+// ✅ IMPORTANT: helper must accept db client explicitly
+async function isSubscriberEmail(dbClient, email) {
+  const e = String(email || "").trim().toLowerCase();
+  if (!e) {
+    subDbg("empty_email", { email });
+    return false;
+  }
+
+  // 1) Env allowlist fallback
+  try {
+    const hit = Array.isArray(SUBSCRIBER_EMAILS) && SUBSCRIBER_EMAILS.includes(e);
+    subDbg("path=allowlist", { email: e, hit });
+    if (hit) return true;
+  } catch (err) {
+    subDbg("path=allowlist_error", { email: e, err: err?.message || err });
+  }
+
+  // 2) subscriber_status table
+  try {
+    const r = await dbClient.query(
+      `
+      SELECT status
+      FROM subscriber_status
+      WHERE lower(email)=lower($1)
+      LIMIT 1;
+      `,
+      [e]
+    );
+    const status = String(r.rows?.[0]?.status || "").toLowerCase();
+    const ok = status === "active" || status === "trialing";
+    subDbg("path=subscriber_status", { email: e, found: !!r.rows?.length, status, ok });
+    if (ok) return true;
+  } catch (err) {
+    subDbg("path=subscriber_status_error", { email: e, err: err?.message || err });
+  }
+
+  // 3) Stripe source of truth
+  try {
+    if (stripe) {
+      const customers = await stripe.customers.list({ email: e, limit: 1 });
+      const cust = customers?.data?.[0];
+      subDbg("path=stripe_customers", { email: e, foundCustomer: !!cust?.id });
+
+      if (cust?.id) {
+        const subs = await stripe.subscriptions.list({
+          customer: cust.id,
+          status: "active",
+          limit: 1,
+        });
+        subDbg("path=stripe_subscriptions_active", { email: e, found: !!subs?.data?.length });
+        if (subs?.data?.length) return true;
+
+        const trialSubs = await stripe.subscriptions.list({
+          customer: cust.id,
+          status: "trialing",
+          limit: 1,
+        });
+        subDbg("path=stripe_subscriptions_trialing", { email: e, found: !!trialSubs?.data?.length });
+        if (trialSubs?.data?.length) return true;
+      }
+    }
+  } catch (e3) {
+    subDbg("path=stripe_error", { email: e, err: e3?.message || e3 });
+    console.warn("⚠️ Stripe subscriber lookup failed:", e3?.message || e3);
+  }
+
+  // 4) users.plan fallback
+  try {
+    const r2 = await dbClient.query(
+      `
+      SELECT COALESCE(TRIM(plan),'') AS plan
+      FROM users
+      WHERE lower(trim(email))=lower($1)
+      LIMIT 1;
+      `,
+      [e]
+    );
+    const plan = String(r2.rows?.[0]?.plan || "").trim().toLowerCase();
+    const ok = plan === "basic" || plan === "pro";
+    subDbg("path=users_plan", { email: e, found: !!r2.rows?.length, plan, ok });
+    if (ok) return true;
+  } catch (err) {
+    subDbg("path=users_plan_error", { email: e, err: err?.message || err });
+  }
+
+  subDbg("path=none", { email: e, isSubscriber: false });
+  return false;
+}
 async function handleBook(req, res) {
   let client = null;
   let didBegin = false;
@@ -10133,105 +10238,13 @@ const courseFeeBps = Number.isFinite(courseFeeBpsRaw)
   ? Math.max(0, Math.min(10000, Math.trunc(courseFeeBpsRaw)))
   : 0;
 
-// ✅ Subscriber discount config (defaults to 5%)
-const SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
-const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
 
-// ✅ DEBUG: set SUBSCRIBER_DEBUG=true temporarily to see which path is being used.
-const SUBSCRIBER_DEBUG = true;
-
-function subDbg(...args) {
-  if (SUBSCRIBER_DEBUG) console.log("[subscriber]", ...args);
-}
-
-async function isSubscriberEmail(email) {
-  const e = String(email || "").trim().toLowerCase();
-  if (!e) {
-    subDbg("empty_email", { email });
-    return false;
-  }
-
-  // 1) Env allowlist fallback (fastest manual override)
-  try {
-    const hit = Array.isArray(SUBSCRIBER_EMAILS) && SUBSCRIBER_EMAILS.includes(e);
-    subDbg("path=allowlist", { email: e, hit });
-    if (hit) return true;
-  } catch (err) {
-    subDbg("path=allowlist_error", { email: e, err: err?.message || err });
-  }
-
-  // 2) subscriber_status table (fast + no Stripe call)
-  try {
-    const r = await client.query(
-      `
-      SELECT status
-      FROM subscriber_status
-      WHERE lower(email)=lower($1)
-      LIMIT 1;
-      `,
-      [e]
-    );
-    const status = String(r.rows?.[0]?.status || "").toLowerCase();
-    const ok = status === "active" || status === "trialing";
-    subDbg("path=subscriber_status", { email: e, found: !!r.rows?.length, status, ok });
-    if (ok) return true;
-  } catch (err) {
-    subDbg("path=subscriber_status_error", { email: e, err: err?.message || err });
-  }
-
-  // 3) Stripe source of truth (active/trialing subscription by email)
-  try {
-    if (stripe) {
-      const customers = await stripe.customers.list({ email: e, limit: 1 });
-      const cust = customers?.data?.[0];
-      subDbg("path=stripe_customers", { email: e, foundCustomer: !!cust?.id });
-
-      if (cust?.id) {
-        const subs = await stripe.subscriptions.list({ customer: cust.id, status: "active", limit: 1 });
-        subDbg("path=stripe_subscriptions_active", { email: e, found: !!subs?.data?.length });
-        if (subs?.data?.length) return true;
-
-        const trialSubs = await stripe.subscriptions.list({ customer: cust.id, status: "trialing", limit: 1 });
-        subDbg("path=stripe_subscriptions_trialing", { email: e, found: !!trialSubs?.data?.length });
-        if (trialSubs?.data?.length) return true;
-      }
-    }
-  } catch (e3) {
-    subDbg("path=stripe_error", { email: e, err: e3?.message || e3 });
-    console.warn("⚠️ Stripe subscriber lookup failed:", e3?.message || e3);
-  }
-
-  // 4) users.plan fallback
-  try {
-    const r2 = await client.query(
-      `
-      SELECT COALESCE(TRIM(plan),'') AS plan
-      FROM users
-      WHERE lower(trim(email))=lower($1)
-      LIMIT 1;
-      `,
-      [e]
-    );
-    const plan = String(r2.rows?.[0]?.plan || "").trim().toLowerCase();
-    const ok = plan === "basic" || plan === "pro";
-    subDbg("path=users_plan", { email: e, found: !!r2.rows?.length, plan, ok });
-    if (ok) return true;
-  } catch (err) {
-    subDbg("path=users_plan_error", { email: e, err: err?.message || err });
-  }
-
-  subDbg("path=none", { email: e, isSubscriber: false });
-  return false;
-}
 
 // ✅ CRITICAL: subscriber check BEFORE BEGIN
 const golfer_email_norm = String(golfer_email || "").trim().toLowerCase();
 
 // ✅ Use the SAME subscriber check as the UI route (/subscriber-status)
-let isSubscriber = await isSubscriberEmail(golfer_email_norm);
+let isSubscriber = await isSubscriberEmail(client, golfer_email_norm);
 
 // ✅ keep a tiny status object just for logs/metadata
 let subStatus = { plan: isSubscriber ? "BASIC" : "FREE", source: "isSubscriberEmail" };
@@ -10780,6 +10793,76 @@ return res.json({
 }
 };
 router.post("/book", handleBook);
+// ✅ UI subscriber preview route
+// GET /api/book/subscriber-status?slug=...&email=...&baseCents=...
+router.get("/subscriber-status", async (req, res) => {
+  let client = null;
+
+  try {
+    const slug = String(req.query?.slug || "").trim().toLowerCase();
+    const email = String(req.query?.email || "").trim().toLowerCase();
+    const baseCentsRaw = Number(req.query?.baseCents || 0);
+    const baseCents = Number.isFinite(baseCentsRaw)
+      ? Math.max(0, Math.trunc(baseCentsRaw))
+      : 0;
+
+    if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
+    if (!email) return res.status(400).json({ ok: false, error: "email_required" });
+
+    client = await db.connect();
+
+    const c = await client.query(
+      `
+      SELECT subscriber_discount_enabled, subscriber_discount_pct
+      FROM booking_courses
+      WHERE slug = $1
+      LIMIT 1;
+      `,
+      [slug]
+    );
+
+    if (!c.rows.length) {
+      return res.status(404).json({ ok: false, error: "course_not_found" });
+    }
+
+    const row = c.rows[0];
+
+    const discountEnabled = row.subscriber_discount_enabled === true;
+    const discountPct =
+      Number.isFinite(Number(row.subscriber_discount_pct))
+        ? Number(row.subscriber_discount_pct)
+        : SUBSCRIBER_DISCOUNT_PCT;
+
+    const isSubscriber = await isSubscriberEmail(client, email);
+
+    const discountApplied =
+      isSubscriber &&
+      discountEnabled &&
+      discountPct > 0 &&
+      baseCents > 0;
+
+    const discountedCents = discountApplied
+      ? Math.max(0, baseCents - Math.round((baseCents * discountPct) / 100))
+      : baseCents;
+
+    return res.json({
+      ok: true,
+      slug,
+      email,
+      isSubscriber,
+      discountEnabled,
+      discountPct,
+      discountApplied,
+      baseCents,
+      discountedCents,
+    });
+  } catch (e) {
+    console.error("subscriber-status error:", e?.message || e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  } finally {
+    try { if (client) client.release(); } catch {}
+  }
+});
 // keep /availability POST blocked so the frontend can’t accidentally use it
 router.post("/availability", (req, res) => {
   return res.status(405).json({
