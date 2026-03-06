@@ -1408,8 +1408,8 @@ function normalizeBookingLikeRow(b){
   return {
     reference: ref,
     name: String(b.name ?? b.hold_name ?? b.holdName ?? "Booking").trim(),
-    email: String(b.email ?? "").trim(),
-    phone: String(b.phone ?? "").trim(),
+    email: String(b.email ?? b.golfer_email ?? "").trim(),
+    phone: String(b.phone ?? b.golfer_phone ?? "").trim(),
 
     paid: !!(b.paid ?? b.is_paid ?? b.paid_flag ?? false),
     checked_in: !!(b.checked_in ?? b.checkedIn ?? b.is_checked_in ?? false),
@@ -1419,6 +1419,28 @@ function normalizeBookingLikeRow(b){
 
     has_cart: !!(b.has_cart || b.hasCart || (Number(b.cart_qty ?? b.cartQty ?? 0) > 0)),
     has_hire_clubs: !!(b.has_hire_clubs || b.hasHireClubs || (Number(b.hire_clubs_qty ?? b.hireClubsQty ?? 0) > 0)),
+
+    // ✅ KEEP PRICE/TOTAL/PLAYERS FIELDS
+    price_per_player_cents: Number(
+      b.price_per_player_cents ??
+      b.pricePerPlayerCents ??
+      b.price_cents ??
+      b.priceCents ??
+      0
+    ) || 0,
+
+    total_cents: Number(
+      b.total_cents ??
+      b.totalCents ??
+      0
+    ) || 0,
+
+    players: Number(
+      b.players ??
+      b.player_count ??
+      b.playerCount ??
+      1
+    ) || 1,
 
     notes: String(b.notes ?? b.note ?? "").trim(),
   };
