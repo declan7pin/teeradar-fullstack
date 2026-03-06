@@ -1407,7 +1407,7 @@ function normalizeBookingLikeRow(b){
 
   return {
     reference: ref,
-    name: String(b.name ?? b.hold_name ?? b.holdName ?? "Booking").trim(),
+        name: String(b.name ?? b.golfer_name ?? b.hold_name ?? b.holdName ?? "Booking").trim(),
     email: String(b.email ?? b.golfer_email ?? "").trim(),
     phone: String(b.phone ?? b.golfer_phone ?? "").trim(),
 
@@ -1429,9 +1429,11 @@ function normalizeBookingLikeRow(b){
       0
     ) || 0,
 
-    total_cents: Number(
+        total_cents: Number(
       b.total_cents ??
       b.totalCents ??
+      b.gross_cents ??
+      b.grossCents ??
       0
     ) || 0,
 
@@ -1693,7 +1695,13 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
     // ✅ CRITICAL FIX:
     // Daily sheet should show ACTUAL effective per-player price,
     // not the original tee-time price.
-    const totalCents = Number(b.total_cents ?? b.totalCents ?? 0) || 0;
+        const totalCents = Number(
+      b.total_cents ??
+      b.totalCents ??
+      b.gross_cents ??
+      b.grossCents ??
+      0
+    ) || 0;
     const effectivePricePerPlayerCents =
       players > 0 && totalCents > 0
         ? Math.round(totalCents / players)
