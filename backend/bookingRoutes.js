@@ -10805,6 +10805,11 @@ router.get("/subscriber-status", async (req, res) => {
     const baseCents = Number.isFinite(baseCentsRaw)
       ? Math.max(0, Math.trunc(baseCentsRaw))
       : 0;
+      console.log("[subscriber-status] request", {
+  slug,
+  email,
+  baseCents,
+});
 
     if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
     if (!email) return res.status(400).json({ ok: false, error: "email_required" });
