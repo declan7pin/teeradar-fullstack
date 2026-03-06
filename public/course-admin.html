@@ -1656,7 +1656,7 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
     byKey.get(key).push(row);
   });
 
-  // ✅ Online bookings: preserve routing keys if present (booking_bookings has these columns)
+    // ✅ Online bookings: preserve routing keys if present (booking_bookings has these columns)
   (bookingsRows || []).forEach(b => {
     const time = normTime(b.tee_time || b.time || b.teeTime || "");
     const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
@@ -1667,10 +1667,33 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
     const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
 
     const players = Math.max(1, Number(b.players || 1));
+
+    // ✅ CRITICAL FIX:
+    // Daily sheet should show ACTUAL effective per-player price,
+    // not the original tee-time price.
+    const totalCents = Number(b.total_cents ?? b.totalCents ?? 0) || 0;
+    const effectivePricePerPlayerCents =
+      players > 0 && totalCents > 0
+        ? Math.round(totalCents / players)
+        : Number(
+            b.price_per_player_cents ??
+            b.pricePerPlayerCents ??
+            b.price_cents ??
+            b.priceCents ??
+            0
+          ) || 0;
+
     for (let i = 0; i < players; i++) {
       if (!byKey.has(key)) byKey.set(key, []);
 
       const row = normalizeBookingLikeRow(b);
+
+      // ✅ stamp ACTUAL per-player price onto every slot for this booking
+      row.price_per_player_cents = effectivePricePerPlayerCents;
+
+      // ✅ keep total too if needed later
+      row.total_cents = totalCents;
+      row.players = players;
 
       // ✅ only show add-ons on Slot 1 for that booking
       if (i > 0) {
