@@ -5276,19 +5276,22 @@ router.post("/admin/fill-slot", requirePlatformAdmin, async (req, res) => {
         });
 
         await sendBookingEmail({
-          to: email,
-          courseName,
-          date: play_date,
-          time: tee_time,
-          holes,
-          players: 1,
-          reference,
-          pricePerPlayerCents: pricePerPlayerCents || 0,
-          totalCents: (pricePerPlayerCents || 0) * 1,
-          cartCents,
-          hireClubsCents,
-          source: "manual",
-        });
+  to: email,
+  courseName,
+  date: playDate,
+  time: tee_time,
+  holes,
+  players,
+  reference,
+  pricePerPlayerCents: pricePerPlayerCents || 0,
+  totalCents:
+    ((pricePerPlayerCents || 0) * players) +
+    (cartCents || 0) +
+    (hireClubsCents || 0),
+  cartCents,
+  hireClubsCents,
+  source: "manual",
+});
       }
     } catch (e) {
       console.warn("admin fill-slot email failed (non-fatal):", e?.message || e);
@@ -6209,19 +6212,22 @@ router.post("/course-admin/booking", requireCourseAdmin, async (req, res) => {
         });
 
         await sendBookingEmail({
-          to: email,
-          courseName,
-          date: playDate,
-          time: tee_time,
-          holes,
-          players,
-          reference,
-          pricePerPlayerCents: pricePerPlayerCents || 0,
-          totalCents: (pricePerPlayerCents || 0) * players,
-          cartCents,
-          hireClubsCents,
-          source: "manual",
-        });
+  to: email,
+  courseName,
+  date: playDate,
+  time: tee_time,
+  holes,
+  players,
+  reference,
+  pricePerPlayerCents: pricePerPlayerCents || 0,
+  totalCents:
+    ((pricePerPlayerCents || 0) * players) +
+    (cartCents || 0) +
+    (hireClubsCents || 0),
+  cartCents,
+  hireClubsCents,
+  source: "manual",
+});
       }
     } catch (e) {
       console.warn("course-admin/booking email failed (non-fatal):", e?.message || e);
