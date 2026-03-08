@@ -114,8 +114,51 @@
         <textarea id="cNotes" rows="2" placeholder="Phone-only course (pilot)"></textarea>
       </div>
       <div style="margin-top:10px">
-        <button id="createCourseBtn">Save Course</button>
-      </div>
+  <label class="muted">Payment option</label>
+  <select id="cPaymentMode" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;">
+    <option value="PAY_AT_COURSE">Pay at course</option>
+    <option value="PAY_ON_BOOKING">Pay at time of booking</option>
+  </select>
+</div>
+
+<!-- ✅ Stripe Connect + Platform Fee Settings -->
+<!-- ✅ Advanced Payment Settings -->
+<!-- ✅ Subscriber discount (applies to BOTH pay modes) -->
+<div style="margin-top:12px">
+  <label class="muted" style="display:flex;align-items:center;gap:10px">
+    <input type="checkbox" id="cSubscriberDiscountEnabled" />
+    Offer TeeRadar Subscriber Discount
+  </label>
+
+  <div style="margin-top:8px;display:flex;gap:10px;align-items:center">
+    <label class="muted" style="min-width:120px">Discount %</label>
+    <input id="cSubscriberDiscountPct" type="number" min="0" max="50" step="1" value="5"
+      style="max-width:120px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;" />
+    <span class="muted mini">Default 5%</span>
+  </div>
+</div>
+
+<!-- ✅ Advanced Payment Settings (ONLY relevant for PAY_ON_BOOKING) -->
+<div id="paymentAdvancedWrap" style="margin-top:12px;display:none">
+
+  <div style="margin-top:12px">
+    <label class="muted">Stripe Connect Account ID</label>
+    <input id="cStripeAccountId" placeholder="acct_XXXXXXXXXXXX" />
+  </div>
+
+  <div style="margin-top:12px">
+    <label class="muted">Manual Platform Fee (basis points, optional override)</label>
+    <input id="cPlatformFeeBps" type="number" min="0" step="1"
+      placeholder="Leave blank for auto tier (300 = 3%)" />
+  </div>
+
+  <div id="cFeePreview" class="muted" style="margin-top:8px;font-weight:700;"></div>
+
+</div>
+
+<div style="margin-top:10px">
+  <button id="createCourseBtn">Save Course</button>
+</div>
       <div id="courseMsg" class="muted" style="margin-top:10px;"></div>
     </div>
 <!-- ✅ Inventory check (carts + clubs) -->
@@ -535,6 +578,63 @@
   }
 
   const $ = (id) => document.getElementById(id);
+
+function updatePaymentUI() {
+  const mode = $("cPaymentMode")?.value || "PAY_AT_COURSE";
+  const wrap = $("paymentAdvancedWrap");
+  if (!wrap) return;
+
+  // ✅ Only show Stripe/platform fee controls for PAY_ON_BOOKING
+  if (mode === "PAY_ON_BOOKING") {
+    wrap.style.display = "block";
+  } else {
+    wrap.style.display = "none";
+
+    // ✅ Clear ONLY Stripe/platform fields (DO NOT clear subscriber discount)
+    if ($("cStripeAccountId")) $("cStripeAccountId").value = "";
+    if ($("cPlatformFeeBps")) $("cPlatformFeeBps").value = "";
+    if ($("cFeePreview")) $("cFeePreview").textContent = "";
+  }
+
+  // ✅ Fee preview is only meaningful for PAY_ON_BOOKING
+  if (mode !== "PAY_ON_BOOKING") return;
+
+  const manualRaw = ($("cPlatformFeeBps")?.value || "").trim();
+  const manual = manualRaw === "" ? null : Number(manualRaw);
+  const discount = !!$("cSubscriberDiscountEnabled")?.checked;
+
+  const STANDARD = 300; // 3%
+  const DISCOUNT = 100; // 1% (your “lower tier”)
+  let bps = discount ? DISCOUNT : STANDARD;
+
+  if (manual !== null && Number.isFinite(manual)) bps = manual;
+
+  const pct = (bps / 100).toFixed(2);
+  if ($("cFeePreview")) $("cFeePreview").textContent = `Platform fee: ${pct}%`;
+}
+  // ✅ Robustly extract a {slug,name,notes,payment_mode} course object from any backend shape
+function extractCourse(out){
+  const c =
+    out?.course ||
+    out?.data?.course ||
+    out?.result?.course ||
+    out?.savedCourse ||
+    out?.courseRow ||
+    out?.row ||
+    out?.data ||
+    null;
+
+  // allow direct "out.slug" style too
+  const slug = String(c?.slug ?? out?.slug ?? "").trim();
+  if (!slug) return null;
+
+  return {
+    slug,
+    name: c?.name ?? out?.name ?? "",
+    notes: c?.notes ?? out?.notes ?? "",
+    payment_mode: c?.payment_mode ?? c?.paymentMode ?? out?.payment_mode ?? out?.paymentMode ?? "PAY_AT_COURSE",
+  };
+}
   // ✅ Create a booking and "take a slot" for a specific tee time
 async function adminFillSlot({ slug, playDate, teeTime, holes }) {
   const name = prompt("Player name:");
@@ -678,6 +778,9 @@ async function loadCourseSettingsIntoForm(slug){
     }
     return { ok:true, times: out };
   }
+$("cPaymentMode")?.addEventListener("change", updatePaymentUI);
+$("cSubscriberDiscountEnabled")?.addEventListener("change", updatePaymentUI);
+$("cPlatformFeeBps")?.addEventListener("input", updatePaymentUI);
 
   $("loginBtn").onclick = async () => {
     $("loginMsg").textContent = "Logging in...";
@@ -711,28 +814,66 @@ async function loadCourseSettingsIntoForm(slug){
     }
   };
 
-  $("createCourseBtn").onclick = async () => {
-    $("courseMsg").textContent = "Saving...";
-    try {
-      const out = await j("/api/book/admin/courses", {
-        method:"POST",
-        body: JSON.stringify({
-          slug: $("cSlug").value,
-          name: $("cName").value,
-          notes: $("cNotes").value
-        })
-      });
-      $("courseMsg").textContent = "✅ Saved: " + out.course.slug + " — opens at /book/" + out.course.slug;
-      $("gSlug").value = out.course.slug;
-      $("sSlug").value = out.course.slug;
-     await loadCourseSettingsIntoForm(out.course.slug);
-       await refresh();
-      await refreshActiveView();
-    } catch (e) {
-      $("courseMsg").textContent = "❌ " + e.message;
-    }
-  };
+ $("createCourseBtn").onclick = async () => {
+  $("courseMsg").textContent = "Saving...";
 
+  try {
+    const payload = {
+      slug: ($("cSlug").value || "").trim(),
+      name: ($("cName").value || "").trim(),
+      notes: ($("cNotes").value || "").trim(),
+      paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
+
+      // ✅ ALWAYS send subscriber discount fields (for BOTH pay modes)
+      subscriberDiscountEnabled: !!$("cSubscriberDiscountEnabled")?.checked,
+      subscriberDiscountPct: Number($("cSubscriberDiscountPct")?.value || 5),
+    };
+
+    const isPayOnBooking = payload.paymentMode === "PAY_ON_BOOKING";
+    if (isPayOnBooking) {
+      payload.stripeAccountId = ($("cStripeAccountId")?.value || "").trim();
+
+      const bpsRaw = ($("cPlatformFeeBps")?.value || "").trim();
+      if (bpsRaw !== "") payload.platformFeeBps = Number(bpsRaw);
+    }
+
+    const out = await j("/api/book/admin/courses", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+
+    const savedSlug =
+      (out?.course?.slug ||
+       out?.data?.course?.slug ||
+       out?.data?.slug ||
+       out?.slug ||
+       payload.slug ||
+       "").toString().trim();
+
+    if (!savedSlug) {
+      $("courseMsg").textContent =
+        "❌ Course saved but response did not include course.slug";
+      return;
+    }
+
+    $("courseMsg").textContent =
+      "✅ Saved: " + savedSlug + " — opens at /book/" + savedSlug;
+
+    $("gSlug").value = savedSlug;
+    $("sSlug").value = savedSlug;
+    if ($("vSlug")) $("vSlug").value = savedSlug;
+    if ($("dSlug")) $("dSlug").value = savedSlug;
+    if ($("iSlug")) $("iSlug").value = savedSlug;
+    if ($("mSlug")) $("mSlug").value = savedSlug;
+    if ($("aSlug")) $("aSlug").value = savedSlug;
+
+    await loadCourseSettingsIntoForm(savedSlug);
+    await refresh();
+    await refreshActiveView();
+  } catch (e) {
+    $("courseMsg").textContent = "❌ " + e.message;
+  }
+};
   $("saveSettingsBtn").onclick = async () => {
     $("settingsMsg").textContent = "Saving settings...";
     try{
@@ -909,6 +1050,11 @@ async function loadCourseSettingsIntoForm(slug){
       .replace(/"/g,"&quot;")
       .replace(/'/g,"&#039;");
   }
+  function paymentLabel(mode){
+  const m = String(mode || "").trim().toUpperCase();
+  if (m === "PAY_ON_BOOKING") return "Pay on booking";
+  return "Pay at course";
+}
 
   function clearViewBoxes(){
     $("viewMsg").textContent = "";
@@ -1460,37 +1606,82 @@ tb.querySelectorAll('button[data-addbooking="1"]').forEach(btn => {
 
       list.forEach(c => {
         const li = document.createElement("li");
-        li.innerHTML =
-          `<b>${_escape(c.name)}</b> — <code>${_escape(c.slug)}</code> — <a href="/book/${_escape(c.slug)}">open</a>` +
-          `<div class="actions">` +
-          `<button class="small secondary" data-fill="${_escape(c.slug)}">Use for generator</button>` +
-          `<button class="small secondary" data-viewtimes="${_escape(c.slug)}">View times</button>` +
-          `<button class="small secondary" data-viewbookings="${_escape(c.slug)}">View bookings</button>` +
-          `<button class="small danger" data-delcourse="${_escape(c.slug)}">Delete course</button>` +
-          `</div>`;
-        ul.appendChild(li);
-      });
+        const mode = c.payment_mode || c.paymentMode || "PAY_AT_COURSE";
+const bps = Number(c.platform_fee_bps || 0);
+const discount = !!c.subscriber_discount_enabled;
+const stripeConnected = !!c.stripe_account_id;
+
+const feePct = bps ? (bps / 100).toFixed(2) + "%" : "";
+
+li.innerHTML =
+  `<b>${_escape(c.name)}</b> — <code>${_escape(c.slug)}</code>` +
+  ` <span class="pill">${_escape(paymentLabel(mode))}</span>` +
+
+  (mode === "PAY_ON_BOOKING"
+  ? ` <span class="pill">${_escape(feePct)}</span>` +
+    (stripeConnected ? ` <span class="pill">Stripe ✓</span>` : ` <span class="pill" style="background:#fee2e2;color:#991b1b;border-color:#fecaca">Stripe ✗</span>`)
+  : ``) +
+
+(discount ? ` <span class="pill">Subscriber Discount</span>` : ``) +
+
+  ` — <a href="/book/${_escape(c.slug)}">open</a>` +
+
+  `<div class="actions">` +
+  `<button class="small secondary" data-fill="${_escape(c.slug)}">Use for generator</button>` +
+  `<button class="small secondary" data-viewtimes="${_escape(c.slug)}">View times</button>` +
+  `<button class="small secondary" data-viewbookings="${_escape(c.slug)}">View bookings</button>` +
+  `<button class="small danger" data-delcourse="${_escape(c.slug)}">Delete course</button>` +
+  `</div>`;
+  
+  ul.appendChild(li);
+});
 
       ul.querySelectorAll("button[data-fill]").forEach(btn => {
-        btn.onclick = () => {
-          const s = btn.getAttribute("data-fill") || "";
-          $("gSlug").value = s;
-          $("aSlug").value = s;
-          $("cSlug").value = s;
-          $("dSlug").value = s;
-          $("vSlug").value = s;
-          $("sSlug").value = s;
-          $("iSlug").value = s; // ✅ also fill inventory slug
-          if ($("mSlug")) $("mSlug").value = s;
-          if ($("mDate")) $("mDate").value = $("vDate")?.value || $("gDate")?.value || $("mDate").value;
-loadCourseSettingsIntoForm(s); // ✅ auto-load fees/qty/durations
-          $("previewBox").textContent = "";
-          $("genMsg").textContent = "";
-          $("delMsg").textContent = "";
-          $("settingsMsg").textContent = "";
-          clearViewBoxes();
-        };
-      });
+  btn.onclick = () => {
+    const s = btn.getAttribute("data-fill") || "";
+    if (!s) return;
+
+    // ✅ Find the course object from the loaded list
+    const course = (list || []).find(x => String(x.slug || "") === s) || {};
+
+    $("gSlug").value = s;
+    $("aSlug").value = s;
+    $("cSlug").value = s;
+    $("dSlug").value = s;
+    $("vSlug").value = s;
+    $("sSlug").value = s;
+    $("iSlug").value = s; // ✅ also fill inventory slug
+    if ($("mSlug")) $("mSlug").value = s;
+    if ($("mDate")) $("mDate").value = $("vDate")?.value || $("gDate")?.value || $("mDate").value;
+
+    // ✅ ALSO fill the edit fields so Save Course edits, not overwrites
+    $("cName").value = course.name || "";
+    $("cNotes").value = course.notes || "";
+    if ($("cPaymentMode")) {
+      $("cPaymentMode").value = (course.payment_mode || "PAY_AT_COURSE");
+    }
+    if ($("cStripeAccountId")) {
+  $("cStripeAccountId").value = course.stripe_account_id || "";
+}
+if ($("cSubscriberDiscountEnabled")) {
+  $("cSubscriberDiscountEnabled").checked = !!course.subscriber_discount_enabled;
+}
+if ($("cSubscriberDiscountPct")) {
+  $("cSubscriberDiscountPct").value = Number(course.subscriber_discount_pct ?? course.subscriberDiscountPct ?? 5);
+}
+if ($("cPlatformFeeBps")) {
+  $("cPlatformFeeBps").value = course.platform_fee_bps || "";
+}
+
+    loadCourseSettingsIntoForm(s); // ✅ auto-load fees/qty/durations
+    $("previewBox").textContent = "";
+    $("genMsg").textContent = "";
+    $("delMsg").textContent = "";
+    $("settingsMsg").textContent = "";
+    clearViewBoxes();
+  };
+});
+updatePaymentUI();
 
       ul.querySelectorAll("button[data-viewtimes]").forEach(btn => {
         btn.onclick = async () => {
@@ -1598,6 +1789,7 @@ $("checkInventoryBtn").onclick = async () => {
     $("inventoryMsg").textContent = "❌ " + e.message;
   }
 };
+updatePaymentUI();
   refresh();
 </script>
 </body>
