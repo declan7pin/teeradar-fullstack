@@ -11181,21 +11181,20 @@ router.post(
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    // ✅ Mark booking as paid + confirmed when checkout completes
-    if (event.type === "checkout.session.completed") {
-      const session = event.data?.object || {};
-      const meta = session.metadata || {};
+    try {
+      // ✅ Mark booking as paid + confirmed when checkout completes
+      if (event.type === "checkout.session.completed") {
+        const session = event.data?.object || {};
+        const meta = session.metadata || {};
 
-      const booking_id = Number(meta.booking_id || 0);
-      const reference = String(meta.reference || "").trim();
+        const booking_id = Number(meta.booking_id || 0);
+        const reference = String(meta.reference || "").trim();
 
-      if (!booking_id && !reference) {
-        console.error("❌ Webhook missing booking_id and reference metadata");
-        return res.status(400).send("Missing booking metadata");
-      }
+        if (!booking_id && !reference) {
+          console.error("❌ Webhook missing booking_id and reference metadata");
+          return res.status(400).send("Missing booking metadata");
+        }
 
-      try {
-        // ✅ This marks paid+confirmed AND sends email (idempotent / safe on retries)
         const fin = await finalizePaidBooking({
           booking_id,
           reference,
@@ -11206,20 +11205,26 @@ router.post(
         console.log("✅ Webhook finalized booking result:", {
           booking_id,
           reference,
+          session_id: String(session.id || ""),
+          payment_intent: String(session.payment_intent || ""),
           fin,
         });
 
         if (!fin?.ok) {
-          console.error("❌ Webhook finalize failed:", fin);
+          console.error("❌ Webhook finalize failed:", {
+            booking_id,
+            reference,
+            fin,
+          });
           return res.status(500).send(fin?.error || "Finalize error");
         }
-      } catch (e) {
-        console.error("❌ Webhook finalize failed", e?.message || e);
-        return res.status(500).send("Finalize error");
       }
-    }
 
-    return res.json({ received: true });
+      return res.json({ received: true });
+    } catch (e) {
+      console.error("❌ Stripe webhook handler failed:", e?.message || e);
+      return res.status(500).send("Webhook handler error");
+    }
   }
 );
 
