@@ -1716,7 +1716,7 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
 
     const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
 
-        const players = Math.max(1, Number(b.players || 1));
+            const players = Math.max(1, Number(b.players || 1));
 
     // ✅ For ONLINE bookings, daily sheet price per player should stay as the BASE booking price.
     // Add-ons are already shown separately as badges (Cart / Clubs), so do NOT fold them into
@@ -1739,6 +1739,30 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
 
     for (let i = 0; i < players; i++) {
       if (!byKey.has(key)) byKey.set(key, []);
+
+      const row = normalizeBookingLikeRow(b);
+
+      // ✅ keep DAILY SHEET display at base per-player price only
+      row.price_per_player_cents = basePricePerPlayerCents;
+
+      // ✅ keep total too if needed later
+      row.total_cents = totalCents;
+      row.players = players;
+
+      // ✅ only show add-ons on Slot 1 for that booking
+      if (i > 0) {
+        row.cart_qty = 0;
+        row.hire_clubs_qty = 0;
+        row.has_cart = false;
+        row.has_hire_clubs = false;
+      }
+
+      row.layout_key = layoutKey;
+      row.front_nine_key = frontKey;
+      row.back_nine_key = backKey;
+
+      byKey.get(key).push(row);
+    }
 
       const row = normalizeBookingLikeRow(b);
 
