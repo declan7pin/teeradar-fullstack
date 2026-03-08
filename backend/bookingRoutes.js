@@ -1,3 +1,4 @@
+
 // backend/bookingRoutes.js
 import express from "express";
 import crypto from "crypto";
@@ -6,6 +7,70 @@ import { Resend } from "resend";
 import cookieParser from "cookie-parser"; // ✅ ADD
 import { recordEvent } from "./analytics.js";
 import jwt from "jsonwebtoken";
+import Stripe from "stripe";
+
+const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
+
+// ✅ Stripe API version pin (recommended)
+const STRIPE_API_VERSION = "2024-06-20";
+
+// ✅ Platform fee in basis points (e.g. 300 = 3%)
+const PLATFORM_FEE_BPS = Number(process.env.PLATFORM_FEE_BPS || 0);
+
+// ✅ Subscriber discount (defaults to 5%)
+const SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
+// ✅ Course-level subscriber discount opt-in (adds columns if missing)
+(async function ensureSubscriberDiscountColumns() {
+  try {
+    await db.query(`
+      ALTER TABLE booking_courses
+        ADD COLUMN IF NOT EXISTS subscriber_discount_enabled boolean DEFAULT false;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_courses
+        ADD COLUMN IF NOT EXISTS subscriber_discount_pct int DEFAULT 5;
+    `);
+
+    console.log("✅ ensured booking_courses subscriber discount columns");
+  } catch (e) {
+    console.warn("⚠️ could not ensure subscriber discount columns", e?.message || e);
+  }
+})();
+
+// Optional: emergency override list (comma-separated emails) if DB lookup isn't ready
+const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+// ✅ Determine if an email is an active subscriber (subscriber_status table)
+async function isSubscriberEmail(email) {
+  const e = String(email || "").trim().toLowerCase();
+  if (!e) return false;
+
+  try {
+    const r = await db.query(
+      `
+      SELECT 1
+      FROM subscriber_status
+      WHERE lower(email) = lower($1)
+        AND status IN ('active','trialing')
+      LIMIT 1;
+      `,
+      [e]
+    );
+
+    return r.rows.length > 0;
+  } catch (err) {
+    console.error("subscriber lookup error", err);
+    return false;
+  }
+}
+// ✅ Create Stripe client once (or null if not configured)
+const stripe = STRIPE_SECRET_KEY
+  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION })
+  : null;
 
 const router = express.Router();
 // ✅ CORS for booking admin + course admin UIs (fixes “buttons do nothing” due to blocked preflight)
@@ -47,6 +112,13 @@ router.use((req, res, next) => {
 
   next();
 });
+// ✅ Base URL used for redirects / links (Stripe success/cancel, confirmation page, etc.)
+const BASE_URL = String(
+  process.env.PUBLIC_BASE_URL ||
+  process.env.SITE_URL ||
+  process.env.RENDER_EXTERNAL_URL ||
+  "https://teeradar.com.au"
+).trim().replace(/\/+$/, "");
 // ✅ Add request id + timing + end-of-request status log
 router.use((req, res, next) => {
   req._rid = Math.random().toString(16).slice(2, 10);
@@ -69,8 +141,87 @@ router.use((req, res, next) => {
   console.log("📌 bookingRoutes hit:", req.method, req.originalUrl);
   next();
 });
-// ✅ ADD (needed): ensure JSON bodies work for ALL routes in this router
-router.use(express.json());
+// ✅ Stripe webhook MUST use raw body (so it must be registered BEFORE express.json())
+const STRIPE_WEBHOOK_SECRET = (process.env.STRIPE_WEBHOOK_SECRET || "").trim();
+
+router.post(
+  "/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    if (!stripe) return res.status(500).send("stripe_not_configured");
+
+    let event;
+    try {
+      const sig = req.headers["stripe-signature"];
+      if (!STRIPE_WEBHOOK_SECRET) return res.status(500).send("missing_webhook_secret");
+      event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+      console.error("stripe webhook signature verify failed", err?.message || err);
+      return res.status(400).send("bad_signature");
+    }
+
+    try {
+      // We only care about Checkout completing
+      if (event.type === "checkout.session.completed") {
+        const session = event.data?.object || {};
+        const meta = session.metadata || {};
+
+        // The metadata is what we’ll rely on to finalize booking
+        const slug = String(meta.slug || "").trim();
+        const date = String(meta.date || "").trim();
+        const time = String(meta.time || "").trim();
+        const holes = Number(meta.holes || 0);
+        const players = Number(meta.players || 0);
+
+        const golfer_name = String(meta.golfer_name || "").trim();
+        const golfer_email = String(meta.golfer_email || "").trim();
+        const golfer_phone = String(meta.golfer_phone || "").trim();
+
+        const cart_qty = Number(meta.cart_qty || 0);
+        const hire_clubs_qty = Number(meta.hire_clubs_qty || 0);
+
+        const layout_key = String(meta.layout_key || "").trim();
+        const front_nine_key = String(meta.front_nine_key || "").trim();
+        const back_nine_key = String(meta.back_nine_key || "").trim();
+
+        const reference = String(meta.reference || "").trim();
+
+        // ✅ Call your existing booking logic, but as "paid"
+        // We’ll add a tiny helper below that reuses your current code path.
+        await finalizePaidBooking({
+          slug,
+          date,
+          time,
+          holes,
+          players,
+          golfer_name,
+          golfer_email,
+          golfer_phone,
+          cart_qty,
+          hire_clubs_qty,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+          reference,
+          stripe_session_id: String(session.id || ""),
+          stripe_payment_intent: String(session.payment_intent || ""),
+        });
+      }
+
+      res.json({ received: true });
+    } catch (e) {
+      console.error("stripe webhook handler error", e);
+      res.status(500).send("webhook_handler_failed");
+    }
+  }
+);
+// ✅ JSON for everything EXCEPT Stripe webhooks (webhooks need RAW body)
+router.use((req, res, next) => {
+  if (req.originalUrl.includes("/stripe/webhook") || req.originalUrl.includes("/stripe-webhook")) {
+    return next();
+  }
+  return express.json()(req, res, next);
+});
 
 // ✅ ADD (needed): read cookies for admin auth
 router.use(cookieParser());
@@ -840,6 +991,8 @@ function requirePlatformAdmin(req, res, next) {
 
   return res.status(401).json({ ok: false, error: "not_authorized" });
 }
+// ✅ Backwards-compatible alias (some routes still reference requireBookingAdmin)
+const requireBookingAdmin = requirePlatformAdmin;
 
 // ✅ accept both the old and new admin generator payload shapes
 function _pickAny(obj, keys, fallback = undefined) {
@@ -972,8 +1125,6 @@ async function sendBookingEmail({
       ? `TeeRadar manual booking confirmed — ${reference}`
       : `TeeRadar booking confirmed — ${reference}`;
 
-  const extrasCents = Number(cartCents || 0) + Number(hireClubsCents || 0);
-
   const cartLine =
     Number(cartCents || 0) > 0
       ? `<tr><td style="padding:6px 0;color:#64748b">Cart</td><td style="padding:6px 0">${fmtMoney(cartCents || 0)}</td></tr>`
@@ -984,7 +1135,10 @@ async function sendBookingEmail({
       ? `<tr><td style="padding:6px 0;color:#64748b">Hire clubs</td><td style="padding:6px 0">${fmtMoney(hireClubsCents || 0)}</td></tr>`
       : "";
 
-  const totalAll = Number(totalCents || 0) + extrasCents;
+  // ✅ IMPORTANT:
+  // totalCents ALREADY includes add-ons in your booking flow.
+  // Do NOT add cart/hire again here.
+  const totalAll = Number(totalCents || 0);
 
   const badge =
     source === "manual"
@@ -1006,7 +1160,10 @@ async function sendBookingEmail({
         <tr><td style="padding:6px 0;color:#64748b">Price</td><td style="padding:6px 0">${fmtMoney(pricePerPlayerCents || 0)} per player</td></tr>
         ${cartLine}
         ${hireClubsLine}
-        <tr><td style="padding:6px 0;color:#64748b">Total</td><td style="padding:6px 0"><b>${fmtMoney(totalAll)}</b></td></tr>
+        <tr>
+          <td style="padding:6px 0;color:#64748b">Total</td>
+          <td style="padding:6px 0"><b>${fmtMoney(totalAll)}</b></td>
+        </tr>
       </table>
 
       <p style="margin:14px 0 0;color:#64748b;font-size:12px">
@@ -1035,33 +1192,114 @@ async function sendBookingEmail({
 // One-time table creation (safe)
 // -----------------------------
 async function ensureBookingTables() {
+  // =============================
+  // booking_courses
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_courses (
       id SERIAL PRIMARY KEY,
       slug TEXT UNIQUE NOT NULL,
       name TEXT NOT NULL,
       notes TEXT,
+      payment_mode TEXT NOT NULL DEFAULT 'PAY_AT_COURSE',
+      layouts JSONB NOT NULL DEFAULT '[]'::jsonb,
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
 
-  // ✅ NEW: course layouts (9-hole loops + optional 18-hole routing)
+  // Ensure payment_mode exists (safe on older DBs)
   await db.query(`
-    CREATE TABLE IF NOT EXISTS booking_course_layouts (
-      course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
-      layouts JSONB NOT NULL DEFAULT '[]'::jsonb,   -- [{key,label}]
-      routes18 JSONB NOT NULL DEFAULT '[]'::jsonb,  -- [{key,label,front9_key,back9_key}]
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
+    ALTER TABLE booking_courses
+    ADD COLUMN IF NOT EXISTS payment_mode TEXT NOT NULL DEFAULT 'PAY_AT_COURSE';
   `);
 
-  // ✅ NEW: store named 9s + 18-hole routings (as JSON, editable by course)
+  // ✅ FIX: repair legacy CHECK constraint + normalize old values (robust + idempotent)
+  // 1) hard-normalize values so the CHECK constraint won't fail
+  await db.query(`
+    UPDATE booking_courses
+    SET payment_mode = CASE
+      WHEN payment_mode IS NULL THEN 'PAY_AT_COURSE'
+      WHEN BTRIM(payment_mode) = '' THEN 'PAY_AT_COURSE'
+      WHEN UPPER(BTRIM(payment_mode)) IN ('PAY_AT_TIME_OF_BOOKING', 'PAY_AT_BOOKING', 'PAYMENT_ON_BOOKING', 'PAY_ON_BOOKING') THEN 'PAY_ON_BOOKING'
+      WHEN UPPER(BTRIM(payment_mode)) IN ('PAY_AT_COURSE') THEN 'PAY_AT_COURSE'
+      ELSE 'PAY_AT_COURSE'
+    END;
+  `);
+
+  // 2) drop old constraint if it exists on this table
+  await db.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'booking_courses'::regclass
+          AND contype = 'c'
+          AND conname = 'booking_courses_payment_mode_check'
+      ) THEN
+        ALTER TABLE booking_courses
+        DROP CONSTRAINT booking_courses_payment_mode_check;
+      END IF;
+    END
+    $$;
+  `);
+
+  // 3) add correct constraint only if missing
+  await db.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'booking_courses'::regclass
+          AND contype = 'c'
+          AND conname = 'booking_courses_payment_mode_check'
+      ) THEN
+        ALTER TABLE booking_courses
+        ADD CONSTRAINT booking_courses_payment_mode_check
+        CHECK (payment_mode IN ('PAY_AT_COURSE', 'PAY_ON_BOOKING'));
+      END IF;
+    END
+    $$;
+  `);
+
+  // Ensure layouts exists (safe on older DBs)
   await db.query(`
     ALTER TABLE booking_courses
     ADD COLUMN IF NOT EXISTS layouts JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
 
-  // ✅ NEW: role-based access for course users (manager vs proshop)
+  // ✅ NEW: Stripe Connect + platform fee config per course
+  await db.query(`
+    ALTER TABLE booking_courses
+    ADD COLUMN IF NOT EXISTS stripe_account_id TEXT;
+  `);
+
+  await db.query(`
+    ALTER TABLE booking_courses
+    ADD COLUMN IF NOT EXISTS platform_fee_bps INTEGER;
+  `);
+
+  await db.query(`
+    ALTER TABLE booking_courses
+    ADD COLUMN IF NOT EXISTS subscriber_discount_enabled BOOLEAN NOT NULL DEFAULT false;
+  `);
+
+  // =============================
+  // booking_course_layouts
+  // =============================
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_course_layouts (
+      course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
+      layouts JSONB NOT NULL DEFAULT '[]'::jsonb,
+      routes18 JSONB NOT NULL DEFAULT '[]'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
+  // =============================
+  // booking_course_users
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_course_users (
       id SERIAL PRIMARY KEY,
@@ -1069,16 +1307,21 @@ async function ensureBookingTables() {
       email TEXT NOT NULL,
       salt_hex TEXT NOT NULL,
       hash_hex TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'proshop',
       created_at TIMESTAMPTZ DEFAULT now(),
       UNIQUE(course_id, email)
     );
   `);
 
+  // Ensure role exists (safe on older DBs)
   await db.query(`
     ALTER TABLE booking_course_users
     ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'proshop';
   `);
 
+  // =============================
+  // booking_time_templates
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_time_templates (
       course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
@@ -1088,7 +1331,9 @@ async function ensureBookingTables() {
     );
   `);
 
-  // ✅ booking_times (base table)
+  // =============================
+  // booking_times (base table)
+  // =============================
   // ✅ IMPORTANT: DO NOT keep the old UNIQUE(course_id, play_date, tee_time, holes)
   // because it causes layouts to be treated as duplicates.
   await db.query(`
@@ -1117,8 +1362,7 @@ async function ensureBookingTables() {
     WHERE booked_players IS NULL;
   `);
 
-  // ✅ NEW: optional layout keys for named 9s + 18 routings (e.g. lakes, pines+lakes)
-  // (MUST exist before we enforce the new unique constraint)
+  // ✅ NEW: optional layout keys for named 9s + 18 routings
   await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS layout_key TEXT;`);
   await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS front_nine_key TEXT;`);
   await db.query(`ALTER TABLE booking_times ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
@@ -1137,7 +1381,6 @@ async function ensureBookingTables() {
   `);
 
   // ✅ ADD: remove legacy blank-layout rows ONLY when real layout rows exist for same slot
-  // This fixes "Inserted 0, skipped X" after layouts are introduced.
   await db.query(`
     DELETE FROM booking_times bt
     WHERE COALESCE(bt.layout_key,'') = ''
@@ -1159,7 +1402,6 @@ async function ensureBookingTables() {
   `);
 
   // ✅ CRITICAL: drop the legacy unique constraint that ignores layout keys
-  // (Postgres usually auto-names it like booking_times_course_id_play_date_tee_time_holes_key)
   await db.query(`
     DO $$
     BEGIN
@@ -1178,7 +1420,6 @@ async function ensureBookingTables() {
   `);
 
   // ✅ ALSO drop any legacy UNIQUE INDEX that ignores layout keys
-  // (some DBs have a unique index on course/date/time/holes with a different name)
   await db.query(`
     DO $$
     DECLARE
@@ -1201,7 +1442,6 @@ async function ensureBookingTables() {
   `);
 
   // ✅ FIX #1: clean duplicates so we can add a unique constraint safely
-  // ✅ UPDATED: duplicates are now determined INCLUDING layout/front/back keys
   await db.query(`
     WITH ranked AS (
       SELECT
@@ -1246,6 +1486,7 @@ async function ensureBookingTables() {
     $$;
   `);
 
+  // ✅ IMPORTANT: these MUST be inside ensureBookingTables()
   await db.query(`DROP INDEX IF EXISTS booking_times_unique_layout_idx;`);
   await db.query(`DROP INDEX IF EXISTS booking_times_unique_slot_idx;`);
 
@@ -1269,6 +1510,9 @@ async function ensureBookingTables() {
     ON booking_times (course_id, play_date, holes, status, tee_time);
   `);
 
+  // =============================
+  // booking_bookings
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_bookings (
       id BIGSERIAL PRIMARY KEY,
@@ -1305,7 +1549,7 @@ async function ensureBookingTables() {
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
   await db.query(`CREATE INDEX IF NOT EXISTS booking_bookings_layout_idx ON booking_bookings (course_id, play_date, holes, layout_key);`);
 
-  // ✅ ADD: normalize booking layout keys too (avoids NULL mismatches in availability joins)
+  // ✅ ADD: normalize booking layout keys too
   await db.query(`
     UPDATE booking_bookings
     SET
@@ -1323,13 +1567,16 @@ async function ensureBookingTables() {
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;`);
   await db.query(`CREATE INDEX IF NOT EXISTS booking_bookings_course_window_idx ON booking_bookings (course_id, start_at, end_at);`);
 
-  // ✅ ADD: paid flag + cart tracking
+  // ✅ ADD: paid flag + cart tracking + subscriber discount tracking
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS checked_in BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS has_cart BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cart_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS hire_clubs_qty INTEGER NOT NULL DEFAULT 0;`);
   await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS subscriber_discount_applied BOOLEAN NOT NULL DEFAULT false;`);
+  await db.query(`ALTER TABLE booking_bookings ADD COLUMN IF NOT EXISTS subscriber_discount_cents INTEGER NOT NULL DEFAULT 0;`);
 
   // ✅ ADD: add-ons pricing stored per course
   await db.query(`ALTER TABLE booking_courses ADD COLUMN IF NOT EXISTS cart_fee_cents INTEGER NOT NULL DEFAULT 0;`);
@@ -1349,6 +1596,32 @@ async function ensureBookingTables() {
     ON booking_bookings (course_id, play_date);
   `);
 
+  // ✅✅✅ ADD (needed): Stripe IDs for webhook idempotency + audit
+  await db.query(`
+    ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS stripe_session_id TEXT;
+  `);
+
+  await db.query(`
+    ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT;
+  `);
+
+  // (optional but recommended) indexes
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_bookings_stripe_session_idx
+    ON booking_bookings (stripe_session_id);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_bookings_stripe_pi_idx
+    ON booking_bookings (stripe_payment_intent);
+  `);
+  // ✅✅✅ END ADD ✅✅✅
+
+  // =============================
+  // booking_analytics_events
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_analytics_events (
       id BIGSERIAL PRIMARY KEY,
@@ -1374,7 +1647,9 @@ async function ensureBookingTables() {
     ON booking_analytics_events (event_type, occurred_at DESC);
   `);
 
-  // ✅ NEW: per-course settings (inventory + durations + add-on fees)
+  // =============================
+  // booking_course_settings
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_course_settings (
       course_id INTEGER PRIMARY KEY REFERENCES booking_courses(id) ON DELETE CASCADE,
@@ -1392,6 +1667,9 @@ async function ensureBookingTables() {
     );
   `);
 
+  // =============================
+  // booking_manual_slots
+  // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_manual_slots (
       id BIGSERIAL PRIMARY KEY,
@@ -1422,7 +1700,7 @@ async function ensureBookingTables() {
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS front_nine_key TEXT;`);
   await db.query(`ALTER TABLE booking_manual_slots ADD COLUMN IF NOT EXISTS back_nine_key TEXT;`);
 
-  // ✅ ADD: normalize manual slot layout keys (same reason as booking_times)
+  // ✅ Normalize manual slot layout keys
   await db.query(`
     UPDATE booking_manual_slots
     SET
@@ -1435,7 +1713,7 @@ async function ensureBookingTables() {
       OR back_nine_key IS NULL;
   `);
 
-  // ✅ ADD: drop the legacy unique constraint that ignores layout keys for manual slots
+  // ✅ Drop the legacy unique constraint that ignores layout keys for manual slots
   await db.query(`
     DO $$
     BEGIN
@@ -1453,44 +1731,42 @@ async function ensureBookingTables() {
     $$;
   `);
 
- // ✅ ADD: drop any legacy UNIQUE constraints / indexes that still ignore layout keys
-// (some “unique indexes” are actually backing indexes for UNIQUE constraints — must drop constraint first)
-await db.query(`
-  DO $$
-  DECLARE
-    r record;
-    c record;
-  BEGIN
-    FOR r IN
-      SELECT
-        i.oid AS index_oid,
-        i.relname AS index_name
-      FROM pg_index x
-      JOIN pg_class t ON t.oid = x.indrelid
-      JOIN pg_class i ON i.oid = x.indexrelid
-      WHERE t.relname = 'booking_manual_slots'
-        AND x.indisunique = true
-        AND pg_get_indexdef(x.indexrelid) LIKE '%(course_id, play_date, tee_time, holes, slot_index)%'
-        AND pg_get_indexdef(x.indexrelid) NOT LIKE '%layout_key%'
-    LOOP
-      -- If this unique index belongs to a UNIQUE constraint, drop the constraint(s) instead of the index
-      IF EXISTS (SELECT 1 FROM pg_constraint pc WHERE pc.conindid = r.index_oid) THEN
-        FOR c IN
-          SELECT conname
-          FROM pg_constraint
-          WHERE conindid = r.index_oid
-        LOOP
-          EXECUTE format('ALTER TABLE booking_manual_slots DROP CONSTRAINT IF EXISTS %I', c.conname);
-        END LOOP;
-      ELSE
-        EXECUTE format('DROP INDEX IF EXISTS %I', r.index_name);
-      END IF;
-    END LOOP;
-  END
-  $$;
-`);
+  // ✅ Drop any legacy UNIQUE constraints / indexes that still ignore layout keys
+  await db.query(`
+    DO $$
+    DECLARE
+      r record;
+      c record;
+    BEGIN
+      FOR r IN
+        SELECT
+          i.oid AS index_oid,
+          i.relname AS index_name
+        FROM pg_index x
+        JOIN pg_class t ON t.oid = x.indrelid
+        JOIN pg_class i ON i.oid = x.indexrelid
+        WHERE t.relname = 'booking_manual_slots'
+          AND x.indisunique = true
+          AND pg_get_indexdef(x.indexrelid) LIKE '%(course_id, play_date, tee_time, holes, slot_index)%'
+          AND pg_get_indexdef(x.indexrelid) NOT LIKE '%layout_key%'
+      LOOP
+        IF EXISTS (SELECT 1 FROM pg_constraint pc WHERE pc.conindid = r.index_oid) THEN
+          FOR c IN
+            SELECT conname
+            FROM pg_constraint
+            WHERE conindid = r.index_oid
+          LOOP
+            EXECUTE format('ALTER TABLE booking_manual_slots DROP CONSTRAINT IF EXISTS %I', c.conname);
+          END LOOP;
+        ELSE
+          EXECUTE format('DROP INDEX IF EXISTS %I', r.index_name);
+        END IF;
+      END LOOP;
+    END
+    $$;
+  `);
 
-  // ✅ ADD: create layout-aware unique index for manual slots
+  // ✅ Create layout-aware unique index for manual slots
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS booking_manual_slots_unique_slot_idx
     ON booking_manual_slots (
@@ -2063,7 +2339,9 @@ router.get("/course-admin/course-settings", requireCourseAdmin, async (req, res)
         hire_clubs_fee_cents,
         hire_clubs_qty,
         duration_9_mins,
-        duration_18_mins
+        duration_18_mins,
+        COALESCE(subscriber_discount_enabled, false) AS subscriber_discount_enabled,
+        COALESCE(subscriber_discount_pct, 5) AS subscriber_discount_pct
       FROM booking_courses
       WHERE slug = $1
       LIMIT 1;
@@ -2071,7 +2349,9 @@ router.get("/course-admin/course-settings", requireCourseAdmin, async (req, res)
       [slug]
     );
 
-    if (!r.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+    if (!r.rows.length) {
+      return res.status(404).json({ ok: false, error: "course_not_found" });
+    }
 
     return res.json({ ok: true, settings: r.rows[0] });
   } catch (e) {
@@ -2433,12 +2713,15 @@ router.get("/admin/course-settings", requirePlatformAdmin, async (req, res) => {
       SELECT
         slug,
         name,
+        payment_mode,
         cart_fee_cents,
         cart_qty,
         hire_clubs_fee_cents,
         hire_clubs_qty,
         duration_9_mins,
-        duration_18_mins
+        duration_18_mins,
+        COALESCE(subscriber_discount_enabled, false) AS subscriber_discount_enabled,
+        COALESCE(subscriber_discount_pct, 5) AS subscriber_discount_pct
       FROM booking_courses
       WHERE slug = $1
       LIMIT 1;
@@ -2446,7 +2729,9 @@ router.get("/admin/course-settings", requirePlatformAdmin, async (req, res) => {
       [slug]
     );
 
-    if (!r.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+    if (!r.rows.length) {
+      return res.status(404).json({ ok: false, error: "course_not_found" });
+    }
 
     // ✅ Return shape that your frontend can read safely
     return res.json({ ok: true, settings: r.rows[0] });
@@ -2461,45 +2746,223 @@ router.get("/admin/course-settings", requirePlatformAdmin, async (req, res) => {
 router.get("/admin/courses", requirePlatformAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT id, slug, name, notes, created_at FROM booking_courses ORDER BY id DESC LIMIT 500;`
+      `
+      SELECT
+        id,
+        slug,
+        name,
+        notes,
+        payment_mode,
+        created_at
+      FROM booking_courses
+      ORDER BY id DESC
+      LIMIT 500;
+      `
     );
+
     res.json({ ok: true, courses: rows || [] });
   } catch (e) {
     console.error("admin/courses GET", e);
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
-router.post("/admin/courses", requirePlatformAdmin, async (req, res) => {
+router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
   try {
-    const slug = normSlug(req.body?.slug);
-    const name = String(req.body?.name || "").trim();
-    const notes = req.body?.notes ? String(req.body.notes).trim() : null;
+    // ✅ ensure tables/columns exist (prevents cold start race issues)
+    await ensureBookingTables();
 
+    const { slug, name, notes } = req.body || {};
+
+    const slugClean = String(slug || "").trim().toLowerCase();
+    const nameClean = String(name || "").trim();
+    const notesClean = String(notes || "").trim();
+
+    if (!slugClean || !nameClean) {
+      return res.status(400).json({ ok: false, error: "slug_and_name_required" });
+    }
+
+    // ============================
+    // Payment Mode Normalisation
+    // ============================
+    const pmRaw =
+      req.body?.payment_mode ??
+      req.body?.paymentMode ??
+      req.body?.payment_option ??
+      req.body?.paymentOption ??
+      "";
+
+    const pmNorm = String(pmRaw || "").trim().toUpperCase();
+
+    const payment_mode =
+      pmNorm === "PAY_ON_BOOKING" ||
+      pmNorm === "PAY_AT_TIME_OF_BOOKING" ||
+      pmNorm.includes("TIME") ||
+      pmNorm.includes("BOOKING")
+        ? "PAY_ON_BOOKING"
+        : "PAY_AT_COURSE";
+
+    // ============================
+    // Stripe Connect + Subscriber Discount + Fee Tier
+    // ============================
+    const stripe_account_id = String(
+      req.body?.stripe_account_id ?? req.body?.stripeAccountId ?? ""
+    ).trim() || null;
+
+    // ✅ NEW: subscriber discount toggle
+    const subscriber_discount_enabled = !!(
+      req.body?.subscriber_discount_enabled ??
+      req.body?.subscriberDiscountEnabled ??
+      false
+    );
+
+    // ✅ NEW: subscriber discount percent (default 5)
+    const pctRaw =
+      req.body?.subscriber_discount_pct ??
+      req.body?.subscriberDiscountPct ??
+      req.body?.discount_pct ??
+      req.body?.discountPct;
+
+    let subscriber_discount_pct = Number.isFinite(Number(pctRaw))
+      ? Math.trunc(Number(pctRaw))
+      : 5;
+
+    // safety clamp
+    subscriber_discount_pct = Math.max(0, Math.min(50, subscriber_discount_pct));
+
+    // ENV controlled fee tiers (safe defaults)
+    const STANDARD_BPS = Number(process.env.STANDARD_PLATFORM_FEE_BPS || 300); // 3%
+    const DISCOUNT_BPS = Number(process.env.DISCOUNT_PLATFORM_FEE_BPS || 100); // 1%
+
+    // Auto choose tier
+    let platform_fee_bps = subscriber_discount_enabled ? DISCOUNT_BPS : STANDARD_BPS;
+
+    // Optional manual override (advanced usage)
+    const manualBps = Number(req.body?.platform_fee_bps ?? req.body?.platformFeeBps);
+
+    if (Number.isFinite(manualBps)) {
+      platform_fee_bps = Math.max(0, Math.min(10000, Math.trunc(manualBps)));
+    }
+
+    // ============================
+    // Insert / Update Course
+    // ============================
+    await db.query(
+      `
+      INSERT INTO booking_courses (
+        slug,
+        name,
+        notes,
+        payment_mode,
+        stripe_account_id,
+        platform_fee_bps,
+        subscriber_discount_enabled,
+        subscriber_discount_pct
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      ON CONFLICT (slug) DO UPDATE
+      SET name = EXCLUDED.name,
+          notes = EXCLUDED.notes,
+          payment_mode = EXCLUDED.payment_mode,
+          stripe_account_id = EXCLUDED.stripe_account_id,
+          platform_fee_bps = EXCLUDED.platform_fee_bps,
+          subscriber_discount_enabled = EXCLUDED.subscriber_discount_enabled,
+          subscriber_discount_pct = EXCLUDED.subscriber_discount_pct
+      `,
+      [
+        slugClean,
+        nameClean,
+        notesClean || null,
+        payment_mode,
+        stripe_account_id,
+        platform_fee_bps,
+        subscriber_discount_enabled,
+        subscriber_discount_pct,
+      ]
+    );
+
+    return res.json({
+      ok: true,
+      slug: slugClean,
+      payment_mode,
+      stripe_account_id,
+      platform_fee_bps,
+      subscriber_discount_enabled,
+      subscriber_discount_pct,
+    });
+  } catch (e) {
+    console.error("admin/courses POST", e);
+
+    return res.status(500).json({
+      ok: false,
+      error: "internal_error",
+      detail: String(e?.message || e),
+    });
+  }
+});
+// ✅ Stripe Connect onboarding (create Express account if missing, return onboarding URL)
+router.post("/admin/stripe/onboard", requireBookingAdmin, async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(500).json({ ok: false, error: "stripe_not_configured" });
+    }
+
+    const slug = normSlug(req.body?.slug || req.query?.slug || "");
     if (!slug || !isValidSlug(slug)) {
       return res.status(400).json({ ok: false, error: "slug_invalid" });
     }
-    if (!name) return res.status(400).json({ ok: false, error: "name_required" });
 
-    const r = await db.query(
-      `
-      INSERT INTO booking_courses (slug, name, notes)
-      VALUES ($1,$2,$3)
-      ON CONFLICT (slug) DO UPDATE SET
-        name = EXCLUDED.name,
-        notes = EXCLUDED.notes
-      RETURNING id, slug, name, notes, created_at;
-      `,
-      [slug, name, notes]
+    const c = await db.query(
+      `SELECT id, slug, stripe_account_id
+       FROM booking_courses
+       WHERE slug=$1
+       LIMIT 1;`,
+      [slug]
     );
+    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
 
-    res.json({ ok: true, course: r.rows[0] });
+    const courseId = Number(c.rows[0].id);
+    let acct = String(c.rows[0].stripe_account_id || "").trim();
+
+    // ✅ Create a Connect Express account if the course doesn't have one yet
+    if (!acct) {
+      const created = await stripe.accounts.create({
+        type: "express",
+        country: "AU",
+        capabilities: {
+          transfers: { requested: true },
+        },
+      });
+
+      acct = created.id;
+
+      await db.query(
+        `UPDATE booking_courses SET stripe_account_id=$1 WHERE id=$2`,
+        [acct, courseId]
+      );
+    }
+
+    const publicBaseUrl =
+      String(process.env.PUBLIC_BASE_URL || "").trim() ||
+      (req.get("origin") || "");
+
+    if (!publicBaseUrl) {
+      return res.status(500).json({ ok: false, error: "missing_PUBLIC_BASE_URL" });
+    }
+
+    // ✅ Stripe-hosted onboarding flow URL
+    const link = await stripe.accountLinks.create({
+      account: acct,
+      type: "account_onboarding",
+      refresh_url: `${publicBaseUrl}/book-admin.html`,
+      return_url: `${publicBaseUrl}/book-admin.html`,
+    });
+
+    return res.json({ ok: true, slug, stripe_account_id: acct, url: link.url });
   } catch (e) {
-    console.error("admin/courses POST", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+    console.error("admin/stripe/onboard", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 router.delete("/admin/courses/:slug", requirePlatformAdmin, async (req, res) => {
   try {
     const slug = normSlug(req.params.slug);
@@ -2956,15 +3419,21 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
     if (!slug || !isValidSlug(slug)) return res.status(400).json({ ok: false, error: "slug_invalid" });
 
     const c = await db.query(`SELECT id FROM booking_courses WHERE slug=$1 LIMIT 1;`, [slug]);
-    if (!c.rows.length) return res.json({ ok: true, bookings: [] });
+    if (!c.rows.length) return res.json({ ok: true, bookings: [], manualSlots: [] });
     const courseId = c.rows[0].id;
 
     const params = [courseId];
     let where = `WHERE b.course_id = $1`;
+
     if (date) {
       params.push(date);
       where += ` AND b.play_date = $${params.length}::date`;
     }
+
+    // ✅ KEY FIX:
+    // Hide Stripe-cancelled holds and unpaid checkout holds from "bookings" view.
+    // (Adjust the allowed statuses if your system uses different names.)
+    where += ` AND COALESCE(UPPER(b.status),'') IN ('CONFIRMED','PENDING','HOLD')`;
 
     const r = await db.query(
       `
@@ -2983,7 +3452,7 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
         b.cart_fee_cents,
         b.has_hire_clubs,
         b.hire_clubs_fee_cents,
-        (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents) AS gross_cents,
+        (COALESCE(b.total_cents,0) + COALESCE(b.cart_fee_cents,0) + COALESCE(b.hire_clubs_fee_cents,0)) AS gross_cents,
         b.status,
         b.created_at
       FROM booking_bookings b
@@ -2994,7 +3463,7 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
       params
     );
 
-        // ✅ ADD: also return manual slots so daily sheet can render walk-ins/phone-ins
+    // ✅ ADD: also return manual slots so daily sheet can render walk-ins/phone-ins
     const ms = await db.query(
       `
       SELECT
@@ -3026,7 +3495,7 @@ router.get("/admin/bookings", requirePlatformAdmin, async (req, res) => {
     res.json({
       ok: true,
       bookings: r.rows || [],
-      manualSlots: ms.rows || [], // ✅ NEW
+      manualSlots: ms.rows || [],
     });
   } catch (e) {
     console.error("admin/bookings GET", e);
@@ -4183,6 +4652,189 @@ async function syncBookedPlayersForTime({
     matched_tee_time: target.tee_time || null,
   };
 }
+// ✅ PUBLIC: fetch booking confirmation details (by reference)
+// NOTE: bookingRoutes is mounted at /api/book, so this becomes:
+// GET /api/book/confirmation?reference=TR-XXXXXX
+router.get("/confirmation", async (req, res) => {
+  try {
+    const reference = String(req.query?.reference || "").trim().toUpperCase();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
+
+    const q = await db.query(
+      `
+      SELECT
+        b.reference,
+        c.slug,
+        c.name AS course_name,
+
+        b.play_date::text AS play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+
+        COALESCE(b.cart_qty,0)::int AS cart_qty,
+        COALESCE(b.hire_clubs_qty,0)::int AS hire_clubs_qty,
+
+        COALESCE(b.total_cents,0)::bigint AS total_cents,
+        COALESCE(b.cart_fee_cents,0)::bigint AS cart_fee_cents,
+        COALESCE(b.hire_clubs_fee_cents,0)::bigint AS hire_clubs_fee_cents,
+
+        COALESCE(b.paid,false) AS paid,
+        COALESCE(b.status,'CONFIRMED') AS status,
+
+        COALESCE(b.golfer_name,'') AS golfer_name,
+        COALESCE(b.golfer_email,'') AS golfer_email,
+        COALESCE(b.golfer_phone,'') AS golfer_phone
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      WHERE UPPER(b.reference) = $1
+      LIMIT 1;
+      `,
+      [reference]
+    );
+
+    const row = q.rows[0];
+    if (!row) return res.status(404).json({ ok: false, error: "not_found" });
+
+    const grossCents =
+      Number(row.total_cents || 0) +
+      Number(row.cart_fee_cents || 0) +
+      Number(row.hire_clubs_fee_cents || 0);
+
+    res.json({
+      ok: true,
+      booking: {
+        reference: row.reference,
+        slug: row.slug,
+        courseName: row.course_name,
+
+        date: row.play_date,
+        teeTime: row.tee_time,
+        holes: Number(row.holes || 0),
+        players: Number(row.players || 0),
+
+        cartsQty: Number(row.cart_qty || 0),
+        hireClubsQty: Number(row.hire_clubs_qty || 0),
+
+        paid: !!row.paid,
+        paymentMode: row.paid ? "PAY_ON_BOOKING" : "PAY_AT_COURSE", // simple + correct for display
+        status: String(row.status || "CONFIRMED").toUpperCase(),
+
+        totalCents: Number(row.total_cents || 0),
+        cartFeeCents: Number(row.cart_fee_cents || 0),
+        hireClubsFeeCents: Number(row.hire_clubs_fee_cents || 0),
+        grossCents,
+
+        customer: {
+          name: row.golfer_name || "",
+          email: row.golfer_email || "",
+          phone: row.golfer_phone || "",
+        },
+      },
+    });
+  } catch (e) {
+    console.error("GET /api/book/confirmation error", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+// ✅ PUBLIC: fetch booking details by reference (frontend expects this shape)
+// bookingRoutes is mounted at /api/book
+// GET /api/book/booking?ref=TR-XXXX  (or ?reference=TR-XXXX)
+router.get("/booking", async (req, res) => {
+  try {
+    const refRaw = String(req.query?.ref || req.query?.reference || "").trim();
+    const reference = refRaw.toUpperCase();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "ref_required" });
+    }
+
+    const q = await db.query(
+      `
+      SELECT
+        b.reference,
+        b.course_id,
+        c.slug,
+        c.name AS course_name,
+
+        b.play_date::text AS play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+
+        COALESCE(b.price_per_player_cents,0)::bigint AS price_per_player_cents,
+        COALESCE(b.total_cents,0)::bigint AS total_cents,
+
+        -- ✅ FIX: use your actual discount column (prevents "discount_cents does not exist")
+        COALESCE(b.subscriber_discount_cents,0)::bigint AS discount_cents,
+
+        COALESCE(b.cart_qty,0)::int AS cart_qty,
+        COALESCE(b.hire_clubs_qty,0)::int AS hire_clubs_qty,
+
+        COALESCE(b.cart_fee_cents,0)::bigint AS cart_fee_cents,
+        COALESCE(b.hire_clubs_fee_cents,0)::bigint AS hire_clubs_fee_cents,
+
+        COALESCE(b.paid,false) AS paid,
+        COALESCE(b.status,'') AS status,
+
+        COALESCE(b.golfer_name,'') AS golfer_name,
+        COALESCE(b.golfer_email,'') AS golfer_email,
+        COALESCE(b.golfer_phone,'') AS golfer_phone
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      WHERE UPPER(b.reference) = $1
+      LIMIT 1;
+      `,
+      [reference]
+    );
+
+    const row = q.rows[0];
+    if (!row) return res.status(404).json({ ok: false, error: "not_found" });
+
+    // If someone tries to load confirmation for a cancelled booking, treat as not found
+    const statusUpper = String(row.status || "").toUpperCase();
+    if (statusUpper === "CANCELLED") {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+
+    res.json({
+      ok: true,
+      booking: {
+        reference: row.reference,
+        time: String(row.tee_time || "").split("|")[0],
+        tee_time: row.tee_time,
+        play_date: row.play_date,
+        holes: Number(row.holes || 0),
+        players: Number(row.players || 0),
+
+        price_per_player_cents: Number(row.price_per_player_cents || 0),
+        total_cents: Number(row.total_cents || 0),
+
+        // ✅ FIX: now returned from DB
+        discount_cents: Number(row.discount_cents || 0),
+
+        cart_qty: Number(row.cart_qty || 0),
+        hire_clubs_qty: Number(row.hire_clubs_qty || 0),
+        cart_fee_cents: Number(row.cart_fee_cents || 0),
+        hire_clubs_fee_cents: Number(row.hire_clubs_fee_cents || 0),
+
+        paid: !!row.paid,
+        status: statusUpper,
+
+        golfer_name: row.golfer_name || "",
+        golfer_email: row.golfer_email || "",
+        golfer_phone: row.golfer_phone || "",
+
+        course_slug: row.slug,
+        course_name: row.course_name,
+      },
+    });
+  } catch (e) {
+    console.error("GET /api/book/booking error", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // -----------------------------
 // ✅ Platform admin manual slots (book-admin.html)
 // -----------------------------
@@ -7414,7 +8066,9 @@ router.get(
         SELECT
           slug, name,
           cart_qty, hire_clubs_qty,
-          cart_fee_cents, hire_clubs_fee_cents
+          cart_fee_cents, hire_clubs_fee_cents,
+          COALESCE(subscriber_discount_enabled, false) AS subscriber_discount_enabled,
+          COALESCE(subscriber_discount_pct, 5) AS subscriber_discount_pct
         FROM booking_courses
         WHERE slug=$1
         LIMIT 1;
@@ -7422,7 +8076,8 @@ router.get(
         [slug]
       );
 
-      if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+      if (!c.rows.length)
+        return res.status(404).json({ ok: false, error: "course_not_found" });
 
       return res.json({ ok: true, course: c.rows[0] });
     } catch (e) {
@@ -7448,6 +8103,19 @@ router.post(
       const cartFeeCents = req.body?.cartFeeCents ?? req.body?.cart_fee_cents;
       const hireClubsFeeCents = req.body?.hireClubsFeeCents ?? req.body?.hire_clubs_fee_cents;
 
+      // ✅ NEW: subscriber discount settings
+      const subscriberDiscountEnabled =
+        req.body?.subscriberDiscountEnabled ??
+        req.body?.subscriber_discount_enabled ??
+        false;
+
+      const subscriberDiscountPctRaw =
+        req.body?.subscriberDiscountPct ??
+        req.body?.subscriber_discount_pct ??
+        5;
+
+      const subscriberDiscountPct = Number(subscriberDiscountPctRaw);
+
       if (!Number.isFinite(cartQty) || cartQty < 0 || cartQty > 100) {
         return res.status(400).json({ ok: false, error: "cart_qty_invalid" });
       }
@@ -7455,33 +8123,75 @@ router.post(
         return res.status(400).json({ ok: false, error: "hire_clubs_qty_invalid" });
       }
 
+      if (
+        !Number.isFinite(subscriberDiscountPct) ||
+        subscriberDiscountPct < 0 ||
+        subscriberDiscountPct > 50
+      ) {
+        return res
+          .status(400)
+          .json({ ok: false, error: "subscriber_discount_pct_invalid" });
+      }
+
       // fees are optional; if provided validate 0..10,000,000 cents
       let cartFeeVal = null;
       let clubsFeeVal = null;
 
-      if (cartFeeCents !== undefined && cartFeeCents !== null && cartFeeCents !== "") {
+      if (
+        cartFeeCents !== undefined &&
+        cartFeeCents !== null &&
+        cartFeeCents !== ""
+      ) {
         cartFeeVal = Number(cartFeeCents);
-        if (!Number.isFinite(cartFeeVal) || cartFeeVal < 0 || cartFeeVal > 10000000) {
+        if (
+          !Number.isFinite(cartFeeVal) ||
+          cartFeeVal < 0 ||
+          cartFeeVal > 10000000
+        ) {
           return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
         }
       }
 
-      if (hireClubsFeeCents !== undefined && hireClubsFeeCents !== null && hireClubsFeeCents !== "") {
+      if (
+        hireClubsFeeCents !== undefined &&
+        hireClubsFeeCents !== null &&
+        hireClubsFeeCents !== ""
+      ) {
         clubsFeeVal = Number(hireClubsFeeCents);
-        if (!Number.isFinite(clubsFeeVal) || clubsFeeVal < 0 || clubsFeeVal > 10000000) {
-          return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
+        if (
+          !Number.isFinite(clubsFeeVal) ||
+          clubsFeeVal < 0 ||
+          clubsFeeVal > 10000000
+        ) {
+          return res
+            .status(400)
+            .json({ ok: false, error: "hire_clubs_fee_invalid" });
         }
       }
 
-      // Build dynamic update: only overwrite fees if provided
-      const fields = ["cart_qty = $2", "hire_clubs_qty = $3"];
-      const params = [slug, cartQty, hireClubsQty];
-      let idx = 4;
+      // Build dynamic update
+      const fields = [
+        "cart_qty = $2",
+        "hire_clubs_qty = $3",
+        "subscriber_discount_enabled = $4",
+        "subscriber_discount_pct = $5"
+      ];
+
+      const params = [
+        slug,
+        cartQty,
+        hireClubsQty,
+        !!subscriberDiscountEnabled,
+        subscriberDiscountPct
+      ];
+
+      let idx = 6;
 
       if (cartFeeVal !== null) {
         fields.push(`cart_fee_cents = $${idx++}`);
         params.push(cartFeeVal);
       }
+
       if (clubsFeeVal !== null) {
         fields.push(`hire_clubs_fee_cents = $${idx++}`);
         params.push(clubsFeeVal);
@@ -7495,12 +8205,15 @@ router.post(
         RETURNING
           slug, name,
           cart_qty, hire_clubs_qty,
-          cart_fee_cents, hire_clubs_fee_cents;
+          cart_fee_cents, hire_clubs_fee_cents,
+          subscriber_discount_enabled,
+          subscriber_discount_pct;
         `,
         params
       );
 
-      if (!u.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+      if (!u.rows.length)
+        return res.status(404).json({ ok: false, error: "course_not_found" });
 
       return res.json({ ok: true, course: u.rows[0] });
     } catch (e) {
@@ -7822,7 +8535,7 @@ router.get("/course-admin/times", requireCourseAdmin, async (req, res) => {
           AND bb.play_date = t.play_date
           AND bb.status = 'CONFIRMED'
           AND bb.holes = t.holes
-          AND bb.tee_time = split_part(t.tee_time, '|', 1)
+          AND split_part(bb.tee_time, '|', 1) = split_part(t.tee_time, '|', 1)
           AND bb.layout_key IS NOT DISTINCT FROM t.layout_key
           AND bb.front_nine_key IS NOT DISTINCT FROM t.front_nine_key
           AND bb.back_nine_key IS NOT DISTINCT FROM t.back_nine_key
@@ -7983,90 +8696,215 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
   try {
     const slug = req.courseAdmin.slug;
     const date = String(req.query.date || "").trim();
+    const debug = String(req.query.debug || "") === "1";
 
     const courseId = await courseIdFromSlug(slug);
     if (!courseId) return res.status(404).json({ ok: false, error: "course_not_found" });
 
+    // ----------------------------
+    // ONLINE BOOKINGS
+    // ----------------------------
     const params = [courseId];
-    let where = `WHERE b.course_id=$1`;
+    let where = `WHERE b.course_id=$1
+                 AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'`;
+
     if (date) {
       params.push(date);
       where += ` AND b.play_date=$${params.length}::date`;
     }
 
-    const r = await db.query(
-      `
-      SELECT
-        b.play_date::text AS play_date,
-        b.tee_time,
-        b.holes,
-        b.layout_key,
-        b.front_nine_key,
-        b.back_nine_key,
-        b.players,
-        b.golfer_name AS name,
-        b.golfer_email AS email,
-        b.golfer_phone AS phone,
-        b.reference,
-        b.paid,
-        b.checked_in,
-        b.has_cart,
-        b.cart_qty,
-        b.hire_clubs_qty,
-        b.cart_fee_cents,
-        b.has_hire_clubs,
-        b.hire_clubs_fee_cents,
-        (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents) AS gross_cents,
-        b.status,
-        b.created_at
-      FROM booking_bookings b
-      ${where}
-      ORDER BY b.play_date DESC, b.tee_time ASC, b.created_at DESC
-      LIMIT 800;
-      `,
-      params
-    );
+    let onlineBookings = [];
+    try {
+      const r = await db.query(
+        `
+        SELECT
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.layout_key,
+          b.front_nine_key,
+          b.back_nine_key,
+          b.players,
+          b.golfer_name AS name,
+          b.golfer_email AS email,
+          b.golfer_phone AS phone,
+          b.reference,
+          b.paid,
+          b.checked_in,
+          b.has_cart,
+          b.cart_qty,
+          b.hire_clubs_qty,
+          b.cart_fee_cents,
+          b.has_hire_clubs,
+          b.hire_clubs_fee_cents,
+          (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents) AS gross_cents,
+          b.status,
+          b.created_at
+        FROM booking_bookings b
+        ${where}
+        ORDER BY b.play_date DESC, b.tee_time ASC, b.created_at DESC
+        LIMIT 800;
+        `,
+        params
+      );
 
-    const ms = await db.query(
-      `
-      SELECT
-        play_date::text AS play_date,
-        tee_time,
-        holes,
-        slot_index,
-        reference,
-        name,
-        email,
-        phone,
-        paid,
-        checked_in,
-        has_cart,
-        has_hire_clubs,
-        cart_qty,
-        hire_clubs_qty,
-        notes,
-        created_at,
-        updated_at
-      FROM booking_manual_slots
-      WHERE course_id = $1
-        ${date ? "AND play_date = $2::date" : ""}
-      ORDER BY play_date DESC, tee_time ASC, holes DESC, slot_index ASC;
-      `,
-      date ? [courseId, date] : [courseId]
-    );
+      onlineBookings = (r.rows || []).map((b) => ({
+        ...b,
+        gross: Number((Number(b.gross_cents || 0) / 100).toFixed(2)),
+      }));
+    } catch (e) {
+      console.error("❌ /course-admin/bookings online query failed", {
+        message: e?.message,
+        detail: e?.detail,
+        code: e?.code,
+        where: e?.where,
+      });
+      // keep going
+    }
 
-    res.json({
+    // ----------------------------
+    // MANUAL SLOTS (raw)
+    // ----------------------------
+    let manualSlots = [];
+    try {
+      const ms = await db.query(
+        `
+        SELECT
+          play_date::text AS play_date,
+          tee_time,
+          holes,
+          slot_index,
+          reference,
+          name,
+          email,
+          phone,
+          paid,
+          checked_in,
+          has_cart,
+          has_hire_clubs,
+          cart_qty,
+          hire_clubs_qty,
+          notes,
+          created_at,
+          updated_at
+        FROM booking_manual_slots
+        WHERE course_id = $1
+          ${date ? "AND play_date = $2::date" : ""}
+        ORDER BY play_date DESC, tee_time ASC, holes DESC, slot_index ASC;
+        `,
+        date ? [courseId, date] : [courseId]
+      );
+      manualSlots = ms.rows || [];
+    } catch (e) {
+      console.error("❌ /course-admin/bookings manualSlots query failed", {
+        message: e?.message,
+        detail: e?.detail,
+        code: e?.code,
+        where: e?.where,
+      });
+      // keep going
+    }
+
+    // ----------------------------
+    // MANUAL BOOKINGS (GROUPED: 1 row per reference)
+    // ----------------------------
+    let manualBookings = [];
+    try {
+      const mbParams = date ? [courseId, date] : [courseId];
+
+      const mb = await db.query(
+        `
+        WITH grouped AS (
+          SELECT
+            m.course_id,
+            m.play_date::date AS play_date,
+            m.reference,
+            MIN(m.tee_time) AS tee_time,
+            MIN(m.holes)::int AS holes,
+            SUM(CASE WHEN COALESCE(NULLIF(TRIM(m.name),''),'') <> '' THEN 1 ELSE 0 END)::int AS players,
+            MAX(COALESCE(m.cart_qty,0))::int AS cart_qty,
+            MAX(COALESCE(m.hire_clubs_qty,0))::int AS hire_clubs_qty,
+            BOOL_OR(COALESCE(m.paid,false)) AS paid,
+            BOOL_OR(COALESCE(m.checked_in,false)) AS checked_in,
+            MAX(NULLIF(TRIM(m.name),'')) AS name,
+            MAX(NULLIF(TRIM(m.email),'')) AS email,
+            MAX(NULLIF(TRIM(m.phone),'')) AS phone
+          FROM booking_manual_slots m
+          WHERE m.course_id = $1
+            ${date ? "AND m.play_date = $2::date" : ""}
+            AND m.reference IS NOT NULL
+            AND m.reference <> ''
+          GROUP BY m.course_id, m.play_date::date, m.reference
+        )
+        SELECT
+          g.play_date::text AS play_date,
+          g.tee_time,
+          g.holes,
+          g.reference,
+          g.players,
+          g.name,
+          g.email,
+          g.phone,
+          g.paid,
+          g.checked_in,
+          g.cart_qty,
+          g.hire_clubs_qty,
+          (
+            (COALESCE(g.players,0) * COALESCE(t.price_per_player_cents,0))
+            + (COALESCE(g.cart_qty,0) * COALESCE(c.cart_fee_cents,0))
+            + (COALESCE(g.hire_clubs_qty,0) * COALESCE(c.hire_clubs_fee_cents,0))
+          )::bigint AS gross_cents
+        FROM grouped g
+        LEFT JOIN booking_times t
+          ON t.course_id = g.course_id
+         AND t.play_date::date = g.play_date
+         AND left(trim(split_part(t.tee_time,'|',1)),5) = left(trim(split_part(g.tee_time,'|',1)),5)
+         AND t.holes = g.holes
+        LEFT JOIN booking_courses c
+          ON c.id = g.course_id
+        ORDER BY g.play_date DESC, g.tee_time ASC;
+        `,
+        mbParams
+      );
+
+      manualBookings = (mb.rows || []).map((b) => ({
+        ...b,
+        gross: Number((Number(b.gross_cents || 0) / 100).toFixed(2)),
+      }));
+    } catch (e) {
+      console.error("❌ /course-admin/bookings manualBookings query failed", {
+        message: e?.message,
+        detail: e?.detail,
+        code: e?.code,
+        where: e?.where,
+      });
+      // keep going — do NOT 500 the whole endpoint
+    }
+
+    return res.json({
       ok: true,
-      bookings: r.rows || [],
-      manualSlots: ms.rows || [],
       course_slug: slug,
+      bookings: onlineBookings,
+      manualSlots,
+      manualBookings,
+      ...(debug
+        ? {
+            debug: {
+              date,
+              counts: {
+                online: onlineBookings.length,
+                manualSlots: manualSlots.length,
+                manualBookings: manualBookings.length,
+              },
+            },
+          }
+        : {}),
     });
   } catch (e) {
-    console.error("course-admin/bookings", e);
+    console.error("course-admin/bookings (root)", e);
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 // toggle paid (course admin)
 router.post("/course-admin/booking-paid", requireCourseAdmin, async (req, res) => {
   try {
@@ -8358,13 +9196,23 @@ router.get("/course/:slug", async (req, res) => {
   try {
     const slug = normSlug(req.params.slug);
     const { rows } = await db.query(
-      `SELECT id, slug, name, notes, cart_fee_cents, hire_clubs_fee_cents
+      `SELECT 
+         id, 
+         slug, 
+         name, 
+         notes, 
+         payment_mode,
+         stripe_account_id,
+         cart_fee_cents, 
+         hire_clubs_fee_cents
        FROM booking_courses
        WHERE slug=$1
        LIMIT 1;`,
       [slug]
     );
-    if (!rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    if (!rows.length)
+      return res.status(404).json({ ok: false, error: "course_not_found" });
 
     // ✅ analytics: booking course page viewed
     recordEvent({
@@ -8373,6 +9221,7 @@ router.get("/course/:slug", async (req, res) => {
       courseName: rows[0].name,
       meta: { slug },
     }).catch(() => {});
+
     recordBookingEvent(req, {
       courseSlug: slug,
       eventType: "course_view",
@@ -8561,7 +9410,10 @@ router.get("/availability", async (req, res) => {
             -- ✅ FIX TIME MATCH (handles 06:00 vs 06:00:00)
             AND b.tee_time::time = split_part(t.tee_time, '|', 1)::time
             AND b.holes     = t.holes
-            AND b.status    = 'CONFIRMED'
+            AND (
+              b.status = 'CONFIRMED'
+              OR (b.status = 'PENDING_PAYMENT' AND b.created_at > now() - interval '15 minutes')
+            )
             AND (
               (
                 t.holes = 18 AND (
@@ -8606,7 +9458,10 @@ router.get("/availability", async (req, res) => {
               WHERE bb18.course_id = t.course_id
                 AND bb18.play_date = t.play_date
                 AND bb18.holes     = 18
-                AND bb18.status    = 'CONFIRMED'
+                AND (
+                  bb18.status = 'CONFIRMED'
+                  OR (bb18.status = 'PENDING_PAYMENT' AND bb18.created_at > now() - interval '15 minutes')
+                )
                 AND bb18.back_nine_key = $4
                 AND (
                   (
@@ -8879,12 +9734,454 @@ function deriveRoutingKeysFromLayoutText({ holes, layoutTextRaw }) {
   return { layout_key: nineKeyFromLabel(cleaned) || null, front_nine_key: null, back_nine_key: null };
 }
 
+async function finalizePaidBooking(payload) {
+  // ✅ Webhook-safe finaliser:
+  // - DO NOT create a new booking/lock times again (that already happened in /book)
+  // - Just mark the EXISTING booking as paid/confirmed
+  // - Store Stripe IDs
+  // - Send the confirmation email
+  // - Must be idempotent (Stripe webhooks retry)
+  //
+  // ✅ IMPORTANT FIX:
+  // - If the booking was CANCELLED (user cancelled payment), NEVER flip it back to CONFIRMED.
+  // - If status is CONFIRMED but paid=false (edge/race), allow webhook to set paid=true.
+  // - Prefer booking_id from Stripe metadata, fallback to reference.
+  // - Handle schemas that may not yet have updated_at / stripe columns.
+
+  const {
+    booking_id,
+    reference,
+    stripe_session_id,
+    stripe_payment_intent,
+  } = payload || {};
+
+  const bookingId = Number(booking_id || 0);
+  const ref = String(reference || "").trim();
+
+  if (!bookingId && !ref) {
+    console.warn("⚠️ finalizePaidBooking: missing booking_id and reference");
+    return { ok: false, error: "missing_booking_identifier" };
+  }
+
+  let booking = null;
+
+  // ✅ helper: find existing booking safely
+  async function findExistingBooking() {
+    return db.query(
+      `
+      SELECT id, paid, status
+      FROM booking_bookings
+      WHERE
+        (($1::int > 0 AND id = $1) OR ($1::int <= 0 AND reference = $2))
+      LIMIT 1;
+      `,
+      [bookingId, ref]
+    );
+  }
+
+  // ✅ helper: shared post-update handling
+  async function handleNoRows() {
+    const exists = await findExistingBooking();
+
+    if (!exists.rows.length) {
+      console.warn("⚠️ finalizePaidBooking: booking not found", { bookingId, ref });
+      return { ok: false, error: "booking_not_found" };
+    }
+
+    const st = String(exists.rows[0]?.status || "").toUpperCase();
+    if (st === "CANCELLED") {
+      console.log("🛑 finalizePaidBooking: booking is CANCELLED, not confirming:", {
+        bookingId,
+        ref,
+      });
+      return { ok: true, cancelled: true };
+    }
+
+    console.log("🔁 finalizePaidBooking: already paid/confirmed:", {
+      bookingId,
+      ref,
+    });
+    return { ok: true, alreadyConfirmed: true };
+  }
+
+  // ✅ Attempt 1: full update with updated_at + stripe columns
+  try {
+    const upd = await db.query(
+      `
+      UPDATE booking_bookings b
+      SET
+        paid = true,
+        status = 'CONFIRMED',
+        updated_at = now(),
+        stripe_session_id = COALESCE($3, b.stripe_session_id),
+        stripe_payment_intent = COALESCE($4, b.stripe_payment_intent)
+      WHERE
+        (
+          ($1::int > 0 AND b.id = $1)
+          OR
+          ($1::int <= 0 AND b.reference = $2)
+        )
+        AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'
+        AND (
+          COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
+          OR COALESCE(b.paid,false) = false
+        )
+      RETURNING
+        b.id,
+        b.course_id,
+        b.play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.golfer_name,
+        b.golfer_email,
+        b.golfer_phone,
+        b.price_per_player_cents,
+        b.total_cents,
+        b.cart_fee_cents,
+        b.hire_clubs_fee_cents,
+        b.reference,
+        b.status,
+        b.paid;
+      `,
+      [
+        bookingId,
+        ref,
+        stripe_session_id ? String(stripe_session_id) : null,
+        stripe_payment_intent ? String(stripe_payment_intent) : null,
+      ]
+    );
+
+    if (!upd.rows.length) {
+      return await handleNoRows();
+    }
+
+    booking = upd.rows[0];
+  } catch (e1) {
+    const msg1 = e1?.message || String(e1 || "");
+    console.warn("finalizePaidBooking: full update failed, falling back:", msg1);
+
+    // ✅ Attempt 2: remove stripe columns, keep updated_at
+    try {
+      const upd2 = await db.query(
+        `
+        UPDATE booking_bookings b
+        SET
+          paid = true,
+          status = 'CONFIRMED',
+          updated_at = now()
+        WHERE
+          (
+            ($1::int > 0 AND b.id = $1)
+            OR
+            ($1::int <= 0 AND b.reference = $2)
+          )
+          AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'
+          AND (
+            COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
+            OR COALESCE(b.paid,false) = false
+          )
+        RETURNING
+          b.id,
+          b.course_id,
+          b.play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name,
+          b.golfer_email,
+          b.golfer_phone,
+          b.price_per_player_cents,
+          b.total_cents,
+          b.cart_fee_cents,
+          b.hire_clubs_fee_cents,
+          b.reference,
+          b.status,
+          b.paid;
+        `,
+        [bookingId, ref]
+      );
+
+      if (!upd2.rows.length) {
+        return await handleNoRows();
+      }
+
+      booking = upd2.rows[0];
+    } catch (e2) {
+      const msg2 = e2?.message || String(e2 || "");
+      console.warn("finalizePaidBooking: updated_at fallback failed, final fallback:", msg2);
+
+      // ✅ Attempt 3: minimal update with no updated_at / no stripe columns
+      try {
+        const upd3 = await db.query(
+          `
+          UPDATE booking_bookings b
+          SET
+            paid = true,
+            status = 'CONFIRMED'
+          WHERE
+            (
+              ($1::int > 0 AND b.id = $1)
+              OR
+              ($1::int <= 0 AND b.reference = $2)
+            )
+            AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'
+            AND (
+              COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
+              OR COALESCE(b.paid,false) = false
+            )
+          RETURNING
+            b.id,
+            b.course_id,
+            b.play_date,
+            b.tee_time,
+            b.holes,
+            b.players,
+            b.golfer_name,
+            b.golfer_email,
+            b.golfer_phone,
+            b.price_per_player_cents,
+            b.total_cents,
+            b.cart_fee_cents,
+            b.hire_clubs_fee_cents,
+            b.reference,
+            b.status,
+            b.paid;
+          `,
+          [bookingId, ref]
+        );
+
+        if (!upd3.rows.length) {
+          return await handleNoRows();
+        }
+
+        booking = upd3.rows[0];
+      } catch (e3) {
+        console.error("❌ finalizePaidBooking final fallback update failed:", e3?.message || e3);
+        return { ok: false, error: "booking_update_failed" };
+      }
+    }
+  }
+
+  console.log("✅ Booking marked paid/confirmed:", {
+    id: booking.id,
+    reference: booking.reference,
+  });
+
+  let courseName = "Golf Course";
+  try {
+    const c = await db.query(
+      `SELECT name FROM booking_courses WHERE id = $1 LIMIT 1;`,
+      [booking.course_id]
+    );
+    courseName = c.rows[0]?.name || courseName;
+  } catch {}
+
+  let emailOk = false;
+  let emailReason = null;
+
+  try {
+    const emailResult = await sendBookingEmail({
+      to: booking.golfer_email,
+      courseName,
+      date: String(booking.play_date).slice(0, 10),
+      time: String(booking.tee_time || "").split("|")[0],
+      holes: Number(booking.holes || 0),
+      players: Number(booking.players || 0),
+      reference: booking.reference,
+      pricePerPlayerCents: Number(booking.price_per_player_cents || 0),
+      totalCents: Number(booking.total_cents || 0),
+      cartCents: Number(booking.cart_fee_cents || 0),
+      hireClubsCents: Number(booking.hire_clubs_fee_cents || 0),
+    });
+
+    emailOk = !!emailResult?.emailOk;
+    emailReason = emailResult?.emailReason || null;
+
+    console.log("📧 finalizePaidBooking email:", {
+      reference: booking.reference,
+      emailOk,
+      emailReason,
+    });
+  } catch (e) {
+    emailOk = false;
+    emailReason = e?.message || "send_failed";
+    console.error("❌ finalizePaidBooking email failed:", e?.message || e);
+  }
+
+  return {
+    ok: true,
+    bookingId: booking.id,
+    reference: booking.reference,
+    emailOk,
+    emailReason,
+  };
+}
+// ===============================
+// SUBSCRIBER HELPERS
+// ===============================
+
+// ✅ Renamed to avoid collisions with older copies elsewhere in bookingRoutes.js
+const BOOK_SUBSCRIBER_DISCOUNT_PCT = Number(process.env.SUBSCRIBER_DISCOUNT_PCT || 5);
+const BOOK_SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+const BOOK_SUBSCRIBER_DEBUG = true;
+
+function bookSubDbg(...args) {
+  if (BOOK_SUBSCRIBER_DEBUG) console.log("[subscriber]", ...args);
+}
+
+// ✅ IMPORTANT: helper accepts db client explicitly
+async function isBookingSubscriberEmail(dbClient, email) {
+  const e = String(email || "").trim().toLowerCase();
+  if (!e) {
+    bookSubDbg("empty_email", { email });
+    return false;
+  }
+
+  // 1) Env allowlist fallback
+  try {
+    const hit = Array.isArray(BOOK_SUBSCRIBER_EMAILS) && BOOK_SUBSCRIBER_EMAILS.includes(e);
+    bookSubDbg("path=allowlist", { email: e, hit });
+    if (hit) return true;
+  } catch (err) {
+    bookSubDbg("path=allowlist_error", { email: e, err: err?.message || err });
+  }
+
+  // 2) subscriber_status table
+  try {
+    const r = await dbClient.query(
+      `
+      SELECT status
+      FROM subscriber_status
+      WHERE lower(email)=lower($1)
+      LIMIT 1;
+      `,
+      [e]
+    );
+    const status = String(r.rows?.[0]?.status || "").toLowerCase();
+    const ok = status === "active" || status === "trialing";
+    bookSubDbg("path=subscriber_status", { email: e, found: !!r.rows?.length, status, ok });
+    if (ok) return true;
+  } catch (err) {
+    bookSubDbg("path=subscriber_status_error", { email: e, err: err?.message || err });
+  }
+
+  // 3) Stripe source of truth
+  try {
+    if (stripe) {
+      const customers = await stripe.customers.list({ email: e, limit: 1 });
+      const cust = customers?.data?.[0];
+      bookSubDbg("path=stripe_customers", { email: e, foundCustomer: !!cust?.id });
+
+      if (cust?.id) {
+        const subs = await stripe.subscriptions.list({
+          customer: cust.id,
+          status: "active",
+          limit: 1,
+        });
+        bookSubDbg("path=stripe_subscriptions_active", { email: e, found: !!subs?.data?.length });
+        if (subs?.data?.length) return true;
+
+        const trialSubs = await stripe.subscriptions.list({
+          customer: cust.id,
+          status: "trialing",
+          limit: 1,
+        });
+        bookSubDbg("path=stripe_subscriptions_trialing", { email: e, found: !!trialSubs?.data?.length });
+        if (trialSubs?.data?.length) return true;
+      }
+    }
+  } catch (e3) {
+    bookSubDbg("path=stripe_error", { email: e, err: e3?.message || e3 });
+    console.warn("⚠️ Stripe subscriber lookup failed:", e3?.message || e3);
+  }
+
+  // 4) users.plan fallback
+  try {
+    const r2 = await dbClient.query(
+      `
+      SELECT COALESCE(TRIM(plan),'') AS plan
+      FROM users
+      WHERE lower(trim(email))=lower($1)
+      LIMIT 1;
+      `,
+      [e]
+    );
+    const plan = String(r2.rows?.[0]?.plan || "").trim().toLowerCase();
+    const ok = plan === "basic" || plan === "pro";
+    bookSubDbg("path=users_plan", { email: e, found: !!r2.rows?.length, plan, ok });
+    if (ok) return true;
+  } catch (err) {
+    bookSubDbg("path=users_plan_error", { email: e, err: err?.message || err });
+  }
+
+  bookSubDbg("path=none", { email: e, isSubscriber: false });
+  return false;
+}
+
 async function handleBook(req, res) {
   let client = null;
   let didBegin = false;
 
   try {
     client = await db.connect();
+
+    const q = async (label, sql, params) => {
+      try {
+        return await client.query(sql, params);
+      } catch (err) {
+        console.error(`❌ DB FAIL @ ${label}`, {
+          code: err?.code,
+          message: err?.message,
+          detail: err?.detail,
+          hint: err?.hint,
+          where: err?.where,
+          constraint: err?.constraint,
+          table: err?.table,
+          column: err?.column,
+        });
+
+        try {
+          const msg = String(err?.message || "");
+          const looksLikeSchema =
+            err?.code === "42703" ||
+            err?.code === "42P01" ||
+            /column .* does not exist/i.test(msg) ||
+            /relation .* does not exist/i.test(msg);
+
+          if (looksLikeSchema) {
+            const colsTimes = await client.query(
+              `
+              SELECT column_name
+              FROM information_schema.columns
+              WHERE table_schema='public' AND table_name='booking_times'
+              ORDER BY ordinal_position;
+              `
+            );
+            const colsBookings = await client.query(
+              `
+              SELECT column_name
+              FROM information_schema.columns
+              WHERE table_schema='public' AND table_name='booking_bookings'
+              ORDER BY ordinal_position;
+              `
+            );
+
+            console.error("🧾 booking_times columns:", colsTimes.rows.map(r => r.column_name));
+            console.error("🧾 booking_bookings columns:", colsBookings.rows.map(r => r.column_name));
+          }
+        } catch (e2) {
+          console.error("⚠️ schema dump failed:", e2?.message || e2);
+        }
+
+        throw err;
+      }
+    };
+
     const slug = normSlug(req.body?.slug);
     const date = String(req.body?.date || "").trim();
     const time = String(req.body?.time || "").trim();
@@ -8895,13 +10192,10 @@ async function handleBook(req, res) {
     const golfer_email = req.body?.email ? String(req.body.email).trim().toLowerCase() : "";
     const golfer_phone = req.body?.phone ? String(req.body.phone).trim() : null;
 
-    // ✅ routing keys from UI (if provided)
-    // ✅ IMPORTANT: DO NOT lowercase here — DB may store mixed case; we match case-insensitively in SQL.
     let layout_key = req.body?.layout_key ? String(req.body.layout_key).trim() : null;
     let front_nine_key = req.body?.front_nine_key ? String(req.body.front_nine_key).trim() : null;
     let back_nine_key = req.body?.back_nine_key ? String(req.body.back_nine_key).trim() : null;
 
-    // ✅ ALSO accept layout label text (what the UI shows: "Pines + Lakes", "Classic + Lakes", etc.)
     const layoutTextRaw =
       req.body?.layout ||
       req.body?.layoutText ||
@@ -8909,7 +10203,6 @@ async function handleBook(req, res) {
       req.body?.layoutLabel ||
       "";
 
-    // ✅ If keys missing, derive from layout label text
     if (holes === 18 && (!front_nine_key || !back_nine_key)) {
       const derived = deriveRoutingKeysFromLayoutText({ holes, layoutTextRaw });
       front_nine_key = front_nine_key || derived.front_nine_key;
@@ -8920,7 +10213,6 @@ async function handleBook(req, res) {
       layout_key = layout_key || derived.layout_key;
     }
 
-    // ✅ cart / hire clubs selection (optional)
     const addonIds = Array.isArray(req.body?.addonIds)
       ? req.body.addonIds.map((x) => String(x))
       : [];
@@ -8967,7 +10259,6 @@ async function handleBook(req, res) {
     if (!Number.isFinite(players) || players < 1 || players > 4)
       return res.status(400).json({ ok: false, error: "players_invalid" });
 
-    // ✅ Now enforce routing keys exist (either from UI OR derived)
     if (holes === 18 && (!front_nine_key || !back_nine_key)) {
       return res.status(400).json({ ok: false, error: "routing_required" });
     }
@@ -8982,24 +10273,86 @@ async function handleBook(req, res) {
       return res.status(400).json({ ok: false, error: "email_required_valid" });
     }
 
-    const c = await client.query(
+    const c = await q(
+      "course_lookup",
       `
-      SELECT id, slug, name, notes,
-        cart_fee_cents, hire_clubs_fee_cents,
-        cart_qty, hire_clubs_qty,
-        duration_9_mins, duration_18_mins
+      SELECT 
+        id, 
+        slug, 
+        name, 
+        notes,
+        payment_mode,
+        stripe_account_id,
+        platform_fee_bps,
+        cart_fee_cents, 
+        hire_clubs_fee_cents,
+        cart_qty, 
+        hire_clubs_qty,
+        duration_9_mins, 
+        duration_18_mins,
+        subscriber_discount_enabled,
+        subscriber_discount_pct
       FROM booking_courses
       WHERE slug=$1
       LIMIT 1;
       `,
       [slug]
     );
-    if (!c.rows.length) return res.status(404).json({ ok: false, error: "course_not_found" });
+
+    if (!c.rows.length)
+      return res.status(404).json({ ok: false, error: "course_not_found" });
 
     const courseRow = c.rows[0];
     const courseId = courseRow.id;
 
-    await client.query("BEGIN");
+    const payment_mode = String(courseRow.payment_mode || "PAY_AT_COURSE").trim().toUpperCase();
+    const stripe_account_id = String(courseRow.stripe_account_id || "").trim();
+
+    const envPlatformFeeBps = Number(process.env.PLATFORM_FEE_BPS || 0);
+    const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || process.env.SITE_URL || "").trim();
+
+    const courseFeeBpsRaw =
+      courseRow.platform_fee_bps !== undefined && courseRow.platform_fee_bps !== null
+        ? Number(courseRow.platform_fee_bps)
+        : envPlatformFeeBps;
+
+    const courseFeeBps = Number.isFinite(courseFeeBpsRaw)
+      ? Math.max(0, Math.min(10000, Math.trunc(courseFeeBpsRaw)))
+      : 0;
+
+    const golfer_email_norm = String(golfer_email || "").trim().toLowerCase();
+
+    let isSubscriber = await isBookingSubscriberEmail(client, golfer_email_norm);
+    let subStatus = { plan: isSubscriber ? "BASIC" : "FREE", source: "isBookingSubscriberEmail" };
+
+    if (payment_mode === "PAY_ON_BOOKING" && stripe && golfer_email_norm) {
+      try {
+        const customers = await stripe.customers.list({ email: golfer_email_norm, limit: 1 });
+        const cust = customers?.data?.[0];
+
+        if (cust?.id) {
+          const active = await stripe.subscriptions.list({ customer: cust.id, status: "active", limit: 1 });
+          const trial = await stripe.subscriptions.list({ customer: cust.id, status: "trialing", limit: 1 });
+          const stripeSaysSubscriber = !!(active?.data?.length || trial?.data?.length);
+
+          if (stripeSaysSubscriber && !isSubscriber) {
+            isSubscriber = true;
+            subStatus = { plan: "BASIC", source: "stripe_confirm" };
+          }
+        }
+      } catch (e) {
+        console.warn("[subscriber] stripe confirm failed (non-fatal)", e?.message || e);
+      }
+    }
+
+    bookSubDbg("confirm-booking subscriber decision", {
+      email: golfer_email_norm,
+      isSubscriber,
+      source: subStatus.source,
+      plan: subStatus.plan,
+    });
+
+    await q("BEGIN", "BEGIN");
     didBegin = true;
 
     await advisoryLockForSlot(client, {
@@ -9012,7 +10365,7 @@ async function handleBook(req, res) {
       back_nine_key,
     });
 
-    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
+    await q("addons_lock", `SELECT pg_advisory_xact_lock(hashtext($1)::bigint);`, [
       `addons:${courseId}`,
     ]);
 
@@ -9024,13 +10377,13 @@ async function handleBook(req, res) {
     const courseClubsQty = Number(courseRow.hire_clubs_qty || 0);
 
     if (cart_qty > 0 && courseCartQty <= 0) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_cart_not_offered", "ROLLBACK");
       didBegin = false;
       return res.status(400).json({ ok: false, error: "cart_not_offered" });
     }
 
     if (hire_clubs_qty > 0 && courseClubsQty <= 0) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_hire_clubs_not_offered", "ROLLBACK");
       didBegin = false;
       return res.status(400).json({ ok: false, error: "hire_clubs_not_offered" });
     }
@@ -9045,13 +10398,13 @@ async function handleBook(req, res) {
     const clubsRemaining = Math.max(0, courseClubsQty - clubsUsed);
 
     if (cart_qty > 0 && courseCartQty > 0 && cart_qty > cartRemaining) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_cart_sold_out", "ROLLBACK");
       didBegin = false;
       return res.status(409).json({ ok: false, error: "cart_sold_out", cartRemaining });
     }
 
     if (hire_clubs_qty > 0 && courseClubsQty > 0 && hire_clubs_qty > clubsRemaining) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_clubs_sold_out", "ROLLBACK");
       didBegin = false;
       return res.status(409).json({ ok: false, error: "hire_clubs_sold_out", clubsRemaining });
     }
@@ -9063,19 +10416,19 @@ async function handleBook(req, res) {
     const hire_clubs_fee_cents = hire_clubs_qty > 0 ? courseHireClubsFeeCents * hire_clubs_qty : 0;
 
     if (!Number.isFinite(cart_fee_cents) || cart_fee_cents < 0 || cart_fee_cents > 10000000) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_cart_fee_invalid", "ROLLBACK");
       didBegin = false;
       return res.status(400).json({ ok: false, error: "cart_fee_invalid" });
     }
 
     if (!Number.isFinite(hire_clubs_fee_cents) || hire_clubs_fee_cents < 0 || hire_clubs_fee_cents > 10000000) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_hire_fee_invalid", "ROLLBACK");
       didBegin = false;
       return res.status(400).json({ ok: false, error: "hire_clubs_fee_invalid" });
     }
 
-    // ✅ FIX: routing-aware + case-insensitive match + supports provider suffix "06:00|..."
-    const t = await client.query(
+    const t = await q(
+      "time_lookup_for_update",
       `
       SELECT tee_time, status, booked_players, max_players, price_per_player_cents,
              layout_key, front_nine_key, back_nine_key
@@ -9097,25 +10450,25 @@ async function handleBook(req, res) {
         date,
         time,
         holes,
-        layout_key || "",       // $5
-        front_nine_key || "",   // $6
-        back_nine_key || "",    // $7
+        layout_key || "",
+        front_nine_key || "",
+        back_nine_key || "",
       ]
     );
 
     if (!t.rows.length) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_time_not_found", "ROLLBACK");
       didBegin = false;
       return res.status(404).json({ ok: false, error: "time_not_found" });
     }
 
     const timeRow = t.rows[0];
 
-    // ✅ IMPORTANT: preserve exact DB tee_time so joins + updates stay consistent
-    const teeTimeDb = String(timeRow.tee_time || time).trim();
+    const teeTimeDbRaw = String(timeRow.tee_time || time || "").trim();
+    const teeTimeDb = teeTimeDbRaw.split("|")[0].trim();
 
     if (String(timeRow.status || "").toUpperCase() !== "AVAILABLE") {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_time_not_available", "ROLLBACK");
       didBegin = false;
       return res.status(409).json({ ok: false, error: "time_not_available" });
     }
@@ -9124,27 +10477,72 @@ async function handleBook(req, res) {
     const bookedPlayers = Number(timeRow.booked_players || 0);
 
     if (players > (maxPlayers - bookedPlayers)) {
-      await client.query("ROLLBACK");
+      await q("ROLLBACK_not_enough_spots", "ROLLBACK");
       didBegin = false;
       return res.status(409).json({ ok: false, error: "not_enough_spots" });
     }
 
     const ppp = Number(timeRow.price_per_player_cents || 0);
-    const baseTotalCents = ppp * players;
 
     const addonsCents =
       (final_has_cart ? cart_fee_cents : 0) +
       (final_has_hire_clubs ? hire_clubs_fee_cents : 0);
 
-    const totalCents = baseTotalCents + addonsCents;
-    const reference = makeRef("TR");
+    const totalBeforeDiscountCents = Math.max(0, (ppp * players) + addonsCents);
 
-    const ins = await client.query(
+    const courseDiscountEnabled = !!courseRow?.subscriber_discount_enabled;
+
+    const courseDiscountPct =
+      Number.isFinite(Number(courseRow?.subscriber_discount_pct))
+        ? Number(courseRow.subscriber_discount_pct)
+        : BOOK_SUBSCRIBER_DISCOUNT_PCT;
+
+    const effectiveDiscountPct =
+      isSubscriber && courseDiscountEnabled && courseDiscountPct > 0
+        ? courseDiscountPct
+        : 0;
+
+    const discountCents =
+      effectiveDiscountPct > 0
+        ? Math.round((totalBeforeDiscountCents * effectiveDiscountPct) / 100)
+        : 0;
+
+    const totalCents = Math.max(0, totalBeforeDiscountCents - discountCents);
+
+    let processingFeeCents = 0;
+    let grossTotalCents = totalCents;
+
+    if (payment_mode === "PAY_ON_BOOKING") {
+      const STRIPE_PCT = 0.03;
+      const STRIPE_FIXED_CENTS = 40;
+
+      const baseCents = Number(totalCents || 0);
+
+      const grossCents = Math.max(
+        baseCents,
+        Math.ceil((baseCents + STRIPE_FIXED_CENTS) / (1 - STRIPE_PCT))
+      );
+
+      processingFeeCents = Math.max(0, grossCents - baseCents);
+      grossTotalCents = grossCents;
+    }
+
+    const reference = makeRef("TR");
+    const bookingStatus = payment_mode === "PAY_ON_BOOKING" ? "PENDING_PAYMENT" : "CONFIRMED";
+    const amountDueCents = payment_mode === "PAY_AT_COURSE" ? totalCents : 0;
+
+    const discountCentsSafe = Number.isFinite(Number(discountCents)) ? Number(discountCents) : 0;
+    const subscriber_discount_applied = discountCentsSafe > 0;
+    const subscriber_discount_cents = discountCentsSafe;
+
+    const ins = await q(
+      "insert_booking",
       `
       INSERT INTO booking_bookings
         (course_id, play_date, tee_time, holes, players,
          golfer_name, golfer_email, golfer_phone,
          price_per_player_cents, total_cents, reference, status,
+         subscriber_discount_applied, subscriber_discount_cents,
          start_at, end_at,
          paid, checked_in,
          has_cart, cart_qty, cart_fee_cents,
@@ -9154,27 +10552,31 @@ async function handleBook(req, res) {
       VALUES
         ($1,$2::date,$3,$4,$5,
          $6,$7,$8,
-         $9,$10,$11,'CONFIRMED',
-         $12::timestamptz,$13::timestamptz,
+         $9,$10,$11,$12,
+         $13,$14,
+         $15::timestamptz,$16::timestamptz,
          false,false,
-         $14,$15,$16,
          $17,$18,$19,
          $20,$21,$22,
+         $23,$24,$25,
          now())
       RETURNING id, reference;
       `,
       [
         courseId,
         date,
-        teeTimeDb, // ✅ FIX: store exact DB tee_time
+        teeTimeDb,
         holes,
         players,
         golfer_name || null,
-        golfer_email || null,
+        golfer_email_norm || null,
         golfer_phone || null,
         ppp,
-        totalCents,
+        (payment_mode === "PAY_ON_BOOKING" ? grossTotalCents : totalCents),
         reference,
+        bookingStatus,
+        subscriber_discount_applied,
+        subscriber_discount_cents,
         startAtIso,
         endAtIso,
         final_has_cart,
@@ -9189,10 +10591,167 @@ async function handleBook(req, res) {
       ]
     );
 
+    const bookingId = ins.rows[0]?.id;
     const newBooked = bookedPlayers + players;
 
-    // ✅ FIX: routing-aware + case-insensitive update (ONLY the chosen routing row)
-    await client.query(
+    if (payment_mode === "PAY_ON_BOOKING") {
+      if (!stripe) {
+        await q("ROLLBACK_stripe_not_configured", "ROLLBACK");
+        didBegin = false;
+        return res.status(500).json({ ok: false, error: "stripe_not_configured" });
+      }
+      if (!stripe_account_id) {
+        await q("ROLLBACK_course_missing_stripe", "ROLLBACK");
+        didBegin = false;
+        return res.status(400).json({ ok: false, error: "course_missing_stripe_account" });
+      }
+      if (!publicBaseUrl) {
+        await q("ROLLBACK_public_base_url_missing", "ROLLBACK");
+        didBegin = false;
+        return res.status(500).json({ ok: false, error: "public_base_url_missing" });
+      }
+
+      const platformFeeCents = Math.max(
+        0,
+        Math.round((Number(totalCents || 0) * courseFeeBps) / 10000)
+      );
+
+      const appFeeCents = Math.max(
+        0,
+        Math.min(
+          Number(grossTotalCents || 0),
+          platformFeeCents + Number(processingFeeCents || 0)
+        )
+      );
+
+      const stripeBaseCents = Number(totalCents || 0);
+      const stripeFeeCents = Number(processingFeeCents || 0);
+      const stripeGrossCents = stripeBaseCents + stripeFeeCents;
+
+      console.log("[pricing] backend totals", {
+        email: golfer_email_norm,
+        isSubscriber,
+        subSource: subStatus?.source,
+        plan: String(subStatus?.plan || "FREE"),
+        courseDiscountEnabled,
+        courseDiscountPct,
+        effectiveDiscountPct,
+        totalBeforeDiscountCents,
+        discountCents,
+        discountCentsSafe,
+        totalCents,
+        processingFeeCents,
+        grossTotalCents,
+        stripeBaseCents,
+        stripeFeeCents,
+        stripeGrossCents,
+      });
+
+      if (stripeBaseCents <= 0 || stripeGrossCents <= 0) {
+        await q("ROLLBACK_invalid_payment_amount", "ROLLBACK");
+        didBegin = false;
+        return res.status(400).json({ ok: false, error: "invalid_payment_amount" });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        customer_email: golfer_email_norm,
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: "aud",
+              unit_amount: stripeBaseCents,
+              product_data: {
+                name: `${courseRow.name} — ${holes} holes (${players} players)`,
+                description: `${date} ${time}`,
+              },
+            },
+          },
+          ...(stripeFeeCents > 0
+            ? [
+                {
+                  quantity: 1,
+                  price_data: {
+                    currency: "aud",
+                    unit_amount: stripeFeeCents,
+                    product_data: {
+                      name: "Processing fee",
+                      description: "Card payment processing",
+                    },
+                  },
+                },
+              ]
+            : []),
+        ],
+        payment_intent_data: {
+          transfer_data: { destination: stripe_account_id },
+          application_fee_amount: appFeeCents,
+          metadata: {
+            booking_id: String(bookingId || ""),
+            reference,
+            course_slug: slug,
+            platform_fee_bps: String(courseFeeBps),
+            subscriber: isSubscriber ? "1" : "0",
+            subscriber_plan: String(subStatus?.plan || "FREE"),
+            subscriber_discount_pct: String(effectiveDiscountPct || 0),
+            discount_cents: String(discountCentsSafe || 0),
+            base_cents: String(stripeBaseCents),
+            platform_fee_cents: String(platformFeeCents),
+            processing_fee_cents: String(stripeFeeCents),
+            gross_cents: String(stripeGrossCents),
+          },
+        },
+        metadata: {
+          booking_id: String(bookingId || ""),
+          reference,
+          course_slug: slug,
+          platform_fee_bps: String(courseFeeBps),
+          subscriber: isSubscriber ? "1" : "0",
+          subscriber_plan: String(subStatus?.plan || "FREE"),
+          subscriber_discount_pct: String(effectiveDiscountPct || 0),
+          discount_cents: String(discountCentsSafe || 0),
+        },
+        success_url: `${BASE_URL}/book/${slug}?paid=1&ref=${encodeURIComponent(reference)}`,
+        cancel_url: `${BASE_URL}/book/${slug}?cancelled=1&ref=${encodeURIComponent(reference)}`,
+      });
+
+      await q("COMMIT_pay_on_booking", "COMMIT");
+      didBegin = false;
+
+      return res.json({
+        ok: true,
+        reference,
+        payment_mode: "PAY_ON_BOOKING",
+        checkoutUrl: session.url,
+        course: { slug: courseRow.slug, name: courseRow.name },
+        booking: {
+          date,
+          time,
+          holes,
+          players,
+          pricePerPlayerCents: ppp,
+          isSubscriber,
+          discountPct: effectiveDiscountPct,
+          discountCents: discountCentsSafe,
+          totalCents,
+          processingFeeCents,
+          grossTotalCents,
+          addonsCents,
+          amountDueCents: 0,
+          cart_qty,
+          hire_clubs_qty,
+          layout_key,
+          front_nine_key,
+          back_nine_key,
+        },
+        emailOk: false,
+        emailReason: "pay_on_booking",
+      });
+    }
+
+    await q(
+      "update_booking_times_booked_players",
       `
       UPDATE booking_times
       SET
@@ -9205,7 +10764,7 @@ async function handleBook(req, res) {
         updated_at = now()
       WHERE course_id=$1
         AND play_date=$2::date
-        AND tee_time=$3
+        AND split_part(tee_time,'|',1) = $3
         AND holes=$4
         AND (
           ($4 = 18 AND lower(front_nine_key) = lower($6) AND lower(back_nine_key) = lower($7))
@@ -9225,7 +10784,7 @@ async function handleBook(req, res) {
       ]
     );
 
-    await client.query("COMMIT");
+    await q("COMMIT_pay_at_course", "COMMIT");
     didBegin = false;
 
     recordEvent({
@@ -9241,7 +10800,7 @@ async function handleBook(req, res) {
     }).catch(() => {});
 
     const emailResult = await sendBookingEmail({
-      to: golfer_email,
+      to: golfer_email_norm,
       courseName: courseRow.name,
       date,
       time,
@@ -9249,9 +10808,12 @@ async function handleBook(req, res) {
       players,
       reference,
       pricePerPlayerCents: ppp,
-      totalCents: totalCents,
+      totalCents,
       cartCents: cart_fee_cents,
       hireClubsCents: hire_clubs_fee_cents,
+      isSubscriber,
+      discountPct: effectiveDiscountPct,
+      discountCents: discountCentsSafe,
     });
 
     return res.json({
@@ -9264,8 +10826,12 @@ async function handleBook(req, res) {
         holes,
         players,
         pricePerPlayerCents: ppp,
+        isSubscriber,
+        discountPct: effectiveDiscountPct,
+        discountCents: discountCentsSafe,
         totalCents,
         addonsCents,
+        amountDueCents,
         cart_qty,
         hire_clubs_qty,
         layout_key,
@@ -9276,26 +10842,99 @@ async function handleBook(req, res) {
       emailReason: emailResult.emailReason || null,
     });
   } catch (e) {
-    console.error("book POST", e);
-
-    try {
-      if (client && didBegin) {
-        await client.query("ROLLBACK");
-        didBegin = false;
-      }
-    } catch (rbErr) {
-      console.error("book POST rollback failed", rbErr);
-    }
-
+    console.error("book POST (root)", e);
+    try { if (client && didBegin) await client.query("ROLLBACK"); } catch {}
     return res.status(500).json({ ok: false, error: "internal_error" });
   } finally {
-    try {
-      if (client) client.release();
-    } catch {}
+    try { if (client) client.release(); } catch {}
   }
 }
 
 router.post("/book", handleBook);
+
+// ✅ UI subscriber preview route
+// GET /api/book/subscriber-status?slug=...&email=...&baseCents=...
+router.get("/subscriber-status", async (req, res) => {
+  let client = null;
+
+  try {
+    const slug = String(req.query?.slug || "").trim().toLowerCase();
+    const email = String(req.query?.email || "").trim().toLowerCase();
+    const baseCentsRaw = Number(req.query?.baseCents || 0);
+    const baseCents = Number.isFinite(baseCentsRaw)
+      ? Math.max(0, Math.trunc(baseCentsRaw))
+      : 0;
+
+    console.log("[subscriber-status] request", {
+      slug,
+      email,
+      baseCents,
+    });
+
+    if (!slug) return res.status(400).json({ ok: false, error: "slug_required" });
+    if (!email) return res.status(400).json({ ok: false, error: "email_required" });
+
+    client = await db.connect();
+
+    const c = await client.query(
+      `
+      SELECT subscriber_discount_enabled, subscriber_discount_pct
+      FROM booking_courses
+      WHERE slug = $1
+      LIMIT 1;
+      `,
+      [slug]
+    );
+
+    if (!c.rows.length) {
+      return res.status(404).json({ ok: false, error: "course_not_found" });
+    }
+
+    const row = c.rows[0];
+
+    const discountEnabled = row.subscriber_discount_enabled === true;
+    const discountPct =
+      Number.isFinite(Number(row.subscriber_discount_pct))
+        ? Number(row.subscriber_discount_pct)
+        : BOOK_SUBSCRIBER_DISCOUNT_PCT;
+
+    const isSubscriber = await isBookingSubscriberEmail(client, email);
+
+    const discountApplied =
+      isSubscriber &&
+      discountEnabled &&
+      discountPct > 0 &&
+      baseCents > 0;
+
+    const discountedCents = discountApplied
+      ? Math.max(0, baseCents - Math.round((baseCents * discountPct) / 100))
+      : baseCents;
+
+    return res.json({
+      ok: true,
+      slug,
+      email,
+      isSubscriber,
+      discountEnabled,
+      discountPct,
+      discountApplied,
+      baseCents,
+      discountedCents,
+    });
+  } catch (e) {
+    console.error("subscriber-status error:", {
+      message: e?.message || e,
+      stack: e?.stack || null,
+    });
+    return res.status(500).json({
+      ok: false,
+      error: "internal_error",
+      message: e?.message || "subscriber_status_failed",
+    });
+  } finally {
+    try { if (client) client.release(); } catch {}
+  }
+});
 // keep /availability POST blocked so the frontend can’t accidentally use it
 router.post("/availability", (req, res) => {
   return res.status(405).json({
@@ -9304,6 +10943,326 @@ router.post("/availability", (req, res) => {
     message: "Use GET /availability to list times and POST /book to confirm a booking.",
   });
 });
+// ===============================
+// CONFIRM PAYMENT (PAY_ON_BOOKING)
+// Called by book-course.html after Stripe redirect
+// ===============================
+router.post("/confirm-payment", async (req, res) => {
+  try {
+    if (!stripe) return res.status(500).json({ ok: false, error: "stripe_not_configured" });
+
+    const sessionId = String(req.body?.sessionId || "").trim();
+    if (!sessionId) return res.status(400).json({ ok: false, error: "session_id_required" });
+
+    // 1) Load session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    // Must be paid (Stripe uses payment_status: 'paid' for Checkout)
+    if (session.payment_status !== "paid") {
+      return res.status(409).json({
+        ok: false,
+        error: "not_paid_yet",
+        payment_status: session.payment_status || null,
+      });
+    }
+
+    const meta = session.metadata || {};
+    const reference = String(meta.reference || "").trim();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "missing_reference_in_metadata" });
+    }
+
+    // 2) Finalize booking (idempotent — safe if webhook already ran)
+    const fin = await finalizePaidBooking({
+      reference,
+      stripe_session_id: String(session.id || ""),
+      stripe_payment_intent: String(session.payment_intent || ""),
+    });
+
+    if (!fin || fin.ok !== true) {
+      return res.status(500).json({ ok: false, error: fin?.error || "finalize_failed" });
+    }
+
+    // 3) Return booking details for the frontend confirmation modal
+    const b = await db.query(
+      `
+      SELECT
+        b.reference,
+        b.play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.golfer_email,
+        b.price_per_player_cents,
+        b.total_cents,
+        b.cart_fee_cents,
+        b.hire_clubs_fee_cents,
+        c.name AS course_name
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      WHERE b.reference = $1
+      LIMIT 1;
+      `,
+      [reference]
+    );
+
+    const booking = b.rows[0];
+    if (!booking) return res.status(404).json({ ok: false, error: "booking_not_found" });
+
+    return res.json({
+      ok: true,
+      reference: booking.reference,
+      email: booking.golfer_email,
+      date: String(booking.play_date).slice(0, 10),
+      time: String(booking.tee_time || "").split("|")[0], // should already be HH:MM now
+      holes: Number(booking.holes || 0),
+      players: Number(booking.players || 0),
+      courseName: booking.course_name,
+
+      // used by your UI (selectedSlot in handleStripeReturn)
+      pricePerPlayerCents: Number(booking.price_per_player_cents || 0),
+
+      // nice-to-have for totals (your showBookingConfirmation uses these)
+      totalCents: Number(booking.total_cents || 0),
+      cartCents: Number(booking.cart_fee_cents || 0),
+      hireClubsCents: Number(booking.hire_clubs_fee_cents || 0),
+
+      // pass through finalize email result (if you return it)
+      emailOk: fin.emailOk === true,
+      emailReason: fin.emailReason || null,
+    });
+  } catch (e) {
+    console.error("confirm-payment error", e?.message || e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+// ✅ Release a PAY_ON_BOOKING hold when user cancels Stripe checkout
+router.post("/payment-cancel", async (req, res) => {
+  let client = null;
+  let didBegin = false;
+
+  try {
+    const ref = String(req.body?.ref || req.query?.ref || "").trim();
+    if (!ref) return res.status(400).json({ ok: false, error: "ref_required" });
+
+    client = await db.connect();
+    await client.query("BEGIN");
+    didBegin = true;
+
+    const b = await client.query(
+      `
+      SELECT id, course_id, play_date, tee_time, holes, players,
+             layout_key, front_nine_key, back_nine_key,
+             status, paid
+      FROM booking_bookings
+      WHERE reference = $1
+      LIMIT 1
+      FOR UPDATE;
+      `,
+      [ref]
+    );
+
+    if (!b.rows.length) {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    const row = b.rows[0];
+    const status = String(row.status || "").toUpperCase();
+    const paid = !!row.paid;
+
+    // ✅ If already confirmed/paid, do not cancel/release (webhook may have won the race)
+    if (paid || status === "CONFIRMED") {
+      await client.query("ROLLBACK");
+      didBegin = false;
+      return res.json({ ok: true, released: false, reason: "already_paid_or_confirmed" });
+    }
+
+    // ✅ Mark booking cancelled
+    // NOTE: if you don't have cancelled_at, remove that one line.
+    await client.query(
+      `UPDATE booking_bookings
+       SET status='CANCELLED',
+           cancelled_at = COALESCE(cancelled_at, now()),
+           updated_at=now()
+       WHERE id=$1;`,
+      [row.id]
+    );
+
+    const holes = Number(row.holes || 0);
+    const players = Number(row.players || 0);
+
+    // ✅ IMPORTANT:
+    // If you reserved capacity in booking_times for PAY_ON_BOOKING holds,
+    // we must release it AND correctly recompute status based on NEW booked_players.
+    if (players > 0) {
+      if (holes === 18) {
+        await client.query(
+          `
+          WITH t AS (
+            SELECT
+              id,
+              max_players,
+              COALESCE(booked_players,0) AS old_booked,
+              GREATEST(0, COALESCE(booked_players,0) - $4) AS new_booked,
+              status AS old_status
+            FROM booking_times
+            WHERE course_id=$1
+              AND play_date=$2::date
+              AND split_part(tee_time,'|',1) = $3
+              AND holes=18
+              AND lower(front_nine_key)=lower($5)
+              AND lower(back_nine_key)=lower($6)
+            FOR UPDATE
+          )
+          UPDATE booking_times bt
+          SET
+            booked_players = t.new_booked,
+            status = CASE
+              WHEN t.old_status='BLOCKED' THEN 'BLOCKED'
+              WHEN t.new_booked >= t.max_players THEN 'BOOKED'
+              ELSE 'AVAILABLE'
+            END,
+            updated_at = now()
+          FROM t
+          WHERE bt.id = t.id;
+          `,
+          [
+            row.course_id,
+            row.play_date,
+            row.tee_time, // "HH:MM"
+            players,
+            String(row.front_nine_key || ""),
+            String(row.back_nine_key || ""),
+          ]
+        );
+      } else {
+        await client.query(
+          `
+          WITH t AS (
+            SELECT
+              id,
+              max_players,
+              COALESCE(booked_players,0) AS old_booked,
+              GREATEST(0, COALESCE(booked_players,0) - $4) AS new_booked,
+              status AS old_status
+            FROM booking_times
+            WHERE course_id=$1
+              AND play_date=$2::date
+              AND split_part(tee_time,'|',1) = $3
+              AND holes=9
+              AND lower(layout_key)=lower($5)
+            FOR UPDATE
+          )
+          UPDATE booking_times bt
+          SET
+            booked_players = t.new_booked,
+            status = CASE
+              WHEN t.old_status='BLOCKED' THEN 'BLOCKED'
+              WHEN t.new_booked >= t.max_players THEN 'BOOKED'
+              ELSE 'AVAILABLE'
+            END,
+            updated_at = now()
+          FROM t
+          WHERE bt.id = t.id;
+          `,
+          [
+            row.course_id,
+            row.play_date,
+            row.tee_time, // "HH:MM"
+            players,
+            String(row.layout_key || ""),
+          ]
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+    didBegin = false;
+
+    return res.json({ ok: true, released: true });
+  } catch (e) {
+    console.error("payment-cancel error:", e);
+    try {
+      if (client && didBegin) await client.query("ROLLBACK");
+    } catch {}
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  } finally {
+    try { if (client) client.release(); } catch {}
+  }
+});
+// ===============================
+// STRIPE WEBHOOK (PAY_ON_BOOKING)
+// ===============================
+router.post(
+  "/stripe-webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    if (!stripe) return res.status(400).send("Stripe not configured");
+
+    const sig = req.headers["stripe-signature"];
+    const endpointSecret = (process.env.STRIPE_WEBHOOK_SECRET || "").trim();
+
+    if (!endpointSecret) {
+      console.error("❌ Missing STRIPE_WEBHOOK_SECRET env var");
+      return res.status(500).send("Missing webhook secret");
+    }
+
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    } catch (err) {
+      console.error("❌ Stripe webhook signature verification failed:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    try {
+      // ✅ Mark booking as paid + confirmed when checkout completes
+      if (event.type === "checkout.session.completed") {
+        const session = event.data?.object || {};
+        const meta = session.metadata || {};
+
+        const booking_id = Number(meta.booking_id || 0);
+        const reference = String(meta.reference || "").trim();
+
+        if (!booking_id && !reference) {
+          console.error("❌ Webhook missing booking_id and reference metadata");
+          return res.status(400).send("Missing booking metadata");
+        }
+
+        const fin = await finalizePaidBooking({
+          booking_id,
+          reference,
+          stripe_session_id: String(session.id || ""),
+          stripe_payment_intent: String(session.payment_intent || ""),
+        });
+
+        console.log("✅ Webhook finalized booking result:", {
+          booking_id,
+          reference,
+          session_id: String(session.id || ""),
+          payment_intent: String(session.payment_intent || ""),
+          fin,
+        });
+
+        if (!fin?.ok) {
+          console.error("❌ Webhook finalize failed:", {
+            booking_id,
+            reference,
+            fin,
+          });
+          return res.status(500).send(fin?.error || "Finalize error");
+        }
+      }
+
+      return res.json({ received: true });
+    } catch (e) {
+      console.error("❌ Stripe webhook handler failed:", e?.message || e);
+      return res.status(500).send("Webhook handler error");
+    }
+  }
+);
 
 // ✅ NEW: Booking Analytics (uses real bookings + existing analytics table)
 router.get("/admin/booking-analytics/summary", requirePlatformAdmin, async (req, res) => {
