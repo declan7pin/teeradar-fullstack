@@ -9,6 +9,8 @@ import Stripe from "stripe"; // ✅ Stripe
 import jwt from "jsonwebtoken"; // ✅ NEW (only used to read email from Bearer token)
 import { ensureBookingTemplateSchema } from "./bookingTemplateMigrate.js";
 import { ensureRoundsTables, ensureScorecardTemplatesTables } from "./roundsMigrate.js";
+import { ensureCoursePaymentModeSchema } from "./paymentMigrate.js";
+import { ensureSubscriberStatusSchema } from "./subscriberMigrate.js";
 // ✅ NEW: cookies (needed for booking admin auth cookie)
 import cookieParser from "cookie-parser";
 
@@ -68,7 +70,17 @@ function isSuperAdmin(email) {
 }
 
 // ✅ Stripe init
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const STRIPE_SECRET_KEY = String(process.env.STRIPE_SECRET_KEY || "")
+  .trim()
+  .replace(/^["']|["']$/g, "")     // remove surrounding quotes if Render stored them
+  .replace(/\s+/g, "");           // remove ALL whitespace/newlines inside the key
+
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+
+console.log("💳 stripe configured:", {
+  hasKey: !!STRIPE_SECRET_KEY,
+  keyPrefix: STRIPE_SECRET_KEY ? STRIPE_SECRET_KEY.slice(0, 7) : null,
+});
 
 // ✅ Map of plan keys → Stripe price IDs
 const PRICE_IDS = {
@@ -302,6 +314,7 @@ async function ensureAlertHitsTable() {
 ensureAlertHitsTable();
 ensureRoundsTables();
 ensureScorecardTemplatesTables();
+ensureSubscriberStatusSchema(); // ✅ ADD: creates subscriber_status table in code
 
 /* ✅✅✅ ONLY ADDITION (needed): ensure booking tables exist (so admin can create courses + generate times) ✅✅✅ */
 async function ensureBookingTables() {
@@ -312,8 +325,39 @@ async function ensureBookingTables() {
         slug TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
         notes TEXT,
+
+        -- ✅ payment config
+        payment_mode TEXT NOT NULL DEFAULT 'PAY_AT_COURSE',
+        stripe_account_id TEXT,
+
+        -- ✅ per-course platform fee override (basis points)
+        -- NULL => fallback to env (PLATFORM_FEE_BPS)
+        platform_fee_bps INTEGER,
+
+        -- ✅ optional flag to indicate they offer subscriber discount (for your UI / reporting)
+        subscriber_discount_enabled BOOLEAN NOT NULL DEFAULT false,
+
         created_at TIMESTAMPTZ DEFAULT now()
       );
+    `);
+
+    // If you already run this, keep it
+    await ensureCoursePaymentModeSchema();
+
+    // ✅ Safe adds for existing DBs
+    await db.query(`
+      ALTER TABLE booking_courses
+      ADD COLUMN IF NOT EXISTS stripe_account_id TEXT;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_courses
+      ADD COLUMN IF NOT EXISTS platform_fee_bps INTEGER;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_courses
+      ADD COLUMN IF NOT EXISTS subscriber_discount_enabled BOOLEAN NOT NULL DEFAULT false;
     `);
 
     await db.query(`
@@ -328,13 +372,11 @@ async function ensureBookingTables() {
       );
     `);
 
-    // ✅ NEW: role for course admin users (PROSHOP or MANAGER)
     await db.query(`
       ALTER TABLE booking_course_users
       ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'PROSHOP';
     `);
 
-    // ✅ Backfill safety (older rows)
     await db.query(`
       UPDATE booking_course_users
       SET role = 'PROSHOP'
@@ -354,16 +396,14 @@ async function ensureBookingTables() {
         price_per_player_cents INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'AVAILABLE',
 
-        -- ✅ NEW: routing/layout keys (empty string = not used)
         layout_key TEXT NOT NULL DEFAULT '',
-        front9_key TEXT NOT NULL DEFAULT '',
-        back9_key  TEXT NOT NULL DEFAULT '',
+        front_nine_key TEXT NOT NULL DEFAULT '',
+        back_nine_key  TEXT NOT NULL DEFAULT '',
 
         created_at TIMESTAMPTZ DEFAULT now(),
         updated_at TIMESTAMPTZ DEFAULT now(),
 
-        -- ✅ NEW: uniqueness includes routing keys
-        UNIQUE(course_id, play_date, tee_time, holes, layout_key, front9_key, back9_key)
+        UNIQUE(course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key)
       );
     `);
 
@@ -393,6 +433,31 @@ async function ensureBookingTables() {
     `);
 
     await db.query(`
+      ALTER TABLE booking_bookings
+      ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_bookings
+      ADD COLUMN IF NOT EXISTS checked_in BOOLEAN NOT NULL DEFAULT false;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_bookings
+      ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_bookings
+      ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;
+    `);
+
+    await db.query(`
+      ALTER TABLE booking_bookings
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+    `);
+
+    await db.query(`
       CREATE INDEX IF NOT EXISTS booking_bookings_course_date_idx
       ON booking_bookings (course_id, play_date);
     `);
@@ -416,60 +481,90 @@ async function ensureBookingTimesRoutingSchema() {
 
     console.log("🔧 booking_times routing migration: starting");
 
-    // 1) Ensure routing + booked_players columns exist
+    // 1) Ensure routing + booked_players columns exist (✅ correct names)
     await db.query(`
       ALTER TABLE booking_times
         ADD COLUMN IF NOT EXISTS booked_players integer NOT NULL DEFAULT 0,
         ADD COLUMN IF NOT EXISTS layout_key text NOT NULL DEFAULT '',
-        ADD COLUMN IF NOT EXISTS front9_key text NOT NULL DEFAULT '',
-        ADD COLUMN IF NOT EXISTS back9_key  text NOT NULL DEFAULT '';
+        ADD COLUMN IF NOT EXISTS front_nine_key text NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS back_nine_key  text NOT NULL DEFAULT '';
     `);
 
     // 2) Backfill any nulls (safety for older rows)
     await db.query(`UPDATE booking_times SET booked_players = 0 WHERE booked_players IS NULL;`);
     await db.query(`UPDATE booking_times SET layout_key = '' WHERE layout_key IS NULL;`);
-    await db.query(`UPDATE booking_times SET front9_key = '' WHERE front9_key IS NULL;`);
-    await db.query(`UPDATE booking_times SET back9_key  = '' WHERE back9_key  IS NULL;`);
+    await db.query(`UPDATE booking_times SET front_nine_key = '' WHERE front_nine_key IS NULL;`);
+    await db.query(`UPDATE booking_times SET back_nine_key  = '' WHERE back_nine_key  IS NULL;`);
 
-    // 3) Drop the OLD unique constraint (course_id, play_date, tee_time, holes)
+    // 2.5) If you previously used front9_key/back9_key, copy values across (safe + dynamic)
+    await db.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='booking_times' AND column_name='front9_key'
+        ) THEN
+          EXECUTE '
+            UPDATE booking_times
+            SET front_nine_key = COALESCE(NULLIF(front_nine_key, ''''), COALESCE(front9_key, ''''))
+            WHERE COALESCE(front_nine_key, '''') = '''';
+          ';
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='booking_times' AND column_name='back9_key'
+        ) THEN
+          EXECUTE '
+            UPDATE booking_times
+            SET back_nine_key = COALESCE(NULLIF(back_nine_key, ''''), COALESCE(back9_key, ''''))
+            WHERE COALESCE(back_nine_key, '''') = '''';
+          ';
+        END IF;
+      END
+      $$;
+    `);
+
+    // 3) Drop the OLD unique constraint (course_id, play_date, tee_time, holes) if it exists
     const oldUq = await db.query(`
-  SELECT c.conname
-  FROM pg_constraint c
-  JOIN pg_class t ON t.oid = c.conrelid
-  WHERE c.contype = 'u'
-    AND t.relname = 'booking_times'
-    AND (
-      SELECT array_agg(a.attname::text ORDER BY a.attname::text)
-      FROM unnest(c.conkey) AS k(attnum)
-      JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
-    ) = ARRAY['course_id','holes','play_date','tee_time']::text[];
-`);
+      SELECT c.conname
+      FROM pg_constraint c
+      JOIN pg_class t ON t.oid = c.conrelid
+      WHERE c.contype = 'u'
+        AND t.relname = 'booking_times'
+        AND (
+          SELECT array_agg(a.attname::text ORDER BY a.attname::text)
+          FROM unnest(c.conkey) AS k(attnum)
+          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+        ) = ARRAY['course_id','holes','play_date','tee_time']::text[];
+    `);
 
     for (const r of oldUq.rows || []) {
       console.log("🧹 dropping old booking_times unique constraint:", r.conname);
       await db.query(`ALTER TABLE booking_times DROP CONSTRAINT IF EXISTS "${r.conname}";`);
     }
-// 3.5) ✅ DEDUPE existing rows so the new unique index can be created
-// Keeps the most recently updated/created row for each routing key.
-await db.query(`
-  WITH ranked AS (
-    SELECT
-      ctid,
-      ROW_NUMBER() OVER (
-        PARTITION BY course_id, play_date, tee_time, holes, layout_key, front9_key, back9_key
-        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
-      ) AS rn
-    FROM booking_times
-  )
-  DELETE FROM booking_times bt
-  USING ranked r
-  WHERE bt.ctid = r.ctid
-    AND r.rn > 1;
-`);
-    // 4) Create the NEW unique index including routing keys
+
+    // 3.5) DEDUPE existing rows so the new unique index can be created
+    await db.query(`
+      WITH ranked AS (
+        SELECT
+          ctid,
+          ROW_NUMBER() OVER (
+            PARTITION BY course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
+          ) AS rn
+        FROM booking_times
+      )
+      DELETE FROM booking_times bt
+      USING ranked r
+      WHERE bt.ctid = r.ctid
+        AND r.rn > 1;
+    `);
+
+    // 4) Create the NEW unique index including routing keys (✅ correct names)
     await db.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS booking_times_uq_routing
-      ON booking_times (course_id, play_date, tee_time, holes, layout_key, front9_key, back9_key);
+      ON booking_times (course_id, play_date, tee_time, holes, layout_key, front_nine_key, back_nine_key);
     `);
 
     console.log("✅ booking_times routing migration: done");
@@ -577,6 +672,27 @@ app.post(
       switch (event.type) {
         case "checkout.session.completed": {
           const session = event.data.object;
+          // ✅ PAY_ON_BOOKING tee-time payments (non-subscription)
+// We set booking_id + reference in session.metadata from bookingRoutes
+const bookingIdRaw = session?.metadata?.booking_id;
+const bookingId = bookingIdRaw ? Number(bookingIdRaw) : 0;
+
+if (bookingId && session?.payment_status === "paid") {
+  await db.query(
+    `
+    UPDATE booking_bookings
+    SET
+      status = 'CONFIRMED',
+      paid = true,
+      updated_at = now()
+    WHERE id = $1
+    `,
+    [bookingId]
+  );
+
+  console.log("✅ Tee-time booking paid + confirmed:", bookingId);
+  break;
+}
 
           const email = (session.customer_details?.email || session.customer_email || "")
             .toString()
@@ -589,6 +705,36 @@ app.post(
             const sub = await stripe.subscriptions.retrieve(subId, {
               expand: ["items.data.price"],
             });
+            // ✅ ADD: immediately upsert subscriber_status on successful subscription checkout
+try {
+  const customerId = String(sub?.customer || session.customer || "").trim();
+  const subscriptionId = String(sub?.id || subId || "").trim();
+  const status = String(sub?.status || "active").trim();
+
+  const currentPeriodEnd = sub?.current_period_end
+    ? new Date(sub.current_period_end * 1000).toISOString()
+    : null;
+
+  if (email && customerId && subscriptionId) {
+    await db.query(
+      `
+      INSERT INTO subscriber_status
+        (email, stripe_customer_id, subscription_id, status, current_period_end, updated_at)
+      VALUES ($1,$2,$3,$4,$5,now())
+      ON CONFLICT (email)
+      DO UPDATE SET
+        stripe_customer_id = EXCLUDED.stripe_customer_id,
+        subscription_id = EXCLUDED.subscription_id,
+        status = EXCLUDED.status,
+        current_period_end = EXCLUDED.current_period_end,
+        updated_at = now();
+      `,
+      [email, customerId, subscriptionId, status, currentPeriodEnd]
+    );
+  }
+} catch (e) {
+  console.warn("⚠️ checkout.session.completed subscriber upsert failed:", e?.message || e);
+}
 
             const priceId = sub?.items?.data?.[0]?.price?.id || null;
             const mapped = priceId ? PRICE_TO_PLAN[priceId] : null;
@@ -609,6 +755,7 @@ app.post(
           break;
         }
 
+        case "customer.subscription.created": // ✅ ADD
         case "customer.subscription.updated":
         case "customer.subscription.deleted": {
           const sub = event.data.object;
@@ -618,6 +765,35 @@ app.post(
 
           const cust = await stripe.customers.retrieve(customerId);
           const email = (cust?.email || "").toString().trim().toLowerCase();
+          // ✅ ADD: keep subscriber_status in sync for automatic booking discounts
+try {
+  const subscriptionId = String(sub?.id || "").trim();
+  const status = String(sub?.status || "").trim(); // active, trialing, canceled, etc.
+
+  const currentPeriodEnd = sub?.current_period_end
+    ? new Date(sub.current_period_end * 1000).toISOString()
+    : null;
+
+  if (email) {
+    await db.query(
+      `
+      INSERT INTO subscriber_status
+        (email, stripe_customer_id, subscription_id, status, current_period_end, updated_at)
+      VALUES ($1,$2,$3,$4,$5,now())
+      ON CONFLICT (email)
+      DO UPDATE SET
+        stripe_customer_id = EXCLUDED.stripe_customer_id,
+        subscription_id = EXCLUDED.subscription_id,
+        status = EXCLUDED.status,
+        current_period_end = EXCLUDED.current_period_end,
+        updated_at = now();
+      `,
+      [email, String(customerId), subscriptionId, status, currentPeriodEnd]
+    );
+  }
+} catch (e) {
+  console.warn("⚠️ subscriber_status upsert failed:", e?.message || e);
+}
 
           if (email) {
             let plan = "FREE";
@@ -658,7 +834,19 @@ app.post(
     }
   }
 );
-app.use(express.json({ type: ["application/json", "text/plain"] }));
+// ✅ IMPORTANT: Stripe webhooks need RAW body for signature verification.
+// So we apply express.json() to everything EXCEPT webhook routes.
+app.use((req, res, next) => {
+  const url = req.originalUrl || "";
+
+  // ✅ skip JSON parsing for Stripe webhook endpoints
+  if (url === "/api/webhook" || url === "/api/book/stripe-webhook") {
+    return next();
+  }
+
+  // everything else can be JSON parsed normally
+  return express.json({ type: ["application/json", "text/plain"] })(req, res, next);
+});
 
 // ✅ NEW: cookies (needed for booking admin auth cookie)
 app.use(cookieParser());
@@ -1498,6 +1686,10 @@ app.get("/api/debug/rounds-db", async (req, res) => {
 // -------------------------------------------------
 app.get("/book/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "book-admin.html"));
+});
+// ✅ NEW: Booking success page (MUST be before /book/:slug)
+app.get("/book/success", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "book-success.html"));
 });
 
 app.get("/book/:slug", (req, res) => {
