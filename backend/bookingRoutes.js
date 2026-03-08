@@ -9739,17 +9739,21 @@ async function finalizePaidBooking(payload) {
   // ✅ IMPORTANT FIX:
   // - If the booking was CANCELLED (user cancelled payment), NEVER flip it back to CONFIRMED.
   // - If status is CONFIRMED but paid=false (edge/race), allow webhook to set paid=true.
+  // - Prefer booking_id from Stripe metadata, fallback to reference.
 
   const {
+    booking_id,
     reference,
     stripe_session_id,
     stripe_payment_intent,
   } = payload || {};
 
+  const bookingId = Number(booking_id || 0);
   const ref = String(reference || "").trim();
-  if (!ref) {
-    console.warn("⚠️ finalizePaidBooking: missing reference");
-    return { ok: false, error: "missing_reference" };
+
+  if (!bookingId && !ref) {
+    console.warn("⚠️ finalizePaidBooking: missing booking_id and reference");
+    return { ok: false, error: "missing_booking_identifier" };
   }
 
   // ✅ 1) ATOMIC idempotent update
@@ -9765,9 +9769,14 @@ async function finalizePaidBooking(payload) {
         paid = true,
         status = 'CONFIRMED',
         updated_at = now(),
-        stripe_session_id = COALESCE($2, b.stripe_session_id),
-        stripe_payment_intent = COALESCE($3, b.stripe_payment_intent)
-      WHERE b.reference = $1
+        stripe_session_id = COALESCE($3, b.stripe_session_id),
+        stripe_payment_intent = COALESCE($4, b.stripe_payment_intent)
+      WHERE
+        (
+          ($1::int > 0 AND b.id = $1)
+          OR
+          ($1::int <= 0 AND b.reference = $2)
+        )
         AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'
         AND (
           COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
@@ -9792,6 +9801,7 @@ async function finalizePaidBooking(payload) {
         b.paid;
       `,
       [
+        bookingId,
         ref,
         stripe_session_id ? String(stripe_session_id) : null,
         stripe_payment_intent ? String(stripe_payment_intent) : null,
@@ -9800,22 +9810,34 @@ async function finalizePaidBooking(payload) {
 
     if (!upd.rows.length) {
       const exists = await db.query(
-        `SELECT id, paid, status FROM booking_bookings WHERE reference=$1 LIMIT 1;`,
-        [ref]
+        `
+        SELECT id, paid, status
+        FROM booking_bookings
+        WHERE
+          (($1::int > 0 AND id = $1) OR ($1::int <= 0 AND reference = $2))
+        LIMIT 1;
+        `,
+        [bookingId, ref]
       );
 
       if (!exists.rows.length) {
-        console.warn("⚠️ finalizePaidBooking: booking not found for reference:", ref);
+        console.warn("⚠️ finalizePaidBooking: booking not found", { bookingId, ref });
         return { ok: false, error: "booking_not_found" };
       }
 
       const st = String(exists.rows[0]?.status || "").toUpperCase();
       if (st === "CANCELLED") {
-        console.log("🛑 finalizePaidBooking: booking is CANCELLED, not confirming:", ref);
+        console.log("🛑 finalizePaidBooking: booking is CANCELLED, not confirming:", {
+          bookingId,
+          ref,
+        });
         return { ok: true, cancelled: true };
       }
 
-      console.log("🔁 finalizePaidBooking: already paid/confirmed:", ref);
+      console.log("🔁 finalizePaidBooking: already paid/confirmed:", {
+        bookingId,
+        ref,
+      });
       return { ok: true, alreadyConfirmed: true };
     }
 
@@ -9824,65 +9846,90 @@ async function finalizePaidBooking(payload) {
     const msg = e?.message || String(e || "");
     console.warn("finalizePaidBooking: stripe columns update failed, falling back:", msg);
 
-    const upd2 = await db.query(
-      `
-      UPDATE booking_bookings b
-      SET
-        paid = true,
-        status = 'CONFIRMED',
-        updated_at = now()
-      WHERE b.reference = $1
-        AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'
-        AND (
-          COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
-          OR COALESCE(b.paid,false) = false
-        )
-      RETURNING
-        b.id,
-        b.course_id,
-        b.play_date,
-        b.tee_time,
-        b.holes,
-        b.players,
-        b.golfer_name,
-        b.golfer_email,
-        b.golfer_phone,
-        b.price_per_player_cents,
-        b.total_cents,
-        b.cart_fee_cents,
-        b.hire_clubs_fee_cents,
-        b.reference,
-        b.status,
-        b.paid;
-      `,
-      [ref]
-    );
-
-    if (!upd2.rows.length) {
-      const exists = await db.query(
-        `SELECT id, paid, status FROM booking_bookings WHERE reference=$1 LIMIT 1;`,
-        [ref]
+    try {
+      const upd2 = await db.query(
+        `
+        UPDATE booking_bookings b
+        SET
+          paid = true,
+          status = 'CONFIRMED',
+          updated_at = now()
+        WHERE
+          (
+            ($1::int > 0 AND b.id = $1)
+            OR
+            ($1::int <= 0 AND b.reference = $2)
+          )
+          AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'
+          AND (
+            COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
+            OR COALESCE(b.paid,false) = false
+          )
+        RETURNING
+          b.id,
+          b.course_id,
+          b.play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name,
+          b.golfer_email,
+          b.golfer_phone,
+          b.price_per_player_cents,
+          b.total_cents,
+          b.cart_fee_cents,
+          b.hire_clubs_fee_cents,
+          b.reference,
+          b.status,
+          b.paid;
+        `,
+        [bookingId, ref]
       );
 
-      if (!exists.rows.length) {
-        console.warn("⚠️ finalizePaidBooking: booking not found for reference:", ref);
-        return { ok: false, error: "booking_not_found" };
+      if (!upd2.rows.length) {
+        const exists = await db.query(
+          `
+          SELECT id, paid, status
+          FROM booking_bookings
+          WHERE
+            (($1::int > 0 AND id = $1) OR ($1::int <= 0 AND reference = $2))
+          LIMIT 1;
+          `,
+          [bookingId, ref]
+        );
+
+        if (!exists.rows.length) {
+          console.warn("⚠️ finalizePaidBooking: booking not found", { bookingId, ref });
+          return { ok: false, error: "booking_not_found" };
+        }
+
+        const st = String(exists.rows[0]?.status || "").toUpperCase();
+        if (st === "CANCELLED") {
+          console.log("🛑 finalizePaidBooking: booking is CANCELLED, not confirming:", {
+            bookingId,
+            ref,
+          });
+          return { ok: true, cancelled: true };
+        }
+
+        console.log("🔁 finalizePaidBooking: already paid/confirmed:", {
+          bookingId,
+          ref,
+        });
+        return { ok: true, alreadyConfirmed: true };
       }
 
-      const st = String(exists.rows[0]?.status || "").toUpperCase();
-      if (st === "CANCELLED") {
-        console.log("🛑 finalizePaidBooking: booking is CANCELLED, not confirming:", ref);
-        return { ok: true, cancelled: true };
-      }
-
-      console.log("🔁 finalizePaidBooking: already paid/confirmed:", ref);
-      return { ok: true, alreadyConfirmed: true };
+      booking = upd2.rows[0];
+    } catch (e2) {
+      console.error("❌ finalizePaidBooking fallback update failed:", e2?.message || e2);
+      return { ok: false, error: "booking_update_failed" };
     }
-
-    booking = upd2.rows[0];
   }
 
-  console.log("✅ Booking marked paid/confirmed:", { id: booking.id, reference: booking.reference });
+  console.log("✅ Booking marked paid/confirmed:", {
+    id: booking.id,
+    reference: booking.reference,
+  });
 
   let courseName = "Golf Course";
   try {
@@ -9925,7 +9972,13 @@ async function finalizePaidBooking(payload) {
     console.error("❌ finalizePaidBooking email failed:", e?.message || e);
   }
 
-  return { ok: true, bookingId: booking.id, reference: booking.reference, emailOk, emailReason };
+  return {
+    ok: true,
+    bookingId: booking.id,
+    reference: booking.reference,
+    emailOk,
+    emailReason,
+  };
 }
 
 // ===============================
@@ -11130,33 +11183,43 @@ router.post(
 
     // ✅ Mark booking as paid + confirmed when checkout completes
     if (event.type === "checkout.session.completed") {
-  const session = event.data.object;
+      const session = event.data?.object || {};
+      const meta = session.metadata || {};
 
-  const reference = session?.metadata?.reference
-    ? String(session.metadata.reference).trim()
-    : "";
+      const booking_id = Number(meta.booking_id || 0);
+      const reference = String(meta.reference || "").trim();
 
-  if (!reference) {
-    console.error("❌ Webhook missing reference metadata");
-    return res.status(400).send("Missing reference");
-  }
+      if (!booking_id && !reference) {
+        console.error("❌ Webhook missing booking_id and reference metadata");
+        return res.status(400).send("Missing booking metadata");
+      }
 
-  try {
-    // ✅ This marks paid+confirmed AND sends email (idempotent / safe on retries)
-    await finalizePaidBooking({
-      reference,
-      stripe_session_id: String(session.id || ""),
-      stripe_payment_intent: String(session.payment_intent || ""),
-    });
+      try {
+        // ✅ This marks paid+confirmed AND sends email (idempotent / safe on retries)
+        const fin = await finalizePaidBooking({
+          booking_id,
+          reference,
+          stripe_session_id: String(session.id || ""),
+          stripe_payment_intent: String(session.payment_intent || ""),
+        });
 
-    console.log("✅ Webhook finalized booking:", { reference });
-  } catch (e) {
-    console.error("❌ Webhook finalize failed", e?.message || e);
-    return res.status(500).send("Finalize error");
-  }
-}
+        console.log("✅ Webhook finalized booking result:", {
+          booking_id,
+          reference,
+          fin,
+        });
 
-return res.json({ received: true });
+        if (!fin?.ok) {
+          console.error("❌ Webhook finalize failed:", fin);
+          return res.status(500).send(fin?.error || "Finalize error");
+        }
+      } catch (e) {
+        console.error("❌ Webhook finalize failed", e?.message || e);
+        return res.status(500).send("Finalize error");
+      }
+    }
+
+    return res.json({ received: true });
   }
 );
 
