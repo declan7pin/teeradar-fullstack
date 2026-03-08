@@ -9746,6 +9746,7 @@ async function finalizePaidBooking(payload) {
   // - If the booking was CANCELLED (user cancelled payment), NEVER flip it back to CONFIRMED.
   // - If status is CONFIRMED but paid=false (edge/race), allow webhook to set paid=true.
   // - Prefer booking_id from Stripe metadata, fallback to reference.
+  // - Handle schemas that may not yet have updated_at / stripe columns.
 
   const {
     booking_id,
@@ -9762,11 +9763,48 @@ async function finalizePaidBooking(payload) {
     return { ok: false, error: "missing_booking_identifier" };
   }
 
-  // ✅ 1) ATOMIC idempotent update
-  // - Do not revive CANCELLED bookings
-  // - Do set paid=true even if already CONFIRMED (but paid=false)
   let booking = null;
 
+  // ✅ helper: find existing booking safely
+  async function findExistingBooking() {
+    return db.query(
+      `
+      SELECT id, paid, status
+      FROM booking_bookings
+      WHERE
+        (($1::int > 0 AND id = $1) OR ($1::int <= 0 AND reference = $2))
+      LIMIT 1;
+      `,
+      [bookingId, ref]
+    );
+  }
+
+  // ✅ helper: shared post-update handling
+  async function handleNoRows() {
+    const exists = await findExistingBooking();
+
+    if (!exists.rows.length) {
+      console.warn("⚠️ finalizePaidBooking: booking not found", { bookingId, ref });
+      return { ok: false, error: "booking_not_found" };
+    }
+
+    const st = String(exists.rows[0]?.status || "").toUpperCase();
+    if (st === "CANCELLED") {
+      console.log("🛑 finalizePaidBooking: booking is CANCELLED, not confirming:", {
+        bookingId,
+        ref,
+      });
+      return { ok: true, cancelled: true };
+    }
+
+    console.log("🔁 finalizePaidBooking: already paid/confirmed:", {
+      bookingId,
+      ref,
+    });
+    return { ok: true, alreadyConfirmed: true };
+  }
+
+  // ✅ Attempt 1: full update with updated_at + stripe columns
   try {
     const upd = await db.query(
       `
@@ -9815,43 +9853,15 @@ async function finalizePaidBooking(payload) {
     );
 
     if (!upd.rows.length) {
-      const exists = await db.query(
-        `
-        SELECT id, paid, status
-        FROM booking_bookings
-        WHERE
-          (($1::int > 0 AND id = $1) OR ($1::int <= 0 AND reference = $2))
-        LIMIT 1;
-        `,
-        [bookingId, ref]
-      );
-
-      if (!exists.rows.length) {
-        console.warn("⚠️ finalizePaidBooking: booking not found", { bookingId, ref });
-        return { ok: false, error: "booking_not_found" };
-      }
-
-      const st = String(exists.rows[0]?.status || "").toUpperCase();
-      if (st === "CANCELLED") {
-        console.log("🛑 finalizePaidBooking: booking is CANCELLED, not confirming:", {
-          bookingId,
-          ref,
-        });
-        return { ok: true, cancelled: true };
-      }
-
-      console.log("🔁 finalizePaidBooking: already paid/confirmed:", {
-        bookingId,
-        ref,
-      });
-      return { ok: true, alreadyConfirmed: true };
+      return await handleNoRows();
     }
 
     booking = upd.rows[0];
-  } catch (e) {
-    const msg = e?.message || String(e || "");
-    console.warn("finalizePaidBooking: stripe columns update failed, falling back:", msg);
+  } catch (e1) {
+    const msg1 = e1?.message || String(e1 || "");
+    console.warn("finalizePaidBooking: full update failed, falling back:", msg1);
 
+    // ✅ Attempt 2: remove stripe columns, keep updated_at
     try {
       const upd2 = await db.query(
         `
@@ -9893,42 +9903,63 @@ async function finalizePaidBooking(payload) {
       );
 
       if (!upd2.rows.length) {
-        const exists = await db.query(
-          `
-          SELECT id, paid, status
-          FROM booking_bookings
-          WHERE
-            (($1::int > 0 AND id = $1) OR ($1::int <= 0 AND reference = $2))
-          LIMIT 1;
-          `,
-          [bookingId, ref]
-        );
-
-        if (!exists.rows.length) {
-          console.warn("⚠️ finalizePaidBooking: booking not found", { bookingId, ref });
-          return { ok: false, error: "booking_not_found" };
-        }
-
-        const st = String(exists.rows[0]?.status || "").toUpperCase();
-        if (st === "CANCELLED") {
-          console.log("🛑 finalizePaidBooking: booking is CANCELLED, not confirming:", {
-            bookingId,
-            ref,
-          });
-          return { ok: true, cancelled: true };
-        }
-
-        console.log("🔁 finalizePaidBooking: already paid/confirmed:", {
-          bookingId,
-          ref,
-        });
-        return { ok: true, alreadyConfirmed: true };
+        return await handleNoRows();
       }
 
       booking = upd2.rows[0];
     } catch (e2) {
-      console.error("❌ finalizePaidBooking fallback update failed:", e2?.message || e2);
-      return { ok: false, error: "booking_update_failed" };
+      const msg2 = e2?.message || String(e2 || "");
+      console.warn("finalizePaidBooking: updated_at fallback failed, final fallback:", msg2);
+
+      // ✅ Attempt 3: minimal update with no updated_at / no stripe columns
+      try {
+        const upd3 = await db.query(
+          `
+          UPDATE booking_bookings b
+          SET
+            paid = true,
+            status = 'CONFIRMED'
+          WHERE
+            (
+              ($1::int > 0 AND b.id = $1)
+              OR
+              ($1::int <= 0 AND b.reference = $2)
+            )
+            AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'
+            AND (
+              COALESCE(UPPER(b.status),'') <> 'CONFIRMED'
+              OR COALESCE(b.paid,false) = false
+            )
+          RETURNING
+            b.id,
+            b.course_id,
+            b.play_date,
+            b.tee_time,
+            b.holes,
+            b.players,
+            b.golfer_name,
+            b.golfer_email,
+            b.golfer_phone,
+            b.price_per_player_cents,
+            b.total_cents,
+            b.cart_fee_cents,
+            b.hire_clubs_fee_cents,
+            b.reference,
+            b.status,
+            b.paid;
+          `,
+          [bookingId, ref]
+        );
+
+        if (!upd3.rows.length) {
+          return await handleNoRows();
+        }
+
+        booking = upd3.rows[0];
+      } catch (e3) {
+        console.error("❌ finalizePaidBooking final fallback update failed:", e3?.message || e3);
+        return { ok: false, error: "booking_update_failed" };
+      }
     }
   }
 
@@ -9986,7 +10017,6 @@ async function finalizePaidBooking(payload) {
     emailReason,
   };
 }
-
 // ===============================
 // SUBSCRIBER HELPERS
 // ===============================
