@@ -8775,33 +8775,59 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
     let manualSlots = [];
     try {
       const ms = await db.query(
-        `
-        SELECT
-          play_date::text AS play_date,
-          tee_time,
-          holes,
-          slot_index,
-          reference,
-          name,
-          email,
-          phone,
-          paid,
-          checked_in,
-          has_cart,
-          has_hire_clubs,
-          cart_qty,
-          hire_clubs_qty,
-          notes,
-          created_at,
-          updated_at
-        FROM booking_manual_slots
-        WHERE course_id = $1
-          ${date ? "AND play_date = $2::date" : ""}
-        ORDER BY play_date DESC, tee_time ASC, holes DESC, slot_index ASC;
-        `,
-        date ? [courseId, date] : [courseId]
-      );
-      manualSlots = ms.rows || [];
+  `
+  WITH slot_groups AS (
+    SELECT
+      m.*,
+      SUM(CASE WHEN COALESCE(NULLIF(TRIM(m.name),''),'') <> '' THEN 1 ELSE 0 END)
+        OVER (PARTITION BY m.course_id, m.play_date::date, m.reference) AS booking_players,
+      MAX(COALESCE(m.cart_qty,0))
+        OVER (PARTITION BY m.course_id, m.play_date::date, m.reference) AS booking_cart_qty,
+      MAX(COALESCE(m.hire_clubs_qty,0))
+        OVER (PARTITION BY m.course_id, m.play_date::date, m.reference) AS booking_hire_clubs_qty
+    FROM booking_manual_slots m
+    WHERE m.course_id = $1
+      ${date ? "AND m.play_date = $2::date" : ""}
+  )
+  SELECT
+    sg.play_date::text AS play_date,
+    sg.tee_time,
+    sg.holes,
+    sg.slot_index,
+    sg.reference,
+    sg.name,
+    sg.email,
+    sg.phone,
+    sg.paid,
+    sg.checked_in,
+    sg.has_cart,
+    sg.has_hire_clubs,
+    sg.cart_qty,
+    sg.hire_clubs_qty,
+    sg.notes,
+    sg.created_at,
+    sg.updated_at,
+    sg.price_per_player_cents,
+    (
+      (
+        (COALESCE(sg.booking_players,0) * COALESCE(sg.price_per_player_cents,0))
+        + (COALESCE(sg.booking_cart_qty,0) * COALESCE(c.cart_fee_cents,0))
+        + (COALESCE(sg.booking_hire_clubs_qty,0) * COALESCE(c.hire_clubs_fee_cents,0))
+      )
+      / NULLIF(COALESCE(sg.booking_players,0), 0)
+    )::bigint AS display_price_per_player_cents
+  FROM slot_groups sg
+  LEFT JOIN booking_courses c
+    ON c.id = sg.course_id
+  ORDER BY sg.play_date DESC, sg.tee_time ASC, sg.holes DESC, sg.slot_index ASC;
+  `,
+  date ? [courseId, date] : [courseId]
+);
+      manualSlots = (ms.rows || []).map((r) => ({
+  ...r,
+  display_price_per_player:
+    Number(Number(r.display_price_per_player_cents || r.price_per_player_cents || 0) / 100).toFixed(2),
+}));
     } catch (e) {
       console.error("❌ /course-admin/bookings manualSlots query failed", {
         message: e?.message,
