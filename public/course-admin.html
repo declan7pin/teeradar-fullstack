@@ -1522,7 +1522,9 @@ function normalizeBookingLikeRow(b){
   if (hasClubs) addonBits.push(`<span class="badge">Clubs${clubsQty > 0 ? " x" + clubsQty : ""}</span>`);
 
   // ✅ PRICE (this will now exist because groupBookingsToSheet stamps it onto each slot)
-  const pricePerPlayerCents = Number(
+    const displayPricePerPlayerCents = Number(
+    item.display_price_per_player_cents ??
+    item.displayPricePerPlayerCents ??
     item.price_per_player_cents ??
     item.pricePerPlayerCents ??
     item.price_cents ??
@@ -1530,8 +1532,8 @@ function normalizeBookingLikeRow(b){
     0
   ) || 0;
 
-  const priceHtml = pricePerPlayerCents > 0
-    ? `<span style="width:100%"><span class="muted">Price:</span> <b>$${(pricePerPlayerCents/100).toFixed(2)}</b> / player</span>`
+  const priceHtml = displayPricePerPlayerCents > 0
+    ? `<span style="width:100%"><span class="muted">Price:</span> <b>$${(displayPricePerPlayerCents/100).toFixed(2)}</b> / player</span>`
     : ``;
 
   return `
@@ -1651,8 +1653,32 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
         m.players ?? m.num_players ?? m.player_count ?? m.playerCount ?? 1
       )));
 
+            const basePricePerPlayerCents = Number(
+        m.price_per_player_cents ??
+        m.pricePerPlayerCents ??
+        m.price_cents ??
+        m.priceCents ??
+        0
+      ) || 0;
+
+      const bookingPlayers = Math.max(1, players);
+      const bookingCartQty = Number(m.cart_qty ?? m.cartQty ?? 0) || 0;
+      const bookingHireQty = Number(m.hire_clubs_qty ?? m.hireClubsQty ?? 0) || 0;
+
+      // ✅ Manual sheet display price = total including add-ons divided by players
+      const displayPricePerPlayerCents = Math.round(
+        (
+          (basePricePerPlayerCents * bookingPlayers) +
+          Number(m.cart_fee_cents ?? m.cartFeeCents ?? 0) +
+          Number(m.hire_clubs_fee_cents ?? m.hireClubsFeeCents ?? 0)
+        ) / bookingPlayers
+      );
+
       for (let i = 0; i < players; i++) {
         const row = normalizeBookingLikeRow(m);
+
+        // ✅ stamp effective display price onto every manual slot row
+        row.display_price_per_player_cents = displayPricePerPlayerCents;
 
         // ✅ only show add-ons once (slot 1)
         if (i > 0) {
