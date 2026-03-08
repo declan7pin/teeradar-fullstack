@@ -9823,7 +9823,39 @@ async function finalizePaidBooking(payload) {
       }
 
       console.log("🔁 finalizePaidBooking: already paid/confirmed:", ref);
-      return { ok: true, alreadyConfirmed: true };
+
+// ✅ Load full booking row and continue to email logic
+const existingFull = await db.query(
+  `
+  SELECT
+    b.id,
+    b.course_id,
+    b.play_date,
+    b.tee_time,
+    b.holes,
+    b.players,
+    b.golfer_name,
+    b.golfer_email,
+    b.golfer_phone,
+    b.price_per_player_cents,
+    b.total_cents,
+    b.cart_fee_cents,
+    b.hire_clubs_fee_cents,
+    b.reference,
+    b.status,
+    b.paid
+  FROM booking_bookings b
+  WHERE b.reference = $1
+  LIMIT 1;
+  `,
+  [ref]
+);
+
+if (!existingFull.rows.length) {
+  return { ok: true, alreadyConfirmed: true };
+}
+
+booking = existingFull.rows[0];
     }
 
     booking = upd.rows[0];
@@ -9883,7 +9915,39 @@ async function finalizePaidBooking(payload) {
       }
 
       console.log("🔁 finalizePaidBooking: already paid/confirmed:", ref);
-      return { ok: true, alreadyConfirmed: true };
+
+// ✅ Load full booking row and continue to email logic
+const existingFull = await db.query(
+  `
+  SELECT
+    b.id,
+    b.course_id,
+    b.play_date,
+    b.tee_time,
+    b.holes,
+    b.players,
+    b.golfer_name,
+    b.golfer_email,
+    b.golfer_phone,
+    b.price_per_player_cents,
+    b.total_cents,
+    b.cart_fee_cents,
+    b.hire_clubs_fee_cents,
+    b.reference,
+    b.status,
+    b.paid
+  FROM booking_bookings b
+  WHERE b.reference = $1
+  LIMIT 1;
+  `,
+  [ref]
+);
+
+if (!existingFull.rows.length) {
+  return { ok: true, alreadyConfirmed: true };
+}
+
+booking = existingFull.rows[0];
     }
 
     booking = upd2.rows[0];
