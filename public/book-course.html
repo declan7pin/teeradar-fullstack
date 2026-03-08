@@ -134,6 +134,25 @@
     .status{margin-top:10px;font-size:13px}
     .status.ok{color:var(--ok)}
     .status.err{color:var(--danger)}
+    
+    .subBanner{
+  margin-top:8px;
+  font-size:12px;
+  padding:8px 10px;
+  border-radius:12px;
+  border:1px solid #bbf7d0;
+  background:#f0fdf4;
+  color:#166534;
+  font-weight:700;
+}
+.priceStrike{
+  text-decoration: line-through;
+  opacity: .65;
+  margin-right: 8px;
+}
+.priceNew{
+  font-weight: 900;
+}
 
     /* time results */
     .timesHeader{
@@ -344,7 +363,7 @@
       <h3 id="modalTitle">Confirm booking</h3>
       <div class="sub" id="modalSub">Enter your details to confirm.</div>
 
-      <div class="kv">
+      <div class="kv" id="modalKv">
   <div class="k">Course</div><div id="mCourse"></div>
   <div class="k">Date</div><div id="mDate"></div>
   <div class="k">Time</div><div id="mTime"></div>
@@ -360,9 +379,10 @@
           <input id="bName" placeholder="e.g. John Smith" autocomplete="name" required />
         </div>
         <div class="field sm6">
-          <label for="bEmail">Email</label>
-          <input id="bEmail" type="email" placeholder="john.smith@example.com" autocomplete="email" required />
-        </div>
+  <label for="bEmail">Email</label>
+  <input id="bEmail" type="email" placeholder="john.smith@example.com" autocomplete="email" required />
+  <div id="subBanner" class="subBanner" style="display:none;"></div>
+</div>
         <div class="field sm6">
           <label for="bPhone">Phone (optional)</label>
           <input id="bPhone" placeholder="04xx xxx xxx" autocomplete="tel" />
@@ -375,9 +395,29 @@
 <!-- ✅ Dynamic add-ons go here -->
 <div id="addonsWrap" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;"></div>
 
-<div style="margin-top:8px;font-size:13px;">
-  <strong>Total:</strong> <span id="mTotal">—</span>
-  <span style="color:var(--muted);font-size:12px;margin-left:6px;">(includes add-ons)</span>
+<div style="margin-top:10px;font-size:13px;">
+  <div style="display:flex;justify-content:space-between;gap:10px;">
+    <span>Base total</span>
+    <b><span id="mBaseTotal">—</span></b>
+  </div>
+
+  <div id="mFeeRow" style="display:none;display:flex;justify-content:space-between;gap:10px;margin-top:6px;">
+    <span>Booking fee</span>
+    <b><span id="mBookingFee">—</span></b>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;">
+    <span><b>Total to pay</b></span>
+    <b><span id="mTotalPay">—</span></b>
+  </div>
+
+  <div id="mFeeNote" style="display:none;color:var(--muted);font-size:12px;margin-top:6px;">
+    Booking fee covers card processing.
+  </div>
+
+  <div style="color:var(--muted);font-size:12px;margin-top:4px;">
+    (includes add-ons)
+  </div>
 </div>
         </div>
         <!-- ✅ END FIX -->
@@ -562,11 +602,76 @@ if (clubsAddonId) idToQty.set(String(clubsAddonId), Number(clubsQtySelected || 0
   }
 
   function updateModalTotal(){
-    if (!selectedSlot) return;
-    const totalCents = computeTotalCents(selectedSlot);
-    const mTotal = $("mTotal");
-    if (mTotal) mTotal.textContent = moneyFromCents(totalCents);
+  if (!selectedSlot) return;
+
+  const totalBeforeDiscountCents = computeTotalCents(selectedSlot); // green fees + add-ons
+  // ✅ if we already have a valid email, keep discount preview in sync with changes
+  const curEmail = String(($("bEmail")?.value || "")).trim().toLowerCase();
+  if (isValidEmail(curEmail)) {
+    const baseNow = Math.max(0, Math.trunc(totalBeforeDiscountCents));
+    if (baseNow !== __lastSubBaseCents || curEmail !== __subscriber.checkedEmail) {
+      __lastSubBaseCents = baseNow;
+      // debounce a little via reqId (function already handles stale)
+      checkSubscriberByEmail(curEmail, baseNow);
+      // NOTE: return is NOT needed; checkSubscriberByEmail will call updateModalTotal after it updates flags
+    }
   }
+
+
+  // subscriber discount preview (applies to whole booking)
+  const disc = applySubscriberDiscountToTotal(totalBeforeDiscountCents);
+
+  const baseAfterDiscountCents = Number(disc.discounted || 0);
+
+  // payment mode (comes from course)
+  const isPayOnBooking = (course && course.payment_mode === "PAY_ON_BOOKING");
+
+  // estimate processing fee only for PAY_ON_BOOKING (must match backend)
+  let feeCents = 0;
+  let grossCents = baseAfterDiscountCents;
+
+  if (isPayOnBooking) {
+    const STRIPE_PCT = 0.03;
+    const STRIPE_FIXED_CENTS = 40;
+
+    grossCents = Math.max(
+      baseAfterDiscountCents,
+      Math.ceil((baseAfterDiscountCents + STRIPE_FIXED_CENTS) / (1 - STRIPE_PCT))
+    );
+    feeCents = Math.max(0, grossCents - baseAfterDiscountCents);
+  }
+
+  // --- render base total (with discount strike-through) ---
+  const baseEl = $("mBaseTotal");
+  if (baseEl) {
+    if (disc.discount > 0) {
+      baseEl.innerHTML =
+        `<span class="priceStrike">${moneyAUD(totalBeforeDiscountCents)}</span>` +
+        `<span class="priceNew">${moneyAUD(baseAfterDiscountCents)}</span>`;
+    } else {
+      baseEl.textContent = moneyAUD(baseAfterDiscountCents);
+    }
+  }
+
+  // --- render fee row + note ---
+  const feeRow = $("mFeeRow");
+  const feeEl = $("mBookingFee");
+  const feeNote = $("mFeeNote");
+
+  if (isPayOnBooking && feeCents > 0) {
+    if (feeRow) feeRow.style.display = "flex";
+    if (feeNote) feeNote.style.display = "block";
+    if (feeEl) feeEl.textContent = moneyAUD(feeCents);
+  } else {
+    if (feeRow) feeRow.style.display = "none";
+    if (feeNote) feeNote.style.display = "none";
+    if (feeEl) feeEl.textContent = moneyAUD(0);
+  }
+
+  // --- render total payable ---
+  const payEl = $("mTotalPay");
+  if (payEl) payEl.textContent = moneyAUD(isPayOnBooking ? grossCents : baseAfterDiscountCents);
+}
 
   // Render add-ons into the modal
   function renderAddons(){
@@ -754,13 +859,29 @@ if (qtySel) {
       const res = await apiFetch("/api/book/course?slug=" + encodeURIComponent(slug));
       const data = await res.json().catch(()=> ({}));
       if (res.ok && data && data.ok && data.course) {
-        course = data.course;
-      } else {
-        // optional fallback if your router uses /course/:slug
-        const r2 = await apiFetch("/api/book/course/" + encodeURIComponent(slug));
-        const d2 = await r2.json().catch(()=> ({}));
-        if (r2.ok && d2 && d2.ok && d2.course) course = d2.course;
-      }
+  course = data.course;
+
+  // ✅ ADD HERE (right after course is set)
+  __subscriber.discountPct =
+    Number.isFinite(Number(course?.subscriber_discount_pct))
+      ? Number(course.subscriber_discount_pct)
+      : 5;
+
+} else {
+  // optional fallback if your router uses /course/:slug
+  const r2 = await apiFetch("/api/book/course/" + encodeURIComponent(slug));
+  const d2 = await r2.json().catch(()=> ({}));
+
+  if (r2.ok && d2 && d2.ok && d2.course) {
+    course = d2.course;
+
+    // ✅ ADD HERE TOO (right after fallback course is set)
+    __subscriber.discountPct =
+      Number.isFinite(Number(course?.subscriber_discount_pct))
+        ? Number(course.subscriber_discount_pct)
+        : 5;
+  }
+}
     } catch {}
     $("courseName").textContent = course.name || "Course";
     $("courseSub").textContent = course.notes
@@ -913,11 +1034,154 @@ const canBook = slotsAvail >= wantPlayers;
 
   let selectedSlot = null;
 
+const __subscriber = {
+  checkedEmail: "",
+  isSubscriber: false,
+
+  // ✅ values returned by /subscriber-status
+  discountApplied: false,
+  discountPct: 0,
+  baseCents: 0,
+  discountedCents: 0,
+};
+
+function moneyAUD(cents){
+  return moneyFromCents(cents);
+}
+
+function applySubscriberDiscountToTotal(totalBeforeDiscountCents) {
+  const base = Number(totalBeforeDiscountCents || 0);
+
+  // ✅ If backend preview matches this baseCents, use backend as source of truth
+  if (
+    __subscriber.discountApplied === true &&
+    Number.isFinite(__subscriber.baseCents) &&
+    Number(__subscriber.baseCents) === base &&
+    Number.isFinite(__subscriber.discountedCents)
+  ) {
+    const discounted = Math.max(0, Number(__subscriber.discountedCents || 0));
+    const discount = Math.max(0, base - discounted);
+    return { discounted, discount };
+  }
+
+  // ✅ fallback (no discount)
+  return { discounted: base, discount: 0 };
+}
+
+let __subReqId = 0;
+let __lastSubBaseCents = -1;
+
+async function checkSubscriberByEmail(email) {
+  const e = String(email || "").trim().toLowerCase();
+  __subscriber.checkedEmail = e;
+
+  const banner = $("subBanner");
+  const myReqId = ++__subReqId;
+
+  // ✅ compute base ASAP (so catch block can always use it)
+  const baseCents = selectedSlot ? Number(computeTotalCents(selectedSlot) || 0) : 0;
+
+  // ✅ reset state (keep discountPct if you want, but clear computed values)
+  __subscriber.isSubscriber = false;
+  __subscriber.discountEnabled = false;
+  __subscriber.discountApplied = false;
+  __subscriber.baseCents = baseCents;
+  __subscriber.discountedCents = baseCents;
+
+  if (banner) {
+    banner.style.display = "block";
+    banner.textContent = "Enter your full email to check subscriber status…";
+  }
+
+  if (!isValidEmail(e)) {
+    updateModalTotal();
+    return;
+  }
+
+  if (!selectedSlot) {
+    if (banner) banner.textContent = "Checking subscriber status…";
+    updateModalTotal();
+    return;
+  }
+
+  if (banner) banner.textContent = "Checking subscriber status…";
+
+  try {
+    const qs = new URLSearchParams({
+      slug,
+      email: e,
+      baseCents: String(Math.max(0, Math.trunc(baseCents))),
+    });
+
+    // ✅ IMPORTANT: this is the ONLY endpoint that knows course+email+base preview
+    const res = await apiFetch("/api/book/subscriber-status?" + qs.toString(), { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+
+    if (myReqId !== __subReqId) return; // ignore stale response
+
+    if (!res.ok || data?.ok !== true) {
+      __subscriber.isSubscriber = false;
+      __subscriber.discountEnabled = false;
+      __subscriber.discountApplied = false;
+      __subscriber.baseCents = baseCents;
+      __subscriber.discountedCents = baseCents;
+
+      if (banner) banner.textContent = "Could not check subscriber status.";
+      updateModalTotal();
+      return;
+    }
+
+    // ✅ trust backend decision
+    __subscriber.isSubscriber = data.isSubscriber === true;
+    __subscriber.discountEnabled = data.discountEnabled === true;
+    __subscriber.discountPct = Number(data.discountPct || 0);
+
+    __subscriber.baseCents = Number.isFinite(Number(data.baseCents)) ? Number(data.baseCents) : baseCents;
+    __subscriber.discountedCents =
+      Number.isFinite(Number(data.discountedCents)) ? Number(data.discountedCents) : baseCents;
+
+    __subscriber.discountApplied = data.discountApplied === true;
+
+    if (banner) {
+      if (__subscriber.discountApplied && __subscriber.discountPct > 0) {
+        banner.textContent = `✅ Subscriber discount — ${__subscriber.discountPct}% applied`;
+      } else if (!__subscriber.isSubscriber) {
+        banner.textContent = "Not a subscriber (no discount).";
+      } else if (__subscriber.isSubscriber && !__subscriber.discountEnabled) {
+        banner.textContent = "Subscriber (no course discount).";
+      } else {
+        banner.textContent = "Subscriber (no discount).";
+      }
+    }
+
+    updateModalTotal();
+  } catch (err) {
+    if (myReqId !== __subReqId) return;
+
+    __subscriber.isSubscriber = false;
+    __subscriber.discountEnabled = false;
+    __subscriber.discountApplied = false;
+    __subscriber.baseCents = baseCents;
+    __subscriber.discountedCents = baseCents;
+
+    if (banner) {
+      banner.textContent = "Could not check subscriber status.";
+      banner.style.display = "block";
+    }
+    updateModalTotal();
+  }
+}
+
   function resetModalToForm() {
     $("modalTitle").textContent = "Confirm booking";
     $("detailsGrid").style.display = "";
     $("cancelBtn").style.display = "";
-    $("confirmBtn").textContent = "Confirm booking";
+    // ✅ Change button text depending on payment mode
+if (course && course.payment_mode === "PAY_ON_BOOKING") {
+  $("confirmBtn").textContent = "Confirm & Pay";
+} else {
+  $("confirmBtn").textContent = "Confirm booking";
+}
     $("confirmBtn").disabled = false;
 
     $("modalSub").textContent = "Enter your details to confirm.";
@@ -945,6 +1209,26 @@ $("mPrice").textContent = `${moneyFromCents(priceCents)} per player`;
     $("bName").value = "";
     $("bEmail").value = "";
     $("bPhone").value = "";
+    // ✅ subscriber check on email input (debounced)
+if (!$("bEmail")._subWire) {
+  $("bEmail")._subWire = true;
+  let tmr = null;
+  $("bEmail").addEventListener("input", () => {
+    clearTimeout(tmr);
+    tmr = setTimeout(() => {
+      checkSubscriberByEmail(($("bEmail").value || "").trim(), computeTotalCents(selectedSlot));
+    }, 250);
+  });
+}
+
+// reset subscriber state each open (DO NOT reset discountPct)
+__subscriber.checkedEmail = "";
+__subscriber.isSubscriber = false;
+__subscriber.discountEnabled = false;
+// ✅ keep __subscriber.discountPct as set by loadCourse()
+
+const banner = $("subBanner");
+if (banner) banner.style.display = "none";
 
     if ($("players") && !$("players")._wiredForTotal){
       $("players")._wiredForTotal = true;
@@ -957,44 +1241,84 @@ $("mPrice").textContent = `${moneyFromCents(priceCents)} per player`;
   }
 
    function showBookingConfirmation(data, email) {
+    // ✅ hide original KV block (prevents duplicate lower section)
+const kv = $("modalKv");
+if (kv) kv.style.display = "none";
   $("modalTitle").textContent = "✅ Booking confirmed";
   $("detailsGrid").style.display = "none";
 
-  const emailOk = !!(data && data.emailOk);
+  // --- email message (3-state: true/false/unknown) ---
+  const emailOkRaw = (data && ("emailOk" in data)) ? data.emailOk : undefined;
   const reason = (data && data.emailReason) ? String(data.emailReason) : "";
-  const emailMsg = emailOk
-    ? `📧 Confirmation email sent to ${email}`
-    : `📧 Email not sent${reason ? ` (${reason})` : ""}`;
 
-  // --- Build add-ons breakdown (what the user picked) ---
+  let emailMsg = "";
+  if (emailOkRaw === true) {
+    emailMsg = `📧 Confirmation email sent to ${email}`;
+  } else if (emailOkRaw === false) {
+    emailMsg = `📧 Email not sent${reason ? ` (${reason})` : ""}`;
+  } else {
+    emailMsg = `📧 Confirmation email will be sent to ${email}`;
+  }
+
+  // --- booking values (prefer actual booking returned from backend) ---
+  const bookingObj = (data && data.booking) ? data.booking : {};
+
+  const showPlayers = Number(
+    bookingObj.players ?? bookingObj.player_count ?? $("players").value ?? 0
+  );
+
+  const showHoles = Number(
+    bookingObj.holes ?? $("holes").value ?? 0
+  );
+
+  const showDate = String(
+    bookingObj.play_date ?? bookingObj.date ?? $("date").value ?? ""
+  ).slice(0, 10);
+
+  const showTime = String(
+    bookingObj.time ?? bookingObj.tee_time ?? selectedSlot?.time ?? ""
+  ).split("|")[0];
+
+  // --- add-ons breakdown (what user picked in modal) ---
   const picked = new Set((selectedAddonIds || []).map(String));
   const chosenAddons = (addons || []).filter(a => a && picked.has(String(a.id)));
 
   const qtyForAddon = (id) => {
-  const sid = String(id || "");
-  if (cartAddonId && sid === String(cartAddonId)) return Number(cartQtySelected || 0);
-  if (clubsAddonId && sid === String(clubsAddonId)) return Number(clubsQtySelected || 0);
-  return 0;
-};
+    const sid = String(id || "");
+    if (cartAddonId && sid === String(cartAddonId)) return Number(cartQtySelected || 0);
+    if (clubsAddonId && sid === String(clubsAddonId)) return Number(clubsQtySelected || 0);
+    return 0;
+  };
 
-const addonLines = chosenAddons.map(a => {
-  const id = String(a.id || "");
-  const label = String(a.label || a.id || "Add-on");
-  const cents = Number(a.price_cents ?? a.priceCents ?? 0);
-  const qty = Math.max(0, Math.min(4, qtyForAddon(id)));
-  const lineTotal = cents * qty;
+  const addonLines = chosenAddons.map(a => {
+    const id = String(a.id || "");
+    const label = String(a.label || a.id || "Add-on");
+    const cents = Number(a.price_cents ?? a.priceCents ?? 0);
+    const qty = Math.max(0, Math.min(4, qtyForAddon(id)));
+    const lineTotal = cents * qty;
 
-  return `
-    <div style="display:flex;justify-content:space-between;gap:10px;">
-      <span>${label} ${qty ? `(x${qty})` : ""}</span>
-      <b>${moneyFromCents(lineTotal)}</b>
-    </div>
-  `;
-}).join("");
+    return `
+      <div style="display:flex;justify-content:space-between;gap:10px;">
+        <span>${label} ${qty ? `(x${qty})` : ""}</span>
+        <b>${moneyFromCents(lineTotal)}</b>
+      </div>
+    `;
+  }).join("");
 
-  // --- Prices ---
+  // --- totals ---
   const perPlayerCents = selectedSlot ? _slotPerPlayerCents(selectedSlot) : 0;
-  const totalCents = selectedSlot ? computeTotalCents(selectedSlot) : null;
+
+  const totalCents = Number(
+    bookingObj.total_cents ?? bookingObj.totalCents ?? data?.booking?.total_cents ?? data?.booking?.totalCents ?? 0
+  );
+
+  const discountCents = Number(
+    bookingObj.discount_cents ?? bookingObj.discountCents ?? 0
+  );
+
+  const totalBeforeDiscountCents = Number.isFinite(totalCents)
+    ? (totalCents + Math.max(0, discountCents))
+    : null;
 
   const baseBlock = `
     <div style="margin-top:10px;">
@@ -1014,12 +1338,18 @@ const addonLines = chosenAddons.map(a => {
     `
     : "";
 
-  const totalBlock = (typeof totalCents === "number")
+  const totalBlock = (Number.isFinite(totalCents))
     ? `
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;">
         <div style="display:flex;justify-content:space-between;gap:10px;">
           <span>Total</span>
-          <b>${moneyFromCents(totalCents)}</b>
+          <b>
+            ${
+              (discountCents > 0 && Number.isFinite(totalBeforeDiscountCents))
+                ? `<span class="priceStrike">${moneyFromCents(totalBeforeDiscountCents)}</span><span class="priceNew">${moneyFromCents(totalCents)}</span>`
+                : `${moneyFromCents(totalCents)}`
+            }
+          </b>
         </div>
         <div style="color:var(--muted);font-size:12px;margin-top:4px;">
           (includes add-ons)
@@ -1028,17 +1358,17 @@ const addonLines = chosenAddons.map(a => {
     `
     : "";
 
-  // --- Summary block (keeps your existing details) ---
+  // --- render confirmation ---
   $("modalSub").innerHTML =
     `Reference: <b>${data.reference}</b><br/>` +
     `${emailMsg}` +
     `<div style="margin-top:10px;">
       <div style="display:grid;grid-template-columns:120px 1fr;gap:6px 10px;font-size:13px;">
         <div style="color:var(--muted)">Course</div><div>${course?.name || slug}</div>
-        <div style="color:var(--muted)">Date</div><div>${$("date").value}</div>
-        <div style="color:var(--muted)">Time</div><div>${selectedSlot?.time || ""}</div>
-        <div style="color:var(--muted)">Players</div><div>${$("players").value}</div>
-        <div style="color:var(--muted)">Holes</div><div>${$("holes").value}</div>
+        <div style="color:var(--muted)">Date</div><div>${showDate}</div>
+        <div style="color:var(--muted)">Time</div><div>${showTime}</div>
+        <div style="color:var(--muted)">Players</div><div>${showPlayers}</div>
+        <div style="color:var(--muted)">Holes</div><div>${showHoles}</div>
       </div>
     </div>` +
     baseBlock +
@@ -1094,19 +1424,19 @@ const addonLines = chosenAddons.map(a => {
 
     const back_nine_key =
       (s.back_nine_key ?? s.backNineKey ?? s.backNine ?? "").toString().trim().toLowerCase();
-      
-      // ✅ build a stable route key for 18s (backend uses this to match the exact tee time row)
-const route18Key =
-  (holes === 18 && front_nine_key && back_nine_key)
-    ? `18:${front_nine_key}|${back_nine_key}`
-    : null;
 
-// ✅ for 9s, layout_key is the 9 key
-const layout9Key = (holes === 9 && layout_key) ? layout_key : null;
+    // ✅ build a stable route key for 18s (backend uses this to match the exact tee time row)
+    const route18Key =
+      (holes === 18 && front_nine_key && back_nine_key)
+        ? `18:${front_nine_key}|${back_nine_key}`
+        : null;
 
-// ✅ final key we send (9s use their 9 key, 18s use route18Key or the provided layout_key)
-const finalLayoutKey =
-  (holes === 9) ? layout9Key : (layout_key || route18Key);
+    // ✅ for 9s, layout_key is the 9 key
+    const layout9Key = (holes === 9 && layout_key) ? layout_key : null;
+
+    // ✅ final key we send (9s use their 9 key, 18s use route18Key or the provided layout_key)
+    const finalLayoutKey =
+      (holes === 9) ? layout9Key : (layout_key || route18Key);
 
     // ✅ ALSO send the human layout label as a fallback (backend can derive keys if needed)
     const layoutText = (getLayoutText(s) || "").toString().trim();
@@ -1118,6 +1448,15 @@ const finalLayoutKey =
     if (holes === 9 && (!layout_key && !layoutText)) {
       throw new Error("routing_required");
     }
+
+    // ✅ prevent double-counting carts/clubs:
+    // send qty via cartQty/hireClubsQty only, not also as addonIds
+    const addonIdsNoQty = (selectedAddonIds || []).filter(id => {
+      const sid = String(id || "");
+      if (cartAddonId && sid === String(cartAddonId)) return false;
+      if (clubsAddonId && sid === String(clubsAddonId)) return false;
+      return true;
+    });
 
     const res = await apiFetch("/api/book/book", {
       method: "POST",
@@ -1132,19 +1471,18 @@ const finalLayoutKey =
         email,
         phone,
 
-        // ✅ include routing keys (primary)
         // ✅ routing (ALWAYS send what we know, especially layout_key for 18s)
-layout_key: finalLayoutKey || null,
-front_nine_key: front_nine_key || null,
-back_nine_key: back_nine_key || null,
+        layout_key: finalLayoutKey || null,
+        front_nine_key: front_nine_key || null,
+        back_nine_key: back_nine_key || null,
 
         // ✅ include label (fallback)
         layout: layoutText,
 
         // ✅ add-ons
-        addonIds: selectedAddonIds,
-        cartQty: cartAddonId ? cartQtySelected : 0,
-        hireClubsQty: clubsAddonId ? clubsQtySelected : 0,
+        addonIds: addonIdsNoQty,
+        cartQty: cartAddonId ? Number(cartQtySelected || 0) : 0,
+        hireClubsQty: clubsAddonId ? Number(clubsQtySelected || 0) : 0,
       }),
     });
 
@@ -1155,6 +1493,12 @@ back_nine_key: back_nine_key || null,
           ? (data.message || data.error)
           : ("HTTP " + res.status);
       throw new Error(msg);
+    }
+
+    // ✅ Stripe redirect for PAY_ON_BOOKING
+    if (data.payment_mode === "PAY_ON_BOOKING" && data.checkoutUrl) {
+      window.location.href = data.checkoutUrl;
+      return;
     }
 
     showBookingConfirmation(data, email);
@@ -1168,6 +1512,11 @@ back_nine_key: back_nine_key || null,
 
 function closeModal(){
   $("modalWrap").style.display = "none";
+
+  // ✅ restore KV block for next time user opens modal to book
+  const kv = $("modalKv");
+  if (kv) kv.style.display = "";
+
   selectedSlot = null;
   selectedAddonIds = [];
 }
@@ -1238,6 +1587,118 @@ $("confirmBtn").onclick = confirmBooking;
       await fetchAvailability();
     }
   } catch (e) {}
+  // ✅ STRIPE CANCEL RETURN HANDLER (uses ?cancelled=1&ref=XXXX)
+(async function handleStripeCancelReturn(){
+  try {
+    const q = new URLSearchParams(location.search);
+    const cancelled = q.get("cancelled");
+    const ref = (q.get("ref") || "").trim();
+
+    if (cancelled !== "1" || !ref) return;
+
+    setStatus("Cancelling booking…", "");
+
+    const res = await apiFetch("/api/book/payment-cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref }),
+    });
+
+    const data = await res.json().catch(()=> ({}));
+    if (!res.ok || !data || !data.ok) {
+      throw new Error(data?.error || "Failed to release hold");
+    }
+
+    setStatus("✅ Booking cancelled.", "ok");
+
+    // remove cancelled/ref from URL so refresh doesn't re-run
+    history.replaceState({}, "", location.pathname);
+
+    await fetchAvailability();
+
+  } catch (e) {
+    setStatus("❌ " + (e.message || "Cancel handling failed"), "err");
+  }
+})();
+ // ✅ STRIPE RETURN HANDLER (uses ?paid=1&ref=XXXX from backend success_url)
+(async function handleStripeReturn(){
+  try {
+    const q = new URLSearchParams(location.search);
+    const paid = q.get("paid");
+    const ref = (q.get("ref") || "").trim();
+
+    if (paid !== "1" || !ref) return;
+
+    setStatus("Finalising payment…", "");
+
+    const res = await apiFetch(
+      "/api/book/booking?" + new URLSearchParams({ ref }).toString()
+    );
+
+    const data = await res.json().catch(()=> ({}));
+
+    if (!res.ok || !data || !data.ok || !data.booking) {
+      throw new Error(data?.error || "Could not load booking confirmation");
+    }
+
+    const b = data.booking;
+    // ✅ sync the form inputs to the ACTUAL booking (so UI never shows stale values)
+if (b.play_date && $("date")) $("date").value = String(b.play_date).slice(0, 10);
+if ($("players") && b.players) $("players").value = String(b.players);
+if ($("holes") && b.holes) $("holes").value = String(b.holes);
+
+    // ✅ repopulate slot so modal renderer works
+    selectedSlot = {
+      time: b.time,
+      holes: Number(b.holes || 18),
+      pricePerPlayerCents: Number(b.price_per_player_cents || 0),
+      layout_key: b.layout_key || null,
+      front_nine_key: b.front_nine_key || null,
+      back_nine_key: b.back_nine_key || null
+    };
+
+    cartQtySelected = Number(b.cart_qty || 0);
+    clubsQtySelected = Number(b.hire_clubs_qty || 0);
+
+    // ✅ FORCE MODAL OPEN
+    $("modalWrap").style.display = "flex";
+
+    // ✅ CRITICAL FIX: pass booking data into confirmation
+    showBookingConfirmation(
+  {
+    reference: b.reference,
+    // ⚠️ Don't lie about email status on Stripe return (webhook may be delayed)
+    emailOk: null,
+    emailReason: null,
+    booking: {
+      play_date: b.play_date,
+      tee_time: b.tee_time,
+      time: b.time,
+      holes: Number(b.holes || 0),
+      players: Number(b.players || 0),
+
+      total_cents: Number(b.total_cents || 0),
+      discount_cents: Number(b.discount_cents || 0),
+
+      cart_fee_cents: Number(b.cart_fee_cents || 0),
+      hire_clubs_fee_cents: Number(b.hire_clubs_fee_cents || 0),
+      cart_qty: Number(b.cart_qty || 0),
+      hire_clubs_qty: Number(b.hire_clubs_qty || 0),
+    }
+  },
+  b.golfer_email || ""
+);
+
+    setStatus(`✅ Booking confirmed. Reference: ${b.reference}`, "ok");
+
+    history.replaceState({}, "", location.pathname);
+
+    await fetchAvailability();
+
+  } catch (e) {
+    setStatus("❌ " + (e.message || "Payment confirmation failed"), "err");
+  }
+})();
 })();
 </script>
 </body>
