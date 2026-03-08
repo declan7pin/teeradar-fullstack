@@ -1716,32 +1716,53 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
 
     const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
 
-    const players = Math.max(1, Number(b.players || 1));
+        const players = Math.max(1, Number(b.players || 1));
 
-    // ✅ CRITICAL FIX:
-    // Daily sheet should show ACTUAL effective per-player price,
-    // not the original tee-time price.
-        const totalCents = Number(
+    // ✅ For ONLINE bookings, daily sheet price per player should stay as the BASE booking price.
+    // Add-ons are already shown separately as badges (Cart / Clubs), so do NOT fold them into
+    // the displayed per-player price here.
+    const basePricePerPlayerCents = Number(
+      b.price_per_player_cents ??
+      b.pricePerPlayerCents ??
+      b.price_cents ??
+      b.priceCents ??
+      0
+    ) || 0;
+
+    const totalCents = Number(
       b.total_cents ??
       b.totalCents ??
       b.gross_cents ??
       b.grossCents ??
       0
     ) || 0;
-    const effectivePricePerPlayerCents =
-      players > 0 && totalCents > 0
-        ? Math.round(totalCents / players)
-        : Number(
-            b.price_per_player_cents ??
-            b.pricePerPlayerCents ??
-            b.price_cents ??
-            b.priceCents ??
-            0
-          ) || 0;
 
     for (let i = 0; i < players; i++) {
       if (!byKey.has(key)) byKey.set(key, []);
 
+      const row = normalizeBookingLikeRow(b);
+
+      // ✅ keep DAILY SHEET display at base per-player price only
+      row.price_per_player_cents = basePricePerPlayerCents;
+
+      // ✅ keep total too if needed later
+      row.total_cents = totalCents;
+      row.players = players;
+
+      // ✅ only show add-ons on Slot 1 for that booking
+      if (i > 0) {
+        row.cart_qty = 0;
+        row.hire_clubs_qty = 0;
+        row.has_cart = false;
+        row.has_hire_clubs = false;
+      }
+
+      row.layout_key = layoutKey;
+      row.front_nine_key = frontKey;
+      row.back_nine_key = backKey;
+
+      byKey.get(key).push(row);
+    }
       const row = normalizeBookingLikeRow(b);
 
       // ✅ stamp ACTUAL per-player price onto every slot for this booking
