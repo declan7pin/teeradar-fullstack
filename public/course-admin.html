@@ -1686,7 +1686,6 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
           row.has_hire_clubs = false;
         }
 
-        // ✅ keep routing keys on the row too (handy later)
         row.layout_key = layoutKey;
         row.front_nine_key = frontKey;
         row.back_nine_key = backKey;
@@ -1704,7 +1703,7 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
     byKey.get(key).push(row);
   });
 
-    // ✅ Online bookings: preserve routing keys if present (booking_bookings has these columns)
+  // ✅ Online bookings: preserve routing keys if present
   (bookingsRows || []).forEach(b => {
     const time = normTime(b.tee_time || b.time || b.teeTime || "");
     const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
@@ -1716,16 +1715,14 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
 
     const players = Math.max(1, Number(b.players || 1));
 
-    // ✅ CRITICAL FIX:
-    // Daily sheet should show ACTUAL effective per-player price,
-    // not the original tee-time price.
-        const totalCents = Number(
+    const totalCents = Number(
       b.total_cents ??
       b.totalCents ??
       b.gross_cents ??
       b.grossCents ??
       0
     ) || 0;
+
     const effectivePricePerPlayerCents =
       players > 0 && totalCents > 0
         ? Math.round(totalCents / players)
@@ -1742,10 +1739,7 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
 
       const row = normalizeBookingLikeRow(b);
 
-      // ✅ stamp ACTUAL per-player price onto every slot for this booking
       row.price_per_player_cents = effectivePricePerPlayerCents;
-
-      // ✅ keep total too if needed later
       row.total_cents = totalCents;
       row.players = players;
 
@@ -1780,7 +1774,6 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
 
     const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
 
-    // ✅ pull the tee time price (THIS is what was missing)
     const timePricePerPlayerCents = Number(
       t.price_per_player_cents ??
       t.pricePerPlayerCents ??
@@ -1791,35 +1784,9 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
 
     const arr = (byKey.get(key) || []).slice(0, 4);
 
-    const bookedCount = Number(
-      t.booked_players ?? t.bookedPlayers ?? t.booked ?? 0
-    );
-
-    while (arr.length < Math.min(4, bookedCount)) {
-      arr.push({
-        reference: "",
-        name: "Booked",
-        email: "",
-        phone: "",
-        paid: false,
-        cart_qty: 0,
-        hire_clubs_qty: 0,
-        has_cart: false,
-        has_hire_clubs: false,
-        notes: "",
-        checked_in: false,
-
-        // keep routing info
-        layout_key: layoutKey,
-        front_nine_key: frontKey,
-        back_nine_key: backKey,
-
-        // ✅ price on placeholders too
-        price_per_player_cents: timePricePerPlayerCents,
-      });
-    }
-
-    // ✅ STAMP PRICE ONTO EVERY SLOT ITEM (THIS is the key fix)
+    // ✅ IMPORTANT:
+    // Do NOT create fake "Booked" placeholders from booked_players.
+    // Only show actual bookings/manual holds.
     arr.forEach(x => {
       if (!x || typeof x !== "object") return;
       if (Number(x.price_per_player_cents ?? 0) <= 0) {
@@ -1835,10 +1802,7 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
       layout_key: layoutKey,
       front_nine_key: frontKey,
       back_nine_key: backKey,
-
-      // ✅ optional: available at row level too
       price_per_player_cents: timePricePerPlayerCents,
-
       slots
     });
   });
