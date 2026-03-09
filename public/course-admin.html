@@ -1407,7 +1407,7 @@ function normalizeBookingLikeRow(b){
 
   return {
     reference: ref,
-        name: String(b.name ?? b.golfer_name ?? b.hold_name ?? b.holdName ?? "Booking").trim(),
+    name: String(b.name ?? b.golfer_name ?? b.hold_name ?? b.holdName ?? "Booking").trim(),
     email: String(b.email ?? b.golfer_email ?? "").trim(),
     phone: String(b.phone ?? b.golfer_phone ?? "").trim(),
 
@@ -1429,7 +1429,7 @@ function normalizeBookingLikeRow(b){
       0
     ) || 0,
 
-        total_cents: Number(
+    total_cents: Number(
       b.total_cents ??
       b.totalCents ??
       b.gross_cents ??
@@ -1445,9 +1445,15 @@ function normalizeBookingLikeRow(b){
     ) || 1,
 
     notes: String(b.notes ?? b.note ?? "").trim(),
+
+    // ✅ NEW
+    can_delete: !!(b.can_delete ?? false),
+    payment_mode: String(b.payment_mode ?? "").trim(),
+    status: String(b.status ?? "").trim(),
   };
 }
-  function buildSlotCell(item, slotIndex){
+
+function buildSlotCell(item, slotIndex){
   if (!item){
     return `
       <div class="slotBox">
@@ -1497,6 +1503,13 @@ function normalizeBookingLikeRow(b){
   const checkedIn =
     !!(item.checked_in_slot ?? item.checkedInSlot ?? (Array.isArray(item.checked_in_slots) ? item.checked_in_slots[slotIndex-1] : null) ?? item.checked_in);
 
+  // ✅ NEW: allow delete button for unpaid online PAY_AT_COURSE bookings only
+  const canDeleteOnline =
+    !isManualRef &&
+    !!item.can_delete &&
+    !paid &&
+    !checkedIn;
+
   // ✅ qty-first (supports manual holds + bookings)
   const cartQty = Number(item.cart_qty ?? item.cartQty ?? 0) || 0;
   const clubsQty = Number(item.hire_clubs_qty ?? item.hireClubsQty ?? 0) || 0;
@@ -1522,9 +1535,7 @@ function normalizeBookingLikeRow(b){
   if (hasClubs) addonBits.push(`<span class="badge">Clubs${clubsQty > 0 ? " x" + clubsQty : ""}</span>`);
 
   // ✅ PRICE (this will now exist because groupBookingsToSheet stamps it onto each slot)
-    const displayPricePerPlayerCents = Number(
-    item.display_price_per_player_cents ??
-    item.displayPricePerPlayerCents ??
+  const pricePerPlayerCents = Number(
     item.price_per_player_cents ??
     item.pricePerPlayerCents ??
     item.price_cents ??
@@ -1532,8 +1543,8 @@ function normalizeBookingLikeRow(b){
     0
   ) || 0;
 
-  const priceHtml = displayPricePerPlayerCents > 0
-    ? `<span style="width:100%"><span class="muted">Price:</span> <b>$${(displayPricePerPlayerCents/100).toFixed(2)}</b> / player</span>`
+  const priceHtml = pricePerPlayerCents > 0
+    ? `<span style="width:100%"><span class="muted">Price:</span> <b>$${(pricePerPlayerCents/100).toFixed(2)}</b> / player</span>`
     : ``;
 
   return `
@@ -1605,10 +1616,21 @@ function normalizeBookingLikeRow(b){
           >Delete</button>
         </div>
       ` : ``}
+
+      ${canDeleteOnline ? `
+        <div class="actions" style="margin-top:10px">
+          <button
+            type="button"
+            class="secondary"
+            style="font-size:12px;padding:8px 10px;border-radius:10px;background:#b91c1c"
+            data-del-booking="1"
+            data-ref="${_escape(refRaw)}"
+          >Delete booking</button>
+        </div>
+      ` : ``}
     </div>
   `;
 }
-
 
 function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
   // ✅ normalize "06:10", "6:10", "06:10:00" -> "06:10"
@@ -1653,32 +1675,8 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
         m.players ?? m.num_players ?? m.player_count ?? m.playerCount ?? 1
       )));
 
-            const basePricePerPlayerCents = Number(
-        m.price_per_player_cents ??
-        m.pricePerPlayerCents ??
-        m.price_cents ??
-        m.priceCents ??
-        0
-      ) || 0;
-
-      const bookingPlayers = Math.max(1, players);
-      const bookingCartQty = Number(m.cart_qty ?? m.cartQty ?? 0) || 0;
-      const bookingHireQty = Number(m.hire_clubs_qty ?? m.hireClubsQty ?? 0) || 0;
-
-      // ✅ Manual sheet display price = total including add-ons divided by players
-      const displayPricePerPlayerCents = Math.round(
-        (
-          (basePricePerPlayerCents * bookingPlayers) +
-          Number(m.cart_fee_cents ?? m.cartFeeCents ?? 0) +
-          Number(m.hire_clubs_fee_cents ?? m.hireClubsFeeCents ?? 0)
-        ) / bookingPlayers
-      );
-
       for (let i = 0; i < players; i++) {
         const row = normalizeBookingLikeRow(m);
-
-        // ✅ stamp effective display price onto every manual slot row
-        row.display_price_per_player_cents = displayPricePerPlayerCents;
 
         // ✅ only show add-ons once (slot 1)
         if (i > 0) {
@@ -1688,7 +1686,6 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
           row.has_hire_clubs = false;
         }
 
-        // ✅ keep routing keys on the row too (handy later)
         row.layout_key = layoutKey;
         row.front_nine_key = frontKey;
         row.back_nine_key = backKey;
@@ -1706,7 +1703,7 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
     byKey.get(key).push(row);
   });
 
-    // ✅ Online bookings: preserve routing keys if present (booking_bookings has these columns)
+  // ✅ Online bookings: preserve routing keys if present
   (bookingsRows || []).forEach(b => {
     const time = normTime(b.tee_time || b.time || b.teeTime || "");
     const holes = Number(b.holes ?? b.hole_count ?? b.num_holes ?? b.holeCount ?? "");
@@ -1716,18 +1713,7 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
 
     const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
 
-                const players = Math.max(1, Number(b.players || 1));
-
-    // ✅ For ONLINE bookings, daily sheet price per player should stay as the BASE booking price.
-    // Add-ons are already shown separately as badges (Cart / Clubs), so do NOT fold them into
-    // the displayed per-player price here.
-    const basePricePerPlayerCents = Number(
-      b.price_per_player_cents ??
-      b.pricePerPlayerCents ??
-      b.price_cents ??
-      b.priceCents ??
-      0
-    ) || 0;
+    const players = Math.max(1, Number(b.players || 1));
 
     const totalCents = Number(
       b.total_cents ??
@@ -1737,15 +1723,23 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
       0
     ) || 0;
 
+    const effectivePricePerPlayerCents =
+      players > 0 && totalCents > 0
+        ? Math.round(totalCents / players)
+        : Number(
+            b.price_per_player_cents ??
+            b.pricePerPlayerCents ??
+            b.price_cents ??
+            b.priceCents ??
+            0
+          ) || 0;
+
     for (let i = 0; i < players; i++) {
       if (!byKey.has(key)) byKey.set(key, []);
 
       const row = normalizeBookingLikeRow(b);
 
-      // ✅ keep DAILY SHEET display at base per-player price only
-      row.price_per_player_cents = basePricePerPlayerCents;
-
-      // ✅ keep total too if needed later
+      row.price_per_player_cents = effectivePricePerPlayerCents;
       row.total_cents = totalCents;
       row.players = players;
 
@@ -1763,7 +1757,7 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
 
       byKey.get(key).push(row);
     }
-    });
+  });
 
   // =======================
   // Daily sheet builder
@@ -1780,7 +1774,6 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
 
     const key = slotKeyFor(time, holes, layoutKey, frontKey, backKey);
 
-    // ✅ pull the tee time price (THIS is what was missing)
     const timePricePerPlayerCents = Number(
       t.price_per_player_cents ??
       t.pricePerPlayerCents ??
@@ -1791,35 +1784,9 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
 
     const arr = (byKey.get(key) || []).slice(0, 4);
 
-    const bookedCount = Number(
-      t.booked_players ?? t.bookedPlayers ?? t.booked ?? 0
-    );
-
-    while (arr.length < Math.min(4, bookedCount)) {
-      arr.push({
-        reference: "",
-        name: "Booked",
-        email: "",
-        phone: "",
-        paid: false,
-        cart_qty: 0,
-        hire_clubs_qty: 0,
-        has_cart: false,
-        has_hire_clubs: false,
-        notes: "",
-        checked_in: false,
-
-        // keep routing info
-        layout_key: layoutKey,
-        front_nine_key: frontKey,
-        back_nine_key: backKey,
-
-        // ✅ price on placeholders too
-        price_per_player_cents: timePricePerPlayerCents,
-      });
-    }
-
-    // ✅ STAMP PRICE ONTO EVERY SLOT ITEM (THIS is the key fix)
+    // ✅ IMPORTANT:
+    // Do NOT create fake "Booked" placeholders from booked_players.
+    // Only show actual bookings/manual holds.
     arr.forEach(x => {
       if (!x || typeof x !== "object") return;
       if (Number(x.price_per_player_cents ?? 0) <= 0) {
@@ -1835,10 +1802,7 @@ function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
       layout_key: layoutKey,
       front_nine_key: frontKey,
       back_nine_key: backKey,
-
-      // ✅ optional: available at row level too
       price_per_player_cents: timePricePerPlayerCents,
-
       slots
     });
   });
@@ -2584,6 +2548,32 @@ async function viewSheet(){
           await viewSheet();
         }catch(e){
           $("viewMsg").textContent = "❌ " + (e?.message || "Failed to delete slot");
+        }
+      };
+    });
+    // ✅ Delete unpaid online PAY_AT_COURSE booking
+    tb.querySelectorAll('button[data-del-booking]').forEach(btn => {
+      btn.onclick = async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        try{
+          await getMe();
+
+          const ref = String(btn.getAttribute("data-ref") || "").trim();
+          if (!ref) throw new Error("reference_required");
+
+          if (!confirm(`Delete unpaid booking ${ref}?`)) return;
+
+          await j("/api/book/course-admin/delete-booking", {
+            method:"POST",
+            body: JSON.stringify({ reference: ref })
+          });
+
+          $("viewMsg").textContent = "✅ Booking deleted";
+          await viewSheet();
+        }catch(e){
+          $("viewMsg").textContent = "❌ " + (e?.message || "Failed to delete booking");
         }
       };
     });
