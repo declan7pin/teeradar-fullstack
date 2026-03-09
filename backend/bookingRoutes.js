@@ -9219,6 +9219,9 @@ router.post("/course-admin/delete-booking", requireCourseAdmin, async (req, res)
         b.play_date,
         b.tee_time,
         b.holes,
+        COALESCE(b.layout_key,'') AS layout_key,
+        COALESCE(b.front_nine_key,'') AS front_nine_key,
+        COALESCE(b.back_nine_key,'') AS back_nine_key,
         COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode
       FROM booking_bookings b
       LEFT JOIN booking_courses c
@@ -9251,7 +9254,7 @@ router.post("/course-admin/delete-booking", requireCourseAdmin, async (req, res)
       return res.status(400).json({ ok: false, error: "checked_in_booking_cannot_be_deleted" });
     }
 
-    if (booking.payment_mode !== "PAY_AT_COURSE") {
+    if (String(booking.payment_mode || "").toUpperCase() !== "PAY_AT_COURSE") {
       return res.status(400).json({ ok: false, error: "only_pay_at_course_can_be_deleted" });
     }
 
@@ -9261,8 +9264,10 @@ router.post("/course-admin/delete-booking", requireCourseAdmin, async (req, res)
     await db.query(
       `
       UPDATE booking_bookings
-      SET status = 'CANCELLED',
-          cancelled_at = NOW()
+      SET
+        status = 'CANCELLED',
+        cancelled_at = COALESCE(cancelled_at, NOW()),
+        cancelled_reason = 'Cancelled by course admin'
       WHERE id = $1
       `,
       [booking.id]
@@ -9276,7 +9281,10 @@ router.post("/course-admin/delete-booking", requireCourseAdmin, async (req, res)
         courseId,
         play_date: booking.play_date,
         tee_time: booking.tee_time,
-        holes: booking.holes
+        holes: booking.holes,
+        layout_key: booking.layout_key || null,
+        front_nine_key: booking.front_nine_key || null,
+        back_nine_key: booking.back_nine_key || null,
       });
     } catch (e) {
       console.warn("syncBookedPlayersForTime failed", e?.message);
