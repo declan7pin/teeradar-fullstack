@@ -8744,7 +8744,7 @@ router.get("/course-admin/bookings", requireCourseAdmin, async (req, res) => {
           b.cart_fee_cents,
           b.has_hire_clubs,
           b.hire_clubs_fee_cents,
-          (b.total_cents + b.cart_fee_cents + b.hire_clubs_fee_cents) AS gross_cents,
+          COALESCE(b.total_cents, 0) AS gross_cents,
           b.status,
           b.created_at,
 
