@@ -1407,7 +1407,7 @@ function normalizeBookingLikeRow(b){
 
   return {
     reference: ref,
-        name: String(b.name ?? b.golfer_name ?? b.hold_name ?? b.holdName ?? "Booking").trim(),
+    name: String(b.name ?? b.golfer_name ?? b.hold_name ?? b.holdName ?? "Booking").trim(),
     email: String(b.email ?? b.golfer_email ?? "").trim(),
     phone: String(b.phone ?? b.golfer_phone ?? "").trim(),
 
@@ -1429,7 +1429,7 @@ function normalizeBookingLikeRow(b){
       0
     ) || 0,
 
-        total_cents: Number(
+    total_cents: Number(
       b.total_cents ??
       b.totalCents ??
       b.gross_cents ??
@@ -1445,9 +1445,15 @@ function normalizeBookingLikeRow(b){
     ) || 1,
 
     notes: String(b.notes ?? b.note ?? "").trim(),
+
+    // ✅ NEW
+    can_delete: !!(b.can_delete ?? false),
+    payment_mode: String(b.payment_mode ?? "").trim(),
+    status: String(b.status ?? "").trim(),
   };
 }
-  function buildSlotCell(item, slotIndex){
+
+function buildSlotCell(item, slotIndex){
   if (!item){
     return `
       <div class="slotBox">
@@ -1496,6 +1502,13 @@ function normalizeBookingLikeRow(b){
 
   const checkedIn =
     !!(item.checked_in_slot ?? item.checkedInSlot ?? (Array.isArray(item.checked_in_slots) ? item.checked_in_slots[slotIndex-1] : null) ?? item.checked_in);
+
+  // ✅ NEW: allow delete button for unpaid online PAY_AT_COURSE bookings only
+  const canDeleteOnline =
+    !isManualRef &&
+    !!item.can_delete &&
+    !paid &&
+    !checkedIn;
 
   // ✅ qty-first (supports manual holds + bookings)
   const cartQty = Number(item.cart_qty ?? item.cartQty ?? 0) || 0;
@@ -1603,10 +1616,21 @@ function normalizeBookingLikeRow(b){
           >Delete</button>
         </div>
       ` : ``}
+
+      ${canDeleteOnline ? `
+        <div class="actions" style="margin-top:10px">
+          <button
+            type="button"
+            class="secondary"
+            style="font-size:12px;padding:8px 10px;border-radius:10px;background:#b91c1c"
+            data-del-booking="1"
+            data-ref="${_escape(refRaw)}"
+          >Delete booking</button>
+        </div>
+      ` : ``}
     </div>
   `;
 }
-
 
 function groupBookingsToSheet(timesRows, bookingsRows, manualRows){
   // ✅ normalize "06:10", "6:10", "06:10:00" -> "06:10"
