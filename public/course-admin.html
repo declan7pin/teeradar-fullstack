@@ -2587,6 +2587,32 @@ async function viewSheet(){
         }
       };
     });
+    // ✅ Delete unpaid online PAY_AT_COURSE booking
+    tb.querySelectorAll('button[data-del-booking]').forEach(btn => {
+      btn.onclick = async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        try{
+          await getMe();
+
+          const ref = String(btn.getAttribute("data-ref") || "").trim();
+          if (!ref) throw new Error("reference_required");
+
+          if (!confirm(`Delete unpaid booking ${ref}?`)) return;
+
+          await j("/api/book/course-admin/delete-booking", {
+            method:"POST",
+            body: JSON.stringify({ reference: ref })
+          });
+
+          $("viewMsg").textContent = "✅ Booking deleted";
+          await viewSheet();
+        }catch(e){
+          $("viewMsg").textContent = "❌ " + (e?.message || "Failed to delete booking");
+        }
+      };
+    });
 
     // ✅ Edit manual slot (MAN- only)
     tb.querySelectorAll('button[data-edit-slot]').forEach(btn => {
