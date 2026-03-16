@@ -1,16 +1,10 @@
 // backend/groupVotesRoutes.js
 import express from "express";
 import crypto from "crypto";
-
-const router = express.Router();
-
-/*
-  IMPORTANT:
-  Adjust this import to match your project.
-  It should be your Postgres helper with db.query(...)
-*/
 import db from "./db.js";
 import { requireAuth as requireUser } from "./auth.js";
+
+const router = express.Router();
 
 function makePublicId() {
   return "gv_" + crypto.randomBytes(6).toString("base64url");
@@ -59,7 +53,7 @@ async function getVoteFull(publicId, viewerUserId = null) {
   const vote = voteRes.rows[0];
   if (!vote) return null;
 
-    const optionsRes = await db.query(
+  const optionsRes = await db.query(
     `
     SELECT
       o.id,
@@ -80,9 +74,19 @@ async function getVoteFull(publicId, viewerUserId = null) {
     LEFT JOIN group_vote_responses r ON r.option_id = o.id
     WHERE o.vote_id = $1
     GROUP BY
-      o.id, o.vote_id, o.course_id, o.course_name, o.course_slug,
-      o.display_name, o.option_label,
-      o.play_date, o.tee_time, o.holes, o.players, o.booking_url, o.option_order
+      o.id,
+      o.vote_id,
+      o.course_id,
+      o.course_name,
+      o.course_slug,
+      o.display_name,
+      o.option_label,
+      o.play_date,
+      o.tee_time,
+      o.holes,
+      o.players,
+      o.booking_url,
+      o.option_order
     ORDER BY o.option_order ASC, o.id ASC
     `,
     [vote.id]
@@ -105,8 +109,7 @@ async function getVoteFull(publicId, viewerUserId = null) {
   const now = new Date();
   const expired = vote.expires_at ? new Date(vote.expires_at) < now : false;
   const canVote = vote.status === "active" && !expired;
-
-    const canChooseWinner =
+  const canChooseWinner =
     !!viewerUserId && Number(viewerUserId) === Number(vote.creator_user_id);
 
   return {
@@ -140,9 +143,11 @@ router.post("/api/group-votes", requireUser, async (req, res) => {
     if (options.length < 2) {
       return res.status(400).json({ ok: false, error: "at_least_two_options_required" });
     }
+
     if (options.length > 10) {
       return res.status(400).json({ ok: false, error: "too_many_options" });
     }
+
     if (expiresAtRaw && Number.isNaN(expiresAtRaw.getTime())) {
       return res.status(400).json({ ok: false, error: "invalid_expires_at" });
     }
@@ -185,9 +190,9 @@ router.post("/api/group-votes", requireUser, async (req, res) => {
 
     for (let i = 0; i < options.length; i += 1) {
       const opt = options[i];
+
       await db.query(
         `
-                `
         INSERT INTO group_vote_options (
           vote_id,
           course_id,
@@ -223,7 +228,7 @@ router.post("/api/group-votes", requireUser, async (req, res) => {
 
     await db.query("COMMIT");
 
-        return res.json({
+    return res.json({
       ok: true,
       publicId,
       shareUrl: `/group-vote?id=${encodeURIComponent(publicId)}`,
@@ -242,7 +247,9 @@ router.get("/api/group-votes/:publicId", async (req, res) => {
     const viewerUserId = req.user?.id || null;
 
     const vote = await getVoteFull(publicId, viewerUserId);
-    if (!vote) return res.status(404).json({ ok: false, error: "not_found" });
+    if (!vote) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
 
     return res.json({ ok: true, vote });
   } catch (err) {
@@ -263,7 +270,10 @@ router.post("/api/group-votes/:publicId/vote", requireUser, async (req, res) => 
     }
 
     const vote = await getVoteFull(publicId, userId);
-    if (!vote) return res.status(404).json({ ok: false, error: "not_found" });
+    if (!vote) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+
     if (!vote.canVote) {
       return res.status(400).json({ ok: false, error: "vote_closed" });
     }
@@ -300,13 +310,16 @@ router.post("/api/group-votes/:publicId/close", requireUser, async (req, res) =>
     const userId = req.user.id;
 
     const vote = await getVoteFull(publicId, userId);
-    if (!vote) return res.status(404).json({ ok: false, error: "not_found" });
+    if (!vote) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+
     if (Number(vote.creatorUserId) !== Number(userId)) {
       return res.status(403).json({ ok: false, error: "forbidden" });
     }
 
     await db.query(
-      `UPDATE group_votes SET status='closed', updated_at=NOW() WHERE id=$1`,
+      `UPDATE group_votes SET status = 'closed', updated_at = NOW() WHERE id = $1`,
       [vote.id]
     );
 
@@ -326,7 +339,10 @@ router.post("/api/group-votes/:publicId/select", requireUser, async (req, res) =
     const userId = req.user.id;
 
     const vote = await getVoteFull(publicId, userId);
-    if (!vote) return res.status(404).json({ ok: false, error: "not_found" });
+    if (!vote) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+
     if (Number(vote.creatorUserId) !== Number(userId)) {
       return res.status(403).json({ ok: false, error: "forbidden" });
     }
