@@ -1,10 +1,33 @@
 // public/group-vote-create.js
 window.TeeRadarGroupVote = (() => {
+    function getAuthToken() {
+    try {
+      return (
+        localStorage.getItem("tr_token") ||
+        localStorage.getItem("token") ||
+        ""
+      );
+    } catch {
+      return "";
+    }
+  }
+
   async function api(url, opts = {}) {
+    const token = getAuthToken();
+
+    const mergedHeaders = {
+      "Content-Type": "application/json",
+      ...(opts.headers || {}),
+    };
+
+    if (token) {
+      mergedHeaders.Authorization = `Bearer ${token}`;
+    }
+
     const r = await fetch(url, {
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
       ...opts,
+      headers: mergedHeaders,
     });
 
     const data = await r.json().catch(() => ({}));
