@@ -234,10 +234,16 @@
         const card = document.createElement("div");
         card.className = "option" + (isWinner ? " winner" : "");
 
+                const displayName =
+          opt.display_name ||
+          opt.option_label ||
+          opt.course_label ||
+          opt.course_name;
+
         card.innerHTML = `
           <div class="row">
             <div>
-              <div class="course">${opt.course_name}</div>
+              <div class="course">${displayName}</div>
               <div class="sub">
                 ${fmtDate(opt.play_date)} • ${opt.tee_time} • ${opt.holes} holes • ${opt.players} players
               </div>
@@ -247,7 +253,7 @@
           <div class="toolbar">
             ${vote.canVote ? `<button class="primary voteBtn" data-option-id="${opt.id}">${isMine ? "Change vote to this" : "Vote for this"}</button>` : ``}
             ${opt.booking_url ? `<a class="ghost btn" href="${opt.booking_url}">View booking</a>` : ``}
-            ${Number(vote.creatorUserId) === Number(window.__CURRENT_USER_ID || 0) ? `<button class="secondary selectBtn" data-option-id="${opt.id}">Choose winner</button>` : ``}
+            ${vote.canChooseWinner ? `<button class="secondary selectBtn" data-option-id="${opt.id}">Choose winner</button>` : ``}
             ${isWinner ? `<span class="pill">Selected tee time</span>` : ``}
             ${isMine ? `<span class="pill">Your vote</span>` : ``}
           </div>
