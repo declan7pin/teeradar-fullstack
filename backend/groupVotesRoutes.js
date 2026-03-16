@@ -1,0 +1,391 @@
+// backend/groupVotesRoutes.js
+import express from "express";
+import crypto from "crypto";
+
+const router = express.Router();
+
+/*
+  IMPORTANT:
+  Adjust this import to match your project.
+  It should be your Postgres helper with db.query(...)
+*/
+import db from "./db.js";
+
+/*
+  IMPORTANT:
+  Replace this with your real TeeRadar user auth middleware.
+  This middleware must set req.user = { id, email, first_name?, full_name? }.
+*/
+function requireUser(req, res, next) {
+  // Example:
+  // if (!req.user?.id) return res.status(401).json({ ok:false, error:"unauthorized" });
+  // next();
+
+  if (!req.user?.id) {
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  }
+  next();
+}
+
+function makePublicId() {
+  return "gv_" + crypto.randomBytes(6).toString("base64url");
+}
+
+function normalizeText(v, max = 500) {
+  return String(v || "").trim().slice(0, max);
+}
+
+function isValidDate(s) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
+}
+
+function isValidTime(s) {
+  return /^\d{2}:\d{2}$/.test(String(s || ""));
+}
+
+function isSafeBookingUrl(u) {
+  if (!u) return true;
+  const s = String(u).trim();
+  return s.startsWith("/") || s.startsWith("http://") || s.startsWith("https://");
+}
+
+async function getVoteFull(publicId, viewerUserId = null) {
+  const voteRes = await db.query(
+    `
+    SELECT
+      gv.id,
+      gv.public_id,
+      gv.creator_user_id,
+      gv.title,
+      gv.note,
+      gv.status,
+      gv.expires_at,
+      gv.selected_option_id,
+      gv.created_at,
+      COALESCE(u.full_name, u.name, u.email, 'TeeRadar User') AS creator_name
+    FROM group_votes gv
+    LEFT JOIN users u ON u.id = gv.creator_user_id
+    WHERE gv.public_id = $1
+    LIMIT 1
+    `,
+    [publicId]
+  );
+
+  const vote = voteRes.rows[0];
+  if (!vote) return null;
+
+  const optionsRes = await db.query(
+    `
+    SELECT
+      o.id,
+      o.vote_id,
+      o.course_id,
+      o.course_name,
+      o.course_slug,
+      o.play_date::text AS play_date,
+      o.tee_time,
+      o.holes,
+      o.players,
+      o.booking_url,
+      o.option_order,
+      COUNT(r.id)::int AS vote_count
+    FROM group_vote_options o
+    LEFT JOIN group_vote_responses r ON r.option_id = o.id
+    WHERE o.vote_id = $1
+    GROUP BY
+      o.id, o.vote_id, o.course_id, o.course_name, o.course_slug,
+      o.play_date, o.tee_time, o.holes, o.players, o.booking_url, o.option_order
+    ORDER BY o.option_order ASC, o.id ASC
+    `,
+    [vote.id]
+  );
+
+  let myOptionId = null;
+  if (viewerUserId) {
+    const myVoteRes = await db.query(
+      `
+      SELECT option_id
+      FROM group_vote_responses
+      WHERE vote_id = $1 AND user_id = $2
+      LIMIT 1
+      `,
+      [vote.id, viewerUserId]
+    );
+    myOptionId = myVoteRes.rows[0]?.option_id || null;
+  }
+
+  const now = new Date();
+  const expired = vote.expires_at ? new Date(vote.expires_at) < now : false;
+  const canVote = vote.status === "active" && !expired;
+
+  return {
+    id: vote.id,
+    publicId: vote.public_id,
+    creatorUserId: vote.creator_user_id,
+    title: vote.title,
+    note: vote.note,
+    status: vote.status,
+    expiresAt: vote.expires_at,
+    createdAt: vote.created_at,
+    creatorName: vote.creator_name,
+    selectedOptionId: vote.selected_option_id,
+    myOptionId,
+    canVote,
+    expired,
+    options: optionsRes.rows,
+  };
+}
+
+// create vote
+router.post("/api/group-votes", requireUser, async (req, res) => {
+  try {
+    const creatorUserId = req.user.id;
+    const title = normalizeText(req.body?.title || "Weekend Round", 120);
+    const note = normalizeText(req.body?.note || "", 500);
+    const expiresAtRaw = req.body?.expiresAt ? new Date(req.body.expiresAt) : null;
+    const options = Array.isArray(req.body?.options) ? req.body.options : [];
+
+    if (options.length < 2) {
+      return res.status(400).json({ ok: false, error: "at_least_two_options_required" });
+    }
+    if (options.length > 10) {
+      return res.status(400).json({ ok: false, error: "too_many_options" });
+    }
+    if (expiresAtRaw && Number.isNaN(expiresAtRaw.getTime())) {
+      return res.status(400).json({ ok: false, error: "invalid_expires_at" });
+    }
+
+    for (const [i, opt] of options.entries()) {
+      if (!normalizeText(opt.courseName, 120)) {
+        return res.status(400).json({ ok: false, error: `missing_course_name_at_${i}` });
+      }
+      if (!isValidDate(opt.playDate)) {
+        return res.status(400).json({ ok: false, error: `invalid_play_date_at_${i}` });
+      }
+      if (!isValidTime(opt.teeTime)) {
+        return res.status(400).json({ ok: false, error: `invalid_tee_time_at_${i}` });
+      }
+      if (!isSafeBookingUrl(opt.bookingUrl)) {
+        return res.status(400).json({ ok: false, error: `invalid_booking_url_at_${i}` });
+      }
+    }
+
+    const publicId = makePublicId();
+
+    await db.query("BEGIN");
+
+    const voteInsert = await db.query(
+      `
+      INSERT INTO group_votes (
+        public_id,
+        creator_user_id,
+        title,
+        note,
+        expires_at
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, public_id
+      `,
+      [publicId, creatorUserId, title, note || null, expiresAtRaw]
+    );
+
+    const voteId = voteInsert.rows[0].id;
+
+    for (let i = 0; i < options.length; i += 1) {
+      const opt = options[i];
+      await db.query(
+        `
+        INSERT INTO group_vote_options (
+          vote_id,
+          course_id,
+          course_name,
+          course_slug,
+          play_date,
+          tee_time,
+          holes,
+          players,
+          booking_url,
+          option_order
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        `,
+        [
+          voteId,
+          opt.courseId || null,
+          normalizeText(opt.courseName, 120),
+          normalizeText(opt.courseSlug, 120) || null,
+          opt.playDate,
+          opt.teeTime,
+          Number(opt.holes || 18),
+          Number(opt.players || 4),
+          normalizeText(opt.bookingUrl, 1000) || null,
+          i,
+        ]
+      );
+    }
+
+    await db.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      publicId,
+      shareUrl: `/group-vote.html?id=${encodeURIComponent(publicId)}`,
+    });
+  } catch (err) {
+    await db.query("ROLLBACK").catch(() => {});
+    console.error("POST /api/group-votes error", err);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+// public fetch
+router.get("/api/group-votes/:publicId", async (req, res) => {
+  try {
+    const publicId = normalizeText(req.params.publicId, 100);
+    const viewerUserId = req.user?.id || null;
+
+    const vote = await getVoteFull(publicId, viewerUserId);
+    if (!vote) return res.status(404).json({ ok: false, error: "not_found" });
+
+    return res.json({ ok: true, vote });
+  } catch (err) {
+    console.error("GET /api/group-votes/:publicId error", err);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+// cast or update vote
+router.post("/api/group-votes/:publicId/vote", requireUser, async (req, res) => {
+  try {
+    const publicId = normalizeText(req.params.publicId, 100);
+    const optionId = Number(req.body?.optionId || 0);
+    const userId = req.user.id;
+
+    if (!optionId) {
+      return res.status(400).json({ ok: false, error: "missing_option_id" });
+    }
+
+    const vote = await getVoteFull(publicId, userId);
+    if (!vote) return res.status(404).json({ ok: false, error: "not_found" });
+    if (!vote.canVote) {
+      return res.status(400).json({ ok: false, error: "vote_closed" });
+    }
+
+    const optionExists = vote.options.some((o) => Number(o.id) === optionId);
+    if (!optionExists) {
+      return res.status(400).json({ ok: false, error: "invalid_option_id" });
+    }
+
+    await db.query(
+      `
+      INSERT INTO group_vote_responses (vote_id, option_id, user_id)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (vote_id, user_id)
+      DO UPDATE SET
+        option_id = EXCLUDED.option_id,
+        updated_at = NOW()
+      `,
+      [vote.id, optionId, userId]
+    );
+
+    const refreshed = await getVoteFull(publicId, userId);
+    return res.json({ ok: true, vote: refreshed });
+  } catch (err) {
+    console.error("POST /api/group-votes/:publicId/vote error", err);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+// close poll
+router.post("/api/group-votes/:publicId/close", requireUser, async (req, res) => {
+  try {
+    const publicId = normalizeText(req.params.publicId, 100);
+    const userId = req.user.id;
+
+    const vote = await getVoteFull(publicId, userId);
+    if (!vote) return res.status(404).json({ ok: false, error: "not_found" });
+    if (Number(vote.creatorUserId) !== Number(userId)) {
+      return res.status(403).json({ ok: false, error: "forbidden" });
+    }
+
+    await db.query(
+      `UPDATE group_votes SET status='closed', updated_at=NOW() WHERE id=$1`,
+      [vote.id]
+    );
+
+    const refreshed = await getVoteFull(publicId, userId);
+    return res.json({ ok: true, vote: refreshed });
+  } catch (err) {
+    console.error("POST /api/group-votes/:publicId/close error", err);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+// select winner
+router.post("/api/group-votes/:publicId/select", requireUser, async (req, res) => {
+  try {
+    const publicId = normalizeText(req.params.publicId, 100);
+    const optionId = Number(req.body?.optionId || 0);
+    const userId = req.user.id;
+
+    const vote = await getVoteFull(publicId, userId);
+    if (!vote) return res.status(404).json({ ok: false, error: "not_found" });
+    if (Number(vote.creatorUserId) !== Number(userId)) {
+      return res.status(403).json({ ok: false, error: "forbidden" });
+    }
+
+    const optionExists = vote.options.some((o) => Number(o.id) === optionId);
+    if (!optionExists) {
+      return res.status(400).json({ ok: false, error: "invalid_option_id" });
+    }
+
+    await db.query(
+      `
+      UPDATE group_votes
+      SET selected_option_id = $2,
+          status = 'booked',
+          updated_at = NOW()
+      WHERE id = $1
+      `,
+      [vote.id, optionId]
+    );
+
+    const refreshed = await getVoteFull(publicId, userId);
+    return res.json({ ok: true, vote: refreshed });
+  } catch (err) {
+    console.error("POST /api/group-votes/:publicId/select error", err);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+// list my polls
+router.get("/api/group-votes-mine", requireUser, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const r = await db.query(
+      `
+      SELECT
+        gv.public_id,
+        gv.title,
+        gv.status,
+        gv.expires_at,
+        gv.created_at,
+        COUNT(o.id)::int AS option_count
+      FROM group_votes gv
+      LEFT JOIN group_vote_options o ON o.vote_id = gv.id
+      WHERE gv.creator_user_id = $1
+      GROUP BY gv.id
+      ORDER BY gv.created_at DESC
+      LIMIT 50
+      `,
+      [userId]
+    );
+
+    return res.json({ ok: true, polls: r.rows });
+  } catch (err) {
+    console.error("GET /api/group-votes-mine error", err);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+export default router;
