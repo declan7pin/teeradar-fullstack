@@ -74,7 +74,7 @@ async function getVoteFull(publicId, viewerUserId = null) {
   const vote = voteRes.rows[0];
   if (!vote) return null;
 
-  const optionsRes = await db.query(
+    const optionsRes = await db.query(
     `
     SELECT
       o.id,
@@ -82,6 +82,8 @@ async function getVoteFull(publicId, viewerUserId = null) {
       o.course_id,
       o.course_name,
       o.course_slug,
+      o.display_name,
+      o.option_label,
       o.play_date::text AS play_date,
       o.tee_time,
       o.holes,
@@ -94,6 +96,7 @@ async function getVoteFull(publicId, viewerUserId = null) {
     WHERE o.vote_id = $1
     GROUP BY
       o.id, o.vote_id, o.course_id, o.course_name, o.course_slug,
+      o.display_name, o.option_label,
       o.play_date, o.tee_time, o.holes, o.players, o.booking_url, o.option_order
     ORDER BY o.option_order ASC, o.id ASC
     `,
@@ -118,6 +121,9 @@ async function getVoteFull(publicId, viewerUserId = null) {
   const expired = vote.expires_at ? new Date(vote.expires_at) < now : false;
   const canVote = vote.status === "active" && !expired;
 
+    const canChooseWinner =
+    !!viewerUserId && Number(viewerUserId) === Number(vote.creator_user_id);
+
   return {
     id: vote.id,
     publicId: vote.public_id,
@@ -131,6 +137,7 @@ async function getVoteFull(publicId, viewerUserId = null) {
     selectedOptionId: vote.selected_option_id,
     myOptionId,
     canVote,
+    canChooseWinner,
     expired,
     options: optionsRes.rows,
   };
@@ -195,11 +202,14 @@ router.post("/api/group-votes", requireUser, async (req, res) => {
       const opt = options[i];
       await db.query(
         `
+                `
         INSERT INTO group_vote_options (
           vote_id,
           course_id,
           course_name,
           course_slug,
+          display_name,
+          option_label,
           play_date,
           tee_time,
           holes,
@@ -207,13 +217,15 @@ router.post("/api/group-votes", requireUser, async (req, res) => {
           booking_url,
           option_order
         )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         `,
         [
           voteId,
           opt.courseId || null,
           normalizeText(opt.courseName, 120),
           normalizeText(opt.courseSlug, 120) || null,
+          normalizeText(opt.displayName || opt.display_name || opt.optionLabel || "", 200) || null,
+          normalizeText(opt.optionLabel || opt.option_label || opt.displayName || "", 200) || null,
           opt.playDate,
           opt.teeTime,
           Number(opt.holes || 18),
@@ -226,10 +238,10 @@ router.post("/api/group-votes", requireUser, async (req, res) => {
 
     await db.query("COMMIT");
 
-    return res.json({
+        return res.json({
       ok: true,
       publicId,
-      shareUrl: `/group-vote.html?id=${encodeURIComponent(publicId)}`,
+      shareUrl: `/group-vote?id=${encodeURIComponent(publicId)}`,
     });
   } catch (err) {
     await db.query("ROLLBACK").catch(() => {});
