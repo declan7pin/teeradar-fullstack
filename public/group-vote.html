@@ -206,11 +206,34 @@
       return "Closes " + d.toLocaleString();
     }
 
+        function getAuthToken() {
+      try {
+        return (
+          localStorage.getItem("tr_token") ||
+          localStorage.getItem("token") ||
+          ""
+        );
+      } catch {
+        return "";
+      }
+    }
+
     async function api(url, opts = {}) {
+      const token = getAuthToken();
+
+      const mergedHeaders = {
+        "Content-Type": "application/json",
+        ...(opts.headers || {}),
+      };
+
+      if (token) {
+        mergedHeaders.Authorization = `Bearer ${token}`;
+      }
+
       const r = await fetch(url, {
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
         ...opts,
+        headers: mergedHeaders,
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "request_failed");
@@ -323,16 +346,24 @@
     }
 
     // Replace these endpoints if your auth endpoints differ
-    async function signupAndVote() {
+        async function signupAndVote() {
       els.authError.textContent = "";
       try {
-        await api("/api/auth/signup", {
+        const data = await api("/api/auth/signup", {
           method: "POST",
           body: JSON.stringify({
             email: els.email.value.trim(),
             password: els.password.value.trim(),
           }),
         });
+
+        if (data?.token) {
+          localStorage.setItem("tr_token", data.token);
+        }
+        if (data?.user) {
+          localStorage.setItem("tr_user", JSON.stringify(data.user));
+        }
+
         if (!state.pendingOptionId) return;
         await handleVoteClick(state.pendingOptionId);
       } catch (err) {
@@ -340,16 +371,24 @@
       }
     }
 
-    async function loginAndVote() {
+        async function loginAndVote() {
       els.authError.textContent = "";
       try {
-        await api("/api/auth/login", {
+        const data = await api("/api/auth/login", {
           method: "POST",
           body: JSON.stringify({
             email: els.email.value.trim(),
             password: els.password.value.trim(),
           }),
         });
+
+        if (data?.token) {
+          localStorage.setItem("tr_token", data.token);
+        }
+        if (data?.user) {
+          localStorage.setItem("tr_user", JSON.stringify(data.user));
+        }
+
         if (!state.pendingOptionId) return;
         await handleVoteClick(state.pendingOptionId);
       } catch (err) {
