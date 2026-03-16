@@ -323,6 +323,64 @@
       margin: 4px 0;
       border-top: 1px solid rgba(0,0,0,0.06);
     }
+        /* ---- Group Vote ---- */
+    .group-vote-toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      padding: 8px 16px 0 16px;
+    }
+
+    .group-vote-left {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .group-vote-btn {
+      border: none;
+      background: var(--purple);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .group-vote-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .group-vote-hint {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .vote-picker {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #444;
+    }
+
+    .vote-picker input[type="checkbox"] {
+      transform: scale(1.1);
+      cursor: pointer;
+    }
+
+    .vote-selected {
+      outline: 2px solid rgba(126, 87, 194, 0.35);
+      box-shadow: 0 0 0 3px rgba(126, 87, 194, 0.08);
+    }
   </style>
 </head>
 
@@ -388,6 +446,17 @@
   <div class="status-line" id="status-line">
     Tap “Search availability” to check live times.
   </div>
+  
+     <div class="group-vote-toolbar">
+    <div class="group-vote-left">
+      <button id="createGroupVoteBtn" class="group-vote-btn" type="button" disabled>
+        Create Group Vote
+      </button>
+      <span id="groupVoteSelectionText" class="group-vote-hint">
+        Select at least 2 tee times to create a vote.
+      </span>
+    </div>
+  </div>
 
   <div id="map"></div>
 
@@ -409,12 +478,14 @@
   <section class="courses-strip" id="courses-strip"></section>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/group-vote-create.js"></script>
   <script>
     let map;
     let markers = [];
     let courses = [];
     let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize, state }
     let groupedSlots = {};         // courseName => [slots]
+    let voteSelections = [];       // selected tee-time options for group vote
 
     // full list + state handling
     let allCourses = [];
@@ -590,6 +661,175 @@
       if (!digits) return "";
       return "tel:" + digits;
     }
+        function updateGroupVoteToolbar() {
+      const btn = document.getElementById("createGroupVoteBtn");
+      const text = document.getElementById("groupVoteSelectionText");
+      const count = voteSelections.length;
+
+      if (btn) btn.disabled = count < 2;
+
+      if (text) {
+        if (count === 0) {
+          text.textContent = "Select at least 2 tee times to create a vote.";
+        } else if (count === 1) {
+          text.textContent = "1 tee time selected. Select at least 1 more.";
+        } else {
+          text.textContent = `${count} tee times selected and ready to share.`;
+        }
+      }
+    }
+
+    function buildVoteOption(course, slot) {
+      const courseName = course?.name || slot?.course || slot?.courseName || "";
+      const courseSlug =
+        course?.slug ||
+        course?.bookingSlug ||
+        course?.booking_slug ||
+        course?.courseSlug ||
+        course?.course_slug ||
+        slugifyCourseName(courseName);
+
+      const playDate =
+        slot?.date ||
+        (lastSearchCriteria && lastSearchCriteria.date) ||
+        document.getElementById("date")?.value ||
+        "";
+
+      const teeTime = slot?.time || slot?.tee_time || "";
+      const holes =
+        Number(slot?.holes || (lastSearchCriteria && lastSearchCriteria.holes) || document.getElementById("holes")?.value || 18) || 18;
+
+      const players =
+        Number((lastSearchCriteria && lastSearchCriteria.partySize) || document.getElementById("players")?.value || 1) || 1;
+
+      const providerLower = String(course?.provider || "").toLowerCase();
+      let bookingUrl = "";
+
+      if (providerLower === "teeradarbooking") {
+        const u = new URL(window.location.origin + "/book/" + encodeURIComponent(courseSlug));
+        if (course?.id) u.searchParams.set("courseId", String(course.id));
+        if (playDate) u.searchParams.set("date", playDate);
+        u.searchParams.set("players", String(players));
+        u.searchParams.set("partySize", String(players));
+        u.searchParams.set("holes", String(holes));
+
+        const earliest =
+          (lastSearchCriteria && lastSearchCriteria.earliest) ||
+          document.getElementById("earliest")?.value ||
+          "06:00";
+
+        const latest =
+          (lastSearchCriteria && lastSearchCriteria.latest) ||
+          document.getElementById("latest")?.value ||
+          "17:00";
+
+        u.searchParams.set("earliest", earliest);
+        u.searchParams.set("latest", latest);
+        u.searchParams.set("timeFrom", earliest);
+        u.searchParams.set("timeTo", latest);
+
+        bookingUrl = u.pathname + u.search;
+      } else {
+        bookingUrl =
+          slot?.bookUrl ||
+          slot?.bookingUrl ||
+          slot?.url ||
+          course?.bookUrl ||
+          course?.url ||
+          "";
+      }
+
+      return {
+        key: [
+          course?.id || courseName,
+          playDate,
+          teeTime,
+          holes,
+          players,
+          bookingUrl
+        ].join("|"),
+        courseId: course?.id || null,
+        courseName,
+        courseSlug,
+        playDate,
+        teeTime,
+        holes,
+        players,
+        bookingUrl
+      };
+    }
+
+    function isVoteSelected(optionKey) {
+      return voteSelections.some((x) => x.key === optionKey);
+    }
+
+    function toggleVoteSelection(course, slot, checked) {
+      const option = buildVoteOption(course, slot);
+
+      if (!option.courseName || !option.playDate || !option.teeTime) {
+        alert("This tee time cannot be added to a group vote.");
+        return;
+      }
+
+      if (checked) {
+        if (!isVoteSelected(option.key)) {
+          voteSelections.push(option);
+        }
+      } else {
+        voteSelections = voteSelections.filter((x) => x.key !== option.key);
+      }
+
+      updateGroupVoteToolbar();
+      renderCourses();
+    }
+
+    async function createGroupVoteFromSelections() {
+      if (!window.TeeRadarGroupVote) {
+        alert("Group Vote script not loaded.");
+        return;
+      }
+
+      if (voteSelections.length < 2) {
+        alert("Please select at least 2 tee times.");
+        return;
+      }
+
+      try {
+        const searchDate =
+          (lastSearchCriteria && lastSearchCriteria.date) ||
+          document.getElementById("date")?.value ||
+          "";
+
+        const title = searchDate
+          ? `Round Vote — ${searchDate}`
+          : "Weekend Round Vote";
+
+        const note = "Vote for the tee time that works best.";
+
+        const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+
+        const result = await window.TeeRadarGroupVote.createVoteFromOptions({
+          title,
+          note,
+          expiresAt,
+          options: voteSelections.map(({ key, ...rest }) => rest),
+        });
+
+        const fullUrl = new URL(result.shareUrl, window.location.origin).toString();
+
+        try {
+          await navigator.clipboard.writeText(fullUrl);
+          alert(`Group vote created.\n\nLink copied to clipboard:\n${fullUrl}`);
+        } catch {
+          alert(`Group vote created:\n${fullUrl}`);
+        }
+
+        window.open(fullUrl, "_blank");
+      } catch (err) {
+        console.error("createGroupVoteFromSelections error", err);
+        alert(err.message || "Could not create group vote.");
+      }
+    }
     // ✅ NEW: consistent slugify used for TeeRadarBooking routes
 function slugifyCourseName(name) {
   return String(name || "")
@@ -674,6 +914,7 @@ function slugifyCourseName(name) {
       // use the logged-in user's home course (if any) to set state + zoom
       applyHomeCourseDefaults();
       renderCourses();
+      updateGroupVoteToolbar();
     }
 
     function initMap() {
@@ -917,7 +1158,7 @@ if (newLatestM !== lM) {
         return;
       }
 
-      lastSearchCriteria = {
+            lastSearchCriteria = {
         date,
         earliest,
         latest,
@@ -925,6 +1166,9 @@ if (newLatestM !== lM) {
         partySize: Number(players) || 1,
         state: selectedState || "",
       };
+
+      voteSelections = [];
+      updateGroupVoteToolbar();
 
       window.teeRadarLastSearchDate = date;
 
@@ -1213,6 +1457,28 @@ if (isPhone) {
         const phoneText = isPhone && course.phone ? course.phone : "";
         const phoneHref = isPhone && course.phone ? getTelHref(course.phone) : "";
 
+                const previewSlots = hasSlots ? fitSlots.slice(0, 3) : [];
+
+        const previewHtml = previewSlots.map((slot, idx) => {
+          const option = buildVoteOption(course, slot);
+          const checked = isVoteSelected(option.key);
+
+          return `
+            <label class="vote-picker">
+              <input
+                type="checkbox"
+                class="vote-slot-checkbox"
+                data-course-name="${encodeURIComponent(name)}"
+                data-slot-index="${idx}"
+                ${checked ? "checked" : ""}
+              />
+              <span>
+                Include <strong>${slot.time || slot.tee_time || "Tee time"}</strong> in group vote
+              </span>
+            </label>
+          `;
+        }).join("");
+
         card.innerHTML = `
           <div>
             <div class="course-header">${name}</div>
@@ -1222,6 +1488,15 @@ if (isPhone) {
               <span class="chip ${availChipClass}">${availLabel}</span>
               <span class="chip">${holesLabel}</span>
             </div>
+
+            ${
+              previewSlots.length
+                ? `<div style="font-size:12px;color:#555;margin-top:6px;">
+                     Suggested tee times: ${previewSlots.map(s => s.time || s.tee_time).join(", ")}
+                   </div>
+                   ${previewHtml}`
+                : ""
+            }
           </div>
           <div class="card-footer">
             <span>${
@@ -1245,6 +1520,10 @@ if (isPhone) {
             }
           </div>
         `;
+
+        if (previewSlots.length && previewSlots.some((slot) => isVoteSelected(buildVoteOption(course, slot).key))) {
+          card.classList.add("vote-selected");
+        }
 
         const subStateEl = card.querySelector(".course-sub");
         if (subStateEl) {
@@ -1401,6 +1680,36 @@ const courseId = course.id || course.courseId || course.course_id || null;
       });
 
       window.open(finalUrl, "_blank");
+    });
+        document.addEventListener("change", (evt) => {
+      const el = evt.target.closest(".vote-slot-checkbox");
+      if (!el) return;
+
+      const courseNameEncoded = el.dataset.courseName;
+      const slotIndex = Number(el.dataset.slotIndex || -1);
+
+      if (!courseNameEncoded || slotIndex < 0) return;
+
+      const courseName = decodeURIComponent(courseNameEncoded);
+      const course = courses.find((c) => c.name === courseName);
+      if (!course) return;
+
+      const want = Number(
+        (lastSearchCriteria && lastSearchCriteria.partySize) ||
+        document.getElementById("players").value ||
+        1
+      );
+
+      const slots = (groupedSlots[courseName] || []).filter((s) => slotFitsParty(s, want));
+      const previewSlots = slots.slice(0, 3);
+      const slot = previewSlots[slotIndex];
+      if (!slot) return;
+
+      toggleVoteSelection(course, slot, el.checked);
+    });
+
+    document.getElementById("createGroupVoteBtn")?.addEventListener("click", () => {
+      createGroupVoteFromSelections();
     });
 
     // State selector behaviour
