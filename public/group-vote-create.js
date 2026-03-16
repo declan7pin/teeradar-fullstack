@@ -6,8 +6,13 @@ window.TeeRadarGroupVote = (() => {
       headers: { "Content-Type": "application/json" },
       ...opts,
     });
+
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data?.error || "request_failed");
+
+    if (!r.ok) {
+      throw new Error(data?.error || "request_failed");
+    }
+
     return data;
   }
 
@@ -32,34 +37,7 @@ window.TeeRadarGroupVote = (() => {
     });
   }
 
-  async function promptAndCreate(options) {
-    const title = window.prompt("Vote title", "Weekend Round") || "Weekend Round";
-    const note = window.prompt("Optional note", "") || "";
-
-    const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
-
-    const result = await createVoteFromOptions({
-      title,
-      note,
-      expiresAt,
-      options,
-    });
-
-    const fullUrl = new URL(result.shareUrl, window.location.origin).toString();
-
-    const share = window.confirm(`Group vote created.\n\nShare link copied?\n\n${fullUrl}`);
-    try {
-      await navigator.clipboard.writeText(fullUrl);
-    } catch {}
-
-    if (share) {
-      window.open(fullUrl, "_blank");
-    }
-    return result;
-  }
-
   return {
     createVoteFromOptions,
-    promptAndCreate,
   };
 })();
