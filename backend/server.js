@@ -25,6 +25,8 @@ import { ensureBookingAddonsSchema } from "./bookingMigrate.js";
 import { ensureScorecardCoursesSchema } from "./scorecardCourseMigrate.js"; // ✅ ADD
 import analyticsRouter from "./analyticsRoutes.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
+import groupVotesRouter from "./groupVotesRoutes.js";
+import { ensureGroupVotesTables } from "./groupVotesMigrate.js";
 
 // Analytics (Postgres)
 import { recordEvent, getAnalyticsSummary, getTopCourses } from "./analytics.js";
@@ -586,6 +588,10 @@ ensureBookingAddonsSchema(db)
 ensureBookingTemplateSchema(db)
   .then(() => console.log("✅ booking template schema ready"))
   .catch((err) => console.error("❌ error ensuring booking template schema:", err));
+  
+  ensureGroupVotesTables(db)
+  .then(() => console.log("✅ group votes schema ready"))
+  .catch((err) => console.error("❌ error ensuring group votes schema:", err));
 
 /* ✅✅✅ FIX (needed): CORS + preflight, and do NOT duplicate SITE_URL ✅✅✅ */
 const EXTRA_CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
@@ -940,6 +946,7 @@ app.use("/api/analytics", analyticsRouter);
 app.use(bookingViewsRouter);
 // ✅✅✅ END ADD ✅✅✅
 
+app.use(groupVotesRouter);
 
 // 🔔 Alerts API
 app.use("/api/alerts", alertsRouter);
@@ -1717,6 +1724,13 @@ app.get("/analytics.html", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "analytics.html"));
 });
 /* ✅✅✅ END FIX ✅✅✅ */
+app.get("/group-vote", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "group-vote.html"));
+});
+
+app.get("/group-vote.html", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "group-vote.html"));
+});
 
 // -------------------------------------------------
 // Frontend fallback
