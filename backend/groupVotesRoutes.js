@@ -10,22 +10,7 @@ const router = express.Router();
   It should be your Postgres helper with db.query(...)
 */
 import db from "./db.js";
-
-/*
-  IMPORTANT:
-  Replace this with your real TeeRadar user auth middleware.
-  This middleware must set req.user = { id, email, first_name?, full_name? }.
-*/
-function requireUser(req, res, next) {
-  // Example:
-  // if (!req.user?.id) return res.status(401).json({ ok:false, error:"unauthorized" });
-  // next();
-
-  if (!req.user?.id) {
-    return res.status(401).json({ ok: false, error: "unauthorized" });
-  }
-  next();
-}
+import { requireAuth as requireUser } from "./auth.js";
 
 function makePublicId() {
   return "gv_" + crypto.randomBytes(6).toString("base64url");
