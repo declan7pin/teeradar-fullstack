@@ -22,6 +22,8 @@ export async function ensureGroupVotesTables(db) {
       course_id BIGINT,
       course_name TEXT NOT NULL,
       course_slug TEXT,
+      display_name TEXT,
+      option_label TEXT,
       play_date DATE NOT NULL,
       tee_time TEXT NOT NULL,
       holes INTEGER NOT NULL DEFAULT 18,
@@ -30,6 +32,17 @@ export async function ensureGroupVotesTables(db) {
       option_order INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+
+  // ✅ Safe adds for existing DBs
+  await db.query(`
+    ALTER TABLE group_vote_options
+    ADD COLUMN IF NOT EXISTS display_name TEXT;
+  `);
+
+  await db.query(`
+    ALTER TABLE group_vote_options
+    ADD COLUMN IF NOT EXISTS option_label TEXT;
   `);
 
   await db.query(`
@@ -57,6 +70,16 @@ export async function ensureGroupVotesTables(db) {
   await db.query(`
     CREATE INDEX IF NOT EXISTS idx_group_vote_options_vote_id
     ON group_vote_options(vote_id);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_group_vote_options_display_name
+    ON group_vote_options(display_name);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_group_vote_options_option_label
+    ON group_vote_options(option_label);
   `);
 
   await db.query(`
