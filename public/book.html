@@ -323,7 +323,7 @@
       margin: 4px 0;
       border-top: 1px solid rgba(0,0,0,0.06);
     }
-        /* ---- Group Vote ---- */
+         /* ---- Group Vote ---- */
     .group-vote-toolbar {
       display: flex;
       gap: 10px;
@@ -361,25 +361,112 @@
       color: #666;
     }
 
-    .vote-picker {
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px solid #eee;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      color: #444;
+    .group-vote-modal.hidden {
+      display: none;
     }
 
-    .vote-picker input[type="checkbox"] {
-      transform: scale(1.1);
+    .group-vote-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .group-vote-modal-card {
+      width: 100%;
+      max-width: 700px;
+      max-height: 85vh;
+      overflow: hidden;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .group-vote-modal-header,
+    .group-vote-modal-footer {
+      padding: 14px 16px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .group-vote-modal-footer {
+      border-bottom: none;
+      border-top: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .group-vote-modal-body {
+      padding: 16px;
+      overflow-y: auto;
+    }
+
+    .group-vote-close-btn {
+      border: none;
+      background: transparent;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .group-vote-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .group-vote-options-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .group-vote-option-row {
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .group-vote-option-row input[type="checkbox"] {
+      margin-top: 4px;
+      transform: scale(1.15);
       cursor: pointer;
     }
 
-    .vote-selected {
-      outline: 2px solid rgba(126, 87, 194, 0.35);
-      box-shadow: 0 0 0 3px rgba(126, 87, 194, 0.08);
+    .group-vote-option-main {
+      flex: 1;
+    }
+
+    .group-vote-option-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .group-vote-option-sub {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .top-bar-button-like {
+      border: none;
+      background: #e5e7eb;
+      color: #222;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 14px;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -447,13 +534,13 @@
     Tap “Search availability” to check live times.
   </div>
   
-     <div class="group-vote-toolbar">
+       <div class="group-vote-toolbar">
     <div class="group-vote-left">
-      <button id="createGroupVoteBtn" class="group-vote-btn" type="button" disabled>
+      <button id="createGroupVoteBtn" class="group-vote-btn" type="button">
         Create Group Vote
       </button>
       <span id="groupVoteSelectionText" class="group-vote-hint">
-        Select at least 2 tee times to create a vote.
+        Create a vote from current search results.
       </span>
     </div>
   </div>
@@ -476,6 +563,36 @@
   </div>
 
   <section class="courses-strip" id="courses-strip"></section>
+    <div id="groupVoteModal" class="group-vote-modal hidden">
+    <div class="group-vote-modal-card">
+      <div class="group-vote-modal-header">
+        <h3 style="margin:0;">Create Group Vote</h3>
+        <button id="closeGroupVoteModalBtn" class="group-vote-close-btn" type="button">✕</button>
+      </div>
+
+      <div class="group-vote-modal-body">
+        <div style="margin-bottom:10px;">
+          <label style="display:block;font-size:13px;color:#555;margin-bottom:4px;">Vote title</label>
+          <input id="groupVoteTitle" class="filter-control" type="text" placeholder="Saturday afternoon round" />
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <label style="display:block;font-size:13px;color:#555;margin-bottom:4px;">Optional note</label>
+          <input id="groupVoteNote" class="filter-control" type="text" placeholder="Vote for the best option" />
+        </div>
+
+        <div id="groupVoteOptionsList" class="group-vote-options-list"></div>
+      </div>
+
+      <div class="group-vote-modal-footer">
+        <span id="groupVoteModalCount" class="group-vote-hint">Select at least 2 options.</span>
+        <div style="display:flex;gap:8px;">
+          <button id="cancelGroupVoteBtn" class="top-bar-button-like" type="button">Cancel</button>
+          <button id="submitGroupVoteBtn" class="group-vote-btn" type="button" disabled>Create Vote</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/group-vote-create.js"></script>
@@ -485,7 +602,8 @@
     let courses = [];
     let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize, state }
     let groupedSlots = {};         // courseName => [slots]
-    let voteSelections = [];       // selected tee-time options for group vote
+    let voteSelections = [];
+    let voteCandidateOptions = [];
 
     // full list + state handling
     let allCourses = [];
@@ -661,21 +779,10 @@
       if (!digits) return "";
       return "tel:" + digits;
     }
-        function updateGroupVoteToolbar() {
-      const btn = document.getElementById("createGroupVoteBtn");
+            function updateGroupVoteToolbar() {
       const text = document.getElementById("groupVoteSelectionText");
-      const count = voteSelections.length;
-
-      if (btn) btn.disabled = count < 2;
-
       if (text) {
-        if (count === 0) {
-          text.textContent = "Select at least 2 tee times to create a vote.";
-        } else if (count === 1) {
-          text.textContent = "1 tee time selected. Select at least 1 more.";
-        } else {
-          text.textContent = `${count} tee times selected and ready to share.`;
-        }
+        text.textContent = "Create a vote from current search results.";
       }
     }
 
@@ -759,28 +866,147 @@
       };
     }
 
-    function isVoteSelected(optionKey) {
-      return voteSelections.some((x) => x.key === optionKey);
+    function getSlotDisplayLabel(course, slot) {
+      const baseName = course?.name || slot?.course || slot?.courseName || "Course";
+
+      const routeBits = [
+        slot?.layoutName,
+        slot?.layout_name,
+        slot?.layoutKey,
+        slot?.layout_key,
+        slot?.frontNineKey,
+        slot?.front_nine_key,
+        slot?.backNineKey,
+        slot?.back_nine_key
+      ].filter(Boolean);
+
+      const uniqueBits = [...new Set(routeBits.map(x => String(x).trim()).filter(Boolean))];
+
+      if (!uniqueBits.length) return baseName;
+
+      return `${baseName} — ${uniqueBits.join(" / ")}`;
     }
 
-    function toggleVoteSelection(course, slot, checked) {
-      const option = buildVoteOption(course, slot);
+    function buildVoteCandidatesFromSearch() {
+      const candidates = [];
+      const seen = new Set();
 
-      if (!option.courseName || !option.playDate || !option.teeTime) {
-        alert("This tee time cannot be added to a group vote.");
+      const want = Number(
+        (lastSearchCriteria && lastSearchCriteria.partySize) ||
+        document.getElementById("players").value ||
+        1
+      );
+
+      courses.forEach((course) => {
+        const courseName = course.name || "";
+        const slots = (groupedSlots[courseName] || []).filter((s) => slotFitsParty(s, want));
+
+        slots.forEach((slot) => {
+          const option = buildVoteOption(course, slot);
+          const displayLabel = getSlotDisplayLabel(course, slot);
+
+          const key = [
+            option.courseId || option.courseName,
+            option.playDate,
+            option.teeTime,
+            option.holes,
+            option.players,
+            displayLabel
+          ].join("|");
+
+          if (seen.has(key)) return;
+          seen.add(key);
+
+          candidates.push({
+            ...option,
+            key,
+            displayLabel,
+            displayTime: option.teeTime,
+            displayDate: option.playDate
+          });
+        });
+      });
+
+      candidates.sort((a, b) => {
+        if (a.displayDate !== b.displayDate) return String(a.displayDate).localeCompare(String(b.displayDate));
+        return String(a.displayTime).localeCompare(String(b.displayTime));
+      });
+
+      return candidates;
+    }
+
+    function renderGroupVoteModalOptions() {
+      const listEl = document.getElementById("groupVoteOptionsList");
+      const countEl = document.getElementById("groupVoteModalCount");
+      const submitBtn = document.getElementById("submitGroupVoteBtn");
+
+      if (!listEl) return;
+
+      listEl.innerHTML = "";
+
+      if (!voteCandidateOptions.length) {
+        listEl.innerHTML = `<div style="font-size:13px;color:#666;">No tee times available to add to a vote.</div>`;
+        if (countEl) countEl.textContent = "No options available.";
+        if (submitBtn) submitBtn.disabled = true;
         return;
       }
 
-      if (checked) {
-        if (!isVoteSelected(option.key)) {
-          voteSelections.push(option);
-        }
-      } else {
-        voteSelections = voteSelections.filter((x) => x.key !== option.key);
+      voteCandidateOptions.forEach((opt, idx) => {
+        const checked = voteSelections.some((x) => x.key === opt.key);
+
+        const row = document.createElement("label");
+        row.className = "group-vote-option-row";
+        row.innerHTML = `
+          <input type="checkbox" class="group-vote-option-checkbox" data-index="${idx}" ${checked ? "checked" : ""} />
+          <div class="group-vote-option-main">
+            <div class="group-vote-option-title">${opt.displayLabel} — ${opt.displayTime}</div>
+            <div class="group-vote-option-sub">${opt.displayDate} • ${opt.holes} holes • ${opt.players} players</div>
+          </div>
+        `;
+        listEl.appendChild(row);
+      });
+
+      const count = voteSelections.length;
+      if (countEl) {
+        countEl.textContent =
+          count >= 2
+            ? `${count} options selected.`
+            : "Select at least 2 options.";
       }
 
-      updateGroupVoteToolbar();
-      renderCourses();
+      if (submitBtn) submitBtn.disabled = count < 2;
+    }
+
+    function openGroupVoteModal() {
+      if (!lastSearchCriteria) {
+        alert("Please search availability first.");
+        return;
+      }
+
+      voteCandidateOptions = buildVoteCandidatesFromSearch();
+      voteSelections = [];
+
+      const titleEl = document.getElementById("groupVoteTitle");
+      const noteEl = document.getElementById("groupVoteNote");
+      const modal = document.getElementById("groupVoteModal");
+
+      if (titleEl) {
+        titleEl.value = lastSearchCriteria?.date
+          ? `Round Vote — ${lastSearchCriteria.date}`
+          : "Weekend Round Vote";
+      }
+
+      if (noteEl) {
+        noteEl.value = "Vote for the tee time that works best.";
+      }
+
+      renderGroupVoteModalOptions();
+      if (modal) modal.classList.remove("hidden");
+    }
+
+    function closeGroupVoteModal() {
+      const modal = document.getElementById("groupVoteModal");
+      if (modal) modal.classList.add("hidden");
     }
 
     async function createGroupVoteFromSelections() {
@@ -795,16 +1021,13 @@
       }
 
       try {
-        const searchDate =
-          (lastSearchCriteria && lastSearchCriteria.date) ||
-          document.getElementById("date")?.value ||
-          "";
+        const title =
+          document.getElementById("groupVoteTitle")?.value?.trim() ||
+          "Round Vote";
 
-        const title = searchDate
-          ? `Round Vote — ${searchDate}`
-          : "Weekend Round Vote";
-
-        const note = "Vote for the tee time that works best.";
+        const note =
+          document.getElementById("groupVoteNote")?.value?.trim() ||
+          "Vote for the tee time that works best.";
 
         const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
 
@@ -812,10 +1035,12 @@
           title,
           note,
           expiresAt,
-          options: voteSelections.map(({ key, ...rest }) => rest),
+          options: voteSelections.map(({ key, displayLabel, displayTime, displayDate, ...rest }) => rest),
         });
 
         const fullUrl = new URL(result.shareUrl, window.location.origin).toString();
+
+        closeGroupVoteModal();
 
         try {
           await navigator.clipboard.writeText(fullUrl);
@@ -1168,6 +1393,7 @@ if (newLatestM !== lM) {
       };
 
       voteSelections = [];
+      voteCandidateOptions = [];
       updateGroupVoteToolbar();
 
       window.teeRadarLastSearchDate = date;
@@ -1457,28 +1683,6 @@ if (isPhone) {
         const phoneText = isPhone && course.phone ? course.phone : "";
         const phoneHref = isPhone && course.phone ? getTelHref(course.phone) : "";
 
-                const previewSlots = hasSlots ? fitSlots.slice(0, 3) : [];
-
-        const previewHtml = previewSlots.map((slot, idx) => {
-          const option = buildVoteOption(course, slot);
-          const checked = isVoteSelected(option.key);
-
-          return `
-            <label class="vote-picker">
-              <input
-                type="checkbox"
-                class="vote-slot-checkbox"
-                data-course-name="${encodeURIComponent(name)}"
-                data-slot-index="${idx}"
-                ${checked ? "checked" : ""}
-              />
-              <span>
-                Include <strong>${slot.time || slot.tee_time || "Tee time"}</strong> in group vote
-              </span>
-            </label>
-          `;
-        }).join("");
-
         card.innerHTML = `
           <div>
             <div class="course-header">${name}</div>
@@ -1490,11 +1694,10 @@ if (isPhone) {
             </div>
 
             ${
-              previewSlots.length
+              hasSlots
                 ? `<div style="font-size:12px;color:#555;margin-top:6px;">
-                     Suggested tee times: ${previewSlots.map(s => s.time || s.tee_time).join(", ")}
-                   </div>
-                   ${previewHtml}`
+                     Suggested tee times: ${fitSlots.slice(0, 3).map(s => s.time || s.tee_time).join(", ")}
+                   </div>`
                 : ""
             }
           </div>
@@ -1521,9 +1724,6 @@ if (isPhone) {
           </div>
         `;
 
-        if (previewSlots.length && previewSlots.some((slot) => isVoteSelected(buildVoteOption(course, slot).key))) {
-          card.classList.add("vote-selected");
-        }
 
         const subStateEl = card.querySelector(".course-sub");
         if (subStateEl) {
@@ -1681,35 +1881,38 @@ const courseId = course.id || course.courseId || course.course_id || null;
 
       window.open(finalUrl, "_blank");
     });
-        document.addEventListener("change", (evt) => {
-      const el = evt.target.closest(".vote-slot-checkbox");
-      if (!el) return;
-
-      const courseNameEncoded = el.dataset.courseName;
-      const slotIndex = Number(el.dataset.slotIndex || -1);
-
-      if (!courseNameEncoded || slotIndex < 0) return;
-
-      const courseName = decodeURIComponent(courseNameEncoded);
-      const course = courses.find((c) => c.name === courseName);
-      if (!course) return;
-
-      const want = Number(
-        (lastSearchCriteria && lastSearchCriteria.partySize) ||
-        document.getElementById("players").value ||
-        1
-      );
-
-      const slots = (groupedSlots[courseName] || []).filter((s) => slotFitsParty(s, want));
-      const previewSlots = slots.slice(0, 3);
-      const slot = previewSlots[slotIndex];
-      if (!slot) return;
-
-      toggleVoteSelection(course, slot, el.checked);
+            document.getElementById("createGroupVoteBtn")?.addEventListener("click", () => {
+      openGroupVoteModal();
     });
 
-    document.getElementById("createGroupVoteBtn")?.addEventListener("click", () => {
-      createGroupVoteFromSelections();
+    document.getElementById("closeGroupVoteModalBtn")?.addEventListener("click", closeGroupVoteModal);
+    document.getElementById("cancelGroupVoteBtn")?.addEventListener("click", closeGroupVoteModal);
+    document.getElementById("submitGroupVoteBtn")?.addEventListener("click", createGroupVoteFromSelections);
+
+    document.addEventListener("change", (evt) => {
+      const cb = evt.target.closest(".group-vote-option-checkbox");
+      if (!cb) return;
+
+      const idx = Number(cb.dataset.index || -1);
+      if (idx < 0 || !voteCandidateOptions[idx]) return;
+
+      const opt = voteCandidateOptions[idx];
+
+      if (cb.checked) {
+        if (!voteSelections.some((x) => x.key === opt.key)) {
+          voteSelections.push(opt);
+        }
+      } else {
+        voteSelections = voteSelections.filter((x) => x.key !== opt.key);
+      }
+
+      renderGroupVoteModalOptions();
+    });
+
+    document.getElementById("groupVoteModal")?.addEventListener("click", (evt) => {
+      if (evt.target.id === "groupVoteModal") {
+        closeGroupVoteModal();
+      }
     });
 
     // State selector behaviour
