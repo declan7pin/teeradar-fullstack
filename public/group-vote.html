@@ -206,9 +206,10 @@
       return "Closes " + d.toLocaleString();
     }
 
-        function getAuthToken() {
+    function getAuthToken() {
       try {
         return (
+          localStorage.getItem("tr_auth_token") ||
           localStorage.getItem("tr_token") ||
           localStorage.getItem("token") ||
           ""
@@ -235,6 +236,7 @@
         ...opts,
         headers: mergedHeaders,
       });
+
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "request_failed");
       return data;
@@ -257,7 +259,7 @@
         const card = document.createElement("div");
         card.className = "option" + (isWinner ? " winner" : "");
 
-                const displayName =
+        const displayName =
           opt.display_name ||
           opt.option_label ||
           opt.course_label ||
@@ -319,7 +321,7 @@
         els.message.textContent = "Your vote has been counted.";
         render();
       } catch (err) {
-        if (String(err.message || "").includes("unauthorized")) {
+        if (String(err.message || "").toLowerCase().includes("unauthorized") || String(err.message || "").toLowerCase().includes("missing token")) {
           state.pendingOptionId = optionId;
           els.authBox.classList.remove("hidden");
           els.authError.textContent = "";
@@ -345,8 +347,7 @@
       }
     }
 
-    // Replace these endpoints if your auth endpoints differ
-        async function signupAndVote() {
+    async function signupAndVote() {
       els.authError.textContent = "";
       try {
         const data = await api("/api/auth/signup", {
@@ -358,6 +359,7 @@
         });
 
         if (data?.token) {
+          localStorage.setItem("tr_auth_token", data.token);
           localStorage.setItem("tr_token", data.token);
         }
         if (data?.user) {
@@ -371,7 +373,7 @@
       }
     }
 
-        async function loginAndVote() {
+    async function loginAndVote() {
       els.authError.textContent = "";
       try {
         const data = await api("/api/auth/login", {
@@ -383,6 +385,7 @@
         });
 
         if (data?.token) {
+          localStorage.setItem("tr_auth_token", data.token);
           localStorage.setItem("tr_token", data.token);
         }
         if (data?.user) {
