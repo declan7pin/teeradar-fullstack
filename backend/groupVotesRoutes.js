@@ -29,7 +29,7 @@ function isSafeBookingUrl(u) {
 }
 
 async function getVoteFull(publicId, viewerUserId = null) {
-  const voteRes = await db.query(
+    const voteRes = await db.query(
     `
     SELECT
       gv.id,
@@ -41,7 +41,7 @@ async function getVoteFull(publicId, viewerUserId = null) {
       gv.expires_at,
       gv.selected_option_id,
       gv.created_at,
-      COALESCE(u.full_name, u.name, u.email, 'TeeRadar User') AS creator_name
+      COALESCE(u.email, 'TeeRadar User') AS creator_name
     FROM group_votes gv
     LEFT JOIN users u ON u.id = gv.creator_user_id
     WHERE gv.public_id = $1
