@@ -53,7 +53,7 @@ async function getVoteFull(publicId, viewerUserId = null) {
   const vote = voteRes.rows[0];
   if (!vote) return null;
 
-  const optionsRes = await db.query(
+    const optionsRes = await db.query(
     `
     SELECT
       o.id,
@@ -69,9 +69,20 @@ async function getVoteFull(publicId, viewerUserId = null) {
       o.players,
       o.booking_url,
       o.option_order,
-      COUNT(r.id)::int AS vote_count
+      COUNT(r.id)::int AS vote_count,
+      COALESCE(
+        JSON_AGG(
+          JSON_BUILD_OBJECT(
+            'user_id', r.user_id,
+            'name', COALESCE(u.email, 'TeeRadar User')
+          )
+          ORDER BY r.created_at ASC
+        ) FILTER (WHERE r.id IS NOT NULL),
+        '[]'::json
+      ) AS voters
     FROM group_vote_options o
     LEFT JOIN group_vote_responses r ON r.option_id = o.id
+    LEFT JOIN users u ON u.id = r.user_id
     WHERE o.vote_id = $1
     GROUP BY
       o.id,
