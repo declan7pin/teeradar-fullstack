@@ -261,11 +261,19 @@
         const card = document.createElement("div");
         card.className = "option" + (isWinner ? " winner" : "");
 
-        const displayName =
+                const displayName =
           opt.display_name ||
           opt.option_label ||
           opt.course_label ||
           opt.course_name;
+
+        const voterNames = Array.isArray(opt.voters)
+          ? opt.voters.map((v) => v.name).filter(Boolean)
+          : [];
+
+        const voterText = voterNames.length
+          ? `Voted by: ${voterNames.join(", ")}`
+          : "No votes yet";
 
         card.innerHTML = `
           <div class="row">
@@ -274,6 +282,7 @@
               <div class="sub">
                 ${fmtDate(opt.play_date)} • ${opt.tee_time} • ${opt.holes} holes • ${opt.players} players
               </div>
+              <div class="sub" style="margin-top:6px;">${voterText}</div>
             </div>
             <div class="pill">${opt.vote_count || 0} vote${Number(opt.vote_count || 0) === 1 ? "" : "s"}</div>
           </div>
