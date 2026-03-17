@@ -143,6 +143,7 @@
       <div id="meta" class="meta"></div>
       <p id="note" class="meta" style="margin-top:10px;"></p>
       <div class="toolbar">
+        <button id="shareBtn" class="primary">Share</button>
         <button id="copyBtn" class="ghost">Copy link</button>
         <button id="refreshBtn" class="secondary">Refresh</button>
       </div>
@@ -170,21 +171,22 @@
     const publicId = qs.get("id");
 
     const els = {
-      title: document.getElementById("title"),
-      meta: document.getElementById("meta"),
-      note: document.getElementById("note"),
-      options: document.getElementById("options"),
-      message: document.getElementById("message"),
-      error: document.getElementById("error"),
-      authBox: document.getElementById("authBox"),
-      email: document.getElementById("email"),
-      password: document.getElementById("password"),
-      authError: document.getElementById("authError"),
-      signupVoteBtn: document.getElementById("signupVoteBtn"),
-      loginVoteBtn: document.getElementById("loginVoteBtn"),
-      copyBtn: document.getElementById("copyBtn"),
-      refreshBtn: document.getElementById("refreshBtn"),
-    };
+  title: document.getElementById("title"),
+  meta: document.getElementById("meta"),
+  note: document.getElementById("note"),
+  options: document.getElementById("options"),
+  message: document.getElementById("message"),
+  error: document.getElementById("error"),
+  authBox: document.getElementById("authBox"),
+  email: document.getElementById("email"),
+  password: document.getElementById("password"),
+  authError: document.getElementById("authError"),
+  signupVoteBtn: document.getElementById("signupVoteBtn"),
+  loginVoteBtn: document.getElementById("loginVoteBtn"),
+  shareBtn: document.getElementById("shareBtn"),
+  copyBtn: document.getElementById("copyBtn"),
+  refreshBtn: document.getElementById("refreshBtn"),
+};
 
     let state = {
       vote: null,
@@ -402,14 +404,44 @@
     els.signupVoteBtn.addEventListener("click", signupAndVote);
     els.loginVoteBtn.addEventListener("click", loginAndVote);
     els.refreshBtn.addEventListener("click", loadVote);
-    els.copyBtn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(location.href);
-        els.message.textContent = "Link copied.";
-      } catch {
-        els.error.textContent = "Could not copy link.";
-      }
-    });
+    els.shareBtn.addEventListener("click", async () => {
+  els.message.textContent = "";
+  els.error.textContent = "";
+
+  const shareTitle = state.vote?.title || "TeeRadar Group Vote";
+  const shareText = state.vote?.note
+    ? `${state.vote.note}\n\nVote for the tee time that works best.`
+    : "Vote for the tee time that works best.";
+
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: shareTitle,
+        text: shareText,
+        url: location.href,
+      });
+      return;
+    }
+
+    await navigator.clipboard.writeText(location.href);
+    els.message.textContent = "Link copied.";
+  } catch (err) {
+    if (err && err.name === "AbortError") return;
+    els.error.textContent = "Could not share link.";
+  }
+});
+
+els.copyBtn.addEventListener("click", async () => {
+  els.message.textContent = "";
+  els.error.textContent = "";
+
+  try {
+    await navigator.clipboard.writeText(location.href);
+    els.message.textContent = "Link copied.";
+  } catch {
+    els.error.textContent = "Could not copy link.";
+  }
+});
 
     if (!publicId) {
       els.error.textContent = "Missing group vote id.";
