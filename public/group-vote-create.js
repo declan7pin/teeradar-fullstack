@@ -1,6 +1,6 @@
 // public/group-vote-create.js
 window.TeeRadarGroupVote = (() => {
-    function getAuthToken() {
+  function getAuthToken() {
     try {
       return (
         localStorage.getItem("tr_token") ||
@@ -15,19 +15,19 @@ window.TeeRadarGroupVote = (() => {
   async function api(url, opts = {}) {
     const token = getAuthToken();
 
-    const mergedHeaders = {
+    const headers = {
       "Content-Type": "application/json",
       ...(opts.headers || {}),
     };
 
     if (token) {
-      mergedHeaders.Authorization = `Bearer ${token}`;
+      headers.Authorization = `Bearer ${token}`;
     }
 
     const r = await fetch(url, {
       credentials: "include",
       ...opts,
-      headers: mergedHeaders,
+      headers,
     });
 
     const data = await r.json().catch(() => ({}));
