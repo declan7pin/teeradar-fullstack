@@ -3,6 +3,7 @@ window.TeeRadarGroupVote = (() => {
   function getAuthToken() {
     try {
       return (
+        localStorage.getItem("tr_auth_token") ||
         localStorage.getItem("tr_token") ||
         localStorage.getItem("token") ||
         ""
