@@ -1042,11 +1042,25 @@
 
         closeGroupVoteModal();
 
-        try {
+                try {
           await navigator.clipboard.writeText(fullUrl);
-          alert(`Group vote created.\n\nLink copied to clipboard:\n${fullUrl}`);
-        } catch {
-          alert(`Group vote created:\n${fullUrl}`);
+        } catch {}
+
+        try {
+          if (navigator.share) {
+            await navigator.share({
+              title: title || "TeeRadar Group Vote",
+              text: note || "Vote for the tee time that works best.",
+              url: fullUrl,
+            });
+          } else {
+            alert(`Group vote created.\n\nLink copied to clipboard:\n${fullUrl}`);
+          }
+        } catch (err) {
+          // user cancelled share sheet -> do nothing
+          if (err && err.name !== "AbortError") {
+            alert(`Group vote created.\n\nLink copied to clipboard:\n${fullUrl}`);
+          }
         }
 
         window.open(fullUrl, "_blank");
