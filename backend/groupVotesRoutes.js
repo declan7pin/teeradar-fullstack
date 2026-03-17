@@ -132,9 +132,9 @@ async function getVoteFull(publicId, viewerUserId = null) {
 }
 
 // create vote
-router.post("/api/group-votes", requireUser, async (req, res) => {
+router.post("/api/group-votes", async (req, res) => {
   try {
-    const creatorUserId = req.user.id;
+    const creatorUserId = req.user?.id || 0;
     const title = normalizeText(req.body?.title || "Weekend Round", 120);
     const note = normalizeText(req.body?.note || "", 500);
     const expiresAtRaw = req.body?.expiresAt ? new Date(req.body.expiresAt) : null;
