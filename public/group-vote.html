@@ -152,16 +152,31 @@
     </div>
 
     <div id="authBox" class="card authBox hidden">
-      <h3>Vote to lock in the round</h3>
-      <p class="small">Create a free TeeRadar account to cast your vote.</p>
-      <input id="email" type="email" placeholder="Email" />
-      <input id="password" type="password" placeholder="Password" />
-      <div class="toolbar">
-        <button id="signupVoteBtn" class="primary">Create account & vote</button>
-        <button id="loginVoteBtn" class="ghost">Log in & vote</button>
-      </div>
-      <div id="authError" class="error"></div>
+  <h3>Vote to lock in the round</h3>
+  <p class="small">Create a free TeeRadar account to cast your vote.</p>
+
+  <div style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:14px;background:#f8fbff;">
+    <div style="font-weight:700;font-size:14px;color:#0f172a;">Want full access to TeeRadar?</div>
+    <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.45;">
+      Unlock <strong>email alerts</strong>, <strong>scorecard analytics</strong>, and <strong>entry to our giveaways</strong>.
+      Use code <strong>TEERADARTRIAL</strong> to get your <strong>first month free</strong>.
     </div>
+  </div>
+
+  <input id="email" type="email" placeholder="Email" />
+  <input id="password" type="password" placeholder="Password" />
+
+  <div class="toolbar">
+    <button id="signupVoteBtn" class="primary">Create account & vote</button>
+    <button id="loginVoteBtn" class="ghost">Log in & vote</button>
+  </div>
+
+  <div class="toolbar" style="margin-top:8px;">
+    <button id="claimTrialBtn" class="secondary" type="button">Claim free month</button>
+  </div>
+
+  <div id="authError" class="error"></div>
+</div>
 
     <div id="options" class="options"></div>
   </div>
@@ -183,6 +198,7 @@
   authError: document.getElementById("authError"),
   signupVoteBtn: document.getElementById("signupVoteBtn"),
   loginVoteBtn: document.getElementById("loginVoteBtn"),
+  claimTrialBtn: document.getElementById("claimTrialBtn"),
   shareBtn: document.getElementById("shareBtn"),
   copyBtn: document.getElementById("copyBtn"),
   refreshBtn: document.getElementById("refreshBtn"),
@@ -357,6 +373,10 @@
         els.error.textContent = err.message || "Could not select winner";
       }
     }
+    function openTrialOffer() {
+      const url = `/subscribe.html?promo=TEERADARTRIAL&source=group-vote`;
+      window.location.href = url;
+    }
 
     async function signupAndVote() {
       els.authError.textContent = "";
@@ -375,6 +395,11 @@
         }
         if (data?.user) {
           localStorage.setItem("tr_user", JSON.stringify(data.user));
+        }
+
+                if (window.confirm("Want full access to TeeRadar?\n\nUse code TEERADARTRIAL to get your first month free and unlock email alerts, scorecard analytics, and giveaway entry.")) {
+          openTrialOffer();
+          return;
         }
 
         if (!state.pendingOptionId) return;
@@ -403,6 +428,11 @@
           localStorage.setItem("tr_user", JSON.stringify(data.user));
         }
 
+                if (window.confirm("Want full access to TeeRadar?\n\nUse code TEERADARTRIAL to get your first month free and unlock email alerts, scorecard analytics, and giveaway entry.")) {
+          openTrialOffer();
+          return;
+        }
+
         if (!state.pendingOptionId) return;
         await handleVoteClick(state.pendingOptionId);
       } catch (err) {
@@ -413,6 +443,7 @@
     els.signupVoteBtn.addEventListener("click", signupAndVote);
     els.loginVoteBtn.addEventListener("click", loginAndVote);
     els.refreshBtn.addEventListener("click", loadVote);
+    els.claimTrialBtn?.addEventListener("click", openTrialOffer);
     els.shareBtn.addEventListener("click", async () => {
   els.message.textContent = "";
   els.error.textContent = "";
