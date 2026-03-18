@@ -14,6 +14,9 @@
       --green:#00796b;
       --green-dark:#005e55;
       --pill:#ecfeff;
+      --gold:#f59e0b;
+      --silver:#94a3b8;
+      --bronze:#b45309;
     }
     *{box-sizing:border-box}
     body{
@@ -134,6 +137,105 @@
       color:var(--muted);
       margin-top:8px;
     }
+
+    /* Standings / podium */
+    .standings-card{
+      padding:18px;
+    }
+    .standings-header{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:center;
+      flex-wrap:wrap;
+      margin-bottom:14px;
+    }
+    .standings-title{
+      font-size:18px;
+      font-weight:800;
+    }
+    .standings-sub{
+      color:var(--muted);
+      font-size:13px;
+      margin-top:4px;
+    }
+    .podium{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:12px;
+    }
+    .podium-item{
+      border:1px solid var(--border);
+      border-radius:16px;
+      background:#fff;
+      padding:14px;
+      min-height:150px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+    }
+    .podium-item.first{
+      border-color:#fbbf24;
+      box-shadow:0 0 0 1px #fbbf24 inset;
+      background:linear-gradient(180deg,#fffdf7 0%,#ffffff 100%);
+    }
+    .podium-item.second{
+      border-color:#cbd5e1;
+      box-shadow:0 0 0 1px #cbd5e1 inset;
+    }
+    .podium-item.third{
+      border-color:#fdba74;
+      box-shadow:0 0 0 1px #fdba74 inset;
+    }
+    .podium-rank{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:38px;
+      height:38px;
+      border-radius:999px;
+      font-weight:800;
+      font-size:15px;
+      color:#fff;
+      margin-bottom:10px;
+    }
+    .podium-item.first .podium-rank{ background:var(--gold); }
+    .podium-item.second .podium-rank{ background:var(--silver); }
+    .podium-item.third .podium-rank{ background:var(--bronze); }
+
+    .podium-name{
+      font-weight:800;
+      font-size:15px;
+      line-height:1.3;
+      margin-bottom:6px;
+    }
+    .podium-meta{
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.4;
+    }
+    .podium-votes{
+      margin-top:12px;
+      display:inline-flex;
+      align-items:center;
+      padding:6px 10px;
+      border-radius:999px;
+      background:#f8fafc;
+      color:#0f172a;
+      font-size:13px;
+      font-weight:800;
+      width:max-content;
+    }
+    .standings-empty{
+      color:var(--muted);
+      font-size:14px;
+    }
+
+    @media (max-width: 760px){
+      .podium{
+        grid-template-columns:1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -151,32 +253,42 @@
       <div id="error" class="error"></div>
     </div>
 
-    <div id="authBox" class="card authBox hidden">
-  <h3>Vote to lock in the round</h3>
-  <p class="small">Create a free TeeRadar account to cast your vote.</p>
-
-  <div style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:14px;background:#f8fbff;">
-    <div style="font-weight:700;font-size:14px;color:#0f172a;">Want full access to TeeRadar?</div>
-    <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.45;">
-      Unlock <strong>email alerts</strong>, <strong>scorecard analytics</strong>, and <strong>entry to our giveaways</strong>.
-      Use code <strong>TEERADARTRIAL</strong> to get your <strong>first month free</strong>.
+    <div id="standingsCard" class="card standings-card hidden">
+      <div class="standings-header">
+        <div>
+          <div class="standings-title">Current standings</div>
+          <div class="standings-sub">Highest voted options right now</div>
+        </div>
+      </div>
+      <div id="podium" class="podium"></div>
     </div>
-  </div>
 
-  <input id="email" type="email" placeholder="Email" />
-  <input id="password" type="password" placeholder="Password" />
+    <div id="authBox" class="card authBox hidden">
+      <h3>Vote to lock in the round</h3>
+      <p class="small">Create a free TeeRadar account to cast your vote.</p>
 
-  <div class="toolbar">
-    <button id="signupVoteBtn" class="primary">Create account & vote</button>
-    <button id="loginVoteBtn" class="ghost">Log in & vote</button>
-  </div>
+      <div style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:14px;background:#f8fbff;">
+        <div style="font-weight:700;font-size:14px;color:#0f172a;">Want full access to TeeRadar?</div>
+        <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.45;">
+          Unlock <strong>email alerts</strong>, <strong>scorecard analytics</strong>, and <strong>entry to our giveaways</strong>.
+          Use code <strong>TEERADARTRIAL</strong> to get your <strong>first month free</strong>.
+        </div>
+      </div>
 
-  <div class="toolbar" style="margin-top:8px;">
-    <button id="claimTrialBtn" class="secondary" type="button">Claim free month</button>
-  </div>
+      <input id="email" type="email" placeholder="Email" />
+      <input id="password" type="password" placeholder="Password" />
 
-  <div id="authError" class="error"></div>
-</div>
+      <div class="toolbar">
+        <button id="signupVoteBtn" class="primary">Create account & vote</button>
+        <button id="loginVoteBtn" class="ghost">Log in & vote</button>
+      </div>
+
+      <div class="toolbar" style="margin-top:8px;">
+        <button id="claimTrialBtn" class="secondary" type="button">Claim free month</button>
+      </div>
+
+      <div id="authError" class="error"></div>
+    </div>
 
     <div id="options" class="options"></div>
   </div>
@@ -186,23 +298,25 @@
     const publicId = qs.get("id");
 
     const els = {
-  title: document.getElementById("title"),
-  meta: document.getElementById("meta"),
-  note: document.getElementById("note"),
-  options: document.getElementById("options"),
-  message: document.getElementById("message"),
-  error: document.getElementById("error"),
-  authBox: document.getElementById("authBox"),
-  email: document.getElementById("email"),
-  password: document.getElementById("password"),
-  authError: document.getElementById("authError"),
-  signupVoteBtn: document.getElementById("signupVoteBtn"),
-  loginVoteBtn: document.getElementById("loginVoteBtn"),
-  claimTrialBtn: document.getElementById("claimTrialBtn"),
-  shareBtn: document.getElementById("shareBtn"),
-  copyBtn: document.getElementById("copyBtn"),
-  refreshBtn: document.getElementById("refreshBtn"),
-};
+      title: document.getElementById("title"),
+      meta: document.getElementById("meta"),
+      note: document.getElementById("note"),
+      options: document.getElementById("options"),
+      message: document.getElementById("message"),
+      error: document.getElementById("error"),
+      authBox: document.getElementById("authBox"),
+      email: document.getElementById("email"),
+      password: document.getElementById("password"),
+      authError: document.getElementById("authError"),
+      signupVoteBtn: document.getElementById("signupVoteBtn"),
+      loginVoteBtn: document.getElementById("loginVoteBtn"),
+      claimTrialBtn: document.getElementById("claimTrialBtn"),
+      shareBtn: document.getElementById("shareBtn"),
+      copyBtn: document.getElementById("copyBtn"),
+      refreshBtn: document.getElementById("refreshBtn"),
+      standingsCard: document.getElementById("standingsCard"),
+      podium: document.getElementById("podium"),
+    };
 
     let state = {
       vote: null,
@@ -260,6 +374,61 @@
       return data;
     }
 
+    function getDisplayName(opt) {
+      return (
+        opt.display_name ||
+        opt.option_label ||
+        opt.course_label ||
+        opt.course_name
+      );
+    }
+
+    function renderStandings(vote) {
+      if (!els.standingsCard || !els.podium) return;
+
+      const sorted = [...(vote.options || [])].sort((a, b) => {
+        const voteDiff = Number(b.vote_count || 0) - Number(a.vote_count || 0);
+        if (voteDiff !== 0) return voteDiff;
+        if ((a.play_date || "") !== (b.play_date || "")) {
+          return String(a.play_date || "").localeCompare(String(b.play_date || ""));
+        }
+        return String(a.tee_time || "").localeCompare(String(b.tee_time || ""));
+      });
+
+      const topThree = sorted.slice(0, 3);
+      els.podium.innerHTML = "";
+
+      if (!topThree.length) {
+        els.standingsCard.classList.remove("hidden");
+        els.podium.innerHTML = `<div class="standings-empty">No standings yet.</div>`;
+        return;
+      }
+
+      const rankClassMap = ["first", "second", "third"];
+
+      topThree.forEach((opt, index) => {
+        const item = document.createElement("div");
+        item.className = `podium-item ${rankClassMap[index] || ""}`;
+
+        item.innerHTML = `
+          <div>
+            <div class="podium-rank">#${index + 1}</div>
+            <div class="podium-name">${getDisplayName(opt)}</div>
+            <div class="podium-meta">
+              ${fmtDate(opt.play_date)} • ${opt.tee_time} • ${opt.holes} holes • ${opt.players} players
+            </div>
+          </div>
+          <div class="podium-votes">
+            ${opt.vote_count || 0} vote${Number(opt.vote_count || 0) === 1 ? "" : "s"}
+          </div>
+        `;
+
+        els.podium.appendChild(item);
+      });
+
+      els.standingsCard.classList.remove("hidden");
+    }
+
     function render() {
       const vote = state.vote;
       if (!vote) return;
@@ -267,6 +436,8 @@
       els.title.textContent = vote.title || "Group Vote";
       els.meta.textContent = `${vote.creatorName || "Someone"} created this vote • ${fmtExpiry(vote.expiresAt)}`;
       els.note.textContent = vote.note || "";
+
+      renderStandings(vote);
 
       els.options.innerHTML = "";
 
@@ -277,11 +448,7 @@
         const card = document.createElement("div");
         card.className = "option" + (isWinner ? " winner" : "");
 
-                const displayName =
-          opt.display_name ||
-          opt.option_label ||
-          opt.course_label ||
-          opt.course_name;
+        const displayName = getDisplayName(opt);
 
         const voterNames = Array.isArray(opt.voters)
           ? opt.voters.map((v) => v.name).filter(Boolean)
@@ -373,6 +540,7 @@
         els.error.textContent = err.message || "Could not select winner";
       }
     }
+
     function openTrialOffer() {
       const url = `/subscribe.html?promo=TEERADARTRIAL&source=group-vote`;
       window.location.href = url;
@@ -397,7 +565,7 @@
           localStorage.setItem("tr_user", JSON.stringify(data.user));
         }
 
-                if (window.confirm("Want full access to TeeRadar?\n\nUse code TEERADARTRIAL to get your first month free and unlock email alerts, scorecard analytics, and giveaway entry.")) {
+        if (window.confirm("Want full access to TeeRadar?\n\nUse code TEERADARTRIAL to get your first month free and unlock email alerts, scorecard analytics, and giveaway entry.")) {
           openTrialOffer();
           return;
         }
@@ -428,7 +596,7 @@
           localStorage.setItem("tr_user", JSON.stringify(data.user));
         }
 
-                if (window.confirm("Want full access to TeeRadar?\n\nUse code TEERADARTRIAL to get your first month free and unlock email alerts, scorecard analytics, and giveaway entry.")) {
+        if (window.confirm("Want full access to TeeRadar?\n\nUse code TEERADARTRIAL to get your first month free and unlock email alerts, scorecard analytics, and giveaway entry.")) {
           openTrialOffer();
           return;
         }
@@ -444,44 +612,45 @@
     els.loginVoteBtn.addEventListener("click", loginAndVote);
     els.refreshBtn.addEventListener("click", loadVote);
     els.claimTrialBtn?.addEventListener("click", openTrialOffer);
+
     els.shareBtn.addEventListener("click", async () => {
-  els.message.textContent = "";
-  els.error.textContent = "";
+      els.message.textContent = "";
+      els.error.textContent = "";
 
-  const shareTitle = state.vote?.title || "TeeRadar Group Vote";
-  const shareText = state.vote?.note
-    ? `${state.vote.note}\n\nVote for the tee time that works best.`
-    : "Vote for the tee time that works best.";
+      const shareTitle = state.vote?.title || "TeeRadar Group Vote";
+      const shareText = state.vote?.note
+        ? `${state.vote.note}\n\nVote for the tee time that works best.`
+        : "Vote for the tee time that works best.";
 
-  try {
-    if (navigator.share) {
-      await navigator.share({
-        title: shareTitle,
-        text: shareText,
-        url: location.href,
-      });
-      return;
-    }
+      try {
+        if (navigator.share) {
+          await navigator.share({
+            title: shareTitle,
+            text: shareText,
+            url: location.href,
+          });
+          return;
+        }
 
-    await navigator.clipboard.writeText(location.href);
-    els.message.textContent = "Link copied.";
-  } catch (err) {
-    if (err && err.name === "AbortError") return;
-    els.error.textContent = "Could not share link.";
-  }
-});
+        await navigator.clipboard.writeText(location.href);
+        els.message.textContent = "Link copied.";
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+        els.error.textContent = "Could not share link.";
+      }
+    });
 
-els.copyBtn.addEventListener("click", async () => {
-  els.message.textContent = "";
-  els.error.textContent = "";
+    els.copyBtn.addEventListener("click", async () => {
+      els.message.textContent = "";
+      els.error.textContent = "";
 
-  try {
-    await navigator.clipboard.writeText(location.href);
-    els.message.textContent = "Link copied.";
-  } catch {
-    els.error.textContent = "Could not copy link.";
-  }
-});
+      try {
+        await navigator.clipboard.writeText(location.href);
+        els.message.textContent = "Link copied.";
+      } catch {
+        els.error.textContent = "Could not copy link.";
+      }
+    });
 
     if (!publicId) {
       els.error.textContent = "Missing group vote id.";
