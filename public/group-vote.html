@@ -244,6 +244,7 @@
       <h1 id="title">Loading group vote...</h1>
       <div id="meta" class="meta"></div>
       <p id="note" class="meta" style="margin-top:10px;"></p>
+      <p class="small" style="margin-top:10px;">Vote for all tee times that work for you. Tap again to remove your vote.</p>
       <div class="toolbar">
         <button id="shareBtn" class="primary">Share</button>
         <button id="copyBtn" class="ghost">Copy link</button>
@@ -265,7 +266,7 @@
 
     <div id="authBox" class="card authBox hidden">
       <h3>Vote to lock in the round</h3>
-      <p class="small">Create a free TeeRadar account to cast your vote.</p>
+      <p class="small">Create a free TeeRadar account to cast your votes.</p>
 
       <div style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:14px;background:#f8fbff;">
         <div style="font-weight:700;font-size:14px;color:#0f172a;">Want full access to TeeRadar?</div>
@@ -443,7 +444,8 @@
 
       for (const opt of vote.options) {
         const isWinner = Number(vote.selectedOptionId || 0) === Number(opt.id);
-        const isMine = Number(vote.myOptionId || 0) === Number(opt.id);
+        const myIds = Array.isArray(vote.myOptionIds) ? vote.myOptionIds.map(Number) : [];
+        const isMine = myIds.includes(Number(opt.id));
 
         const card = document.createElement("div");
         card.className = "option" + (isWinner ? " winner" : "");
@@ -470,11 +472,11 @@
             <div class="pill">${opt.vote_count || 0} vote${Number(opt.vote_count || 0) === 1 ? "" : "s"}</div>
           </div>
           <div class="toolbar">
-            ${vote.canVote ? `<button class="primary voteBtn" data-option-id="${opt.id}">${isMine ? "Change vote to this" : "Vote for this"}</button>` : ``}
+            ${vote.canVote ? `<button class="primary voteBtn" data-option-id="${opt.id}">${isMine ? "Remove vote" : "Vote for this"}</button>` : ``}
             ${opt.booking_url ? `<a class="ghost btn" href="${opt.booking_url}">View booking</a>` : ``}
             ${vote.canChooseWinner ? `<button class="secondary selectBtn" data-option-id="${opt.id}">Choose winner</button>` : ``}
             ${isWinner ? `<span class="pill">Selected tee time</span>` : ``}
-            ${isMine ? `<span class="pill">Your vote</span>` : ``}
+            ${isMine ? `<span class="pill">You voted for this</span>` : ``}
           </div>
         `;
 
@@ -512,7 +514,7 @@
         });
         state.vote = data.vote;
         els.authBox.classList.add("hidden");
-        els.message.textContent = "Your vote has been counted.";
+        els.message.textContent = "Your votes have been updated.";
         render();
       } catch (err) {
         if (String(err.message || "").toLowerCase().includes("unauthorized") || String(err.message || "").toLowerCase().includes("missing token")) {
