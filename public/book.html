@@ -458,6 +458,38 @@
       font-size: 12px;
       color: #666;
     }
+        .group-vote-course-filter-wrap {
+      margin-bottom: 12px;
+    }
+
+    .group-vote-course-filter-label {
+      display: block;
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 6px;
+    }
+
+    .group-vote-course-filter-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .group-vote-course-chip {
+      border: 1px solid #d1d5db;
+      background: #fff;
+      color: #374151;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .group-vote-course-chip.active {
+      background: var(--teal);
+      color: #fff;
+      border-color: var(--teal);
+    }
 
     .top-bar-button-like {
       border: none;
@@ -571,9 +603,14 @@
       </div>
 
       <div class="group-vote-modal-body">
-        <div style="margin-bottom:10px;">
+                <div style="margin-bottom:10px;">
           <label style="display:block;font-size:13px;color:#555;margin-bottom:4px;">Vote title</label>
           <input id="groupVoteTitle" class="filter-control" type="text" placeholder="Saturday afternoon round" />
+        </div>
+
+        <div class="group-vote-course-filter-wrap">
+          <label class="group-vote-course-filter-label">Preferred courses</label>
+          <div id="groupVoteCourseFilterChips" class="group-vote-course-filter-chips"></div>
         </div>
 
         <div style="margin-bottom:10px;">
@@ -604,6 +641,7 @@
     let groupedSlots = {};         // courseName => [slots]
     let voteSelections = [];
     let voteCandidateOptions = [];
+    let voteSelectedCourses = [];
 
     // full list + state handling
     let allCourses = [];
@@ -917,12 +955,13 @@
           if (seen.has(key)) return;
           seen.add(key);
 
-          candidates.push({
+              candidates.push({
             ...option,
             key,
             displayLabel,
             displayTime: option.teeTime,
-            displayDate: option.playDate
+            displayDate: option.playDate,
+            filterCourseName: option.courseName
           });
         });
       });
@@ -934,6 +973,56 @@
 
       return candidates;
     }
+        function getGroupVoteCourseNames() {
+      return [...new Set(
+        voteCandidateOptions
+          .map((opt) => String(opt.filterCourseName || "").trim())
+          .filter(Boolean)
+      )].sort((a, b) => a.localeCompare(b));
+    }
+
+    function getFilteredVoteCandidateOptions() {
+      if (!voteSelectedCourses.length) return voteCandidateOptions;
+      return voteCandidateOptions.filter((opt) =>
+        voteSelectedCourses.includes(String(opt.filterCourseName || "").trim())
+      );
+    }
+
+    function renderGroupVoteCourseFilter() {
+      const chipsEl = document.getElementById("groupVoteCourseFilterChips");
+      if (!chipsEl) return;
+
+      const courseNames = getGroupVoteCourseNames();
+      chipsEl.innerHTML = "";
+
+      const allBtn = document.createElement("button");
+      allBtn.type = "button";
+      allBtn.className = `group-vote-course-chip ${voteSelectedCourses.length === 0 ? "active" : ""}`;
+      allBtn.textContent = "All courses";
+      allBtn.addEventListener("click", () => {
+        voteSelectedCourses = [];
+        renderGroupVoteCourseFilter();
+        renderGroupVoteModalOptions();
+      });
+      chipsEl.appendChild(allBtn);
+
+      courseNames.forEach((courseName) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `group-vote-course-chip ${voteSelectedCourses.includes(courseName) ? "active" : ""}`;
+        btn.textContent = courseName;
+        btn.addEventListener("click", () => {
+          if (voteSelectedCourses.includes(courseName)) {
+            voteSelectedCourses = voteSelectedCourses.filter((x) => x !== courseName);
+          } else {
+            voteSelectedCourses.push(courseName);
+          }
+          renderGroupVoteCourseFilter();
+          renderGroupVoteModalOptions();
+        });
+        chipsEl.appendChild(btn);
+      });
+    }
 
     function renderGroupVoteModalOptions() {
       const listEl = document.getElementById("groupVoteOptionsList");
@@ -944,20 +1033,25 @@
 
       listEl.innerHTML = "";
 
+      const visibleOptions = getFilteredVoteCandidateOptions();
+
       if (!voteCandidateOptions.length) {
         listEl.innerHTML = `<div style="font-size:13px;color:#666;">No tee times available to add to a vote.</div>`;
         if (countEl) countEl.textContent = "No options available.";
         if (submitBtn) submitBtn.disabled = true;
         return;
       }
+            if (!visibleOptions.length) {
+        listEl.innerHTML = `<div style="font-size:13px;color:#666;">No tee times match the selected course filter.</div>`;
+      }
 
-      voteCandidateOptions.forEach((opt, idx) => {
-        const checked = voteSelections.some((x) => x.key === opt.key);
+        visibleOptions.forEach((opt) => {
+                const checked = voteSelections.some((x) => x.key === opt.key);
 
         const row = document.createElement("label");
         row.className = "group-vote-option-row";
         row.innerHTML = `
-          <input type="checkbox" class="group-vote-option-checkbox" data-index="${idx}" ${checked ? "checked" : ""} />
+          <input type="checkbox" class="group-vote-option-checkbox" data-key="${encodeURIComponent(opt.key)}" ${checked ? "checked" : ""} />
           <div class="group-vote-option-main">
             <div class="group-vote-option-title">${opt.displayLabel} — ${opt.displayTime}</div>
             <div class="group-vote-option-sub">${opt.displayDate} • ${opt.holes} holes • ${opt.players} players</div>
@@ -983,8 +1077,9 @@
         return;
       }
 
-      voteCandidateOptions = buildVoteCandidatesFromSearch();
+            voteCandidateOptions = buildVoteCandidatesFromSearch();
       voteSelections = [];
+      voteSelectedCourses = [];
 
       const titleEl = document.getElementById("groupVoteTitle");
       const noteEl = document.getElementById("groupVoteNote");
@@ -1000,6 +1095,7 @@
         noteEl.value = "Vote for the tee time that works best.";
       }
 
+      renderGroupVoteCourseFilter();
       renderGroupVoteModalOptions();
       if (modal) modal.classList.remove("hidden");
     }
@@ -1903,14 +1999,15 @@ const courseId = course.id || course.courseId || course.course_id || null;
     document.getElementById("cancelGroupVoteBtn")?.addEventListener("click", closeGroupVoteModal);
     document.getElementById("submitGroupVoteBtn")?.addEventListener("click", createGroupVoteFromSelections);
 
-    document.addEventListener("change", (evt) => {
+        document.addEventListener("change", (evt) => {
       const cb = evt.target.closest(".group-vote-option-checkbox");
       if (!cb) return;
 
-      const idx = Number(cb.dataset.index || -1);
-      if (idx < 0 || !voteCandidateOptions[idx]) return;
+      const optionKey = decodeURIComponent(cb.dataset.key || "");
+      if (!optionKey) return;
 
-      const opt = voteCandidateOptions[idx];
+      const opt = voteCandidateOptions.find((x) => x.key === optionKey);
+      if (!opt) return;
 
       if (cb.checked) {
         if (!voteSelections.some((x) => x.key === opt.key)) {
