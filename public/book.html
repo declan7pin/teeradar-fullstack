@@ -680,6 +680,40 @@
       </div>
     </div>
   </div>
+  
+  <div id="groupVoteLinkModal" class="group-vote-modal hidden">
+  <div class="group-vote-modal-card" style="max-width:560px;">
+    <div class="group-vote-modal-header">
+      <h3 style="margin:0;">Group Vote Created</h3>
+      <button id="closeGroupVoteLinkModalBtn" class="group-vote-close-btn" type="button">✕</button>
+    </div>
+
+    <div class="group-vote-modal-body">
+      <div style="font-size:14px;color:#555;margin-bottom:10px;">
+        Your group vote is ready to share.
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="display:block;font-size:13px;color:#555;margin-bottom:4px;">Share link</label>
+        <input
+          id="groupVoteShareLinkInput"
+          class="filter-control"
+          type="text"
+          readonly
+        />
+      </div>
+    </div>
+
+    <div class="group-vote-modal-footer">
+      <span class="group-vote-hint" id="groupVoteLinkModalStatus">Copy the link or share it.</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button id="copyGroupVoteLinkBtn" class="top-bar-button-like" type="button">Copy link</button>
+        <button id="shareGroupVoteLinkBtn" class="group-vote-btn" type="button">Share</button>
+        <button id="openGroupVoteLinkBtn" class="top-bar-button-like" type="button">Open vote</button>
+      </div>
+    </div>
+  </div>
+</div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/group-vote-create.js"></script>
@@ -1163,6 +1197,30 @@
       if (modal) modal.classList.add("hidden");
       closeGroupVoteCourseDropdown();
     }
+    
+    let latestGroupVoteShareUrl = "";
+let latestGroupVoteShareTitle = "";
+let latestGroupVoteShareNote = "";
+
+function showGroupVoteLinkModal(url, title, note) {
+  latestGroupVoteShareUrl = url || "";
+  latestGroupVoteShareTitle = title || "TeeRadar Group Vote";
+  latestGroupVoteShareNote = note || "Vote for the tee time that works best.";
+
+  const modal = document.getElementById("groupVoteLinkModal");
+  const input = document.getElementById("groupVoteShareLinkInput");
+  const status = document.getElementById("groupVoteLinkModalStatus");
+
+  if (input) input.value = latestGroupVoteShareUrl;
+  if (status) status.textContent = "Copy the link or share it.";
+
+  if (modal) modal.classList.remove("hidden");
+}
+
+function closeGroupVoteLinkModal() {
+  const modal = document.getElementById("groupVoteLinkModal");
+  if (modal) modal.classList.add("hidden");
+}
 
     async function createGroupVoteFromSelections() {
       if (!window.TeeRadarGroupVote) {
@@ -1197,28 +1255,9 @@
 
         closeGroupVoteModal();
 
-                try {
-          await navigator.clipboard.writeText(fullUrl);
-        } catch {}
+         closeGroupVoteModal();
+         showGroupVoteLinkModal(fullUrl, title, note);
 
-        try {
-          if (navigator.share) {
-            await navigator.share({
-              title: title || "TeeRadar Group Vote",
-              text: note || "Vote for the tee time that works best.",
-              url: fullUrl,
-            });
-          } else {
-            alert(`Group vote created.\n\nLink copied to clipboard:\n${fullUrl}`);
-          }
-        } catch (err) {
-          // user cancelled share sheet -> do nothing
-          if (err && err.name !== "AbortError") {
-            alert(`Group vote created.\n\nLink copied to clipboard:\n${fullUrl}`);
-          }
-        }
-
-        window.open(fullUrl, "_blank");
       } catch (err) {
         console.error("createGroupVoteFromSelections error", err);
         alert(err.message || "Could not create group vote.");
@@ -2122,6 +2161,56 @@ const courseId = course.id || course.courseId || course.course_id || null;
       const wrap = evt.target.closest(".group-vote-course-filter-wrap");
       if (!wrap) closeGroupVoteCourseDropdown();
     });
+    
+    document.getElementById("closeGroupVoteLinkModalBtn")?.addEventListener("click", closeGroupVoteLinkModal);
+
+document.getElementById("copyGroupVoteLinkBtn")?.addEventListener("click", async () => {
+  const input = document.getElementById("groupVoteShareLinkInput");
+  const status = document.getElementById("groupVoteLinkModalStatus");
+  const url = input?.value || latestGroupVoteShareUrl || "";
+
+  if (!url) return;
+
+  try {
+    await navigator.clipboard.writeText(url);
+    if (status) status.textContent = "Link copied.";
+  } catch {
+    if (status) status.textContent = "Could not copy link.";
+  }
+});
+
+document.getElementById("shareGroupVoteLinkBtn")?.addEventListener("click", async () => {
+  const status = document.getElementById("groupVoteLinkModalStatus");
+
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: latestGroupVoteShareTitle,
+        text: latestGroupVoteShareNote,
+        url: latestGroupVoteShareUrl,
+      });
+      if (status) status.textContent = "Shared successfully.";
+      return;
+    }
+
+    await navigator.clipboard.writeText(latestGroupVoteShareUrl);
+    if (status) status.textContent = "Link copied.";
+  } catch (err) {
+    if (err && err.name === "AbortError") return;
+    if (status) status.textContent = "Could not share link.";
+  }
+});
+
+document.getElementById("openGroupVoteLinkBtn")?.addEventListener("click", () => {
+  if (!latestGroupVoteShareUrl) return;
+  window.open(latestGroupVoteShareUrl, "_blank");
+});
+
+document.getElementById("groupVoteLinkModal")?.addEventListener("click", (evt) => {
+  if (evt.target.id === "groupVoteLinkModal") {
+    closeGroupVoteLinkModal();
+  }
+});
 
     // State selector behaviour
     (function setupStateSelector() {
