@@ -538,6 +538,40 @@
       font-size: 14px;
       cursor: pointer;
     }
+        /* ---- Results toolbar ---- */
+    .results-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: end;
+      padding: 8px 16px 0 16px;
+    }
+
+    .results-toolbar-group {
+      min-width: 150px;
+      flex: 1 1 180px;
+    }
+
+    .results-toolbar-label {
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 4px;
+    }
+
+    .results-toolbar-control {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      font-size: 14px;
+    }
+
+    .chip-home-course {
+      background: #e8f7ef;
+      color: #0f7a3c;
+      font-weight: 600;
+    }
   </style>
 </head>
 
@@ -617,7 +651,7 @@
 
   <div id="map"></div>
 
-  <div class="legend">
+    <div class="legend">
     <div class="legend-item">
       <span class="legend-dot dot-green"></span> Available
     </div>
@@ -629,6 +663,32 @@
     </div>
     <div class="legend-item">
       <span class="legend-dot dot-yellow"></span> Unable to confirm availability
+    </div>
+  </div>
+
+  <div class="results-toolbar">
+    <div class="results-toolbar-group">
+      <div class="results-toolbar-label">Sort courses</div>
+      <select id="courseSort" class="results-toolbar-control">
+        <option value="default" selected>Alphabetical</option>
+        <option value="availability_desc">Most available times</option>
+        <option value="nearest">Nearest</option>
+        <option value="home_first">Home course first</option>
+        <option value="holes_9_first">9 holes first</option>
+        <option value="holes_18_first">18 holes first</option>
+        <option value="name_desc">Z–A</option>
+      </select>
+    </div>
+
+    <div class="results-toolbar-group">
+      <div class="results-toolbar-label">Show</div>
+      <select id="courseAvailabilityFilter" class="results-toolbar-control">
+        <option value="all" selected>All courses</option>
+        <option value="available">Available</option>
+        <option value="phone">Phone booking</option>
+        <option value="unknown">Unable to confirm</option>
+        <option value="unavailable">No availability</option>
+      </select>
     </div>
   </div>
 
@@ -718,7 +778,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/group-vote-create.js"></script>
   <script>
-    let map;
+        let map;
     let markers = [];
     let courses = [];
     let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize, state }
@@ -726,6 +786,11 @@
     let voteSelections = [];
     let voteCandidateOptions = [];
     let voteSelectedCourses = [];
+
+    let currentSortMode = "default";
+    let currentAvailabilityFilter = "all";
+    let userLat = null;
+    let userLng = null;
 
     // full list + state handling
     let allCourses = [];
@@ -1346,6 +1411,10 @@ function slugifyCourseName(name) {
 
       // use the logged-in user's home course (if any) to set state + zoom
       applyHomeCourseDefaults();
+
+      currentSortMode = document.getElementById("courseSort")?.value || "default";
+      currentAvailabilityFilter = document.getElementById("courseAvailabilityFilter")?.value || "all";
+
       renderCourses();
       updateGroupVoteToolbar();
     }
@@ -1474,9 +1543,13 @@ function slugifyCourseName(name) {
       const hLat = homeCourse ? toNum(homeCourse.lat) : null;
       const hLng = homeCourse ? toNum(homeCourse.lng) : null;
 
-      if (homeCourse && hLat !== null && hLng !== null) {
+            if (homeCourse && hLat !== null && hLng !== null) {
+        userLat = hLat;
+        userLng = hLng;
         map.setView([hLat, hLng], 12);
       } else {
+        userLat = null;
+        userLng = null;
         zoomToStateCourses();
       }
 
@@ -1543,6 +1616,258 @@ function slugifyCourseName(name) {
       const d = new Date(dateStr);
       const day = d.getDay();
       return day === 0 || day === 6;
+    }
+        function normalizeText(v) {
+      return String(v || "").trim().toLowerCase();
+    }
+
+    function getUserHomeCourseInfo() {
+      const user = getStoredUser();
+      if (!user) {
+        return {
+          homeCourse: "",
+          homeCourseId: null,
+          homeCourseState: ""
+        };
+      }
+
+      return {
+        homeCourse: String(user.homeCourse || "").trim(),
+        homeCourseId: user.homeCourseId || null,
+        homeCourseState: String(user.homeCourseState || "").trim().toUpperCase()
+      };
+    }
+
+    function cleanCourseNameForMatch(str) {
+      if (!str) return "";
+      let s = String(str).toLowerCase();
+      s = s.replace(/\(\s*(wa|nt|qld|nsw|vic|sa|tas|act)\s*\)/gi, "");
+      const idx = s.indexOf("(");
+      if (idx >= 0) s = s.slice(0, idx);
+      return s.trim();
+    }
+
+    function isSubscriberHomeCourse(course) {
+      const info = getUserHomeCourseInfo();
+      if (!course || !info) return false;
+
+      if (info.homeCourseId && course.id && String(course.id) === String(info.homeCourseId)) {
+        return true;
+      }
+
+      const courseName = cleanCourseNameForMatch(course.name || "");
+      const homeName = cleanCourseNameForMatch(info.homeCourse || "");
+      if (!courseName || !homeName) return false;
+
+      return (
+        courseName === homeName ||
+        courseName.includes(homeName) ||
+        homeName.includes(courseName)
+      );
+    }
+
+    function isLikelySubscriber() {
+      const info = getUserHomeCourseInfo();
+      return !!(info.homeCourse || info.homeCourseId);
+    }
+
+    function getCourseDistanceKm(course) {
+      const lat1 = Number(userLat);
+      const lng1 = Number(userLng);
+      const lat2 = Number(course?.lat);
+      const lng2 = Number(course?.lng);
+
+      if (
+        !Number.isFinite(lat1) ||
+        !Number.isFinite(lng1) ||
+        !Number.isFinite(lat2) ||
+        !Number.isFinite(lng2)
+      ) {
+        return null;
+      }
+
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const R = 6371;
+
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function getCourseRenderMeta(course) {
+      const name = course.name || "";
+      const provider = String(course.provider || "Other").trim();
+      const providerLower = provider.toLowerCase();
+      const isPhone = providerLower === "phone";
+      const isTeeItUp = providerLower === "teeitup";
+      const isChronogolf = providerLower === "chronogolf";
+      const isClickThroughOnly = isTeeItUp || isChronogolf;
+
+      const searchDate = lastSearchCriteria && lastSearchCriteria.date;
+      const isUnconfirmed =
+        isClickThroughOnly ||
+        name.startsWith("Wembley Golf Course") ||
+        name.startsWith("Meadow Springs Golf Course") ||
+        name.startsWith("Meadow Springs Golf & Country Club");
+
+      const slots = groupedSlots[name] || [];
+      const want = Number(
+        (lastSearchCriteria && lastSearchCriteria.partySize) ||
+        document.getElementById("players").value ||
+        1
+      );
+
+      const fitSlots = (Array.isArray(slots) ? slots : []).filter((s) => slotFitsParty(s, want));
+      const hasSlots = fitSlots.length > 0;
+
+      let markerKind = "unavailable";
+      if (isPhone) {
+        markerKind = "phone";
+      } else if (hasSlots === true) {
+        markerKind = "available";
+      } else if (isClickThroughOnly || isUnconfirmed) {
+        markerKind = "unknown";
+      }
+
+      return {
+        name,
+        provider,
+        providerLower,
+        isPhone,
+        isTeeItUp,
+        isChronogolf,
+        isClickThroughOnly,
+        isUnconfirmed,
+        fitSlots,
+        hasSlots,
+        markerKind,
+        availableCount: fitSlots.length,
+        isHomeCourse: isSubscriberHomeCourse(course),
+        distanceKm: getCourseDistanceKm(course),
+        holes: Number(course.holes || 0)
+      };
+    }
+
+    function applyCourseVisibilityFilter(course, meta) {
+      switch (currentAvailabilityFilter) {
+        case "available":
+          return meta.markerKind === "available";
+        case "phone":
+          return meta.markerKind === "phone";
+        case "unknown":
+          return meta.markerKind === "unknown";
+        case "unavailable":
+          return meta.markerKind === "unavailable";
+        case "all":
+        default:
+          return true;
+      }
+    }
+
+    function compareAlpha(a, b) {
+      return normalizeText(a.course.name).localeCompare(normalizeText(b.course.name));
+    }
+
+    function compareAvailabilityGroup(a, b) {
+      const rank = (item) => {
+        switch (item.meta.markerKind) {
+          case "available": return 0;
+          case "phone": return 1;
+          case "unknown": return 2;
+          case "unavailable": return 3;
+          default: return 4;
+        }
+      };
+      return rank(a) - rank(b);
+    }
+
+    function compareHomeCourseFirst(a, b) {
+      if (a.meta.isHomeCourse !== b.meta.isHomeCourse) {
+        return a.meta.isHomeCourse ? -1 : 1;
+      }
+      return 0;
+    }
+
+    function compareMostAvailable(a, b) {
+      if (a.meta.availableCount !== b.meta.availableCount) {
+        return b.meta.availableCount - a.meta.availableCount;
+      }
+      return 0;
+    }
+
+    function compareNearest(a, b) {
+      const aDist = Number.isFinite(a.meta.distanceKm) ? a.meta.distanceKm : Infinity;
+      const bDist = Number.isFinite(b.meta.distanceKm) ? b.meta.distanceKm : Infinity;
+      if (aDist !== bDist) return aDist - bDist;
+      return 0;
+    }
+
+    function compareHoles9First(a, b) {
+      const aRank = a.meta.holes === 9 ? 0 : 1;
+      const bRank = b.meta.holes === 9 ? 0 : 1;
+      if (aRank !== bRank) return aRank - bRank;
+      return 0;
+    }
+
+    function compareHoles18First(a, b) {
+      const aRank = a.meta.holes === 18 ? 0 : 1;
+      const bRank = b.meta.holes === 18 ? 0 : 1;
+      if (aRank !== bRank) return aRank - bRank;
+      return 0;
+    }
+
+    function sortRenderableCourses(items) {
+      const subscriber = isLikelySubscriber();
+
+      items.sort((a, b) => {
+        if (subscriber) {
+          const homeCmp = compareHomeCourseFirst(a, b);
+          if (homeCmp !== 0) return homeCmp;
+        }
+
+        const availabilityCmp = compareAvailabilityGroup(a, b);
+        if (availabilityCmp !== 0) return availabilityCmp;
+
+        if (currentSortMode === "availability_desc") {
+          const cmp = compareMostAvailable(a, b);
+          if (cmp !== 0) return cmp;
+        }
+
+        if (currentSortMode === "nearest") {
+          const cmp = compareNearest(a, b);
+          if (cmp !== 0) return cmp;
+        }
+
+        if (currentSortMode === "home_first" && subscriber) {
+          const cmp = compareHomeCourseFirst(a, b);
+          if (cmp !== 0) return cmp;
+        }
+
+        if (currentSortMode === "holes_9_first") {
+          const cmp = compareHoles9First(a, b);
+          if (cmp !== 0) return cmp;
+        }
+
+        if (currentSortMode === "holes_18_first") {
+          const cmp = compareHoles18First(a, b);
+          if (cmp !== 0) return cmp;
+        }
+
+        if (currentSortMode === "name_desc") {
+          return compareAlpha(b, a);
+        }
+
+        return compareAlpha(a, b);
+      });
+
+      return items;
     }
 
     // ---- SEARCH & RENDER ----
@@ -1740,7 +2065,7 @@ trackEvent("search", {
       return L.divIcon({ className, iconSize: [14, 14] });
     }
 
-    function renderCourses() {
+        function renderCourses() {
       clearMarkers();
       coursesStrip.innerHTML = "";
 
@@ -1753,14 +2078,10 @@ trackEvent("search", {
       const searchDate = lastSearchCriteria && lastSearchCriteria.date;
       const dateIsWeekend = searchDate ? isWeekendDateStr(searchDate) : null;
 
+      const renderableCourses = [];
+
       courses.forEach((course) => {
         const name = course.name || "";
-        const provider = String(course.provider || "Other").trim();
-        const providerLower = provider.toLowerCase();
-        const isPhone = providerLower === "phone";
-        const isTeeItUp = providerLower === "teeitup";
-        const isChronogolf = providerLower === "chronogolf";
-        const isClickThroughOnly = isTeeItUp || isChronogolf;
 
         if (searchDate) {
           const hasWeekendWord = /weekend/i.test(name);
@@ -1770,14 +2091,8 @@ trackEvent("search", {
           if (hasWeekdayWord && dateIsWeekend === true) return;
         }
 
-        const isUnconfirmed =
-          isClickThroughOnly ||
-          name.startsWith("Wembley Golf Course") ||
-          name.startsWith("Meadow Springs Golf Course") ||
-          name.startsWith("Meadow Springs Golf & Country Club");
-
         if (
-          !isPhone &&
+          !String(course.provider || "").trim().toLowerCase().includes("phone") &&
           selectedHoles &&
           typeof course.holes === "number" &&
           Number(course.holes) !== selectedHoles
@@ -1785,28 +2100,29 @@ trackEvent("search", {
           return;
         }
 
-        const slots = groupedSlots[name] || [];
+        const meta = getCourseRenderMeta(course);
 
-        const want = Number(
-          (lastSearchCriteria && lastSearchCriteria.partySize) ||
-          document.getElementById("players").value ||
-          1
-        );
+        if (!applyCourseVisibilityFilter(course, meta)) {
+          return;
+        }
 
-        const fitSlots = (Array.isArray(slots) ? slots : []).filter(s => slotFitsParty(s, want));
-        const hasSlots = fitSlots.length > 0;
+        renderableCourses.push({ course, meta });
+      });
 
-        // ✅ STRICT marker logic — fixes Hillview green bug
-let markerKind = "unavailable";
+      sortRenderableCourses(renderableCourses);
 
-if (isPhone) {
-  markerKind = "phone";
-} else if (hasSlots === true) {
-  // ONLY green if at least one slot fits party size
-  markerKind = "available";
-} else if (isClickThroughOnly || isUnconfirmed) {
-  markerKind = "unknown";
-}
+      renderableCourses.forEach(({ course, meta }) => {
+        const name = meta.name;
+        const provider = meta.provider;
+        const providerLower = meta.providerLower;
+        const isPhone = meta.isPhone;
+        const isClickThroughOnly = meta.isClickThroughOnly;
+        const isUnconfirmed = meta.isUnconfirmed;
+        const fitSlots = meta.fitSlots;
+        const hasSlots = meta.hasSlots;
+        const markerKind = meta.markerKind;
+        const isHomeCourse = meta.isHomeCourse;
+        const distanceKm = meta.distanceKm;
 
         const cLat = toNum(course.lat);
         const cLng = toNum(course.lng);
@@ -1818,6 +2134,14 @@ if (isPhone) {
 
           let popupHtml = `<div style="font-size:13px;">
             <strong>${name}</strong><br>${provider}`;
+
+          if (isHomeCourse) {
+            popupHtml += `<br><strong>Home course</strong>`;
+          }
+
+          if (Number.isFinite(distanceKm)) {
+            popupHtml += `<br>${distanceKm.toFixed(1)} km away`;
+          }
 
           if (isClickThroughOnly || isUnconfirmed) {
             popupHtml += `<br><strong>Unable to confirm availability</strong>`;
@@ -1891,14 +2215,19 @@ if (isPhone) {
         const phoneText = isPhone && course.phone ? course.phone : "";
         const phoneHref = isPhone && course.phone ? getTelHref(course.phone) : "";
 
+        const extraInfoBits = [];
+        if (isHomeCourse) extraInfoBits.push(`<span class="chip chip-home-course">Home course</span>`);
+        if (Number.isFinite(distanceKm)) extraInfoBits.push(`<span class="chip">${distanceKm.toFixed(1)} km</span>`);
+
         card.innerHTML = `
           <div>
             <div class="course-header">${name}</div>
-            <div class="course-sub">Western Australia</div>
+            <div class="course-sub">${getPrettyStateName(course.state)}</div>
             <div class="chip-row">
               <span class="chip chip-provider">${providerLabel}</span>
               <span class="chip ${availChipClass}">${availLabel}</span>
               <span class="chip">${holesLabel}</span>
+              ${extraInfoBits.join("")}
             </div>
 
             ${
@@ -1932,14 +2261,16 @@ if (isPhone) {
           </div>
         `;
 
-
-        const subStateEl = card.querySelector(".course-sub");
-        if (subStateEl) {
-          subStateEl.textContent = getPrettyStateName(course.state);
-        }
-
         coursesStrip.appendChild(card);
       });
+
+      if (!renderableCourses.length) {
+        coursesStrip.innerHTML = `
+          <div style="padding: 8px 4px 18px 4px; color:#666; font-size:14px;">
+            No courses match the selected filters.
+          </div>
+        `;
+      }
     }
 
     // Handle clicks on "Go to booking" (cards + map popups)
@@ -2211,6 +2542,16 @@ document.getElementById("groupVoteLinkModal")?.addEventListener("click", (evt) =
     closeGroupVoteLinkModal();
   }
 });
+
+    document.getElementById("courseSort")?.addEventListener("change", (e) => {
+      currentSortMode = e.target.value || "default";
+      renderCourses();
+    });
+
+    document.getElementById("courseAvailabilityFilter")?.addEventListener("change", (e) => {
+      currentAvailabilityFilter = e.target.value || "all";
+      renderCourses();
+    });
 
     // State selector behaviour
     (function setupStateSelector() {
