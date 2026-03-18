@@ -326,9 +326,27 @@ router.post("/api/group-votes/:publicId/vote", requireUser, async (req, res) => 
 
     const refreshed = await getVoteFull(publicId, userId);
     return res.json({ ok: true, vote: refreshed });
-  } catch (err) {
-    console.error("POST /api/group-votes/:publicId/vote error", err);
-    return res.status(500).json({ ok: false, error: "server_error" });
+    } catch (err) {
+    console.error("POST /api/group-votes/:publicId/vote error", {
+      message: err?.message || null,
+      detail: err?.detail || null,
+      code: err?.code || null,
+      constraint: err?.constraint || null,
+      table: err?.table || null,
+      stack: err?.stack || null,
+    });
+
+    return res.status(500).json({
+      ok: false,
+      error: "server_error",
+      debug: {
+        message: err?.message || null,
+        detail: err?.detail || null,
+        code: err?.code || null,
+        constraint: err?.constraint || null,
+        table: err?.table || null,
+      },
+    });
   }
 });
 
