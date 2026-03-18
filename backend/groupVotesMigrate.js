@@ -55,7 +55,13 @@ export async function ensureGroupVotesTables(db) {
     );
   `);
 
-  // ✅ Force-drop old single-vote uniqueness if it exists
+  // ✅ Drop the exact old single-vote constraint that is still causing conflicts
+  await db.query(`
+    ALTER TABLE group_vote_responses
+    DROP CONSTRAINT IF EXISTS group_vote_responses_vote_id_user_id_key;
+  `);
+
+  // ✅ Drop any other old unique constraint matching (vote_id, user_id)
   await db.query(`
     DO $$
     DECLARE r RECORD;
@@ -76,12 +82,12 @@ export async function ensureGroupVotesTables(db) {
     END $$;
   `);
 
-  // ✅ Also drop old index name if one was created manually before
+  // ✅ Also drop any old manual single-vote unique index if it exists
   await db.query(`
     DROP INDEX IF EXISTS idx_group_vote_responses_vote_user_unique;
   `);
 
-  // ✅ Correct multi-vote unique rule: one user can vote once per option
+  // ✅ Correct multi-vote unique rule: same user can vote for multiple options, once per option
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_group_vote_responses_vote_option_user_unique
     ON group_vote_responses(vote_id, option_id, user_id);
