@@ -458,8 +458,9 @@
       font-size: 12px;
       color: #666;
     }
-        .group-vote-course-filter-wrap {
+            .group-vote-course-filter-wrap {
       margin-bottom: 12px;
+      position: relative;
     }
 
     .group-vote-course-filter-label {
@@ -469,26 +470,63 @@
       margin-bottom: 6px;
     }
 
-    .group-vote-course-filter-chips {
+    .group-vote-course-dropdown-btn {
+      width: 100%;
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .group-vote-course-chip {
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
       border: 1px solid #d1d5db;
+      border-radius: 12px;
       background: #fff;
-      color: #374151;
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 13px;
+      color: #222;
+      font-size: 14px;
       cursor: pointer;
+      text-align: left;
     }
 
-    .group-vote-course-chip.active {
-      background: var(--teal);
-      color: #fff;
-      border-color: var(--teal);
+    .group-vote-course-dropdown-btn-text {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .group-vote-course-dropdown-menu {
+      margin-top: 8px;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #fff;
+      max-height: 220px;
+      overflow-y: auto;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+      display: none;
+    }
+
+    .group-vote-course-dropdown-menu.open {
+      display: block;
+    }
+
+    .group-vote-course-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: #222;
+      cursor: pointer;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .group-vote-course-dropdown-item:last-child {
+      border-bottom: none;
+    }
+
+    .group-vote-course-dropdown-item input[type="checkbox"] {
+      transform: scale(1.05);
+      cursor: pointer;
     }
 
     .top-bar-button-like {
@@ -608,9 +646,21 @@
           <input id="groupVoteTitle" class="filter-control" type="text" placeholder="Saturday afternoon round" />
         </div>
 
-        <div class="group-vote-course-filter-wrap">
+                <div class="group-vote-course-filter-wrap">
           <label class="group-vote-course-filter-label">Preferred courses</label>
-          <div id="groupVoteCourseFilterChips" class="group-vote-course-filter-chips"></div>
+
+          <button
+            id="groupVoteCourseDropdownBtn"
+            class="group-vote-course-dropdown-btn"
+            type="button"
+          >
+            <span id="groupVoteCourseDropdownBtnText" class="group-vote-course-dropdown-btn-text">
+              All courses
+            </span>
+            <span>▾</span>
+          </button>
+
+          <div id="groupVoteCourseDropdownMenu" class="group-vote-course-dropdown-menu"></div>
         </div>
 
         <div style="margin-bottom:10px;">
@@ -988,40 +1038,48 @@
       );
     }
 
+        function getGroupVoteCourseFilterLabel() {
+      if (!voteSelectedCourses.length) return "All courses";
+      if (voteSelectedCourses.length === 1) return voteSelectedCourses[0];
+      return `${voteSelectedCourses.length} courses selected`;
+    }
+
     function renderGroupVoteCourseFilter() {
-      const chipsEl = document.getElementById("groupVoteCourseFilterChips");
-      if (!chipsEl) return;
+      const btnTextEl = document.getElementById("groupVoteCourseDropdownBtnText");
+      const menuEl = document.getElementById("groupVoteCourseDropdownMenu");
+      if (!btnTextEl || !menuEl) return;
+
+      btnTextEl.textContent = getGroupVoteCourseFilterLabel();
 
       const courseNames = getGroupVoteCourseNames();
-      chipsEl.innerHTML = "";
+      menuEl.innerHTML = "";
 
-      const allBtn = document.createElement("button");
-      allBtn.type = "button";
-      allBtn.className = `group-vote-course-chip ${voteSelectedCourses.length === 0 ? "active" : ""}`;
-      allBtn.textContent = "All courses";
-      allBtn.addEventListener("click", () => {
-        voteSelectedCourses = [];
-        renderGroupVoteCourseFilter();
-        renderGroupVoteModalOptions();
-      });
-      chipsEl.appendChild(allBtn);
+      const allRow = document.createElement("label");
+      allRow.className = "group-vote-course-dropdown-item";
+      allRow.innerHTML = `
+        <input type="checkbox" class="group-vote-course-filter-checkbox" data-course="__ALL__" ${voteSelectedCourses.length === 0 ? "checked" : ""} />
+        <span>All courses</span>
+      `;
+      menuEl.appendChild(allRow);
 
       courseNames.forEach((courseName) => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = `group-vote-course-chip ${voteSelectedCourses.includes(courseName) ? "active" : ""}`;
-        btn.textContent = courseName;
-        btn.addEventListener("click", () => {
-          if (voteSelectedCourses.includes(courseName)) {
-            voteSelectedCourses = voteSelectedCourses.filter((x) => x !== courseName);
-          } else {
-            voteSelectedCourses.push(courseName);
-          }
-          renderGroupVoteCourseFilter();
-          renderGroupVoteModalOptions();
-        });
-        chipsEl.appendChild(btn);
+        const row = document.createElement("label");
+        row.className = "group-vote-course-dropdown-item";
+        row.innerHTML = `
+          <input
+            type="checkbox"
+            class="group-vote-course-filter-checkbox"
+            data-course="${encodeURIComponent(courseName)}"
+            ${voteSelectedCourses.includes(courseName) ? "checked" : ""}
+          />
+          <span>${courseName}</span>
+        `;
+        menuEl.appendChild(row);
       });
+    }
+        function closeGroupVoteCourseDropdown() {
+      const menuEl = document.getElementById("groupVoteCourseDropdownMenu");
+      if (menuEl) menuEl.classList.remove("open");
     }
 
     function renderGroupVoteModalOptions() {
@@ -1103,6 +1161,7 @@
     function closeGroupVoteModal() {
       const modal = document.getElementById("groupVoteModal");
       if (modal) modal.classList.add("hidden");
+      closeGroupVoteCourseDropdown();
     }
 
     async function createGroupVoteFromSelections() {
@@ -2024,6 +2083,44 @@ const courseId = course.id || course.courseId || course.course_id || null;
       if (evt.target.id === "groupVoteModal") {
         closeGroupVoteModal();
       }
+    });
+        document.getElementById("groupVoteCourseDropdownBtn")?.addEventListener("click", (evt) => {
+      evt.stopPropagation();
+      const menuEl = document.getElementById("groupVoteCourseDropdownMenu");
+      if (!menuEl) return;
+      menuEl.classList.toggle("open");
+    });
+
+    document.addEventListener("change", (evt) => {
+      const cb = evt.target.closest(".group-vote-course-filter-checkbox");
+      if (!cb) return;
+
+      const raw = cb.dataset.course || "";
+
+      if (raw === "__ALL__") {
+        voteSelectedCourses = [];
+        renderGroupVoteCourseFilter();
+        renderGroupVoteModalOptions();
+        return;
+      }
+
+      const courseName = decodeURIComponent(raw);
+
+      if (cb.checked) {
+        if (!voteSelectedCourses.includes(courseName)) {
+          voteSelectedCourses.push(courseName);
+        }
+      } else {
+        voteSelectedCourses = voteSelectedCourses.filter((x) => x !== courseName);
+      }
+
+      renderGroupVoteCourseFilter();
+      renderGroupVoteModalOptions();
+    });
+
+    document.addEventListener("click", (evt) => {
+      const wrap = evt.target.closest(".group-vote-course-filter-wrap");
+      if (!wrap) closeGroupVoteCourseDropdown();
     });
 
     // State selector behaviour
