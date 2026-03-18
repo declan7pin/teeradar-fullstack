@@ -29,7 +29,7 @@ function isSafeBookingUrl(u) {
 }
 
 async function getVoteFull(publicId, viewerUserId = null) {
-    const voteRes = await db.query(
+  const voteRes = await db.query(
     `
     SELECT
       gv.id,
@@ -53,7 +53,7 @@ async function getVoteFull(publicId, viewerUserId = null) {
   const vote = voteRes.rows[0];
   if (!vote) return null;
 
-    const optionsRes = await db.query(
+  const optionsRes = await db.query(
     `
     SELECT
       o.id,
@@ -103,18 +103,18 @@ async function getVoteFull(publicId, viewerUserId = null) {
     [vote.id]
   );
 
-  let myOptionId = null;
+  let myOptionIds = [];
   if (viewerUserId) {
     const myVoteRes = await db.query(
       `
       SELECT option_id
       FROM group_vote_responses
       WHERE vote_id = $1 AND user_id = $2
-      LIMIT 1
+      ORDER BY created_at ASC, id ASC
       `,
       [vote.id, viewerUserId]
     );
-    myOptionId = myVoteRes.rows[0]?.option_id || null;
+    myOptionIds = myVoteRes.rows.map((r) => Number(r.option_id)).filter(Boolean);
   }
 
   const now = new Date();
@@ -134,7 +134,7 @@ async function getVoteFull(publicId, viewerUserId = null) {
     createdAt: vote.created_at,
     creatorName: vote.creator_name,
     selectedOptionId: vote.selected_option_id,
-    myOptionId,
+    myOptionIds,
     canVote,
     canChooseWinner,
     expired,
@@ -269,7 +269,7 @@ router.get("/api/group-votes/:publicId", async (req, res) => {
   }
 });
 
-// cast or update vote
+// cast or toggle vote
 router.post("/api/group-votes/:publicId/vote", requireUser, async (req, res) => {
   try {
     const publicId = normalizeText(req.params.publicId, 100);
@@ -294,17 +294,35 @@ router.post("/api/group-votes/:publicId/vote", requireUser, async (req, res) => 
       return res.status(400).json({ ok: false, error: "invalid_option_id" });
     }
 
-    await db.query(
+    const existing = await db.query(
       `
-      INSERT INTO group_vote_responses (vote_id, option_id, user_id)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (vote_id, user_id)
-      DO UPDATE SET
-        option_id = EXCLUDED.option_id,
-        updated_at = NOW()
+      SELECT id
+      FROM group_vote_responses
+      WHERE vote_id = $1 AND option_id = $2 AND user_id = $3
+      LIMIT 1
       `,
       [vote.id, optionId, userId]
     );
+
+    if (existing.rows[0]?.id) {
+      await db.query(
+        `
+        DELETE FROM group_vote_responses
+        WHERE id = $1
+        `,
+        [existing.rows[0].id]
+      );
+    } else {
+      await db.query(
+        `
+        INSERT INTO group_vote_responses (vote_id, option_id, user_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (vote_id, option_id, user_id)
+        DO NOTHING
+        `,
+        [vote.id, optionId, userId]
+      );
+    }
 
     const refreshed = await getVoteFull(publicId, userId);
     return res.json({ ok: true, vote: refreshed });
