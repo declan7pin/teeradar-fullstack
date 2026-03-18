@@ -34,7 +34,6 @@ export async function ensureGroupVotesTables(db) {
     );
   `);
 
-  // ✅ Safe adds for existing DBs
   await db.query(`
     ALTER TABLE group_vote_options
     ADD COLUMN IF NOT EXISTS display_name TEXT;
@@ -52,33 +51,37 @@ export async function ensureGroupVotesTables(db) {
       option_id BIGINT NOT NULL REFERENCES group_vote_options(id) ON DELETE CASCADE,
       user_id BIGINT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (vote_id, option_id, user_id)
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 
-  // ✅ Migrate old single-vote uniqueness to multi-vote uniqueness
+  // ✅ Force-drop old single-vote uniqueness if it exists
   await db.query(`
     DO $$
-    DECLARE constraint_name text;
+    DECLARE r RECORD;
     BEGIN
-      SELECT tc.constraint_name
-      INTO constraint_name
-      FROM information_schema.table_constraints tc
-      JOIN information_schema.key_column_usage kcu
-        ON tc.constraint_name = kcu.constraint_name
-       AND tc.table_schema = kcu.table_schema
-      WHERE tc.table_name = 'group_vote_responses'
-        AND tc.constraint_type = 'UNIQUE'
-      GROUP BY tc.constraint_name
-      HAVING array_agg(kcu.column_name ORDER BY kcu.column_name) = ARRAY['user_id','vote_id'];
-
-      IF constraint_name IS NOT NULL THEN
-        EXECUTE 'ALTER TABLE group_vote_responses DROP CONSTRAINT ' || quote_ident(constraint_name);
-      END IF;
+      FOR r IN
+        SELECT tc.constraint_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.table_schema = kcu.table_schema
+        WHERE tc.table_name = 'group_vote_responses'
+          AND tc.constraint_type = 'UNIQUE'
+        GROUP BY tc.constraint_name
+        HAVING array_agg(kcu.column_name ORDER BY kcu.column_name) = ARRAY['user_id','vote_id']
+      LOOP
+        EXECUTE 'ALTER TABLE group_vote_responses DROP CONSTRAINT IF EXISTS ' || quote_ident(r.constraint_name);
+      END LOOP;
     END $$;
   `);
 
+  // ✅ Also drop old index name if one was created manually before
+  await db.query(`
+    DROP INDEX IF EXISTS idx_group_vote_responses_vote_user_unique;
+  `);
+
+  // ✅ Correct multi-vote unique rule: one user can vote once per option
   await db.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_group_vote_responses_vote_option_user_unique
     ON group_vote_responses(vote_id, option_id, user_id);
@@ -124,7 +127,6 @@ export async function ensureGroupVotesTables(db) {
     ON group_vote_responses(user_id);
   `);
 
-  // add FK after both tables exist
   await db.query(`
     DO $$
     BEGIN
@@ -142,7 +144,6 @@ export async function ensureGroupVotesTables(db) {
     END $$;
   `);
 
-  // keep updated_at fresh
   await db.query(`
     CREATE OR REPLACE FUNCTION set_group_votes_updated_at()
     RETURNS TRIGGER AS $$
