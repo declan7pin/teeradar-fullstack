@@ -313,12 +313,10 @@ router.post("/api/group-votes/:publicId/vote", requireUser, async (req, res) => 
         [existing.rows[0].id]
       );
     } else {
-      await db.query(
+            await db.query(
         `
         INSERT INTO group_vote_responses (vote_id, option_id, user_id)
         VALUES ($1, $2, $3)
-        ON CONFLICT (vote_id, option_id, user_id)
-        DO NOTHING
         `,
         [vote.id, optionId, userId]
       );
