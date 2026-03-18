@@ -53,8 +53,35 @@ export async function ensureGroupVotesTables(db) {
       user_id BIGINT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (vote_id, user_id)
+      UNIQUE (vote_id, option_id, user_id)
     );
+  `);
+
+  // ✅ Migrate old single-vote uniqueness to multi-vote uniqueness
+  await db.query(`
+    DO $$
+    DECLARE constraint_name text;
+    BEGIN
+      SELECT tc.constraint_name
+      INTO constraint_name
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu
+        ON tc.constraint_name = kcu.constraint_name
+       AND tc.table_schema = kcu.table_schema
+      WHERE tc.table_name = 'group_vote_responses'
+        AND tc.constraint_type = 'UNIQUE'
+      GROUP BY tc.constraint_name
+      HAVING array_agg(kcu.column_name ORDER BY kcu.column_name) = ARRAY['user_id','vote_id'];
+
+      IF constraint_name IS NOT NULL THEN
+        EXECUTE 'ALTER TABLE group_vote_responses DROP CONSTRAINT ' || quote_ident(constraint_name);
+      END IF;
+    END $$;
+  `);
+
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_group_vote_responses_vote_option_user_unique
+    ON group_vote_responses(vote_id, option_id, user_id);
   `);
 
   await db.query(`
