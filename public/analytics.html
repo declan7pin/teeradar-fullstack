@@ -1378,9 +1378,10 @@ else setText("metricHitRate7d", "—");
     <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
     <td style="white-space:nowrap;">
       <button class="edit-btn" type="button" data-edit-user-idx="${idx}">Edit</button>
+      <button class="delete-btn" type="button" data-delete-user-id="${u.id}">Delete</button>
     </td>
   </tr>
-        `;
+`;
       }).join("");
     }
 
@@ -1400,6 +1401,16 @@ else setText("metricHitRate7d", "—");
     const data = await res.json().catch(() => null);
     return { res, data };
   }
+async function deleteRegisteredUserById(id) {
+  const res = await fetch(`/api/analytics/users/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+    credentials: "include",
+  });
+
+  const data = await res.json().catch(() => null);
+  return { res, data };
+}
 
   async function editRegisteredUser(user) {
     if (!user || !user.id) return;
@@ -1496,10 +1507,47 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
+  const deleteBtn = e.target.closest("[data-delete-user-id]");
+  if (deleteBtn) {
+    const id = Number(deleteBtn.getAttribute("data-delete-user-id"));
+    if (!Number.isFinite(id) || id <= 0) return;
+
+    const row = (USERS_CACHE || []).find((x) => Number(x?.id) === id) || null;
+    const label = row?.email || `User #${id}`;
+
+    const ok = window.confirm(
+      `Delete this user?\n\n${label}\n\nThis cannot be undone.`
+    );
+    if (!ok) return;
+
+    deleteBtn.disabled = true;
+    const oldTxt = deleteBtn.textContent;
+    deleteBtn.textContent = "Deleting...";
+
+    try {
+      const { res, data } = await deleteRegisteredUserById(id);
+
+      if (!res.ok || !data || !data.ok) {
+        alert("Delete failed: " + (data?.error || res.status));
+      } else {
+        await loadRegisteredUsers();
+        const detailCard = document.getElementById("userDetailCard");
+        if (detailCard) detailCard.style.display = "none";
+      }
+    } catch (err) {
+      console.error("deleteRegisteredUser error:", err);
+      alert("Delete failed (network/server error).");
+    } finally {
+      deleteBtn.disabled = false;
+      deleteBtn.textContent = oldTxt;
+    }
+
+    return;
+  }
+
   const tr = e.target.closest("#usersTable tbody tr");
   if (!tr) return;
 
-  // Ignore clicks inside the actions cell
   const td = e.target.closest("td");
   if (td && td === tr.lastElementChild) return;
 
