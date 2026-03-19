@@ -84,37 +84,35 @@ async function ensureUserAlertHitsTable() {
 ensureUserAlertHitsTable();
 
 // ---------------------------------------------------------
-// ✅ ADDED: schema helpers (safe plan pickup, no breaking changes)
+// Subscriber entitlement helpers
 // ---------------------------------------------------------
-let _schemaCache = null;
+function isTruthyPlan(plan) {
+  const p = String(plan || "").trim().toUpperCase();
+  return p === "BASIC" || p === "PRO";
+}
 
-async function getSchemaFlags() {
-  if (_schemaCache) return _schemaCache;
+function isEntitledSubscriberRow(subRow) {
+  if (!subRow) return false;
 
-  async function columnExists(tableName, columnName) {
-    try {
-      const { rows } = await db.query(
-        `
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = $1
-          AND column_name = $2
-        LIMIT 1
-        `,
-        [tableName, columnName]
-      );
-      return rows.length > 0;
-    } catch (e) {
-      return false;
-    }
-  }
+  const entitlementActive = !!subRow.entitlement_active;
+  if (!entitlementActive) return false;
 
-  const usersHasPlan = await columnExists("users", "plan");
-  const prefsHasPlan = await columnExists("user_preferences", "plan");
+  const status = String(subRow.status || "").trim().toLowerCase();
+  if (status !== "active" && status !== "trialing") return false;
 
-  _schemaCache = { usersHasPlan, prefsHasPlan };
-  return _schemaCache;
+  if (!subRow.current_period_end) return false;
+
+  const endMs = new Date(subRow.current_period_end).getTime();
+  if (!Number.isFinite(endMs)) return false;
+
+  return endMs > Date.now();
+}
+
+function getEffectiveSubscriberPlan(subRow) {
+  if (!isEntitledSubscriberRow(subRow)) return "FREE";
+
+  const p = String(subRow.plan || "").trim().toUpperCase();
+  return isTruthyPlan(p) ? p : "FREE";
 }
 
 // ---------------------------------------------------------
@@ -690,6 +688,20 @@ async function fetchTeeRadarSlotsFromDb(course, criteria) {
 
   return rows || [];
 }
+async function disableAlertEmailsForUser(email) {
+  try {
+    await db.query(
+      `
+      UPDATE user_preferences
+      SET alert_frequency = 'OFF'
+      WHERE LOWER(email) = LOWER($1)
+      `,
+      [email]
+    );
+  } catch (err) {
+    console.error(`⚠️ Failed to disable alert emails for ${email}:`, err.message);
+  }
+}
 // ---------------------------------------------------------
 // Core alert tick
 // ---------------------------------------------------------
@@ -698,20 +710,18 @@ async function runAlertTick() {
   console.log("🔔 Alert tick starting…");
 
   try {
-    const schema = await getSchemaFlags();
-
-    // Build plan select safely (won't break if column doesn't exist)
-    const planSelect =
-      schema.usersHasPlan
-        ? "u.plan AS plan"
-        : (schema.prefsHasPlan ? "p.plan AS plan" : "NULL::text AS plan");
-
-    // Pull users + preferences
+        // Pull users + preferences + subscriber entitlement
     const { rows } = await db.query(`
       SELECT
         u.email,
         u.home_course,
-        ${planSelect},
+
+        ss.plan AS subscriber_plan,
+        ss.status AS subscriber_status,
+        ss.entitlement_active,
+        ss.current_period_end,
+        ss.cancel_at_period_end,
+
         p.home_state,
         p.favourites,
         p.preferred_days,
@@ -724,6 +734,8 @@ async function runAlertTick() {
       FROM users u
       JOIN user_preferences p
         ON p.email = u.email
+      LEFT JOIN subscriber_status ss
+        ON LOWER(ss.email) = LOWER(u.email)
       WHERE p.favourites IS NOT NULL
     `);
 
@@ -737,8 +749,10 @@ async function runAlertTick() {
     const now = new Date();
 
     for (const row of rows) {
-      const email = (row.email || "").toLowerCase();
-      const plan = row.plan || null;
+            const email = (row.email || "").toLowerCase();
+
+      const entitled = isEntitledSubscriberRow(row);
+      const plan = getEffectiveSubscriberPlan(row);
 
       // ✅ FIX: normalise JSONB/string values to arrays so users don't get skipped
       const favourites = normaliseJsonArray(row.favourites);
@@ -750,6 +764,17 @@ async function runAlertTick() {
       const partySize = row.preferred_party_size || 1;
       const alertFrequencyRaw = row.alert_frequency || null;
       const alertLastSentRaw = row.alert_last_sent || null;
+
+      // 🔒 Only active entitled subscribers can receive email alerts
+            if (!entitled) {
+        console.log(
+          `🔒 Skipping ${email} – no active subscriber entitlement (status=${row.subscriber_status || "none"}, plan=${row.subscriber_plan || "FREE"}).`
+        );
+
+        // Optional cleanup so expired users stop showing as alert-enabled
+        await disableAlertEmailsForUser(email);
+        continue;
+      }
 
       if (!Array.isArray(favourites) || favourites.length === 0) {
         continue;
