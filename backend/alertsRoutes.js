@@ -5,6 +5,70 @@ import db from "./db.js";
 const router = express.Router();
 
 // ---------------------------------------------------------
+// Subscriber entitlement helpers
+// ---------------------------------------------------------
+function isTruthyPlan(plan) {
+  const p = String(plan || "").trim().toUpperCase();
+  return p === "BASIC" || p === "PRO";
+}
+
+function isEntitledSubscriberRow(subRow) {
+  if (!subRow) return false;
+
+  const entitlementActive = !!subRow.entitlement_active;
+  if (!entitlementActive) return false;
+
+  const status = String(subRow.status || "").trim().toLowerCase();
+  if (status !== "active" && status !== "trialing") return false;
+
+  if (!subRow.current_period_end) return false;
+
+  const endMs = new Date(subRow.current_period_end).getTime();
+  if (!Number.isFinite(endMs)) return false;
+
+  return endMs > Date.now();
+}
+
+function getEffectiveSubscriberPlan(subRow) {
+  if (!isEntitledSubscriberRow(subRow)) return "FREE";
+
+  const p = String(subRow.plan || "").trim().toUpperCase();
+  return isTruthyPlan(p) ? p : "FREE";
+}
+
+async function getSubscriberStatusRow(email) {
+  const result = await db.query(
+    `
+    SELECT
+      email,
+      plan,
+      status,
+      entitlement_active,
+      current_period_end,
+      cancel_at_period_end
+    FROM subscriber_status
+    WHERE LOWER(email) = LOWER($1)
+    LIMIT 1
+    `,
+    [email]
+  );
+
+  return result.rows?.[0] || null;
+}
+
+async function requireSubscriberAlertsAccess(email) {
+  const sub = await getSubscriberStatusRow(email);
+  const entitled = isEntitledSubscriberRow(sub);
+  const plan = getEffectiveSubscriberPlan(sub);
+
+  return {
+    entitled,
+    plan,
+    subscription: sub,
+  };
+}
+
+// ---------------------------------------------------------
 // Ensure tables exist
 // ---------------------------------------------------------
 async function ensureUserAlertHitsTable() {
@@ -77,12 +141,32 @@ router.get("/account/preferences", async (req, res) => {
       return res.status(400).json({ ok: false, error: "email is required" });
     }
 
-    const prefs = await getUserPreferencesRow(email);
-    if (!prefs) {
-      return res.json({ ok: true, found: false, preferences: null });
+    const access = await requireSubscriberAlertsAccess(email);
+    if (!access.entitled) {
+      return res.status(403).json({
+        ok: false,
+        error: "subscriber_required",
+        plan: "FREE",
+        message: "An active subscription is required to access email alerts.",
+      });
     }
 
-    return res.json({ ok: true, found: true, preferences: prefs });
+    const prefs = await getUserPreferencesRow(email);
+    if (!prefs) {
+      return res.json({
+        ok: true,
+        found: false,
+        plan: access.plan,
+        preferences: null,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      found: true,
+      plan: access.plan,
+      preferences: prefs,
+    });
   } catch (err) {
     console.error("account/preferences GET error:", err);
     return res.status(500).json({ ok: false, error: "internal error" });
@@ -97,12 +181,32 @@ router.get("/preferences", async (req, res) => {
       return res.status(400).json({ ok: false, error: "email is required" });
     }
 
-    const prefs = await getUserPreferencesRow(email);
-    if (!prefs) {
-      return res.json({ ok: true, found: false, preferences: null });
+    const access = await requireSubscriberAlertsAccess(email);
+    if (!access.entitled) {
+      return res.status(403).json({
+        ok: false,
+        error: "subscriber_required",
+        plan: "FREE",
+        message: "An active subscription is required to access email alerts.",
+      });
     }
 
-    return res.json({ ok: true, found: true, preferences: prefs });
+    const prefs = await getUserPreferencesRow(email);
+    if (!prefs) {
+      return res.json({
+        ok: true,
+        found: false,
+        plan: access.plan,
+        preferences: null,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      found: true,
+      plan: access.plan,
+      preferences: prefs,
+    });
   } catch (err) {
     console.error("preferences GET error:", err);
     return res.status(500).json({ ok: false, error: "internal error" });
@@ -167,6 +271,17 @@ router.get("/unread", async (req, res) => {
       return res.status(400).json({ ok: false, error: "email is required" });
     }
 
+    const access = await requireSubscriberAlertsAccess(email);
+    if (!access.entitled) {
+      return res.status(403).json({
+        ok: false,
+        error: "subscriber_required",
+        plan: "FREE",
+        hits: [],
+        message: "An active subscription is required to access email alerts.",
+      });
+    }
+
     // Get current favourites for this user (prevents old hits showing)
     const favNameSet = await getFavouriteCourseNameSet(email);
 
@@ -186,7 +301,7 @@ router.get("/unread", async (req, res) => {
         slots,
         created_at
       FROM user_alert_hits
-      WHERE email = $1
+      WHERE LOWER(email) = LOWER($1)
         AND read_at IS NULL
       ORDER BY created_at DESC
       LIMIT 200;
@@ -214,7 +329,11 @@ router.get("/unread", async (req, res) => {
       created_at: r.created_at,
     }));
 
-    res.json({ ok: true, hits });
+    res.json({
+      ok: true,
+      plan: access.plan,
+      hits,
+    });
   } catch (err) {
     console.error("alerts/unread error:", err);
     res.status(500).json({ ok: false, error: "internal error" });
@@ -235,25 +354,40 @@ router.post("/mark-read", async (req, res) => {
       return res.status(400).json({ ok: false, error: "email is required" });
     }
 
+    const access = await requireSubscriberAlertsAccess(email);
+    if (!access.entitled) {
+      return res.status(403).json({
+        ok: false,
+        error: "subscriber_required",
+        plan: "FREE",
+        updated: 0,
+        message: "An active subscription is required to access email alerts.",
+      });
+    }
+
     const ids = Array.isArray(idsRaw)
       ? idsRaw.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0)
       : [];
 
     if (!ids.length) {
-      return res.json({ ok: true, updated: 0 });
+      return res.json({ ok: true, plan: access.plan, updated: 0 });
     }
 
     const result = await db.query(
       `
       UPDATE user_alert_hits
       SET read_at = now()
-      WHERE email = $1
+      WHERE LOWER(email) = LOWER($1)
         AND id = ANY($2::int[])
       `,
       [email, ids]
     );
 
-    res.json({ ok: true, updated: result.rowCount || 0 });
+    res.json({
+      ok: true,
+      plan: access.plan,
+      updated: result.rowCount || 0,
+    });
   } catch (err) {
     console.error("alerts/mark-read error:", err);
     res.status(500).json({ ok: false, error: "internal error" });
