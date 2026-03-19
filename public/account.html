@@ -1185,8 +1185,20 @@ searchableCourses = data.filter((c) => {
         planPill.textContent = "Plan: Free (no active subscription)";
       }
 
-      if (planSubtext) {
-        if (entitlementActive && cancelAtPeriodEnd && currentPeriodEnd) {
+            if (planSubtext) {
+        if (entitlementActive && subscriptionStatus === "trialing" && currentPeriodEnd) {
+          const endDate = new Date(currentPeriodEnd);
+          const label = Number.isFinite(endDate.getTime())
+            ? endDate.toLocaleDateString("en-AU", {
+                day: "numeric",
+                month: "short",
+                year: "numeric"
+              })
+            : currentPeriodEnd;
+
+          planSubtext.textContent =
+            `Your ${currentPlan === "PRO" ? "Pro" : "Basic"} free trial is active until ${label}. All subscriber features are currently unlocked.`;
+        } else if (entitlementActive && cancelAtPeriodEnd && currentPeriodEnd) {
           const endDate = new Date(currentPeriodEnd);
           const label = Number.isFinite(endDate.getTime())
             ? endDate.toLocaleDateString("en-AU", {
