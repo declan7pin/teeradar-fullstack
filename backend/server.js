@@ -102,6 +102,129 @@ for (const [key, priceId] of Object.entries(PRICE_IDS)) {
     PRICE_TO_PLAN[priceId] = { plan: "PRO", maxFavs: 10 };
   }
 }
+function normalizePlan(plan) {
+  const p = String(plan || "").trim().toUpperCase();
+  if (p === "BASIC") return "BASIC";
+  if (p === "PRO") return "PRO";
+  return "FREE";
+}
+
+function derivePlanFromPriceId(priceId) {
+  const mapped = priceId ? PRICE_TO_PLAN[priceId] : null;
+  return normalizePlan(mapped?.plan || "FREE");
+}
+
+function computeEntitlementActive(status, currentPeriodEnd) {
+  const s = String(status || "").trim().toLowerCase();
+  if (s !== "active" && s !== "trialing") return false;
+  if (!currentPeriodEnd) return false;
+
+  const endMs = new Date(currentPeriodEnd).getTime();
+  if (!Number.isFinite(endMs)) return false;
+
+  return endMs > Date.now();
+}
+
+async function upsertSubscriberStatusFromStripe({ email, customerId, subscription }) {
+  if (!email || !subscription) return;
+
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const stripeCustomerId = String(customerId || subscription.customer || "").trim();
+  const subscriptionId = String(subscription.id || "").trim();
+  const status = String(subscription.status || "inactive").trim().toLowerCase();
+
+  const currentPeriodEnd = subscription.current_period_end
+    ? new Date(subscription.current_period_end * 1000).toISOString()
+    : null;
+
+  const canceledAt = subscription.canceled_at
+    ? new Date(subscription.canceled_at * 1000).toISOString()
+    : null;
+
+  const cancelAtPeriodEnd = !!subscription.cancel_at_period_end;
+
+  const priceId = subscription?.items?.data?.[0]?.price?.id || null;
+  const paidPlan = derivePlanFromPriceId(priceId);
+
+  const entitlementActive = computeEntitlementActive(status, currentPeriodEnd);
+
+  // ✅ Option B: effective plan becomes FREE once entitlement ends
+  const effectivePlan = entitlementActive ? paidPlan : "FREE";
+
+  await db.query(
+    `
+    INSERT INTO subscriber_status (
+      email,
+      stripe_customer_id,
+      subscription_id,
+      status,
+      plan,
+      cancel_at_period_end,
+      canceled_at,
+      current_period_end,
+      entitlement_active,
+      updated_at
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now())
+    ON CONFLICT (email)
+    DO UPDATE SET
+      stripe_customer_id = EXCLUDED.stripe_customer_id,
+      subscription_id = EXCLUDED.subscription_id,
+      status = EXCLUDED.status,
+      plan = EXCLUDED.plan,
+      cancel_at_period_end = EXCLUDED.cancel_at_period_end,
+      canceled_at = EXCLUDED.canceled_at,
+      current_period_end = EXCLUDED.current_period_end,
+      entitlement_active = EXCLUDED.entitlement_active,
+      updated_at = now()
+    `,
+    [
+      normalizedEmail,
+      stripeCustomerId || null,
+      subscriptionId || null,
+      status,
+      effectivePlan,
+      cancelAtPeriodEnd,
+      canceledAt,
+      currentPeriodEnd,
+      entitlementActive,
+    ]
+  );
+
+  // Keep legacy users.plan aligned for older parts of the app
+  await db.query(
+    `
+    UPDATE users
+    SET plan = $2
+    WHERE LOWER(email) = LOWER($1)
+    `,
+    [normalizedEmail, effectivePlan]
+  );
+}
+
+async function getSubscriberStatusByEmail(email) {
+  const result = await db.query(
+    `
+    SELECT
+      email,
+      stripe_customer_id,
+      subscription_id,
+      status,
+      plan,
+      cancel_at_period_end,
+      canceled_at,
+      current_period_end,
+      entitlement_active,
+      updated_at
+    FROM subscriber_status
+    WHERE LOWER(email) = LOWER($1)
+    LIMIT 1
+    `,
+    [email]
+  );
+
+  return result.rows?.[0] || null;
+}
 
 app.get("/api/analytics/debug", async (req, res) => {
   try {
@@ -707,51 +830,36 @@ if (bookingId && session?.payment_status === "paid") {
 
           const subId = session.subscription;
 
-          if (email && subId) {
+                    if (email && subId) {
             const sub = await stripe.subscriptions.retrieve(subId, {
               expand: ["items.data.price"],
             });
-            // ✅ ADD: immediately upsert subscriber_status on successful subscription checkout
-try {
-  const customerId = String(sub?.customer || session.customer || "").trim();
-  const subscriptionId = String(sub?.id || subId || "").trim();
-  const status = String(sub?.status || "active").trim();
 
-  const currentPeriodEnd = sub?.current_period_end
-    ? new Date(sub.current_period_end * 1000).toISOString()
-    : null;
+            try {
+              await upsertSubscriberStatusFromStripe({
+                email,
+                customerId: String(sub?.customer || session.customer || "").trim(),
+                subscription: sub,
+              });
 
-  if (email && customerId && subscriptionId) {
-    await db.query(
-      `
-      INSERT INTO subscriber_status
-        (email, stripe_customer_id, subscription_id, status, current_period_end, updated_at)
-      VALUES ($1,$2,$3,$4,$5,now())
-      ON CONFLICT (email)
-      DO UPDATE SET
-        stripe_customer_id = EXCLUDED.stripe_customer_id,
-        subscription_id = EXCLUDED.subscription_id,
-        status = EXCLUDED.status,
-        current_period_end = EXCLUDED.current_period_end,
-        updated_at = now();
-      `,
-      [email, customerId, subscriptionId, status, currentPeriodEnd]
-    );
-  }
-} catch (e) {
-  console.warn("⚠️ checkout.session.completed subscriber upsert failed:", e?.message || e);
-}
+              const priceId = sub?.items?.data?.[0]?.price?.id || null;
+              const effectivePlan = derivePlanFromPriceId(priceId);
 
-            const priceId = sub?.items?.data?.[0]?.price?.id || null;
-            const mapped = priceId ? PRICE_TO_PLAN[priceId] : null;
-
-            const plan = mapped?.plan || "BASIC"; // fallback if unknown
-            await db.query(
-              `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
-              [email, plan]
-            );
-
-            console.log("✅ Updated plan from checkout:", email, plan, priceId);
+              console.log("✅ Updated subscriber status from checkout:", {
+                email,
+                subscriptionId: sub?.id || null,
+                priceId,
+                effectivePlan,
+                status: sub?.status || null,
+                cancelAtPeriodEnd: !!sub?.cancel_at_period_end,
+                currentPeriodEnd: sub?.current_period_end || null,
+              });
+            } catch (e) {
+              console.warn(
+                "⚠️ checkout.session.completed subscriber upsert failed:",
+                e?.message || e
+              );
+            }
           } else {
             console.log("ℹ️ checkout.session.completed missing email/subscription", {
               email: !!email,
@@ -761,64 +869,47 @@ try {
           break;
         }
 
-        case "customer.subscription.created": // ✅ ADD
+                case "customer.subscription.created":
         case "customer.subscription.updated":
         case "customer.subscription.deleted": {
           const sub = event.data.object;
-
           const customerId = sub.customer;
-          const priceId = sub?.items?.data?.[0]?.price?.id || null;
 
-          const cust = await stripe.customers.retrieve(customerId);
-          const email = (cust?.email || "").toString().trim().toLowerCase();
-          // ✅ ADD: keep subscriber_status in sync for automatic booking discounts
-try {
-  const subscriptionId = String(sub?.id || "").trim();
-  const status = String(sub?.status || "").trim(); // active, trialing, canceled, etc.
+          let email = "";
 
-  const currentPeriodEnd = sub?.current_period_end
-    ? new Date(sub.current_period_end * 1000).toISOString()
-    : null;
-
-  if (email) {
-    await db.query(
-      `
-      INSERT INTO subscriber_status
-        (email, stripe_customer_id, subscription_id, status, current_period_end, updated_at)
-      VALUES ($1,$2,$3,$4,$5,now())
-      ON CONFLICT (email)
-      DO UPDATE SET
-        stripe_customer_id = EXCLUDED.stripe_customer_id,
-        subscription_id = EXCLUDED.subscription_id,
-        status = EXCLUDED.status,
-        current_period_end = EXCLUDED.current_period_end,
-        updated_at = now();
-      `,
-      [email, String(customerId), subscriptionId, status, currentPeriodEnd]
-    );
-  }
-} catch (e) {
-  console.warn("⚠️ subscriber_status upsert failed:", e?.message || e);
-}
+          try {
+            const cust = await stripe.customers.retrieve(customerId);
+            email = (cust?.email || "").toString().trim().toLowerCase();
+          } catch (err) {
+            console.warn("⚠️ Failed retrieving Stripe customer for webhook:", err?.message || err);
+          }
 
           if (email) {
-            let plan = "FREE";
+            await upsertSubscriberStatusFromStripe({
+              email,
+              customerId: String(customerId || "").trim(),
+              subscription: sub,
+            });
 
-            if (
-              event.type !== "customer.subscription.deleted" &&
-              sub.status === "active"
-            ) {
-              const mapped = priceId ? PRICE_TO_PLAN[priceId] : null;
-              plan = mapped?.plan || "BASIC";
-            }
+            const priceId = sub?.items?.data?.[0]?.price?.id || null;
 
-            await db.query(
-              `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
-              [email, plan]
-            );
-
-            console.log("✅ Updated plan from subscription:", email, plan, priceId);
+            console.log("✅ Updated subscriber status from subscription event:", {
+              type: event.type,
+              email,
+              subscriptionId: sub?.id || null,
+              priceId,
+              status: sub?.status || null,
+              cancelAtPeriodEnd: !!sub?.cancel_at_period_end,
+              currentPeriodEnd: sub?.current_period_end || null,
+            });
+          } else {
+            console.log("ℹ️ subscription webhook had no customer email", {
+              type: event.type,
+              customerId: customerId || null,
+              subscriptionId: sub?.id || null,
+            });
           }
+
           break;
         }
 
@@ -951,73 +1042,6 @@ app.use(groupVotesRouter);
 // 🔔 Alerts API
 app.use("/api/alerts", alertsRouter);
 
-app.get("/api/alerts/unread", async (req, res) => {
-  try {
-    const email = (req.query.email || "").toString().trim().toLowerCase();
-    if (!email) return res.status(400).json({ ok: false, error: "email is required" });
-
-    const { rows } = await db.query(
-      `
-      SELECT id, email, course_name, course_id, state, date, slots, created_at
-      FROM alert_hits
-      WHERE email = $1 AND read_at IS NULL
-      ORDER BY created_at DESC
-      LIMIT 100
-      `,
-      [email]
-    );
-
-    const hits = rows.map((r) => ({
-      id: r.id,
-      email: r.email,
-      course_name: r.course_name,
-      course_id: r.course_id,
-      state: r.state,
-      date: r.date,
-      slots: r.slots || [],
-      created_at: r.created_at,
-    }));
-
-    res.json({ ok: true, hits });
-  } catch (err) {
-    console.error("/api/alerts/unread error:", err);
-    res.status(500).json({ ok: false, error: "internal error", detail: err.message });
-  }
-});
-
-app.post("/api/alerts/mark-read", async (req, res) => {
-  try {
-    const { email, ids = [] } = req.body || {};
-    const trimmedEmail = (email || "").toString().trim().toLowerCase();
-    if (!trimmedEmail) {
-      return res.status(400).json({ ok: false, error: "email is required" });
-    }
-
-    const cleanIds = Array.isArray(ids)
-      ? ids.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
-      : [];
-
-    if (!cleanIds.length) {
-      return res.json({ ok: true, updated: 0 });
-    }
-
-    const result = await db.query(
-      `
-      UPDATE alert_hits
-      SET read_at = now()
-      WHERE email = $1
-        AND id = ANY($2::bigint[])
-      `,
-      [trimmedEmail, cleanIds]
-    );
-
-    res.json({ ok: true, updated: result.rowCount || 0 });
-  } catch (err) {
-    console.error("/api/alerts/mark-read error", err);
-    res.status(500).json({ ok: false, error: "internal error", detail: err.message });
-  }
-});
-
 // -------------------------------------------------
 // Stripe Checkout – create subscription session
 // -------------------------------------------------
@@ -1040,12 +1064,29 @@ app.post("/api/subscribe", async (req, res) => {
       `${SITE_URL}/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1`;
     const cancelUrl = process.env.STRIPE_CANCEL_URL || `${SITE_URL}/subscribe-cancel.html`;
 
+        const derivedPlan = derivePlanFromPriceId(priceId);
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
       customer_email: customerEmail,
       allow_promotion_codes: true,
       line_items: [{ price: priceId, quantity: 1 }],
+
+      metadata: {
+        email: customerEmail || "",
+        plan: derivedPlan,
+        planKey: String(plan || "").trim().toUpperCase(),
+      },
+
+      subscription_data: {
+        metadata: {
+          email: customerEmail || "",
+          plan: derivedPlan,
+          planKey: String(plan || "").trim().toUpperCase(),
+        },
+      },
+
       success_url: successUrl,
       cancel_url: cancelUrl,
     });
@@ -1103,36 +1144,32 @@ app.get("/api/account/plan", async (req, res) => {
       return res.status(400).json({ error: "email is required" });
     }
 
-    const customers = await stripe.customers.list({ email, limit: 1 });
+    const sub = await getSubscriberStatusByEmail(email);
 
-    if (!customers.data.length) {
-      return res.json({ plan: "FREE", maxFavs: 3, reason: "no_stripe_customer" });
+    if (!sub) {
+      return res.json({
+        plan: "FREE",
+        maxFavs: 3,
+        entitlementActive: false,
+        subscriptionStatus: "inactive",
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: null,
+        reason: "no_subscriber_status",
+      });
     }
 
-    const customer = customers.data[0];
+    const plan = normalizePlan(sub.plan);
+    const maxFavs = plan === "PRO" ? 10 : 3;
 
-    const subs = await stripe.subscriptions.list({
-      customer: customer.id,
-      status: "active",
-      limit: 1,
-      expand: ["data.items.data.price"],
+    return res.json({
+      plan,
+      maxFavs,
+      entitlementActive: !!sub.entitlement_active,
+      subscriptionStatus: sub.status || "inactive",
+      cancelAtPeriodEnd: !!sub.cancel_at_period_end,
+      currentPeriodEnd: sub.current_period_end || null,
+      updatedAt: sub.updated_at || null,
     });
-
-    if (!subs.data.length) {
-      return res.json({ plan: "FREE", maxFavs: 3, reason: "no_active_subscription" });
-    }
-
-    const sub = subs.data[0];
-    const firstItem = sub.items.data[0];
-    const priceId = firstItem?.price?.id;
-
-    if (!priceId || !PRICE_TO_PLAN[priceId]) {
-      return res.json({ plan: "BASIC", maxFavs: 3, reason: "unknown_price", priceId });
-    }
-
-    const { plan, maxFavs } = PRICE_TO_PLAN[priceId];
-
-    return res.json({ plan, maxFavs, priceId });
   } catch (err) {
     console.error("account/plan error:", err);
     res.status(500).json({ error: "plan_lookup_failed", detail: err.message });
@@ -1165,6 +1202,23 @@ app.post("/api/account/preferences", async (req, res) => {
     }
 
     const preferredDays = Array.isArray(days) && days.length ? days : null;
+    
+        const subscriber = await getSubscriberStatusByEmail(trimmedEmail);
+    const entitled =
+      !!subscriber?.entitlement_active &&
+      (String(subscriber?.status || "").toLowerCase() === "active" ||
+        String(subscriber?.status || "").toLowerCase() === "trialing") &&
+      !!subscriber?.current_period_end &&
+      new Date(subscriber.current_period_end).getTime() > Date.now();
+
+    if (!entitled) {
+      return res.status(403).json({
+        ok: false,
+        error: "subscriber_required",
+        plan: "FREE",
+        message: "An active subscription is required to save email alert preferences.",
+      });
+    }
 
     await db.query(
       `
