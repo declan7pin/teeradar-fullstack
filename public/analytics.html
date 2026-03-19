@@ -1279,14 +1279,13 @@ else setText("metricHitRate7d", "—");
   }
 
     function normalisePlanLabel(plan) {
-    if (!plan) return "Free";
-    const p = String(plan).trim().toUpperCase();
-    if (p === "PRO") return "Pro";
-    if (p === "BASIC") return "Basic";
-    if (p === "FREE") return "Free";
-    if (p.includes("TRIAL")) return "Trial";
-    return String(plan);
-  }
+  if (!plan) return "Free";
+  const p = String(plan).trim().toUpperCase();
+  if (p === "PRO") return "Pro";
+  if (p === "BASIC") return "Basic";
+  if (p === "FREE") return "Free";
+  return String(plan);
+}
   
   function computeSubscriptionMetrics() {
     let basic = 0;
