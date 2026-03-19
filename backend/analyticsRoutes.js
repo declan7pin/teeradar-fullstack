@@ -952,27 +952,38 @@ router.patch("/users/:id", async (req, res) => {
 /**
  * DELETE /api/analytics/users/:id
  */
-router.delete("/users/:id", (req, res) => {
+router.delete("/users/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    if (!id) {
-      return res.status(400).json({ error: "Invalid id" });
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ ok: false, error: "invalid_id" });
     }
 
-    if (typeof deleteRegisteredUser !== "function") {
-      return res.status(501).json({
-        error: "delete_not_supported",
-        message:
-          "Your analyticsDb.js does not export a delete user function. Add one (e.g. deleteRegisteredUser) or rename the export.",
-        availableExports: Object.keys(analyticsDb || {}).sort(),
-      });
+    const userRes = await db.query(
+      `
+      SELECT id, email
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    const user = userRes.rows?.[0];
+    if (!user) {
+      return res.status(404).json({ ok: false, error: "user_not_found" });
     }
 
-    deleteRegisteredUser(id);
+    const email = String(user.email || "").trim().toLowerCase();
+
+    await db.query(`DELETE FROM user_preferences WHERE LOWER(email) = LOWER($1)`, [email]);
+    await db.query(`DELETE FROM subscriber_status WHERE LOWER(email) = LOWER($1)`, [email]);
+    await db.query(`DELETE FROM users WHERE id = $1`, [id]);
+
     return res.json({ ok: true });
   } catch (err) {
-    console.error("Error deleting registered user", err);
-    return res.status(500).json({ error: "Failed to delete user" });
+    console.error("DELETE /api/analytics/users/:id error:", err);
+    return res.status(500).json({ ok: false, error: "delete_failed", detail: err.message });
   }
 });
 
