@@ -734,7 +734,7 @@
             <th>Favourite courses</th>
             <th>Created at</th>
             <th>Last seen</th>
-            <th></th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="usersTbody"></tbody>
@@ -840,7 +840,10 @@
     <div style="font-size:13px; line-height:1.5;">
       <p><strong>Email:</strong> <span id="detailEmail">—</span></p>
       <p><strong>Plan:</strong> <span id="detailPlan">—</span></p>
-      <p><strong>Home state:</strong> <span id="detailHomeState">—</span></p>
+      <p>
+  <strong>Home state:</strong> <span id="detailHomeState">—</span><br>
+  <strong>Home course:</strong> <span id="detailHomeCourse">—</span>
+</p>
       <p><strong>Favourite courses:</strong><br>
         <span id="detailFavs">—</span>
       </p>
@@ -1275,16 +1278,16 @@ else setText("metricHitRate7d", "—");
       .join(" • ");
   }
 
-  function normalisePlanLabel(plan) {
-    if (!plan) return "Unsubscribed";
-    const p = String(plan).toUpperCase();
+    function normalisePlanLabel(plan) {
+    if (!plan) return "Free";
+    const p = String(plan).trim().toUpperCase();
     if (p === "PRO") return "Pro";
     if (p === "BASIC") return "Basic";
-    if (p === "FREE") return "Unsubscribed";
+    if (p === "FREE") return "Free";
     if (p.includes("TRIAL")) return "Trial";
-    return plan;
+    return String(plan);
   }
-
+  
   function computeSubscriptionMetrics() {
     let basic = 0;
     let pro = 0;
@@ -1364,22 +1367,84 @@ else setText("metricHitRate7d", "—");
         const homeState = u.home_state || "";
         const planLabel = normalisePlanLabel(u.plan);
 
-        return `
+                return `
   <tr data-user-idx="${idx}">
     <td>${u.id ?? ""}</td>
-            <td><span class="user-email-pill">${u.email ?? ""}</span></td>
-            <td data-col="plan">${planLabel}</td>
-            <td>${homeState}</td>
-            <td>${favDisplay || ""}</td>
-            <td>${created ? new Date(created).toLocaleString() : ""}</td>
-            <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
-            <td></td>
-          </tr>
+    <td><span class="user-email-pill">${u.email ?? ""}</span></td>
+    <td data-col="plan">${planLabel}</td>
+    <td>${homeState}</td>
+    <td>${favDisplay || ""}</td>
+    <td>${created ? new Date(created).toLocaleString() : ""}</td>
+    <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
+    <td style="white-space:nowrap;">
+      <button class="edit-btn" type="button" data-edit-user-idx="${idx}">Edit</button>
+    </td>
+  </tr>
         `;
       }).join("");
     }
 
     computeSubscriptionMetrics();
+  }
+  async function patchRegisteredUser(id, payload) {
+    const res = await fetch(`/api/analytics/users/${id}`, {
+      method: "PATCH",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify(payload || {}),
+    });
+
+    const data = await res.json().catch(() => null);
+    return { res, data };
+  }
+
+  async function editRegisteredUser(user) {
+    if (!user || !user.id) return;
+
+    const currentHomeState = String(user.home_state || "").trim().toUpperCase();
+    const currentHomeCourse = String(user.home_course || "").trim();
+
+    const newHomeStateRaw = window.prompt(
+      "Edit home state for this user.\n\nAllowed values: WA, NT, QLD, SA, TAS, VIC, NSW, ACT\nLeave blank to clear it.",
+      currentHomeState
+    );
+
+    if (newHomeStateRaw === null) return;
+
+    const newHomeCourseRaw = window.prompt(
+      "Edit home course for this user.\n\nLeave blank to clear it.",
+      currentHomeCourse
+    );
+
+    if (newHomeCourseRaw === null) return;
+
+    const payload = {
+      home_state: String(newHomeStateRaw || "").trim().toUpperCase(),
+      home_course: String(newHomeCourseRaw || "").trim(),
+    };
+
+    const validStates = new Set(["", "WA", "NT", "QLD", "SA", "TAS", "VIC", "NSW", "ACT"]);
+    if (!validStates.has(payload.home_state)) {
+      alert("Invalid home state. Use one of: WA, NT, QLD, SA, TAS, VIC, NSW, ACT");
+      return;
+    }
+
+    try {
+      const { res, data } = await patchRegisteredUser(user.id, payload);
+
+      if (!res.ok || !data || !data.ok) {
+        alert("Update failed: " + (data?.error || res.status));
+        return;
+      }
+
+      await loadRegisteredUsers();
+    } catch (err) {
+      console.error("editRegisteredUser error:", err);
+      alert("Update failed (network/server error).");
+    }
   }
 
 function showUserDetails(u) {
@@ -1391,6 +1456,7 @@ function showUserDetails(u) {
   setText("detailEmail", u.email ?? "—");
   setText("detailPlan", normalisePlanLabel(u.plan));
   setText("detailHomeState", u.home_state ?? "—");
+  setText("detailHomeCourse", u.home_course ?? "—");
 
   const favs = favouritesToString(u.favourites || u.favourite_courses);
   setText("detailFavs", favs || "—");
@@ -1417,9 +1483,25 @@ function showUserDetails(u) {
 }
 
 // Delegate click for any row in the users table
-document.addEventListener("click", (e) => {
+document.addEventListener("click", async (e) => {
+  const editBtn = e.target.closest("[data-edit-user-idx]");
+  if (editBtn) {
+    const idx = Number(editBtn.getAttribute("data-edit-user-idx"));
+    if (!Number.isFinite(idx)) return;
+
+    const user = USERS_CACHE[idx];
+    if (!user) return;
+
+    await editRegisteredUser(user);
+    return;
+  }
+
   const tr = e.target.closest("#usersTable tbody tr");
   if (!tr) return;
+
+  // Ignore clicks inside the actions cell
+  const td = e.target.closest("td");
+  if (td && td === tr.lastElementChild) return;
 
   const idx = Number(tr.getAttribute("data-user-idx"));
   if (!Number.isFinite(idx)) return;
