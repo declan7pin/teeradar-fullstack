@@ -254,6 +254,96 @@ app.get("/api/analytics/debug", async (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
+async function syncSubscriberStatusFromStripeByEmail(email) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail || !stripe) return null;
+
+  const customers = await stripe.customers.list({
+    email: normalizedEmail,
+    limit: 1,
+  });
+
+  const customer = customers?.data?.[0];
+  if (!customer?.id) {
+    return null;
+  }
+
+  // Look for a current subscription that should grant access
+  const subs = await stripe.subscriptions.list({
+    customer: customer.id,
+    status: "all",
+    limit: 20,
+    expand: ["data.items.data.price"],
+  });
+
+  if (!subs?.data?.length) {
+    await db.query(
+      `
+      INSERT INTO subscriber_status (
+        email,
+        stripe_customer_id,
+        subscription_id,
+        status,
+        plan,
+        cancel_at_period_end,
+        canceled_at,
+        current_period_end,
+        entitlement_active,
+        updated_at
+      )
+      VALUES ($1,$2,NULL,'inactive','FREE',false,NULL,NULL,false,now())
+      ON CONFLICT (email)
+      DO UPDATE SET
+        stripe_customer_id = EXCLUDED.stripe_customer_id,
+        subscription_id = NULL,
+        status = 'inactive',
+        plan = 'FREE',
+        cancel_at_period_end = false,
+        canceled_at = NULL,
+        current_period_end = NULL,
+        entitlement_active = false,
+        updated_at = now()
+      `,
+      [normalizedEmail, String(customer.id)]
+    );
+
+    await db.query(
+      `UPDATE users SET plan = 'FREE' WHERE LOWER(email) = LOWER($1)`,
+      [normalizedEmail]
+    );
+
+    return null;
+  }
+
+  // Prefer entitled subscription first: active/trialing and still in period
+  const ordered = [...subs.data].sort((a, b) => {
+    const aEntitled = computeEntitlementActive(
+      a?.status,
+      a?.current_period_end ? new Date(a.current_period_end * 1000).toISOString() : null
+    ) ? 1 : 0;
+    const bEntitled = computeEntitlementActive(
+      b?.status,
+      b?.current_period_end ? new Date(b.current_period_end * 1000).toISOString() : null
+    ) ? 1 : 0;
+
+    if (bEntitled !== aEntitled) return bEntitled - aEntitled;
+
+    const aEnd = a?.current_period_end || 0;
+    const bEnd = b?.current_period_end || 0;
+    return bEnd - aEnd;
+  });
+
+  const best = ordered[0];
+  if (!best) return null;
+
+  await upsertSubscriberStatusFromStripe({
+    email: normalizedEmail,
+    customerId: String(customer.id),
+    subscription: best,
+  });
+
+  return best;
+}
 
 // ✅ NEW: small helper to get email from body/query OR Bearer token
 function getEmailFromRequest(req) {
@@ -1144,7 +1234,24 @@ app.get("/api/account/plan", async (req, res) => {
       return res.status(400).json({ error: "email is required" });
     }
 
-    const sub = await getSubscriberStatusByEmail(email);
+        let sub = await getSubscriberStatusByEmail(email);
+
+    // ✅ self-heal from Stripe if missing or stale
+    const looksInactive =
+      !sub ||
+      !sub.entitlement_active ||
+      !sub.current_period_end ||
+      new Date(sub.current_period_end).getTime() <= Date.now() ||
+      !["active", "trialing"].includes(String(sub.status || "").toLowerCase());
+
+    if (looksInactive && stripe) {
+      try {
+        await syncSubscriberStatusFromStripeByEmail(email);
+        sub = await getSubscriberStatusByEmail(email);
+      } catch (e) {
+        console.warn("⚠️ account/plan Stripe self-heal failed:", e?.message || e);
+      }
+    }
 
     if (!sub) {
       return res.json({
@@ -1173,6 +1280,71 @@ app.get("/api/account/plan", async (req, res) => {
   } catch (err) {
     console.error("account/plan error:", err);
     res.status(500).json({ error: "plan_lookup_failed", detail: err.message });
+  }
+});
+app.post("/api/admin/subscriber-status/resync", async (req, res) => {
+  try {
+    const emailFromReq = getEmailFromRequest(req);
+    if (!isSuperAdmin(emailFromReq)) {
+      return res.status(403).json({ ok: false, error: "forbidden" });
+    }
+
+    if (!stripe) {
+      return res.status(500).json({ ok: false, error: "stripe_not_configured" });
+    }
+
+    const usersRes = await db.query(`
+      SELECT email
+      FROM users
+      WHERE email IS NOT NULL
+        AND TRIM(email) <> ''
+      ORDER BY id ASC
+    `);
+
+    let checked = 0;
+    let updated = 0;
+    const errors = [];
+
+    for (const row of usersRes.rows || []) {
+      const email = String(row.email || "").trim().toLowerCase();
+      if (!email) continue;
+
+      checked += 1;
+
+      try {
+        const before = await getSubscriberStatusByEmail(email);
+        await syncSubscriberStatusFromStripeByEmail(email);
+        const after = await getSubscriberStatusByEmail(email);
+
+        const beforePlan = String(before?.plan || "FREE");
+        const afterPlan = String(after?.plan || "FREE");
+        const beforeEnt = !!before?.entitlement_active;
+        const afterEnt = !!after?.entitlement_active;
+
+        if (beforePlan !== afterPlan || beforeEnt !== afterEnt) {
+          updated += 1;
+        }
+      } catch (e) {
+        errors.push({
+          email,
+          error: e?.message || String(e),
+        });
+      }
+    }
+
+    return res.json({
+      ok: true,
+      checked,
+      updated,
+      errors: errors.slice(0, 25),
+    });
+  } catch (err) {
+    console.error("subscriber-status resync error:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "subscriber_resync_failed",
+      detail: err.message,
+    });
   }
 });
 
@@ -1792,10 +1964,55 @@ app.get("/group-vote.html", (req, res) => {
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
+async function backfillExistingSubscriberStatuses() {
+  if (!stripe) {
+    console.log("ℹ️ Skipping subscriber backfill: Stripe not configured");
+    return;
+  }
 
+  try {
+    const usersRes = await db.query(`
+      SELECT email
+      FROM users
+      WHERE email IS NOT NULL
+        AND TRIM(email) <> ''
+      ORDER BY id ASC
+      LIMIT 200
+    `);
+
+    let updated = 0;
+
+    for (const row of usersRes.rows || []) {
+      const email = String(row.email || "").trim().toLowerCase();
+      if (!email) continue;
+
+      try {
+        const before = await getSubscriberStatusByEmail(email);
+        const shouldCheck =
+          !before ||
+          !before.entitlement_active ||
+          !before.current_period_end ||
+          !["active", "trialing"].includes(String(before.status || "").toLowerCase());
+
+        if (!shouldCheck) continue;
+
+        await syncSubscriberStatusFromStripeByEmail(email);
+        updated += 1;
+      } catch (e) {
+        console.warn("⚠️ subscriber backfill failed for", email, e?.message || e);
+      }
+    }
+
+    console.log(`✅ subscriber backfill complete (${updated} user(s) checked/repaired)`);
+  } catch (err) {
+    console.error("❌ subscriber backfill failed:", err);
+  }
+}
 // -------------------------------------------------
 // Start Server
 // -------------------------------------------------
+backfillExistingSubscriberStatuses();
+
 app.listen(PORT, () => {
   console.log(`✅ TeeRadar backend running on port ${PORT}`);
 });
