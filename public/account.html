@@ -445,11 +445,10 @@
       </div>
     </div>
 
-    <div class="card">
+        <div class="card">
       <h2>Subscription</h2>
-      <p>
-        Manage your billing details, upgrade, or cancel your TeeRadar subscription using Stripe’s
-        secure customer portal.
+      <p id="subscriptionCardText">
+        Manage your billing details, upgrade, or cancel your TeeRadar subscription.
       </p>
 
       <div class="row-actions">
@@ -486,6 +485,7 @@
   const favDropdown = document.getElementById("favAutocompleteList");
   const prefsStatus = document.getElementById("prefsStatus");
   const billingStatus = document.getElementById("billingStatus");
+  const subscriptionCardText = document.getElementById("subscriptionCardText");
   const navAccountBtn = document.getElementById("navAccount");
   const logoutBtn = document.getElementById("pageLogout");
 
@@ -1115,10 +1115,19 @@ searchableCourses = data.filter((c) => {
     });
   }
 
-  // --- manage billing (Stripe customer portal) ---
+    // --- manage billing / upgrade ---
   const manageBillingBtn = document.getElementById("manageBillingBtn");
   if (manageBillingBtn) {
     manageBillingBtn.addEventListener("click", async () => {
+      billingStatus.textContent = "";
+      billingStatus.className = "status";
+
+      // ✅ FREE users should go to the subscription page, not Stripe portal
+      if (!currentEntitlementActive || currentPlan === "FREE") {
+        window.location.href = "/subscribe.html";
+        return;
+      }
+
       billingStatus.textContent = "Opening billing portal…";
       billingStatus.className = "status";
 
@@ -1130,16 +1139,19 @@ searchableCourses = data.filter((c) => {
             ...(token ? { "Authorization": "Bearer " + token } : {})
           },
           body: JSON.stringify({
-            email, /* ✅ REQUIRED so backend can find Stripe customer */
+            email,
             returnUrl: window.location.href
           })
         });
+
         const data = await res.json().catch(() => ({}));
+
         if (res.ok && data && data.url) {
           window.location.href = data.url;
           return;
         }
-        billingStatus.textContent = "Could not open billing portal yet (backend not wired).";
+
+        billingStatus.textContent = "Could not open billing portal yet.";
         billingStatus.className = "status err";
       } catch (err) {
         console.error("billing portal error", err);
@@ -1177,12 +1189,26 @@ searchableCourses = data.filter((c) => {
 
       maxFavs = Number(data.maxFavs) || (currentPlan === "PRO" ? 10 : 3);
 
-      if (currentPlan === "PRO") {
+            if (currentPlan === "PRO") {
         planPill.textContent = `Plan: Pro (${maxFavs} favourite courses)`;
       } else if (currentPlan === "BASIC") {
         planPill.textContent = `Plan: Basic (${maxFavs} favourite courses)`;
       } else {
         planPill.textContent = "Plan: Free (no active subscription)";
+      }
+
+      if (manageBillingBtn) {
+        manageBillingBtn.textContent =
+          currentPlan === "FREE" || !entitlementActive
+            ? "View subscription options"
+            : "Manage / cancel subscription";
+      }
+
+      if (subscriptionCardText) {
+        subscriptionCardText.textContent =
+          currentPlan === "FREE" || !entitlementActive
+            ? "Upgrade to unlock email alerts, subscriber discounts, and premium TeeRadar features."
+            : "Manage your billing details, subscription, or cancellation using Stripe’s secure customer portal.";
       }
 
             if (planSubtext) {
@@ -1227,16 +1253,27 @@ searchableCourses = data.filter((c) => {
         prefsStatus.textContent = "Email alerts require an active subscription.";
         prefsStatus.className = "status";
       }
-    } catch (err) {
+        } catch (err) {
       console.error("plan fetch error", err);
       currentEntitlementActive = false;
       currentPlan = "FREE";
       maxFavs = 3;
       planPill.textContent = "Plan: Free";
+
       if (planSubtext) {
         planSubtext.textContent =
           "We couldn’t verify your subscription just now. Your account is still available.";
       }
+
+      if (manageBillingBtn) {
+        manageBillingBtn.textContent = "View subscription options";
+      }
+
+      if (subscriptionCardText) {
+        subscriptionCardText.textContent =
+          "Upgrade to unlock email alerts, subscriber discounts, and premium TeeRadar features.";
+      }
+
       setAlertControlsLocked(true);
     }
   }
