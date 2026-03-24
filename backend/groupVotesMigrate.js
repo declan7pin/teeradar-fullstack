@@ -63,24 +63,24 @@ export async function ensureGroupVotesTables(db) {
 
   // ✅ Drop any other old unique constraint matching (vote_id, user_id)
   await db.query(`
-    DO $$
-    DECLARE r RECORD;
-    BEGIN
-      FOR r IN
-        SELECT tc.constraint_name
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage kcu
-          ON tc.constraint_name = kcu.constraint_name
-         AND tc.table_schema = kcu.table_schema
-        WHERE tc.table_name = 'group_vote_responses'
-          AND tc.constraint_type = 'UNIQUE'
-        GROUP BY tc.constraint_name
-        HAVING array_agg(kcu.column_name ORDER BY kcu.column_name) = ARRAY['user_id','vote_id']
-      LOOP
-        EXECUTE 'ALTER TABLE group_vote_responses DROP CONSTRAINT IF EXISTS ' || quote_ident(r.constraint_name);
-      END LOOP;
-    END $$;
-  `);
+  DO $$
+  DECLARE c record;
+  BEGIN
+    FOR c IN
+      SELECT tc.constraint_name
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu
+        ON tc.constraint_name = kcu.constraint_name
+       AND tc.table_schema = kcu.table_schema
+      WHERE tc.table_name = 'group_vote_responses'
+        AND tc.constraint_type = 'UNIQUE'
+      GROUP BY tc.constraint_name
+      HAVING array_agg(kcu.column_name::text ORDER BY kcu.column_name::text) = ARRAY['user_id','vote_id']::text[]
+    LOOP
+      EXECUTE 'ALTER TABLE group_vote_responses DROP CONSTRAINT ' || quote_ident(c.constraint_name);
+    END LOOP;
+  END $$;
+`);
 
   // ✅ Also drop any old manual single-vote unique index if it exists
   await db.query(`
