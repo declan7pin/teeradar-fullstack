@@ -33,6 +33,19 @@ const PRICE_TO_PLAN = {
   "price_1SdnSGASm4geYL4WBWsFWUNe": "PRO",
   "price_1SdnSpASm4geYL4W1yxaZf2i": "PRO",
 };
+function normalizePlan(plan) {
+  const p = String(plan || "").trim().toUpperCase();
+  if (p === "PRO") return "PRO";
+  if (p === "BASIC") return "BASIC";
+  return "FREE";
+}
+
+function titlePlan(plan) {
+  const p = normalizePlan(plan);
+  if (p === "PRO") return "Pro";
+  if (p === "BASIC") return "Basic";
+  return "Free";
+}
 
 // pull the functions that DO exist (no hard failure)
 const logAnalyticsEvent = analyticsDb.logAnalyticsEvent;
@@ -554,16 +567,34 @@ router.get("/users/stripe-check", async (req, res) => {
     );
     const hasPlan = new Set(cols.rows.map((r) => r.column_name)).has("plan");
 
-    const dbRow = hasPlan
+        const dbRow = hasPlan
       ? await db.query(`SELECT id, email, plan FROM users WHERE LOWER(email) = $1 LIMIT 1;`, [email])
       : await db.query(`SELECT id, email FROM users WHERE LOWER(email) = $1 LIMIT 1;`, [email]);
 
-    const out = {
+    const subRow = await db.query(
+      `
+      SELECT
+        email,
+        plan,
+        status,
+        entitlement_active,
+        cancel_at_period_end,
+        current_period_end,
+        updated_at
+      FROM subscriber_status
+      WHERE LOWER(email) = $1
+      LIMIT 1
+      `,
+      [email]
+    );
+
+        const out = {
       ok: true,
       stripeEnabled: !!stripe,
       stripeKeyPresent: !!stripeKey,
       email,
       dbUser: dbRow.rows[0] || null,
+      subscriberStatus: subRow.rows[0] || null,
       stripe: {
         customerFound: false,
         customerId: null,
@@ -640,27 +671,11 @@ router.get("/users", async (req, res) => {
       });
     }
 
-    const usersCols = await getCols("users");
-    const hasPlanCol = usersCols.has("plan");
+        const usersCols = await getCols("users");
 
     // Safe column picks
     const colId = usersCols.has("id") ? "u.id" : "NULL::int AS id";
     const colEmail = usersCols.has("email") ? "u.email" : "NULL::text AS email";
-
-    // ✅ Normalise DB values to FREE/BASIC/PRO (not "Unsubscribed")
-    const colPlan = hasPlanCol
-      ? `
-        CASE
-          WHEN u.plan IS NULL OR NULLIF(TRIM(u.plan), '') IS NULL THEN 'FREE'
-          WHEN UPPER(TRIM(u.plan)) IN ('FREE','BASIC','PRO') THEN UPPER(TRIM(u.plan))
-          WHEN LOWER(TRIM(u.plan)) IN ('unsubscribed','unsubscribed ') THEN 'FREE'
-          WHEN LOWER(u.plan) LIKE '%pro%' THEN 'PRO'
-          WHEN LOWER(u.plan) LIKE '%basic%' THEN 'BASIC'
-          WHEN LOWER(u.plan) LIKE '%free%' THEN 'FREE'
-          ELSE 'FREE'
-        END AS plan
-      `
-      : "'FREE'::text AS plan";
 
     const colCreatedAt = usersCols.has("created_at")
       ? "u.created_at"
@@ -672,6 +687,8 @@ router.get("/users", async (req, res) => {
 
     // Optional join to preferences (if table exists)
     const hasPrefs = await tableExists("public.user_preferences");
+
+        const hasSubscriberStatus = await tableExists("public.subscriber_status");
 
     let sql = "";
     if (hasPrefs) {
@@ -687,94 +704,128 @@ router.get("/users", async (req, res) => {
           ? "COALESCE(p.favourites, '[]'::jsonb) AS favourites"
           : "'[]'::jsonb AS favourites";
 
-      sql = `
-        SELECT
-          ${colId},
-          ${colEmail},
-          ${colPlan},
-          ${colHomeState},
-          ${colFavs},
-          ${colCreatedAt},
-          ${colLastSeen}
-        FROM users u
-        LEFT JOIN user_preferences p
-          ON LOWER(p.email) = LOWER(u.email)
-        ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
-        LIMIT $1;
-      `;
+      const colHomeCourse =
+        usersCols.has("home_course")
+          ? "COALESCE(u.home_course, '') AS home_course"
+          : "''::text AS home_course";
+
+      if (hasSubscriberStatus) {
+        sql = `
+          SELECT
+            ${colId},
+            ${colEmail},
+            CASE
+              WHEN ss.entitlement_active = TRUE
+               AND LOWER(COALESCE(ss.status, '')) IN ('active','trialing')
+               AND ss.current_period_end IS NOT NULL
+               AND ss.current_period_end > NOW()
+               AND UPPER(COALESCE(ss.plan, 'FREE')) IN ('BASIC','PRO')
+              THEN UPPER(ss.plan)
+              ELSE 'FREE'
+            END AS plan,
+            ${colHomeState},
+            ${colHomeCourse},
+            ${colFavs},
+            ${colCreatedAt},
+            ${colLastSeen},
+            ss.status AS subscription_status,
+            ss.entitlement_active,
+            ss.cancel_at_period_end,
+            ss.current_period_end
+          FROM users u
+          LEFT JOIN user_preferences p
+            ON LOWER(p.email) = LOWER(u.email)
+          LEFT JOIN subscriber_status ss
+            ON LOWER(ss.email) = LOWER(u.email)
+          ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
+          LIMIT $1;
+        `;
+      } else {
+        sql = `
+          SELECT
+            ${colId},
+            ${colEmail},
+            'FREE'::text AS plan,
+            ${colHomeState},
+            ${colHomeCourse},
+            ${colFavs},
+            ${colCreatedAt},
+            ${colLastSeen},
+            NULL::text AS subscription_status,
+            FALSE AS entitlement_active,
+            FALSE AS cancel_at_period_end,
+            NULL::timestamptz AS current_period_end
+          FROM users u
+          LEFT JOIN user_preferences p
+            ON LOWER(p.email) = LOWER(u.email)
+          ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
+          LIMIT $1;
+        `;
+      }
     } else {
-      // no prefs table - still return users
-      sql = `
-        SELECT
-          ${colId},
-          ${colEmail},
-          ${colPlan},
-          ''::text AS home_state,
-          '[]'::jsonb AS favourites,
-          ${colCreatedAt},
-          ${colLastSeen}
-        FROM users u
-        ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
-        LIMIT $1;
-      `;
+      const colHomeCourse =
+        usersCols.has("home_course")
+          ? "COALESCE(u.home_course, '') AS home_course"
+          : "''::text AS home_course";
+
+      if (hasSubscriberStatus) {
+        sql = `
+          SELECT
+            ${colId},
+            ${colEmail},
+            CASE
+              WHEN ss.entitlement_active = TRUE
+               AND LOWER(COALESCE(ss.status, '')) IN ('active','trialing')
+               AND ss.current_period_end IS NOT NULL
+               AND ss.current_period_end > NOW()
+               AND UPPER(COALESCE(ss.plan, 'FREE')) IN ('BASIC','PRO')
+              THEN UPPER(ss.plan)
+              ELSE 'FREE'
+            END AS plan,
+            ''::text AS home_state,
+            ${colHomeCourse},
+            '[]'::jsonb AS favourites,
+            ${colCreatedAt},
+            ${colLastSeen},
+            ss.status AS subscription_status,
+            ss.entitlement_active,
+            ss.cancel_at_period_end,
+            ss.current_period_end
+          FROM users u
+          LEFT JOIN subscriber_status ss
+            ON LOWER(ss.email) = LOWER(u.email)
+          ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
+          LIMIT $1;
+        `;
+      } else {
+        sql = `
+          SELECT
+            ${colId},
+            ${colEmail},
+            'FREE'::text AS plan,
+            ''::text AS home_state,
+            ${colHomeCourse},
+            '[]'::jsonb AS favourites,
+            ${colCreatedAt},
+            ${colLastSeen},
+            NULL::text AS subscription_status,
+            FALSE AS entitlement_active,
+            FALSE AS cancel_at_period_end,
+            NULL::timestamptz AS current_period_end
+          FROM users u
+          ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
+          LIMIT $1;
+        `;
+      }
     }
 
     const r = await db.query(sql, [limit]);
 
-    // ✅ Display-friendly labels: Free/Basic/Pro
-    let users = (r.rows || []).map((u) => {
-      const raw = String(u.plan || "").trim().toUpperCase();
-      let plan = "Free";
-      if (raw === "PRO" || raw.includes("PRO")) plan = "Pro";
-      else if (raw === "BASIC" || raw.includes("BASIC")) plan = "Basic";
-      else plan = "Free";
-      return { ...u, plan };
-    });
-
-    // ✅ Stripe-heal: if Stripe is set up, correct plans for users showing Free
-    // (cap to avoid rate limits)
-    if (stripe && hasPlanCol) {
-      const toCheck = users
-        .filter((u) => u.plan === "Free" && u.email)
-        .slice(0, 50);
-
-      for (const u of toCheck) {
-        try {
-          const email = String(u.email || "").trim().toLowerCase();
-          if (!email) continue;
-
-          const custList = await stripe.customers.list({ email, limit: 1 });
-          if (!custList.data.length) continue;
-
-          const customer = custList.data[0];
-
-          const subs = await stripe.subscriptions.list({
-            customer: customer.id,
-            status: "active",
-            limit: 1,
-            expand: ["data.items.data.price"],
-          });
-
-          if (!subs.data.length) continue;
-
-          const priceId = subs.data[0]?.items?.data?.[0]?.price?.id || null;
-          const mappedPlan = priceId ? PRICE_TO_PLAN[priceId] : null;
-
-          // ✅ store canonical values
-          const finalPlanDb = mappedPlan || "BASIC";
-
-          await db.query(
-            `UPDATE users SET plan = $2 WHERE LOWER(email) = $1`,
-            [email, finalPlanDb]
-          );
-
-          // ✅ update response label
-          u.plan = finalPlanDb === "PRO" ? "Pro" : "Basic";
-        } catch (e) {
-          console.warn("Stripe heal failed for", u.email, e?.message || e);
-        }
-      }
-    }
+    const users = (r.rows || []).map((u) => ({
+      ...u,
+      plan: titlePlan(u.plan),
+      favourites_count: Array.isArray(u.favourites) ? u.favourites.length : 0,
+    }));
 
     return res.json({ users });
   } catch (err) {
@@ -786,31 +837,153 @@ router.get("/users", async (req, res) => {
     });
   }
 });
+/**
+ * PATCH /api/analytics/users/:id
+ * Body: { home_state?, home_course? }
+ */
+router.patch("/users/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ ok: false, error: "invalid_id" });
+    }
 
+    const usersCols = await db.query(
+      `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'users'
+      `
+    );
+    const usersColSet = new Set(usersCols.rows.map((r) => r.column_name));
+
+    const userRes = await db.query(
+      `
+      SELECT id, email
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    const user = userRes.rows?.[0];
+    if (!user) {
+      return res.status(404).json({ ok: false, error: "user_not_found" });
+    }
+
+    const email = String(user.email || "").trim().toLowerCase();
+
+    const rawHomeState = req.body?.home_state;
+    const rawHomeCourse = req.body?.home_course;
+
+    const homeState =
+      rawHomeState === undefined
+        ? undefined
+        : String(rawHomeState || "").trim().toUpperCase();
+
+    const homeCourse =
+      rawHomeCourse === undefined
+        ? undefined
+        : String(rawHomeCourse || "").trim();
+
+    if (homeState !== undefined) {
+      const validStates = new Set(["", "WA", "NT", "QLD", "SA", "TAS", "VIC", "NSW", "ACT"]);
+      if (!validStates.has(homeState)) {
+        return res.status(400).json({ ok: false, error: "invalid_home_state" });
+      }
+    }
+
+    if (homeCourse !== undefined && homeCourse.length > 255) {
+      return res.status(400).json({ ok: false, error: "home_course_too_long" });
+    }
+
+    // Update users table if columns exist
+    if (usersColSet.has("home_course") || usersColSet.has("home_course_state")) {
+      const updates = [];
+      const params = [];
+      let i = 1;
+
+      if (homeCourse !== undefined && usersColSet.has("home_course")) {
+        updates.push(`home_course = $${i++}`);
+        params.push(homeCourse || null);
+      }
+
+      if (homeState !== undefined && usersColSet.has("home_course_state")) {
+        updates.push(`home_course_state = $${i++}`);
+        params.push(homeState || null);
+      }
+
+      if (updates.length) {
+        params.push(id);
+        await db.query(
+          `
+          UPDATE users
+          SET ${updates.join(", ")}
+          WHERE id = $${i}
+          `,
+          params
+        );
+      }
+    }
+
+    // Update user_preferences if that table exists
+    const prefsExists = await db.query(`SELECT to_regclass('public.user_preferences') AS t;`);
+    if (prefsExists.rows?.[0]?.t) {
+      await db.query(
+        `
+        INSERT INTO user_preferences (email, home_state, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (email)
+        DO UPDATE SET
+          home_state = COALESCE($2, user_preferences.home_state),
+          updated_at = NOW()
+        `,
+        [email, homeState === undefined ? null : homeState || null]
+      );
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("PATCH /api/analytics/users/:id error:", err);
+    return res.status(500).json({ ok: false, error: "update_failed", detail: err.message });
+  }
+});
 /**
  * DELETE /api/analytics/users/:id
  */
-router.delete("/users/:id", (req, res) => {
+router.delete("/users/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    if (!id) {
-      return res.status(400).json({ error: "Invalid id" });
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ ok: false, error: "invalid_id" });
     }
 
-    if (typeof deleteRegisteredUser !== "function") {
-      return res.status(501).json({
-        error: "delete_not_supported",
-        message:
-          "Your analyticsDb.js does not export a delete user function. Add one (e.g. deleteRegisteredUser) or rename the export.",
-        availableExports: Object.keys(analyticsDb || {}).sort(),
-      });
+    const userRes = await db.query(
+      `
+      SELECT id, email
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    const user = userRes.rows?.[0];
+    if (!user) {
+      return res.status(404).json({ ok: false, error: "user_not_found" });
     }
 
-    deleteRegisteredUser(id);
+    const email = String(user.email || "").trim().toLowerCase();
+
+    await db.query(`DELETE FROM user_preferences WHERE LOWER(email) = LOWER($1)`, [email]);
+    await db.query(`DELETE FROM subscriber_status WHERE LOWER(email) = LOWER($1)`, [email]);
+    await db.query(`DELETE FROM users WHERE id = $1`, [id]);
+
     return res.json({ ok: true });
   } catch (err) {
-    console.error("Error deleting registered user", err);
-    return res.status(500).json({ error: "Failed to delete user" });
+    console.error("DELETE /api/analytics/users/:id error:", err);
+    return res.status(500).json({ ok: false, error: "delete_failed", detail: err.message });
   }
 });
 
