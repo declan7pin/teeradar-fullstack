@@ -323,6 +323,255 @@
       margin: 4px 0;
       border-top: 1px solid rgba(0,0,0,0.06);
     }
+         /* ---- Group Vote ---- */
+    .group-vote-toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      padding: 8px 16px 0 16px;
+    }
+
+    .group-vote-left {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .group-vote-btn {
+      border: none;
+      background: var(--purple);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .group-vote-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .group-vote-hint {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .group-vote-modal.hidden {
+      display: none;
+    }
+
+    .group-vote-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .group-vote-modal-card {
+      width: 100%;
+      max-width: 700px;
+      max-height: 85vh;
+      overflow: hidden;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .group-vote-modal-header,
+    .group-vote-modal-footer {
+      padding: 14px 16px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .group-vote-modal-footer {
+      border-bottom: none;
+      border-top: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .group-vote-modal-body {
+      padding: 16px;
+      overflow-y: auto;
+    }
+
+    .group-vote-close-btn {
+      border: none;
+      background: transparent;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .group-vote-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .group-vote-options-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .group-vote-option-row {
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .group-vote-option-row input[type="checkbox"] {
+      margin-top: 4px;
+      transform: scale(1.15);
+      cursor: pointer;
+    }
+
+    .group-vote-option-main {
+      flex: 1;
+    }
+
+    .group-vote-option-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .group-vote-option-sub {
+      font-size: 12px;
+      color: #666;
+    }
+            .group-vote-course-filter-wrap {
+      margin-bottom: 12px;
+      position: relative;
+    }
+
+    .group-vote-course-filter-label {
+      display: block;
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 6px;
+    }
+
+    .group-vote-course-dropdown-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      background: #fff;
+      color: #222;
+      font-size: 14px;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .group-vote-course-dropdown-btn-text {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .group-vote-course-dropdown-menu {
+      margin-top: 8px;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #fff;
+      max-height: 220px;
+      overflow-y: auto;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+      display: none;
+    }
+
+    .group-vote-course-dropdown-menu.open {
+      display: block;
+    }
+
+    .group-vote-course-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: #222;
+      cursor: pointer;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .group-vote-course-dropdown-item:last-child {
+      border-bottom: none;
+    }
+
+    .group-vote-course-dropdown-item input[type="checkbox"] {
+      transform: scale(1.05);
+      cursor: pointer;
+    }
+
+    .top-bar-button-like {
+      border: none;
+      background: #e5e7eb;
+      color: #222;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+        /* ---- Results toolbar ---- */
+    .results-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: end;
+      padding: 8px 16px 0 16px;
+    }
+
+    .results-toolbar-group {
+      min-width: 150px;
+      flex: 1 1 180px;
+    }
+
+    .results-toolbar-label {
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 4px;
+    }
+
+    .results-toolbar-control {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      font-size: 14px;
+    }
+
+    .chip-home-course {
+      background: #e8f7ef;
+      color: #0f7a3c;
+      font-weight: 600;
+    }
   </style>
 </head>
 
@@ -388,10 +637,21 @@
   <div class="status-line" id="status-line">
     Tap “Search availability” to check live times.
   </div>
+  
+       <div class="group-vote-toolbar">
+    <div class="group-vote-left">
+      <button id="createGroupVoteBtn" class="group-vote-btn" type="button">
+        Create Group Vote
+      </button>
+      <span id="groupVoteSelectionText" class="group-vote-hint">
+        Create a vote from current search results.
+      </span>
+    </div>
+  </div>
 
   <div id="map"></div>
 
-  <div class="legend">
+    <div class="legend">
     <div class="legend-item">
       <span class="legend-dot dot-green"></span> Available
     </div>
@@ -406,15 +666,131 @@
     </div>
   </div>
 
+  <div class="results-toolbar">
+    <div class="results-toolbar-group">
+      <div class="results-toolbar-label">Sort courses</div>
+      <select id="courseSort" class="results-toolbar-control">
+        <option value="default" selected>Alphabetical</option>
+        <option value="availability_desc">Most available times</option>
+        <option value="nearest">Nearest</option>
+        <option value="home_first">Home course first</option>
+        <option value="holes_9_first">9 holes first</option>
+        <option value="holes_18_first">18 holes first</option>
+        <option value="name_desc">Z–A</option>
+      </select>
+    </div>
+
+    <div class="results-toolbar-group">
+      <div class="results-toolbar-label">Show</div>
+      <select id="courseAvailabilityFilter" class="results-toolbar-control">
+        <option value="all" selected>All courses</option>
+        <option value="available">Available</option>
+        <option value="phone">Phone booking</option>
+        <option value="unknown">Unable to confirm</option>
+        <option value="unavailable">No availability</option>
+      </select>
+    </div>
+  </div>
+
   <section class="courses-strip" id="courses-strip"></section>
+    <div id="groupVoteModal" class="group-vote-modal hidden">
+    <div class="group-vote-modal-card">
+      <div class="group-vote-modal-header">
+        <h3 style="margin:0;">Create Group Vote</h3>
+        <button id="closeGroupVoteModalBtn" class="group-vote-close-btn" type="button">✕</button>
+      </div>
+
+      <div class="group-vote-modal-body">
+                <div style="margin-bottom:10px;">
+          <label style="display:block;font-size:13px;color:#555;margin-bottom:4px;">Vote title</label>
+          <input id="groupVoteTitle" class="filter-control" type="text" placeholder="Saturday afternoon round" />
+        </div>
+
+                <div class="group-vote-course-filter-wrap">
+          <label class="group-vote-course-filter-label">Preferred courses</label>
+
+          <button
+            id="groupVoteCourseDropdownBtn"
+            class="group-vote-course-dropdown-btn"
+            type="button"
+          >
+            <span id="groupVoteCourseDropdownBtnText" class="group-vote-course-dropdown-btn-text">
+              All courses
+            </span>
+            <span>▾</span>
+          </button>
+
+          <div id="groupVoteCourseDropdownMenu" class="group-vote-course-dropdown-menu"></div>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <label style="display:block;font-size:13px;color:#555;margin-bottom:4px;">Optional note</label>
+          <input id="groupVoteNote" class="filter-control" type="text" placeholder="Vote for the best option" />
+        </div>
+
+        <div id="groupVoteOptionsList" class="group-vote-options-list"></div>
+      </div>
+
+      <div class="group-vote-modal-footer">
+        <span id="groupVoteModalCount" class="group-vote-hint">Select at least 2 options.</span>
+        <div style="display:flex;gap:8px;">
+          <button id="cancelGroupVoteBtn" class="top-bar-button-like" type="button">Cancel</button>
+          <button id="submitGroupVoteBtn" class="group-vote-btn" type="button" disabled>Create Vote</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div id="groupVoteLinkModal" class="group-vote-modal hidden">
+  <div class="group-vote-modal-card" style="max-width:560px;">
+    <div class="group-vote-modal-header">
+      <h3 style="margin:0;">Group Vote Created</h3>
+      <button id="closeGroupVoteLinkModalBtn" class="group-vote-close-btn" type="button">✕</button>
+    </div>
+
+    <div class="group-vote-modal-body">
+      <div style="font-size:14px;color:#555;margin-bottom:10px;">
+        Your group vote is ready to share.
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="display:block;font-size:13px;color:#555;margin-bottom:4px;">Share link</label>
+        <input
+          id="groupVoteShareLinkInput"
+          class="filter-control"
+          type="text"
+          readonly
+        />
+      </div>
+    </div>
+
+    <div class="group-vote-modal-footer">
+      <span class="group-vote-hint" id="groupVoteLinkModalStatus">Copy the link or share it.</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button id="copyGroupVoteLinkBtn" class="top-bar-button-like" type="button">Copy link</button>
+        <button id="shareGroupVoteLinkBtn" class="group-vote-btn" type="button">Share</button>
+        <button id="openGroupVoteLinkBtn" class="top-bar-button-like" type="button">Open vote</button>
+      </div>
+    </div>
+  </div>
+</div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/group-vote-create.js"></script>
   <script>
-    let map;
+        let map;
     let markers = [];
     let courses = [];
     let lastSearchCriteria = null; // { date, earliest, latest, holes, partySize, state }
     let groupedSlots = {};         // courseName => [slots]
+    let voteSelections = [];
+    let voteCandidateOptions = [];
+    let voteSelectedCourses = [];
+
+    let currentSortMode = "default";
+    let currentAvailabilityFilter = "all";
+    let userLat = null;
+    let userLng = null;
 
     // full list + state handling
     let allCourses = [];
@@ -590,6 +966,368 @@
       if (!digits) return "";
       return "tel:" + digits;
     }
+            function updateGroupVoteToolbar() {
+      const text = document.getElementById("groupVoteSelectionText");
+      if (text) {
+        text.textContent = "Create a vote from current search results.";
+      }
+    }
+
+    function buildVoteOption(course, slot) {
+      const courseName = course?.name || slot?.course || slot?.courseName || "";
+      const courseSlug =
+        course?.slug ||
+        course?.bookingSlug ||
+        course?.booking_slug ||
+        course?.courseSlug ||
+        course?.course_slug ||
+        slugifyCourseName(courseName);
+
+      const playDate =
+        slot?.date ||
+        (lastSearchCriteria && lastSearchCriteria.date) ||
+        document.getElementById("date")?.value ||
+        "";
+
+      const teeTime = slot?.time || slot?.tee_time || "";
+      const holes =
+        Number(slot?.holes || (lastSearchCriteria && lastSearchCriteria.holes) || document.getElementById("holes")?.value || 18) || 18;
+
+      const players =
+        Number((lastSearchCriteria && lastSearchCriteria.partySize) || document.getElementById("players")?.value || 1) || 1;
+
+      const providerLower = String(course?.provider || "").toLowerCase();
+      let bookingUrl = "";
+
+      if (providerLower === "teeradarbooking") {
+        const u = new URL(window.location.origin + "/book/" + encodeURIComponent(courseSlug));
+        if (course?.id) u.searchParams.set("courseId", String(course.id));
+        if (playDate) u.searchParams.set("date", playDate);
+        u.searchParams.set("players", String(players));
+        u.searchParams.set("partySize", String(players));
+        u.searchParams.set("holes", String(holes));
+
+        const earliest =
+          (lastSearchCriteria && lastSearchCriteria.earliest) ||
+          document.getElementById("earliest")?.value ||
+          "06:00";
+
+        const latest =
+          (lastSearchCriteria && lastSearchCriteria.latest) ||
+          document.getElementById("latest")?.value ||
+          "17:00";
+
+        u.searchParams.set("earliest", earliest);
+        u.searchParams.set("latest", latest);
+        u.searchParams.set("timeFrom", earliest);
+        u.searchParams.set("timeTo", latest);
+
+        bookingUrl = u.pathname + u.search;
+      } else {
+        bookingUrl =
+          slot?.bookUrl ||
+          slot?.bookingUrl ||
+          slot?.url ||
+          course?.bookUrl ||
+          course?.url ||
+          "";
+      }
+
+      return {
+        key: [
+          course?.id || courseName,
+          playDate,
+          teeTime,
+          holes,
+          players,
+          bookingUrl
+        ].join("|"),
+        courseId: course?.id || null,
+        courseName,
+        courseSlug,
+        playDate,
+        teeTime,
+        holes,
+        players,
+        bookingUrl
+      };
+    }
+
+    function getSlotDisplayLabel(course, slot) {
+      const baseName = course?.name || slot?.course || slot?.courseName || "Course";
+
+      const routeBits = [
+        slot?.layoutName,
+        slot?.layout_name,
+        slot?.layoutKey,
+        slot?.layout_key,
+        slot?.frontNineKey,
+        slot?.front_nine_key,
+        slot?.backNineKey,
+        slot?.back_nine_key
+      ].filter(Boolean);
+
+      const uniqueBits = [...new Set(routeBits.map(x => String(x).trim()).filter(Boolean))];
+
+      if (!uniqueBits.length) return baseName;
+
+      return `${baseName} — ${uniqueBits.join(" / ")}`;
+    }
+
+    function buildVoteCandidatesFromSearch() {
+      const candidates = [];
+      const seen = new Set();
+
+      const want = Number(
+        (lastSearchCriteria && lastSearchCriteria.partySize) ||
+        document.getElementById("players").value ||
+        1
+      );
+
+      courses.forEach((course) => {
+        const courseName = course.name || "";
+        const slots = (groupedSlots[courseName] || []).filter((s) => slotFitsParty(s, want));
+
+        slots.forEach((slot) => {
+          const option = buildVoteOption(course, slot);
+          const displayLabel = getSlotDisplayLabel(course, slot);
+
+          const key = [
+            option.courseId || option.courseName,
+            option.playDate,
+            option.teeTime,
+            option.holes,
+            option.players,
+            displayLabel
+          ].join("|");
+
+          if (seen.has(key)) return;
+          seen.add(key);
+
+              candidates.push({
+            ...option,
+            key,
+            displayLabel,
+            displayTime: option.teeTime,
+            displayDate: option.playDate,
+            filterCourseName: option.courseName
+          });
+        });
+      });
+
+      candidates.sort((a, b) => {
+        if (a.displayDate !== b.displayDate) return String(a.displayDate).localeCompare(String(b.displayDate));
+        return String(a.displayTime).localeCompare(String(b.displayTime));
+      });
+
+      return candidates;
+    }
+        function getGroupVoteCourseNames() {
+      return [...new Set(
+        voteCandidateOptions
+          .map((opt) => String(opt.filterCourseName || "").trim())
+          .filter(Boolean)
+      )].sort((a, b) => a.localeCompare(b));
+    }
+
+    function getFilteredVoteCandidateOptions() {
+      if (!voteSelectedCourses.length) return voteCandidateOptions;
+      return voteCandidateOptions.filter((opt) =>
+        voteSelectedCourses.includes(String(opt.filterCourseName || "").trim())
+      );
+    }
+
+        function getGroupVoteCourseFilterLabel() {
+      if (!voteSelectedCourses.length) return "All courses";
+      if (voteSelectedCourses.length === 1) return voteSelectedCourses[0];
+      return `${voteSelectedCourses.length} courses selected`;
+    }
+
+    function renderGroupVoteCourseFilter() {
+      const btnTextEl = document.getElementById("groupVoteCourseDropdownBtnText");
+      const menuEl = document.getElementById("groupVoteCourseDropdownMenu");
+      if (!btnTextEl || !menuEl) return;
+
+      btnTextEl.textContent = getGroupVoteCourseFilterLabel();
+
+      const courseNames = getGroupVoteCourseNames();
+      menuEl.innerHTML = "";
+
+      const allRow = document.createElement("label");
+      allRow.className = "group-vote-course-dropdown-item";
+      allRow.innerHTML = `
+        <input type="checkbox" class="group-vote-course-filter-checkbox" data-course="__ALL__" ${voteSelectedCourses.length === 0 ? "checked" : ""} />
+        <span>All courses</span>
+      `;
+      menuEl.appendChild(allRow);
+
+      courseNames.forEach((courseName) => {
+        const row = document.createElement("label");
+        row.className = "group-vote-course-dropdown-item";
+        row.innerHTML = `
+          <input
+            type="checkbox"
+            class="group-vote-course-filter-checkbox"
+            data-course="${encodeURIComponent(courseName)}"
+            ${voteSelectedCourses.includes(courseName) ? "checked" : ""}
+          />
+          <span>${courseName}</span>
+        `;
+        menuEl.appendChild(row);
+      });
+    }
+        function closeGroupVoteCourseDropdown() {
+      const menuEl = document.getElementById("groupVoteCourseDropdownMenu");
+      if (menuEl) menuEl.classList.remove("open");
+    }
+
+    function renderGroupVoteModalOptions() {
+      const listEl = document.getElementById("groupVoteOptionsList");
+      const countEl = document.getElementById("groupVoteModalCount");
+      const submitBtn = document.getElementById("submitGroupVoteBtn");
+
+      if (!listEl) return;
+
+      listEl.innerHTML = "";
+
+      const visibleOptions = getFilteredVoteCandidateOptions();
+
+      if (!voteCandidateOptions.length) {
+        listEl.innerHTML = `<div style="font-size:13px;color:#666;">No tee times available to add to a vote.</div>`;
+        if (countEl) countEl.textContent = "No options available.";
+        if (submitBtn) submitBtn.disabled = true;
+        return;
+      }
+            if (!visibleOptions.length) {
+        listEl.innerHTML = `<div style="font-size:13px;color:#666;">No tee times match the selected course filter.</div>`;
+      }
+
+        visibleOptions.forEach((opt) => {
+                const checked = voteSelections.some((x) => x.key === opt.key);
+
+        const row = document.createElement("label");
+        row.className = "group-vote-option-row";
+        row.innerHTML = `
+          <input type="checkbox" class="group-vote-option-checkbox" data-key="${encodeURIComponent(opt.key)}" ${checked ? "checked" : ""} />
+          <div class="group-vote-option-main">
+            <div class="group-vote-option-title">${opt.displayLabel} — ${opt.displayTime}</div>
+            <div class="group-vote-option-sub">${opt.displayDate} • ${opt.holes} holes • ${opt.players} players</div>
+          </div>
+        `;
+        listEl.appendChild(row);
+      });
+
+      const count = voteSelections.length;
+      if (countEl) {
+        countEl.textContent =
+          count >= 2
+            ? `${count} options selected.`
+            : "Select at least 2 options.";
+      }
+
+      if (submitBtn) submitBtn.disabled = count < 2;
+    }
+
+    function openGroupVoteModal() {
+      if (!lastSearchCriteria) {
+        alert("Please search availability first.");
+        return;
+      }
+
+            voteCandidateOptions = buildVoteCandidatesFromSearch();
+      voteSelections = [];
+      voteSelectedCourses = [];
+
+      const titleEl = document.getElementById("groupVoteTitle");
+      const noteEl = document.getElementById("groupVoteNote");
+      const modal = document.getElementById("groupVoteModal");
+
+      if (titleEl) {
+        titleEl.value = lastSearchCriteria?.date
+          ? `Round Vote — ${lastSearchCriteria.date}`
+          : "Weekend Round Vote";
+      }
+
+      if (noteEl) {
+        noteEl.value = "Vote for the tee time that works best.";
+      }
+
+      renderGroupVoteCourseFilter();
+      renderGroupVoteModalOptions();
+      if (modal) modal.classList.remove("hidden");
+    }
+
+    function closeGroupVoteModal() {
+      const modal = document.getElementById("groupVoteModal");
+      if (modal) modal.classList.add("hidden");
+      closeGroupVoteCourseDropdown();
+    }
+    
+    let latestGroupVoteShareUrl = "";
+let latestGroupVoteShareTitle = "";
+let latestGroupVoteShareNote = "";
+
+function showGroupVoteLinkModal(url, title, note) {
+  latestGroupVoteShareUrl = url || "";
+  latestGroupVoteShareTitle = title || "TeeRadar Group Vote";
+  latestGroupVoteShareNote = note || "Vote for the tee time that works best.";
+
+  const modal = document.getElementById("groupVoteLinkModal");
+  const input = document.getElementById("groupVoteShareLinkInput");
+  const status = document.getElementById("groupVoteLinkModalStatus");
+
+  if (input) input.value = latestGroupVoteShareUrl;
+  if (status) status.textContent = "Copy the link or share it.";
+
+  if (modal) modal.classList.remove("hidden");
+}
+
+function closeGroupVoteLinkModal() {
+  const modal = document.getElementById("groupVoteLinkModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+    async function createGroupVoteFromSelections() {
+      if (!window.TeeRadarGroupVote) {
+        alert("Group Vote script not loaded.");
+        return;
+      }
+
+      if (voteSelections.length < 2) {
+        alert("Please select at least 2 tee times.");
+        return;
+      }
+
+      try {
+        const title =
+          document.getElementById("groupVoteTitle")?.value?.trim() ||
+          "Round Vote";
+
+        const note =
+          document.getElementById("groupVoteNote")?.value?.trim() ||
+          "Vote for the tee time that works best.";
+
+        const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+
+        const result = await window.TeeRadarGroupVote.createVoteFromOptions({
+          title,
+          note,
+          expiresAt,
+          options: voteSelections.map(({ key, displayLabel, displayTime, displayDate, ...rest }) => rest),
+        });
+
+        const fullUrl = new URL(result.shareUrl, window.location.origin).toString();
+
+        closeGroupVoteModal();
+
+         closeGroupVoteModal();
+         showGroupVoteLinkModal(fullUrl, title, note);
+
+      } catch (err) {
+        console.error("createGroupVoteFromSelections error", err);
+        alert(err.message || "Could not create group vote.");
+      }
+    }
     // ✅ NEW: consistent slugify used for TeeRadarBooking routes
 function slugifyCourseName(name) {
   return String(name || "")
@@ -673,7 +1411,12 @@ function slugifyCourseName(name) {
 
       // use the logged-in user's home course (if any) to set state + zoom
       applyHomeCourseDefaults();
+
+      currentSortMode = document.getElementById("courseSort")?.value || "default";
+      currentAvailabilityFilter = document.getElementById("courseAvailabilityFilter")?.value || "all";
+
       renderCourses();
+      updateGroupVoteToolbar();
     }
 
     function initMap() {
@@ -800,9 +1543,13 @@ function slugifyCourseName(name) {
       const hLat = homeCourse ? toNum(homeCourse.lat) : null;
       const hLng = homeCourse ? toNum(homeCourse.lng) : null;
 
-      if (homeCourse && hLat !== null && hLng !== null) {
+            if (homeCourse && hLat !== null && hLng !== null) {
+        userLat = hLat;
+        userLng = hLng;
         map.setView([hLat, hLng], 12);
       } else {
+        userLat = null;
+        userLng = null;
         zoomToStateCourses();
       }
 
@@ -870,6 +1617,258 @@ function slugifyCourseName(name) {
       const day = d.getDay();
       return day === 0 || day === 6;
     }
+        function normalizeText(v) {
+      return String(v || "").trim().toLowerCase();
+    }
+
+    function getUserHomeCourseInfo() {
+      const user = getStoredUser();
+      if (!user) {
+        return {
+          homeCourse: "",
+          homeCourseId: null,
+          homeCourseState: ""
+        };
+      }
+
+      return {
+        homeCourse: String(user.homeCourse || "").trim(),
+        homeCourseId: user.homeCourseId || null,
+        homeCourseState: String(user.homeCourseState || "").trim().toUpperCase()
+      };
+    }
+
+    function cleanCourseNameForMatch(str) {
+      if (!str) return "";
+      let s = String(str).toLowerCase();
+      s = s.replace(/\(\s*(wa|nt|qld|nsw|vic|sa|tas|act)\s*\)/gi, "");
+      const idx = s.indexOf("(");
+      if (idx >= 0) s = s.slice(0, idx);
+      return s.trim();
+    }
+
+    function isSubscriberHomeCourse(course) {
+      const info = getUserHomeCourseInfo();
+      if (!course || !info) return false;
+
+      if (info.homeCourseId && course.id && String(course.id) === String(info.homeCourseId)) {
+        return true;
+      }
+
+      const courseName = cleanCourseNameForMatch(course.name || "");
+      const homeName = cleanCourseNameForMatch(info.homeCourse || "");
+      if (!courseName || !homeName) return false;
+
+      return (
+        courseName === homeName ||
+        courseName.includes(homeName) ||
+        homeName.includes(courseName)
+      );
+    }
+
+    function isLikelySubscriber() {
+      const info = getUserHomeCourseInfo();
+      return !!(info.homeCourse || info.homeCourseId);
+    }
+
+    function getCourseDistanceKm(course) {
+      const lat1 = Number(userLat);
+      const lng1 = Number(userLng);
+      const lat2 = Number(course?.lat);
+      const lng2 = Number(course?.lng);
+
+      if (
+        !Number.isFinite(lat1) ||
+        !Number.isFinite(lng1) ||
+        !Number.isFinite(lat2) ||
+        !Number.isFinite(lng2)
+      ) {
+        return null;
+      }
+
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const R = 6371;
+
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function getCourseRenderMeta(course) {
+      const name = course.name || "";
+      const provider = String(course.provider || "Other").trim();
+      const providerLower = provider.toLowerCase();
+      const isPhone = providerLower === "phone";
+      const isTeeItUp = providerLower === "teeitup";
+      const isChronogolf = providerLower === "chronogolf";
+      const isClickThroughOnly = isTeeItUp || isChronogolf;
+
+      const searchDate = lastSearchCriteria && lastSearchCriteria.date;
+      const isUnconfirmed =
+        isClickThroughOnly ||
+        name.startsWith("Wembley Golf Course") ||
+        name.startsWith("Meadow Springs Golf Course") ||
+        name.startsWith("Meadow Springs Golf & Country Club");
+
+      const slots = groupedSlots[name] || [];
+      const want = Number(
+        (lastSearchCriteria && lastSearchCriteria.partySize) ||
+        document.getElementById("players").value ||
+        1
+      );
+
+      const fitSlots = (Array.isArray(slots) ? slots : []).filter((s) => slotFitsParty(s, want));
+      const hasSlots = fitSlots.length > 0;
+
+      let markerKind = "unavailable";
+      if (isPhone) {
+        markerKind = "phone";
+      } else if (hasSlots === true) {
+        markerKind = "available";
+      } else if (isClickThroughOnly || isUnconfirmed) {
+        markerKind = "unknown";
+      }
+
+      return {
+        name,
+        provider,
+        providerLower,
+        isPhone,
+        isTeeItUp,
+        isChronogolf,
+        isClickThroughOnly,
+        isUnconfirmed,
+        fitSlots,
+        hasSlots,
+        markerKind,
+        availableCount: fitSlots.length,
+        isHomeCourse: isSubscriberHomeCourse(course),
+        distanceKm: getCourseDistanceKm(course),
+        holes: Number(course.holes || 0)
+      };
+    }
+
+    function applyCourseVisibilityFilter(course, meta) {
+      switch (currentAvailabilityFilter) {
+        case "available":
+          return meta.markerKind === "available";
+        case "phone":
+          return meta.markerKind === "phone";
+        case "unknown":
+          return meta.markerKind === "unknown";
+        case "unavailable":
+          return meta.markerKind === "unavailable";
+        case "all":
+        default:
+          return true;
+      }
+    }
+
+    function compareAlpha(a, b) {
+      return normalizeText(a.course.name).localeCompare(normalizeText(b.course.name));
+    }
+
+    function compareAvailabilityGroup(a, b) {
+      const rank = (item) => {
+        switch (item.meta.markerKind) {
+          case "available": return 0;
+          case "phone": return 1;
+          case "unknown": return 2;
+          case "unavailable": return 3;
+          default: return 4;
+        }
+      };
+      return rank(a) - rank(b);
+    }
+
+    function compareHomeCourseFirst(a, b) {
+      if (a.meta.isHomeCourse !== b.meta.isHomeCourse) {
+        return a.meta.isHomeCourse ? -1 : 1;
+      }
+      return 0;
+    }
+
+    function compareMostAvailable(a, b) {
+      if (a.meta.availableCount !== b.meta.availableCount) {
+        return b.meta.availableCount - a.meta.availableCount;
+      }
+      return 0;
+    }
+
+    function compareNearest(a, b) {
+      const aDist = Number.isFinite(a.meta.distanceKm) ? a.meta.distanceKm : Infinity;
+      const bDist = Number.isFinite(b.meta.distanceKm) ? b.meta.distanceKm : Infinity;
+      if (aDist !== bDist) return aDist - bDist;
+      return 0;
+    }
+
+    function compareHoles9First(a, b) {
+      const aRank = a.meta.holes === 9 ? 0 : 1;
+      const bRank = b.meta.holes === 9 ? 0 : 1;
+      if (aRank !== bRank) return aRank - bRank;
+      return 0;
+    }
+
+    function compareHoles18First(a, b) {
+      const aRank = a.meta.holes === 18 ? 0 : 1;
+      const bRank = b.meta.holes === 18 ? 0 : 1;
+      if (aRank !== bRank) return aRank - bRank;
+      return 0;
+    }
+
+    function sortRenderableCourses(items) {
+      const subscriber = isLikelySubscriber();
+
+      items.sort((a, b) => {
+        if (subscriber) {
+          const homeCmp = compareHomeCourseFirst(a, b);
+          if (homeCmp !== 0) return homeCmp;
+        }
+
+        const availabilityCmp = compareAvailabilityGroup(a, b);
+        if (availabilityCmp !== 0) return availabilityCmp;
+
+        if (currentSortMode === "availability_desc") {
+          const cmp = compareMostAvailable(a, b);
+          if (cmp !== 0) return cmp;
+        }
+
+        if (currentSortMode === "nearest") {
+          const cmp = compareNearest(a, b);
+          if (cmp !== 0) return cmp;
+        }
+
+        if (currentSortMode === "home_first" && subscriber) {
+          const cmp = compareHomeCourseFirst(a, b);
+          if (cmp !== 0) return cmp;
+        }
+
+        if (currentSortMode === "holes_9_first") {
+          const cmp = compareHoles9First(a, b);
+          if (cmp !== 0) return cmp;
+        }
+
+        if (currentSortMode === "holes_18_first") {
+          const cmp = compareHoles18First(a, b);
+          if (cmp !== 0) return cmp;
+        }
+
+        if (currentSortMode === "name_desc") {
+          return compareAlpha(b, a);
+        }
+
+        return compareAlpha(a, b);
+      });
+
+      return items;
+    }
 
     // ---- SEARCH & RENDER ----
     async function runSearch() {
@@ -917,7 +1916,7 @@ if (newLatestM !== lM) {
         return;
       }
 
-      lastSearchCriteria = {
+            lastSearchCriteria = {
         date,
         earliest,
         latest,
@@ -925,6 +1924,10 @@ if (newLatestM !== lM) {
         partySize: Number(players) || 1,
         state: selectedState || "",
       };
+
+      voteSelections = [];
+      voteCandidateOptions = [];
+      updateGroupVoteToolbar();
 
       window.teeRadarLastSearchDate = date;
 
@@ -1062,7 +2065,7 @@ trackEvent("search", {
       return L.divIcon({ className, iconSize: [14, 14] });
     }
 
-    function renderCourses() {
+        function renderCourses() {
       clearMarkers();
       coursesStrip.innerHTML = "";
 
@@ -1075,14 +2078,10 @@ trackEvent("search", {
       const searchDate = lastSearchCriteria && lastSearchCriteria.date;
       const dateIsWeekend = searchDate ? isWeekendDateStr(searchDate) : null;
 
+      const renderableCourses = [];
+
       courses.forEach((course) => {
         const name = course.name || "";
-        const provider = String(course.provider || "Other").trim();
-        const providerLower = provider.toLowerCase();
-        const isPhone = providerLower === "phone";
-        const isTeeItUp = providerLower === "teeitup";
-        const isChronogolf = providerLower === "chronogolf";
-        const isClickThroughOnly = isTeeItUp || isChronogolf;
 
         if (searchDate) {
           const hasWeekendWord = /weekend/i.test(name);
@@ -1092,14 +2091,8 @@ trackEvent("search", {
           if (hasWeekdayWord && dateIsWeekend === true) return;
         }
 
-        const isUnconfirmed =
-          isClickThroughOnly ||
-          name.startsWith("Wembley Golf Course") ||
-          name.startsWith("Meadow Springs Golf Course") ||
-          name.startsWith("Meadow Springs Golf & Country Club");
-
         if (
-          !isPhone &&
+          !String(course.provider || "").trim().toLowerCase().includes("phone") &&
           selectedHoles &&
           typeof course.holes === "number" &&
           Number(course.holes) !== selectedHoles
@@ -1107,28 +2100,29 @@ trackEvent("search", {
           return;
         }
 
-        const slots = groupedSlots[name] || [];
+        const meta = getCourseRenderMeta(course);
 
-        const want = Number(
-          (lastSearchCriteria && lastSearchCriteria.partySize) ||
-          document.getElementById("players").value ||
-          1
-        );
+        if (!applyCourseVisibilityFilter(course, meta)) {
+          return;
+        }
 
-        const fitSlots = (Array.isArray(slots) ? slots : []).filter(s => slotFitsParty(s, want));
-        const hasSlots = fitSlots.length > 0;
+        renderableCourses.push({ course, meta });
+      });
 
-        // ✅ STRICT marker logic — fixes Hillview green bug
-let markerKind = "unavailable";
+      sortRenderableCourses(renderableCourses);
 
-if (isPhone) {
-  markerKind = "phone";
-} else if (hasSlots === true) {
-  // ONLY green if at least one slot fits party size
-  markerKind = "available";
-} else if (isClickThroughOnly || isUnconfirmed) {
-  markerKind = "unknown";
-}
+      renderableCourses.forEach(({ course, meta }) => {
+        const name = meta.name;
+        const provider = meta.provider;
+        const providerLower = meta.providerLower;
+        const isPhone = meta.isPhone;
+        const isClickThroughOnly = meta.isClickThroughOnly;
+        const isUnconfirmed = meta.isUnconfirmed;
+        const fitSlots = meta.fitSlots;
+        const hasSlots = meta.hasSlots;
+        const markerKind = meta.markerKind;
+        const isHomeCourse = meta.isHomeCourse;
+        const distanceKm = meta.distanceKm;
 
         const cLat = toNum(course.lat);
         const cLng = toNum(course.lng);
@@ -1140,6 +2134,14 @@ if (isPhone) {
 
           let popupHtml = `<div style="font-size:13px;">
             <strong>${name}</strong><br>${provider}`;
+
+          if (isHomeCourse) {
+            popupHtml += `<br><strong>Home course</strong>`;
+          }
+
+          if (Number.isFinite(distanceKm)) {
+            popupHtml += `<br>${distanceKm.toFixed(1)} km away`;
+          }
 
           if (isClickThroughOnly || isUnconfirmed) {
             popupHtml += `<br><strong>Unable to confirm availability</strong>`;
@@ -1213,15 +2215,28 @@ if (isPhone) {
         const phoneText = isPhone && course.phone ? course.phone : "";
         const phoneHref = isPhone && course.phone ? getTelHref(course.phone) : "";
 
+        const extraInfoBits = [];
+        if (isHomeCourse) extraInfoBits.push(`<span class="chip chip-home-course">Home course</span>`);
+        if (Number.isFinite(distanceKm)) extraInfoBits.push(`<span class="chip">${distanceKm.toFixed(1)} km</span>`);
+
         card.innerHTML = `
           <div>
             <div class="course-header">${name}</div>
-            <div class="course-sub">Western Australia</div>
+            <div class="course-sub">${getPrettyStateName(course.state)}</div>
             <div class="chip-row">
               <span class="chip chip-provider">${providerLabel}</span>
               <span class="chip ${availChipClass}">${availLabel}</span>
               <span class="chip">${holesLabel}</span>
+              ${extraInfoBits.join("")}
             </div>
+
+            ${
+              hasSlots
+                ? `<div style="font-size:12px;color:#555;margin-top:6px;">
+                     Suggested tee times: ${fitSlots.slice(0, 3).map(s => s.time || s.tee_time).join(", ")}
+                   </div>`
+                : ""
+            }
           </div>
           <div class="card-footer">
             <span>${
@@ -1246,13 +2261,16 @@ if (isPhone) {
           </div>
         `;
 
-        const subStateEl = card.querySelector(".course-sub");
-        if (subStateEl) {
-          subStateEl.textContent = getPrettyStateName(course.state);
-        }
-
         coursesStrip.appendChild(card);
       });
+
+      if (!renderableCourses.length) {
+        coursesStrip.innerHTML = `
+          <div style="padding: 8px 4px 18px 4px; color:#666; font-size:14px;">
+            No courses match the selected filters.
+          </div>
+        `;
+      }
     }
 
     // Handle clicks on "Go to booking" (cards + map popups)
@@ -1401,6 +2419,138 @@ const courseId = course.id || course.courseId || course.course_id || null;
       });
 
       window.open(finalUrl, "_blank");
+    });
+            document.getElementById("createGroupVoteBtn")?.addEventListener("click", () => {
+      openGroupVoteModal();
+    });
+
+    document.getElementById("closeGroupVoteModalBtn")?.addEventListener("click", closeGroupVoteModal);
+    document.getElementById("cancelGroupVoteBtn")?.addEventListener("click", closeGroupVoteModal);
+    document.getElementById("submitGroupVoteBtn")?.addEventListener("click", createGroupVoteFromSelections);
+
+        document.addEventListener("change", (evt) => {
+      const cb = evt.target.closest(".group-vote-option-checkbox");
+      if (!cb) return;
+
+      const optionKey = decodeURIComponent(cb.dataset.key || "");
+      if (!optionKey) return;
+
+      const opt = voteCandidateOptions.find((x) => x.key === optionKey);
+      if (!opt) return;
+
+      if (cb.checked) {
+        if (!voteSelections.some((x) => x.key === opt.key)) {
+          voteSelections.push(opt);
+        }
+      } else {
+        voteSelections = voteSelections.filter((x) => x.key !== opt.key);
+      }
+
+      renderGroupVoteModalOptions();
+    });
+
+    document.getElementById("groupVoteModal")?.addEventListener("click", (evt) => {
+      if (evt.target.id === "groupVoteModal") {
+        closeGroupVoteModal();
+      }
+    });
+        document.getElementById("groupVoteCourseDropdownBtn")?.addEventListener("click", (evt) => {
+      evt.stopPropagation();
+      const menuEl = document.getElementById("groupVoteCourseDropdownMenu");
+      if (!menuEl) return;
+      menuEl.classList.toggle("open");
+    });
+
+    document.addEventListener("change", (evt) => {
+      const cb = evt.target.closest(".group-vote-course-filter-checkbox");
+      if (!cb) return;
+
+      const raw = cb.dataset.course || "";
+
+      if (raw === "__ALL__") {
+        voteSelectedCourses = [];
+        renderGroupVoteCourseFilter();
+        renderGroupVoteModalOptions();
+        return;
+      }
+
+      const courseName = decodeURIComponent(raw);
+
+      if (cb.checked) {
+        if (!voteSelectedCourses.includes(courseName)) {
+          voteSelectedCourses.push(courseName);
+        }
+      } else {
+        voteSelectedCourses = voteSelectedCourses.filter((x) => x !== courseName);
+      }
+
+      renderGroupVoteCourseFilter();
+      renderGroupVoteModalOptions();
+    });
+
+    document.addEventListener("click", (evt) => {
+      const wrap = evt.target.closest(".group-vote-course-filter-wrap");
+      if (!wrap) closeGroupVoteCourseDropdown();
+    });
+    
+    document.getElementById("closeGroupVoteLinkModalBtn")?.addEventListener("click", closeGroupVoteLinkModal);
+
+document.getElementById("copyGroupVoteLinkBtn")?.addEventListener("click", async () => {
+  const input = document.getElementById("groupVoteShareLinkInput");
+  const status = document.getElementById("groupVoteLinkModalStatus");
+  const url = input?.value || latestGroupVoteShareUrl || "";
+
+  if (!url) return;
+
+  try {
+    await navigator.clipboard.writeText(url);
+    if (status) status.textContent = "Link copied.";
+  } catch {
+    if (status) status.textContent = "Could not copy link.";
+  }
+});
+
+document.getElementById("shareGroupVoteLinkBtn")?.addEventListener("click", async () => {
+  const status = document.getElementById("groupVoteLinkModalStatus");
+
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: latestGroupVoteShareTitle,
+        text: latestGroupVoteShareNote,
+        url: latestGroupVoteShareUrl,
+      });
+      if (status) status.textContent = "Shared successfully.";
+      return;
+    }
+
+    await navigator.clipboard.writeText(latestGroupVoteShareUrl);
+    if (status) status.textContent = "Link copied.";
+  } catch (err) {
+    if (err && err.name === "AbortError") return;
+    if (status) status.textContent = "Could not share link.";
+  }
+});
+
+document.getElementById("openGroupVoteLinkBtn")?.addEventListener("click", () => {
+  if (!latestGroupVoteShareUrl) return;
+  window.open(latestGroupVoteShareUrl, "_blank");
+});
+
+document.getElementById("groupVoteLinkModal")?.addEventListener("click", (evt) => {
+  if (evt.target.id === "groupVoteLinkModal") {
+    closeGroupVoteLinkModal();
+  }
+});
+
+    document.getElementById("courseSort")?.addEventListener("change", (e) => {
+      currentSortMode = e.target.value || "default";
+      renderCourses();
+    });
+
+    document.getElementById("courseAvailabilityFilter")?.addEventListener("change", (e) => {
+      currentAvailabilityFilter = e.target.value || "all";
+      renderCourses();
     });
 
     // State selector behaviour
