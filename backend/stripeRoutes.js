@@ -2,7 +2,7 @@
 import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2024-06-20", // ok if Stripe ignores / updates this
+  apiVersion: "2024-06-20",
 });
 
 // Map plan names from the frontend → real Stripe price IDs
@@ -13,17 +13,36 @@ const PRICE_IDS = {
   PRO_ANNUAL:    "price_1ScbmCASm4geYL4W0EQZBrvf",
 };
 
+function normalizePlanKey(plan) {
+  return String(plan || "").trim().toUpperCase();
+}
+
+function derivePlanName(planKey) {
+  if (planKey.startsWith("PRO_")) return "PRO";
+  if (planKey.startsWith("BASIC_")) return "BASIC";
+  return "FREE";
+}
+
 export async function createCheckoutSession(req, res) {
   try {
-    const { plan, email } = req.body;
+    const { plan, email, userId } = req.body;
 
-    const priceId = PRICE_IDS[plan];
+    const planKey = normalizePlanKey(plan);
+    const priceId = PRICE_IDS[planKey];
+
     if (!priceId) {
       return res.status(400).json({ error: "Invalid plan selected" });
     }
 
-    // Fallback email in case you don't send one yet
-    const customerEmail = email && email.trim() !== "" ? email : undefined;
+    const customerEmail =
+      email && String(email).trim() !== "" ? String(email).trim() : undefined;
+
+    const planName = derivePlanName(planKey);
+
+    const baseUrl =
+      process.env.PUBLIC_BASE_URL ||
+      process.env.APP_URL ||
+      "http://localhost:3000";
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -37,10 +56,27 @@ export async function createCheckoutSession(req, res) {
       customer_email: customerEmail,
       allow_promotion_codes: true,
 
-      // TODO: replace YOUR_DOMAIN with your test/prod URL
-      success_url:
-        "https://YOUR_DOMAIN/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://YOUR_DOMAIN/subscribe-cancel.html",
+      // These are important for webhook reconciliation later
+      client_reference_id: userId ? String(userId) : undefined,
+
+      metadata: {
+        planKey,
+        planName,
+        email: customerEmail || "",
+        userId: userId ? String(userId) : "",
+      },
+
+      subscription_data: {
+        metadata: {
+          planKey,
+          planName,
+          email: customerEmail || "",
+          userId: userId ? String(userId) : "",
+        },
+      },
+
+      success_url: `${baseUrl}/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/subscribe-cancel.html`,
     });
 
     return res.json({ url: session.url });
@@ -51,3 +87,5 @@ export async function createCheckoutSession(req, res) {
       .json({ error: "Unable to create checkout session right now." });
   }
 }
+
+export { stripe };
