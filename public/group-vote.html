@@ -263,12 +263,19 @@
       </div>
       <div id="podium" class="podium"></div>
     </div>
+    
+    <div id="authStatusBox" class="card hidden" style="border:1px solid #d1fae5;background:#ecfdf5;">
+  <div style="font-size:15px;font-weight:700;color:#065f46;">You’re logged in</div>
+  <div id="authStatusText" style="margin-top:6px;font-size:14px;color:#065f46;">
+    Ready to vote.
+  </div>
+</div>
 
     <div id="authBox" class="card authBox hidden">
       <h3>Vote to lock in the round</h3>
       <p class="small">Create a free TeeRadar account to cast your votes.</p>
 
-      <div style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:14px;background:#f8fbff;">
+      <div id="signupUpsellBox" style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:14px;background:#f8fbff;">
         <div style="font-weight:700;font-size:14px;color:#0f172a;">Want full access to TeeRadar?</div>
         <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.45;">
           Unlock <strong>email alerts</strong>, <strong>scorecard analytics</strong>, and <strong>entry to our giveaways</strong>.
@@ -284,9 +291,9 @@
         <button id="loginVoteBtn" class="ghost">Log in & vote</button>
       </div>
 
-      <div class="toolbar" style="margin-top:8px;">
-        <button id="claimTrialBtn" class="secondary" type="button">Claim free month</button>
-      </div>
+      <div id="signupUpsellActions" class="toolbar" style="margin-top:8px;">
+     <button id="claimTrialBtn" class="secondary" type="button">Claim free month</button>
+     </div>
 
       <div id="authError" class="error"></div>
     </div>
@@ -299,30 +306,33 @@
     const publicId = qs.get("id");
 
     const els = {
-      title: document.getElementById("title"),
-      meta: document.getElementById("meta"),
-      note: document.getElementById("note"),
-      options: document.getElementById("options"),
-      message: document.getElementById("message"),
-      error: document.getElementById("error"),
-      authBox: document.getElementById("authBox"),
-      email: document.getElementById("email"),
-      password: document.getElementById("password"),
-      authError: document.getElementById("authError"),
-      signupVoteBtn: document.getElementById("signupVoteBtn"),
-      loginVoteBtn: document.getElementById("loginVoteBtn"),
-      claimTrialBtn: document.getElementById("claimTrialBtn"),
-      shareBtn: document.getElementById("shareBtn"),
-      copyBtn: document.getElementById("copyBtn"),
-      refreshBtn: document.getElementById("refreshBtn"),
-      standingsCard: document.getElementById("standingsCard"),
-      podium: document.getElementById("podium"),
-    };
+  title: document.getElementById("title"),
+  meta: document.getElementById("meta"),
+  note: document.getElementById("note"),
+  options: document.getElementById("options"),
+  message: document.getElementById("message"),
+  error: document.getElementById("error"),
+  authBox: document.getElementById("authBox"),
+  authStatusBox: document.getElementById("authStatusBox"),
+  authStatusText: document.getElementById("authStatusText"),
+  email: document.getElementById("email"),
+  password: document.getElementById("password"),
+  authError: document.getElementById("authError"),
+  signupVoteBtn: document.getElementById("signupVoteBtn"),
+  loginVoteBtn: document.getElementById("loginVoteBtn"),
+  claimTrialBtn: document.getElementById("claimTrialBtn"),
+  shareBtn: document.getElementById("shareBtn"),
+  copyBtn: document.getElementById("copyBtn"),
+  refreshBtn: document.getElementById("refreshBtn"),
+  standingsCard: document.getElementById("standingsCard"),
+  podium: document.getElementById("podium"),
+};
 
     let state = {
-      vote: null,
-      pendingOptionId: null,
-    };
+  vote: null,
+  pendingOptionId: null,
+  authMode: "login", // "login" | "signup"
+};
 
     function fmtDate(dateStr) {
       try {
@@ -351,6 +361,69 @@
         return "";
       }
     }
+    
+    function getLoggedInUser() {
+  try {
+    const raw = localStorage.getItem("tr_user");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function isLoggedIn() {
+  return !!getAuthToken();
+}
+
+function updateAuthUi() {
+  const signupUpsellBox = document.getElementById("signupUpsellBox");
+  const signupUpsellActions = document.getElementById("signupUpsellActions");
+  const showSignupUpsell = state.authMode === "signup";
+  const user = getLoggedInUser();
+
+  if (signupUpsellBox) {
+    signupUpsellBox.style.display = showSignupUpsell ? "" : "none";
+  }
+
+  if (signupUpsellActions) {
+    signupUpsellActions.style.display = showSignupUpsell ? "" : "none";
+  }
+
+  if (els.authStatusBox) {
+    if (isLoggedIn()) {
+      els.authStatusBox.classList.remove("hidden");
+      if (els.authStatusText) {
+        els.authStatusText.textContent = user?.email
+          ? `Logged in as ${user.email}. You can vote straight away.`
+          : "You’re logged in and can vote straight away.";
+      }
+    } else {
+      els.authStatusBox.classList.add("hidden");
+    }
+  }
+
+  if (els.authBox && isLoggedIn()) {
+    els.authBox.classList.add("hidden");
+  }
+
+  if (els.signupVoteBtn) {
+    els.signupVoteBtn.className = state.authMode === "signup" ? "primary" : "ghost";
+  }
+
+  if (els.loginVoteBtn) {
+    els.loginVoteBtn.className = state.authMode === "login" ? "primary" : "ghost";
+  }
+}
+
+function showSignupMode() {
+  state.authMode = "signup";
+  updateAuthUi();
+}
+
+function showLoginMode() {
+  state.authMode = "login";
+  updateAuthUi();
+}
 
     async function api(url, opts = {}) {
       const token = getAuthToken();
@@ -518,11 +591,13 @@
         render();
       } catch (err) {
         if (String(err.message || "").toLowerCase().includes("unauthorized") || String(err.message || "").toLowerCase().includes("missing token")) {
-          state.pendingOptionId = optionId;
-          els.authBox.classList.remove("hidden");
-          els.authError.textContent = "";
-          return;
-        }
+  state.pendingOptionId = optionId;
+  state.authMode = "login";
+  els.authBox.classList.remove("hidden");
+  els.authError.textContent = "";
+  updateAuthUi();
+  return;
+}
         els.error.textContent = err.message || "Could not save vote";
       }
     }
@@ -566,6 +641,8 @@
         if (data?.user) {
           localStorage.setItem("tr_user", JSON.stringify(data.user));
         }
+        
+        updateAuthUi();
 
         if (window.confirm("Want full access to TeeRadar?\n\nUse code TEERADARTRIAL to get your first month free and unlock email alerts, scorecard analytics, and giveaway entry.")) {
           openTrialOffer();
@@ -598,11 +675,6 @@
           localStorage.setItem("tr_user", JSON.stringify(data.user));
         }
 
-        if (window.confirm("Want full access to TeeRadar?\n\nUse code TEERADARTRIAL to get your first month free and unlock email alerts, scorecard analytics, and giveaway entry.")) {
-          openTrialOffer();
-          return;
-        }
-
         if (!state.pendingOptionId) return;
         await handleVoteClick(state.pendingOptionId);
       } catch (err) {
@@ -610,8 +682,21 @@
       }
     }
 
-    els.signupVoteBtn.addEventListener("click", signupAndVote);
-    els.loginVoteBtn.addEventListener("click", loginAndVote);
+    els.signupVoteBtn.addEventListener("click", () => {
+  if (state.authMode !== "signup") {
+    showSignupMode();
+    return;
+  }
+  signupAndVote();
+});
+
+els.loginVoteBtn.addEventListener("click", () => {
+  if (state.authMode !== "login") {
+    showLoginMode();
+    return;
+  }
+  loginAndVote();
+});
     els.refreshBtn.addEventListener("click", loadVote);
     els.claimTrialBtn?.addEventListener("click", openTrialOffer);
 
@@ -654,11 +739,13 @@
       }
     });
 
-    if (!publicId) {
-      els.error.textContent = "Missing group vote id.";
-    } else {
-      loadVote();
-    }
+    updateAuthUi();
+
+if (!publicId) {
+  els.error.textContent = "Missing group vote id.";
+} else {
+  loadVote();
+}
   </script>
 </body>
 </html>
