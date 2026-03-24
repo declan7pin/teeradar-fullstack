@@ -1,5 +1,3 @@
-
-
 // backend/bookingRoutes.js
 import express from "express";
 import crypto from "crypto";
@@ -45,7 +43,7 @@ const SUBSCRIBER_EMAILS = String(process.env.SUBSCRIBER_EMAILS || "")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 
-// ✅ Determine if an email is an active subscriber (subscriber_status table)
+// ✅ Determine if an email currently has subscriber entitlement
 async function isSubscriberEmail(email) {
   const e = String(email || "").trim().toLowerCase();
   if (!e) return false;
@@ -53,16 +51,31 @@ async function isSubscriberEmail(email) {
   try {
     const r = await db.query(
       `
-      SELECT 1
+      SELECT
+        plan,
+        status,
+        entitlement_active,
+        current_period_end
       FROM subscriber_status
       WHERE lower(email) = lower($1)
-        AND status IN ('active','trialing')
       LIMIT 1;
       `,
       [e]
     );
 
-    return r.rows.length > 0;
+    const row = r.rows?.[0];
+    if (!row) return false;
+
+    const status = String(row.status || "").trim().toLowerCase();
+    if (status !== "active" && status !== "trialing") return false;
+
+    if (!row.entitlement_active) return false;
+    if (!row.current_period_end) return false;
+
+    const endMs = new Date(row.current_period_end).getTime();
+    if (!Number.isFinite(endMs)) return false;
+
+    return endMs > Date.now();
   } catch (err) {
     console.error("subscriber lookup error", err);
     return false;
@@ -10203,54 +10216,54 @@ async function isBookingSubscriberEmail(dbClient, email) {
     bookSubDbg("path=allowlist_error", { email: e, err: err?.message || err });
   }
 
-  // 2) subscriber_status table
+    // 2) subscriber_status table
   try {
     const r = await dbClient.query(
       `
-      SELECT status
+      SELECT
+        plan,
+        status,
+        entitlement_active,
+        current_period_end
       FROM subscriber_status
       WHERE lower(email)=lower($1)
       LIMIT 1;
       `,
       [e]
     );
-    const status = String(r.rows?.[0]?.status || "").toLowerCase();
-    const ok = status === "active" || status === "trialing";
-    bookSubDbg("path=subscriber_status", { email: e, found: !!r.rows?.length, status, ok });
+
+    const row = r.rows?.[0] || null;
+    const status = String(row?.status || "").toLowerCase();
+    const entitlementActive = !!row?.entitlement_active;
+
+    let currentPeriodValid = false;
+    if (row?.current_period_end) {
+      const endMs = new Date(row.current_period_end).getTime();
+      currentPeriodValid = Number.isFinite(endMs) && endMs > Date.now();
+    }
+
+    const ok =
+      (status === "active" || status === "trialing") &&
+      entitlementActive &&
+      currentPeriodValid;
+
+    bookSubDbg("path=subscriber_status", {
+      email: e,
+      found: !!row,
+      status,
+      entitlementActive,
+      currentPeriodEnd: row?.current_period_end || null,
+      currentPeriodValid,
+      ok,
+    });
+
     if (ok) return true;
   } catch (err) {
     bookSubDbg("path=subscriber_status_error", { email: e, err: err?.message || err });
   }
-
-  // 3) Stripe source of truth
-  try {
-    if (stripe) {
-      const customers = await stripe.customers.list({ email: e, limit: 1 });
-      const cust = customers?.data?.[0];
-      bookSubDbg("path=stripe_customers", { email: e, foundCustomer: !!cust?.id });
-
-      if (cust?.id) {
-        const subs = await stripe.subscriptions.list({
-          customer: cust.id,
-          status: "active",
-          limit: 1,
-        });
-        bookSubDbg("path=stripe_subscriptions_active", { email: e, found: !!subs?.data?.length });
-        if (subs?.data?.length) return true;
-
-        const trialSubs = await stripe.subscriptions.list({
-          customer: cust.id,
-          status: "trialing",
-          limit: 1,
-        });
-        bookSubDbg("path=stripe_subscriptions_trialing", { email: e, found: !!trialSubs?.data?.length });
-        if (trialSubs?.data?.length) return true;
-      }
-    }
-  } catch (e3) {
-    bookSubDbg("path=stripe_error", { email: e, err: e3?.message || e3 });
-    console.warn("⚠️ Stripe subscriber lookup failed:", e3?.message || e3);
-  }
+    // 3) No Stripe fallback here.
+  // subscriber_status is the app source of truth for entitlement.
+  bookSubDbg("path=stripe_skipped", { email: e });
 
   // 4) users.plan fallback
   try {
