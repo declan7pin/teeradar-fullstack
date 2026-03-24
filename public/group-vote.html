@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>TeeRadar — Group Vote</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{
+      --bg:#f4f7fb;
+      --card:#fff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e2e8f0;
+      --green:#00796b;
+      --green-dark:#005e55;
+      --pill:#ecfeff;
+      --gold:#f59e0b;
+      --silver:#94a3b8;
+      --bronze:#b45309;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+    .wrap{
+      max-width:920px;
+      margin:24px auto;
+      padding:0 16px 40px;
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:18px;
+      margin-bottom:14px;
+    }
+    h1,h2,h3,p{margin:0}
+    .meta{
+      margin-top:8px;
+      color:var(--muted);
+      font-size:14px;
+    }
+    .options{
+      display:grid;
+      gap:12px;
+      margin-top:14px;
+    }
+    .option{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:14px;
+      background:#fff;
+    }
+    .row{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .course{
+      font-size:18px;
+      font-weight:700;
+    }
+    .sub{
+      color:var(--muted);
+      margin-top:4px;
+      font-size:14px;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      padding:6px 10px;
+      border-radius:999px;
+      background:var(--pill);
+      color:var(--green-dark);
+      font-size:13px;
+      font-weight:700;
+    }
+    button, .btn{
+      appearance:none;
+      border:none;
+      border-radius:12px;
+      padding:10px 14px;
+      cursor:pointer;
+      font:inherit;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .primary{ background:var(--green); color:#fff; }
+    .secondary{ background:#e2e8f0; color:#0f172a; }
+    .ghost{ background:#fff; border:1px solid var(--border); color:#0f172a; }
+    .toolbar{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:14px;
+    }
+    .winner{
+      border-color:#10b981;
+      box-shadow:0 0 0 1px #10b981 inset;
+    }
+    .hidden{ display:none !important; }
+    .msg{
+      margin-top:12px;
+      color:var(--green-dark);
+      font-weight:600;
+    }
+    .error{
+      color:#b91c1c;
+      margin-top:10px;
+      font-weight:600;
+    }
+    .authBox{
+      margin-top:16px;
+      padding:14px;
+      border:1px dashed var(--border);
+      border-radius:14px;
+      background:#fafafa;
+    }
+    input{
+      width:100%;
+      margin-top:8px;
+      padding:12px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      font:inherit;
+      background:#fff;
+    }
+    .small{
+      font-size:13px;
+      color:var(--muted);
+      margin-top:8px;
+    }
+
+    /* Standings / podium */
+    .standings-card{
+      padding:18px;
+    }
+    .standings-header{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:center;
+      flex-wrap:wrap;
+      margin-bottom:14px;
+    }
+    .standings-title{
+      font-size:18px;
+      font-weight:800;
+    }
+    .standings-sub{
+      color:var(--muted);
+      font-size:13px;
+      margin-top:4px;
+    }
+    .podium{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:12px;
+    }
+    .podium-item{
+      border:1px solid var(--border);
+      border-radius:16px;
+      background:#fff;
+      padding:14px;
+      min-height:150px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+    }
+    .podium-item.first{
+      border-color:#fbbf24;
+      box-shadow:0 0 0 1px #fbbf24 inset;
+      background:linear-gradient(180deg,#fffdf7 0%,#ffffff 100%);
+    }
+    .podium-item.second{
+      border-color:#cbd5e1;
+      box-shadow:0 0 0 1px #cbd5e1 inset;
+    }
+    .podium-item.third{
+      border-color:#fdba74;
+      box-shadow:0 0 0 1px #fdba74 inset;
+    }
+    .podium-rank{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:38px;
+      height:38px;
+      border-radius:999px;
+      font-weight:800;
+      font-size:15px;
+      color:#fff;
+      margin-bottom:10px;
+    }
+    .podium-item.first .podium-rank{ background:var(--gold); }
+    .podium-item.second .podium-rank{ background:var(--silver); }
+    .podium-item.third .podium-rank{ background:var(--bronze); }
+
+    .podium-name{
+      font-weight:800;
+      font-size:15px;
+      line-height:1.3;
+      margin-bottom:6px;
+    }
+    .podium-meta{
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.4;
+    }
+    .podium-votes{
+      margin-top:12px;
+      display:inline-flex;
+      align-items:center;
+      padding:6px 10px;
+      border-radius:999px;
+      background:#f8fafc;
+      color:#0f172a;
+      font-size:13px;
+      font-weight:800;
+      width:max-content;
+    }
+    .standings-empty{
+      color:var(--muted);
+      font-size:14px;
+    }
+
+    @media (max-width: 760px){
+      .podium{
+        grid-template-columns:1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1 id="title">Loading group vote...</h1>
+      <div id="meta" class="meta"></div>
+      <p id="note" class="meta" style="margin-top:10px;"></p>
+      <p class="small" style="margin-top:10px;">Vote for all tee times that work for you. Tap again to remove your vote.</p>
+      <div class="toolbar">
+        <button id="shareBtn" class="primary">Share</button>
+        <button id="copyBtn" class="ghost">Copy link</button>
+        <button id="refreshBtn" class="secondary">Refresh</button>
+      </div>
+      <div id="message" class="msg"></div>
+      <div id="error" class="error"></div>
+    </div>
+
+    <div id="standingsCard" class="card standings-card hidden">
+      <div class="standings-header">
+        <div>
+          <div class="standings-title">Current standings</div>
+          <div class="standings-sub">Highest voted options right now</div>
+        </div>
+      </div>
+      <div id="podium" class="podium"></div>
+    </div>
+    
+    <div id="authStatusBox" class="card hidden" style="border:1px solid #d1fae5;background:#ecfdf5;">
+  <div style="font-size:15px;font-weight:700;color:#065f46;">You’re logged in</div>
+  <div id="authStatusText" style="margin-top:6px;font-size:14px;color:#065f46;">
+    Ready to vote.
+  </div>
+</div>
+
+    <div id="authBox" class="card authBox hidden">
+      <h3>Vote to lock in the round</h3>
+      <p class="small">Create a free TeeRadar account to cast your votes.</p>
+
+      <div id="signupUpsellBox" style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:14px;background:#f8fbff;">
+        <div style="font-weight:700;font-size:14px;color:#0f172a;">Want full access to TeeRadar?</div>
+        <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.45;">
+          Unlock <strong>email alerts</strong>, <strong>scorecard analytics</strong>, and <strong>entry to our giveaways</strong>.
+          Use code <strong>TEERADARTRIAL</strong> to get your <strong>first month free</strong>.
+        </div>
+      </div>
+
+      <input id="email" type="email" placeholder="Email" />
+      <input id="password" type="password" placeholder="Password" />
+
+      <div class="toolbar">
+        <button id="signupVoteBtn" class="primary">Create account & vote</button>
+        <button id="loginVoteBtn" class="ghost">Log in & vote</button>
+      </div>
+
+      <div id="signupUpsellActions" class="toolbar" style="margin-top:8px;">
+     <button id="claimTrialBtn" class="secondary" type="button">Claim free month</button>
+     </div>
+
+      <div id="authError" class="error"></div>
+    </div>
+
+    <div id="options" class="options"></div>
+  </div>
+
+  <script>
+    const qs = new URLSearchParams(location.search);
+    const publicId = qs.get("id");
+
+    const els = {
+  title: document.getElementById("title"),
+  meta: document.getElementById("meta"),
+  note: document.getElementById("note"),
+  options: document.getElementById("options"),
+  message: document.getElementById("message"),
+  error: document.getElementById("error"),
+  authBox: document.getElementById("authBox"),
+  authStatusBox: document.getElementById("authStatusBox"),
+  authStatusText: document.getElementById("authStatusText"),
+  email: document.getElementById("email"),
+  password: document.getElementById("password"),
+  authError: document.getElementById("authError"),
+  signupVoteBtn: document.getElementById("signupVoteBtn"),
+  loginVoteBtn: document.getElementById("loginVoteBtn"),
+  claimTrialBtn: document.getElementById("claimTrialBtn"),
+  shareBtn: document.getElementById("shareBtn"),
+  copyBtn: document.getElementById("copyBtn"),
+  refreshBtn: document.getElementById("refreshBtn"),
+  standingsCard: document.getElementById("standingsCard"),
+  podium: document.getElementById("podium"),
+};
+
+    let state = {
+  vote: null,
+  pendingOptionId: null,
+  authMode: "login", // "login" | "signup"
+};
+
+    function fmtDate(dateStr) {
+      try {
+        return new Date(dateStr + "T00:00:00").toLocaleDateString();
+      } catch {
+        return dateStr;
+      }
+    }
+
+    function fmtExpiry(ts) {
+      if (!ts) return "No expiry";
+      const d = new Date(ts);
+      if (Number.isNaN(d.getTime())) return "";
+      return "Closes " + d.toLocaleString();
+    }
+
+    function getAuthToken() {
+      try {
+        return (
+          localStorage.getItem("tr_auth_token") ||
+          localStorage.getItem("tr_token") ||
+          localStorage.getItem("token") ||
+          ""
+        );
+      } catch {
+        return "";
+      }
+    }
+    
+    function getLoggedInUser() {
+  try {
+    const raw = localStorage.getItem("tr_user");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function isLoggedIn() {
+  return !!getAuthToken();
+}
+
+function updateAuthUi() {
+  const signupUpsellBox = document.getElementById("signupUpsellBox");
+  const signupUpsellActions = document.getElementById("signupUpsellActions");
+  const showSignupUpsell = state.authMode === "signup";
+  const user = getLoggedInUser();
+
+  if (signupUpsellBox) {
+    signupUpsellBox.style.display = showSignupUpsell ? "" : "none";
+  }
+
+  if (signupUpsellActions) {
+    signupUpsellActions.style.display = showSignupUpsell ? "" : "none";
+  }
+
+  if (els.authStatusBox) {
+    if (isLoggedIn()) {
+      els.authStatusBox.classList.remove("hidden");
+      if (els.authStatusText) {
+        els.authStatusText.textContent = user?.email
+          ? `Logged in as ${user.email}. You can vote straight away.`
+          : "You’re logged in and can vote straight away.";
+      }
+    } else {
+      els.authStatusBox.classList.add("hidden");
+    }
+  }
+
+  if (els.authBox && isLoggedIn()) {
+    els.authBox.classList.add("hidden");
+  }
+
+  if (els.signupVoteBtn) {
+    els.signupVoteBtn.className = state.authMode === "signup" ? "primary" : "ghost";
+  }
+
+  if (els.loginVoteBtn) {
+    els.loginVoteBtn.className = state.authMode === "login" ? "primary" : "ghost";
+  }
+}
+
+function showSignupMode() {
+  state.authMode = "signup";
+  updateAuthUi();
+}
+
+function showLoginMode() {
+  state.authMode = "login";
+  updateAuthUi();
+}
+
+    async function api(url, opts = {}) {
+      const token = getAuthToken();
+
+      const mergedHeaders = {
+        "Content-Type": "application/json",
+        ...(opts.headers || {}),
+      };
+
+      if (token) {
+        mergedHeaders.Authorization = `Bearer ${token}`;
+      }
+
+      const r = await fetch(url, {
+        credentials: "include",
+        ...opts,
+        headers: mergedHeaders,
+      });
+
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || "request_failed");
+      return data;
+    }
+
+    function getDisplayName(opt) {
+      return (
+        opt.display_name ||
+        opt.option_label ||
+        opt.course_label ||
+        opt.course_name
+      );
+    }
+
+    function renderStandings(vote) {
+      if (!els.standingsCard || !els.podium) return;
+
+      const sorted = [...(vote.options || [])].sort((a, b) => {
+        const voteDiff = Number(b.vote_count || 0) - Number(a.vote_count || 0);
+        if (voteDiff !== 0) return voteDiff;
+        if ((a.play_date || "") !== (b.play_date || "")) {
+          return String(a.play_date || "").localeCompare(String(b.play_date || ""));
+        }
+        return String(a.tee_time || "").localeCompare(String(b.tee_time || ""));
+      });
+
+      const topThree = sorted.slice(0, 3);
+      els.podium.innerHTML = "";
+
+      if (!topThree.length) {
+        els.standingsCard.classList.remove("hidden");
+        els.podium.innerHTML = `<div class="standings-empty">No standings yet.</div>`;
+        return;
+      }
+
+      const rankClassMap = ["first", "second", "third"];
+
+      topThree.forEach((opt, index) => {
+        const item = document.createElement("div");
+        item.className = `podium-item ${rankClassMap[index] || ""}`;
+
+        item.innerHTML = `
+          <div>
+            <div class="podium-rank">#${index + 1}</div>
+            <div class="podium-name">${getDisplayName(opt)}</div>
+            <div class="podium-meta">
+              ${fmtDate(opt.play_date)} • ${opt.tee_time} • ${opt.holes} holes • ${opt.players} players
+            </div>
+          </div>
+          <div class="podium-votes">
+            ${opt.vote_count || 0} vote${Number(opt.vote_count || 0) === 1 ? "" : "s"}
+          </div>
+        `;
+
+        els.podium.appendChild(item);
+      });
+
+      els.standingsCard.classList.remove("hidden");
+    }
+
+    function render() {
+      const vote = state.vote;
+      if (!vote) return;
+
+      els.title.textContent = vote.title || "Group Vote";
+      els.meta.textContent = `${vote.creatorName || "Someone"} created this vote • ${fmtExpiry(vote.expiresAt)}`;
+      els.note.textContent = vote.note || "";
+
+      renderStandings(vote);
+
+      els.options.innerHTML = "";
+
+      for (const opt of vote.options) {
+        const isWinner = Number(vote.selectedOptionId || 0) === Number(opt.id);
+        const myIds = Array.isArray(vote.myOptionIds) ? vote.myOptionIds.map(Number) : [];
+        const isMine = myIds.includes(Number(opt.id));
+
+        const card = document.createElement("div");
+        card.className = "option" + (isWinner ? " winner" : "");
+
+        const displayName = getDisplayName(opt);
+
+        const voterNames = Array.isArray(opt.voters)
+          ? opt.voters.map((v) => v.name).filter(Boolean)
+          : [];
+
+        const voterText = voterNames.length
+          ? `Voted by: ${voterNames.join(", ")}`
+          : "No votes yet";
+
+        card.innerHTML = `
+          <div class="row">
+            <div>
+              <div class="course">${displayName}</div>
+              <div class="sub">
+                ${fmtDate(opt.play_date)} • ${opt.tee_time} • ${opt.holes} holes • ${opt.players} players
+              </div>
+              <div class="sub" style="margin-top:6px;">${voterText}</div>
+            </div>
+            <div class="pill">${opt.vote_count || 0} vote${Number(opt.vote_count || 0) === 1 ? "" : "s"}</div>
+          </div>
+          <div class="toolbar">
+            ${vote.canVote ? `<button class="primary voteBtn" data-option-id="${opt.id}">${isMine ? "Remove vote" : "Vote for this"}</button>` : ``}
+            ${opt.booking_url ? `<a class="ghost btn" href="${opt.booking_url}">View booking</a>` : ``}
+            ${vote.canChooseWinner ? `<button class="secondary selectBtn" data-option-id="${opt.id}">Choose winner</button>` : ``}
+            ${isWinner ? `<span class="pill">Selected tee time</span>` : ``}
+            ${isMine ? `<span class="pill">You voted for this</span>` : ``}
+          </div>
+        `;
+
+        els.options.appendChild(card);
+      }
+
+      document.querySelectorAll(".voteBtn").forEach((btn) => {
+        btn.addEventListener("click", () => handleVoteClick(Number(btn.dataset.optionId)));
+      });
+
+      document.querySelectorAll(".selectBtn").forEach((btn) => {
+        btn.addEventListener("click", () => chooseWinner(Number(btn.dataset.optionId)));
+      });
+    }
+
+    async function loadVote() {
+      els.error.textContent = "";
+      try {
+        const data = await api(`/api/group-votes/${encodeURIComponent(publicId)}`);
+        state.vote = data.vote;
+        render();
+      } catch (err) {
+        els.error.textContent = err.message || "Failed to load vote";
+      }
+    }
+
+    async function handleVoteClick(optionId) {
+      els.message.textContent = "";
+      els.error.textContent = "";
+
+      try {
+        const data = await api(`/api/group-votes/${encodeURIComponent(publicId)}/vote`, {
+          method: "POST",
+          body: JSON.stringify({ optionId }),
+        });
+        state.vote = data.vote;
+        els.authBox.classList.add("hidden");
+        els.message.textContent = "Your votes have been updated.";
+        render();
+      } catch (err) {
+        if (String(err.message || "").toLowerCase().includes("unauthorized") || String(err.message || "").toLowerCase().includes("missing token")) {
+  state.pendingOptionId = optionId;
+  state.authMode = "login";
+  els.authBox.classList.remove("hidden");
+  els.authError.textContent = "";
+  updateAuthUi();
+  return;
+}
+        els.error.textContent = err.message || "Could not save vote";
+      }
+    }
+
+    async function chooseWinner(optionId) {
+      els.message.textContent = "";
+      els.error.textContent = "";
+      try {
+        const data = await api(`/api/group-votes/${encodeURIComponent(publicId)}/select`, {
+          method: "POST",
+          body: JSON.stringify({ optionId }),
+        });
+        state.vote = data.vote;
+        els.message.textContent = "Winning tee time selected.";
+        render();
+      } catch (err) {
+        els.error.textContent = err.message || "Could not select winner";
+      }
+    }
+
+    function openTrialOffer() {
+      const url = `/subscribe.html?promo=TEERADARTRIAL&source=group-vote`;
+      window.location.href = url;
+    }
+
+    async function signupAndVote() {
+      els.authError.textContent = "";
+      try {
+        const data = await api("/api/auth/signup", {
+          method: "POST",
+          body: JSON.stringify({
+            email: els.email.value.trim(),
+            password: els.password.value.trim(),
+          }),
+        });
+
+        if (data?.token) {
+          localStorage.setItem("tr_auth_token", data.token);
+          localStorage.setItem("tr_token", data.token);
+        }
+        if (data?.user) {
+          localStorage.setItem("tr_user", JSON.stringify(data.user));
+        }
+        
+        updateAuthUi();
+
+        if (window.confirm("Want full access to TeeRadar?\n\nUse code TEERADARTRIAL to get your first month free and unlock email alerts, scorecard analytics, and giveaway entry.")) {
+          openTrialOffer();
+          return;
+        }
+
+        if (!state.pendingOptionId) return;
+        await handleVoteClick(state.pendingOptionId);
+      } catch (err) {
+        els.authError.textContent = err.message || "Signup failed";
+      }
+    }
+
+    async function loginAndVote() {
+      els.authError.textContent = "";
+      try {
+        const data = await api("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({
+            email: els.email.value.trim(),
+            password: els.password.value.trim(),
+          }),
+        });
+
+        if (data?.token) {
+          localStorage.setItem("tr_auth_token", data.token);
+          localStorage.setItem("tr_token", data.token);
+        }
+        if (data?.user) {
+          localStorage.setItem("tr_user", JSON.stringify(data.user));
+        }
+
+        if (!state.pendingOptionId) return;
+        await handleVoteClick(state.pendingOptionId);
+      } catch (err) {
+        els.authError.textContent = err.message || "Login failed";
+      }
+    }
+
+    els.signupVoteBtn.addEventListener("click", () => {
+  if (state.authMode !== "signup") {
+    showSignupMode();
+    return;
+  }
+  signupAndVote();
+});
+
+els.loginVoteBtn.addEventListener("click", () => {
+  if (state.authMode !== "login") {
+    showLoginMode();
+    return;
+  }
+  loginAndVote();
+});
+    els.refreshBtn.addEventListener("click", loadVote);
+    els.claimTrialBtn?.addEventListener("click", openTrialOffer);
+
+    els.shareBtn.addEventListener("click", async () => {
+      els.message.textContent = "";
+      els.error.textContent = "";
+
+      const shareTitle = state.vote?.title || "TeeRadar Group Vote";
+      const shareText = state.vote?.note
+        ? `${state.vote.note}\n\nVote for the tee time that works best.`
+        : "Vote for the tee time that works best.";
+
+      try {
+        if (navigator.share) {
+          await navigator.share({
+            title: shareTitle,
+            text: shareText,
+            url: location.href,
+          });
+          return;
+        }
+
+        await navigator.clipboard.writeText(location.href);
+        els.message.textContent = "Link copied.";
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+        els.error.textContent = "Could not share link.";
+      }
+    });
+
+    els.copyBtn.addEventListener("click", async () => {
+      els.message.textContent = "";
+      els.error.textContent = "";
+
+      try {
+        await navigator.clipboard.writeText(location.href);
+        els.message.textContent = "Link copied.";
+      } catch {
+        els.error.textContent = "Could not copy link.";
+      }
+    });
+
+    updateAuthUi();
+
+if (!publicId) {
+  els.error.textContent = "Missing group vote id.";
+} else {
+  loadVote();
+}
+  </script>
+</body>
+</html>
