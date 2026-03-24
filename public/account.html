@@ -336,9 +336,12 @@
       <h2>Account details</h2>
       <p>Signed in as <strong id="accountEmail"></strong></p>
       <span class="pill" id="planPill">Plan: checking subscription…</span>
-      <p style="margin-top:6px;">
-        If you upgrade to Pro later, we’ll automatically let you save up to 10 favourites.
-      </p>
+<p id="planSubtext" style="margin-top:6px;">
+  If you upgrade to Pro later, we’ll automatically let you save up to 10 favourites.
+</p>
+<div id="alertsLockedMsg" class="blocked" style="display:none;">
+  Email alerts are only available with an active subscription. Your account is still active, but alert access is currently locked.
+</div>
 
       <!-- main in-page log out button -->
       <div class="row-actions">
@@ -475,6 +478,8 @@
   const accountContentEl = document.getElementById("accountContent");
   const accountEmailEl = document.getElementById("accountEmail");
   const planPill = document.getElementById("planPill");
+  const planSubtext = document.getElementById("planSubtext");
+  const alertsLockedMsg = document.getElementById("alertsLockedMsg");
   const homeStateSelect = document.getElementById("homeState");
   const favInput = document.getElementById("favCourseInput");
   const favListEl = document.getElementById("favList");
@@ -534,6 +539,41 @@
 
   // Default: Basic (3 favs). This will be updated after we hit the server.
   let maxFavs = 3;
+    let currentEntitlementActive = false;
+  let currentPlan = "FREE";
+
+  function setAlertControlsLocked(locked) {
+    const controls = [
+      favInput,
+      homeStateSelect,
+      homeCourseInput,
+      prefEarliest,
+      prefLatest,
+      prefHoles,
+      prefPartySize,
+      alertFrequencySelect,
+      savePrefsBtn
+    ].filter(Boolean);
+
+    controls.forEach(el => {
+      el.disabled = !!locked;
+    });
+
+    dayCheckboxes.forEach(cb => {
+      cb.disabled = !!locked;
+    });
+
+    const favRemoveButtons = document.querySelectorAll(".fav-remove");
+    favRemoveButtons.forEach(btn => {
+      btn.disabled = !!locked;
+      btn.style.opacity = locked ? "0.5" : "1";
+      btn.style.cursor = locked ? "not-allowed" : "pointer";
+    });
+
+    if (alertsLockedMsg) {
+      alertsLockedMsg.style.display = locked ? "block" : "none";
+    }
+  }
 
   // --- helpers for days ---
   function getSelectedDays() {
@@ -896,7 +936,15 @@ searchableCourses = data.filter((c) => {
         }
       });
 
-      const payload = await res.json().catch(() => null);
+            const payload = await res.json().catch(() => null);
+
+      if (res.status === 403 && payload && payload.error === "subscriber_required") {
+        setAlertControlsLocked(true);
+        prefsStatus.textContent = "Email alerts require an active subscription.";
+        prefsStatus.className = "status";
+        return false;
+      }
+
       if (!res.ok || !payload || !payload.ok || !payload.found || !payload.preferences) {
         return false;
       }
@@ -999,14 +1047,11 @@ searchableCourses = data.filter((c) => {
             ? { name: homeCourseInput.value.trim(), id: null, state: homeState || null }
             : null);
 
-      savePrefsToStorage(homeState, homeCourseObj, favCourses, {
-        days: selectedDays,
-        earliest,
-        latest,
-        holes: holesValue,
-        partySize: partySizeValue,
-        frequency: alertFrequency
-      });
+            if (!currentEntitlementActive) {
+        prefsStatus.textContent = "An active subscription is required to save email alert preferences.";
+        prefsStatus.className = "status err";
+        return;
+      }
 
       prefsStatus.textContent = "Saving…";
       prefsStatus.className = "status";
@@ -1038,17 +1083,34 @@ searchableCourses = data.filter((c) => {
           body: JSON.stringify(body)
         });
 
+                const data = await res.json().catch(() => ({}));
+
         if (res.ok) {
+          savePrefsToStorage(homeState, homeCourseObj, favCourses, {
+            days: selectedDays,
+            earliest,
+            latest,
+            holes: holesValue,
+            partySize: partySizeValue,
+            frequency: alertFrequency
+          });
+
           prefsStatus.textContent = "Preferences saved.";
           prefsStatus.className = "status ok";
+        } else if (res.status === 403 && data && data.error === "subscriber_required") {
+          setAlertControlsLocked(true);
+          currentEntitlementActive = false;
+          currentPlan = "FREE";
+          prefsStatus.textContent = "An active subscription is required to save email alert preferences.";
+          prefsStatus.className = "status err";
         } else {
-          prefsStatus.textContent = "Saved locally. Server update failed.";
-          prefsStatus.className = "status";
+          prefsStatus.textContent = "Server update failed.";
+          prefsStatus.className = "status err";
         }
-      } catch (err) {
+            } catch (err) {
         console.error("prefs save error", err);
-        prefsStatus.textContent = "Saved locally. Server update failed (network).";
-        prefsStatus.className = "status";
+        prefsStatus.textContent = "Server update failed (network).";
+        prefsStatus.className = "status err";
       }
     });
   }
@@ -1088,46 +1150,113 @@ searchableCourses = data.filter((c) => {
   }
 
   // --- NEW: ask backend what Stripe plan this email is on ---
-  async function refreshPlanFromServer() {
+    async function refreshPlanFromServer() {
     if (!email || !planPill) return;
 
     try {
-      const res = await fetch(`/api/account/plan?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`/api/account/plan?email=${encodeURIComponent(email)}`, {
+        headers: {
+          ...(token ? { "Authorization": "Bearer " + token } : {})
+        }
+      });
+
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         throw new Error(data.error || "plan lookup failed");
       }
 
-      const plan = data.plan || "BASIC";
-      const favLimit = Number(data.maxFavs) || (plan === "PRO" ? 10 : 3);
-      maxFavs = favLimit;
+      const plan = String(data.plan || "FREE").toUpperCase();
+      const entitlementActive = !!data.entitlementActive;
+      const subscriptionStatus = String(data.subscriptionStatus || "inactive").toLowerCase();
+      const cancelAtPeriodEnd = !!data.cancelAtPeriodEnd;
+      const currentPeriodEnd = data.currentPeriodEnd || null;
 
-      if (plan === "PRO") {
-        planPill.textContent = `Plan: Pro (${favLimit} favourite courses)`;
-      } else if (plan === "BASIC") {
-        planPill.textContent = `Plan: Basic (${favLimit} favourite courses)`;
+      currentEntitlementActive = entitlementActive;
+      currentPlan = entitlementActive ? plan : "FREE";
+
+      maxFavs = Number(data.maxFavs) || (currentPlan === "PRO" ? 10 : 3);
+
+      if (currentPlan === "PRO") {
+        planPill.textContent = `Plan: Pro (${maxFavs} favourite courses)`;
+      } else if (currentPlan === "BASIC") {
+        planPill.textContent = `Plan: Basic (${maxFavs} favourite courses)`;
       } else {
         planPill.textContent = "Plan: Free (no active subscription)";
       }
+
+            if (planSubtext) {
+        if (entitlementActive && subscriptionStatus === "trialing" && currentPeriodEnd) {
+          const endDate = new Date(currentPeriodEnd);
+          const label = Number.isFinite(endDate.getTime())
+            ? endDate.toLocaleDateString("en-AU", {
+                day: "numeric",
+                month: "short",
+                year: "numeric"
+              })
+            : currentPeriodEnd;
+
+          planSubtext.textContent =
+            `Your ${currentPlan === "PRO" ? "Pro" : "Basic"} free trial is active until ${label}. All subscriber features are currently unlocked.`;
+        } else if (entitlementActive && cancelAtPeriodEnd && currentPeriodEnd) {
+          const endDate = new Date(currentPeriodEnd);
+          const label = Number.isFinite(endDate.getTime())
+            ? endDate.toLocaleDateString("en-AU", {
+                day: "numeric",
+                month: "short",
+                year: "numeric"
+              })
+            : currentPeriodEnd;
+
+          planSubtext.textContent =
+            `Your subscription is cancelled and will remain active until ${label}. After that, your account will stay active on the Free plan.`;
+        } else if (entitlementActive) {
+          planSubtext.textContent =
+            currentPlan === "PRO"
+              ? "Your Pro subscription is active."
+              : "Your Basic subscription is active.";
+        } else {
+          planSubtext.textContent =
+            "Your account is active on the Free plan. Email alerts, subscriber discounts, and premium subscriber features require an active subscription.";
+        }
+      }
+
+      setAlertControlsLocked(!entitlementActive);
+
+      if (!entitlementActive) {
+        prefsStatus.textContent = "Email alerts require an active subscription.";
+        prefsStatus.className = "status";
+      }
     } catch (err) {
       console.error("plan fetch error", err);
-      // Fallback to Basic if Stripe lookup fails
+      currentEntitlementActive = false;
+      currentPlan = "FREE";
       maxFavs = 3;
-      planPill.textContent = "Plan: Basic (3 favourite courses)";
+      planPill.textContent = "Plan: Free";
+      if (planSubtext) {
+        planSubtext.textContent =
+          "We couldn’t verify your subscription just now. Your account is still available.";
+      }
+      setAlertControlsLocked(true);
     }
   }
 
   // --- boot ---
-  (async function init() {
+    (async function init() {
     if (!email) return;
     await loadCourses();
 
-    // ✅ NEW: pull from DB first so UI gets preferred_days/earliest/latest/holes/party_size
-    await hydratePrefsFromServer();
+    await refreshPlanFromServer();
+
+    if (currentEntitlementActive) {
+      await hydratePrefsFromServer();
+    }
 
     loadPrefsFromStorage();
-    await refreshPlanFromServer(); // sync plan from Stripe
+
+    if (!currentEntitlementActive) {
+      setAlertControlsLocked(true);
+    }
   })();
 </script>
 </body>
