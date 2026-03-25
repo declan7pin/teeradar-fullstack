@@ -387,7 +387,7 @@ router.post("/api/group-votes/:publicId/vote", requireUser, async (req, res) => 
           user_id: userId || null,
           courseName: null,
           course_name: null,
-          roundId: null,
+          roundId: vote.id || null,
           round_id: vote.id || null,
         });
       }
