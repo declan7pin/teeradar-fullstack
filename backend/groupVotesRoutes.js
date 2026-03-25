@@ -502,6 +502,28 @@ router.post("/api/group-votes/:publicId/select", requireUser, async (req, res) =
       `,
       [vote.id, optionId]
     );
+        // ✅ Track winner selection
+    try {
+      const occurredAt = new Date().toISOString();
+      const recordPgEvent = pgAnalytics.recordEvent || pgAnalytics.recordPgEvent || null;
+
+      if (typeof recordPgEvent === "function") {
+        await recordPgEvent({
+          type: "group_vote_winner_selected",
+          at: occurredAt,
+          occurredAt,
+          occurred_at: occurredAt,
+          userId: userId || null,
+          user_id: userId || null,
+          courseName: null,
+          course_name: null,
+          roundId: vote.id || null,
+          round_id: vote.id || null,
+        });
+      }
+    } catch (e) {
+      console.warn("group_vote_winner_selected analytics insert failed (non-fatal):", e?.message || e);
+    }
 
     const refreshed = await getVoteFull(publicId, userId);
     return res.json({ ok: true, vote: refreshed });
