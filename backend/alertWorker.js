@@ -94,24 +94,43 @@ function isTruthyPlan(plan) {
 function isEntitledSubscriberRow(subRow) {
   if (!subRow) return false;
 
-  const entitlementActive = !!subRow.entitlement_active;
-  if (!entitlementActive) return false;
+  const status = String(
+    subRow.subscriber_status ?? subRow.status ?? ""
+  ).trim().toLowerCase();
 
-  const status = String(subRow.status || "").trim().toLowerCase();
-  if (status !== "active" && status !== "trialing") return false;
+  const plan = String(
+    subRow.subscriber_plan ?? subRow.plan ?? "FREE"
+  ).trim().toUpperCase();
 
-  if (!subRow.current_period_end) return false;
+  const hasActiveStatus = status === "active" || status === "trialing";
+  const hasPaidPlan = plan === "BASIC" || plan === "PRO";
 
-  const endMs = new Date(subRow.current_period_end).getTime();
-  if (!Number.isFinite(endMs)) return false;
+  if (!hasActiveStatus || !hasPaidPlan) return false;
 
-  return endMs > Date.now();
+  // If current_period_end exists, respect it.
+  // If it's missing/null, do NOT automatically fail valid active subscribers.
+  const rawEnd =
+    subRow.current_period_end ??
+    subRow.subscriber_current_period_end ??
+    null;
+
+  if (rawEnd) {
+    const endMs = new Date(rawEnd).getTime();
+    if (Number.isFinite(endMs) && endMs <= Date.now()) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function getEffectiveSubscriberPlan(subRow) {
   if (!isEntitledSubscriberRow(subRow)) return "FREE";
 
-  const p = String(subRow.plan || "").trim().toUpperCase();
+  const p = String(
+    subRow.subscriber_plan ?? subRow.plan ?? ""
+  ).trim().toUpperCase();
+
   return isTruthyPlan(p) ? p : "FREE";
 }
 
@@ -751,6 +770,14 @@ async function runAlertTick() {
     for (const row of rows) {
             const email = (row.email || "").toLowerCase();
 
+            const subscriberStatus = String(
+        row.subscriber_status ?? row.status ?? ""
+      ).trim().toLowerCase();
+
+      const subscriberPlan = String(
+        row.subscriber_plan ?? row.plan ?? "FREE"
+      ).trim().toUpperCase();
+
       const entitled = isEntitledSubscriberRow(row);
       const plan = getEffectiveSubscriberPlan(row);
 
@@ -766,12 +793,12 @@ async function runAlertTick() {
       const alertLastSentRaw = row.alert_last_sent || null;
 
       // 🔒 Only active entitled subscribers can receive email alerts
-            if (!entitled) {
+                  if (!entitled) {
         console.log(
-          `🔒 Skipping ${email} – no active subscriber entitlement (status=${row.subscriber_status || "none"}, plan=${row.subscriber_plan || "FREE"}).`
+          `🔒 Skipping ${email} – no active subscriber entitlement (status=${subscriberStatus || "none"}, plan=${subscriberPlan || "FREE"}).`
         );
 
-        // Optional cleanup so expired users stop showing as alert-enabled
+        // Optional cleanup so expired/free/cancelled users stop showing as alert-enabled
         await disableAlertEmailsForUser(email);
         continue;
       }
