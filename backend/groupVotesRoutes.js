@@ -286,13 +286,35 @@ router.get("/api/group-votes/:publicId", async (req, res) => {
       return res.status(404).json({ ok: false, error: "not_found" });
     }
 
+    // ✅ Track successful group vote open
+    try {
+      const occurredAt = new Date().toISOString();
+      const recordPgEvent = pgAnalytics.recordEvent || pgAnalytics.recordPgEvent || null;
+
+      if (typeof recordPgEvent === "function") {
+        await recordPgEvent({
+          type: "group_vote_opened",
+          at: occurredAt,
+          occurredAt,
+          occurred_at: occurredAt,
+          userId: viewerUserId || null,
+          user_id: viewerUserId || null,
+          courseName: null,
+          course_name: null,
+          roundId: null,
+          round_id: null,
+        });
+      }
+    } catch (e) {
+      console.warn("group_vote_opened analytics insert failed (non-fatal):", e?.message || e);
+    }
+
     return res.json({ ok: true, vote });
   } catch (err) {
     console.error("GET /api/group-votes/:publicId error", err);
     return res.status(500).json({ ok: false, error: "server_error" });
   }
 });
-
 // cast or toggle vote
 router.post("/api/group-votes/:publicId/vote", requireUser, async (req, res) => {
   try {
@@ -328,6 +350,8 @@ router.post("/api/group-votes/:publicId/vote", requireUser, async (req, res) => 
       [vote.id, optionId, userId]
     );
 
+    let action = "added";
+
     if (existing.rows[0]?.id) {
       await db.query(
         `
@@ -336,19 +360,66 @@ router.post("/api/group-votes/:publicId/vote", requireUser, async (req, res) => 
         `,
         [existing.rows[0].id]
       );
+      action = "removed";
     } else {
-            await db.query(
+      await db.query(
         `
         INSERT INTO group_vote_responses (vote_id, option_id, user_id)
         VALUES ($1, $2, $3)
         `,
         [vote.id, optionId, userId]
       );
+      action = "added";
+    }
+
+    // ✅ Track successful vote interaction
+    try {
+      const occurredAt = new Date().toISOString();
+      const recordPgEvent = pgAnalytics.recordEvent || pgAnalytics.recordPgEvent || null;
+
+      if (typeof recordPgEvent === "function") {
+        await recordPgEvent({
+          type: "group_vote_vote_submitted",
+          at: occurredAt,
+          occurredAt,
+          occurred_at: occurredAt,
+          userId: userId || null,
+          user_id: userId || null,
+          courseName: null,
+          course_name: null,
+          roundId: null,
+          round_id: vote.id || null,
+        });
+      }
+    } catch (e) {
+      console.warn("group_vote_vote_submitted analytics insert failed (non-fatal):", e?.message || e);
     }
 
     const refreshed = await getVoteFull(publicId, userId);
-    return res.json({ ok: true, vote: refreshed });
-    } catch (err) {
+    return res.json({ ok: true, vote: refreshed, action });
+  } catch (err) {
+    console.error("POST /api/group-votes/:publicId/vote error", {
+      message: err?.message || null,
+      detail: err?.detail || null,
+      code: err?.code || null,
+      constraint: err?.constraint || null,
+      table: err?.table || null,
+      stack: err?.stack || null,
+    });
+
+    return res.status(500).json({
+      ok: false,
+      error: "server_error",
+      debug: {
+        message: err?.message || null,
+        detail: err?.detail || null,
+        code: err?.code || null,
+        constraint: err?.constraint || null,
+        table: err?.table || null,
+      },
+    });
+  }
+});
     console.error("POST /api/group-votes/:publicId/vote error", {
       message: err?.message || null,
       detail: err?.detail || null,
