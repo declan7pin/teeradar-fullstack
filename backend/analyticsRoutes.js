@@ -722,7 +722,7 @@ const colFavs =
 
 const colAlertDays =
   prefsCols.has("preferred_days")
-    ? "COALESCE(p.preferred_days, '[]'::jsonb) AS alert_days"
+    ? "COALESCE(array_to_json(p.preferred_days)::jsonb, '[]'::jsonb) AS alert_days"
     : "'[]'::jsonb AS alert_days";
 
 const colAlertTimeRange =
