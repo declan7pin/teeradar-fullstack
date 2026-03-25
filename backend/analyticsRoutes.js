@@ -711,72 +711,100 @@ router.get("/users", async (req, res) => {
       const prefsCols = await getCols("user_preferences");
 
       const colHomeState =
-        prefsCols.has("home_state")
-          ? "COALESCE(p.home_state, '') AS home_state"
-          : "''::text AS home_state";
+  prefsCols.has("home_state")
+    ? "COALESCE(p.home_state, '') AS home_state"
+    : "''::text AS home_state";
 
-      const colFavs =
-        prefsCols.has("favourites")
-          ? "COALESCE(p.favourites, '[]'::jsonb) AS favourites"
-          : "'[]'::jsonb AS favourites";
+const colFavs =
+  prefsCols.has("favourites")
+    ? "COALESCE(p.favourites, '[]'::jsonb) AS favourites"
+    : "'[]'::jsonb AS favourites";
 
-      const colHomeCourse =
-        usersCols.has("home_course")
-          ? "COALESCE(u.home_course, '') AS home_course"
-          : "''::text AS home_course";
+const colAlertDays =
+  prefsCols.has("preferred_days")
+    ? "COALESCE(p.preferred_days, '[]'::jsonb) AS alert_days"
+    : "'[]'::jsonb AS alert_days";
+
+const colAlertTimeRange =
+  prefsCols.has("preferred_earliest") && prefsCols.has("preferred_latest")
+    ? "CASE WHEN p.preferred_earliest IS NOT NULL OR p.preferred_latest IS NOT NULL THEN COALESCE(p.preferred_earliest, '—') || '–' || COALESCE(p.preferred_latest, '—') ELSE '' END AS alert_time_range"
+    : "''::text AS alert_time_range";
+
+const colAlertHoles =
+  prefsCols.has("preferred_holes")
+    ? "COALESCE(p.preferred_holes::text, '') AS alert_holes"
+    : "''::text AS alert_holes";
+
+const colAlertPlayers =
+  prefsCols.has("preferred_party_size")
+    ? "COALESCE(p.preferred_party_size::text, '') AS alert_players"
+    : "''::text AS alert_players";
+
+const colHomeCourse =
+  usersCols.has("home_course")
+    ? "COALESCE(u.home_course, '') AS home_course"
+    : "''::text AS home_course";
 
       if (hasSubscriberStatus) {
         sql = `
-          SELECT
-            ${colId},
-            ${colEmail},
-            CASE
-              WHEN ss.entitlement_active = TRUE
-               AND LOWER(COALESCE(ss.status, '')) IN ('active','trialing')
-               AND ss.current_period_end IS NOT NULL
-               AND ss.current_period_end > NOW()
-               AND UPPER(COALESCE(ss.plan, 'FREE')) IN ('BASIC','PRO')
-              THEN UPPER(ss.plan)
-              ELSE 'FREE'
-            END AS plan,
-            ${colHomeState},
-            ${colHomeCourse},
-            ${colFavs},
-            ${colCreatedAt},
-            ${colLastSeen},
-            ss.status AS subscription_status,
-            ss.entitlement_active,
-            ss.cancel_at_period_end,
-            ss.current_period_end
-          FROM users u
-          LEFT JOIN user_preferences p
-            ON LOWER(p.email) = LOWER(u.email)
-          LEFT JOIN subscriber_status ss
-            ON LOWER(ss.email) = LOWER(u.email)
-          ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
-          LIMIT $1;
-        `;
+  SELECT
+    ${colId},
+    ${colEmail},
+    CASE
+      WHEN ss.entitlement_active = TRUE
+       AND LOWER(COALESCE(ss.status, '')) IN ('active','trialing')
+       AND ss.current_period_end IS NOT NULL
+       AND ss.current_period_end > NOW()
+       AND UPPER(COALESCE(ss.plan, 'FREE')) IN ('BASIC','PRO')
+      THEN UPPER(ss.plan)
+      ELSE 'FREE'
+    END AS plan,
+    ${colHomeState},
+    ${colHomeCourse},
+    ${colFavs},
+    ${colAlertDays},
+    ${colAlertTimeRange},
+    ${colAlertHoles},
+    ${colAlertPlayers},
+    ${colCreatedAt},
+    ${colLastSeen},
+    ss.status AS subscription_status,
+    ss.entitlement_active,
+    ss.cancel_at_period_end,
+    ss.current_period_end
+  FROM users u
+  LEFT JOIN user_preferences p
+    ON LOWER(p.email) = LOWER(u.email)
+  LEFT JOIN subscriber_status ss
+    ON LOWER(ss.email) = LOWER(u.email)
+  ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
+  LIMIT $1;
+`;
       } else {
         sql = `
-          SELECT
-            ${colId},
-            ${colEmail},
-            'FREE'::text AS plan,
-            ${colHomeState},
-            ${colHomeCourse},
-            ${colFavs},
-            ${colCreatedAt},
-            ${colLastSeen},
-            NULL::text AS subscription_status,
-            FALSE AS entitlement_active,
-            FALSE AS cancel_at_period_end,
-            NULL::timestamptz AS current_period_end
-          FROM users u
-          LEFT JOIN user_preferences p
-            ON LOWER(p.email) = LOWER(u.email)
-          ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
-          LIMIT $1;
-        `;
+  SELECT
+    ${colId},
+    ${colEmail},
+    'FREE'::text AS plan,
+    ${colHomeState},
+    ${colHomeCourse},
+    ${colFavs},
+    ${colAlertDays},
+    ${colAlertTimeRange},
+    ${colAlertHoles},
+    ${colAlertPlayers},
+    ${colCreatedAt},
+    ${colLastSeen},
+    NULL::text AS subscription_status,
+    FALSE AS entitlement_active,
+    FALSE AS cancel_at_period_end,
+    NULL::timestamptz AS current_period_end
+  FROM users u
+  LEFT JOIN user_preferences p
+    ON LOWER(p.email) = LOWER(u.email)
+  ORDER BY ${usersCols.has("created_at") ? "u.created_at" : "u.id"} DESC NULLS LAST
+  LIMIT $1;
+`;
       }
     } else {
       const colHomeCourse =
