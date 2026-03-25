@@ -3,6 +3,7 @@ import express from "express";
 import crypto from "crypto";
 import db from "./db.js";
 import { requireAuth as requireUser } from "./auth.js";
+import * as pgAnalytics from "./analytics.js";
 
 const router = express.Router();
 
@@ -237,7 +238,30 @@ router.post("/api/group-votes", async (req, res) => {
       );
     }
 
-    await db.query("COMMIT");
+        await db.query("COMMIT");
+
+    // ✅ Track successful group vote creation
+    try {
+      const occurredAt = new Date().toISOString();
+      const recordPgEvent = pgAnalytics.recordEvent || pgAnalytics.recordPgEvent || null;
+
+      if (typeof recordPgEvent === "function") {
+        await recordPgEvent({
+          type: "group_vote_created",
+          at: occurredAt,
+          occurredAt,
+          occurred_at: occurredAt,
+          userId: creatorUserId || null,
+          user_id: creatorUserId || null,
+          courseName: null,
+          course_name: null,
+          roundId: null,
+          round_id: null,
+        });
+      }
+    } catch (e) {
+      console.warn("group_vote_created analytics insert failed (non-fatal):", e?.message || e);
+    }
 
     return res.json({
       ok: true,
