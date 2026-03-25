@@ -534,6 +534,45 @@
       <li><span class="label">No rounds logged yet</span><span class="value">—</span></li>
     </ul>
   </section>
+  
+  <div class="section-title">Group votes</div>
+<section class="cards-grid" aria-label="Group vote metrics">
+  <article class="card">
+    <div class="card-label">Group votes created</div>
+    <div id="metricGroupVotesCreated" class="card-value">—</div>
+    <div class="card-hint">Successful group vote creations</div>
+  </article>
+
+  <article class="card">
+    <div class="card-label">Group votes opened</div>
+    <div id="metricGroupVotesOpened" class="card-value">—</div>
+    <div class="card-hint">Times a vote page was opened</div>
+  </article>
+
+  <article class="card">
+    <div class="card-label">Votes submitted</div>
+    <div id="metricGroupVotesSubmitted" class="card-value">—</div>
+    <div class="card-hint">Vote interactions submitted</div>
+  </article>
+
+  <article class="card">
+    <div class="card-label">Winners selected</div>
+    <div id="metricGroupVotesWinnerSelected" class="card-value">—</div>
+    <div class="card-hint">Group votes marked as decided</div>
+  </article>
+
+  <article class="card">
+    <div class="card-label">Open rate</div>
+    <div id="metricGroupVotesOpenRate" class="card-value">—</div>
+    <div class="card-hint">Opened ÷ created</div>
+  </article>
+
+  <article class="card">
+    <div class="card-label">Winner rate</div>
+    <div id="metricGroupVotesWinnerRate" class="card-value">—</div>
+    <div class="card-hint">Winners selected ÷ created</div>
+  </article>
+</section>
 
   <div class="section-title">Alerts</div>
   <section class="cards-grid" aria-label="Alerts metrics">
@@ -1203,20 +1242,28 @@ else setText("metricHitRate7d", "—");
     updatedAt.textContent = "Loaded from " + wrapped.url + " • " + new Date().toLocaleString();
 
     const homeViewsVal = toInt(getAny(summary, ["homePageViews","homeViews","home_page_views"], 0));
-    const bookingClicksVal = toInt(getAny(summary, ["courseBookingClicks","bookingClicks","booking_clicks"], 0));
-    const searchesVal = toInt(getAny(summary, ["searches"], 0));
-    const newUsersVal = toInt(getAny(summary, ["newUsers","new_users"], 0));
-    const usersAllTimeVal = toInt(getAny(summary, ["usersAllTime","unique_users"], 0));
-    const usersTodayVal = toInt(getAny(summary, ["usersToday","users_today"], 0));
-    const usersWeekVal = toInt(getAny(summary, ["usersWeek","users_week"], 0));
+const bookingClicksVal = toInt(getAny(summary, ["courseBookingClicks","bookingClicks","booking_clicks"], 0));
+const searchesVal = toInt(getAny(summary, ["searches"], 0));
+const newUsersVal = toInt(getAny(summary, ["newUsers","new_users"], 0));
+const groupVotesCreatedVal = toInt(getAny(summary, ["groupVotesCreated","group_votes_created"], 0));
+const groupVotesOpenedVal = toInt(getAny(summary, ["groupVotesOpened","group_votes_opened"], 0));
+const groupVotesSubmittedVal = toInt(getAny(summary, ["groupVotesSubmitted","group_votes_submitted"], 0));
+const groupVotesWinnerSelectedVal = toInt(getAny(summary, ["groupVotesWinnerSelected","group_votes_winner_selected"], 0));
+const usersAllTimeVal = toInt(getAny(summary, ["usersAllTime","unique_users"], 0));
+const usersTodayVal = toInt(getAny(summary, ["usersToday","users_today"], 0));
+const usersWeekVal = toInt(getAny(summary, ["usersWeek","users_week"], 0));
 
     setText("metricHomeViews", String(homeViewsVal));
-    setText("metricBookingClicks", String(bookingClicksVal));
-    setText("metricSearches", String(searchesVal));
-    setText("metricNewUsers", String(newUsersVal));
-    setText("usersAllTime", String(usersAllTimeVal));
-    setText("usersToday", String(usersTodayVal));
-    setText("usersWeek", String(usersWeekVal));
+setText("metricBookingClicks", String(bookingClicksVal));
+setText("metricSearches", String(searchesVal));
+setText("metricNewUsers", String(newUsersVal));
+setText("metricGroupVotesCreated", String(groupVotesCreatedVal));
+setText("metricGroupVotesOpened", String(groupVotesOpenedVal));
+setText("metricGroupVotesSubmitted", String(groupVotesSubmittedVal));
+setText("metricGroupVotesWinnerSelected", String(groupVotesWinnerSelectedVal));
+setText("usersAllTime", String(usersAllTimeVal));
+setText("usersToday", String(usersTodayVal));
+setText("usersWeek", String(usersWeekVal));
 
     const roundsPlayedVal = toInt(getAny(summary, ["roundsPlayed","rounds","rounds_played"], 0));
     setText("metricRoundsPlayed", String(roundsPlayedVal));
@@ -1226,6 +1273,12 @@ else setText("metricHitRate7d", "—");
 
     const convSearch = searchesVal > 0 ? (bookingClicksVal / searchesVal) : 0;
     setText("metricConvSearchBooking", fmtPct(convSearch));
+    
+    const groupVoteOpenRate = groupVotesCreatedVal > 0 ? (groupVotesOpenedVal / groupVotesCreatedVal) : 0;
+setText("metricGroupVotesOpenRate", fmtPct(groupVoteOpenRate));
+
+const groupVoteWinnerRate = groupVotesCreatedVal > 0 ? (groupVotesWinnerSelectedVal / groupVotesCreatedVal) : 0;
+setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
 
     const users30d = toInt(getAny(summary, ["users30d","users_30d"], 0));
     const returning7d = toInt(getAny(summary, ["returningUsers7d","returning_users_7d"], 0));
