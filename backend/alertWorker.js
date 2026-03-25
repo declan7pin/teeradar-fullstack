@@ -19,6 +19,8 @@ const resend =
   resendApiKey && resendApiKey.trim()
     ? new Resend(resendApiKey.trim())
     : null;
+    const TEERADAR_LOGO_URL =
+  process.env.TEERADAR_LOGO_URL || "https://teeradar.com.au/logo.png";
 
 // --- Load course + fee group data (same as server.js) ---
 const PERTH_LAT = -31.9523;
@@ -360,22 +362,134 @@ async function sendAlertEmailSummaryForUser({
   lines.push(`TeeRadar`);
 
   const subject =
-    safeHits.length > 0
-      ? `TeeRadar – tee times found for your favourites`
-      : `TeeRadar – update (no tee times found)`;
+  safeHits.length > 0
+    ? `TeeRadar – tee times found for your favourites`
+    : `TeeRadar – update (no tee times found)`;
 
-  const textBody = lines.join("\n");
+const textBody = lines.join("\n");
 
-  const fromAddress =
-    process.env.ALERT_FROM_EMAIL || "TeeRadar Alerts <alerts@teeradar.com.au>";
+const htmlBody = `
+<div style="margin:0;padding:24px 12px;background:#f4f7fb;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.08);">
+    
+    <div style="padding:18px 20px;border-bottom:1px solid #e2e8f0;background:#ffffff;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+        <tr>
+          <td style="vertical-align:middle;">
+            <div style="font-size:20px;font-weight:800;color:#00796b;line-height:1.2;">TeeRadar Alerts</div>
+            <div style="font-size:12px;color:#64748b;margin-top:4px;">Tee times for your favourites</div>
+          </td>
+          <td style="text-align:right;vertical-align:middle;">
+            <img
+              src="${TEERADAR_LOGO_URL}"
+              alt="TeeRadar"
+              style="max-height:44px;max-width:140px;display:block;margin-left:auto;"
+            />
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="padding:20px;">
+      <p style="margin:0 0 12px;font-size:15px;line-height:1.5;">
+        Hi ${email},
+      </p>
+
+      ${
+        safeHits.length > 0
+          ? `<p style="margin:0 0 14px;font-size:15px;line-height:1.5;color:#0f172a;">
+               We found tee times matching your alert.
+             </p>`
+          : `<p style="margin:0 0 14px;font-size:15px;line-height:1.5;color:#0f172a;">
+               No matching tee times were found on this check, but we’ll keep looking for you.
+             </p>`
+      }
+
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin-bottom:18px;">
+        <div style="font-size:13px;color:#334155;line-height:1.7;">
+          <div><strong>Time window:</strong> ${windowLabel}</div>
+          <div><strong>Holes:</strong> ${holesLabel}</div>
+          <div><strong>Group size:</strong> ${playersLabel}</div>
+        </div>
+      </div>
+
+      ${
+        safeHits.length > 0
+          ? sortedDates.map((d) => {
+              const arr = byDate.get(d) || [];
+              arr.sort((a, b) => (a.courseName || "").localeCompare(b.courseName || ""));
+
+              return `
+                <div style="margin:0 0 18px;">
+                  <div style="font-size:13px;font-weight:800;color:#0f172a;letter-spacing:.02em;margin-bottom:8px;">
+                    ${d}
+                  </div>
+
+                  ${arr.map((item) => `
+                    <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px 14px 12px;margin-bottom:10px;background:#ffffff;">
+                      <div style="font-size:15px;font-weight:700;color:#0f172a;line-height:1.4;">
+                        ${item.courseName}
+                      </div>
+                      <div style="font-size:13px;color:#64748b;margin-top:4px;line-height:1.5;">
+                        ${item.count} tee time(s) available
+                      </div>
+                      <div style="margin-top:10px;">
+                        <a
+                          href="${item.bookingLink}"
+                          style="display:inline-block;background:#00796b;color:#ffffff;text-decoration:none;font-size:13px;font-weight:700;padding:10px 14px;border-radius:10px;"
+                        >
+                          View tee times
+                        </a>
+                      </div>
+                    </div>
+                  `).join("")}
+                </div>
+              `;
+            }).join("")
+          : `
+            <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;background:#ffffff;margin-bottom:18px;">
+              <div style="font-size:14px;color:#475569;line-height:1.6;">
+                We’ll check again based on your chosen alert frequency and email you when matching times are found.
+              </div>
+            </div>
+          `
+      }
+
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;">
+        <div style="font-size:13px;color:#475569;line-height:1.6;">
+          You can adjust or turn off alerts any time from your account page:
+        </div>
+        <div style="margin-top:8px;">
+          <a
+            href="https://teeradar.com.au/account.html"
+            style="color:#00796b;text-decoration:none;font-size:13px;font-weight:600;"
+          >
+            teeradar.com.au/account.html
+          </a>
+        </div>
+      </div>
+
+      <p style="margin:20px 0 0;font-size:14px;line-height:1.6;color:#0f172a;">
+        Enjoy your round,<br/>
+        <strong>TeeRadar</strong>
+      </p>
+    </div>
+  </div>
+</div>
+`;
+
+const fromAddress =
+  process.env.ALERT_FROM_EMAIL || "TeeRadar Alerts <alerts@teeradar.com.au>";
+    
 
   try {
     const { error } = await resend.emails.send({
-      from: fromAddress,
-      to: email,
-      subject,
-      text: textBody,
-    });
+  from: fromAddress,
+  to: email,
+  subject,
+  text: textBody,
+  html: htmlBody,
+});
 
     if (error) {
       console.error(`❌ Resend error sending summary alert to ${email}:`, error);
