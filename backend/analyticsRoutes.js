@@ -176,7 +176,11 @@ async function buildPgSummary() {
   const searches = byType.search || 0; // ✅ USER searches only
   const alertSearches = byType.search_course || 0; // ✅ background scans
 
-  const newUsers = byType.new_user || 0;
+const newUsers = byType.new_user || 0;
+const groupVotesCreated = byType.group_vote_created || 0;
+const groupVotesOpened = byType.group_vote_opened || 0;
+const groupVotesSubmitted = byType.group_vote_vote_submitted || 0;
+const groupVotesWinnerSelected = byType.group_vote_winner_selected || 0;
 
   // uniques
   const usersAllTime = await q(
@@ -344,6 +348,10 @@ async function buildPgSummary() {
     alertSearches,
 
     newUsers,
+    groupVotesCreated,
+    groupVotesOpened,
+    groupVotesSubmitted,
+    groupVotesWinnerSelected,
 
     homeViews,
     bookingClicks,
@@ -395,7 +403,11 @@ function buildSqliteSummaryFromEvents(events = []) {
   const alertSearches = byType.search_course || 0;
 
   const newUsers = byType.new_user || 0;
-  const roundsPlayed = byType.round_played || 0;
+const groupVotesCreated = byType.group_vote_created || 0;
+const groupVotesOpened = byType.group_vote_opened || 0;
+const groupVotesSubmitted = byType.group_vote_vote_submitted || 0;
+const groupVotesWinnerSelected = byType.group_vote_winner_selected || 0;
+const roundsPlayed = byType.round_played || 0;
 
   // top booked courses (from course_name)
   const topCoursesMap = new Map();
@@ -431,6 +443,10 @@ function buildSqliteSummaryFromEvents(events = []) {
     searches,
     alertSearches,
     newUsers,
+    groupVotesCreated,
+    groupVotesOpened,
+    groupVotesSubmitted,
+    groupVotesWinnerSelected,
 
     homeViews,
     bookingClicks,
