@@ -1530,7 +1530,10 @@ function showUserDetails(u) {
   const holes = u.alert_holes ?? u.holes ?? u.alertHoles ?? null;
   const players = u.alert_players ?? u.players ?? u.alertPlayers ?? null;
 
-  setText("detailDays", days != null ? String(days) : "—");
+  setText(
+  "detailDays",
+  Array.isArray(days) ? (days.length ? days.join(", ") : "—") : (days != null && String(days).trim() !== "" ? String(days) : "—")
+);
   setText("detailTimeRange", timeRange != null ? String(timeRange) : "—");
   setText("detailHoles", holes != null ? String(holes) : "—");
   setText("detailPlayers", players != null ? String(players) : "—");
