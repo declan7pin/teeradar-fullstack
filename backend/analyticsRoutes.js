@@ -727,7 +727,7 @@ const colAlertDays =
 
 const colAlertTimeRange =
   prefsCols.has("preferred_earliest") && prefsCols.has("preferred_latest")
-    ? "CASE WHEN p.preferred_earliest IS NOT NULL OR p.preferred_latest IS NOT NULL THEN COALESCE(p.preferred_earliest, '—') || '–' || COALESCE(p.preferred_latest, '—') ELSE '' END AS alert_time_range"
+    ? "CASE WHEN p.preferred_earliest IS NOT NULL OR p.preferred_latest IS NOT NULL THEN COALESCE(p.preferred_earliest::text, '—') || '–' || COALESCE(p.preferred_latest::text, '—') ELSE '' END AS alert_time_range"
     : "''::text AS alert_time_range";
 
 const colAlertHoles =
@@ -751,14 +751,15 @@ const colHomeCourse =
     ${colId},
     ${colEmail},
     CASE
-      WHEN ss.entitlement_active = TRUE
-       AND LOWER(COALESCE(ss.status, '')) IN ('active','trialing')
-       AND ss.current_period_end IS NOT NULL
-       AND ss.current_period_end > NOW()
-       AND UPPER(COALESCE(ss.plan, 'FREE')) IN ('BASIC','PRO')
-      THEN UPPER(ss.plan)
-      ELSE 'FREE'
-    END AS plan,
+  WHEN LOWER(COALESCE(ss.status, '')) IN ('active','trialing')
+   AND UPPER(COALESCE(ss.plan, 'FREE')) IN ('BASIC','PRO')
+   AND (
+     ss.current_period_end IS NULL
+     OR ss.current_period_end > NOW()
+   )
+  THEN UPPER(ss.plan)
+  ELSE 'FREE'
+END AS plan,
     ${colHomeState},
     ${colHomeCourse},
     ${colFavs},
@@ -818,14 +819,15 @@ const colHomeCourse =
             ${colId},
             ${colEmail},
             CASE
-              WHEN ss.entitlement_active = TRUE
-               AND LOWER(COALESCE(ss.status, '')) IN ('active','trialing')
-               AND ss.current_period_end IS NOT NULL
-               AND ss.current_period_end > NOW()
-               AND UPPER(COALESCE(ss.plan, 'FREE')) IN ('BASIC','PRO')
-              THEN UPPER(ss.plan)
-              ELSE 'FREE'
-            END AS plan,
+  WHEN LOWER(COALESCE(ss.status, '')) IN ('active','trialing')
+   AND UPPER(COALESCE(ss.plan, 'FREE')) IN ('BASIC','PRO')
+   AND (
+     ss.current_period_end IS NULL
+     OR ss.current_period_end > NOW()
+   )
+  THEN UPPER(ss.plan)
+  ELSE 'FREE'
+END AS plan,
             ''::text AS home_state,
             ${colHomeCourse},
             '[]'::jsonb AS favourites,
