@@ -420,28 +420,6 @@ router.post("/api/group-votes/:publicId/vote", requireUser, async (req, res) => 
     });
   }
 });
-    console.error("POST /api/group-votes/:publicId/vote error", {
-      message: err?.message || null,
-      detail: err?.detail || null,
-      code: err?.code || null,
-      constraint: err?.constraint || null,
-      table: err?.table || null,
-      stack: err?.stack || null,
-    });
-
-    return res.status(500).json({
-      ok: false,
-      error: "server_error",
-      debug: {
-        message: err?.message || null,
-        detail: err?.detail || null,
-        code: err?.code || null,
-        constraint: err?.constraint || null,
-        table: err?.table || null,
-      },
-    });
-  }
-});
 
 // close poll
 router.post("/api/group-votes/:publicId/close", requireUser, async (req, res) => {
