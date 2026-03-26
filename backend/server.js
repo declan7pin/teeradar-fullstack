@@ -1350,6 +1350,8 @@ app.post("/api/admin/subscriber-status/resync", async (req, res) => {
 
 // -------------------------------------------------
 // ✅ Save account preferences
+// Free users can save booking defaults.
+// Subscribers can also save alert preferences.
 // -------------------------------------------------
 app.post("/api/account/preferences", async (req, res) => {
   try {
@@ -1368,36 +1370,120 @@ app.post("/api/account/preferences", async (req, res) => {
       homeCourseState,
     } = req.body || {};
 
-    const trimmedEmail = (email || "").toString().trim().toLowerCase();
+    const trimmedEmail = String(email || "").trim().toLowerCase();
     if (!trimmedEmail) {
       return res.status(400).json({ error: "email is required" });
     }
 
+    const normalizedHomeState =
+      String(homeState || "").trim().toUpperCase() || null;
+
+    const normalizedHomeCourse =
+      String(homeCourse || "").trim() || null;
+
+    const normalizedHomeCourseId =
+      String(homeCourseId || "").trim() || null;
+
+    const finalHomeCourseState =
+      String(homeCourseState || "").trim().toUpperCase() ||
+      normalizedHomeState ||
+      null;
+
     const preferredDays = Array.isArray(days) && days.length ? days : null;
-    
-        const subscriber = await getSubscriberStatusByEmail(trimmedEmail);
-    const entitled =
+
+    let subscriber = await getSubscriberStatusByEmail(trimmedEmail);
+    let entitled =
       !!subscriber?.entitlement_active &&
       (String(subscriber?.status || "").toLowerCase() === "active" ||
         String(subscriber?.status || "").toLowerCase() === "trialing") &&
       !!subscriber?.current_period_end &&
       new Date(subscriber.current_period_end).getTime() > Date.now();
 
-    if (!entitled) {
-      return res.status(403).json({
-        ok: false,
-        error: "subscriber_required",
-        plan: "FREE",
-        message: "An active subscription is required to save email alert preferences.",
-      });
+    // Optional self-heal from Stripe if local status looks stale
+    if (!entitled && stripe) {
+      try {
+        await syncSubscriberStatusFromStripeByEmail(trimmedEmail);
+        subscriber = await getSubscriberStatusByEmail(trimmedEmail);
+        entitled =
+          !!subscriber?.entitlement_active &&
+          (String(subscriber?.status || "").toLowerCase() === "active" ||
+            String(subscriber?.status || "").toLowerCase() === "trialing") &&
+          !!subscriber?.current_period_end &&
+          new Date(subscriber.current_period_end).getTime() > Date.now();
+      } catch (e) {
+        console.warn("⚠️ preferences save Stripe self-heal failed:", e?.message || e);
+      }
     }
 
+    // -------------------------------------------------
+    // 1) Save booking defaults for EVERYONE
+    // -------------------------------------------------
     await db.query(
       `
       INSERT INTO user_preferences (
-        email, home_state, favourites, preferred_days,
-        preferred_earliest, preferred_latest, preferred_holes, preferred_party_size,
-        alert_frequency, updated_at
+        email,
+        home_state,
+        updated_at
+      )
+      VALUES ($1, $2, now())
+      ON CONFLICT (email) DO UPDATE SET
+        home_state = EXCLUDED.home_state,
+        updated_at = now()
+      `,
+      [trimmedEmail, normalizedHomeState]
+    );
+
+    await db.query(
+      `
+      UPDATE users
+      SET
+        home_course = $2,
+        home_course_id = $3,
+        home_course_state = $4
+      WHERE LOWER(email) = LOWER($1)
+      `,
+      [
+        trimmedEmail,
+        normalizedHomeCourse,
+        normalizedHomeCourseId,
+        finalHomeCourseState,
+      ]
+    );
+
+    // -------------------------------------------------
+    // 2) Free users stop here
+    // -------------------------------------------------
+    if (!entitled) {
+      return res.json({
+        ok: true,
+        entitlementActive: false,
+        plan: "FREE",
+        alertsLocked: true,
+        saved: {
+          homeState: normalizedHomeState,
+          homeCourse: normalizedHomeCourse,
+          homeCourseId: normalizedHomeCourseId,
+          homeCourseState: finalHomeCourseState,
+        },
+      });
+    }
+
+    // -------------------------------------------------
+    // 3) Subscribers save alert preferences too
+    // -------------------------------------------------
+    await db.query(
+      `
+      INSERT INTO user_preferences (
+        email,
+        home_state,
+        favourites,
+        preferred_days,
+        preferred_earliest,
+        preferred_latest,
+        preferred_holes,
+        preferred_party_size,
+        alert_frequency,
+        updated_at
       )
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now())
       ON CONFLICT (email) DO UPDATE SET
@@ -1413,7 +1499,7 @@ app.post("/api/account/preferences", async (req, res) => {
       `,
       [
         trimmedEmail,
-        homeState || null,
+        normalizedHomeState,
         JSON.stringify(favourites || []),
         preferredDays,
         earliest || null,
@@ -1424,23 +1510,124 @@ app.post("/api/account/preferences", async (req, res) => {
       ]
     );
 
-    const finalHomeCourseState = homeCourseState || homeState || null;
-
-    await db.query(
-      `
-      UPDATE users
-      SET
-        home_course = COALESCE(NULLIF($2, ''), home_course),
-        home_course_id = COALESCE(NULLIF($3, ''), home_course_id),
-        home_course_state = COALESCE(NULLIF($4, ''), home_course_state)
-      WHERE email = $1
-      `,
-      [trimmedEmail, homeCourse || "", homeCourseId || "", finalHomeCourseState || ""]
-    );
-
-    res.json({ ok: true });
+    return res.json({
+      ok: true,
+      entitlementActive: true,
+      plan: normalizePlan(subscriber?.plan || "FREE"),
+      saved: {
+        homeState: normalizedHomeState,
+        homeCourse: normalizedHomeCourse,
+        homeCourseId: normalizedHomeCourseId,
+        homeCourseState: finalHomeCourseState,
+        favourites,
+        days,
+        earliest: earliest || null,
+        latest: latest || null,
+        holes: holes ? Number(holes) : null,
+        partySize: partySize ? Number(partySize) : null,
+        alertFrequency: alertFrequency || null,
+      },
+    });
   } catch (err) {
     console.error("account/preferences error:", err);
+    res.status(500).json({ error: "internal error", detail: err.message });
+  }
+});
+
+// -------------------------------------------------
+// ✅ Load account preferences
+// Free users still get booking defaults from backend.
+// Subscribers also get alert preferences.
+// -------------------------------------------------
+app.get("/api/account/preferences", async (req, res) => {
+  try {
+    const trimmedEmail = String(req.query.email || "").trim().toLowerCase();
+    if (!trimmedEmail) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    let subscriber = await getSubscriberStatusByEmail(trimmedEmail);
+    let entitled =
+      !!subscriber?.entitlement_active &&
+      (String(subscriber?.status || "").toLowerCase() === "active" ||
+        String(subscriber?.status || "").toLowerCase() === "trialing") &&
+      !!subscriber?.current_period_end &&
+      new Date(subscriber.current_period_end).getTime() > Date.now();
+
+    if (!entitled && stripe) {
+      try {
+        await syncSubscriberStatusFromStripeByEmail(trimmedEmail);
+        subscriber = await getSubscriberStatusByEmail(trimmedEmail);
+        entitled =
+          !!subscriber?.entitlement_active &&
+          (String(subscriber?.status || "").toLowerCase() === "active" ||
+            String(subscriber?.status || "").toLowerCase() === "trialing") &&
+          !!subscriber?.current_period_end &&
+          new Date(subscriber.current_period_end).getTime() > Date.now();
+      } catch (e) {
+        console.warn("⚠️ preferences load Stripe self-heal failed:", e?.message || e);
+      }
+    }
+
+    const prefRes = await db.query(
+      `
+      SELECT
+        email,
+        home_state,
+        favourites,
+        preferred_days,
+        preferred_earliest,
+        preferred_latest,
+        preferred_holes,
+        preferred_party_size,
+        alert_frequency
+      FROM user_preferences
+      WHERE LOWER(email) = LOWER($1)
+      LIMIT 1
+      `,
+      [trimmedEmail]
+    );
+
+    const userRes = await db.query(
+      `
+      SELECT
+        email,
+        home_course,
+        home_course_id,
+        home_course_state
+      FROM users
+      WHERE LOWER(email) = LOWER($1)
+      LIMIT 1
+      `,
+      [trimmedEmail]
+    );
+
+    const pref = prefRes.rows?.[0] || null;
+    const user = userRes.rows?.[0] || null;
+
+    return res.json({
+      ok: true,
+      found: !!(pref || user),
+      entitlementActive: entitled,
+      plan: entitled ? normalizePlan(subscriber?.plan || "FREE") : "FREE",
+      preferences: {
+        home_state: pref?.home_state || "",
+        favourites: entitled ? (pref?.favourites || []) : [],
+        preferred_days: entitled ? (pref?.preferred_days || []) : [],
+        preferred_earliest: entitled ? (pref?.preferred_earliest || "") : "",
+        preferred_latest: entitled ? (pref?.preferred_latest || "") : "",
+        preferred_holes: entitled ? (pref?.preferred_holes ?? "") : "",
+        preferred_party_size: entitled ? (pref?.preferred_party_size ?? "1") : "1",
+        alert_frequency: entitled ? (pref?.alert_frequency || "POPUPS_ONLY") : "POPUPS_ONLY",
+
+        // extra fields for convenience
+        home_course: user?.home_course || "",
+        home_course_id: user?.home_course_id || null,
+        home_course_state: user?.home_course_state || pref?.home_state || "",
+      },
+    });
+  } catch (err) {
+    console.error("account/preferences GET error:", err);
     res.status(500).json({ error: "internal error", detail: err.message });
   }
 });
