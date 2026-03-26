@@ -351,7 +351,7 @@
 
     <div class="card">
       <h2>Preferences</h2>
-      <p>We’ll use these defaults on your bookings page.</p>
+            <p>We’ll use these defaults on your bookings page. Email alert settings require an active subscription.</p>
 
       <label for="homeState">Home state</label>
       <select id="homeState">
@@ -445,11 +445,10 @@
       </div>
     </div>
 
-    <div class="card">
+        <div class="card">
       <h2>Subscription</h2>
-      <p>
-        Manage your billing details, upgrade, or cancel your TeeRadar subscription using Stripe’s
-        secure customer portal.
+      <p id="subscriptionCardText">
+        Manage your billing details, upgrade, or cancel your TeeRadar subscription.
       </p>
 
       <div class="row-actions">
@@ -486,6 +485,7 @@
   const favDropdown = document.getElementById("favAutocompleteList");
   const prefsStatus = document.getElementById("prefsStatus");
   const billingStatus = document.getElementById("billingStatus");
+  const subscriptionCardText = document.getElementById("subscriptionCardText");
   const navAccountBtn = document.getElementById("navAccount");
   const logoutBtn = document.getElementById("pageLogout");
 
@@ -542,17 +542,16 @@
     let currentEntitlementActive = false;
   let currentPlan = "FREE";
 
-  function setAlertControlsLocked(locked) {
+    function setAlertControlsLocked(locked) {
+    // ✅ Keep booking defaults editable for free users
+    // Only lock alert-related controls
     const controls = [
       favInput,
-      homeStateSelect,
-      homeCourseInput,
       prefEarliest,
       prefLatest,
       prefHoles,
       prefPartySize,
-      alertFrequencySelect,
-      savePrefsBtn
+      alertFrequencySelect
     ].filter(Boolean);
 
     controls.forEach(el => {
@@ -569,6 +568,11 @@
       btn.style.opacity = locked ? "0.5" : "1";
       btn.style.cursor = locked ? "not-allowed" : "pointer";
     });
+
+    // ✅ Always allow home state, home course, and save button
+    if (homeStateSelect) homeStateSelect.disabled = false;
+    if (homeCourseInput) homeCourseInput.disabled = false;
+    if (savePrefsBtn) savePrefsBtn.disabled = false;
 
     if (alertsLockedMsg) {
       alertsLockedMsg.style.display = locked ? "block" : "none";
@@ -1047,16 +1051,29 @@ searchableCourses = data.filter((c) => {
             ? { name: homeCourseInput.value.trim(), id: null, state: homeState || null }
             : null);
 
-            if (!currentEntitlementActive) {
-        prefsStatus.textContent = "An active subscription is required to save email alert preferences.";
-        prefsStatus.className = "status err";
-        return;
-      }
+                  const isSubscriber = !!currentEntitlementActive;
 
       prefsStatus.textContent = "Saving…";
       prefsStatus.className = "status";
 
-      try {
+            try {
+        // ✅ FREE users: save booking defaults locally only
+        if (!isSubscriber) {
+          savePrefsToStorage(homeState, homeCourseObj, favCourses, {
+            days: selectedDays,
+            earliest,
+            latest,
+            holes: holesValue,
+            partySize: partySizeValue,
+            frequency: alertFrequency
+          });
+
+          prefsStatus.textContent = "Home state and home course saved.";
+          prefsStatus.className = "status ok";
+          return;
+        }
+
+        // ✅ Subscribers: save everything to backend
         const body = {
           email,
           homeState,
@@ -1068,7 +1085,6 @@ searchableCourses = data.filter((c) => {
           partySize: partySizeValue,
           alertFrequency,
 
-          // ✅ NEW: send home course to backend so /api/me updates
           homeCourse: homeCourseObj ? homeCourseObj.name : null,
           homeCourseId: homeCourseObj ? (homeCourseObj.id || null) : null,
           homeCourseState: homeCourseObj ? (homeCourseObj.state || homeState || null) : (homeState || null)
@@ -1083,7 +1099,7 @@ searchableCourses = data.filter((c) => {
           body: JSON.stringify(body)
         });
 
-                const data = await res.json().catch(() => ({}));
+        const data = await res.json().catch(() => ({}));
 
         if (res.ok) {
           savePrefsToStorage(homeState, homeCourseObj, favCourses, {
@@ -1101,24 +1117,55 @@ searchableCourses = data.filter((c) => {
           setAlertControlsLocked(true);
           currentEntitlementActive = false;
           currentPlan = "FREE";
-          prefsStatus.textContent = "An active subscription is required to save email alert preferences.";
-          prefsStatus.className = "status err";
+
+          // ✅ Still keep booking defaults saved locally
+          savePrefsToStorage(homeState, homeCourseObj, favCourses, {
+            days: selectedDays,
+            earliest,
+            latest,
+            holes: holesValue,
+            partySize: partySizeValue,
+            frequency: alertFrequency
+          });
+
+          prefsStatus.textContent = "Home state and home course saved. Email alert preferences require an active subscription.";
+          prefsStatus.className = "status ok";
         } else {
           prefsStatus.textContent = "Server update failed.";
           prefsStatus.className = "status err";
         }
-            } catch (err) {
+      } catch (err) {
         console.error("prefs save error", err);
-        prefsStatus.textContent = "Server update failed (network).";
-        prefsStatus.className = "status err";
+
+        // ✅ Fallback: still save booking defaults locally
+        savePrefsToStorage(homeState, homeCourseObj, favCourses, {
+          days: selectedDays,
+          earliest,
+          latest,
+          holes: holesValue,
+          partySize: partySizeValue,
+          frequency: alertFrequency
+        });
+
+        prefsStatus.textContent = "Home state and home course saved locally.";
+        prefsStatus.className = "status ok";
       }
     });
   }
 
-  // --- manage billing (Stripe customer portal) ---
+    // --- manage billing / upgrade ---
   const manageBillingBtn = document.getElementById("manageBillingBtn");
   if (manageBillingBtn) {
     manageBillingBtn.addEventListener("click", async () => {
+      billingStatus.textContent = "";
+      billingStatus.className = "status";
+
+      // ✅ FREE users should go to the subscription page, not Stripe portal
+      if (!currentEntitlementActive || currentPlan === "FREE") {
+        window.location.href = "/subscribe.html";
+        return;
+      }
+
       billingStatus.textContent = "Opening billing portal…";
       billingStatus.className = "status";
 
@@ -1130,16 +1177,19 @@ searchableCourses = data.filter((c) => {
             ...(token ? { "Authorization": "Bearer " + token } : {})
           },
           body: JSON.stringify({
-            email, /* ✅ REQUIRED so backend can find Stripe customer */
+            email,
             returnUrl: window.location.href
           })
         });
+
         const data = await res.json().catch(() => ({}));
+
         if (res.ok && data && data.url) {
           window.location.href = data.url;
           return;
         }
-        billingStatus.textContent = "Could not open billing portal yet (backend not wired).";
+
+        billingStatus.textContent = "Could not open billing portal yet.";
         billingStatus.className = "status err";
       } catch (err) {
         console.error("billing portal error", err);
@@ -1177,12 +1227,26 @@ searchableCourses = data.filter((c) => {
 
       maxFavs = Number(data.maxFavs) || (currentPlan === "PRO" ? 10 : 3);
 
-      if (currentPlan === "PRO") {
+            if (currentPlan === "PRO") {
         planPill.textContent = `Plan: Pro (${maxFavs} favourite courses)`;
       } else if (currentPlan === "BASIC") {
         planPill.textContent = `Plan: Basic (${maxFavs} favourite courses)`;
       } else {
         planPill.textContent = "Plan: Free (no active subscription)";
+      }
+
+      if (manageBillingBtn) {
+        manageBillingBtn.textContent =
+          currentPlan === "FREE" || !entitlementActive
+            ? "View subscription options"
+            : "Manage / cancel subscription";
+      }
+
+      if (subscriptionCardText) {
+        subscriptionCardText.textContent =
+          currentPlan === "FREE" || !entitlementActive
+            ? "Upgrade to unlock email alerts, subscriber discounts, and premium TeeRadar features."
+            : "Manage your billing details, subscription, or cancellation using Stripe’s secure customer portal.";
       }
 
             if (planSubtext) {
@@ -1223,20 +1287,31 @@ searchableCourses = data.filter((c) => {
 
       setAlertControlsLocked(!entitlementActive);
 
-      if (!entitlementActive) {
-        prefsStatus.textContent = "Email alerts require an active subscription.";
+            if (!entitlementActive) {
+        prefsStatus.textContent = "You can still save your home state and home course. Email alert preferences require an active subscription.";
         prefsStatus.className = "status";
       }
-    } catch (err) {
+        } catch (err) {
       console.error("plan fetch error", err);
       currentEntitlementActive = false;
       currentPlan = "FREE";
       maxFavs = 3;
       planPill.textContent = "Plan: Free";
+
       if (planSubtext) {
         planSubtext.textContent =
           "We couldn’t verify your subscription just now. Your account is still available.";
       }
+
+      if (manageBillingBtn) {
+        manageBillingBtn.textContent = "View subscription options";
+      }
+
+      if (subscriptionCardText) {
+        subscriptionCardText.textContent =
+          "Upgrade to unlock email alerts, subscriber discounts, and premium TeeRadar features.";
+      }
+
       setAlertControlsLocked(true);
     }
   }
