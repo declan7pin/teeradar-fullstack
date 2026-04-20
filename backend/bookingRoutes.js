@@ -324,6 +324,59 @@ function getBearer(req) {
   const m = auth.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : "";
 }
+async function findUserByEmail(email) {
+  const clean = String(email || "").trim().toLowerCase();
+  if (!clean) return null;
+
+  try {
+    const r = await db.query(
+      `
+      SELECT id, email
+      FROM users
+      WHERE LOWER(TRIM(email)) = $1
+      LIMIT 1;
+      `,
+      [clean]
+    );
+    return r.rows?.[0] || null;
+  } catch (e) {
+    console.warn("findUserByEmail failed", e?.message || e);
+    return null;
+  }
+}
+
+async function getAuthedUserFromReq(req) {
+  try {
+    const bearer = getBearer(req);
+    const token =
+      bearer ||
+      String(req.cookies?.tr_token || req.cookies?.token || req.cookies?.jwt || "").trim();
+
+    if (!token || !JWT_SECRET_FALLBACK) return null;
+
+    const decoded = jwt.verify(token, JWT_SECRET_FALLBACK);
+    const email = String(decoded?.email || decoded?.user?.email || "").trim().toLowerCase();
+    if (!email) return null;
+
+    return await findUserByEmail(email);
+  } catch {
+    return null;
+  }
+}
+
+async function requireAccountUser(req, res, next) {
+  try {
+    const user = await getAuthedUserFromReq(req);
+    if (!user?.id) {
+      return res.status(401).json({ ok: false, error: "not_authenticated" });
+    }
+    req.accountUser = user;
+    return next();
+  } catch (e) {
+    console.error("requireAccountUser", e);
+    return res.status(401).json({ ok: false, error: "not_authenticated" });
+  }
+}
 function getBypassProvided(req) {
   const key =
     String(req.headers["x-course-admin-key"] || "").trim() ||
@@ -9949,6 +10002,7 @@ async function finalizePaidBooking(payload) {
   // - DO NOT create a new booking/lock times again (that already happened in /book)
   // - Just mark the EXISTING booking as paid/confirmed
   // - Store Stripe IDs
+  // - Attach user_id when booking email matches a TeeRadar account
   // - Send the confirmation email
   // - Must be idempotent (Stripe webhooks retry)
   //
@@ -9968,6 +10022,31 @@ async function finalizePaidBooking(payload) {
     return { ok: false, error: "missing_reference" };
   }
 
+  // ✅ NEW: if the booking email belongs to a TeeRadar user, attach user_id
+  let matchedUserId = null;
+  try {
+    const bookingEmailLookup = await db.query(
+      `
+      SELECT golfer_email
+      FROM booking_bookings
+      WHERE reference = $1
+      LIMIT 1;
+      `,
+      [ref]
+    );
+
+    const existingEmail = String(
+      bookingEmailLookup.rows?.[0]?.golfer_email || ""
+    ).trim().toLowerCase();
+
+    if (existingEmail) {
+      const matchedUser = await findUserByEmail(existingEmail);
+      matchedUserId = matchedUser?.id || null;
+    }
+  } catch (e) {
+    console.warn("finalizePaidBooking user lookup failed", e?.message || e);
+  }
+
   // ✅ 1) ATOMIC idempotent update
   // - Do not revive CANCELLED bookings
   // - Do set paid=true even if already CONFIRMED (but paid=false)
@@ -9981,6 +10060,7 @@ async function finalizePaidBooking(payload) {
         paid = true,
         status = 'CONFIRMED',
         updated_at = now(),
+        user_id = COALESCE(b.user_id, $4),
         stripe_session_id = COALESCE($2, b.stripe_session_id),
         stripe_payment_intent = COALESCE($3, b.stripe_payment_intent)
       WHERE b.reference = $1
@@ -9992,6 +10072,7 @@ async function finalizePaidBooking(payload) {
       RETURNING
         b.id,
         b.course_id,
+        b.user_id,
         b.play_date,
         b.tee_time,
         b.holes,
@@ -10011,6 +10092,7 @@ async function finalizePaidBooking(payload) {
         ref,
         stripe_session_id ? String(stripe_session_id) : null,
         stripe_payment_intent ? String(stripe_payment_intent) : null,
+        matchedUserId,
       ]
     );
 
@@ -10033,44 +10115,45 @@ async function finalizePaidBooking(payload) {
 
       console.log("🔁 finalizePaidBooking: already paid/confirmed:", ref);
 
-// ✅ Load full booking row and continue to email logic
-const existingFull = await db.query(
-  `
-  SELECT
-    b.id,
-    b.course_id,
-    b.play_date,
-    b.tee_time,
-    b.holes,
-    b.players,
-    b.golfer_name,
-    b.golfer_email,
-    b.golfer_phone,
-    b.price_per_player_cents,
-    b.total_cents,
-    b.cart_fee_cents,
-    b.hire_clubs_fee_cents,
-    b.reference,
-    b.status,
-    b.paid
-  FROM booking_bookings b
-  WHERE b.reference = $1
-  LIMIT 1;
-  `,
-  [ref]
-);
+      // ✅ Load full booking row and continue to email logic
+      const existingFull = await db.query(
+        `
+        SELECT
+          b.id,
+          b.course_id,
+          b.user_id,
+          b.play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name,
+          b.golfer_email,
+          b.golfer_phone,
+          b.price_per_player_cents,
+          b.total_cents,
+          b.cart_fee_cents,
+          b.hire_clubs_fee_cents,
+          b.reference,
+          b.status,
+          b.paid
+        FROM booking_bookings b
+        WHERE b.reference = $1
+        LIMIT 1;
+        `,
+        [ref]
+      );
 
-if (!existingFull.rows.length) {
-  return { ok: true, alreadyConfirmed: true };
-}
+      if (!existingFull.rows.length) {
+        return { ok: true, alreadyConfirmed: true };
+      }
 
-booking = existingFull.rows[0];
+      booking = existingFull.rows[0];
+    } else {
+      booking = upd.rows[0];
     }
-
-    booking = upd.rows[0];
   } catch (e) {
     const msg = e?.message || String(e || "");
-    console.warn("finalizePaidBooking: stripe columns update failed, falling back:", msg);
+    console.warn("finalizePaidBooking: stripe/user_id columns update failed, falling back:", msg);
 
     const upd2 = await db.query(
       `
@@ -10078,7 +10161,8 @@ booking = existingFull.rows[0];
       SET
         paid = true,
         status = 'CONFIRMED',
-        updated_at = now()
+        updated_at = now(),
+        user_id = COALESCE(b.user_id, $2)
       WHERE b.reference = $1
         AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'
         AND (
@@ -10088,6 +10172,7 @@ booking = existingFull.rows[0];
       RETURNING
         b.id,
         b.course_id,
+        b.user_id,
         b.play_date,
         b.tee_time,
         b.holes,
@@ -10103,7 +10188,7 @@ booking = existingFull.rows[0];
         b.status,
         b.paid;
       `,
-      [ref]
+      [ref, matchedUserId]
     );
 
     if (!upd2.rows.length) {
@@ -10125,44 +10210,49 @@ booking = existingFull.rows[0];
 
       console.log("🔁 finalizePaidBooking: already paid/confirmed:", ref);
 
-// ✅ Load full booking row and continue to email logic
-const existingFull = await db.query(
-  `
-  SELECT
-    b.id,
-    b.course_id,
-    b.play_date,
-    b.tee_time,
-    b.holes,
-    b.players,
-    b.golfer_name,
-    b.golfer_email,
-    b.golfer_phone,
-    b.price_per_player_cents,
-    b.total_cents,
-    b.cart_fee_cents,
-    b.hire_clubs_fee_cents,
-    b.reference,
-    b.status,
-    b.paid
-  FROM booking_bookings b
-  WHERE b.reference = $1
-  LIMIT 1;
-  `,
-  [ref]
-);
+      // ✅ Load full booking row and continue to email logic
+      const existingFull = await db.query(
+        `
+        SELECT
+          b.id,
+          b.course_id,
+          b.user_id,
+          b.play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name,
+          b.golfer_email,
+          b.golfer_phone,
+          b.price_per_player_cents,
+          b.total_cents,
+          b.cart_fee_cents,
+          b.hire_clubs_fee_cents,
+          b.reference,
+          b.status,
+          b.paid
+        FROM booking_bookings b
+        WHERE b.reference = $1
+        LIMIT 1;
+        `,
+        [ref]
+      );
 
-if (!existingFull.rows.length) {
-  return { ok: true, alreadyConfirmed: true };
-}
+      if (!existingFull.rows.length) {
+        return { ok: true, alreadyConfirmed: true };
+      }
 
-booking = existingFull.rows[0];
+      booking = existingFull.rows[0];
+    } else {
+      booking = upd2.rows[0];
     }
-
-    booking = upd2.rows[0];
   }
 
-  console.log("✅ Booking marked paid/confirmed:", { id: booking.id, reference: booking.reference });
+  console.log("✅ Booking marked paid/confirmed:", {
+    id: booking.id,
+    reference: booking.reference,
+    user_id: booking.user_id || null,
+  });
 
   let courseName = "Golf Course";
   try {
@@ -10205,7 +10295,14 @@ booking = existingFull.rows[0];
     console.error("❌ finalizePaidBooking email failed:", e?.message || e);
   }
 
-  return { ok: true, bookingId: booking.id, reference: booking.reference, emailOk, emailReason };
+  return {
+    ok: true,
+    bookingId: booking.id,
+    reference: booking.reference,
+    user_id: booking.user_id || null,
+    emailOk,
+    emailReason,
+  };
 }
 
 // ===============================
@@ -10726,11 +10823,18 @@ async function handleBook(req, res) {
     const subscriber_discount_applied = discountCentsSafe > 0;
     const subscriber_discount_cents = discountCentsSafe;
 
+        // ✅ NEW: attach booking to TeeRadar account if booking email belongs to a user
+    const matchedUser = golfer_email_norm
+      ? await findUserByEmail(golfer_email_norm)
+      : null;
+
+    const matchedUserId = matchedUser?.id || null;
+    
     const ins = await q(
       "insert_booking",
       `
-      INSERT INTO booking_bookings
-        (course_id, play_date, tee_time, holes, players,
+            INSERT INTO booking_bookings
+        (course_id, user_id, play_date, tee_time, holes, players,
          golfer_name, golfer_email, golfer_phone,
          price_per_player_cents, total_cents, reference, status,
          subscriber_discount_applied, subscriber_discount_cents,
@@ -10740,21 +10844,22 @@ async function handleBook(req, res) {
          has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
          layout_key, front_nine_key, back_nine_key,
          created_at)
-      VALUES
-        ($1,$2::date,$3,$4,$5,
-         $6,$7,$8,
-         $9,$10,$11,$12,
-         $13,$14,
-         $15::timestamptz,$16::timestamptz,
+            VALUES
+        ($1,$2,$3::date,$4,$5,$6,
+         $7,$8,$9,
+         $10,$11,$12,$13,
+         $14,$15,
+         $16::timestamptz,$17::timestamptz,
          false,false,
-         $17,$18,$19,
-         $20,$21,$22,
-         $23,$24,$25,
+         $18,$19,$20,
+         $21,$22,$23,
+         $24,$25,$26,
          now())
       RETURNING id, reference;
       `,
-      [
+            [
         courseId,
+        matchedUserId,
         date,
         teeTimeDb,
         holes,
