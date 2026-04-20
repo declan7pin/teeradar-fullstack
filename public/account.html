@@ -281,6 +281,109 @@
       margin-top:10px;
     }
 
+    /* MY GAMES */
+    .games-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .game-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      background: #fff;
+      box-shadow: 0 8px 20px rgba(15,23,42,0.05);
+    }
+
+    .game-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .game-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin: 0 0 4px;
+    }
+
+    .game-meta {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .game-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .game-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid var(--border);
+      background: #f8fafc;
+      color: #334155;
+    }
+
+    .game-pill.ok {
+      background: #ecfdf5;
+      border-color: #bbf7d0;
+      color: #166534;
+    }
+
+    .game-pill.warn {
+      background: #fff7ed;
+      border-color: #fed7aa;
+      color: #9a3412;
+    }
+
+    .game-pill.err {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: #b91c1c;
+    }
+
+    .game-actions {
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-danger:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .empty-state {
+      font-size: 13px;
+      color: var(--muted);
+      padding: 10px 0 2px;
+    }
+    
     /* NEW: day choice chips */
     .day-choices {
       display:flex;
@@ -350,8 +453,28 @@
     </div>
 
     <div class="card">
+      <h2>My games</h2>
+      <p>View your upcoming bookings, previous games, and cancel eligible bookings.</p>
+
+      <div class="row-actions" style="margin-bottom:8px;">
+        <button id="refreshGamesBtn" class="btn-secondary" type="button">Refresh games</button>
+        <span id="gamesStatus" class="status"></span>
+      </div>
+
+      <h2 style="margin-top:14px;">Upcoming games</h2>
+      <div id="upcomingGames" class="games-grid">
+        <div class="empty-state">Loading upcoming games…</div>
+      </div>
+
+      <h2 style="margin-top:18px;">Previous games</h2>
+      <div id="previousGames" class="games-grid">
+        <div class="empty-state">Loading previous games…</div>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>Preferences</h2>
-            <p>We’ll use these defaults on your bookings page. Email alert settings require an active subscription.</p>
+      <p>We’ll use these defaults on your bookings page. Email alert settings require an active subscription.</p>
 
       <label for="homeState">Home state</label>
       <select id="homeState">
@@ -445,7 +568,7 @@
       </div>
     </div>
 
-        <div class="card">
+    <div class="card">
       <h2>Subscription</h2>
       <p id="subscriptionCardText">
         Manage your billing details, upgrade, or cancel your TeeRadar subscription.
@@ -484,11 +607,16 @@
   const favListEl = document.getElementById("favList");
   const favDropdown = document.getElementById("favAutocompleteList");
   const prefsStatus = document.getElementById("prefsStatus");
-  const billingStatus = document.getElementById("billingStatus");
+    const billingStatus = document.getElementById("billingStatus");
   const subscriptionCardText = document.getElementById("subscriptionCardText");
   const navAccountBtn = document.getElementById("navAccount");
   const logoutBtn = document.getElementById("pageLogout");
 
+  // ✅ NEW: my games elements
+  const refreshGamesBtn = document.getElementById("refreshGamesBtn");
+  const gamesStatus = document.getElementById("gamesStatus");
+  const upcomingGamesEl = document.getElementById("upcomingGames");
+  const previousGamesEl = document.getElementById("previousGames");
   // ✅ NEW: home course elements
   const homeCourseInput = document.getElementById("homeCourseInput");
   const homeCourseDropdown = document.getElementById("homeCourseAutocompleteList");
@@ -1315,12 +1443,190 @@ searchableCourses = data.filter((c) => {
       setAlertControlsLocked(true);
     }
   }
+  
+    function formatMoney(cents) {
+    const n = Number(cents || 0) / 100;
+    return `$${n.toFixed(2)}`;
+  }
 
-  // --- boot ---
-    (async function init() {
+  function escapeHtml(str) {
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function renderGameCards(items, targetEl, kind) {
+    if (!targetEl) return;
+
+    if (!Array.isArray(items) || !items.length) {
+      targetEl.innerHTML = `<div class="empty-state">No ${kind} games found.</div>`;
+      return;
+    }
+
+    targetEl.innerHTML = items.map((g) => {
+      const status = String(g.status || "").toUpperCase();
+      const paid = !!g.paid;
+      const canCancel = !!g.can_cancel;
+
+      let statusClass = "game-pill";
+      if (status === "CONFIRMED") statusClass += " ok";
+      else if (status === "CANCELLED") statusClass += " err";
+      else statusClass += " warn";
+
+      return `
+        <div class="game-card">
+          <div class="game-top">
+            <div>
+              <div class="game-title">${escapeHtml(g.course_name || "Golf Course")}</div>
+              <div class="game-meta">
+                ${escapeHtml(g.play_date || "")} • ${escapeHtml(String(g.tee_time || "").split("|")[0])} • ${escapeHtml(g.holes)} holes • ${escapeHtml(g.players)} player(s)
+              </div>
+              <div class="game-meta" style="margin-top:4px;">
+                Ref: ${escapeHtml(g.reference || "")}
+              </div>
+            </div>
+          </div>
+
+          <div class="game-pills">
+            <span class="${statusClass}">Status: ${escapeHtml(status || "UNKNOWN")}</span>
+            <span class="game-pill ${paid ? "ok" : "warn"}">${paid ? "Paid online" : "Pay at course"}</span>
+            <span class="game-pill">Total: ${escapeHtml(formatMoney(g.gross_cents || 0))}</span>
+            ${(Number(g.cart_qty || 0) > 0) ? `<span class="game-pill">Carts: ${escapeHtml(g.cart_qty)}</span>` : ``}
+            ${(Number(g.hire_clubs_qty || 0) > 0) ? `<span class="game-pill">Hire clubs: ${escapeHtml(g.hire_clubs_qty)}</span>` : ``}
+          </div>
+
+          <div class="game-actions">
+            ${canCancel ? `<button class="btn-danger cancel-booking-btn" data-reference="${escapeHtml(g.reference || "")}" type="button">Cancel booking</button>` : ``}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    targetEl.querySelectorAll(".cancel-booking-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const reference = String(btn.dataset.reference || "").trim();
+        if (!reference) return;
+
+        const ok = window.confirm("Are you sure you want to cancel this booking?");
+        if (!ok) return;
+
+        btn.disabled = true;
+        if (gamesStatus) {
+          gamesStatus.textContent = "Cancelling booking…";
+          gamesStatus.className = "status";
+        }
+
+        try {
+          const res = await fetch(`/api/book/my-games/${encodeURIComponent(reference)}/cancel`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { "Authorization": "Bearer " + token } : {})
+            }
+          });
+
+          const data = await res.json().catch(() => ({}));
+
+          if (res.ok && data && data.ok) {
+            if (gamesStatus) {
+              gamesStatus.textContent = "Booking cancelled.";
+              gamesStatus.className = "status ok";
+            }
+            await loadMyGames();
+            return;
+          }
+
+          const msg =
+            data?.error === "paid_booking_cannot_be_cancelled_here"
+              ? "This paid booking cannot be cancelled here yet."
+              : data?.error === "past_booking_cannot_be_cancelled"
+              ? "Past bookings cannot be cancelled."
+              : data?.error === "already_cancelled"
+              ? "This booking is already cancelled."
+              : "Unable to cancel booking.";
+
+          if (gamesStatus) {
+            gamesStatus.textContent = msg;
+            gamesStatus.className = "status err";
+          }
+          btn.disabled = false;
+        } catch (err) {
+          console.error("cancel booking error", err);
+          if (gamesStatus) {
+            gamesStatus.textContent = "Network error while cancelling booking.";
+            gamesStatus.className = "status err";
+          }
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function loadMyGames() {
+    if (!email || !upcomingGamesEl || !previousGamesEl) return;
+
+    upcomingGamesEl.innerHTML = `<div class="empty-state">Loading upcoming games…</div>`;
+    previousGamesEl.innerHTML = `<div class="empty-state">Loading previous games…</div>`;
+
+    if (gamesStatus) {
+      gamesStatus.textContent = "Loading games…";
+      gamesStatus.className = "status";
+    }
+
+    try {
+      const res = await fetch("/api/book/my-games", {
+        method: "GET",
+        headers: {
+          ...(token ? { "Authorization": "Bearer " + token } : {})
+        }
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data || !data.ok) {
+        upcomingGamesEl.innerHTML = `<div class="empty-state">Could not load upcoming games.</div>`;
+        previousGamesEl.innerHTML = `<div class="empty-state">Could not load previous games.</div>`;
+
+        if (gamesStatus) {
+          gamesStatus.textContent = "Could not load your bookings.";
+          gamesStatus.className = "status err";
+        }
+        return;
+      }
+
+      renderGameCards(data.upcoming || [], upcomingGamesEl, "upcoming");
+      renderGameCards(data.previous || [], previousGamesEl, "previous");
+
+      if (gamesStatus) {
+        gamesStatus.textContent = "";
+        gamesStatus.className = "status";
+      }
+    } catch (err) {
+      console.error("loadMyGames error", err);
+      upcomingGamesEl.innerHTML = `<div class="empty-state">Could not load upcoming games.</div>`;
+      previousGamesEl.innerHTML = `<div class="empty-state">Could not load previous games.</div>`;
+
+      if (gamesStatus) {
+        gamesStatus.textContent = "Network error loading your bookings.";
+        gamesStatus.className = "status err";
+      }
+    }
+  }
+
+  if (refreshGamesBtn) {
+    refreshGamesBtn.addEventListener("click", () => {
+      loadMyGames();
+    });
+  }
+
+    // --- boot ---
+  (async function init() {
     if (!email) return;
-    await loadCourses();
 
+    await loadCourses();
     await refreshPlanFromServer();
 
     if (currentEntitlementActive) {
@@ -1332,6 +1638,8 @@ searchableCourses = data.filter((c) => {
     if (!currentEntitlementActive) {
       setAlertControlsLocked(true);
     }
+
+    await loadMyGames();
   })();
 </script>
 </body>
