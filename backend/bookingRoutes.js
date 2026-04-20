@@ -4928,6 +4928,209 @@ router.get("/booking", async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+router.get("/my-games", requireAccountUser, async (req, res) => {
+  try {
+    const userId = Number(req.accountUser.id);
+    const userEmail = String(req.accountUser.email || "").trim().toLowerCase();
+
+    // ✅ also claim any old bookings by email match
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET user_id = $1
+      WHERE user_id IS NULL
+        AND golfer_email IS NOT NULL
+        AND LOWER(TRIM(golfer_email)) = $2
+      `,
+      [userId, userEmail]
+    );
+
+    const r = await db.query(
+      `
+      SELECT
+        b.id,
+        b.reference,
+        b.play_date::text AS play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.golfer_name,
+        b.golfer_email,
+        b.status,
+        COALESCE(b.paid,false) AS paid,
+        COALESCE(b.total_cents,0)::int AS total_cents,
+        COALESCE(b.cart_fee_cents,0)::int AS cart_fee_cents,
+        COALESCE(b.hire_clubs_fee_cents,0)::int AS hire_clubs_fee_cents,
+        COALESCE(b.cart_qty,0)::int AS cart_qty,
+        COALESCE(b.hire_clubs_qty,0)::int AS hire_clubs_qty,
+        COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode,
+        c.slug AS course_slug,
+        c.name AS course_name
+      FROM booking_bookings b
+      JOIN booking_courses c
+        ON c.id = b.course_id
+      WHERE
+        (
+          b.user_id = $1
+          OR (
+            b.user_id IS NULL
+            AND b.golfer_email IS NOT NULL
+            AND LOWER(TRIM(b.golfer_email)) = $2
+          )
+        )
+      ORDER BY b.play_date DESC, b.tee_time DESC, b.created_at DESC
+      `,
+      [userId, userEmail]
+    );
+
+    const todayPerth = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Australia/Perth",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    const upcoming = [];
+    const previous = [];
+
+    for (const row of r.rows || []) {
+      const statusUpper = String(row.status || "").toUpperCase();
+      const isCancelled = statusUpper === "CANCELLED";
+      const isPast = String(row.play_date || "") < todayPerth;
+
+      const item = {
+        ...row,
+        gross_cents:
+          Number(row.total_cents || 0) +
+          Number(row.cart_fee_cents || 0) +
+          Number(row.hire_clubs_fee_cents || 0),
+        can_cancel: !isCancelled && !isPast,
+      };
+
+      if (isCancelled || isPast) previous.push(item);
+      else upcoming.push(item);
+    }
+
+    return res.json({
+      ok: true,
+      upcoming,
+      previous,
+    });
+  } catch (e) {
+    console.error("GET /my-games", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+router.post("/my-games/:reference/cancel", requireAccountUser, async (req, res) => {
+  try {
+    const reference = String(req.params.reference || "").trim();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
+
+    const userId = Number(req.accountUser.id);
+    const userEmail = String(req.accountUser.email || "").trim().toLowerCase();
+
+    const r = await db.query(
+      `
+      SELECT
+        b.id,
+        b.course_id,
+        b.reference,
+        b.paid,
+        b.checked_in,
+        b.status,
+        b.play_date,
+        b.tee_time,
+        b.holes,
+        COALESCE(b.layout_key,'') AS layout_key,
+        COALESCE(b.front_nine_key,'') AS front_nine_key,
+        COALESCE(b.back_nine_key,'') AS back_nine_key,
+        COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode
+      FROM booking_bookings b
+      LEFT JOIN booking_courses c
+        ON c.id = b.course_id
+      WHERE b.reference = $1
+        AND (
+          b.user_id = $2
+          OR (
+            b.user_id IS NULL
+            AND b.golfer_email IS NOT NULL
+            AND LOWER(TRIM(b.golfer_email)) = $3
+          )
+        )
+      LIMIT 1
+      `,
+      [reference, userId, userEmail]
+    );
+
+    const booking = r.rows?.[0];
+    if (!booking) {
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    if (String(booking.status || "").toUpperCase() === "CANCELLED") {
+      return res.status(400).json({ ok: false, error: "already_cancelled" });
+    }
+
+    if (booking.checked_in) {
+      return res.status(400).json({ ok: false, error: "checked_in_booking_cannot_be_cancelled" });
+    }
+
+    const todayPerth = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Australia/Perth",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    if (String(booking.play_date || "") < todayPerth) {
+      return res.status(400).json({ ok: false, error: "past_booking_cannot_be_cancelled" });
+    }
+
+    // ✅ For now keep this simple and safe:
+    // allow PAY_AT_COURSE cancellation
+    // block paid PAY_ON_BOOKING until refund flow is added
+    if (String(booking.payment_mode || "").toUpperCase() === "PAY_ON_BOOKING" && booking.paid) {
+      return res.status(400).json({ ok: false, error: "paid_booking_cannot_be_cancelled_here" });
+    }
+
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET
+        status = 'CANCELLED',
+        cancelled_at = COALESCE(cancelled_at, NOW()),
+        cancelled_reason = 'Cancelled by account user'
+      WHERE id = $1
+      `,
+      [booking.id]
+    );
+
+    try {
+      await syncBookedPlayersForTime({
+        courseId: booking.course_id,
+        play_date: booking.play_date,
+        tee_time: booking.tee_time,
+        holes: booking.holes,
+        layout_key: booking.layout_key || null,
+        front_nine_key: booking.front_nine_key || null,
+        back_nine_key: booking.back_nine_key || null,
+      });
+    } catch (e) {
+      console.warn("syncBookedPlayersForTime failed after user cancel", e?.message || e);
+    }
+
+    return res.json({
+      ok: true,
+      reference: booking.reference,
+      status: "CANCELLED",
+    });
+  } catch (e) {
+    console.error("POST /my-games/:reference/cancel", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // -----------------------------
 // ✅ Platform admin manual slots (book-admin.html)
 // -----------------------------
