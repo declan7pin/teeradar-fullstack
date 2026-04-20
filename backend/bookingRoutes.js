@@ -1524,13 +1524,14 @@ async function ensureBookingTables() {
     ON booking_times (course_id, play_date, holes, status, tee_time);
   `);
 
-  // =============================
+   // =============================
   // booking_bookings
   // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_bookings (
       id BIGSERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
+      user_id BIGINT,
       play_date DATE NOT NULL,
       tee_time TEXT NOT NULL,
       holes INTEGER NOT NULL,
@@ -1549,12 +1550,37 @@ async function ensureBookingTables() {
 
   await db.query(`
     ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS user_id BIGINT;
+  `);
+
+  await db.query(`
+    ALTER TABLE booking_bookings
     ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
   `);
 
   await db.query(`
     ALTER TABLE booking_bookings
     ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;
+  `);
+
+  // ✅ NEW: link bookings to TeeRadar account when email matches a user
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_bookings_user_id_idx
+    ON booking_bookings (user_id);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_bookings_golfer_email_lower_idx
+    ON booking_bookings ((LOWER(TRIM(golfer_email))));
+  `);
+
+  await db.query(`
+    UPDATE booking_bookings b
+    SET user_id = u.id
+    FROM users u
+    WHERE b.user_id IS NULL
+      AND b.golfer_email IS NOT NULL
+      AND LOWER(TRIM(b.golfer_email)) = LOWER(TRIM(u.email));
   `);
 
   // ✅ NEW: persist chosen layout for bookings (named 9s + 18 routings)
