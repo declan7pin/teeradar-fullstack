@@ -1646,8 +1646,9 @@ targetEl.querySelectorAll(".share-booking-btn").forEach((btn) => {
     }
   });
 });
+}
 
-  async function loadMyGames() {
+async function loadMyGames() {
     if (!email || !upcomingGamesEl || !previousGamesEl) return;
 
     upcomingGamesEl.innerHTML = `<div class="empty-state">Loading upcoming games…</div>`;
