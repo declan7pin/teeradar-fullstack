@@ -377,6 +377,20 @@ async function requireAccountUser(req, res, next) {
     return res.status(401).json({ ok: false, error: "not_authenticated" });
   }
 }
+function parseShareEmails(raw) {
+  if (Array.isArray(raw)) {
+    return raw
+      .map((x) => String(x || "").trim().toLowerCase())
+      .filter(Boolean)
+      .filter(isLikelyEmail);
+  }
+
+  return String(raw || "")
+    .split(/[,\n;]/)
+    .map((x) => String(x || "").trim().toLowerCase())
+    .filter(Boolean)
+    .filter(isLikelyEmail);
+}
 function getBypassProvided(req) {
   const key =
     String(req.headers["x-course-admin-key"] || "").trim() ||
@@ -1711,6 +1725,36 @@ async function ensureBookingTables() {
     ON booking_bookings (stripe_payment_intent);
   `);
   // ✅✅✅ END ADD ✅✅✅
+
+  // =============================
+  // booking_booking_shares
+  // =============================
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_booking_shares (
+      id BIGSERIAL PRIMARY KEY,
+      booking_id BIGINT NOT NULL REFERENCES booking_bookings(id) ON DELETE CASCADE,
+      shared_by_user_id BIGINT,
+      shared_to_email TEXT NOT NULL,
+      shared_to_user_id BIGINT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (booking_id, shared_to_email)
+    );
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_booking_shares_booking_idx
+    ON booking_booking_shares (booking_id);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_booking_shares_to_email_lower_idx
+    ON booking_booking_shares ((LOWER(TRIM(shared_to_email))));
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_booking_shares_to_user_idx
+    ON booking_booking_shares (shared_to_user_id);
+  `);
 
   // =============================
   // booking_analytics_events
@@ -4933,7 +4977,7 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
     const userId = Number(req.accountUser.id);
     const userEmail = String(req.accountUser.email || "").trim().toLowerCase();
 
-    // ✅ also claim any old bookings by email match
+    // ✅ claim any old owned bookings by email match
     await db.query(
       `
       UPDATE booking_bookings
@@ -4945,40 +4989,93 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
       [userId, userEmail]
     );
 
+    // ✅ also resolve shared rows to user_id when possible
+    await db.query(
+      `
+      UPDATE booking_booking_shares s
+      SET shared_to_user_id = $1
+      WHERE shared_to_user_id IS NULL
+        AND LOWER(TRIM(s.shared_to_email)) = $2
+      `,
+      [userId, userEmail]
+    );
+
     const r = await db.query(
       `
-      SELECT
-        b.id,
-        b.reference,
-        b.play_date::text AS play_date,
-        b.tee_time,
-        b.holes,
-        b.players,
-        b.golfer_name,
-        b.golfer_email,
-        b.status,
-        COALESCE(b.paid,false) AS paid,
-        COALESCE(b.total_cents,0)::int AS total_cents,
-        COALESCE(b.cart_fee_cents,0)::int AS cart_fee_cents,
-        COALESCE(b.hire_clubs_fee_cents,0)::int AS hire_clubs_fee_cents,
-        COALESCE(b.cart_qty,0)::int AS cart_qty,
-        COALESCE(b.hire_clubs_qty,0)::int AS hire_clubs_qty,
-        COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode,
-        c.slug AS course_slug,
-        c.name AS course_name
-      FROM booking_bookings b
-      JOIN booking_courses c
-        ON c.id = b.course_id
-      WHERE
-        (
-          b.user_id = $1
-          OR (
-            b.user_id IS NULL
-            AND b.golfer_email IS NOT NULL
-            AND LOWER(TRIM(b.golfer_email)) = $2
+      WITH owned AS (
+        SELECT
+          b.id,
+          b.reference,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name,
+          b.golfer_email,
+          b.status,
+          COALESCE(b.paid,false) AS paid,
+          COALESCE(b.total_cents,0)::int AS total_cents,
+          COALESCE(b.cart_fee_cents,0)::int AS cart_fee_cents,
+          COALESCE(b.hire_clubs_fee_cents,0)::int AS hire_clubs_fee_cents,
+          COALESCE(b.cart_qty,0)::int AS cart_qty,
+          COALESCE(b.hire_clubs_qty,0)::int AS hire_clubs_qty,
+          COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode,
+          c.slug AS course_slug,
+          c.name AS course_name,
+          false AS is_shared,
+          true AS is_owner
+        FROM booking_bookings b
+        JOIN booking_courses c
+          ON c.id = b.course_id
+        WHERE
+          (
+            b.user_id = $1
+            OR (
+              b.user_id IS NULL
+              AND b.golfer_email IS NOT NULL
+              AND LOWER(TRIM(b.golfer_email)) = $2
+            )
           )
-        )
-      ORDER BY b.play_date DESC, b.tee_time DESC, b.created_at DESC
+      ),
+      shared AS (
+        SELECT
+          b.id,
+          b.reference,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name,
+          b.golfer_email,
+          b.status,
+          COALESCE(b.paid,false) AS paid,
+          COALESCE(b.total_cents,0)::int AS total_cents,
+          COALESCE(b.cart_fee_cents,0)::int AS cart_fee_cents,
+          COALESCE(b.hire_clubs_fee_cents,0)::int AS hire_clubs_fee_cents,
+          COALESCE(b.cart_qty,0)::int AS cart_qty,
+          COALESCE(b.hire_clubs_qty,0)::int AS hire_clubs_qty,
+          COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode,
+          c.slug AS course_slug,
+          c.name AS course_name,
+          true AS is_shared,
+          false AS is_owner
+        FROM booking_booking_shares s
+        JOIN booking_bookings b
+          ON b.id = s.booking_id
+        JOIN booking_courses c
+          ON c.id = b.course_id
+        WHERE
+          s.shared_to_user_id = $1
+          OR LOWER(TRIM(s.shared_to_email)) = $2
+      )
+      SELECT DISTINCT ON (id)
+        *
+      FROM (
+        SELECT * FROM owned
+        UNION ALL
+        SELECT * FROM shared
+      ) x
+      ORDER BY id, is_owner DESC, play_date DESC, tee_time DESC
       `,
       [userId, userEmail]
     );
@@ -5000,9 +5097,9 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
 
       const item = {
         ...row,
-        // ✅ FIX: total_cents is already the full booking total
         gross_cents: Number(row.total_cents || 0),
-        can_cancel: !isCancelled && !isPast,
+        can_cancel: !isCancelled && !isPast && !!row.is_owner,
+        can_share: !isCancelled && !isPast && !!row.is_owner,
       };
 
       if (isCancelled || isPast) previous.push(item);
@@ -5019,7 +5116,149 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+router.post("/my-games/:reference/share", requireAccountUser, async (req, res) => {
+  try {
+    const reference = String(req.params.reference || "").trim();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
 
+    const userId = Number(req.accountUser.id);
+    const userEmail = String(req.accountUser.email || "").trim().toLowerCase();
+
+    const emails = parseShareEmails(req.body?.emails || req.body?.email || "");
+    const uniqueEmails = [...new Set(emails)].filter((e) => e !== userEmail);
+
+    if (!uniqueEmails.length) {
+      return res.status(400).json({ ok: false, error: "no_valid_emails" });
+    }
+
+    const bookingQ = await db.query(
+      `
+      SELECT
+        b.id,
+        b.course_id,
+        b.reference,
+        b.play_date::text AS play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.golfer_name,
+        b.golfer_email,
+        b.golfer_phone,
+        b.price_per_player_cents,
+        b.total_cents,
+        b.cart_fee_cents,
+        b.hire_clubs_fee_cents,
+        b.status,
+        b.paid,
+        c.name AS course_name,
+        c.slug AS course_slug,
+        COALESCE(c.payment_mode, 'PAY_AT_COURSE') AS payment_mode
+      FROM booking_bookings b
+      JOIN booking_courses c
+        ON c.id = b.course_id
+      WHERE b.reference = $1
+        AND (
+          b.user_id = $2
+          OR (
+            b.user_id IS NULL
+            AND b.golfer_email IS NOT NULL
+            AND LOWER(TRIM(b.golfer_email)) = $3
+          )
+        )
+      LIMIT 1
+      `,
+      [reference, userId, userEmail]
+    );
+
+    const booking = bookingQ.rows?.[0];
+    if (!booking) {
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    const statusUpper = String(booking.status || "").toUpperCase();
+    if (statusUpper === "CANCELLED") {
+      return res.status(400).json({ ok: false, error: "cannot_share_cancelled_booking" });
+    }
+
+    const todayPerth = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Australia/Perth",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    if (String(booking.play_date || "") < todayPerth) {
+      return res.status(400).json({ ok: false, error: "cannot_share_past_booking" });
+    }
+
+    const results = [];
+
+    for (const mateEmail of uniqueEmails) {
+      const matchedUser = await findUserByEmail(mateEmail);
+      const matchedUserId = matchedUser?.id || null;
+
+      await db.query(
+        `
+        INSERT INTO booking_booking_shares (
+          booking_id,
+          shared_by_user_id,
+          shared_to_email,
+          shared_to_user_id
+        )
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (booking_id, shared_to_email)
+        DO UPDATE SET
+          shared_by_user_id = EXCLUDED.shared_by_user_id,
+          shared_to_user_id = EXCLUDED.shared_to_user_id
+        `,
+        [booking.id, userId, mateEmail, matchedUserId]
+      );
+
+      let emailOk = false;
+      let emailReason = null;
+
+      try {
+        const emailResult = await sendBookingEmail({
+          to: mateEmail,
+          courseName: booking.course_name,
+          date: String(booking.play_date).slice(0, 10),
+          time: String(booking.tee_time || "").split("|")[0],
+          holes: Number(booking.holes || 0),
+          players: Number(booking.players || 0),
+          reference: booking.reference,
+          pricePerPlayerCents: Number(booking.price_per_player_cents || 0),
+          totalCents: Number(booking.total_cents || 0),
+          cartCents: Number(booking.cart_fee_cents || 0),
+          hireClubsCents: Number(booking.hire_clubs_fee_cents || 0),
+        });
+
+        emailOk = !!emailResult?.emailOk;
+        emailReason = emailResult?.emailReason || null;
+      } catch (e) {
+        emailOk = false;
+        emailReason = e?.message || "send_failed";
+      }
+
+      results.push({
+        email: mateEmail,
+        linked_to_account: !!matchedUserId,
+        emailOk,
+        emailReason,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      reference: booking.reference,
+      shared: results,
+    });
+  } catch (e) {
+    console.error("POST /my-games/:reference/share", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 router.post("/my-games/:reference/cancel", requireAccountUser, async (req, res) => {
   try {
     const reference = String(req.params.reference || "").trim();
