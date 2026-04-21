@@ -1498,72 +1498,154 @@ searchableCourses = data.filter((c) => {
             ${(Number(g.hire_clubs_qty || 0) > 0) ? `<span class="game-pill">Hire clubs: ${escapeHtml(g.hire_clubs_qty)}</span>` : ``}
           </div>
 
-          <div class="game-actions">
-            ${canCancel ? `<button class="btn-danger cancel-booking-btn" data-reference="${escapeHtml(g.reference || "")}" type="button">Cancel booking</button>` : ``}
+                    <div class="game-actions">
+            ${canCancel ? `
+              <button class="btn-danger cancel-booking-btn" data-reference="${escapeHtml(g.reference || "")}" type="button">
+                Cancel booking
+              </button>
+            ` : ``}
+
+            ${g.can_share ? `
+              <button class="btn-secondary share-booking-btn" data-reference="${escapeHtml(g.reference || "")}" type="button">
+                Share booking
+              </button>
+            ` : ``}
           </div>
         </div>
       `;
     }).join("");
 
     targetEl.querySelectorAll(".cancel-booking-btn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const reference = String(btn.dataset.reference || "").trim();
-        if (!reference) return;
+  btn.addEventListener("click", async () => {
+    const reference = String(btn.dataset.reference || "").trim();
+    if (!reference) return;
 
-        const ok = window.confirm("Are you sure you want to cancel this booking?");
-        if (!ok) return;
+    const ok = window.confirm("Are you sure you want to cancel this booking?");
+    if (!ok) return;
 
-        btn.disabled = true;
-        if (gamesStatus) {
-          gamesStatus.textContent = "Cancelling booking…";
-          gamesStatus.className = "status";
-        }
+    btn.disabled = true;
+    if (gamesStatus) {
+      gamesStatus.textContent = "Cancelling booking…";
+      gamesStatus.className = "status";
+    }
 
-        try {
-          const res = await fetch(`/api/book/my-games/${encodeURIComponent(reference)}/cancel`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { "Authorization": "Bearer " + token } : {})
-            }
-          });
-
-          const data = await res.json().catch(() => ({}));
-
-          if (res.ok && data && data.ok) {
-            if (gamesStatus) {
-              gamesStatus.textContent = "Booking cancelled.";
-              gamesStatus.className = "status ok";
-            }
-            await loadMyGames();
-            return;
-          }
-
-          const msg =
-            data?.error === "paid_booking_cannot_be_cancelled_here"
-              ? "This paid booking cannot be cancelled here yet."
-              : data?.error === "past_booking_cannot_be_cancelled"
-              ? "Past bookings cannot be cancelled."
-              : data?.error === "already_cancelled"
-              ? "This booking is already cancelled."
-              : "Unable to cancel booking.";
-
-          if (gamesStatus) {
-            gamesStatus.textContent = msg;
-            gamesStatus.className = "status err";
-          }
-          btn.disabled = false;
-        } catch (err) {
-          console.error("cancel booking error", err);
-          if (gamesStatus) {
-            gamesStatus.textContent = "Network error while cancelling booking.";
-            gamesStatus.className = "status err";
-          }
-          btn.disabled = false;
+    try {
+      const res = await fetch(`/api/book/my-games/${encodeURIComponent(reference)}/cancel`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": "Bearer " + token } : {})
         }
       });
-    });
-  }
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data && data.ok) {
+        if (gamesStatus) {
+          gamesStatus.textContent = "Booking cancelled.";
+          gamesStatus.className = "status ok";
+        }
+        await loadMyGames();
+        return;
+      }
+
+      const msg =
+        data?.error === "paid_booking_cannot_be_cancelled_here"
+          ? "This paid booking cannot be cancelled here yet."
+          : data?.error === "past_booking_cannot_be_cancelled"
+          ? "Past bookings cannot be cancelled."
+          : data?.error === "already_cancelled"
+          ? "This booking is already cancelled."
+          : "Unable to cancel booking.";
+
+      if (gamesStatus) {
+        gamesStatus.textContent = msg;
+        gamesStatus.className = "status err";
+      }
+      btn.disabled = false;
+    } catch (err) {
+      console.error("cancel booking error", err);
+      if (gamesStatus) {
+        gamesStatus.textContent = "Network error while cancelling booking.";
+        gamesStatus.className = "status err";
+      }
+      btn.disabled = false;
+    }
+  });
+});
+
+targetEl.querySelectorAll(".share-booking-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const reference = String(btn.dataset.reference || "").trim();
+    if (!reference) return;
+
+    const emailsInput = prompt(
+      "Enter your mates' emails (comma separated):\n\ne.g. mate1@email.com, mate2@email.com"
+    );
+
+    if (!emailsInput) return;
+
+    btn.disabled = true;
+
+    if (gamesStatus) {
+      gamesStatus.textContent = "Sharing booking…";
+      gamesStatus.className = "status";
+    }
+
+    try {
+      const res = await fetch(`/api/book/my-games/${encodeURIComponent(reference)}/share`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": "Bearer " + token } : {})
+        },
+        body: JSON.stringify({ emails: emailsInput })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data && data.ok) {
+        if (gamesStatus) {
+          const sharedCount = Array.isArray(data.shared) ? data.shared.length : 0;
+          gamesStatus.textContent =
+            sharedCount > 0
+              ? `Booking shared with ${sharedCount} mate${sharedCount === 1 ? "" : "s"}.`
+              : "Booking shared successfully.";
+          gamesStatus.className = "status ok";
+        }
+        btn.disabled = false;
+        return;
+      }
+
+      const msg =
+        data?.error === "no_valid_emails"
+          ? "Please enter at least one valid email."
+          : data?.error === "cannot_share_cancelled_booking"
+          ? "Cancelled bookings cannot be shared."
+          : data?.error === "cannot_share_past_booking"
+          ? "Past bookings cannot be shared."
+          : data?.error === "booking_not_found"
+          ? "Booking not found."
+          : "Failed to share booking.";
+
+      if (gamesStatus) {
+        gamesStatus.textContent = msg;
+        gamesStatus.className = "status err";
+      }
+
+      btn.disabled = false;
+    } catch (err) {
+      console.error("share booking error", err);
+
+      if (gamesStatus) {
+        gamesStatus.textContent = "Network error while sharing booking.";
+        gamesStatus.className = "status err";
+      }
+
+      btn.disabled = false;
+    }
+  });
+});
 
   async function loadMyGames() {
     if (!email || !upcomingGamesEl || !previousGamesEl) return;
