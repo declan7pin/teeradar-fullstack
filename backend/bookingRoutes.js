@@ -391,6 +391,12 @@ function parseShareEmails(raw) {
     .filter(Boolean)
     .filter(isLikelyEmail);
 }
+function cleanMateNickname(v) {
+  return String(v || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 60);
+}
 function getBypassProvided(req) {
   const key =
     String(req.headers["x-course-admin-key"] || "").trim() ||
@@ -1754,6 +1760,29 @@ async function ensureBookingTables() {
   await db.query(`
     CREATE INDEX IF NOT EXISTS booking_booking_shares_to_user_idx
     ON booking_booking_shares (shared_to_user_id);
+  `);
+    // =============================
+  // booking_share_contacts
+  // =============================
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_share_contacts (
+      id BIGSERIAL PRIMARY KEY,
+      owner_user_id BIGINT NOT NULL,
+      nickname TEXT NOT NULL,
+      mate_email TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (owner_user_id, mate_email)
+    );
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_share_contacts_owner_idx
+    ON booking_share_contacts (owner_user_id);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_share_contacts_email_lower_idx
+    ON booking_share_contacts ((LOWER(TRIM(mate_email))));
   `);
 
   // =============================
@@ -4970,6 +4999,106 @@ router.get("/booking", async (req, res) => {
   } catch (e) {
     console.error("GET /api/book/booking error", e);
     res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+router.get("/my-mates", requireAccountUser, async (req, res) => {
+  try {
+    const userId = Number(req.accountUser.id);
+
+    const r = await db.query(
+      `
+      SELECT
+        id,
+        nickname,
+        mate_email AS email,
+        created_at
+      FROM booking_share_contacts
+      WHERE owner_user_id = $1
+      ORDER BY LOWER(nickname) ASC, LOWER(mate_email) ASC
+      `,
+      [userId]
+    );
+
+    return res.json({
+      ok: true,
+      mates: r.rows || [],
+    });
+  } catch (e) {
+    console.error("GET /my-mates", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+router.post("/my-mates", requireAccountUser, async (req, res) => {
+  try {
+    const userId = Number(req.accountUser.id);
+
+    const nickname = cleanMateNickname(req.body?.nickname);
+    const mateEmail = String(req.body?.email || "").trim().toLowerCase();
+
+    if (!nickname) {
+      return res.status(400).json({ ok: false, error: "nickname_required" });
+    }
+
+    if (!isLikelyEmail(mateEmail)) {
+      return res.status(400).json({ ok: false, error: "email_invalid" });
+    }
+
+    const r = await db.query(
+      `
+      INSERT INTO booking_share_contacts (
+        owner_user_id,
+        nickname,
+        mate_email
+      )
+      VALUES ($1, $2, $3)
+      ON CONFLICT (owner_user_id, mate_email)
+      DO UPDATE SET
+        nickname = EXCLUDED.nickname
+      RETURNING
+        id,
+        nickname,
+        mate_email AS email,
+        created_at
+      `,
+      [userId, nickname, mateEmail]
+    );
+
+    return res.json({
+      ok: true,
+      mate: r.rows?.[0] || null,
+    });
+  } catch (e) {
+    console.error("POST /my-mates", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+router.delete("/my-mates/:id", requireAccountUser, async (req, res) => {
+  try {
+    const userId = Number(req.accountUser.id);
+    const mateId = Number(req.params.id || 0);
+
+    if (!Number.isFinite(mateId) || mateId <= 0) {
+      return res.status(400).json({ ok: false, error: "mate_id_invalid" });
+    }
+
+    const r = await db.query(
+      `
+      DELETE FROM booking_share_contacts
+      WHERE id = $1
+        AND owner_user_id = $2
+      RETURNING id
+      `,
+      [mateId, userId]
+    );
+
+    if (!r.rows.length) {
+      return res.status(404).json({ ok: false, error: "mate_not_found" });
+    }
+
+    return res.json({ ok: true, deleted: mateId });
+  } catch (e) {
+    console.error("DELETE /my-mates/:id", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 router.get("/my-games", requireAccountUser, async (req, res) => {
