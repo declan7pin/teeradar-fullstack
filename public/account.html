@@ -384,6 +384,136 @@
       padding: 10px 0 2px;
     }
     
+        /* SHARE MODAL */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 1000;
+    }
+
+    .modal-backdrop.show {
+      display: flex;
+    }
+
+    .modal-card {
+      width: 100%;
+      max-width: 560px;
+      background: #fff;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      box-shadow: 0 24px 60px rgba(15,23,42,0.25);
+      padding: 18px;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 4px;
+    }
+
+    .modal-subtext {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .mates-list {
+      display: grid;
+      gap: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+      margin-bottom: 14px;
+    }
+
+    .mate-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .mate-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .mate-check {
+      margin: 0;
+    }
+
+    .mate-text {
+      min-width: 0;
+    }
+
+    .mate-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+    }
+
+    .mate-email {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.3;
+      word-break: break-word;
+    }
+
+    .mate-delete {
+      border: none;
+      background: transparent;
+      color: var(--danger);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .modal-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 14px 0;
+    }
+
+    .modal-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .modal-grid.single {
+      grid-template-columns: 1fr;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .modal-empty {
+      font-size: 13px;
+      color: var(--muted);
+      padding: 8px 2px;
+    }
+
+    @media (max-width: 640px) {
+      .modal-grid {
+        grid-template-columns: 1fr;
+      }
+    }
     /* NEW: day choice chips */
     .day-choices {
       display:flex;
@@ -583,7 +713,47 @@
     </div>
   </div>
 </main>
+<div id="shareBookingModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-title">Share booking</div>
+    <div class="modal-subtext" id="shareBookingSubtext">
+      Select saved mates to share this booking with.
+    </div>
 
+    <div id="shareBookingStatus" class="status"></div>
+
+    <div id="savedMatesList" class="mates-list">
+      <div class="modal-empty">Loading mates…</div>
+    </div>
+
+    <div class="modal-divider"></div>
+
+    <div class="modal-title" style="font-size:15px;">Add a mate</div>
+    <div class="modal-subtext" style="margin-bottom:10px;">
+      Save a nickname so you can share faster next time.
+    </div>
+
+    <div class="modal-grid">
+      <div>
+        <label for="mateNicknameInput">Nickname</label>
+        <input id="mateNicknameInput" type="text" placeholder="e.g. Jack" />
+      </div>
+      <div>
+        <label for="mateEmailInput">Email</label>
+        <input id="mateEmailInput" type="text" placeholder="e.g. jack@email.com" />
+      </div>
+    </div>
+
+    <div class="modal-actions" style="justify-content:flex-start;">
+      <button id="saveMateBtn" class="btn-secondary" type="button">Save mate</button>
+    </div>
+
+    <div class="modal-actions">
+      <button id="closeShareBookingModalBtn" class="btn-secondary" type="button">Close</button>
+      <button id="shareSelectedMatesBtn" class="btn-primary" type="button">Share selected</button>
+    </div>
+  </div>
+</div>
 <script>
   // --- basic auth presence check using localStorage ---
   const email =
@@ -613,10 +783,21 @@
   const logoutBtn = document.getElementById("pageLogout");
 
   // ✅ NEW: my games elements
-  const refreshGamesBtn = document.getElementById("refreshGamesBtn");
+    const refreshGamesBtn = document.getElementById("refreshGamesBtn");
   const gamesStatus = document.getElementById("gamesStatus");
   const upcomingGamesEl = document.getElementById("upcomingGames");
   const previousGamesEl = document.getElementById("previousGames");
+
+  // ✅ NEW: share booking modal
+  const shareBookingModal = document.getElementById("shareBookingModal");
+  const shareBookingSubtext = document.getElementById("shareBookingSubtext");
+  const shareBookingStatus = document.getElementById("shareBookingStatus");
+  const savedMatesList = document.getElementById("savedMatesList");
+  const mateNicknameInput = document.getElementById("mateNicknameInput");
+  const mateEmailInput = document.getElementById("mateEmailInput");
+  const saveMateBtn = document.getElementById("saveMateBtn");
+  const closeShareBookingModalBtn = document.getElementById("closeShareBookingModalBtn");
+  const shareSelectedMatesBtn = document.getElementById("shareSelectedMatesBtn");
   // ✅ NEW: home course elements
   const homeCourseInput = document.getElementById("homeCourseInput");
   const homeCourseDropdown = document.getElementById("homeCourseAutocompleteList");
@@ -666,9 +847,14 @@
   }
 
   // Default: Basic (3 favs). This will be updated after we hit the server.
-  let maxFavs = 3;
-    let currentEntitlementActive = false;
+    let maxFavs = 3;
+  let currentEntitlementActive = false;
   let currentPlan = "FREE";
+
+  // ✅ NEW: saved mates + share target
+  let savedMates = [];
+  let activeShareReference = "";
+  let activeShareLabel = "";
 
     function setAlertControlsLocked(locked) {
     // ✅ Keep booking defaults editable for free users
@@ -1575,51 +1761,255 @@ searchableCourses = data.filter((c) => {
 });
 
 targetEl.querySelectorAll(".share-booking-btn").forEach((btn) => {
-  btn.addEventListener("click", async () => {
+  btn.addEventListener("click", () => {
     const reference = String(btn.dataset.reference || "").trim();
     if (!reference) return;
 
-    const emailsInput = prompt(
-      "Enter your mates' emails (comma separated):\n\ne.g. mate1@email.com, mate2@email.com"
-    );
+    const card = btn.closest(".game-card");
+    const labelText = card
+      ? card.querySelector(".game-title")?.textContent || "this booking"
+      : "this booking";
 
-    if (!emailsInput) return;
+    openShareBookingModal(reference, labelText);
+  });
+});
+}
 
-    btn.disabled = true;
+  function setShareBookingStatus(text, variant = "") {
+    if (!shareBookingStatus) return;
+    shareBookingStatus.textContent = text || "";
+    shareBookingStatus.className = variant ? `status ${variant}` : "status";
+  }
 
-    if (gamesStatus) {
-      gamesStatus.textContent = "Sharing booking…";
-      gamesStatus.className = "status";
+  function closeShareBookingModal() {
+    activeShareReference = "";
+    activeShareLabel = "";
+    setShareBookingStatus("");
+    if (mateNicknameInput) mateNicknameInput.value = "";
+    if (mateEmailInput) mateEmailInput.value = "";
+    if (shareBookingModal) {
+      shareBookingModal.classList.remove("show");
+      shareBookingModal.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function openShareBookingModal(reference, labelText) {
+    activeShareReference = String(reference || "").trim();
+    activeShareLabel = String(labelText || "").trim();
+
+    if (shareBookingSubtext) {
+      shareBookingSubtext.textContent = activeShareLabel
+        ? `Select saved mates to share ${activeShareLabel} with.`
+        : "Select saved mates to share this booking with.";
     }
 
+    setShareBookingStatus("");
+
+    if (shareBookingModal) {
+      shareBookingModal.classList.add("show");
+      shareBookingModal.setAttribute("aria-hidden", "false");
+    }
+
+    loadSavedMates();
+  }
+
+  function renderSavedMates() {
+    if (!savedMatesList) return;
+
+    if (!Array.isArray(savedMates) || !savedMates.length) {
+      savedMatesList.innerHTML = `<div class="modal-empty">No saved mates yet. Add one below.</div>`;
+      return;
+    }
+
+    savedMatesList.innerHTML = savedMates.map((mate) => `
+      <div class="mate-row">
+        <label class="mate-left">
+          <input class="mate-check" type="checkbox" value="${escapeHtml(mate.email || "")}" />
+          <div class="mate-text">
+            <div class="mate-name">${escapeHtml(mate.nickname || "Mate")}</div>
+            <div class="mate-email">${escapeHtml(mate.email || "")}</div>
+          </div>
+        </label>
+        <button class="mate-delete" type="button" data-mate-id="${escapeHtml(mate.id || "")}">
+          Delete
+        </button>
+      </div>
+    `).join("");
+
+    savedMatesList.querySelectorAll(".mate-delete").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const mateId = String(btn.dataset.mateId || "").trim();
+        if (!mateId) return;
+
+        const ok = window.confirm("Delete this saved mate?");
+        if (!ok) return;
+
+        btn.disabled = true;
+        setShareBookingStatus("Deleting mate...");
+
+        try {
+          const res = await fetch(`/api/book/my-mates/${encodeURIComponent(mateId)}`, {
+            method: "DELETE",
+            headers: {
+              ...(token ? { "Authorization": "Bearer " + token } : {})
+            }
+          });
+
+          const data = await res.json().catch(() => ({}));
+
+          if (res.ok && data && data.ok) {
+            setShareBookingStatus("Mate deleted.", "ok");
+            await loadSavedMates();
+            return;
+          }
+
+          setShareBookingStatus("Could not delete mate.", "err");
+          btn.disabled = false;
+        } catch (err) {
+          console.error("delete mate error", err);
+          setShareBookingStatus("Network error deleting mate.", "err");
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function loadSavedMates() {
+    if (!savedMatesList) return;
+
+    savedMatesList.innerHTML = `<div class="modal-empty">Loading mates...</div>`;
+
     try {
-      const res = await fetch(`/api/book/my-games/${encodeURIComponent(reference)}/share`, {
+      const res = await fetch("/api/book/my-mates", {
+        method: "GET",
+        headers: {
+          ...(token ? { "Authorization": "Bearer " + token } : {})
+        }
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data || !data.ok) {
+        savedMates = [];
+        savedMatesList.innerHTML = `<div class="modal-empty">Could not load saved mates.</div>`;
+        return;
+      }
+
+      savedMates = Array.isArray(data.mates) ? data.mates : [];
+      renderSavedMates();
+    } catch (err) {
+      console.error("loadSavedMates error", err);
+      savedMates = [];
+      savedMatesList.innerHTML = `<div class="modal-empty">Could not load saved mates.</div>`;
+    }
+  }
+
+  async function saveMate() {
+    const nickname = String(mateNicknameInput?.value || "").trim();
+    const emailValue = String(mateEmailInput?.value || "").trim();
+
+    if (!nickname) {
+      setShareBookingStatus("Please enter a nickname.", "err");
+      return;
+    }
+
+    if (!emailValue) {
+      setShareBookingStatus("Please enter an email.", "err");
+      return;
+    }
+
+    setShareBookingStatus("Saving mate...");
+
+    try {
+      const res = await fetch("/api/book/my-mates", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { "Authorization": "Bearer " + token } : {})
         },
-        body: JSON.stringify({ emails: emailsInput })
+        body: JSON.stringify({
+          nickname,
+          email: emailValue
+        })
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data && data.ok) {
+        setShareBookingStatus("Mate saved.", "ok");
+        if (mateNicknameInput) mateNicknameInput.value = "";
+        if (mateEmailInput) mateEmailInput.value = "";
+        await loadSavedMates();
+        return;
+      }
+
+      const msg =
+        data?.error === "nickname_required"
+          ? "Nickname is required."
+          : data?.error === "email_invalid"
+          ? "Please enter a valid email."
+          : "Could not save mate.";
+
+      setShareBookingStatus(msg, "err");
+    } catch (err) {
+      console.error("saveMate error", err);
+      setShareBookingStatus("Network error saving mate.", "err");
+    }
+  }
+
+  async function shareSelectedMates() {
+    if (!activeShareReference) {
+      setShareBookingStatus("No booking selected.", "err");
+      return;
+    }
+
+    const selectedEmails = Array.from(
+      savedMatesList.querySelectorAll('.mate-check:checked')
+    ).map((cb) => String(cb.value || "").trim()).filter(Boolean);
+
+    if (!selectedEmails.length) {
+      setShareBookingStatus("Select at least one mate.", "err");
+      return;
+    }
+
+    setShareBookingStatus("Sharing booking...");
+
+    try {
+      const res = await fetch(`/api/book/my-games/${encodeURIComponent(activeShareReference)}/share`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": "Bearer " + token } : {})
+        },
+        body: JSON.stringify({
+          emails: selectedEmails
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data && data.ok) {
+        const sharedCount = Array.isArray(data.shared) ? data.shared.length : selectedEmails.length;
+        setShareBookingStatus(
+          `Booking shared with ${sharedCount} mate${sharedCount === 1 ? "" : "s"}.`,
+          "ok"
+        );
+
         if (gamesStatus) {
-          const sharedCount = Array.isArray(data.shared) ? data.shared.length : 0;
-          gamesStatus.textContent =
-            sharedCount > 0
-              ? `Booking shared with ${sharedCount} mate${sharedCount === 1 ? "" : "s"}.`
-              : "Booking shared successfully.";
+          gamesStatus.textContent = `Booking shared with ${sharedCount} mate${sharedCount === 1 ? "" : "s"}.`;
           gamesStatus.className = "status ok";
         }
-        btn.disabled = false;
+
+        setTimeout(() => {
+          closeShareBookingModal();
+        }, 700);
+
         return;
       }
 
       const msg =
         data?.error === "no_valid_emails"
-          ? "Please enter at least one valid email."
+          ? "Please select valid mates."
           : data?.error === "cannot_share_cancelled_booking"
           ? "Cancelled bookings cannot be shared."
           : data?.error === "cannot_share_past_booking"
@@ -1628,26 +2018,39 @@ targetEl.querySelectorAll(".share-booking-btn").forEach((btn) => {
           ? "Booking not found."
           : "Failed to share booking.";
 
-      if (gamesStatus) {
-        gamesStatus.textContent = msg;
-        gamesStatus.className = "status err";
-      }
-
-      btn.disabled = false;
+      setShareBookingStatus(msg, "err");
     } catch (err) {
-      console.error("share booking error", err);
-
-      if (gamesStatus) {
-        gamesStatus.textContent = "Network error while sharing booking.";
-        gamesStatus.className = "status err";
-      }
-
-      btn.disabled = false;
+      console.error("shareSelectedMates error", err);
+      setShareBookingStatus("Network error while sharing booking.", "err");
     }
-  });
-});
-}
+  }
 
+  if (saveMateBtn) {
+    saveMateBtn.addEventListener("click", () => {
+      saveMate();
+    });
+  }
+
+  if (closeShareBookingModalBtn) {
+    closeShareBookingModalBtn.addEventListener("click", () => {
+      closeShareBookingModal();
+    });
+  }
+
+  if (shareSelectedMatesBtn) {
+    shareSelectedMatesBtn.addEventListener("click", () => {
+      shareSelectedMates();
+    });
+  }
+
+  if (shareBookingModal) {
+    shareBookingModal.addEventListener("click", (e) => {
+      if (e.target === shareBookingModal) {
+        closeShareBookingModal();
+      }
+    });
+  }
+  
 async function loadMyGames() {
     if (!email || !upcomingGamesEl || !previousGamesEl) return;
 
