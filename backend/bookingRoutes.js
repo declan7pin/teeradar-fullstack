@@ -5000,10 +5000,8 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
 
       const item = {
         ...row,
-        gross_cents:
-          Number(row.total_cents || 0) +
-          Number(row.cart_fee_cents || 0) +
-          Number(row.hire_clubs_fee_cents || 0),
+        // ✅ FIX: total_cents is already the full booking total
+        gross_cents: Number(row.total_cents || 0),
         can_cancel: !isCancelled && !isPast,
       };
 
@@ -5021,6 +5019,7 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 router.post("/my-games/:reference/cancel", requireAccountUser, async (req, res) => {
   try {
     const reference = String(req.params.reference || "").trim();
