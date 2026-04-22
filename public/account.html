@@ -1989,67 +1989,92 @@ targetEl.querySelectorAll(".share-booking-btn").forEach((btn) => {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data && data.ok) {
-        const sharedCount = Array.isArray(data.shared) ? data.shared.length : selectedEmails.length;
-        setShareBookingStatus(
-          `Booking shared with ${sharedCount} mate${sharedCount === 1 ? "" : "s"}.`,
-          "ok"
-        );
+  const shared = Array.isArray(data.shared) ? data.shared : [];
+  const sentCount = shared.filter((x) => x && x.emailOk).length;
+  const failed = shared.filter((x) => x && !x.emailOk);
 
-        if (gamesStatus) {
-          gamesStatus.textContent = `Booking shared with ${sharedCount} mate${sharedCount === 1 ? "" : "s"}.`;
-          gamesStatus.className = "status ok";
-        }
+  if (failed.length === 0) {
+    const sharedCount = shared.length || selectedEmails.length;
 
-        setTimeout(() => {
-          closeShareBookingModal();
-        }, 700);
+    setShareBookingStatus(
+      `Booking shared with ${sharedCount} mate${sharedCount === 1 ? "" : "s"}.`,
+      "ok"
+    );
 
-        return;
-      }
-
-      const msg =
-        data?.error === "no_valid_emails"
-          ? "Please select valid mates."
-          : data?.error === "cannot_share_cancelled_booking"
-          ? "Cancelled bookings cannot be shared."
-          : data?.error === "cannot_share_past_booking"
-          ? "Past bookings cannot be shared."
-          : data?.error === "booking_not_found"
-          ? "Booking not found."
-          : "Failed to share booking.";
-
-      setShareBookingStatus(msg, "err");
-    } catch (err) {
-      console.error("shareSelectedMates error", err);
-      setShareBookingStatus("Network error while sharing booking.", "err");
+    if (gamesStatus) {
+      gamesStatus.textContent = `Booking shared with ${sharedCount} mate${sharedCount === 1 ? "" : "s"}.`;
+      gamesStatus.className = "status ok";
     }
-  }
 
-  if (saveMateBtn) {
-    saveMateBtn.addEventListener("click", () => {
-      saveMate();
-    });
-  }
-
-  if (closeShareBookingModalBtn) {
-    closeShareBookingModalBtn.addEventListener("click", () => {
+    setTimeout(() => {
       closeShareBookingModal();
-    });
+    }, 700);
+
+    return;
   }
 
-  if (shareSelectedMatesBtn) {
-    shareSelectedMatesBtn.addEventListener("click", () => {
-      shareSelectedMates();
-    });
+  const failedList = failed
+    .map((x) => `${x.email}${x.emailReason ? ` (${x.emailReason})` : ""}`)
+    .join(", ");
+
+  setShareBookingStatus(
+    `Shared saved, but email failed for: ${failedList}`,
+    "err"
+  );
+
+  if (gamesStatus) {
+    gamesStatus.textContent = sentCount > 0
+      ? `Shared saved, but some emails failed.`
+      : `Shared saved, but emails failed.`;
+    gamesStatus.className = "status err";
   }
 
-  if (shareBookingModal) {
-    shareBookingModal.addEventListener("click", (e) => {
-      if (e.target === shareBookingModal) {
-        closeShareBookingModal();
-      }
-    });
-  }
+  return;
+}
+
+const msg =
+  data?.error === "no_valid_emails"
+    ? "Please select valid mates."
+    : data?.error === "cannot_share_cancelled_booking"
+    ? "Cancelled bookings cannot be shared."
+    : data?.error === "cannot_share_past_booking"
+    ? "Past bookings cannot be shared."
+    : data?.error === "booking_not_found"
+    ? "Booking not found."
+    : "Failed to share booking.";
+
+setShareBookingStatus(msg, "err");
+} catch (err) {
+  console.error("shareSelectedMates error", err);
+  setShareBookingStatus("Network error while sharing booking.", "err");
+}
+}
+
+if (saveMateBtn) {
+  saveMateBtn.addEventListener("click", () => {
+    saveMate();
+  });
+}
+
+if (closeShareBookingModalBtn) {
+  closeShareBookingModalBtn.addEventListener("click", () => {
+    closeShareBookingModal();
+  });
+}
+
+if (shareSelectedMatesBtn) {
+  shareSelectedMatesBtn.addEventListener("click", () => {
+    shareSelectedMates();
+  });
+}
+
+if (shareBookingModal) {
+  shareBookingModal.addEventListener("click", (e) => {
+    if (e.target === shareBookingModal) {
+      closeShareBookingModal();
+    }
+  });
+}
   
 async function loadMyGames() {
     if (!email || !upcomingGamesEl || !previousGamesEl) return;
