@@ -2117,7 +2117,22 @@ function filterPreviousGames(items) {
 
 function renderFilteredPreviousGames() {
   if (!previousGamesEl) return;
-  renderGameCards(filterPreviousGames(allPreviousGames), previousGamesEl, "previous");
+
+  const filtered = filterPreviousGames(allPreviousGames);
+
+  renderGameCards(filtered, previousGamesEl, "previous");
+
+  // ✅ update button count based on filter
+  if (togglePreviousGamesBtn) {
+    const total = allPreviousGames.length;
+    const visible = filtered.length;
+
+    if (visible !== total) {
+      togglePreviousGamesBtn.textContent = `Hide previous games (${visible}/${total})`;
+    } else {
+      togglePreviousGamesBtn.textContent = `Hide previous games (${total})`;
+    }
+  }
 }
   
 async function loadMyGames() {
@@ -2156,29 +2171,37 @@ async function loadMyGames() {
 
 allPreviousGames = Array.isArray(data.previous) ? data.previous : [];
 
+// ✅ update button count
+if (togglePreviousGamesBtn) {
+  const count = allPreviousGames.length;
+  togglePreviousGamesBtn.textContent = previousGamesVisible
+    ? `Hide previous games (${count})`
+    : `View previous games (${count})`;
+}
+
 if (previousGamesVisible) {
   renderFilteredPreviousGames();
 } else if (previousGamesEl) {
   previousGamesEl.innerHTML = `<div class="empty-state">Previous games are hidden.</div>`;
 }
 
-      if (gamesStatus) {
-        gamesStatus.textContent = "";
-        gamesStatus.className = "status";
-      }
-    } catch (err) {
-      console.error("loadMyGames error", err);
-      upcomingGamesEl.innerHTML = `<div class="empty-state">Could not load upcoming games.</div>`;
-      previousGamesEl.innerHTML = `<div class="empty-state">Could not load previous games.</div>`;
+if (gamesStatus) {
+  gamesStatus.textContent = "";
+  gamesStatus.className = "status";
+}
+} catch (err) {
+  console.error("loadMyGames error", err);
+  upcomingGamesEl.innerHTML = `<div class="empty-state">Could not load upcoming games.</div>`;
+  previousGamesEl.innerHTML = `<div class="empty-state">Could not load previous games.</div>`;
 
-      if (gamesStatus) {
-        gamesStatus.textContent = "Network error loading your bookings.";
-        gamesStatus.className = "status err";
-      }
-    }
+  if (gamesStatus) {
+    gamesStatus.textContent = "Network error loading your bookings.";
+    gamesStatus.className = "status err";
   }
+}
+}
 
-  if (togglePreviousGamesBtn) {
+if (togglePreviousGamesBtn) {
   togglePreviousGamesBtn.addEventListener("click", () => {
     previousGamesVisible = !previousGamesVisible;
 
@@ -2190,9 +2213,11 @@ if (previousGamesVisible) {
       previousGamesFilter.style.display = previousGamesVisible ? "block" : "none";
     }
 
+    const total = allPreviousGames.length;
+
     togglePreviousGamesBtn.textContent = previousGamesVisible
-      ? "Hide previous games"
-      : "View previous games";
+      ? `Hide previous games (${total})`
+      : `View previous games (${total})`;
 
     if (previousGamesVisible) {
       renderFilteredPreviousGames();
