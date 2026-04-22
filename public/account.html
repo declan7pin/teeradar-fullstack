@@ -596,10 +596,23 @@
         <div class="empty-state">Loading upcoming games…</div>
       </div>
 
-      <h2 style="margin-top:18px;">Previous games</h2>
-      <div id="previousGames" class="games-grid">
-        <div class="empty-state">Loading previous games…</div>
-      </div>
+      <div class="row-actions" style="margin-top:18px; margin-bottom:8px;">
+  <button id="togglePreviousGamesBtn" class="btn-secondary" type="button">View previous games</button>
+
+  <select id="previousGamesFilter" style="max-width:180px; display:none; margin-bottom:0;">
+    <option value="30">Last 30 days</option>
+    <option value="90">Last 90 days</option>
+    <option value="365">Last 12 months</option>
+    <option value="all">All time</option>
+  </select>
+</div>
+
+<div id="previousGamesWrap" style="display:none;">
+  <h2 style="margin-top:0;">Previous games</h2>
+  <div id="previousGames" class="games-grid">
+    <div class="empty-state">Loading previous games…</div>
+  </div>
+</div>
     </div>
 
     <div class="card">
@@ -784,9 +797,12 @@
 
   // ✅ NEW: my games elements
     const refreshGamesBtn = document.getElementById("refreshGamesBtn");
-  const gamesStatus = document.getElementById("gamesStatus");
-  const upcomingGamesEl = document.getElementById("upcomingGames");
-  const previousGamesEl = document.getElementById("previousGames");
+const gamesStatus = document.getElementById("gamesStatus");
+const upcomingGamesEl = document.getElementById("upcomingGames");
+const previousGamesEl = document.getElementById("previousGames");
+const togglePreviousGamesBtn = document.getElementById("togglePreviousGamesBtn");
+const previousGamesWrap = document.getElementById("previousGamesWrap");
+const previousGamesFilter = document.getElementById("previousGamesFilter");
 
   // ✅ NEW: share booking modal
   const shareBookingModal = document.getElementById("shareBookingModal");
@@ -848,13 +864,17 @@
 
   // Default: Basic (3 favs). This will be updated after we hit the server.
     let maxFavs = 3;
-  let currentEntitlementActive = false;
-  let currentPlan = "FREE";
+let currentEntitlementActive = false;
+let currentPlan = "FREE";
 
-  // ✅ NEW: saved mates + share target
-  let savedMates = [];
-  let activeShareReference = "";
-  let activeShareLabel = "";
+// ✅ NEW: saved mates + share target
+let savedMates = [];
+let activeShareReference = "";
+let activeShareLabel = "";
+
+// ✅ NEW: previous games UI state
+let allPreviousGames = [];
+let previousGamesVisible = false;
 
     function setAlertControlsLocked(locked) {
     // ✅ Keep booking defaults editable for free users
@@ -2075,6 +2095,30 @@ if (shareBookingModal) {
     }
   });
 }
+
+function filterPreviousGames(items) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  const filterValue = previousGamesFilter ? previousGamesFilter.value : "30";
+
+  if (filterValue === "all") return list;
+
+  const days = Number(filterValue || 30);
+  if (!Number.isFinite(days) || days <= 0) return list;
+
+  const now = new Date();
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - days);
+
+  return list.filter((g) => {
+    const d = new Date(String(g.play_date || ""));
+    return Number.isFinite(d.getTime()) && d >= cutoff;
+  });
+}
+
+function renderFilteredPreviousGames() {
+  if (!previousGamesEl) return;
+  renderGameCards(filterPreviousGames(allPreviousGames), previousGamesEl, "previous");
+}
   
 async function loadMyGames() {
     if (!email || !upcomingGamesEl || !previousGamesEl) return;
@@ -2109,7 +2153,14 @@ async function loadMyGames() {
       }
 
       renderGameCards(data.upcoming || [], upcomingGamesEl, "upcoming");
-      renderGameCards(data.previous || [], previousGamesEl, "previous");
+
+allPreviousGames = Array.isArray(data.previous) ? data.previous : [];
+
+if (previousGamesVisible) {
+  renderFilteredPreviousGames();
+} else if (previousGamesEl) {
+  previousGamesEl.innerHTML = `<div class="empty-state">Previous games are hidden.</div>`;
+}
 
       if (gamesStatus) {
         gamesStatus.textContent = "";
@@ -2127,12 +2178,35 @@ async function loadMyGames() {
     }
   }
 
-  if (refreshGamesBtn) {
-    refreshGamesBtn.addEventListener("click", () => {
-      loadMyGames();
-    });
-  }
+  if (togglePreviousGamesBtn) {
+  togglePreviousGamesBtn.addEventListener("click", () => {
+    previousGamesVisible = !previousGamesVisible;
 
+    if (previousGamesWrap) {
+      previousGamesWrap.style.display = previousGamesVisible ? "block" : "none";
+    }
+
+    if (previousGamesFilter) {
+      previousGamesFilter.style.display = previousGamesVisible ? "block" : "none";
+    }
+
+    togglePreviousGamesBtn.textContent = previousGamesVisible
+      ? "Hide previous games"
+      : "View previous games";
+
+    if (previousGamesVisible) {
+      renderFilteredPreviousGames();
+    }
+  });
+}
+
+if (previousGamesFilter) {
+  previousGamesFilter.addEventListener("change", () => {
+    if (previousGamesVisible) {
+      renderFilteredPreviousGames();
+    }
+  });
+}
     // --- boot ---
   (async function init() {
     if (!email) return;
