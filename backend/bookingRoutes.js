@@ -5376,6 +5376,14 @@ router.post("/my-games/:reference/share", requireAccountUser, async (req, res) =
         emailOk,
         emailReason,
       });
+
+      console.log("📧 SHARE EMAIL RESULT:", {
+        reference: booking.reference,
+        to: mateEmail,
+        linked_to_account: !!matchedUserId,
+        emailOk,
+        emailReason,
+      });
     }
 
     return res.json({
