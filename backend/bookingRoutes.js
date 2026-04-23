@@ -5525,18 +5525,46 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
     }
 
     if (booking.scorecard_round_id) {
-      console.log("📎 create-scorecard existing round found:", {
-        reference: booking.reference,
-        roundId: Number(booking.scorecard_round_id),
-      });
+  const existingRoundQ = await db.query(
+    `
+    SELECT id, user_id, course, layout, state, holes
+    FROM rounds
+    WHERE id = $1
+    LIMIT 1
+    `,
+    [Number(booking.scorecard_round_id)]
+  );
 
-      return res.json({
-        ok: true,
-        alreadyExisted: true,
-        roundId: Number(booking.scorecard_round_id),
-        reference: booking.reference,
-      });
-    }
+  const existingRound = existingRoundQ.rows?.[0] || null;
+
+  if (existingRound) {
+    console.log("📎 create-scorecard existing round found:", {
+      reference: booking.reference,
+      roundId: Number(booking.scorecard_round_id),
+      roundCourse: existingRound.course,
+      bookingCourse: booking.course_name,
+    });
+
+    return res.json({
+      ok: true,
+      alreadyExisted: true,
+      roundId: Number(booking.scorecard_round_id),
+      reference: booking.reference,
+    });
+  }
+
+  // stale linked round -> clear and continue to create a fresh one
+  await db.query(
+    `
+    UPDATE booking_bookings
+    SET
+      scorecard_round_id = NULL,
+      scorecard_created_at = NULL
+    WHERE id = $1
+    `,
+    [booking.id]
+  );
+}
 
     let layoutName = null;
     if (Number(booking.holes) === 9) {
