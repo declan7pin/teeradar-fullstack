@@ -3019,6 +3019,23 @@ if (!isLoggedIn()){
     // -----------------------------
     // Safe wrappers
     // -----------------------------
+function getRoundIdFromUrl(){
+  try{
+    const url = new URL(window.location.href);
+    const v = String(url.searchParams.get("roundId") || "").trim();
+    return v || "";
+  }catch{
+    return "";
+  }
+}
+
+function clearRoundIdFromUrl(){
+  try{
+    const url = new URL(window.location.href);
+    url.searchParams.delete("roundId");
+    window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+  }catch{}
+}
     async function safeFetchRounds(){
       try{
         await fetchRounds();
@@ -3140,14 +3157,14 @@ if (!isLoggedIn()){
     (async function init(){
   // Always show the app now (Guest mode supported)
   appEl.style.display = "block";
-    // ✅ NEW: show promo popup every time My Rounds opens
-setTimeout(() => openPromoModal(), 450);
+
+  // ✅ NEW: show promo popup every time My Rounds opens
+  setTimeout(() => openPromoModal(), 450);
 
   const token = getToken();
   const loggedIn = !!token;
-  renderHeaderAuthState();
+  const roundIdFromUrl = getRoundIdFromUrl();
 
-  // Header buttons
   renderHeaderAuthState();
 
   // Guest notice
@@ -3165,6 +3182,12 @@ setTimeout(() => openPromoModal(), 450);
   syncNineLoopVisibility();
 
   await safeFetchRounds();
+
+  // ✅ NEW: auto-open round when arriving from My Account
+  if (roundIdFromUrl) {
+    await safeLoadRound(roundIdFromUrl);
+    clearRoundIdFromUrl();
+  }
 })();
   </script>
 </body>
