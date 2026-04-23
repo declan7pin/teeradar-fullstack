@@ -181,6 +181,76 @@ function isCompleteTemplateArrays(pars, dists, holes) {
   return true;
 }
 
+async function getTemplateFromDbLoose(course, state, holes) {
+  const wanted = normaliseCourseName(course);
+  const st = String(state || "").trim().toUpperCase();
+  const h = Number(holes);
+
+  if (!wanted || !st || !h) return null;
+
+  const { rows } = await db.query(
+    `
+    SELECT id, name, state, holes, pars_json, dists_json
+    FROM scorecard_courses
+    WHERE state = $1 AND holes = $2
+    ORDER BY updated_at DESC NULLS LAST, id DESC;
+    `,
+    [st, h]
+  );
+
+  const match = (rows || []).find((r) => normaliseCourseName(r.name) === wanted);
+  if (!match) return null;
+
+  return {
+    id: match.id,
+    name: match.name,
+    state: match.state,
+    holes: match.holes,
+    pars: Array.isArray(match.pars_json) ? match.pars_json : null,
+    dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+  };
+}
+
+function splitLayoutParts(layout) {
+  return String(layout || "")
+    .split("/")
+    .map((x) => String(x || "").trim())
+    .filter(Boolean);
+}
+
+async function getNineHoleTemplateForLayout(course, state, layoutPart) {
+  const wantedCourse = normaliseCourseName(course);
+  const wantedPart = String(layoutPart || "").trim().toLowerCase();
+  const st = String(state || "").trim().toUpperCase();
+
+  if (!wantedCourse || !wantedPart || !st) return null;
+
+  const { rows } = await db.query(
+    `
+    SELECT id, name, state, holes, pars_json, dists_json
+    FROM scorecard_courses
+    WHERE state = $1 AND holes = 9
+    ORDER BY updated_at DESC NULLS LAST, id DESC;
+    `,
+    [st]
+  );
+
+  const match = (rows || []).find((r) => {
+    const n = normaliseCourseName(r.name);
+    return n.includes(wantedCourse) && n.includes(wantedPart);
+  });
+
+  if (!match) return null;
+
+  return {
+    id: match.id,
+    name: match.name,
+    state: match.state,
+    holes: match.holes,
+    pars: Array.isArray(match.pars_json) ? match.pars_json : null,
+    dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+  };
+}
 // -------------------------------------------------
 // Helpers
 // -------------------------------------------------
@@ -660,7 +730,6 @@ export async function createRoundWithSeededHoles({
 
   const playersCount = clampPlayers(players_count);
 
-  // normalize player_names (array of strings, length = playersCount)
   let playerNames = [];
   if (Array.isArray(player_names)) {
     playerNames = player_names.map((x) => String(x || "").trim());
@@ -671,20 +740,79 @@ export async function createRoundWithSeededHoles({
   let pars = null;
   let dists = null;
 
-  // ✅ DB template only (approved)
+  // ✅ Try approved templates first
   if (mode === "published" && stateCode) {
-    const t = await getTemplateFromDb(String(course), stateCode, holesNum);
-    if (t && Array.isArray(t.pars) && t.pars.length === holesNum) pars = t.pars.slice(0, holesNum);
-    if (t && Array.isArray(t.dists) && t.dists.length === holesNum) dists = t.dists.slice(0, holesNum);
+    // 1) exact course/state/holes match
+    let t = await getTemplateFromDb(String(course), stateCode, holesNum);
+
+    // 2) looser name match if exact failed
+    if (!t) {
+      t = await getTemplateFromDbLoose(String(course), stateCode, holesNum);
+    }
+
+    if (t && Array.isArray(t.pars) && t.pars.length === holesNum) {
+      pars = t.pars.slice(0, holesNum);
+    }
+    if (t && Array.isArray(t.dists) && t.dists.length === holesNum) {
+      dists = t.dists.slice(0, holesNum);
+    }
+
+    // 3) 18-hole routed fallback from two approved 9-hole templates
+    if ((!pars || !dists) && holesNum === 18 && layoutName) {
+      const parts = splitLayoutParts(layoutName);
+      if (parts.length === 2) {
+        const frontT = await getNineHoleTemplateForLayout(course, stateCode, parts[0]);
+        const backT = await getNineHoleTemplateForLayout(course, stateCode, parts[1]);
+
+        if (
+          frontT && backT &&
+          Array.isArray(frontT.pars) && frontT.pars.length === 9 &&
+          Array.isArray(backT.pars) && backT.pars.length === 9
+        ) {
+          pars = frontT.pars.slice(0, 9).concat(backT.pars.slice(0, 9));
+        }
+
+        if (
+          frontT && backT &&
+          Array.isArray(frontT.dists) && frontT.dists.length === 9 &&
+          Array.isArray(backT.dists) && backT.dists.length === 9
+        ) {
+          dists = frontT.dists.slice(0, 9).concat(backT.dists.slice(0, 9));
+        }
+      }
+    }
+
+    // 4) 9-hole routed fallback
+    if ((!pars || !dists) && holesNum === 9 && layoutName) {
+      const t9 = await getNineHoleTemplateForLayout(course, stateCode, layoutName);
+
+      if (t9 && Array.isArray(t9.pars) && t9.pars.length === 9) {
+        pars = t9.pars.slice(0, 9);
+      }
+      if (t9 && Array.isArray(t9.dists) && t9.dists.length === 9) {
+        dists = t9.dists.slice(0, 9);
+      }
+    }
+
+    console.log("🧩 createRoundWithSeededHoles template lookup:", {
+      course: String(course).trim(),
+      layout: layoutName,
+      state: stateCode,
+      holes: holesNum,
+      foundPars: !!pars,
+      foundDists: !!dists,
+      parsCount: Array.isArray(pars) ? pars.length : 0,
+      distsCount: Array.isArray(dists) ? dists.length : 0,
+    });
   }
 
-  // ✅ legacy optional: accept publishedPars from frontend ONLY if DB template is missing
+  // ✅ legacy optional fallback
   if (mode === "published" && !pars && Array.isArray(publishedPars) && publishedPars.length === holesNum) {
     const tmp = publishedPars.map((p) => (p === null || p === undefined || p === "" ? null : Number(p)));
     if (tmp.every((p) => p === null || Number.isFinite(p))) pars = tmp;
   }
 
-  const finalParMode = pars ? "published" : "blank";
+  const finalParMode = (Array.isArray(pars) && pars.length === holesNum) ? "published" : "blank";
 
   await ensurePlayerNamesColumn();
 
@@ -735,7 +863,6 @@ export async function createRoundWithSeededHoles({
 
     await db.query("COMMIT");
 
-    // ✅ verify the round really exists after commit
     const verifyRound = await db.query(
       `
       SELECT id, user_id, course, layout, state, holes, par_mode, created_at, players_count, player_names
