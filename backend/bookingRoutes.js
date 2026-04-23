@@ -5475,6 +5475,7 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
           b.scorecard_round_id,
           c.slug AS course_slug,
           c.name AS course_name,
+          c.state AS course_state,
           (
             b.user_id = $2
             OR (
@@ -5524,47 +5525,53 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
       return res.status(400).json({ ok: false, error: "past_booking_cannot_create_scorecard" });
     }
 
+    // ✅ if linked round exists AND belongs to this user, reuse it
     if (booking.scorecard_round_id) {
-  const existingRoundQ = await db.query(
-    `
-    SELECT id, user_id, course, layout, state, holes
-    FROM rounds
-    WHERE id = $1
-    LIMIT 1
-    `,
-    [Number(booking.scorecard_round_id)]
-  );
+      const existingRoundQ = await db.query(
+        `
+        SELECT id, user_id, course, layout, state, holes
+        FROM rounds
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [Number(booking.scorecard_round_id)]
+      );
 
-  const existingRound = existingRoundQ.rows?.[0] || null;
+      const existingRound = existingRoundQ.rows?.[0] || null;
 
-  if (existingRound) {
-    console.log("📎 create-scorecard existing round found:", {
-      reference: booking.reference,
-      roundId: Number(booking.scorecard_round_id),
-      roundCourse: existingRound.course,
-      bookingCourse: booking.course_name,
-    });
+      if (existingRound && Number(existingRound.user_id) === Number(userId)) {
+        console.log("📎 create-scorecard existing round found:", {
+          reference: booking.reference,
+          roundId: Number(booking.scorecard_round_id),
+          roundCourse: existingRound.course,
+          bookingCourse: booking.course_name,
+        });
 
-    return res.json({
-      ok: true,
-      alreadyExisted: true,
-      roundId: Number(booking.scorecard_round_id),
-      reference: booking.reference,
-    });
-  }
+        return res.json({
+          ok: true,
+          alreadyExisted: true,
+          roundId: Number(booking.scorecard_round_id),
+          reference: booking.reference,
+        });
+      }
 
-  // stale linked round -> clear and continue to create a fresh one
-  await db.query(
-    `
-    UPDATE booking_bookings
-    SET
-      scorecard_round_id = NULL,
-      scorecard_created_at = NULL
-    WHERE id = $1
-    `,
-    [booking.id]
-  );
-}
+      // ✅ stale / inaccessible linked round -> clear and continue
+      await db.query(
+        `
+        UPDATE booking_bookings
+        SET
+          scorecard_round_id = NULL,
+          scorecard_created_at = NULL
+        WHERE id = $1
+        `,
+        [booking.id]
+      );
+
+      console.log("🧹 create-scorecard cleared stale linked round:", {
+        reference: booking.reference,
+        oldRoundId: Number(booking.scorecard_round_id),
+      });
+    }
 
     let layoutName = null;
     if (Number(booking.holes) === 9) {
@@ -5575,21 +5582,17 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
       layoutName = [front, back].filter(Boolean).join(" / ") || null;
     }
 
-    const stateGuessQ = await db.query(
-      `
-      SELECT state
-      FROM booking_courses
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [booking.course_id]
-    );
+    const stateCode = String(booking.course_state || "").trim().toUpperCase() || null;
 
-    const stateCode = String(stateGuessQ.rows?.[0]?.state || "").trim().toUpperCase() || null;
+    // ✅ if course name is junk like "Pay at Course", fall back to slug-based readable value
+    let safeCourseName = String(booking.course_name || "").trim();
+    if (!safeCourseName || /^pay at course$/i.test(safeCourseName)) {
+      safeCourseName = String(booking.course_slug || "").trim() || "Unknown Course";
+    }
 
     console.log("🛠️ create-scorecard payload:", {
       userId,
-      course: booking.course_name,
+      course: safeCourseName,
       layout: layoutName,
       state: stateCode,
       holes: Number(booking.holes || 18),
@@ -5598,7 +5601,7 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
 
     const createResult = await createRoundWithSeededHoles({
       userId,
-      course: booking.course_name,
+      course: safeCourseName,
       layout: layoutName,
       state: stateCode,
       holes: Number(booking.holes || 18),
