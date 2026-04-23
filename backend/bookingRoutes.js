@@ -5166,8 +5166,7 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
           COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode,
           c.slug AS course_slug,
           c.name AS course_name,
-          b.scorecard_round_id,
-          b.scorecard_created_at,
+          COALESCE(b.scorecard_round_id, NULL)::bigint AS scorecard_round_id,
           false AS is_shared,
           true AS is_owner
         FROM booking_bookings b
@@ -5203,8 +5202,7 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
           COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode,
           c.slug AS course_slug,
           c.name AS course_name,
-          b.scorecard_round_id,
-          b.scorecard_created_at,
+          COALESCE(b.scorecard_round_id, NULL)::bigint AS scorecard_round_id,
           true AS is_shared,
           false AS is_owner
         FROM booking_booking_shares s
@@ -5228,6 +5226,32 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
       [userId, userEmail]
     );
 
+    // ✅ verify which scorecard_round_id values still exist
+    const roundIds = Array.from(
+      new Set(
+        (r.rows || [])
+          .map((row) => Number(row.scorecard_round_id || 0))
+          .filter((id) => Number.isFinite(id) && id > 0)
+      )
+    );
+
+    const existingRoundIds = new Set();
+
+    if (roundIds.length) {
+      const roundCheck = await db.query(
+        `
+        SELECT id
+        FROM rounds
+        WHERE id = ANY($1::bigint[])
+        `,
+        [roundIds]
+      );
+
+      for (const rr of roundCheck.rows || []) {
+        existingRoundIds.add(Number(rr.id));
+      }
+    }
+
     const todayPerth = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Australia/Perth",
       year: "numeric",
@@ -5243,11 +5267,14 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
       const isCancelled = statusUpper === "CANCELLED";
       const isPast = String(row.play_date || "") < todayPerth;
 
+      const roundId = Number(row.scorecard_round_id || 0);
+      const hasValidScorecard = roundId > 0 && existingRoundIds.has(roundId);
+
       const item = {
         ...row,
         gross_cents: Number(row.total_cents || 0),
-        has_scorecard: !!row.scorecard_round_id,
-        scorecard_round_id: row.scorecard_round_id ? Number(row.scorecard_round_id) : null,
+        scorecard_round_id: hasValidScorecard ? roundId : null,
+        has_scorecard: hasValidScorecard,
         can_cancel: !isCancelled && !isPast && !!row.is_owner,
         can_share: !isCancelled && !isPast && !!row.is_owner,
         can_create_scorecard: !isCancelled && !isPast,
