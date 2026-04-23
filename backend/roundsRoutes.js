@@ -628,74 +628,69 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
 });
 
 // -------------------------------------------------
-// Routes (mounted at /api/rounds)
+// ✅ Reusable round creator
+// Used by POST /api/rounds and later by bookingRoutes.js
 // -------------------------------------------------
+export async function createRoundWithSeededHoles({
+  userId,
+  course,
+  layout = null,
+  state = null,
+  holes = 18,
+  par_mode = "published", // "published" | "blank"
+  publishedPars = null,   // optional legacy support
+  players_count = 1,
+  player_names = null,
+}) {
+  const holesNum = Number(holes);
 
-// Create a new round + seed holes (pars + dists if approved template exists; otherwise blank)
-router.post("/", requireAuth, async (req, res) => {
-  const userId = req.user?.id;
+  if (!userId) {
+    return { ok: false, status: 401, error: "unauthorised" };
+  }
+  if (!course || !String(course).trim()) {
+    return { ok: false, status: 400, error: "course is required" };
+  }
+  if (![9, 18].includes(holesNum)) {
+    return { ok: false, status: 400, error: "holes must be 9 or 18" };
+  }
+
+  const stateCode = (state || "").toString().trim().toUpperCase() || null;
+  const layoutName = (layout || "").toString().trim() || null;
+  const mode = (par_mode || "").toString().trim().toLowerCase() || "published";
+
+  const playersCount = clampPlayers(players_count);
+
+  // normalize player_names (array of strings, length = playersCount)
+  let playerNames = [];
+  if (Array.isArray(player_names)) {
+    playerNames = player_names.map((x) => String(x || "").trim());
+  }
+  playerNames.length = playersCount;
+  if (typeof playerNames[0] !== "string") playerNames[0] = "";
+
+  let pars = null;
+  let dists = null;
+
+  // ✅ DB template only (approved)
+  if (mode === "published" && stateCode) {
+    const t = await getTemplateFromDb(String(course), stateCode, holesNum);
+    if (t && Array.isArray(t.pars) && t.pars.length === holesNum) pars = t.pars.slice(0, holesNum);
+    if (t && Array.isArray(t.dists) && t.dists.length === holesNum) dists = t.dists.slice(0, holesNum);
+  }
+
+  // ✅ legacy optional: accept publishedPars from frontend ONLY if DB template is missing
+  if (mode === "published" && !pars && Array.isArray(publishedPars) && publishedPars.length === holesNum) {
+    const tmp = publishedPars.map((p) => (p === null || p === undefined || p === "" ? null : Number(p)));
+    if (tmp.every((p) => p === null || Number.isFinite(p))) pars = tmp;
+  }
+
+  const finalParMode = pars ? "published" : "blank";
+
+  await ensurePlayerNamesColumn();
+
+  await db.query("BEGIN");
 
   try {
-    const {
-      course,
-      layout = null,
-      state = null,
-      holes = 18,
-      par_mode = "published", // "published" | "blank"
-      publishedPars = null,   // optional legacy support
-
-      // ✅ NEW: players count (1–4)
-      players_count = 1,
-      // ✅ NEW: player names (optional)
-      player_names = null,
-    } = req.body || {};
-
-    const holesNum = Number(holes);
-
-    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
-    if (!course || !String(course).trim()) {
-      return res.status(400).json({ ok: false, error: "course is required" });
-    }
-    if (![9, 18].includes(holesNum)) {
-      return res.status(400).json({ ok: false, error: "holes must be 9 or 18" });
-    }
-
-    const stateCode = (state || "").toString().trim().toUpperCase() || null;
-    const layoutName = (layout || "").toString().trim() || null;
-    const mode = (par_mode || "").toString().trim().toLowerCase() || "published";
-
-    const playersCount = clampPlayers(players_count);
-
-    // normalize player_names (array of strings, length = playersCount)
-    let playerNames = [];
-    if (Array.isArray(player_names)) {
-      playerNames = player_names.map((x) => String(x || "").trim());
-    }
-    playerNames.length = playersCount;
-    if (typeof playerNames[0] !== "string") playerNames[0] = "";
-
-    let pars = null;
-    let dists = null;
-
-    // ✅ 0) DB template only (approved)
-    if (mode === "published" && stateCode) {
-      const t = await getTemplateFromDb(String(course), stateCode, holesNum);
-      if (t && Array.isArray(t.pars) && t.pars.length === holesNum) pars = t.pars.slice(0, holesNum);
-      if (t && Array.isArray(t.dists) && t.dists.length === holesNum) dists = t.dists.slice(0, holesNum);
-    }
-
-    // ✅ 1) legacy optional: accept publishedPars from frontend ONLY if DB template is missing
-    if (mode === "published" && !pars && Array.isArray(publishedPars) && publishedPars.length === holesNum) {
-      const tmp = publishedPars.map((p) => (p === null || p === undefined || p === "" ? null : Number(p)));
-      if (tmp.every((p) => p === null || Number.isFinite(p))) pars = tmp;
-    }
-
-    const finalParMode = pars ? "published" : "blank";
-
-    await ensurePlayerNamesColumn();
-
-    await db.query("BEGIN");
-
     const roundInsert = await db.query(
       `
       INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, players_count, player_names)
@@ -742,15 +737,59 @@ router.post("/", requireAuth, async (req, res) => {
       [round.id]
     );
 
-    return res.json({
+    return {
       ok: true,
       round,
       holes: holesRows.rows,
       scorecardUsed: !!pars,
       templateUsed: !!(pars && dists),
-    });
+    };
   } catch (err) {
     try { await db.query("ROLLBACK"); } catch {}
+    throw err;
+  }
+}
+// -------------------------------------------------
+// Routes (mounted at /api/rounds)
+// -------------------------------------------------
+
+// Create a new round + seed holes (pars + dists if approved template exists; otherwise blank)
+router.post("/", requireAuth, async (req, res) => {
+  const userId = req.user?.id;
+
+  try {
+    const {
+      course,
+      layout = null,
+      state = null,
+      holes = 18,
+      par_mode = "published",
+      publishedPars = null,
+      players_count = 1,
+      player_names = null,
+    } = req.body || {};
+
+    const result = await createRoundWithSeededHoles({
+      userId,
+      course,
+      layout,
+      state,
+      holes,
+      par_mode,
+      publishedPars,
+      players_count,
+      player_names,
+    });
+
+    if (!result?.ok) {
+      return res.status(result?.status || 400).json({
+        ok: false,
+        error: result?.error || "invalid_request",
+      });
+    }
+
+    return res.json(result);
+  } catch (err) {
     console.error("POST /api/rounds error:", err);
     return res.status(500).json({ ok: false, error: "internal error", detail: err?.message });
   }
