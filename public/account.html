@@ -1743,6 +1743,85 @@ async function createOrOpenScorecard(game, btn) {
   }
 }
 
+function getScorecardUrl(roundId) {
+  return `/my-rounds.html?roundId=${encodeURIComponent(roundId)}`;
+}
+
+async function createOrOpenScorecard(game, btn) {
+  const hasScorecard = !!game?.has_scorecard;
+  const roundId = Number(game?.scorecard_round_id || 0);
+  const reference = String(game?.reference || "").trim();
+
+  if (hasScorecard && roundId > 0) {
+    window.location.href = getScorecardUrl(roundId);
+    return;
+  }
+
+  if (!reference) {
+    if (gamesStatus) {
+      gamesStatus.textContent = "Could not find booking reference for scorecard.";
+      gamesStatus.className = "status err";
+    }
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+
+  if (gamesStatus) {
+    gamesStatus.textContent = "Creating scorecard…";
+    gamesStatus.className = "status";
+  }
+
+  try {
+    const res = await fetch(`/api/book/my-games/${encodeURIComponent(reference)}/create-scorecard`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": "Bearer " + token } : {})
+      }
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data && data.ok && Number(data.roundId) > 0) {
+      if (gamesStatus) {
+        gamesStatus.textContent = data.alreadyExisted
+          ? "Opening scorecard…"
+          : "Scorecard created.";
+        gamesStatus.className = "status ok";
+      }
+
+      window.location.href = getScorecardUrl(Number(data.roundId));
+      return;
+    }
+
+    const msg =
+      data?.error === "past_booking_cannot_create_scorecard"
+        ? "Past bookings cannot create a scorecard from here."
+        : data?.error === "booking_not_found"
+        ? "Booking not found."
+        : data?.error === "scorecard_create_failed"
+        ? "Could not create scorecard."
+        : "Unable to create scorecard.";
+
+    if (gamesStatus) {
+      gamesStatus.textContent = msg;
+      gamesStatus.className = "status err";
+    }
+
+    if (btn) btn.disabled = false;
+  } catch (err) {
+    console.error("createOrOpenScorecard error", err);
+
+    if (gamesStatus) {
+      gamesStatus.textContent = "Network error while creating scorecard.";
+      gamesStatus.className = "status err";
+    }
+
+    if (btn) btn.disabled = false;
+  }
+}
+
   function renderGameCards(items, targetEl, kind) {
     if (!targetEl) return;
 
@@ -1783,55 +1862,63 @@ async function createOrOpenScorecard(game, btn) {
             ${(Number(g.hire_clubs_qty || 0) > 0) ? `<span class="game-pill">Hire clubs: ${escapeHtml(g.hire_clubs_qty)}</span>` : ``}
           </div>
 
-                              <div class="game-actions">
-            ${g.can_create_scorecard ? `
-              <button
-                class="btn-primary scorecard-booking-btn"
-                data-reference="${escapeHtml(g.reference || "")}"
-                data-round-id="${escapeHtml(g.scorecard_round_id || "")}"
-                data-has-scorecard="${g.has_scorecard ? "1" : "0"}"
-                type="button"
-              >
-                ${g.has_scorecard ? "Open scorecard" : "Create scorecard"}
-              </button>
-            ` : ``}
+                             <div class="game-actions">
+  ${g.can_create_scorecard ? `
+    <button
+      class="btn-primary scorecard-booking-btn"
+      data-reference="${escapeHtml(g.reference || "")}"
+      data-round-id="${Number(g.scorecard_round_id || 0)}"
+      data-has-scorecard="${g.has_scorecard ? "1" : "0"}"
+      type="button"
+    >
+      ${g.has_scorecard ? "Open scorecard" : "Create scorecard"}
+    </button>
+  ` : ``}
 
-            ${canCancel ? `
-              <button class="btn-danger cancel-booking-btn" data-reference="${escapeHtml(g.reference || "")}" type="button">
-                Cancel booking
-              </button>
-            ` : ``}
+  ${canCancel ? `
+    <button
+      class="btn-danger cancel-booking-btn"
+      data-reference="${escapeHtml(g.reference || "")}"
+      type="button"
+    >
+      Cancel booking
+    </button>
+  ` : ``}
 
-            ${g.can_share ? `
-              <button class="btn-secondary share-booking-btn" data-reference="${escapeHtml(g.reference || "")}" type="button">
-                Share booking
-              </button>
-            ` : ``}
-          </div>
-        </div>
+  ${g.can_share ? `
+    <button
+      class="btn-secondary share-booking-btn"
+      data-reference="${escapeHtml(g.reference || "")}"
+      type="button"
+    >
+      Share booking
+    </button>
+  ` : ``}
+</div>
+</div>
       `;
     }).join("");
 
     targetEl.querySelectorAll(".scorecard-booking-btn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const reference = String(btn.dataset.reference || "").trim();
-        if (!reference) return;
+  btn.addEventListener("click", async () => {
+    const reference = String(btn.dataset.reference || "").trim();
+    if (!reference) return;
 
-        const game = (Array.isArray(items) ? items : []).find(
-          (x) => String(x?.reference || "").trim() === reference
-        );
+    const game = (Array.isArray(items) ? items : []).find(
+      (x) => String(x?.reference || "").trim() === reference
+    );
 
-        if (!game) {
-          if (gamesStatus) {
-            gamesStatus.textContent = "Could not load booking data for scorecard.";
-            gamesStatus.className = "status err";
-          }
-          return;
-        }
+    if (!game) {
+      if (gamesStatus) {
+        gamesStatus.textContent = "Could not load booking data for scorecard.";
+        gamesStatus.className = "status err";
+      }
+      return;
+    }
 
-        await createOrOpenScorecard(game, btn);
-      });
-    });
+    await createOrOpenScorecard(game, btn);
+  });
+});
     targetEl.querySelectorAll(".cancel-booking-btn").forEach((btn) => {
   btn.addEventListener("click", async () => {
     const reference = String(btn.dataset.reference || "").trim();
