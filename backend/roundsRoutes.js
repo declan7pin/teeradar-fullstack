@@ -688,9 +688,11 @@ export async function createRoundWithSeededHoles({
 
   await ensurePlayerNamesColumn();
 
-  await db.query("BEGIN");
+  let insertedRoundId = null;
 
   try {
+    await db.query("BEGIN");
+
     const roundInsert = await db.query(
       `
       INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, players_count, player_names)
@@ -698,7 +700,7 @@ export async function createRoundWithSeededHoles({
       RETURNING id, user_id, course, layout, state, holes, par_mode, created_at, players_count, player_names;
       `,
       [
-        userId,
+        Number(userId),
         String(course).trim(),
         layoutName,
         stateCode,
@@ -709,7 +711,13 @@ export async function createRoundWithSeededHoles({
       ]
     );
 
-    const round = roundInsert.rows[0];
+    const round = roundInsert.rows?.[0] || null;
+    if (!round || !round.id) {
+      await db.query("ROLLBACK");
+      return { ok: false, status: 500, error: "round_insert_failed" };
+    }
+
+    insertedRoundId = Number(round.id);
 
     for (let i = 1; i <= holesNum; i++) {
       const parVal = pars ? (Number.isFinite(Number(pars[i - 1])) ? Number(pars[i - 1]) : null) : null;
@@ -721,11 +729,35 @@ export async function createRoundWithSeededHoles({
         VALUES ($1, $2, $3, $4, NULL, NULL, '{}'::jsonb, '{}'::jsonb)
         ON CONFLICT (round_id, hole_number) DO NOTHING;
         `,
-        [round.id, i, parVal, distVal]
+        [insertedRoundId, i, parVal, distVal]
       );
     }
 
     await db.query("COMMIT");
+
+    // ✅ verify the round really exists after commit
+    const verifyRound = await db.query(
+      `
+      SELECT id, user_id, course, layout, state, holes, par_mode, created_at, players_count, player_names
+      FROM rounds
+      WHERE id = $1
+      LIMIT 1;
+      `,
+      [insertedRoundId]
+    );
+
+    if (!verifyRound.rows.length) {
+      console.error("createRoundWithSeededHoles: round missing after commit", {
+        insertedRoundId,
+        userId,
+        course,
+        layoutName,
+        stateCode,
+        holesNum,
+      });
+
+      return { ok: false, status: 500, error: "round_not_found_after_commit" };
+    }
 
     const holesRows = await db.query(
       `
@@ -734,20 +766,46 @@ export async function createRoundWithSeededHoles({
       WHERE round_id = $1
       ORDER BY hole_number ASC;
       `,
-      [round.id]
+      [insertedRoundId]
     );
+
+    console.log("✅ createRoundWithSeededHoles created round:", {
+      roundId: insertedRoundId,
+      userId,
+      course: String(course).trim(),
+      layout: layoutName,
+      state: stateCode,
+      holes: holesNum,
+      par_mode: finalParMode,
+      templateUsed: !!(pars && dists),
+    });
 
     return {
       ok: true,
-      round,
-      holes: holesRows.rows,
+      status: 200,
+      round: verifyRound.rows[0],
+      holes: holesRows.rows || [],
       scorecardUsed: !!pars,
       templateUsed: !!(pars && dists),
     };
   } catch (err) {
     try { await db.query("ROLLBACK"); } catch {}
-    throw err;
+    console.error("createRoundWithSeededHoles failed:", err?.message || err, {
+      insertedRoundId,
+      userId,
+      course,
+      layoutName,
+      stateCode,
+      holesNum,
+    });
+    return {
+      ok: false,
+      status: 500,
+      error: "create_round_with_seeded_holes_failed",
+      detail: err?.message || String(err || ""),
+    };
   }
+}
 }
 // -------------------------------------------------
 // Routes (mounted at /api/rounds)
