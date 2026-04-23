@@ -5543,6 +5543,7 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
           roundId: Number(booking.scorecard_round_id),
           roundCourse: existingRound.course,
           bookingCourse: booking.course_name,
+          roundState: existingRound.state || null,
         });
 
         return res.json({
@@ -5585,9 +5586,68 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
       safeCourseName = String(booking.course_slug || "").trim() || "Unknown Course";
     }
 
-    // ✅ booking_courses has no state column in your DB, so do not query it
-    // use null for now unless you later add state to the booking/course flow
-    const stateCode = null;
+    // ✅ resolve state from existing approved scorecard templates first
+    // this lets published pars/distances seed correctly
+    let stateCode = null;
+
+    try {
+      const templateStateQ = await db.query(
+        `
+        SELECT state
+        FROM scorecard_courses
+        WHERE
+          holes = $2
+          AND (
+            LOWER(TRIM(name)) = LOWER(TRIM($1))
+            OR LOWER(TRIM(name)) = LOWER(TRIM($3))
+          )
+        ORDER BY updated_at DESC NULLS LAST, id DESC
+        LIMIT 1
+        `,
+        [
+          safeCourseName,
+          Number(booking.holes || 18),
+          String(booking.course_slug || "").trim()
+        ]
+      );
+
+      stateCode = String(templateStateQ.rows?.[0]?.state || "").trim().toUpperCase() || null;
+    } catch (err) {
+      console.warn("⚠️ create-scorecard template state lookup failed:", err?.message || err);
+    }
+
+    // ✅ fallback: infer state from existing owned rounds for same course
+    if (!stateCode) {
+      try {
+        const priorRoundStateQ = await db.query(
+          `
+          SELECT state
+          FROM rounds
+          WHERE
+            user_id = $1
+            AND holes = $2
+            AND (
+              LOWER(TRIM(course)) = LOWER(TRIM($3))
+              OR LOWER(TRIM(course)) = LOWER(TRIM($4))
+            )
+            AND state IS NOT NULL
+            AND TRIM(state) <> ''
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1
+          `,
+          [
+            userId,
+            Number(booking.holes || 18),
+            safeCourseName,
+            String(booking.course_slug || "").trim()
+          ]
+        );
+
+        stateCode = String(priorRoundStateQ.rows?.[0]?.state || "").trim().toUpperCase() || null;
+      } catch (err) {
+        console.warn("⚠️ create-scorecard prior round state lookup failed:", err?.message || err);
+      }
+    }
 
     console.log("🛠️ create-scorecard payload:", {
       userId,
@@ -5636,6 +5696,9 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
       reference: booking.reference,
       bookingId: booking.id,
       roundId,
+      scorecardUsed: !!createResult.scorecardUsed,
+      templateUsed: !!createResult.templateUsed,
+      stateUsed: stateCode,
     });
 
     return res.json({
