@@ -5475,7 +5475,6 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
           b.scorecard_round_id,
           c.slug AS course_slug,
           c.name AS course_name,
-          c.state AS course_state,
           (
             b.user_id = $2
             OR (
@@ -5525,7 +5524,6 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
       return res.status(400).json({ ok: false, error: "past_booking_cannot_create_scorecard" });
     }
 
-    // ✅ if linked round exists AND belongs to this user, reuse it
     if (booking.scorecard_round_id) {
       const existingRoundQ = await db.query(
         `
@@ -5555,7 +5553,6 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
         });
       }
 
-      // ✅ stale / inaccessible linked round -> clear and continue
       await db.query(
         `
         UPDATE booking_bookings
@@ -5574,6 +5571,7 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
     }
 
     let layoutName = null;
+
     if (Number(booking.holes) === 9) {
       layoutName = String(booking.layout_key || "").trim() || null;
     } else if (Number(booking.holes) === 18) {
@@ -5582,13 +5580,14 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
       layoutName = [front, back].filter(Boolean).join(" / ") || null;
     }
 
-    const stateCode = String(booking.course_state || "").trim().toUpperCase() || null;
-
-    // ✅ if course name is junk like "Pay at Course", fall back to slug-based readable value
     let safeCourseName = String(booking.course_name || "").trim();
     if (!safeCourseName || /^pay at course$/i.test(safeCourseName)) {
       safeCourseName = String(booking.course_slug || "").trim() || "Unknown Course";
     }
+
+    // ✅ booking_courses has no state column in your DB, so do not query it
+    // use null for now unless you later add state to the booking/course flow
+    const stateCode = null;
 
     console.log("🛠️ create-scorecard payload:", {
       userId,
