@@ -850,25 +850,53 @@
       <div class="muted" id="pendingModalMeta">Loading…</div>
 
       <div class="row" id="pendingModalControls" style="display:none;">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-          <div id="pendingTeeWrap" style="display:none;">
-            <div class="muted" style="font-weight:800;">Tee</div>
-            <select id="pendingTeeSelect" style="padding:8px;border:1px solid var(--border);border-radius:10px;"></select>
-          </div>
-        </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+    <div>
+      <div class="muted" style="font-weight:800;">Course name</div>
+      <input
+        id="pendingCourseNameInput"
+        type="text"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;min-width:280px;"
+      />
+    </div>
 
-        <div class="actions" style="margin-top:0;">
-          <button class="btn2 secondary" id="pendingCloseBtn" type="button">Close</button>
-        </div>
-      </div>
+    <div>
+      <div class="muted" style="font-weight:800;">State</div>
+      <select
+        id="pendingCourseStateInput"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;min-width:100px;"
+      >
+        <option value="WA">WA</option>
+        <option value="NT">NT</option>
+        <option value="QLD">QLD</option>
+        <option value="NSW">NSW</option>
+        <option value="VIC">VIC</option>
+        <option value="SA">SA</option>
+        <option value="TAS">TAS</option>
+        <option value="ACT">ACT</option>
+      </select>
+    </div>
+
+    <div id="pendingTeeWrap" style="display:none;">
+      <div class="muted" style="font-weight:800;">Tee</div>
+      <select id="pendingTeeSelect" style="padding:8px;border:1px solid var(--border);border-radius:10px;"></select>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:0;">
+    <button class="btn2" id="pendingApproveBtnTop" type="button">Approve</button>
+    <button class="btn2 secondary" id="pendingCloseBtn" type="button">Close</button>
+  </div>
+</div>
 
       <div id="pendingModalBody" style="margin-top:10px;">
         <!-- table injects here -->
       </div>
 
       <div class="actions" id="pendingModalFooter">
-        <button class="btn2 secondary" id="pendingCloseBtn2" type="button">Close</button>
-      </div>
+  <button class="btn2" id="pendingApproveBtnBottom" type="button">Approve</button>
+  <button class="btn2 secondary" id="pendingCloseBtn2" type="button">Close</button>
+</div>
     </div>
   </div>
   <section class="card" id="userDetailCard" style="margin-top:14px; display:none;">
@@ -1851,6 +1879,12 @@ const pendingModalBody = document.getElementById("pendingModalBody");
 const pendingModalControls = document.getElementById("pendingModalControls");
 const pendingTeeWrap = document.getElementById("pendingTeeWrap");
 const pendingTeeSelect = document.getElementById("pendingTeeSelect");
+const pendingCourseNameInput = document.getElementById("pendingCourseNameInput");
+const pendingCourseStateInput = document.getElementById("pendingCourseStateInput");
+const pendingApproveBtnTop = document.getElementById("pendingApproveBtnTop");
+const pendingApproveBtnBottom = document.getElementById("pendingApproveBtnBottom");
+
+let ACTIVE_PENDING_ID = null;
 
 function openPendingModal(){
   if (!pendingModalBack) return;
