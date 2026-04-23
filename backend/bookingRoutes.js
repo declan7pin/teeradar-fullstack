@@ -5429,6 +5429,8 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
     const userId = Number(req.accountUser.id);
     const userEmail = String(req.accountUser.email || "").trim().toLowerCase();
 
+    console.log("🎯 create-scorecard hit", { reference, userId, userEmail });
+
     const bookingQ = await db.query(
       `
       WITH accessible AS (
@@ -5478,6 +5480,8 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
     );
 
     const booking = bookingQ.rows?.[0];
+    console.log("📘 create-scorecard booking lookup:", booking || null);
+
     if (!booking) {
       return res.status(404).json({ ok: false, error: "booking_not_found" });
     }
@@ -5493,42 +5497,21 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
       return res.status(400).json({ ok: false, error: "past_booking_cannot_create_scorecard" });
     }
 
-    // ✅ if booking already points to a valid round, reuse it
     if (booking.scorecard_round_id) {
-      const existingRoundQ = await db.query(
-        `
-        SELECT id
-        FROM rounds
-        WHERE id = $1
-        LIMIT 1
-        `,
-        [Number(booking.scorecard_round_id)]
-      );
+      console.log("📎 create-scorecard existing round found:", {
+        reference: booking.reference,
+        roundId: Number(booking.scorecard_round_id),
+      });
 
-      if (existingRoundQ.rows.length) {
-        return res.json({
-          ok: true,
-          alreadyExisted: true,
-          roundId: Number(booking.scorecard_round_id),
-          reference: booking.reference,
-        });
-      }
-
-      // ✅ stale round id stored on booking -> clear it and create a fresh one
-      await db.query(
-        `
-        UPDATE booking_bookings
-        SET
-          scorecard_round_id = NULL,
-          scorecard_created_at = NULL
-        WHERE id = $1
-        `,
-        [booking.id]
-      );
+      return res.json({
+        ok: true,
+        alreadyExisted: true,
+        roundId: Number(booking.scorecard_round_id),
+        reference: booking.reference,
+      });
     }
 
     let layoutName = null;
-
     if (Number(booking.holes) === 9) {
       layoutName = String(booking.layout_key || "").trim() || null;
     } else if (Number(booking.holes) === 18) {
@@ -5537,49 +5520,49 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
       layoutName = [front, back].filter(Boolean).join(" / ") || null;
     }
 
+    const stateGuessQ = await db.query(
+      `
+      SELECT state
+      FROM booking_courses
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [booking.course_id]
+    );
+
+    const stateCode = String(stateGuessQ.rows?.[0]?.state || "").trim().toUpperCase() || null;
+
+    console.log("🛠️ create-scorecard payload:", {
+      userId,
+      course: booking.course_name,
+      layout: layoutName,
+      state: stateCode,
+      holes: Number(booking.holes || 18),
+      players_count: Number(booking.players || 1),
+    });
+
     const createResult = await createRoundWithSeededHoles({
       userId,
       course: booking.course_name,
       layout: layoutName,
-      state: null,
+      state: stateCode,
       holes: Number(booking.holes || 18),
       par_mode: "published",
       players_count: Number(booking.players || 1),
       player_names: [],
     });
 
+    console.log("📦 create-scorecard helper result:", createResult || null);
+
     if (!createResult?.ok || !createResult?.round?.id) {
       return res.status(createResult?.status || 400).json({
         ok: false,
         error: createResult?.error || "scorecard_create_failed",
+        detail: createResult?.detail || null,
       });
     }
 
     const roundId = Number(createResult.round.id);
-
-    // ✅ verify round really exists before saving it to booking_bookings
-    const verifyRoundQ = await db.query(
-      `
-      SELECT id, user_id
-      FROM rounds
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [roundId]
-    );
-
-    if (!verifyRoundQ.rows.length) {
-      console.error("create-scorecard: round created result returned id but no round row exists", {
-        bookingReference: booking.reference,
-        roundId,
-        userId,
-      });
-
-      return res.status(500).json({
-        ok: false,
-        error: "scorecard_round_not_persisted",
-      });
-    }
 
     await db.query(
       `
@@ -5592,6 +5575,12 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
       [booking.id, roundId]
     );
 
+    console.log("✅ create-scorecard success:", {
+      reference: booking.reference,
+      bookingId: booking.id,
+      roundId,
+    });
+
     return res.json({
       ok: true,
       alreadyExisted: false,
@@ -5602,7 +5591,7 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
     });
   } catch (e) {
     console.error("POST /my-games/:reference/create-scorecard", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
+    return res.status(500).json({ ok: false, error: "internal_error", detail: e?.message || null });
   }
 });
 router.post("/my-games/:reference/cancel", requireAccountUser, async (req, res) => {
