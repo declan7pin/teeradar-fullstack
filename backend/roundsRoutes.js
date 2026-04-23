@@ -294,6 +294,11 @@ function isValidEmail(v) {
   if (!s) return false;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
+function normaliseStateCode(v) {
+  const s = String(v || "").trim().toUpperCase();
+  const allowed = new Set(["WA", "NT", "QLD", "NSW", "VIC", "SA", "TAS", "ACT"]);
+  return allowed.has(s) ? s : "";
+}
 // -------------------------------------------------
 // ✅ Template endpoints
 // Mounted at /api/rounds, so:
@@ -554,7 +559,7 @@ router.get("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (re
   }
 });
 
-// Rename an approved scorecard course
+// Edit an approved scorecard course (name + state)
 router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -562,31 +567,42 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
       return res.status(400).json({ ok: false, error: "invalid_id" });
     }
 
-    const nameRaw = String(req.body?.name || "").trim();
-    if (!nameRaw) {
-      return res.status(400).json({ ok: false, error: "name_required" });
-    }
-
-    // keep consistent normalisation (and ensures lowercase / trimmed)
-    const newName = normaliseCourseName(nameRaw);
-
-    // load current record
     const cur = await db.query(
       `SELECT id, name, state, holes FROM scorecard_courses WHERE id = $1 LIMIT 1;`,
       [id]
     );
-    if (!cur.rows.length) return res.status(404).json({ ok: false, error: "not_found" });
+    if (!cur.rows.length) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
 
-    // update (may conflict with unique(name,state,holes))
+    const existing = cur.rows[0];
+
+    const nameRaw = String(req.body?.name || "").trim();
+    const stateRaw = String(req.body?.state || "").trim().toUpperCase();
+
+    const newName = nameRaw ? normaliseCourseName(nameRaw) : String(existing.name || "").trim();
+    const newState = stateRaw ? normaliseStateCode(stateRaw) : String(existing.state || "").trim().toUpperCase();
+
+    if (!newName) {
+      return res.status(400).json({ ok: false, error: "name_required" });
+    }
+
+    if (!newState) {
+      return res.status(400).json({ ok: false, error: "state_required" });
+    }
+
     try {
       const up = await db.query(
         `
         UPDATE scorecard_courses
-        SET name = $2, updated_at = now()
+        SET
+          name = $2,
+          state = $3,
+          updated_at = now()
         WHERE id = $1
         RETURNING id, name, state, holes, updated_at;
         `,
-        [id, newName]
+        [id, newName, newState]
       );
 
       return res.json({ ok: true, course: up.rows[0] });
@@ -599,7 +615,7 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
     }
   } catch (err) {
     console.error("PATCH /api/rounds/admin/scorecard-courses/:id error:", err);
-    return res.status(500).json({ ok: false, error: "internal error" });
+    return res.status(500).json({ ok: false, error: "internal error", detail: err?.message });
   }
 });
 
