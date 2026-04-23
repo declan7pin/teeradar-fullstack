@@ -1730,6 +1730,20 @@ async function ensureBookingTables() {
     CREATE INDEX IF NOT EXISTS booking_bookings_stripe_pi_idx
     ON booking_bookings (stripe_payment_intent);
   `);
+    await db.query(`
+    ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS scorecard_round_id BIGINT;
+  `);
+
+  await db.query(`
+    ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS scorecard_created_at TIMESTAMPTZ;
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_bookings_scorecard_round_idx
+    ON booking_bookings (scorecard_round_id);
+  `);
   // ✅✅✅ END ADD ✅✅✅
 
   // =============================
@@ -5151,6 +5165,8 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
           COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode,
           c.slug AS course_slug,
           c.name AS course_name,
+          b.scorecard_round_id,
+          b.scorecard_created_at,
           false AS is_shared,
           true AS is_owner
         FROM booking_bookings b
@@ -5186,6 +5202,8 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
           COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode,
           c.slug AS course_slug,
           c.name AS course_name,
+          b.scorecard_round_id,
+          b.scorecard_created_at,
           true AS is_shared,
           false AS is_owner
         FROM booking_booking_shares s
@@ -5227,8 +5245,11 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
       const item = {
         ...row,
         gross_cents: Number(row.total_cents || 0),
+        has_scorecard: !!row.scorecard_round_id,
+        scorecard_round_id: row.scorecard_round_id ? Number(row.scorecard_round_id) : null,
         can_cancel: !isCancelled && !isPast && !!row.is_owner,
         can_share: !isCancelled && !isPast && !!row.is_owner,
+        can_create_scorecard: !isCancelled && !isPast,
       };
 
       if (isCancelled || isPast) previous.push(item);
@@ -5245,6 +5266,7 @@ router.get("/my-games", requireAccountUser, async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 router.post("/my-games/:reference/share", requireAccountUser, async (req, res) => {
   try {
     const reference = String(req.params.reference || "").trim();
@@ -5393,6 +5415,112 @@ router.post("/my-games/:reference/share", requireAccountUser, async (req, res) =
     });
   } catch (e) {
     console.error("POST /my-games/:reference/share", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (req, res) => {
+  try {
+    const reference = String(req.params.reference || "").trim();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
+
+    const userId = Number(req.accountUser.id);
+    const userEmail = String(req.accountUser.email || "").trim().toLowerCase();
+
+    const bookingQ = await db.query(
+      `
+      WITH accessible AS (
+        SELECT
+          b.id,
+          b.course_id,
+          b.reference,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          COALESCE(b.layout_key,'') AS layout_key,
+          COALESCE(b.front_nine_key,'') AS front_nine_key,
+          COALESCE(b.back_nine_key,'') AS back_nine_key,
+          b.scorecard_round_id,
+          c.slug AS course_slug,
+          c.name AS course_name,
+          (
+            b.user_id = $2
+            OR (
+              b.user_id IS NULL
+              AND b.golfer_email IS NOT NULL
+              AND LOWER(TRIM(b.golfer_email)) = $3
+            )
+          ) AS is_owner,
+          EXISTS (
+            SELECT 1
+            FROM booking_booking_shares s
+            WHERE s.booking_id = b.id
+              AND (
+                s.shared_to_user_id = $2
+                OR LOWER(TRIM(s.shared_to_email)) = $3
+              )
+          ) AS is_shared
+        FROM booking_bookings b
+        JOIN booking_courses c
+          ON c.id = b.course_id
+        WHERE b.reference = $1
+        LIMIT 1
+      )
+      SELECT *
+      FROM accessible
+      WHERE is_owner = true OR is_shared = true
+      LIMIT 1
+      `,
+      [reference, userId, userEmail]
+    );
+
+    const booking = bookingQ.rows?.[0];
+    if (!booking) {
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    const todayPerth = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Australia/Perth",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    if (String(booking.play_date || "") < todayPerth) {
+      return res.status(400).json({ ok: false, error: "past_booking_cannot_create_scorecard" });
+    }
+
+    if (booking.scorecard_round_id) {
+      return res.json({
+        ok: true,
+        alreadyExisted: true,
+        roundId: Number(booking.scorecard_round_id),
+        reference: booking.reference,
+      });
+    }
+
+    // ✅ TEMP STUB:
+    // We need the rounds/scorecard backend file next so we can:
+    // 1) create the round
+    // 2) create holes from the exact booked routing
+    // 3) save round id back to booking_bookings
+    return res.status(501).json({
+      ok: false,
+      error: "scorecard_creation_not_wired_yet",
+      detail: {
+        reference: booking.reference,
+        course_id: booking.course_id,
+        course_slug: booking.course_slug,
+        holes: Number(booking.holes || 0),
+        layout_key: booking.layout_key || "",
+        front_nine_key: booking.front_nine_key || "",
+        back_nine_key: booking.back_nine_key || "",
+      }
+    });
+  } catch (e) {
+    console.error("POST /my-games/:reference/create-scorecard", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
