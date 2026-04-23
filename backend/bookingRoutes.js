@@ -5493,13 +5493,38 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
       return res.status(400).json({ ok: false, error: "past_booking_cannot_create_scorecard" });
     }
 
+    // ✅ if booking already points to a valid round, reuse it
     if (booking.scorecard_round_id) {
-      return res.json({
-        ok: true,
-        alreadyExisted: true,
-        roundId: Number(booking.scorecard_round_id),
-        reference: booking.reference,
-      });
+      const existingRoundQ = await db.query(
+        `
+        SELECT id
+        FROM rounds
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [Number(booking.scorecard_round_id)]
+      );
+
+      if (existingRoundQ.rows.length) {
+        return res.json({
+          ok: true,
+          alreadyExisted: true,
+          roundId: Number(booking.scorecard_round_id),
+          reference: booking.reference,
+        });
+      }
+
+      // ✅ stale round id stored on booking -> clear it and create a fresh one
+      await db.query(
+        `
+        UPDATE booking_bookings
+        SET
+          scorecard_round_id = NULL,
+          scorecard_created_at = NULL
+        WHERE id = $1
+        `,
+        [booking.id]
+      );
     }
 
     let layoutName = null;
@@ -5531,6 +5556,30 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
     }
 
     const roundId = Number(createResult.round.id);
+
+    // ✅ verify round really exists before saving it to booking_bookings
+    const verifyRoundQ = await db.query(
+      `
+      SELECT id, user_id
+      FROM rounds
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [roundId]
+    );
+
+    if (!verifyRoundQ.rows.length) {
+      console.error("create-scorecard: round created result returned id but no round row exists", {
+        bookingReference: booking.reference,
+        roundId,
+        userId,
+      });
+
+      return res.status(500).json({
+        ok: false,
+        error: "scorecard_round_not_persisted",
+      });
+    }
 
     await db.query(
       `
