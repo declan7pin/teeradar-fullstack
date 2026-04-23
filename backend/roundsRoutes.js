@@ -806,7 +806,6 @@ export async function createRoundWithSeededHoles({
     };
   }
 }
-}
 // -------------------------------------------------
 // Routes (mounted at /api/rounds)
 // -------------------------------------------------
