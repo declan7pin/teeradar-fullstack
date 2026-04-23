@@ -7,6 +7,7 @@ import cookieParser from "cookie-parser"; // ✅ ADD
 import { recordEvent } from "./analytics.js";
 import jwt from "jsonwebtoken";
 import Stripe from "stripe";
+import { createRoundWithSeededHoles } from "./roundsRoutes.js";
 
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
 
@@ -5501,23 +5502,54 @@ router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (
       });
     }
 
-    // ✅ TEMP STUB:
-    // We need the rounds/scorecard backend file next so we can:
-    // 1) create the round
-    // 2) create holes from the exact booked routing
-    // 3) save round id back to booking_bookings
-    return res.status(501).json({
-      ok: false,
-      error: "scorecard_creation_not_wired_yet",
-      detail: {
-        reference: booking.reference,
-        course_id: booking.course_id,
-        course_slug: booking.course_slug,
-        holes: Number(booking.holes || 0),
-        layout_key: booking.layout_key || "",
-        front_nine_key: booking.front_nine_key || "",
-        back_nine_key: booking.back_nine_key || "",
-      }
+    let layoutName = null;
+
+    if (Number(booking.holes) === 9) {
+      layoutName = String(booking.layout_key || "").trim() || null;
+    } else if (Number(booking.holes) === 18) {
+      const front = String(booking.front_nine_key || "").trim();
+      const back = String(booking.back_nine_key || "").trim();
+      layoutName = [front, back].filter(Boolean).join(" / ") || null;
+    }
+
+    const createResult = await createRoundWithSeededHoles({
+      userId,
+      course: booking.course_name,
+      layout: layoutName,
+      state: null,
+      holes: Number(booking.holes || 18),
+      par_mode: "published",
+      players_count: Number(booking.players || 1),
+      player_names: [],
+    });
+
+    if (!createResult?.ok || !createResult?.round?.id) {
+      return res.status(createResult?.status || 400).json({
+        ok: false,
+        error: createResult?.error || "scorecard_create_failed",
+      });
+    }
+
+    const roundId = Number(createResult.round.id);
+
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET
+        scorecard_round_id = $2,
+        scorecard_created_at = NOW()
+      WHERE id = $1
+      `,
+      [booking.id, roundId]
+    );
+
+    return res.json({
+      ok: true,
+      alreadyExisted: false,
+      roundId,
+      reference: booking.reference,
+      scorecardUsed: !!createResult.scorecardUsed,
+      templateUsed: !!createResult.templateUsed,
     });
   } catch (e) {
     console.error("POST /my-games/:reference/create-scorecard", e);
