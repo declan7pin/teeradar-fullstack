@@ -622,7 +622,9 @@ router.delete("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, as
 router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ ok: false, error: "invalid_id" });
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ ok: false, error: "invalid_id" });
+    }
 
     const { rows } = await db.query(
       `
@@ -638,6 +640,22 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
 
     const p = rows[0];
 
+    // ✅ allow admin overrides before approval
+    const overrideNameRaw = String(req.body?.name || "").trim();
+    const overrideStateRaw = String(req.body?.state || "").trim().toUpperCase();
+
+    const approvedName = overrideNameRaw ? normaliseCourseName(overrideNameRaw) : String(p.name || "").trim();
+    const approvedState = overrideStateRaw || String(p.state || "").trim().toUpperCase();
+    const approvedHoles = Number(p.holes);
+
+    if (!approvedName) {
+      return res.status(400).json({ ok: false, error: "name_required" });
+    }
+
+    if (!approvedState) {
+      return res.status(400).json({ ok: false, error: "state_required" });
+    }
+
     await db.query("BEGIN");
 
     const up = await db.query(
@@ -651,12 +669,17 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
         updated_at = now()
       RETURNING id;
       `,
-      [p.name, p.state, p.holes, JSON.stringify(p.pars_json), JSON.stringify(p.dists_json)]
+      [
+        approvedName,
+        approvedState,
+        approvedHoles,
+        JSON.stringify(p.pars_json),
+        JSON.stringify(p.dists_json)
+      ]
     );
 
     const approvedCourseId = up.rows[0]?.id || null;
 
-    // ✅ store who approved (manual coupon will be emailed by you later)
     const approverId = Number(req.user?.id || 0) || null;
     const approverEmail = String(req.user?.email || "").trim().toLowerCase() || null;
 
@@ -664,15 +687,16 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
       `
       UPDATE courses_pending
       SET
+        name = $2,
+        state = $3,
         approved_at = now(),
-        approved_by_user_id = $2,
-        approved_by_email = $3
+        approved_by_user_id = $4,
+        approved_by_email = $5
       WHERE id = $1;
       `,
-      [id, approverId, approverEmail]
+      [id, approvedName, approvedState, approverId, approverEmail]
     );
 
-    // ✅ contributor history (auto-linked)
     try {
       await db.query(
         `
@@ -681,7 +705,15 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
         VALUES
           ('APPROVED', $1, $2, $3, $4, $5, $6, $7);
         `,
-        [p.name, p.state, p.holes, Number(id), approvedCourseId, approverId, approverEmail]
+        [
+          approvedName,
+          approvedState,
+          approvedHoles,
+          Number(id),
+          approvedCourseId,
+          approverId,
+          approverEmail
+        ]
       );
     } catch (e) {
       console.warn("contribution log (APPROVED) failed:", e?.message || e);
@@ -689,7 +721,13 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
 
     await db.query("COMMIT");
 
-    return res.json({ ok: true, approvedCourseId });
+    return res.json({
+      ok: true,
+      approvedCourseId,
+      name: approvedName,
+      state: approvedState,
+      holes: approvedHoles
+    });
   } catch (err) {
     try { await db.query("ROLLBACK"); } catch {}
     console.error("POST /api/rounds/admin/pending-courses/:id/approve error:", err);
