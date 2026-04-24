@@ -2020,6 +2020,17 @@ async function openPendingCourseDetail(id){
   const name = detail?.name || detail?.course || row?.name || "—";
   const state = detail?.state || row?.state || "—";
   const holes = Number(detail?.holes || row?.holes || 0) || 0;
+  
+  ACTIVE_PENDING_ID = Number(id);
+
+if (pendingCourseNameInput) {
+  pendingCourseNameInput.value = name && name !== "—" ? name : "";
+}
+
+if (pendingCourseStateInput) {
+  const cleanState = String(state || "").trim().toUpperCase();
+  pendingCourseStateInput.value = cleanState || "WA";
+}
 
   const pars = extractPars(detail);
   const distInfo = extractDistances(detail);
@@ -2076,7 +2087,94 @@ async function openPendingCourseDetail(id){
     if (e.key === "Escape") closePendingModal();
   });
 })();
-// Delegate approve click
+async function approvePendingCourse(id, btn = null) {
+  if (!Number.isFinite(Number(id)) || Number(id) <= 0) return;
+
+  const row = (PENDING_COURSES_CACHE || []).find(x => Number(x?.id) === Number(id)) || null;
+
+  const name =
+    pendingCourseNameInput && String(pendingCourseNameInput.value || "").trim()
+      ? String(pendingCourseNameInput.value || "").trim()
+      : String(row?.name || "").trim();
+
+  const state =
+    pendingCourseStateInput && String(pendingCourseStateInput.value || "").trim()
+      ? String(pendingCourseStateInput.value || "").trim().toUpperCase()
+      : String(row?.state || "").trim().toUpperCase();
+
+  if (!name) {
+    alert("Course name is required.");
+    return;
+  }
+
+  if (!state) {
+    alert("Please select a state before approving.");
+    return;
+  }
+
+  const ok = window.confirm(`Approve this course template?\n\n${name} (${state})`);
+  if (!ok) return;
+
+  const oldTxt = btn ? btn.textContent : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Approving…";
+  }
+
+  try {
+    const res = await fetch(`/api/rounds/admin/pending-courses/${Number(id)}/approve`, {
+      method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        name,
+        state,
+      }),
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data || !data.ok) {
+      alert("Approve failed: " + (data?.error || res.status));
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = oldTxt;
+      }
+      return;
+    }
+
+    closePendingModal();
+    await loadPendingCourses();
+    await loadApprovedCourses();
+  } catch (err) {
+    console.error("approve pending course failed", err);
+    alert("Approve failed (network/server error).");
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = oldTxt;
+    }
+  }
+}
+
+// Wire approve buttons (only once)
+if (pendingApproveBtnTop && !pendingApproveBtnTop._wired) {
+  pendingApproveBtnTop._wired = true;
+  pendingApproveBtnTop.addEventListener("click", () => {
+    approvePendingCourse(Number(ACTIVE_PENDING_ID), pendingApproveBtnTop);
+  });
+}
+
+if (pendingApproveBtnBottom && !pendingApproveBtnBottom._wired) {
+  pendingApproveBtnBottom._wired = true;
+  pendingApproveBtnBottom.addEventListener("click", () => {
+    approvePendingCourse(Number(ACTIVE_PENDING_ID), pendingApproveBtnBottom);
+  });
+}
+
+// Table Approve button now opens the modal first
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-approve-id]");
   if (!btn) return;
@@ -2084,41 +2182,7 @@ document.addEventListener("click", async (e) => {
   const id = Number(btn.getAttribute("data-approve-id"));
   if (!Number.isFinite(id) || id <= 0) return;
 
-  // confirm
-  const ok = window.confirm("Approve this course template? This will publish pars + distances.");
-  if (!ok) return;
-
-  btn.disabled = true;
-  const oldTxt = btn.textContent;
-  btn.textContent = "Approving…";
-
-  try {
-    const res = await fetch(`/api/rounds/admin/pending-courses/${id}/approve`, {
-      method: "POST",
-      headers: {
-        ...getAuthHeaders(),
-        "Content-Type": "application/json"
-      },
-      credentials: "include"
-    });
-
-    const data = await res.json().catch(() => null);
-
-    if (!res.ok || !data || !data.ok) {
-      alert("Approve failed: " + (data?.error || res.status));
-      btn.disabled = false;
-      btn.textContent = oldTxt;
-      return;
-    }
-
-    // refresh list
-    await loadPendingCourses();
-  } catch (err) {
-    console.error("approve pending course failed", err);
-    alert("Approve failed (network/server error).");
-    btn.disabled = false;
-    btn.textContent = oldTxt;
-  }
+  await openPendingCourseDetail(id);
 });
 
 // ✅ Delegate click on pending row (opens modal)
