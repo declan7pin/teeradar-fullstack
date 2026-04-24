@@ -2127,7 +2127,7 @@ if (premPills){
 
   premPills.innerHTML = `
     <span class="premPill">${escapeHtml(pLabel)}</span>
-    <span class="premPill">Hole ${holeNum} / ${holesCount}</span>
+    <span class="premPill" id="premHoleSelectPill" style="cursor:pointer;">Hole ${holeNum} / ${holesCount}</span>
     <span class="premPill">Par ${Number.isFinite(basePar) ? basePar : "—"}</span>
     <span class="premPill">${Number.isFinite(metaDist) ? (metaDist + "m") : "—"}</span>
     <span class="premPill">${teeName ? ("Tee " + escapeHtml(teeName)) : "Tee —"}</span>
@@ -2222,6 +2222,28 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
   const pc2 = getPlayersCountFromRound(round);
 if (premPrevBtn) premPrevBtn.disabled = (premiumHoleIndex <= 0 && premiumPlayerIndex <= 0);
 if (premNextBtn) premNextBtn.disabled = (premiumHoleIndex >= holesCount - 1 && premiumPlayerIndex >= pc2 - 1);
+}
+const holeSelectPill = document.getElementById("premHoleSelectPill");
+if (holeSelectPill) {
+  holeSelectPill.onclick = () => {
+    const currentHole = premiumHoleIndex + 1;
+    const raw = window.prompt(
+      `Jump to which hole? Enter 1-${holesCount}`,
+      String(currentHole)
+    );
+
+    if (raw === null) return;
+
+    const selectedHole = Number(raw);
+    if (!Number.isFinite(selectedHole) || selectedHole < 1 || selectedHole > holesCount) {
+      alert(`Please enter a hole number between 1 and ${holesCount}.`);
+      return;
+    }
+
+    premiumHoleIndex = selectedHole - 1;
+    premiumPlayerIndex = 0;
+    renderPremiumForHole(round, metaPars, metaDists, teeName);
+  };
 }
 
 function enablePremiumMode(round, metaPars, metaDists, teeName){
