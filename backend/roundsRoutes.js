@@ -57,6 +57,21 @@ function normalise(s) {
 
 // ✅ NEW: normalise course names so they match DB templates
 // Removes trailing "(18 holes)" / "(9 holes)" etc.
+function normaliseCourseName(s) {
+  let x = (s || "").toString().trim().toLowerCase();
+
+  x = x.replace(/\s*\(\s*\d+\s*holes?\s*\)\s*$/i, "");
+  x = x.replace(/\s*\(\s*\d+\s*hole\s*\)\s*$/i, "");
+
+  // ✅ make "front / back" match "front/back"
+  x = x.replace(/\s*\/\s*/g, "/");
+
+  // ✅ collapse whitespace
+  x = x.replace(/\s+/g, " ").trim();
+
+  return x;
+}
+
 async function getTemplateFromDbAnyState(course, holes, layout = null) {
   const baseName = normaliseCourseName(course);
   const layoutName = normaliseCourseName(layout);
@@ -69,6 +84,7 @@ async function getTemplateFromDbAnyState(course, holes, layout = null) {
 
   if (layoutName) {
     possibleNames.add(normaliseCourseName(`${baseName} - ${layoutName}`));
+    possibleNames.add(normaliseCourseName(`${baseName}-${layoutName}`));
   }
 
   const { rows } = await db.query(
@@ -86,7 +102,21 @@ async function getTemplateFromDbAnyState(course, holes, layout = null) {
     return possibleNames.has(n);
   });
 
-  if (matches.length !== 1) return null;
+  if (matches.length !== 1) {
+    console.log("⚠️ getTemplateFromDbAnyState no single match:", {
+      course,
+      layout,
+      holes: h,
+      possibleNames: Array.from(possibleNames),
+      matches: matches.map((m) => ({
+        id: m.id,
+        name: m.name,
+        state: m.state,
+        holes: m.holes,
+      })),
+    });
+    return null;
+  }
 
   const match = matches[0];
 
