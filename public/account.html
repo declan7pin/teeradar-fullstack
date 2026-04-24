@@ -514,6 +514,20 @@
         grid-template-columns: 1fr;
       }
     }
+    
+        /* REFUND MODAL */
+    .refund-phone {
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      background:var(--teal);
+      color:#fff;
+      border-radius:999px;
+      padding:10px 16px;
+      font-weight:700;
+      margin-top:10px;
+    }
+    
     /* NEW: day choice chips */
     .day-choices {
       display:flex;
@@ -726,6 +740,24 @@
     </div>
   </div>
 </main>
+<div id="refundModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-title">Request a refund</div>
+    <div class="modal-subtext" id="refundModalText">
+      Refunds for paid online bookings are handled by the golf course directly.
+    </div>
+
+    <p style="font-size:13px;color:var(--muted);margin:0 0 10px;">
+      Please call the course to request a refund, as each course may have a different refund policy.
+    </p>
+
+    <div id="refundPhoneWrap"></div>
+
+    <div class="modal-actions">
+      <button id="closeRefundModalBtn" class="btn-secondary" type="button">Close</button>
+    </div>
+  </div>
+</div>
 <div id="shareBookingModal" class="modal-backdrop" aria-hidden="true">
   <div class="modal-card">
     <div class="modal-title">Share booking</div>
@@ -805,6 +837,10 @@ const previousGamesWrap = document.getElementById("previousGamesWrap");
 const previousGamesFilter = document.getElementById("previousGamesFilter");
 
   // ✅ NEW: share booking modal
+    const refundModal = document.getElementById("refundModal");
+  const refundModalText = document.getElementById("refundModalText");
+  const refundPhoneWrap = document.getElementById("refundPhoneWrap");
+  const closeRefundModalBtn = document.getElementById("closeRefundModalBtn");
   const shareBookingModal = document.getElementById("shareBookingModal");
   const shareBookingSubtext = document.getElementById("shareBookingSubtext");
   const shareBookingStatus = document.getElementById("shareBookingStatus");
@@ -1663,6 +1699,40 @@ searchableCourses = data.filter((c) => {
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
   }
+  
+  function openRefundModal(game) {
+  const courseName = String(game?.course_name || "the course").trim();
+  const phone =
+    String(
+      game?.course_phone ||
+      game?.phone ||
+      game?.coursePhone ||
+      ""
+    ).trim();
+
+  if (refundModalText) {
+    refundModalText.textContent =
+      `Refunds for ${courseName} paid online bookings are handled by the golf course directly.`;
+  }
+
+  if (refundPhoneWrap) {
+    refundPhoneWrap.innerHTML = phone
+      ? `<a class="refund-phone" href="tel:${escapeHtml(phone)}">Call ${escapeHtml(phone)}</a>`
+      : `<div class="blocked" style="margin-top:10px;">No phone number is currently available for this course. Please contact the course directly.</div>`;
+  }
+
+  if (refundModal) {
+    refundModal.classList.add("show");
+    refundModal.setAttribute("aria-hidden", "false");
+  }
+}
+
+function closeRefundModal() {
+  if (refundModal) {
+    refundModal.classList.remove("show");
+    refundModal.setAttribute("aria-hidden", "true");
+  }
+}
 
 function getScorecardUrl(roundId) {
   return `/round.html?id=${encodeURIComponent(roundId)}`;
@@ -1875,13 +1945,23 @@ async function createOrOpenScorecard(game, btn) {
     </button>
   ` : ``}
 
-  ${canCancel ? `
+    ${canCancel && !paid ? `
     <button
       class="btn-danger cancel-booking-btn"
       data-reference="${escapeHtml(g.reference || "")}"
       type="button"
     >
       Cancel booking
+    </button>
+  ` : ``}
+
+  ${canCancel && paid ? `
+    <button
+      class="btn-danger refund-booking-btn"
+      data-reference="${escapeHtml(g.reference || "")}"
+      type="button"
+    >
+      Request refund
     </button>
   ` : ``}
 
@@ -1975,6 +2055,19 @@ async function createOrOpenScorecard(game, btn) {
       }
       btn.disabled = false;
     }
+  });
+});
+
+targetEl.querySelectorAll(".refund-booking-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const reference = String(btn.dataset.reference || "").trim();
+    if (!reference) return;
+
+    const game = (Array.isArray(items) ? items : []).find(
+      (x) => String(x?.reference || "").trim() === reference
+    );
+
+    openRefundModal(game || {});
   });
 });
 
@@ -2283,6 +2376,16 @@ if (closeShareBookingModalBtn) {
 if (shareSelectedMatesBtn) {
   shareSelectedMatesBtn.addEventListener("click", () => {
     shareSelectedMates();
+  });
+}
+
+if (closeRefundModalBtn) {
+  closeRefundModalBtn.addEventListener("click", closeRefundModal);
+}
+
+if (refundModal) {
+  refundModal.addEventListener("click", (e) => {
+    if (e.target === refundModal) closeRefundModal();
   });
 }
 
