@@ -561,6 +561,62 @@ button, a, .btn, .btn2, input, select {
   line-height:1.35;
 }
 .promoNote .muted{font-weight:800}
+/* ✅ Hole picker bottom sheet */
+.holePickerBack{
+  position:fixed;
+  inset:0;
+  background:rgba(2,6,23,.45);
+  display:none;
+  z-index:9999;
+  align-items:flex-end;
+  justify-content:center;
+}
+
+.holePicker{
+  width:100%;
+  max-width:520px;
+  background:#fff;
+  border-radius:22px 22px 0 0;
+  padding:18px 18px 28px;
+  box-shadow:0 -12px 40px rgba(0,0,0,.22);
+}
+
+.holePickerHandle{
+  width:54px;
+  height:6px;
+  border-radius:999px;
+  background:#d1d5db;
+  margin:0 auto 14px;
+}
+
+.holePicker h3{
+  margin:0 0 18px;
+  font-size:1.8rem;
+  font-weight:1000;
+}
+
+.holeGrid{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:10px;
+}
+
+.holePickBtn{
+  border:1px solid var(--border);
+  background:#fff;
+  border-radius:8px;
+  height:62px;
+  font-size:1.25rem;
+  font-weight:900;
+  color:var(--text);
+  cursor:pointer;
+}
+
+.holePickBtn.active{
+  background:#22c55e;
+  border-color:#22c55e;
+  color:#fff;
+}
   </style>
 </head>
 <body>
@@ -868,6 +924,15 @@ button, a, .btn, .btn2, input, select {
       <div id="submitToast" class="toast" style="margin-top:10px;"></div>
     </div>
   </div>
+  
+  <!-- ✅ Hole picker modal -->
+<div class="holePickerBack" id="holePickerBack" aria-hidden="true">
+  <div class="holePicker">
+    <div class="holePickerHandle"></div>
+    <h3>Select a Hole</h3>
+    <div class="holeGrid" id="holePickerGrid"></div>
+  </div>
+</div>
 
   <script>
     // -----------------------------
@@ -2223,28 +2288,6 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
 if (premPrevBtn) premPrevBtn.disabled = (premiumHoleIndex <= 0 && premiumPlayerIndex <= 0);
 if (premNextBtn) premNextBtn.disabled = (premiumHoleIndex >= holesCount - 1 && premiumPlayerIndex >= pc2 - 1);
 }
-const holeSelectPill = document.getElementById("premHoleSelectPill");
-if (holeSelectPill) {
-  holeSelectPill.onclick = () => {
-    const currentHole = premiumHoleIndex + 1;
-    const raw = window.prompt(
-      `Jump to which hole? Enter 1-${holesCount}`,
-      String(currentHole)
-    );
-
-    if (raw === null) return;
-
-    const selectedHole = Number(raw);
-    if (!Number.isFinite(selectedHole) || selectedHole < 1 || selectedHole > holesCount) {
-      alert(`Please enter a hole number between 1 and ${holesCount}.`);
-      return;
-    }
-
-    premiumHoleIndex = selectedHole - 1;
-    premiumPlayerIndex = 0;
-    renderPremiumForHole(round, metaPars, metaDists, teeName);
-  };
-}
 
 function enablePremiumMode(round, metaPars, metaDists, teeName){
   premiumShowingTable = false;
@@ -3204,34 +3247,57 @@ function clearRoundIdFromUrl(){
       if (e.key === "Escape") closeSubmitModal();
     });
     
-    // ✅ Tap/click Hole pill to jump to any hole
+    // ✅ Tap/click Hole pill to open proper hole picker
+const holePickerBack = document.getElementById("holePickerBack");
+const holePickerGrid = document.getElementById("holePickerGrid");
+
+function openHolePicker(){
+  if (!holePickerBack || !holePickerGrid || !currentRound) return;
+
+  const holesCount = Number(currentRound?.holes) || 18;
+  const currentHole = premiumHoleIndex + 1;
+
+  holePickerGrid.innerHTML = "";
+
+  for (let i = 1; i <= holesCount; i++){
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "holePickBtn" + (i === currentHole ? " active" : "");
+    btn.textContent = String(i);
+
+    btn.addEventListener("click", () => {
+      premiumHoleIndex = i - 1;
+      premiumPlayerIndex = 0;
+      closeHolePicker();
+      renderPremiumForHole(currentRound, null, null, "");
+    });
+
+    holePickerGrid.appendChild(btn);
+  }
+
+  holePickerBack.style.display = "flex";
+  holePickerBack.setAttribute("aria-hidden", "false");
+}
+
+function closeHolePicker(){
+  if (!holePickerBack) return;
+  holePickerBack.style.display = "none";
+  holePickerBack.setAttribute("aria-hidden", "true");
+}
+
 document.addEventListener("click", (e) => {
   const pill = e.target.closest("#premHoleSelectPill");
   if (!pill) return;
 
   e.preventDefault();
-
-  const holesCount = Number(currentRound?.holes) || 18;
-  const currentHole = premiumHoleIndex + 1;
-
-  const raw = window.prompt(
-    `Jump to which hole? Enter 1-${holesCount}`,
-    String(currentHole)
-  );
-
-  if (raw === null) return;
-
-  const selectedHole = Number(raw);
-  if (!Number.isFinite(selectedHole) || selectedHole < 1 || selectedHole > holesCount) {
-    alert(`Please enter a hole number between 1 and ${holesCount}.`);
-    return;
-  }
-
-  premiumHoleIndex = selectedHole - 1;
-  premiumPlayerIndex = 0;
-
-  renderScorecard(currentRound);
+  openHolePicker();
 });
+
+if (holePickerBack){
+  holePickerBack.addEventListener("click", (e) => {
+    if (e.target === holePickerBack) closeHolePicker();
+  });
+}
 
     (async function init(){
   // Always show the app now (Guest mode supported)
