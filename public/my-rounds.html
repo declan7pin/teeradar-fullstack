@@ -1236,6 +1236,15 @@ function setLeftPanelsVisibility(show){
       label = label.replace(/\s+/g, " ").trim();
       return label;
     }
+    function splitRoundLayoutParts(layout){
+  return String(layout || "")
+    .toLowerCase()
+    .replace(/\s*\/\s*/g, " / ")
+    .replace(/\s*-\s*/g, " / ")
+    .split("/")
+    .map(x => x.trim())
+    .filter(Boolean);
+}
 
     function isValidEmail(v){
       const s = String(v||"").trim();
@@ -1690,7 +1699,7 @@ function setLeftPanelsVisibility(show){
         if (holes === 9){
           layoutEl.value = uiNineSingle || layoutEl.value;
         } else {
-          layoutEl.value = (uiNineFront && uiNineBack) ? `${uiNineFront} - ${uiNineBack}` : layoutEl.value;
+          layoutEl.value = (uiNineFront && uiNineBack) ? `${uiNineFront} / ${uiNineBack}` : layoutEl.value;
         }
 
         nineLoopWrap.style.display = "none";
@@ -1727,7 +1736,7 @@ function setLeftPanelsVisibility(show){
 
     nineBackEl.addEventListener("change", async () => {
       uiNineBack = String(nineBackEl.value || "").trim();
-      layoutEl.value = (uiNineFront && uiNineBack) ? `${uiNineFront} - ${uiNineBack}` : layoutEl.value;
+      layoutEl.value = (uiNineFront && uiNineBack) ? `${uiNineFront} / ${uiNineBack}` : layoutEl.value;
       await refreshNinesAndTeesUI();
     });
 
@@ -2344,9 +2353,19 @@ function enablePremiumMode(round, metaPars, metaDists, teeName){
 
           if (!uiNineFront || !uiNineBack){
             const lay = String(round.layout || "").trim();
-            const parts = lay.split("-").map(s=>s.trim()).filter(Boolean);
-            uiNineFront = layouts9.find(x => parts[0] && x.toLowerCase() === parts[0].toLowerCase()) || layouts9[0] || "";
-            uiNineBack  = layouts9.find(x => parts[1] && x.toLowerCase() === parts[1].toLowerCase()) || layouts9[1] || layouts9[0] || "";
+const parts = splitRoundLayoutParts(lay);
+
+uiNineFront =
+  layouts9.find(x => parts[0] && x.toLowerCase() === parts[0].toLowerCase()) ||
+  layouts9[0] ||
+  "";
+
+uiNineBack =
+  layouts9.find(x => parts[1] && x.toLowerCase() === parts[1].toLowerCase()) ||
+  layouts9.find(x => x.toLowerCase() !== String(uiNineFront || "").toLowerCase()) ||
+  layouts9[1] ||
+  layouts9[0] ||
+  "";
           }
 
           ensureDifferentFrontBack(layouts9);
@@ -2852,7 +2871,7 @@ if (!isLoggedIn()){
         } else {
           const a = String(uiNineFront || "").trim();
           const b = String(uiNineBack || "").trim();
-          layout = (a && b) ? `${a} - ${b}` : layout;
+          layout = (a && b) ? `${a} / ${b}` : layout;
         }
       }
 
