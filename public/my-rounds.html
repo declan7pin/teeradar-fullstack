@@ -3203,6 +3203,35 @@ function clearRoundIdFromUrl(){
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeSubmitModal();
     });
+    
+    // ✅ Tap/click Hole pill to jump to any hole
+document.addEventListener("click", (e) => {
+  const pill = e.target.closest("#premHoleSelectPill");
+  if (!pill) return;
+
+  e.preventDefault();
+
+  const holesCount = Number(currentRound?.holes) || 18;
+  const currentHole = premiumHoleIndex + 1;
+
+  const raw = window.prompt(
+    `Jump to which hole? Enter 1-${holesCount}`,
+    String(currentHole)
+  );
+
+  if (raw === null) return;
+
+  const selectedHole = Number(raw);
+  if (!Number.isFinite(selectedHole) || selectedHole < 1 || selectedHole > holesCount) {
+    alert(`Please enter a hole number between 1 and ${holesCount}.`);
+    return;
+  }
+
+  premiumHoleIndex = selectedHole - 1;
+  premiumPlayerIndex = 0;
+
+  renderScorecard(currentRound);
+});
 
     (async function init(){
   // Always show the app now (Guest mode supported)
