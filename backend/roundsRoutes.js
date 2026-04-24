@@ -211,6 +211,39 @@ async function getTemplateFromDbLoose(course, state, holes) {
   };
 }
 
+async function getTemplateFromDbAnyState(course, holes) {
+  const wanted = normaliseCourseName(course);
+  const h = Number(holes);
+
+  if (!wanted || !h) return null;
+
+  const { rows } = await db.query(
+    `
+    SELECT id, name, state, holes, pars_json, dists_json
+    FROM scorecard_courses
+    WHERE holes = $1
+    ORDER BY updated_at DESC NULLS LAST, id DESC;
+    `,
+    [h]
+  );
+
+  const matches = (rows || []).filter((r) => normaliseCourseName(r.name) === wanted);
+
+  // ✅ Only auto-pick state if there is one clear match
+  if (matches.length !== 1) return null;
+
+  const match = matches[0];
+
+  return {
+    id: match.id,
+    name: match.name,
+    state: match.state,
+    holes: match.holes,
+    pars: Array.isArray(match.pars_json) ? match.pars_json : null,
+    dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+  };
+}
+
 function splitLayoutParts(layout) {
   return String(layout || "")
     .split("/")
@@ -778,7 +811,7 @@ export async function createRoundWithSeededHoles({
     return { ok: false, status: 400, error: "holes must be 9 or 18" };
   }
 
-  const stateCode = (state || "").toString().trim().toUpperCase() || null;
+  let stateCode = (state || "").toString().trim().toUpperCase() || null;
   const layoutName = (layout || "").toString().trim() || null;
   const mode = (par_mode || "").toString().trim().toLowerCase() || "published";
 
@@ -794,25 +827,36 @@ export async function createRoundWithSeededHoles({
   let pars = null;
   let dists = null;
 
-  // ✅ Try approved templates first
-  if (mode === "published" && stateCode) {
-    // 1) exact course/state/holes match
-    let t = await getTemplateFromDb(String(course), stateCode, holesNum);
+    // ✅ Try approved templates first
+  if (mode === "published") {
+    let t = null;
 
-    // 2) looser name match if exact failed
-    if (!t) {
-      t = await getTemplateFromDbLoose(String(course), stateCode, holesNum);
+    if (stateCode) {
+      // 1) exact course/state/holes match
+      t = await getTemplateFromDb(String(course), stateCode, holesNum);
+
+      // 2) looser name match if exact failed
+      if (!t) {
+        t = await getTemplateFromDbLoose(String(course), stateCode, holesNum);
+      }
+    }
+
+    // ✅ 3) If booking-created round has no state, auto-find the approved template
+    if (!t && !stateCode) {
+      t = await getTemplateFromDbAnyState(String(course), holesNum);
+      if (t?.state) stateCode = String(t.state || "").trim().toUpperCase() || null;
     }
 
     if (t && Array.isArray(t.pars) && t.pars.length === holesNum) {
       pars = t.pars.slice(0, holesNum);
     }
+
     if (t && Array.isArray(t.dists) && t.dists.length === holesNum) {
       dists = t.dists.slice(0, holesNum);
     }
 
-    // 3) 18-hole routed fallback from two approved 9-hole templates
-    if ((!pars || !dists) && holesNum === 18 && layoutName) {
+    // 4) 18-hole routed fallback from two approved 9-hole templates
+    if ((!pars || !dists) && holesNum === 18 && layoutName && stateCode) {
       const parts = splitLayoutParts(layoutName);
       if (parts.length === 2) {
         const frontT = await getNineHoleTemplateForLayout(course, stateCode, parts[0]);
@@ -836,13 +880,14 @@ export async function createRoundWithSeededHoles({
       }
     }
 
-    // 4) 9-hole routed fallback
-    if ((!pars || !dists) && holesNum === 9 && layoutName) {
+    // 5) 9-hole routed fallback
+    if ((!pars || !dists) && holesNum === 9 && layoutName && stateCode) {
       const t9 = await getNineHoleTemplateForLayout(course, stateCode, layoutName);
 
       if (t9 && Array.isArray(t9.pars) && t9.pars.length === 9) {
         pars = t9.pars.slice(0, 9);
       }
+
       if (t9 && Array.isArray(t9.dists) && t9.dists.length === 9) {
         dists = t9.dists.slice(0, 9);
       }
