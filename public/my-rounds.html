@@ -2080,20 +2080,29 @@ function renderPremiumForHole(round, metaPars, metaDists, teeName){
 
   const holeNum = premiumHoleIndex + 1;
 
-  // determine par: published meta -> table -> fallback 4
-  const metaPar = (metaPars && Number.isFinite(Number(metaPars[premiumHoleIndex])))
-    ? Number(metaPars[premiumHoleIndex])
-    : null;
-
+    // ✅ FIX: premium header must use the table row as source of truth
+  // Table is already correctly built from saved/backend pars + distances.
   const parInp = scoreBody.querySelector(`input[data-field="par"][data-hole="${holeNum}"]`);
   const tableParRaw = parInp ? String(parInp.value || "").trim() : "";
   const tablePar = tableParRaw === "" ? null : Number(tableParRaw);
 
-  const basePar = Number.isFinite(metaPar) ? metaPar : (Number.isFinite(tablePar) ? tablePar : 4);
+  const metaPar = (metaPars && Number.isFinite(Number(metaPars[premiumHoleIndex])))
+    ? Number(metaPars[premiumHoleIndex])
+    : null;
 
-  const metaDist = (metaDists && Number.isFinite(Number(metaDists[premiumHoleIndex])))
+  // ✅ prefer table par first, then meta, then fallback
+  const basePar = Number.isFinite(tablePar) ? tablePar : (Number.isFinite(metaPar) ? metaPar : 4);
+
+  // ✅ distance also prefers the rendered table value
+  const distCell = scoreBody.querySelector(`tr:nth-child(${holeNum}) td.distCell[data-meta-dist]`);
+  const tableDistRaw = distCell ? String(distCell.getAttribute("data-meta-dist") || "").trim() : "";
+  const tableDist = tableDistRaw === "" ? null : Number(tableDistRaw);
+
+  const metaDistRaw = (metaDists && Number.isFinite(Number(metaDists[premiumHoleIndex])))
     ? Number(metaDists[premiumHoleIndex])
     : null;
+
+  const metaDist = Number.isFinite(tableDist) ? tableDist : metaDistRaw;
 
   // header pills
 const pc = getPlayersCountFromRound(round);
