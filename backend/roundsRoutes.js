@@ -239,39 +239,6 @@ async function getTemplateFromDbLoose(course, state, holes) {
   };
 }
 
-async function getTemplateFromDbAnyState(course, holes) {
-  const wanted = normaliseCourseName(course);
-  const h = Number(holes);
-
-  if (!wanted || !h) return null;
-
-  const { rows } = await db.query(
-    `
-    SELECT id, name, state, holes, pars_json, dists_json
-    FROM scorecard_courses
-    WHERE holes = $1
-    ORDER BY updated_at DESC NULLS LAST, id DESC;
-    `,
-    [h]
-  );
-
-  const matches = (rows || []).filter((r) => normaliseCourseName(r.name) === wanted);
-
-  // ✅ Only auto-pick state if there is one clear match
-  if (matches.length !== 1) return null;
-
-  const match = matches[0];
-
-  return {
-    id: match.id,
-    name: match.name,
-    state: match.state,
-    holes: match.holes,
-    pars: Array.isArray(match.pars_json) ? match.pars_json : null,
-    dists: Array.isArray(match.dists_json) ? match.dists_json : null,
-  };
-}
-
 function splitLayoutParts(layout) {
   return String(layout || "")
     .split("/")
