@@ -57,19 +57,47 @@ function normalise(s) {
 
 // ✅ NEW: normalise course names so they match DB templates
 // Removes trailing "(18 holes)" / "(9 holes)" etc.
-function normaliseCourseName(s) {
-  let x = (s || "").toString().trim().toLowerCase();
+async function getTemplateFromDbAnyState(course, holes, layout = null) {
+  const baseName = normaliseCourseName(course);
+  const layoutName = normaliseCourseName(layout);
+  const h = Number(holes);
 
-  // remove trailing "(...holes...)" e.g. "Whaleback Golf Course (18 holes)"
-  x = x.replace(/\s*\(\s*\d+\s*holes?\s*\)\s*$/i, "");
+  if (!baseName || !h) return null;
 
-  // also handle "(9 hole)" just in case
-  x = x.replace(/\s*\(\s*\d+\s*hole\s*\)\s*$/i, "");
+  const possibleNames = new Set();
+  possibleNames.add(baseName);
 
-  // collapse whitespace
-  x = x.replace(/\s+/g, " ").trim();
+  if (layoutName) {
+    possibleNames.add(normaliseCourseName(`${baseName} - ${layoutName}`));
+  }
 
-  return x;
+  const { rows } = await db.query(
+    `
+    SELECT id, name, state, holes, pars_json, dists_json
+    FROM scorecard_courses
+    WHERE holes = $1
+    ORDER BY updated_at DESC NULLS LAST, id DESC;
+    `,
+    [h]
+  );
+
+  const matches = (rows || []).filter((r) => {
+    const n = normaliseCourseName(r.name);
+    return possibleNames.has(n);
+  });
+
+  if (matches.length !== 1) return null;
+
+  const match = matches[0];
+
+  return {
+    id: match.id,
+    name: match.name,
+    state: match.state,
+    holes: match.holes,
+    pars: Array.isArray(match.pars_json) ? match.pars_json : null,
+    dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+  };
 }
 
 // -------------------------------------------------
@@ -843,7 +871,7 @@ export async function createRoundWithSeededHoles({
 
     // ✅ 3) If booking-created round has no state, auto-find the approved template
     if (!t && !stateCode) {
-      t = await getTemplateFromDbAnyState(String(course), holesNum);
+      t = await getTemplateFromDbAnyState(String(course), holesNum, layoutName);
       if (t?.state) stateCode = String(t.state || "").trim().toUpperCase() || null;
     }
 
