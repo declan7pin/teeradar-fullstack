@@ -6053,6 +6053,20 @@ router.post("/course-admin/bookings/:reference/request-cancellation", requireCou
   }
 });
 
+router.post("/course-admin/request-booking-cancellation", requireCourseAdmin, async (req, res) => {
+  try {
+    const reference = String(req.body?.reference || "").trim();
+    if (!reference) return res.status(400).json({ ok:false, error:"reference_required" });
+
+    return res.status(501).json({
+      ok:false,
+      error:"route_connected_but_handler_missing",
+      detail:"Your live server now sees this route. Replace this block with the full cancellation handler."
+    });
+  } catch (e) {
+    return res.status(500).json({ ok:false, error:"internal_error" });
+  }
+});
 // ✅ Public golfer page: review cancellation request
 router.get("/cancel-request", async (req, res) => {
   try {
