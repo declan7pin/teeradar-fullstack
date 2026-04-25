@@ -1276,6 +1276,102 @@ async function sendBookingEmail({
   }
 }
 
+// ✅ Send golfer email asking them to confirm paid-online cancellation
+async function sendPaidCancellationRequestEmail({
+  to,
+  golferName,
+  courseName,
+  date,
+  time,
+  holes,
+  players,
+  reference,
+  token,
+}) {
+  const result = { emailOk: false, emailReason: "" };
+
+  if (!resend) {
+    result.emailReason = "RESEND_API_KEY_not_set";
+    return result;
+  }
+
+  const from = buildFrom();
+  if (!from) {
+    result.emailReason = "BOOKING_EMAIL_FROM_not_set";
+    return result;
+  }
+
+  if (!isLikelyEmail(to)) {
+    result.emailReason = "invalid_to_email";
+    return result;
+  }
+
+  const confirmUrl = `${BASE_URL}/api/book/cancel-request?token=${encodeURIComponent(token)}`;
+
+  const subject = `Cancellation request — ${courseName} booking ${reference}`;
+
+  const html = `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.5;color:#0f172a">
+      <h2 style="margin:0 0 10px">Cancellation request</h2>
+
+      <p style="margin:0 0 12px">
+        Hi ${golferName ? escapeHtmlForEmail(golferName) : "there"},
+      </p>
+
+      <p style="margin:0 0 12px">
+        ${escapeHtmlForEmail(courseName)} has requested to cancel your paid online TeeRadar booking.
+      </p>
+
+      <table style="border-collapse:collapse;width:100%;max-width:520px;margin:12px 0">
+        <tr><td style="padding:6px 0;color:#64748b">Reference</td><td style="padding:6px 0"><b>${escapeHtmlForEmail(reference)}</b></td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Course</td><td style="padding:6px 0">${escapeHtmlForEmail(courseName)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Date</td><td style="padding:6px 0">${escapeHtmlForEmail(date)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Time</td><td style="padding:6px 0">${escapeHtmlForEmail(time)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Players</td><td style="padding:6px 0">${escapeHtmlForEmail(players)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Holes</td><td style="padding:6px 0">${escapeHtmlForEmail(holes)}</td></tr>
+      </table>
+
+      <p style="margin:0 0 14px">
+        Please confirm whether you agree to cancel this booking.
+      </p>
+
+      <p style="margin:0 0 14px">
+        <a href="${confirmUrl}" style="display:inline-block;padding:12px 16px;border-radius:10px;background:#00796b;color:#fff;text-decoration:none;font-weight:800">
+          Review cancellation request
+        </a>
+      </p>
+
+      <p style="margin:14px 0 0;color:#64748b;font-size:12px">
+        Refunds are handled according to the course’s refund policy.
+      </p>
+    </div>
+  `;
+
+  try {
+    const payload = { from, to, subject, html };
+    if (bookingBcc && isLikelyEmail(bookingBcc)) payload.bcc = bookingBcc;
+
+    await resend.emails.send(payload);
+
+    result.emailOk = true;
+    return result;
+  } catch (e) {
+    result.emailOk = false;
+    result.emailReason = e?.message ? String(e.message) : "send_failed";
+    return result;
+  }
+}
+
+// ✅ local email escaping helper
+function escapeHtmlForEmail(v) {
+  return String(v ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 // -----------------------------
 // One-time table creation (safe)
 // -----------------------------
@@ -1636,6 +1732,36 @@ async function ensureBookingTables() {
     ALTER TABLE booking_bookings
     ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;
   `);
+  // ✅ ADD: paid online cancellation request flow
+await db.query(`
+  ALTER TABLE booking_bookings
+  ADD COLUMN IF NOT EXISTS cancellation_requested_at TIMESTAMPTZ;
+`);
+
+await db.query(`
+  ALTER TABLE booking_bookings
+  ADD COLUMN IF NOT EXISTS cancellation_requested_by TEXT;
+`);
+
+await db.query(`
+  ALTER TABLE booking_bookings
+  ADD COLUMN IF NOT EXISTS cancellation_token TEXT;
+`);
+
+await db.query(`
+  ALTER TABLE booking_bookings
+  ADD COLUMN IF NOT EXISTS cancellation_confirmed_at TIMESTAMPTZ;
+`);
+
+await db.query(`
+  ALTER TABLE booking_bookings
+  ADD COLUMN IF NOT EXISTS cancellation_declined_at TIMESTAMPTZ;
+`);
+
+await db.query(`
+  CREATE INDEX IF NOT EXISTS booking_bookings_cancellation_token_idx
+  ON booking_bookings (cancellation_token);
+`);
 
   // ✅ NEW: link bookings to TeeRadar account when email matches a user
   await db.query(`
@@ -5822,6 +5948,311 @@ router.post("/my-games/:reference/cancel", requireAccountUser, async (req, res) 
   } catch (e) {
     console.error("POST /my-games/:reference/cancel", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// ✅ Course admin: request cancellation for PAID ONLINE bookings only
+router.post("/course-admin/bookings/:reference/request-cancellation", requireCourseAdmin, async (req, res) => {
+  try {
+    const reference = String(req.params.reference || "").trim().toUpperCase();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
+
+    const courseId = Number(req.courseAdmin?.course_id || 0);
+    const requestedBy = String(req.courseAdmin?.email || "").trim().toLowerCase();
+
+    const q = await db.query(
+      `
+      SELECT
+        b.id,
+        b.course_id,
+        b.reference,
+        b.golfer_name,
+        b.golfer_email,
+        b.play_date::text AS play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.status,
+        b.paid,
+        b.cancellation_requested_at,
+        c.name AS course_name,
+        COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      WHERE UPPER(b.reference) = $1
+        AND b.course_id = $2
+      LIMIT 1;
+      `,
+      [reference, courseId]
+    );
+
+    const booking = q.rows?.[0];
+    if (!booking) {
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    if (String(booking.status || "").toUpperCase() === "CANCELLED") {
+      return res.status(400).json({ ok: false, error: "already_cancelled" });
+    }
+
+    if (String(booking.payment_mode || "").toUpperCase() !== "PAY_ON_BOOKING" || !booking.paid) {
+      return res.status(400).json({ ok: false, error: "only_paid_online_bookings_use_cancellation_request" });
+    }
+
+    if (!isLikelyEmail(booking.golfer_email)) {
+      return res.status(400).json({ ok: false, error: "golfer_email_missing" });
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET
+        cancellation_requested_at = NOW(),
+        cancellation_requested_by = $2,
+        cancellation_token = $3,
+        cancellation_confirmed_at = NULL,
+        cancellation_declined_at = NULL
+      WHERE id = $1
+      `,
+      [booking.id, requestedBy || "course_admin", token]
+    );
+
+    const emailResult = await sendPaidCancellationRequestEmail({
+      to: booking.golfer_email,
+      golferName: booking.golfer_name || "",
+      courseName: booking.course_name || "Golf Course",
+      date: booking.play_date,
+      time: String(booking.tee_time || "").split("|")[0],
+      holes: Number(booking.holes || 0),
+      players: Number(booking.players || 0),
+      reference: booking.reference,
+      token,
+    });
+
+    if (!emailResult.emailOk) {
+      return res.status(500).json({
+        ok: false,
+        error: "cancellation_email_failed",
+        detail: emailResult.emailReason || null,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      reference: booking.reference,
+      cancellationRequested: true,
+      emailOk: true,
+    });
+  } catch (e) {
+    console.error("course-admin request cancellation", e);
+    return res.status(500).json({ ok: false, error: "internal_error", detail: e?.message || null });
+  }
+});
+
+// ✅ Public golfer page: review cancellation request
+router.get("/cancel-request", async (req, res) => {
+  try {
+    const token = String(req.query?.token || "").trim();
+    if (!token) return res.status(400).send("Missing cancellation token.");
+
+    const q = await db.query(
+      `
+      SELECT
+        b.reference,
+        b.golfer_name,
+        b.play_date::text AS play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.status,
+        b.cancellation_confirmed_at,
+        b.cancellation_declined_at,
+        c.name AS course_name
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      WHERE b.cancellation_token = $1
+      LIMIT 1;
+      `,
+      [token]
+    );
+
+    const booking = q.rows?.[0];
+    if (!booking) return res.status(404).send("Cancellation request not found.");
+
+    const status = String(booking.status || "").toUpperCase();
+
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    return res.send(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar — Cancellation request</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f4f7fb;color:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:18px}
+    .card{width:100%;max-width:520px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;box-shadow:0 18px 40px rgba(15,23,42,.12)}
+    h1{margin:0 0 8px;font-size:24px}
+    p{color:#64748b;line-height:1.45}
+    .box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin:14px 0}
+    button{border:0;border-radius:999px;padding:11px 16px;font-weight:800;cursor:pointer;margin:6px}
+    .yes{background:#00796b;color:#fff}
+    .no{background:#e5e7eb;color:#0f172a}
+    .msg{font-weight:800;margin-top:12px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Cancellation request</h1>
+    <p>${escapeHtmlForEmail(booking.course_name)} has requested to cancel this paid online booking.</p>
+
+    <div class="box">
+      <div><b>Reference:</b> ${escapeHtmlForEmail(booking.reference)}</div>
+      <div><b>Date:</b> ${escapeHtmlForEmail(booking.play_date)}</div>
+      <div><b>Time:</b> ${escapeHtmlForEmail(String(booking.tee_time || "").split("|")[0])}</div>
+      <div><b>Players:</b> ${escapeHtmlForEmail(booking.players)}</div>
+      <div><b>Holes:</b> ${escapeHtmlForEmail(booking.holes)}</div>
+    </div>
+
+    ${
+      status === "CANCELLED"
+        ? `<p class="msg">This booking has already been cancelled.</p>`
+        : booking.cancellation_declined_at
+        ? `<p class="msg">You have already chosen to keep this booking.</p>`
+        : `
+          <p>Do you agree to cancel this booking?</p>
+          <button class="yes" onclick="submitDecision('confirm')">Confirm cancellation</button>
+          <button class="no" onclick="submitDecision('decline')">Keep booking</button>
+          <div id="msg" class="msg"></div>
+        `
+    }
+  </div>
+
+<script>
+async function submitDecision(decision){
+  const msg = document.getElementById("msg");
+  msg.textContent = "Saving...";
+  try{
+    const res = await fetch("/api/book/cancel-request/decision", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ token:${JSON.stringify(token)}, decision })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      msg.textContent = data.error || "Could not update cancellation request.";
+      return;
+    }
+    msg.textContent = decision === "confirm"
+      ? "Cancellation confirmed. The course has been notified."
+      : "Booking kept. The course has been notified.";
+    setTimeout(() => window.location.reload(), 900);
+  }catch(e){
+    msg.textContent = "Network error.";
+  }
+}
+</script>
+</body>
+</html>`);
+  } catch (e) {
+    console.error("GET /cancel-request", e);
+    return res.status(500).send("Internal error.");
+  }
+});
+
+// ✅ Public golfer action: confirm or decline cancellation
+router.post("/cancel-request/decision", async (req, res) => {
+  try {
+    const token = String(req.body?.token || "").trim();
+    const decision = String(req.body?.decision || "").trim().toLowerCase();
+
+    if (!token) return res.status(400).json({ ok: false, error: "token_required" });
+    if (!["confirm", "decline"].includes(decision)) {
+      return res.status(400).json({ ok: false, error: "decision_invalid" });
+    }
+
+    const q = await db.query(
+      `
+      SELECT
+        b.id,
+        b.course_id,
+        b.reference,
+        b.play_date,
+        b.tee_time,
+        b.holes,
+        b.status,
+        COALESCE(b.layout_key,'') AS layout_key,
+        COALESCE(b.front_nine_key,'') AS front_nine_key,
+        COALESCE(b.back_nine_key,'') AS back_nine_key
+      FROM booking_bookings b
+      WHERE b.cancellation_token = $1
+      LIMIT 1;
+      `,
+      [token]
+    );
+
+    const booking = q.rows?.[0];
+    if (!booking) return res.status(404).json({ ok: false, error: "request_not_found" });
+
+    if (String(booking.status || "").toUpperCase() === "CANCELLED") {
+      return res.json({ ok: true, alreadyCancelled: true });
+    }
+
+    if (decision === "decline") {
+      await db.query(
+        `
+        UPDATE booking_bookings
+        SET
+          cancellation_declined_at = NOW(),
+          cancellation_token = NULL
+        WHERE id = $1
+        `,
+        [booking.id]
+      );
+
+      return res.json({ ok: true, reference: booking.reference, decision: "decline" });
+    }
+
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET
+        status = 'CANCELLED',
+        cancelled_at = COALESCE(cancelled_at, NOW()),
+        cancelled_reason = 'Paid online cancellation confirmed by golfer',
+        cancellation_confirmed_at = NOW(),
+        cancellation_token = NULL
+      WHERE id = $1
+      `,
+      [booking.id]
+    );
+
+    try {
+      await syncBookedPlayersForTime({
+        courseId: booking.course_id,
+        play_date: booking.play_date,
+        tee_time: booking.tee_time,
+        holes: booking.holes,
+        layout_key: booking.layout_key || null,
+        front_nine_key: booking.front_nine_key || null,
+        back_nine_key: booking.back_nine_key || null,
+      });
+    } catch (e) {
+      console.warn("syncBookedPlayersForTime failed after paid cancellation confirm", e?.message || e);
+    }
+
+    return res.json({
+      ok: true,
+      reference: booking.reference,
+      decision: "confirm",
+      status: "CANCELLED",
+    });
+  } catch (e) {
+    console.error("POST /cancel-request/decision", e);
+    return res.status(500).json({ ok: false, error: "internal_error", detail: e?.message || null });
   }
 });
 // -----------------------------
