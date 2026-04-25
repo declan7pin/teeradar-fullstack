@@ -6255,7 +6255,7 @@ router.get("/cancel-request", async (req, res) => {
 
     ${
       status === "CANCELLED"
-        ? `<p class="msg">This booking has already been cancelled.</p>`
+        ? `<p class="msg">✅ This booking has been successfully cancelled.</p>`
         : booking.cancellation_declined_at
         ? `<p class="msg">You have already chosen to keep this booking.</p>`
         : `
