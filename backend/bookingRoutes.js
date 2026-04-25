@@ -6056,15 +6056,115 @@ router.post("/course-admin/bookings/:reference/request-cancellation", requireCou
 router.post("/course-admin/request-booking-cancellation", requireCourseAdmin, async (req, res) => {
   try {
     const reference = String(req.body?.reference || "").trim();
-    if (!reference) return res.status(400).json({ ok:false, error:"reference_required" });
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
 
-    return res.status(501).json({
-      ok:false,
-      error:"route_connected_but_handler_missing",
-      detail:"Your live server now sees this route. Replace this block with the full cancellation handler."
+    // ✅ Ensure columns exist
+    await db.query(`
+      ALTER TABLE booking_bookings
+        ADD COLUMN IF NOT EXISTS cancellation_token text,
+        ADD COLUMN IF NOT EXISTS cancellation_requested_at timestamptz,
+        ADD COLUMN IF NOT EXISTS cancellation_confirmed_at timestamptz,
+        ADD COLUMN IF NOT EXISTS cancellation_declined_at timestamptz,
+        ADD COLUMN IF NOT EXISTS cancelled_at timestamptz,
+        ADD COLUMN IF NOT EXISTS cancelled_reason text;
+    `);
+
+    const q = await db.query(
+      `
+      SELECT
+        b.id,
+        b.reference,
+        b.course_id,
+        b.play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.golfer_name,
+        b.golfer_email,
+        b.status,
+        b.paid,
+        c.name AS course_name
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      WHERE b.reference = $1
+        AND b.course_id = $2
+      LIMIT 1;
+      `,
+      [reference, req.courseAdmin.course_id]
+    );
+
+    const booking = q.rows?.[0];
+
+    if (!booking) {
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    if (String(booking.status || "").toUpperCase() === "CANCELLED") {
+      return res.status(400).json({ ok: false, error: "already_cancelled" });
+    }
+
+    if (!booking.paid) {
+      return res.status(400).json({
+        ok: false,
+        error: "only_paid_online_bookings_use_request_cancellation"
+      });
+    }
+
+    if (!isLikelyEmail(booking.golfer_email)) {
+      return res.status(400).json({
+        ok: false,
+        error: "golfer_email_missing"
+      });
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET
+        cancellation_token = $1,
+        cancellation_requested_at = NOW(),
+        cancellation_declined_at = NULL
+      WHERE id = $2
+      `,
+      [token, booking.id]
+    );
+
+    const emailResult = await sendPaidCancellationRequestEmail({
+      to: booking.golfer_email,
+      golferName: booking.golfer_name,
+      courseName: booking.course_name || req.courseAdmin.course_name || "Golf Course",
+      date: String(booking.play_date).slice(0, 10),
+      time: String(booking.tee_time || "").split("|")[0],
+      holes: Number(booking.holes || 0),
+      players: Number(booking.players || 0),
+      reference: booking.reference,
+      token
+    });
+
+    if (!emailResult.emailOk) {
+      return res.status(500).json({
+        ok: false,
+        error: "cancellation_email_failed",
+        detail: emailResult.emailReason || "send_failed"
+      });
+    }
+
+    return res.json({
+      ok: true,
+      reference: booking.reference,
+      emailOk: true
     });
   } catch (e) {
-    return res.status(500).json({ ok:false, error:"internal_error" });
+    console.error("POST /course-admin/request-booking-cancellation", e);
+    return res.status(500).json({
+      ok: false,
+      error: "request_booking_cancellation_failed",
+      detail: e?.message || "unknown_error"
+    });
   }
 });
 // ✅ Public golfer page: review cancellation request
