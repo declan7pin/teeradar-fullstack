@@ -1503,12 +1503,25 @@ function buildSlotCell(item, slotIndex){
   const checkedIn =
     !!(item.checked_in_slot ?? item.checkedInSlot ?? (Array.isArray(item.checked_in_slots) ? item.checked_in_slots[slotIndex-1] : null) ?? item.checked_in);
 
-  // ✅ NEW: allow delete button for unpaid online PAY_AT_COURSE bookings only
+    // ✅ Allow course admin actions on online bookings
+  const paymentMode = String(item.payment_mode || item.paymentMode || "").toUpperCase();
+  const status = String(item.status || "").toUpperCase();
+
+  // PAY_AT_COURSE unpaid bookings can be deleted directly
   const canDeleteOnline =
     !isManualRef &&
     !!item.can_delete &&
     !paid &&
-    !checkedIn;
+    !checkedIn &&
+    paymentMode !== "PAY_ON_BOOKING" &&
+    status !== "CANCELLED";
+
+  // PAY_ON_BOOKING paid bookings need golfer email confirmation before cancellation/refund handling
+  const canRequestPaidCancel =
+    !isManualRef &&
+    paid &&
+    paymentMode === "PAY_ON_BOOKING" &&
+    status !== "CANCELLED";
 
   // ✅ qty-first (supports manual holds + bookings)
   const cartQty = Number(item.cart_qty ?? item.cartQty ?? 0) || 0;
@@ -1617,7 +1630,7 @@ function buildSlotCell(item, slotIndex){
         </div>
       ` : ``}
 
-      ${canDeleteOnline ? `
+            ${canDeleteOnline ? `
         <div class="actions" style="margin-top:10px">
           <button
             type="button"
@@ -1626,6 +1639,18 @@ function buildSlotCell(item, slotIndex){
             data-del-booking="1"
             data-ref="${_escape(refRaw)}"
           >Delete booking</button>
+        </div>
+      ` : ``}
+
+      ${canRequestPaidCancel ? `
+        <div class="actions" style="margin-top:10px">
+          <button
+            type="button"
+            class="secondary"
+            style="font-size:12px;padding:8px 10px;border-radius:10px;background:#b91c1c"
+            data-request-cancel-booking="1"
+            data-ref="${_escape(refRaw)}"
+          >Request cancellation</button>
         </div>
       ` : ``}
     </div>
@@ -2574,6 +2599,45 @@ async function viewSheet(){
           await viewSheet();
         }catch(e){
           $("viewMsg").textContent = "❌ " + (e?.message || "Failed to delete booking");
+        }
+      };
+    });
+    
+        // ✅ Request cancellation for paid PAY_ON_BOOKING bookings
+    // Sends confirmation email to golfer before course/admin cancellation is final.
+    tb.querySelectorAll('button[data-request-cancel-booking]').forEach(btn => {
+      btn.onclick = async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        try {
+          await getMe();
+
+          const ref = String(btn.getAttribute("data-ref") || "").trim();
+          if (!ref) throw new Error("reference_required");
+
+          const ok = confirm(
+            `Request cancellation for paid online booking ${ref}?\n\n` +
+            `This will email the golfer asking them to confirm the cancellation. ` +
+            `The booking should only be cancelled after they confirm.`
+          );
+
+          if (!ok) return;
+
+          btn.disabled = true;
+          btn.textContent = "Sending request...";
+
+          await j("/api/book/course-admin/request-booking-cancellation", {
+            method: "POST",
+            body: JSON.stringify({ reference: ref })
+          });
+
+          $("viewMsg").textContent = "✅ Cancellation confirmation email sent to golfer.";
+          await viewSheet();
+        } catch (e) {
+          $("viewMsg").textContent = "❌ " + (e?.message || "Failed to request cancellation");
+          btn.disabled = false;
+          btn.textContent = "Request cancellation";
         }
       };
     });
