@@ -6195,7 +6195,29 @@ router.get("/cancel-request", async (req, res) => {
     );
 
     const booking = q.rows?.[0];
-    if (!booking) return res.status(404).send("Cancellation request not found.");
+    if (!booking) {
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  return res.status(404).send(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar — Cancellation request</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f4f7fb;color:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:18px}
+    .card{width:100%;max-width:520px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;box-shadow:0 18px 40px rgba(15,23,42,.12)}
+    h1{margin:0 0 8px;font-size:24px;color:#00796b}
+    p{color:#64748b;line-height:1.45;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Cancellation already processed</h1>
+    <p>This cancellation link has already been used, expired, or the booking has already been updated.</p>
+  </div>
+</body>
+</html>`);
+}
 
     const status = String(booking.status || "").toUpperCase();
 
