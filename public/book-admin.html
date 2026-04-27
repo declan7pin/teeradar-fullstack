@@ -1638,45 +1638,40 @@ li.innerHTML =
 });
 
             ul.querySelectorAll("button[data-edit]").forEach(btn => {
-  btn.onclick = () => {
-    const s = btn.getAttribute("data-edit") || "";
-    if (!s) return;
-
-    const course = (list || []).find(x => String(x.slug || "") === s) || {};
-
-    editingCourseSlug = s;
-
-    $("cSlug").value = s;
-    $("cName").value = course.name || "";
-    $("cNotes").value = course.notes || "";
-
-    $("cPaymentMode").value = course.payment_mode || "PAY_AT_COURSE";
-    $("cStripeAccountId").value = course.stripe_account_id || "";
-    $("cSubscriberDiscountEnabled").checked = !!course.subscriber_discount_enabled;
-    $("cSubscriberDiscountPct").value = Number(course.subscriber_discount_pct ?? 5);
-    $("cPlatformFeeBps").value = course.platform_fee_bps || "";
-
-    $("createCourseBtn").textContent = "Update Course";
-
-    updatePaymentUI();
-    loadCourseSettingsIntoForm(s);
-
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-});
         btn.onclick = () => {
-          const s = btn.getAttribute("data-fill") || "";
+          const s = btn.getAttribute("data-edit") || "";
           if (!s) return;
 
           const course = (list || []).find(x => String(x.slug || "") === s) || {};
 
-          // ✅ SET EDIT MODE
           editingCourseSlug = s;
 
-          // ✅ Fill all matching forms
+          $("cSlug").value = s;
+          $("cName").value = course.name || "";
+          $("cNotes").value = course.notes || "";
+
+          $("cPaymentMode").value = course.payment_mode || course.paymentMode || "PAY_AT_COURSE";
+          $("cStripeAccountId").value = course.stripe_account_id || course.stripeAccountId || "";
+          $("cSubscriberDiscountEnabled").checked = !!course.subscriber_discount_enabled;
+          $("cSubscriberDiscountPct").value = Number(course.subscriber_discount_pct ?? course.subscriberDiscountPct ?? 5);
+          $("cPlatformFeeBps").value = course.platform_fee_bps || course.platformFeeBps || "";
+
+          $("createCourseBtn").textContent = "Update Course";
+
+          updatePaymentUI();
+          loadCourseSettingsIntoForm(s);
+
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        };
+      });
+
+      ul.querySelectorAll("button[data-fill]").forEach(btn => {
+        btn.onclick = () => {
+          const s = btn.getAttribute("data-fill") || "";
+          if (!s) return;
+
           $("gSlug").value = s;
           $("aSlug").value = s;
-          $("cSlug").value = s;
           $("dSlug").value = s;
           $("vSlug").value = s;
           $("sSlug").value = s;
@@ -1684,37 +1679,6 @@ li.innerHTML =
 
           if ($("mSlug")) $("mSlug").value = s;
           if ($("mDate")) $("mDate").value = $("vDate")?.value || $("gDate")?.value || "";
-
-          // ✅ Fill course edit fields
-          $("cName").value = course.name || "";
-          $("cNotes").value = course.notes || "";
-
-          if ($("cPaymentMode")) {
-            $("cPaymentMode").value = course.payment_mode || course.paymentMode || "PAY_AT_COURSE";
-          }
-
-          if ($("cStripeAccountId")) {
-            $("cStripeAccountId").value = course.stripe_account_id || course.stripeAccountId || "";
-          }
-
-          if ($("cSubscriberDiscountEnabled")) {
-            $("cSubscriberDiscountEnabled").checked = !!course.subscriber_discount_enabled;
-          }
-
-          if ($("cSubscriberDiscountPct")) {
-            $("cSubscriberDiscountPct").value = Number(
-              course.subscriber_discount_pct ?? course.subscriberDiscountPct ?? 5
-            );
-          }
-
-          if ($("cPlatformFeeBps")) {
-            $("cPlatformFeeBps").value = course.platform_fee_bps || course.platformFeeBps || "";
-          }
-
-          $("createCourseBtn").textContent = "Update Course";
-
-          loadCourseSettingsIntoForm(s);
-          updatePaymentUI();
 
           $("previewBox").textContent = "";
           $("genMsg").textContent = "";
@@ -1725,7 +1689,8 @@ li.innerHTML =
           window.scrollTo({ top: 0, behavior: "smooth" });
         };
       });
-updatePaymentUI();
+
+      updatePaymentUI();
 
       ul.querySelectorAll("button[data-viewtimes]").forEach(btn => {
         btn.onclick = async () => {
@@ -1752,11 +1717,11 @@ updatePaymentUI();
 
           if (!confirm(`DELETE COURSE "${s}" and ALL related tee times + bookings? This cannot be undone.`)) return;
 
-          try{
+          try {
             await j("/api/book/admin/courses/" + encodeURIComponent(s), { method:"DELETE" });
             $("delMsg").textContent = `✅ Deleted course ${s}`;
             await refresh();
-          }catch(e){
+          } catch(e) {
             $("delMsg").textContent = "❌ " + e.message;
           }
         };
@@ -1769,6 +1734,7 @@ updatePaymentUI();
       ul.appendChild(li);
     }
   }
+
 $("checkInventoryBtn").onclick = async () => {
   $("inventoryMsg").textContent = "Checking inventory...";
   $("inventoryBox").style.display = "none";
@@ -1781,7 +1747,6 @@ $("checkInventoryBtn").onclick = async () => {
     if (!slug) throw new Error("course slug is required");
     if (!date) throw new Error("play date is required");
 
-    // 1️⃣ Load course settings (totals)
     const settingsRes = await j(
       "/api/book/admin/course-settings?slug=" + encodeURIComponent(slug),
       { method:"GET" }
@@ -1790,7 +1755,6 @@ $("checkInventoryBtn").onclick = async () => {
     $("inventoryDebug").textContent =
       "course-settings response:\n" + JSON.stringify(settingsRes, null, 2);
 
-    // ✅ support different backend response shapes
     const cs =
       settingsRes.settings ||
       settingsRes.course_settings ||
@@ -1802,7 +1766,6 @@ $("checkInventoryBtn").onclick = async () => {
     const totalCarts = Number(cs.cart_qty ?? cs.cartQty ?? 0);
     const totalClubs = Number(cs.hire_clubs_qty ?? cs.hireClubsQty ?? 0);
 
-    // 2️⃣ Load bookings for date
     const bookingsOut = await j(
       "/api/book/admin/bookings?" + new URLSearchParams({ slug, date }).toString(),
       { method:"GET" }
@@ -1821,11 +1784,8 @@ $("checkInventoryBtn").onclick = async () => {
       clubsUsed += Number(b.hire_clubs_qty ?? (b.has_hire_clubs ? 1 : 0));
     });
 
-    const cartsLeft = Math.max(0, totalCarts - cartsUsed);
-    const clubsLeft = Math.max(0, totalClubs - clubsUsed);
-
-    $("invCarts").textContent = `${cartsLeft} remaining (of ${totalCarts})`;
-    $("invClubs").textContent = `${clubsLeft} remaining (of ${totalClubs})`;
+    $("invCarts").textContent = `${Math.max(0, totalCarts - cartsUsed)} remaining (of ${totalCarts})`;
+    $("invClubs").textContent = `${Math.max(0, totalClubs - clubsUsed)} remaining (of ${totalClubs})`;
 
     $("inventoryBox").style.display = "block";
     $("inventoryMsg").textContent = "✅ Inventory loaded";
@@ -1833,8 +1793,9 @@ $("checkInventoryBtn").onclick = async () => {
     $("inventoryMsg").textContent = "❌ " + e.message;
   }
 };
+
 updatePaymentUI();
-  refresh();
+refresh();
 </script>
 </body>
 </html>
