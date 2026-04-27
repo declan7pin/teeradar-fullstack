@@ -1636,88 +1636,68 @@ li.innerHTML =
   ul.appendChild(li);
 });
 
-      btn.onclick = () => {
-  const s = btn.getAttribute("data-fill") || "";
-  if (!s) return;
+            ul.querySelectorAll("button[data-fill]").forEach(btn => {
+        btn.onclick = () => {
+          const s = btn.getAttribute("data-fill") || "";
+          if (!s) return;
 
-  const course = (list || []).find(x => String(x.slug || "") === s) || {};
+          const course = (list || []).find(x => String(x.slug || "") === s) || {};
 
-  // ✅ SET EDIT MODE
-  editingCourseSlug = s;
+          // ✅ SET EDIT MODE
+          editingCourseSlug = s;
 
-  // ✅ Fill form
-  $("gSlug").value = s;
-  $("aSlug").value = s;
-  $("cSlug").value = s;
-  $("dSlug").value = s;
-  $("vSlug").value = s;
-  $("sSlug").value = s;
-  $("iSlug").value = s;
+          // ✅ Fill all matching forms
+          $("gSlug").value = s;
+          $("aSlug").value = s;
+          $("cSlug").value = s;
+          $("dSlug").value = s;
+          $("vSlug").value = s;
+          $("sSlug").value = s;
+          $("iSlug").value = s;
 
-  if ($("mSlug")) $("mSlug").value = s;
-  if ($("mDate")) $("mDate").value = $("vDate")?.value || $("gDate")?.value || "";
+          if ($("mSlug")) $("mSlug").value = s;
+          if ($("mDate")) $("mDate").value = $("vDate")?.value || $("gDate")?.value || "";
 
-  $("cName").value = course.name || "";
-  $("cNotes").value = course.notes || "";
+          // ✅ Fill course edit fields
+          $("cName").value = course.name || "";
+          $("cNotes").value = course.notes || "";
 
-  $("cPaymentMode").value = (course.payment_mode || "PAY_AT_COURSE");
+          if ($("cPaymentMode")) {
+            $("cPaymentMode").value = course.payment_mode || course.paymentMode || "PAY_AT_COURSE";
+          }
 
-  $("cStripeAccountId").value = course.stripe_account_id || "";
-  $("cSubscriberDiscountEnabled").checked = !!course.subscriber_discount_enabled;
-  $("cSubscriberDiscountPct").value = Number(course.subscriber_discount_pct ?? 5);
-  $("cPlatformFeeBps").value = course.platform_fee_bps || "";
+          if ($("cStripeAccountId")) {
+            $("cStripeAccountId").value = course.stripe_account_id || course.stripeAccountId || "";
+          }
 
-  // ✅ Update button text
-  $("createCourseBtn").textContent = "Update Course";
+          if ($("cSubscriberDiscountEnabled")) {
+            $("cSubscriberDiscountEnabled").checked = !!course.subscriber_discount_enabled;
+          }
 
-  loadCourseSettingsIntoForm(s);
+          if ($("cSubscriberDiscountPct")) {
+            $("cSubscriberDiscountPct").value = Number(
+              course.subscriber_discount_pct ?? course.subscriberDiscountPct ?? 5
+            );
+          }
 
-  updatePaymentUI();
+          if ($("cPlatformFeeBps")) {
+            $("cPlatformFeeBps").value = course.platform_fee_bps || course.platformFeeBps || "";
+          }
 
-  window.scrollTo({ top: 0, behavior: "smooth" });
-};
-    if (!s) return;
+          $("createCourseBtn").textContent = "Update Course";
 
-    // ✅ Find the course object from the loaded list
-    const course = (list || []).find(x => String(x.slug || "") === s) || {};
+          loadCourseSettingsIntoForm(s);
+          updatePaymentUI();
 
-    $("gSlug").value = s;
-    $("aSlug").value = s;
-    $("cSlug").value = s;
-    $("dSlug").value = s;
-    $("vSlug").value = s;
-    $("sSlug").value = s;
-    $("iSlug").value = s; // ✅ also fill inventory slug
-    if ($("mSlug")) $("mSlug").value = s;
-    if ($("mDate")) $("mDate").value = $("vDate")?.value || $("gDate")?.value || $("mDate").value;
+          $("previewBox").textContent = "";
+          $("genMsg").textContent = "";
+          $("delMsg").textContent = "";
+          $("settingsMsg").textContent = "";
+          clearViewBoxes();
 
-    // ✅ ALSO fill the edit fields so Save Course edits, not overwrites
-    $("cName").value = course.name || "";
-    $("cNotes").value = course.notes || "";
-    if ($("cPaymentMode")) {
-      $("cPaymentMode").value = (course.payment_mode || "PAY_AT_COURSE");
-    }
-    if ($("cStripeAccountId")) {
-  $("cStripeAccountId").value = course.stripe_account_id || "";
-}
-if ($("cSubscriberDiscountEnabled")) {
-  $("cSubscriberDiscountEnabled").checked = !!course.subscriber_discount_enabled;
-}
-if ($("cSubscriberDiscountPct")) {
-  $("cSubscriberDiscountPct").value = Number(course.subscriber_discount_pct ?? course.subscriberDiscountPct ?? 5);
-}
-if ($("cPlatformFeeBps")) {
-  $("cPlatformFeeBps").value = course.platform_fee_bps || "";
-}
-
-    loadCourseSettingsIntoForm(s); // ✅ auto-load fees/qty/durations
-    $("previewBox").textContent = "";
-    $("genMsg").textContent = "";
-    $("delMsg").textContent = "";
-    $("settingsMsg").textContent = "";
-    clearViewBoxes();
-  };
-});
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        };
+      });
 updatePaymentUI();
 
       ul.querySelectorAll("button[data-viewtimes]").forEach(btn => {
