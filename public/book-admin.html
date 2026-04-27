@@ -578,6 +578,7 @@
   }
 
   const $ = (id) => document.getElementById(id);
+  let editingCourseSlug = null;
 
 function updatePaymentUI() {
   const mode = $("cPaymentMode")?.value || "PAY_AT_COURSE";
@@ -814,7 +815,7 @@ $("cPlatformFeeBps")?.addEventListener("input", updatePaymentUI);
     }
   };
 
- $("createCourseBtn").onclick = async () => {
+$("createCourseBtn").onclick = async () => {
   $("courseMsg").textContent = "Saving...";
 
   try {
@@ -824,52 +825,51 @@ $("cPlatformFeeBps")?.addEventListener("input", updatePaymentUI);
       notes: ($("cNotes").value || "").trim(),
       paymentMode: ($("cPaymentMode")?.value || "PAY_AT_COURSE"),
 
-      // ✅ ALWAYS send subscriber discount fields (for BOTH pay modes)
       subscriberDiscountEnabled: !!$("cSubscriberDiscountEnabled")?.checked,
       subscriberDiscountPct: Number($("cSubscriberDiscountPct")?.value || 5),
     };
 
     const isPayOnBooking = payload.paymentMode === "PAY_ON_BOOKING";
+
     if (isPayOnBooking) {
       payload.stripeAccountId = ($("cStripeAccountId")?.value || "").trim();
+
+      if (!payload.stripeAccountId) {
+        throw new Error("Stripe account required for Pay on Booking");
+      }
 
       const bpsRaw = ($("cPlatformFeeBps")?.value || "").trim();
       if (bpsRaw !== "") payload.platformFeeBps = Number(bpsRaw);
     }
 
-    const out = await j("/api/book/admin/courses", {
-      method: "POST",
+    let url = "/api/book/admin/courses";
+    let method = "POST";
+
+    // ✅ EDIT MODE
+    if (editingCourseSlug) {
+      url = "/api/book/admin/courses/" + encodeURIComponent(editingCourseSlug);
+      method = "PUT";
+    }
+
+    const out = await j(url, {
+      method,
       body: JSON.stringify(payload)
     });
 
     const savedSlug =
-      (out?.course?.slug ||
-       out?.data?.course?.slug ||
-       out?.data?.slug ||
-       out?.slug ||
-       payload.slug ||
-       "").toString().trim();
-
-    if (!savedSlug) {
-      $("courseMsg").textContent =
-        "❌ Course saved but response did not include course.slug";
-      return;
-    }
+      payload.slug || editingCourseSlug;
 
     $("courseMsg").textContent =
-      "✅ Saved: " + savedSlug + " — opens at /book/" + savedSlug;
+      `✅ ${editingCourseSlug ? "Updated" : "Created"}: ${savedSlug}`;
 
-    $("gSlug").value = savedSlug;
-    $("sSlug").value = savedSlug;
-    if ($("vSlug")) $("vSlug").value = savedSlug;
-    if ($("dSlug")) $("dSlug").value = savedSlug;
-    if ($("iSlug")) $("iSlug").value = savedSlug;
-    if ($("mSlug")) $("mSlug").value = savedSlug;
-    if ($("aSlug")) $("aSlug").value = savedSlug;
+    // ✅ RESET EDIT MODE
+    editingCourseSlug = null;
+    $("createCourseBtn").textContent = "Save Course";
 
     await loadCourseSettingsIntoForm(savedSlug);
     await refresh();
     await refreshActiveView();
+
   } catch (e) {
     $("courseMsg").textContent = "❌ " + e.message;
   }
@@ -1636,9 +1636,46 @@ li.innerHTML =
   ul.appendChild(li);
 });
 
-      ul.querySelectorAll("button[data-fill]").forEach(btn => {
-  btn.onclick = () => {
-    const s = btn.getAttribute("data-fill") || "";
+      btn.onclick = () => {
+  const s = btn.getAttribute("data-fill") || "";
+  if (!s) return;
+
+  const course = (list || []).find(x => String(x.slug || "") === s) || {};
+
+  // ✅ SET EDIT MODE
+  editingCourseSlug = s;
+
+  // ✅ Fill form
+  $("gSlug").value = s;
+  $("aSlug").value = s;
+  $("cSlug").value = s;
+  $("dSlug").value = s;
+  $("vSlug").value = s;
+  $("sSlug").value = s;
+  $("iSlug").value = s;
+
+  if ($("mSlug")) $("mSlug").value = s;
+  if ($("mDate")) $("mDate").value = $("vDate")?.value || $("gDate")?.value || "";
+
+  $("cName").value = course.name || "";
+  $("cNotes").value = course.notes || "";
+
+  $("cPaymentMode").value = (course.payment_mode || "PAY_AT_COURSE");
+
+  $("cStripeAccountId").value = course.stripe_account_id || "";
+  $("cSubscriberDiscountEnabled").checked = !!course.subscriber_discount_enabled;
+  $("cSubscriberDiscountPct").value = Number(course.subscriber_discount_pct ?? 5);
+  $("cPlatformFeeBps").value = course.platform_fee_bps || "";
+
+  // ✅ Update button text
+  $("createCourseBtn").textContent = "Update Course";
+
+  loadCourseSettingsIntoForm(s);
+
+  updatePaymentUI();
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
     if (!s) return;
 
     // ✅ Find the course object from the loaded list
