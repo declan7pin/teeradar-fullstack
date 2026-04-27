@@ -1627,7 +1627,8 @@ li.innerHTML =
   ` — <a href="/book/${_escape(c.slug)}">open</a>` +
 
   `<div class="actions">` +
-  `<button class="small secondary" data-fill="${_escape(c.slug)}">Use for generator</button>` +
+  `<button class="small secondary" data-edit="${_escape(c.slug)}">Edit</button>` +
+`<button class="small secondary" data-fill="${_escape(c.slug)}">Use for generator</button>` +
   `<button class="small secondary" data-viewtimes="${_escape(c.slug)}">View times</button>` +
   `<button class="small secondary" data-viewbookings="${_escape(c.slug)}">View bookings</button>` +
   `<button class="small danger" data-delcourse="${_escape(c.slug)}">Delete course</button>` +
@@ -1636,7 +1637,33 @@ li.innerHTML =
   ul.appendChild(li);
 });
 
-            ul.querySelectorAll("button[data-fill]").forEach(btn => {
+            ul.querySelectorAll("button[data-edit]").forEach(btn => {
+  btn.onclick = () => {
+    const s = btn.getAttribute("data-edit") || "";
+    if (!s) return;
+
+    const course = (list || []).find(x => String(x.slug || "") === s) || {};
+
+    editingCourseSlug = s;
+
+    $("cSlug").value = s;
+    $("cName").value = course.name || "";
+    $("cNotes").value = course.notes || "";
+
+    $("cPaymentMode").value = course.payment_mode || "PAY_AT_COURSE";
+    $("cStripeAccountId").value = course.stripe_account_id || "";
+    $("cSubscriberDiscountEnabled").checked = !!course.subscriber_discount_enabled;
+    $("cSubscriberDiscountPct").value = Number(course.subscriber_discount_pct ?? 5);
+    $("cPlatformFeeBps").value = course.platform_fee_bps || "";
+
+    $("createCourseBtn").textContent = "Update Course";
+
+    updatePaymentUI();
+    loadCourseSettingsIntoForm(s);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+});
         btn.onclick = () => {
           const s = btn.getAttribute("data-fill") || "";
           if (!s) return;
