@@ -3206,6 +3206,85 @@ router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
     });
   }
 });
+
+// ----------------------------------------
+// ✅ UPDATE COURSE (EDIT MODE SUPPORT)
+// PUT /api/book/admin/courses/:slug
+// ----------------------------------------
+router.put("/admin/courses/:slug", async (req, res) => {
+  try {
+    const slug = String(req.params.slug || "").trim().toLowerCase();
+    if (!slug) {
+      return res.status(400).json({ ok: false, error: "missing_slug" });
+    }
+
+    const {
+      name,
+      notes,
+      paymentMode,
+      stripeAccountId,
+      platformFeeBps,
+      subscriberDiscountEnabled,
+      subscriberDiscountPct,
+    } = req.body || {};
+
+    // ✅ Validate payment mode
+    const payment_mode =
+      String(paymentMode || "PAY_AT_COURSE").trim().toUpperCase() === "PAY_ON_BOOKING"
+        ? "PAY_ON_BOOKING"
+        : "PAY_AT_COURSE";
+
+    // ✅ Validate Stripe requirement
+    if (payment_mode === "PAY_ON_BOOKING" && !String(stripeAccountId || "").trim()) {
+      return res.status(400).json({
+        ok: false,
+        error: "stripe_account_required_for_pay_on_booking",
+      });
+    }
+
+    const result = await db.query(
+      `
+      UPDATE booking_courses
+      SET
+        name = COALESCE($2, name),
+        notes = COALESCE($3, notes),
+        payment_mode = $4,
+        stripe_account_id = CASE
+          WHEN $4 = 'PAY_ON_BOOKING' THEN $5
+          ELSE NULL
+        END,
+        platform_fee_bps = COALESCE($6, platform_fee_bps),
+        subscriber_discount_enabled = COALESCE($7, subscriber_discount_enabled),
+        subscriber_discount_pct = COALESCE($8, subscriber_discount_pct),
+        updated_at = now()
+      WHERE slug = $1
+      RETURNING *;
+      `,
+      [
+        slug,
+        name || null,
+        notes || null,
+        payment_mode,
+        stripeAccountId || null,
+        Number.isFinite(platformFeeBps) ? Number(platformFeeBps) : null,
+        typeof subscriberDiscountEnabled === "boolean" ? subscriberDiscountEnabled : null,
+        Number.isFinite(subscriberDiscountPct) ? Number(subscriberDiscountPct) : null,
+      ]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ ok: false, error: "course_not_found" });
+    }
+
+    return res.json({
+      ok: true,
+      course: result.rows[0],
+    });
+  } catch (e) {
+    console.error("❌ update course failed", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 // ✅ Stripe Connect onboarding (create Express account if missing, return onboarding URL)
 router.post("/admin/stripe/onboard", requireBookingAdmin, async (req, res) => {
   try {
