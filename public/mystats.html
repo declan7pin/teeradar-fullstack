@@ -445,6 +445,38 @@
   font-weight:1000;
   letter-spacing:-.05em;
 }
+.customRange{
+  display:grid;
+  grid-template-columns:1fr 1fr auto auto;
+  gap:10px;
+  align-items:end;
+  margin-top:14px;
+}
+
+.customRange label{
+  display:block;
+  margin:0 0 6px;
+  font-size:.78rem;
+  font-weight:950;
+  color:#1f2937;
+}
+
+.customRange input{
+  width:100%;
+  padding:12px 14px;
+  border:1px solid var(--border);
+  border-radius:16px;
+  background:#f8fafc;
+  color:var(--text);
+  font:inherit;
+  font-weight:800;
+}
+
+@media(max-width:700px){
+  .customRange{
+    grid-template-columns:1fr;
+  }
+}
 }
 </style>
 </head>
@@ -491,6 +523,25 @@
         <button class="tab" data-range="30d">Last 30 days</button>
         <button class="tab" data-range="1y">Last year</button>
       </div>
+      <div class="customRange">
+  <div>
+    <label for="customStart">Start date</label>
+    <input id="customStart" type="date" />
+  </div>
+
+  <div>
+    <label for="customEnd">Finish date</label>
+    <input id="customEnd" type="date" />
+  </div>
+
+  <button class="btn primary" id="applyCustomRangeBtn" type="button">
+    Apply
+  </button>
+
+  <button class="btn" id="clearCustomRangeBtn" type="button">
+    Clear
+  </button>
+</div>
     </div>
 
     <div class="grid" style="margin-top:12px">
@@ -728,12 +779,34 @@
       }catch(e){ return "r_" + Math.random().toString(36).slice(2); }
     }
     function inRange(round, range){
-      const now = new Date();
-      if (range === "last5") return true;
-      if (range === "30d"){ const d=new Date(now); d.setDate(d.getDate()-30); return round.date.getTime() >= d.getTime(); }
-      if (range === "1y"){ const d=new Date(now); d.setFullYear(d.getFullYear()-1); return round.date.getTime() >= d.getTime(); }
-      return true;
-    }
+  const now = new Date();
+
+  if (range === "custom"){
+    const start = customStartDate ? new Date(customStartDate + "T00:00:00") : null;
+    const end = customEndDate ? new Date(customEndDate + "T23:59:59") : null;
+
+    if (start && round.date.getTime() < start.getTime()) return false;
+    if (end && round.date.getTime() > end.getTime()) return false;
+
+    return true;
+  }
+
+  if (range === "last5") return true;
+
+  if (range === "30d"){
+    const d = new Date(now);
+    d.setDate(d.getDate() - 30);
+    return round.date.getTime() >= d.getTime();
+  }
+
+  if (range === "1y"){
+    const d = new Date(now);
+    d.setFullYear(d.getFullYear() - 1);
+    return round.date.getTime() >= d.getTime();
+  }
+
+  return true;
+}
     function dateLabel(d){
       if (!(d instanceof Date) || isNaN(d.getTime())) return "Unknown date";
       const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), da=String(d.getDate()).padStart(2,"0");
@@ -1522,6 +1595,8 @@
     // ---------- Render ----------
     let ALL = [];
     let currentRange = "last5";
+    let customStartDate = "";
+let customEndDate = "";
 
     // ✅ ADDED: holes filter state (only)
     let currentHoles = "all"; // all | 9 | 18
@@ -1549,9 +1624,13 @@
 
       // ✅ CHANGED (only): include holes label in pill
       const rangeText =
-        currentRange === "last5" ? "Last 5 rounds" :
-        currentRange === "30d" ? "Last 30 days" :
-        "Last year";
+  currentRange === "custom"
+    ? `Custom: ${customStartDate || "Any"} to ${customEndDate || "Any"}`
+    : currentRange === "last5"
+      ? "Last 5 rounds"
+      : currentRange === "30d"
+        ? "Last 30 days"
+        : "Last year";
       document.getElementById("rangePill").textContent = `Range: ${rangeText} • ${holesLabel()}`;
 
       // ✅ ADDED: show/hide holes-only sections (Avg/Best/Worst handled in setKpis)
@@ -1623,6 +1702,30 @@
         applyRange();
       });
     });
+    document.getElementById("applyCustomRangeBtn").addEventListener("click", () => {
+  customStartDate = document.getElementById("customStart").value || "";
+  customEndDate = document.getElementById("customEnd").value || "";
+
+  document.querySelectorAll(".tab[data-range]").forEach(b => b.classList.remove("active"));
+
+  currentRange = "custom";
+  applyRange();
+});
+
+document.getElementById("clearCustomRangeBtn").addEventListener("click", () => {
+  document.getElementById("customStart").value = "";
+  document.getElementById("customEnd").value = "";
+
+  customStartDate = "";
+  customEndDate = "";
+
+  currentRange = "last5";
+
+  document.querySelectorAll(".tab[data-range]").forEach(b => b.classList.remove("active"));
+  document.querySelector('.tab[data-range="last5"]')?.classList.add("active");
+
+  applyRange();
+});
 
     document.getElementById("refreshBtn").addEventListener("click", refresh);
 
