@@ -726,7 +726,51 @@
       border-radius:22px;
       padding:18px;
     }
+    .startHero{
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  align-items:center;
+  margin-bottom:18px;
+}
+
+.startHeroText h2{
+  margin:0 0 6px;
+}
+
+.startHeroText .muted{
+  font-weight:750;
+}
+
+#createFormPanel{
+  display:none;
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid var(--border);
+}
+
+#createFormPanel.open{
+  display:block;
+}
+
+.roundFilters{
+  display:grid;
+  grid-template-columns:1fr 180px auto;
+  gap:10px;
+  margin:14px 0;
+  align-items:end;
+}
+
+@media(max-width:700px){
+  .startHero{
+    align-items:flex-start;
+    flex-direction:column;
   }
+
+  .roundFilters{
+    grid-template-columns:1fr;
+  }
+}
 </style>
 </head>
 <body>
@@ -763,6 +807,18 @@
       <div class="grid">
         <!-- LEFT -->
         <section class="card" id="createRoundSection">
+          <div class="startHero">
+  <div class="startHeroText">
+    <h2>Recent rounds</h2>
+    <div class="muted">Review old rounds or start a fresh scorecard.</div>
+  </div>
+
+  <button class="btn2" id="openStartRoundBtn" type="button">
+    Start round
+  </button>
+</div>
+
+<div id="createFormPanel">
           <h2>Start a round</h2>
           <div class="muted" style="font-weight:750;">
             Create a clean scorecard, track strokes and putts, then review your round stats later.
@@ -891,16 +947,32 @@
 </div>
 
 <div id="leftToast" class="toast"></div>
+</div>
 
-<hr style="border:none;border-top:1px solid var(--border);margin:14px 0;" />
+<hr style="border:none;border-top:1px solid var(--border);margin:20px 0;" />
 
 <div id="yourRoundsSection">
-  <h2 style="margin-top:0;">Recent rounds</h2>
   <div class="muted" style="font-weight:750;">
-   Tap a round to continue scoring or review your card.
+    Tap a round to continue scoring or review your card.
   </div>
 
-  <div id="roundsList" class="list" style="margin-top:12px;"></div>
+  <div class="roundFilters">
+    <div>
+      <label for="roundCourseFilter">Filter by course</label>
+      <input id="roundCourseFilter" placeholder="Search course name..." />
+    </div>
+
+    <div>
+      <label for="roundDateFilter">Filter by date</label>
+      <input id="roundDateFilter" type="date" />
+    </div>
+
+    <button class="btn2 secondary" id="clearRoundFiltersBtn" type="button">
+      Clear
+    </button>
+  </div>
+
+  <div id="roundsList" class="list"></div>
 
   <div class="muted" id="roundsEmpty" style="margin-top:10px;font-weight:800;display:none;">
     No rounds yet — create your first one above.
@@ -1292,7 +1364,13 @@ function renderHeaderAuthState(){
 }
              
     const roundsListEl = document.getElementById("roundsList");
-    const roundsEmptyEl = document.getElementById("roundsEmpty");
+const roundsEmptyEl = document.getElementById("roundsEmpty");
+
+const openStartRoundBtn = document.getElementById("openStartRoundBtn");
+const createFormPanel = document.getElementById("createFormPanel");
+const roundCourseFilter = document.getElementById("roundCourseFilter");
+const roundDateFilter = document.getElementById("roundDateFilter");
+const clearRoundFiltersBtn = document.getElementById("clearRoundFiltersBtn");
 
     const scTitleEl = document.getElementById("scTitle");
     const scSubEl = document.getElementById("scSub");
@@ -2099,43 +2177,106 @@ function setLeftPanelsVisibility(show){
   return { pars, distances: distRes.distances, teeName: distRes.teeName };
 }
 
+function roundScoreCacheKey(id){
+  return `teeradar_round_score_${String(id || "")}`;
+}
+
+function getCachedRoundScore(id){
+  try{
+    const raw = localStorage.getItem(roundScoreCacheKey(id));
+    return raw ? JSON.parse(raw) : null;
+  }catch{
+    return null;
+  }
+}
+
+function setCachedRoundScore(id, totals){
+  try{
+    if (!id || !totals) return;
+    localStorage.setItem(roundScoreCacheKey(id), JSON.stringify(totals));
+  }catch{}
+}
+
+function dateOnlyFromRound(r){
+  try{
+    const d = new Date(r.created_at);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toISOString().slice(0,10);
+  }catch{
+    return "";
+  }
+}
+
     // -----------------------------
     // Round list
     // -----------------------------
     function renderRoundsList(){
-      roundsListEl.innerHTML = "";
-      roundsEmptyEl.style.display = roundsCache.length ? "none" : "block";
+  roundsListEl.innerHTML = "";
 
-      for (const r of roundsCache) {
-        const item = document.createElement("div");
-        item.className = "roundItem";
-        item.dataset.id = r.id;
+  const courseQ = String(roundCourseFilter?.value || "").trim().toLowerCase();
+  const dateQ = String(roundDateFilter?.value || "").trim();
 
-        const totalsP1 = calcTotalsForPlayer(r.holesData || [], 0);
-        const scoreLabel = (totalsP1.strokes != null) ? totalsP1.strokes : "—";
-        const toParLabel = (totalsP1.toPar != null)
-          ? (totalsP1.toPar === 0 ? "E" : (totalsP1.toPar > 0 ? "+"+totalsP1.toPar : ""+totalsP1.toPar))
-          : "—";
+  const filtered = roundsCache.filter((r) => {
+    const courseText = `${r.course || ""} ${r.layout || ""}`.toLowerCase();
+    const courseOk = !courseQ || courseText.includes(courseQ);
 
-        const pc = getPlayersCountFromRound(r);
+    const roundDate = dateOnlyFromRound(r);
+    const dateOk = !dateQ || roundDate === dateQ;
 
-        item.innerHTML = `
-          <div class="top">
-            <div>
-              <div class="title">${escapeHtml(r.course || "Round")}${r.layout ? " — " + escapeHtml(r.layout) : ""}</div>
-              <div class="meta">
-                ${escapeHtml(r.state || "")} • ${r.holes || ""} holes • Players: ${pc}
-                • ${escapeHtml(r.par_mode || "")} • ${formatDate(r.created_at)}
-              </div>
-            </div>
-            <div class="score">${scoreLabel} <span class="muted" style="font-weight:900;">(${toParLabel})</span></div>
-          </div>
-        `;
+    return courseOk && dateOk;
+  });
 
-        item.addEventListener("click", () => loadRound(r.id));
-        roundsListEl.appendChild(item);
-      }
+  roundsEmptyEl.style.display = filtered.length ? "none" : "block";
+
+  for (const r of filtered) {
+    const item = document.createElement("div");
+    item.className = "roundItem";
+    item.dataset.id = r.id;
+
+    const holesForTotals =
+      Array.isArray(r.holesData) && r.holesData.length
+        ? r.holesData
+        : [];
+
+    let totalsP1 = calcTotalsForPlayer(holesForTotals, 0);
+
+    const cached = getCachedRoundScore(r.id);
+    if ((totalsP1.strokes == null || totalsP1.toPar == null) && cached) {
+      totalsP1 = {
+        ...totalsP1,
+        strokes: cached.strokes ?? totalsP1.strokes,
+        putts: cached.putts ?? totalsP1.putts,
+        toPar: cached.toPar ?? totalsP1.toPar
+      };
     }
+
+    const scoreLabel = (totalsP1.strokes != null) ? totalsP1.strokes : "Open";
+    const toParLabel = (totalsP1.toPar != null)
+      ? (totalsP1.toPar === 0 ? "E" : (totalsP1.toPar > 0 ? "+"+totalsP1.toPar : ""+totalsP1.toPar))
+      : "";
+
+    const pc = getPlayersCountFromRound(r);
+
+    item.innerHTML = `
+      <div class="top">
+        <div>
+          <div class="title">${escapeHtml(r.course || "Round")}${r.layout ? " — " + escapeHtml(r.layout) : ""}</div>
+          <div class="meta">
+            ${escapeHtml(r.state || "")} • ${r.holes || ""} holes • Players: ${pc}
+            • ${escapeHtml(r.par_mode || "")} • ${formatDate(r.created_at)}
+          </div>
+        </div>
+        <div class="score">
+          ${escapeHtml(String(scoreLabel))}
+          ${toParLabel ? `<span class="muted" style="font-weight:900;">(${escapeHtml(toParLabel)})</span>` : ""}
+        </div>
+      </div>
+    `;
+
+    item.addEventListener("click", () => loadRound(r.id));
+    roundsListEl.appendChild(item);
+  }
+}
 
     // -----------------------------
     // Scorecard rendering
@@ -2759,6 +2900,9 @@ if (canUsePremium) {
         }));
 
         const totals = calcTotalsForPlayer(holesForCalc, pi);
+        if (pi === 0 && currentRoundId) {
+  setCachedRoundScore(currentRoundId, totals);
+}
 
         const toParLabel = (totals.toPar == null)
           ? "—"
@@ -3268,40 +3412,69 @@ function clearRoundIdFromUrl(){
   if (!isLoggedIn()) return;
   logout();
 });
-    createRoundBtn.addEventListener("click", async () => {
-  try{
+  createRoundBtn.addEventListener("click", async () => {
+  try {
     await createRound();
-  }catch(err){
+  } catch (err) {
     console.error("createRound failed:", err);
     setToast(leftToast, "Create failed: " + (err?.message || "error"), false);
   }
 });
-    refreshBtn.addEventListener("click", safeFetchRounds);
-    if (showLeftBtn) {
+
+refreshBtn.addEventListener("click", safeFetchRounds);
+
+if (openStartRoundBtn && createFormPanel) {
+  openStartRoundBtn.addEventListener("click", () => {
+    createFormPanel.classList.toggle("open");
+    openStartRoundBtn.textContent = createFormPanel.classList.contains("open")
+      ? "Hide setup"
+      : "Start round";
+  });
+}
+
+if (roundCourseFilter) {
+  roundCourseFilter.addEventListener("input", renderRoundsList);
+}
+
+if (roundDateFilter) {
+  roundDateFilter.addEventListener("change", renderRoundsList);
+}
+
+if (clearRoundFiltersBtn) {
+  clearRoundFiltersBtn.addEventListener("click", () => {
+    if (roundCourseFilter) roundCourseFilter.value = "";
+    if (roundDateFilter) roundDateFilter.value = "";
+    renderRoundsList();
+  });
+}
+
+if (showLeftBtn) {
   showLeftBtn.addEventListener("click", () => {
     setLeftPanelsVisibility(true);
-    // optional: scroll back to the top so the left card is visible
+    if (createFormPanel) createFormPanel.classList.add("open");
+    if (openStartRoundBtn) openStartRoundBtn.textContent = "Hide setup";
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 }
 
-    saveAllBtn.addEventListener("click", async () => {
-      try{
-        await saveRoundAll();
-      }catch(err){
-        setToast(rightToast, "Save failed: " + (err.message || "error"), false);
-      }
-    });
+saveAllBtn.addEventListener("click", async () => {
+  try {
+    await saveRoundAll();
+  } catch (err) {
+    setToast(rightToast, "Save failed: " + (err.message || "error"), false);
+  }
+});
 
-    deleteRoundBtn.addEventListener("click", async () => {
-      const ok = confirm("Delete this round? This cannot be undone.");
-      if (!ok) return;
-      try{
-        await deleteRound();
-      }catch(err){
-        setToast(rightToast, "Delete failed: " + (err.message || "error"), false);
-      }
-    });
+deleteRoundBtn.addEventListener("click", async () => {
+  const ok = confirm("Delete this round? This cannot be undone.");
+  if (!ok) return;
+
+  try {
+    await deleteRound();
+  } catch (err) {
+    setToast(rightToast, "Delete failed: " + (err.message || "error"), false);
+  }
+});
 
     holesEl.addEventListener("change", async () => {
       syncNineLoopVisibility();
