@@ -417,7 +417,35 @@
     th,td{
       padding:11px 8px;
     }
-  }
+    .breakdownSummary{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin:12px 0 12px;
+}
+
+.breakdownStat{
+  border:1px solid rgba(0,121,107,.14);
+  background:linear-gradient(180deg,#f4fbfa,#ffffff);
+  border-radius:18px;
+  padding:14px;
+}
+
+.breakdownStat .label{
+  color:var(--teal-dark);
+  font-size:.76rem;
+  font-weight:950;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+
+.breakdownStat .value{
+  margin-top:4px;
+  font-size:1.7rem;
+  font-weight:1000;
+  letter-spacing:-.05em;
+}
+}
 </style>
 </head>
 <body>
@@ -910,6 +938,10 @@
       const totalRounds = rounds.length;
       const totalShots = rounds.reduce((s,r)=> s + (Number.isFinite(r.totalShots)?r.totalShots:0), 0);
       const totalPutts = rounds.reduce((s,r)=> s + (Number.isFinite(r.totalPutts)?r.totalPutts:0), 0);
+      const totalHoles = rounds.reduce((s, r) => {
+  const hc = Number(r.holesCount || (Array.isArray(r.holes) ? r.holes.length : 0) || 0);
+  return s + (Number.isFinite(hc) ? hc : 0);
+}, 0);
 
       const scores = rounds.map(r => r.totalScore).filter(Number.isFinite);
       const avgRound = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length) : null;
@@ -1189,7 +1221,7 @@
       const gir5 = girByPar[5].opp ? (girByPar[5].made / girByPar[5].opp) : null;
 
       return {
-        totalRounds,totalShots,totalPutts,avgRound,bestRound,worstRound,
+        totalRounds,totalShots,totalPutts,totalHoles,avgRound,bestRound,worstRound,
         birdies,pars,bogeyPlus,
         eaglePlus,birdie,parCt,bogey,doublePlus,
         par3Avg,par4Avg,par5Avg,
@@ -1231,29 +1263,29 @@
     }
 
     function setKpis(stats){
-      const holesSpecific = (currentHoles === "9" || currentHoles === "18");
+  const holesSpecific = (currentHoles === "9" || currentHoles === "18");
 
-      const items = [
-        { label: "Rounds", value: stats.totalRounds, hint: "Rounds included in this range" },
-        { label: "Total shots", value: stats.totalShots, hint: "Sum of all strokes recorded" },
-        { label: "Total putts", value: stats.totalPutts, hint: "Sum of all putts recorded" },
+  const items = [
+    { label: "Rounds", value: stats.totalRounds, hint: "Rounds included in this range" },
+    { label: "Total shots", value: stats.totalShots, hint: "Sum of all strokes recorded" },
+    { label: "Total holes played", value: stats.totalHoles, hint: "Sum of all holes played" },
+    { label: "Total putts", value: stats.totalPutts, hint: "Sum of all putts recorded" },
 
-        // ✅ Only show these when 9 or 18 selected
-        ...(holesSpecific ? [
-          { label: "Avg per round", value: stats.avgRound !== null ? fmt1(stats.avgRound) : "—", hint: "Average total score" },
-          { label: "Best round", value: stats.bestRound !== null ? stats.bestRound : "—", hint: "Lowest score in range" },
-          { label: "Worst round", value: stats.worstRound !== null ? stats.worstRound : "—", hint: "Highest score in range" },
-        ] : [])
-      ];
+    ...(holesSpecific ? [
+      { label: "Avg per round", value: stats.avgRound !== null ? fmt1(stats.avgRound) : "—", hint: "Average total score" },
+      { label: "Best round", value: stats.bestRound !== null ? stats.bestRound : "—", hint: "Lowest score in range" },
+      { label: "Worst round", value: stats.worstRound !== null ? stats.worstRound : "—", hint: "Highest score in range" },
+    ] : [])
+  ];
 
-      document.getElementById("kpis").innerHTML = items.map(x => `
-        <div class="kpi">
-          <div class="label">${escapeHtml(x.label)}</div>
-          <div class="value">${escapeHtml(x.value)}</div>
-          <div class="hint">${escapeHtml(x.hint)}</div>
-        </div>
-      `).join("");
-    }
+  document.getElementById("kpis").innerHTML = items.map(x => `
+    <div class="kpi">
+      <div class="label">${escapeHtml(x.label)}</div>
+      <div class="value">${escapeHtml(x.value)}</div>
+      <div class="hint">${escapeHtml(x.hint)}</div>
+    </div>
+  `).join("");
+}
 
     function setParAverages(stats){
       document.getElementById("parAverages").textContent =
@@ -1340,13 +1372,27 @@
     }
 
     function setBreakdown(stats){
-      document.getElementById("breakdownBody").innerHTML = `
-        <tr><td>Birdies or better</td><td class="nowrap"><strong>${stats.birdies}</strong></td></tr>
-        <tr><td>Pars</td><td class="nowrap"><strong>${stats.pars}</strong></td></tr>
-        <tr><td>Bogey+</td><td class="nowrap"><strong>${stats.bogeyPlus}</strong></td></tr>
-        <tr><td>3-putts (count)</td><td class="nowrap"><strong>${stats.threePutts}</strong></td></tr>
-      `;
-    }
+  document.getElementById("breakdownBody").innerHTML = `
+    <tr>
+      <td colspan="2">
+        <div class="breakdownSummary">
+          <div class="breakdownStat">
+            <div class="label">Total holes played</div>
+            <div class="value">${stats.totalHoles}</div>
+          </div>
+          <div class="breakdownStat">
+            <div class="label">Total shots</div>
+            <div class="value">${stats.totalShots}</div>
+          </div>
+        </div>
+      </td>
+    </tr>
+    <tr><td>Birdies or better</td><td class="nowrap"><strong>${stats.birdies}</strong></td></tr>
+    <tr><td>Pars</td><td class="nowrap"><strong>${stats.pars}</strong></td></tr>
+    <tr><td>Bogey+</td><td class="nowrap"><strong>${stats.bogeyPlus}</strong></td></tr>
+    <tr><td>3-putts (count)</td><td class="nowrap"><strong>${stats.threePutts}</strong></td></tr>
+  `;
+}
 
     function setPutting(stats){
       document.getElementById("puttingBody").innerHTML = `
