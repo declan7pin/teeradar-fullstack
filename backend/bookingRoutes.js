@@ -1468,6 +1468,10 @@ async function ensureBookingTables() {
     ALTER TABLE booking_courses
     ADD COLUMN IF NOT EXISTS subscriber_discount_enabled BOOLEAN NOT NULL DEFAULT false;
   `);
+  await db.query(`
+  ALTER TABLE booking_courses
+  ADD COLUMN IF NOT EXISTS subscriber_discount_pct INTEGER NOT NULL DEFAULT 5;
+`);
 
   // =============================
   // booking_course_layouts
