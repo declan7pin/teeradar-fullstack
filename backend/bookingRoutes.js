@@ -3060,6 +3060,8 @@ router.get("/admin/course-settings", requirePlatformAdmin, async (req, res) => {
 // -----------------------------
 router.get("/admin/courses", requirePlatformAdmin, async (req, res) => {
   try {
+    await ensureBookingTables();
+
     const { rows } = await db.query(
       `
       SELECT
@@ -3068,6 +3070,10 @@ router.get("/admin/courses", requirePlatformAdmin, async (req, res) => {
         name,
         notes,
         payment_mode,
+        stripe_account_id,
+        platform_fee_bps,
+        subscriber_discount_enabled,
+        subscriber_discount_pct,
         created_at
       FROM booking_courses
       ORDER BY id DESC
@@ -3078,7 +3084,11 @@ router.get("/admin/courses", requirePlatformAdmin, async (req, res) => {
     res.json({ ok: true, courses: rows || [] });
   } catch (e) {
     console.error("admin/courses GET", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+    res.status(500).json({
+      ok: false,
+      error: "internal_error",
+      detail: String(e?.message || e),
+    });
   }
 });
 router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
