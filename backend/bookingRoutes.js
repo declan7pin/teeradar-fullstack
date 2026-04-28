@@ -1452,6 +1452,10 @@ async function ensureBookingTables() {
     ALTER TABLE booking_courses
     ADD COLUMN IF NOT EXISTS layouts JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
+  await db.query(`
+  ALTER TABLE booking_courses
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+`);
 
   // ✅ NEW: Stripe Connect + platform fee config per course
   await db.query(`
