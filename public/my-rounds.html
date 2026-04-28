@@ -770,6 +770,56 @@
   .roundFilters{
     grid-template-columns:1fr;
   }
+  .roundsCollapsed #roundsList,
+.roundsCollapsed #roundsEmpty,
+.roundsCollapsed .roundFilters{
+  display:none !important;
+}
+
+.roundsHeaderRow{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:8px;
+}
+
+.liveScoreHero{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:12px 0 14px;
+  padding:16px;
+  border-radius:22px;
+  background:linear-gradient(135deg,#061b2f,#00796b);
+  color:#fff;
+  box-shadow:0 16px 36px rgba(0,121,107,.22);
+}
+
+.liveScoreHero .scoreBig{
+  font-size:2.3rem;
+  font-weight:1000;
+  letter-spacing:-.06em;
+  line-height:1;
+}
+
+.liveScoreHero .scoreLabel{
+  font-size:.82rem;
+  font-weight:850;
+  opacity:.78;
+  margin-bottom:5px;
+}
+
+.liveScoreHero .scoreMeta{
+  font-size:.9rem;
+  font-weight:850;
+  opacity:.9;
+}
+
+.liveScoreHero.saved .scoreBig{
+  font-size:1.75rem;
+}
 }
 </style>
 </head>
@@ -951,9 +1001,18 @@
 
 <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;" />
 
-<div id="yourRoundsSection">
-  <div class="muted" style="font-weight:750;">
-    Tap a round to continue scoring or review your card.
+<div id="yourRoundsSection" class="roundsCollapsed">
+  <div class="roundsHeaderRow">
+    <div>
+      <h2 style="margin:0;">Recent rounds</h2>
+      <div class="muted" style="font-weight:750;">
+        Keep this hidden until you need to open an old scorecard.
+      </div>
+    </div>
+
+    <button class="btn2 secondary" id="toggleRoundsBtn" type="button">
+      View rounds
+    </button>
   </div>
 
   <div class="roundFilters">
@@ -1371,6 +1430,8 @@ const createFormPanel = document.getElementById("createFormPanel");
 const roundCourseFilter = document.getElementById("roundCourseFilter");
 const roundDateFilter = document.getElementById("roundDateFilter");
 const clearRoundFiltersBtn = document.getElementById("clearRoundFiltersBtn");
+const toggleRoundsBtn = document.getElementById("toggleRoundsBtn");
+const yourRoundsSection = document.getElementById("yourRoundsSection");
 
     const scTitleEl = document.getElementById("scTitle");
     const scSubEl = document.getElementById("scSub");
@@ -2599,6 +2660,52 @@ function enablePremiumMode(round, metaPars, metaDists, teeName){
     };
   }
 }
+
+function formatToParOnly(v){
+  if (v == null || !Number.isFinite(Number(v))) return "E";
+  const n = Number(v);
+  if (n === 0) return "E";
+  return n > 0 ? `+${n}` : `${n}`;
+}
+
+function renderLiveScoreHero(savedMode = false){
+  const old = document.getElementById("liveScoreHero");
+  if (old) old.remove();
+
+  if (!currentRound) return;
+
+  const holesRows = readTableHoles();
+  const totals = calcTotalsForPlayer(holesRows, 0);
+
+  const toPar = formatToParOnly(totals.toPar);
+
+  const hero = document.createElement("div");
+  hero.id = "liveScoreHero";
+  hero.className = "liveScoreHero" + (savedMode ? " saved" : "");
+
+  hero.innerHTML = savedMode
+    ? `
+      <div>
+        <div class="scoreLabel">Saved score</div>
+        <div class="scoreBig">${escapeHtml(toPar)}</div>
+      </div>
+      <div class="scoreMeta">
+        Total ${totals.strokes ?? "—"}<br/>
+        Putts ${totals.putts ?? "—"}
+      </div>
+    `
+    : `
+      <div>
+        <div class="scoreLabel">Current round</div>
+        <div class="scoreBig">${escapeHtml(toPar)}</div>
+      </div>
+      <div class="scoreMeta">To par</div>
+    `;
+
+  const scorecardWrap = document.getElementById("scorecardWrap");
+  if (scorecardWrap) scorecardWrap.prepend(hero);
+}
+
     async function renderScorecard(round){
       currentRound = round;
       currentRoundId = round?.id || null;
@@ -2913,8 +3020,10 @@ if (canUsePremium) {
         pill.className = "pill";
         pill.textContent = `${label}: Strokes ${totals.strokes ?? "—"} • Putts ${totals.putts ?? "—"} • To Par ${toParLabel}`;
         totalsGrid.appendChild(pill);
-        applyTableScoreColours();
+                applyTableScoreColours();
       }
+
+      renderLiveScoreHero(false);
     }
 
     // -----------------------------
@@ -3291,9 +3400,10 @@ if (!isLoggedIn()){
 
   guestUpsertRound(currentRound);
 
-  setToast(rightToast, "Saved (guest).", true);
-  await safeFetchRounds();
-  return;
+  renderLiveScoreHero(true);
+setToast(rightToast, "Saved (guest).", true);
+await safeFetchRounds();
+return;
 }
 
       // ✅ save names per-round before saving scores (so it's never lost)
@@ -3330,8 +3440,9 @@ if (!isLoggedIn()){
         }
       }
 
-      setToast(rightToast, "Saved.", true);
-      await safeFetchRounds();
+      renderLiveScoreHero(true);
+setToast(rightToast, "Saved.", true);
+await safeFetchRounds();
     }
 
     async function deleteRound(){
@@ -3447,6 +3558,15 @@ if (clearRoundFiltersBtn) {
     renderRoundsList();
   });
 }
+
+if (toggleRoundsBtn && yourRoundsSection) {
+  toggleRoundsBtn.addEventListener("click", () => {
+    const collapsed = yourRoundsSection.classList.toggle("roundsCollapsed");
+    toggleRoundsBtn.textContent = collapsed ? "View rounds" : "Hide rounds";
+  });
+}
+
+if (showLeftBtn) {
 
 if (showLeftBtn) {
   showLeftBtn.addEventListener("click", () => {
