@@ -1418,28 +1418,24 @@ function slugifyCourseName(name) {
     init();
 
         async function init() {
-      initMap();
-      await loadCourses();
+  initMap();
+  await loadCourses();
 
-      // ✅ NEW: ensure we pull the stored home state from DB before defaults apply
-      await hydrateUserFromServer();
+  // ✅ Ensure we pull the stored home state from DB before defaults apply
+  await hydrateUserFromServer();
 
-      // use the logged-in user's home course (if any) to set state + zoom
-      applyHomeCourseDefaults();
+  // Use the logged-in user's home course, if any, to set state + zoom
+  applyHomeCourseDefaults();
 
-      currentSortMode = document.getElementById("courseSort")?.value || "default";
-      currentAvailabilityFilter = document.getElementById("courseAvailabilityFilter")?.value || "all";
+  currentSortMode = document.getElementById("courseSort")?.value || "default";
+  currentAvailabilityFilter = document.getElementById("courseAvailabilityFilter")?.value || "all";
 
-      renderCourses();
-      updateGroupVoteToolbar();
+  renderCourses();
+  updateGroupVoteToolbar();
 
-      // Try to get live location after initial render
-      requestCurrentLocation({
-        centerMap: false,
-        rerender: true,
-        silent: true
-      });
-    }
+  // ✅ Do not auto-request location on page load.
+  // User can tap "Use my current location" to enable nearest-distance sorting.
+}
 
     function initMap() {
       map = L.map("map").setView([-31.95, 115.86], 5.8);
@@ -1775,6 +1771,9 @@ function slugifyCourseName(name) {
     }
     
     function getCourseDistanceKm(course) {
+  // Only show distance after a real location has been approved
+  if (!usingLiveLocation) return null;
+
   const lat1 = Number(userLat);
   const lng1 = Number(userLng);
   const lat2 = Number(course?.lat);
@@ -1786,6 +1785,11 @@ function slugifyCourseName(name) {
     !Number.isFinite(lat2) ||
     !Number.isFinite(lng2)
   ) {
+    return null;
+  }
+
+  // Block bad fallback coords like 0,0
+  if (Math.abs(lat1) < 0.0001 && Math.abs(lng1) < 0.0001) {
     return null;
   }
 
