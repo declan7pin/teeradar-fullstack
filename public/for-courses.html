@@ -59,10 +59,10 @@
     }
 
     .brand img{
-  height:34px;
-  width:auto;
-  object-fit:contain;
-}
+      height:34px;
+      width:auto;
+      object-fit:contain;
+    }
 
     .navlinks{
       display:flex;
@@ -399,6 +399,19 @@
       color:var(--muted);
     }
 
+    .email-direct{
+      margin-top:12px;
+      font-size:13px;
+      color:var(--muted);
+      line-height:1.5;
+    }
+
+    .email-direct a{
+      color:var(--green-dark);
+      font-weight:800;
+      text-decoration:underline;
+    }
+
     footer{
       text-align:center;
       padding:34px 18px 46px;
@@ -650,8 +663,8 @@
         <div>
           <h2>Interested in TeeRadar for your course?</h2>
           <p class="section-intro">
-            Fill out the form and TeeRadar will contact you with more information.
-            This helps us understand your course, booking setup and what you need.
+            Fill out the form and it will open your email app with the details
+            pre-filled. Send it to TeeRadar and we’ll get back to you.
           </p>
 
           <div class="card">
@@ -659,6 +672,11 @@
             <p>
               More online bookings, lower admin work, simple reporting, modern
               booking pages and better exposure to golfers.
+            </p>
+
+            <p class="email-direct">
+              Prefer not to use the form? Contact us directly at
+              <a href="mailto:TeeRadar.help@gmail.com">TeeRadar.help@gmail.com</a>
             </p>
           </div>
         </div>
@@ -726,7 +744,7 @@
           <textarea id="message" placeholder="Tell us about your course, current setup, tee time rules, pain points or questions."></textarea>
 
           <button class="btn" type="submit" id="submitBtn" style="margin-top:16px;width:100%;">
-            Send enquiry
+            Contact TeeRadar
           </button>
 
           <div class="status" id="formStatus"></div>
@@ -742,59 +760,58 @@
   <script>
     const form = document.getElementById("courseEnquiryForm");
     const statusEl = document.getElementById("formStatus");
-    const submitBtn = document.getElementById("submitBtn");
 
-    form.addEventListener("submit", async (e) => {
+    form.addEventListener("submit", (e) => {
       e.preventDefault();
 
-      const data = {
-        to: "TeeRadar.help@gmail.com",
-        email: document.getElementById("email").value.trim(),
-        subject: "New TeeRadar course enquiry",
-        message: `
+      const courseName = document.getElementById("courseName").value.trim();
+      const state = document.getElementById("state").value.trim();
+      const contactName = document.getElementById("contactName").value.trim();
+      const role = document.getElementById("role").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const phone = document.getElementById("phone").value.trim();
+      const currentSystem = document.getElementById("currentSystem").value.trim();
+      const interest = document.getElementById("interest").value.trim();
+      const message = document.getElementById("message").value.trim();
+
+      if (!courseName || !state || !contactName || !email) {
+        statusEl.textContent = "Please complete the required fields.";
+        statusEl.style.color = "#b91c1c";
+        return;
+      }
+
+      const subject = "New TeeRadar Course Enquiry";
+
+      const body = `
 New TeeRadar Course Enquiry
 
-Course name: ${document.getElementById("courseName").value.trim()}
-State: ${document.getElementById("state").value.trim()}
-Contact name: ${document.getElementById("contactName").value.trim()}
-Role: ${document.getElementById("role").value.trim()}
-Email: ${document.getElementById("email").value.trim()}
-Phone: ${document.getElementById("phone").value.trim()}
-Current booking system: ${document.getElementById("currentSystem").value.trim()}
-Interested in: ${document.getElementById("interest").value.trim()}
+Course name: ${courseName}
+State: ${state}
+
+Contact name: ${contactName}
+Role: ${role || "Not provided"}
+Email: ${email}
+Phone: ${phone || "Not provided"}
+
+Current booking system:
+${currentSystem || "Not provided"}
+
+Interested in:
+${interest || "Not provided"}
 
 Extra information:
-${document.getElementById("message").value.trim()}
-        `.trim()
-      };
+${message || "Not provided"}
+      `.trim();
 
-      statusEl.textContent = "Sending enquiry...";
+      const mailto =
+        "mailto:TeeRadar.help@gmail.com" +
+        "?subject=" + encodeURIComponent(subject) +
+        "&body=" + encodeURIComponent(body);
+
+      statusEl.textContent = "Opening your email app...";
       statusEl.style.color = "#64748b";
-      submitBtn.disabled = true;
 
-      try {
-        const res = await fetch("/api/contact", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data)
-        });
-
-        const result = await res.json().catch(() => ({}));
-
-        if (!res.ok || !result.ok) {
-          throw new Error(result.error || "send_failed");
-        }
-
-        statusEl.textContent = "Thanks — your enquiry has been sent.";
-        statusEl.style.color = "#15803d";
-        form.reset();
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = "Could not send enquiry. Please try again.";
-        statusEl.style.color = "#b91c1c";
-      } finally {
-        submitBtn.disabled = false;
-      }
+      window.location.href = mailto;
     });
   </script>
 </body>
