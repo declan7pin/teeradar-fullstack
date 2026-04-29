@@ -4,60 +4,54 @@ import nodemailer from "nodemailer";
 
 const contactRouter = express.Router();
 
-/**
- * POST /api/contact
- * Body: { email, question, description }
- */
 contactRouter.post("/", async (req, res) => {
   try {
-    const { email, question, description } = req.body || {};
+    const body = req.body || {};
 
-    // Basic validation
-    if (!email || !question || !description) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "Email, question and description are required." });
+    const email = String(body.email || "").trim();
+    const question = String(body.question || body.subject || "New TeeRadar enquiry").trim();
+    const description = String(body.description || body.message || body.details || "").trim();
+
+    if (!email || !description) {
+      return res.status(400).json({
+        ok: false,
+        error: "Email and message are required."
+      });
     }
 
-    // Very light email sanity check
     if (!email.includes("@") || !email.includes(".")) {
-      return res.status(400).json({ ok: false, error: "Please enter a valid email." });
+      return res.status(400).json({
+        ok: false,
+        error: "Please enter a valid email."
+      });
     }
 
-    // Destination: YOUR email, stored as an environment variable
-    const toAddress = process.env.CONTACT_TO_EMAIL;
-    if (!toAddress) {
-      console.error("CONTACT_TO_EMAIL is not set in environment variables.");
-      return res
-        .status(500)
-        .json({ ok: false, error: "Contact system not configured yet." });
-    }
+    const toAddress = process.env.CONTACT_TO_EMAIL || "TeeRadar.help@gmail.com";
 
-    // Configure SMTP transport
-    // ⚠️ You will set these as environment vars in Render.
     const portNumber = Number(process.env.SMTP_PORT) || 587;
 
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST, // e.g. "smtp.office365.com" or your provider
+      host: process.env.SMTP_HOST,
       port: portNumber,
-      secure: portNumber === 465,  // true for 465 (SSL), false otherwise
-      requireTLS: portNumber === 587, // STARTTLS on 587 (Office365/Gmail style)
+      secure: portNumber === 465,
+      requireTLS: portNumber === 587,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
     });
 
-    const mailSubject = `TeeRadar contact: ${question.slice(0, 80)}`;
+    const mailSubject = `TeeRadar enquiry: ${question.slice(0, 80)}`;
+
     const mailText = `
-New contact enquiry from TeeRadar:
+New TeeRadar enquiry:
 
 From: ${email}
 
-Question:
+Subject:
 ${question}
 
-Description:
+Message:
 ${description}
 
 ---
@@ -66,8 +60,9 @@ Reply directly to: ${email}
     `.trim();
 
     await transporter.sendMail({
-      from: `"TeeRadar Contact" <no-reply@teeradar.com.au>`, // shown to user
-      to: toAddress,                                        // this is YOUR email
+      from: `"TeeRadar Contact" <${process.env.SMTP_USER}>`,
+      to: toAddress,
+      replyTo: email,
       subject: mailSubject,
       text: mailText,
     });
