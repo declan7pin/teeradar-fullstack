@@ -26,7 +26,6 @@ import { ensureScorecardCoursesSchema } from "./scorecardCourseMigrate.js"; // �
 import analyticsRouter from "./analyticsRoutes.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 import groupVotesRouter from "./groupVotesRoutes.js";
-import contactRouter from "./contact.js";
 import { ensureGroupVotesTables } from "./groupVotesMigrate.js";
 
 // Analytics (Postgres)
@@ -2025,7 +2024,61 @@ const prov = provRaw.toLowerCase();
 // ✅ GET /api/analytics/users
 // (The broken orphan block that caused "Unexpected token }" has been removed.)
 
-app.use("/api/contact", contactRouter);
+// -------------------------------------------------
+// Contact Form Email System
+// -------------------------------------------------
+app.post("/api/contact", async (req, res) => {
+  const CONTACT_EMAIL = process.env.CONTACT_EMAIL;
+  const SMTP_HOST = process.env.SMTP_HOST;
+  const SMTP_PORT = process.env.SMTP_PORT;
+  const SMTP_USER = process.env.SMTP_USER;
+  const SMTP_PASS = process.env.SMTP_PASS;
+
+  console.log("[contact env] email:", CONTACT_EMAIL);
+  console.log("[contact env] host:", SMTP_HOST);
+  console.log("[contact env] port:", SMTP_PORT);
+  console.log("[contact env] user:", SMTP_USER);
+  console.log("[contact env] pass present:", !!SMTP_PASS);
+
+  if (!CONTACT_EMAIL || !SMTP_HOST || !SMTP_USER || !SMTP_PASS || !SMTP_PORT) {
+    return res.status(500).json({ ok: false, error: "Email service not configured" });
+  }
+
+  const { email, question, details } = req.body;
+
+  if (!email || !question || !details) {
+    return res.status(400).json({ ok: false, error: "Missing required fields" });
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: Number(SMTP_PORT),
+      secure: false,
+      auth: { user: SMTP_USER, pass: SMTP_PASS },
+    });
+
+    await transporter.sendMail({
+      from: `"TeeRadar Contact" <${SMTP_USER}>`,
+      to: CONTACT_EMAIL,
+      subject: `New TeeRadar Question: ${question}`,
+      text: `
+From: ${email}
+
+Question:
+${question}
+
+Details:
+${details}
+      `,
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Email send error:", err);
+    res.status(500).json({ ok: false, error: "Email failed to send" });
+  }
+});
 
 // -------------------------------------------------
 // 🔎 DEBUG: confirm rounds are stored in DB
