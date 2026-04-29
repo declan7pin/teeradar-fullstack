@@ -60,16 +60,74 @@ function normalise(s) {
 function normaliseCourseName(s) {
   let x = (s || "").toString().trim().toLowerCase();
 
-  // remove trailing "(...holes...)" e.g. "Whaleback Golf Course (18 holes)"
   x = x.replace(/\s*\(\s*\d+\s*holes?\s*\)\s*$/i, "");
-
-  // also handle "(9 hole)" just in case
   x = x.replace(/\s*\(\s*\d+\s*hole\s*\)\s*$/i, "");
 
-  // collapse whitespace
+  // ✅ make "front / back" match "front/back"
+  x = x.replace(/\s*\/\s*/g, "/");
+
+  // ✅ collapse whitespace
   x = x.replace(/\s+/g, " ").trim();
 
   return x;
+}
+
+async function getTemplateFromDbAnyState(course, holes, layout = null) {
+  const baseName = normaliseCourseName(course);
+  const layoutName = normaliseCourseName(layout);
+  const h = Number(holes);
+
+  if (!baseName || !h) return null;
+
+  const possibleNames = new Set();
+  possibleNames.add(baseName);
+
+  if (layoutName) {
+    possibleNames.add(normaliseCourseName(`${baseName} - ${layoutName}`));
+    possibleNames.add(normaliseCourseName(`${baseName}-${layoutName}`));
+  }
+
+  const { rows } = await db.query(
+    `
+    SELECT id, name, state, holes, pars_json, dists_json
+    FROM scorecard_courses
+    WHERE holes = $1
+    ORDER BY updated_at DESC NULLS LAST, id DESC;
+    `,
+    [h]
+  );
+
+  const matches = (rows || []).filter((r) => {
+    const n = normaliseCourseName(r.name);
+    return possibleNames.has(n);
+  });
+
+  if (matches.length !== 1) {
+    console.log("⚠️ getTemplateFromDbAnyState no single match:", {
+      course,
+      layout,
+      holes: h,
+      possibleNames: Array.from(possibleNames),
+      matches: matches.map((m) => ({
+        id: m.id,
+        name: m.name,
+        state: m.state,
+        holes: m.holes,
+      })),
+    });
+    return null;
+  }
+
+  const match = matches[0];
+
+  return {
+    id: match.id,
+    name: match.name,
+    state: match.state,
+    holes: match.holes,
+    pars: Array.isArray(match.pars_json) ? match.pars_json : null,
+    dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+  };
 }
 
 // -------------------------------------------------
@@ -181,6 +239,76 @@ function isCompleteTemplateArrays(pars, dists, holes) {
   return true;
 }
 
+async function getTemplateFromDbLoose(course, state, holes) {
+  const wanted = normaliseCourseName(course);
+  const st = String(state || "").trim().toUpperCase();
+  const h = Number(holes);
+
+  if (!wanted || !st || !h) return null;
+
+  const { rows } = await db.query(
+    `
+    SELECT id, name, state, holes, pars_json, dists_json
+    FROM scorecard_courses
+    WHERE state = $1 AND holes = $2
+    ORDER BY updated_at DESC NULLS LAST, id DESC;
+    `,
+    [st, h]
+  );
+
+  const match = (rows || []).find((r) => normaliseCourseName(r.name) === wanted);
+  if (!match) return null;
+
+  return {
+    id: match.id,
+    name: match.name,
+    state: match.state,
+    holes: match.holes,
+    pars: Array.isArray(match.pars_json) ? match.pars_json : null,
+    dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+  };
+}
+
+function splitLayoutParts(layout) {
+  return String(layout || "")
+    .split("/")
+    .map((x) => String(x || "").trim())
+    .filter(Boolean);
+}
+
+async function getNineHoleTemplateForLayout(course, state, layoutPart) {
+  const wantedCourse = normaliseCourseName(course);
+  const wantedPart = String(layoutPart || "").trim().toLowerCase();
+  const st = String(state || "").trim().toUpperCase();
+
+  if (!wantedCourse || !wantedPart || !st) return null;
+
+  const { rows } = await db.query(
+    `
+    SELECT id, name, state, holes, pars_json, dists_json
+    FROM scorecard_courses
+    WHERE state = $1 AND holes = 9
+    ORDER BY updated_at DESC NULLS LAST, id DESC;
+    `,
+    [st]
+  );
+
+  const match = (rows || []).find((r) => {
+    const n = normaliseCourseName(r.name);
+    return n.includes(wantedCourse) && n.includes(wantedPart);
+  });
+
+  if (!match) return null;
+
+  return {
+    id: match.id,
+    name: match.name,
+    state: match.state,
+    holes: match.holes,
+    pars: Array.isArray(match.pars_json) ? match.pars_json : null,
+    dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+  };
+}
 // -------------------------------------------------
 // Helpers
 // -------------------------------------------------
@@ -223,6 +351,11 @@ function isValidEmail(v) {
   const s = String(v || "").trim();
   if (!s) return false;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+function normaliseStateCode(v) {
+  const s = String(v || "").trim().toUpperCase();
+  const allowed = new Set(["WA", "NT", "QLD", "NSW", "VIC", "SA", "TAS", "ACT"]);
+  return allowed.has(s) ? s : "";
 }
 // -------------------------------------------------
 // ✅ Template endpoints
@@ -484,7 +617,7 @@ router.get("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (re
   }
 });
 
-// Rename an approved scorecard course
+// Edit an approved scorecard course (name + state)
 router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -492,31 +625,42 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
       return res.status(400).json({ ok: false, error: "invalid_id" });
     }
 
-    const nameRaw = String(req.body?.name || "").trim();
-    if (!nameRaw) {
-      return res.status(400).json({ ok: false, error: "name_required" });
-    }
-
-    // keep consistent normalisation (and ensures lowercase / trimmed)
-    const newName = normaliseCourseName(nameRaw);
-
-    // load current record
     const cur = await db.query(
       `SELECT id, name, state, holes FROM scorecard_courses WHERE id = $1 LIMIT 1;`,
       [id]
     );
-    if (!cur.rows.length) return res.status(404).json({ ok: false, error: "not_found" });
+    if (!cur.rows.length) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
 
-    // update (may conflict with unique(name,state,holes))
+    const existing = cur.rows[0];
+
+    const nameRaw = String(req.body?.name || "").trim();
+    const stateRaw = String(req.body?.state || "").trim().toUpperCase();
+
+    const newName = nameRaw ? normaliseCourseName(nameRaw) : String(existing.name || "").trim();
+    const newState = stateRaw ? normaliseStateCode(stateRaw) : String(existing.state || "").trim().toUpperCase();
+
+    if (!newName) {
+      return res.status(400).json({ ok: false, error: "name_required" });
+    }
+
+    if (!newState) {
+      return res.status(400).json({ ok: false, error: "state_required" });
+    }
+
     try {
       const up = await db.query(
         `
         UPDATE scorecard_courses
-        SET name = $2, updated_at = now()
+        SET
+          name = $2,
+          state = $3,
+          updated_at = now()
         WHERE id = $1
         RETURNING id, name, state, holes, updated_at;
         `,
-        [id, newName]
+        [id, newName, newState]
       );
 
       return res.json({ ok: true, course: up.rows[0] });
@@ -529,7 +673,7 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
     }
   } catch (err) {
     console.error("PATCH /api/rounds/admin/scorecard-courses/:id error:", err);
-    return res.status(500).json({ ok: false, error: "internal error" });
+    return res.status(500).json({ ok: false, error: "internal error", detail: err?.message });
   }
 });
 
@@ -552,7 +696,9 @@ router.delete("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, as
 router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ ok: false, error: "invalid_id" });
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ ok: false, error: "invalid_id" });
+    }
 
     const { rows } = await db.query(
       `
@@ -568,6 +714,22 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
 
     const p = rows[0];
 
+    // ✅ allow admin overrides before approval
+    const overrideNameRaw = String(req.body?.name || "").trim();
+    const overrideStateRaw = String(req.body?.state || "").trim().toUpperCase();
+
+    const approvedName = overrideNameRaw ? normaliseCourseName(overrideNameRaw) : String(p.name || "").trim();
+    const approvedState = overrideStateRaw || String(p.state || "").trim().toUpperCase();
+    const approvedHoles = Number(p.holes);
+
+    if (!approvedName) {
+      return res.status(400).json({ ok: false, error: "name_required" });
+    }
+
+    if (!approvedState) {
+      return res.status(400).json({ ok: false, error: "state_required" });
+    }
+
     await db.query("BEGIN");
 
     const up = await db.query(
@@ -581,12 +743,17 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
         updated_at = now()
       RETURNING id;
       `,
-      [p.name, p.state, p.holes, JSON.stringify(p.pars_json), JSON.stringify(p.dists_json)]
+      [
+        approvedName,
+        approvedState,
+        approvedHoles,
+        JSON.stringify(p.pars_json),
+        JSON.stringify(p.dists_json)
+      ]
     );
 
     const approvedCourseId = up.rows[0]?.id || null;
 
-    // ✅ store who approved (manual coupon will be emailed by you later)
     const approverId = Number(req.user?.id || 0) || null;
     const approverEmail = String(req.user?.email || "").trim().toLowerCase() || null;
 
@@ -594,15 +761,16 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
       `
       UPDATE courses_pending
       SET
+        name = $2,
+        state = $3,
         approved_at = now(),
-        approved_by_user_id = $2,
-        approved_by_email = $3
+        approved_by_user_id = $4,
+        approved_by_email = $5
       WHERE id = $1;
       `,
-      [id, approverId, approverEmail]
+      [id, approvedName, approvedState, approverId, approverEmail]
     );
 
-    // ✅ contributor history (auto-linked)
     try {
       await db.query(
         `
@@ -611,7 +779,15 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
         VALUES
           ('APPROVED', $1, $2, $3, $4, $5, $6, $7);
         `,
-        [p.name, p.state, p.holes, Number(id), approvedCourseId, approverId, approverEmail]
+        [
+          approvedName,
+          approvedState,
+          approvedHoles,
+          Number(id),
+          approvedCourseId,
+          approverId,
+          approverEmail
+        ]
       );
     } catch (e) {
       console.warn("contribution log (APPROVED) failed:", e?.message || e);
@@ -619,7 +795,13 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
 
     await db.query("COMMIT");
 
-    return res.json({ ok: true, approvedCourseId });
+    return res.json({
+      ok: true,
+      approvedCourseId,
+      name: approvedName,
+      state: approvedState,
+      holes: approvedHoles
+    });
   } catch (err) {
     try { await db.query("ROLLBACK"); } catch {}
     console.error("POST /api/rounds/admin/pending-courses/:id/approve error:", err);
@@ -627,6 +809,254 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
   }
 });
 
+// -------------------------------------------------
+// ✅ Reusable round creator
+// Used by POST /api/rounds and later by bookingRoutes.js
+// -------------------------------------------------
+export async function createRoundWithSeededHoles({
+  userId,
+  course,
+  layout = null,
+  state = null,
+  holes = 18,
+  par_mode = "published", // "published" | "blank"
+  publishedPars = null,   // optional legacy support
+  players_count = 1,
+  player_names = null,
+}) {
+  const holesNum = Number(holes);
+
+  if (!userId) {
+    return { ok: false, status: 401, error: "unauthorised" };
+  }
+  if (!course || !String(course).trim()) {
+    return { ok: false, status: 400, error: "course is required" };
+  }
+  if (![9, 18].includes(holesNum)) {
+    return { ok: false, status: 400, error: "holes must be 9 or 18" };
+  }
+
+  let stateCode = (state || "").toString().trim().toUpperCase() || null;
+  const layoutName = (layout || "").toString().trim() || null;
+  const mode = (par_mode || "").toString().trim().toLowerCase() || "published";
+
+  const playersCount = clampPlayers(players_count);
+
+  let playerNames = [];
+  if (Array.isArray(player_names)) {
+    playerNames = player_names.map((x) => String(x || "").trim());
+  }
+  playerNames.length = playersCount;
+  if (typeof playerNames[0] !== "string") playerNames[0] = "";
+
+  let pars = null;
+  let dists = null;
+
+    // ✅ Try approved templates first
+  if (mode === "published") {
+    let t = null;
+
+    if (stateCode) {
+      // 1) exact course/state/holes match
+      t = await getTemplateFromDb(String(course), stateCode, holesNum);
+
+      // 2) looser name match if exact failed
+      if (!t) {
+        t = await getTemplateFromDbLoose(String(course), stateCode, holesNum);
+      }
+    }
+
+    // ✅ 3) If booking-created round has no state, auto-find the approved template
+    if (!t && !stateCode) {
+      t = await getTemplateFromDbAnyState(String(course), holesNum, layoutName);
+      if (t?.state) stateCode = String(t.state || "").trim().toUpperCase() || null;
+    }
+
+    if (t && Array.isArray(t.pars) && t.pars.length === holesNum) {
+      pars = t.pars.slice(0, holesNum);
+    }
+
+    if (t && Array.isArray(t.dists) && t.dists.length === holesNum) {
+      dists = t.dists.slice(0, holesNum);
+    }
+
+    // 4) 18-hole routed fallback from two approved 9-hole templates
+    if ((!pars || !dists) && holesNum === 18 && layoutName && stateCode) {
+      const parts = splitLayoutParts(layoutName);
+      if (parts.length === 2) {
+        const frontT = await getNineHoleTemplateForLayout(course, stateCode, parts[0]);
+        const backT = await getNineHoleTemplateForLayout(course, stateCode, parts[1]);
+
+        if (
+          frontT && backT &&
+          Array.isArray(frontT.pars) && frontT.pars.length === 9 &&
+          Array.isArray(backT.pars) && backT.pars.length === 9
+        ) {
+          pars = frontT.pars.slice(0, 9).concat(backT.pars.slice(0, 9));
+        }
+
+        if (
+          frontT && backT &&
+          Array.isArray(frontT.dists) && frontT.dists.length === 9 &&
+          Array.isArray(backT.dists) && backT.dists.length === 9
+        ) {
+          dists = frontT.dists.slice(0, 9).concat(backT.dists.slice(0, 9));
+        }
+      }
+    }
+
+    // 5) 9-hole routed fallback
+    if ((!pars || !dists) && holesNum === 9 && layoutName && stateCode) {
+      const t9 = await getNineHoleTemplateForLayout(course, stateCode, layoutName);
+
+      if (t9 && Array.isArray(t9.pars) && t9.pars.length === 9) {
+        pars = t9.pars.slice(0, 9);
+      }
+
+      if (t9 && Array.isArray(t9.dists) && t9.dists.length === 9) {
+        dists = t9.dists.slice(0, 9);
+      }
+    }
+
+    console.log("🧩 createRoundWithSeededHoles template lookup:", {
+      course: String(course).trim(),
+      layout: layoutName,
+      state: stateCode,
+      holes: holesNum,
+      foundPars: !!pars,
+      foundDists: !!dists,
+      parsCount: Array.isArray(pars) ? pars.length : 0,
+      distsCount: Array.isArray(dists) ? dists.length : 0,
+    });
+  }
+
+  // ✅ legacy optional fallback
+  if (mode === "published" && !pars && Array.isArray(publishedPars) && publishedPars.length === holesNum) {
+    const tmp = publishedPars.map((p) => (p === null || p === undefined || p === "" ? null : Number(p)));
+    if (tmp.every((p) => p === null || Number.isFinite(p))) pars = tmp;
+  }
+
+  const finalParMode = (Array.isArray(pars) && pars.length === holesNum) ? "published" : "blank";
+
+  await ensurePlayerNamesColumn();
+
+  let insertedRoundId = null;
+
+  try {
+    await db.query("BEGIN");
+
+    const roundInsert = await db.query(
+      `
+      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, players_count, player_names)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+      RETURNING id, user_id, course, layout, state, holes, par_mode, created_at, players_count, player_names;
+      `,
+      [
+        Number(userId),
+        String(course).trim(),
+        layoutName,
+        stateCode,
+        holesNum,
+        finalParMode,
+        playersCount,
+        JSON.stringify(playerNames),
+      ]
+    );
+
+    const round = roundInsert.rows?.[0] || null;
+    if (!round || !round.id) {
+      await db.query("ROLLBACK");
+      return { ok: false, status: 500, error: "round_insert_failed" };
+    }
+
+    insertedRoundId = Number(round.id);
+
+    for (let i = 1; i <= holesNum; i++) {
+      const parVal = pars ? (Number.isFinite(Number(pars[i - 1])) ? Number(pars[i - 1]) : null) : null;
+      const distVal = dists ? (Number.isFinite(Number(dists[i - 1])) ? Number(dists[i - 1]) : null) : null;
+
+      await db.query(
+        `
+        INSERT INTO round_holes (round_id, hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player)
+        VALUES ($1, $2, $3, $4, NULL, NULL, '{}'::jsonb, '{}'::jsonb)
+        ON CONFLICT (round_id, hole_number) DO NOTHING;
+        `,
+        [insertedRoundId, i, parVal, distVal]
+      );
+    }
+
+    await db.query("COMMIT");
+
+    const verifyRound = await db.query(
+      `
+      SELECT id, user_id, course, layout, state, holes, par_mode, created_at, players_count, player_names
+      FROM rounds
+      WHERE id = $1
+      LIMIT 1;
+      `,
+      [insertedRoundId]
+    );
+
+    if (!verifyRound.rows.length) {
+      console.error("createRoundWithSeededHoles: round missing after commit", {
+        insertedRoundId,
+        userId,
+        course,
+        layoutName,
+        stateCode,
+        holesNum,
+      });
+
+      return { ok: false, status: 500, error: "round_not_found_after_commit" };
+    }
+
+    const holesRows = await db.query(
+      `
+      SELECT hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player
+      FROM round_holes
+      WHERE round_id = $1
+      ORDER BY hole_number ASC;
+      `,
+      [insertedRoundId]
+    );
+
+    console.log("✅ createRoundWithSeededHoles created round:", {
+      roundId: insertedRoundId,
+      userId,
+      course: String(course).trim(),
+      layout: layoutName,
+      state: stateCode,
+      holes: holesNum,
+      par_mode: finalParMode,
+      templateUsed: !!(pars && dists),
+    });
+
+    return {
+      ok: true,
+      status: 200,
+      round: verifyRound.rows[0],
+      holes: holesRows.rows || [],
+      scorecardUsed: !!pars,
+      templateUsed: !!(pars && dists),
+    };
+  } catch (err) {
+    try { await db.query("ROLLBACK"); } catch {}
+    console.error("createRoundWithSeededHoles failed:", err?.message || err, {
+      insertedRoundId,
+      userId,
+      course,
+      layoutName,
+      stateCode,
+      holesNum,
+    });
+    return {
+      ok: false,
+      status: 500,
+      error: "create_round_with_seeded_holes_failed",
+      detail: err?.message || String(err || ""),
+    };
+  }
+}
 // -------------------------------------------------
 // Routes (mounted at /api/rounds)
 // -------------------------------------------------
@@ -641,116 +1071,33 @@ router.post("/", requireAuth, async (req, res) => {
       layout = null,
       state = null,
       holes = 18,
-      par_mode = "published", // "published" | "blank"
-      publishedPars = null,   // optional legacy support
-
-      // ✅ NEW: players count (1–4)
+      par_mode = "published",
+      publishedPars = null,
       players_count = 1,
-      // ✅ NEW: player names (optional)
       player_names = null,
     } = req.body || {};
 
-    const holesNum = Number(holes);
-
-    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
-    if (!course || !String(course).trim()) {
-      return res.status(400).json({ ok: false, error: "course is required" });
-    }
-    if (![9, 18].includes(holesNum)) {
-      return res.status(400).json({ ok: false, error: "holes must be 9 or 18" });
-    }
-
-    const stateCode = (state || "").toString().trim().toUpperCase() || null;
-    const layoutName = (layout || "").toString().trim() || null;
-    const mode = (par_mode || "").toString().trim().toLowerCase() || "published";
-
-    const playersCount = clampPlayers(players_count);
-
-    // normalize player_names (array of strings, length = playersCount)
-    let playerNames = [];
-    if (Array.isArray(player_names)) {
-      playerNames = player_names.map((x) => String(x || "").trim());
-    }
-    playerNames.length = playersCount;
-    if (typeof playerNames[0] !== "string") playerNames[0] = "";
-
-    let pars = null;
-    let dists = null;
-
-    // ✅ 0) DB template only (approved)
-    if (mode === "published" && stateCode) {
-      const t = await getTemplateFromDb(String(course), stateCode, holesNum);
-      if (t && Array.isArray(t.pars) && t.pars.length === holesNum) pars = t.pars.slice(0, holesNum);
-      if (t && Array.isArray(t.dists) && t.dists.length === holesNum) dists = t.dists.slice(0, holesNum);
-    }
-
-    // ✅ 1) legacy optional: accept publishedPars from frontend ONLY if DB template is missing
-    if (mode === "published" && !pars && Array.isArray(publishedPars) && publishedPars.length === holesNum) {
-      const tmp = publishedPars.map((p) => (p === null || p === undefined || p === "" ? null : Number(p)));
-      if (tmp.every((p) => p === null || Number.isFinite(p))) pars = tmp;
-    }
-
-    const finalParMode = pars ? "published" : "blank";
-
-    await ensurePlayerNamesColumn();
-
-    await db.query("BEGIN");
-
-    const roundInsert = await db.query(
-      `
-      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, players_count, player_names)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
-      RETURNING id, user_id, course, layout, state, holes, par_mode, created_at, players_count, player_names;
-      `,
-      [
-        userId,
-        String(course).trim(),
-        layoutName,
-        stateCode,
-        holesNum,
-        finalParMode,
-        playersCount,
-        JSON.stringify(playerNames),
-      ]
-    );
-
-    const round = roundInsert.rows[0];
-
-    for (let i = 1; i <= holesNum; i++) {
-      const parVal = pars ? (Number.isFinite(Number(pars[i - 1])) ? Number(pars[i - 1]) : null) : null;
-      const distVal = dists ? (Number.isFinite(Number(dists[i - 1])) ? Number(dists[i - 1]) : null) : null;
-
-      await db.query(
-        `
-        INSERT INTO round_holes (round_id, hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player)
-        VALUES ($1, $2, $3, $4, NULL, NULL, '{}'::jsonb, '{}'::jsonb)
-        ON CONFLICT (round_id, hole_number) DO NOTHING;
-        `,
-        [round.id, i, parVal, distVal]
-      );
-    }
-
-    await db.query("COMMIT");
-
-    const holesRows = await db.query(
-      `
-      SELECT hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player
-      FROM round_holes
-      WHERE round_id = $1
-      ORDER BY hole_number ASC;
-      `,
-      [round.id]
-    );
-
-    return res.json({
-      ok: true,
-      round,
-      holes: holesRows.rows,
-      scorecardUsed: !!pars,
-      templateUsed: !!(pars && dists),
+    const result = await createRoundWithSeededHoles({
+      userId,
+      course,
+      layout,
+      state,
+      holes,
+      par_mode,
+      publishedPars,
+      players_count,
+      player_names,
     });
+
+    if (!result?.ok) {
+      return res.status(result?.status || 400).json({
+        ok: false,
+        error: result?.error || "invalid_request",
+      });
+    }
+
+    return res.json(result);
   } catch (err) {
-    try { await db.query("ROLLBACK"); } catch {}
     console.error("POST /api/rounds error:", err);
     return res.status(500).json({ ok: false, error: "internal error", detail: err?.message });
   }
