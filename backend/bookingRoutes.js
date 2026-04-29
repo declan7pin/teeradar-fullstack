@@ -7,6 +7,7 @@ import cookieParser from "cookie-parser"; // ✅ ADD
 import { recordEvent } from "./analytics.js";
 import jwt from "jsonwebtoken";
 import Stripe from "stripe";
+import { createRoundWithSeededHoles } from "./roundsRoutes.js";
 
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
 
@@ -323,6 +324,79 @@ function getBearer(req) {
   const auth = String(req.headers.authorization || "");
   const m = auth.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : "";
+}
+async function findUserByEmail(email) {
+  const clean = String(email || "").trim().toLowerCase();
+  if (!clean) return null;
+
+  try {
+    const r = await db.query(
+      `
+      SELECT id, email
+      FROM users
+      WHERE LOWER(TRIM(email)) = $1
+      LIMIT 1;
+      `,
+      [clean]
+    );
+    return r.rows?.[0] || null;
+  } catch (e) {
+    console.warn("findUserByEmail failed", e?.message || e);
+    return null;
+  }
+}
+
+async function getAuthedUserFromReq(req) {
+  try {
+    const bearer = getBearer(req);
+    const token =
+      bearer ||
+      String(req.cookies?.tr_token || req.cookies?.token || req.cookies?.jwt || "").trim();
+
+    if (!token || !JWT_SECRET_FALLBACK) return null;
+
+    const decoded = jwt.verify(token, JWT_SECRET_FALLBACK);
+    const email = String(decoded?.email || decoded?.user?.email || "").trim().toLowerCase();
+    if (!email) return null;
+
+    return await findUserByEmail(email);
+  } catch {
+    return null;
+  }
+}
+
+async function requireAccountUser(req, res, next) {
+  try {
+    const user = await getAuthedUserFromReq(req);
+    if (!user?.id) {
+      return res.status(401).json({ ok: false, error: "not_authenticated" });
+    }
+    req.accountUser = user;
+    return next();
+  } catch (e) {
+    console.error("requireAccountUser", e);
+    return res.status(401).json({ ok: false, error: "not_authenticated" });
+  }
+}
+function parseShareEmails(raw) {
+  if (Array.isArray(raw)) {
+    return raw
+      .map((x) => String(x || "").trim().toLowerCase())
+      .filter(Boolean)
+      .filter(isLikelyEmail);
+  }
+
+  return String(raw || "")
+    .split(/[,\n;]/)
+    .map((x) => String(x || "").trim().toLowerCase())
+    .filter(Boolean)
+    .filter(isLikelyEmail);
+}
+function cleanMateNickname(v) {
+  return String(v || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 60);
 }
 function getBypassProvided(req) {
   const key =
@@ -1202,6 +1276,102 @@ async function sendBookingEmail({
   }
 }
 
+// ✅ Send golfer email asking them to confirm paid-online cancellation
+async function sendPaidCancellationRequestEmail({
+  to,
+  golferName,
+  courseName,
+  date,
+  time,
+  holes,
+  players,
+  reference,
+  token,
+}) {
+  const result = { emailOk: false, emailReason: "" };
+
+  if (!resend) {
+    result.emailReason = "RESEND_API_KEY_not_set";
+    return result;
+  }
+
+  const from = buildFrom();
+  if (!from) {
+    result.emailReason = "BOOKING_EMAIL_FROM_not_set";
+    return result;
+  }
+
+  if (!isLikelyEmail(to)) {
+    result.emailReason = "invalid_to_email";
+    return result;
+  }
+
+  const confirmUrl = `${BASE_URL}/api/book/cancel-request?token=${encodeURIComponent(token)}`;
+
+  const subject = `Cancellation request — ${courseName} booking ${reference}`;
+
+  const html = `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.5;color:#0f172a">
+      <h2 style="margin:0 0 10px">Cancellation request</h2>
+
+      <p style="margin:0 0 12px">
+        Hi ${golferName ? escapeHtmlForEmail(golferName) : "there"},
+      </p>
+
+      <p style="margin:0 0 12px">
+        ${escapeHtmlForEmail(courseName)} has requested to cancel your paid online TeeRadar booking.
+      </p>
+
+      <table style="border-collapse:collapse;width:100%;max-width:520px;margin:12px 0">
+        <tr><td style="padding:6px 0;color:#64748b">Reference</td><td style="padding:6px 0"><b>${escapeHtmlForEmail(reference)}</b></td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Course</td><td style="padding:6px 0">${escapeHtmlForEmail(courseName)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Date</td><td style="padding:6px 0">${escapeHtmlForEmail(date)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Time</td><td style="padding:6px 0">${escapeHtmlForEmail(time)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Players</td><td style="padding:6px 0">${escapeHtmlForEmail(players)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Holes</td><td style="padding:6px 0">${escapeHtmlForEmail(holes)}</td></tr>
+      </table>
+
+      <p style="margin:0 0 14px">
+        Please confirm whether you agree to cancel this booking.
+      </p>
+
+      <p style="margin:0 0 14px">
+        <a href="${confirmUrl}" style="display:inline-block;padding:12px 16px;border-radius:10px;background:#00796b;color:#fff;text-decoration:none;font-weight:800">
+          Review cancellation request
+        </a>
+      </p>
+
+      <p style="margin:14px 0 0;color:#64748b;font-size:12px">
+        Refunds are handled according to the course’s refund policy.
+      </p>
+    </div>
+  `;
+
+  try {
+    const payload = { from, to, subject, html };
+    if (bookingBcc && isLikelyEmail(bookingBcc)) payload.bcc = bookingBcc;
+
+    await resend.emails.send(payload);
+
+    result.emailOk = true;
+    return result;
+  } catch (e) {
+    result.emailOk = false;
+    result.emailReason = e?.message ? String(e.message) : "send_failed";
+    return result;
+  }
+}
+
+// ✅ local email escaping helper
+function escapeHtmlForEmail(v) {
+  return String(v ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 // -----------------------------
 // One-time table creation (safe)
 // -----------------------------
@@ -1282,6 +1452,10 @@ async function ensureBookingTables() {
     ALTER TABLE booking_courses
     ADD COLUMN IF NOT EXISTS layouts JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
+  await db.query(`
+  ALTER TABLE booking_courses
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+`);
 
   // ✅ NEW: Stripe Connect + platform fee config per course
   await db.query(`
@@ -1298,6 +1472,10 @@ async function ensureBookingTables() {
     ALTER TABLE booking_courses
     ADD COLUMN IF NOT EXISTS subscriber_discount_enabled BOOLEAN NOT NULL DEFAULT false;
   `);
+  await db.query(`
+  ALTER TABLE booking_courses
+  ADD COLUMN IF NOT EXISTS subscriber_discount_pct INTEGER NOT NULL DEFAULT 5;
+`);
 
   // =============================
   // booking_course_layouts
@@ -1524,13 +1702,14 @@ async function ensureBookingTables() {
     ON booking_times (course_id, play_date, holes, status, tee_time);
   `);
 
-  // =============================
+   // =============================
   // booking_bookings
   // =============================
   await db.query(`
     CREATE TABLE IF NOT EXISTS booking_bookings (
       id BIGSERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES booking_courses(id) ON DELETE CASCADE,
+      user_id BIGINT,
       play_date DATE NOT NULL,
       tee_time TEXT NOT NULL,
       holes INTEGER NOT NULL,
@@ -1549,12 +1728,67 @@ async function ensureBookingTables() {
 
   await db.query(`
     ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS user_id BIGINT;
+  `);
+
+  await db.query(`
+    ALTER TABLE booking_bookings
     ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
   `);
 
   await db.query(`
     ALTER TABLE booking_bookings
     ADD COLUMN IF NOT EXISTS cancelled_reason TEXT;
+  `);
+  // ✅ ADD: paid online cancellation request flow
+await db.query(`
+  ALTER TABLE booking_bookings
+  ADD COLUMN IF NOT EXISTS cancellation_requested_at TIMESTAMPTZ;
+`);
+
+await db.query(`
+  ALTER TABLE booking_bookings
+  ADD COLUMN IF NOT EXISTS cancellation_requested_by TEXT;
+`);
+
+await db.query(`
+  ALTER TABLE booking_bookings
+  ADD COLUMN IF NOT EXISTS cancellation_token TEXT;
+`);
+
+await db.query(`
+  ALTER TABLE booking_bookings
+  ADD COLUMN IF NOT EXISTS cancellation_confirmed_at TIMESTAMPTZ;
+`);
+
+await db.query(`
+  ALTER TABLE booking_bookings
+  ADD COLUMN IF NOT EXISTS cancellation_declined_at TIMESTAMPTZ;
+`);
+
+await db.query(`
+  CREATE INDEX IF NOT EXISTS booking_bookings_cancellation_token_idx
+  ON booking_bookings (cancellation_token);
+`);
+
+  // ✅ NEW: link bookings to TeeRadar account when email matches a user
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_bookings_user_id_idx
+    ON booking_bookings (user_id);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_bookings_golfer_email_lower_idx
+    ON booking_bookings ((LOWER(TRIM(golfer_email))));
+  `);
+
+  await db.query(`
+    UPDATE booking_bookings b
+    SET user_id = u.id
+    FROM users u
+    WHERE b.user_id IS NULL
+      AND b.golfer_email IS NOT NULL
+      AND LOWER(TRIM(b.golfer_email)) = LOWER(TRIM(u.email));
   `);
 
   // ✅ NEW: persist chosen layout for bookings (named 9s + 18 routings)
@@ -1631,7 +1865,74 @@ async function ensureBookingTables() {
     CREATE INDEX IF NOT EXISTS booking_bookings_stripe_pi_idx
     ON booking_bookings (stripe_payment_intent);
   `);
+    await db.query(`
+    ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS scorecard_round_id BIGINT;
+  `);
+
+  await db.query(`
+    ALTER TABLE booking_bookings
+    ADD COLUMN IF NOT EXISTS scorecard_created_at TIMESTAMPTZ;
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_bookings_scorecard_round_idx
+    ON booking_bookings (scorecard_round_id);
+  `);
   // ✅✅✅ END ADD ✅✅✅
+
+  // =============================
+  // booking_booking_shares
+  // =============================
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_booking_shares (
+      id BIGSERIAL PRIMARY KEY,
+      booking_id BIGINT NOT NULL REFERENCES booking_bookings(id) ON DELETE CASCADE,
+      shared_by_user_id BIGINT,
+      shared_to_email TEXT NOT NULL,
+      shared_to_user_id BIGINT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (booking_id, shared_to_email)
+    );
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_booking_shares_booking_idx
+    ON booking_booking_shares (booking_id);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_booking_shares_to_email_lower_idx
+    ON booking_booking_shares ((LOWER(TRIM(shared_to_email))));
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_booking_shares_to_user_idx
+    ON booking_booking_shares (shared_to_user_id);
+  `);
+    // =============================
+  // booking_share_contacts
+  // =============================
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS booking_share_contacts (
+      id BIGSERIAL PRIMARY KEY,
+      owner_user_id BIGINT NOT NULL,
+      nickname TEXT NOT NULL,
+      mate_email TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (owner_user_id, mate_email)
+    );
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_share_contacts_owner_idx
+    ON booking_share_contacts (owner_user_id);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS booking_share_contacts_email_lower_idx
+    ON booking_share_contacts ((LOWER(TRIM(mate_email))));
+  `);
 
   // =============================
   // booking_analytics_events
@@ -2759,6 +3060,8 @@ router.get("/admin/course-settings", requirePlatformAdmin, async (req, res) => {
 // -----------------------------
 router.get("/admin/courses", requirePlatformAdmin, async (req, res) => {
   try {
+    await ensureBookingTables();
+
     const { rows } = await db.query(
       `
       SELECT
@@ -2767,6 +3070,10 @@ router.get("/admin/courses", requirePlatformAdmin, async (req, res) => {
         name,
         notes,
         payment_mode,
+        stripe_account_id,
+        platform_fee_bps,
+        subscriber_discount_enabled,
+        subscriber_discount_pct,
         created_at
       FROM booking_courses
       ORDER BY id DESC
@@ -2777,7 +3084,11 @@ router.get("/admin/courses", requirePlatformAdmin, async (req, res) => {
     res.json({ ok: true, courses: rows || [] });
   } catch (e) {
     console.error("admin/courses GET", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+    res.status(500).json({
+      ok: false,
+      error: "internal_error",
+      detail: String(e?.message || e),
+    });
   }
 });
 router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
@@ -2911,6 +3222,85 @@ router.post("/admin/courses", requireBookingAdmin, async (req, res) => {
       error: "internal_error",
       detail: String(e?.message || e),
     });
+  }
+});
+
+// ----------------------------------------
+// ✅ UPDATE COURSE (EDIT MODE SUPPORT)
+// PUT /api/book/admin/courses/:slug
+// ----------------------------------------
+router.put("/admin/courses/:slug", async (req, res) => {
+  try {
+    const slug = String(req.params.slug || "").trim().toLowerCase();
+    if (!slug) {
+      return res.status(400).json({ ok: false, error: "missing_slug" });
+    }
+
+    const {
+      name,
+      notes,
+      paymentMode,
+      stripeAccountId,
+      platformFeeBps,
+      subscriberDiscountEnabled,
+      subscriberDiscountPct,
+    } = req.body || {};
+
+    // ✅ Validate payment mode
+    const payment_mode =
+      String(paymentMode || "PAY_AT_COURSE").trim().toUpperCase() === "PAY_ON_BOOKING"
+        ? "PAY_ON_BOOKING"
+        : "PAY_AT_COURSE";
+
+    // ✅ Validate Stripe requirement
+    if (payment_mode === "PAY_ON_BOOKING" && !String(stripeAccountId || "").trim()) {
+      return res.status(400).json({
+        ok: false,
+        error: "stripe_account_required_for_pay_on_booking",
+      });
+    }
+
+    const result = await db.query(
+      `
+      UPDATE booking_courses
+      SET
+        name = COALESCE($2, name),
+        notes = COALESCE($3, notes),
+        payment_mode = $4,
+        stripe_account_id = CASE
+          WHEN $4 = 'PAY_ON_BOOKING' THEN $5
+          ELSE NULL
+        END,
+        platform_fee_bps = COALESCE($6, platform_fee_bps),
+        subscriber_discount_enabled = COALESCE($7, subscriber_discount_enabled),
+        subscriber_discount_pct = COALESCE($8, subscriber_discount_pct),
+        updated_at = now()
+      WHERE slug = $1
+      RETURNING *;
+      `,
+      [
+        slug,
+        name || null,
+        notes || null,
+        payment_mode,
+        stripeAccountId || null,
+        Number.isFinite(platformFeeBps) ? Number(platformFeeBps) : null,
+        typeof subscriberDiscountEnabled === "boolean" ? subscriberDiscountEnabled : null,
+        Number.isFinite(subscriberDiscountPct) ? Number(subscriberDiscountPct) : null,
+      ]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ ok: false, error: "course_not_found" });
+    }
+
+    return res.json({
+      ok: true,
+      course: result.rows[0],
+    });
+  } catch (e) {
+    console.error("❌ update course failed", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 // ✅ Stripe Connect onboarding (create Express account if missing, return onboarding URL)
@@ -4847,6 +5237,1255 @@ router.get("/booking", async (req, res) => {
   } catch (e) {
     console.error("GET /api/book/booking error", e);
     res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+router.get("/my-mates", requireAccountUser, async (req, res) => {
+  try {
+    const userId = Number(req.accountUser.id);
+
+    const r = await db.query(
+      `
+      SELECT
+        id,
+        nickname,
+        mate_email AS email,
+        created_at
+      FROM booking_share_contacts
+      WHERE owner_user_id = $1
+      ORDER BY LOWER(nickname) ASC, LOWER(mate_email) ASC
+      `,
+      [userId]
+    );
+
+    return res.json({
+      ok: true,
+      mates: r.rows || [],
+    });
+  } catch (e) {
+    console.error("GET /my-mates", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+router.post("/my-mates", requireAccountUser, async (req, res) => {
+  try {
+    const userId = Number(req.accountUser.id);
+
+    const nickname = cleanMateNickname(req.body?.nickname);
+    const mateEmail = String(req.body?.email || "").trim().toLowerCase();
+
+    if (!nickname) {
+      return res.status(400).json({ ok: false, error: "nickname_required" });
+    }
+
+    if (!isLikelyEmail(mateEmail)) {
+      return res.status(400).json({ ok: false, error: "email_invalid" });
+    }
+
+    const r = await db.query(
+      `
+      INSERT INTO booking_share_contacts (
+        owner_user_id,
+        nickname,
+        mate_email
+      )
+      VALUES ($1, $2, $3)
+      ON CONFLICT (owner_user_id, mate_email)
+      DO UPDATE SET
+        nickname = EXCLUDED.nickname
+      RETURNING
+        id,
+        nickname,
+        mate_email AS email,
+        created_at
+      `,
+      [userId, nickname, mateEmail]
+    );
+
+    return res.json({
+      ok: true,
+      mate: r.rows?.[0] || null,
+    });
+  } catch (e) {
+    console.error("POST /my-mates", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+router.delete("/my-mates/:id", requireAccountUser, async (req, res) => {
+  try {
+    const userId = Number(req.accountUser.id);
+    const mateId = Number(req.params.id || 0);
+
+    if (!Number.isFinite(mateId) || mateId <= 0) {
+      return res.status(400).json({ ok: false, error: "mate_id_invalid" });
+    }
+
+    const r = await db.query(
+      `
+      DELETE FROM booking_share_contacts
+      WHERE id = $1
+        AND owner_user_id = $2
+      RETURNING id
+      `,
+      [mateId, userId]
+    );
+
+    if (!r.rows.length) {
+      return res.status(404).json({ ok: false, error: "mate_not_found" });
+    }
+
+    return res.json({ ok: true, deleted: mateId });
+  } catch (e) {
+    console.error("DELETE /my-mates/:id", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+router.get("/my-games", requireAccountUser, async (req, res) => {
+  try {
+    const userId = Number(req.accountUser.id);
+    const userEmail = String(req.accountUser.email || "").trim().toLowerCase();
+
+    // ✅ claim any old owned bookings by email match
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET user_id = $1
+      WHERE user_id IS NULL
+        AND golfer_email IS NOT NULL
+        AND LOWER(TRIM(golfer_email)) = $2
+      `,
+      [userId, userEmail]
+    );
+
+    // ✅ also resolve shared rows to user_id when possible
+    await db.query(
+      `
+      UPDATE booking_booking_shares s
+      SET shared_to_user_id = $1
+      WHERE shared_to_user_id IS NULL
+        AND LOWER(TRIM(s.shared_to_email)) = $2
+      `,
+      [userId, userEmail]
+    );
+
+    const r = await db.query(
+      `
+      WITH owned AS (
+        SELECT
+          b.id,
+          b.reference,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name,
+          b.golfer_email,
+          b.status,
+          COALESCE(b.paid,false) AS paid,
+          COALESCE(b.total_cents,0)::int AS total_cents,
+          COALESCE(b.cart_fee_cents,0)::int AS cart_fee_cents,
+          COALESCE(b.hire_clubs_fee_cents,0)::int AS hire_clubs_fee_cents,
+          COALESCE(b.cart_qty,0)::int AS cart_qty,
+          COALESCE(b.hire_clubs_qty,0)::int AS hire_clubs_qty,
+          COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode,
+          c.slug AS course_slug,
+          c.name AS course_name,
+          COALESCE(b.scorecard_round_id, NULL)::bigint AS scorecard_round_id,
+          false AS is_shared,
+          true AS is_owner
+        FROM booking_bookings b
+        JOIN booking_courses c
+          ON c.id = b.course_id
+        WHERE
+          (
+            b.user_id = $1
+            OR (
+              b.user_id IS NULL
+              AND b.golfer_email IS NOT NULL
+              AND LOWER(TRIM(b.golfer_email)) = $2
+            )
+          )
+      ),
+      shared AS (
+        SELECT
+          b.id,
+          b.reference,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name,
+          b.golfer_email,
+          b.status,
+          COALESCE(b.paid,false) AS paid,
+          COALESCE(b.total_cents,0)::int AS total_cents,
+          COALESCE(b.cart_fee_cents,0)::int AS cart_fee_cents,
+          COALESCE(b.hire_clubs_fee_cents,0)::int AS hire_clubs_fee_cents,
+          COALESCE(b.cart_qty,0)::int AS cart_qty,
+          COALESCE(b.hire_clubs_qty,0)::int AS hire_clubs_qty,
+          COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode,
+          c.slug AS course_slug,
+          c.name AS course_name,
+          COALESCE(b.scorecard_round_id, NULL)::bigint AS scorecard_round_id,
+          true AS is_shared,
+          false AS is_owner
+        FROM booking_booking_shares s
+        JOIN booking_bookings b
+          ON b.id = s.booking_id
+        JOIN booking_courses c
+          ON c.id = b.course_id
+        WHERE
+          s.shared_to_user_id = $1
+          OR LOWER(TRIM(s.shared_to_email)) = $2
+      )
+      SELECT DISTINCT ON (id)
+        *
+      FROM (
+        SELECT * FROM owned
+        UNION ALL
+        SELECT * FROM shared
+      ) x
+      ORDER BY id, is_owner DESC, play_date DESC, tee_time DESC
+      `,
+      [userId, userEmail]
+    );
+
+    // ✅ verify which scorecard_round_id values still exist
+    const roundIds = Array.from(
+      new Set(
+        (r.rows || [])
+          .map((row) => Number(row.scorecard_round_id || 0))
+          .filter((id) => Number.isFinite(id) && id > 0)
+      )
+    );
+
+    const existingRoundIds = new Set();
+
+    if (roundIds.length) {
+      const roundCheck = await db.query(
+        `
+        SELECT id
+        FROM rounds
+        WHERE id = ANY($1::bigint[])
+        `,
+        [roundIds]
+      );
+
+      for (const rr of roundCheck.rows || []) {
+        existingRoundIds.add(Number(rr.id));
+      }
+    }
+
+    const todayPerth = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Australia/Perth",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    const upcoming = [];
+    const previous = [];
+
+    for (const row of r.rows || []) {
+      const statusUpper = String(row.status || "").toUpperCase();
+      const isCancelled = statusUpper === "CANCELLED";
+      const isPast = String(row.play_date || "") < todayPerth;
+
+      const roundId = Number(row.scorecard_round_id || 0);
+      const hasValidScorecard = roundId > 0 && existingRoundIds.has(roundId);
+
+      const item = {
+        ...row,
+        gross_cents: Number(row.total_cents || 0),
+        scorecard_round_id: hasValidScorecard ? roundId : null,
+        has_scorecard: hasValidScorecard,
+        can_cancel: !isCancelled && !isPast && !!row.is_owner,
+        can_share: !isCancelled && !isPast && !!row.is_owner,
+        can_create_scorecard: !isCancelled && !isPast,
+      };
+
+      if (isCancelled || isPast) previous.push(item);
+      else upcoming.push(item);
+    }
+
+    return res.json({
+      ok: true,
+      upcoming,
+      previous,
+    });
+  } catch (e) {
+    console.error("GET /my-games", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+router.post("/my-games/:reference/share", requireAccountUser, async (req, res) => {
+  try {
+    const reference = String(req.params.reference || "").trim();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
+
+    const userId = Number(req.accountUser.id);
+    const userEmail = String(req.accountUser.email || "").trim().toLowerCase();
+
+    const emails = parseShareEmails(req.body?.emails || req.body?.email || "");
+    const uniqueEmails = [...new Set(emails)].filter((e) => e !== userEmail);
+
+    if (!uniqueEmails.length) {
+      return res.status(400).json({ ok: false, error: "no_valid_emails" });
+    }
+
+    const bookingQ = await db.query(
+      `
+      SELECT
+        b.id,
+        b.course_id,
+        b.reference,
+        b.play_date::text AS play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.golfer_name,
+        b.golfer_email,
+        b.golfer_phone,
+        b.price_per_player_cents,
+        b.total_cents,
+        b.cart_fee_cents,
+        b.hire_clubs_fee_cents,
+        b.status,
+        b.paid,
+        c.name AS course_name,
+        c.slug AS course_slug,
+        COALESCE(c.payment_mode, 'PAY_AT_COURSE') AS payment_mode
+      FROM booking_bookings b
+      JOIN booking_courses c
+        ON c.id = b.course_id
+      WHERE b.reference = $1
+        AND (
+          b.user_id = $2
+          OR (
+            b.user_id IS NULL
+            AND b.golfer_email IS NOT NULL
+            AND LOWER(TRIM(b.golfer_email)) = $3
+          )
+        )
+      LIMIT 1
+      `,
+      [reference, userId, userEmail]
+    );
+
+    const booking = bookingQ.rows?.[0];
+    if (!booking) {
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    const statusUpper = String(booking.status || "").toUpperCase();
+    if (statusUpper === "CANCELLED") {
+      return res.status(400).json({ ok: false, error: "cannot_share_cancelled_booking" });
+    }
+
+    const todayPerth = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Australia/Perth",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    if (String(booking.play_date || "") < todayPerth) {
+      return res.status(400).json({ ok: false, error: "cannot_share_past_booking" });
+    }
+
+    const results = [];
+
+    for (const mateEmail of uniqueEmails) {
+      const matchedUser = await findUserByEmail(mateEmail);
+      const matchedUserId = matchedUser?.id || null;
+
+      await db.query(
+        `
+        INSERT INTO booking_booking_shares (
+          booking_id,
+          shared_by_user_id,
+          shared_to_email,
+          shared_to_user_id
+        )
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (booking_id, shared_to_email)
+        DO UPDATE SET
+          shared_by_user_id = EXCLUDED.shared_by_user_id,
+          shared_to_user_id = EXCLUDED.shared_to_user_id
+        `,
+        [booking.id, userId, mateEmail, matchedUserId]
+      );
+
+      let emailOk = false;
+      let emailReason = null;
+
+      try {
+        const emailResult = await sendBookingEmail({
+          to: mateEmail,
+          courseName: booking.course_name,
+          date: String(booking.play_date).slice(0, 10),
+          time: String(booking.tee_time || "").split("|")[0],
+          holes: Number(booking.holes || 0),
+          players: Number(booking.players || 0),
+          reference: booking.reference,
+          pricePerPlayerCents: Number(booking.price_per_player_cents || 0),
+          totalCents: Number(booking.total_cents || 0),
+          cartCents: Number(booking.cart_fee_cents || 0),
+          hireClubsCents: Number(booking.hire_clubs_fee_cents || 0),
+        });
+
+        emailOk = !!emailResult?.emailOk;
+        emailReason = emailResult?.emailReason || null;
+      } catch (e) {
+        emailOk = false;
+        emailReason = e?.message || "send_failed";
+      }
+
+      results.push({
+        email: mateEmail,
+        linked_to_account: !!matchedUserId,
+        emailOk,
+        emailReason,
+      });
+
+      console.log("📧 SHARE EMAIL RESULT:", {
+        reference: booking.reference,
+        to: mateEmail,
+        linked_to_account: !!matchedUserId,
+        emailOk,
+        emailReason,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      reference: booking.reference,
+      shared: results,
+    });
+  } catch (e) {
+    console.error("POST /my-games/:reference/share", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+router.post("/my-games/:reference/create-scorecard", requireAccountUser, async (req, res) => {
+  try {
+    const reference = String(req.params.reference || "").trim();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
+
+    const userId = Number(req.accountUser.id);
+    const userEmail = String(req.accountUser.email || "").trim().toLowerCase();
+
+    console.log("🎯 create-scorecard hit", { reference, userId, userEmail });
+
+    const bookingQ = await db.query(
+      `
+      WITH accessible AS (
+        SELECT
+          b.id,
+          b.course_id,
+          b.reference,
+          b.play_date::text AS play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          COALESCE(b.layout_key,'') AS layout_key,
+          COALESCE(b.front_nine_key,'') AS front_nine_key,
+          COALESCE(b.back_nine_key,'') AS back_nine_key,
+          b.scorecard_round_id,
+          c.slug AS course_slug,
+          c.name AS course_name,
+          (
+            b.user_id = $2
+            OR (
+              b.user_id IS NULL
+              AND b.golfer_email IS NOT NULL
+              AND LOWER(TRIM(b.golfer_email)) = $3
+            )
+          ) AS is_owner,
+          EXISTS (
+            SELECT 1
+            FROM booking_booking_shares s
+            WHERE s.booking_id = b.id
+              AND (
+                s.shared_to_user_id = $2
+                OR LOWER(TRIM(s.shared_to_email)) = $3
+              )
+          ) AS is_shared
+        FROM booking_bookings b
+        JOIN booking_courses c
+          ON c.id = b.course_id
+        WHERE b.reference = $1
+        LIMIT 1
+      )
+      SELECT *
+      FROM accessible
+      WHERE is_owner = true OR is_shared = true
+      LIMIT 1
+      `,
+      [reference, userId, userEmail]
+    );
+
+    const booking = bookingQ.rows?.[0];
+    console.log("📘 create-scorecard booking lookup:", booking || null);
+
+    if (!booking) {
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    const todayPerth = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Australia/Perth",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    if (String(booking.play_date || "") < todayPerth) {
+      return res.status(400).json({ ok: false, error: "past_booking_cannot_create_scorecard" });
+    }
+
+    if (booking.scorecard_round_id) {
+      const existingRoundQ = await db.query(
+        `
+        SELECT id, user_id, course, layout, state, holes
+        FROM rounds
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [Number(booking.scorecard_round_id)]
+      );
+
+      const existingRound = existingRoundQ.rows?.[0] || null;
+
+      if (existingRound && Number(existingRound.user_id) === Number(userId)) {
+        console.log("📎 create-scorecard existing round found:", {
+          reference: booking.reference,
+          roundId: Number(booking.scorecard_round_id),
+          roundCourse: existingRound.course,
+          bookingCourse: booking.course_name,
+          roundState: existingRound.state || null,
+        });
+
+        return res.json({
+          ok: true,
+          alreadyExisted: true,
+          roundId: Number(booking.scorecard_round_id),
+          reference: booking.reference,
+        });
+      }
+
+      await db.query(
+        `
+        UPDATE booking_bookings
+        SET
+          scorecard_round_id = NULL,
+          scorecard_created_at = NULL
+        WHERE id = $1
+        `,
+        [booking.id]
+      );
+
+      console.log("🧹 create-scorecard cleared stale linked round:", {
+        reference: booking.reference,
+        oldRoundId: Number(booking.scorecard_round_id),
+      });
+    }
+
+    let layoutName = null;
+
+    if (Number(booking.holes) === 9) {
+      layoutName = String(booking.layout_key || "").trim() || null;
+    } else if (Number(booking.holes) === 18) {
+      const front = String(booking.front_nine_key || "").trim();
+      const back = String(booking.back_nine_key || "").trim();
+      layoutName = [front, back].filter(Boolean).join(" / ") || null;
+    }
+
+    let safeCourseName = String(booking.course_name || "").trim();
+    if (!safeCourseName || /^pay at course$/i.test(safeCourseName)) {
+      safeCourseName = String(booking.course_slug || "").trim() || "Unknown Course";
+    }
+
+    // ✅ resolve state from existing approved scorecard templates first
+    // this lets published pars/distances seed correctly
+    let stateCode = null;
+
+    try {
+      const templateStateQ = await db.query(
+        `
+        SELECT state
+        FROM scorecard_courses
+        WHERE
+          holes = $2
+          AND (
+            LOWER(TRIM(name)) = LOWER(TRIM($1))
+            OR LOWER(TRIM(name)) = LOWER(TRIM($3))
+          )
+        ORDER BY updated_at DESC NULLS LAST, id DESC
+        LIMIT 1
+        `,
+        [
+          safeCourseName,
+          Number(booking.holes || 18),
+          String(booking.course_slug || "").trim()
+        ]
+      );
+
+      stateCode = String(templateStateQ.rows?.[0]?.state || "").trim().toUpperCase() || null;
+    } catch (err) {
+      console.warn("⚠️ create-scorecard template state lookup failed:", err?.message || err);
+    }
+
+    // ✅ fallback: infer state from existing owned rounds for same course
+    if (!stateCode) {
+      try {
+        const priorRoundStateQ = await db.query(
+          `
+          SELECT state
+          FROM rounds
+          WHERE
+            user_id = $1
+            AND holes = $2
+            AND (
+              LOWER(TRIM(course)) = LOWER(TRIM($3))
+              OR LOWER(TRIM(course)) = LOWER(TRIM($4))
+            )
+            AND state IS NOT NULL
+            AND TRIM(state) <> ''
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1
+          `,
+          [
+            userId,
+            Number(booking.holes || 18),
+            safeCourseName,
+            String(booking.course_slug || "").trim()
+          ]
+        );
+
+        stateCode = String(priorRoundStateQ.rows?.[0]?.state || "").trim().toUpperCase() || null;
+      } catch (err) {
+        console.warn("⚠️ create-scorecard prior round state lookup failed:", err?.message || err);
+      }
+    }
+
+    console.log("🛠️ create-scorecard payload:", {
+      userId,
+      course: safeCourseName,
+      layout: layoutName,
+      state: stateCode,
+      holes: Number(booking.holes || 18),
+      players_count: Number(booking.players || 1),
+    });
+
+    const createResult = await createRoundWithSeededHoles({
+      userId,
+      course: safeCourseName,
+      layout: layoutName,
+      state: stateCode,
+      holes: Number(booking.holes || 18),
+      par_mode: "published",
+      players_count: Number(booking.players || 1),
+      player_names: [],
+    });
+
+    console.log("📦 create-scorecard helper result:", createResult || null);
+
+    if (!createResult?.ok || !createResult?.round?.id) {
+      return res.status(createResult?.status || 400).json({
+        ok: false,
+        error: createResult?.error || "scorecard_create_failed",
+        detail: createResult?.detail || null,
+      });
+    }
+
+    const roundId = Number(createResult.round.id);
+
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET
+        scorecard_round_id = $2,
+        scorecard_created_at = NOW()
+      WHERE id = $1
+      `,
+      [booking.id, roundId]
+    );
+
+    console.log("✅ create-scorecard success:", {
+      reference: booking.reference,
+      bookingId: booking.id,
+      roundId,
+      scorecardUsed: !!createResult.scorecardUsed,
+      templateUsed: !!createResult.templateUsed,
+      stateUsed: stateCode,
+    });
+
+    return res.json({
+      ok: true,
+      alreadyExisted: false,
+      roundId,
+      reference: booking.reference,
+      scorecardUsed: !!createResult.scorecardUsed,
+      templateUsed: !!createResult.templateUsed,
+    });
+  } catch (e) {
+    console.error("POST /my-games/:reference/create-scorecard", e);
+    return res.status(500).json({ ok: false, error: "internal_error", detail: e?.message || null });
+  }
+});
+router.post("/my-games/:reference/cancel", requireAccountUser, async (req, res) => {
+  try {
+    const reference = String(req.params.reference || "").trim();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
+
+    const userId = Number(req.accountUser.id);
+    const userEmail = String(req.accountUser.email || "").trim().toLowerCase();
+
+    const r = await db.query(
+      `
+      SELECT
+        b.id,
+        b.course_id,
+        b.reference,
+        b.paid,
+        b.checked_in,
+        b.status,
+        b.play_date,
+        b.tee_time,
+        b.holes,
+        COALESCE(b.layout_key,'') AS layout_key,
+        COALESCE(b.front_nine_key,'') AS front_nine_key,
+        COALESCE(b.back_nine_key,'') AS back_nine_key,
+        COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode
+      FROM booking_bookings b
+      LEFT JOIN booking_courses c
+        ON c.id = b.course_id
+      WHERE b.reference = $1
+        AND (
+          b.user_id = $2
+          OR (
+            b.user_id IS NULL
+            AND b.golfer_email IS NOT NULL
+            AND LOWER(TRIM(b.golfer_email)) = $3
+          )
+        )
+      LIMIT 1
+      `,
+      [reference, userId, userEmail]
+    );
+
+    const booking = r.rows?.[0];
+    if (!booking) {
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    if (String(booking.status || "").toUpperCase() === "CANCELLED") {
+      return res.status(400).json({ ok: false, error: "already_cancelled" });
+    }
+
+    if (booking.checked_in) {
+      return res.status(400).json({ ok: false, error: "checked_in_booking_cannot_be_cancelled" });
+    }
+
+    const todayPerth = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Australia/Perth",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    if (String(booking.play_date || "") < todayPerth) {
+      return res.status(400).json({ ok: false, error: "past_booking_cannot_be_cancelled" });
+    }
+
+    // ✅ For now keep this simple and safe:
+    // allow PAY_AT_COURSE cancellation
+    // block paid PAY_ON_BOOKING until refund flow is added
+    if (String(booking.payment_mode || "").toUpperCase() === "PAY_ON_BOOKING" && booking.paid) {
+      return res.status(400).json({ ok: false, error: "paid_booking_cannot_be_cancelled_here" });
+    }
+
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET
+        status = 'CANCELLED',
+        cancelled_at = COALESCE(cancelled_at, NOW()),
+        cancelled_reason = 'Cancelled by account user'
+      WHERE id = $1
+      `,
+      [booking.id]
+    );
+
+    try {
+      await syncBookedPlayersForTime({
+        courseId: booking.course_id,
+        play_date: booking.play_date,
+        tee_time: booking.tee_time,
+        holes: booking.holes,
+        layout_key: booking.layout_key || null,
+        front_nine_key: booking.front_nine_key || null,
+        back_nine_key: booking.back_nine_key || null,
+      });
+    } catch (e) {
+      console.warn("syncBookedPlayersForTime failed after user cancel", e?.message || e);
+    }
+
+    return res.json({
+      ok: true,
+      reference: booking.reference,
+      status: "CANCELLED",
+    });
+  } catch (e) {
+    console.error("POST /my-games/:reference/cancel", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// ✅ Course admin: request cancellation for PAID ONLINE bookings only
+router.post("/course-admin/bookings/:reference/request-cancellation", requireCourseAdmin, async (req, res) => {
+  try {
+    const reference = String(req.params.reference || "").trim().toUpperCase();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
+
+    const courseId = Number(req.courseAdmin?.course_id || 0);
+    const requestedBy = String(req.courseAdmin?.email || "").trim().toLowerCase();
+
+    const q = await db.query(
+      `
+      SELECT
+        b.id,
+        b.course_id,
+        b.reference,
+        b.golfer_name,
+        b.golfer_email,
+        b.play_date::text AS play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.status,
+        b.paid,
+        b.cancellation_requested_at,
+        c.name AS course_name,
+        COALESCE(c.payment_mode,'PAY_AT_COURSE') AS payment_mode
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      WHERE UPPER(b.reference) = $1
+        AND b.course_id = $2
+      LIMIT 1;
+      `,
+      [reference, courseId]
+    );
+
+    const booking = q.rows?.[0];
+    if (!booking) {
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    if (String(booking.status || "").toUpperCase() === "CANCELLED") {
+      return res.status(400).json({ ok: false, error: "already_cancelled" });
+    }
+
+    if (String(booking.payment_mode || "").toUpperCase() !== "PAY_ON_BOOKING" || !booking.paid) {
+      return res.status(400).json({ ok: false, error: "only_paid_online_bookings_use_cancellation_request" });
+    }
+
+    if (!isLikelyEmail(booking.golfer_email)) {
+      return res.status(400).json({ ok: false, error: "golfer_email_missing" });
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET
+        cancellation_requested_at = NOW(),
+        cancellation_requested_by = $2,
+        cancellation_token = $3,
+        cancellation_confirmed_at = NULL,
+        cancellation_declined_at = NULL
+      WHERE id = $1
+      `,
+      [booking.id, requestedBy || "course_admin", token]
+    );
+
+    const emailResult = await sendPaidCancellationRequestEmail({
+      to: booking.golfer_email,
+      golferName: booking.golfer_name || "",
+      courseName: booking.course_name || "Golf Course",
+      date: booking.play_date,
+      time: String(booking.tee_time || "").split("|")[0],
+      holes: Number(booking.holes || 0),
+      players: Number(booking.players || 0),
+      reference: booking.reference,
+      token,
+    });
+
+    if (!emailResult.emailOk) {
+      return res.status(500).json({
+        ok: false,
+        error: "cancellation_email_failed",
+        detail: emailResult.emailReason || null,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      reference: booking.reference,
+      cancellationRequested: true,
+      emailOk: true,
+    });
+  } catch (e) {
+    console.error("course-admin request cancellation", e);
+    return res.status(500).json({ ok: false, error: "internal_error", detail: e?.message || null });
+  }
+});
+
+router.post("/course-admin/request-booking-cancellation", requireCourseAdmin, async (req, res) => {
+  try {
+    const reference = String(req.body?.reference || "").trim();
+    if (!reference) {
+      return res.status(400).json({ ok: false, error: "reference_required" });
+    }
+
+    // ✅ Ensure columns exist
+    await db.query(`
+      ALTER TABLE booking_bookings
+        ADD COLUMN IF NOT EXISTS cancellation_token text,
+        ADD COLUMN IF NOT EXISTS cancellation_requested_at timestamptz,
+        ADD COLUMN IF NOT EXISTS cancellation_confirmed_at timestamptz,
+        ADD COLUMN IF NOT EXISTS cancellation_declined_at timestamptz,
+        ADD COLUMN IF NOT EXISTS cancelled_at timestamptz,
+        ADD COLUMN IF NOT EXISTS cancelled_reason text;
+    `);
+
+    const q = await db.query(
+      `
+      SELECT
+        b.id,
+        b.reference,
+        b.course_id,
+        b.play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.golfer_name,
+        b.golfer_email,
+        b.status,
+        b.paid,
+        c.name AS course_name
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      WHERE b.reference = $1
+        AND b.course_id = $2
+      LIMIT 1;
+      `,
+      [reference, req.courseAdmin.course_id]
+    );
+
+    const booking = q.rows?.[0];
+
+    if (!booking) {
+      return res.status(404).json({ ok: false, error: "booking_not_found" });
+    }
+
+    if (String(booking.status || "").toUpperCase() === "CANCELLED") {
+      return res.status(400).json({ ok: false, error: "already_cancelled" });
+    }
+
+    if (!booking.paid) {
+      return res.status(400).json({
+        ok: false,
+        error: "only_paid_online_bookings_use_request_cancellation"
+      });
+    }
+
+    if (!isLikelyEmail(booking.golfer_email)) {
+      return res.status(400).json({
+        ok: false,
+        error: "golfer_email_missing"
+      });
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET
+        cancellation_token = $1,
+        cancellation_requested_at = NOW(),
+        cancellation_declined_at = NULL
+      WHERE id = $2
+      `,
+      [token, booking.id]
+    );
+
+    const emailResult = await sendPaidCancellationRequestEmail({
+      to: booking.golfer_email,
+      golferName: booking.golfer_name,
+      courseName: booking.course_name || req.courseAdmin.course_name || "Golf Course",
+      date: String(booking.play_date).slice(0, 10),
+      time: String(booking.tee_time || "").split("|")[0],
+      holes: Number(booking.holes || 0),
+      players: Number(booking.players || 0),
+      reference: booking.reference,
+      token
+    });
+
+    if (!emailResult.emailOk) {
+      return res.status(500).json({
+        ok: false,
+        error: "cancellation_email_failed",
+        detail: emailResult.emailReason || "send_failed"
+      });
+    }
+
+    return res.json({
+      ok: true,
+      reference: booking.reference,
+      emailOk: true
+    });
+  } catch (e) {
+    console.error("POST /course-admin/request-booking-cancellation", e);
+    return res.status(500).json({
+      ok: false,
+      error: "request_booking_cancellation_failed",
+      detail: e?.message || "unknown_error"
+    });
+  }
+});
+// ✅ Public golfer page: review cancellation request
+router.get("/cancel-request", async (req, res) => {
+  try {
+    const token = String(req.query?.token || "").trim();
+    if (!token) return res.status(400).send("Missing cancellation token.");
+
+    const q = await db.query(
+      `
+      SELECT
+        b.reference,
+        b.golfer_name,
+        b.play_date::text AS play_date,
+        b.tee_time,
+        b.holes,
+        b.players,
+        b.status,
+        b.cancellation_confirmed_at,
+        b.cancellation_declined_at,
+        c.name AS course_name
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      WHERE b.cancellation_token = $1
+      LIMIT 1;
+      `,
+      [token]
+    );
+
+    const booking = q.rows?.[0];
+    if (!booking) {
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  return res.status(404).send(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar — Cancellation request</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f4f7fb;color:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:18px}
+    .card{width:100%;max-width:520px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;box-shadow:0 18px 40px rgba(15,23,42,.12)}
+    h1{margin:0 0 8px;font-size:24px;color:#00796b}
+    p{color:#64748b;line-height:1.45;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Cancellation already processed</h1>
+    <p>This cancellation link has already been used, expired, or the booking has already been updated.</p>
+  </div>
+</body>
+</html>`);
+}
+
+    const status = String(booking.status || "").toUpperCase();
+
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    return res.send(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar — Cancellation request</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f4f7fb;color:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:18px}
+    .card{width:100%;max-width:520px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;box-shadow:0 18px 40px rgba(15,23,42,.12)}
+    h1{margin:0 0 8px;font-size:24px}
+    p{color:#64748b;line-height:1.45}
+    .box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin:14px 0}
+    button{border:0;border-radius:999px;padding:11px 16px;font-weight:800;cursor:pointer;margin:6px}
+    .yes{background:#00796b;color:#fff}
+    .no{background:#e5e7eb;color:#0f172a}
+    .msg{font-weight:800;margin-top:12px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Cancellation request</h1>
+    <p>${escapeHtmlForEmail(booking.course_name)} has requested to cancel this paid online booking.</p>
+
+    <div class="box">
+      <div><b>Reference:</b> ${escapeHtmlForEmail(booking.reference)}</div>
+      <div><b>Date:</b> ${escapeHtmlForEmail(booking.play_date)}</div>
+      <div><b>Time:</b> ${escapeHtmlForEmail(String(booking.tee_time || "").split("|")[0])}</div>
+      <div><b>Players:</b> ${escapeHtmlForEmail(booking.players)}</div>
+      <div><b>Holes:</b> ${escapeHtmlForEmail(booking.holes)}</div>
+    </div>
+
+    ${
+      status === "CANCELLED"
+        ? `<p class="msg">✅ This booking has been successfully cancelled.</p>`
+        : booking.cancellation_declined_at
+        ? `<p class="msg">You have already chosen to keep this booking.</p>`
+        : `
+          <p>Do you agree to cancel this booking?</p>
+          <button class="yes" onclick="submitDecision('confirm')">Confirm cancellation</button>
+          <button class="no" onclick="submitDecision('decline')">Keep booking</button>
+          <div id="msg" class="msg"></div>
+        `
+    }
+  </div>
+
+<script>
+async function submitDecision(decision){
+  const msg = document.getElementById("msg");
+  msg.textContent = "Saving...";
+  try{
+    const res = await fetch("/api/book/cancel-request/decision", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ token:${JSON.stringify(token)}, decision })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      msg.textContent = data.error || "Could not update cancellation request.";
+      return;
+    }
+    msg.textContent = decision === "confirm"
+      ? "Cancellation confirmed. The course has been notified."
+      : "Booking kept. The course has been notified.";
+    setTimeout(() => window.location.reload(), 900);
+  }catch(e){
+    msg.textContent = "Network error.";
+  }
+}
+</script>
+</body>
+</html>`);
+  } catch (e) {
+    console.error("GET /cancel-request", e);
+    return res.status(500).send("Internal error.");
+  }
+});
+
+// ✅ Public golfer action: confirm or decline cancellation
+router.post("/cancel-request/decision", async (req, res) => {
+  try {
+    const token = String(req.body?.token || "").trim();
+    const decision = String(req.body?.decision || "").trim().toLowerCase();
+
+    if (!token) return res.status(400).json({ ok: false, error: "token_required" });
+    if (!["confirm", "decline"].includes(decision)) {
+      return res.status(400).json({ ok: false, error: "decision_invalid" });
+    }
+
+    const q = await db.query(
+      `
+      SELECT
+        b.id,
+        b.course_id,
+        b.reference,
+        b.play_date,
+        b.tee_time,
+        b.holes,
+        b.status,
+        COALESCE(b.layout_key,'') AS layout_key,
+        COALESCE(b.front_nine_key,'') AS front_nine_key,
+        COALESCE(b.back_nine_key,'') AS back_nine_key
+      FROM booking_bookings b
+      WHERE b.cancellation_token = $1
+      LIMIT 1;
+      `,
+      [token]
+    );
+
+    const booking = q.rows?.[0];
+    if (!booking) return res.status(404).json({ ok: false, error: "request_not_found" });
+
+    if (String(booking.status || "").toUpperCase() === "CANCELLED") {
+      return res.json({ ok: true, alreadyCancelled: true });
+    }
+
+    if (decision === "decline") {
+      await db.query(
+        `
+        UPDATE booking_bookings
+        SET
+          cancellation_declined_at = NOW(),
+          cancellation_token = NULL
+        WHERE id = $1
+        `,
+        [booking.id]
+      );
+
+      return res.json({ ok: true, reference: booking.reference, decision: "decline" });
+    }
+
+    await db.query(
+      `
+      UPDATE booking_bookings
+      SET
+        status = 'CANCELLED',
+        cancelled_at = COALESCE(cancelled_at, NOW()),
+        cancelled_reason = 'Paid online cancellation confirmed by golfer',
+        cancellation_confirmed_at = NOW(),
+        cancellation_token = NULL
+      WHERE id = $1
+      `,
+      [booking.id]
+    );
+
+    try {
+      await syncBookedPlayersForTime({
+        courseId: booking.course_id,
+        play_date: booking.play_date,
+        tee_time: booking.tee_time,
+        holes: booking.holes,
+        layout_key: booking.layout_key || null,
+        front_nine_key: booking.front_nine_key || null,
+        back_nine_key: booking.back_nine_key || null,
+      });
+    } catch (e) {
+      console.warn("syncBookedPlayersForTime failed after paid cancellation confirm", e?.message || e);
+    }
+
+    return res.json({
+      ok: true,
+      reference: booking.reference,
+      decision: "confirm",
+      status: "CANCELLED",
+    });
+  } catch (e) {
+    console.error("POST /cancel-request/decision", e);
+    return res.status(500).json({ ok: false, error: "internal_error", detail: e?.message || null });
   }
 });
 // -----------------------------
@@ -9923,6 +11562,7 @@ async function finalizePaidBooking(payload) {
   // - DO NOT create a new booking/lock times again (that already happened in /book)
   // - Just mark the EXISTING booking as paid/confirmed
   // - Store Stripe IDs
+  // - Attach user_id when booking email matches a TeeRadar account
   // - Send the confirmation email
   // - Must be idempotent (Stripe webhooks retry)
   //
@@ -9942,6 +11582,31 @@ async function finalizePaidBooking(payload) {
     return { ok: false, error: "missing_reference" };
   }
 
+  // ✅ NEW: if the booking email belongs to a TeeRadar user, attach user_id
+  let matchedUserId = null;
+  try {
+    const bookingEmailLookup = await db.query(
+      `
+      SELECT golfer_email
+      FROM booking_bookings
+      WHERE reference = $1
+      LIMIT 1;
+      `,
+      [ref]
+    );
+
+    const existingEmail = String(
+      bookingEmailLookup.rows?.[0]?.golfer_email || ""
+    ).trim().toLowerCase();
+
+    if (existingEmail) {
+      const matchedUser = await findUserByEmail(existingEmail);
+      matchedUserId = matchedUser?.id || null;
+    }
+  } catch (e) {
+    console.warn("finalizePaidBooking user lookup failed", e?.message || e);
+  }
+
   // ✅ 1) ATOMIC idempotent update
   // - Do not revive CANCELLED bookings
   // - Do set paid=true even if already CONFIRMED (but paid=false)
@@ -9955,6 +11620,7 @@ async function finalizePaidBooking(payload) {
         paid = true,
         status = 'CONFIRMED',
         updated_at = now(),
+        user_id = COALESCE(b.user_id, $4),
         stripe_session_id = COALESCE($2, b.stripe_session_id),
         stripe_payment_intent = COALESCE($3, b.stripe_payment_intent)
       WHERE b.reference = $1
@@ -9966,6 +11632,7 @@ async function finalizePaidBooking(payload) {
       RETURNING
         b.id,
         b.course_id,
+        b.user_id,
         b.play_date,
         b.tee_time,
         b.holes,
@@ -9985,6 +11652,7 @@ async function finalizePaidBooking(payload) {
         ref,
         stripe_session_id ? String(stripe_session_id) : null,
         stripe_payment_intent ? String(stripe_payment_intent) : null,
+        matchedUserId,
       ]
     );
 
@@ -10007,44 +11675,45 @@ async function finalizePaidBooking(payload) {
 
       console.log("🔁 finalizePaidBooking: already paid/confirmed:", ref);
 
-// ✅ Load full booking row and continue to email logic
-const existingFull = await db.query(
-  `
-  SELECT
-    b.id,
-    b.course_id,
-    b.play_date,
-    b.tee_time,
-    b.holes,
-    b.players,
-    b.golfer_name,
-    b.golfer_email,
-    b.golfer_phone,
-    b.price_per_player_cents,
-    b.total_cents,
-    b.cart_fee_cents,
-    b.hire_clubs_fee_cents,
-    b.reference,
-    b.status,
-    b.paid
-  FROM booking_bookings b
-  WHERE b.reference = $1
-  LIMIT 1;
-  `,
-  [ref]
-);
+      // ✅ Load full booking row and continue to email logic
+      const existingFull = await db.query(
+        `
+        SELECT
+          b.id,
+          b.course_id,
+          b.user_id,
+          b.play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name,
+          b.golfer_email,
+          b.golfer_phone,
+          b.price_per_player_cents,
+          b.total_cents,
+          b.cart_fee_cents,
+          b.hire_clubs_fee_cents,
+          b.reference,
+          b.status,
+          b.paid
+        FROM booking_bookings b
+        WHERE b.reference = $1
+        LIMIT 1;
+        `,
+        [ref]
+      );
 
-if (!existingFull.rows.length) {
-  return { ok: true, alreadyConfirmed: true };
-}
+      if (!existingFull.rows.length) {
+        return { ok: true, alreadyConfirmed: true };
+      }
 
-booking = existingFull.rows[0];
+      booking = existingFull.rows[0];
+    } else {
+      booking = upd.rows[0];
     }
-
-    booking = upd.rows[0];
   } catch (e) {
     const msg = e?.message || String(e || "");
-    console.warn("finalizePaidBooking: stripe columns update failed, falling back:", msg);
+    console.warn("finalizePaidBooking: stripe/user_id columns update failed, falling back:", msg);
 
     const upd2 = await db.query(
       `
@@ -10052,7 +11721,8 @@ booking = existingFull.rows[0];
       SET
         paid = true,
         status = 'CONFIRMED',
-        updated_at = now()
+        updated_at = now(),
+        user_id = COALESCE(b.user_id, $2)
       WHERE b.reference = $1
         AND COALESCE(UPPER(b.status),'') <> 'CANCELLED'
         AND (
@@ -10062,6 +11732,7 @@ booking = existingFull.rows[0];
       RETURNING
         b.id,
         b.course_id,
+        b.user_id,
         b.play_date,
         b.tee_time,
         b.holes,
@@ -10077,7 +11748,7 @@ booking = existingFull.rows[0];
         b.status,
         b.paid;
       `,
-      [ref]
+      [ref, matchedUserId]
     );
 
     if (!upd2.rows.length) {
@@ -10099,44 +11770,49 @@ booking = existingFull.rows[0];
 
       console.log("🔁 finalizePaidBooking: already paid/confirmed:", ref);
 
-// ✅ Load full booking row and continue to email logic
-const existingFull = await db.query(
-  `
-  SELECT
-    b.id,
-    b.course_id,
-    b.play_date,
-    b.tee_time,
-    b.holes,
-    b.players,
-    b.golfer_name,
-    b.golfer_email,
-    b.golfer_phone,
-    b.price_per_player_cents,
-    b.total_cents,
-    b.cart_fee_cents,
-    b.hire_clubs_fee_cents,
-    b.reference,
-    b.status,
-    b.paid
-  FROM booking_bookings b
-  WHERE b.reference = $1
-  LIMIT 1;
-  `,
-  [ref]
-);
+      // ✅ Load full booking row and continue to email logic
+      const existingFull = await db.query(
+        `
+        SELECT
+          b.id,
+          b.course_id,
+          b.user_id,
+          b.play_date,
+          b.tee_time,
+          b.holes,
+          b.players,
+          b.golfer_name,
+          b.golfer_email,
+          b.golfer_phone,
+          b.price_per_player_cents,
+          b.total_cents,
+          b.cart_fee_cents,
+          b.hire_clubs_fee_cents,
+          b.reference,
+          b.status,
+          b.paid
+        FROM booking_bookings b
+        WHERE b.reference = $1
+        LIMIT 1;
+        `,
+        [ref]
+      );
 
-if (!existingFull.rows.length) {
-  return { ok: true, alreadyConfirmed: true };
-}
+      if (!existingFull.rows.length) {
+        return { ok: true, alreadyConfirmed: true };
+      }
 
-booking = existingFull.rows[0];
+      booking = existingFull.rows[0];
+    } else {
+      booking = upd2.rows[0];
     }
-
-    booking = upd2.rows[0];
   }
 
-  console.log("✅ Booking marked paid/confirmed:", { id: booking.id, reference: booking.reference });
+  console.log("✅ Booking marked paid/confirmed:", {
+    id: booking.id,
+    reference: booking.reference,
+    user_id: booking.user_id || null,
+  });
 
   let courseName = "Golf Course";
   try {
@@ -10179,7 +11855,14 @@ booking = existingFull.rows[0];
     console.error("❌ finalizePaidBooking email failed:", e?.message || e);
   }
 
-  return { ok: true, bookingId: booking.id, reference: booking.reference, emailOk, emailReason };
+  return {
+    ok: true,
+    bookingId: booking.id,
+    reference: booking.reference,
+    user_id: booking.user_id || null,
+    emailOk,
+    emailReason,
+  };
 }
 
 // ===============================
@@ -10700,11 +12383,18 @@ async function handleBook(req, res) {
     const subscriber_discount_applied = discountCentsSafe > 0;
     const subscriber_discount_cents = discountCentsSafe;
 
+        // ✅ NEW: attach booking to TeeRadar account if booking email belongs to a user
+    const matchedUser = golfer_email_norm
+      ? await findUserByEmail(golfer_email_norm)
+      : null;
+
+    const matchedUserId = matchedUser?.id || null;
+    
     const ins = await q(
       "insert_booking",
       `
-      INSERT INTO booking_bookings
-        (course_id, play_date, tee_time, holes, players,
+            INSERT INTO booking_bookings
+        (course_id, user_id, play_date, tee_time, holes, players,
          golfer_name, golfer_email, golfer_phone,
          price_per_player_cents, total_cents, reference, status,
          subscriber_discount_applied, subscriber_discount_cents,
@@ -10714,21 +12404,22 @@ async function handleBook(req, res) {
          has_hire_clubs, hire_clubs_qty, hire_clubs_fee_cents,
          layout_key, front_nine_key, back_nine_key,
          created_at)
-      VALUES
-        ($1,$2::date,$3,$4,$5,
-         $6,$7,$8,
-         $9,$10,$11,$12,
-         $13,$14,
-         $15::timestamptz,$16::timestamptz,
+            VALUES
+        ($1,$2,$3::date,$4,$5,$6,
+         $7,$8,$9,
+         $10,$11,$12,$13,
+         $14,$15,
+         $16::timestamptz,$17::timestamptz,
          false,false,
-         $17,$18,$19,
-         $20,$21,$22,
-         $23,$24,$25,
+         $18,$19,$20,
+         $21,$22,$23,
+         $24,$25,$26,
          now())
       RETURNING id, reference;
       `,
-      [
+            [
         courseId,
+        matchedUserId,
         date,
         teeTimeDb,
         holes,
