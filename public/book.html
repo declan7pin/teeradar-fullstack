@@ -558,13 +558,19 @@
       margin-bottom: 4px;
     }
 
-    .results-toolbar-control {
+        .results-toolbar-control {
       width: 100%;
       padding: 8px 10px;
       border-radius: 10px;
       border: 1px solid #cbd5e1;
       background: #fff;
       font-size: 14px;
+    }
+
+    button.results-toolbar-control {
+      cursor: pointer;
+      text-align: center;
+      font-weight: 600;
     }
 
     .chip-home-course {
@@ -666,7 +672,7 @@
     </div>
   </div>
 
-  <div class="results-toolbar">
+    <div class="results-toolbar">
     <div class="results-toolbar-group">
       <div class="results-toolbar-label">Sort courses</div>
       <select id="courseSort" class="results-toolbar-control">
@@ -690,8 +696,15 @@
         <option value="unavailable">No availability</option>
       </select>
     </div>
-  </div>
 
+    <div class="results-toolbar-group">
+      <div class="results-toolbar-label">Location</div>
+      <button id="useMyLocationBtn" class="results-toolbar-control" type="button">
+        Use my current location
+      </button>
+    </div>
+  </div>
+  
   <section class="courses-strip" id="courses-strip"></section>
     <div id="groupVoteModal" class="group-vote-modal hidden">
     <div class="group-vote-modal-card">
@@ -791,6 +804,8 @@
     let currentAvailabilityFilter = "all";
     let userLat = null;
     let userLng = null;
+    let userLocationMarker = null;
+    let usingLiveLocation = false;
 
     // full list + state handling
     let allCourses = [];
@@ -1402,22 +1417,25 @@ function slugifyCourseName(name) {
 
     init();
 
-    async function init() {
-      initMap();
-      await loadCourses();
+        async function init() {
+  initMap();
+  await loadCourses();
 
-      // ✅ NEW: ensure we pull the stored home state from DB before defaults apply
-      await hydrateUserFromServer();
+  // ✅ Ensure we pull the stored home state from DB before defaults apply
+  await hydrateUserFromServer();
 
-      // use the logged-in user's home course (if any) to set state + zoom
-      applyHomeCourseDefaults();
+  // Use the logged-in user's home course, if any, to set state + zoom
+  applyHomeCourseDefaults();
 
-      currentSortMode = document.getElementById("courseSort")?.value || "default";
-      currentAvailabilityFilter = document.getElementById("courseAvailabilityFilter")?.value || "all";
+  currentSortMode = document.getElementById("courseSort")?.value || "default";
+  currentAvailabilityFilter = document.getElementById("courseAvailabilityFilter")?.value || "all";
 
-      renderCourses();
-      updateGroupVoteToolbar();
-    }
+  renderCourses();
+  updateGroupVoteToolbar();
+
+  // ✅ Do not auto-request location on page load.
+  // User can tap "Use my current location" to enable nearest-distance sorting.
+}
 
     function initMap() {
       map = L.map("map").setView([-31.95, 115.86], 5.8);
@@ -1543,14 +1561,15 @@ function slugifyCourseName(name) {
       const hLat = homeCourse ? toNum(homeCourse.lat) : null;
       const hLng = homeCourse ? toNum(homeCourse.lng) : null;
 
-            if (homeCourse && hLat !== null && hLng !== null) {
-        userLat = hLat;
-        userLng = hLng;
-        map.setView([hLat, hLng], 12);
+                  if (homeCourse && hLat !== null && hLng !== null) {
+        // Default map view to home course area, but do NOT use it as live location
+        if (!usingLiveLocation) {
+          map.setView([hLat, hLng], 12);
+        }
       } else {
-        userLat = null;
-        userLng = null;
-        zoomToStateCourses();
+        if (!usingLiveLocation) {
+          zoomToStateCourses();
+        }
       }
 
       const pretty = getPrettyStateName(selectedState);
@@ -1671,35 +1690,125 @@ function slugifyCourseName(name) {
       return !!(info.homeCourse || info.homeCourseId);
     }
 
-    function getCourseDistanceKm(course) {
-      const lat1 = Number(userLat);
-      const lng1 = Number(userLng);
-      const lat2 = Number(course?.lat);
-      const lng2 = Number(course?.lng);
+        function updateUserLocationMarker() {
+      if (!map) return;
 
-      if (
-        !Number.isFinite(lat1) ||
-        !Number.isFinite(lng1) ||
-        !Number.isFinite(lat2) ||
-        !Number.isFinite(lng2)
-      ) {
-        return null;
+      if (userLocationMarker) {
+        map.removeLayer(userLocationMarker);
+        userLocationMarker = null;
       }
 
-      const toRad = (deg) => (deg * Math.PI) / 180;
-      const R = 6371;
+      if (!Number.isFinite(Number(userLat)) || !Number.isFinite(Number(userLng))) {
+        return;
+      }
 
-      const dLat = toRad(lat2 - lat1);
-      const dLng = toRad(lng2 - lng1);
+      userLocationMarker = L.circleMarker([Number(userLat), Number(userLng)], {
+        radius: 8,
+        weight: 2,
+        color: "#0b63ce",
+        fillColor: "#0b63ce",
+        fillOpacity: 0.85
+      }).addTo(map);
 
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-        Math.sin(dLng / 2) * Math.sin(dLng / 2);
-
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
+      userLocationMarker.bindPopup("Your current location");
     }
+
+    function requestCurrentLocation(options = {}) {
+      const {
+        centerMap = true,
+        rerender = true,
+        silent = false
+      } = options || {};
+
+      if (!navigator.geolocation) {
+        if (!silent) {
+          alert("Location is not supported on this device/browser.");
+        }
+        return;
+      }
+
+      const btn = document.getElementById("useMyLocationBtn");
+      if (btn) btn.textContent = "Getting location...";
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          userLat = Number(position.coords.latitude);
+          userLng = Number(position.coords.longitude);
+          usingLiveLocation = true;
+
+          updateUserLocationMarker();
+
+          if (centerMap && map) {
+            map.setView([userLat, userLng], 10);
+          }
+
+          if (btn) btn.textContent = "Using current location";
+
+          if (statusLine) {
+            statusLine.textContent = "Using your current location to sort nearest courses.";
+            statusLine.style.color = "#1b7d45";
+          }
+
+          if (rerender) {
+            renderCourses();
+          }
+        },
+        (err) => {
+          console.warn("Geolocation error", err);
+
+          if (btn) btn.textContent = "Use my current location";
+
+          if (!silent) {
+            alert("Could not get your current location. Please allow location access.");
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000
+        }
+      );
+    }
+    
+    function getCourseDistanceKm(course) {
+  // Only show distance after a real location has been approved
+  if (!usingLiveLocation) return null;
+
+  const lat1 = Number(userLat);
+  const lng1 = Number(userLng);
+  const lat2 = Number(course?.lat);
+  const lng2 = Number(course?.lng);
+
+  if (
+    !Number.isFinite(lat1) ||
+    !Number.isFinite(lng1) ||
+    !Number.isFinite(lat2) ||
+    !Number.isFinite(lng2)
+  ) {
+    return null;
+  }
+
+  // Block bad fallback coords like 0,0
+  if (Math.abs(lat1) < 0.0001 && Math.abs(lng1) < 0.0001) {
+    return null;
+  }
+
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 6371;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
     function getCourseRenderMeta(course) {
       const name = course.name || "";
@@ -1823,25 +1932,22 @@ function slugifyCourseName(name) {
       return 0;
     }
 
-    function sortRenderableCourses(items) {
+        function sortRenderableCourses(items) {
       const subscriber = isLikelySubscriber();
 
       items.sort((a, b) => {
-        if (subscriber) {
-          const homeCmp = compareHomeCourseFirst(a, b);
-          if (homeCmp !== 0) return homeCmp;
-        }
+        if (currentSortMode === "nearest") {
+          const nearestCmp = compareNearest(a, b);
+          if (nearestCmp !== 0) return nearestCmp;
 
-        const availabilityCmp = compareAvailabilityGroup(a, b);
-        if (availabilityCmp !== 0) return availabilityCmp;
+          const availabilityCmp = compareAvailabilityGroup(a, b);
+          if (availabilityCmp !== 0) return availabilityCmp;
+
+          return compareAlpha(a, b);
+        }
 
         if (currentSortMode === "availability_desc") {
           const cmp = compareMostAvailable(a, b);
-          if (cmp !== 0) return cmp;
-        }
-
-        if (currentSortMode === "nearest") {
-          const cmp = compareNearest(a, b);
           if (cmp !== 0) return cmp;
         }
 
@@ -1859,6 +1965,14 @@ function slugifyCourseName(name) {
           const cmp = compareHoles18First(a, b);
           if (cmp !== 0) return cmp;
         }
+
+        if (subscriber) {
+          const homeCmp = compareHomeCourseFirst(a, b);
+          if (homeCmp !== 0) return homeCmp;
+        }
+
+        const availabilityCmp = compareAvailabilityGroup(a, b);
+        if (availabilityCmp !== 0) return availabilityCmp;
 
         if (currentSortMode === "name_desc") {
           return compareAlpha(b, a);
@@ -2052,9 +2166,15 @@ trackEvent("search", {
       }
     }
 
-    function clearMarkers() {
+        function clearMarkers() {
       markers.forEach((m) => map.removeLayer(m));
       markers = [];
+
+      // Keep / redraw live user location marker separately
+      if (userLocationMarker) {
+        map.removeLayer(userLocationMarker);
+        userLocationMarker = null;
+      }
     }
 
     function createMarkerIcon(kind) {
@@ -2263,6 +2383,8 @@ trackEvent("search", {
 
         coursesStrip.appendChild(card);
       });
+      
+      updateUserLocationMarker();
 
       if (!renderableCourses.length) {
         coursesStrip.innerHTML = `
@@ -2546,6 +2668,14 @@ document.getElementById("groupVoteLinkModal")?.addEventListener("click", (evt) =
     document.getElementById("courseSort")?.addEventListener("change", (e) => {
       currentSortMode = e.target.value || "default";
       renderCourses();
+    });
+    
+        document.getElementById("useMyLocationBtn")?.addEventListener("click", () => {
+      requestCurrentLocation({
+        centerMap: true,
+        rerender: true,
+        silent: false
+      });
     });
 
     document.getElementById("courseAvailabilityFilter")?.addEventListener("change", (e) => {
