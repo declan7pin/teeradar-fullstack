@@ -802,10 +802,14 @@
 
     let currentSortMode = "default";
     let currentAvailabilityFilter = "all";
-    let userLat = null;
-    let userLng = null;
-    let userLocationMarker = null;
-    let usingLiveLocation = false;
+   let userLat = null;
+   let userLng = null;
+   let userLocationMarker = null;
+   let usingLiveLocation = false;
+
+// Home course fallback location for Nearest sorting
+   let homeCourseLat = null;
+   let homeCourseLng = null;
 
     // full list + state handling
     let allCourses = [];
@@ -1562,11 +1566,14 @@ function slugifyCourseName(name) {
       const hLng = homeCourse ? toNum(homeCourse.lng) : null;
 
                   if (homeCourse && hLat !== null && hLng !== null) {
-        // Default map view to home course area, but do NOT use it as live location
-        if (!usingLiveLocation) {
-          map.setView([hLat, hLng], 12);
-        }
-      } else {
+  // Save home course as fallback location when GPS is not available
+  homeCourseLat = hLat;
+  homeCourseLng = hLng;
+
+  if (!usingLiveLocation) {
+    map.setView([hLat, hLng], 12);
+  }
+} else {
         if (!usingLiveLocation) {
           zoomToStateCourses();
         }
@@ -1754,14 +1761,30 @@ function slugifyCourseName(name) {
           }
         },
         (err) => {
-          console.warn("Geolocation error", err);
+  console.warn("Geolocation error", err);
 
-          if (btn) btn.textContent = "Use my current location";
+  usingLiveLocation = false;
 
-          if (!silent) {
-            alert("Could not get your current location. Please allow location access.");
-          }
-        },
+  if (btn) btn.textContent = "Use my current location";
+
+  if (homeCourseLat !== null && homeCourseLng !== null) {
+    currentSortMode = "nearest";
+    const sortEl = document.getElementById("courseSort");
+    if (sortEl) sortEl.value = "nearest";
+
+    if (statusLine) {
+      statusLine.textContent = "Using your home course location to sort nearest courses.";
+      statusLine.style.color = "#1b7d45";
+    }
+
+    renderCourses();
+    return;
+  }
+
+  if (!silent) {
+    alert("Could not get your current location. Please allow location access.");
+  }
+},
         {
           enableHighAccuracy: true,
           timeout: 10000,
@@ -1771,11 +1794,29 @@ function slugifyCourseName(name) {
     }
     
     function getCourseDistanceKm(course) {
-  // Only show distance after a real location has been approved
-  if (!usingLiveLocation) return null;
+  let lat1 = null;
+  let lng1 = null;
 
-  const lat1 = Number(userLat);
-  const lng1 = Number(userLng);
+  // 1) Use live GPS if approved
+  if (
+    usingLiveLocation &&
+    Number.isFinite(Number(userLat)) &&
+    Number.isFinite(Number(userLng))
+  ) {
+    lat1 = Number(userLat);
+    lng1 = Number(userLng);
+  }
+
+  // 2) Otherwise use home course fallback
+  if (
+    (lat1 === null || lng1 === null) &&
+    Number.isFinite(Number(homeCourseLat)) &&
+    Number.isFinite(Number(homeCourseLng))
+  ) {
+    lat1 = Number(homeCourseLat);
+    lng1 = Number(homeCourseLng);
+  }
+
   const lat2 = Number(course?.lat);
   const lng2 = Number(course?.lng);
 
@@ -1788,7 +1829,6 @@ function slugifyCourseName(name) {
     return null;
   }
 
-  // Block bad fallback coords like 0,0
   if (Math.abs(lat1) < 0.0001 && Math.abs(lng1) < 0.0001) {
     return null;
   }
@@ -1809,7 +1849,6 @@ function slugifyCourseName(name) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
-
     function getCourseRenderMeta(course) {
       const name = course.name || "";
       const provider = String(course.provider || "Other").trim();
