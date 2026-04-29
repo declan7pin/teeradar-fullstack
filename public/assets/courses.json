@@ -37,73 +37,73 @@
   },
 
   {
-    "name": "Point Walter Golf Course (9 holes)",
-    "provider": "MiClub",
-    "state": "WA",
-    "holes": 9,
-    "lat": -32.01766087020319,
-    "lng": 115.78917035341037,
-    "url": "https://pointwalter.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=101527"
-  },
+  "name": "Point Walter Golf Course (9 holes)",
+  "provider": "MiClub",
+  "state": "WA",
+  "holes": 9,
+  "lat": -32.01766087020319,
+  "lng": 115.78917035341037,
+  "url": "https://pointwalter.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=101527"
+},
 
-    {
-  "name": "Serpentine & Districts Golf Club",
+{
+  "name": "Serpentine & Districts Golf Club (18 holes)",
   "provider": "Phone",
   "state": "WA",
   "holes": 18,
   "lat": -32.361569,
   "lng": 115.972081,
-  "phone": "08 9525 2265"
+  "phone": "08 9525 2265",
   "url": "https://serpentinegolfclub.org"
-  },
+},
 
-   {
-  "name": "Serpentine & Districts Golf Club",
+{
+  "name": "Serpentine & Districts Golf Club (9 holes)",
   "provider": "Phone",
   "state": "WA",
   "holes": 9,
   "lat": -32.361569,
   "lng": 115.972081,
-  "phone": "08 9525 2265"
+  "phone": "08 9525 2265",
   "url": "https://serpentinegolfclub.org"
-  },
+},
 
-  {
-    "name": "Maylands Peninsula Golf Course (18 holes)",
-    "provider": "MiClub",
-    "state": "WA",
-    "holes": 18,
-    "lat": -31.942041317213896,
-    "lng": 115.90112636383051,
-    "url": "https://maylandsembleton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=100795"
-  },
-  {
-    "name": "Maylands Peninsula Golf Course (9 holes)",
-    "provider": "MiClub",
-    "state": "WA",
-    "holes": 9,
-    "lat": -31.942041317213896,
-    "lng": 115.90112636383051,
-    "url": "https://maylandsembleton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=100797"
-  },
-  {
-    "name": "Maylands Peninsula Golf Course (9 holes + cart + lunch)",
-    "provider": "MiClub",
-    "state": "WA",
-    "holes": 9,
-    "lat": -31.942041317213896,
-    "lng": 115.90112636383051,
-    "url": "https://maylandsembleton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=934741"
-  },
-  {
-    "name": "Maylands Peninsula Golf Course (18 holes + cart + lunch)",
-    "provider": "MiClub",
-    "state": "WA",
-    "holes": 18,
-    "lat": -31.942041317213896,
-    "lng": 115.90112636383051,
-    "url": "https://maylandsembleton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=934740"
-  },
+{
+  "name": "Maylands Peninsula Golf Course (18 holes)",
+  "provider": "MiClub",
+  "state": "WA",
+  "holes": 18,
+  "lat": -31.942041317213896,
+  "lng": 115.90112636383051,
+  "url": "https://maylandsembleton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=100795"
+},
+{
+  "name": "Maylands Peninsula Golf Course (9 holes)",
+  "provider": "MiClub",
+  "state": "WA",
+  "holes": 9,
+  "lat": -31.942041317213896,
+  "lng": 115.90112636383051,
+  "url": "https://maylandsembleton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=100797"
+},
+{
+  "name": "Maylands Peninsula Golf Course (9 holes + cart + lunch)",
+  "provider": "MiClub",
+  "state": "WA",
+  "holes": 9,
+  "lat": -31.942041317213896,
+  "lng": 115.90112636383051,
+  "url": "https://maylandsembleton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=934741"
+},
+{
+  "name": "Maylands Peninsula Golf Course (18 holes + cart + lunch)",
+  "provider": "MiClub",
+  "state": "WA",
+  "holes": 18,
+  "lat": -31.942041317213896,
+  "lng": 115.90112636383051,
+  "url": "https://maylandsembleton.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-20&feeGroupId=934740"
+},
 
   {
     "name": "Collier Park Golf Course (18 holes)",
