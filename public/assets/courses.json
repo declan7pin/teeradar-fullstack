@@ -46,6 +46,26 @@
     "url": "https://pointwalter.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-19&feeGroupId=101527"
   },
 
+    {
+  "name": "Serpentine & Districts Golf Club",
+  "provider": "Phone",
+  "state": "WA",
+  "holes": 18,
+  "lat": -32.361569,
+  "lng": 115.972081,
+  "url": "https://serpentinegolfclub.org"
+  },
+
+   {
+  "name": "Serpentine & Districts Golf Club",
+  "provider": "Phone",
+  "state": "WA",
+  "holes": 9,
+  "lat": -32.361569,
+  "lng": 115.972081,
+  "url": "https://serpentinegolfclub.org"
+  },
+
   {
     "name": "Maylands Peninsula Golf Course (18 holes)",
     "provider": "MiClub",
