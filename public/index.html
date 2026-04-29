@@ -733,9 +733,11 @@
   <div class="brand-text">TeeRadar</div>
 </a>
     <nav>
-      <a href="/index.html">Home</a>
-      <a href="/book.html">Bookings</a>
-      <a href="/faq.html">FAQ</a>
+      <nav>
+  <a href="/index.html">Home</a>
+  <a href="/book.html">Bookings</a>
+  <a href="/for-courses.html">For Courses</a>
+  <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
       <a href="/analytics" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
 
@@ -1321,71 +1323,53 @@
   }
 
   function initContactForm() {
-    const form = document.getElementById("contactForm");
-    if (!form) return;
+  const form = document.getElementById("contactForm");
+  if (!form) return;
 
-    const emailInput = document.getElementById("contactEmail");
-    const questionInput = document.getElementById("contactQuestion");
-    const detailsInput = document.getElementById("contactDetails");
-    const statusEl = document.getElementById("contactStatus");
-    const submitBtn = document.getElementById("contactSubmit");
+  const emailInput = document.getElementById("contactEmail");
+  const questionInput = document.getElementById("contactQuestion");
+  const detailsInput = document.getElementById("contactDetails");
+  const statusEl = document.getElementById("contactStatus");
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      if (!emailInput.value.trim()) {
-        statusEl.textContent = "Please enter your email so we can reply.";
-        statusEl.style.color = "#b91c1c";
-        emailInput.focus();
-        return;
-      }
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
 
-      const email = emailInput.value.trim();
-      const question = questionInput.value.trim();
-      const details = detailsInput.value.trim();
+    const email = emailInput.value.trim();
+    const question = questionInput.value.trim();
+    const details = detailsInput.value.trim();
 
-      const subject = question || "New TeeRadar enquiry";
-      const message =
-        (question ? "Question: " + question + "\n\n" : "") +
-        (details ? "Details:\n" + details : "");
+    if (!email) {
+      statusEl.textContent = "Please enter your email so we can reply.";
+      statusEl.style.color = "#b91c1c";
+      emailInput.focus();
+      return;
+    }
 
-      statusEl.textContent = "Sending...";
-      statusEl.style.color = "#64748b";
-      submitBtn.disabled = true;
+    const subject = question || "New TeeRadar enquiry";
 
-      try {
-        const res = await fetch("/api/contact", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email,
-            subject,
-            message,
-            question,
-            details
-          })
-        });
+    const body = `
+New TeeRadar enquiry
 
-        const data = await res.json().catch(() => ({}));
+From: ${email}
 
-        if (!res.ok || !data.ok) {
-          statusEl.textContent =
-            (data && data.error) || "Something went wrong. Please try again.";
-          statusEl.style.color = "#b91c1c";
-        } else {
-          statusEl.textContent = "Thanks — your message has been sent.";
-          statusEl.style.color = "#15803d";
-          form.reset();
-        }
-      } catch (err) {
-        console.error("Contact error:", err);
-        statusEl.textContent = "Network error — please try again.";
-        statusEl.style.color = "#b91c1c";
-      } finally {
-        submitBtn.disabled = false;
-      }
-    });
-  }
+Question:
+${question || "Not provided"}
 
+Details:
+${details || "Not provided"}
+    `.trim();
+
+    const mailto =
+      "mailto:TeeRadar.help@gmail.com" +
+      "?subject=" + encodeURIComponent(subject) +
+      "&body=" + encodeURIComponent(body);
+
+    statusEl.textContent = "Opening your email app...";
+    statusEl.style.color = "#64748b";
+
+    window.location.href = mailto;
+  });
+}
   function initSubscriberAlertModal() {
     const modal = document.getElementById("tr-alert-modal-backdrop");
     if (!modal) return;
