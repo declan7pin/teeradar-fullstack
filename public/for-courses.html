@@ -1,0 +1,818 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar for Golf Courses</title>
+  <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+
+  <style>
+    :root{
+      --green:#00796b;
+      --green-dark:#005e55;
+      --green-soft:#e6f4f1;
+      --bg:#f4f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e2e8f0;
+      --blue:#0ea5e9;
+      --shadow:0 18px 50px rgba(15,23,42,.10);
+    }
+
+    *{box-sizing:border-box}
+
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      background:linear-gradient(180deg,#f8fafc,#eef6f4);
+      color:var(--text);
+    }
+
+    a{text-decoration:none;color:inherit}
+
+    .topbar{
+      background:#fff;
+      border-bottom:1px solid var(--border);
+      position:sticky;
+      top:0;
+      z-index:20;
+    }
+
+    .nav{
+      max-width:1120px;
+      margin:auto;
+      padding:14px 18px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-weight:900;
+      color:var(--green);
+      font-size:20px;
+    }
+
+    .brand img{
+      height:34px;
+      width:auto;
+      object-fit:contain;
+    }
+
+    .navlinks{
+      display:flex;
+      align-items:center;
+      gap:14px;
+      font-size:14px;
+      color:var(--muted);
+    }
+
+    .navlinks a:hover{color:var(--green)}
+
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border:0;
+      border-radius:999px;
+      padding:13px 20px;
+      background:var(--green);
+      color:#fff;
+      font-weight:800;
+      cursor:pointer;
+      box-shadow:0 14px 32px rgba(0,121,107,.22);
+    }
+
+    .btn.secondary{
+      background:#fff;
+      color:var(--green);
+      border:1px solid var(--border);
+      box-shadow:none;
+    }
+
+    .hero{
+      max-width:1120px;
+      margin:auto;
+      padding:64px 18px 38px;
+      display:grid;
+      grid-template-columns:1.1fr .9fr;
+      gap:34px;
+      align-items:center;
+    }
+
+    .badge{
+      display:inline-flex;
+      padding:8px 13px;
+      border-radius:999px;
+      background:var(--green-soft);
+      color:var(--green-dark);
+      font-weight:900;
+      font-size:13px;
+      margin-bottom:18px;
+    }
+
+    h1{
+      font-size:clamp(42px,6vw,68px);
+      line-height:.98;
+      letter-spacing:-2.5px;
+      margin:0 0 18px;
+    }
+
+    .hero-sub{
+      font-size:19px;
+      line-height:1.55;
+      color:var(--muted);
+      margin:0 0 24px;
+      max-width:650px;
+    }
+
+    .hero-actions{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+      margin-top:24px;
+    }
+
+    .trust-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:22px;
+    }
+
+    .trust-pill{
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:999px;
+      padding:8px 12px;
+      font-size:13px;
+      color:var(--muted);
+      font-weight:700;
+    }
+
+    .hero-panel{
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:28px;
+      padding:22px;
+      box-shadow:var(--shadow);
+      position:relative;
+      overflow:hidden;
+    }
+
+    .hero-panel:before{
+      content:"";
+      position:absolute;
+      inset:-60px -80px auto auto;
+      width:180px;
+      height:180px;
+      border-radius:999px;
+      background:rgba(0,121,107,.12);
+    }
+
+    .panel-title{
+      font-size:17px;
+      font-weight:900;
+      margin:0 0 14px;
+    }
+
+    .metric-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+      margin-bottom:16px;
+    }
+
+    .metric{
+      background:#f8fafc;
+      border:1px solid var(--border);
+      border-radius:18px;
+      padding:14px;
+    }
+
+    .metric strong{
+      display:block;
+      font-size:24px;
+      color:var(--green-dark);
+      margin-bottom:4px;
+    }
+
+    .metric span{
+      font-size:12px;
+      color:var(--muted);
+      font-weight:700;
+    }
+
+    .mini-flow{
+      display:grid;
+      gap:10px;
+    }
+
+    .flow-step{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:13px 14px;
+    }
+
+    .flow-step strong{font-size:14px}
+    .flow-step span{font-size:12px;color:var(--muted)}
+
+    .section{
+      max-width:1120px;
+      margin:auto;
+      padding:48px 18px;
+    }
+
+    .section h2{
+      font-size:clamp(30px,4vw,44px);
+      line-height:1.05;
+      letter-spacing:-1.3px;
+      margin:0 0 12px;
+    }
+
+    .section-intro{
+      margin:0 0 24px;
+      color:var(--muted);
+      font-size:17px;
+      line-height:1.55;
+      max-width:790px;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:16px;
+    }
+
+    .card{
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:24px;
+      padding:23px;
+      box-shadow:0 12px 34px rgba(15,23,42,.06);
+    }
+
+    .card .icon{
+      width:42px;
+      height:42px;
+      border-radius:14px;
+      background:var(--green-soft);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:21px;
+      margin-bottom:12px;
+    }
+
+    .card h3{
+      margin:0 0 8px;
+      font-size:20px;
+    }
+
+    .card p{
+      margin:0;
+      color:var(--muted);
+      line-height:1.5;
+      font-size:15px;
+    }
+
+    .dark{
+      background:linear-gradient(135deg,#064e3b,#00796b);
+      color:#fff;
+      border-radius:30px;
+      padding:34px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:24px;
+      align-items:center;
+      box-shadow:var(--shadow);
+    }
+
+    .dark h2{
+      color:#fff;
+      margin:0 0 10px;
+    }
+
+    .dark p{
+      color:rgba(255,255,255,.86);
+      line-height:1.55;
+      margin:0;
+    }
+
+    .dark-list{
+      display:grid;
+      gap:10px;
+    }
+
+    .dark-item{
+      background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.2);
+      border-radius:16px;
+      padding:13px;
+      font-weight:800;
+    }
+
+    .pricing{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:16px;
+    }
+
+    .price-card{
+      border:2px solid var(--green);
+    }
+
+    .price-note{
+      display:inline-flex;
+      background:var(--green);
+      color:#fff;
+      padding:7px 11px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:900;
+      margin-bottom:12px;
+    }
+
+    .form-wrap{
+      display:grid;
+      grid-template-columns:.85fr 1.15fr;
+      gap:20px;
+      align-items:start;
+    }
+
+    form{
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:26px;
+      padding:24px;
+      box-shadow:var(--shadow);
+    }
+
+    label{
+      display:block;
+      font-size:13px;
+      font-weight:800;
+      color:#334155;
+      margin:13px 0 6px;
+    }
+
+    input,select,textarea{
+      width:100%;
+      border:1px solid #cbd5e1;
+      border-radius:13px;
+      padding:12px 13px;
+      font:inherit;
+      font-size:14px;
+      background:#fff;
+    }
+
+    textarea{
+      min-height:110px;
+      resize:vertical;
+    }
+
+    input:focus,select:focus,textarea:focus{
+      outline:none;
+      border-color:var(--green);
+      box-shadow:0 0 0 3px rgba(0,121,107,.12);
+    }
+
+    .form-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+
+    .status{
+      margin-top:10px;
+      font-size:13px;
+      color:var(--muted);
+    }
+
+    .email-direct{
+      margin-top:12px;
+      font-size:13px;
+      color:var(--muted);
+      line-height:1.5;
+    }
+
+    .email-direct a{
+      color:var(--green-dark);
+      font-weight:800;
+      text-decoration:underline;
+    }
+
+    footer{
+      text-align:center;
+      padding:34px 18px 46px;
+      color:var(--muted);
+      font-size:14px;
+    }
+
+    @media(max-width:850px){
+      .hero,.dark,.pricing,.form-wrap{
+        grid-template-columns:1fr;
+      }
+
+      .grid{
+        grid-template-columns:1fr;
+      }
+
+      .navlinks{
+        display:none;
+      }
+
+      .form-grid{
+        grid-template-columns:1fr;
+      }
+
+      .hero{
+        padding-top:44px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header class="topbar">
+    <nav class="nav">
+      <a class="brand" href="/">
+        <img src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png" alt="TeeRadar">
+        <span>TeeRadar</span>
+      </a>
+
+      <div class="navlinks">
+        <a href="/">Home</a>
+        <a href="/book.html">Bookings</a>
+        <a href="/faq.html">FAQ</a>
+        <a href="#enquiry" class="btn">Enquire</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <div class="badge">Built for Australian golf courses</div>
+
+        <h1>More bookings. Less admin. A better golfer experience.</h1>
+
+        <p class="hero-sub">
+          TeeRadar gives golf courses a modern booking system, admin dashboard,
+          payment options, tee sheet tools and exposure to golfers actively looking
+          for a round.
+        </p>
+
+        <div class="hero-actions">
+          <a class="btn" href="#enquiry">Request information</a>
+          <a class="btn secondary" href="#how-it-works">See how it works</a>
+        </div>
+
+        <div class="trust-row">
+          <div class="trust-pill">Online bookings</div>
+          <div class="trust-pill">Daily tee sheet</div>
+          <div class="trust-pill">Cart inventory</div>
+          <div class="trust-pill">Stripe payments</div>
+          <div class="trust-pill">Booking analytics</div>
+        </div>
+      </div>
+
+      <aside class="hero-panel">
+        <p class="panel-title">What TeeRadar helps courses improve</p>
+
+        <div class="metric-grid">
+          <div class="metric">
+            <strong>24/7</strong>
+            <span>Online booking access</span>
+          </div>
+          <div class="metric">
+            <strong>Less</strong>
+            <span>Manual admin work</span>
+          </div>
+          <div class="metric">
+            <strong>More</strong>
+            <span>Golfer visibility</span>
+          </div>
+          <div class="metric">
+            <strong>Clear</strong>
+            <span>Revenue reporting</span>
+          </div>
+        </div>
+
+        <div class="mini-flow">
+          <div class="flow-step">
+            <strong>Golfer finds your course</strong>
+            <span>TeeRadar search</span>
+          </div>
+          <div class="flow-step">
+            <strong>They book online</strong>
+            <span>Your live availability</span>
+          </div>
+          <div class="flow-step">
+            <strong>You manage it easily</strong>
+            <span>Admin tee sheet</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="section" id="how-it-works">
+      <h2>Not just booking software — a way to bring more golfers in.</h2>
+      <p class="section-intro">
+        TeeRadar is designed to help courses take bookings, control availability,
+        manage add-ons and give golfers a smoother way to discover and book rounds.
+      </p>
+
+      <div class="grid">
+        <div class="card">
+          <div class="icon">🔎</div>
+          <h3>Golfers discover your course</h3>
+          <p>
+            TeeRadar helps put your course in front of golfers searching by date,
+            time, players and hole count.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="icon">📅</div>
+          <h3>Bookings flow into your tee sheet</h3>
+          <p>
+            Your team can view bookings, player numbers, times, carts, hire clubs
+            and booking details from one admin area.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="icon">📈</div>
+          <h3>You see what is working</h3>
+          <p>
+            Track bookings, revenue, booking type, player numbers and daily demand
+            from your course dashboard.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="dark">
+        <div>
+          <h2>Why courses should look at TeeRadar</h2>
+          <p>
+            Golfers expect a fast, simple online booking experience. Courses need
+            control, visibility and low-friction admin tools. TeeRadar brings both
+            sides together.
+          </p>
+        </div>
+
+        <div class="dark-list">
+          <div class="dark-item">Modern mobile-friendly booking page</div>
+          <div class="dark-item">Pay at course or pay online options</div>
+          <div class="dark-item">Cart and hire club inventory limits</div>
+          <div class="dark-item">Subscriber discount tools to drive demand</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>What your course gets</h2>
+      <p class="section-intro">
+        A practical booking platform built around how golf courses actually operate.
+      </p>
+
+      <div class="grid">
+        <div class="card">
+          <div class="icon">⛳</div>
+          <h3>Custom booking page</h3>
+          <p>Your course gets a clean booking page with your tee times, pricing and rules.</p>
+        </div>
+
+        <div class="card">
+          <div class="icon">🧾</div>
+          <h3>Admin daily sheet</h3>
+          <p>Manage bookings, manual slots, player details and availability from one screen.</p>
+        </div>
+
+        <div class="card">
+          <div class="icon">💳</div>
+          <h3>Payment flexibility</h3>
+          <p>Choose pay-at-course or online payment with Stripe depending on your setup.</p>
+        </div>
+
+        <div class="card">
+          <div class="icon">🚗</div>
+          <h3>Add-on control</h3>
+          <p>Track carts and hire clubs so your team does not over-allocate stock.</p>
+        </div>
+
+        <div class="card">
+          <div class="icon">📊</div>
+          <h3>Analytics dashboard</h3>
+          <p>See bookings, revenue, player numbers and course activity over time.</p>
+        </div>
+
+        <div class="card">
+          <div class="icon">🎯</div>
+          <h3>Marketing exposure</h3>
+          <p>Use TeeRadar to reach golfers already searching for available tee times.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Early course partner offer</h2>
+      <p class="section-intro">
+        TeeRadar is currently looking for early partner courses. The goal is simple:
+        help courses get online, reduce booking friction and build a better golf
+        booking network across Australia.
+      </p>
+
+      <div class="pricing">
+        <div class="card price-card">
+          <span class="price-note">Best early offer</span>
+          <h3>Subscriber discount partner</h3>
+          <p>
+            Courses that allow a TeeRadar subscriber discount may be eligible for
+            a free or heavily discounted booking system setup during the early
+            partner phase.
+          </p>
+        </div>
+
+        <div class="card">
+          <span class="price-note">Flexible option</span>
+          <h3>Standard course setup</h3>
+          <p>
+            Courses that do not want to offer a subscriber discount can still use
+            TeeRadar with a simple booking fee or discounted early-stage pricing.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="enquiry">
+      <div class="form-wrap">
+        <div>
+          <h2>Interested in TeeRadar for your course?</h2>
+          <p class="section-intro">
+            Fill out the form and it will open your email app with the details
+            pre-filled. Send it to TeeRadar and we’ll get back to you.
+          </p>
+
+          <div class="card">
+            <h3>Good fit for courses that want:</h3>
+            <p>
+              More online bookings, lower admin work, simple reporting, modern
+              booking pages and better exposure to golfers.
+            </p>
+
+            <p class="email-direct">
+              Prefer not to use the form? Contact us directly at
+              <a href="mailto:TeeRadar.help@gmail.com">TeeRadar.help@gmail.com</a>
+            </p>
+          </div>
+        </div>
+
+        <form id="courseEnquiryForm">
+          <div class="form-grid">
+            <div>
+              <label for="courseName">Course name *</label>
+              <input id="courseName" required placeholder="e.g. Marri Park Golf Course">
+            </div>
+
+            <div>
+              <label for="state">State *</label>
+              <select id="state" required>
+                <option value="">Select state</option>
+                <option>WA</option>
+                <option>NSW</option>
+                <option>VIC</option>
+                <option>QLD</option>
+                <option>SA</option>
+                <option>TAS</option>
+                <option>ACT</option>
+                <option>NT</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div>
+              <label for="contactName">Your name *</label>
+              <input id="contactName" required placeholder="Full name">
+            </div>
+
+            <div>
+              <label for="role">Role at course</label>
+              <input id="role" placeholder="Manager, owner, pro shop, etc.">
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div>
+              <label for="email">Email *</label>
+              <input id="email" type="email" required placeholder="you@course.com.au">
+            </div>
+
+            <div>
+              <label for="phone">Phone</label>
+              <input id="phone" placeholder="Optional">
+            </div>
+          </div>
+
+          <label for="currentSystem">Current booking system</label>
+          <input id="currentSystem" placeholder="MiClub, Quick18, phone only, spreadsheet, other">
+
+          <label for="interest">What are you interested in?</label>
+          <select id="interest">
+            <option>Full booking system</option>
+            <option>More golfer exposure / leads</option>
+            <option>Online payments</option>
+            <option>Analytics dashboard</option>
+            <option>Not sure yet</option>
+          </select>
+
+          <label for="message">Extra information</label>
+          <textarea id="message" placeholder="Tell us about your course, current setup, tee time rules, pain points or questions."></textarea>
+
+          <button class="btn" type="submit" id="submitBtn" style="margin-top:16px;width:100%;">
+            Contact TeeRadar
+          </button>
+
+          <div class="status" id="formStatus"></div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    © TeeRadar — Golf booking, alerts and course tools.
+  </footer>
+
+  <script>
+    const form = document.getElementById("courseEnquiryForm");
+    const statusEl = document.getElementById("formStatus");
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      const courseName = document.getElementById("courseName").value.trim();
+      const state = document.getElementById("state").value.trim();
+      const contactName = document.getElementById("contactName").value.trim();
+      const role = document.getElementById("role").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const phone = document.getElementById("phone").value.trim();
+      const currentSystem = document.getElementById("currentSystem").value.trim();
+      const interest = document.getElementById("interest").value.trim();
+      const message = document.getElementById("message").value.trim();
+
+      if (!courseName || !state || !contactName || !email) {
+        statusEl.textContent = "Please complete the required fields.";
+        statusEl.style.color = "#b91c1c";
+        return;
+      }
+
+      const subject = "New TeeRadar Course Enquiry";
+
+      const body = `
+New TeeRadar Course Enquiry
+
+Course name: ${courseName}
+State: ${state}
+
+Contact name: ${contactName}
+Role: ${role || "Not provided"}
+Email: ${email}
+Phone: ${phone || "Not provided"}
+
+Current booking system:
+${currentSystem || "Not provided"}
+
+Interested in:
+${interest || "Not provided"}
+
+Extra information:
+${message || "Not provided"}
+      `.trim();
+
+      const mailto =
+        "mailto:TeeRadar.help@gmail.com" +
+        "?subject=" + encodeURIComponent(subject) +
+        "&body=" + encodeURIComponent(body);
+
+      statusEl.textContent = "Opening your email app...";
+      statusEl.style.color = "#64748b";
+
+      window.location.href = mailto;
+    });
+  </script>
+</body>
+</html>
