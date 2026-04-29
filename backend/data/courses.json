@@ -47,6 +47,26 @@
   },
 
   {
+  "name": "Serpentine & Districts Golf Club",
+  "provider": "Phone",
+  "state": "WA",
+  "holes": 18,
+  "lat": -32.361569,
+  "lng": 115.972081,
+  "url": "https://serpentinegolfclub.org"
+  },
+
+   {
+  "name": "Serpentine & Districts Golf Club",
+  "provider": "Phone",
+  "state": "WA",
+  "holes": 9,
+  "lat": -32.361569,
+  "lng": 115.972081,
+  "url": "https://serpentinegolfclub.org"
+  },
+  
+  {
     "name": "Maylands Peninsula Golf Course (18 holes)",
     "provider": "MiClub",
     "state": "WA",
