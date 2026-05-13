@@ -368,14 +368,13 @@ async function handleSummary(req, res) {
 
     console.log("📊 /api/analytics/summary start", filters);
 
-    // ✅ IMPORTANT:
-    // Use the local fast summary, NOT pgAnalytics.getAnalyticsSummary()
-    // because pgAnalytics.getAnalyticsSummary is currently hanging.
+    // ✅ FAST PATH: avoids slow analytics.js summary timing out
     const summary = await buildPgSummary(filters);
 
     console.log("📊 /api/analytics/summary done", Date.now() - started + "ms");
 
     return res.json({
+      ok: true,
       ...summary,
       loadedMs: Date.now() - started,
     });
