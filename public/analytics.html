@@ -1105,20 +1105,39 @@ window.addEventListener("unhandledrejection", (e) => {
     return "$" + n.toFixed(0);
   }
 
-  async function tryFetchJson(url) {
-    console.log("FETCH:", url);
-    try {
-      const res = await fetch(url, {
-  headers: getAuthHeaders(),
-  credentials: "include", // ✅ ensures cookies flow if you ever use cookie login
-});
-      if (!res.ok) return null;
-      const data = await res.json().catch(() => null);
-      return data || null;
-    } catch (e) {
+  async function tryFetchJson(url, timeoutMs = 12000) {
+  console.log("FETCH:", url);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      headers: getAuthHeaders(),
+      credentials: "include",
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+
+    console.log("FETCH RESULT:", url, res.status);
+
+    if (!res.ok) return null;
+
+    const data = await res.json().catch((e) => {
+      console.error("JSON parse failed:", url, e);
       return null;
-    }
+    });
+
+    return data || null;
+  } catch (e) {
+    clearTimeout(timer);
+    console.error("FETCH FAILED:", url, e?.name || e?.message || e);
+    return null;
   }
+}
 
   async function fetchAnalyticsSummary() {
     console.log("📡 fetchAnalyticsSummary called");
@@ -1140,7 +1159,7 @@ window.addEventListener("unhandledrejection", (e) => {
 
   for (const url of candidates) {
     console.log("Trying analytics URL:", url);
-const data = await tryFetchJson(url);
+const data = await tryFetchJson(url, 12000);
     if (data) return { data, url };
   }
 
