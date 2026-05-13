@@ -504,6 +504,10 @@ button.secondary{
       class="secondary">
       Reset
     </button>
+    
+    <div id="analyticsLoadingStatus" class="muted-note" style="width:100%;margin-top:8px;">
+  Loading analytics…
+</div>
 
   </div>
 </section>
@@ -1177,6 +1181,19 @@ function getAnalyticsFilters() {
   return ANALYTICS_FILTERS;
 }
 
+function setAnalyticsLoading(isLoading, message = "") {
+  const el = document.getElementById("analyticsLoadingStatus");
+  if (!el) return;
+
+  if (isLoading) {
+    el.textContent = message || "Loading analytics…";
+    el.style.color = "#2563eb";
+  } else {
+    el.textContent = message || "Analytics loaded.";
+    el.style.color = "var(--muted)";
+  }
+}
+
   function setText(id, txt) {
     const el = document.getElementById(id);
     if (el) el.textContent = txt;
@@ -1362,19 +1379,24 @@ else setText("metricHitRate7d", "—");
   }
 
   async function loadAnalytics() {
-    if (!enforceAdmin()) return;
+  if (!enforceAdmin()) return;
+
+  setAnalyticsLoading(true, "Loading analytics…");
 
     const updatedAt = document.getElementById("summaryUpdated");
 
     const wrapped = await fetchAnalyticsSummary();
     if (!wrapped) {
-      updatedAt.textContent =
-        "Analytics is blank because the backend summary endpoint wasn’t found. Expected /api/analytics/summary or /api/analytics.";
-      return;
-    }
+  updatedAt.textContent =
+    "Analytics is blank because the backend summary endpoint wasn’t found. Expected /api/analytics/summary or /api/analytics.";
+
+  setAnalyticsLoading(false, "Could not load analytics.");
+  return;
+}
 
     const summary = wrapped.data;
     updatedAt.textContent = "Loaded from " + wrapped.url + " • " + new Date().toLocaleString();
+    setAnalyticsLoading(false, "Analytics loaded • " + new Date().toLocaleTimeString());
 
     const homeViewsVal = toInt(getAny(summary, ["homePageViews","homeViews","home_page_views"], 0));
 const bookingClicksVal = toInt(getAny(summary, ["courseBookingClicks","bookingClicks","booking_clicks"], 0));
