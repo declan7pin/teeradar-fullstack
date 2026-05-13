@@ -38,6 +38,25 @@ async function ensureAnalyticsTable() {
 
     await db.query(`CREATE INDEX IF NOT EXISTS idx_analytics_round_id ON analytics (round_id);`);
     await db.query(`CREATE INDEX IF NOT EXISTS idx_analytics_round_key ON analytics (round_key);`);
+    await db.query(`
+  CREATE INDEX IF NOT EXISTS idx_analytics_occurred_at
+  ON analytics (occurred_at DESC);
+`);
+
+await db.query(`
+  CREATE INDEX IF NOT EXISTS idx_analytics_course_type_time
+  ON analytics (course_name, type, occurred_at DESC);
+`);
+
+await db.query(`
+  CREATE INDEX IF NOT EXISTS idx_analytics_type_course_time
+  ON analytics (type, course_name, occurred_at DESC);
+`);
+
+await db.query(`
+  CREATE INDEX IF NOT EXISTS idx_analytics_meta_provider
+  ON analytics ((LOWER(COALESCE(meta->>'provider',''))));
+`);
   })();
 
   return initPromise;
