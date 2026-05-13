@@ -296,97 +296,234 @@ async function getAvgTimeToHitMins7d() {
 /**
  * Return a summary of key metrics.
  */
-export async function getAnalyticsSummary() {
+export async function getAnalyticsSummary(filters = {}) {
   await ensureAnalyticsTable();
 
   const summary = {};
 
+  const provider = String(filters.provider || "").trim().toLowerCase();
+  const from = String(filters.from || "").trim();
+  const to = String(filters.to || "").trim();
+
+  function applyFilters(sql, params = []) {
+    const whereParts = [];
+    const whereParams = [];
+    let paramIdx = params.length + 1;
+
+    if (provider) {
+      whereParts.push(`LOWER(COALESCE(meta->>'provider','')) = $${paramIdx}`);
+      whereParams.push(provider);
+      paramIdx++;
+    }
+
+    if (from) {
+      whereParts.push(`occurred_at >= $${paramIdx}::date`);
+      whereParams.push(from);
+      paramIdx++;
+    }
+
+    if (to) {
+      whereParts.push(`occurred_at < ($${paramIdx}::date + INTERVAL '1 day')`);
+      whereParams.push(to);
+      paramIdx++;
+    }
+
+    const extraWhere = whereParts.length
+      ? " AND " + whereParts.join(" AND ")
+      : "";
+
+    return {
+      sql: sql.replaceAll("__FILTERS__", extraWhere),
+      params: [...params, ...whereParams],
+    };
+  }
+
   async function count(sql, params = []) {
-    const { rows } = await db.query(sql, params);
+    const q = applyFilters(sql, params);
+    const { rows } = await db.query(q.sql, q.params);
     return rows.length ? Number(rows[0].n) || 0 : 0;
   }
 
-  // ✅ Count canonical types + common historical aliases (so old rows still show)
-  summary.homeViews = await count(
-    `SELECT COUNT(*)::int AS n FROM analytics
-     WHERE type IN ('home_view','home_page_view','homepage_view','homeView','home')`
-  );
+  async function rowsQuery(sql, params = []) {
+    const q = applyFilters(sql, params);
+    const { rows } = await db.query(q.sql, q.params);
+    return rows || [];
+  }
 
-  summary.bookingClicks = await count(
-    `SELECT COUNT(*)::int AS n FROM analytics
-     WHERE type IN (
-       'booking_click','course_booking_click',
-       'booking','book_click','course_booking'
-     )`
-  );
+  summary.homeViews = await count(`
+    SELECT COUNT(*)::int AS n
+    FROM analytics
+    WHERE type IN ('home_view','home_page_view','homepage_view','homeView','home')
+    __FILTERS__
+  `);
 
-  summary.searches = await count(
-    `SELECT COUNT(*)::int AS n FROM analytics
-     WHERE type IN ('search','search_submit','searches')`
-  );
+  summary.bookingClicks = await count(`
+    SELECT COUNT(*)::int AS n
+    FROM analytics
+    WHERE type IN (
+      'booking_click','course_booking_click',
+      'booking','book_click','course_booking'
+    )
+    __FILTERS__
+  `);
 
-  summary.roundsPlayed = await count(
-    `SELECT COUNT(DISTINCT COALESCE(round_key, round_id::text))::int AS n
-     FROM analytics
-     WHERE type IN ('round_played','round_saved','scorecard_saved')
-       AND COALESCE(round_key, round_id::text) IS NOT NULL`
-  );
+  summary.searches = await count(`
+    SELECT COUNT(*)::int AS n
+    FROM analytics
+    WHERE type IN ('search','search_submit','searches')
+    __FILTERS__
+  `);
 
-  summary.roundsPlayed7d = await count(
-    `SELECT COUNT(DISTINCT COALESCE(round_key, round_id::text))::int AS n
-     FROM analytics
-     WHERE type IN ('round_played','round_saved','scorecard_saved')
-       AND COALESCE(round_key, round_id::text) IS NOT NULL
-       AND occurred_at >= NOW() - INTERVAL '7 days'`
-  );
+  summary.roundsPlayed = await count(`
+    SELECT COUNT(DISTINCT COALESCE(round_key, round_id::text))::int AS n
+    FROM analytics
+    WHERE type IN ('round_played','round_saved','scorecard_saved')
+      AND COALESCE(round_key, round_id::text) IS NOT NULL
+    __FILTERS__
+  `);
 
-  summary.topPlayedCourses = await getTopPlayedCourses(10);
-  summary.topPlayedCourses30d = await getTopPlayedCourses(10, 30);
+  summary.roundsPlayed7d = await count(`
+    SELECT COUNT(DISTINCT COALESCE(round_key, round_id::text))::int AS n
+    FROM analytics
+    WHERE type IN ('round_played','round_saved','scorecard_saved')
+      AND COALESCE(round_key, round_id::text) IS NOT NULL
+      AND occurred_at >= NOW() - INTERVAL '7 days'
+    __FILTERS__
+  `);
 
-  summary.newUsers7d = await count(
-    `SELECT COUNT(DISTINCT user_id)::int AS n
-     FROM analytics
-     WHERE occurred_at >= NOW() - INTERVAL '7 days'`
-  );
+  summary.newUsers7d = await count(`
+    SELECT COUNT(DISTINCT user_id)::int AS n
+    FROM analytics
+    WHERE occurred_at >= NOW() - INTERVAL '7 days'
+    __FILTERS__
+  `);
+
   summary.newUsers = summary.newUsers7d;
 
-  summary.usersAllTime = await count(`SELECT COUNT(DISTINCT user_id)::int AS n FROM analytics`);
+  summary.usersAllTime = await count(`
+    SELECT COUNT(DISTINCT user_id)::int AS n
+    FROM analytics
+    WHERE user_id IS NOT NULL
+    __FILTERS__
+  `);
 
-  summary.usersToday = await count(
-    `SELECT COUNT(DISTINCT user_id)::int AS n
-     FROM analytics
-     WHERE occurred_at >= date_trunc('day', NOW())`
-  );
+  summary.usersToday = await count(`
+    SELECT COUNT(DISTINCT user_id)::int AS n
+    FROM analytics
+    WHERE occurred_at >= date_trunc('day', NOW())
+    __FILTERS__
+  `);
 
-  summary.usersWeek = await count(
-    `SELECT COUNT(DISTINCT user_id)::int AS n
-     FROM analytics
-     WHERE occurred_at >= date_trunc('day', NOW()) - INTERVAL '6 days'`
-  );
+  summary.usersWeek = await count(`
+    SELECT COUNT(DISTINCT user_id)::int AS n
+    FROM analytics
+    WHERE occurred_at >= date_trunc('day', NOW()) - INTERVAL '6 days'
+    __FILTERS__
+  `);
 
-  summary.users30d = await count(
-    `SELECT COUNT(DISTINCT user_id)::int AS n
-     FROM analytics
-     WHERE occurred_at >= NOW() - INTERVAL '30 days'`
-  );
+  summary.users30d = await count(`
+    SELECT COUNT(DISTINCT user_id)::int AS n
+    FROM analytics
+    WHERE occurred_at >= NOW() - INTERVAL '30 days'
+    __FILTERS__
+  `);
 
-  summary.returningUsers7d = await count(
-    `
+  summary.returningUsers7d = await count(`
     WITH recent AS (
       SELECT DISTINCT user_id
       FROM analytics
       WHERE occurred_at >= NOW() - INTERVAL '7 days'
+        AND user_id IS NOT NULL
+        __FILTERS__
     ),
     earlier AS (
       SELECT DISTINCT user_id
       FROM analytics
       WHERE occurred_at < NOW() - INTERVAL '7 days'
+        AND user_id IS NOT NULL
+        __FILTERS__
     )
     SELECT COUNT(*)::int AS n
     FROM recent
     JOIN earlier USING (user_id)
-    `
-  );
+  `);
+
+  summary.topCourses = await rowsQuery(`
+    SELECT course_name AS "courseName", COUNT(*)::int AS "clicks"
+    FROM analytics
+    WHERE course_name IS NOT NULL
+      AND course_name <> ''
+      AND type IN ('booking_click','course_booking_click','booking','book_click','course_booking')
+    __FILTERS__
+    GROUP BY course_name
+    ORDER BY COUNT(*) DESC
+    LIMIT 10
+  `);
+
+  summary.topSearchedCourses = await rowsQuery(`
+    SELECT course_name AS "courseName", COUNT(*)::int AS "searches"
+    FROM analytics
+    WHERE course_name IS NOT NULL
+      AND course_name <> ''
+      AND type IN ('search_course','course_search','searched_course')
+    __FILTERS__
+    GROUP BY course_name
+    ORDER BY COUNT(*) DESC
+    LIMIT 10
+  `);
+
+  summary.demandRank = await rowsQuery(`
+    SELECT
+      course_name AS "courseName",
+      SUM(CASE WHEN type IN ('search_course','course_search','searched_course') THEN 1 ELSE 0 END)::int AS "searches",
+      SUM(CASE WHEN type IN ('booking_click','course_booking_click','booking','book_click','course_booking') THEN 1 ELSE 0 END)::int AS "clicks",
+      (
+        SUM(CASE WHEN type IN ('search_course','course_search','searched_course') THEN 1 ELSE 0 END) * 2
+        + SUM(CASE WHEN type IN ('booking_click','course_booking_click','booking','book_click','course_booking') THEN 1 ELSE 0 END)
+      )::int AS "score"
+    FROM analytics
+    WHERE course_name IS NOT NULL
+      AND course_name <> ''
+      AND type IN (
+        'search_course','course_search','searched_course',
+        'booking_click','course_booking_click','booking','book_click','course_booking'
+      )
+    __FILTERS__
+    GROUP BY course_name
+    ORDER BY "score" DESC
+    LIMIT 10
+  `);
+
+  summary.topPlayedCourses = await rowsQuery(`
+    SELECT
+      course_name AS "courseName",
+      COUNT(DISTINCT COALESCE(round_key, round_id::text))::int AS "rounds"
+    FROM analytics
+    WHERE type = 'round_played'
+      AND COALESCE(round_key, round_id::text) IS NOT NULL
+      AND course_name IS NOT NULL
+      AND course_name <> ''
+    __FILTERS__
+    GROUP BY course_name
+    ORDER BY COUNT(DISTINCT COALESCE(round_key, round_id::text)) DESC
+    LIMIT 10
+  `);
+
+  summary.topPlayedCourses30d = await rowsQuery(`
+    SELECT
+      course_name AS "courseName",
+      COUNT(DISTINCT COALESCE(round_key, round_id::text))::int AS "rounds"
+    FROM analytics
+    WHERE type = 'round_played'
+      AND COALESCE(round_key, round_id::text) IS NOT NULL
+      AND course_name IS NOT NULL
+      AND course_name <> ''
+      AND occurred_at >= NOW() - INTERVAL '30 days'
+    __FILTERS__
+    GROUP BY course_name
+    ORDER BY COUNT(DISTINCT COALESCE(round_key, round_id::text)) DESC
+    LIMIT 10
+  `);
 
   summary.homeToBookingRate =
     summary.homeViews > 0 ? summary.bookingClicks / summary.homeViews : 0;
@@ -394,18 +531,12 @@ export async function getAnalyticsSummary() {
   summary.searchToBookingRate =
     summary.searches > 0 ? summary.bookingClicks / summary.searches : 0;
 
-  // Aliases your frontend already uses
   summary.homePageViews = summary.homeViews;
   summary.courseBookingClicks = summary.bookingClicks;
   summary.conversionHomeToBooking = summary.homeToBookingRate;
   summary.conversionSearchToBooking = summary.searchToBookingRate;
   summary.rounds = summary.roundsPlayed;
 
-  summary.topCourses = await getTopCourses(10);
-  summary.topSearchedCourses = await getTopSearchedCourses(10);
-  summary.demandRank = await getDemandRanking(10);
-
-  // Alerts defaults (non-fatal)
   summary.alertsSent7d = 0;
   summary.alertHits7d = 0;
   summary.hitRate7d = 0;
@@ -414,19 +545,21 @@ export async function getAnalyticsSummary() {
   summary.topAlertCourses = [];
 
   try {
-    summary.alertsSent7d = await count(
-      `SELECT COUNT(*)::int AS n FROM analytics
-       WHERE type = ANY($1::text[])
-         AND occurred_at >= NOW() - INTERVAL '7 days'`,
-      [ALERT_SENT_TYPES]
-    );
+    summary.alertsSent7d = await count(`
+      SELECT COUNT(*)::int AS n
+      FROM analytics
+      WHERE type = ANY($1::text[])
+        AND occurred_at >= NOW() - INTERVAL '7 days'
+      __FILTERS__
+    `, [ALERT_SENT_TYPES]);
 
-    summary.alertHits7d = await count(
-      `SELECT COUNT(*)::int AS n FROM analytics
-       WHERE type = ANY($1::text[])
-         AND occurred_at >= NOW() - INTERVAL '7 days'`,
-      [ALERT_HIT_TYPES]
-    );
+    summary.alertHits7d = await count(`
+      SELECT COUNT(*)::int AS n
+      FROM analytics
+      WHERE type = ANY($1::text[])
+        AND occurred_at >= NOW() - INTERVAL '7 days'
+      __FILTERS__
+    `, [ALERT_HIT_TYPES]);
 
     summary.hitRate7d =
       summary.alertsSent7d > 0 ? summary.alertHits7d / summary.alertsSent7d : 0;
@@ -438,7 +571,6 @@ export async function getAnalyticsSummary() {
     console.error("⚠️ Alerts analytics failed (ignored):", e?.message || e);
   }
 
-  // extra aliases for different analytics.html versions
   summary.alertsSent = summary.alertsSent7d;
   summary.alertHits = summary.alertHits7d;
   summary.hitRate = summary.hitRate7d;
@@ -454,10 +586,6 @@ export async function getAnalyticsSummary() {
 
   return summary;
 }
-
-/**
- * Return top courses by click count.
- */
 export async function getTopCourses(limit = 10) {
   await ensureAnalyticsTable();
 
