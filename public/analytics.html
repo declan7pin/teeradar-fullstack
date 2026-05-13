@@ -509,6 +509,20 @@ button.secondary{
   Loading analytics…
 </div>
 
+<pre id="analyticsDebugBox" style="
+  width:100%;
+  display:block;
+  margin-top:10px;
+  padding:10px;
+  border-radius:12px;
+  background:#0f172a;
+  color:#e5e7eb;
+  font-size:11px;
+  white-space:pre-wrap;
+  overflow:auto;
+  max-height:220px;
+">Debug loading…</pre>
+
   </div>
 </section>
 
@@ -1105,45 +1119,41 @@ window.addEventListener("unhandledrejection", (e) => {
     return "$" + n.toFixed(0);
   }
 
-  async function tryFetchJson(url, timeoutMs = 12000) {
-  console.log("FETCH:", url);
+  async function fetchAnalyticsSummary() {
+  const filters = getAnalyticsFilters();
+  const qs = new URLSearchParams();
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  if (filters.provider) qs.set("provider", filters.provider);
+  if (filters.from) qs.set("from", filters.from);
+  if (filters.to) qs.set("to", filters.to);
 
-  try {
-    const res = await fetch(url, {
-      headers: {
-        ...getAuthHeaders(),
-        "Cache-Control": "no-cache",
-      },
-      credentials: "include",
-      cache: "no-cache",
-      signal: controller.signal,
-    });
+  const suffix = qs.toString() ? "?" + qs.toString() : "";
 
-    clearTimeout(timer);
+  const candidates = [
+    "/api/analytics/summary" + suffix,
+    "/api/analytics" + suffix,
+    "/api/analytics/debug" + suffix,
+  ];
 
-    console.log("FETCH RESULT:", url, res.status);
+  setAnalyticsDebug("Starting analytics summary fetch", { candidates });
 
-    if (res.status === 304) {
-      console.warn("304 returned with no JSON body:", url);
-      return null;
+  for (const url of candidates) {
+    const data = await tryFetchJson(url, 12000);
+
+    if (data) {
+      setAnalyticsDebug("Analytics endpoint loaded successfully", {
+        url,
+        keys: Object.keys(data),
+        sample: data,
+      });
+
+      return { data, url };
     }
-
-    if (!res.ok) return null;
-
-    return await res.json().catch((e) => {
-      console.error("JSON parse failed:", url, e);
-      return null;
-    });
-  } catch (e) {
-    clearTimeout(timer);
-    console.error("FETCH FAILED:", url, e?.name || e?.message || e);
-    return null;
   }
-}
 
+  setAnalyticsDebug("All analytics endpoints failed", { candidates });
+  return null;
+}
   async function fetchAnalyticsSummary() {
   console.log("📡 fetchAnalyticsSummary called");
 
@@ -1218,6 +1228,25 @@ function setAnalyticsLoading(isLoading, message = "") {
     el.textContent = message || "Analytics loaded.";
     el.style.color = "var(--muted)";
   }
+}
+
+function setAnalyticsDebug(message, data = null) {
+  const el = document.getElementById("analyticsDebugBox");
+  if (!el) return;
+
+  const time = new Date().toLocaleTimeString();
+
+  let text = `[${time}] ${message}`;
+
+  if (data !== null && data !== undefined) {
+    try {
+      text += "\n" + JSON.stringify(data, null, 2);
+    } catch {
+      text += "\n" + String(data);
+    }
+  }
+
+  el.textContent = text;
 }
 
   function setText(id, txt) {
