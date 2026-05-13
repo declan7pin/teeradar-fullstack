@@ -126,17 +126,35 @@ router.post("/event", async (req, res) => {
           null;
 
         await recordPgEvent({
-          type,
-          at,
-          occurredAt: at,
-          occurred_at: at,
-          userId,
-          user_id: userId,
-          courseName,
-          course_name: courseName,
-          roundId,
-          round_id: roundId,
-        });
+  type,
+  at,
+  occurredAt: at,
+  occurred_at: at,
+
+  userId,
+  user_id: userId,
+
+  courseName,
+  course_name: courseName,
+
+  roundId,
+  round_id: roundId,
+
+  plan:
+    mergedPayload.plan ??
+    mergedPayload.subscriptionPlan ??
+    mergedPayload.subscription_plan ??
+    null,
+
+  meta: {
+    ...(mergedPayload.meta || {}),
+
+    provider:
+      mergedPayload.provider ??
+      mergedPayload.meta?.provider ??
+      null,
+  },
+});
       }
     } catch (e) {
       console.warn("Postgres analytics insert failed (non-fatal):", e?.message || e);
