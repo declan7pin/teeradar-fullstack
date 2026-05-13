@@ -500,56 +500,44 @@ const roundsPlayed = byType.round_played || 0;
 
 // shared handler for summary so we can serve both "/" and "/summary"
 async function handleSummary(req, res) {
+  const started = Date.now();
+
   try {
-    // ✅ Prefer Postgres as source of truth
-    const pg =
-  typeof pgAnalytics.getAnalyticsSummary === "function"
-    ? await pgAnalytics.getAnalyticsSummary({
-        provider: req.query.provider,
-        from: req.query.from,
-        to: req.query.to,
-      })
-    : await buildPgSummary();
+    const filters = {
+      provider: String(req.query.provider || "").trim(),
+      from: String(req.query.from || "").trim(),
+      to: String(req.query.to || "").trim(),
+    };
 
-    const pgHasSignal =
-      Number(pg.homePageViews || 0) > 0 ||
-      Number(pg.courseBookingClicks || 0) > 0 ||
-      Number(pg.searches || 0) > 0 ||
-      Number(pg.newUsers || 0) > 0 ||
-      Number(pg.roundsPlayed || 0) > 0 ||
-      Number(pg.alertsSent7d || 0) > 0 ||
-      Number(pg.alertHits7d || 0) > 0 ||
-      Number(pg.alertsSentAllTime || 0) > 0 ||
-      Number(pg.alertHitsAllTime || 0) > 0;
+    console.log("📊 /api/analytics/summary start", filters);
 
-    if (pgHasSignal) return res.json(pg);
-
-    // ✅ If Postgres is truly empty, fall back to SQLite (if available)
-    const events =
-      typeof getAllEvents === "function"
-        ? await Promise.resolve(getAllEvents(20000))
-        : [];
-
-    const sqliteSummary = buildSqliteSummaryFromEvents(events || []);
-    return res.json(sqliteSummary);
-  } catch (e) {
-    console.warn("Postgres summary failed, falling back to SQLite:", e?.message || e);
-
-    try {
-      const events =
-        typeof getAllEvents === "function"
-          ? await Promise.resolve(getAllEvents(20000))
-          : [];
-
-      const sqliteSummary = buildSqliteSummaryFromEvents(events || []);
-      return res.json(sqliteSummary);
-    } catch (err) {
-      console.error("Error building analytics summary", err);
-      return res.status(500).json({ error: "Failed to load analytics summary" });
+    if (typeof pgAnalytics.getAnalyticsSummary !== "function") {
+      return res.status(500).json({
+        ok: false,
+        error: "getAnalyticsSummary_not_exported",
+      });
     }
+
+    const summary = await pgAnalytics.getAnalyticsSummary(filters);
+
+    console.log("📊 /api/analytics/summary done", Date.now() - started + "ms");
+
+    return res.json({
+      ok: true,
+      ...summary,
+      loadedMs: Date.now() - started,
+    });
+  } catch (err) {
+    console.error("❌ /api/analytics/summary failed:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "analytics_summary_failed",
+      detail: err?.message || String(err),
+      loadedMs: Date.now() - started,
+    });
   }
 }
-
 /**
  * GET /api/analytics
  */
