@@ -1287,8 +1287,22 @@ function setAnalyticsDebug(message, data = null) {
 
     el.innerHTML = "";
     arr.slice(0, 12).forEach((row) => {
-      const name = row.courseName || row.course || row.name || "—";
-      const n = row.hits ?? row.count ?? row.n ?? row.clicks ?? row.searches ?? 0;
+      const name =
+  row.courseName ||
+  row.course_name ||
+  row.course ||
+  row.name ||
+  "—";
+
+const n =
+  row.hits ??
+  row.count ??
+  row.n ??
+  row.clicks ??
+  row.searches ??
+  row.rounds ??
+  row.score ??
+  0;
       el.innerHTML += `
         <li>
           <span class="label">${name}</span>
@@ -1313,7 +1327,7 @@ function setAnalyticsDebug(message, data = null) {
 
     const map30 = new Map();
     d30Arr.forEach((r) => {
-      const name = r.courseName || r.course || r.name || "";
+      const name = r.courseName || r.course_name || r.course || r.name || "";
       if (!name) return;
       map30.set(name, toInt(r.n ?? r.count ?? r.plays ?? 0));
     });
@@ -1325,7 +1339,7 @@ function setAnalyticsDebug(message, data = null) {
 
     const ordered = [];
     allArr.forEach((r) => {
-      const name = r.courseName || r.course || r.name || "—";
+      const name = r.courseName || r.course_name || r.course || r.name || "—";
       const aN = toInt(r.n ?? r.count ?? r.plays ?? 0);
       const bN = map30.has(name) ? map30.get(name) : 0;
       ordered.push({ name, aN, bN });
