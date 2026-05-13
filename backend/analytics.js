@@ -583,9 +583,11 @@ export async function getAnalyticsSummary(filters = {}) {
     summary.hitRate7d =
       summary.alertsSent7d > 0 ? summary.alertHits7d / summary.alertsSent7d : 0;
 
-    summary.avgTimeToHitMins = await getAvgTimeToHitMins7d();
-    summary.alertsByPlan = await getAlertsByPlan7d();
-    summary.topAlertCourses = await getTopAlertCourses7d(10);
+    // TEMP DISABLED: this query is too slow and is causing /api/analytics/summary to hang
+summary.avgTimeToHitMins = 0;
+
+summary.alertsByPlan = await getAlertsByPlan7d();
+summary.topAlertCourses = await getTopAlertCourses7d(10);
   } catch (e) {
     console.error("⚠️ Alerts analytics failed (ignored):", e?.message || e);
   }
