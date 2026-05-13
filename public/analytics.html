@@ -1106,6 +1106,7 @@ window.addEventListener("unhandledrejection", (e) => {
   }
 
   async function tryFetchJson(url) {
+    console.log("FETCH:", url);
     try {
       const res = await fetch(url, {
   headers: getAuthHeaders(),
@@ -1120,6 +1121,7 @@ window.addEventListener("unhandledrejection", (e) => {
   }
 
   async function fetchAnalyticsSummary() {
+    console.log("📡 fetchAnalyticsSummary called");
   const filters = getAnalyticsFilters();
 
   const qs = new URLSearchParams();
@@ -1137,7 +1139,8 @@ window.addEventListener("unhandledrejection", (e) => {
   ];
 
   for (const url of candidates) {
-    const data = await tryFetchJson(url);
+    console.log("Trying analytics URL:", url);
+const data = await tryFetchJson(url);
     if (data) return { data, url };
   }
 
@@ -2736,11 +2739,14 @@ function wireAnalyticsFilters() {
 
 // ✅ ONE load handler ONLY (safe)
 window.addEventListener("load", () => {
+  console.log("✅ Analytics page loaded");
+
   try {
+    console.log("⏳ Loading main analytics...");
     wireAnalyticsFilters();
     loadAnalytics();
   } catch (e) {
-    console.warn("analytics failed", e);
+    console.error("❌ analytics failed", e);
   }
 
   try { loadRegisteredUsers(); } catch (e) { console.warn("loadRegisteredUsers failed", e); }
@@ -2755,7 +2761,7 @@ window.addEventListener("load", () => {
     if (typeof wireBookingAnalyticsButtons === "function") wireBookingAnalyticsButtons();
     if (typeof loadBookingAnalytics === "function") loadBookingAnalytics();
   } catch (e) {
-    console.warn("booking analytics failed (non-fatal)", e);
+    console.warn("booking analytics failed", e);
   }
 });
 </script>
