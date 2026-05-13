@@ -25,7 +25,32 @@
       color:var(--text);
     }
     a{text-decoration:none;color:inherit;}
-    button{font-family:inherit;}
+    button{
+  font-family:inherit;
+  cursor:pointer;
+}
+
+button.secondary{
+  background:#fff;
+  color:var(--text);
+  border:1px solid var(--border);
+}
+
+#btnAnalyticsToday,
+#btnAnalytics7d,
+#btnAnalytics30d,
+#btnApplyAnalyticsFilters,
+#btnResetAnalyticsFilters,
+#btnBookToday,
+#btnBookWeek,
+#btnBookMonth,
+#btnBookApply,
+#btnBookCsv,
+#btnPendingRefresh,
+#btnApprovedRefresh{
+  padding:8px 12px;
+  border-radius:999px;
+}
 
     header{
       background:var(--teal);
@@ -432,7 +457,56 @@
   </div>
 
   <h1>Analytics dashboard</h1>
-  <p class="page-sub">Live tee-time engagement across Western Australia.</p>
+<p class="page-sub">Live tee-time engagement across Western Australia.</p>
+
+<!-- Analytics filters -->
+<section class="card" style="margin-bottom:18px;">
+  <div class="card-label">Analytics filters</div>
+
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
+
+    <div>
+      <div class="muted-note">Provider</div>
+      <select id="analyticsProviderFilter"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+        <option value="">All providers</option>
+        <option value="miclub">MiClub</option>
+        <option value="quick18">Quick18</option>
+        <option value="teeradar">TeeRadar Booking</option>
+        <option value="phone">Phone only</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="muted-note">From</div>
+      <input id="analyticsFromDate" type="date"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+    </div>
+
+    <div>
+      <div class="muted-note">To</div>
+      <input id="analyticsToDate" type="date"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+    </div>
+
+    <button id="btnAnalyticsToday" type="button">Today</button>
+    <button id="btnAnalytics7d" type="button">Last 7 days</button>
+    <button id="btnAnalytics30d" type="button">Last 30 days</button>
+
+    <button id="btnApplyAnalyticsFilters"
+      type="button"
+      class="secondary">
+      Apply filters
+    </button>
+
+    <button id="btnResetAnalyticsFilters"
+      type="button"
+      class="secondary">
+      Reset
+    </button>
+
+  </div>
+</section>
 
   <section class="cards-grid" aria-label="Key metrics">
     <article class="card">
@@ -1042,17 +1116,29 @@ window.addEventListener("unhandledrejection", (e) => {
   }
 
   async function fetchAnalyticsSummary() {
-    const candidates = [
-      "/api/analytics/summary",
-      "/api/analytics",
-      "/api/analytics/summary.json"
-    ];
-    for (const url of candidates) {
-      const data = await tryFetchJson(url);
-      if (data) return { data, url };
-    }
-    return null;
+  const filters = getAnalyticsFilters();
+
+  const qs = new URLSearchParams();
+
+  if (filters.provider) qs.set("provider", filters.provider);
+  if (filters.from) qs.set("from", filters.from);
+  if (filters.to) qs.set("to", filters.to);
+
+  const suffix = qs.toString() ? ("?" + qs.toString()) : "";
+
+  const candidates = [
+    "/api/analytics/summary" + suffix,
+    "/api/analytics" + suffix,
+    "/api/analytics/summary.json" + suffix
+  ];
+
+  for (const url of candidates) {
+    const data = await tryFetchJson(url);
+    if (data) return { data, url };
   }
+
+  return null;
+}
 
   function formatHourRange(hourStr) {
     if (hourStr == null) return "–";
@@ -1069,6 +1155,27 @@ window.addEventListener("unhandledrejection", (e) => {
 
     return `${fmt(h)}–${fmt(next)}`;
   }
+  
+  let ANALYTICS_FILTERS = {
+  provider: "",
+  from: "",
+  to: ""
+};
+
+function getAnalyticsFilters() {
+  const provider =
+    document.getElementById("analyticsProviderFilter")?.value || "";
+
+  const from =
+    document.getElementById("analyticsFromDate")?.value || "";
+
+  const to =
+    document.getElementById("analyticsToDate")?.value || "";
+
+  ANALYTICS_FILTERS = { provider, from, to };
+
+  return ANALYTICS_FILTERS;
+}
 
   function setText(id, txt) {
     const el = document.getElementById(id);
@@ -2526,14 +2633,100 @@ function wireBookingAnalyticsButtons() {
   if (slugSel) slugSel.addEventListener("change", () => loadBookingAnalytics("range"));
 }
 
+function wireAnalyticsFilters() {
+
+  const providerEl =
+    document.getElementById("analyticsProviderFilter");
+
+  const fromEl =
+    document.getElementById("analyticsFromDate");
+
+  const toEl =
+    document.getElementById("analyticsToDate");
+
+  const applyBtn =
+    document.getElementById("btnApplyAnalyticsFilters");
+
+  const resetBtn =
+    document.getElementById("btnResetAnalyticsFilters");
+
+  const todayBtn =
+    document.getElementById("btnAnalyticsToday");
+
+  const d7Btn =
+    document.getElementById("btnAnalytics7d");
+
+  const d30Btn =
+    document.getElementById("btnAnalytics30d");
+
+  function setRange(days) {
+    const now = new Date();
+
+    const from = new Date();
+    from.setDate(now.getDate() - days);
+
+    fromEl.value = yyyyMmDd(from);
+    toEl.value = yyyyMmDd(now);
+
+    loadAnalytics();
+  }
+
+  if (todayBtn) {
+    todayBtn.addEventListener("click", () => {
+      const d = yyyyMmDd(new Date());
+
+      fromEl.value = d;
+      toEl.value = d;
+
+      loadAnalytics();
+    });
+  }
+
+  if (d7Btn) {
+    d7Btn.addEventListener("click", () => {
+      setRange(7);
+    });
+  }
+
+  if (d30Btn) {
+    d30Btn.addEventListener("click", () => {
+      setRange(30);
+    });
+  }
+
+  if (applyBtn) {
+    applyBtn.addEventListener("click", () => {
+      loadAnalytics();
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+
+      if (providerEl) providerEl.value = "";
+      if (fromEl) fromEl.value = "";
+      if (toEl) toEl.value = "";
+
+      loadAnalytics();
+    });
+  }
+}
 
 // ✅ ONE load handler ONLY (safe)
 window.addEventListener("load", () => {
-  try { loadAnalytics(); } catch (e) { console.warn("loadAnalytics failed", e); }
+  try {
+    wireAnalyticsFilters();
+    loadAnalytics();
+  } catch (e) {
+    console.warn("analytics failed", e);
+  }
+
   try { loadRegisteredUsers(); } catch (e) { console.warn("loadRegisteredUsers failed", e); }
-    try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
+
+  try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
   try { loadPendingCourses(); } catch (e) { console.warn("loadPendingCourses failed", e); }
-    try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
+
+  try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
   try { loadApprovedCourses(); } catch (e) { console.warn("loadApprovedCourses failed", e); }
 
   try {
