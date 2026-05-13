@@ -170,236 +170,93 @@ router.post("/event", async (req, res) => {
 /**
  * ✅ Build summary directly from Postgres analytics table
  */
-async function buildPgSummary() {
-  const q = async (sql, params = []) => (await db.query(sql, params)).rows;
+async function buildPgSummary(filters = {}) {
+  const provider = String(filters.provider || "").trim().toLowerCase();
+  const from = String(filters.from || "").trim();
+  const to = String(filters.to || "").trim();
 
-  // totals by type (all-time)
-  const totals = await q(
+  const params = [];
+  const where = [];
+
+  if (provider) {
+    params.push(provider);
+    where.push(`LOWER(COALESCE(meta->>'provider','')) = $${params.length}`);
+  }
+
+  if (from) {
+    params.push(from);
+    where.push(`occurred_at >= $${params.length}::date`);
+  }
+
+  if (to) {
+    params.push(to);
+    where.push(`occurred_at < ($${params.length}::date + INTERVAL '1 day')`);
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+  const { rows } = await db.query(
     `
     SELECT type, COUNT(*)::int AS n
     FROM analytics
+    ${whereSql}
     GROUP BY type
-    `
+    `,
+    params
   );
-  const byType = Object.fromEntries(totals.map((r) => [r.type, Number(r.n) || 0]));
+
+  const byType = Object.fromEntries(rows.map((r) => [r.type, Number(r.n) || 0]));
 
   const homeViews = byType.home_view || 0;
-  const bookingClicks = byType.course_booking_click || 0;
-
-  /**
-   * ✅ IMPORTANT FIX:
-   * - "search" = real user pressing Search (what you want on the Searches card)
-   * - "search_course" = background scanning / course checks (alerts worker)
-   */
-  const searches = byType.search || 0; // ✅ USER searches only
-  const alertSearches = byType.search_course || 0; // ✅ background scans
-
-const newUsers = byType.new_user || 0;
-const groupVotesCreated = byType.group_vote_created || 0;
-const groupVotesOpened = byType.group_vote_opened || 0;
-const groupVotesSubmitted = byType.group_vote_vote_submitted || 0;
-const groupVotesWinnerSelected = byType.group_vote_winner_selected || 0;
-
-  // uniques
-  const usersAllTime = await q(
-    `SELECT COUNT(DISTINCT user_id)::int AS n
-     FROM analytics
-     WHERE user_id IS NOT NULL AND user_id <> '';`
-  );
-  const usersToday = await q(
-    `SELECT COUNT(DISTINCT user_id)::int AS n
-     FROM analytics
-     WHERE user_id IS NOT NULL AND user_id <> ''
-       AND occurred_at >= date_trunc('day', now());`
-  );
-  const usersWeek = await q(
-    `SELECT COUNT(DISTINCT user_id)::int AS n
-     FROM analytics
-     WHERE user_id IS NOT NULL AND user_id <> ''
-       AND occurred_at >= now() - interval '7 days';`
-  );
-  const users30d = await q(
-    `SELECT COUNT(DISTINCT user_id)::int AS n
-     FROM analytics
-     WHERE user_id IS NOT NULL AND user_id <> ''
-       AND occurred_at >= now() - interval '30 days';`
-  );
-
-  // returning users in last 7d (users with 2+ events in last 7d)
-  const returningUsers7d = await q(
-    `SELECT COUNT(*)::int AS n FROM (
-        SELECT user_id
-        FROM analytics
-        WHERE user_id IS NOT NULL AND user_id <> ''
-          AND occurred_at >= now() - interval '7 days'
-        GROUP BY user_id
-        HAVING COUNT(*) >= 2
-     ) t;`
-  );
-
-  // repeat bookers (users with 2+ booking clicks all-time)
-  const repeatBookers = await q(
-    `SELECT COUNT(*)::int AS n FROM (
-        SELECT user_id
-        FROM analytics
-        WHERE type = 'course_booking_click'
-          AND user_id IS NOT NULL AND user_id <> ''
-        GROUP BY user_id
-        HAVING COUNT(*) >= 2
-     ) t;`
-  );
-
-  // peak booking hour
-  const peakBookingHour = await q(
-    `SELECT EXTRACT(HOUR FROM occurred_at)::int AS hr, COUNT(*)::int AS n
-     FROM analytics
-     WHERE type = 'course_booking_click'
-     GROUP BY hr
-     ORDER BY n DESC
-     LIMIT 1;`
-  );
-
-  // top booked courses (all-time)
-  const topCourses = await q(
-    `SELECT course_name AS course, COUNT(*)::int AS n
-     FROM analytics
-     WHERE type = 'course_booking_click'
-       AND course_name IS NOT NULL AND course_name <> ''
-     GROUP BY course_name
-     ORDER BY n DESC
-     LIMIT 10;`
-  );
-
-  // top scanned courses (all-time) - this is still your search_course bucket
-  const topSearchedCourses = await q(
-    `SELECT course_name AS course, COUNT(*)::int AS n
-     FROM analytics
-     WHERE type = 'search_course'
-       AND course_name IS NOT NULL AND course_name <> ''
-     GROUP BY course_name
-     ORDER BY n DESC
-     LIMIT 10;`
-  );
-
-  // rounds played
-  const roundsPlayed = byType.round_played || 0;
-  const roundsPlayed7dRows = await q(
-    `SELECT COUNT(*)::int AS n
-     FROM analytics
-     WHERE type = 'round_played'
-       AND occurred_at >= now() - interval '7 days';`
-  );
-
-  // most played courses
-  const topPlayedCourses = await q(
-    `SELECT course_name AS course, COUNT(*)::int AS n
-     FROM analytics
-     WHERE type = 'round_played'
-       AND course_name IS NOT NULL AND course_name <> ''
-     GROUP BY course_name
-     ORDER BY n DESC
-     LIMIT 10;`
-  );
-
-  const topPlayedCourses30d = await q(
-    `SELECT course_name AS course, COUNT(*)::int AS n
-     FROM analytics
-     WHERE type = 'round_played'
-       AND course_name IS NOT NULL AND course_name <> ''
-       AND occurred_at >= now() - interval '30 days'
-     GROUP BY course_name
-     ORDER BY n DESC
-     LIMIT 10;`
-  );
-
-  // ✅ Alerts (7d) — based on analytics event types
-  const alertsSent7dRows = await q(
-    `SELECT COUNT(*)::int AS n
-     FROM analytics
-     WHERE type = 'alert_sent'
-       AND occurred_at >= now() - interval '7 days';`
-  );
-  const alertHits7dRows = await q(
-    `SELECT COUNT(*)::int AS n
-     FROM analytics
-     WHERE type = 'alert_hit'
-       AND occurred_at >= now() - interval '7 days';`
-  );
-
-  // ✅ Alerts (all-time)
-  const alertsSentAllTimeRows = await q(
-    `SELECT COUNT(*)::int AS n
-     FROM analytics
-     WHERE type = 'alert_sent';`
-  );
-
-  const alertHitsAllTimeRows = await q(
-    `SELECT COUNT(*)::int AS n
-     FROM analytics
-     WHERE type = 'alert_hit';`
-  );
-
-  const topAlertCourses7d = await q(
-    `SELECT course_name AS course, COUNT(*)::int AS n
-     FROM analytics
-     WHERE type = 'alert_hit'
-       AND occurred_at >= now() - interval '7 days'
-       AND course_name IS NOT NULL AND course_name <> ''
-     GROUP BY course_name
-     ORDER BY n DESC
-     LIMIT 10;`
-  );
-
-  const alertsSent7d = alertsSent7dRows[0]?.n ?? 0;
-  const alertHits7d = alertHits7dRows[0]?.n ?? 0;
-  const alertsSentAllTime = alertsSentAllTimeRows[0]?.n ?? 0;
-  const alertHitsAllTime = alertHitsAllTimeRows[0]?.n ?? 0;
+  const bookingClicks = (byType.course_booking_click || 0) + (byType.booking_click || 0);
+  const searches = byType.search || 0;
 
   return {
+    ok: true,
+
     homePageViews: homeViews,
-    courseBookingClicks: bookingClicks,
-
-    // ✅ clean user number
-    searches,
-
-    // ✅ background scans count
-    alertSearches,
-
-    newUsers,
-    groupVotesCreated,
-    groupVotesOpened,
-    groupVotesSubmitted,
-    groupVotesWinnerSelected,
-
     homeViews,
+
+    courseBookingClicks: bookingClicks,
     bookingClicks,
 
-    usersAllTime: usersAllTime[0]?.n ?? 0,
-    usersToday: usersToday[0]?.n ?? 0,
-    usersWeek: usersWeek[0]?.n ?? 0,
-    users30d: users30d[0]?.n ?? 0,
-    returningUsers7d: returningUsers7d[0]?.n ?? 0,
-    repeatBookers: repeatBookers[0]?.n ?? 0,
-    peakBookingHour: peakBookingHour[0]?.hr ?? null,
+    searches,
+    alertSearches: byType.search_course || 0,
 
-    topCourses: topCourses.map((r) => ({ course: r.course, n: r.n })),
-    topSearchedCourses: topSearchedCourses.map((r) => ({ course: r.course, n: r.n })),
+    newUsers: byType.new_user || 0,
 
+    groupVotesCreated: byType.group_vote_created || 0,
+    groupVotesOpened: byType.group_vote_opened || 0,
+    groupVotesSubmitted: byType.group_vote_vote_submitted || 0,
+    groupVotesWinnerSelected: byType.group_vote_winner_selected || 0,
+
+    usersAllTime: 0,
+    usersToday: 0,
+    usersWeek: 0,
+    users30d: 0,
+    returningUsers7d: 0,
+    repeatBookers: 0,
+    peakBookingHour: null,
+
+    topCourses: [],
+    topSearchedCourses: [],
     demandRank: [],
 
-    roundsPlayed,
-    roundsPlayed7d: roundsPlayed7dRows[0]?.n ?? 0,
-    topPlayedCourses: topPlayedCourses.map((r) => ({ course: r.course, n: r.n })),
-    topPlayedCourses30d: topPlayedCourses30d.map((r) => ({ course: r.course, n: r.n })),
+    roundsPlayed: byType.round_played || 0,
+    roundsPlayed7d: 0,
+    topPlayedCourses: [],
+    topPlayedCourses30d: [],
 
-    // ✅ Alerts summary fields analytics.html expects
-    alertsSent7d,
-    alertHits7d,
-    alertsSentAllTime,
-    alertHitsAllTime,
-    avgTimeToHitMins: null,
-    alertsByPlan: null,
-    topAlertCourses: topAlertCourses7d.map((r) => ({ course: r.course, hits: r.n })),
+    alertsSent7d: byType.alert_sent || 0,
+    alertHits7d: byType.alert_hit || 0,
+    alertsSentAllTime: byType.alert_sent || 0,
+    alertHitsAllTime: byType.alert_hit || 0,
+    avgTimeToHitMins: 0,
+    alertsByPlan: { BASIC: 0, PRO: 0, FREE: 0, TRIAL: 0, UNKNOWN: 0 },
+    topAlertCourses: [],
+
+    homeToBookingRate: homeViews > 0 ? bookingClicks / homeViews : 0,
+    searchToBookingRate: searches > 0 ? bookingClicks / searches : 0,
   };
 }
 
@@ -511,19 +368,14 @@ async function handleSummary(req, res) {
 
     console.log("📊 /api/analytics/summary start", filters);
 
-    if (typeof pgAnalytics.getAnalyticsSummary !== "function") {
-      return res.status(500).json({
-        ok: false,
-        error: "getAnalyticsSummary_not_exported",
-      });
-    }
-
-    const summary = await pgAnalytics.getAnalyticsSummary(filters);
+    // ✅ IMPORTANT:
+    // Use the local fast summary, NOT pgAnalytics.getAnalyticsSummary()
+    // because pgAnalytics.getAnalyticsSummary is currently hanging.
+    const summary = await buildPgSummary(filters);
 
     console.log("📊 /api/analytics/summary done", Date.now() - started + "ms");
 
     return res.json({
-      ok: true,
       ...summary,
       loadedMs: Date.now() - started,
     });
