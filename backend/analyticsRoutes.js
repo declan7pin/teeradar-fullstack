@@ -211,6 +211,85 @@ async function buildPgSummary(filters = {}) {
   const bookingClicks = (byType.course_booking_click || 0) + (byType.booking_click || 0);
   const searches = byType.search || 0;
 
+  // ✅ Top clicked/booked courses
+  // Pull from analytics first, then fallback to real TeeRadar booking rows.
+  const topCoursesRes = await db.query(
+    `
+    WITH analytics_clicks AS (
+      SELECT
+        course_name AS course,
+        COUNT(*)::int AS n
+      FROM analytics
+      ${whereSql}
+      ${whereSql ? "AND" : "WHERE"} type IN ('course_booking_click', 'booking_click', 'booking', 'book_click')
+        AND course_name IS NOT NULL
+        AND course_name <> ''
+      GROUP BY course_name
+    ),
+    real_bookings AS (
+      SELECT
+        c.name AS course,
+        COUNT(*)::int AS n
+      FROM booking_bookings b
+      JOIN booking_courses c ON c.id = b.course_id
+      WHERE COALESCE(b.status, '') <> 'CANCELLED'
+      GROUP BY c.name
+    )
+    SELECT course, SUM(n)::int AS n
+    FROM (
+      SELECT * FROM analytics_clicks
+      UNION ALL
+      SELECT * FROM real_bookings
+    ) x
+    GROUP BY course
+    ORDER BY n DESC
+    LIMIT 10;
+    `,
+    params
+  );
+
+  const topCourses = topCoursesRes.rows || [];
+
+  // ✅ Most searched/scanned courses from analytics
+  const topSearchedRes = await db.query(
+    `
+    SELECT
+      course_name AS course,
+      COUNT(*)::int AS n
+    FROM analytics
+    ${whereSql}
+    ${whereSql ? "AND" : "WHERE"} type IN ('search_course', 'course_search', 'search')
+      AND course_name IS NOT NULL
+      AND course_name <> ''
+    GROUP BY course_name
+    ORDER BY n DESC
+    LIMIT 10;
+    `,
+    params
+  );
+
+  const topSearchedCourses = topSearchedRes.rows || [];
+
+  // ✅ Most played courses
+  const topPlayedRes = await db.query(
+    `
+    SELECT
+      course_name AS course,
+      COUNT(*)::int AS n
+    FROM analytics
+    ${whereSql}
+    ${whereSql ? "AND" : "WHERE"} type = 'round_played'
+      AND course_name IS NOT NULL
+      AND course_name <> ''
+    GROUP BY course_name
+    ORDER BY n DESC
+    LIMIT 10;
+    `,
+    params
+  );
+
+  const topPlayedCourses = topPlayedRes.rows || [];
+
   return {
     ok: true,
 
@@ -238,14 +317,20 @@ async function buildPgSummary(filters = {}) {
     repeatBookers: 0,
     peakBookingHour: null,
 
-    topCourses: [],
-    topSearchedCourses: [],
-    demandRank: [],
+    topCourses: topCourses.map((r) => ({ course: r.course, n: Number(r.n) || 0 })),
+    topSearchedCourses: topSearchedCourses.map((r) => ({ course: r.course, n: Number(r.n) || 0 })),
+
+    demandRank: topCourses.map((r) => ({
+      course: r.course,
+      searches: 0,
+      clicks: Number(r.n) || 0,
+      score: Number(r.n) || 0,
+    })),
 
     roundsPlayed: byType.round_played || 0,
     roundsPlayed7d: 0,
-    topPlayedCourses: [],
-    topPlayedCourses30d: [],
+    topPlayedCourses: topPlayedCourses.map((r) => ({ course: r.course, n: Number(r.n) || 0 })),
+    topPlayedCourses30d: topPlayedCourses.map((r) => ({ course: r.course, n: Number(r.n) || 0 })),
 
     alertsSent7d: byType.alert_sent || 0,
     alertHits7d: byType.alert_hit || 0,
@@ -259,7 +344,6 @@ async function buildPgSummary(filters = {}) {
     searchToBookingRate: searches > 0 ? bookingClicks / searches : 0,
   };
 }
-
 function buildSqliteSummaryFromEvents(events = []) {
   const byType = {};
   for (const e of events) {
