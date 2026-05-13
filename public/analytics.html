@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>TeeRadar WA — Analytics</title>
+  <title>TeeRadar — Analytics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
@@ -1106,62 +1106,58 @@ window.addEventListener("unhandledrejection", (e) => {
   }
 
   async function tryFetchJson(url, timeoutMs = 12000) {
-  console.log("FETCH:", url);
+  const bust = url.includes("?") ? "&" : "?";
+  const finalUrl = url + bust + "_ts=" + Date.now();
+
+  console.log("FETCH:", finalUrl);
 
   const controller = new AbortController();
-  const timer = setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(url, {
-      headers: getAuthHeaders(),
+    const res = await fetch(finalUrl, {
+      headers: {
+        ...getAuthHeaders(),
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+      },
       credentials: "include",
+      cache: "no-store",
       signal: controller.signal,
     });
 
     clearTimeout(timer);
 
-    console.log("FETCH RESULT:", url, res.status);
+    console.log("FETCH RESULT:", finalUrl, res.status);
 
     if (!res.ok) return null;
 
-    const data = await res.json().catch((e) => {
-      console.error("JSON parse failed:", url, e);
+    return await res.json().catch((e) => {
+      console.error("JSON parse failed:", finalUrl, e);
       return null;
     });
-
-    return data || null;
   } catch (e) {
     clearTimeout(timer);
-    console.error("FETCH FAILED:", url, e?.name || e?.message || e);
+    console.error("FETCH FAILED:", finalUrl, e?.name || e?.message || e);
     return null;
   }
 }
 
   async function fetchAnalyticsSummary() {
-    console.log("📡 fetchAnalyticsSummary called");
-  const filters = getAnalyticsFilters();
+  console.log("📡 fetchAnalyticsSummary called");
 
+  const filters = getAnalyticsFilters();
   const qs = new URLSearchParams();
 
   if (filters.provider) qs.set("provider", filters.provider);
   if (filters.from) qs.set("from", filters.from);
   if (filters.to) qs.set("to", filters.to);
 
-  const suffix = qs.toString() ? ("?" + qs.toString()) : "";
+  const suffix = qs.toString() ? "?" + qs.toString() : "";
+  const url = "/api/analytics/summary" + suffix;
 
-  const candidates = [
-    "/api/analytics/summary" + suffix,
-    "/api/analytics" + suffix,
-    "/api/analytics/summary.json" + suffix
-  ];
-
-  for (const url of candidates) {
-    console.log("Trying analytics URL:", url);
-const data = await tryFetchJson(url, 12000);
-    if (data) return { data, url };
-  }
+  const data = await tryFetchJson(url, 12000);
+  if (data) return { data, url };
 
   return null;
 }
@@ -2757,31 +2753,50 @@ function wireAnalyticsFilters() {
 }
 
 // ✅ ONE load handler ONLY (safe)
-window.addEventListener("load", () => {
+window.addEventListener("load", async () => {
   console.log("✅ Analytics page loaded");
 
   try {
-    console.log("⏳ Loading main analytics...");
+    setAnalyticsLoading(true, "Loading main analytics…");
     wireAnalyticsFilters();
-    loadAnalytics();
+    await loadAnalytics();
   } catch (e) {
-    console.error("❌ analytics failed", e);
+    console.error("❌ main analytics failed", e);
+    setAnalyticsLoading(false, "Main analytics failed. Check console + Render logs.");
   }
 
-  try { loadRegisteredUsers(); } catch (e) { console.warn("loadRegisteredUsers failed", e); }
-
-  try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
-  try { loadPendingCourses(); } catch (e) { console.warn("loadPendingCourses failed", e); }
-
-  try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
-  try { loadApprovedCourses(); } catch (e) { console.warn("loadApprovedCourses failed", e); }
+  try {
+    setAnalyticsLoading(true, "Loading registered users…");
+    await loadRegisteredUsers();
+  } catch (e) {
+    console.warn("loadRegisteredUsers failed", e);
+  }
 
   try {
+    setAnalyticsLoading(true, "Loading pending courses…");
+    wirePendingCoursesRefresh();
+    await loadPendingCourses();
+  } catch (e) {
+    console.warn("pending courses failed", e);
+  }
+
+  try {
+    setAnalyticsLoading(true, "Loading approved courses…");
+    wireApprovedCoursesRefresh();
+    await loadApprovedCourses();
+  } catch (e) {
+    console.warn("approved courses failed", e);
+  }
+
+  try {
+    setAnalyticsLoading(true, "Loading booking analytics…");
     if (typeof wireBookingAnalyticsButtons === "function") wireBookingAnalyticsButtons();
-    if (typeof loadBookingAnalytics === "function") loadBookingAnalytics();
+    if (typeof loadBookingAnalytics === "function") await loadBookingAnalytics();
   } catch (e) {
     console.warn("booking analytics failed", e);
   }
+
+  setAnalyticsLoading(false, "Analytics loaded • " + new Date().toLocaleTimeString());
 });
 </script>
 
