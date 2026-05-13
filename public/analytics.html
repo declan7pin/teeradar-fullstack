@@ -1157,9 +1157,10 @@ window.addEventListener("unhandledrejection", (e) => {
   const suffix = qs.toString() ? "?" + qs.toString() : "";
 
   const candidates = [
-    "/api/analytics/summary" + suffix,
-    "/api/analytics" + suffix
-  ];
+  "/api/analytics",
+  "/api/analytics/summary",
+  "/api/analytics/debug"
+].map(x => x + suffix);
 
   for (const url of candidates) {
     const data = await tryFetchJson(url, 12000);
@@ -1412,10 +1413,13 @@ else setText("metricHitRate7d", "—");
 
     const wrapped = await fetchAnalyticsSummary();
     if (!wrapped) {
+  console.error("Analytics endpoints all failed");
+
   updatedAt.textContent =
-    "Analytics is blank because the backend summary endpoint wasn’t found. Expected /api/analytics/summary or /api/analytics.";
+    "Analytics endpoints failed. Check Render logs.";
 
   setAnalyticsLoading(false, "Could not load analytics.");
+
   return;
 }
 
