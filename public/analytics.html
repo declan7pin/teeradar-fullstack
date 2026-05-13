@@ -1266,7 +1266,8 @@ function setAnalyticsDebug(message, data = null) {
     }
   }
 
-  el.textContent = text;
+  el.textContent = (el.textContent || "") + "\n\n" + text;
+  el.scrollTop = el.scrollHeight;
 }
 
   function setText(id, txt) {
