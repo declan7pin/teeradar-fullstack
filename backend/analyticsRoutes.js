@@ -502,7 +502,14 @@ const roundsPlayed = byType.round_played || 0;
 async function handleSummary(req, res) {
   try {
     // ✅ Prefer Postgres as source of truth
-    const pg = await buildPgSummary();
+    const pg =
+  typeof pgAnalytics.getAnalyticsSummary === "function"
+    ? await pgAnalytics.getAnalyticsSummary({
+        provider: req.query.provider,
+        from: req.query.from,
+        to: req.query.to,
+      })
+    : await buildPgSummary();
 
     const pgHasSignal =
       Number(pg.homePageViews || 0) > 0 ||
