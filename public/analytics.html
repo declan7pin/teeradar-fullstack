@@ -1115,11 +1115,66 @@ window.addEventListener("unhandledrejection", (e) => {
   }
 
   function fmtMoney(n) {
-    if (!Number.isFinite(n)) return "—";
-    return "$" + n.toFixed(0);
-  }
+  if (!Number.isFinite(n)) return "—";
+  return "$" + n.toFixed(0);
+}
 
-  async function fetchAnalyticsSummary() {
+async function tryFetchJson(url, timeoutMs = 12000) {
+  const finalUrl = url + (url.includes("?") ? "&" : "?") + "_ts=" + Date.now();
+
+  setAnalyticsDebug("Fetching", { finalUrl });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(finalUrl, {
+      headers: {
+        ...getAuthHeaders(),
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+      },
+      credentials: "include",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+
+    const text = await res.text();
+
+    setAnalyticsDebug("Fetch result", {
+      url: finalUrl,
+      status: res.status,
+      ok: res.ok,
+      bodyPreview: text.slice(0, 800),
+    });
+
+    if (!res.ok) return null;
+
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      setAnalyticsDebug("JSON parse failed", {
+        url: finalUrl,
+        error: e.message,
+        bodyPreview: text.slice(0, 800),
+      });
+      return null;
+    }
+  } catch (e) {
+    clearTimeout(timer);
+
+    setAnalyticsDebug("Fetch failed", {
+      url: finalUrl,
+      error: e.name || e.message || String(e),
+    });
+
+    return null;
+  }
+}
+
+async function fetchAnalyticsSummary() {
   const filters = getAnalyticsFilters();
   const qs = new URLSearchParams();
 
@@ -1132,51 +1187,16 @@ window.addEventListener("unhandledrejection", (e) => {
   const candidates = [
     "/api/analytics/summary" + suffix,
     "/api/analytics" + suffix,
-    "/api/analytics/debug" + suffix,
   ];
 
-  setAnalyticsDebug("Starting analytics summary fetch", { candidates });
-
-  for (const url of candidates) {
-    const data = await tryFetchJson(url, 12000);
-
-    if (data) {
-      setAnalyticsDebug("Analytics endpoint loaded successfully", {
-        url,
-        keys: Object.keys(data),
-        sample: data,
-      });
-
-      return { data, url };
-    }
-  }
-
-  setAnalyticsDebug("All analytics endpoints failed", { candidates });
-  return null;
-}
-  async function fetchAnalyticsSummary() {
-  console.log("📡 fetchAnalyticsSummary called");
-
-  const filters = getAnalyticsFilters();
-  const qs = new URLSearchParams();
-
-  if (filters.provider) qs.set("provider", filters.provider);
-  if (filters.from) qs.set("from", filters.from);
-  if (filters.to) qs.set("to", filters.to);
-
-  const suffix = qs.toString() ? "?" + qs.toString() : "";
-
-  const candidates = [
-  "/api/analytics",
-  "/api/analytics/summary",
-  "/api/analytics/debug"
-].map(x => x + suffix);
+  setAnalyticsDebug("Starting analytics fetch", { candidates });
 
   for (const url of candidates) {
     const data = await tryFetchJson(url, 12000);
     if (data) return { data, url };
   }
 
+  setAnalyticsDebug("All analytics endpoints failed", { candidates });
   return null;
 }
 
