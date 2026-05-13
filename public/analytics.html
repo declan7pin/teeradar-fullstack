@@ -1106,39 +1106,40 @@ window.addEventListener("unhandledrejection", (e) => {
   }
 
   async function tryFetchJson(url, timeoutMs = 12000) {
-  const bust = url.includes("?") ? "&" : "?";
-  const finalUrl = url + bust + "_ts=" + Date.now();
-
-  console.log("FETCH:", finalUrl);
+  console.log("FETCH:", url);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(finalUrl, {
+    const res = await fetch(url, {
       headers: {
         ...getAuthHeaders(),
         "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
       },
       credentials: "include",
-      cache: "no-store",
+      cache: "no-cache",
       signal: controller.signal,
     });
 
     clearTimeout(timer);
 
-    console.log("FETCH RESULT:", finalUrl, res.status);
+    console.log("FETCH RESULT:", url, res.status);
+
+    if (res.status === 304) {
+      console.warn("304 returned with no JSON body:", url);
+      return null;
+    }
 
     if (!res.ok) return null;
 
     return await res.json().catch((e) => {
-      console.error("JSON parse failed:", finalUrl, e);
+      console.error("JSON parse failed:", url, e);
       return null;
     });
   } catch (e) {
     clearTimeout(timer);
-    console.error("FETCH FAILED:", finalUrl, e?.name || e?.message || e);
+    console.error("FETCH FAILED:", url, e?.name || e?.message || e);
     return null;
   }
 }
@@ -1154,10 +1155,16 @@ window.addEventListener("unhandledrejection", (e) => {
   if (filters.to) qs.set("to", filters.to);
 
   const suffix = qs.toString() ? "?" + qs.toString() : "";
-  const url = "/api/analytics/summary" + suffix;
 
-  const data = await tryFetchJson(url, 12000);
-  if (data) return { data, url };
+  const candidates = [
+    "/api/analytics/summary" + suffix,
+    "/api/analytics" + suffix
+  ];
+
+  for (const url of candidates) {
+    const data = await tryFetchJson(url, 12000);
+    if (data) return { data, url };
+  }
 
   return null;
 }
@@ -2753,50 +2760,31 @@ function wireAnalyticsFilters() {
 }
 
 // ✅ ONE load handler ONLY (safe)
-window.addEventListener("load", async () => {
+window.addEventListener("load", () => {
   console.log("✅ Analytics page loaded");
 
   try {
-    setAnalyticsLoading(true, "Loading main analytics…");
     wireAnalyticsFilters();
-    await loadAnalytics();
+    setAnalyticsLoading(true, "Loading analytics…");
+    loadAnalytics();
   } catch (e) {
-    console.error("❌ main analytics failed", e);
-    setAnalyticsLoading(false, "Main analytics failed. Check console + Render logs.");
+    console.error("main analytics failed", e);
   }
 
-  try {
-    setAnalyticsLoading(true, "Loading registered users…");
-    await loadRegisteredUsers();
-  } catch (e) {
-    console.warn("loadRegisteredUsers failed", e);
-  }
+  try { loadRegisteredUsers(); } catch (e) { console.warn("loadRegisteredUsers failed", e); }
+
+  try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
+  try { loadPendingCourses(); } catch (e) { console.warn("loadPendingCourses failed", e); }
+
+  try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
+  try { loadApprovedCourses(); } catch (e) { console.warn("loadApprovedCourses failed", e); }
 
   try {
-    setAnalyticsLoading(true, "Loading pending courses…");
-    wirePendingCoursesRefresh();
-    await loadPendingCourses();
-  } catch (e) {
-    console.warn("pending courses failed", e);
-  }
-
-  try {
-    setAnalyticsLoading(true, "Loading approved courses…");
-    wireApprovedCoursesRefresh();
-    await loadApprovedCourses();
-  } catch (e) {
-    console.warn("approved courses failed", e);
-  }
-
-  try {
-    setAnalyticsLoading(true, "Loading booking analytics…");
     if (typeof wireBookingAnalyticsButtons === "function") wireBookingAnalyticsButtons();
-    if (typeof loadBookingAnalytics === "function") await loadBookingAnalytics();
+    if (typeof loadBookingAnalytics === "function") loadBookingAnalytics();
   } catch (e) {
     console.warn("booking analytics failed", e);
   }
-
-  setAnalyticsLoading(false, "Analytics loaded • " + new Date().toLocaleTimeString());
 });
 </script>
 
