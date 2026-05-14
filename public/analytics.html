@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>TeeRadar WA — Analytics</title>
+  <title>TeeRadar — Analytics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
@@ -25,7 +25,32 @@
       color:var(--text);
     }
     a{text-decoration:none;color:inherit;}
-    button{font-family:inherit;}
+    button{
+  font-family:inherit;
+  cursor:pointer;
+}
+
+button.secondary{
+  background:#fff;
+  color:var(--text);
+  border:1px solid var(--border);
+}
+
+#btnAnalyticsToday,
+#btnAnalytics7d,
+#btnAnalytics30d,
+#btnApplyAnalyticsFilters,
+#btnResetAnalyticsFilters,
+#btnBookToday,
+#btnBookWeek,
+#btnBookMonth,
+#btnBookApply,
+#btnBookCsv,
+#btnPendingRefresh,
+#btnApprovedRefresh{
+  padding:8px 12px;
+  border-radius:999px;
+}
 
     header{
       background:var(--teal);
@@ -432,7 +457,60 @@
   </div>
 
   <h1>Analytics dashboard</h1>
-  <p class="page-sub">Live tee-time engagement across Western Australia.</p>
+<p class="page-sub">Live tee-time engagement across Western Australia.</p>
+
+<!-- Analytics filters -->
+<section class="card" style="margin-bottom:18px;">
+  <div class="card-label">Analytics filters</div>
+
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
+
+    <div>
+      <div class="muted-note">Provider</div>
+      <select id="analyticsProviderFilter"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+        <option value="">All providers</option>
+        <option value="miclub">MiClub</option>
+        <option value="quick18">Quick18</option>
+        <option value="teeradar">TeeRadar Booking</option>
+        <option value="phone">Phone only</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="muted-note">From</div>
+      <input id="analyticsFromDate" type="date"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+    </div>
+
+    <div>
+      <div class="muted-note">To</div>
+      <input id="analyticsToDate" type="date"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+    </div>
+
+    <button id="btnAnalyticsToday" type="button">Today</button>
+    <button id="btnAnalytics7d" type="button">Last 7 days</button>
+    <button id="btnAnalytics30d" type="button">Last 30 days</button>
+
+    <button id="btnApplyAnalyticsFilters"
+      type="button"
+      class="secondary">
+      Apply filters
+    </button>
+
+    <button id="btnResetAnalyticsFilters"
+      type="button"
+      class="secondary">
+      Reset
+    </button>
+    
+    <div id="analyticsLoadingStatus" class="muted-note" style="width:100%;margin-top:8px;">
+  Loading analytics…
+</div>
+
+  </div>
+</section>
 
   <section class="cards-grid" aria-label="Key metrics">
     <article class="card">
@@ -1023,36 +1101,90 @@ window.addEventListener("unhandledrejection", (e) => {
   }
 
   function fmtMoney(n) {
-    if (!Number.isFinite(n)) return "—";
-    return "$" + n.toFixed(0);
-  }
+  if (!Number.isFinite(n)) return "—";
+  return "$" + n.toFixed(0);
+}
 
-  async function tryFetchJson(url) {
+async function tryFetchJson(url, timeoutMs = 12000) {
+  const finalUrl = url + (url.includes("?") ? "&" : "?") + "_ts=" + Date.now();
+
+  setAnalyticsDebug("Fetching", { finalUrl });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(finalUrl, {
+      headers: {
+        ...getAuthHeaders(),
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+      },
+      credentials: "include",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+
+    const text = await res.text();
+
+    setAnalyticsDebug("Fetch result", {
+      url: finalUrl,
+      status: res.status,
+      ok: res.ok,
+      bodyPreview: text.slice(0, 800),
+    });
+
+    if (!res.ok) return null;
+
     try {
-      const res = await fetch(url, {
-  headers: getAuthHeaders(),
-  credentials: "include", // ✅ ensures cookies flow if you ever use cookie login
-});
-      if (!res.ok) return null;
-      const data = await res.json().catch(() => null);
-      return data || null;
+      return JSON.parse(text);
     } catch (e) {
+      setAnalyticsDebug("JSON parse failed", {
+        url: finalUrl,
+        error: e.message,
+        bodyPreview: text.slice(0, 800),
+      });
       return null;
     }
-  }
+  } catch (e) {
+    clearTimeout(timer);
 
-  async function fetchAnalyticsSummary() {
-    const candidates = [
-      "/api/analytics/summary",
-      "/api/analytics",
-      "/api/analytics/summary.json"
-    ];
-    for (const url of candidates) {
-      const data = await tryFetchJson(url);
-      if (data) return { data, url };
-    }
+    setAnalyticsDebug("Fetch failed", {
+      url: finalUrl,
+      error: e.name || e.message || String(e),
+    });
+
     return null;
   }
+}
+
+async function fetchAnalyticsSummary() {
+  const filters = getAnalyticsFilters();
+  const qs = new URLSearchParams();
+
+  if (filters.provider) qs.set("provider", filters.provider);
+  if (filters.from) qs.set("from", filters.from);
+  if (filters.to) qs.set("to", filters.to);
+
+  const suffix = qs.toString() ? "?" + qs.toString() : "";
+
+  const candidates = [
+    "/api/analytics/summary" + suffix,
+    "/api/analytics" + suffix,
+  ];
+
+  setAnalyticsDebug("Starting analytics fetch", { candidates });
+
+  for (const url of candidates) {
+    const data = await tryFetchJson(url, 30000);
+    if (data) return { data, url };
+  }
+
+  setAnalyticsDebug("All analytics endpoints failed", { candidates });
+  return null;
+}
 
   function formatHourRange(hourStr) {
     if (hourStr == null) return "–";
@@ -1069,6 +1201,44 @@ window.addEventListener("unhandledrejection", (e) => {
 
     return `${fmt(h)}–${fmt(next)}`;
   }
+  
+  let ANALYTICS_FILTERS = {
+  provider: "",
+  from: "",
+  to: ""
+};
+
+function getAnalyticsFilters() {
+  const provider =
+    document.getElementById("analyticsProviderFilter")?.value || "";
+
+  const from =
+    document.getElementById("analyticsFromDate")?.value || "";
+
+  const to =
+    document.getElementById("analyticsToDate")?.value || "";
+
+  ANALYTICS_FILTERS = { provider, from, to };
+
+  return ANALYTICS_FILTERS;
+}
+
+function setAnalyticsLoading(isLoading, message = "") {
+  const el = document.getElementById("analyticsLoadingStatus");
+  if (!el) return;
+
+  if (isLoading) {
+    el.textContent = message || "Loading analytics…";
+    el.style.color = "#2563eb";
+  } else {
+    el.textContent = message || "Analytics loaded.";
+    el.style.color = "var(--muted)";
+  }
+}
+
+function setAnalyticsDebug(message, data = null) {
+  // Debug disabled
+}
 
   function setText(id, txt) {
     const el = document.getElementById(id);
@@ -1087,8 +1257,22 @@ window.addEventListener("unhandledrejection", (e) => {
 
     el.innerHTML = "";
     arr.slice(0, 12).forEach((row) => {
-      const name = row.courseName || row.course || row.name || "—";
-      const n = row.hits ?? row.count ?? row.n ?? row.clicks ?? row.searches ?? 0;
+      const name =
+  row.courseName ||
+  row.course_name ||
+  row.course ||
+  row.name ||
+  "—";
+
+const n =
+  row.hits ??
+  row.count ??
+  row.n ??
+  row.clicks ??
+  row.searches ??
+  row.rounds ??
+  row.score ??
+  0;
       el.innerHTML += `
         <li>
           <span class="label">${name}</span>
@@ -1113,7 +1297,7 @@ window.addEventListener("unhandledrejection", (e) => {
 
     const map30 = new Map();
     d30Arr.forEach((r) => {
-      const name = r.courseName || r.course || r.name || "";
+      const name = r.courseName || r.course_name || r.course || r.name || "";
       if (!name) return;
       map30.set(name, toInt(r.n ?? r.count ?? r.plays ?? 0));
     });
@@ -1125,7 +1309,7 @@ window.addEventListener("unhandledrejection", (e) => {
 
     const ordered = [];
     allArr.forEach((r) => {
-      const name = r.courseName || r.course || r.name || "—";
+      const name = r.courseName || r.course_name || r.course || r.name || "—";
       const aN = toInt(r.n ?? r.count ?? r.plays ?? 0);
       const bN = map30.has(name) ? map30.get(name) : 0;
       ordered.push({ name, aN, bN });
@@ -1255,19 +1439,27 @@ else setText("metricHitRate7d", "—");
   }
 
   async function loadAnalytics() {
-    if (!enforceAdmin()) return;
+  if (!enforceAdmin()) return;
+
+  setAnalyticsLoading(true, "Loading analytics…");
 
     const updatedAt = document.getElementById("summaryUpdated");
 
     const wrapped = await fetchAnalyticsSummary();
     if (!wrapped) {
-      updatedAt.textContent =
-        "Analytics is blank because the backend summary endpoint wasn’t found. Expected /api/analytics/summary or /api/analytics.";
-      return;
-    }
+  console.error("Analytics endpoints all failed");
+
+  updatedAt.textContent =
+    "Analytics endpoints failed. Check Render logs.";
+
+  setAnalyticsLoading(false, "Could not load analytics.");
+
+  return;
+}
 
     const summary = wrapped.data;
     updatedAt.textContent = "Loaded from " + wrapped.url + " • " + new Date().toLocaleString();
+    setAnalyticsLoading(false, "Analytics loaded • " + new Date().toLocaleTimeString());
 
     const homeViewsVal = toInt(getAny(summary, ["homePageViews","homeViews","home_page_views"], 0));
 const bookingClicksVal = toInt(getAny(summary, ["courseBookingClicks","bookingClicks","booking_clicks"], 0));
@@ -2526,21 +2718,109 @@ function wireBookingAnalyticsButtons() {
   if (slugSel) slugSel.addEventListener("change", () => loadBookingAnalytics("range"));
 }
 
+function wireAnalyticsFilters() {
+
+  const providerEl =
+    document.getElementById("analyticsProviderFilter");
+
+  const fromEl =
+    document.getElementById("analyticsFromDate");
+
+  const toEl =
+    document.getElementById("analyticsToDate");
+
+  const applyBtn =
+    document.getElementById("btnApplyAnalyticsFilters");
+
+  const resetBtn =
+    document.getElementById("btnResetAnalyticsFilters");
+
+  const todayBtn =
+    document.getElementById("btnAnalyticsToday");
+
+  const d7Btn =
+    document.getElementById("btnAnalytics7d");
+
+  const d30Btn =
+    document.getElementById("btnAnalytics30d");
+
+  function setRange(days) {
+    const now = new Date();
+
+    const from = new Date();
+    from.setDate(now.getDate() - days);
+
+    fromEl.value = yyyyMmDd(from);
+    toEl.value = yyyyMmDd(now);
+
+    loadAnalytics();
+  }
+
+  if (todayBtn) {
+    todayBtn.addEventListener("click", () => {
+      const d = yyyyMmDd(new Date());
+
+      fromEl.value = d;
+      toEl.value = d;
+
+      loadAnalytics();
+    });
+  }
+
+  if (d7Btn) {
+    d7Btn.addEventListener("click", () => {
+      setRange(7);
+    });
+  }
+
+  if (d30Btn) {
+    d30Btn.addEventListener("click", () => {
+      setRange(30);
+    });
+  }
+
+  if (applyBtn) {
+    applyBtn.addEventListener("click", () => {
+      loadAnalytics();
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+
+      if (providerEl) providerEl.value = "";
+      if (fromEl) fromEl.value = "";
+      if (toEl) toEl.value = "";
+
+      loadAnalytics();
+    });
+  }
+}
 
 // ✅ ONE load handler ONLY (safe)
 window.addEventListener("load", () => {
-  try { loadAnalytics(); } catch (e) { console.warn("loadAnalytics failed", e); }
+
+  try {
+    wireAnalyticsFilters();
+    setAnalyticsLoading(true, "Loading analytics…");
+    loadAnalytics();
+  } catch (e) {
+    console.error("main analytics failed", e);
+  }
+
   try { loadRegisteredUsers(); } catch (e) { console.warn("loadRegisteredUsers failed", e); }
-    try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
+
+  try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
   try { loadPendingCourses(); } catch (e) { console.warn("loadPendingCourses failed", e); }
-    try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
+
+  try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
   try { loadApprovedCourses(); } catch (e) { console.warn("loadApprovedCourses failed", e); }
 
   try {
     if (typeof wireBookingAnalyticsButtons === "function") wireBookingAnalyticsButtons();
     if (typeof loadBookingAnalytics === "function") loadBookingAnalytics();
   } catch (e) {
-    console.warn("booking analytics failed (non-fatal)", e);
+    console.warn("booking analytics failed", e);
   }
 });
 </script>
