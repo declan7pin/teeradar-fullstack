@@ -509,20 +509,6 @@ button.secondary{
   Loading analytics…
 </div>
 
-<pre id="analyticsDebugBox" style="
-  width:100%;
-  display:block;
-  margin-top:10px;
-  padding:10px;
-  border-radius:12px;
-  background:#0f172a;
-  color:#e5e7eb;
-  font-size:11px;
-  white-space:pre-wrap;
-  overflow:auto;
-  max-height:220px;
-">Debug loading…</pre>
-
   </div>
 </section>
 
@@ -1251,23 +1237,7 @@ function setAnalyticsLoading(isLoading, message = "") {
 }
 
 function setAnalyticsDebug(message, data = null) {
-  const el = document.getElementById("analyticsDebugBox");
-  if (!el) return;
-
-  const time = new Date().toLocaleTimeString();
-
-  let text = `[${time}] ${message}`;
-
-  if (data !== null && data !== undefined) {
-    try {
-      text += "\n" + JSON.stringify(data, null, 2);
-    } catch {
-      text += "\n" + String(data);
-    }
-  }
-
-  el.textContent = (el.textContent || "") + "\n\n" + text;
-  el.scrollTop = el.scrollHeight;
+  // Debug disabled
 }
 
   function setText(id, txt) {
@@ -2829,7 +2799,6 @@ function wireAnalyticsFilters() {
 
 // ✅ ONE load handler ONLY (safe)
 window.addEventListener("load", () => {
-  console.log("✅ Analytics page loaded");
 
   try {
     wireAnalyticsFilters();
