@@ -171,43 +171,40 @@ router.post("/event", async (req, res) => {
  * ✅ Build summary directly from Postgres analytics table
  */
 async function buildPgSummary(filters = {}) {
-  const provider = String(filters.provider || "").trim().toLowerCase();
+  const providerRaw = String(filters.provider || "").trim().toLowerCase();
   const from = String(filters.from || "").trim();
   const to = String(filters.to || "").trim();
-
-  const providerAliases = {
-    miclub: ["miclub"],
-    quick18: ["quick18"],
-    phone: ["phone"],
-    teeradar: ["teeradarbooking", "teeradar booking", "teeradar"],
-  };
 
   const params = [];
   const where = [];
 
-  if (provider) {
   const providerAliases = {
     miclub: ["miclub"],
     quick18: ["quick18"],
-    phone: ["phone", "phone booking", "phone only"],
-    teeradar: ["teeradar", "teeradarbooking", "teeradar booking"],
+    phone: ["phone", "phonebooking"],
+    teeradar: ["teeradarbooking", "teeradar", "teeradarbooking"],
   };
 
-  const aliases = providerAliases[provider] || [provider];
+  if (providerRaw) {
+    const aliases = providerAliases[providerRaw] || [providerRaw];
 
-  params.push(aliases);
-  where.push(`
-    LOWER(
-      COALESCE(
-        meta->>'provider',
-        meta->>'courseProvider',
-        meta->>'course_provider',
-        provider,
-        ''
-      )
-    ) = ANY($${params.length}::text[])
-  `);
-}
+    params.push(aliases);
+    where.push(`
+      LOWER(
+        regexp_replace(
+          COALESCE(
+            meta->>'provider',
+            meta->>'courseProvider',
+            meta->>'course_provider',
+            ''
+          ),
+          '\\s+',
+          '',
+          'g'
+        )
+      ) = ANY($${params.length}::text[])
+    `);
+  }
 
   if (from) {
     params.push(from);
@@ -237,10 +234,6 @@ async function buildPgSummary(filters = {}) {
     totals.map((r) => [r.type, Number(r.n) || 0])
   );
 
-  const homeViews = byType.home_view || 0;
-  const bookingClicks = (byType.course_booking_click || 0) + (byType.booking_click || 0);
-  const searches = byType.search || 0;
-
   const topCourses = await q(`
     SELECT course_name AS course, COUNT(*)::int AS n
     FROM analytics
@@ -265,18 +258,6 @@ async function buildPgSummary(filters = {}) {
     LIMIT 10
   `);
 
-  const topPlayedCourses = await q(`
-    SELECT course_name AS course, COUNT(*)::int AS n
-    FROM analytics
-    ${whereSql}
-      ${whereSql ? "AND" : "WHERE"} type = 'round_played'
-      AND course_name IS NOT NULL
-      AND course_name <> ''
-    GROUP BY course_name
-    ORDER BY n DESC
-    LIMIT 10
-  `);
-
   const topAlertCourses = await q(`
     SELECT course_name AS course, COUNT(*)::int AS hits
     FROM analytics
@@ -289,6 +270,11 @@ async function buildPgSummary(filters = {}) {
     LIMIT 10
   `);
 
+  const homeViews = byType.home_view || 0;
+  const bookingClicks =
+    (byType.course_booking_click || 0) + (byType.booking_click || 0);
+  const searches = byType.search || 0;
+
   return {
     ok: true,
 
@@ -300,6 +286,7 @@ async function buildPgSummary(filters = {}) {
 
     searches,
     alertSearches: byType.search_course || 0,
+
     newUsers: byType.new_user || 0,
 
     groupVotesCreated: byType.group_vote_created || 0,
@@ -315,14 +302,14 @@ async function buildPgSummary(filters = {}) {
     repeatBookers: 0,
     peakBookingHour: null,
 
-    topCourses,
-    topSearchedCourses,
-    demandRank: topCourses,
+    topCourses: topCourses.map((r) => ({ course: r.course, n: r.n })),
+    topSearchedCourses: topSearchedCourses.map((r) => ({ course: r.course, n: r.n })),
+    demandRank: topCourses.map((r) => ({ course: r.course, n: r.n })),
 
     roundsPlayed: byType.round_played || 0,
     roundsPlayed7d: 0,
-    topPlayedCourses,
-    topPlayedCourses30d: topPlayedCourses,
+    topPlayedCourses: [],
+    topPlayedCourses30d: [],
 
     alertsSent7d: byType.alert_sent || 0,
     alertHits7d: byType.alert_hit || 0,
@@ -330,7 +317,10 @@ async function buildPgSummary(filters = {}) {
     alertHitsAllTime: byType.alert_hit || 0,
     avgTimeToHitMins: 0,
     alertsByPlan: { BASIC: 0, PRO: 0, FREE: 0, TRIAL: 0, UNKNOWN: 0 },
-    topAlertCourses,
+    topAlertCourses: topAlertCourses.map((r) => ({
+      course: r.course,
+      hits: r.hits,
+    })),
 
     homeToBookingRate: homeViews > 0 ? bookingClicks / homeViews : 0,
     searchToBookingRate: searches > 0 ? bookingClicks / searches : 0,
