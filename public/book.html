@@ -2336,7 +2336,23 @@ trackEvent("search", {
           popupHtml += `</div>`;
 
           marker.bindPopup(popupHtml);
-          markers.push(marker);
+
+// ✅ Track Phone-only courses only when the info card/popup is opened
+if (isPhone) {
+  marker.on("popupopen", () => {
+    trackEvent("course_booking_click", {
+  courseName: name,
+  course_name: name,
+  provider,
+  courseProvider: provider,
+  state: course.state || null,
+  phone: course.phone || null,
+  source: "phone_popup_open",
+});
+  });
+}
+
+markers.push(marker);
         }
 
         const card = document.createElement("article");
