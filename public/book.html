@@ -2136,8 +2136,14 @@ const slots = Array.isArray(data.slots) ? data.slots : [];
 
         // 🔹 NEW: log one search_course event per course with slots
 Object.entries(groupedSlots).forEach(([courseName, cSlots]) => {
+  const course = courses.find((c) => c.name === courseName);
+  const provider = course?.provider || "Other";
+
   trackEvent("search_course", {
     courseName,
+    course_name: courseName,
+    provider,
+    courseProvider: provider,
     date,
     earliest,
     latest,
@@ -2508,11 +2514,13 @@ const courseId = course.id || course.courseId || course.course_id || null;
         const finalUrl = u.toString();
 
         trackEvent("course_booking_click", {
-          courseName,
-          provider,
-          url: finalUrl,
-          state: course.state || null,
-        });
+  courseName,
+  course_name: courseName,
+  provider,
+  courseProvider: provider,
+  url: finalUrl,
+  state: course.state || null,
+});
 
         window.open(finalUrl, "_blank");
         return;
@@ -2573,11 +2581,13 @@ const courseId = course.id || course.courseId || course.course_id || null;
       }
 
       trackEvent("course_booking_click", {
-        courseName,
-        provider,
-        url: finalUrl,
-        state: course.state || null,
-      });
+  courseName,
+  course_name: courseName,
+  provider,
+  courseProvider: provider,
+  url: finalUrl,
+  state: course.state || null,
+});
 
       window.open(finalUrl, "_blank");
     });
