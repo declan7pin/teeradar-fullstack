@@ -1192,7 +1192,7 @@ async function fetchAnalyticsSummary() {
   setAnalyticsDebug("Starting analytics fetch", { candidates });
 
   for (const url of candidates) {
-    const data = await tryFetchJson(url, 12000);
+    const data = await tryFetchJson(url, 30000);
     if (data) return { data, url };
   }
 
