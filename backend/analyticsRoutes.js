@@ -185,10 +185,29 @@ async function buildPgSummary(filters = {}) {
   const params = [];
   const where = [];
 
-  if (provider && providerAliases[provider]) {
-    params.push(providerAliases[provider]);
-    where.push(`LOWER(COALESCE(meta->>'provider', '')) = ANY($${params.length}::text[])`);
-  }
+  if (provider) {
+  const providerAliases = {
+    miclub: ["miclub"],
+    quick18: ["quick18"],
+    phone: ["phone", "phone booking", "phone only"],
+    teeradar: ["teeradar", "teeradarbooking", "teeradar booking"],
+  };
+
+  const aliases = providerAliases[provider] || [provider];
+
+  params.push(aliases);
+  where.push(`
+    LOWER(
+      COALESCE(
+        meta->>'provider',
+        meta->>'courseProvider',
+        meta->>'course_provider',
+        provider,
+        ''
+      )
+    ) = ANY($${params.length}::text[])
+  `);
+}
 
   if (from) {
     params.push(from);
