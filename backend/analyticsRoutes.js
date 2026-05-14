@@ -175,12 +175,19 @@ async function buildPgSummary(filters = {}) {
   const from = String(filters.from || "").trim();
   const to = String(filters.to || "").trim();
 
+  const providerAliases = {
+    miclub: ["miclub"],
+    quick18: ["quick18"],
+    phone: ["phone"],
+    teeradar: ["teeradarbooking", "teeradar booking", "teeradar"],
+  };
+
   const params = [];
   const where = [];
 
-  if (provider) {
-    params.push(provider);
-    where.push(`LOWER(COALESCE(meta->>'provider','')) = $${params.length}`);
+  if (provider && providerAliases[provider]) {
+    params.push(providerAliases[provider]);
+    where.push(`LOWER(COALESCE(meta->>'provider', '')) = ANY($${params.length}::text[])`);
   }
 
   if (from) {
@@ -195,100 +202,73 @@ async function buildPgSummary(filters = {}) {
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-  const { rows } = await db.query(
-    `
+  const q = async (sql, extraParams = params) => {
+    const r = await db.query(sql, extraParams);
+    return r.rows || [];
+  };
+
+  const totals = await q(`
     SELECT type, COUNT(*)::int AS n
     FROM analytics
     ${whereSql}
     GROUP BY type
-    `,
-    params
-  );
+  `);
 
-  const byType = Object.fromEntries(rows.map((r) => [r.type, Number(r.n) || 0]));
+  const byType = Object.fromEntries(
+    totals.map((r) => [r.type, Number(r.n) || 0])
+  );
 
   const homeViews = byType.home_view || 0;
   const bookingClicks = (byType.course_booking_click || 0) + (byType.booking_click || 0);
   const searches = byType.search || 0;
 
-  // ✅ Top clicked/booked courses
-  // Pull from analytics first, then fallback to real TeeRadar booking rows.
-  const topCoursesRes = await db.query(
-    `
-    WITH analytics_clicks AS (
-      SELECT
-        course_name AS course,
-        COUNT(*)::int AS n
-      FROM analytics
-      ${whereSql}
-      ${whereSql ? "AND" : "WHERE"} type IN ('course_booking_click', 'booking_click', 'booking', 'book_click')
-        AND course_name IS NOT NULL
-        AND course_name <> ''
-      GROUP BY course_name
-    ),
-    real_bookings AS (
-      SELECT
-        c.name AS course,
-        COUNT(*)::int AS n
-      FROM booking_bookings b
-      JOIN booking_courses c ON c.id = b.course_id
-      WHERE COALESCE(b.status, '') <> 'CANCELLED'
-      GROUP BY c.name
-    )
-    SELECT course, SUM(n)::int AS n
-    FROM (
-      SELECT * FROM analytics_clicks
-      UNION ALL
-      SELECT * FROM real_bookings
-    ) x
-    GROUP BY course
-    ORDER BY n DESC
-    LIMIT 10;
-    `,
-    params
-  );
-
-  const topCourses = topCoursesRes.rows || [];
-
-  // ✅ Most searched/scanned courses from analytics
-  const topSearchedRes = await db.query(
-    `
-    SELECT
-      course_name AS course,
-      COUNT(*)::int AS n
+  const topCourses = await q(`
+    SELECT course_name AS course, COUNT(*)::int AS n
     FROM analytics
     ${whereSql}
-    ${whereSql ? "AND" : "WHERE"} type IN ('search_course', 'course_search', 'search')
+      ${whereSql ? "AND" : "WHERE"} type IN ('course_booking_click', 'booking_click')
       AND course_name IS NOT NULL
       AND course_name <> ''
     GROUP BY course_name
     ORDER BY n DESC
-    LIMIT 10;
-    `,
-    params
-  );
+    LIMIT 10
+  `);
 
-  const topSearchedCourses = topSearchedRes.rows || [];
-
-  // ✅ Most played courses
-  const topPlayedRes = await db.query(
-    `
-    SELECT
-      course_name AS course,
-      COUNT(*)::int AS n
+  const topSearchedCourses = await q(`
+    SELECT course_name AS course, COUNT(*)::int AS n
     FROM analytics
     ${whereSql}
-    ${whereSql ? "AND" : "WHERE"} type = 'round_played'
+      ${whereSql ? "AND" : "WHERE"} type = 'search_course'
       AND course_name IS NOT NULL
       AND course_name <> ''
     GROUP BY course_name
     ORDER BY n DESC
-    LIMIT 10;
-    `,
-    params
-  );
+    LIMIT 10
+  `);
 
-  const topPlayedCourses = topPlayedRes.rows || [];
+  const topPlayedCourses = await q(`
+    SELECT course_name AS course, COUNT(*)::int AS n
+    FROM analytics
+    ${whereSql}
+      ${whereSql ? "AND" : "WHERE"} type = 'round_played'
+      AND course_name IS NOT NULL
+      AND course_name <> ''
+    GROUP BY course_name
+    ORDER BY n DESC
+    LIMIT 10
+  `);
+
+  const topAlertCourses = await q(`
+    SELECT course_name AS course, COUNT(*)::int AS hits
+    FROM analytics
+    ${whereSql}
+      ${whereSql ? "AND" : "WHERE"} type = 'alert_hit'
+      AND course_name IS NOT NULL
+      AND course_name <> ''
+    GROUP BY course_name
+    ORDER BY hits DESC
+    LIMIT 10
+  `);
 
   return {
     ok: true,
@@ -301,7 +281,6 @@ async function buildPgSummary(filters = {}) {
 
     searches,
     alertSearches: byType.search_course || 0,
-
     newUsers: byType.new_user || 0,
 
     groupVotesCreated: byType.group_vote_created || 0,
@@ -317,20 +296,14 @@ async function buildPgSummary(filters = {}) {
     repeatBookers: 0,
     peakBookingHour: null,
 
-    topCourses: topCourses.map((r) => ({ course: r.course, n: Number(r.n) || 0 })),
-    topSearchedCourses: topSearchedCourses.map((r) => ({ course: r.course, n: Number(r.n) || 0 })),
-
-    demandRank: topCourses.map((r) => ({
-      course: r.course,
-      searches: 0,
-      clicks: Number(r.n) || 0,
-      score: Number(r.n) || 0,
-    })),
+    topCourses,
+    topSearchedCourses,
+    demandRank: topCourses,
 
     roundsPlayed: byType.round_played || 0,
     roundsPlayed7d: 0,
-    topPlayedCourses: topPlayedCourses.map((r) => ({ course: r.course, n: Number(r.n) || 0 })),
-    topPlayedCourses30d: topPlayedCourses.map((r) => ({ course: r.course, n: Number(r.n) || 0 })),
+    topPlayedCourses,
+    topPlayedCourses30d: topPlayedCourses,
 
     alertsSent7d: byType.alert_sent || 0,
     alertHits7d: byType.alert_hit || 0,
@@ -338,7 +311,7 @@ async function buildPgSummary(filters = {}) {
     alertHitsAllTime: byType.alert_hit || 0,
     avgTimeToHitMins: 0,
     alertsByPlan: { BASIC: 0, PRO: 0, FREE: 0, TRIAL: 0, UNKNOWN: 0 },
-    topAlertCourses: [],
+    topAlertCourses,
 
     homeToBookingRate: homeViews > 0 ? bookingClicks / homeViews : 0,
     searchToBookingRate: searches > 0 ? bookingClicks / searches : 0,
