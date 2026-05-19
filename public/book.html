@@ -791,6 +791,9 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/group-vote-create.js"></script>
   <script>
+
+    const API_BASE = "https://teeradar.com.au";
+    
         let map;
     let markers = [];
     let courses = [];
@@ -964,7 +967,7 @@
     // analytics helper (used for searches + booking clicks)
     function trackEvent(type, payload) {
       try {
-        fetch("/api/analytics/event", {
+        fetch(`${API_BASE}/api/analytics/event`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1386,7 +1389,7 @@ function slugifyCourseName(name) {
         const email = getLoggedInEmail();
         if (!email) return;
 
-        const res = await fetch(`/api/me?email=${encodeURIComponent(email)}`);
+        const res = await fetch(`${API_BASE}/api/me?email=${encodeURIComponent(email)}`);
         if (!res.ok) return;
 
         const me = await res.json();
@@ -1450,7 +1453,7 @@ function slugifyCourseName(name) {
 
     async function loadCourses() {
       try {
-        const res = await fetch("/api/courses");
+        const res = await fetch(`${API_BASE}/api/courses`);
         courses = await res.json();
 
         allCourses = Array.isArray(courses) ? courses : [];
@@ -2088,7 +2091,7 @@ if (newLatestM !== lM) {
       statusLine.style.color = "#555";
 
       try {
-        const res = await fetch("/api/search", {
+        const res = await fetch(`${API_BASE}/api/search`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify(lastSearchCriteria),
