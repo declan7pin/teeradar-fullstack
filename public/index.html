@@ -800,6 +800,112 @@
   .hero-card {
     min-height: 220px;
   }
+  .mobile-menu-btn {
+  display: none;
+  width: 42px;
+  height: 38px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.14);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mobile-menu-btn span {
+  display: block;
+  width: 21px;
+  height: 2px;
+  background: #ffffff;
+  border-radius: 999px;
+}
+
+@media (max-width: 700px) {
+  header {
+    padding: 10px 14px;
+  }
+
+  .nav-wrap {
+    position: relative;
+    align-items: center;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand-text {
+    font-size: 14px;
+  }
+
+  .mobile-menu-btn {
+    display: flex;
+  }
+
+  nav {
+    display: none;
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    right: 0;
+    background: #00796b;
+    border-radius: 16px;
+    padding: 12px;
+    box-shadow: 0 18px 35px rgba(15,23,42,0.28);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    z-index: 50;
+  }
+
+  nav.nav-open {
+    display: flex;
+  }
+
+  nav a,
+  nav button {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+    padding: 10px 12px;
+    font-size: 13px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.12);
+  }
+
+  .nav-login {
+    background: #ffffff;
+    color: #005e55;
+  }
+
+  main {
+    margin-top: 22px;
+  }
+
+  .hero-title {
+    font-size: 28px;
+    line-height: 1.08;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+  }
+
+  .btn-primary,
+  .btn-outline {
+    width: 100%;
+  }
+
+  .hero-chips {
+    flex-direction: column;
+  }
+
+  .chip {
+    justify-content: center;
+    width: 100%;
+  }
 }
   </style>
 </head>
@@ -807,23 +913,26 @@
 <header>
   <div class="nav-wrap">
     <a class="brand" href="/course-admin-login.html" aria-label="Course admin login">
-  <div class="brand-logo">
-    <img src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png" alt="TeeRadar" />
-  </div>
-  <div class="brand-text">TeeRadar</div>
-</a>
-    <nav>
-      <nav>
-  <a href="/index.html">Home</a>
-  <a href="/book.html">Bookings</a>
-  <a href="/for-courses.html">For Courses</a>
-  <a href="/faq.html">FAQ</a>
+      <div class="brand-logo">
+        <img src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png" alt="TeeRadar" />
+      </div>
+      <div class="brand-text">TeeRadar</div>
+    </a>
+
+    <button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Open menu">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    <nav id="mainNav">
+      <a href="/index.html">Home</a>
+      <a href="/book.html">Bookings</a>
+      <a href="/for-courses.html">For Courses</a>
+      <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
       <a href="/analytics" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
-
-      <!-- ✅ My Rounds: visible even when logged out -->
-<a href="/my-rounds.html" id="navMyRounds">My Rounds</a>
-
+      <a href="/my-rounds.html" id="navMyRounds">My Rounds</a>
       <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
     </nav>
   </div>
@@ -1687,6 +1796,24 @@ ${details || "Not provided"}
   }
 
   window.addEventListener("load", () => {
+
+    const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+    const mainNav = document.getElementById("mainNav");
+
+    if (mobileMenuBtn && mainNav) {
+
+        mobileMenuBtn.addEventListener("click", () => {
+            mainNav.classList.toggle("nav-open");
+        });
+
+        mainNav.querySelectorAll("a,button").forEach(item => {
+            item.addEventListener("click", () => {
+                mainNav.classList.remove("nav-open");
+            });
+        });
+
+    }
+
     renderNavState();
     trackInitialHome();
     initTCBanner();
@@ -1695,7 +1822,7 @@ ${details || "Not provided"}
     maybeAutoOpenSignupFromQuery();
     initSubscriberAlertModal();
     tryShowAvailablePopupForSubscribedUser();
-  });
+});
 </script>
 </body>
 </html>
