@@ -721,6 +721,86 @@
       background:#005e55;
       transform:translateY(1px);
     }
+    @media (max-width: 700px) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .nav {
+    padding: 10px 14px;
+  }
+
+  .nav-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .brand {
+    justify-content: center;
+  }
+
+  .nav-links {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+
+  .nav-links a {
+    font-size: 12px;
+    text-align: center;
+    padding: 8px 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .hero {
+    padding: 26px 16px 18px;
+  }
+
+  .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
+  .hero h1 {
+    font-size: 30px;
+    line-height: 1.05;
+  }
+
+  .hero p {
+    font-size: 14px;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-actions a {
+    text-align: center;
+  }
+
+  .chips {
+    gap: 8px;
+  }
+
+  .chip {
+    font-size: 12px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr;
+    padding: 0 16px 28px;
+  }
+
+  .hero-card {
+    min-height: 220px;
+  }
+}
   </style>
 </head>
 <body>
