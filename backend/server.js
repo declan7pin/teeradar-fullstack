@@ -814,11 +814,21 @@ const EXTRA_CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
 
 const ALLOWED_ORIGINS = new Set([
   SITE_URL,
+  "https://teeradar.com.au",
   "https://www.teeradar.com.au",
+
+  // local dev
+  "http://localhost",
   "http://localhost:3000",
   "http://localhost:5173",
+  "http://127.0.0.1",
   "http://127.0.0.1:3000",
   "http://127.0.0.1:5173",
+
+  // Capacitor mobile app
+  "capacitor://localhost",
+  "ionic://localhost",
+
   ...EXTRA_CORS_ORIGINS,
 ]);
 
