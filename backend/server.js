@@ -1089,7 +1089,7 @@ app.use((req, res, next) => {
       "script-src 'self' 'unsafe-inline' https:; " +
       "style-src 'self' 'unsafe-inline' https:; " +
       "img-src 'self' https: data:; " +
-      "connect-src 'self' https:; " +
+      "connect-src 'self' https: http://localhost capacitor://localhost ionic://localhost; " +
       "font-src 'self' https: data:;"
   );
   next();
