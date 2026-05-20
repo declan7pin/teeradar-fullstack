@@ -819,16 +819,25 @@ const ALLOWED_ORIGINS = new Set([
 
   // local dev
   "http://localhost",
+  "https://localhost",
   "http://localhost:3000",
+  "https://localhost:3000",
   "http://localhost:5173",
+  "https://localhost:5173",
+
   "http://127.0.0.1",
+  "https://127.0.0.1",
   "http://127.0.0.1:3000",
+  "https://127.0.0.1:3000",
   "http://127.0.0.1:5173",
+  "https://127.0.0.1:5173",
 
   // Capacitor mobile app
   "capacitor://localhost",
   "ionic://localhost",
 
+  ...EXTRA_CORS_ORIGINS,
+]);
   ...EXTRA_CORS_ORIGINS,
 ]);
 
@@ -1089,7 +1098,7 @@ app.use((req, res, next) => {
       "script-src 'self' 'unsafe-inline' https:; " +
       "style-src 'self' 'unsafe-inline' https:; " +
       "img-src 'self' https: data:; " +
-      "connect-src 'self' https: http://localhost capacitor://localhost ionic://localhost; " +
+      "connect-src 'self' https: http://localhost https://localhost http://127.0.0.1 https://127.0.0.1 capacitor://localhost ionic://localhost; " +
       "font-src 'self' https: data:;"
   );
   next();
