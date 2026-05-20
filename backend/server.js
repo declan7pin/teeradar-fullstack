@@ -838,8 +838,6 @@ const ALLOWED_ORIGINS = new Set([
 
   ...EXTRA_CORS_ORIGINS,
 ]);
-  ...EXTRA_CORS_ORIGINS,
-]);
 
 function isAllowedOrigin(origin) {
   if (!origin) return true; // allow curl/server-to-server
