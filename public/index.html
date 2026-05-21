@@ -1148,10 +1148,11 @@
 
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
+const API_BASE = "https://teeradar-fullstack-5.onrender.com";
 
   function trackEvent(type, payload) {
     try {
-      fetch("/api/analytics/event", {
+      fetch(`${API_BASE}/api/analytics/event`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1243,7 +1244,7 @@
 
   async function hasActivePlanViaStripe(email) {
     try {
-      const res = await fetch("/api/account/plan?email=" + encodeURIComponent(email));
+      const res = await fetch(`${API_BASE}/api/account/plan?email=` + encodeURIComponent(email));
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data) return false;
       return (data.plan === "BASIC" || data.plan === "PRO");
@@ -1385,7 +1386,7 @@
     if (authCourses.length) return;
 
     try {
-      const res = await fetch("/api/courses");
+      const res = await fetch(`${API_BASE}/api/courses`);
       const data = await res.json();
       authCourses = Array.isArray(data) ? data : [];
     } catch (err) {
@@ -1469,7 +1470,7 @@
       }
 
       try {
-        const res = await fetch(endpoint, {
+        const res = await fetch(`${API_BASE}${endpoint}`,{
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -1677,7 +1678,7 @@ ${details || "Not provided"}
 
       const token = localStorage.getItem("teeradar_jwt") || "";
 
-      const res = await fetch("/api/alerts/unread?email=" + encodeURIComponent(email), {
+      const res = await fetch(`${API_BASE}/api/alerts/unread?email=` + encodeURIComponent(email), {
         method: "GET",
         headers: token ? { "Authorization": "Bearer " + token } : {}
       });
@@ -1774,7 +1775,7 @@ ${details || "Not provided"}
             .filter(v => v !== undefined && v !== null);
 
           if (allIds.length) {
-            fetch("/api/alerts/mark-read", {
+            fetch(`${API_BASE}/api/alerts/mark-read`,{
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
