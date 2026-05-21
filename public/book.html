@@ -793,6 +793,29 @@
   <script>
 
     const API_BASE = "https://teeradar.com.au";
+    function appDebug(label, value) {
+  console.log("APP DEBUG:", label, value);
+
+  let el = document.getElementById("appDebugBox");
+  if (!el) {
+    el = document.createElement("pre");
+    el.id = "appDebugBox";
+    el.style.cssText = `
+      margin:8px 16px;
+      padding:8px;
+      background:#111827;
+      color:#22c55e;
+      font-size:11px;
+      white-space:pre-wrap;
+      border-radius:8px;
+      max-height:220px;
+      overflow:auto;
+    `;
+    document.body.insertBefore(el, document.getElementById("map"));
+  }
+
+  el.textContent += `\n${label}: ${typeof value === "string" ? value : JSON.stringify(value, null, 2)}`;
+}
     
         let map;
     let markers = [];
@@ -1452,21 +1475,37 @@ function slugifyCourseName(name) {
     }
 
     async function loadCourses() {
-      try {
-        const res = await fetch(`${API_BASE}/api/courses`);
-        courses = await res.json();
+  try {
+    const url = `${API_BASE}/api/courses`;
 
-        allCourses = Array.isArray(courses) ? courses : [];
-        window.allCourses = allCourses;
+    appDebug("loadCourses URL", url);
+    appDebug("origin", window.location.origin);
+    appDebug("href", window.location.href);
 
-        applyStateFilter();
-      } catch (err) {
-        console.error("Failed to load courses", err);
-        courses = [];
-        allCourses = [];
-      }
-    }
+    const res = await fetch(url);
 
+    appDebug("loadCourses status", `${res.status} ${res.statusText}`);
+
+    const text = await res.text();
+    appDebug("loadCourses response start", text.slice(0, 300));
+
+    courses = JSON.parse(text);
+
+    allCourses = Array.isArray(courses) ? courses : [];
+    window.allCourses = allCourses;
+
+    appDebug("courses loaded", allCourses.length);
+
+    applyStateFilter();
+  } catch (err) {
+    console.error("Failed to load courses", err);
+    appDebug("loadCourses ERROR", err?.message || String(err));
+    appDebug("loadCourses STACK", err?.stack || "none");
+
+    courses = [];
+    allCourses = [];
+  }
+}
     // ---- read stored user + apply home course defaults ----
     function getStoredUser() {
       // Preferred: object previously saved as "tr_user"
