@@ -793,6 +793,26 @@
   <script>
 
     const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+window.fetch = ((originalFetch) => {
+  return async (...args) => {
+    try {
+      appDebug("FETCH URL", args[0]);
+
+      const response = await originalFetch(...args);
+
+      appDebug(
+        "FETCH RESPONSE",
+        `${response.status} ${response.statusText}`
+      );
+
+      return response;
+    } catch (err) {
+      appDebug("FETCH ERROR", err.message);
+      appDebug("FETCH STACK", err.stack || "none");
+      throw err;
+    }
+  };
+})(window.fetch);
     function appDebug(label, value) {
   console.log("APP DEBUG:", label, value);
 
