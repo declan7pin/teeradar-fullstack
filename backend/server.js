@@ -816,6 +816,7 @@ const ALLOWED_ORIGINS = new Set([
   SITE_URL,
   "https://teeradar.com.au",
   "https://www.teeradar.com.au",
+  "https://teeradar-fullstack-5.onrender.com",
 
   // local dev
   "http://localhost",
