@@ -822,6 +822,7 @@
   const favListEl = document.getElementById("favList");
   const favDropdown = document.getElementById("favAutocompleteList");
   const prefsStatus = document.getElementById("prefsStatus");
+  const API_BASE = "https://teeradar-fullstack-5.onrender.com";
     const billingStatus = document.getElementById("billingStatus");
   const subscriptionCardText = document.getElementById("subscriptionCardText");
   const navAccountBtn = document.getElementById("navAccount");
@@ -1143,7 +1144,7 @@ function isBlockedForAlerts(course) {
 
   async function loadCourses() {
   try {
-    const res = await fetch("/api/courses");
+    const res = await fetch(`${API_BASE}/api/courses`);
     const data = await res.json();
 
     if (Array.isArray(data)) {
@@ -1303,7 +1304,7 @@ searchableCourses = data.filter((c) => {
     }
 
     try {
-      const res = await fetch(`/api/account/preferences?email=${encodeURIComponent(email)}`, {
+      const res = await fetch(`${API_BASE}/api/account/preferences?email=${encodeURIComponent(email)}`, {
         method: "GET",
         headers: {
           ...(token ? { "Authorization": "Bearer " + token } : {})
@@ -1348,7 +1349,7 @@ searchableCourses = data.filter((c) => {
       // ✅ NEW: try to hydrate home course from /api/me (source of truth), else keep existing
       let homeCourseObj = getExistingHomeCourseFromStorage();
       try {
-        const meRes = await fetch(`/api/me?email=${encodeURIComponent(email)}`);
+        const meRes = await fetch(`${API_BASE}/api/me?email=${encodeURIComponent(email)}`);
         const me = await meRes.json().catch(() => null);
         if (meRes.ok && me && (me.homeCourse || me.homeCourseId || me.homeCourseState)) {
           homeCourseObj = {
@@ -1460,7 +1461,7 @@ searchableCourses = data.filter((c) => {
           homeCourseState: homeCourseObj ? (homeCourseObj.state || homeState || null) : (homeState || null)
         };
 
-        const res = await fetch("/api/account/preferences", {
+        const res = await fetch(`${API_BASE}/api/account/preferences`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1540,7 +1541,7 @@ searchableCourses = data.filter((c) => {
       billingStatus.className = "status";
 
       try {
-        const res = await fetch("/api/billing/portal", {
+        const res = await fetch(`${API_BASE}/api/billing/portal`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1574,7 +1575,7 @@ searchableCourses = data.filter((c) => {
     if (!email || !planPill) return;
 
     try {
-      const res = await fetch(`/api/account/plan?email=${encodeURIComponent(email)}`, {
+      const res = await fetch(`${API_BASE}/api/account/plan?email=${encodeURIComponent(email)}`, {
         headers: {
           ...(token ? { "Authorization": "Bearer " + token } : {})
         }
