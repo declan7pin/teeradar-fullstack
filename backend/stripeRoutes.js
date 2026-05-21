@@ -39,10 +39,12 @@ export async function createCheckoutSession(req, res) {
 
     const planName = derivePlanName(planKey);
 
-    const baseUrl =
-      process.env.PUBLIC_BASE_URL ||
-      process.env.APP_URL ||
-      "http://localhost:3000";
+   const baseUrl =
+  process.env.STRIPE_RETURN_URL ||
+  process.env.SITE_URL ||
+  process.env.PUBLIC_BASE_URL ||
+  process.env.APP_URL ||
+  "https://teeradar-fullstack-5.onrender.com";
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -75,8 +77,12 @@ export async function createCheckoutSession(req, res) {
         },
       },
 
-      success_url: `${baseUrl}/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/subscribe-cancel.html`,
+      success_url:
+  process.env.STRIPE_SUCCESS_URL ||
+  `${baseUrl}/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}`,
+cancel_url:
+  process.env.STRIPE_CANCEL_URL ||
+  `${baseUrl}/subscribe-cancel.html`,
     });
 
     return res.json({ url: session.url });
