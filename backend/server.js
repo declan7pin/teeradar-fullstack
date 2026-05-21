@@ -1168,9 +1168,12 @@ app.post("/api/subscribe", async (req, res) => {
         : undefined;
 
     const successUrl =
-      process.env.STRIPE_SUCCESS_URL ||
-      `${SITE_URL}/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1`;
-    const cancelUrl = process.env.STRIPE_CANCEL_URL || `${SITE_URL}/subscribe-cancel.html`;
+  process.env.STRIPE_SUCCESS_URL ||
+  `${SITE_URL}/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1&backend=${encodeURIComponent(SITE_URL)}`;
+
+const cancelUrl =
+  process.env.STRIPE_CANCEL_URL ||
+  `${SITE_URL}/subscribe-cancel.html?backend=${encodeURIComponent(SITE_URL)}`;
 
         const derivedPlan = derivePlanFromPriceId(priceId);
 
