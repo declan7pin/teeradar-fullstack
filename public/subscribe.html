@@ -364,6 +364,8 @@ Copy the code and paste it into the promo section on the payment screen.
 
 <script>
 
+const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+
 async function startSubscription(planKey){
 
 const emailInput=document.getElementById("emailInput");
@@ -382,13 +384,38 @@ return;
 
 try{
 
-const res=await fetch("/api/subscribe",{
+const res=await fetch(`${API_BASE}/api/subscribe`,{
 method:"POST",
-headers:{ "Content-Type":"application/json"},
-body:JSON.stringify({plan:planKey,email})
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+plan:planKey,
+email
+})
 });
 
 const data=await res.json();
+
+if(!res.ok||!data.url){
+console.error("Subscribe error:",data);
+errorBox.textContent=data.error||"Could not start subscription.";
+return;
+}
+
+successBox.textContent="Redirecting to Stripe Checkout...";
+
+window.location.href=data.url;
+
+}catch(err){
+
+console.error(err);
+
+errorBox.textContent=
+"Failed to connect to subscription service.";
+
+}
+}
 
 if(!res.ok||!data.url){
 console.error("Subscribe error:",data);
