@@ -147,14 +147,15 @@
           e.preventDefault();
 
           // ✅ NEW: pass the email in the URL too (in case index prefers query params)
-          const url = new URL("/index.html", window.location.origin);
-          url.searchParams.set("signup", "1");
-          if (prefillEmail) {
-            url.searchParams.set("email", prefillEmail);
-            url.searchParams.set("prefill_email", prefillEmail);
-          }
+          const signupUrl = new URL("index.html", window.location.href);
+signupUrl.searchParams.set("signup", "1");
 
-          window.location.href = url.pathname + url.search;
+if (prefillEmail) {
+  signupUrl.searchParams.set("email", prefillEmail);
+  signupUrl.searchParams.set("prefill_email", prefillEmail);
+}
+
+window.location.href = signupUrl.toString();
         });
       }
     })();
