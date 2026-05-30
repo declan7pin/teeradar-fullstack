@@ -1176,6 +1176,8 @@
 </div>
 
   <script>
+    const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+
     // -----------------------------
     // Auth helpers
     // -----------------------------
@@ -1230,7 +1232,7 @@
       headers["Content-Type"] = headers["Content-Type"] || "application/json";
       if (token) headers["Authorization"] = "Bearer " + token;
 
-      const res = await fetch(path, { ...options, headers });
+      const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
       let data = null;
       try { data = await res.json(); } catch { /* ignore */ }
       if (!res.ok) {
@@ -1572,7 +1574,7 @@ function setLeftPanelsVisibility(show){
 
       try{
         // ✅ ONLY allow autofill from submitted/approved scorecard templates
-        const res = await fetch("/api/rounds/templates");
+        const res = await fetch(`${API_BASE}/api/rounds/templates`);
         const data = await res.json();
 
         // expected shape: { courses: [...] }
@@ -1617,7 +1619,7 @@ function setLeftPanelsVisibility(show){
   }
 
   try{
-    const res = await fetch(`/api/scorecards/${encodeURIComponent(state)}`);
+    const res = await fetch(`${API_BASE}/api/scorecards/${encodeURIComponent(state)}`);
 
     let arr = [];
     if (!res.ok){
