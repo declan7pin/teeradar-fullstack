@@ -726,6 +726,8 @@
   </div> <!-- ✅ keep this line; we’ll close #app properly below -->
 
   <script>
+    const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+
     /* ✅✅✅ ONLY CHANGES BELOW ✅✅✅ */
 
     /* ✅ MOVE getToken ABOVE gate + refresh use */
@@ -834,7 +836,7 @@
       headers["Content-Type"] = headers["Content-Type"] || "application/json";
       if (token) headers["Authorization"] = "Bearer " + token;
 
-      const res = await fetch(path, { ...options, headers });
+      const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
       let data = null;
       try { data = await res.json(); } catch {}
       if (!res.ok){
