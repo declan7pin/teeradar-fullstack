@@ -931,7 +931,7 @@
       <a href="/for-courses.html">For Courses</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
-      <a href="/analytics" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
+      <a href="/analytics.html" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
       <a href="/my-rounds.html" id="navMyRounds">My Rounds</a>
       <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
     </nav>
@@ -1808,10 +1808,12 @@ ${details || "Not provided"}
         });
 
         mainNav.querySelectorAll("a,button").forEach(item => {
-            item.addEventListener("click", () => {
-                mainNav.classList.remove("nav-open");
-            });
-        });
+  item.addEventListener("click", () => {
+    setTimeout(() => {
+      mainNav.classList.remove("nav-open");
+    }, 150);
+  });
+});
 
     }
 
