@@ -501,6 +501,7 @@
       <div class="title">
         <h1>My Stats</h1>
         <div class="sub">Your performance trends across recent rounds.</div>
+        <div id="statsDebug" class="mini" style="margin-top:6px;color:#b91c1c;font-weight:900;"></div>
       </div>
       <div class="actions">
         <a class="btn" href="/my-rounds.html">← Back to My Rounds</a>
@@ -1675,15 +1676,52 @@ let customEndDate = "";
     }
 
     async function refresh(){
-      // ✅ CHANGE: don’t load anything if logged out (gate is showing)
-      const token = getToken();
-      if (!token) return;
 
-      /* ✅✅✅ ONLY CHANGE (needed): async load rounds (backend first, then local) ✅✅✅ */
-      ALL = await loadAllRounds();
-      applyRange();
-      /* ✅✅✅ END ONLY CHANGE ✅✅✅ */
+  const debug = document.getElementById("statsDebug");
+
+  const token = getToken();
+
+  if (!token){
+    if (debug){
+      debug.textContent =
+        "Debug: no login token found.";
     }
+    return;
+  }
+
+  try {
+
+    if (debug){
+      debug.textContent =
+        "Debug: loading rounds from backend...";
+    }
+
+    ALL = await loadAllRounds();
+
+    if (debug){
+      debug.textContent =
+        "Debug: loaded " +
+        ALL.length +
+        " round(s).";
+    }
+
+    applyRange();
+
+  } catch (err){
+
+    console.error(
+      "My Stats refresh failed:",
+      err
+    );
+
+    if (debug){
+      debug.textContent =
+        "Debug error: " +
+        (err?.message || String(err));
+    }
+
+  }
+}
 
     // ✅ CHANGED (only): scope range tab listeners to data-range
     document.querySelectorAll(".tab[data-range]").forEach(btn => {
