@@ -1021,7 +1021,8 @@ button.secondary{
   max-width:260px;
 "></div>
 <script>
-  const ADMIN_EMAIL = "declan7pin@gmail.com";
+  const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+const ADMIN_EMAIL = "declan7pin@gmail.com";
   // ✅ Needed for booking admin analytics routes (requirePlatformAdmin)
 const BOOKING_ADMIN_SECRET = ""; 
 // put the same value as your Render env var BOOKING_ADMIN_SECRET
@@ -1106,7 +1107,12 @@ window.addEventListener("unhandledrejection", (e) => {
 }
 
 async function tryFetchJson(url, timeoutMs = 12000) {
-  const finalUrl = url + (url.includes("?") ? "&" : "?") + "_ts=" + Date.now();
+  const fullUrl = url.startsWith("http")
+  ? url
+  : `${API_BASE}${url}`;
+
+const finalUrl =
+  fullUrl + (fullUrl.includes("?") ? "&" : "?") + "_ts=" + Date.now();
 
   setAnalyticsDebug("Fetching", { finalUrl });
 
@@ -1660,7 +1666,7 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
     computeSubscriptionMetrics();
   }
   async function patchRegisteredUser(id, payload) {
-    const res = await fetch(`/api/analytics/users/${id}`, {
+    const res = await fetch(`${API_BASE}/api/analytics/users/${id}`, {
       method: "PATCH",
       headers: {
         ...getAuthHeaders(),
@@ -1674,7 +1680,7 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
     return { res, data };
   }
 async function deleteRegisteredUserById(id) {
-  const res = await fetch(`/api/analytics/users/${id}`, {
+  const res = await fetch(`${API_BASE}/api/analytics/users/${id}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
     credentials: "include",
@@ -1932,7 +1938,7 @@ document.addEventListener("click", async (e) => {
     editBtn.textContent = "Saving…";
 
     try {
-      const res = await fetch(`/api/rounds/admin/scorecard-courses/${id}`, {
+      const res = await fetch(`${API_BASE}/api/rounds/admin/scorecard-courses/${id}`, {
         method: "PATCH",
         headers: {
           ...getAuthHeaders(),
@@ -1979,7 +1985,7 @@ document.addEventListener("click", async (e) => {
     delBtn.textContent = "Deleting…";
 
     try {
-      const res = await fetch(`/api/rounds/admin/scorecard-courses/${id}`, {
+      const res = await fetch(`${API_BASE}/api/rounds/admin/scorecard-courses/${id}`, {
         method: "DELETE",
         headers: getAuthHeaders(),
         credentials: "include",
@@ -2314,7 +2320,7 @@ async function approvePendingCourse(id, btn = null) {
   }
 
   try {
-    const res = await fetch(`/api/rounds/admin/pending-courses/${Number(id)}/approve`, {
+    const res = await fetch(`${API_BASE}/api/rounds/admin/pending-courses/${Number(id)}/approve`, {
       method: "POST",
       headers: {
         ...getAuthHeaders(),
@@ -2417,11 +2423,15 @@ function yyyyMmDd(d) {
 }
 
 function buildBookUrl(path, paramsObj) {
-  const u = new URL(path, window.location.origin);
+  const u = new URL(path, API_BASE);
+
   Object.entries(paramsObj || {}).forEach(([k, v]) => {
-    if (v !== null && v !== undefined && String(v).trim() !== "") u.searchParams.set(k, v);
+    if (v !== null && v !== undefined && String(v).trim() !== "") {
+      u.searchParams.set(k, v);
+    }
   });
-  return u.pathname + "?" + u.searchParams.toString();
+
+  return u.toString();
 }
 
 // --- simple tooltip helpers ---
