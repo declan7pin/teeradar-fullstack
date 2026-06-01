@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <title>TeeRadar — Book a Tee Time</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+/>
 
   <!-- Google AdSense (auto ads) -->
   <script
@@ -39,13 +42,16 @@
     }
 
     .top-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 16px;
-      background: var(--teal);
-      color: #fff;
-    }
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+  background: var(--teal);
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
 
     .top-bar-title { font-weight: 600; }
 
@@ -578,6 +584,11 @@
       color: #0f7a3c;
       font-weight: 600;
     }
+    @media (max-width: 700px) {
+  .top-bar {
+    padding: calc(env(safe-area-inset-top) + 12px) 14px 12px;
+  }
+}
   </style>
 </head>
 
