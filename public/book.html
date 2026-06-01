@@ -45,15 +45,41 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+  padding:
+    calc(env(safe-area-inset-top) + 14px)
+    16px
+    14px
+    16px;
   background: var(--teal);
   color: #fff;
-  position: sticky;
-  top: 0;
-  z-index: 1000;
+  min-height: calc(env(safe-area-inset-top) + 76px);
+}
+    .top-bar-title {
+  font-weight: 600;
+  line-height: 1.15;
+  max-width: 42%;
 }
 
-    .top-bar-title { font-weight: 600; }
+@media (max-width: 520px) {
+  .top-bar {
+    gap: 8px;
+  }
+
+  .top-bar-title {
+    font-size: 14px;
+    max-width: 38%;
+  }
+
+  .state-selector-button {
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+
+  .top-bar > button {
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+}
 
     .top-bar button {
       border: none;
