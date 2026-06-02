@@ -909,10 +909,46 @@
     justify-content: center;
     width: 100%;
   }
+  /* === APP STARTUP SPLASH === */
+#appSplash{
+  position:fixed;
+  inset:0;
+  background:#ffffff;
+  z-index:99999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  gap:18px;
+  transition:opacity .35s ease, visibility .35s ease;
+}
+
+#appSplash.hide{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+
+#appSplashLogo{
+  width:120px;
+  height:120px;
+  object-fit:contain;
+}
+
+#appSplashText{
+  font-size:2rem;
+  font-weight:900;
+  letter-spacing:.08em;
+  color:#00796b;
+  min-height:40px;
 }
   </style>
 </head>
 <body>
+  <div id="appSplash" style="display:none;">
+  <img id="appSplashLogo" src="/assets/TeeRadar Logo.png" alt="TeeRadar" />
+  <div id="appSplashText"></div>
+</div>
 <header>
   <div class="nav-wrap">
     <a class="brand" href="/course-admin-login.html" aria-label="Course admin login">
@@ -1152,6 +1188,46 @@
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
 const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+function runAppSplashOnce(){
+  const splash = document.getElementById("appSplash");
+  const textEl = document.getElementById("appSplashText");
+
+  if (!splash || !textEl) return Promise.resolve();
+
+  if (sessionStorage.getItem("teeradar_app_splash_seen") === "1") {
+    splash.style.display = "none";
+    return Promise.resolve();
+  }
+
+  sessionStorage.setItem("teeradar_app_splash_seen", "1");
+
+  splash.style.display = "flex";
+
+  const word = "TeeRadar";
+
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      let i = 0;
+
+      const typeTimer = setInterval(() => {
+        textEl.textContent = word.slice(0, i + 1);
+        i++;
+
+        if (i >= word.length) {
+          clearInterval(typeTimer);
+
+          setTimeout(() => {
+            splash.classList.add("hide");
+            setTimeout(() => {
+              splash.style.display = "none";
+              resolve();
+            }, 350);
+          }, 150);
+        }
+      }, 1000 / word.length);
+    }, 1500);
+  });
+}
 
   function trackEvent(type, payload) {
     try {
@@ -1799,7 +1875,8 @@ ${details || "Not provided"}
     } catch (e) {}
   }
 
-  window.addEventListener("load", () => {
+  window.addEventListener("load", async () => {
+  await runAppSplashOnce();
 
     const mobileMenuBtn = document.getElementById("mobileMenuBtn");
     const mainNav = document.getElementById("mainNav");
