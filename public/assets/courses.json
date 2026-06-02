@@ -35,7 +35,42 @@
     "lng": 115.7763087218749,
     "url": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-05&feeGroupId=102202"
   },
-
+{
+  "name": "Kennedy Bay Golf Club (18 holes)",
+  "provider": "MiClub",
+  "state": "WA",
+  "holes": 18,
+  "lat": -32.368336,
+  "lng": 115.736203,
+  "url": "https://kennedybay.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2026-06-05&feeGroupId=3451280"
+},
+{
+  "name": "Kennedy Bay Golf Club (9 holes)",
+  "provider": "MiClub",
+  "state": "WA",
+  "holes": 9,
+  "lat": -32.368336,
+  "lng": 115.736203,
+  "url": "https://kennedybay.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2026-06-05&feeGroupId=3451283"
+},
+{
+  "name": "Rockingham Golf Club (18 holes)",
+  "provider": "MiClub",
+  "state": "WA",
+  "holes": 18,
+  "lat": -32.296483,
+  "lng": 115.774097,
+  "url": "https://www.rockinghamgolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=2026-06-08&feeGroupId=1500487570"
+},
+{
+  "name": "Rockingham Golf Club (9 holes)",
+  "provider": "MiClub",
+  "state": "WA",
+  "holes": 9,
+  "lat": -32.296483,
+  "lng": 115.774097,
+  "url": "https://www.rockinghamgolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=2026-06-08&feeGroupId=1500487574"
+},
   {
   "name": "Point Walter Golf Course (9 holes)",
   "provider": "MiClub",
