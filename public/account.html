@@ -29,74 +29,88 @@
     a { color: inherit; text-decoration: none; }
     button { font-family: inherit; }
 
-    /* HEADER (simple) */
-    header {
-      background: var(--teal);
-      color: #fff;
-      padding: 10px 4vw;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    .nav-wrap {
-      max-width: 960px;
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .brand-logo {
-      width: 26px;
-      height: 26px;
-      border-radius: 999px;
-      background: #ecfdf5;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #065f46;
-      font-size: 15px;
-      font-weight: 800;
-      box-shadow: 0 0 0 3px rgba(16,185,129,0.25);
-    }
-    .brand-text {
-      font-weight: 700;
-      letter-spacing: .04em;
-      font-size: 15px;
-    }
-    .nav-links {
-      display: flex;
-      gap: 14px;
-      font-size: 13px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .nav-links a {
-      padding: 4px 8px;
-      border-radius: 999px;
-      color: #e0f2f1;
-      opacity: .9;
-    }
-    .nav-links a:hover {
-      background: rgba(255,255,255,0.16);
-      opacity: 1;
-    }
-    .nav-login {
-      background:#ffffff;
-      color:var(--teal-dark);
-      border:none;
-      padding:5px 14px;
-      border-radius:999px;
-      font-size:12px;
-      font-weight:600;
-      cursor:pointer;
-    }
+    /* HEADER */
+header {
+  background: var(--teal);
+  color: #fff;
+  padding: calc(env(safe-area-inset-top) + 12px) 18px 14px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.nav-wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* hide the little T icon */
+.brand-logo {
+  display: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-text {
+  font-weight: 800;
+  letter-spacing: .01em;
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.nav-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.nav-links a,
+.nav-login {
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 650;
+  border: none;
+}
+
+.nav-links a {
+  color: #e0f2f1;
+  background: rgba(255,255,255,0.12);
+}
+
+.nav-login {
+  background: #ffffff;
+  color: var(--teal-dark);
+  cursor: pointer;
+}
+
+@media (max-width: 520px) {
+  .brand-text {
+    font-size: 1.55rem;
+  }
+
+  .nav-links {
+    gap: 7px;
+  }
+
+  .nav-links a,
+  .nav-login {
+    font-size: 12px;
+    padding: 7px 11px;
+  }
+}
 
     /* MAIN LAYOUT */
     main {
@@ -554,14 +568,12 @@
 <header>
   <div class="nav-wrap">
     <div class="brand">
-      <div class="brand-logo">T</div>
-      <div class="brand-text">TeeRadar</div>
-    </div>
+  <div class="brand-text">TeeRadar</div>
+</div>
     <div class="nav-links">
       <a href="/index.html">Home</a>
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
-      <a href="/about.html">About</a>
       <!-- now a "My account" button in the header, no longer log out -->
       <button id="navAccount" class="nav-login" type="button">My account</button>
     </div>
