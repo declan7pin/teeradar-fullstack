@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>TeeRadar — Course Admin Login</title>
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
   <style>
@@ -87,32 +87,32 @@
       cursor:pointer;
     }
         .homeLink{
-      position:fixed;
-      top:20px;
-      left:20px;
-      background:#fff;
-      color:#00796b;
-      text-decoration:none;
-      font-weight:700;
-      padding:10px 16px;
-      border-radius:999px;
-      border:1px solid #cbd5e1;
-      box-shadow:0 2px 8px rgba(0,0,0,.08);
-      z-index:1000;
-    }
+  position:fixed;
+  top:calc(env(safe-area-inset-top) + 60px);
+  left:20px;
+  background:#fff;
+  color:#00796b;
+  text-decoration:none;
+  font-weight:700;
+  padding:10px 16px;
+  border-radius:999px;
+  border:1px solid #cbd5e1;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);
+  z-index:1000;
+}
 
-    .homeLink:hover{
-      background:#f8fafc;
-    }
+.homeLink:hover{
+  background:#f8fafc;
+}
 
-    @media (max-width:720px){
-      .homeLink{
-        top:calc(env(safe-area-inset-top) + 12px);
-        left:12px;
-        font-size:14px;
-        padding:8px 14px;
-      }
-    }
+@media (max-width:720px){
+  .homeLink{
+    top:calc(env(safe-area-inset-top) + 52px);
+    left:12px;
+    font-size:14px;
+    padding:8px 14px;
+  }
+}
   </style>
 </head>
 <body>
