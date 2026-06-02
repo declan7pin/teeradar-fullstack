@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>TeeRadar — My Rounds</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
   :root{
     --teal:#00796b;
@@ -705,30 +705,41 @@
   }
 
   @media (max-width:700px){
-    header{
-  align-items:center;
-  padding:
-    calc(env(safe-area-inset-top) + 14px)
-    14px
-    14px
-    14px;
-  min-height:calc(env(safe-area-inset-top) + 92px);
-}
+  header{
+    align-items:flex-start;
+    justify-content:flex-start;
+    flex-direction:column;
+    padding:
+      calc(env(safe-area-inset-top) + 58px)
+      14px
+      16px
+      14px;
+    min-height:auto;
+    gap:12px;
+  }
 
-.brand{
-  margin-top:0;
-  font-size:1rem;
-  flex-shrink:0;
-}
-.navbtns{
-  gap:7px;
-  max-width:62%;
-}
+  .brand{
+    margin-top:0;
+    font-size:1rem;
+    flex-shrink:0;
+    width:100%;
+  }
 
-.btn{
-  padding:8px 10px;
-  font-size:.82rem;
-}
+  .brand small{
+    font-size:.82rem;
+  }
+
+  .navbtns{
+    width:100%;
+    max-width:none;
+    justify-content:flex-start;
+    gap:8px;
+  }
+
+  .btn{
+    padding:8px 12px;
+    font-size:.82rem;
+  }
 
     main{
       padding:16px 12px 34px;
