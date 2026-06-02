@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Privacy & Policies • TeeRadar WA</title>
+  <title>Privacy & Policies • TeeRadar</title>
   <style>
     :root {
       --green: #0f766e;
@@ -48,9 +48,10 @@
     }
 
     h1 {
-      font-size: 2rem;
-      margin-bottom: 8px;
-    }
+  font-size: clamp(2rem, 6vw, 3rem);
+  margin-bottom: 8px;
+  line-height: 1.05;
+}
 
     .subtitle {
       color: var(--muted);
@@ -93,15 +94,48 @@
     }
 
     @media (max-width: 720px) {
-      header { flex-direction: column; gap: 10px; padding: 14px 18px; }
-      .wrapper { margin: 24px 16px 50px; padding: 20px; }
-      nav a { margin-left: 10px; font-size: 0.9rem; }
-    }
+
+  header{
+    flex-direction:column;
+    padding:14px 12px;
+    gap:12px;
+  }
+
+  .brand{
+    font-size:1.8rem;
+    text-align:center;
+  }
+
+  nav{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:8px;
+    width:100%;
+  }
+
+  nav a{
+    margin:0;
+    padding:6px 12px;
+    border-radius:999px;
+    background:rgba(255,255,255,0.12);
+    font-size:0.85rem;
+  }
+
+  .wrapper{
+    margin:20px 12px 40px;
+    padding:20px;
+  }
+
+  h1{
+    font-size:2.2rem;
+  }
+}
   </style>
 </head>
 <body>
   <header>
-    <div class="brand">TeeRadar WA</div>
+    <div class="brand">TeeRadar</div>
     <nav>
       <a href="/">Home</a>
       <a href="/book.html">Bookings</a>
@@ -115,25 +149,25 @@
     <h1>Privacy & Policies</h1>
     <p class="subtitle">
       Last updated: 24 November 2025<br />
-      This page explains how TeeRadar WA collects and uses information and how advertising (including Google AdSense) works on our site.
+      This page explains how TeeRadar collects and uses information and how advertising (including Google AdSense) works on our site.
     </p>
 
     <h2>1. Who we are</h2>
     <p>
-      <strong>TeeRadar WA</strong> is a golf tee-time search tool based in Western Australia.
+      <strong>TeeRadar </strong> is a golf tee-time search tool based in Western Australia.
       We show public golf courses and then send you to each course’s own booking site. We do not take
       payments or bookings on your behalf.
     </p>
 
     <h2>2. What TeeRadar does</h2>
     <p>
-      TeeRadar WA lets you search WA public courses by date, time window, holes and players.
+      TeeRadar lets you search Australian public courses by date, time window, holes and players.
       When you click a result, you are taken to the course’s official booking page (for example
       MiClub, Quick18 or a club website). Any booking you make is between you and the course.
     </p>
 
     <h2>3. Information we collect</h2>
-    <p>We collect a small amount of information when you use TeeRadar WA:</p>
+    <p>We collect a small amount of information when you use TeeRadar :</p>
     <ul>
       <li><strong>Account details:</strong> If you create a TeeRadar login, we store your email address, password (encrypted) and optional “home course”.</li>
       <li><strong>Contact messages:</strong> If you use our contact form, we receive the email address and details you submit so we can reply.</li>
@@ -143,7 +177,7 @@
 
     <h2>4. Cookies and similar technologies</h2>
     <p>
-      TeeRadar WA and our partners use cookies and similar technologies to:
+      TeeRadar and our partners use cookies and similar technologies to:
     </p>
     <ul>
       <li>Remember your login session.</li>
@@ -158,11 +192,11 @@
 
     <h2>5. Advertising and Google AdSense</h2>
     <p>
-      We use <strong>Google AdSense</strong> to show ads on TeeRadar WA. This means:
+      We use <strong>Google AdSense</strong> to show ads on TeeRadar. This means:
     </p>
     <ul>
       <li>Third-party vendors, including Google, use cookies to serve ads based on your visits to this and/or other websites.</li>
-      <li>Google’s use of advertising cookies enables it and its partners to serve ads based on your visits to TeeRadar WA and other sites on the internet.</li>
+      <li>Google’s use of advertising cookies enables it and its partners to serve ads based on your visits to TeeRadar and other sites on the internet.</li>
       <li>You may opt out of personalised advertising from Google by visiting your <a href="https://adssettings.google.com" target="_blank" rel="noopener">Google Ads Settings</a> page. You can also learn more at <a href="https://policies.google.com/technologies/ads" target="_blank" rel="noopener">Google’s advertising privacy page</a>.</li>
     </ul>
     <p>
@@ -172,7 +206,7 @@
     <h2>6. How we use your information</h2>
     <p>We use the information we collect to:</p>
     <ul>
-      <li>Provide and maintain TeeRadar WA.</li>
+      <li>Provide and maintain TeeRadar.</li>
       <li>Operate your account and remember your preferences.</li>
       <li>Respond to support or contact requests.</li>
       <li>Monitor usage, detect abuse and keep the service secure.</li>
@@ -186,12 +220,12 @@
     </p>
     <ul>
       <li><strong>Service providers</strong> who host our site, store our database or process analytics/ads (for example, Render, Google, email providers).</li>
-      <li><strong>Legal or safety purposes</strong> if we are required to by law, or if we need to protect the rights, property or safety of TeeRadar WA, our users or others.</li>
+      <li><strong>Legal or safety purposes</strong> if we are required to by law, or if we need to protect the rights, property or safety of TeeRadar, our users or others.</li>
     </ul>
 
     <h2>8. Links to course and third-party sites</h2>
     <p>
-      When you click a booking link, you leave TeeRadar WA and go to a course’s own site or booking platform.
+      When you click a booking link, you leave TeeRadar and go to a course’s own site or booking platform.
       Their privacy policies and terms apply there, not ours. We don’t control those systems and don’t see your payment details.
     </p>
 
@@ -242,7 +276,7 @@
   </main>
 
   <footer>
-    © <script>document.write(new Date().getFullYear())</script> TeeRadar WA • Availability subject to course sites.
+    © <script>document.write(new Date().getFullYear())</script> TeeRadar  • Availability subject to course sites.
   </footer>
 </body>
 </html>
