@@ -614,11 +614,63 @@
   .top-bar {
     padding: calc(env(safe-area-inset-top) + 12px) 14px 12px;
   }
+  /* ---- App splash screen ---- */
+#appSplash{
+  position:fixed;
+  inset:0;
+  z-index:99999;
+  background:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transition:opacity .25s ease, visibility .25s ease;
+}
+
+#appSplash.hide{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+
+.splashInner{
+  text-align:center;
+}
+
+.splashLogo{
+  width:190px;
+  max-width:70vw;
+  display:block;
+  margin:0 auto 18px;
+}
+
+.splashWord{
+  font-size:2rem;
+  font-weight:900;
+  letter-spacing:.08em;
+  color:#101820;
+  min-height:42px;
+}
+
+@media(max-width:520px){
+  .splashLogo{
+    width:165px;
+  }
+
+  .splashWord{
+    font-size:1.65rem;
+  }
 }
   </style>
 </head>
 
 <body>
+  <div id="appSplash">
+    <div class="splashInner">
+      <img src="/assets/TeeRadar Logo.png" alt="TeeRadar" class="splashLogo" />
+      <div id="splashWord" class="splashWord"></div>
+    </div>
+  </div>
+
   <header class="top-bar">
     <div class="top-bar-title">TeeRadar — Book a Tee Time</div>
 
@@ -828,6 +880,29 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/group-vote-create.js"></script>
   <script>
+    (function runSplash(){
+      const wordEl = document.getElementById("splashWord");
+      const splash = document.getElementById("appSplash");
+      const word = "TEERADAR";
+
+      setTimeout(() => {
+        let i = 0;
+        const interval = setInterval(() => {
+          if (!wordEl) return clearInterval(interval);
+
+          wordEl.textContent = word.slice(0, i + 1);
+          i++;
+
+          if (i >= word.length) {
+            clearInterval(interval);
+          }
+        }, 1000 / word.length);
+      }, 1500);
+
+      setTimeout(() => {
+        if (splash) splash.classList.add("hide");
+      }, 2500);
+    })();
 
     const API_BASE = "https://teeradar-fullstack-5.onrender.com";
 window.fetch = ((originalFetch) => {
