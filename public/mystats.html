@@ -33,10 +33,13 @@
   }
 
   .wrap{
-    max-width:1180px;
-    margin:0 auto;
-    padding:24px 18px 42px;
-  }
+  max-width:1180px;
+  margin:0 auto;
+  padding:
+    calc(env(safe-area-inset-top) + 24px)
+    18px
+    calc(env(safe-area-inset-bottom) + 42px);
+}
 
   header{
     display:flex;
@@ -363,8 +366,11 @@
 
   @media (max-width:700px){
     .wrap{
-      padding:18px 12px 34px;
-    }
+  padding:
+    calc(env(safe-area-inset-top) + 24px)
+    12px
+    calc(env(safe-area-inset-bottom) + 34px);
+}
 
     header{
       align-items:flex-start;
@@ -463,12 +469,13 @@
 
 .customRange input{
   width:100%;
+  min-height:52px;
   padding:12px 14px;
   border:1px solid var(--border);
   border-radius:16px;
   background:#f8fafc;
   color:var(--text);
-  font:inherit;
+  font-size:16px;
   font-weight:800;
 }
 
