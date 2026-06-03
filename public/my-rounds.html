@@ -843,6 +843,46 @@
 .liveScoreHero.saved .scoreBig{
   font-size:1.75rem;
 }
+/* ✅ MOBILE ONLY: scorecard scrolls vertically + horizontally without zooming page */
+@media (max-width:700px){
+  html,
+  body{
+    width:100%;
+    max-width:100%;
+    overflow-x:hidden;
+  }
+
+  .card,
+  #scorecardWrap{
+    max-width:100%;
+    min-width:0;
+  }
+
+  .tableWrap{
+    width:100%;
+    max-width:100%;
+    max-height:70vh;
+    overflow:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    touch-action:pan-x pan-y;
+  }
+
+  #scoreTable{
+    width:max-content;
+    min-width:820px;
+  }
+
+  th,
+  td{
+    font-size:.82rem;
+    padding:9px 8px;
+  }
+
+  .mini{
+    width:64px;
+    padding:8px 6px;
+  }
 }
 </style>
 </head>
@@ -1094,7 +1134,7 @@
     <div class="premTop">
       <div class="premPills" id="premPills"></div>
       <div class="premPills">
-        <button class="btn2 secondary" id="toggleTableBtn" type="button" style="display:none;">View table</button>
+        <button class="btn2 secondary" id="toggleTableBtn" type="button" style="display:none;">View scorecard</button>
       </div>
     </div>
 
@@ -2468,7 +2508,7 @@ function setPremiumVisible(on){
 
   if (toggleTableBtn){
     toggleTableBtn.style.display = on ? "inline-flex" : "none";
-    toggleTableBtn.textContent = premiumShowingTable ? "Play mode" : "View table";
+    toggleTableBtn.textContent = premiumShowingTable ? "Play mode" : "View scorecard";
   }
 }
 
