@@ -735,6 +735,25 @@ header {
         <button id="savePrefsBtn" class="btn-primary" type="button">Save preferences</button>
         <span id="prefsStatus" class="status"></span>
       </div>
+        </div>
+
+    <div class="card">
+      <h2>Push notifications</h2>
+      <p>
+        Turn on mobile/browser push alerts for tee time notifications.
+      </p>
+
+      <div class="row-actions">
+        <button id="enablePushBtn" class="btn-primary" type="button">
+          Enable push notifications
+        </button>
+
+        <button id="disablePushBtn" class="btn-secondary" type="button">
+          Disable push notifications
+        </button>
+
+        <span id="pushStatus" class="status"></span>
+      </div>
     </div>
 
     <div class="card">
@@ -874,6 +893,10 @@ const previousGamesFilter = document.getElementById("previousGamesFilter");
   const prefHoles = document.getElementById("prefHoles");
   const prefPartySize = document.getElementById("prefPartySize");
   const alertFrequencySelect = document.getElementById("alertFrequency");
+  // ✅ PUSH NOTIFICATIONS
+const enablePushBtn = document.getElementById("enablePushBtn");
+const disablePushBtn = document.getElementById("disablePushBtn");
+const pushStatus = document.getElementById("pushStatus");
 
   if (!email) {
     notLoggedInEl.style.display = "block";
@@ -2564,7 +2587,62 @@ if (previousGamesFilter) {
     }
 
     await loadMyGames();
-  })();
+    })();
+
+  // ✅ PUSH NOTIFICATION BUTTONS
+  if (enablePushBtn) {
+    enablePushBtn.addEventListener("click", async () => {
+      try {
+        if (!window.TeeRadarPush?.enablePush) {
+          throw new Error("Push script not loaded.");
+        }
+
+        pushStatus.textContent = "Requesting permission...";
+        pushStatus.className = "status";
+
+        await window.TeeRadarPush.enablePush(email);
+
+        pushStatus.textContent = "Push notifications enabled.";
+        pushStatus.className = "status ok";
+      } catch (err) {
+        console.error(err);
+
+        pushStatus.textContent =
+          err?.message || "Could not enable push notifications.";
+
+        pushStatus.className = "status err";
+      }
+    });
+  }
+
+  if (disablePushBtn) {
+    disablePushBtn.addEventListener("click", async () => {
+      try {
+        if (!window.TeeRadarPush?.disablePush) {
+          throw new Error("Push script not loaded.");
+        }
+
+        pushStatus.textContent = "Disabling...";
+        pushStatus.className = "status";
+
+        await window.TeeRadarPush.disablePush();
+
+        pushStatus.textContent =
+          "Push notifications disabled on this device.";
+
+        pushStatus.className = "status ok";
+      } catch (err) {
+        console.error(err);
+
+        pushStatus.textContent =
+          err?.message || "Could not disable push notifications.";
+
+        pushStatus.className = "status err";
+      }
+    });
+  }
 </script>
+
+<script src="/push.js"></script>
 </body>
 </html>
