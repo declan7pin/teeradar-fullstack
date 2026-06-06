@@ -1,10 +1,89 @@
 const PUSH_API_BASE = "https://teeradar-fullstack-5.onrender.com";
 
+function isNativeApp() {
+  return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+}
+
+function getPushPlugin() {
+  return window.Capacitor?.Plugins?.PushNotifications || null;
+}
+
+function getUserEmail(passedEmail) {
+  return (
+    passedEmail ||
+    localStorage.getItem("teeradar_user_email") ||
+    localStorage.getItem("teeradar_email") ||
+    ""
+  ).trim().toLowerCase();
+}
+
+/* =========================
+   NATIVE iOS / ANDROID PUSH
+========================= */
+async function enableNativePush(email) {
+  const PushNotifications = getPushPlugin();
+
+  if (!PushNotifications) {
+    throw new Error("Native push plugin not available. Run npx cap sync ios and reinstall the app.");
+  }
+
+  let perm = await PushNotifications.checkPermissions();
+
+  if (perm.receive !== "granted") {
+    perm = await PushNotifications.requestPermissions();
+  }
+
+  if (perm.receive !== "granted") {
+    throw new Error("Push permission was not granted.");
+  }
+
+  PushNotifications.removeAllListeners();
+
+  await PushNotifications.addListener("registration", async (token) => {
+    console.log("Native push token:", token.value);
+
+    const userEmail = getUserEmail(email);
+    const jwt = localStorage.getItem("teeradar_jwt") || "";
+
+    await fetch(`${PUSH_API_BASE}/api/mobile-push/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(jwt ? { Authorization: "Bearer " + jwt } : {})
+      },
+      body: JSON.stringify({
+        email: userEmail,
+        platform: window.Capacitor.getPlatform(),
+        token: token.value
+      })
+    });
+  });
+
+  await PushNotifications.addListener("registrationError", (err) => {
+    console.error("Native push registration error:", err);
+  });
+
+  await PushNotifications.addListener("pushNotificationReceived", (notification) => {
+    console.log("Push received:", notification);
+  });
+
+  await PushNotifications.addListener("pushNotificationActionPerformed", (event) => {
+    const url = event?.notification?.data?.url;
+    if (url) window.location.href = url;
+  });
+
+  await PushNotifications.register();
+
+  return true;
+}
+
+/* =========================
+   WEB PUSH
+========================= */
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
-
   return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
@@ -19,26 +98,22 @@ async function getPublicVapidKey() {
   return data.publicKey;
 }
 
-async function enableTeeRadarPushNotifications() {
+async function enableWebPush(email) {
   if (!("serviceWorker" in navigator)) {
-    alert("Push notifications are not supported on this browser.");
-    return false;
+    throw new Error("Push notifications are not supported on this browser.");
   }
 
   if (!("PushManager" in window)) {
-    alert("Push notifications are not supported on this device.");
-    return false;
+    throw new Error("Push notifications are not supported on this device.");
   }
 
   const permission = await Notification.requestPermission();
 
   if (permission !== "granted") {
-    alert("Notifications were not enabled.");
-    return false;
+    throw new Error("Notifications were not enabled.");
   }
 
   const registration = await navigator.serviceWorker.register("/sw.js");
-
   const publicKey = await getPublicVapidKey();
 
   const subscription = await registration.pushManager.subscribe({
@@ -46,11 +121,7 @@ async function enableTeeRadarPushNotifications() {
     applicationServerKey: urlBase64ToUint8Array(publicKey)
   });
 
-  const email =
-    localStorage.getItem("teeradar_user_email") ||
-    localStorage.getItem("teeradar_email") ||
-    "";
-
+  const userEmail = getUserEmail(email);
   const token = localStorage.getItem("teeradar_jwt") || "";
 
   const res = await fetch(`${PUSH_API_BASE}/api/push/subscribe`, {
@@ -60,7 +131,7 @@ async function enableTeeRadarPushNotifications() {
       ...(token ? { Authorization: "Bearer " + token } : {})
     },
     body: JSON.stringify({
-      email,
+      email: userEmail,
       subscription
     })
   });
@@ -71,11 +142,29 @@ async function enableTeeRadarPushNotifications() {
     throw new Error(data.error || "Could not save push subscription");
   }
 
-  alert("Push notifications enabled.");
   return true;
 }
 
+/* =========================
+   PUBLIC METHODS
+========================= */
+async function enablePush(email) {
+  if (isNativeApp()) {
+    return enableNativePush(email);
+  }
+
+  return enableWebPush(email);
+}
+
 async function disablePush() {
+  if (isNativeApp()) {
+    const PushNotifications = getPushPlugin();
+    if (PushNotifications) {
+      await PushNotifications.removeAllListeners();
+    }
+    return true;
+  }
+
   const registration = await navigator.serviceWorker.ready;
   const subscription = await registration.pushManager.getSubscription();
 
@@ -95,6 +184,6 @@ async function disablePush() {
 }
 
 window.TeeRadarPush = {
-  enablePush: enableTeeRadarPushNotifications,
+  enablePush,
   disablePush
 };
