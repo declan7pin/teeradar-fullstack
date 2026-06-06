@@ -75,4 +75,26 @@ async function enableTeeRadarPushNotifications() {
   return true;
 }
 
-window.enableTeeRadarPushNotifications = enableTeeRadarPushNotifications;
+async function disablePush() {
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription();
+
+  if (subscription) {
+    const endpoint = subscription.endpoint;
+
+    await fetch(`${PUSH_API_BASE}/api/push/unsubscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint })
+    });
+
+    await subscription.unsubscribe();
+  }
+
+  return true;
+}
+
+window.TeeRadarPush = {
+  enablePush: enableTeeRadarPushNotifications,
+  disablePush
+};
