@@ -41,6 +41,9 @@ import authRouter from "./auth.js";
 // 🔔 Alerts (NEW)
 import alertsRouter from "./alertsRoutes.js";
 import { startAlertWorker, runAlertTickOnce } from "./alertWorker.js"; // ✅ ADDED runAlertTickOnce
+// 🔔 Push notifications
+import pushRouter from "./pushRoutes.js";
+import { ensurePushSubscriptionsTable } from "./pushMigrate.js";
 
 // ✅ NEW: Rounds router
 import roundsRouter from "./roundsRoutes.js";
@@ -527,6 +530,7 @@ async function ensureAlertHitsTable() {
   }
 }
 ensureAlertHitsTable();
+ensurePushSubscriptionsTable();
 ensureRoundsTables();
 ensureScorecardTemplatesTables();
 ensureSubscriberStatusSchema(); // ✅ ADD: creates subscriber_status table in code
@@ -1149,6 +1153,8 @@ app.use(groupVotesRouter);
 
 // 🔔 Alerts API
 app.use("/api/alerts", alertsRouter);
+// 🔔 Push notifications API
+app.use("/api/push", pushRouter);
 
 // -------------------------------------------------
 // Stripe Checkout – create subscription session
