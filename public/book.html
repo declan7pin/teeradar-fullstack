@@ -137,11 +137,45 @@
     }
 
     .status-line {
-      font-size: 13px;
-      padding: 6px 16px 0 16px;
-      color: #555;
-    }
+  font-size: 13px;
+  padding: 8px 16px 0 16px;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
 
+.status-line.loading::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #00c853;
+  display: inline-block;
+  animation: livePulse 1s infinite ease-in-out;
+  box-shadow: 0 0 0 rgba(0,200,83,.5);
+}
+
+@keyframes livePulse {
+  0% {
+    transform: scale(0.9);
+    opacity: .7;
+    box-shadow: 0 0 0 0 rgba(0,200,83,.5);
+  }
+
+  70% {
+    transform: scale(1.15);
+    opacity: 1;
+    box-shadow: 0 0 0 10px rgba(0,200,83,0);
+  }
+
+  100% {
+    transform: scale(0.9);
+    opacity: .7;
+    box-shadow: 0 0 0 0 rgba(0,200,83,0);
+  }
+}
     #map {
       height: 320px;
       margin: 10px 16px;
@@ -2282,6 +2316,8 @@ if (newLatestM !== lM) {
 
       statusLine.textContent = "Checking live availability...";
       statusLine.style.color = "#555";
+      statusLine.classList.add("loading");
+
       renderCourseSkeleton(6);
 
       try {
@@ -2389,7 +2425,8 @@ trackEvent("search", {
   slots: totalSlots, // ✅ now safe
 });
 
-        if (totalSlots === 0) {
+        statusLine.classList.remove("loading");
+          if (totalSlots === 0) {
           statusLine.textContent =
             "No matching tee times found in that window. Try adjusting the filters.";
           statusLine.style.color = "#b03030";
@@ -2403,6 +2440,7 @@ trackEvent("search", {
         renderCourses();
       } catch (err) {
         console.error("Search error", err);
+        statusLine.classList.remove("loading");
         statusLine.textContent = "Error checking availability. Please try again.";
         statusLine.style.color = "#b03030";
       }
