@@ -2023,7 +2023,6 @@ function setLeftPanelsVisibility(show){
       playerNames[0] = String(inp.value || "").trim();
       try{ localStorage.setItem("teeradar_guest_p1_name", playerNames[0]); }catch{}
       // refresh headers if a round is open
-      if (currentRoundId && currentRound) renderScorecard(currentRound);
     });
   }
 } else {
@@ -2032,7 +2031,6 @@ function setLeftPanelsVisibility(show){
     // if a round is selected, save immediately to that round
     if (currentRoundId) saveNamesForRound(currentRoundId);
     // also refresh header labels
-    if (currentRoundId && currentRound) renderScorecard(currentRound);
   });
 }
 
@@ -2701,6 +2699,11 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
     sel.style.border = "1px solid var(--border)";
     sel.style.fontWeight = "900";
     sel.style.fontSize = "18px";
+
+    const blankOpt = document.createElement("option");
+blankOpt.value = "";
+blankOpt.textContent = "Select putts";
+sel.appendChild(blankOpt);
 
         const puttVals = [
       { value: 0, label: "Chipped in" },
