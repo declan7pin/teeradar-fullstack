@@ -2590,11 +2590,8 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
   const startStrokes = Number.isFinite(Number(curStrokes)) ? Number(curStrokes) : Number(basePar);
   const startPutts = Number.isFinite(Number(curPutts)) ? Number(curPutts) : 2;
 
-  // strokes options: par-2 .. par+4
-  const strokeVals = [];
-  for (let v = basePar - 2; v <= basePar + 4; v++){
-    if (v >= 1 && v <= 12) strokeVals.push(v);
-  }
+    // strokes options: 1 to 11+
+  const strokeVals = [1,2,3,4,5,6,7,8,9,10,11];
 
   // wheel picker for strokes
   if (premScoreBtns){
@@ -2610,7 +2607,7 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
     strokeVals.forEach(v => {
       const opt = document.createElement("option");
       opt.value = String(v);
-      opt.textContent = String(v);
+      opt.textContent = v === 11 ? "11+" : String(v);
       sel.appendChild(opt);
     });
 
@@ -2636,10 +2633,24 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
     sel.style.fontWeight = "900";
     sel.style.fontSize = "18px";
 
-    [0,1,2,3,4].forEach(v => {
+        const puttVals = [
+      { value: 0, label: "Chipped in" },
+      { value: 1, label: "1" },
+      { value: 2, label: "2" },
+      { value: 3, label: "3" },
+      { value: 4, label: "4" },
+      { value: 5, label: "5" },
+      { value: 6, label: "6" },
+      { value: 7, label: "7" },
+      { value: 8, label: "8" },
+      { value: 9, label: "9" },
+      { value: 10, label: "10" }
+    ];
+
+    puttVals.forEach(({ value, label }) => {
       const opt = document.createElement("option");
-      opt.value = String(v);
-      opt.textContent = String(v);
+      opt.value = String(value);
+      opt.textContent = label;
       sel.appendChild(opt);
     });
 
