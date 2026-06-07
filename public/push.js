@@ -1,11 +1,23 @@
 const PUSH_API_BASE = "https://teeradar-fullstack-5.onrender.com";
 
 function isNativeApp() {
-  return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  try {
+    return (
+      window.Capacitor &&
+      typeof window.Capacitor.getPlatform === "function" &&
+      ["ios", "android"].includes(window.Capacitor.getPlatform())
+    );
+  } catch {
+    return false;
+  }
 }
 
 function getPushPlugin() {
-  return window.Capacitor?.Plugins?.PushNotifications || null;
+  return (
+    window.Capacitor?.Plugins?.PushNotifications ||
+    window.Capacitor?.PushNotifications ||
+    null
+  );
 }
 
 function getUserEmail(passedEmail) {
@@ -24,7 +36,9 @@ async function enableNativePush(email) {
   const PushNotifications = getPushPlugin();
 
   if (!PushNotifications) {
-    throw new Error("Native push plugin not available. Run npx cap sync ios and reinstall the app.");
+    throw new Error(
+      "Native push plugin not available. Run npx cap sync ios and reinstall the app."
+    );
   }
 
   let perm = await PushNotifications.checkPermissions();
@@ -37,7 +51,9 @@ async function enableNativePush(email) {
     throw new Error("Push permission was not granted.");
   }
 
-  PushNotifications.removeAllListeners();
+  if (typeof PushNotifications.removeAllListeners === "function") {
+    await PushNotifications.removeAllListeners();
+  }
 
   await PushNotifications.addListener("registration", async (token) => {
     console.log("Native push token:", token.value);
@@ -45,7 +61,7 @@ async function enableNativePush(email) {
     const userEmail = getUserEmail(email);
     const jwt = localStorage.getItem("teeradar_jwt") || "";
 
-    await fetch(`${PUSH_API_BASE}/api/mobile-push/register`, {
+    const res = await fetch(`${PUSH_API_BASE}/api/mobile-push/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -57,6 +73,12 @@ async function enableNativePush(email) {
         token: token.value
       })
     });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.ok) {
+      console.warn("Native push token save failed:", data);
+    }
   });
 
   await PushNotifications.addListener("registrationError", (err) => {
@@ -159,9 +181,15 @@ async function enablePush(email) {
 async function disablePush() {
   if (isNativeApp()) {
     const PushNotifications = getPushPlugin();
-    if (PushNotifications) {
+
+    if (PushNotifications && typeof PushNotifications.removeAllListeners === "function") {
       await PushNotifications.removeAllListeners();
     }
+
+    return true;
+  }
+
+  if (!("serviceWorker" in navigator)) {
     return true;
   }
 
