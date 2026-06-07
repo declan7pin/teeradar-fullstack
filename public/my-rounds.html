@@ -533,118 +533,175 @@
   }
 
   #premiumWrap{
-    display:none;
-    border:1px solid var(--border);
-    border-radius:22px;
-    background:#fff;
-    overflow:hidden;
-    box-shadow:0 12px 34px rgba(15,23,42,.07);
+  display:none;
+  border:0;
+  border-radius:28px;
+  background:#fff;
+  overflow:hidden;
+  box-shadow:0 18px 48px rgba(15,23,42,.10);
+}
+
+.premTop{
+  padding:20px;
+  background:linear-gradient(135deg,#071f2f,#00796b);
+  color:#fff;
+}
+
+.premHeroTop{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:14px;
+}
+
+.premHoleTitle{
+  font-size:2rem;
+  font-weight:1000;
+  letter-spacing:-.06em;
+  line-height:1;
+}
+
+.premPlayer{
+  margin-top:8px;
+  display:inline-flex;
+  padding:8px 12px;
+  border-radius:999px;
+  background:rgba(255,255,255,.13);
+  border:1px solid rgba(255,255,255,.18);
+  font-weight:900;
+}
+
+.premScoreBox{
+  text-align:right;
+}
+
+.premScoreBig{
+  font-size:2.6rem;
+  font-weight:1000;
+  letter-spacing:-.07em;
+  line-height:1;
+}
+
+.premScoreSmall{
+  margin-top:4px;
+  opacity:.82;
+  font-weight:900;
+}
+
+.premPills{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:16px;
+}
+
+.premPill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:9px 12px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.12);
+  font-weight:900;
+  font-size:.88rem;
+  white-space:nowrap;
+}
+
+.premPill.clickable{
+  background:#fff;
+  border-color:#fff;
+  color:#005e55;
+  cursor:pointer;
+  box-shadow:0 8px 20px rgba(0,0,0,.18);
+}
+
+.premBody{
+  padding:18px;
+  background:linear-gradient(180deg,#ffffff,#f7fbfa);
+}
+
+.premGrid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:14px;
+}
+
+.premPanel{
+  border:1px solid rgba(219,229,234,.95);
+  border-radius:24px;
+  padding:18px;
+  background:#fff;
+  box-shadow:0 12px 30px rgba(15,23,42,.06);
+}
+
+.premRow{
+  display:block;
+  margin-top:18px;
+}
+
+.premRow:first-child{
+  margin-top:0;
+}
+
+.premRow label{
+  margin:0 0 10px;
+  font-size:1.05rem;
+  font-weight:1000;
+  letter-spacing:-.03em;
+}
+
+.premBtns select{
+  appearance:none;
+  -webkit-appearance:none;
+  min-height:58px;
+  border-radius:18px!important;
+  background:#f8fafc!important;
+  border:1px solid #dbe5ea!important;
+  text-align:center;
+  text-align-last:center;
+  font-size:1.35rem!important;
+  font-weight:1000!important;
+  color:#0f172a!important;
+}
+
+.premNav{
+  display:grid;
+  grid-template-columns:1fr 1.4fr;
+  gap:10px;
+  margin-top:18px;
+}
+
+.premNav .btn2{
+  min-height:56px;
+  font-size:1rem;
+}
+
+.premMiniNote{
+  margin-top:14px;
+  color:var(--muted);
+  font-weight:900;
+  text-align:center;
+}
+
+@media(max-width:700px){
+  #premiumWrap{
+    margin-left:-2px;
+    margin-right:-2px;
   }
 
   .premTop{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:12px;
-    padding:14px;
-    background:linear-gradient(135deg,#063f39,#00796b);
-    color:#fff;
+    padding:20px 18px;
   }
 
-  .premPills{
-    display:flex;
-    gap:8px;
-    flex-wrap:wrap;
-    align-items:center;
+  .premHoleTitle{
+    font-size:2.15rem;
   }
 
-  .premPill{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    padding:8px 11px;
-    border-radius:999px;
-    border:1px solid rgba(255,255,255,.18);
-    background:rgba(255,255,255,.12);
-    font-weight:900;
-    font-size:.86rem;
-    white-space:nowrap;
+  .premScoreBig{
+    font-size:2.8rem;
   }
-
-  .premPill.clickable{
-    background:#fff;
-    border-color:#fff;
-    color:#005e55;
-    cursor:pointer;
-    box-shadow:0 8px 20px rgba(0,0,0,.18);
-  }
-
-  @keyframes holePulse{
-    0%{box-shadow:0 0 0 0 rgba(255,255,255,.5),0 8px 20px rgba(0,0,0,.18)}
-    70%{box-shadow:0 0 0 10px rgba(255,255,255,0),0 8px 20px rgba(0,0,0,.18)}
-    100%{box-shadow:0 0 0 0 rgba(255,255,255,0),0 8px 20px rgba(0,0,0,.18)}
-  }
-
-  .premPill.clickable.attention{animation:holePulse 2s infinite}
-
-  .premBody{padding:16px}
-
-  .premGrid{
-    display:grid;
-    grid-template-columns:1fr;
-    gap:14px;
-  }
-
-  .premPanel{
-    border:1px solid var(--border);
-    border-radius:20px;
-    padding:16px;
-    background:linear-gradient(180deg,#fff,#fbfdfe);
-  }
-
-  .premRow{
-    display:grid;
-    grid-template-columns:120px 1fr;
-    gap:12px;
-    align-items:center;
-    margin-top:12px;
-  }
-
-  @media (max-width:520px){
-    .premRow{grid-template-columns:1fr}
-  }
-
-  .premRow label{
-    margin:0;
-    font-size:1rem;
-    font-weight:950;
-  }
-
-  .premBtns{
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-  }
-
-  .premNav{
-    display:flex;
-    gap:10px;
-    justify-content:space-between;
-    flex-wrap:wrap;
-    margin-top:16px;
-  }
-
-  .premNav .btn2{
-    flex:1;
-    min-width:140px;
-  }
-
-  .premMiniNote{
-    margin-top:12px;
-    color:var(--muted);
-    font-weight:800;
-  }
-
+}
   .tableWrap.hidden{display:none}
 
   .holePickerBack{
@@ -1142,7 +1199,7 @@
       <div class="premGrid">
         <div class="premPanel">
           <div class="premRow">
-            <label>Score</label>
+            <label>Strokes</label>
             <div class="premBtns" id="premScoreBtns"></div>
           </div>
 
@@ -2568,13 +2625,25 @@ if (premPills){
   const toParLabel = (totals.toPar == null) ? "—" : (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+"+totals.toPar : ""+totals.toPar));
 
   premPills.innerHTML = `
-    <span class="premPill">${escapeHtml(pLabel)}</span>
+  <div class="premHeroTop">
+    <div>
+      <div class="premHoleTitle">Hole ${holeNum}</div>
+      <div class="premPlayer">${escapeHtml(pLabel)}</div>
+    </div>
+
+    <div class="premScoreBox">
+      <div class="premScoreBig">${escapeHtml(toParLabel)}</div>
+      <div class="premScoreSmall">To par</div>
+    </div>
+  </div>
+
+  <div class="premPills">
     <span class="premPill clickable attention" id="premHoleSelectPill">Hole ${holeNum} / ${holesCount}</span>
     <span class="premPill">Par ${Number.isFinite(basePar) ? basePar : "—"}</span>
-    <span class="premPill">${Number.isFinite(metaDist) ? (metaDist + "m") : "—"}</span>
+    <span class="premPill">${Number.isFinite(metaDist) ? (metaDist + "m") : "Distance —"}</span>
     <span class="premPill">${teeName ? ("Tee " + escapeHtml(teeName)) : "Tee —"}</span>
-    <span class="premPill">To Par: ${toParLabel}</span>
-  `;
+  </div>
+`;
 }
 
 // ✅ button text
@@ -2668,9 +2737,8 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
   // no colours / shapes in play mode
   if (premNote){
     premNote.textContent = (premiumPlayerIndex < (getPlayersCountFromRound(round) - 1))
-  ? "Use the wheels, then Next player →"
-  : "Use the wheels, then Next hole →";
-  }
+  ? "Enter this player’s score, then move to the next player."
+  : "Enter your score, then move to the next hole.";
 
   const pc2 = getPlayersCountFromRound(round);
 if (premPrevBtn) premPrevBtn.disabled = (premiumHoleIndex <= 0 && premiumPlayerIndex <= 0);
