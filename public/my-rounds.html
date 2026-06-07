@@ -2657,7 +2657,7 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
 
   // ✅ defaults you requested
   const startStrokes = Number.isFinite(Number(curStrokes)) ? Number(curStrokes) : Number(basePar);
-  const startPutts = Number.isFinite(Number(curPutts)) ? Number(curPutts) : 2;
+  const startPutts = Number.isFinite(Number(curPutts)) ? Number(curPutts) : "";
 
     // strokes options: 1 to 11+
   const strokeVals = [1,2,3,4,5,6,7,8,9,10,11];
@@ -2716,6 +2716,11 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
       { value: 10, label: "10" }
     ];
 
+    const blankOpt = document.createElement("option");
+blankOpt.value = "";
+blankOpt.textContent = "Select putts";
+sel.appendChild(blankOpt);
+
     puttVals.forEach(({ value, label }) => {
       const opt = document.createElement("option");
       opt.value = String(value);
@@ -2723,7 +2728,7 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
       sel.appendChild(opt);
     });
 
-    sel.value = String(startPutts);
+    sel.value = startPutts === "" ? "" : String(startPutts);
 
     sel.addEventListener("change", () => {
       const v = Number(sel.value);
