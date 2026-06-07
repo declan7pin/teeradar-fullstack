@@ -2719,11 +2719,6 @@ sel.appendChild(blankOpt);
       { value: 10, label: "10" }
     ];
 
-    const blankOpt = document.createElement("option");
-blankOpt.value = "";
-blankOpt.textContent = "Select putts";
-sel.appendChild(blankOpt);
-
     puttVals.forEach(({ value, label }) => {
       const opt = document.createElement("option");
       opt.value = String(value);
@@ -2734,8 +2729,9 @@ sel.appendChild(blankOpt);
     sel.value = startPutts === "" ? "" : String(startPutts);
 
     sel.addEventListener("change", () => {
-      const v = Number(sel.value);
-      setHoleValueInTable(holeNum, "putts", premiumPlayerIndex + 1, Number.isFinite(v) ? v : null);
+      const raw = String(sel.value || "").trim();
+const v = raw === "" ? null : Number(raw);
+setHoleValueInTable(holeNum, "putts", premiumPlayerIndex + 1, Number.isFinite(v) ? v : null);
       renderPremiumForHole(round, metaPars, metaDists, teeName);
     });
 
