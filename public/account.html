@@ -830,6 +830,10 @@ header {
     </div>
   </div>
 </div>
+
+<script src="/capacitor.js"></script>
+<script src="/push.js"></script>
+  
 <script>
   // --- basic auth presence check using localStorage ---
   const email =
@@ -2589,7 +2593,7 @@ if (previousGamesFilter) {
     await loadMyGames();
     })();
 
-  // ✅ PUSH NOTIFICATION BUTTONS
+   // ✅ PUSH NOTIFICATION BUTTONS
   if (enablePushBtn) {
     enablePushBtn.addEventListener("click", async () => {
       try {
@@ -2642,7 +2646,5 @@ if (previousGamesFilter) {
     });
   }
 </script>
-
-<script src="/push.js"></script>
 </body>
 </html>
