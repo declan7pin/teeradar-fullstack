@@ -2652,11 +2652,11 @@ if (premPrevBtn) premPrevBtn.textContent = (premiumPlayerIndex > 0) ? "← Prev 
 const holeRow = getHoleRowFromTable(holeNum);
 const curStrokes = holeRow ? getHolePlayerValue(holeRow, "strokes", premiumPlayerIndex) : null;
 const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerIndex) : null;
+const hasSavedPutts = curPutts !== null && curPutts !== undefined && Number.isFinite(Number(curPutts));
 
   // ✅ defaults you requested
   const startStrokes = Number.isFinite(Number(curStrokes)) ? Number(curStrokes) : Number(basePar);
-  const startPutts = Number.isFinite(Number(curPutts)) ? Number(curPutts) : "";
-
+  const startPutts = hasSavedPutts ? Number(curPutts) : "";
     // strokes options: 1 to 11+
   const strokeVals = [1,2,3,4,5,6,7,8,9,10,11];
 
@@ -2706,28 +2706,29 @@ blankOpt.textContent = "Select putts";
 sel.appendChild(blankOpt);
 
         const puttVals = [
-      { value: 0, label: "Chipped in" },
-      { value: 1, label: "1" },
-      { value: 2, label: "2" },
-      { value: 3, label: "3" },
-      { value: 4, label: "4" },
-      { value: 5, label: "5" },
-      { value: 6, label: "6" },
-      { value: 7, label: "7" },
-      { value: 8, label: "8" },
-      { value: 9, label: "9" },
-      { value: 10, label: "10" }
-    ];
+  { value: "", label: "Select putts" },
+  { value: 0, label: "Chipped in" },
+  { value: 1, label: "1" },
+  { value: 2, label: "2" },
+  { value: 3, label: "3" },
+  { value: 4, label: "4" },
+  { value: 5, label: "5" },
+  { value: 6, label: "6" },
+  { value: 7, label: "7" },
+  { value: 8, label: "8" },
+  { value: 9, label: "9" },
+  { value: 10, label: "10" }
+];
 
-    puttVals.forEach(({ value, label }) => {
-      const opt = document.createElement("option");
-      opt.value = String(value);
-      opt.textContent = label;
-      sel.appendChild(opt);
-    });
+puttVals.forEach(({ value, label }) => {
+  const opt = document.createElement("option");
+  opt.value = String(value);
+  opt.textContent = label;
+  sel.appendChild(opt);
+});
 
-    sel.value = startPutts === "" ? "" : String(startPutts);
-
+sel.value = startPutts === "" ? "" : String(startPutts);
+    
     sel.addEventListener("change", () => {
       const raw = String(sel.value || "").trim();
 const v = raw === "" ? null : Number(raw);
