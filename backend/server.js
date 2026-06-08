@@ -536,6 +536,45 @@ ensureRoundsTables();
 ensureScorecardTemplatesTables();
 ensureSubscriberStatusSchema(); // ✅ ADD: creates subscriber_status table in code
 
+async function ensureUserFriendsTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS user_friends (
+        id BIGSERIAL PRIMARY KEY,
+        requester_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        addressee_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT now(),
+        accepted_at TIMESTAMPTZ,
+        CHECK (status IN ('pending', 'accepted', 'blocked')),
+        CHECK (requester_user_id <> addressee_user_id),
+        UNIQUE (requester_user_id, addressee_user_id)
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_friends_requester
+      ON user_friends (requester_user_id);
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_friends_addressee
+      ON user_friends (addressee_user_id);
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_friends_status
+      ON user_friends (status);
+    `);
+
+    console.log("✅ user_friends table ready");
+  } catch (err) {
+    console.error("❌ error ensuring user_friends table:", err);
+  }
+}
+
+ensureUserFriendsTable();
+
 /* ✅✅✅ ONLY ADDITION (needed): ensure booking tables exist (so admin can create courses + generate times) ✅✅✅ */
 async function ensureBookingTables() {
   try {
