@@ -16,79 +16,41 @@
     .stat{background:#e6f4f1;border-radius:14px;padding:14px}
     .stat strong{display:block;font-size:24px;color:#005e55}
     .stat span{font-size:13px;color:#64748b}
-    .round{
-  border:1px solid #dbe5ea;
-  border-radius:14px;
-  padding:13px;
-  margin-top:10px;
-  transition:.18s ease;
-}
-
-.round:hover{
-  transform:translateY(-2px);
-  box-shadow:0 10px 25px rgba(15,23,42,.08);
-}
+    .round{border:1px solid #dbe5ea;border-radius:14px;padding:13px;margin-top:10px;transition:.18s ease;cursor:pointer}
+    .round:hover{transform:translateY(-2px);box-shadow:0 10px 25px rgba(15,23,42,.08)}
     .round strong{display:block}
     .round span{display:block;color:#64748b;font-size:13px;margin-top:3px}
     .back{display:inline-block;margin-bottom:14px;color:#005e55;font-weight:700}
     .empty{color:#64748b}
     h2{margin:0 0 12px}
     .section-title{margin:18px 0 10px;font-size:15px;color:#64748b;text-transform:uppercase;letter-spacing:.06em}
-    .compare-grid{
-  display:grid;
-  gap:10px;
-}
 
-.compare-row{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:10px;
-}
+    .compare-btn{
+      width:100%;
+      border:0;
+      border-radius:14px;
+      padding:14px;
+      background:#00796b;
+      color:#fff;
+      font-weight:800;
+      font-size:15px;
+      cursor:pointer;
+      margin-bottom:14px;
+    }
 
-.compare-label{
-  font-size:13px;
-  font-weight:800;
-  color:#334155;
-  margin:14px 0 6px;
-}
+    .compare-grid{display:grid;gap:10px}
+    .compare-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .compare-label{font-size:13px;font-weight:800;color:#334155;margin:14px 0 6px}
+    .compare-box{border:2px solid #e2e8f0;border-radius:14px;padding:12px;background:#fff}
+    .compare-box strong{display:block;font-size:22px}
+    .compare-box span{font-size:12px;color:#64748b}
+    .compare-box.leader{border-color:#16a34a;background:#ecfdf5}
+    .compare-box.last{border-color:#dc2626;background:#fef2f2}
+    .compare-box.even{border-color:#eab308;background:#fefce8}
 
-.compare-box{
-  border:2px solid #e2e8f0;
-  border-radius:14px;
-  padding:12px;
-  background:#fff;
-}
-
-.compare-box strong{
-  display:block;
-  font-size:22px;
-}
-
-.compare-box span{
-  font-size:12px;
-  color:#64748b;
-}
-
-.compare-box.leader{
-  border-color:#16a34a;
-  background:#ecfdf5;
-}
-
-.compare-box.last{
-  border-color:#dc2626;
-  background:#fef2f2;
-}
-
-.compare-box.even{
-  border-color:#eab308;
-  background:#fefce8;
-}
-
-@media(max-width:640px){
-  .compare-row{
-    grid-template-columns:1fr;
-  }
-}
+    @media(max-width:640px){
+      .compare-row{grid-template-columns:1fr}
+    }
   </style>
 </head>
 <body>
@@ -130,11 +92,13 @@
       </div>
     </section>
 
-    <section class="card">
-  <h2>Compare Stats</h2>
-  <p class="empty" style="padding-top:0;">Green = leader, red = behind, yellow = even.</p>
-  <div id="compareStats" class="compare-grid"></div>
-</section>
+    <button id="compareToggle" class="compare-btn" type="button">Compare Stats</button>
+
+    <section id="compareSection" class="card" style="display:none;">
+      <h2>Compare Stats</h2>
+      <p class="empty" style="padding-top:0;">Green = leader, red = behind, yellow = even.</p>
+      <div id="compareStats" class="compare-grid"></div>
+    </section>
 
     <section class="card">
       <h2>Recent rounds</h2>
@@ -167,66 +131,63 @@
     }
 
     function compareClass(myValue, friendValue, lowerIsBetter){
-  const a = Number(myValue);
-  const b = Number(friendValue);
+      const a = Number(myValue);
+      const b = Number(friendValue);
 
-  if (!Number.isFinite(a) && !Number.isFinite(b)) return "even";
-  if (!Number.isFinite(a)) return "last";
-  if (!Number.isFinite(b)) return "leader";
-  if (a === b) return "even";
+      if (!Number.isFinite(a) && !Number.isFinite(b)) return "even";
+      if (!Number.isFinite(a)) return "last";
+      if (!Number.isFinite(b)) return "leader";
+      if (a === b) return "even";
 
-  if (lowerIsBetter) {
-    return a < b ? "leader" : "last";
-  }
+      if (lowerIsBetter) return a < b ? "leader" : "last";
+      return a > b ? "leader" : "last";
+    }
 
-  return a > b ? "leader" : "last";
-}
+    function friendCompareClass(myValue, friendValue, lowerIsBetter){
+      const mine = compareClass(myValue, friendValue, lowerIsBetter);
+      if (mine === "leader") return "last";
+      if (mine === "last") return "leader";
+      return "even";
+    }
 
-function friendCompareClass(myValue, friendValue, lowerIsBetter){
-  const mine = compareClass(myValue, friendValue, lowerIsBetter);
-  if (mine === "leader") return "last";
-  if (mine === "last") return "leader";
-  return "even";
-}
+    function renderCompareStats(myStats, friendStats, friendName){
+      const el = document.getElementById("compareStats");
+      if (!el) return;
 
-function renderCompareStats(myStats, friendStats, friendName){
-  const el = document.getElementById("compareStats");
-  if (!el) return;
+      const rows = [
+        ["Completed rounds", "rounds_played", false],
+        ["Best 18-hole score", "best_score_18", true],
+        ["Average 18-hole score", "average_score_18", true],
+        ["Average 18-hole putts", "average_putts_18", true],
+        ["Best 9-hole score", "best_score_9", true],
+        ["Average 9-hole score", "average_score_9", true],
+        ["Average 9-hole putts", "average_putts_9", true],
+        ["Total eagles", "total_eagles", false],
+        ["Total birdies", "total_birdies", false],
+        ["Total pars", "total_pars", false],
+      ];
 
-  const rows = [
-    ["Completed rounds", "rounds_played", false],
-    ["Best 18-hole score", "best_score_18", true],
-    ["Average 18-hole score", "average_score_18", true],
-    ["Average 18-hole putts", "average_putts_18", true],
-    ["Best 9-hole score", "best_score_9", true],
-    ["Average 9-hole score", "average_score_9", true],
-    ["Average 9-hole putts", "average_putts_9", true],
-    ["Total eagles", "total_eagles", false],
-    ["Total birdies", "total_birdies", false],
-    ["Total pars", "total_pars", false],
-  ];
+      el.innerHTML = rows.map(([label, key, lowerIsBetter]) => {
+        const mine = myStats?.[key];
+        const theirs = friendStats?.[key];
 
-  el.innerHTML = rows.map(([label, key, lowerIsBetter]) => {
-    const mine = myStats?.[key];
-    const theirs = friendStats?.[key];
-
-    return `
-      <div>
-        <div class="compare-label">${escapeHtml(label)}</div>
-        <div class="compare-row">
-          <div class="compare-box ${compareClass(mine, theirs, lowerIsBetter)}">
-            <strong>${escapeHtml(displayValue(mine))}</strong>
-            <span>You</span>
+        return `
+          <div>
+            <div class="compare-label">${escapeHtml(label)}</div>
+            <div class="compare-row">
+              <div class="compare-box ${compareClass(mine, theirs, lowerIsBetter)}">
+                <strong>${escapeHtml(displayValue(mine))}</strong>
+                <span>You</span>
+              </div>
+              <div class="compare-box ${friendCompareClass(mine, theirs, lowerIsBetter)}">
+                <strong>${escapeHtml(displayValue(theirs))}</strong>
+                <span>${escapeHtml(friendName)}</span>
+              </div>
+            </div>
           </div>
-          <div class="compare-box ${friendCompareClass(mine, theirs, lowerIsBetter)}">
-            <strong>${escapeHtml(displayValue(theirs))}</strong>
-            <span>${escapeHtml(friendName)}</span>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join("");
-}
+        `;
+      }).join("");
+    }
 
     function friendlyName(friend){
       const raw = String(friend.name || friend.email || "Friend").trim();
@@ -234,7 +195,21 @@ function renderCompareStats(myStats, friendStats, friendName){
       return raw.split("@")[0];
     }
 
+    function initCompareToggle(){
+      const btn = document.getElementById("compareToggle");
+      const section = document.getElementById("compareSection");
+      if (!btn || !section) return;
+
+      btn.addEventListener("click", () => {
+        const isHidden = section.style.display === "none";
+        section.style.display = isHidden ? "block" : "none";
+        btn.textContent = isHidden ? "Hide Compare Stats" : "Compare Stats";
+      });
+    }
+
     async function init(){
+      initCompareToggle();
+
       const params = new URLSearchParams(window.location.search);
       const userId = params.get("userId");
       const token = getToken();
@@ -259,8 +234,9 @@ function renderCompareStats(myStats, friendStats, friendName){
         const stats = data.stats || {};
         const myStats = data.myStats || data.compareStats?.me || {};
         const rounds = data.rounds || [];
+        const friendName = friendlyName(friend);
 
-        document.getElementById("friendName").textContent = friendlyName(friend);
+        document.getElementById("friendName").textContent = friendName;
 
         document.getElementById("roundsPlayed").textContent = displayValue(stats.rounds_played ?? 0);
         document.getElementById("totalRounds").textContent = displayValue(stats.total_rounds ?? 0);
@@ -276,7 +252,8 @@ function renderCompareStats(myStats, friendStats, friendName){
         document.getElementById("totalEagles").textContent = displayValue(stats.total_eagles ?? 0);
         document.getElementById("totalBirdies").textContent = displayValue(stats.total_birdies ?? 0);
         document.getElementById("totalPars").textContent = displayValue(stats.total_pars ?? 0);
-        renderCompareStats(myStats, stats, friendlyName(friend));
+
+        renderCompareStats(myStats, stats, friendName);
 
         const list = document.getElementById("roundsList");
 
@@ -296,11 +273,10 @@ function renderCompareStats(myStats, friendStats, friendName){
               : `${r.score_vs_par}`;
 
           return `
-          <div
-           class="round"
-           onclick="window.location.href='/my-round.html?id=${Number(r.id)}'"
-           style="cursor:pointer;"
-          >
+            <div
+              class="round"
+              onclick="window.location.href='/friend-scorecard.html?userId=${encodeURIComponent(userId)}&roundId=${encodeURIComponent(r.id)}'"
+            >
               <strong>${escapeHtml(r.course || "Golf round")}</strong>
               <span>${escapeHtml(r.state || "")} ${escapeHtml(r.holes || "")} holes</span>
               <span>Score: ${escapeHtml(score)} ${vsPar ? "(" + escapeHtml(vsPar) + ")" : ""}</span>
