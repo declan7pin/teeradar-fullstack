@@ -519,6 +519,26 @@ async function ensureUsersDisplayNameColumn() {
 
 ensureUsersDisplayNameColumn();
 
+async function ensureUserSocialColumns() {
+  try {
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS display_name TEXT;
+    `);
+
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS profile_visibility TEXT NOT NULL DEFAULT 'friends';
+    `);
+
+    console.log("✅ user social columns ready");
+  } catch (err) {
+    console.error("❌ error ensuring user social columns:", err);
+  }
+}
+
+ensureUserSocialColumns();
+
 // ✅ NEW: table for alert "hits" (used by the logged-in popup unread/viewed flow)
 async function ensureAlertHitsTable() {
   try {
