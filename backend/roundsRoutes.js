@@ -1340,20 +1340,13 @@ const friendStats = {
   total_pars: completed.reduce((sum, r) => sum + Number(r.pars || 0), 0),
 };
 
-return res.json({
-  ok: true,
-  friend: {
-    ...friend,
-    name: displayName,
-  },
-  stats: friendStats,
-  myStats,
-  compareStats: {
-    me: myStats,
-    friend: friendStats,
-  },
-  rounds,
-});
+    return res.json({
+      ok: true,
+      friend: {
+        ...(friend || {}),
+        name: displayName,
+      },
+      stats: {
         rounds_played: completed.length,
         total_rounds: rounds.length,
 
