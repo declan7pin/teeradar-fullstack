@@ -1375,6 +1375,49 @@ const friendStats = {
   }
 });
 
+// Friend can view a shared round scorecard
+router.get("/friend/:friendUserId/round/:roundId", requireAuth, async (req, res) => {
+  try {
+    const myUserId = Number(req.user?.id);
+    const friendUserId = Number(req.params.friendUserId);
+    const roundId = Number(req.params.roundId);
+
+    const friendship = await db.query(
+      `
+      SELECT id
+      FROM user_friends
+      WHERE status = 'accepted'
+        AND (
+          (requester_user_id = $1 AND addressee_user_id = $2)
+          OR
+          (requester_user_id = $2 AND addressee_user_id = $1)
+        )
+      LIMIT 1;
+      `,
+      [myUserId, friendUserId]
+    );
+
+    if (!friendship.rows.length) {
+      return res.status(403).json({ ok: false, error: "not_friends" });
+    }
+
+    const data = await getRoundWithHoles(roundId);
+
+    if (!data || Number(data.round.user_id) !== friendUserId) {
+      return res.status(404).json({ ok: false, error: "round_not_found" });
+    }
+
+    return res.json({
+      ok: true,
+      round: data.round,
+      holes: data.holes,
+    });
+  } catch (err) {
+    console.error("GET friend round error:", err);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
 // Get one round + holes (must own it)
 router.get("/:id", requireAuth, async (req, res) => {
   try {
