@@ -594,6 +594,22 @@ header {
     <div class="card">
       <h2>Account details</h2>
       <p>Signed in as <strong id="accountEmail"></strong></p>
+      <label for="displayNameInput">Display name</label>
+
+<input
+  id="displayNameInput"
+  type="text"
+  maxlength="40"
+  placeholder="Enter your display name"
+/>
+
+<div class="row-actions">
+  <button id="saveDisplayNameBtn" class="btn-secondary" type="button">
+    Save display name
+  </button>
+
+  <span id="displayNameStatus" class="status"></span>
+</div>
       <span class="pill" id="planPill">Plan: checking subscription…</span>
 <p id="planSubtext" style="margin-top:6px;">
   If you upgrade to Pro later, we’ll automatically let you save up to 10 favourites.
@@ -862,6 +878,9 @@ header {
   const subscriptionCardText = document.getElementById("subscriptionCardText");
   const navAccountBtn = document.getElementById("navAccount");
   const logoutBtn = document.getElementById("pageLogout");
+  const displayNameInput = document.getElementById("displayNameInput");
+const saveDisplayNameBtn = document.getElementById("saveDisplayNameBtn");
+const displayNameStatus = document.getElementById("displayNameStatus");
 
   // ✅ NEW: my games elements
     const refreshGamesBtn = document.getElementById("refreshGamesBtn");
@@ -909,6 +928,16 @@ const pushStatus = document.getElementById("pushStatus");
     notLoggedInEl.style.display = "none";
     accountContentEl.style.display = "block";
     accountEmailEl.textContent = email;
+    try {
+  const raw = localStorage.getItem("tr_user");
+  if (raw && displayNameInput) {
+    const u = JSON.parse(raw);
+
+    if (u?.displayName) {
+      displayNameInput.value = u.displayName;
+    }
+  }
+} catch {}
   }
 
   // header "My account" button – already on this page
@@ -937,6 +966,65 @@ const pushStatus = document.getElementById("pushStatus");
       window.location.href = "/index.html";
     });
   }
+
+  // -------------------------------------------------
+// ✅ Display name save
+// -------------------------------------------------
+if (saveDisplayNameBtn) {
+  saveDisplayNameBtn.addEventListener("click", async () => {
+    const displayName = String(displayNameInput?.value || "")
+      .trim()
+      .slice(0, 40);
+
+    if (!displayName) {
+      displayNameStatus.textContent = "Please enter a display name.";
+      displayNameStatus.className = "status err";
+      return;
+    }
+
+    displayNameStatus.textContent = "Saving...";
+    displayNameStatus.className = "status";
+
+    try {
+      const res = await fetch(`${API_BASE}/api/account/display-name`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: "Bearer " + token } : {})
+        },
+        body: JSON.stringify({
+          displayName
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "save_failed");
+      }
+
+      // ✅ update local user object
+      try {
+        const raw = localStorage.getItem("tr_user");
+        const obj = raw ? JSON.parse(raw) : {};
+
+        obj.displayName = displayName;
+
+        localStorage.setItem("tr_user", JSON.stringify(obj));
+      } catch {}
+
+      displayNameStatus.textContent = "Display name updated.";
+      displayNameStatus.className = "status ok";
+    } catch (err) {
+      console.error(err);
+
+      displayNameStatus.textContent =
+        "Could not save display name.";
+
+      displayNameStatus.className = "status err";
+    }
+  });
+}
 
   // Default: Basic (3 favs). This will be updated after we hit the server.
     let maxFavs = 3;
