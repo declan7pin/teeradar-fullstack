@@ -1356,24 +1356,6 @@ const friendStats = {
   },
   rounds,
 });
-        rounds_played: completed.length,
-        total_rounds: rounds.length,
-
-        best_score_9: bestScore(completed9),
-        best_score_18: bestScore(completed18),
-
-        average_score_9: avgScore(completed9),
-        average_score_18: avgScore(completed18),
-
-        average_putts_9: avgPutts(completed9),
-        average_putts_18: avgPutts(completed18),
-
-        total_eagles: completed.reduce((sum, r) => sum + Number(r.eagles || 0), 0),
-        total_birdies: completed.reduce((sum, r) => sum + Number(r.birdies || 0), 0),
-        total_pars: completed.reduce((sum, r) => sum + Number(r.pars || 0), 0),
-      },
-      rounds,
-    });
   } catch (err) {
     console.error("GET /api/rounds/friend/:friendUserId/profile error:", err);
     return res.status(500).json({
