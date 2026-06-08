@@ -42,8 +42,42 @@ export function runMigrations() {
         UNIQUE(name, state, holes)
       )
     `).run();
+    
+        // 3) Friend requests / friends system
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS user_friends (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-    // 3) Reward tracking columns on users (only add if missing)
+        requester_user_id INTEGER NOT NULL,
+        addressee_user_id INTEGER NOT NULL,
+
+        status TEXT NOT NULL DEFAULT 'pending'
+          CHECK (status IN ('pending', 'accepted', 'blocked')),
+
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        accepted_at TEXT,
+
+        CHECK (requester_user_id <> addressee_user_id),
+        UNIQUE(requester_user_id, addressee_user_id)
+      )
+    `).run();
+
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_user_friends_requester
+      ON user_friends (requester_user_id)
+    `).run();
+
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_user_friends_addressee
+      ON user_friends (addressee_user_id)
+    `).run();
+
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_user_friends_status
+      ON user_friends (status)
+    `).run();
+
+    // 4) Reward tracking columns on users (only add if missing)
     // NOTE: SQLite supports ADD COLUMN, but not IF NOT EXISTS, so we check first.
     if (!columnExists("users", "course_bonus_used")) {
       db.prepare(`ALTER TABLE users ADD COLUMN course_bonus_used INTEGER NOT NULL DEFAULT 0`).run();
