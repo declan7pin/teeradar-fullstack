@@ -1262,13 +1262,98 @@ FROM users
         ? String(friend.email).split("@")[0]
         : "Friend";
 
-    return res.json({
-      ok: true,
-      friend: {
-        ...friend,
-        name: displayName,
-      },
-      stats: {
+    const myStatsRes = await db.query(
+  `
+  SELECT
+    r.id,
+    r.holes,
+    COALESCE(SUM(rh.strokes), 0)::int AS total_score,
+    COALESCE(SUM(rh.par), 0)::int AS total_par,
+    COALESCE(SUM(rh.putts), 0)::int AS total_putts,
+    COUNT(rh.id)::int AS holes_entered,
+    COALESCE(SUM(CASE WHEN rh.strokes IS NOT NULL AND rh.par IS NOT NULL AND rh.strokes = rh.par - 2 THEN 1 ELSE 0 END), 0)::int AS eagles,
+    COALESCE(SUM(CASE WHEN rh.strokes IS NOT NULL AND rh.par IS NOT NULL AND rh.strokes = rh.par - 1 THEN 1 ELSE 0 END), 0)::int AS birdies,
+    COALESCE(SUM(CASE WHEN rh.strokes IS NOT NULL AND rh.par IS NOT NULL AND rh.strokes = rh.par THEN 1 ELSE 0 END), 0)::int AS pars
+  FROM rounds r
+  LEFT JOIN round_holes rh ON rh.round_id = r.id
+  WHERE r.user_id = $1
+  GROUP BY r.id
+  `,
+  [myUserId]
+);
+
+function buildStats(rows) {
+  const all = (rows || []).map((r) => {
+    const holes = Number(r.holes || 0);
+    const score = Number(r.total_score || 0);
+    const putts = Number(r.total_putts || 0);
+    const holesEntered = Number(r.holes_entered || 0);
+    const complete = holesEntered >= holes && score > 0;
+
+    return {
+      ...r,
+      holes,
+      total_score: score,
+      total_putts: putts,
+      complete,
+      eagles: Number(r.eagles || 0),
+      birdies: Number(r.birdies || 0),
+      pars: Number(r.pars || 0),
+    };
+  }).filter((r) => r.complete);
+
+  const r9 = all.filter((r) => r.holes === 9);
+  const r18 = all.filter((r) => r.holes === 18);
+
+  const avg = (list, key) =>
+    list.length ? Math.round(list.reduce((s, r) => s + Number(r[key] || 0), 0) / list.length) : null;
+
+  const best = (list) =>
+    list.length ? Math.min(...list.map((r) => Number(r.total_score || 0)).filter(Boolean)) : null;
+
+  return {
+    rounds_played: all.length,
+    best_score_9: best(r9),
+    best_score_18: best(r18),
+    average_score_9: avg(r9, "total_score"),
+    average_score_18: avg(r18, "total_score"),
+    average_putts_9: avg(r9, "total_putts"),
+    average_putts_18: avg(r18, "total_putts"),
+    total_eagles: all.reduce((s, r) => s + Number(r.eagles || 0), 0),
+    total_birdies: all.reduce((s, r) => s + Number(r.birdies || 0), 0),
+    total_pars: all.reduce((s, r) => s + Number(r.pars || 0), 0),
+  };
+}
+
+const myStats = buildStats(myStatsRes.rows || []);
+const friendStats = {
+  rounds_played: completed.length,
+  total_rounds: rounds.length,
+  best_score_9: bestScore(completed9),
+  best_score_18: bestScore(completed18),
+  average_score_9: avgScore(completed9),
+  average_score_18: avgScore(completed18),
+  average_putts_9: avgPutts(completed9),
+  average_putts_18: avgPutts(completed18),
+  total_eagles: completed.reduce((sum, r) => sum + Number(r.eagles || 0), 0),
+  total_birdies: completed.reduce((sum, r) => sum + Number(r.birdies || 0), 0),
+  total_pars: completed.reduce((sum, r) => sum + Number(r.pars || 0), 0),
+};
+
+return res.json({
+  ok: true,
+  friend: {
+    ...friend,
+    name: displayName,
+  },
+  stats: friendStats,
+  myStats,
+  compareStats: {
+    me: myStats,
+    friend: friendStats,
+  },
+  rounds,
+});
         rounds_played: completed.length,
         total_rounds: rounds.length,
 
