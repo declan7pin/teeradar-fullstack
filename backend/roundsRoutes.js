@@ -1148,10 +1148,7 @@ router.get("/friend/:friendUserId/profile", requireAuth, async (req, res) => {
     const myUserId = Number(req.user?.id);
     const friendUserId = Number(req.params.friendUserId);
 
-    if (!myUserId) {
-      return res.status(401).json({ ok: false, error: "unauthorised" });
-    }
-
+    if (!myUserId) return res.status(401).json({ ok: false, error: "unauthorised" });
     if (!Number.isFinite(friendUserId) || friendUserId <= 0) {
       return res.status(400).json({ ok: false, error: "invalid friend user id" });
     }
@@ -1201,7 +1198,11 @@ router.get("/friend/:friendUserId/profile", requireAuth, async (req, res) => {
         COALESCE(SUM(rh.strokes), 0)::int AS total_score,
         COALESCE(SUM(rh.par), 0)::int AS total_par,
         COALESCE(SUM(rh.putts), 0)::int AS total_putts,
-        COUNT(rh.id)::int AS holes_entered
+        COUNT(rh.id)::int AS holes_entered,
+
+        COALESCE(SUM(CASE WHEN rh.strokes IS NOT NULL AND rh.par IS NOT NULL AND rh.strokes = rh.par - 2 THEN 1 ELSE 0 END), 0)::int AS eagles,
+        COALESCE(SUM(CASE WHEN rh.strokes IS NOT NULL AND rh.par IS NOT NULL AND rh.strokes = rh.par - 1 THEN 1 ELSE 0 END), 0)::int AS birdies,
+        COALESCE(SUM(CASE WHEN rh.strokes IS NOT NULL AND rh.par IS NOT NULL AND rh.strokes = rh.par THEN 1 ELSE 0 END), 0)::int AS pars
       FROM rounds r
       LEFT JOIN round_holes rh ON rh.round_id = r.id
       WHERE r.user_id = $1
@@ -1218,7 +1219,6 @@ router.get("/friend/:friendUserId/profile", requireAuth, async (req, res) => {
       const totalPutts = Number(r.total_putts || 0);
       const holesEntered = Number(r.holes_entered || 0);
       const holes = Number(r.holes || 0);
-
       const complete = holesEntered >= holes && totalScore > 0;
 
       return {
@@ -1229,40 +1229,58 @@ router.get("/friend/:friendUserId/profile", requireAuth, async (req, res) => {
         holes_entered: holesEntered,
         complete,
         score_vs_par: complete && totalPar > 0 ? totalScore - totalPar : null,
+        eagles: Number(r.eagles || 0),
+        birdies: Number(r.birdies || 0),
+        pars: Number(r.pars || 0),
       };
     });
 
     const completed = rounds.filter((r) => r.complete);
+    const completed9 = completed.filter((r) => Number(r.holes) === 9);
+    const completed18 = completed.filter((r) => Number(r.holes) === 18);
 
-    const bestRound = completed.length
-      ? completed.reduce((best, r) =>
-          Number(r.total_score) < Number(best.total_score) ? r : best
-        )
-      : null;
+    function avgScore(list) {
+      if (!list.length) return null;
+      return Math.round(list.reduce((sum, r) => sum + Number(r.total_score || 0), 0) / list.length);
+    }
 
-    const avgScore = completed.length
-      ? Math.round(
-          completed.reduce((sum, r) => sum + Number(r.total_score || 0), 0) /
-            completed.length
-        )
-      : null;
+    function avgPutts(list) {
+      if (!list.length) return null;
+      return Math.round(list.reduce((sum, r) => sum + Number(r.total_putts || 0), 0) / list.length);
+    }
 
-    const avgPutts = completed.length
-      ? Math.round(
-          completed.reduce((sum, r) => sum + Number(r.total_putts || 0), 0) /
-            completed.length
-        )
-      : null;
+    function bestScore(list) {
+      if (!list.length) return null;
+      return Math.min(...list.map((r) => Number(r.total_score || 0)).filter(Boolean));
+    }
+
+    const displayName =
+      friend?.email
+        ? String(friend.email).split("@")[0]
+        : "Friend";
 
     return res.json({
       ok: true,
-      friend,
+      friend: {
+        ...friend,
+        name: displayName,
+      },
       stats: {
         rounds_played: completed.length,
         total_rounds: rounds.length,
-        best_score: bestRound ? Number(bestRound.total_score) : null,
-        average_score: avgScore,
-        average_putts: avgPutts,
+
+        best_score_9: bestScore(completed9),
+        best_score_18: bestScore(completed18),
+
+        average_score_9: avgScore(completed9),
+        average_score_18: avgScore(completed18),
+
+        average_putts_9: avgPutts(completed9),
+        average_putts_18: avgPutts(completed18),
+
+        total_eagles: completed.reduce((sum, r) => sum + Number(r.eagles || 0), 0),
+        total_birdies: completed.reduce((sum, r) => sum + Number(r.birdies || 0), 0),
+        total_pars: completed.reduce((sum, r) => sum + Number(r.pars || 0), 0),
       },
       rounds,
     });
