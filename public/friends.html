@@ -238,13 +238,14 @@
       "";
 
     function getToken(){
-      return (
-        localStorage.getItem("token") ||
-        localStorage.getItem("authToken") ||
-        localStorage.getItem("teeradar_token") ||
-        ""
-      );
-    }
+  return (
+    localStorage.getItem("teeradar_jwt") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("authToken") ||
+    localStorage.getItem("teeradar_token") ||
+    ""
+  );
+}
 
     function authHeaders(){
       const token = getToken();
