@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar — Friend Profile</title>
+  <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#eef4f6;color:#0f172a}
+    .wrap{max-width:860px;margin:0 auto;padding:20px 14px 80px}
+    .hero{background:linear-gradient(135deg,#00796b,#005e55);color:#fff;border-radius:22px;padding:22px;margin-bottom:16px}
+    .hero h1{margin:0 0 6px;font-size:28px}
+    .hero p{margin:0;opacity:.9}
+    .card{background:#fff;border:1px solid #dbe5ea;border-radius:18px;padding:16px;margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    .stat{background:#e6f4f1;border-radius:14px;padding:14px}
+    .stat strong{display:block;font-size:24px;color:#005e55}
+    .stat span{font-size:13px;color:#64748b}
+    .round{border:1px solid #dbe5ea;border-radius:14px;padding:13px;margin-top:10px}
+    .round strong{display:block}
+    .round span{display:block;color:#64748b;font-size:13px;margin-top:3px}
+    .back{display:inline-block;margin-bottom:14px;color:#005e55;font-weight:700}
+    .empty{color:#64748b}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <a class="back" href="/friends.html">← Back to friends</a>
+
+    <section class="hero">
+      <h1 id="friendName">Friend profile</h1>
+      <p>Rounds, scorecards and stats shared with you.</p>
+    </section>
+
+    <section class="card">
+      <h2>Stats</h2>
+      <div class="grid">
+        <div class="stat"><strong id="roundsPlayed">—</strong><span>Completed rounds</span></div>
+        <div class="stat"><strong id="bestScore">—</strong><span>Best score</span></div>
+        <div class="stat"><strong id="avgScore">—</strong><span>Average score</span></div>
+        <div class="stat"><strong id="avgPutts">—</strong><span>Average putts</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Recent rounds</h2>
+      <div id="roundsList" class="empty">Loading rounds...</div>
+    </section>
+  </main>
+
+  <script src="/config.js"></script>
+  <script>
+    const API_BASE =
+      window.TEERADAR_API_BASE ||
+      localStorage.getItem("teeradar_backend_url") ||
+      "";
+
+    function getToken(){
+      return localStorage.getItem("teeradar_jwt") || "";
+    }
+
+    function escapeHtml(value){
+      return String(value ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    async function init(){
+      const params = new URLSearchParams(window.location.search);
+      const userId = params.get("userId");
+      const token = getToken();
+
+      if (!userId || !token) {
+        document.getElementById("roundsList").textContent = "Missing friend or login details.";
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/api/rounds/friend/${encodeURIComponent(userId)}/profile`, {
+          headers: { Authorization: "Bearer " + token }
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Could not load friend profile");
+        }
+
+        const friend = data.friend || {};
+        const stats = data.stats || {};
+        const rounds = data.rounds || [];
+
+        document.getElementById("friendName").textContent = friend.email || "Friend profile";
+        document.getElementById("roundsPlayed").textContent = stats.rounds_played ?? "0";
+        document.getElementById("bestScore").textContent = stats.best_score ?? "—";
+        document.getElementById("avgScore").textContent = stats.average_score ?? "—";
+        document.getElementById("avgPutts").textContent = stats.average_putts ?? "—";
+
+        const list = document.getElementById("roundsList");
+
+        if (!rounds.length) {
+          list.innerHTML = `<div class="empty">No rounds shared yet.</div>`;
+          return;
+        }
+
+        list.className = "";
+
+        list.innerHTML = rounds.map(r => {
+          const score = r.complete ? `${r.total_score}` : "Incomplete";
+          const vsPar = r.score_vs_par === null || r.score_vs_par === undefined
+            ? ""
+            : r.score_vs_par > 0
+              ? `+${r.score_vs_par}`
+              : `${r.score_vs_par}`;
+
+          return `
+            <div class="round">
+              <strong>${escapeHtml(r.course || "Golf round")}</strong>
+              <span>${escapeHtml(r.state || "")} ${escapeHtml(r.holes || "")} holes</span>
+              <span>Score: ${escapeHtml(score)} ${vsPar ? "(" + escapeHtml(vsPar) + ")" : ""}</span>
+              <span>Putts: ${escapeHtml(r.total_putts || "—")}</span>
+            </div>
+          `;
+        }).join("");
+      } catch (err) {
+        document.getElementById("roundsList").textContent = err.message;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
