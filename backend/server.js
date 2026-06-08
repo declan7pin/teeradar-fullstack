@@ -503,6 +503,22 @@ async function ensureUsersHomeCourseColumns() {
 }
 ensureUsersHomeCourseColumns();
 
+// ✅ NEW: ensure users display name column exists
+async function ensureUsersDisplayNameColumn() {
+  try {
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS display_name TEXT;
+    `);
+
+    console.log("✅ users display_name column ready");
+  } catch (err) {
+    console.error("❌ error ensuring users display_name column:", err);
+  }
+}
+
+ensureUsersDisplayNameColumn();
+
 // ✅ NEW: table for alert "hits" (used by the logged-in popup unread/viewed flow)
 async function ensureAlertHitsTable() {
   try {
@@ -1698,6 +1714,47 @@ app.get("/api/account/preferences", async (req, res) => {
   } catch (err) {
     console.error("account/preferences GET error:", err);
     res.status(500).json({ error: "internal error", detail: err.message });
+  }
+});
+
+// -------------------------------------------------
+// ✅ Update display name
+// -------------------------------------------------
+app.post("/api/account/display-name", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    const displayName = String(req.body?.displayName || "")
+      .trim()
+      .slice(0, 40);
+
+    if (!displayName) {
+      return res.status(400).json({
+        ok: false,
+        error: "Display name required"
+      });
+    }
+
+    await db.query(
+      `
+      UPDATE users
+      SET display_name = $2
+      WHERE id = $1
+      `,
+      [userId, displayName]
+    );
+
+    return res.json({
+      ok: true,
+      displayName
+    });
+  } catch (err) {
+    console.error("display name update error:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Could not update display name"
+    });
   }
 });
 
