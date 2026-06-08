@@ -16,7 +16,18 @@
     .stat{background:#e6f4f1;border-radius:14px;padding:14px}
     .stat strong{display:block;font-size:24px;color:#005e55}
     .stat span{font-size:13px;color:#64748b}
-    .round{border:1px solid #dbe5ea;border-radius:14px;padding:13px;margin-top:10px}
+    .round{
+  border:1px solid #dbe5ea;
+  border-radius:14px;
+  padding:13px;
+  margin-top:10px;
+  transition:.18s ease;
+}
+
+.round:hover{
+  transform:translateY(-2px);
+  box-shadow:0 10px 25px rgba(15,23,42,.08);
+}
     .round strong{display:block}
     .round span{display:block;color:#64748b;font-size:13px;margin-top:3px}
     .back{display:inline-block;margin-bottom:14px;color:#005e55;font-weight:700}
@@ -160,7 +171,11 @@
               : `${r.score_vs_par}`;
 
           return `
-            <div class="round">
+          <div
+           class="round"
+           onclick="window.location.href='/my-round.html?id=${Number(r.id)}'"
+           style="cursor:pointer;"
+          >
               <strong>${escapeHtml(r.course || "Golf round")}</strong>
               <span>${escapeHtml(r.state || "")} ${escapeHtml(r.holes || "")} holes</span>
               <span>Score: ${escapeHtml(score)} ${vsPar ? "(" + escapeHtml(vsPar) + ")" : ""}</span>
