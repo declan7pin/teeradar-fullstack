@@ -1258,9 +1258,11 @@ FROM users
     }
 
     const displayName =
-      friend?.email
-        ? String(friend.email).split("@")[0]
-        : "Friend";
+  friend?.name && !String(friend.name).includes("@")
+    ? String(friend.name)
+    : friend?.email
+      ? String(friend.email).split("@")[0]
+      : "Friend";
 
     const myStatsRes = await db.query(
   `
@@ -1341,12 +1343,19 @@ const friendStats = {
 };
 
     return res.json({
-      ok: true,
-      friend: {
-        ...(friend || {}),
-        name: displayName,
-      },
-      stats: {
+  ok: true,
+  friend: {
+    ...(friend || {}),
+    name: friend?.name || displayName,
+  },
+  stats: friendStats,
+  myStats,
+  compareStats: {
+    me: myStats,
+    friend: friendStats,
+  },
+  rounds,
+});
         rounds_played: completed.length,
         total_rounds: rounds.length,
 
