@@ -4,169 +4,130 @@ import db from "./db.js";
 
 const router = express.Router();
 
-/*
-  IMPORTANT:
-  This assumes req.user.id exists from your auth middleware.
-  If your auth uses another field name, we’ll adjust later.
-*/
-
-/*
-========================================
-SEND FRIEND REQUEST
-POST /api/friends/request
-========================================
-*/
-router.post("/request", (req, res) => {
+// Send friend request
+router.post("/request", async (req, res) => {
   try {
     const requesterId = req.user?.id;
-    const { addresseeUserId } = req.body;
+    const { addresseeUserId } = req.body || {};
 
-    if (!requesterId) {
-      return res.status(401).json({
-        ok: false,
-        error: "not_authenticated",
-      });
-    }
-
-    if (!addresseeUserId) {
-      return res.status(400).json({
-        ok: false,
-        error: "missing_addressee",
-      });
-    }
-
+    if (!requesterId) return res.status(401).json({ ok: false, error: "not_authenticated" });
+    if (!addresseeUserId) return res.status(400).json({ ok: false, error: "missing_addressee" });
     if (Number(requesterId) === Number(addresseeUserId)) {
-      return res.status(400).json({
-        ok: false,
-        error: "cannot_add_self",
-      });
+      return res.status(400).json({ ok: false, error: "cannot_add_self" });
     }
 
-    const existing = db.prepare(`
-      SELECT id
-      FROM user_friends
-      WHERE requester_user_id = ?
-      AND addressee_user_id = ?
-    `).get(requesterId, addresseeUserId);
-
-    if (existing) {
-      return res.json({
-        ok: true,
-        alreadyExists: true,
-      });
-    }
-
-    db.prepare(`
-      INSERT INTO user_friends (
-        requester_user_id,
-        addressee_user_id,
-        status
-      )
-      VALUES (?, ?, 'pending')
-    `).run(requesterId, addresseeUserId);
+    await db.query(
+      `
+      INSERT INTO user_friends (requester_user_id, addressee_user_id, status)
+      VALUES ($1, $2, 'pending')
+      ON CONFLICT (requester_user_id, addressee_user_id) DO NOTHING
+      `,
+      [requesterId, addresseeUserId]
+    );
 
     res.json({ ok: true });
   } catch (e) {
     console.error("friends/request", e);
-
-    res.status(500).json({
-      ok: false,
-      error: "internal_error",
-    });
+    res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
-/*
-========================================
-ACCEPT FRIEND REQUEST
-POST /api/friends/accept
-========================================
-*/
-router.post("/accept", (req, res) => {
+// Accept friend request
+router.post("/accept", async (req, res) => {
   try {
     const userId = req.user?.id;
-    const { requestId } = req.body;
+    const { requestId } = req.body || {};
 
-    if (!userId) {
-      return res.status(401).json({
-        ok: false,
-        error: "not_authenticated",
-      });
-    }
+    if (!userId) return res.status(401).json({ ok: false, error: "not_authenticated" });
 
-    const request = db.prepare(`
-      SELECT *
-      FROM user_friends
-      WHERE id = ?
-      AND addressee_user_id = ?
-      AND status = 'pending'
-    `).get(requestId, userId);
-
-    if (!request) {
-      return res.status(404).json({
-        ok: false,
-        error: "request_not_found",
-      });
-    }
-
-    db.prepare(`
+    const result = await db.query(
+      `
       UPDATE user_friends
-      SET
-        status = 'accepted',
-        accepted_at = datetime('now')
-      WHERE id = ?
-    `).run(requestId);
+      SET status = 'accepted', accepted_at = now()
+      WHERE id = $1
+        AND addressee_user_id = $2
+        AND status = 'pending'
+      RETURNING *
+      `,
+      [requestId, userId]
+    );
+
+    if (!result.rows?.length) {
+      return res.status(404).json({ ok: false, error: "request_not_found" });
+    }
 
     res.json({ ok: true });
   } catch (e) {
     console.error("friends/accept", e);
-
-    res.status(500).json({
-      ok: false,
-      error: "internal_error",
-    });
+    res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
-/*
-========================================
-LIST MY FRIENDS
-GET /api/friends/list
-========================================
-*/
-router.get("/list", (req, res) => {
+// List pending requests sent to me
+router.get("/requests", async (req, res) => {
   try {
     const userId = req.user?.id;
 
-    if (!userId) {
-      return res.status(401).json({
-        ok: false,
-        error: "not_authenticated",
-      });
-    }
+    const result = await db.query(
+      `
+      SELECT
+        uf.id,
+        uf.requester_user_id,
+        uf.addressee_user_id,
+        uf.status,
+        uf.created_at,
+        u.email,
+        COALESCE(u.name, u.email) AS name
+      FROM user_friends uf
+      LEFT JOIN users u ON u.id = uf.requester_user_id
+      WHERE uf.addressee_user_id = $1
+        AND uf.status = 'pending'
+      ORDER BY uf.created_at DESC
+      `,
+      [userId]
+    );
 
-    const friends = db.prepare(`
-      SELECT *
-      FROM user_friends
-      WHERE status = 'accepted'
-      AND (
-        requester_user_id = ?
-        OR addressee_user_id = ?
-      )
-      ORDER BY accepted_at DESC
-    `).all(userId, userId);
+    res.json({ ok: true, requests: result.rows });
+  } catch (e) {
+    console.error("friends/requests", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 
-    res.json({
-      ok: true,
-      friends,
-    });
+// List accepted friends
+router.get("/list", async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    const result = await db.query(
+      `
+      SELECT
+        uf.id,
+        uf.status,
+        uf.accepted_at,
+        CASE
+          WHEN uf.requester_user_id = $1 THEN uf.addressee_user_id
+          ELSE uf.requester_user_id
+        END AS friend_user_id,
+        u.email,
+        COALESCE(u.name, u.email) AS name
+      FROM user_friends uf
+      JOIN users u
+        ON u.id = CASE
+          WHEN uf.requester_user_id = $1 THEN uf.addressee_user_id
+          ELSE uf.requester_user_id
+        END
+      WHERE uf.status = 'accepted'
+        AND ($1 IN (uf.requester_user_id, uf.addressee_user_id))
+      ORDER BY uf.accepted_at DESC
+      `,
+      [userId]
+    );
+
+    res.json({ ok: true, friends: result.rows });
   } catch (e) {
     console.error("friends/list", e);
-
-    res.status(500).json({
-      ok: false,
-      error: "internal_error",
-    });
+    res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
