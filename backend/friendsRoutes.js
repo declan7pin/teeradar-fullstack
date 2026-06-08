@@ -28,7 +28,7 @@ router.get("/search", async (req, res) => {
       SELECT
         u.id,
         u.email,
-        u.email AS name
+        COALESCE(NULLIF(u.display_name, ''), u.email) AS name
       FROM users u
       WHERE LOWER(u.email) LIKE LOWER($1)
         AND u.id <> $2
@@ -175,7 +175,7 @@ router.get("/requests", async (req, res) => {
         uf.status,
         uf.created_at,
         u.email,
-        u.email AS name
+        COALESCE(NULLIF(u.display_name, ''), u.email) AS name
       FROM user_friends uf
       LEFT JOIN users u ON u.id = uf.requester_user_id
       WHERE uf.addressee_user_id = $1
@@ -217,7 +217,7 @@ router.get("/list", async (req, res) => {
           ELSE uf.requester_user_id
         END AS friend_user_id,
         u.email,
-        u.email AS name
+        COALESCE(NULLIF(u.display_name, ''), u.email) AS name
       FROM user_friends uf
       JOIN users u
         ON u.id = CASE
