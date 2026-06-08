@@ -408,8 +408,10 @@
               <span>${escapeHtml(friend.email)}</span>
             </div>
             <div class="actions">
-              <button class="ghost" disabled>View Stats soon</button>
-              <button class="ghost" disabled>Share Round soon</button>
+            <button class="ghost" onclick="window.location.href='/friend-profile.html?userId=${Number(friend.friend_user_id)}'">
+              View Rounds & Stats
+            </button>
+            <button class="ghost" disabled>Share Round soon</button>
             </div>
           </div>
         `).join("");
