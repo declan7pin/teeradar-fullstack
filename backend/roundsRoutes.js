@@ -1174,8 +1174,11 @@ router.get("/friend/:friendUserId/profile", requireAuth, async (req, res) => {
 
     const friendRes = await db.query(
       `
-      SELECT id, email
-      FROM users
+      SELECT
+  id,
+  email,
+  COALESCE(NULLIF(display_name, ''), email) AS name
+FROM users
       WHERE id = $1
       LIMIT 1;
       `,
