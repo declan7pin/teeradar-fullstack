@@ -1139,6 +1139,143 @@ router.get("/mine", requireAuth, async (req, res) => {
   return router.handle(req, res);
 });
 
+// -------------------------------------------------
+// Friend profile: rounds + stats
+// GET /api/rounds/friend/:friendUserId/profile
+// -------------------------------------------------
+router.get("/friend/:friendUserId/profile", requireAuth, async (req, res) => {
+  try {
+    const myUserId = Number(req.user?.id);
+    const friendUserId = Number(req.params.friendUserId);
+
+    if (!myUserId) {
+      return res.status(401).json({ ok: false, error: "unauthorised" });
+    }
+
+    if (!Number.isFinite(friendUserId) || friendUserId <= 0) {
+      return res.status(400).json({ ok: false, error: "invalid friend user id" });
+    }
+
+    const friendship = await db.query(
+      `
+      SELECT id
+      FROM user_friends
+      WHERE status = 'accepted'
+        AND (
+          (requester_user_id = $1 AND addressee_user_id = $2)
+          OR
+          (requester_user_id = $2 AND addressee_user_id = $1)
+        )
+      LIMIT 1;
+      `,
+      [myUserId, friendUserId]
+    );
+
+    if (!friendship.rows.length) {
+      return res.status(403).json({ ok: false, error: "not_friends" });
+    }
+
+    const friendRes = await db.query(
+      `
+      SELECT id, email
+      FROM users
+      WHERE id = $1
+      LIMIT 1;
+      `,
+      [friendUserId]
+    );
+
+    const friend = friendRes.rows[0] || null;
+
+    const roundsRes = await db.query(
+      `
+      SELECT
+        r.id,
+        r.course,
+        r.layout,
+        r.state,
+        r.holes,
+        r.created_at,
+        r.players_count,
+        r.player_names,
+        COALESCE(SUM(rh.strokes), 0)::int AS total_score,
+        COALESCE(SUM(rh.par), 0)::int AS total_par,
+        COALESCE(SUM(rh.putts), 0)::int AS total_putts,
+        COUNT(rh.id)::int AS holes_entered
+      FROM rounds r
+      LEFT JOIN round_holes rh ON rh.round_id = r.id
+      WHERE r.user_id = $1
+      GROUP BY r.id
+      ORDER BY r.created_at DESC
+      LIMIT 50;
+      `,
+      [friendUserId]
+    );
+
+    const rounds = (roundsRes.rows || []).map((r) => {
+      const totalScore = Number(r.total_score || 0);
+      const totalPar = Number(r.total_par || 0);
+      const totalPutts = Number(r.total_putts || 0);
+      const holesEntered = Number(r.holes_entered || 0);
+      const holes = Number(r.holes || 0);
+
+      const complete = holesEntered >= holes && totalScore > 0;
+
+      return {
+        ...r,
+        total_score: totalScore,
+        total_par: totalPar,
+        total_putts: totalPutts,
+        holes_entered: holesEntered,
+        complete,
+        score_vs_par: complete && totalPar > 0 ? totalScore - totalPar : null,
+      };
+    });
+
+    const completed = rounds.filter((r) => r.complete);
+
+    const bestRound = completed.length
+      ? completed.reduce((best, r) =>
+          Number(r.total_score) < Number(best.total_score) ? r : best
+        )
+      : null;
+
+    const avgScore = completed.length
+      ? Math.round(
+          completed.reduce((sum, r) => sum + Number(r.total_score || 0), 0) /
+            completed.length
+        )
+      : null;
+
+    const avgPutts = completed.length
+      ? Math.round(
+          completed.reduce((sum, r) => sum + Number(r.total_putts || 0), 0) /
+            completed.length
+        )
+      : null;
+
+    return res.json({
+      ok: true,
+      friend,
+      stats: {
+        rounds_played: completed.length,
+        total_rounds: rounds.length,
+        best_score: bestRound ? Number(bestRound.total_score) : null,
+        average_score: avgScore,
+        average_putts: avgPutts,
+      },
+      rounds,
+    });
+  } catch (err) {
+    console.error("GET /api/rounds/friend/:friendUserId/profile error:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "internal error",
+      detail: err?.message,
+    });
+  }
+});
+
 // Get one round + holes (must own it)
 router.get("/:id", requireAuth, async (req, res) => {
   try {
