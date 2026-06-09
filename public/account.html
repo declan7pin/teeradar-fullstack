@@ -2044,7 +2044,7 @@ async function createOrOpenScorecard(game, btn) {
             <div>
               <div class="game-title">${escapeHtml(g.course_name || "Golf Course")}</div>
               <div class="game-meta">
-                ${escapeHtml(g.play_date || "")} • ${escapeHtml(String(g.tee_time || "").split("|")[0])} • ${escapeHtml(g.holes)} holes • ${escapeHtml(g.players)} player(s)
+                ${escapeHtml(g.play_date || "")} • ${escapeHtml(String(g.tee_time || "").split("|")[0] || "Time TBC")} • ${escapeHtml(g.holes)} holes${g.is_manual_upcoming ? " • Manually added" : ` • ${escapeHtml(g.players)} player(s)`}
               </div>
               <div class="game-meta" style="margin-top:4px;">
                 Ref: ${escapeHtml(g.reference || "")}
@@ -2563,6 +2563,41 @@ function renderFilteredPreviousGames() {
     }
   }
 }
+
+async function loadManualUpcomingRoundsForAccount() {
+  try {
+    const res = await fetch(`${API_BASE}/api/shared-rounds/upcoming`, {
+      method: "GET",
+      headers: {
+        ...(token ? { Authorization: "Bearer " + token } : {})
+      }
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.ok) return [];
+
+    return (data.rounds || []).map((r) => ({
+      course_name: r.course,
+      play_date: r.play_date,
+      tee_time: r.tee_time || "",
+      holes: r.holes,
+      players: "—",
+      reference: `manual-${r.id}`,
+      status: "UPCOMING",
+      paid: false,
+      gross_cents: 0,
+      can_cancel: false,
+      can_share: false,
+      can_create_scorecard: false,
+      notes: r.notes || "",
+      is_manual_upcoming: true
+    }));
+  } catch (err) {
+    console.warn("manual upcoming rounds failed", err);
+    return [];
+  }
+}  
   
 async function loadMyGames() {
     if (!email || !upcomingGamesEl || !previousGamesEl) return;
@@ -2596,7 +2631,14 @@ async function loadMyGames() {
         return;
       }
 
-      renderGameCards(data.upcoming || [], upcomingGamesEl, "upcoming");
+      const bookingUpcoming = Array.isArray(data.upcoming) ? data.upcoming : [];
+const manualUpcoming = await loadManualUpcomingRoundsForAccount();
+
+renderGameCards(
+  [...bookingUpcoming, ...manualUpcoming],
+  upcomingGamesEl,
+  "upcoming"
+);
 
 allPreviousGames = Array.isArray(data.previous) ? data.previous : [];
 
