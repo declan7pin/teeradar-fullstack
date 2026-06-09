@@ -2093,6 +2093,16 @@ async function createOrOpenScorecard(game, btn) {
     </button>
   ` : ``}
 
+  ${g.is_manual_upcoming ? `
+  <button
+    class="btn-danger delete-manual-upcoming-btn"
+    data-id="${Number(g.manual_upcoming_id || 0)}"
+    type="button"
+  >
+    Delete round
+  </button>
+` : ``}
+
   ${g.can_share ? `
     <button
       class="btn-secondary share-booking-btn"
@@ -2212,7 +2222,38 @@ targetEl.querySelectorAll(".share-booking-btn").forEach((btn) => {
     openShareBookingModal(reference, labelText);
   });
 });
-}
+
+    targetEl.querySelectorAll(".delete-manual-upcoming-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const id = Number(btn.dataset.id || 0);
+    if (!id) return;
+
+    const ok = window.confirm("Delete this manually added upcoming round?");
+    if (!ok) return;
+
+    btn.disabled = true;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/shared-rounds/upcoming/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: {
+          ...(token ? { Authorization: "Bearer " + token } : {})
+        }
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "delete_failed");
+      }
+
+      await loadMyGames();
+    } catch (err) {
+      alert("Could not delete round: " + (err.message || "error"));
+      btn.disabled = false;
+    }
+  });
+});
 
   function setShareBookingStatus(text, variant = "") {
     if (!shareBookingStatus) return;
@@ -2584,6 +2625,7 @@ async function loadManualUpcomingRoundsForAccount() {
       holes: r.holes,
       players: "—",
       reference: `manual-${r.id}`,
+      manual_upcoming_id: r.id,
       status: "UPCOMING",
       paid: false,
       gross_cents: 0,
