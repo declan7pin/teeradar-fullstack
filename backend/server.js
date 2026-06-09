@@ -637,6 +637,41 @@ async function ensureBookingTables() {
         created_at TIMESTAMPTZ DEFAULT now()
       );
     `);
+    
+    async function ensureSharedRoundsTables() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS upcoming_rounds (
+        id BIGSERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        course TEXT NOT NULL,
+        state TEXT,
+        play_date DATE NOT NULL,
+        tee_time TEXT,
+        holes INTEGER NOT NULL DEFAULT 18,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS upcoming_round_shares (
+        id BIGSERIAL PRIMARY KEY,
+        upcoming_round_id BIGINT NOT NULL REFERENCES upcoming_rounds(id) ON DELETE CASCADE,
+        owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        shared_with_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        shared_at TIMESTAMPTZ DEFAULT now(),
+        UNIQUE(upcoming_round_id, shared_with_user_id)
+      );
+    `);
+
+    console.log("✅ shared rounds tables ready");
+  } catch (err) {
+    console.error("❌ error ensuring shared rounds tables:", err);
+  }
+}
+
+ensureSharedRoundsTables();
 
     // If you already run this, keep it
     await ensureCoursePaymentModeSchema();
