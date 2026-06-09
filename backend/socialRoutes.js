@@ -121,12 +121,42 @@ router.get("/friend-activity", async (req, res) => {
         state: r.state,
         holes,
         created_at: r.created_at,
+        activity_date: r.created_at,
         total_score: totalScore,
         score_vs_par: vsPar,
         complete,
-        text: complete
-          ? `${r.display_name} shot ${totalScore} at ${r.course}`
-          : `${r.display_name} started a round at ${r.course}`,
+        let activityText = "";
+
+if (!complete) {
+  activityText = `${r.display_name} started a round at ${r.course}`;
+} else {
+  activityText = `${r.display_name} shot ${totalScore} at ${r.course}`;
+
+  // ✅ best score achievements
+  if (holes === 18) {
+    if (totalScore <= 79) {
+      activityText += ` • New personal best 18-hole score`;
+    }
+  }
+
+  if (holes === 9) {
+    if (totalScore <= 39) {
+      activityText += ` • New personal best 9-hole score`;
+    }
+  }
+
+  // ✅ putting achievements
+  const totalPutts =
+    Number(r.total_putts || 0);
+
+  if (holes === 18 && totalPutts > 0 && totalPutts <= 30) {
+    activityText += ` • Best putting round`;
+  }
+
+  if (holes === 9 && totalPutts > 0 && totalPutts <= 15) {
+    activityText += ` • Best putting round`;
+  }
+}
       };
     });
 
