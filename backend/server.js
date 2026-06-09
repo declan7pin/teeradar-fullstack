@@ -28,6 +28,7 @@ import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 import groupVotesRouter from "./groupVotesRoutes.js";
 import { ensureGroupVotesTables } from "./groupVotesMigrate.js";
 import friendsRouter from "./friendsRoutes.js";
+import socialRouter from "./socialRoutes.js";
 
 // Analytics (Postgres)
 import { recordEvent, getAnalyticsSummary, getTopCourses } from "./analytics.js";
@@ -1199,6 +1200,7 @@ app.use("/api/rounds", roundsRouter);
 app.use("/api/scorecards", scorecardsRouter);
 // ✅ Friends API
 app.use("/api/friends", requireAuth, friendsRouter);
+app.use("/api/social", socialRouter);
 // ✅ NEW: booking API router
 app.use("/api/book", (req, res, next) => {
   // Try to get slug from header OR query OR /api/book/:slug style param
