@@ -3877,6 +3877,44 @@ function clearRoundIdFromUrl(){
     window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
   }catch{}
 }
+function getStartUpcomingIdFromUrl(){
+  try{
+    const url = new URL(window.location.href);
+    const v = String(url.searchParams.get("startUpcomingId") || "").trim();
+    return v || "";
+  }catch{
+    return "";
+  }
+}
+
+function clearStartUpcomingIdFromUrl(){
+  try{
+    const url = new URL(window.location.href);
+    url.searchParams.delete("startUpcomingId");
+    window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+  }catch{}
+}
+
+async function startUpcomingRoundFromId(id){
+  if (!id || !isLoggedIn()) return;
+
+  const data = await api("/api/shared-rounds/upcoming", { method:"GET" });
+  const rounds = data.rounds || [];
+  const upcoming = rounds.find(r => Number(r.id) === Number(id));
+
+  if (!upcoming) {
+    setToast(leftToast, "Upcoming round not found.", false);
+    return;
+  }
+
+  courseEl.value = upcoming.course || "";
+  stateEl.value = upcoming.state || "WA";
+  holesEl.value = String(upcoming.holes || 18);
+  notesEl.value = upcoming.notes || "";
+
+  await refreshNinesAndTeesUI();
+  await createRound();
+}    
     async function safeFetchRounds(){
       try{
         await fetchRounds();
@@ -4102,6 +4140,7 @@ if (holePickerBack){
   const token = getToken();
   const loggedIn = !!token;
   const roundIdFromUrl = getRoundIdFromUrl();
+  const startUpcomingIdFromUrl = getStartUpcomingIdFromUrl();
 
   renderHeaderAuthState();
 
@@ -4204,6 +4243,11 @@ upcomingCourseAutoList.id = "upcomingCourseAutoList";
 
   await safeFetchRounds();
 await fetchUpcomingRounds();
+ if (startUpcomingIdFromUrl) {
+  await startUpcomingRoundFromId(startUpcomingIdFromUrl);
+  clearStartUpcomingIdFromUrl();
+  return;
+}     
 
   // ✅ NEW: auto-open round when arriving from My Account
   if (roundIdFromUrl) {
