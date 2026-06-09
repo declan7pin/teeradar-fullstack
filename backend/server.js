@@ -29,6 +29,7 @@ import groupVotesRouter from "./groupVotesRoutes.js";
 import { ensureGroupVotesTables } from "./groupVotesMigrate.js";
 import friendsRouter from "./friendsRoutes.js";
 import socialRouter from "./socialRoutes.js";
+import sharedRoundsRouter from "./sharedRoundsRoutes.js";
 
 // Analytics (Postgres)
 import { recordEvent, getAnalyticsSummary, getTopCourses } from "./analytics.js";
@@ -1230,6 +1231,8 @@ app.use(bookingViewsRouter);
 // ✅✅✅ END ADD ✅✅✅
 
 app.use(groupVotesRouter);
+app.use("/api/shared-rounds", sharedRoundsRouter);
+
 
 // 🔔 Alerts API
 app.use("/api/alerts", alertsRouter);
