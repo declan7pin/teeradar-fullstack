@@ -4122,8 +4122,10 @@ syncNineLoopVisibility();
   
   async function initUpcomingCourseAutocomplete(){
   if (!upcomingCourse) return;
+    if (document.getElementById("upcomingCourseAutoList")) return;
 
   upcomingCourseAutoList = document.createElement("div");
+upcomingCourseAutoList.id = "upcomingCourseAutoList";
   upcomingCourseAutoList.className = "autocomplete-list";
   upcomingCourseAutoList.style.display = "none";
 
