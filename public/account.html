@@ -2095,6 +2095,16 @@ async function createOrOpenScorecard(game, btn) {
 
   ${g.is_manual_upcoming ? `
   <button
+    class="btn-primary start-manual-round-btn"
+    data-id="${Number(g.manual_upcoming_id || 0)}"
+    type="button"
+  >
+    Start round now
+  </button>
+` : ``}
+
+  ${g.is_manual_upcoming ? `
+  <button
     class="btn-danger delete-manual-upcoming-btn"
     data-id="${Number(g.manual_upcoming_id || 0)}"
     type="button"
@@ -2222,6 +2232,15 @@ targetEl.querySelectorAll(".share-booking-btn").forEach((btn) => {
     openShareBookingModal(reference, labelText);
   });
 });
+
+targetEl.querySelectorAll(".start-manual-round-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const id = Number(btn.dataset.id || 0);
+    if (!id) return;
+
+    window.location.href = `/my-rounds.html?startUpcomingId=${encodeURIComponent(id)}`;
+  });
+});    
 
     targetEl.querySelectorAll(".delete-manual-upcoming-btn").forEach((btn) => {
   btn.addEventListener("click", async () => {
@@ -2609,18 +2628,22 @@ function renderFilteredPreviousGames() {
 
 async function loadManualUpcomingRoundsForAccount() {
   try {
-    const res = await fetch(`${API_BASE}/api/shared-rounds/upcoming`, {
-      method: "GET",
-      headers: {
-        ...(token ? { Authorization: "Bearer " + token } : {})
-      }
-    });
+    const [mineRes, sharedRes] = await Promise.all([
+      fetch(`${API_BASE}/api/shared-rounds/upcoming`, {
+        headers: { ...(token ? { Authorization: "Bearer " + token } : {}) }
+      }),
+      fetch(`${API_BASE}/api/shared-rounds/shared-with-me`, {
+        headers: { ...(token ? { Authorization: "Bearer " + token } : {}) }
+      })
+    ]);
 
-    const data = await res.json().catch(() => ({}));
+    const mineData = await mineRes.json().catch(() => ({}));
+    const sharedData = await sharedRes.json().catch(() => ({}));
 
-    if (!res.ok || !data.ok) return [];
+    const mine = mineRes.ok && mineData.ok ? (mineData.rounds || []) : [];
+    const shared = sharedRes.ok && sharedData.ok ? (sharedData.rounds || []) : [];
 
-    return (data.rounds || []).map((r) => ({
+    const mapRound = (r, sharedWithMe = false) => ({
       course_name: r.course,
       play_date: r.play_date,
       tee_time: r.tee_time || "",
@@ -2632,16 +2655,22 @@ async function loadManualUpcomingRoundsForAccount() {
       paid: false,
       gross_cents: 0,
       can_cancel: false,
-      can_share: false,
+      can_share: !sharedWithMe,
       can_create_scorecard: false,
-      notes: r.notes || "",
-      is_manual_upcoming: true
-    }));
+      notes: sharedWithMe ? `Shared by ${r.owner_name || r.owner_email || "friend"}` : (r.notes || ""),
+      is_manual_upcoming: true,
+      is_shared_with_me: sharedWithMe
+    });
+
+    return [
+      ...mine.map((r) => mapRound(r, false)),
+      ...shared.map((r) => mapRound(r, true))
+    ];
   } catch (err) {
-    console.warn("manual upcoming rounds failed", err);
+    console.warn("manual/shared upcoming rounds failed", err);
     return [];
   }
-}  
+}
   
 async function loadMyGames() {
     if (!email || !upcomingGamesEl || !previousGamesEl) return;
