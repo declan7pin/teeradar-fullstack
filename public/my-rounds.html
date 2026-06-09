@@ -1678,6 +1678,9 @@ let premiumPlayerIndex = 0; // 0-based (0=P1)
 
     const courseAutoList = document.getElementById("courseAutoList");
 
+// ✅ Upcoming round autocomplete
+let upcomingCourseAutoList = null;
+
     // ✅ NEW refs
     const playerNamesWrap = document.getElementById("playerNamesWrap");
     const namesGrid = document.getElementById("namesGrid");
@@ -4114,7 +4117,88 @@ if (holePickerBack){
   setLeftPanelsVisibility(true);
 
   initCourseAutocomplete();
-  syncNineLoopVisibility();
+initUpcomingCourseAutocomplete();
+syncNineLoopVisibility();
+  
+  async function initUpcomingCourseAutocomplete(){
+  if (!upcomingCourse) return;
+
+  upcomingCourseAutoList = document.createElement("div");
+  upcomingCourseAutoList.className = "autocomplete-list";
+  upcomingCourseAutoList.style.display = "none";
+
+  upcomingCourse.parentElement.style.position = "relative";
+  upcomingCourse.parentElement.appendChild(upcomingCourseAutoList);
+
+  upcomingCourse.addEventListener("input", async () => {
+    const q = norm(upcomingCourse.value);
+    upcomingCourseAutoList.style.display = "none";
+    upcomingCourseAutoList.innerHTML = "";
+
+    if (!q || q.length < 2) return;
+
+    await loadCoursesOnce();
+
+    const stateNow = String(upcomingState?.value || "").trim().toUpperCase();
+
+    const matches = coursesCache
+      .filter(c => norm(c.name || c.course || c.title).includes(q))
+      .sort((a,b) => {
+        const aState = String(a.state || "").toUpperCase();
+        const bState = String(b.state || "").toUpperCase();
+        const aBoost = (stateNow && aState === stateNow) ? -1 : 0;
+        const bBoost = (stateNow && bState === stateNow) ? -1 : 0;
+        if (aBoost !== bBoost) return aBoost - bBoost;
+        return norm(a.name).localeCompare(norm(b.name));
+      })
+      .slice(0, 10);
+
+    if (!matches.length) return;
+
+    upcomingCourseAutoList.innerHTML = matches.map((c, index) => {
+      const name = c.name || c.course || c.title || "";
+      const st = String(c.state || "").toUpperCase();
+      const holes = Number(c.holes) || "";
+      return `
+        <div class="autocomplete-item" data-index="${index}">
+          ${escapeHtml(name)}${holes ? ` (${holes} holes)` : ""}
+          ${st ? `<small>State: ${escapeHtml(st)}</small>` : ""}
+        </div>
+      `;
+    }).join("");
+
+    upcomingCourseAutoList.querySelectorAll(".autocomplete-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        const c = matches[Number(item.dataset.index)];
+        if (!c) return;
+
+        upcomingCourse.value = c.name || c.course || c.title || "";
+
+        if (c.state && upcomingState) {
+          upcomingState.value = String(c.state).toUpperCase();
+        }
+
+        if (c.holes && upcomingHoles) {
+          upcomingHoles.value = String(Number(c.holes));
+        }
+
+        upcomingCourseAutoList.style.display = "none";
+        upcomingCourseAutoList.innerHTML = "";
+      });
+    });
+
+    upcomingCourseAutoList.style.display = "block";
+  });
+
+  document.addEventListener("click", (e) => {
+    if (e.target === upcomingCourse) return;
+    if (upcomingCourseAutoList && upcomingCourseAutoList.contains(e.target)) return;
+    if (upcomingCourseAutoList) {
+      upcomingCourseAutoList.style.display = "none";
+      upcomingCourseAutoList.innerHTML = "";
+    }
+  });
+}
 
   await safeFetchRounds();
 await fetchUpcomingRounds();
