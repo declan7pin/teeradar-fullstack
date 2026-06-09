@@ -1121,6 +1121,60 @@
 
 <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;" />
 
+<h2>Upcoming rounds</h2>
+<div class="muted" style="font-weight:750;">
+  Manually add a future round and share it with friends.
+</div>
+
+<div class="row">
+  <div>
+    <label for="upcomingCourse">Course</label>
+    <input id="upcomingCourse" placeholder="e.g. Point Walter Golf Course" />
+  </div>
+  <div>
+    <label for="upcomingState">State</label>
+    <select id="upcomingState">
+      <option value="WA">WA</option>
+      <option value="NT">NT</option>
+      <option value="QLD">QLD</option>
+      <option value="NSW">NSW</option>
+      <option value="VIC">VIC</option>
+      <option value="SA">SA</option>
+      <option value="TAS">TAS</option>
+      <option value="ACT">ACT</option>
+    </select>
+  </div>
+</div>
+
+<div class="row3">
+  <div>
+    <label for="upcomingDate">Date</label>
+    <input id="upcomingDate" type="date" />
+  </div>
+  <div>
+    <label for="upcomingTime">Tee time</label>
+    <input id="upcomingTime" type="time" />
+  </div>
+  <div>
+    <label for="upcomingHoles">Holes</label>
+    <select id="upcomingHoles">
+      <option value="18">18</option>
+      <option value="9">9</option>
+    </select>
+  </div>
+</div>
+
+<label for="upcomingNotes">Notes</label>
+<textarea id="upcomingNotes" placeholder="Optional notes e.g. Cart booked, 2 players, comp round..."></textarea>
+
+<div class="actions">
+  <button class="btn2" id="addUpcomingBtn" type="button">Add upcoming round</button>
+</div>
+
+<div id="upcomingList" class="list"></div>
+
+<hr style="border:none;border-top:1px solid var(--border);margin:20px 0;" />
+
 <div id="yourRoundsSection" class="roundsCollapsed">
   <div class="roundsHeaderRow">
     <div>
@@ -1292,6 +1346,24 @@
     <div class="holePickerHandle"></div>
     <h3>Select a Hole</h3>
     <div class="holeGrid" id="holePickerGrid"></div>
+  </div>
+</div>
+
+<div class="modalBack" id="shareRoundModalBack" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3>Share upcoming round</h3>
+    <div class="muted" style="font-weight:800;">
+      Select which friends can see this upcoming round.
+    </div>
+
+    <div id="shareFriendsList" class="list" style="margin-top:14px;"></div>
+
+    <div class="actions">
+      <button class="btn2 secondary" id="shareCancelBtn" type="button">Cancel</button>
+      <button class="btn2" id="shareConfirmBtn" type="button">Share</button>
+    </div>
+
+    <div id="shareToast" class="toast"></div>
   </div>
 </div>
 
@@ -1515,6 +1587,22 @@ function writeScorecardsToLS(st, arr){
     
     const accountLink = document.getElementById("accountLink");
 const myStatsLink = document.getElementById("myStatsLink");
+const upcomingCourse = document.getElementById("upcomingCourse");
+const upcomingState = document.getElementById("upcomingState");
+const upcomingDate = document.getElementById("upcomingDate");
+const upcomingTime = document.getElementById("upcomingTime");
+const upcomingHoles = document.getElementById("upcomingHoles");
+const upcomingNotes = document.getElementById("upcomingNotes");
+const addUpcomingBtn = document.getElementById("addUpcomingBtn");
+const upcomingList = document.getElementById("upcomingList");
+
+const shareRoundModalBack = document.getElementById("shareRoundModalBack");
+const shareFriendsList = document.getElementById("shareFriendsList");
+const shareCancelBtn = document.getElementById("shareCancelBtn");
+const shareConfirmBtn = document.getElementById("shareConfirmBtn");
+const shareToast = document.getElementById("shareToast");
+
+let selectedUpcomingRoundId = null;
 
 function isLoggedIn(){
   return !!getToken();
@@ -3334,6 +3422,148 @@ function guestDeleteRound(id){
   guestWriteRounds(arr);
 }
 
+async function fetchUpcomingRounds(){
+  if (!isLoggedIn() || !upcomingList) {
+    if (upcomingList) upcomingList.innerHTML = `<div class="muted">Log in to add and share upcoming rounds.</div>`;
+    return;
+  }
+
+  try {
+    const data = await api("/api/shared-rounds/upcoming", { method:"GET" });
+    const rounds = data.rounds || [];
+
+    if (!rounds.length) {
+      upcomingList.innerHTML = `<div class="muted" style="font-weight:800;">No upcoming rounds added yet.</div>`;
+      return;
+    }
+
+    upcomingList.innerHTML = rounds.map(r => `
+      <div class="roundItem" style="cursor:default;">
+        <div class="top">
+          <div>
+            <div class="title">${escapeHtml(r.course || "Upcoming round")}</div>
+            <div class="meta">
+              ${escapeHtml(r.state || "")} • ${escapeHtml(r.holes || "")} holes
+              • ${escapeHtml(r.play_date || "")}
+              ${r.tee_time ? " • " + escapeHtml(r.tee_time) : ""}
+            </div>
+            ${r.notes ? `<div class="meta">${escapeHtml(r.notes)}</div>` : ""}
+          </div>
+          <div>
+            <button class="btn2 secondary" type="button" onclick="openShareRoundModal(${Number(r.id)})">
+              Share
+            </button>
+          </div>
+        </div>
+      </div>
+    `).join("");
+  } catch (err) {
+    upcomingList.innerHTML = `<div class="muted">Could not load upcoming rounds: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function addUpcomingRound(){
+  if (!isLoggedIn()) {
+    setToast(leftToast, "Please log in to add upcoming rounds.", false);
+    return;
+  }
+
+  const course = String(upcomingCourse?.value || "").trim();
+  const state = String(upcomingState?.value || "WA").trim().toUpperCase();
+  const play_date = String(upcomingDate?.value || "").trim();
+  const tee_time = String(upcomingTime?.value || "").trim();
+  const holes = Number(upcomingHoles?.value || 18);
+  const notes = String(upcomingNotes?.value || "").trim();
+
+  if (!course || !play_date) {
+    setToast(leftToast, "Please enter a course and date.", false);
+    return;
+  }
+
+  try {
+    await api("/api/shared-rounds/upcoming", {
+      method:"POST",
+      body: JSON.stringify({ course, state, play_date, tee_time, holes, notes })
+    });
+
+    if (upcomingCourse) upcomingCourse.value = "";
+    if (upcomingDate) upcomingDate.value = "";
+    if (upcomingTime) upcomingTime.value = "";
+    if (upcomingNotes) upcomingNotes.value = "";
+
+    setToast(leftToast, "Upcoming round added.", true);
+    await fetchUpcomingRounds();
+  } catch (err) {
+    setToast(leftToast, "Could not add upcoming round: " + err.message, false);
+  }
+}
+
+async function openShareRoundModal(roundId){
+  selectedUpcomingRoundId = Number(roundId);
+
+  if (!shareRoundModalBack || !shareFriendsList) return;
+
+  shareToast.className = "toast";
+  shareToast.style.display = "none";
+  shareFriendsList.innerHTML = `<div class="muted">Loading friends...</div>`;
+  shareRoundModalBack.style.display = "flex";
+  shareRoundModalBack.setAttribute("aria-hidden", "false");
+
+  try {
+    const data = await api("/api/friends/list", { method:"GET" });
+    const friends = data.friends || [];
+
+    if (!friends.length) {
+      shareFriendsList.innerHTML = `<div class="muted">No friends yet. Add friends first.</div>`;
+      return;
+    }
+
+    shareFriendsList.innerHTML = friends.map(f => `
+      <label style="display:flex;gap:10px;align-items:center;margin:0;padding:12px;border:1px solid var(--border);border-radius:16px;">
+        <input type="checkbox" class="shareFriendCheck" value="${Number(f.friend_user_id)}" style="width:auto;" />
+        <span style="font-weight:900;">${escapeHtml(f.name || f.email || "Friend")}</span>
+      </label>
+    `).join("");
+  } catch (err) {
+    shareFriendsList.innerHTML = `<div class="muted">Could not load friends: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function closeShareRoundModal(){
+  if (!shareRoundModalBack) return;
+  selectedUpcomingRoundId = null;
+  shareRoundModalBack.style.display = "none";
+  shareRoundModalBack.setAttribute("aria-hidden", "true");
+}
+
+async function confirmShareRound(){
+  if (!selectedUpcomingRoundId) return;
+
+  const ids = Array.from(document.querySelectorAll(".shareFriendCheck:checked"))
+    .map(el => Number(el.value))
+    .filter(Number.isFinite);
+
+  if (!ids.length) {
+    setToast(shareToast, "Select at least one friend.", false);
+    return;
+  }
+
+  try {
+    await api("/api/shared-rounds/share", {
+      method:"POST",
+      body: JSON.stringify({
+        upcoming_round_id: selectedUpcomingRoundId,
+        friend_user_ids: ids
+      })
+    });
+
+    setToast(shareToast, "Shared successfully.", true);
+    setTimeout(closeShareRoundModal, 700);
+  } catch (err) {
+    setToast(shareToast, "Share failed: " + err.message, false);
+  }
+}
+
     // -----------------------------
     // API calls
     // -----------------------------
@@ -3683,6 +3913,15 @@ function clearRoundIdFromUrl(){
 });
 
 refreshBtn.addEventListener("click", safeFetchRounds);
+if (addUpcomingBtn) addUpcomingBtn.addEventListener("click", addUpcomingRound);
+if (shareCancelBtn) shareCancelBtn.addEventListener("click", closeShareRoundModal);
+if (shareConfirmBtn) shareConfirmBtn.addEventListener("click", confirmShareRound);
+
+if (shareRoundModalBack) {
+  shareRoundModalBack.addEventListener("click", (e) => {
+    if (e.target === shareRoundModalBack) closeShareRoundModal();
+  });
+}
 
 if (openStartRoundBtn && createFormPanel) {
   openStartRoundBtn.addEventListener("click", () => {
@@ -3878,6 +4117,7 @@ if (holePickerBack){
   syncNineLoopVisibility();
 
   await safeFetchRounds();
+await fetchUpcomingRounds();
 
   // ✅ NEW: auto-open round when arriving from My Account
   if (roundIdFromUrl) {
