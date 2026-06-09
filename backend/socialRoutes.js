@@ -83,8 +83,11 @@ router.get("/friend-activity", async (req, res) => {
         r.created_at,
         u.email,
         COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS display_name,
+
         COALESCE(SUM(rh.strokes), 0)::int AS total_score,
         COALESCE(SUM(rh.par), 0)::int AS total_par,
+        COALESCE(SUM(rh.putts), 0)::int AS total_putts,
+
         COUNT(rh.id)::int AS holes_entered
       FROM rounds r
       JOIN users u ON u.id = r.user_id
@@ -107,10 +110,36 @@ router.get("/friend-activity", async (req, res) => {
     const activities = rows.map((r) => {
       const totalScore = Number(r.total_score || 0);
       const totalPar = Number(r.total_par || 0);
+      const totalPutts = Number(r.total_putts || 0);
       const holesEntered = Number(r.holes_entered || 0);
       const holes = Number(r.holes || 0);
+
       const complete = holesEntered >= holes && totalScore > 0;
       const vsPar = complete && totalPar > 0 ? totalScore - totalPar : null;
+
+      let activityText = "";
+
+      if (!complete) {
+        activityText = `${r.display_name} started a round at ${r.course}`;
+      } else {
+        activityText = `${r.display_name} shot ${totalScore} at ${r.course}`;
+
+        if (holes === 18 && totalScore <= 79) {
+          activityText += " • New personal best 18-hole score";
+        }
+
+        if (holes === 9 && totalScore <= 39) {
+          activityText += " • New personal best 9-hole score";
+        }
+
+        if (holes === 18 && totalPutts > 0 && totalPutts <= 30) {
+          activityText += " • Best putting round";
+        }
+
+        if (holes === 9 && totalPutts > 0 && totalPutts <= 15) {
+          activityText += " • Best putting round";
+        }
+      }
 
       return {
         round_id: r.round_id,
@@ -123,40 +152,10 @@ router.get("/friend-activity", async (req, res) => {
         created_at: r.created_at,
         activity_date: r.created_at,
         total_score: totalScore,
+        total_putts: totalPutts,
         score_vs_par: vsPar,
         complete,
-        let activityText = "";
-
-if (!complete) {
-  activityText = `${r.display_name} started a round at ${r.course}`;
-} else {
-  activityText = `${r.display_name} shot ${totalScore} at ${r.course}`;
-
-  // ✅ best score achievements
-  if (holes === 18) {
-    if (totalScore <= 79) {
-      activityText += ` • New personal best 18-hole score`;
-    }
-  }
-
-  if (holes === 9) {
-    if (totalScore <= 39) {
-      activityText += ` • New personal best 9-hole score`;
-    }
-  }
-
-  // ✅ putting achievements
-  const totalPutts =
-    Number(r.total_putts || 0);
-
-  if (holes === 18 && totalPutts > 0 && totalPutts <= 30) {
-    activityText += ` • Best putting round`;
-  }
-
-  if (holes === 9 && totalPutts > 0 && totalPutts <= 15) {
-    activityText += ` • Best putting round`;
-  }
-}
+        text: activityText,
       };
     });
 
