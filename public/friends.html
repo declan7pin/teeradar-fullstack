@@ -75,13 +75,15 @@
       align-items:center;
     }
 
-    input{
-      width:100%;
-      padding:12px 13px;
-      border-radius:12px;
-      border:1px solid var(--border);
-      font:inherit;
-    }
+    input,
+select{
+  width:100%;
+  padding:12px 13px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  font:inherit;
+  background:#fff;
+}
 
     button{
       border:0;
@@ -207,6 +209,31 @@
       <h1>Friends</h1>
       <p>Add golf mates, share upcoming rounds, compare scorecards, and view each other’s stats.</p>
     </section>
+    
+    <section class="card">
+  <h2>Your social profile</h2>
+
+  <div class="row">
+    <input id="displayNameInput" type="text" placeholder="Display name e.g. Declan" maxlength="40" />
+
+    <select id="privacySelect">
+      <option value="friends">Friends only</option>
+      <option value="public">Public</option>
+      <option value="private">Private</option>
+    </select>
+
+    <button id="saveSocialBtn" type="button">Save</button>
+  </div>
+
+  <div id="socialStatus" class="status"></div>
+</section>
+
+<section class="card">
+  <h2>Friend activity</h2>
+  <div id="activityList" class="list">
+    <div class="empty">Loading activity...</div>
+  </div>
+</section>
 
     <section class="card">
       <div class="pill">Add a friend</div>
@@ -394,6 +421,79 @@
         alert("Could not accept request: " + err.message);
       }
     }
+    
+    async function loadSocialSettings(){
+  const nameInput = document.getElementById("displayNameInput");
+  const privacySelect = document.getElementById("privacySelect");
+  const status = document.getElementById("socialStatus");
+
+  if (!nameInput || !privacySelect) return;
+
+  try {
+    const data = await apiFetch("/api/social/settings");
+    const settings = data.settings || {};
+
+    nameInput.value = settings.display_name || "";
+    privacySelect.value = settings.profile_visibility || "friends";
+  } catch (err) {
+    if (status) status.textContent = "Could not load profile settings.";
+  }
+}
+
+async function saveSocialSettings(){
+  const nameInput = document.getElementById("displayNameInput");
+  const privacySelect = document.getElementById("privacySelect");
+  const status = document.getElementById("socialStatus");
+
+  try {
+    status.textContent = "Saving...";
+
+    await apiFetch("/api/social/settings", {
+      method: "POST",
+      body: JSON.stringify({
+        display_name: nameInput.value.trim(),
+        profile_visibility: privacySelect.value
+      })
+    });
+
+    status.textContent = "Saved.";
+    await loadFriendActivity();
+    await loadFriends();
+  } catch (err) {
+    status.textContent = "Could not save: " + err.message;
+  }
+}
+
+async function loadFriendActivity(){
+  const el = document.getElementById("activityList");
+  if (!el) return;
+
+  try {
+    const data = await apiFetch("/api/social/friend-activity");
+    const activities = data.activities || [];
+
+    if (!activities.length) {
+      el.innerHTML = `<div class="empty">No friend activity yet.</div>`;
+      return;
+    }
+
+    el.innerHTML = activities.map(a => `
+      <div class="friend">
+        <div>
+          <strong>${escapeHtml(a.text || "Friend activity")}</strong>
+          <span>${escapeHtml(a.state || "")} ${escapeHtml(a.holes || "")} holes</span>
+        </div>
+        <div class="actions">
+          <button class="ghost" onclick="window.location.href='/friend-profile.html?userId=${Number(a.user_id)}'">
+            View Profile
+          </button>
+        </div>
+      </div>
+    `).join("");
+  } catch (err) {
+    el.innerHTML = `<div class="empty">Could not load activity: ${escapeHtml(err.message)}</div>`;
+  }
+}
 
     async function loadFriends(){
       const el = document.getElementById("friendsList");
@@ -427,6 +527,7 @@
     }
 
     document.getElementById("searchBtn").addEventListener("click", searchUsers);
+    document.getElementById("saveSocialBtn")?.addEventListener("click", saveSocialSettings);
     document.getElementById("friendSearch").addEventListener("keydown", (e) => {
       if (e.key === "Enter") searchUsers();
     });
@@ -442,8 +543,10 @@
         return;
       }
 
-      await loadRequests();
-      await loadFriends();
+      await loadSocialSettings();
+await loadFriendActivity();
+await loadRequests();
+await loadFriends();
     }
 
     init();
