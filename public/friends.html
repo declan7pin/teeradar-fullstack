@@ -481,7 +481,12 @@ async function loadFriendActivity(){
       <div class="friend">
         <div>
           <strong>${escapeHtml(a.text || "Friend activity")}</strong>
-          <span>${escapeHtml(a.state || "")} ${escapeHtml(a.holes || "")} holes</span>
+<span>
+  ${escapeHtml(a.state || "")}
+  ${escapeHtml(a.holes || "")} holes
+  •
+  ${new Date(a.activity_date).toLocaleDateString()}
+</span>
         </div>
         <div class="actions">
           <button class="ghost" onclick="window.location.href='/friend-profile.html?userId=${Number(a.user_id)}'">
