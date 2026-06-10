@@ -229,7 +229,13 @@ select{
 </section>
 
 <section class="card">
-  <h2>Friend activity</h2>
+  <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px;">
+    <h2 style="margin:0;">Friend activity</h2>
+    <button class="ghost" type="button" onclick="window.location.href='/friend-activity.html'">
+      View full feed
+    </button>
+  </div>
+
   <div id="activityList" class="list">
     <div class="empty">Loading activity...</div>
   </div>
@@ -470,7 +476,7 @@ async function loadFriendActivity(){
 
   try {
     const data = await apiFetch("/api/social/friend-activity");
-    const activities = data.activities || [];
+    const activities = (data.activities || []).slice(0, 15);
 
     if (!activities.length) {
       el.innerHTML = `<div class="empty">No friend activity yet.</div>`;
