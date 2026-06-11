@@ -25,6 +25,57 @@ function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+export async function sendPushToEmail(email, payload = {}) {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return { sent: 0, removed: 0 };
+
+  const targetEmail = normalizeEmail(email);
+  if (!targetEmail) return { sent: 0, removed: 0 };
+
+  const { rows } = await db.query(
+    `
+    SELECT endpoint, p256dh, auth
+    FROM push_subscriptions
+    WHERE LOWER(email) = LOWER($1)
+    ORDER BY updated_at DESC
+    `,
+    [targetEmail]
+  );
+
+  let sent = 0;
+  let removed = 0;
+
+  for (const row of rows || []) {
+    const subscription = {
+      endpoint: row.endpoint,
+      keys: {
+        p256dh: row.p256dh,
+        auth: row.auth,
+      },
+    };
+
+    try {
+      await webpush.sendNotification(
+        subscription,
+        JSON.stringify({
+          title: payload.title || "TeeRadar",
+          body: payload.body || "You have a new notification.",
+          url: payload.url || "/index.html",
+        })
+      );
+      sent++;
+    } catch (err) {
+      if (err.statusCode === 404 || err.statusCode === 410) {
+        await db.query(`DELETE FROM push_subscriptions WHERE endpoint = $1`, [row.endpoint]);
+        removed++;
+      } else {
+        console.warn("push send failed:", err?.message || err);
+      }
+    }
+  }
+
+  return { sent, removed };
+}
+
 router.get("/public-key", (req, res) => {
   if (!VAPID_PUBLIC_KEY) {
     return res.status(500).json({
