@@ -285,4 +285,34 @@ router.delete("/upcoming/:id", async (req, res) => {
   }
 });
 
+router.delete("/shared-with-me/:id", async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const id = Number(req.params.id);
+
+    if (!id) {
+      return res.status(400).json({ ok: false, error: "invalid_round_id" });
+    }
+
+    const result = await db.query(
+      `
+      DELETE FROM upcoming_round_shares
+      WHERE upcoming_round_id = $1
+        AND shared_with_user_id = $2
+      RETURNING id;
+      `,
+      [id, userId]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ ok: false, error: "shared_round_not_found" });
+    }
+
+    res.json({ ok: true, removedId: id });
+  } catch (err) {
+    console.error("DELETE /api/shared-rounds/shared-with-me/:id error:", err);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
 export default router;
