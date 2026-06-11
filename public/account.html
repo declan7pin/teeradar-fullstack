@@ -2020,6 +2020,38 @@ async function createOrOpenScorecard(game, btn) {
   }
 }
 
+  function getGameDateTime(game) {
+  const datePart = String(game?.play_date || "").slice(0, 10);
+  const timePart = String(game?.tee_time || "").split("|")[0].trim();
+
+  if (!datePart) return null;
+
+  const iso = timePart
+    ? `${datePart}T${timePart}:00`
+    : `${datePart}T23:59:59`;
+
+  const d = new Date(iso);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
+function isPastGame(game) {
+  const d = getGameDateTime(game);
+  if (!d) return false;
+  return d.getTime() < Date.now();
+}
+
+function formatGameDate(game) {
+  const d = getGameDateTime(game);
+  if (!d) return String(game?.play_date || "");
+
+  return d.toLocaleDateString("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
+}
+
   function renderGameCards(items, targetEl, kind) {
     if (!targetEl) return;
 
@@ -2044,7 +2076,7 @@ async function createOrOpenScorecard(game, btn) {
             <div>
               <div class="game-title">${escapeHtml(g.course_name || "Golf Course")}</div>
               <div class="game-meta">
-                ${escapeHtml(g.play_date || "")} • ${escapeHtml(String(g.tee_time || "").split("|")[0] || "Time TBC")} • ${escapeHtml(g.holes)} holes${g.is_manual_upcoming ? " • Manually added" : ` • ${escapeHtml(g.players)} player(s)`}
+                ${escapeHtml(formatGameDate(g))} • ${escapeHtml(String(g.tee_time || "").split("|")[0] || "Time TBC")} • ${escapeHtml(g.holes)} holes${g.is_manual_upcoming ? (g.is_shared_with_me ? ` • Shared by ${escapeHtml(g.owner_name || "friend")}` : " • Manually added") : ` • ${escapeHtml(g.players)} player(s)`}
               </div>
               <div class="game-meta" style="margin-top:4px;">
                 Ref: ${escapeHtml(g.reference || "")}
@@ -2103,14 +2135,14 @@ async function createOrOpenScorecard(game, btn) {
   </button>
 ` : ``}
 
-  ${g.is_manual_upcoming ? `
   <button
-    class="btn-danger delete-manual-upcoming-btn"
-    data-id="${Number(g.manual_upcoming_id || 0)}"
-    type="button"
-  >
-    Delete round
-  </button>
+  class="btn-danger delete-manual-upcoming-btn"
+  data-id="${Number(g.manual_upcoming_id || 0)}"
+  data-shared="${g.is_shared_with_me ? "1" : "0"}"
+  type="button"
+>
+  ${g.is_shared_with_me ? "Remove from my games" : "Delete round"}
+</button>
 ` : ``}
 
   ${g.can_share ? `
@@ -2247,13 +2279,20 @@ targetEl.querySelectorAll(".start-manual-round-btn").forEach((btn) => {
     const id = Number(btn.dataset.id || 0);
     if (!id) return;
 
-    const ok = window.confirm("Delete this manually added upcoming round?");
+    const isShared = String(btn.dataset.shared || "") === "1";
+const ok = window.confirm(
+  isShared
+    ? "Remove this shared round from your upcoming games?"
+    : "Delete this manually added upcoming round?"
+);
     if (!ok) return;
 
     btn.disabled = true;
 
     try {
-      const res = await fetch(`${API_BASE}/api/shared-rounds/upcoming/${encodeURIComponent(id)}`, {
+      const res = await fetch(
+  `${API_BASE}/api/shared-rounds/${isShared ? "shared-with-me" : "upcoming"}/${encodeURIComponent(id)}`,
+  {
         method: "DELETE",
         headers: {
           ...(token ? { Authorization: "Bearer " + token } : {})
@@ -2705,7 +2744,10 @@ async function loadMyGames() {
       }
 
       const bookingUpcoming = Array.isArray(data.upcoming) ? data.upcoming : [];
-const manualUpcoming = await loadManualUpcomingRoundsForAccount();
+const manualRounds = await loadManualUpcomingRoundsForAccount();
+
+const manualUpcoming = manualRounds.filter((g) => !isPastGame(g));
+const manualPrevious = manualRounds.filter((g) => isPastGame(g));
 
 renderGameCards(
   [...bookingUpcoming, ...manualUpcoming],
@@ -2713,7 +2755,10 @@ renderGameCards(
   "upcoming"
 );
 
-allPreviousGames = Array.isArray(data.previous) ? data.previous : [];
+allPreviousGames = [
+  ...(Array.isArray(data.previous) ? data.previous : []),
+  ...manualPrevious
+];
 
 // ✅ update button count
 if (togglePreviousGamesBtn) {
