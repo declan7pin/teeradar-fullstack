@@ -3425,6 +3425,18 @@ function guestDeleteRound(id){
   guestWriteRounds(arr);
 }
 
+function formatUpcomingDate(dateStr){
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return String(dateStr).slice(0,10);
+
+  return d.toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
+}    
+
 async function fetchUpcomingRounds(){
   if (!isLoggedIn() || !upcomingList) {
     if (upcomingList) upcomingList.innerHTML = `<div class="muted">Log in to add and share upcoming rounds.</div>`;
@@ -3440,31 +3452,40 @@ async function fetchUpcomingRounds(){
       return;
     }
 
-    upcomingList.innerHTML = rounds.map(r => `
-      <div class="roundItem" style="cursor:default;">
-        <div class="top">
-          <div>
-            <div class="title">${escapeHtml(r.course || "Upcoming round")}</div>
-            <div class="meta">
-              ${escapeHtml(r.state || "")} • ${escapeHtml(r.holes || "")} holes
-              • ${escapeHtml(r.play_date || "")}
-              ${r.tee_time ? " • " + escapeHtml(r.tee_time) : ""}
+    upcomingList.innerHTML = rounds.map(r => {
+      const isShared = r.is_shared === true || r.is_shared === "true";
+      const ownerText = isShared && r.owner_name ? `Shared by ${escapeHtml(r.owner_name)}` : "";
+
+      return `
+        <div class="roundItem" onclick="startUpcomingRoundFromId(${Number(r.id)})" style="cursor:pointer;">
+          <div class="top">
+            <div>
+              <div class="title">${escapeHtml(r.course || "Upcoming round")}</div>
+              <div class="meta">
+                ${escapeHtml(r.state || "")} • ${escapeHtml(r.holes || "")} holes
+                • ${formatUpcomingDate(r.play_date)}
+                ${r.tee_time ? " • " + escapeHtml(r.tee_time) : ""}
+              </div>
+              ${ownerText ? `<div class="meta"><strong>${ownerText}</strong></div>` : ""}
+              ${r.notes ? `<div class="meta">${escapeHtml(r.notes)}</div>` : ""}
+              <div class="meta" style="color:#00796b;font-weight:900;">Tap to start scorecard</div>
             </div>
-            ${r.notes ? `<div class="meta">${escapeHtml(r.notes)}</div>` : ""}
-          </div>
-          <div>
-            <button class="btn2 secondary" type="button" onclick="openShareRoundModal(${Number(r.id)})">
-              Share
-            </button>
+            <div>
+              ${isShared ? "" : `
+                <button class="btn2 secondary" type="button"
+                  onclick="event.stopPropagation(); openShareRoundModal(${Number(r.id)})">
+                  Share
+                </button>
+              `}
+            </div>
           </div>
         </div>
-      </div>
-    `).join("");
+      `;
+    }).join("");
   } catch (err) {
     upcomingList.innerHTML = `<div class="muted">Could not load upcoming rounds: ${escapeHtml(err.message)}</div>`;
   }
 }
-
 async function addUpcomingRound(){
   if (!isLoggedIn()) {
     setToast(leftToast, "Please log in to add upcoming rounds.", false);
