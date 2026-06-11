@@ -52,25 +52,62 @@ router.post("/upcoming", async (req, res) => {
 router.get("/upcoming", async (req, res) => {
   try {
     const userId = Number(req.user?.id);
+    const includeShared = String(req.query.includeShared || "") === "1";
+
+    if (!includeShared) {
+      const { rows } = await db.query(
+        `
+        SELECT
+          ur.*,
+          false AS is_shared,
+          NULL AS owner_name
+        FROM upcoming_rounds ur
+        WHERE ur.user_id = $1
+        ORDER BY ur.play_date ASC, ur.tee_time ASC NULLS LAST
+        LIMIT 100;
+        `,
+        [userId]
+      );
+
+      return res.json({ ok: true, rounds: rows });
+    }
 
     const { rows } = await db.query(
       `
       SELECT *
-      FROM upcoming_rounds
-      WHERE user_id = $1
+      FROM (
+        SELECT
+          ur.*,
+          false AS is_shared,
+          NULL::text AS owner_name,
+          NULL::timestamp AS shared_at
+        FROM upcoming_rounds ur
+        WHERE ur.user_id = $1
+
+        UNION ALL
+
+        SELECT
+          ur.*,
+          true AS is_shared,
+          COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS owner_name,
+          s.shared_at
+        FROM upcoming_round_shares s
+        JOIN upcoming_rounds ur ON ur.id = s.upcoming_round_id
+        JOIN users u ON u.id = s.owner_user_id
+        WHERE s.shared_with_user_id = $1
+      ) x
       ORDER BY play_date ASC, tee_time ASC NULLS LAST
       LIMIT 100;
       `,
       [userId]
     );
 
-    res.json({ ok:true, rounds: rows });
+    res.json({ ok: true, rounds: rows });
   } catch (err) {
     console.error("GET /api/shared-rounds/upcoming error:", err);
-    res.status(500).json({ ok:false, error:"internal_error" });
+    res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 router.post("/share", async (req, res) => {
   try {
     const userId = Number(req.user?.id);
