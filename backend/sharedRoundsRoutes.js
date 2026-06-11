@@ -2,6 +2,7 @@
 import express from "express";
 import db from "./db.js";
 import { requireAuth } from "./auth.js";
+import { sendPushToEmail } from "./pushRoutes.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -18,9 +19,10 @@ router.post("/upcoming", async (req, res) => {
       notes = "",
     } = req.body || {};
 
-    if (!userId) return res.status(401).json({ ok:false, error:"unauthorised" });
+    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
+
     if (!course || !play_date) {
-      return res.status(400).json({ ok:false, error:"course_and_date_required" });
+      return res.status(400).json({ ok: false, error: "course_and_date_required" });
     }
 
     const result = await db.query(
@@ -42,10 +44,10 @@ router.post("/upcoming", async (req, res) => {
       ]
     );
 
-    res.json({ ok:true, round: result.rows[0] });
+    res.json({ ok: true, round: result.rows[0] });
   } catch (err) {
     console.error("POST /api/shared-rounds/upcoming error:", err);
-    res.status(500).json({ ok:false, error:"internal_error" });
+    res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
@@ -60,7 +62,8 @@ router.get("/upcoming", async (req, res) => {
         SELECT
           ur.*,
           false AS is_shared,
-          NULL AS owner_name
+          NULL::text AS owner_name,
+          NULL::timestamp AS shared_at
         FROM upcoming_rounds ur
         WHERE ur.user_id = $1
         ORDER BY ur.play_date ASC, ur.tee_time ASC NULLS LAST
@@ -108,18 +111,19 @@ router.get("/upcoming", async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 router.post("/share", async (req, res) => {
   try {
     const userId = Number(req.user?.id);
     const { upcoming_round_id, friend_user_ids = [] } = req.body || {};
 
     if (!upcoming_round_id) {
-      return res.status(400).json({ ok:false, error:"missing_upcoming_round_id" });
+      return res.status(400).json({ ok: false, error: "missing_upcoming_round_id" });
     }
 
     const ownerCheck = await db.query(
       `
-      SELECT id
+      SELECT id, course
       FROM upcoming_rounds
       WHERE id = $1 AND user_id = $2
       LIMIT 1;
@@ -128,7 +132,7 @@ router.post("/share", async (req, res) => {
     );
 
     if (!ownerCheck.rows.length) {
-      return res.status(404).json({ ok:false, error:"round_not_found" });
+      return res.status(404).json({ ok: false, error: "round_not_found" });
     }
 
     const ids = Array.isArray(friend_user_ids)
@@ -136,6 +140,7 @@ router.post("/share", async (req, res) => {
       : [];
 
     let shared = 0;
+    let notificationsSent = 0;
 
     for (const friendId of ids) {
       const friendship = await db.query(
@@ -155,24 +160,61 @@ router.post("/share", async (req, res) => {
 
       if (!friendship.rows.length) continue;
 
-      await db.query(
+      const insertShare = await db.query(
         `
         INSERT INTO upcoming_round_shares (
           upcoming_round_id, owner_user_id, shared_with_user_id
         )
         VALUES ($1,$2,$3)
-        ON CONFLICT (upcoming_round_id, shared_with_user_id) DO NOTHING;
+        ON CONFLICT (upcoming_round_id, shared_with_user_id) DO NOTHING
+        RETURNING id;
         `,
         [Number(upcoming_round_id), userId, friendId]
       );
 
+      if (!insertShare.rows.length) continue;
+
       shared++;
+
+      try {
+        const notifyRes = await db.query(
+          `
+          SELECT
+            ur.course,
+            ur.play_date,
+            ur.tee_time,
+            friend.email AS friend_email,
+            owner.email AS owner_email,
+            COALESCE(NULLIF(owner.display_name, ''), split_part(owner.email, '@', 1)) AS owner_name
+          FROM upcoming_rounds ur
+          JOIN users friend ON friend.id = $2
+          JOIN users owner ON owner.id = ur.user_id
+          WHERE ur.id = $1
+          LIMIT 1;
+          `,
+          [Number(upcoming_round_id), friendId]
+        );
+
+        const n = notifyRes.rows[0];
+
+        if (n?.friend_email) {
+          const pushResult = await sendPushToEmail(n.friend_email, {
+            title: "Upcoming round shared",
+            body: `${n.owner_name || "A friend"} shared ${n.course || "a round"} with you.`,
+            url: "/my-rounds.html",
+          });
+
+          notificationsSent += Number(pushResult?.sent || 0);
+        }
+      } catch (pushErr) {
+        console.warn("Upcoming round push notification failed:", pushErr?.message || pushErr);
+      }
     }
 
-    res.json({ ok:true, shared });
+    res.json({ ok: true, shared, notificationsSent });
   } catch (err) {
     console.error("POST /api/shared-rounds/share error:", err);
-    res.status(500).json({ ok:false, error:"internal_error" });
+    res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
@@ -197,10 +239,10 @@ router.get("/shared-with-me", async (req, res) => {
       [userId]
     );
 
-    res.json({ ok:true, rounds: rows });
+    res.json({ ok: true, rounds: rows });
   } catch (err) {
     console.error("GET /api/shared-rounds/shared-with-me error:", err);
-    res.status(500).json({ ok:false, error:"internal_error" });
+    res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
@@ -212,6 +254,15 @@ router.delete("/upcoming/:id", async (req, res) => {
     if (!id) {
       return res.status(400).json({ ok: false, error: "invalid_round_id" });
     }
+
+    await db.query(
+      `
+      DELETE FROM upcoming_round_shares
+      WHERE upcoming_round_id = $1
+        AND owner_user_id = $2;
+      `,
+      [id, userId]
+    );
 
     const result = await db.query(
       `
@@ -233,6 +284,5 @@ router.delete("/upcoming/:id", async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 
 export default router;
