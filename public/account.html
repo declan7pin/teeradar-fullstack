@@ -2133,16 +2133,15 @@ function formatGameDate(game) {
   >
     Start round now
   </button>
-` : ``}
 
   <button
-  class="btn-danger delete-manual-upcoming-btn"
-  data-id="${Number(g.manual_upcoming_id || 0)}"
-  data-shared="${g.is_shared_with_me ? "1" : "0"}"
-  type="button"
->
-  ${g.is_shared_with_me ? "Remove from my games" : "Delete round"}
-</button>
+    class="btn-danger delete-manual-upcoming-btn"
+    data-id="${Number(g.manual_upcoming_id || 0)}"
+    data-shared="${g.is_shared_with_me ? "1" : "0"}"
+    type="button"
+  >
+    ${g.is_shared_with_me ? "Remove from my games" : "Delete round"}
+  </button>
 ` : ``}
 
   ${g.can_share ? `
