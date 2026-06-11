@@ -3432,7 +3432,7 @@ async function fetchUpcomingRounds(){
   }
 
   try {
-    const data = await api("/api/shared-rounds/upcoming", { method:"GET" });
+    const data = await api("/api/shared-rounds/upcoming?includeShared=1", { method:"GET" });
     const rounds = data.rounds || [];
 
     if (!rounds.length) {
@@ -3898,7 +3898,7 @@ function clearStartUpcomingIdFromUrl(){
 async function startUpcomingRoundFromId(id){
   if (!id || !isLoggedIn()) return;
 
-  const data = await api("/api/shared-rounds/upcoming", { method:"GET" });
+  const data = await api("/api/shared-rounds/upcoming?includeShared=1", { method:"GET" });
   const rounds = data.rounds || [];
   const upcoming = rounds.find(r => Number(r.id) === Number(id));
 
