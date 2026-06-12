@@ -3956,10 +3956,27 @@ async function startUpcomingRoundFromId(id){
     return;
   }
 
-  const names = getUpcomingPlayerNames(upcoming);
-  const playerCount = Math.max(1, Math.min(4, names.length));
+  // ✅ FIX: use unique names only, and do not include stale previous players
+  let names = getUpcomingPlayerNames(upcoming)
+    .map(n => String(n || "").trim())
+    .filter(Boolean);
 
+  const seen = new Set();
+  names = names.filter(n => {
+    const key = n.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 4);
+
+  const playerCount = Math.max(1, names.length);
+
+  // ✅ clear old player names first
   for (let i = 0; i < 4; i++) {
+    playerNames[i] = "";
+  }
+
+  for (let i = 0; i < playerCount; i++) {
     playerNames[i] = names[i] || "";
   }
 
