@@ -1603,7 +1603,8 @@ const shareConfirmBtn = document.getElementById("shareConfirmBtn");
 const shareToast = document.getElementById("shareToast");
 
 let selectedUpcomingRoundId = null;
-
+let pendingUpcomingPlayerNames = null;
+    
 function isLoggedIn(){
   return !!getToken();
 }
@@ -3463,6 +3464,40 @@ function getUpcomingPlayerNames(upcoming){
   return names.slice(0, 4);
 }
 
+function getUpcomingPlayerNames(upcoming){
+  const names = [];
+
+  const possible =
+    upcoming.participants ||
+    upcoming.player_names ||
+    upcoming.shared_players ||
+    [];
+
+  if (Array.isArray(possible)) {
+    possible.forEach((p) => {
+      const name = String(
+        p?.name ||
+        p?.display_name ||
+        p?.email ||
+        p ||
+        ""
+      ).trim();
+
+      if (name && !names.some(n => n.toLowerCase() === name.toLowerCase())) {
+        names.push(name);
+      }
+    });
+  }
+
+  if (!names.length) {
+    const me = getUserFromToken();
+    const myName = String(me.name || me.email || "").trim();
+    if (myName) names.push(myName);
+  }
+
+  return names.slice(0, 4);
+}    
+
 async function fetchUpcomingRounds(){
   if (!isLoggedIn() || !upcomingList) {
     if (upcomingList) upcomingList.innerHTML = `<div class="muted">Log in to add and share upcoming rounds.</div>`;
@@ -3697,7 +3732,25 @@ async function confirmShareRound(){
       let layout = String(layoutEl.value || "").trim();
       const par_mode = String(parModeEl.value || "published").trim();
       const notes = String(notesEl.value || "").trim();
-      const players_count = clamp(playersEl?.value || 1, 1, 4);
+      let players_count = clamp(playersEl?.value || 1, 1, 4);
+
+if (Array.isArray(pendingUpcomingPlayerNames) && pendingUpcomingPlayerNames.length) {
+  for (let i = 0; i < 4; i++) {
+    playerNames[i] = "";
+  }
+
+  pendingUpcomingPlayerNames.slice(0, 4).forEach((name, i) => {
+    playerNames[i] = String(name || "").trim();
+  });
+
+  players_count = clamp(pendingUpcomingPlayerNames.length, 1, 4);
+
+  if (playersEl) {
+    playersEl.value = String(players_count);
+  }
+
+  pendingUpcomingPlayerNames = null;
+}
 
       // ✅ build player_names array for backend
       const namesOut = [];
@@ -3988,8 +4041,10 @@ async function startUpcomingRoundFromId(id){
 
   renderPlayerNamesUI();
 
-  await refreshNinesAndTeesUI();
-  await createRound();
+  pendingUpcomingPlayerNames = names.slice(0, playerCount);
+
+await refreshNinesAndTeesUI();
+await createRound();
 }
     async function safeFetchRounds(){
       try{
