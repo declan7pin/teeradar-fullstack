@@ -7,6 +7,62 @@ import { sendPushToEmail } from "./pushRoutes.js";
 const router = express.Router();
 router.use(requireAuth);
 
+function cleanText(v) {
+  return String(v || "").trim();
+}
+
+function cleanState(v) {
+  return String(v || "").trim().toUpperCase() || null;
+}
+
+async function getRoundParticipants(upcomingRoundId) {
+  const { rows } = await db.query(
+    `
+    SELECT
+      u.id,
+      u.email,
+      COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS name,
+      CASE WHEN ur.user_id = u.id THEN true ELSE false END AS is_owner
+    FROM upcoming_rounds ur
+    JOIN users u ON u.id = ur.user_id
+    WHERE ur.id = $1
+
+    UNION ALL
+
+    SELECT
+      u.id,
+      u.email,
+      COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS name,
+      false AS is_owner
+    FROM upcoming_round_shares s
+    JOIN users u ON u.id = s.shared_with_user_id
+    WHERE s.upcoming_round_id = $1
+
+    ORDER BY is_owner DESC, name ASC;
+    `,
+    [Number(upcomingRoundId)]
+  );
+
+  return rows || [];
+}
+
+async function attachParticipants(rounds) {
+  const out = [];
+
+  for (const r of rounds || []) {
+    const participants = await getRoundParticipants(r.id);
+    out.push({
+      ...r,
+      participants,
+      players_count: participants.length || 1,
+      player_names: participants.map((p) => p.name || p.email || "Player"),
+      player_user_ids: participants.map((p) => Number(p.id)).filter(Number.isFinite),
+    });
+  }
+
+  return out;
+}
+
 router.post("/upcoming", async (req, res) => {
   try {
     const userId = Number(req.user?.id);
@@ -21,7 +77,7 @@ router.post("/upcoming", async (req, res) => {
 
     if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
 
-    if (!course || !play_date) {
+    if (!cleanText(course) || !cleanText(play_date)) {
       return res.status(400).json({ ok: false, error: "course_and_date_required" });
     }
 
@@ -35,16 +91,30 @@ router.post("/upcoming", async (req, res) => {
       `,
       [
         userId,
-        String(course).trim(),
-        String(state || "").trim().toUpperCase() || null,
-        play_date,
-        tee_time || null,
+        cleanText(course),
+        cleanState(state),
+        cleanText(play_date),
+        cleanText(tee_time) || null,
         Number(holes) || 18,
-        String(notes || "").trim() || null,
+        cleanText(notes) || null,
       ]
     );
 
-    res.json({ ok: true, round: result.rows[0] });
+    const round = result.rows[0];
+    const participants = await getRoundParticipants(round.id);
+
+    res.json({
+      ok: true,
+      round: {
+        ...round,
+        is_shared: false,
+        owner_name: null,
+        participants,
+        players_count: participants.length || 1,
+        player_names: participants.map((p) => p.name || p.email || "Player"),
+        player_user_ids: participants.map((p) => Number(p.id)).filter(Number.isFinite),
+      },
+    });
   } catch (err) {
     console.error("POST /api/shared-rounds/upcoming error:", err);
     res.status(500).json({ ok: false, error: "internal_error" });
@@ -72,7 +142,7 @@ router.get("/upcoming", async (req, res) => {
         [userId]
       );
 
-      return res.json({ ok: true, rounds: rows });
+      return res.json({ ok: true, rounds: await attachParticipants(rows) });
     }
 
     const { rows } = await db.query(
@@ -105,7 +175,7 @@ router.get("/upcoming", async (req, res) => {
       [userId]
     );
 
-    res.json({ ok: true, rounds: rows });
+    res.json({ ok: true, rounds: await attachParticipants(rows) });
   } catch (err) {
     console.error("GET /api/shared-rounds/upcoming error:", err);
     res.status(500).json({ ok: false, error: "internal_error" });
@@ -181,10 +251,7 @@ router.post("/share", async (req, res) => {
           `
           SELECT
             ur.course,
-            ur.play_date,
-            ur.tee_time,
             friend.email AS friend_email,
-            owner.email AS owner_email,
             COALESCE(NULLIF(owner.display_name, ''), split_part(owner.email, '@', 1)) AS owner_name
           FROM upcoming_rounds ur
           JOIN users friend ON friend.id = $2
@@ -197,7 +264,7 @@ router.post("/share", async (req, res) => {
 
         const n = notifyRes.rows[0];
 
-        if (n?.friend_email) {
+        if (n?.friend_email && typeof sendPushToEmail === "function") {
           const pushResult = await sendPushToEmail(n.friend_email, {
             title: "Upcoming round shared",
             body: `${n.owner_name || "A friend"} shared ${n.course || "a round"} with you.`,
@@ -226,6 +293,7 @@ router.get("/shared-with-me", async (req, res) => {
       `
       SELECT
         ur.*,
+        true AS is_shared,
         s.shared_at,
         u.email,
         COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS owner_name
@@ -239,7 +307,7 @@ router.get("/shared-with-me", async (req, res) => {
       [userId]
     );
 
-    res.json({ ok: true, rounds: rows });
+    res.json({ ok: true, rounds: await attachParticipants(rows) });
   } catch (err) {
     console.error("GET /api/shared-rounds/shared-with-me error:", err);
     res.status(500).json({ ok: false, error: "internal_error" });
