@@ -2791,11 +2791,6 @@ const hasSavedPutts = curPutts !== null && curPutts !== undefined && Number.isFi
     sel.style.fontWeight = "900";
     sel.style.fontSize = "18px";
 
-    const blankOpt = document.createElement("option");
-blankOpt.value = "";
-blankOpt.textContent = "Select putts";
-sel.appendChild(blankOpt);
-
         const puttVals = [
   { value: "", label: "Select putts" },
   { value: 0, label: "Chipped in" },
@@ -3445,10 +3440,9 @@ function getUpcomingPlayerNames(upcoming){
   if (myName) names.push(myName);
 
   const possible =
-    upcoming.player_names ||
-    upcoming.players ||
-    upcoming.participants ||
     upcoming.shared_players ||
+    upcoming.player_names ||
+    upcoming.participants ||
     [];
 
   if (Array.isArray(possible)) {
@@ -3457,7 +3451,6 @@ function getUpcomingPlayerNames(upcoming){
         p?.name ||
         p?.display_name ||
         p?.email ||
-        p ||
         ""
       ).trim();
 
@@ -3964,7 +3957,7 @@ async function startUpcomingRoundFromId(id){
   }
 
   const names = getUpcomingPlayerNames(upcoming);
-  const playerCount = Math.max(1, Math.min(4, names.length || Number(upcoming.players_count || 1)));
+  const playerCount = Math.max(1, Math.min(4, names.length));
 
   for (let i = 0; i < 4; i++) {
     playerNames[i] = names[i] || "";
