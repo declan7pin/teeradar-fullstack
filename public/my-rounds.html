@@ -1604,6 +1604,8 @@ const shareToast = document.getElementById("shareToast");
 
 let selectedUpcomingRoundId = null;
 let pendingUpcomingPlayerNames = null;
+let pendingUpcomingPlayerUserIds = null;
+let pendingUpcomingRoundId = null;
     
 function isLoggedIn(){
   return !!getToken();
@@ -3436,37 +3438,6 @@ function formatUpcomingDate(dateStr){
 function getUpcomingPlayerNames(upcoming){
   const names = [];
 
-  const me = getUserFromToken();
-  const myName = String(me.name || me.email || "").trim();
-  if (myName) names.push(myName);
-
-  const possible =
-    upcoming.shared_players ||
-    upcoming.player_names ||
-    upcoming.participants ||
-    [];
-
-  if (Array.isArray(possible)) {
-    possible.forEach((p) => {
-      const name = String(
-        p?.name ||
-        p?.display_name ||
-        p?.email ||
-        ""
-      ).trim();
-
-      if (name && !names.some(n => n.toLowerCase() === name.toLowerCase())) {
-        names.push(name);
-      }
-    });
-  }
-
-  return names.slice(0, 4);
-}
-
-function getUpcomingPlayerNames(upcoming){
-  const names = [];
-
   const possible =
     upcoming.participants ||
     upcoming.player_names ||
@@ -3497,6 +3468,23 @@ function getUpcomingPlayerNames(upcoming){
 
   return names.slice(0, 4);
 }    
+
+function getUpcomingPlayerUserIds(upcoming){
+  const ids = Array.isArray(upcoming.player_user_ids)
+    ? upcoming.player_user_ids.map(Number).filter(Number.isFinite)
+    : [];
+
+  if (ids.length) return ids.slice(0, 4);
+
+  const participants = Array.isArray(upcoming.participants)
+    ? upcoming.participants
+    : [];
+
+  return participants
+    .map(p => Number(p?.id))
+    .filter(Number.isFinite)
+    .slice(0, 4);
+}
 
 async function fetchUpcomingRounds(){
   if (!isLoggedIn() || !upcomingList) {
@@ -3734,6 +3722,12 @@ async function confirmShareRound(){
       const notes = String(notesEl.value || "").trim();
       let players_count = clamp(playersEl?.value || 1, 1, 4);
 
+const upcomingPlayerIdsForPayload = Array.isArray(pendingUpcomingPlayerUserIds)
+  ? pendingUpcomingPlayerUserIds.slice(0, 4)
+  : null;
+
+const upcomingRoundIdForPayload = pendingUpcomingRoundId || null;
+
 if (Array.isArray(pendingUpcomingPlayerNames) && pendingUpcomingPlayerNames.length) {
   for (let i = 0; i < 4; i++) {
     playerNames[i] = "";
@@ -3750,8 +3744,9 @@ if (Array.isArray(pendingUpcomingPlayerNames) && pendingUpcomingPlayerNames.leng
   }
 
   pendingUpcomingPlayerNames = null;
+  pendingUpcomingPlayerUserIds = null;
+  pendingUpcomingRoundId = null;
 }
-
       // ✅ build player_names array for backend
       const namesOut = [];
       for (let i = 0; i < 4; i++) {
@@ -3796,20 +3791,22 @@ if (!isLoggedIn()){
         pars = Array.isArray(meta?.pars) ? meta.pars : null;
       }
 
-      const payload = {
-        course,
-        state,
-        holes,
-        layout: layout || null,
-        par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
-        notes: notes || null,
-        players_count,
-        player_names: namesOut,
-        ...(holes === 9 && !hasNinesUI ? { nineLoop } : {}),
-        ...(pars ? { pars } : {})
-      };
+     const payload = {
+  course,
+  state,
+  holes,
+  layout: layout || null,
+  par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
+  notes: notes || null,
+  players_count,
+  player_names: namesOut,
+  player_user_ids: upcomingPlayerIdsForPayload,
+  source_upcoming_round_id: upcomingRoundIdForPayload,
+  ...(holes === 9 && !hasNinesUI ? { nineLoop } : {}),
+  ...(pars ? { pars } : {})
+};
 
-      // ✅ Guest mode: create locally (no backend)
+// ✅ Guest mode: create locally (no backend)
 if (!isLoggedIn()){
   const newId = guestMakeId();
   const nowIso = new Date().toISOString();
@@ -3824,6 +3821,8 @@ if (!isLoggedIn()){
     notes: notes || null,
     players_count,
     player_names: namesOut,
+    player_user_ids: upcomingPlayerIdsForPayload,
+    source_upcoming_round_id: upcomingRoundIdForPayload,
     created_at: nowIso,
     holesData: Array.from({ length: holes }, (_, i) => ({
       hole_number: i + 1,
@@ -3833,7 +3832,7 @@ if (!isLoggedIn()){
       putts_by_player: {}
     }))
   };
-
+  
   // cache names + save round
   saveNamesForRound(newId);
   guestUpsertRound(roundLocal);
@@ -4042,6 +4041,8 @@ async function startUpcomingRoundFromId(id){
   renderPlayerNamesUI();
 
   pendingUpcomingPlayerNames = names.slice(0, playerCount);
+pendingUpcomingPlayerUserIds = getUpcomingPlayerUserIds(upcoming).slice(0, playerCount);
+pendingUpcomingRoundId = Number(upcoming.id);
 
 await refreshNinesAndTeesUI();
 await createRound();
