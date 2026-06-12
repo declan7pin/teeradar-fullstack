@@ -73,46 +73,100 @@ router.get("/friend-activity", async (req, res) => {
 
     const { rows } = await db.query(
       `
-      SELECT
-        r.id AS round_id,
-        r.user_id,
-        r.course,
-        r.layout,
-        r.state,
-        r.holes,
-        r.created_at,
-        u.email,
-        COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS display_name,
+      SELECT *
+      FROM (
+        SELECT
+          'round' AS activity_type,
+          r.id AS round_id,
+          NULL::int AS upcoming_round_id,
+          r.user_id,
+          r.course,
+          r.layout,
+          r.state,
+          r.holes,
+          r.created_at AS activity_date,
+          u.email,
+          COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS display_name,
 
-        COALESCE(SUM(rh.strokes), 0)::int AS total_score,
-        COALESCE(SUM(rh.par), 0)::int AS total_par,
-        COALESCE(SUM(rh.putts), 0)::int AS total_putts,
+          COALESCE(SUM(rh.strokes), 0)::int AS total_score,
+          COALESCE(SUM(rh.par), 0)::int AS total_par,
+          COALESCE(SUM(rh.putts), 0)::int AS total_putts,
+          COUNT(rh.id)::int AS holes_entered,
 
-        COUNT(rh.id)::int AS holes_entered
-      FROM rounds r
-      JOIN users u ON u.id = r.user_id
-      JOIN user_friends uf
-        ON uf.status = 'accepted'
-        AND (
-          (uf.requester_user_id = $1 AND uf.addressee_user_id = r.user_id)
-          OR
-          (uf.addressee_user_id = $1 AND uf.requester_user_id = r.user_id)
-        )
-      LEFT JOIN round_holes rh ON rh.round_id = r.id
-      WHERE COALESCE(u.profile_visibility, 'friends') IN ('friends', 'public')
-      GROUP BY r.id, u.id
-      ORDER BY r.created_at DESC
-      LIMIT 50;
+          NULL::date AS play_date,
+          NULL::time AS tee_time,
+          NULL::text AS owner_name
+        FROM rounds r
+        JOIN users u ON u.id = r.user_id
+        JOIN user_friends uf
+          ON uf.status = 'accepted'
+          AND (
+            (uf.requester_user_id = $1 AND uf.addressee_user_id = r.user_id)
+            OR
+            (uf.addressee_user_id = $1 AND uf.requester_user_id = r.user_id)
+          )
+        LEFT JOIN round_holes rh ON rh.round_id = r.id
+        WHERE COALESCE(u.profile_visibility, 'friends') IN ('friends', 'public')
+        GROUP BY r.id, u.id
+
+        UNION ALL
+
+        SELECT
+          'upcoming_shared' AS activity_type,
+          NULL::int AS round_id,
+          ur.id AS upcoming_round_id,
+          ur.user_id,
+          ur.course,
+          NULL::text AS layout,
+          ur.state,
+          ur.holes,
+          s.shared_at AS activity_date,
+          u.email,
+          COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS display_name,
+
+          0::int AS total_score,
+          0::int AS total_par,
+          0::int AS total_putts,
+          0::int AS holes_entered,
+
+          ur.play_date,
+          ur.tee_time,
+          COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS owner_name
+        FROM upcoming_round_shares s
+        JOIN upcoming_rounds ur ON ur.id = s.upcoming_round_id
+        JOIN users u ON u.id = ur.user_id
+        WHERE s.shared_with_user_id = $1
+      ) x
+      ORDER BY activity_date DESC
+      LIMIT 15;
       `,
       [userId]
     );
 
     const activities = rows.map((r) => {
+      const holes = Number(r.holes || 0);
+
+      if (r.activity_type === "upcoming_shared") {
+        return {
+          type: "upcoming_shared",
+          upcoming_round_id: r.upcoming_round_id,
+          user_id: r.user_id,
+          display_name: r.display_name,
+          course: r.course,
+          state: r.state,
+          holes,
+          play_date: r.play_date,
+          tee_time: r.tee_time,
+          activity_date: r.activity_date,
+          complete: false,
+          text: `${r.display_name} shared an upcoming round at ${r.course}`,
+        };
+      }
+
       const totalScore = Number(r.total_score || 0);
       const totalPar = Number(r.total_par || 0);
       const totalPutts = Number(r.total_putts || 0);
       const holesEntered = Number(r.holes_entered || 0);
-      const holes = Number(r.holes || 0);
 
       const complete = holesEntered >= holes && totalScore > 0;
       const vsPar = complete && totalPar > 0 ? totalScore - totalPar : null;
@@ -142,6 +196,7 @@ router.get("/friend-activity", async (req, res) => {
       }
 
       return {
+        type: "round",
         round_id: r.round_id,
         user_id: r.user_id,
         display_name: r.display_name,
@@ -149,8 +204,8 @@ router.get("/friend-activity", async (req, res) => {
         layout: r.layout,
         state: r.state,
         holes,
-        created_at: r.created_at,
-        activity_date: r.created_at,
+        created_at: r.activity_date,
+        activity_date: r.activity_date,
         total_score: totalScore,
         total_putts: totalPutts,
         score_vs_par: vsPar,
