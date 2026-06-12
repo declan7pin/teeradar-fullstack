@@ -344,7 +344,7 @@ async function getRoundWithHoles(roundId) {
   const roundRow = await db.query(
     `
     SELECT id, user_id, course, layout, state, holes, par_mode, created_at,
-           players_count, player_names
+       players_count, player_names, player_user_ids, shared_upcoming_round_id
     FROM rounds
     WHERE id = $1
     LIMIT 1;
