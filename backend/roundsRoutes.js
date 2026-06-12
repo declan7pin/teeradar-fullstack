@@ -327,7 +327,14 @@ async function getNineHoleTemplateForLayout(course, state, layoutPart) {
 // -------------------------------------------------
 async function getRoundOwner(roundId) {
   const { rows } = await db.query(
-    `SELECT id, user_id, course, state, holes, players_count FROM rounds WHERE id = $1 LIMIT 1`,
+    `
+    SELECT
+      id, user_id, course, layout, state, holes, par_mode,
+      players_count, player_names, player_user_ids, shared_upcoming_round_id
+    FROM rounds
+    WHERE id = $1
+    LIMIT 1;
+    `,
     [Number(roundId)]
   );
   return rows[0] || null;
@@ -359,6 +366,113 @@ async function getRoundWithHoles(roundId) {
   );
 
   return { round: roundRow.rows[0], holes: holesRows.rows || [] };
+}
+async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
+  const masterData = await getRoundWithHoles(masterRoundId);
+  if (!masterData?.round) return;
+
+  const master = masterData.round;
+  const upcomingId = Number(master.shared_upcoming_round_id || 0);
+  const playerUserIds = Array.isArray(master.player_user_ids) ? master.player_user_ids.map(Number) : [];
+  const playerNames = Array.isArray(master.player_names) ? master.player_names : [];
+
+  if (!upcomingId || playerUserIds.length <= 1) return;
+
+  for (let i = 0; i < playerUserIds.length; i++) {
+    const playerUserId = Number(playerUserIds[i]);
+    if (!Number.isFinite(playerUserId) || playerUserId <= 0) continue;
+
+    const playerNum = String(i + 1);
+    const playerName = String(playerNames[i] || "").trim();
+
+    let roundId = null;
+
+    const existing = await db.query(
+      `
+      SELECT id
+      FROM rounds
+      WHERE user_id = $1
+        AND shared_upcoming_round_id = $2
+      LIMIT 1;
+      `,
+      [playerUserId, upcomingId]
+    );
+
+    if (existing.rows.length) {
+      roundId = Number(existing.rows[0].id);
+    } else {
+      const created = await createRoundWithSeededHoles({
+        userId: playerUserId,
+        course: master.course,
+        layout: master.layout,
+        state: master.state,
+        holes: master.holes,
+        par_mode: master.par_mode || "published",
+        players_count: 1,
+        player_names: [playerName],
+        player_user_ids: [playerUserId],
+        shared_upcoming_round_id: upcomingId,
+      });
+
+      if (!created?.ok || !created?.round?.id) continue;
+      roundId = Number(created.round.id);
+    }
+
+    for (const h of savedHoles || []) {
+      const holeNum = Number(h?.hole_number ?? h?.hole ?? h?.number);
+      if (!Number.isFinite(holeNum) || holeNum <= 0) continue;
+
+      const strokesMap = cleanPlayerMap(h?.strokes_by_player || h?.strokesByPlayer || {});
+      const puttsMap = cleanPlayerMap(h?.putts_by_player || h?.puttsByPlayer || {});
+
+      const strokesVal =
+        typeof strokesMap[playerNum] !== "undefined"
+          ? Number(strokesMap[playerNum])
+          : null;
+
+      const puttsVal =
+        typeof puttsMap[playerNum] !== "undefined"
+          ? Number(puttsMap[playerNum])
+          : null;
+
+      const parVal =
+        h?.par === null || typeof h?.par === "undefined" || h?.par === ""
+          ? null
+          : Number(h.par);
+
+      const distVal =
+        h?.distance_m === null || typeof h?.distance_m === "undefined" || h?.distance_m === ""
+          ? null
+          : Number(h.distance_m);
+
+      await db.query(
+        `
+        INSERT INTO round_holes (
+          round_id, hole_number, par, distance_m,
+          strokes, putts, strokes_by_player, putts_by_player
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb)
+        ON CONFLICT (round_id, hole_number) DO UPDATE SET
+          par = EXCLUDED.par,
+          distance_m = EXCLUDED.distance_m,
+          strokes = EXCLUDED.strokes,
+          putts = EXCLUDED.putts,
+          strokes_by_player = EXCLUDED.strokes_by_player,
+          putts_by_player = EXCLUDED.putts_by_player;
+        `,
+        [
+          roundId,
+          holeNum,
+          Number.isFinite(parVal) ? parVal : null,
+          Number.isFinite(distVal) ? distVal : null,
+          Number.isFinite(strokesVal) ? strokesVal : null,
+          Number.isFinite(puttsVal) ? puttsVal : null,
+          JSON.stringify({ "1": Number.isFinite(strokesVal) ? strokesVal : null }),
+          JSON.stringify({ "1": Number.isFinite(puttsVal) ? puttsVal : null }),
+        ]
+      );
+    }
+  }
 }
 function isValidEmail(v) {
   const s = String(v || "").trim();
@@ -1017,7 +1131,7 @@ export async function createRoundWithSeededHoles({
 
     const verifyRound = await db.query(
       `
-      SELECT id, user_id, course, layout, state, holes, par_mode, created_at, players_count, player_names
+      SELECT id, user_id, course, layout, state, holes, par_mode, created_at, players_count, player_names, player_user_ids, shared_upcoming_round_id
       FROM rounds
       WHERE id = $1
       LIMIT 1;
@@ -1095,15 +1209,17 @@ router.post("/", requireAuth, async (req, res) => {
 
   try {
     const {
-      course,
-      layout = null,
-      state = null,
-      holes = 18,
-      par_mode = "published",
-      publishedPars = null,
-      players_count = 1,
-      player_names = null,
-    } = req.body || {};
+  course,
+  layout = null,
+  state = null,
+  holes = 18,
+  par_mode = "published",
+  publishedPars = null,
+  players_count = 1,
+  player_names = null,
+  player_user_ids = null,
+  shared_upcoming_round_id = null,
+} = req.body || {};
 
     const result = await createRoundWithSeededHoles({
       userId,
@@ -1115,6 +1231,8 @@ router.post("/", requireAuth, async (req, res) => {
       publishedPars,
       players_count,
       player_names,
+      player_user_ids,
+      shared_upcoming_round_id,
     });
 
     if (!result?.ok) {
@@ -1670,6 +1788,11 @@ router.put("/:id", requireAuth, async (req, res) => {
     await db.query("COMMIT");
 
     const data = await getRoundWithHoles(roundId);
+    try {
+  await syncSharedPlayerRounds(roundId, holes);
+} catch (syncErr) {
+  console.warn("syncSharedPlayerRounds failed:", syncErr?.message || syncErr);
+}
 
     // ✅ ADDED: if the payload looks "complete", record round_played once (deduped by round_id)
     try {
