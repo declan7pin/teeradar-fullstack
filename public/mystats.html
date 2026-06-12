@@ -747,6 +747,49 @@
       }
       return "";
     }
+    function decodeJwtPayload(token){
+  try{
+    const parts = String(token || "").split(".");
+    if (parts.length < 2) return {};
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const pad = b64.length % 4 ? "=".repeat(4 - (b64.length % 4)) : "";
+    return JSON.parse(atob(b64 + pad));
+  }catch{
+    return {};
+  }
+}
+
+function getCurrentUserNameOrEmail(){
+  const p = decodeJwtPayload(getToken());
+  const email = String(p.email || p.userEmail || p.sub || "").trim().toLowerCase();
+  const name = String(p.name || p.fullName || p.displayName || "").trim().toLowerCase();
+  return { email, name, shortEmail: email ? email.split("@")[0].toLowerCase() : "" };
+}
+
+function getMyPlayerIndex(round){
+  const me = getCurrentUserNameOrEmail();
+  const names = Array.isArray(round?.player_names) ? round.player_names : [];
+
+  const idx = names.findIndex(n => {
+    const x = String(n || "").trim().toLowerCase();
+    return x && (x === me.email || x === me.name || x === me.shortEmail);
+  });
+
+  return idx >= 0 ? idx : 0;
+}
+
+function getPlayerValue(h, field, playerIndex){
+  const playerNo = String(playerIndex + 1);
+  const map = h?.[`${field}_by_player`];
+
+  if (map && typeof map === "object" && map[playerNo] !== undefined && map[playerNo] !== null) {
+    return safeNum(map[playerNo]);
+  }
+
+  if (playerIndex === 0) return safeNum(h?.[field]);
+
+  return null;
+}
 
     // ✅ HARD gate: My Stats requires login (My Rounds can be public)
     (function gate(){
@@ -870,12 +913,14 @@
           const round = det.round || det;
           const holesArr = Array.isArray(det.holes) ? det.holes : [];
 
-          const holes = holesArr.map((h, idx) => ({
-            hole: safeNum(h.hole_number ?? h.hole ?? (idx+1)) ?? (idx+1),
-            par: safeNum(h.par),
-            shots: safeNum(h.strokes ?? h.shots ?? h.score),
-            putts: safeNum(h.putts)
-          }));
+          const myPlayerIndex = getMyPlayerIndex(round);
+
+const holes = holesArr.map((h, idx) => ({
+  hole: safeNum(h.hole_number ?? h.hole ?? (idx+1)) ?? (idx+1),
+  par: safeNum(h.par),
+  shots: getPlayerValue(h, "strokes", myPlayerIndex),
+  putts: getPlayerValue(h, "putts", myPlayerIndex)
+}));
 
           const totalShots = sumNums(holes.map(h => h.shots));
           const totalPutts = sumNums(holes.map(h => h.putts));
@@ -954,12 +999,14 @@
         let holes = [];
 
         if (Array.isArray(r.holesData)){
-          holes = r.holesData.map((h, idx) => ({
-            hole: safeNum(h.hole ?? h.hole_number ?? (idx+1)) ?? (idx+1),
-            par: safeNum(h.par),
-            shots: safeNum(h.shots ?? h.strokes ?? h.score ?? (h.strokes_by_player ? h.strokes_by_player["1"] : null)),
-            putts: safeNum(h.putts ?? (h.putts_by_player ? h.putts_by_player["1"] : null))
-          }));
+          const myPlayerIndex = getMyPlayerIndex(r);
+
+holes = r.holesData.map((h, idx) => ({
+  hole: safeNum(h.hole ?? h.hole_number ?? (idx+1)) ?? (idx+1),
+  par: safeNum(h.par),
+  shots: getPlayerValue(h, "strokes", myPlayerIndex),
+  putts: getPlayerValue(h, "putts", myPlayerIndex)
+}));
         } else if (Array.isArray(r.holes)){
           holes = r.holes.map((h, idx) => ({
             hole: safeNum(h.hole ?? (idx+1)) ?? (idx+1),
