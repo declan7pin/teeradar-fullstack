@@ -164,6 +164,19 @@ async function ensurePlayerNamesColumn() {
     console.warn("ensurePlayerNamesColumn failed:", e?.message || e);
   }
 }
+async function ensureSharedRoundColumns() {
+  try {
+    await db.query(`
+      ALTER TABLE rounds
+      ADD COLUMN IF NOT EXISTS player_user_ids jsonb DEFAULT '[]'::jsonb;
+
+      ALTER TABLE rounds
+      ADD COLUMN IF NOT EXISTS shared_upcoming_round_id integer;
+    `);
+  } catch (e) {
+    console.warn("ensureSharedRoundColumns failed:", e?.message || e);
+  }
+}
 
 // -------------------------------------------------
 // ✅ "complete" heuristic to count a round as played
@@ -822,7 +835,9 @@ export async function createRoundWithSeededHoles({
   par_mode = "published", // "published" | "blank"
   publishedPars = null,   // optional legacy support
   players_count = 1,
-  player_names = null,
+    player_names = null,
+  player_user_ids = null,
+  shared_upcoming_round_id = null,
 }) {
   const holesNum = Number(holes);
 
@@ -938,18 +953,29 @@ export async function createRoundWithSeededHoles({
 
   const finalParMode = (Array.isArray(pars) && pars.length === holesNum) ? "published" : "blank";
 
-  await ensurePlayerNamesColumn();
+    await ensurePlayerNamesColumn();
+  await ensureSharedRoundColumns();
+
+  let playerUserIds = [];
+  if (Array.isArray(player_user_ids)) {
+    playerUserIds = player_user_ids.map(Number).filter(Number.isFinite);
+  }
+  playerUserIds.length = playersCount;
 
   let insertedRoundId = null;
 
   try {
     await db.query("BEGIN");
 
-    const roundInsert = await db.query(
+        const roundInsert = await db.query(
       `
-      INSERT INTO rounds (user_id, course, layout, state, holes, par_mode, players_count, player_names)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
-      RETURNING id, user_id, course, layout, state, holes, par_mode, created_at, players_count, player_names;
+      INSERT INTO rounds (
+        user_id, course, layout, state, holes, par_mode,
+        players_count, player_names, player_user_ids, shared_upcoming_round_id
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10)
+      RETURNING id, user_id, course, layout, state, holes, par_mode, created_at,
+                players_count, player_names, player_user_ids, shared_upcoming_round_id;
       `,
       [
         Number(userId),
@@ -960,6 +986,8 @@ export async function createRoundWithSeededHoles({
         finalParMode,
         playersCount,
         JSON.stringify(playerNames),
+        JSON.stringify(playerUserIds),
+        shared_upcoming_round_id ? Number(shared_upcoming_round_id) : null,
       ]
     );
 
@@ -1406,6 +1434,107 @@ router.get("/friend/:friendUserId/round/:roundId", requireAuth, async (req, res)
   } catch (err) {
     console.error("GET friend round error:", err);
     return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+router.post("/from-upcoming/:upcomingId", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const upcomingId = Number(req.params.upcomingId);
+
+    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
+    if (!Number.isFinite(upcomingId) || upcomingId <= 0) {
+      return res.status(400).json({ ok: false, error: "invalid_upcoming_id" });
+    }
+
+    const { rows } = await db.query(
+      `
+      SELECT *
+      FROM upcoming_rounds ur
+      WHERE ur.id = $1
+        AND (
+          ur.user_id = $2
+          OR EXISTS (
+            SELECT 1
+            FROM upcoming_round_shares s
+            WHERE s.upcoming_round_id = ur.id
+              AND s.shared_with_user_id = $2
+          )
+        )
+      LIMIT 1;
+      `,
+      [upcomingId, userId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ ok: false, error: "upcoming_round_not_found" });
+    }
+
+    const upcoming = rows[0];
+
+    const participantsRes = await db.query(
+      `
+      SELECT
+        u.id,
+        u.email,
+        COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS name,
+        CASE WHEN u.id = ur.user_id THEN 0 ELSE 1 END AS sort_order
+      FROM upcoming_rounds ur
+      JOIN users u ON u.id = ur.user_id
+      WHERE ur.id = $1
+
+      UNION ALL
+
+      SELECT
+        u.id,
+        u.email,
+        COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS name,
+        1 AS sort_order
+      FROM upcoming_round_shares s
+      JOIN users u ON u.id = s.shared_with_user_id
+      WHERE s.upcoming_round_id = $1
+
+      ORDER BY sort_order ASC, name ASC
+      LIMIT 4;
+      `,
+      [upcomingId]
+    );
+
+    const participants = participantsRes.rows || [];
+    const playerNames = participants.map((p) => p.name || p.email || "Player");
+    const playerUserIds = participants.map((p) => Number(p.id)).filter(Number.isFinite);
+
+    const result = await createRoundWithSeededHoles({
+      userId,
+      course: upcoming.course,
+      state: upcoming.state,
+      holes: upcoming.holes || 18,
+      layout: null,
+      par_mode: "published",
+      players_count: Math.max(1, Math.min(4, participants.length || 1)),
+      player_names: playerNames,
+      player_user_ids: playerUserIds,
+      shared_upcoming_round_id: upcomingId,
+    });
+
+    if (!result?.ok) {
+      return res.status(result?.status || 400).json(result);
+    }
+
+    return res.json({
+      ok: true,
+      roundId: result.round?.id,
+      round: result.round,
+      holes: result.holes,
+      participants,
+    });
+  } catch (err) {
+    console.error("POST /api/rounds/from-upcoming/:upcomingId error:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "internal error",
+      detail: err?.message,
+    });
   }
 });
 
