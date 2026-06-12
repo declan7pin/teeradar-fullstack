@@ -3437,6 +3437,39 @@ function formatUpcomingDate(dateStr){
   });
 }    
 
+function getUpcomingPlayerNames(upcoming){
+  const names = [];
+
+  const me = getUserFromToken();
+  const myName = String(me.name || me.email || "").trim();
+  if (myName) names.push(myName);
+
+  const possible =
+    upcoming.player_names ||
+    upcoming.players ||
+    upcoming.participants ||
+    upcoming.shared_players ||
+    [];
+
+  if (Array.isArray(possible)) {
+    possible.forEach((p) => {
+      const name = String(
+        p?.name ||
+        p?.display_name ||
+        p?.email ||
+        p ||
+        ""
+      ).trim();
+
+      if (name && !names.some(n => n.toLowerCase() === name.toLowerCase())) {
+        names.push(name);
+      }
+    });
+  }
+
+  return names.slice(0, 4);
+}
+
 async function fetchUpcomingRounds(){
   if (!isLoggedIn() || !upcomingList) {
     if (upcomingList) upcomingList.innerHTML = `<div class="muted">Log in to add and share upcoming rounds.</div>`;
@@ -3468,7 +3501,9 @@ async function fetchUpcomingRounds(){
               </div>
               ${ownerText ? `<div class="meta"><strong>${ownerText}</strong></div>` : ""}
               ${r.notes ? `<div class="meta">${escapeHtml(r.notes)}</div>` : ""}
-              <div class="meta" style="color:#00796b;font-weight:900;">Tap to start scorecard</div>
+              <div class="meta" style="color:#00796b;font-weight:900;">
+  Tap to start scorecard${r.players_count ? ` • ${escapeHtml(r.players_count)} players` : ""}
+</div>
             </div>
             <div>
               ${isShared ? "" : `
@@ -3928,14 +3963,24 @@ async function startUpcomingRoundFromId(id){
     return;
   }
 
+  const names = getUpcomingPlayerNames(upcoming);
+  const playerCount = Math.max(1, Math.min(4, names.length || Number(upcoming.players_count || 1)));
+
+  for (let i = 0; i < 4; i++) {
+    playerNames[i] = names[i] || "";
+  }
+
   courseEl.value = upcoming.course || "";
   stateEl.value = upcoming.state || "WA";
   holesEl.value = String(upcoming.holes || 18);
+  playersEl.value = String(playerCount);
   notesEl.value = upcoming.notes || "";
+
+  renderPlayerNamesUI();
 
   await refreshNinesAndTeesUI();
   await createRound();
-}    
+}
     async function safeFetchRounds(){
       try{
         await fetchRounds();
