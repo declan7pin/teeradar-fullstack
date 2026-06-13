@@ -91,10 +91,10 @@ router.get("/friend-activity", async (req, res) => {
           COALESCE(SUM(rh.strokes), 0)::int AS total_score,
           COALESCE(SUM(rh.par), 0)::int AS total_par,
           COALESCE(SUM(rh.putts), 0)::int AS total_putts,
-          COUNT(rh.id)::int AS holes_entered,
+          COUNT(rh.hole_number)::int AS holes_entered,
 
-          NULL::date AS play_date,
-          NULL::time AS tee_time,
+          NULL::text AS play_date,
+          NULL::text AS tee_time,
           NULL::text AS owner_name
         FROM rounds r
         JOIN users u ON u.id = r.user_id
@@ -129,8 +129,8 @@ router.get("/friend-activity", async (req, res) => {
           0::int AS total_putts,
           0::int AS holes_entered,
 
-          ur.play_date,
-          ur.tee_time,
+          ur.play_date::text AS play_date,
+          ur.tee_time::text AS tee_time,
           COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS owner_name
         FROM upcoming_round_shares s
         JOIN upcoming_rounds ur ON ur.id = s.upcoming_round_id
