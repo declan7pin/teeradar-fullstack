@@ -528,7 +528,9 @@ async function loadFriendActivity(){
             <button class="ghost" onclick="window.location.href='/friend-profile.html?userId=${Number(friend.friend_user_id)}'">
               View Rounds & Stats
             </button>
-            <button class="ghost" disabled>Share Round soon</button>
+            <button class="ghost" onclick="window.location.href='/shared-rounds.html?friendUserId=${Number(friend.friend_user_id)}'">
+            Shared Rounds
+            </button>
             </div>
           </div>
         `).join("");
