@@ -14,6 +14,20 @@ function cleanText(v) {
 function cleanState(v) {
   return String(v || "").trim().toUpperCase() || null;
 }
+function upcomingTimeFilterSql(alias = "ur") {
+  return `
+    AND (
+      ${alias}.tee_time IS NULL
+      OR (
+        (
+          ${alias}.play_date::date
+          + ${alias}.tee_time::time
+          + INTERVAL '20 minutes'
+        ) >= now()
+      )
+    )
+  `;
+}
 
 async function getRoundParticipants(upcomingRoundId) {
   const { rows } = await db.query(
@@ -136,6 +150,8 @@ router.get("/upcoming", async (req, res) => {
           NULL::timestamp AS shared_at
         FROM upcoming_rounds ur
         WHERE ur.user_id = $1
+        ${upcomingTimeFilterSql("ur")}
+        ${upcomingTimeFilterSql("ur")}
         ORDER BY ur.play_date ASC, ur.tee_time ASC NULLS LAST
         LIMIT 100;
         `,
@@ -156,6 +172,7 @@ router.get("/upcoming", async (req, res) => {
           NULL::timestamp AS shared_at
         FROM upcoming_rounds ur
         WHERE ur.user_id = $1
+        ${upcomingTimeFilterSql("ur")}
 
         UNION ALL
 
@@ -168,6 +185,7 @@ router.get("/upcoming", async (req, res) => {
         JOIN upcoming_rounds ur ON ur.id = s.upcoming_round_id
         JOIN users u ON u.id = s.owner_user_id
         WHERE s.shared_with_user_id = $1
+       ${upcomingTimeFilterSql("ur")}
       ) x
       ORDER BY play_date ASC, tee_time ASC NULLS LAST
       LIMIT 100;
@@ -301,6 +319,7 @@ router.get("/shared-with-me", async (req, res) => {
       JOIN upcoming_rounds ur ON ur.id = s.upcoming_round_id
       JOIN users u ON u.id = s.owner_user_id
       WHERE s.shared_with_user_id = $1
+      ${upcomingTimeFilterSql("ur")}
       ORDER BY ur.play_date ASC, ur.tee_time ASC NULLS LAST
       LIMIT 100;
       `,
