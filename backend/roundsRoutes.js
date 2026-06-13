@@ -368,16 +368,41 @@ async function getRoundWithHoles(roundId) {
   return { round: roundRow.rows[0], holes: holesRows.rows || [] };
 }
 async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
+  console.log("🟦 syncSharedPlayerRounds START", {
+    masterRoundId,
+    savedHolesCount: Array.isArray(savedHoles) ? savedHoles.length : "not_array",
+  });
+
   const masterData = await getRoundWithHoles(masterRoundId);
-  if (!masterData?.round) return;
+  if (!masterData?.round) {
+    console.log("🟥 sync stopped: master round not found", { masterRoundId });
+    return;
+  }
 
   const master = masterData.round;
-  const upcomingId = Number(master.shared_upcoming_round_id || 0);
-  if (!upcomingId) return;
 
-  // ✅ Always rebuild participants from the upcoming round + shares.
-  // This means even if master.player_user_ids is wrong/missing,
-  // every shared player still gets their own saved score.
+  console.log("🟦 sync master round", {
+    masterRoundId,
+    user_id: master.user_id,
+    shared_upcoming_round_id: master.shared_upcoming_round_id,
+    course: master.course,
+    layout: master.layout,
+    state: master.state,
+    holes: master.holes,
+    players_count: master.players_count,
+    player_names: master.player_names,
+    player_user_ids: master.player_user_ids,
+  });
+
+  const upcomingId = Number(master.shared_upcoming_round_id || 0);
+
+  if (!upcomingId) {
+    console.log("🟥 sync stopped: no shared_upcoming_round_id on master round", {
+      masterRoundId,
+    });
+    return;
+  }
+
   const participantsRes = await db.query(
     `
     SELECT
@@ -407,15 +432,38 @@ async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
   );
 
   const participants = participantsRes.rows || [];
-  if (participants.length <= 1) return;
+
+  console.log("🟦 sync participants", {
+    upcomingId,
+    count: participants.length,
+    participants,
+  });
+
+  if (participants.length <= 1) {
+    console.log("🟥 sync stopped: only one participant found", {
+      upcomingId,
+      participantsCount: participants.length,
+    });
+    return;
+  }
 
   for (let i = 0; i < participants.length; i++) {
     const player = participants[i];
     const playerUserId = Number(player.id);
-    if (!Number.isFinite(playerUserId) || playerUserId <= 0) continue;
-
     const playerNum = String(i + 1);
     const playerName = String(player.name || player.email || `Player ${i + 1}`).trim();
+
+    console.log("🟨 syncing player", {
+      index: i,
+      playerNum,
+      playerUserId,
+      playerName,
+    });
+
+    if (!Number.isFinite(playerUserId) || playerUserId <= 0) {
+      console.log("🟥 skipped player: invalid user id", { player });
+      continue;
+    }
 
     let roundId = null;
 
@@ -433,6 +481,12 @@ async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
 
     if (existing.rows.length) {
       roundId = Number(existing.rows[0].id);
+
+      console.log("🟩 using existing player round", {
+        playerUserId,
+        roundId,
+        upcomingId,
+      });
     } else {
       const created = await createRoundWithSeededHoles({
         userId: playerUserId,
@@ -447,9 +501,33 @@ async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
         shared_upcoming_round_id: upcomingId,
       });
 
-      if (!created?.ok || !created?.round?.id) continue;
+      console.log("🟦 create player round result", {
+        playerUserId,
+        upcomingId,
+        createdOk: created?.ok,
+        createdRoundId: created?.round?.id,
+        error: created?.error,
+        detail: created?.detail,
+      });
+
+      if (!created?.ok || !created?.round?.id) {
+        console.log("🟥 skipped player: could not create player round", {
+          playerUserId,
+          upcomingId,
+        });
+        continue;
+      }
+
       roundId = Number(created.round.id);
+
+      console.log("🟩 created player round", {
+        playerUserId,
+        roundId,
+        upcomingId,
+      });
     }
+
+    let holesSavedForPlayer = 0;
 
     for (const h of savedHoles || []) {
       const holeNum = Number(h?.hole_number ?? h?.hole ?? h?.number);
@@ -502,8 +580,22 @@ async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
           JSON.stringify(puttsVal === null ? {} : { "1": puttsVal }),
         ]
       );
+
+      holesSavedForPlayer++;
     }
+
+    console.log("✅ finished syncing player", {
+      playerUserId,
+      roundId,
+      playerNum,
+      holesSavedForPlayer,
+    });
   }
+
+  console.log("✅ syncSharedPlayerRounds COMPLETE", {
+    masterRoundId,
+    upcomingId,
+  });
 }
 function isValidEmail(v) {
   const s = String(v || "").trim();
