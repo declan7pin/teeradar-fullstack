@@ -373,8 +373,14 @@ async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
 
   const master = masterData.round;
   const upcomingId = Number(master.shared_upcoming_round_id || 0);
-  const playerUserIds = Array.isArray(master.player_user_ids) ? master.player_user_ids.map(Number) : [];
-  const playerNames = Array.isArray(master.player_names) ? master.player_names : [];
+
+  const playerUserIds = Array.isArray(master.player_user_ids)
+    ? master.player_user_ids.map(Number).filter(Number.isFinite)
+    : [];
+
+  const playerNames = Array.isArray(master.player_names)
+    ? master.player_names
+    : [];
 
   if (!upcomingId || playerUserIds.length <= 1) return;
 
@@ -383,7 +389,7 @@ async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
     if (!Number.isFinite(playerUserId) || playerUserId <= 0) continue;
 
     const playerNum = String(i + 1);
-    const playerName = String(playerNames[i] || "").trim();
+    const playerName = String(playerNames[i] || "").trim() || `Player ${i + 1}`;
 
     let roundId = null;
 
@@ -393,6 +399,7 @@ async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
       FROM rounds
       WHERE user_id = $1
         AND shared_upcoming_round_id = $2
+      ORDER BY created_at ASC
       LIMIT 1;
       `,
       [playerUserId, upcomingId]
@@ -425,15 +432,13 @@ async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
       const strokesMap = cleanPlayerMap(h?.strokes_by_player || h?.strokesByPlayer || {});
       const puttsMap = cleanPlayerMap(h?.putts_by_player || h?.puttsByPlayer || {});
 
-      const strokesVal =
-        typeof strokesMap[playerNum] !== "undefined"
-          ? Number(strokesMap[playerNum])
-          : null;
+      const strokesVal = Number.isFinite(Number(strokesMap[playerNum]))
+        ? Number(strokesMap[playerNum])
+        : null;
 
-      const puttsVal =
-        typeof puttsMap[playerNum] !== "undefined"
-          ? Number(puttsMap[playerNum])
-          : null;
+      const puttsVal = Number.isFinite(Number(puttsMap[playerNum]))
+        ? Number(puttsMap[playerNum])
+        : null;
 
       const parVal =
         h?.par === null || typeof h?.par === "undefined" || h?.par === ""
@@ -465,10 +470,10 @@ async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
           holeNum,
           Number.isFinite(parVal) ? parVal : null,
           Number.isFinite(distVal) ? distVal : null,
-          Number.isFinite(strokesVal) ? strokesVal : null,
-          Number.isFinite(puttsVal) ? puttsVal : null,
-          JSON.stringify({ "1": Number.isFinite(strokesVal) ? strokesVal : null }),
-          JSON.stringify({ "1": Number.isFinite(puttsVal) ? puttsVal : null }),
+          strokesVal,
+          puttsVal,
+          JSON.stringify(strokesVal === null ? {} : { "1": strokesVal }),
+          JSON.stringify(puttsVal === null ? {} : { "1": puttsVal }),
         ]
       );
     }
@@ -1565,6 +1570,8 @@ router.post("/from-upcoming/:upcomingId", requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: "invalid_upcoming_id" });
     }
 
+    await ensureSharedRoundColumns();
+
     const { rows } = await db.query(
       `
       SELECT *
@@ -1621,29 +1628,64 @@ router.post("/from-upcoming/:upcomingId", requireAuth, async (req, res) => {
     const participants = participantsRes.rows || [];
     const playerNames = participants.map((p) => p.name || p.email || "Player");
     const playerUserIds = participants.map((p) => Number(p.id)).filter(Number.isFinite);
+    const playersCount = Math.max(1, Math.min(4, participants.length || 1));
 
-    const result = await createRoundWithSeededHoles({
-      userId,
-      course: upcoming.course,
-      state: upcoming.state,
-      holes: upcoming.holes || 18,
-      layout: null,
-      par_mode: "published",
-      players_count: Math.max(1, Math.min(4, participants.length || 1)),
-      player_names: playerNames,
-      player_user_ids: playerUserIds,
-      shared_upcoming_round_id: upcomingId,
-    });
+    let currentUserRound = null;
+    let currentUserHoles = [];
 
-    if (!result?.ok) {
-      return res.status(result?.status || 400).json(result);
+    for (const p of participants) {
+      const participantUserId = Number(p.id);
+      if (!Number.isFinite(participantUserId)) continue;
+
+      const existing = await db.query(
+        `
+        SELECT id
+        FROM rounds
+        WHERE user_id = $1
+          AND shared_upcoming_round_id = $2
+        ORDER BY created_at ASC
+        LIMIT 1;
+        `,
+        [participantUserId, upcomingId]
+      );
+
+      let result = null;
+
+      if (existing.rows.length) {
+        result = await getRoundWithHoles(Number(existing.rows[0].id));
+      } else {
+        result = await createRoundWithSeededHoles({
+          userId: participantUserId,
+          course: upcoming.course,
+          state: upcoming.state,
+          holes: upcoming.holes || 18,
+          layout: null,
+          par_mode: "published",
+
+          // current user's live scorecard shows all players
+          players_count: participantUserId === userId ? playersCount : 1,
+          player_names: participantUserId === userId ? playerNames : [p.name || p.email || "Player"],
+          player_user_ids: participantUserId === userId ? playerUserIds : [participantUserId],
+
+          shared_upcoming_round_id: upcomingId,
+        });
+      }
+
+      if (participantUserId === userId) {
+        currentUserRound = result?.round || null;
+        currentUserHoles = result?.holes || [];
+      }
+    }
+
+    if (!currentUserRound?.id) {
+      return res.status(500).json({ ok: false, error: "current_user_round_not_created" });
     }
 
     return res.json({
       ok: true,
-      roundId: result.round?.id,
-      round: result.round,
-      holes: result.holes,
+      roundId: currentUserRound.id,
+      round: currentUserRound,
+      holes: currentUserHoles,
       participants,
     });
   } catch (err) {
@@ -1655,7 +1697,6 @@ router.post("/from-upcoming/:upcomingId", requireAuth, async (req, res) => {
     });
   }
 });
-
 // Get one round + holes (must own it)
 router.get("/:id", requireAuth, async (req, res) => {
   try {
