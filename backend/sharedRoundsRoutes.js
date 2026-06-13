@@ -151,7 +151,6 @@ router.get("/upcoming", async (req, res) => {
         FROM upcoming_rounds ur
         WHERE ur.user_id = $1
         ${upcomingTimeFilterSql("ur")}
-        ${upcomingTimeFilterSql("ur")}
         ORDER BY ur.play_date ASC, ur.tee_time ASC NULLS LAST
         LIMIT 100;
         `,
