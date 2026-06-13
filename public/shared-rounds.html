@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TeeRadar — Shared Rounds</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+  <style>
+    :root{
+      --teal:#00796b;
+      --teal-dark:#005e55;
+      --bg:#eef3f4;
+      --card:#ffffff;
+      --border:#d7e2e5;
+      --text:#0f172a;
+      --muted:#64748b;
+      --shadow:0 14px 34px rgba(15,23,42,.06);
+    }
+
+    *{box-sizing:border-box}
+
+    body{
+      margin:0;
+      font-family:Inter,system-ui,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+
+    .wrap{
+      max-width:900px;
+      margin:0 auto;
+      padding:
+        calc(env(safe-area-inset-top) + 20px)
+        14px
+        calc(env(safe-area-inset-bottom) + 40px);
+    }
+
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:18px;
+    }
+
+    h1{
+      margin:0;
+      font-size:2rem;
+      font-weight:1000;
+      letter-spacing:-.05em;
+    }
+
+    .sub{
+      color:var(--muted);
+      margin-top:6px;
+      font-weight:700;
+    }
+
+    .btn{
+      border:none;
+      background:linear-gradient(180deg,#00897b,#00695c);
+      color:#fff;
+      padding:12px 18px;
+      border-radius:999px;
+      font-weight:900;
+      cursor:pointer;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-height:46px;
+      box-shadow:0 10px 24px rgba(0,121,107,.18);
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:28px;
+      padding:20px;
+      box-shadow:var(--shadow);
+      margin-bottom:16px;
+    }
+
+    .roundTitle{
+      font-size:1.3rem;
+      font-weight:1000;
+      line-height:1.1;
+      letter-spacing:-.04em;
+      margin-bottom:8px;
+    }
+
+    .meta{
+      color:var(--muted);
+      font-weight:800;
+      line-height:1.45;
+    }
+
+    .players{
+      margin-top:14px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+
+    .pill{
+      padding:9px 13px;
+      border-radius:999px;
+      background:#edf7f5;
+      border:1px solid #cce8e2;
+      color:var(--teal-dark);
+      font-weight:900;
+      font-size:.92rem;
+    }
+
+    .empty{
+      background:#fff;
+      border:1px dashed var(--border);
+      border-radius:22px;
+      padding:24px;
+      color:var(--muted);
+      font-weight:800;
+      text-align:center;
+    }
+
+    @media(max-width:700px){
+      h1{
+        font-size:1.7rem;
+      }
+
+      .card{
+        padding:18px;
+        border-radius:24px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="topbar">
+    <div>
+      <h1>Shared Rounds</h1>
+      <div class="sub" id="pageSub">
+        Rounds shared between golfers.
+      </div>
+    </div>
+
+    <a class="btn" href="/friends.html">
+      ← Back
+    </a>
+  </div>
+
+  <div id="roundsWrap">
+    <div class="empty">
+      Loading shared rounds...
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+
+function getToken(){
+  const keys = [
+    "teeradar_jwt",
+    "teeradar_token",
+    "token",
+    "authToken",
+    "jwt",
+    "access_token"
+  ];
+
+  for (const k of keys){
+    const v = localStorage.getItem(k);
+    if (v && String(v).trim().length > 10){
+      return String(v).trim();
+    }
+  }
+
+  return "";
+}
+
+async function api(path, options = {}){
+  const token = getToken();
+
+  const headers = {
+    ...(options.headers || {}),
+    "Content-Type":"application/json"
+  };
+
+  if (token){
+    headers.Authorization = "Bearer " + token;
+  }
+
+  const res = await fetch(API_BASE + path, {
+    ...options,
+    headers
+  });
+
+  const data = await res.json();
+
+  if (!res.ok){
+    throw new Error(data?.error || "Request failed");
+  }
+
+  return data;
+}
+
+function escapeHtml(str){
+  return String(str || "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;");
+}
+
+function formatDate(dateStr, teeTime){
+  if (!dateStr) return "Unknown date";
+
+  const d = new Date(dateStr);
+
+  if (isNaN(d.getTime())){
+    return dateStr;
+  }
+
+  const formatted =
+    d.toLocaleDateString("en-AU", {
+      day:"2-digit",
+      month:"short",
+      year:"numeric"
+    });
+
+  return teeTime
+    ? `${formatted} • ${teeTime}`
+    : formatted;
+}
+
+async function loadRounds(){
+  try{
+    const params = new URLSearchParams(window.location.search);
+    const friendUserId = Number(params.get("friendUserId") || 0);
+
+    if (!friendUserId){
+      throw new Error("Missing friend user id");
+    }
+
+    const data = await api(
+      `/api/shared-rounds/with/${friendUserId}`
+    );
+
+    const rounds = Array.isArray(data?.rounds)
+      ? data.rounds
+      : [];
+
+    const wrap = document.getElementById("roundsWrap");
+
+    if (!rounds.length){
+      wrap.innerHTML = `
+        <div class="empty">
+          No shared rounds found yet.
+        </div>
+      `;
+      return;
+    }
+
+    wrap.innerHTML = rounds.map(r => {
+      const players = Array.isArray(r.player_names)
+        ? r.player_names
+        : [];
+
+      return `
+        <div class="card">
+
+          <div class="roundTitle">
+            ${escapeHtml(r.course || "Unknown course")}
+          </div>
+
+          <div class="meta">
+            ${escapeHtml(r.state || "WA")}
+            •
+            ${Number(r.holes || 18)} holes
+            <br/>
+            ${escapeHtml(formatDate(r.play_date, r.tee_time))}
+          </div>
+
+          <div class="players">
+            ${players.map(p => `
+              <div class="pill">
+                ${escapeHtml(p)}
+              </div>
+            `).join("")}
+          </div>
+
+        </div>
+      `;
+    }).join("");
+
+  }catch(err){
+
+    console.error(err);
+
+    document.getElementById("roundsWrap").innerHTML = `
+      <div class="empty">
+        Failed to load shared rounds.
+      </div>
+    `;
+  }
+}
+
+loadRounds();
+</script>
+
+</body>
+</html>
