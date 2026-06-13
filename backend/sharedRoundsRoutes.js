@@ -14,6 +14,21 @@ function cleanText(v) {
 function cleanState(v) {
   return String(v || "").trim().toUpperCase() || null;
 }
+function timezoneForState(state) {
+  switch (String(state || "").trim().toUpperCase()) {
+    case "WA": return "Australia/Perth";
+    case "NT": return "Australia/Darwin";
+    case "SA": return "Australia/Adelaide";
+    case "QLD": return "Australia/Brisbane";
+    case "NSW":
+    case "VIC":
+    case "TAS":
+    case "ACT":
+      return "Australia/Sydney";
+    default:
+      return "Australia/Perth";
+  }
+}
 function upcomingTimeFilterSql(alias = "ur") {
   return `
     AND (
@@ -23,7 +38,19 @@ function upcomingTimeFilterSql(alias = "ur") {
           ${alias}.play_date::date
           + ${alias}.tee_time::time
           + INTERVAL '20 minutes'
-        ) >= now()
+        ) >= (
+          now() AT TIME ZONE COALESCE(
+            ${alias}.timezone,
+            CASE
+              WHEN ${alias}.state = 'WA' THEN 'Australia/Perth'
+              WHEN ${alias}.state = 'NT' THEN 'Australia/Darwin'
+              WHEN ${alias}.state = 'SA' THEN 'Australia/Adelaide'
+              WHEN ${alias}.state = 'QLD' THEN 'Australia/Brisbane'
+              WHEN ${alias}.state IN ('NSW','VIC','TAS','ACT') THEN 'Australia/Sydney'
+              ELSE 'Australia/Perth'
+            END
+          )
+        )
       )
     )
   `;
@@ -97,21 +124,22 @@ router.post("/upcoming", async (req, res) => {
 
     const result = await db.query(
       `
-      INSERT INTO upcoming_rounds (
-        user_id, course, state, play_date, tee_time, holes, notes
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+     INSERT INTO upcoming_rounds (
+  user_id, course, state, timezone, play_date, tee_time, holes, notes
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       RETURNING *;
       `,
       [
-        userId,
-        cleanText(course),
-        cleanState(state),
-        cleanText(play_date),
-        cleanText(tee_time) || null,
-        Number(holes) || 18,
-        cleanText(notes) || null,
-      ]
+  userId,
+  cleanText(course),
+  cleanState(state),
+  timezoneForState(state),
+  cleanText(play_date),
+  cleanText(tee_time) || null,
+  Number(holes) || 18,
+  cleanText(notes) || null,
+]
     );
 
     const round = result.rows[0];
