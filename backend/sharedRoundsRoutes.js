@@ -429,4 +429,83 @@ router.delete("/shared-with-me/:id", async (req, res) => {
   }
 });
 
+router.get("/with/:friendUserId", async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const friendUserId = Number(req.params.friendUserId);
+
+    if (!userId || !friendUserId) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_users"
+      });
+    }
+
+    const { rows } = await db.query(
+      `
+      SELECT DISTINCT
+        ur.*,
+
+        ARRAY(
+          SELECT
+            COALESCE(
+              NULLIF(u2.display_name, ''),
+              split_part(u2.email, '@', 1)
+            )
+          FROM (
+            SELECT ur2.user_id AS uid
+            FROM upcoming_rounds ur2
+            WHERE ur2.id = ur.id
+
+            UNION
+
+            SELECT s.shared_with_user_id
+            FROM upcoming_round_shares s
+            WHERE s.upcoming_round_id = ur.id
+          ) p
+          JOIN users u2 ON u2.id = p.uid
+          ORDER BY 1
+        ) AS player_names
+
+      FROM upcoming_rounds ur
+
+      LEFT JOIN upcoming_round_shares s
+        ON s.upcoming_round_id = ur.id
+
+      WHERE
+        (
+          ur.user_id = $1
+          AND s.shared_with_user_id = $2
+        )
+        OR
+        (
+          ur.user_id = $2
+          AND s.shared_with_user_id = $1
+        )
+
+      ORDER BY ur.play_date DESC, ur.tee_time DESC NULLS LAST
+      LIMIT 100;
+      `,
+      [userId, friendUserId]
+    );
+
+    res.json({
+      ok: true,
+      rounds: rows || []
+    });
+
+  } catch (err) {
+
+    console.error(
+      "GET /api/shared-rounds/with/:friendUserId error:",
+      err
+    );
+
+    res.status(500).json({
+      ok: false,
+      error: "internal_error"
+    });
+  }
+});
+
 export default router;
