@@ -15,17 +15,33 @@
     }
 
     .wrap{
-      max-width:860px;
-      margin:0 auto;
-      padding:20px 14px 90px;
-    }
+  max-width:860px;
+  margin:0 auto;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 20px)
+    14px
+    90px;
+}
 
     .back{
-      display:inline-block;
-      margin-bottom:14px;
-      color:#005e55;
-      font-weight:800;
-    }
+  display:flex;
+  gap:10px;
+  margin-bottom:14px;
+}
+
+.back a{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:54px;
+  border-radius:18px;
+  background:#e6f4f1;
+  color:#005e55;
+  font-weight:800;
+  text-decoration:none;
+  border:1px solid #dbe5ea;
+}
 
     .hero{
       background:linear-gradient(135deg,#00796b,#005e55);
@@ -128,7 +144,17 @@
 <body>
   <main class="wrap">
 
-    <a class="back" href="javascript:history.back()">← Back</a>
+    <div class="back">
+
+  <a href="/index.html">
+    ← Return Home
+  </a>
+
+  <a href="javascript:history.back()">
+    ← Back
+  </a>
+
+</div>
 
     <section class="hero">
       <h1 id="courseName">Loading round...</h1>
