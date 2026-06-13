@@ -87,6 +87,22 @@ export function runMigrations() {
       db.prepare(`ALTER TABLE users ADD COLUMN basic_free_until TEXT`).run();
     }
 
+        // 5) Mobile push notification tokens
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS mobile_push_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        platform TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `).run();
+
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_mobile_push_email
+      ON mobile_push_tokens (email)
+    `).run();
+
     console.log("✅ migrations: ok");
   } catch (e) {
     console.error("❌ migrations failed:", e);
