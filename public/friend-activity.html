@@ -8,7 +8,14 @@
 
   <style>
     body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#eef4f6;color:#0f172a}
-    .wrap{max-width:860px;margin:0 auto;padding:20px 14px 80px}
+    .wrap{
+  max-width:860px;
+  margin:0 auto;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 20px)
+    14px
+    80px;
+}
     .hero{background:linear-gradient(135deg,#00796b,#005e55);color:#fff;border-radius:22px;padding:22px;margin-bottom:16px}
     .hero h1{margin:0 0 6px;font-size:28px}
     .hero p{margin:0;opacity:.92;line-height:1.45}
@@ -31,9 +38,25 @@
 
 <body>
   <main class="wrap">
-    <button class="ghost" type="button" onclick="window.location.href='/friends.html'" style="margin-bottom:12px;">
-      ← Back to friends
-    </button>
+    <div style="display:flex;gap:10px;margin-bottom:14px;">
+  <button
+    class="ghost"
+    type="button"
+    onclick="window.location.href='/index.html'"
+    style="flex:1;"
+  >
+    ← Return Home
+  </button>
+
+  <button
+    class="ghost"
+    type="button"
+    onclick="window.location.href='/friends.html'"
+    style="flex:1;"
+  >
+    ← Back to friends
+  </button>
+</div>
 
     <section class="hero">
       <h1>Full activity feed</h1>
