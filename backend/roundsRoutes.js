@@ -373,23 +373,49 @@ async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
 
   const master = masterData.round;
   const upcomingId = Number(master.shared_upcoming_round_id || 0);
+  if (!upcomingId) return;
 
-  const playerUserIds = Array.isArray(master.player_user_ids)
-    ? master.player_user_ids.map(Number).filter(Number.isFinite)
-    : [];
+  // ✅ Always rebuild participants from the upcoming round + shares.
+  // This means even if master.player_user_ids is wrong/missing,
+  // every shared player still gets their own saved score.
+  const participantsRes = await db.query(
+    `
+    SELECT
+      u.id,
+      u.email,
+      COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS name,
+      CASE WHEN u.id = ur.user_id THEN 0 ELSE 1 END AS sort_order
+    FROM upcoming_rounds ur
+    JOIN users u ON u.id = ur.user_id
+    WHERE ur.id = $1
 
-  const playerNames = Array.isArray(master.player_names)
-    ? master.player_names
-    : [];
+    UNION ALL
 
-  if (!upcomingId || playerUserIds.length <= 1) return;
+    SELECT
+      u.id,
+      u.email,
+      COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS name,
+      1 AS sort_order
+    FROM upcoming_round_shares s
+    JOIN users u ON u.id = s.shared_with_user_id
+    WHERE s.upcoming_round_id = $1
 
-  for (let i = 0; i < playerUserIds.length; i++) {
-    const playerUserId = Number(playerUserIds[i]);
+    ORDER BY sort_order ASC, name ASC
+    LIMIT 4;
+    `,
+    [upcomingId]
+  );
+
+  const participants = participantsRes.rows || [];
+  if (participants.length <= 1) return;
+
+  for (let i = 0; i < participants.length; i++) {
+    const player = participants[i];
+    const playerUserId = Number(player.id);
     if (!Number.isFinite(playerUserId) || playerUserId <= 0) continue;
 
     const playerNum = String(i + 1);
-    const playerName = String(playerNames[i] || "").trim() || `Player ${i + 1}`;
+    const playerName = String(player.name || player.email || `Player ${i + 1}`).trim();
 
     let roundId = null;
 
