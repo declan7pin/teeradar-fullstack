@@ -61,7 +61,7 @@ async function enableNativePush(email) {
     const userEmail = getUserEmail(email);
     const jwt = localStorage.getItem("teeradar_jwt") || "";
 
-    const res = await fetch(`${PUSH_API_BASE}/api/mobile-push/register`, {
+    const res = await fetch(`${PUSH_API_BASE}/api/push/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
