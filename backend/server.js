@@ -568,8 +568,32 @@ async function ensureAlertHitsTable() {
     console.error("❌ error ensuring alert_hits table:", err);
   }
 }
+
+async function ensureMobilePushTokensTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS mobile_push_tokens (
+        id BIGSERIAL PRIMARY KEY,
+        email TEXT NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        platform TEXT,
+        updated_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_mobile_push_tokens_email
+      ON mobile_push_tokens (LOWER(email));
+    `);
+
+    console.log("✅ mobile_push_tokens table ready");
+  } catch (err) {
+    console.error("❌ error ensuring mobile_push_tokens table:", err);
+  }
+}
 ensureAlertHitsTable();
 ensurePushSubscriptionsTable();
+ensureMobilePushTokensTable();
 ensureRoundsTables();
 ensureScorecardTemplatesTables();
 ensureSubscriberStatusSchema(); // ✅ ADD: creates subscriber_status table in code
