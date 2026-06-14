@@ -1143,14 +1143,16 @@ if (prov === "miclub" || prov === "quick18") {
         });
       }
 
-      await sendTeeTimePushSummaryForUser({
-        email,
-        hits: emailHits,
-        earliest,
-        latest,
-        userHoles,
-        partySize,
-      });
+            if (canSendEmailForUser && emailHits.length > 0) {
+        await sendTeeTimePushSummaryForUser({
+          email,
+          hits: emailHits,
+          earliest,
+          latest,
+          userHoles,
+          partySize,
+        });
+      }
     }
 
     console.log("🔔 Alert tick finished.");
