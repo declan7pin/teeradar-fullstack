@@ -29,6 +29,37 @@ function getUserEmail(passedEmail) {
   ).trim().toLowerCase();
 }
 
+function safeNotificationUrl(rawUrl) {
+  const fallback = "/index.html";
+  const value = String(rawUrl || "").trim();
+
+  if (!value) return fallback;
+
+  try {
+    if (value.startsWith("/")) return value;
+
+    const parsed = new URL(value);
+    if (
+      parsed.hostname === "teeradar.com.au" ||
+      parsed.hostname === "www.teeradar.com.au" ||
+      parsed.hostname.includes("teeradar-fullstack")
+    ) {
+      return parsed.pathname + parsed.search + parsed.hash;
+    }
+  } catch {}
+
+  return fallback;
+}
+
+function openNotificationUrl(rawUrl) {
+  const url = safeNotificationUrl(rawUrl);
+  console.log("Opening push URL:", url);
+
+  setTimeout(() => {
+    window.location.href = url;
+  }, 150);
+}
+
 /* =========================
    NATIVE iOS / ANDROID PUSH
 ========================= */
@@ -90,8 +121,17 @@ async function enableNativePush(email) {
   });
 
   await PushNotifications.addListener("pushNotificationActionPerformed", (event) => {
-    const url = event?.notification?.data?.url;
-    if (url) window.location.href = url;
+    console.log("Push action event:", event);
+
+    const data = event?.notification?.data || {};
+    const url =
+      data.url ||
+      data.link ||
+      data.click_action ||
+      event?.notification?.url ||
+      "/index.html";
+
+    openNotificationUrl(url);
   });
 
   await PushNotifications.register();
