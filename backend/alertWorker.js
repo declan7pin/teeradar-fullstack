@@ -296,30 +296,39 @@ async function sendTeeTimePushSummaryForUser({
   email,
   hits,
   earliest,
-  latest,
+ latest,
   userHoles,
   partySize,
 }) {
   const safeHits = Array.isArray(hits) ? hits : [];
+
   if (!safeHits.length) return;
 
-  const first = safeHits[0];
+  // randomise displayed course so it rotates
+  const randomHit =
+    safeHits[Math.floor(Math.random() * safeHits.length)];
+
   const extraCount = safeHits.length - 1;
 
   const title = "Tee times available ⛳";
 
   const body =
     extraCount > 0
-      ? `${first.courseName} and ${extraCount} more favourite course(s) have tee times available.`
-      : `${first.courseName} has ${first.count} tee time(s) available.`;
+      ? `${randomHit.courseName} and ${extraCount} more favourite course(s) have tee times available.`
+      : `${randomHit.courseName} has ${randomHit.count} tee time(s) available.`;
 
   await sendMobilePushToEmail(email, {
     title,
     body,
-    url: "/account.html",
+
+    // open alerts page instead of homepage
+    url: "/account.html#alerts",
+
     type: "TEE_TIME_ALERT",
+
     meta: {
       hitsCount: safeHits.length,
+      highlightedCourse: randomHit.courseName,
       earliest,
       latest,
       holes: userHoles || null,
