@@ -1019,6 +1019,38 @@
     left:0;
     margin:auto;
   }
+ @media(max-width:700px){
+  .header-actions{
+    display:flex !important;
+    align-items:center !important;
+    gap:10px !important;
+  }
+
+  .mobile-menu-btn{
+    display:flex !important;
+    width:42px !important;
+    height:38px !important;
+    border:0 !important;
+    border-radius:12px !important;
+    background:rgba(255,255,255,0.14) !important;
+    cursor:pointer !important;
+    align-items:center !important;
+    justify-content:center !important;
+    flex-direction:column !important;
+    gap:5px !important;
+  }
+
+  .mobile-menu-btn span{
+    display:block !important;
+    width:21px !important;
+    height:2px !important;
+    background:#ffffff !important;
+    border-radius:999px !important;
+  }
+
+  .notification-bell{
+    display:flex !important;
+  }
 }
   </style>
 </head>
@@ -1047,7 +1079,15 @@
   <span class="notification-badge" id="notificationBadge">0</span>
 </button>
 
-<div class="notification-panel" id="notificationPanel">
+    <button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Open menu">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+      </div>
+
+    <div class="notification-panel" id="notificationPanel">
   <div class="notification-head">
     <span>Notifications</span>
     <button type="button" id="notificationReadAll">Mark all read</button>
@@ -1056,14 +1096,6 @@
     <div class="notification-empty">No notifications yet.</div>
   </div>
 </div>
-
-    <button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Open menu">
-      <span></span>
-      <span></span>
-      <span></span>
-    </button>
-
-      </div>
 
     <nav id="mainNav">
       <a href="/index.html">Home</a>
