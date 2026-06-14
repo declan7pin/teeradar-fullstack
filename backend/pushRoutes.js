@@ -315,7 +315,7 @@ export async function sendMobilePushToEmail(email, payload = {}) {
   const targetEmail = normalizeEmail(email);
 
   if (!targetEmail) {
-    return { sent: 0 };
+    return { sent: 0, removed: 0 };
   }
 
   const { rows } = await db.query(
@@ -323,11 +323,13 @@ export async function sendMobilePushToEmail(email, payload = {}) {
     SELECT token
     FROM mobile_push_tokens
     WHERE LOWER(email) = LOWER($1)
+    ORDER BY updated_at DESC
     `,
     [targetEmail]
   );
 
   let sent = 0;
+  let removed = 0;
 
   for (const row of rows || []) {
     try {
@@ -335,23 +337,37 @@ export async function sendMobilePushToEmail(email, payload = {}) {
         token: row.token,
 
         notification: {
-          title: payload.title || "TeeRadar",
-          body: payload.body || "You have a new notification.",
+          title: String(payload.title || "TeeRadar"),
+          body: String(payload.body || "You have a new notification."),
         },
 
         data: {
-          url: payload.url || "/index.html",
-          type: payload.type || "GENERAL"
-        }
+          url: String(payload.url || "/index.html"),
+          type: String(payload.type || "GENERAL"),
+          meta: JSON.stringify(payload.meta || {}),
+        },
       });
 
       sent++;
     } catch (err) {
-      console.warn("firebase push failed:", err?.message || err);
+      const msg = err?.message || String(err);
+      console.warn("firebase push failed:", msg);
+
+      if (
+        msg.includes("not a valid FCM registration token") ||
+        msg.includes("registration-token-not-registered") ||
+        msg.includes("Requested entity was not found")
+      ) {
+        await db.query(
+          `DELETE FROM mobile_push_tokens WHERE token = $1`,
+          [row.token]
+        );
+        removed++;
+      }
     }
   }
 
-  return { sent };
+  return { sent, removed };
 }
 
 // =========================
