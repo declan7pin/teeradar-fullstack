@@ -208,6 +208,38 @@
       font-weight:600;
       cursor:pointer;
     }
+    .home-alert-card{
+  display:none;
+  margin:16px 0 14px;
+  background:#fff7ed;
+  border:1px solid #fed7aa;
+  border-radius:16px;
+  padding:14px;
+  box-shadow:0 12px 28px rgba(15,23,42,0.08);
+}
+
+.home-alert-card h3{
+  margin:0 0 4px;
+  font-size:15px;
+  color:#9a3412;
+}
+
+.home-alert-card p{
+  margin:0 0 10px;
+  font-size:13px;
+  color:#7c2d12;
+}
+
+.home-alert-card button{
+  border:none;
+  border-radius:999px;
+  background:#f97316;
+  color:#fff;
+  padding:8px 14px;
+  font-size:13px;
+  font-weight:800;
+  cursor:pointer;
+}
     .hero-chips{
       display:flex;
       flex-wrap:wrap;
@@ -1023,6 +1055,12 @@
         </button>
       </div>
 
+            <div id="homeAlertCard" class="home-alert-card">
+        <h3>New tee time alerts available ⛳</h3>
+        <p>You have unread favourite-course alerts ready to view.</p>
+        <button type="button" id="homeAlertBtn">View alerts</button>
+      </div>
+
       <div class="hero-chips">
         <div class="chip">
           <span class="icon">⛳</span>
@@ -1605,7 +1643,8 @@ function runAppSplashOnce(){
         closeAuthModal();
         renderNavState();
 
-        tryShowAvailablePopupForSubscribedUser();
+            initHomeAlertCard();
+    tryShowAvailablePopupForSubscribedUser();
       } catch (err) {
         console.error("Auth error:", err);
         alert("Something went wrong. Please try again.");
@@ -1753,6 +1792,43 @@ ${details || "Not provided"}
         .replace(/([?&]selected_date=)\d{4}-\d{2}-\d{2}/, `$1${date}`)
         .replace(/([?&]startDate=)\d{2}\/\d{2}\/\d{4}/, `$1${toDMY(date)}`)
         .replace(/([?&]teedate=)\d{8}/, `$1${toYMDNoDash(date)}`);
+    }
+  }
+
+    async function initHomeAlertCard() {
+    try {
+      const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
+      if (!email) return;
+
+      const card = document.getElementById("homeAlertCard");
+      const btn = document.getElementById("homeAlertBtn");
+      if (!card || !btn) return;
+
+      const token = localStorage.getItem("teeradar_jwt") || "";
+
+      const res = await fetch(`${API_BASE}/api/alerts/unread?email=` + encodeURIComponent(email), {
+        method: "GET",
+        headers: token ? { "Authorization": "Bearer " + token } : {}
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) return;
+
+      const hits = Array.isArray(data.hits) ? data.hits : [];
+      const hasUnread = hits.some(h => {
+        const slots = h.slots || h.results || [];
+        return Array.isArray(slots) && slots.length > 0;
+      });
+
+      if (!hasUnread) return;
+
+      card.style.display = "block";
+
+      btn.onclick = () => {
+        window.location.href = "/account.html#alerts";
+      };
+    } catch (e) {
+      console.warn("initHomeAlertCard failed", e);
     }
   }
 
