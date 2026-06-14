@@ -2,7 +2,10 @@
 import express from "express";
 import db from "./db.js";
 import { requireAuth } from "./auth.js";
-import { sendPushToEmail } from "./pushRoutes.js";
+import {
+  sendPushToEmail,
+  sendMobilePushToEmail
+} from "./pushRoutes.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -309,14 +312,36 @@ router.post("/share", async (req, res) => {
 
         const n = notifyRes.rows[0];
 
-        if (n?.friend_email && typeof sendPushToEmail === "function") {
-          const pushResult = await sendPushToEmail(n.friend_email, {
-            title: "Upcoming round shared",
-            body: `${n.owner_name || "A friend"} shared ${n.course || "a round"} with you.`,
-            url: "/my-rounds.html",
-          });
+                if (n?.friend_email) {
 
-          notificationsSent += Number(pushResult?.sent || 0);
+          // WEB PUSH
+          if (typeof sendPushToEmail === "function") {
+            const pushResult = await sendPushToEmail(n.friend_email, {
+              title: "Upcoming round shared",
+              body: `${n.owner_name || "A friend"} shared ${n.course || "a round"} with you.`,
+              url: "/my-rounds.html",
+            });
+
+            notificationsSent += Number(pushResult?.sent || 0);
+          }
+
+          // MOBILE PUSH
+          if (typeof sendMobilePushToEmail === "function") {
+            const mobileResult = await sendMobilePushToEmail(
+              n.friend_email,
+              {
+                title: "Upcoming round shared ⛳",
+                body: `${n.owner_name || "A friend"} shared ${n.course || "a round"} with you.`,
+                url: "/my-rounds.html",
+                type: "ROUND_SHARED",
+                meta: {
+                  roundId: Number(upcoming_round_id)
+                }
+              }
+            );
+
+            notificationsSent += Number(mobileResult?.sent || 0);
+          }
         }
       } catch (pushErr) {
         console.warn("Upcoming round push notification failed:", pushErr?.message || pushErr);
