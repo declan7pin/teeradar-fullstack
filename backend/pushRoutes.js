@@ -354,4 +354,39 @@ export async function sendMobilePushToEmail(email, payload = {}) {
   return { sent };
 }
 
+// =========================
+// TEST MOBILE PUSH
+// =========================
+router.post("/mobile-test", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body?.email);
+
+    if (!email) {
+      return res.status(400).json({
+        ok: false,
+        error: "email_required"
+      });
+    }
+
+    const result = await sendMobilePushToEmail(email, {
+      title: "TeeRadar",
+      body: "iPhone push notifications are now working 🎉",
+      url: "/index.html",
+      type: "TEST"
+    });
+
+    res.json({
+      ok: true,
+      ...result
+    });
+  } catch (err) {
+    console.error("mobile test push error:", err);
+
+    res.status(500).json({
+      ok: false,
+      error: "mobile_test_push_failed"
+    });
+  }
+});
+
 export default router;
