@@ -388,5 +388,32 @@ router.post("/mobile-test", async (req, res) => {
     });
   }
 });
+// =========================
+// DEBUG MOBILE PUSH TOKENS
+// =========================
+router.get("/mobile-debug", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.query?.email);
 
+    const { rows } = await db.query(
+      `
+      SELECT email, platform, updated_at, LEFT(token, 16) AS token_preview
+      FROM mobile_push_tokens
+      WHERE ($1 = '' OR LOWER(email) = LOWER($1))
+      ORDER BY updated_at DESC
+      LIMIT 20
+      `,
+      [email]
+    );
+
+    res.json({
+      ok: true,
+      count: rows.length,
+      rows
+    });
+  } catch (err) {
+    console.error("mobile push debug error:", err);
+    res.status(500).json({ ok: false, error: "mobile_push_debug_failed" });
+  }
+});
 export default router;
