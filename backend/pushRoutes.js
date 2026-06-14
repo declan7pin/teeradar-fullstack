@@ -206,7 +206,7 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    await db.query(
+     await db.query(
       `
       INSERT INTO mobile_push_tokens (
         email,
@@ -227,6 +227,12 @@ router.post("/register", async (req, res) => {
         platform
       ]
     );
+
+    console.log("✅ mobile push token registered", {
+      email,
+      platform,
+      tokenPreview: token.slice(0, 12) + "..."
+    });
 
     res.json({ ok: true });
   } catch (err) {
