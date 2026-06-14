@@ -987,112 +987,118 @@
   min-height:40px;
   text-align:center;
 }
-  .notification-bell{
+  .nav-wrap{
   position:relative;
-  width:42px;
-  height:38px;
-  border:0;
-  border-radius:12px;
-  background:rgba(255,255,255,0.14);
-  color:#fff;
-  font-size:21px;
-  cursor:pointer;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+}
+
+.notification-bell{
+  position:relative !important;
+  width:42px !important;
+  height:38px !important;
+  border:0 !important;
+  border-radius:12px !important;
+  background:rgba(255,255,255,0.14) !important;
+  color:#fff !important;
+  font-size:18px !important;
+  cursor:pointer !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
 }
 
 .notification-badge{
-  position:absolute;
-  top:-5px;
-  right:-5px;
-  min-width:18px;
-  height:18px;
-  padding:0 5px;
-  border-radius:999px;
-  background:#ef4444;
-  color:#fff;
-  font-size:11px;
-  font-weight:900;
+  position:absolute !important;
+  top:-5px !important;
+  right:-5px !important;
+  min-width:18px !important;
+  height:18px !important;
+  padding:0 5px !important;
+  border-radius:999px !important;
+  background:#ef4444 !important;
+  color:#fff !important;
+  font-size:11px !important;
+  font-weight:900 !important;
   display:none;
-  align-items:center;
-  justify-content:center;
+  align-items:center !important;
+  justify-content:center !important;
 }
 
 .notification-panel{
-  position:absolute;
-  top:calc(100% + 10px);
-  right:58px;
-  width:min(360px, calc(100vw - 28px));
-  max-height:460px;
-  overflow:auto;
-  background:#fff;
-  color:#0f172a;
-  border-radius:16px;
-  box-shadow:0 18px 40px rgba(15,23,42,.28);
-  border:1px solid #e2e8f0;
-  display:none;
-  z-index:80;
+  position:absolute !important;
+  top:calc(100% + 10px) !important;
+  right:58px !important;
+  width:min(360px, calc(100vw - 28px)) !important;
+  max-height:460px !important;
+  overflow:auto !important;
+  background:#ffffff !important;
+  color:#0f172a !important;
+  border-radius:16px !important;
+  box-shadow:0 18px 40px rgba(15,23,42,.28) !important;
+  border:1px solid #e2e8f0 !important;
+  display:none !important;
+  z-index:999 !important;
 }
 
-.notification-panel.open{display:block;}
+.notification-panel.open{
+  display:block !important;
+}
 
 .notification-head{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding:12px 14px;
-  border-bottom:1px solid #e2e8f0;
-  font-weight:900;
+  display:flex !important;
+  justify-content:space-between !important;
+  align-items:center !important;
+  padding:12px 14px !important;
+  border-bottom:1px solid #e2e8f0 !important;
+  font-weight:900 !important;
 }
 
 .notification-head button{
-  border:0;
-  background:transparent;
-  color:#00796b;
-  font-weight:800;
-  cursor:pointer;
+  border:0 !important;
+  background:transparent !important;
+  color:#00796b !important;
+  font-weight:800 !important;
+  cursor:pointer !important;
 }
 
 .notification-item{
-  padding:12px 14px;
-  border-bottom:1px solid #eef2f7;
-  cursor:pointer;
+  padding:12px 14px !important;
+  border-bottom:1px solid #eef2f7 !important;
+  cursor:pointer !important;
 }
 
 .notification-item.unread{
-  background:#ecfeff;
+  background:#ecfeff !important;
 }
 
 .notification-title{
-  font-weight:900;
-  font-size:13px;
-  margin-bottom:3px;
+  font-weight:900 !important;
+  font-size:13px !important;
+  margin-bottom:3px !important;
 }
 
 .notification-body{
-  font-size:12px;
-  color:#64748b;
+  font-size:12px !important;
+  color:#64748b !important;
 }
 
 .notification-time{
-  font-size:11px;
-  color:#94a3b8;
-  margin-top:4px;
+  font-size:11px !important;
+  color:#94a3b8 !important;
+  margin-top:4px !important;
 }
 
 .notification-empty{
-  padding:18px 14px;
-  color:#64748b;
-  font-size:13px;
-  text-align:center;
+  padding:18px 14px !important;
+  color:#64748b !important;
+  font-size:13px !important;
+  text-align:center !important;
 }
 
 @media(max-width:700px){
   .notification-panel{
-    right:0;
-    left:0;
-    margin:auto;
+    right:0 !important;
+    left:0 !important;
+    margin:auto !important;
   }
 }
   </style>
@@ -2146,9 +2152,16 @@ ${details || "Not provided"}
       `;
 
       item.onclick = async () => {
-        await markNotificationRead(n.id);
-        window.location.href = n.url || "/index.html";
-      };
+  await markNotificationRead(n.id);
+
+  const url = String(n.url || "/index.html").trim();
+
+  if (url.startsWith("/")) {
+    window.location.href = url;
+  } else {
+    window.location.href = "/index.html";
+  }
+};
 
       list.appendChild(item);
     });
