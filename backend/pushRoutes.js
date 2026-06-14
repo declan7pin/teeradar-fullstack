@@ -368,23 +368,53 @@ router.post("/mobile-test", async (req, res) => {
       });
     }
 
-    const result = await sendMobilePushToEmail(email, {
-      title: "TeeRadar",
-      body: "iPhone push notifications are now working 🎉",
-      url: "/index.html",
-      type: "TEST"
-    });
+    const { rows } = await db.query(
+      `
+      SELECT token
+      FROM mobile_push_tokens
+      WHERE LOWER(email) = LOWER($1)
+      ORDER BY updated_at DESC
+      `,
+      [email]
+    );
+
+    let sent = 0;
+    const errors = [];
+
+    for (const row of rows || []) {
+      try {
+        await admin.messaging().send({
+          token: row.token,
+          notification: {
+            title: "TeeRadar",
+            body: "iPhone push notifications are now working 🎉"
+          },
+          data: {
+            url: "/index.html",
+            type: "TEST"
+          }
+        });
+
+        sent++;
+      } catch (err) {
+        errors.push(err?.message || String(err));
+        console.warn("mobile test push send failed:", err?.message || err);
+      }
+    }
 
     res.json({
       ok: true,
-      ...result
+      found: rows.length,
+      sent,
+      errors
     });
   } catch (err) {
     console.error("mobile test push error:", err);
 
     res.status(500).json({
       ok: false,
-      error: "mobile_test_push_failed"
+      error: "mobile_test_push_failed",
+      detail: err.message
     });
   }
 });
