@@ -396,9 +396,20 @@ router.post("/mobile-test", async (req, res) => {
         });
 
         sent++;
-      } catch (err) {
-        errors.push(err?.message || String(err));
-        console.warn("mobile test push send failed:", err?.message || err);
+            } catch (err) {
+        const msg = err?.message || String(err);
+        errors.push(msg);
+        console.warn("mobile test push send failed:", msg);
+
+        if (
+          msg.includes("not a valid FCM registration token") ||
+          msg.includes("registration-token-not-registered")
+        ) {
+          await db.query(
+            `DELETE FROM mobile_push_tokens WHERE token = $1`,
+            [row.token]
+          );
+        }
       }
     }
 
