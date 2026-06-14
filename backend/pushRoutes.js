@@ -46,6 +46,71 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
+async function ensureNotificationInboxTable() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS user_notifications (
+      id BIGSERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'GENERAL',
+      url TEXT NOT NULL DEFAULT '/index.html',
+      meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+      read_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS user_notifications_email_created_idx
+    ON user_notifications (LOWER(email), created_at DESC);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS user_notifications_unread_idx
+    ON user_notifications (LOWER(email), read_at);
+  `);
+}
+
+ensureNotificationInboxTable()
+  .then(() => console.log("✅ user_notifications table ready"))
+  .catch((err) => console.warn("⚠️ user_notifications table failed:", err?.message || err));
+
+async function saveNotificationForEmail(email, payload = {}) {
+  const targetEmail = normalizeEmail(email);
+  if (!targetEmail) return null;
+
+  const title = String(payload.title || "TeeRadar");
+  const body = String(payload.body || "You have a new notification.");
+  const type = String(payload.type || "GENERAL");
+  const url = String(payload.url || "/index.html");
+  const meta = payload.meta || {};
+
+  const { rows } = await db.query(
+    `
+    INSERT INTO user_notifications (
+      email,
+      title,
+      body,
+      type,
+      url,
+      meta
+    )
+    VALUES ($1,$2,$3,$4,$5,$6::jsonb)
+    RETURNING id
+    `,
+    [
+      targetEmail,
+      title,
+      body,
+      type,
+      url,
+      JSON.stringify(meta)
+    ]
+  );
+
+  return rows?.[0]?.id || null;
+}
 
 export async function sendPushToEmail(email, payload = {}) {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return { sent: 0, removed: 0 };
@@ -317,6 +382,7 @@ export async function sendMobilePushToEmail(email, payload = {}) {
   if (!targetEmail) {
     return { sent: 0, removed: 0 };
   }
+    const notificationId = await saveNotificationForEmail(targetEmail, payload);
 
   const { rows } = await db.query(
     `
@@ -341,10 +407,11 @@ export async function sendMobilePushToEmail(email, payload = {}) {
           body: String(payload.body || "You have a new notification."),
         },
 
-        data: {
+                data: {
           url: String(payload.url || "/index.html"),
           type: String(payload.type || "GENERAL"),
           meta: JSON.stringify(payload.meta || {}),
+          notificationId: String(notificationId || ""),
         },
       });
 
@@ -471,6 +538,114 @@ router.get("/mobile-debug", async (req, res) => {
   } catch (err) {
     console.error("mobile push debug error:", err);
     res.status(500).json({ ok: false, error: "mobile_push_debug_failed" });
+  }
+});
+// =========================
+// NOTIFICATION INBOX
+// =========================
+router.get("/notifications", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.query?.email);
+
+    if (!email) {
+      return res.status(400).json({
+        ok: false,
+        error: "email_required"
+      });
+    }
+
+    const { rows } = await db.query(
+      `
+      SELECT
+        id,
+        title,
+        body,
+        type,
+        url,
+        meta,
+        read_at,
+        created_at
+      FROM user_notifications
+      WHERE LOWER(email) = LOWER($1)
+      ORDER BY created_at DESC
+      LIMIT 50
+      `,
+      [email]
+    );
+
+    const unreadResult = await db.query(
+      `
+      SELECT COUNT(*)::int AS unread
+      FROM user_notifications
+      WHERE LOWER(email) = LOWER($1)
+        AND read_at IS NULL
+      `,
+      [email]
+    );
+
+    res.json({
+      ok: true,
+      unread: Number(unreadResult.rows?.[0]?.unread || 0),
+      notifications: rows || []
+    });
+  } catch (err) {
+    console.error("notifications list error:", err);
+    res.status(500).json({ ok: false, error: "notifications_failed" });
+  }
+});
+
+router.post("/notifications/read", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body?.email);
+    const id = Number(req.body?.id || 0);
+
+    if (!email) {
+      return res.status(400).json({ ok: false, error: "email_required" });
+    }
+
+    if (!id) {
+      return res.status(400).json({ ok: false, error: "id_required" });
+    }
+
+    await db.query(
+      `
+      UPDATE user_notifications
+      SET read_at = COALESCE(read_at, now())
+      WHERE id = $1
+        AND LOWER(email) = LOWER($2)
+      `,
+      [id, email]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("notification read error:", err);
+    res.status(500).json({ ok: false, error: "notification_read_failed" });
+  }
+});
+
+router.post("/notifications/read-all", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body?.email);
+
+    if (!email) {
+      return res.status(400).json({ ok: false, error: "email_required" });
+    }
+
+    await db.query(
+      `
+      UPDATE user_notifications
+      SET read_at = COALESCE(read_at, now())
+      WHERE LOWER(email) = LOWER($1)
+        AND read_at IS NULL
+      `,
+      [email]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("notifications read-all error:", err);
+    res.status(500).json({ ok: false, error: "notifications_read_all_failed" });
   }
 });
 export default router;
