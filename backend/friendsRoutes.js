@@ -1,6 +1,7 @@
 // backend/friendsRoutes.js
 import express from "express";
 import db from "./db.js";
+import { sendMobilePushToEmail } from "./pushRoutes.js";
 
 const router = express.Router();
 
@@ -89,7 +90,7 @@ router.post("/request", async (req, res) => {
       });
     }
 
-    await db.query(
+    const insertResult = await db.query(
       `
       INSERT INTO user_friends (
         requester_user_id,
@@ -97,9 +98,38 @@ router.post("/request", async (req, res) => {
         status
       )
       VALUES ($1, $2, 'pending')
+      RETURNING id
       `,
       [requesterId, addresseeUserId]
     );
+
+    const usersResult = await db.query(
+      `
+      SELECT
+        requester.email AS requester_email,
+        COALESCE(NULLIF(requester.display_name, ''), requester.email) AS requester_name,
+        addressee.email AS addressee_email
+      FROM users requester
+      JOIN users addressee ON addressee.id = $2
+      WHERE requester.id = $1
+      LIMIT 1
+      `,
+      [requesterId, addresseeUserId]
+    );
+
+    const users = usersResult.rows?.[0];
+
+    if (users?.addressee_email) {
+      await sendMobilePushToEmail(users.addressee_email, {
+        title: "New friend request",
+        body: `${users.requester_name || "Someone"} sent you a friend request.`,
+        url: "/friends.html",
+        type: "FRIEND_REQUEST",
+        meta: {
+          requestId: insertResult.rows?.[0]?.id || null,
+        },
+      });
+    }
 
     res.json({ ok: true });
   } catch (e) {
@@ -142,7 +172,42 @@ router.post("/accept", async (req, res) => {
     );
 
     if (!result.rows?.length) {
-      return res.status(404).json({ ok: false, error: "request_not_found" });
+      return res.status(404).json({
+        ok: false,
+        error: "request_not_found"
+      });
+    }
+
+    const acceptedRequest = result.rows[0];
+
+    const usersResult = await db.query(
+      `
+      SELECT
+        requester.email AS requester_email,
+        COALESCE(NULLIF(addressee.display_name, ''), addressee.email) AS addressee_name
+      FROM user_friends uf
+      JOIN users requester
+        ON requester.id = uf.requester_user_id
+      JOIN users addressee
+        ON addressee.id = uf.addressee_user_id
+      WHERE uf.id = $1
+      LIMIT 1
+      `,
+      [acceptedRequest.id]
+    );
+
+    const users = usersResult.rows?.[0];
+
+    if (users?.requester_email) {
+      await sendMobilePushToEmail(users.requester_email, {
+        title: "Friend request accepted",
+        body: `${users.addressee_name || "Someone"} accepted your friend request.`,
+        url: "/friends.html",
+        type: "FRIEND_ACCEPTED",
+        meta: {
+          requestId: acceptedRequest.id
+        }
+      });
     }
 
     res.json({ ok: true });
@@ -151,7 +216,6 @@ router.post("/accept", async (req, res) => {
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 /*
 ========================================
 LIST PENDING REQUESTS SENT TO ME
