@@ -311,10 +311,10 @@ async function sendTeeTimePushSummaryForUser({
       ? `${safeHits.length} favourite courses have tee times available.`
       : `${safeHits[0].courseName} has ${safeHits[0].count} tee time(s) available.`;
 
-  await sendMobilePushToEmail(email, {
+    await sendMobilePushToEmail(email, {
     title,
     body,
-    url: "/account.html#alerts",
+    url: "/book.html?alerts=1",
     type: "TEE_TIME_ALERT",
     meta: {
       hitsCount: safeHits.length,
