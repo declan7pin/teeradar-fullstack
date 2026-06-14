@@ -987,6 +987,114 @@
   min-height:40px;
   text-align:center;
 }
+  .notification-bell{
+  position:relative;
+  width:42px;
+  height:38px;
+  border:0;
+  border-radius:12px;
+  background:rgba(255,255,255,0.14);
+  color:#fff;
+  font-size:21px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.notification-badge{
+  position:absolute;
+  top:-5px;
+  right:-5px;
+  min-width:18px;
+  height:18px;
+  padding:0 5px;
+  border-radius:999px;
+  background:#ef4444;
+  color:#fff;
+  font-size:11px;
+  font-weight:900;
+  display:none;
+  align-items:center;
+  justify-content:center;
+}
+
+.notification-panel{
+  position:absolute;
+  top:calc(100% + 10px);
+  right:58px;
+  width:min(360px, calc(100vw - 28px));
+  max-height:460px;
+  overflow:auto;
+  background:#fff;
+  color:#0f172a;
+  border-radius:16px;
+  box-shadow:0 18px 40px rgba(15,23,42,.28);
+  border:1px solid #e2e8f0;
+  display:none;
+  z-index:80;
+}
+
+.notification-panel.open{display:block;}
+
+.notification-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:12px 14px;
+  border-bottom:1px solid #e2e8f0;
+  font-weight:900;
+}
+
+.notification-head button{
+  border:0;
+  background:transparent;
+  color:#00796b;
+  font-weight:800;
+  cursor:pointer;
+}
+
+.notification-item{
+  padding:12px 14px;
+  border-bottom:1px solid #eef2f7;
+  cursor:pointer;
+}
+
+.notification-item.unread{
+  background:#ecfeff;
+}
+
+.notification-title{
+  font-weight:900;
+  font-size:13px;
+  margin-bottom:3px;
+}
+
+.notification-body{
+  font-size:12px;
+  color:#64748b;
+}
+
+.notification-time{
+  font-size:11px;
+  color:#94a3b8;
+  margin-top:4px;
+}
+
+.notification-empty{
+  padding:18px 14px;
+  color:#64748b;
+  font-size:13px;
+  text-align:center;
+}
+
+@media(max-width:700px){
+  .notification-panel{
+    right:0;
+    left:0;
+    margin:auto;
+  }
+}
   </style>
 </head>
 <body>
@@ -1006,6 +1114,21 @@
       </div>
       <div class="brand-text">TeeRadar</div>
     </a>
+
+    <button class="notification-bell" id="notificationBell" type="button" aria-label="Notifications">
+  🔔
+  <span class="notification-badge" id="notificationBadge">0</span>
+</button>
+
+<div class="notification-panel" id="notificationPanel">
+  <div class="notification-head">
+    <span>Notifications</span>
+    <button type="button" id="notificationReadAll">Mark all read</button>
+  </div>
+  <div id="notificationList">
+    <div class="notification-empty">No notifications yet.</div>
+  </div>
+</div>
 
     <button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Open menu">
       <span></span>
@@ -1973,6 +2096,130 @@ ${details || "Not provided"}
     } catch (e) {}
   }
 
+  async function loadNotifications() {
+  const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
+  const bell = document.getElementById("notificationBell");
+  const badge = document.getElementById("notificationBadge");
+  const list = document.getElementById("notificationList");
+
+  if (!bell || !badge || !list) return;
+
+  if (!email) {
+    bell.style.display = "none";
+    return;
+  }
+
+  bell.style.display = "flex";
+
+  try {
+    const res = await fetch(`${API_BASE}/api/push/notifications?email=${encodeURIComponent(email)}`);
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.ok) return;
+
+    const unread = Number(data.unread || 0);
+    badge.textContent = unread > 99 ? "99+" : String(unread);
+    badge.style.display = unread > 0 ? "flex" : "none";
+
+    const notifications = Array.isArray(data.notifications) ? data.notifications : [];
+
+    if (!notifications.length) {
+      list.innerHTML = `<div class="notification-empty">No notifications yet.</div>`;
+      return;
+    }
+
+    list.innerHTML = "";
+
+    notifications.forEach((n) => {
+      const item = document.createElement("div");
+      item.className = "notification-item" + (!n.read_at ? " unread" : "");
+
+      const created = n.created_at ? new Date(n.created_at) : null;
+      const when = created && !Number.isNaN(created.getTime())
+        ? created.toLocaleString()
+        : "";
+
+      item.innerHTML = `
+        <div class="notification-title">${escapeHtml(n.title || "TeeRadar")}</div>
+        <div class="notification-body">${escapeHtml(n.body || "")}</div>
+        <div class="notification-time">${escapeHtml(when)}</div>
+      `;
+
+      item.onclick = async () => {
+        await markNotificationRead(n.id);
+        window.location.href = n.url || "/index.html";
+      };
+
+      list.appendChild(item);
+    });
+  } catch (e) {
+    console.warn("loadNotifications failed", e);
+  }
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function markNotificationRead(id) {
+  const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
+  if (!email || !id) return;
+
+  try {
+    await fetch(`${API_BASE}/api/push/notifications/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, id })
+    });
+  } catch {}
+}
+
+async function markAllNotificationsRead() {
+  const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
+  if (!email) return;
+
+  try {
+    await fetch(`${API_BASE}/api/push/notifications/read-all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+  } catch {}
+
+  await loadNotifications();
+}
+
+function initNotificationBell() {
+  const bell = document.getElementById("notificationBell");
+  const panel = document.getElementById("notificationPanel");
+  const readAll = document.getElementById("notificationReadAll");
+
+  if (!bell || !panel) return;
+
+  bell.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    panel.classList.toggle("open");
+    await loadNotifications();
+  });
+
+  if (readAll) {
+    readAll.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await markAllNotificationsRead();
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    if (panel.contains(e.target) || bell.contains(e.target)) return;
+    panel.classList.remove("open");
+  });
+}
+
   window.addEventListener("load", async () => {
   await runAppSplashOnce();
 
@@ -2012,7 +2259,11 @@ if (analyticsLink) {
     initHomeCourseAutocomplete();
     maybeAutoOpenSignupFromQuery();
     initSubscriberAlertModal();
-    tryShowAvailablePopupForSubscribedUser();
+initNotificationBell();
+loadNotifications();
+tryShowAvailablePopupForSubscribedUser();
+
+setInterval(loadNotifications, 60000);
 });
 </script>
 </body>
