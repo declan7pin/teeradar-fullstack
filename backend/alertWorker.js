@@ -9,6 +9,7 @@ import { Resend } from "resend"; // ✅ use Resend instead of nodemailer
 
 // ✅ ADDED: analytics event logger (used by analytics dashboard)
 import { recordEvent } from "./analytics.js";
+import { sendMobilePushToEmail } from "./pushRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -291,6 +292,41 @@ function buildBookingLinkForDate(course, date) {
  *
  * ✅ WIRED: logs analytics event "alert_sent" only if email succeeds
  */
+async function sendTeeTimePushSummaryForUser({
+  email,
+  hits,
+  earliest,
+  latest,
+  userHoles,
+  partySize,
+}) {
+  const safeHits = Array.isArray(hits) ? hits : [];
+  if (!safeHits.length) return;
+
+  const first = safeHits[0];
+  const extraCount = safeHits.length - 1;
+
+  const title = "Tee times available ⛳";
+
+  const body =
+    extraCount > 0
+      ? `${first.courseName} and ${extraCount} more favourite course(s) have tee times available.`
+      : `${first.courseName} has ${first.count} tee time(s) available.`;
+
+  await sendMobilePushToEmail(email, {
+    title,
+    body,
+    url: "/account.html",
+    type: "TEE_TIME_ALERT",
+    meta: {
+      hitsCount: safeHits.length,
+      earliest,
+      latest,
+      holes: userHoles || null,
+      partySize: partySize || null,
+    },
+  });
+}
 async function sendAlertEmailSummaryForUser({
   email,
   plan,
@@ -1095,7 +1131,7 @@ if (prov === "miclub" || prov === "quick18") {
       }
 
       // ✅ Send ONE email per interval even if there are no hits (digest/heartbeat)
-      if (emailsAllowed && canSendEmailForUser) {
+            if (emailsAllowed && canSendEmailForUser) {
         await sendAlertEmailSummaryForUser({
           email,
           plan,
@@ -1106,6 +1142,15 @@ if (prov === "miclub" || prov === "quick18") {
           partySize,
         });
       }
+
+      await sendTeeTimePushSummaryForUser({
+        email,
+        hits: emailHits,
+        earliest,
+        latest,
+        userHoles,
+        partySize,
+      });
     }
 
     console.log("🔔 Alert tick finished.");
