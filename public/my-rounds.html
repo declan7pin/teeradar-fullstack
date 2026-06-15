@@ -4008,28 +4008,60 @@ async function startUpcomingRoundFromId(id){
     return;
   }
 
-  // ✅ FIX: use unique names only, and do not include stale previous players
-  let names = getUpcomingPlayerNames(upcoming)
-    .map(n => String(n || "").trim())
+  const me = getUserFromToken();
+  const myEmail = String(me.email || "").trim().toLowerCase();
+  const myName = String(me.name || myEmail || "").trim();
+
+  const participants = Array.isArray(upcoming.participants)
+    ? upcoming.participants
+    : [];
+
+  const orderedParticipants = [
+    ...participants.filter(p => String(p.email || "").trim().toLowerCase() === myEmail),
+    ...participants.filter(p => String(p.email || "").trim().toLowerCase() !== myEmail),
+  ];
+
+  let names = orderedParticipants
+    .map(p => String(p.name || p.email || "").trim())
     .filter(Boolean);
 
+  let userIds = orderedParticipants
+    .map(p => Number(p.id))
+    .filter(Number.isFinite);
+
+  if (!names.length) {
+    names = getUpcomingPlayerNames(upcoming)
+      .map(n => String(n || "").trim())
+      .filter(Boolean);
+
+    userIds = getUpcomingPlayerUserIds(upcoming)
+      .map(Number)
+      .filter(Number.isFinite);
+  }
+
   const seen = new Set();
-  names = names.filter(n => {
-    const key = n.toLowerCase();
-    if (seen.has(key)) return false;
+  const finalNames = [];
+  const finalUserIds = [];
+
+  for (let i = 0; i < names.length; i++) {
+    const key = String(names[i] || "").trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+
     seen.add(key);
-    return true;
-  }).slice(0, 4);
+    finalNames.push(names[i]);
+    finalUserIds.push(userIds[i] || null);
 
-  const playerCount = Math.max(1, names.length);
+    if (finalNames.length >= 4) break;
+  }
 
-  // ✅ clear old player names first
+  const playerCount = Math.max(1, finalNames.length);
+
   for (let i = 0; i < 4; i++) {
     playerNames[i] = "";
   }
 
   for (let i = 0; i < playerCount; i++) {
-    playerNames[i] = names[i] || "";
+    playerNames[i] = finalNames[i] || "";
   }
 
   courseEl.value = upcoming.course || "";
@@ -4040,12 +4072,12 @@ async function startUpcomingRoundFromId(id){
 
   renderPlayerNamesUI();
 
-  pendingUpcomingPlayerNames = names.slice(0, playerCount);
-pendingUpcomingPlayerUserIds = getUpcomingPlayerUserIds(upcoming).slice(0, playerCount);
-pendingUpcomingRoundId = Number(upcoming.id);
+  pendingUpcomingPlayerNames = finalNames.slice(0, playerCount);
+  pendingUpcomingPlayerUserIds = finalUserIds.slice(0, playerCount);
+  pendingUpcomingRoundId = Number(upcoming.id);
 
-await refreshNinesAndTeesUI();
-await createRound();
+  await refreshNinesAndTeesUI();
+  await createRound();
 }
     async function safeFetchRounds(){
       try{
