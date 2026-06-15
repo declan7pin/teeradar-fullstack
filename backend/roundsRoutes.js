@@ -164,6 +164,22 @@ async function ensurePlayerNamesColumn() {
     console.warn("ensurePlayerNamesColumn failed:", e?.message || e);
   }
 }
+
+async function ensureTeeRadarHandicapColumns() {
+  try {
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS teeradar_handicap numeric(5,1),
+      ADD COLUMN IF NOT EXISTS teeradar_handicap_status text DEFAULT 'provisional',
+      ADD COLUMN IF NOT EXISTS teeradar_handicap_rounds integer DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS teeradar_handicap_trend numeric(5,1),
+      ADD COLUMN IF NOT EXISTS teeradar_handicap_updated_at timestamptz;
+    `);
+  } catch (e) {
+    console.warn("ensureTeeRadarHandicapColumns failed:", e?.message || e);
+  }
+}
+
 async function ensureSharedRoundColumns() {
   try {
     await db.query(`
@@ -606,6 +622,133 @@ function normaliseStateCode(v) {
   const s = String(v || "").trim().toUpperCase();
   const allowed = new Set(["WA", "NT", "QLD", "NSW", "VIC", "SA", "TAS", "ACT"]);
   return allowed.has(s) ? s : "";
+}
+function handicapDiffFromRound(row) {
+  const holes = Number(row.holes || 0);
+  const score = Number(row.total_score || 0);
+  const par = Number(row.total_par || 0);
+  const holesEntered = Number(row.holes_entered || 0);
+
+  if (![9, 18].includes(holes)) return null;
+  if (holesEntered < holes) return null;
+  if (!Number.isFinite(score) || score <= 0) return null;
+  if (!Number.isFinite(par) || par <= 0) return null;
+
+  const diff = score - par;
+
+  // Scale 9-hole rounds to 18-hole equivalent
+  return holes === 9 ? diff * 2 : diff;
+}
+
+async function recalculateTeeRadarHandicap(userId) {
+  await ensureTeeRadarHandicapColumns();
+
+  const { rows } = await db.query(
+    `
+    SELECT
+      r.id,
+      r.holes,
+      r.created_at,
+      COALESCE(SUM(rh.strokes), 0)::int AS total_score,
+      COALESCE(SUM(rh.par), 0)::int AS total_par,
+      COUNT(CASE WHEN rh.strokes IS NOT NULL THEN 1 END)::int AS holes_entered
+    FROM rounds r
+    JOIN round_holes rh ON rh.round_id = r.id
+    WHERE r.user_id = $1
+    GROUP BY r.id
+    ORDER BY r.created_at DESC
+    LIMIT 50;
+    `,
+    [Number(userId)]
+  );
+
+  const played = (rows || [])
+    .map((r) => ({
+      id: r.id,
+      date: new Date(r.created_at || 0).getTime(),
+      diff: handicapDiffFromRound(r),
+    }))
+    .filter((r) => Number.isFinite(Number(r.diff)))
+    .sort((a, b) => b.date - a.date);
+
+  if (!played.length) {
+    await db.query(
+      `
+      UPDATE users
+      SET
+        teeradar_handicap = NULL,
+        teeradar_handicap_status = 'provisional',
+        teeradar_handicap_rounds = 0,
+        teeradar_handicap_trend = NULL,
+        teeradar_handicap_updated_at = now()
+      WHERE id = $1;
+      `,
+      [Number(userId)]
+    );
+
+    return {
+      handicap: null,
+      status: "provisional",
+      rounds: 0,
+      trend: null,
+    };
+  }
+
+  const recent20 = played.slice(0, 20);
+
+  const bestCount =
+    recent20.length >= 20 ? 8 :
+    recent20.length >= 10 ? 4 :
+    recent20.length >= 6 ? 2 :
+    1;
+
+  const best = recent20
+    .slice()
+    .sort((a, b) => Number(a.diff) - Number(b.diff))
+    .slice(0, bestCount);
+
+  const avg = best.reduce((sum, r) => sum + Number(r.diff), 0) / best.length;
+  const handicap = Math.max(0, Number(avg.toFixed(1)));
+
+  const last3 = played.slice(0, 3);
+  const prev3 = played.slice(3, 6);
+
+  let trend = null;
+
+  if (last3.length >= 3 && prev3.length >= 3) {
+    const lastAvg = last3.reduce((sum, r) => sum + Number(r.diff), 0) / last3.length;
+    const prevAvg = prev3.reduce((sum, r) => sum + Number(r.diff), 0) / prev3.length;
+    trend = Number((lastAvg - prevAvg).toFixed(1));
+  }
+
+  const status = played.length >= 3 ? "confirmed" : "provisional";
+
+  await db.query(
+    `
+    UPDATE users
+    SET
+      teeradar_handicap = $2,
+      teeradar_handicap_status = $3,
+      teeradar_handicap_rounds = $4,
+      teeradar_handicap_trend = $5,
+      teeradar_handicap_updated_at = now()
+    WHERE id = $1;
+    `,
+    [
+      Number(userId),
+      handicap,
+      status,
+      played.length,
+      Number.isFinite(Number(trend)) ? trend : null,
+    ]
+  );
+
+  return {
+    handicap,
+    status,
+    rounds: played.length,
+    trend,
+  };
 }
 // -------------------------------------------------
 // ✅ Template endpoints
@@ -1384,6 +1527,24 @@ router.get("/", requireAuth, async (req, res) => {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
 
+    await ensureTeeRadarHandicapColumns();
+
+const handicapRes = await db.query(
+  `
+  SELECT
+    teeradar_handicap,
+    teeradar_handicap_status,
+    teeradar_handicap_rounds,
+    teeradar_handicap_trend,
+    teeradar_handicap_updated_at
+  FROM users
+  WHERE id = $1
+  LIMIT 1;
+  `,
+  [userId]
+);
+
+const handicapRow = handicapRes.rows[0] || {};
     const { rows } = await db.query(
       `
       SELECT id, course, layout, state, holes, par_mode, created_at,
@@ -1396,7 +1557,17 @@ router.get("/", requireAuth, async (req, res) => {
       [userId]
     );
 
-    return res.json({ ok: true, rounds: rows });
+    return res.json({
+  ok: true,
+  rounds: rows,
+  handicap: {
+    value: handicapRow.teeradar_handicap,
+    status: handicapRow.teeradar_handicap_status || "provisional",
+    rounds: Number(handicapRow.teeradar_handicap_rounds || 0),
+    trend: handicapRow.teeradar_handicap_trend,
+    updated_at: handicapRow.teeradar_handicap_updated_at,
+  },
+});
   } catch (err) {
     console.error("GET /api/rounds error:", err);
     return res.status(500).json({ ok: false, error: "internal error" });
@@ -1970,7 +2141,15 @@ router.put("/:id", requireAuth, async (req, res) => {
       console.warn("round_played analytics failed:", e?.message || e);
     }
 
-    return res.json({ ok: true, round: data.round, holes: data.holes });
+    let handicap = null;
+
+try {
+  handicap = await recalculateTeeRadarHandicap(userId);
+} catch (hErr) {
+  console.warn("TeeRadar handicap recalculation failed:", hErr?.message || hErr);
+}
+
+return res.json({ ok: true, round: data.round, holes: data.holes, handicap });
   } catch (err) {
     try { await db.query("ROLLBACK"); } catch {}
     console.error("PUT /api/rounds/:id error:", err);
@@ -2067,7 +2246,15 @@ router.delete("/:id", requireAuth, async (req, res) => {
 
     const result = await db.query(`DELETE FROM rounds WHERE id = $1`, [roundId]);
 
-    return res.json({ ok: true, deleted: result.rowCount || 0 });
+let handicap = null;
+
+try {
+  handicap = await recalculateTeeRadarHandicap(userId);
+} catch (hErr) {
+  console.warn("TeeRadar handicap recalculation after delete failed:", hErr?.message || hErr);
+}
+
+return res.json({ ok: true, deleted: result.rowCount || 0, handicap });
   } catch (err) {
     console.error("DELETE /api/rounds/:id error:", err);
     return res.status(500).json({ ok: false, error: "internal error" });
