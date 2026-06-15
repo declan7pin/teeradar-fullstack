@@ -697,10 +697,10 @@ async function recalculateTeeRadarHandicap(userId) {
   const recent20 = played.slice(0, 20);
 
   const bestCount =
-    recent20.length >= 20 ? 8 :
-    recent20.length >= 10 ? 4 :
-    recent20.length >= 6 ? 2 :
-    1;
+  recent20.length >= 20 ? 8 :
+  recent20.length >= 10 ? 4 :
+  recent20.length >= 6 ? 2 :
+  recent20.length;
 
   const best = recent20
     .slice()
