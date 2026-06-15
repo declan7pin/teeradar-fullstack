@@ -89,7 +89,7 @@ async function getTemplateFromDbAnyState(course, holes, layout = null) {
 
   const { rows } = await db.query(
     `
-    SELECT id, name, state, holes, pars_json, dists_json
+    SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour
     FROM scorecard_courses
     WHERE holes = $1
     ORDER BY updated_at DESC NULLS LAST, id DESC;
@@ -127,6 +127,9 @@ async function getTemplateFromDbAnyState(course, holes, layout = null) {
     holes: match.holes,
     pars: Array.isArray(match.pars_json) ? match.pars_json : null,
     dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+        course_rating: match.course_rating,
+    slope_rating: match.slope_rating,
+    tee_colour: match.tee_colour,
   };
 }
 
@@ -162,6 +165,24 @@ async function ensurePlayerNamesColumn() {
     `);
   } catch (e) {
     console.warn("ensurePlayerNamesColumn failed:", e?.message || e);
+  }
+}
+
+async function ensureScorecardRatingColumns() {
+  try {
+    await db.query(`
+      ALTER TABLE scorecard_courses
+      ADD COLUMN IF NOT EXISTS course_rating numeric(4,1),
+      ADD COLUMN IF NOT EXISTS slope_rating integer,
+      ADD COLUMN IF NOT EXISTS tee_colour text;
+
+      ALTER TABLE courses_pending
+      ADD COLUMN IF NOT EXISTS course_rating numeric(4,1),
+      ADD COLUMN IF NOT EXISTS slope_rating integer,
+      ADD COLUMN IF NOT EXISTS tee_colour text;
+    `);
+  } catch (e) {
+    console.warn("ensureScorecardRatingColumns failed:", e?.message || e);
   }
 }
 
@@ -238,7 +259,7 @@ async function getTemplateFromDb(course, state, holes) {
 
   const { rows } = await db.query(
     `
-    SELECT id, name, state, holes, pars_json, dists_json
+    SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour
     FROM scorecard_courses
     WHERE LOWER(name) = $1 AND state = $2 AND holes = $3
     LIMIT 1;
@@ -252,7 +273,17 @@ async function getTemplateFromDb(course, state, holes) {
   const pars = Array.isArray(r.pars_json) ? r.pars_json : null;
   const dists = Array.isArray(r.dists_json) ? r.dists_json : null;
 
-  return { id: r.id, name: r.name, state: r.state, holes: r.holes, pars, dists };
+  return {
+  id: r.id,
+  name: r.name,
+  state: r.state,
+  holes: r.holes,
+  pars,
+  dists,
+  course_rating: r.course_rating,
+  slope_rating: r.slope_rating,
+  tee_colour: r.tee_colour,
+};
 }
 
 function isCompleteTemplateArrays(pars, dists, holes) {
@@ -277,7 +308,7 @@ async function getTemplateFromDbLoose(course, state, holes) {
 
   const { rows } = await db.query(
     `
-    SELECT id, name, state, holes, pars_json, dists_json
+    SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour
     FROM scorecard_courses
     WHERE state = $1 AND holes = $2
     ORDER BY updated_at DESC NULLS LAST, id DESC;
@@ -295,6 +326,9 @@ async function getTemplateFromDbLoose(course, state, holes) {
     holes: match.holes,
     pars: Array.isArray(match.pars_json) ? match.pars_json : null,
     dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+        course_rating: match.course_rating,
+    slope_rating: match.slope_rating,
+    tee_colour: match.tee_colour,
   };
 }
 
@@ -314,7 +348,7 @@ async function getNineHoleTemplateForLayout(course, state, layoutPart) {
 
   const { rows } = await db.query(
     `
-    SELECT id, name, state, holes, pars_json, dists_json
+    SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour
     FROM scorecard_courses
     WHERE state = $1 AND holes = 9
     ORDER BY updated_at DESC NULLS LAST, id DESC;
@@ -336,6 +370,9 @@ async function getNineHoleTemplateForLayout(course, state, layoutPart) {
     holes: match.holes,
     pars: Array.isArray(match.pars_json) ? match.pars_json : null,
     dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+        course_rating: match.course_rating,
+    slope_rating: match.slope_rating,
+    tee_colour: match.tee_colour,
   };
 }
 // -------------------------------------------------
@@ -634,9 +671,25 @@ function handicapDiffFromRound(row) {
   if (!Number.isFinite(score) || score <= 0) return null;
   if (!Number.isFinite(par) || par <= 0) return null;
 
-  const diff = score - par;
+  const courseRating = Number(row.course_rating);
+  const slopeRating = Number(row.slope_rating);
 
-  // Scale 9-hole rounds to 18-hole equivalent
+  // ✅ More accurate WHS-style formula when rating/slope exists
+  if (
+    Number.isFinite(courseRating) &&
+    courseRating > 20 &&
+    Number.isFinite(slopeRating) &&
+    slopeRating >= 55 &&
+    slopeRating <= 155
+  ) {
+    const adjustedRating = holes === 9 ? courseRating * 2 : courseRating;
+    const adjustedScore = holes === 9 ? score * 2 : score;
+
+    return (adjustedScore - adjustedRating) * 113 / slopeRating;
+  }
+
+  // ✅ Fallback when rating/slope is missing
+  const diff = score - par;
   return holes === 9 ? diff * 2 : diff;
 }
 
@@ -646,18 +699,26 @@ async function recalculateTeeRadarHandicap(userId) {
   const { rows } = await db.query(
     `
     SELECT
-      r.id,
-      r.holes,
-      r.created_at,
-      COALESCE(SUM(rh.strokes), 0)::int AS total_score,
-      COALESCE(SUM(rh.par), 0)::int AS total_par,
-      COUNT(CASE WHEN rh.strokes IS NOT NULL THEN 1 END)::int AS holes_entered
-    FROM rounds r
-    JOIN round_holes rh ON rh.round_id = r.id
-    WHERE r.user_id = $1
-    GROUP BY r.id
-    ORDER BY r.created_at DESC
-    LIMIT 50;
+  r.id,
+  r.holes,
+  r.course,
+  r.state,
+  r.created_at,
+  COALESCE(SUM(rh.strokes), 0)::int AS total_score,
+  COALESCE(SUM(rh.par), 0)::int AS total_par,
+  COUNT(CASE WHEN rh.strokes IS NOT NULL THEN 1 END)::int AS holes_entered,
+  sc.course_rating,
+  sc.slope_rating
+FROM rounds r
+JOIN round_holes rh ON rh.round_id = r.id
+LEFT JOIN scorecard_courses sc
+  ON LOWER(sc.name) = LOWER(r.course)
+  AND sc.state = r.state
+  AND sc.holes = r.holes
+WHERE r.user_id = $1
+GROUP BY r.id, sc.course_rating, sc.slope_rating
+ORDER BY r.created_at DESC
+LIMIT 50;
     `,
     [Number(userId)]
   );
@@ -765,9 +826,11 @@ if (last3.length >= 3) {
 // -------------------------------------------------
 router.get("/templates", async (req, res) => {
   try {
-    const { rows } = await db.query(
+  await ensureScorecardRatingColumns();
+
+  const { rows } = await db.query(
       `
-      SELECT id, name, state, holes, pars_json, dists_json, updated_at
+      SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour, updated_at
       FROM scorecard_courses
       ORDER BY state ASC, name ASC, holes ASC;
       `
@@ -783,6 +846,9 @@ router.get("/templates", async (req, res) => {
         pars: Array.isArray(r.pars_json) ? r.pars_json : [],
         dists: Array.isArray(r.dists_json) ? r.dists_json : [],
         updatedAt: r.updated_at,
+        course_rating: r.course_rating,
+slope_rating: r.slope_rating,
+tee_colour: r.tee_colour,
       })),
     });
   } catch (err) {
@@ -1129,25 +1195,47 @@ router.post("/admin/pending-courses/:id/approve", requireAuth, requireSuperAdmin
     }
 
     await db.query("BEGIN");
+    await ensureScorecardRatingColumns();
+
+const courseRating =
+  req.body?.course_rating === null || typeof req.body?.course_rating === "undefined" || req.body?.course_rating === ""
+    ? null
+    : Number(req.body.course_rating);
+
+const slopeRating =
+  req.body?.slope_rating === null || typeof req.body?.slope_rating === "undefined" || req.body?.slope_rating === ""
+    ? null
+    : Number(req.body.slope_rating);
+
+const teeColour = String(req.body?.tee_colour || "").trim() || null;
 
     const up = await db.query(
       `
-      INSERT INTO scorecard_courses (name, state, holes, pars_json, dists_json)
-      VALUES ($1,$2,$3,$4::jsonb,$5::jsonb)
-      ON CONFLICT (name, state, holes)
-      DO UPDATE SET
-        pars_json = EXCLUDED.pars_json,
-        dists_json = EXCLUDED.dists_json,
-        updated_at = now()
-      RETURNING id;
+      INSERT INTO scorecard_courses (
+  name, state, holes, pars_json, dists_json,
+  course_rating, slope_rating, tee_colour
+)
+VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7,$8)
+ON CONFLICT (name, state, holes)
+DO UPDATE SET
+  pars_json = EXCLUDED.pars_json,
+  dists_json = EXCLUDED.dists_json,
+  course_rating = EXCLUDED.course_rating,
+  slope_rating = EXCLUDED.slope_rating,
+  tee_colour = EXCLUDED.tee_colour,
+  updated_at = now()
+RETURNING id;
       `,
       [
-        approvedName,
-        approvedState,
-        approvedHoles,
-        JSON.stringify(p.pars_json),
-        JSON.stringify(p.dists_json)
-      ]
+  approvedName,
+  approvedState,
+  approvedHoles,
+  JSON.stringify(p.pars_json),
+  JSON.stringify(p.dists_json),
+  Number.isFinite(courseRating) ? courseRating : null,
+  Number.isFinite(slopeRating) ? slopeRating : null,
+  teeColour
+]
     );
 
     const approvedCourseId = up.rows[0]?.id || null;
