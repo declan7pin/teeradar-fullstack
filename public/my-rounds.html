@@ -123,6 +123,45 @@
     padding:20px;
     box-shadow:var(--shadow);
   }
+  
+  .handicapCard{
+  margin-bottom:18px;
+  border:1px solid rgba(0,121,107,.16);
+  background:linear-gradient(135deg,#ffffff,#eefaf7);
+  border-radius:24px;
+  padding:18px;
+  box-shadow:0 14px 34px rgba(15,23,42,.06);
+}
+
+.handicapTop{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+}
+
+.handicapValue{
+  font-size:2.4rem;
+  font-weight:1000;
+  letter-spacing:-.07em;
+  margin-top:8px;
+}
+
+.handicapBadge{
+  padding:8px 11px;
+  border-radius:999px;
+  background:var(--teal-soft);
+  color:#005e55;
+  font-weight:950;
+  font-size:.8rem;
+  white-space:nowrap;
+}
+
+.handicapTrend{
+  margin-top:8px;
+  font-weight:950;
+  color:var(--muted);
+}
 
   .card h2{
     margin:0 0 8px;
@@ -977,7 +1016,21 @@
       <div class="grid">
         <!-- LEFT -->
         <section class="card" id="createRoundSection">
-          <div class="startHero">
+
+  <div class="handicapCard" id="handicapCard">
+    <div class="handicapTop">
+      <div>
+        <h2 style="margin:0;">TeeRadar Handicap</h2>
+        <div class="muted" id="handicapStatus" style="font-weight:850;">Loading...</div>
+      </div>
+      <div class="handicapBadge" id="handicapBadge">Provisional</div>
+    </div>
+
+    <div class="handicapValue" id="handicapValue">—</div>
+    <div class="handicapTrend" id="handicapTrend">Trend: — last 3 rounds</div>
+  </div>
+
+  <div class="startHero">
   <div class="startHeroText">
     <h2>Recent rounds</h2>
     <div class="muted">Review old rounds or start a fresh scorecard.</div>
@@ -2472,6 +2525,105 @@ function setCachedRoundScore(id, totals){
   }catch{}
 }
 
+function getRoundHandicapScore(round){
+  const holes = Array.isArray(round?.holesData)
+    ? round.holesData
+    : (Array.isArray(round?.holes) ? round.holes : []);
+
+  const totals = calcTotalsForPlayer(holes, 0);
+
+  if (totals.strokes == null || totals.par == null) return null;
+
+  const holesCount = Number(round?.holes) || holes.length || 18;
+  const toPar = Number(totals.strokes) - Number(totals.par);
+
+  // Simple TeeRadar index estimate.
+  // 9-hole rounds are scaled to 18.
+  return holesCount === 9 ? toPar * 2 : toPar;
+}
+
+function calculateTeeRadarHandicap(){
+  const played = (roundsCache || [])
+    .map(r => ({
+      round: r,
+      diff: getRoundHandicapScore(r),
+      date: new Date(r.created_at || 0).getTime()
+    }))
+    .filter(x => Number.isFinite(Number(x.diff)))
+    .sort((a,b) => b.date - a.date);
+
+  if (!played.length) {
+    return {
+      value: null,
+      status: "Submit 3 rounds to confirm your TeeRadar Handicap.",
+      badge: "No rounds",
+      trend: "Trend: — last 3 rounds"
+    };
+  }
+
+  const confirmed = played.length >= 3;
+
+  const recent20 = played.slice(0, 20);
+  const bestCount =
+    recent20.length >= 20 ? 8 :
+    recent20.length >= 10 ? 4 :
+    recent20.length >= 6 ? 2 :
+    1;
+
+  const best = recent20
+    .slice()
+    .sort((a,b) => a.diff - b.diff)
+    .slice(0, bestCount);
+
+  const avg = best.reduce((sum,x) => sum + Number(x.diff), 0) / best.length;
+
+  const last3 = played.slice(0, 3);
+  const prev3 = played.slice(3, 6);
+
+  let trendText = "Trend: not enough rounds yet";
+
+  if (last3.length >= 3 && prev3.length >= 3) {
+    const a = last3.reduce((sum,x) => sum + x.diff, 0) / last3.length;
+    const b = prev3.reduce((sum,x) => sum + x.diff, 0) / prev3.length;
+    const change = a - b;
+
+    if (Math.abs(change) < 0.1) {
+      trendText = "Trend: steady last 3 rounds";
+    } else if (change < 0) {
+      trendText = `Trend: ↓ ${Math.abs(change).toFixed(1)} last 3 rounds`;
+    } else {
+      trendText = `Trend: ↑ ${change.toFixed(1)} last 3 rounds`;
+    }
+  } else if (last3.length >= 3) {
+    trendText = "Trend: first 3-round trend ready";
+  }
+
+  return {
+    value: Math.max(0, avg).toFixed(1),
+    status: confirmed
+      ? `Confirmed from ${played.length} submitted rounds.`
+      : `${played.length}/3 rounds submitted — provisional handicap.`,
+    badge: confirmed ? "Confirmed" : "Provisional",
+    trend: trendText
+  };
+}
+
+function renderTeeRadarHandicap(){
+  const valueEl = document.getElementById("handicapValue");
+  const statusEl = document.getElementById("handicapStatus");
+  const badgeEl = document.getElementById("handicapBadge");
+  const trendEl = document.getElementById("handicapTrend");
+
+  if (!valueEl || !statusEl || !badgeEl || !trendEl) return;
+
+  const h = calculateTeeRadarHandicap();
+
+  valueEl.textContent = h.value == null ? "—" : h.value;
+  statusEl.textContent = h.status;
+  badgeEl.textContent = h.badge;
+  trendEl.textContent = h.trend;
+}
+
 function dateOnlyFromRound(r){
   try{
     const d = new Date(r.created_at);
@@ -3651,6 +3803,7 @@ async function confirmShareRound(){
       holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
     }));
     renderRoundsList();
+renderTeeRadarHandicap();
     return;
   }
 
@@ -3662,6 +3815,7 @@ async function confirmShareRound(){
     holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
   }));
   renderRoundsList();
+renderTeeRadarHandicap();
 }
 
     async function loadRound(id){
@@ -3927,6 +4081,7 @@ return;
       renderLiveScoreHero(true);
 setToast(rightToast, "Saved.", true);
 await safeFetchRounds();
+renderTeeRadarHandicap();
     }
 
     async function deleteRound(){
