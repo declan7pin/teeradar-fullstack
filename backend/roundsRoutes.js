@@ -1069,8 +1069,16 @@ router.get("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (re
   try {
     const { rows } = await db.query(
       `
-      SELECT id, name, state, holes, updated_at
-      FROM scorecard_courses
+      SELECT
+  id,
+  name,
+  state,
+  holes,
+  course_rating,
+  slope_rating,
+  tee_colour,
+  updated_at
+FROM scorecard_courses
       ORDER BY state ASC, name ASC, holes ASC;
       `
     );
@@ -1118,11 +1126,22 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
         `
         UPDATE scorecard_courses
         SET
-          name = $2,
-          state = $3,
-          updated_at = now()
+  name = $2,
+  state = $3,
+  course_rating = $4,
+  slope_rating = $5,
+  tee_colour = $6,
+  updated_at = now()
         WHERE id = $1
-        RETURNING id, name, state, holes, updated_at;
+        RETURNING
+  id,
+  name,
+  state,
+  holes,
+  course_rating,
+  slope_rating,
+  tee_colour,
+  updated_at;
         `,
         [id, newName, newState]
       );
