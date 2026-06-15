@@ -1027,7 +1027,7 @@
     </div>
 
     <div class="handicapValue" id="handicapValue">—</div>
-    <div class="handicapTrend" id="handicapTrend">Trend: — last 3 rounds</div>
+    <div class="handicapTrend" id="handicapTrend">Last 3 avg vs par: —</div>
   </div>
 
   <div class="startHero">
@@ -2558,7 +2558,7 @@ function calculateTeeRadarHandicap(){
       value: null,
       status: "Submit 3 rounds to confirm your TeeRadar Handicap.",
       badge: "No rounds",
-      trend: "Trend: — last 3 rounds"
+      trend: "Last 3 avg vs par: —"
     };
   }
 
@@ -2625,10 +2625,11 @@ function renderTeeRadarHandicap(){
     const status = String(backendHandicap.status || "provisional").toLowerCase();
     const trend = backendHandicap.trend;
 
-    let trendText = "Trend: — last 3 rounds";
+    let trendText = "Last 3 avg vs par: —";
 
-    if (Number.isFinite(Number(trend))) {
-  trendText = `Trend: ${Number(trend).toFixed(1)} last 3 rounds`;
+if (Number.isFinite(Number(trend))) {
+  const t = Number(trend);
+  trendText = `Last 3 avg vs par: ${t > 0 ? "+" : ""}${t.toFixed(1)}`;
 }
 
     h = {
