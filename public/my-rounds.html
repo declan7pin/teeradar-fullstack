@@ -2628,15 +2628,8 @@ function renderTeeRadarHandicap(){
     let trendText = "Trend: — last 3 rounds";
 
     if (Number.isFinite(Number(trend))) {
-      const t = Number(trend);
-      if (Math.abs(t) < 0.1) {
-        trendText = "Trend: steady last 3 rounds";
-      } else if (t < 0) {
-        trendText = `Trend: ↓ ${Math.abs(t).toFixed(1)} last 3 rounds`;
-      } else {
-        trendText = `Trend: ↑ ${t.toFixed(1)} last 3 rounds`;
-      }
-    }
+  trendText = `Trend: ${Number(trend).toFixed(1)} last 3 rounds`;
+}
 
     h = {
       value: value == null ? null : Number(value).toFixed(1),
