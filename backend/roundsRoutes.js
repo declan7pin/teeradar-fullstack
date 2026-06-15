@@ -1095,15 +1095,22 @@ FROM scorecard_courses
 router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     await ensureScorecardRatingColumns();
+
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ ok: false, error: "invalid_id" });
     }
 
     const cur = await db.query(
-      `SELECT id, name, state, holes FROM scorecard_courses WHERE id = $1 LIMIT 1;`,
+      `
+      SELECT id, name, state, holes, course_rating, slope_rating, tee_colour
+      FROM scorecard_courses
+      WHERE id = $1
+      LIMIT 1;
+      `,
       [id]
     );
+
     if (!cur.rows.length) {
       return res.status(404).json({ ok: false, error: "not_found" });
     }
@@ -1113,8 +1120,33 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
     const nameRaw = String(req.body?.name || "").trim();
     const stateRaw = String(req.body?.state || "").trim().toUpperCase();
 
-    const newName = nameRaw ? normaliseCourseName(nameRaw) : String(existing.name || "").trim();
-    const newState = stateRaw ? normaliseStateCode(stateRaw) : String(existing.state || "").trim().toUpperCase();
+    const courseRatingRaw = req.body?.course_rating;
+    const slopeRatingRaw = req.body?.slope_rating;
+    const teeColourRaw = String(req.body?.tee_colour || "").trim();
+
+    const newName = nameRaw
+      ? normaliseCourseName(nameRaw)
+      : String(existing.name || "").trim();
+
+    const newState = stateRaw
+      ? normaliseStateCode(stateRaw)
+      : String(existing.state || "").trim().toUpperCase();
+
+    const newCourseRating =
+      courseRatingRaw === null ||
+      typeof courseRatingRaw === "undefined" ||
+      courseRatingRaw === ""
+        ? null
+        : Number(courseRatingRaw);
+
+    const newSlopeRating =
+      slopeRatingRaw === null ||
+      typeof slopeRatingRaw === "undefined" ||
+      slopeRatingRaw === ""
+        ? null
+        : Number(slopeRatingRaw);
+
+    const newTeeColour = teeColourRaw || null;
 
     if (!newName) {
       return res.status(400).json({ ok: false, error: "name_required" });
@@ -1124,29 +1156,47 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
       return res.status(400).json({ ok: false, error: "state_required" });
     }
 
+    if (newCourseRating !== null && !Number.isFinite(newCourseRating)) {
+      return res.status(400).json({ ok: false, error: "invalid_course_rating" });
+    }
+
+    if (
+      newSlopeRating !== null &&
+      (!Number.isFinite(newSlopeRating) || newSlopeRating < 55 || newSlopeRating > 155)
+    ) {
+      return res.status(400).json({ ok: false, error: "invalid_slope_rating" });
+    }
+
     try {
       const up = await db.query(
         `
         UPDATE scorecard_courses
         SET
-  name = $2,
-  state = $3,
-  course_rating = $4,
-  slope_rating = $5,
-  tee_colour = $6,
-  updated_at = now()
+          name = $2,
+          state = $3,
+          course_rating = $4,
+          slope_rating = $5,
+          tee_colour = $6,
+          updated_at = now()
         WHERE id = $1
         RETURNING
-  id,
-  name,
-  state,
-  holes,
-  course_rating,
-  slope_rating,
-  tee_colour,
-  updated_at;
+          id,
+          name,
+          state,
+          holes,
+          course_rating,
+          slope_rating,
+          tee_colour,
+          updated_at;
         `,
-        [id, newName, newState]
+        [
+          id,
+          newName,
+          newState,
+          newCourseRating,
+          newSlopeRating,
+          newTeeColour,
+        ]
       );
 
       return res.json({ ok: true, course: up.rows[0] });
