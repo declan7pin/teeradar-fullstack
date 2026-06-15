@@ -1538,6 +1538,7 @@
     let currentRoundId = null;
     let currentRound = null;
     let roundsCache = [];
+    let backendHandicap = null;
 
     // course cache (optional)
     let coursesCache = [];
@@ -2616,7 +2617,38 @@ function renderTeeRadarHandicap(){
 
   if (!valueEl || !statusEl || !badgeEl || !trendEl) return;
 
-  const h = calculateTeeRadarHandicap();
+  let h = null;
+
+  if (backendHandicap && isLoggedIn()) {
+    const rounds = Number(backendHandicap.rounds || 0);
+    const value = backendHandicap.value;
+    const status = String(backendHandicap.status || "provisional").toLowerCase();
+    const trend = backendHandicap.trend;
+
+    let trendText = "Trend: — last 3 rounds";
+
+    if (Number.isFinite(Number(trend))) {
+      const t = Number(trend);
+      if (Math.abs(t) < 0.1) {
+        trendText = "Trend: steady last 3 rounds";
+      } else if (t < 0) {
+        trendText = `Trend: ↓ ${Math.abs(t).toFixed(1)} last 3 rounds`;
+      } else {
+        trendText = `Trend: ↑ ${t.toFixed(1)} last 3 rounds`;
+      }
+    }
+
+    h = {
+      value: value == null ? null : Number(value).toFixed(1),
+      status: rounds >= 3
+        ? `Confirmed from ${rounds} submitted rounds.`
+        : `${rounds}/3 rounds submitted — provisional handicap.`,
+      badge: status === "confirmed" ? "Confirmed" : "Provisional",
+      trend: trendText
+    };
+  } else {
+    h = calculateTeeRadarHandicap();
+  }
 
   valueEl.textContent = h.value == null ? "—" : h.value;
   statusEl.textContent = h.status;
@@ -3809,8 +3841,10 @@ renderTeeRadarHandicap();
 
   // ✅ Logged in: read from backend
   const data = await api("/api/rounds", { method:"GET" });
-  const rounds = (data && data.rounds) ? data.rounds : [];
-  roundsCache = rounds.map(r => ({
+backendHandicap = data?.handicap || null;
+
+const rounds = (data && data.rounds) ? data.rounds : [];
+roundsCache = rounds.map(r => ({
     ...r,
     holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
   }));
