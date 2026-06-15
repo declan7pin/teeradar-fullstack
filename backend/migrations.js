@@ -42,8 +42,8 @@ export function runMigrations() {
         UNIQUE(name, state, holes)
       )
     `).run();
-    
-        // 3) Friend requests / friends system
+
+    // 3) Friend requests / friends system
     db.prepare(`
       CREATE TABLE IF NOT EXISTS user_friends (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +87,34 @@ export function runMigrations() {
       db.prepare(`ALTER TABLE users ADD COLUMN basic_free_until TEXT`).run();
     }
 
-        // 5) Mobile push notification tokens
+    // 5) TeeRadar Handicap columns on users
+    if (!columnExists("users", "teeradar_handicap")) {
+      db.prepare(`ALTER TABLE users ADD COLUMN teeradar_handicap REAL`).run();
+    }
+
+    if (!columnExists("users", "teeradar_handicap_status")) {
+      db.prepare(`
+        ALTER TABLE users
+        ADD COLUMN teeradar_handicap_status TEXT NOT NULL DEFAULT 'provisional'
+      `).run();
+    }
+
+    if (!columnExists("users", "teeradar_handicap_rounds")) {
+      db.prepare(`
+        ALTER TABLE users
+        ADD COLUMN teeradar_handicap_rounds INTEGER NOT NULL DEFAULT 0
+      `).run();
+    }
+
+    if (!columnExists("users", "teeradar_handicap_trend")) {
+      db.prepare(`ALTER TABLE users ADD COLUMN teeradar_handicap_trend REAL`).run();
+    }
+
+    if (!columnExists("users", "teeradar_handicap_updated_at")) {
+      db.prepare(`ALTER TABLE users ADD COLUMN teeradar_handicap_updated_at TEXT`).run();
+    }
+
+    // 6) Mobile push notification tokens
     db.prepare(`
       CREATE TABLE IF NOT EXISTS mobile_push_tokens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
