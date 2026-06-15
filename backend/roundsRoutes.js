@@ -708,7 +708,11 @@ async function recalculateTeeRadarHandicap(userId) {
     .slice(0, bestCount);
 
   const avg = best.reduce((sum, r) => sum + Number(r.diff), 0) / best.length;
-  const handicap = Math.max(0, Number(avg.toFixed(1)));
+  // TeeRadar Handicap V1:
+// Uses best recent score differentials.
+// 9-hole rounds are already doubled to an 18-hole equivalent.
+// 0.93 keeps it close to real handicap behaviour without course rating/slope yet.
+const handicap = Math.max(0, Number((avg * 0.93).toFixed(1)));
 
   const last3 = played.slice(0, 3);
   const prev3 = played.slice(3, 6);
