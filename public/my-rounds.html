@@ -983,9 +983,11 @@
 #courseRow .autocomplete-list{
   position:static;
   margin-top:10px;
-  max-height:420px;
+  max-height:360px;
   border-radius:22px;
-  overflow:hidden;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
 }
 
 .courseOptionCard{
@@ -1035,7 +1037,9 @@
   }
 
   #courseRow .autocomplete-list{
-    max-height:360px;
+    max-height:52vh;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
   }
 }
 
