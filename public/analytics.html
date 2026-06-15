@@ -913,8 +913,11 @@ button.secondary{
             <th>Course</th>
             <th>State</th>
             <th>Holes</th>
-            <th>Updated</th>
-            <th></th>
+<th>Rating</th>
+<th>Slope</th>
+<th>Tee</th>
+<th>Updated</th>
+<th></th>
           </tr>
         </thead>
         <tbody id="approvedCoursesTbody"></tbody>
@@ -1884,6 +1887,9 @@ async function loadApprovedCourses() {
       const state = c.state ?? "—";
       const holes = c.holes ?? "—";
       const updated = c.updated_at ? new Date(c.updated_at).toLocaleString() : "";
+      const rating = c.course_rating ?? "";
+const slope = c.slope_rating ?? "";
+const tee = c.tee_colour ?? "";
 
       return `
         <tr data-approved-id="${id}">
@@ -1891,8 +1897,11 @@ async function loadApprovedCourses() {
           <td>${name}</td>
           <td>${state}</td>
           <td>${holes}</td>
-          <td>${updated}</td>
-          <td style="white-space:nowrap;">
+<td>${rating}</td>
+<td>${slope}</td>
+<td>${tee}</td>
+<td>${updated}</td>
+<td style="white-space:nowrap;">
             <button class="edit-btn" type="button" data-edit-course-id="${id}">Edit</button>
             <button class="delete-btn" type="button" data-delete-course-id="${id}">Delete</button>
           </td>
@@ -1922,16 +1931,66 @@ document.addEventListener("click", async (e) => {
     if (!Number.isFinite(id) || id <= 0) return;
 
     const row = (APPROVED_COURSES_CACHE || []).find(x => Number(x?.id) === id) || null;
-    const currentName = row?.name || "";
 
-    const newNameRaw = window.prompt(
-      "Enter the new course name.\n\nTip: use a suffix for nines, e.g.\ncollier park golf course - lakes\ncollier park golf course - pines\ncollier park golf course - lakes/pines",
-      currentName
-    );
+const currentName = row?.name || "";
+const currentState = row?.state || "";
+const currentRating = row?.course_rating ?? "";
+const currentSlope = row?.slope_rating ?? "";
+const currentTee = row?.tee_colour ?? "";
 
-    if (newNameRaw == null) return; // cancelled
-    const newName = String(newNameRaw || "").trim();
-    if (!newName) return alert("Name cannot be blank.");
+const newNameRaw = window.prompt(
+  "Enter the course name.",
+  currentName
+);
+if (newNameRaw == null) return;
+
+const newStateRaw = window.prompt(
+  "Enter state.\n\nAllowed: WA, NT, QLD, NSW, VIC, SA, TAS, ACT",
+  currentState
+);
+if (newStateRaw == null) return;
+
+const newRatingRaw = window.prompt(
+  "Enter course rating.\n\nExample: 69.4\nLeave blank if unknown.",
+  currentRating
+);
+if (newRatingRaw == null) return;
+
+const newSlopeRaw = window.prompt(
+  "Enter slope rating.\n\nExample: 121\nLeave blank if unknown.",
+  currentSlope
+);
+if (newSlopeRaw == null) return;
+
+const newTeeRaw = window.prompt(
+  "Enter tee colour/name.\n\nExample: White, Blue, Red\nLeave blank if unknown.",
+  currentTee
+);
+if (newTeeRaw == null) return;
+
+const newName = String(newNameRaw || "").trim();
+const newState = String(newStateRaw || "").trim().toUpperCase();
+const newRating = String(newRatingRaw || "").trim();
+const newSlope = String(newSlopeRaw || "").trim();
+const newTee = String(newTeeRaw || "").trim();
+
+if (!newName) return alert("Name cannot be blank.");
+
+const validStates = new Set(["WA", "NT", "QLD", "NSW", "VIC", "SA", "TAS", "ACT"]);
+if (!validStates.has(newState)) {
+  alert("Invalid state. Use one of: WA, NT, QLD, NSW, VIC, SA, TAS, ACT");
+  return;
+}
+
+if (newRating && !Number.isFinite(Number(newRating))) {
+  alert("Course rating must be a number, e.g. 69.4");
+  return;
+}
+
+if (newSlope && (!Number.isFinite(Number(newSlope)) || Number(newSlope) < 55 || Number(newSlope) > 155)) {
+  alert("Slope rating must be between 55 and 155.");
+  return;
+}
 
     editBtn.disabled = true;
     const oldTxt = editBtn.textContent;
@@ -1945,7 +2004,13 @@ document.addEventListener("click", async (e) => {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({ name: newName }),
+        body: JSON.stringify({
+  name: newName,
+  state: newState,
+  course_rating: newRating ? Number(newRating) : null,
+  slope_rating: newSlope ? Number(newSlope) : null,
+  tee_colour: newTee || null,
+}),
       });
 
       const data = await res.json().catch(() => null);
