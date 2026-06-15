@@ -1067,6 +1067,8 @@ router.get("/admin/pending-courses/:id", requireAuth, requireSuperAdmin, async (
 // List approved scorecard courses
 router.get("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
+    await ensureScorecardRatingColumns();
+
     const { rows } = await db.query(
       `
       SELECT
@@ -1092,6 +1094,7 @@ FROM scorecard_courses
 // Edit an approved scorecard course (name + state)
 router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
+    await ensureScorecardRatingColumns();
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ ok: false, error: "invalid_id" });
