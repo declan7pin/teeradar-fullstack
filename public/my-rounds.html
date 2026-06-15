@@ -979,7 +979,66 @@
     width:64px;
     padding:8px 6px;
   }
+  /* ✅ App-style course setup */
+#courseRow .autocomplete-list{
+  position:static;
+  margin-top:10px;
+  max-height:420px;
+  border-radius:22px;
+  overflow:hidden;
 }
+
+.courseOptionCard{
+  padding:16px 18px;
+  border-bottom:1px solid var(--border);
+  background:#fff;
+  cursor:pointer;
+}
+
+.courseOptionCard:hover{
+  background:#f4fbf9;
+}
+
+.courseOptionTitle{
+  font-size:1rem;
+  font-weight:1000;
+  letter-spacing:-.03em;
+  color:var(--text);
+}
+
+.courseOptionMeta{
+  margin-top:4px;
+  color:var(--muted);
+  font-weight:850;
+}
+
+.courseOptionRating{
+  margin-top:8px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.courseBadge{
+  display:inline-flex;
+  padding:6px 9px;
+  border-radius:999px;
+  background:var(--teal-soft);
+  color:#005e55;
+  font-size:.78rem;
+  font-weight:950;
+}
+
+@media(max-width:700px){
+  #createFormPanel .row{
+    grid-template-columns:1fr;
+  }
+
+  #courseRow .autocomplete-list{
+    max-height:360px;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -1850,12 +1909,15 @@ function setLeftPanelsVisibility(show){
 
         // normalize to what the autocomplete expects
         coursesCache = arr
-          .map((c) => ({
-            name: String(c?.name || c?.course || "").trim(),
-            state: String(c?.state || "").trim().toUpperCase(),
-            holes: Number(c?.holes) || null,
-          }))
-          .filter((c) => c.name && c.state);
+  .map((c) => ({
+    name: String(c?.name || c?.course || "").trim(),
+    state: String(c?.state || "").trim().toUpperCase(),
+    holes: Number(c?.holes) || null,
+    course_rating: c?.course_rating ?? c?.rating ?? null,
+    slope_rating: c?.slope_rating ?? c?.slope ?? null,
+    tee_colour: c?.tee_colour ?? c?.tee ?? "",
+  }))
+  .filter((c) => c.name && c.state);
 
       }catch(e){
         coursesCache = [];
@@ -2022,47 +2084,61 @@ function setLeftPanelsVisibility(show){
     }
 
     function showCourseAutocomplete(items){
-      if (!courseAutoList) return;
+  if (!courseAutoList) return;
+
+  courseAutoList.innerHTML = "";
+
+  if (!items.length){
+    courseAutoList.style.display = "none";
+    return;
+  }
+
+  items.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "courseOptionCard";
+
+    const baseName = c.name || c.course || c.title || "";
+    const st = String(c.state || "").toUpperCase();
+    const h = Number(c.holes) || null;
+    const rating = c.course_rating ?? null;
+    const slope = c.slope_rating ?? null;
+    const tee = String(c.tee_colour || "").trim();
+
+    div.innerHTML = `
+      <div class="courseOptionTitle">
+        ${escapeHtml(baseName)}${h ? ` (${h} holes)` : ""}
+      </div>
+
+      <div class="courseOptionMeta">
+        ${st ? `State: ${escapeHtml(st)}` : ""}
+      </div>
+
+      <div class="courseOptionRating">
+        ${rating ? `<span class="courseBadge">Rating ${escapeHtml(rating)}</span>` : ""}
+        ${slope ? `<span class="courseBadge">Slope ${escapeHtml(slope)}</span>` : ""}
+        ${tee ? `<span class="courseBadge">Tee ${escapeHtml(tee)}</span>` : ""}
+      </div>
+    `;
+
+    div.addEventListener("click", async () => {
+      courseEl.value = baseName;
+
+      if (st && stateEl) stateEl.value = st;
+      if (h && holesEl) holesEl.value = String(h);
+
+      selectedCourseKey = courseKey(baseName, st || stateEl.value);
+
+      courseAutoList.style.display = "none";
       courseAutoList.innerHTML = "";
-      if (!items.length){
-        courseAutoList.style.display = "none";
-        return;
-      }
-      items.forEach(c => {
-        const div = document.createElement("div");
-        div.className = "autocomplete-item";
-        const baseName = c.name || c.course || c.title || "";
-        const st = (c.state || "").toUpperCase();
-        const h = Number(c.holes) || null;
 
-        const label = h ? `${baseName} (${h} holes)` : baseName;
-        const meta = st ? `State: ${st}` : "";
+      await refreshNinesAndTeesUI();
+    });
 
-        div.innerHTML = `${escapeHtml(label)}${meta ? `<small>${escapeHtml(meta)}</small>` : ""}`;
+    courseAutoList.appendChild(div);
+  });
 
-        div.addEventListener("click", async () => {
-          const nm = c.name || c.course || c.title || "";
-          const st2 = (c.state || "").toUpperCase();
-          const h2 = Number(c.holes) || null;
-
-          // ✅ set course WITHOUT "(18 holes)" suffix
-          courseEl.value = nm;
-
-          if (st2 && stateEl) stateEl.value = st2;
-          if (h2 && holesEl) holesEl.value = String(h2);
-
-          selectedCourseKey = courseKey(nm, st2 || stateEl.value);
-          courseAutoList.style.display = "none";
-          courseAutoList.innerHTML = "";
-
-          await refreshNinesAndTeesUI();
-        });
-
-        courseAutoList.appendChild(div);
-      });
-      courseAutoList.style.display = "block";
-    }
-
+  courseAutoList.style.display = "block";
+}
     async function initCourseAutocomplete(){
       if (!courseEl || !courseAutoList) return;
 
