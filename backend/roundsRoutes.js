@@ -719,11 +719,12 @@ const handicap = Math.max(0, Number((avg * 0.93).toFixed(1)));
 
   let trend = null;
 
-  if (last3.length >= 3 && prev3.length >= 3) {
-    const lastAvg = last3.reduce((sum, r) => sum + Number(r.diff), 0) / last3.length;
-    const prevAvg = prev3.reduce((sum, r) => sum + Number(r.diff), 0) / prev3.length;
-    trend = Number((lastAvg - prevAvg).toFixed(1));
-  }
+if (last3.length >= 3) {
+  const lastAvg = last3.reduce((sum, r) => sum + Number(r.diff), 0) / last3.length;
+
+  // Store last 3 average as handicap-style number
+  trend = Math.max(0, Number((lastAvg * 0.93).toFixed(1)));
+}
 
   const status = played.length >= 3 ? "confirmed" : "provisional";
 
