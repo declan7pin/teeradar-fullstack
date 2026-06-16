@@ -622,6 +622,26 @@ router.get("/users", async (req, res) => {
     // Safe column picks
     const colId = usersCols.has("id") ? "u.id" : "NULL::int AS id";
     const colEmail = usersCols.has("email") ? "u.email" : "NULL::text AS email";
+    
+    const colDisplayName = usersCols.has("display_name")
+  ? "COALESCE(u.display_name, '') AS display_name"
+  : "''::text AS display_name";
+
+const colFullName = usersCols.has("full_name")
+  ? "COALESCE(u.full_name, '') AS full_name"
+  : "''::text AS full_name";
+
+const colGender = usersCols.has("gender")
+  ? "COALESCE(u.gender, 'prefer_not_to_answer') AS gender"
+  : "'prefer_not_to_answer'::text AS gender";
+
+const colDob = usersCols.has("dob")
+  ? "u.dob AS dob"
+  : "NULL::date AS dob";
+
+const colDeletionRequestedAt = usersCols.has("deletion_requested_at")
+  ? "u.deletion_requested_at AS deletion_requested_at"
+  : "NULL::timestamptz AS deletion_requested_at";
 
     const colCreatedAt = usersCols.has("created_at")
       ? "u.created_at"
@@ -680,6 +700,16 @@ const colHomeCourse =
   SELECT
     ${colId},
     ${colEmail},
+    ${colDisplayName},
+${colFullName},
+${colGender},
+${colDob},
+CASE
+  WHEN ${usersCols.has("dob") ? "u.dob" : "NULL::date"} IS NOT NULL
+  THEN DATE_PART('year', AGE(${usersCols.has("dob") ? "u.dob" : "NULL::date"}))::int
+  ELSE NULL
+END AS age,
+${colDeletionRequestedAt},
     CASE
   WHEN LOWER(COALESCE(ss.status, '')) IN ('active','trialing')
    AND UPPER(COALESCE(ss.plan, 'FREE')) IN ('BASIC','PRO')
@@ -716,6 +746,16 @@ END AS plan,
   SELECT
     ${colId},
     ${colEmail},
+    ${colDisplayName},
+${colFullName},
+${colGender},
+${colDob},
+CASE
+  WHEN ${usersCols.has("dob") ? "u.dob" : "NULL::date"} IS NOT NULL
+  THEN DATE_PART('year', AGE(${usersCols.has("dob") ? "u.dob" : "NULL::date"}))::int
+  ELSE NULL
+END AS age,
+${colDeletionRequestedAt},
     'FREE'::text AS plan,
     ${colHomeState},
     ${colHomeCourse},
@@ -748,6 +788,16 @@ END AS plan,
           SELECT
             ${colId},
             ${colEmail},
+            ${colDisplayName},
+${colFullName},
+${colGender},
+${colDob},
+CASE
+  WHEN ${usersCols.has("dob") ? "u.dob" : "NULL::date"} IS NOT NULL
+  THEN DATE_PART('year', AGE(${usersCols.has("dob") ? "u.dob" : "NULL::date"}))::int
+  ELSE NULL
+END AS age,
+${colDeletionRequestedAt},
             CASE
   WHEN LOWER(COALESCE(ss.status, '')) IN ('active','trialing')
    AND UPPER(COALESCE(ss.plan, 'FREE')) IN ('BASIC','PRO')
@@ -778,6 +828,16 @@ END AS plan,
           SELECT
             ${colId},
             ${colEmail},
+            ${colDisplayName},
+${colFullName},
+${colGender},
+${colDob},
+CASE
+  WHEN ${usersCols.has("dob") ? "u.dob" : "NULL::date"} IS NOT NULL
+  THEN DATE_PART('year', AGE(${usersCols.has("dob") ? "u.dob" : "NULL::date"}))::int
+  ELSE NULL
+END AS age,
+${colDeletionRequestedAt},
             'FREE'::text AS plan,
             ''::text AS home_state,
             ${colHomeCourse},
