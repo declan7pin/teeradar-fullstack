@@ -53,70 +53,99 @@ button.secondary{
 }
 
     header{
-      background:var(--teal);
-      color:#fff;
-      padding:10px 4vw;
-      position:sticky;
-      top:0;
-      z-index:20;
-      box-shadow:0 2px 6px rgba(0,0,0,0.12);
-    }
-    .nav-wrap{
-      max-width:1100px;
-      margin:0 auto;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:16px;
-    }
-    .brand{
-      display:flex;
-      align-items:center;
-      gap:10px;
-    }
-    .brand-logo{
-      width:28px;
-      height:28px;
-      border-radius:999px;
-      background:#ecfdf5;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      color:#065f46;
-      font-size:15px;
-      font-weight:800;
-      box-shadow:0 0 0 3px rgba(16,185,129,0.25);
-    }
-    .brand-text{
-      font-weight:700;
-      letter-spacing:.04em;
-      font-size:15px;
-      line-height:1.1;
-    }
-    nav{
-      display:flex;
-      gap:16px;
-      align-items:center;
-      flex-wrap:wrap;
-      justify-content:flex-end;
-      font-size:13px;
-    }
-    nav a{
-      color:#e0f2f1;
-      opacity:.9;
-      padding:4px 8px;
-      border-radius:999px;
-    }
-    nav a:hover{
-      background:rgba(255,255,255,0.14);
-      opacity:1;
-    }
-    .nav-analytics{
-      border:1px solid rgba(190,242,100,0.8);
-      background:rgba(15,118,110,0.22);
-      padding:4px 12px;
-      font-weight:600;
-    }
+  background:var(--teal);
+  color:#fff;
+  padding:calc(10px + env(safe-area-inset-top)) 4vw 10px;
+  position:sticky;
+  top:0;
+  z-index:20;
+  box-shadow:0 2px 6px rgba(0,0,0,0.12);
+}
+
+.nav-wrap{
+  max-width:1100px;
+  margin:0 auto;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  min-width:0;
+}
+
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+  flex:0 0 auto;
+}
+
+.brand-text{
+  font-weight:700;
+  letter-spacing:.04em;
+  font-size:15px;
+  line-height:1.1;
+  white-space:nowrap;
+}
+
+nav{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  justify-content:flex-end;
+  font-size:13px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  min-width:0;
+}
+
+nav::-webkit-scrollbar{
+  display:none;
+}
+
+nav a{
+  color:#e0f2f1;
+  opacity:.9;
+  padding:6px 10px;
+  border-radius:999px;
+  white-space:nowrap;
+  flex:0 0 auto;
+}
+
+nav a:hover{
+  background:rgba(255,255,255,0.14);
+  opacity:1;
+}
+
+@media (max-width: 520px){
+  header{
+    padding-left:12px;
+    padding-right:12px;
+  }
+
+  .brand-logo{
+    width:34px;
+    height:34px;
+    font-size:18px;
+  }
+
+  .brand-text{
+    font-size:14px;
+    max-width:92px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  nav{
+    gap:6px;
+    font-size:12px;
+  }
+
+  nav a{
+    padding:6px 9px;
+  }
+}
 
     main{
       max-width:1100px;
@@ -890,6 +919,76 @@ button.secondary{
       </table>
     </div>
   </section>
+  <section class="card" style="margin-top:14px;" id="manualCourseCard">
+  <div class="card-label">Manually add scorecard course</div>
+  <div class="muted-note">Add course name, state, pars and distances manually.</div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
+    <div>
+      <div class="muted-note">Course name</div>
+      <input id="manualCourseName" type="text" placeholder="Example: Kennedy Bay Golf Club"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;min-width:240px;">
+    </div>
+
+    <div>
+      <div class="muted-note">State</div>
+      <select id="manualCourseState" style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+        <option value="WA">WA</option>
+        <option value="NT">NT</option>
+        <option value="QLD">QLD</option>
+        <option value="NSW">NSW</option>
+        <option value="VIC">VIC</option>
+        <option value="SA">SA</option>
+        <option value="TAS">TAS</option>
+        <option value="ACT">ACT</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="muted-note">Holes</div>
+      <select id="manualCourseHoles" style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+        <option value="18">18</option>
+        <option value="9">9</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="muted-note">Tee</div>
+      <input id="manualCourseTee" type="text" placeholder="White"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;width:110px;">
+    </div>
+
+    <div>
+      <div class="muted-note">Rating</div>
+      <input id="manualCourseRating" type="number" step="0.1" placeholder="69.4"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;width:110px;">
+    </div>
+
+    <div>
+      <div class="muted-note">Slope</div>
+      <input id="manualCourseSlope" type="number" placeholder="121"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;width:110px;">
+    </div>
+
+    <button id="btnBuildManualCourse" type="button" class="secondary">Build holes</button>
+    <button id="btnSaveManualCourse" type="button">Save course</button>
+  </div>
+
+  <div id="manualCourseStatus" class="muted-note" style="margin-top:8px;"></div>
+
+  <div style="overflow-x:auto;margin-top:10px;">
+    <table class="score-mini" id="manualCourseTable" style="display:none;">
+      <thead>
+        <tr>
+          <th>Hole</th>
+          <th>Par</th>
+          <th>Distance metres</th>
+        </tr>
+      </thead>
+      <tbody id="manualCourseTbody"></tbody>
+    </table>
+  </div>
+</section>
     <section class="card" style="margin-top:14px;" id="approvedCoursesCard">
     <div class="card-label">Approved courses (scorecard templates)</div>
 
@@ -1843,6 +1942,156 @@ document.addEventListener("click", async (e) => {
 
   showUserDetails(u);
 });
+// ---------- Manual scorecard course create ----------
+
+function buildManualCourseRows() {
+  const holes = Number(document.getElementById("manualCourseHoles")?.value || 18);
+  const tbody = document.getElementById("manualCourseTbody");
+  const table = document.getElementById("manualCourseTable");
+
+  if (!tbody || !table) return;
+
+  tbody.innerHTML = "";
+
+  for (let i = 1; i <= holes; i++) {
+    tbody.innerHTML += `
+      <tr>
+        <td>Hole ${i}</td>
+        <td>
+          <input data-manual-par="${i}" type="number" min="3" max="6" value="4"
+            style="width:80px;padding:7px;border:1px solid var(--border);border-radius:8px;text-align:center;">
+        </td>
+        <td>
+          <input data-manual-distance="${i}" type="number" min="1" placeholder="Metres"
+            style="width:120px;padding:7px;border:1px solid var(--border);border-radius:8px;text-align:center;">
+        </td>
+      </tr>
+    `;
+  }
+
+  table.style.display = "table";
+}
+
+async function saveManualCourse() {
+  const status = document.getElementById("manualCourseStatus");
+  const btn = document.getElementById("btnSaveManualCourse");
+
+  const name = String(document.getElementById("manualCourseName")?.value || "").trim();
+  const state = String(document.getElementById("manualCourseState")?.value || "").trim().toUpperCase();
+  const holes = Number(document.getElementById("manualCourseHoles")?.value || 18);
+  const tee_colour = String(document.getElementById("manualCourseTee")?.value || "").trim() || null;
+
+  const ratingRaw = String(document.getElementById("manualCourseRating")?.value || "").trim();
+  const slopeRaw = String(document.getElementById("manualCourseSlope")?.value || "").trim();
+
+  const pars = [];
+  const distances_m = [];
+
+  for (let i = 1; i <= holes; i++) {
+    const par = Number(document.querySelector(`[data-manual-par="${i}"]`)?.value || "");
+    const distance = Number(document.querySelector(`[data-manual-distance="${i}"]`)?.value || "");
+
+    if (!Number.isFinite(par) || par < 3 || par > 6) {
+      alert(`Hole ${i} par must be between 3 and 6.`);
+      return;
+    }
+
+    if (!Number.isFinite(distance) || distance <= 0) {
+      alert(`Hole ${i} distance is required.`);
+      return;
+    }
+
+    pars.push(par);
+    distances_m.push(distance);
+  }
+
+  if (!name) {
+    alert("Course name is required.");
+    return;
+  }
+
+  if (ratingRaw && !Number.isFinite(Number(ratingRaw))) {
+    alert("Course rating must be a number.");
+    return;
+  }
+
+  if (slopeRaw && (!Number.isFinite(Number(slopeRaw)) || Number(slopeRaw) < 55 || Number(slopeRaw) > 155)) {
+    alert("Slope rating must be between 55 and 155.");
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+  }
+
+  if (status) status.textContent = "Saving course…";
+
+  try {
+    const res = await fetch(`${API_BASE}/api/rounds/admin/scorecard-courses`, {
+      method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        name,
+        state,
+        holes,
+        pars,
+        distances_m,
+        course_rating: ratingRaw ? Number(ratingRaw) : null,
+        slope_rating: slopeRaw ? Number(slopeRaw) : null,
+        tee_colour,
+      }),
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data || !data.ok) {
+      alert("Save failed: " + (data?.error || res.status));
+      if (status) status.textContent = "Save failed.";
+      return;
+    }
+
+    if (status) status.textContent = "Course saved.";
+    await loadApprovedCourses();
+
+  } catch (err) {
+    console.error("saveManualCourse failed", err);
+    alert("Save failed (network/server error).");
+    if (status) status.textContent = "Save failed.";
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Save course";
+    }
+  }
+}
+
+function wireManualCourseCreate() {
+  const buildBtn = document.getElementById("btnBuildManualCourse");
+  const saveBtn = document.getElementById("btnSaveManualCourse");
+  const holesEl = document.getElementById("manualCourseHoles");
+
+  if (buildBtn && !buildBtn._wired) {
+    buildBtn._wired = true;
+    buildBtn.addEventListener("click", buildManualCourseRows);
+  }
+
+  if (saveBtn && !saveBtn._wired) {
+    saveBtn._wired = true;
+    saveBtn.addEventListener("click", saveManualCourse);
+  }
+
+  if (holesEl && !holesEl._wired) {
+    holesEl._wired = true;
+    holesEl.addEventListener("change", buildManualCourseRows);
+  }
+
+  buildManualCourseRows();
+}
 // ---------- Approved scorecard courses (edit / delete) ----------
 
 let APPROVED_COURSES_CACHE = [];
@@ -2887,6 +3136,8 @@ window.addEventListener("load", () => {
 
   try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
   try { loadPendingCourses(); } catch (e) { console.warn("loadPendingCourses failed", e); }
+  
+  try { wireManualCourseCreate(); } catch (e) { console.warn("wireManualCourseCreate failed", e); }
 
   try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
   try { loadApprovedCourses(); } catch (e) { console.warn("loadApprovedCourses failed", e); }
