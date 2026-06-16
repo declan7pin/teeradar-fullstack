@@ -7,13 +7,254 @@ const router = express.Router();
 
 router.use(requireAuth);
 
-router.get("/settings", async (req, res) => {
+let profileColumnsReady = false;
+
+async function ensureSocialProfileColumns() {
+  if (profileColumnsReady) return;
+
+  await db.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS full_name TEXT,
+      ADD COLUMN IF NOT EXISTS gender TEXT,
+      ADD COLUMN IF NOT EXISTS age INTEGER,
+      ADD COLUMN IF NOT EXISTS deletion_requested_at TIMESTAMPTZ;
+  `);
+
+  profileColumnsReady = true;
+}
+
+async function sendDeletionRequestEmail({ email, displayName, fullName }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const toEmail =
+    process.env.DELETE_REQUEST_EMAIL ||
+    process.env.CONTACT_TO_EMAIL ||
+    process.env.ADMIN_EMAIL ||
+    "alerts@teeradar.com.au";
+
+  if (!apiKey) {
+    console.warn("RESEND_API_KEY missing, deletion request email not sent.");
+    return false;
+  }
+
+  const subject = `TeeRadar account deletion request - ${email}`;
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.5;">
+      <h2>Account deletion request</h2>
+      <p>A TeeRadar user has requested account deletion.</p>
+
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Display name:</strong> ${displayName || "-"}</p>
+      <p><strong>Full name:</strong> ${fullName || "-"}</p>
+      <p><strong>Requested at:</strong> ${new Date().toISOString()}</p>
+
+      <p>Please manually review and delete/disable this account.</p>
+    </div>
+  `;
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM || "TeeRadar <alerts@teeradar.com.au>",
+      to: [toEmail],
+      subject,
+      html,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    console.error("Deletion request email failed:", response.status, text);
+    return false;
+  }
+
+  return true;
+}
+
+// ✅ NEW: account profile details
+router.get("/profile", async (req, res) => {
   try {
+    await ensureSocialProfileColumns();
+
     const userId = Number(req.user?.id);
 
     const { rows } = await db.query(
       `
-      SELECT id, email, display_name, profile_visibility
+      SELECT
+        id,
+        email,
+        display_name,
+        full_name,
+        gender,
+        age,
+        profile_visibility
+      FROM users
+      WHERE id = $1
+      LIMIT 1;
+      `,
+      [userId]
+    );
+
+    const user = rows[0] || null;
+
+    res.json({
+      ok: true,
+      profile: user
+        ? {
+            email: user.email,
+            displayName: user.display_name || "",
+            fullName: user.full_name || "",
+            gender: user.gender || "",
+            age: user.age || null,
+            profileVisibility: user.profile_visibility || "friends",
+          }
+        : null,
+    });
+  } catch (err) {
+    console.error("GET /api/social/profile error:", err);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+router.post("/profile", async (req, res) => {
+  try {
+    await ensureSocialProfileColumns();
+
+    const userId = Number(req.user?.id);
+
+    const displayName = String(req.body?.displayName || "")
+      .trim()
+      .slice(0, 40);
+
+    const fullName = String(req.body?.fullName || "")
+      .trim()
+      .slice(0, 80);
+
+    const genderRaw = String(req.body?.gender || "").trim().toLowerCase();
+    const allowedGenders = new Set(["", "male", "female", "other"]);
+    const gender = allowedGenders.has(genderRaw) ? genderRaw : "";
+
+    const ageRaw = req.body?.age;
+    const age =
+      ageRaw === null || ageRaw === "" || typeof ageRaw === "undefined"
+        ? null
+        : Number(ageRaw);
+
+    if (!displayName) {
+      return res.status(400).json({ ok: false, error: "display_name_required" });
+    }
+
+    if (age !== null && (!Number.isFinite(age) || age < 13 || age > 120)) {
+      return res.status(400).json({ ok: false, error: "invalid_age" });
+    }
+
+    const { rows } = await db.query(
+      `
+      UPDATE users
+      SET
+        display_name = $2,
+        full_name = $3,
+        gender = $4,
+        age = $5
+      WHERE id = $1
+      RETURNING
+        id,
+        email,
+        display_name,
+        full_name,
+        gender,
+        age,
+        profile_visibility;
+      `,
+      [
+        userId,
+        displayName || null,
+        fullName || null,
+        gender || null,
+        age,
+      ]
+    );
+
+    const user = rows[0] || null;
+
+    res.json({
+      ok: true,
+      profile: user
+        ? {
+            email: user.email,
+            displayName: user.display_name || "",
+            fullName: user.full_name || "",
+            gender: user.gender || "",
+            age: user.age || null,
+            profileVisibility: user.profile_visibility || "friends",
+          }
+        : null,
+    });
+  } catch (err) {
+    console.error("POST /api/social/profile error:", err);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// ✅ NEW: account deletion request
+router.post("/delete-request", async (req, res) => {
+  try {
+    await ensureSocialProfileColumns();
+
+    const userId = Number(req.user?.id);
+
+    const { rows } = await db.query(
+      `
+      UPDATE users
+      SET deletion_requested_at = NOW()
+      WHERE id = $1
+      RETURNING email, display_name, full_name;
+      `,
+      [userId]
+    );
+
+    const user = rows[0];
+
+    if (!user) {
+      return res.status(404).json({ ok: false, error: "user_not_found" });
+    }
+
+    const emailSent = await sendDeletionRequestEmail({
+      email: user.email,
+      displayName: user.display_name,
+      fullName: user.full_name,
+    });
+
+    res.json({
+      ok: true,
+      emailSent,
+    });
+  } catch (err) {
+    console.error("POST /api/social/delete-request error:", err);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+router.get("/settings", async (req, res) => {
+  try {
+    await ensureSocialProfileColumns();
+
+    const userId = Number(req.user?.id);
+
+    const { rows } = await db.query(
+      `
+      SELECT
+        id,
+        email,
+        display_name,
+        full_name,
+        gender,
+        age,
+        profile_visibility
       FROM users
       WHERE id = $1
       LIMIT 1;
@@ -27,6 +268,9 @@ router.get("/settings", async (req, res) => {
       ok: true,
       settings: {
         display_name: user?.display_name || "",
+        full_name: user?.full_name || "",
+        gender: user?.gender || "",
+        age: user?.age || null,
         profile_visibility: user?.profile_visibility || "friends",
       },
     });
@@ -38,6 +282,8 @@ router.get("/settings", async (req, res) => {
 
 router.post("/settings", async (req, res) => {
   try {
+    await ensureSocialProfileColumns();
+
     const userId = Number(req.user?.id);
     const displayName = String(req.body?.display_name || "").trim().slice(0, 40);
     const visibility = String(req.body?.profile_visibility || "friends").trim();
