@@ -897,13 +897,18 @@ nav a:hover{
         <thead>
           <tr>
             <th>ID</th>
-            <th>Email</th>
-            <th>Plan</th>
-            <th>Home state</th>
-            <th>Favourite courses</th>
-            <th>Created at</th>
-            <th>Last seen</th>
-            <th>Actions</th>
+<th>Email</th>
+<th>Name</th>
+<th>Gender</th>
+<th>DOB</th>
+<th>Age</th>
+<th>Delete requested</th>
+<th>Plan</th>
+<th>Home state</th>
+<th>Favourite courses</th>
+<th>Created at</th>
+<th>Last seen</th>
+<th>Actions</th>
           </tr>
         </thead>
         <tbody id="usersTbody"></tbody>
@@ -1109,7 +1114,13 @@ nav a:hover{
     </div>
     <div style="font-size:13px; line-height:1.5;">
       <p><strong>Email:</strong> <span id="detailEmail">—</span></p>
-      <p><strong>Plan:</strong> <span id="detailPlan">—</span></p>
+<p><strong>Full name:</strong> <span id="detailFullName">—</span></p>
+<p><strong>Display name:</strong> <span id="detailDisplayName">—</span></p>
+<p><strong>Gender:</strong> <span id="detailGender">—</span></p>
+<p><strong>DOB:</strong> <span id="detailDob">—</span></p>
+<p><strong>Age:</strong> <span id="detailAge">—</span></p>
+<p><strong>Delete requested:</strong> <span id="detailDeleteRequested">—</span></p>
+<p><strong>Plan:</strong> <span id="detailPlan">—</span></p>
       <p>
   <strong>Home state:</strong> <span id="detailHomeState">—</span><br>
   <strong>Home course:</strong> <span id="detailHomeCourse">—</span>
@@ -1770,10 +1781,48 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
         const homeState = u.home_state || "";
         const planLabel = normalisePlanLabel(u.plan);
 
-                return `
+                const fullName = u.full_name || u.fullName || "";
+const displayName = u.display_name || u.displayName || "";
+const nameLabel = fullName || displayName || "";
+
+const genderRaw = String(u.gender || "").trim();
+const genderLabel =
+  genderRaw === "male"
+    ? "Male"
+    : genderRaw === "female"
+    ? "Female"
+    : genderRaw === "other"
+    ? "Other"
+    : genderRaw === "prefer_not_to_answer"
+    ? "Prefer not to answer"
+    : "";
+
+const dobRaw = u.dob || "";
+const dobLabel = dobRaw ? new Date(dobRaw).toLocaleDateString("en-AU") : "";
+
+const ageLabel =
+  u.age !== null && typeof u.age !== "undefined"
+    ? String(u.age)
+    : "";
+
+const deleteRequestedRaw =
+  u.deletion_requested_at ||
+  u.deletionRequestedAt ||
+  "";
+
+const deleteRequestedLabel = deleteRequestedRaw
+  ? new Date(deleteRequestedRaw).toLocaleString()
+  : "";
+
+return `
   <tr data-user-idx="${idx}">
     <td>${u.id ?? ""}</td>
     <td><span class="user-email-pill">${u.email ?? ""}</span></td>
+    <td>${nameLabel}</td>
+    <td>${genderLabel}</td>
+    <td>${dobLabel}</td>
+    <td>${ageLabel}</td>
+    <td>${deleteRequestedLabel}</td>
     <td data-col="plan">${planLabel}</td>
     <td>${homeState}</td>
     <td>${favDisplay || ""}</td>
@@ -1868,7 +1917,43 @@ function showUserDetails(u) {
   card.style.display = "block";
 
   setText("detailEmail", u.email ?? "—");
-  setText("detailPlan", normalisePlanLabel(u.plan));
+
+setText("detailFullName", u.full_name || u.fullName || "—");
+setText("detailDisplayName", u.display_name || u.displayName || "—");
+
+const genderRaw = String(u.gender || "").trim();
+const genderLabel =
+  genderRaw === "male"
+    ? "Male"
+    : genderRaw === "female"
+    ? "Female"
+    : genderRaw === "other"
+    ? "Other"
+    : genderRaw === "prefer_not_to_answer"
+    ? "Prefer not to answer"
+    : "—";
+
+setText("detailGender", genderLabel);
+
+const dobRaw = u.dob || "";
+setText("detailDob", dobRaw ? new Date(dobRaw).toLocaleDateString("en-AU") : "—");
+
+setText(
+  "detailAge",
+  u.age !== null && typeof u.age !== "undefined" ? String(u.age) : "—"
+);
+
+const deleteRequestedRaw =
+  u.deletion_requested_at ||
+  u.deletionRequestedAt ||
+  "";
+
+setText(
+  "detailDeleteRequested",
+  deleteRequestedRaw ? new Date(deleteRequestedRaw).toLocaleString() : "—"
+);
+
+setText("detailPlan", normalisePlanLabel(u.plan));
   setText("detailHomeState", u.home_state ?? "—");
   setText("detailHomeCourse", u.home_course ?? "—");
 
