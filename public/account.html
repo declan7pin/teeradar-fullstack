@@ -153,7 +153,7 @@ header {
       margin-bottom: 4px;
       color: #4b5563;
     }
-    select, input[type="text"], input[type="time"] {
+    select, input[type="text"], input[type="time"], input[type="number"] {
       width: 100%;
       padding: 8px 10px;
       border-radius: 8px;
@@ -161,7 +161,7 @@ header {
       font-size: 13px;
       margin-bottom: 10px;
     }
-    select:focus, input[type="text"]:focus, input[type="time"]:focus {
+    select:focus, input[type="text"]:focus, input[type="time"]:focus, input[type="number"]:focus {
       outline: none;
       border-color: #0ea5e9;
       box-shadow: 0 0 0 1px rgba(14,165,233,0.35);
@@ -595,17 +595,25 @@ header {
       <h2>Account details</h2>
       <p>Signed in as <strong id="accountEmail"></strong></p>
       <label for="displayNameInput">Display name</label>
+<input id="displayNameInput" type="text" maxlength="40" placeholder="Enter your display name" />
 
-<input
-  id="displayNameInput"
-  type="text"
-  maxlength="40"
-  placeholder="Enter your display name"
-/>
+<label for="fullNameInput">Full name</label>
+<input id="fullNameInput" type="text" maxlength="80" placeholder="Enter your full name" />
+
+<label for="genderInput">Gender</label>
+<select id="genderInput">
+  <option value="">Prefer not to say</option>
+  <option value="male">Male</option>
+  <option value="female">Female</option>
+  <option value="other">Other</option>
+</select>
+
+<label for="ageInput">Age</label>
+<input id="ageInput" type="number" min="13" max="120" placeholder="Enter your age" />
 
 <div class="row-actions">
   <button id="saveDisplayNameBtn" class="btn-secondary" type="button">
-    Save display name
+    Save account details
   </button>
 
   <span id="displayNameStatus" class="status"></span>
@@ -779,13 +787,27 @@ header {
       </p>
 
       <div class="row-actions">
-        <button id="manageBillingBtn" class="btn-secondary" type="button">
-          Manage / cancel subscription
-        </button>
-        <span id="billingStatus" class="status"></span>
-      </div>
-    </div>
+  <button id="manageBillingBtn" class="btn-secondary" type="button">
+    Manage / cancel subscription
+  </button>
+  <span id="billingStatus" class="status"></span>
+</div>
+</div>
+
+<div class="card">
+  <h2>Delete account</h2>
+  <p>
+    Request account deletion. This will send TeeRadar a request to remove your account and data.
+  </p>
+
+  <div class="row-actions">
+    <button id="deleteAccountRequestBtn" class="btn-danger" type="button">
+      Request account deletion
+    </button>
+    <span id="deleteAccountStatus" class="status"></span>
   </div>
+</div>
+</div>
 </main>
 <div id="refundModal" class="modal-backdrop" aria-hidden="true">
   <div class="modal-card">
@@ -885,6 +907,11 @@ header {
   const displayNameInput = document.getElementById("displayNameInput");
 const saveDisplayNameBtn = document.getElementById("saveDisplayNameBtn");
 const displayNameStatus = document.getElementById("displayNameStatus");
+const fullNameInput = document.getElementById("fullNameInput");
+const genderInput = document.getElementById("genderInput");
+const ageInput = document.getElementById("ageInput");
+const deleteAccountRequestBtn = document.getElementById("deleteAccountRequestBtn");
+const deleteAccountStatus = document.getElementById("deleteAccountStatus");
 
   // ✅ NEW: my games elements
     const refreshGamesBtn = document.getElementById("refreshGamesBtn");
@@ -937,9 +964,21 @@ const pushStatus = document.getElementById("pushStatus");
   if (raw && displayNameInput) {
     const u = JSON.parse(raw);
 
-    if (u?.displayName) {
-      displayNameInput.value = u.displayName;
-    }
+    if (u?.displayName && displayNameInput) {
+  displayNameInput.value = u.displayName;
+}
+
+if (u?.fullName && fullNameInput) {
+  fullNameInput.value = u.fullName;
+}
+
+if (u?.gender && genderInput) {
+  genderInput.value = u.gender;
+}
+
+if (u?.age && ageInput) {
+  ageInput.value = u.age;
+}
   }
 } catch {}
   }
@@ -972,16 +1011,24 @@ const pushStatus = document.getElementById("pushStatus");
   }
 
   // -------------------------------------------------
-// ✅ Display name save
+// ✅ Account details save
 // -------------------------------------------------
 if (saveDisplayNameBtn) {
   saveDisplayNameBtn.addEventListener("click", async () => {
-    const displayName = String(displayNameInput?.value || "")
-      .trim()
-      .slice(0, 40);
+    const displayName = String(displayNameInput?.value || "").trim().slice(0, 40);
+    const fullName = String(fullNameInput?.value || "").trim().slice(0, 80);
+    const gender = String(genderInput?.value || "").trim();
+    const ageRaw = String(ageInput?.value || "").trim();
+    const age = ageRaw ? Number(ageRaw) : null;
 
     if (!displayName) {
       displayNameStatus.textContent = "Please enter a display name.";
+      displayNameStatus.className = "status err";
+      return;
+    }
+
+    if (age !== null && (!Number.isFinite(age) || age < 13 || age > 120)) {
+      displayNameStatus.textContent = "Please enter a valid age.";
       displayNameStatus.className = "status err";
       return;
     }
@@ -990,14 +1037,18 @@ if (saveDisplayNameBtn) {
     displayNameStatus.className = "status";
 
     try {
-      const res = await fetch(`${API_BASE}/api/account/display-name`, {
+      const res = await fetch(`${API_BASE}/api/account/profile`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: "Bearer " + token } : {})
         },
         body: JSON.stringify({
-          displayName
+          email,
+          displayName,
+          fullName,
+          gender,
+          age
         })
       });
 
@@ -1007,24 +1058,24 @@ if (saveDisplayNameBtn) {
         throw new Error(data?.error || "save_failed");
       }
 
-      // ✅ update local user object
       try {
         const raw = localStorage.getItem("tr_user");
         const obj = raw ? JSON.parse(raw) : {};
 
+        obj.email = email;
         obj.displayName = displayName;
+        obj.fullName = fullName;
+        obj.gender = gender;
+        obj.age = age;
 
         localStorage.setItem("tr_user", JSON.stringify(obj));
       } catch {}
 
-      displayNameStatus.textContent = "Display name updated.";
+      displayNameStatus.textContent = "Account details updated.";
       displayNameStatus.className = "status ok";
     } catch (err) {
       console.error(err);
-
-      displayNameStatus.textContent =
-        "Could not save display name.";
-
+      displayNameStatus.textContent = "Could not save account details.";
       displayNameStatus.className = "status err";
     }
   });
@@ -2896,6 +2947,48 @@ if (previousGamesFilter) {
       }
     });
   }
+  
+  // -------------------------------------------------
+// ✅ Delete account request
+// -------------------------------------------------
+if (deleteAccountRequestBtn) {
+  deleteAccountRequestBtn.addEventListener("click", async () => {
+    const ok = window.confirm(
+      "Request account deletion? TeeRadar will be notified and your account will be manually reviewed for deletion."
+    );
+
+    if (!ok) return;
+
+    deleteAccountRequestBtn.disabled = true;
+    deleteAccountStatus.textContent = "Sending request...";
+    deleteAccountStatus.className = "status";
+
+    try {
+      const res = await fetch(`${API_BASE}/api/account/delete-request`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: "Bearer " + token } : {})
+        },
+        body: JSON.stringify({ email })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "request_failed");
+      }
+
+      deleteAccountStatus.textContent = "Account deletion request sent.";
+      deleteAccountStatus.className = "status ok";
+    } catch (err) {
+      console.error(err);
+      deleteAccountStatus.textContent = "Could not send deletion request.";
+      deleteAccountStatus.className = "status err";
+      deleteAccountRequestBtn.disabled = false;
+    }
+  });
+}
 </script>
 </body>
 </html>
