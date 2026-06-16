@@ -1091,6 +1091,102 @@ FROM scorecard_courses
   }
 });
 
+// Manually add an approved scorecard course
+router.post("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    await ensureScorecardRatingColumns();
+
+    const nameRaw = String(req.body?.name || "").trim();
+    const state = normaliseStateCode(req.body?.state);
+    const holes = Number(req.body?.holes);
+
+    const pars = Array.isArray(req.body?.pars) ? req.body.pars.map(Number) : [];
+    const dists = Array.isArray(req.body?.distances_m)
+      ? req.body.distances_m.map(Number)
+      : Array.isArray(req.body?.dists)
+        ? req.body.dists.map(Number)
+        : [];
+
+    const courseRatingRaw = req.body?.course_rating;
+    const slopeRatingRaw = req.body?.slope_rating;
+    const teeColour = String(req.body?.tee_colour || "").trim() || null;
+
+    const name = normaliseCourseName(nameRaw);
+
+    if (!name) return res.status(400).json({ ok: false, error: "name_required" });
+    if (!state) return res.status(400).json({ ok: false, error: "state_required" });
+    if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "invalid_holes" });
+
+    if (!isCompleteTemplateArrays(pars, dists, holes)) {
+      return res.status(400).json({
+        ok: false,
+        error: "template_incomplete",
+        message: "Every hole needs a valid par and distance.",
+      });
+    }
+
+    const courseRating =
+      courseRatingRaw === null || typeof courseRatingRaw === "undefined" || courseRatingRaw === ""
+        ? null
+        : Number(courseRatingRaw);
+
+    const slopeRating =
+      slopeRatingRaw === null || typeof slopeRatingRaw === "undefined" || slopeRatingRaw === ""
+        ? null
+        : Number(slopeRatingRaw);
+
+    if (courseRating !== null && !Number.isFinite(courseRating)) {
+      return res.status(400).json({ ok: false, error: "invalid_course_rating" });
+    }
+
+    if (
+      slopeRating !== null &&
+      (!Number.isFinite(slopeRating) || slopeRating < 55 || slopeRating > 155)
+    ) {
+      return res.status(400).json({ ok: false, error: "invalid_slope_rating" });
+    }
+
+    const up = await db.query(
+      `
+      INSERT INTO scorecard_courses (
+        name, state, holes, pars_json, dists_json,
+        course_rating, slope_rating, tee_colour, updated_at
+      )
+      VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7,$8,now())
+      ON CONFLICT (name, state, holes)
+      DO UPDATE SET
+        pars_json = EXCLUDED.pars_json,
+        dists_json = EXCLUDED.dists_json,
+        course_rating = EXCLUDED.course_rating,
+        slope_rating = EXCLUDED.slope_rating,
+        tee_colour = EXCLUDED.tee_colour,
+        updated_at = now()
+      RETURNING
+        id, name, state, holes, course_rating, slope_rating, tee_colour, updated_at;
+      `,
+      [
+        name,
+        state,
+        holes,
+        JSON.stringify(pars),
+        JSON.stringify(dists),
+        Number.isFinite(courseRating) ? courseRating : null,
+        Number.isFinite(slopeRating) ? slopeRating : null,
+        teeColour,
+      ]
+    );
+
+    return res.json({ ok: true, course: up.rows[0] });
+  } catch (err) {
+    console.error("POST /api/rounds/admin/scorecard-courses error:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "internal error",
+      detail: err?.message,
+    });
+  }
+});
+
 // Edit an approved scorecard course (name + state)
 router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, async (req, res) => {
   try {
