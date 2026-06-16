@@ -68,8 +68,7 @@ button.secondary{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:10px;
-  min-width:0;
+  gap:14px;
 }
 
 .brand{
@@ -77,6 +76,20 @@ button.secondary{
   align-items:center;
   gap:10px;
   min-width:0;
+}
+
+.brand-logo{
+  width:28px;
+  height:28px;
+  border-radius:999px;
+  background:#ecfdf5;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#065f46;
+  font-size:15px;
+  font-weight:800;
+  box-shadow:0 0 0 3px rgba(16,185,129,0.25);
   flex:0 0 auto;
 }
 
@@ -90,18 +103,11 @@ button.secondary{
 
 nav{
   display:flex;
-  gap:8px;
+  gap:10px;
   align-items:center;
   justify-content:flex-end;
   font-size:13px;
-  overflow-x:auto;
-  -webkit-overflow-scrolling:touch;
-  scrollbar-width:none;
-  min-width:0;
-}
-
-nav::-webkit-scrollbar{
-  display:none;
+  flex-wrap:wrap;
 }
 
 nav a{
@@ -110,7 +116,6 @@ nav a{
   padding:6px 10px;
   border-radius:999px;
   white-space:nowrap;
-  flex:0 0 auto;
 }
 
 nav a:hover{
@@ -118,10 +123,25 @@ nav a:hover{
   opacity:1;
 }
 
-@media (max-width: 520px){
+.nav-analytics{
+  border:1px solid rgba(190,242,100,0.8);
+  background:rgba(15,118,110,0.22);
+  padding:6px 12px;
+  font-weight:600;
+}
+
+@media (max-width: 640px){
   header{
-    padding-left:12px;
-    padding-right:12px;
+    padding:calc(8px + env(safe-area-inset-top)) 10px 10px;
+  }
+
+  .nav-wrap{
+    display:block;
+  }
+
+  .brand{
+    justify-content:center;
+    margin-bottom:8px;
   }
 
   .brand-logo{
@@ -131,19 +151,22 @@ nav a:hover{
   }
 
   .brand-text{
-    font-size:14px;
-    max-width:92px;
-    overflow:hidden;
-    text-overflow:ellipsis;
+    font-size:17px;
   }
 
   nav{
+    justify-content:center;
     gap:6px;
     font-size:12px;
   }
 
   nav a{
     padding:6px 9px;
+    background:rgba(255,255,255,0.08);
+  }
+
+  .nav-analytics{
+    padding:6px 10px;
   }
 }
 
