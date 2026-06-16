@@ -153,7 +153,7 @@ header {
       margin-bottom: 4px;
       color: #4b5563;
     }
-    select, input[type="text"], input[type="time"], input[type="number"] {
+    select, input[type="text"], input[type="time"], input[type="number"], input[type="date"] {
       width: 100%;
       padding: 8px 10px;
       border-radius: 8px;
@@ -161,7 +161,7 @@ header {
       font-size: 13px;
       margin-bottom: 10px;
     }
-    select:focus, input[type="text"]:focus, input[type="time"]:focus, input[type="number"]:focus {
+    select:focus, input[type="text"]:focus, input[type="time"]:focus, input[type="number"]:focus, input[type="date"]:focus {
       outline: none;
       border-color: #0ea5e9;
       box-shadow: 0 0 0 1px rgba(14,165,233,0.35);
@@ -608,8 +608,8 @@ header {
   <option value="other">Other</option>
 </select>
 
-<label for="ageInput">Age</label>
-<input id="ageInput" type="number" min="13" max="120" placeholder="Enter your age" />
+<label for="dobInput">Date of birth</label>
+<input id="dobInput" type="date" />
 
 <div class="row-actions">
   <button id="saveDisplayNameBtn" class="btn-secondary" type="button">
@@ -909,7 +909,7 @@ const saveDisplayNameBtn = document.getElementById("saveDisplayNameBtn");
 const displayNameStatus = document.getElementById("displayNameStatus");
 const fullNameInput = document.getElementById("fullNameInput");
 const genderInput = document.getElementById("genderInput");
-const ageInput = document.getElementById("ageInput");
+const dobInput = document.getElementById("dobInput");
 const deleteAccountRequestBtn = document.getElementById("deleteAccountRequestBtn");
 const deleteAccountStatus = document.getElementById("deleteAccountStatus");
 
@@ -976,8 +976,8 @@ if (u?.gender && genderInput) {
   genderInput.value = u.gender;
 }
 
-if (u?.age && ageInput) {
-  ageInput.value = u.age;
+if (u?.dob && dobInput) {
+  dobInput.value = u.dob;
 }
   }
 } catch {}
@@ -1017,18 +1017,11 @@ if (saveDisplayNameBtn) {
   saveDisplayNameBtn.addEventListener("click", async () => {
     const displayName = String(displayNameInput?.value || "").trim().slice(0, 40);
     const fullName = String(fullNameInput?.value || "").trim().slice(0, 80);
-    const gender = String(genderInput?.value || "").trim();
-    const ageRaw = String(ageInput?.value || "").trim();
-    const age = ageRaw ? Number(ageRaw) : null;
+    const gender = String(genderInput?.value || "prefer_not_to_answer").trim();
+const dob = String(dobInput?.value || "").trim();
 
     if (!displayName) {
       displayNameStatus.textContent = "Please enter a display name.";
-      displayNameStatus.className = "status err";
-      return;
-    }
-
-    if (age !== null && (!Number.isFinite(age) || age < 13 || age > 120)) {
-      displayNameStatus.textContent = "Please enter a valid age.";
       displayNameStatus.className = "status err";
       return;
     }
@@ -1037,19 +1030,19 @@ if (saveDisplayNameBtn) {
     displayNameStatus.className = "status";
 
     try {
-      const res = await fetch(`${API_BASE}/api/account/profile`, {
+      const res = await fetch(`${API_BASE}/api/social/profile`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: "Bearer " + token } : {})
         },
         body: JSON.stringify({
-          email,
-          displayName,
-          fullName,
-          gender,
-          age
-        })
+  email,
+  displayName,
+  fullName,
+  gender,
+  dob
+})
       });
 
       const data = await res.json().catch(() => ({}));
@@ -1066,7 +1059,7 @@ if (saveDisplayNameBtn) {
         obj.displayName = displayName;
         obj.fullName = fullName;
         obj.gender = gender;
-        obj.age = age;
+        obj.dob = dob;
 
         localStorage.setItem("tr_user", JSON.stringify(obj));
       } catch {}
@@ -2964,7 +2957,7 @@ if (deleteAccountRequestBtn) {
     deleteAccountStatus.className = "status";
 
     try {
-      const res = await fetch(`${API_BASE}/api/account/delete-request`, {
+      const res = await fetch(`${API_BASE}/api/social/delete-request`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
