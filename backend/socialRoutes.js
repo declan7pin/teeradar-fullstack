@@ -16,7 +16,7 @@ async function ensureSocialProfileColumns() {
     ALTER TABLE users
       ADD COLUMN IF NOT EXISTS full_name TEXT,
       ADD COLUMN IF NOT EXISTS gender TEXT,
-      ADD COLUMN IF NOT EXISTS age INTEGER,
+      ADD COLUMN IF NOT EXISTS dob DATE,
       ADD COLUMN IF NOT EXISTS deletion_requested_at TIMESTAMPTZ;
   `);
 
@@ -75,7 +75,7 @@ async function sendDeletionRequestEmail({ email, displayName, fullName }) {
   return true;
 }
 
-// ✅ NEW: account profile details
+// ✅ account profile details
 router.get("/profile", async (req, res) => {
   try {
     await ensureSocialProfileColumns();
@@ -90,7 +90,7 @@ router.get("/profile", async (req, res) => {
         display_name,
         full_name,
         gender,
-        age,
+        dob,
         profile_visibility
       FROM users
       WHERE id = $1
@@ -108,8 +108,8 @@ router.get("/profile", async (req, res) => {
             email: user.email,
             displayName: user.display_name || "",
             fullName: user.full_name || "",
-            gender: user.gender || "",
-            age: user.age || null,
+            gender: user.gender || "prefer_not_to_answer",
+            dob: user.dob ? String(user.dob).slice(0, 10) : "",
             profileVisibility: user.profile_visibility || "friends",
           }
         : null,
@@ -134,22 +134,30 @@ router.post("/profile", async (req, res) => {
       .trim()
       .slice(0, 80);
 
-    const genderRaw = String(req.body?.gender || "").trim().toLowerCase();
-    const allowedGenders = new Set(["", "male", "female", "other"]);
-    const gender = allowedGenders.has(genderRaw) ? genderRaw : "";
+    const genderRaw = String(req.body?.gender || "prefer_not_to_answer")
+      .trim()
+      .toLowerCase();
 
-    const ageRaw = req.body?.age;
-    const age =
-      ageRaw === null || ageRaw === "" || typeof ageRaw === "undefined"
-        ? null
-        : Number(ageRaw);
+    const allowedGenders = new Set([
+      "prefer_not_to_answer",
+      "male",
+      "female",
+      "other",
+    ]);
+
+    const gender = allowedGenders.has(genderRaw)
+      ? genderRaw
+      : "prefer_not_to_answer";
+
+    const dobRaw = String(req.body?.dob || "").trim();
+    const dob = dobRaw ? dobRaw : null;
 
     if (!displayName) {
       return res.status(400).json({ ok: false, error: "display_name_required" });
     }
 
-    if (age !== null && (!Number.isFinite(age) || age < 13 || age > 120)) {
-      return res.status(400).json({ ok: false, error: "invalid_age" });
+    if (dob && !/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+      return res.status(400).json({ ok: false, error: "invalid_dob" });
     }
 
     const { rows } = await db.query(
@@ -159,7 +167,7 @@ router.post("/profile", async (req, res) => {
         display_name = $2,
         full_name = $3,
         gender = $4,
-        age = $5
+        dob = $5
       WHERE id = $1
       RETURNING
         id,
@@ -167,15 +175,15 @@ router.post("/profile", async (req, res) => {
         display_name,
         full_name,
         gender,
-        age,
+        dob,
         profile_visibility;
       `,
       [
         userId,
         displayName || null,
         fullName || null,
-        gender || null,
-        age,
+        gender || "prefer_not_to_answer",
+        dob,
       ]
     );
 
@@ -188,8 +196,8 @@ router.post("/profile", async (req, res) => {
             email: user.email,
             displayName: user.display_name || "",
             fullName: user.full_name || "",
-            gender: user.gender || "",
-            age: user.age || null,
+            gender: user.gender || "prefer_not_to_answer",
+            dob: user.dob ? String(user.dob).slice(0, 10) : "",
             profileVisibility: user.profile_visibility || "friends",
           }
         : null,
@@ -200,7 +208,7 @@ router.post("/profile", async (req, res) => {
   }
 });
 
-// ✅ NEW: account deletion request
+// ✅ account deletion request
 router.post("/delete-request", async (req, res) => {
   try {
     await ensureSocialProfileColumns();
@@ -253,7 +261,7 @@ router.get("/settings", async (req, res) => {
         display_name,
         full_name,
         gender,
-        age,
+        dob,
         profile_visibility
       FROM users
       WHERE id = $1
@@ -269,8 +277,8 @@ router.get("/settings", async (req, res) => {
       settings: {
         display_name: user?.display_name || "",
         full_name: user?.full_name || "",
-        gender: user?.gender || "",
-        age: user?.age || null,
+        gender: user?.gender || "prefer_not_to_answer",
+        dob: user?.dob ? String(user.dob).slice(0, 10) : "",
         profile_visibility: user?.profile_visibility || "friends",
       },
     });
