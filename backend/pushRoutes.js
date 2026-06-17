@@ -142,13 +142,15 @@ export async function sendPushToEmail(email, payload = {}) {
 
     try {
       await webpush.sendNotification(
-        subscription,
-        JSON.stringify({
-          title: payload.title || "TeeRadar",
-          body: payload.body || "You have a new notification.",
-          url: payload.url || "/index.html",
-        })
-      );
+  subscription,
+  JSON.stringify({
+    title: payload.title || "TeeRadar",
+    body: payload.body || "You have a new notification.",
+    url: payload.url || "/index.html",
+    type: payload.type || "GENERAL",
+    meta: payload.meta || {},
+  })
+);
       sent++;
     } catch (err) {
       if (err.statusCode === 404 || err.statusCode === 410) {
