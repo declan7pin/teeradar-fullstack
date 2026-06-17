@@ -285,6 +285,51 @@ function buildBookingLinkForDate(course, date) {
   }
 }
 
+function formatAlertDateLabel(isoDate) {
+  const d = new Date(`${isoDate}T12:00:00`);
+  if (!Number.isFinite(d.getTime())) return isoDate;
+
+  return d.toLocaleDateString("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function normaliseSlotTime(slot) {
+  const raw =
+    slot?.time ||
+    slot?.tee_time ||
+    slot?.teeTime ||
+    slot?.start_time ||
+    slot?.startTime ||
+    "";
+
+  return String(raw || "").split("|")[0].trim();
+}
+
+function buildPushHitSummary(hits) {
+  const safeHits = Array.isArray(hits) ? hits : [];
+
+  const top = safeHits.slice(0, 3).map((h) => {
+    const course = String(h.courseName || "Course").trim();
+    const date = formatAlertDateLabel(h.date);
+
+    const firstTime =
+      Array.isArray(h.sampleTimes) && h.sampleTimes.length
+        ? h.sampleTimes[0]
+        : "";
+
+    return firstTime
+      ? `${course} ${date} ${firstTime}`
+      : `${course} ${date}`;
+  });
+
+  const extra = safeHits.length > 3 ? ` • +${safeHits.length - 3} more` : "";
+
+  return top.join(" • ") + extra;
+}
+
 /**
  * Send ONE email that includes ALL favourites with availability for this tick.
  * If none found, still send a "no matches" email (digest/heartbeat).
@@ -304,20 +349,26 @@ async function sendTeeTimePushSummaryForUser({
 
   if (!safeHits.length) return;
 
-  const title = "Tee times available ⛳";
+  const title =
+    safeHits.length === 1
+      ? `${safeHits[0].courseName} has tee times ⛳`
+      : `${safeHits.length} courses have tee times ⛳`;
 
-  const body =
-    safeHits.length > 1
-      ? `${safeHits.length} favourite courses have tee times available.`
-      : `${safeHits[0].courseName} has ${safeHits[0].count} tee time(s) available.`;
+  const body = buildPushHitSummary(safeHits);
 
-    await sendMobilePushToEmail(email, {
+  await sendMobilePushToEmail(email, {
     title,
     body,
     url: "/book.html?alerts=1",
     type: "TEE_TIME_ALERT",
     meta: {
       hitsCount: safeHits.length,
+      courses: safeHits.slice(0, 10).map((h) => ({
+        courseName: h.courseName,
+        date: h.date,
+        count: h.count,
+        sampleTimes: h.sampleTimes || [],
+      })),
       earliest,
       latest,
       holes: userHoles || null,
@@ -1107,13 +1158,21 @@ if (prov === "miclub" || prov === "quick18") {
                 (course && (course.url || course.bookingUrl || course.bookUrl)) ||
                 "https://teeradar.com.au/book.html";
 
-              emailHits.push({
-                courseName: course.name,
-                provider: course.provider || null,
-                date,
-                count,
-                bookingLink,
-              });
+              const sampleTimes = Array.isArray(result)
+  ? result
+      .map((slot) => normaliseSlotTime(slot))
+      .filter(Boolean)
+      .slice(0, 3)
+  : [];
+
+emailHits.push({
+  courseName: course.name,
+  provider: course.provider || null,
+  date,
+  count,
+  bookingLink,
+  sampleTimes,
+});
             } else {
               console.log(
                 `  ⛔ ${email} – ${course.name} on ${date}: no slots.`
