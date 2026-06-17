@@ -995,9 +995,44 @@ window.fetch = ((originalFetch) => {
     let currentSortMode = "default";
     let currentAvailabilityFilter = "all";
    let userLat = null;
-   let userLng = null;
-   let userLocationMarker = null;
-   let usingLiveLocation = false;
+let userLng = null;
+let userLocationMarker = null;
+let usingLiveLocation = false;
+
+const LOCATION_CACHE_KEY = "teeradar_last_location";
+const LOCATION_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+function saveCachedLocation(lat, lng) {
+  try {
+    localStorage.setItem(
+      LOCATION_CACHE_KEY,
+      JSON.stringify({
+        lat: Number(lat),
+        lng: Number(lng),
+        savedAt: Date.now()
+      })
+    );
+  } catch {}
+}
+
+function loadCachedLocation() {
+  try {
+    const raw = localStorage.getItem(LOCATION_CACHE_KEY);
+    if (!raw) return null;
+
+    const obj = JSON.parse(raw);
+    const lat = Number(obj.lat);
+    const lng = Number(obj.lng);
+    const savedAt = Number(obj.savedAt || 0);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (!savedAt || Date.now() - savedAt > LOCATION_CACHE_MAX_AGE_MS) return null;
+
+    return { lat, lng };
+  } catch {
+    return null;
+  }
+}
 
 // Home course fallback location for Nearest sorting
    let homeCourseLat = null;
@@ -1929,77 +1964,121 @@ function slugifyCourseName(name) {
     }
 
     function requestCurrentLocation(options = {}) {
-      const {
-        centerMap = true,
-        rerender = true,
-        silent = false
-      } = options || {};
+  const {
+    centerMap = true,
+    rerender = true,
+    silent = false
+  } = options || {};
 
-      if (!navigator.geolocation) {
-        if (!silent) {
-          alert("Location is not supported on this device/browser.");
-        }
-        return;
-      }
+  const btn = document.getElementById("useMyLocationBtn");
 
-      const btn = document.getElementById("useMyLocationBtn");
-      if (btn) btn.textContent = "Getting location...";
+  // ✅ 1) Use cached location instantly
+  const cached = loadCachedLocation();
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          userLat = Number(position.coords.latitude);
-          userLng = Number(position.coords.longitude);
-          usingLiveLocation = true;
+  if (cached) {
+    userLat = cached.lat;
+    userLng = cached.lng;
+    usingLiveLocation = true;
 
-          updateUserLocationMarker();
-
-          if (centerMap && map) {
-            map.setView([userLat, userLng], 10);
-          }
-
-          if (btn) btn.textContent = "Using current location";
-
-          if (statusLine) {
-            statusLine.textContent = "Using your current location to sort nearest courses.";
-            statusLine.style.color = "#1b7d45";
-          }
-
-          if (rerender) {
-            renderCourses();
-          }
-        },
-        (err) => {
-  console.warn("Geolocation error", err);
-
-  usingLiveLocation = false;
-
-  if (btn) btn.textContent = "Use my current location";
-
-  if (homeCourseLat !== null && homeCourseLng !== null) {
     currentSortMode = "nearest";
     const sortEl = document.getElementById("courseSort");
     if (sortEl) sortEl.value = "nearest";
 
+    updateUserLocationMarker();
+
+    if (btn) btn.textContent = "Using saved location";
+
     if (statusLine) {
-      statusLine.textContent = "Using your home course location to sort nearest courses.";
+      statusLine.textContent = "Using your saved location while we refresh GPS...";
       statusLine.style.color = "#1b7d45";
     }
 
-    renderCourses();
+    if (rerender) renderCourses();
+  } else {
+    if (btn) btn.textContent = "Getting location...";
+  }
+
+  if (!navigator.geolocation) {
+    if (btn) btn.textContent = cached ? "Using saved location" : "Use my current location";
+
+    if (!silent && !cached) {
+      alert("Location is not supported on this device/browser.");
+    }
+
     return;
   }
 
-  if (!silent) {
-    alert("Could not get your current location. Please allow location access.");
-  }
-},
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000
+  // ✅ 2) Refresh GPS in background
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      userLat = Number(position.coords.latitude);
+      userLng = Number(position.coords.longitude);
+      usingLiveLocation = true;
+
+      saveCachedLocation(userLat, userLng);
+
+      currentSortMode = "nearest";
+      const sortEl = document.getElementById("courseSort");
+      if (sortEl) sortEl.value = "nearest";
+
+      updateUserLocationMarker();
+
+      if (centerMap && map) {
+        map.setView([userLat, userLng], 10);
+      }
+
+      if (btn) btn.textContent = "Using current location";
+
+      if (statusLine) {
+        statusLine.textContent = "Using your current location to sort nearest courses.";
+        statusLine.style.color = "#1b7d45";
+      }
+
+      if (rerender) renderCourses();
+    },
+    (err) => {
+      console.warn("Geolocation error", err);
+
+      if (cached) {
+        if (btn) btn.textContent = "Using saved location";
+
+        if (statusLine) {
+          statusLine.textContent = "Using your saved location to sort nearest courses.";
+          statusLine.style.color = "#1b7d45";
         }
-      );
+
+        return;
+      }
+
+      usingLiveLocation = false;
+
+      if (btn) btn.textContent = "Use my current location";
+
+      if (homeCourseLat !== null && homeCourseLng !== null) {
+        currentSortMode = "nearest";
+        const sortEl = document.getElementById("courseSort");
+        if (sortEl) sortEl.value = "nearest";
+
+        if (statusLine) {
+          statusLine.textContent = "Using your home course location to sort nearest courses.";
+          statusLine.style.color = "#1b7d45";
+        }
+
+        renderCourses();
+        return;
+      }
+
+      if (!silent) {
+        alert("Could not get your current location. Please allow location access.");
+      }
+    },
+    {
+      enableHighAccuracy: false,
+      timeout: 3500,
+      maximumAge: 10 * 60 * 1000
     }
+  );
+}
     
     function getCourseDistanceKm(course) {
   let lat1 = null;
