@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>TeeRadar — My Rounds</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
   :root{
     --teal:#00796b;
@@ -31,18 +31,23 @@
   }
 
   header{
-    position:sticky;
-    top:0;
-    z-index:20;
-    background:rgba(0,94,85,.94);
-    color:#fff;
-    padding:14px 22px;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:16px;
-    box-shadow:0 12px 32px rgba(0,0,0,.14);
-  }
+  position:sticky;
+  top:0;
+  z-index:20;
+  background:rgba(0,94,85,.94);
+  color:#fff;
+  padding:
+    calc(env(safe-area-inset-top) + 14px)
+    22px
+    16px
+    22px;
+  min-height:calc(env(safe-area-inset-top) + 88px);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  box-shadow:0 12px 32px rgba(0,0,0,.14);
+}
 
   .brand{
     display:flex;
@@ -118,6 +123,45 @@
     padding:20px;
     box-shadow:var(--shadow);
   }
+  
+  .handicapCard{
+  margin-bottom:18px;
+  border:1px solid rgba(0,121,107,.16);
+  background:linear-gradient(135deg,#ffffff,#eefaf7);
+  border-radius:24px;
+  padding:18px;
+  box-shadow:0 14px 34px rgba(15,23,42,.06);
+}
+
+.handicapTop{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+}
+
+.handicapValue{
+  font-size:2.4rem;
+  font-weight:1000;
+  letter-spacing:-.07em;
+  margin-top:8px;
+}
+
+.handicapBadge{
+  padding:8px 11px;
+  border-radius:999px;
+  background:var(--teal-soft);
+  color:#005e55;
+  font-weight:950;
+  font-size:.8rem;
+  white-space:nowrap;
+}
+
+.handicapTrend{
+  margin-top:8px;
+  font-weight:950;
+  color:var(--muted);
+}
 
   .card h2{
     margin:0 0 8px;
@@ -528,118 +572,175 @@
   }
 
   #premiumWrap{
-    display:none;
-    border:1px solid var(--border);
-    border-radius:22px;
-    background:#fff;
-    overflow:hidden;
-    box-shadow:0 12px 34px rgba(15,23,42,.07);
+  display:none;
+  border:0;
+  border-radius:28px;
+  background:#fff;
+  overflow:hidden;
+  box-shadow:0 18px 48px rgba(15,23,42,.10);
+}
+
+.premTop{
+  padding:20px;
+  background:linear-gradient(135deg,#071f2f,#00796b);
+  color:#fff;
+}
+
+.premHeroTop{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:14px;
+}
+
+.premHoleTitle{
+  font-size:2rem;
+  font-weight:1000;
+  letter-spacing:-.06em;
+  line-height:1;
+}
+
+.premPlayer{
+  margin-top:8px;
+  display:inline-flex;
+  padding:8px 12px;
+  border-radius:999px;
+  background:rgba(255,255,255,.13);
+  border:1px solid rgba(255,255,255,.18);
+  font-weight:900;
+}
+
+.premScoreBox{
+  text-align:right;
+}
+
+.premScoreBig{
+  font-size:2.6rem;
+  font-weight:1000;
+  letter-spacing:-.07em;
+  line-height:1;
+}
+
+.premScoreSmall{
+  margin-top:4px;
+  opacity:.82;
+  font-weight:900;
+}
+
+.premPills{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:16px;
+}
+
+.premPill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:9px 12px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.12);
+  font-weight:900;
+  font-size:.88rem;
+  white-space:nowrap;
+}
+
+.premPill.clickable{
+  background:#fff;
+  border-color:#fff;
+  color:#005e55;
+  cursor:pointer;
+  box-shadow:0 8px 20px rgba(0,0,0,.18);
+}
+
+.premBody{
+  padding:18px;
+  background:linear-gradient(180deg,#ffffff,#f7fbfa);
+}
+
+.premGrid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:14px;
+}
+
+.premPanel{
+  border:1px solid rgba(219,229,234,.95);
+  border-radius:24px;
+  padding:18px;
+  background:#fff;
+  box-shadow:0 12px 30px rgba(15,23,42,.06);
+}
+
+.premRow{
+  display:block;
+  margin-top:18px;
+}
+
+.premRow:first-child{
+  margin-top:0;
+}
+
+.premRow label{
+  margin:0 0 10px;
+  font-size:1.05rem;
+  font-weight:1000;
+  letter-spacing:-.03em;
+}
+
+.premBtns select{
+  appearance:none;
+  -webkit-appearance:none;
+  min-height:58px;
+  border-radius:18px!important;
+  background:#f8fafc!important;
+  border:1px solid #dbe5ea!important;
+  text-align:center;
+  text-align-last:center;
+  font-size:1.35rem!important;
+  font-weight:1000!important;
+  color:#0f172a!important;
+}
+
+.premNav{
+  display:grid;
+  grid-template-columns:1fr 1.4fr;
+  gap:10px;
+  margin-top:18px;
+}
+
+.premNav .btn2{
+  min-height:56px;
+  font-size:1rem;
+}
+
+.premMiniNote{
+  margin-top:14px;
+  color:var(--muted);
+  font-weight:900;
+  text-align:center;
+}
+
+@media(max-width:700px){
+  #premiumWrap{
+    margin-left:-2px;
+    margin-right:-2px;
   }
 
   .premTop{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:12px;
-    padding:14px;
-    background:linear-gradient(135deg,#063f39,#00796b);
-    color:#fff;
+    padding:20px 18px;
   }
 
-  .premPills{
-    display:flex;
-    gap:8px;
-    flex-wrap:wrap;
-    align-items:center;
+  .premHoleTitle{
+    font-size:2.15rem;
   }
 
-  .premPill{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    padding:8px 11px;
-    border-radius:999px;
-    border:1px solid rgba(255,255,255,.18);
-    background:rgba(255,255,255,.12);
-    font-weight:900;
-    font-size:.86rem;
-    white-space:nowrap;
+  .premScoreBig{
+    font-size:2.8rem;
   }
-
-  .premPill.clickable{
-    background:#fff;
-    border-color:#fff;
-    color:#005e55;
-    cursor:pointer;
-    box-shadow:0 8px 20px rgba(0,0,0,.18);
-  }
-
-  @keyframes holePulse{
-    0%{box-shadow:0 0 0 0 rgba(255,255,255,.5),0 8px 20px rgba(0,0,0,.18)}
-    70%{box-shadow:0 0 0 10px rgba(255,255,255,0),0 8px 20px rgba(0,0,0,.18)}
-    100%{box-shadow:0 0 0 0 rgba(255,255,255,0),0 8px 20px rgba(0,0,0,.18)}
-  }
-
-  .premPill.clickable.attention{animation:holePulse 2s infinite}
-
-  .premBody{padding:16px}
-
-  .premGrid{
-    display:grid;
-    grid-template-columns:1fr;
-    gap:14px;
-  }
-
-  .premPanel{
-    border:1px solid var(--border);
-    border-radius:20px;
-    padding:16px;
-    background:linear-gradient(180deg,#fff,#fbfdfe);
-  }
-
-  .premRow{
-    display:grid;
-    grid-template-columns:120px 1fr;
-    gap:12px;
-    align-items:center;
-    margin-top:12px;
-  }
-
-  @media (max-width:520px){
-    .premRow{grid-template-columns:1fr}
-  }
-
-  .premRow label{
-    margin:0;
-    font-size:1rem;
-    font-weight:950;
-  }
-
-  .premBtns{
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-  }
-
-  .premNav{
-    display:flex;
-    gap:10px;
-    justify-content:space-between;
-    flex-wrap:wrap;
-    margin-top:16px;
-  }
-
-  .premNav .btn2{
-    flex:1;
-    min-width:140px;
-  }
-
-  .premMiniNote{
-    margin-top:12px;
-    color:var(--muted);
-    font-weight:800;
-  }
-
+}
   .tableWrap.hidden{display:none}
 
   .holePickerBack{
@@ -700,23 +801,41 @@
   }
 
   @media (max-width:700px){
-    header{
-      align-items:flex-start;
-      padding:16px;
-    }
+  header{
+    align-items:flex-start;
+    justify-content:flex-start;
+    flex-direction:column;
+    padding:
+      calc(env(safe-area-inset-top) + 58px)
+      14px
+      16px
+      14px;
+    min-height:auto;
+    gap:12px;
+  }
 
-    .brand{
-      margin-top:70px;
-    }
+  .brand{
+    margin-top:0;
+    font-size:1rem;
+    flex-shrink:0;
+    width:100%;
+  }
 
-    .navbtns{
-      gap:7px;
-    }
+  .brand small{
+    font-size:.82rem;
+  }
 
-    .btn{
-      padding:8px 11px;
-      font-size:.86rem;
-    }
+  .navbtns{
+    width:100%;
+    max-width:none;
+    justify-content:flex-start;
+    gap:8px;
+  }
+
+  .btn{
+    padding:8px 12px;
+    font-size:.82rem;
+  }
 
     main{
       padding:16px 12px 34px;
@@ -820,7 +939,110 @@
 .liveScoreHero.saved .scoreBig{
   font-size:1.75rem;
 }
+/* ✅ MOBILE ONLY: scorecard scrolls vertically + horizontally without zooming page */
+@media (max-width:700px){
+  html,
+  body{
+    width:100%;
+    max-width:100%;
+    overflow-x:hidden;
+  }
+
+  .card,
+  #scorecardWrap{
+    max-width:100%;
+    min-width:0;
+  }
+
+  .tableWrap{
+    width:100%;
+    max-width:100%;
+    max-height:70vh;
+    overflow:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    touch-action:pan-x pan-y;
+  }
+
+  #scoreTable{
+    width:max-content;
+    min-width:820px;
+  }
+
+  th,
+  td{
+    font-size:.82rem;
+    padding:9px 8px;
+  }
+
+  .mini{
+    width:64px;
+    padding:8px 6px;
+  }
+  /* ✅ App-style course setup */
+#courseRow .autocomplete-list{
+  position:static;
+  margin-top:10px;
+  max-height:360px;
+  border-radius:22px;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
 }
+
+.courseOptionCard{
+  padding:16px 18px;
+  border-bottom:1px solid var(--border);
+  background:#fff;
+  cursor:pointer;
+}
+
+.courseOptionCard:hover{
+  background:#f4fbf9;
+}
+
+.courseOptionTitle{
+  font-size:1rem;
+  font-weight:1000;
+  letter-spacing:-.03em;
+  color:var(--text);
+}
+
+.courseOptionMeta{
+  margin-top:4px;
+  color:var(--muted);
+  font-weight:850;
+}
+
+.courseOptionRating{
+  margin-top:8px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.courseBadge{
+  display:inline-flex;
+  padding:6px 9px;
+  border-radius:999px;
+  background:var(--teal-soft);
+  color:#005e55;
+  font-size:.78rem;
+  font-weight:950;
+}
+
+@media(max-width:700px){
+  #createFormPanel .row{
+    grid-template-columns:1fr;
+  }
+
+  #courseRow .autocomplete-list{
+    max-height:52vh;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -857,7 +1079,21 @@
       <div class="grid">
         <!-- LEFT -->
         <section class="card" id="createRoundSection">
-          <div class="startHero">
+
+  <div class="handicapCard" id="handicapCard">
+    <div class="handicapTop">
+      <div>
+        <h2 style="margin:0;">TeeRadar Handicap</h2>
+        <div class="muted" id="handicapStatus" style="font-weight:850;">Loading...</div>
+      </div>
+      <div class="handicapBadge" id="handicapBadge">Provisional</div>
+    </div>
+
+    <div class="handicapValue" id="handicapValue">—</div>
+    <div class="handicapTrend" id="handicapTrend">Last 3 avg vs par: —</div>
+  </div>
+
+  <div class="startHero">
   <div class="startHeroText">
     <h2>Recent rounds</h2>
     <div class="muted">Review old rounds or start a fresh scorecard.</div>
@@ -1001,6 +1237,60 @@
 
 <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;" />
 
+<h2>Upcoming rounds</h2>
+<div class="muted" style="font-weight:750;">
+  Manually add a future round and share it with friends.
+</div>
+
+<div class="row">
+  <div>
+    <label for="upcomingCourse">Course</label>
+    <input id="upcomingCourse" placeholder="e.g. Point Walter Golf Course" />
+  </div>
+  <div>
+    <label for="upcomingState">State</label>
+    <select id="upcomingState">
+      <option value="WA">WA</option>
+      <option value="NT">NT</option>
+      <option value="QLD">QLD</option>
+      <option value="NSW">NSW</option>
+      <option value="VIC">VIC</option>
+      <option value="SA">SA</option>
+      <option value="TAS">TAS</option>
+      <option value="ACT">ACT</option>
+    </select>
+  </div>
+</div>
+
+<div class="row3">
+  <div>
+    <label for="upcomingDate">Date</label>
+    <input id="upcomingDate" type="date" />
+  </div>
+  <div>
+    <label for="upcomingTime">Tee time</label>
+    <input id="upcomingTime" type="time" />
+  </div>
+  <div>
+    <label for="upcomingHoles">Holes</label>
+    <select id="upcomingHoles">
+      <option value="18">18</option>
+      <option value="9">9</option>
+    </select>
+  </div>
+</div>
+
+<label for="upcomingNotes">Notes</label>
+<textarea id="upcomingNotes" placeholder="Optional notes e.g. Cart booked, 2 players, comp round..."></textarea>
+
+<div class="actions">
+  <button class="btn2" id="addUpcomingBtn" type="button">Add upcoming round</button>
+</div>
+
+<div id="upcomingList" class="list"></div>
+
+<hr style="border:none;border-top:1px solid var(--border);margin:20px 0;" />
+
 <div id="yourRoundsSection" class="roundsCollapsed">
   <div class="roundsHeaderRow">
     <div>
@@ -1071,7 +1361,7 @@
     <div class="premTop">
       <div class="premPills" id="premPills"></div>
       <div class="premPills">
-        <button class="btn2 secondary" id="toggleTableBtn" type="button" style="display:none;">View table</button>
+        <button class="btn2 secondary" id="toggleTableBtn" type="button" style="display:none;">View scorecard</button>
       </div>
     </div>
 
@@ -1079,7 +1369,7 @@
       <div class="premGrid">
         <div class="premPanel">
           <div class="premRow">
-            <label>Score</label>
+            <label>Strokes</label>
             <div class="premBtns" id="premScoreBtns"></div>
           </div>
 
@@ -1175,7 +1465,27 @@
   </div>
 </div>
 
+<div class="modalBack" id="shareRoundModalBack" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3>Share upcoming round</h3>
+    <div class="muted" style="font-weight:800;">
+      Select which friends can see this upcoming round.
+    </div>
+
+    <div id="shareFriendsList" class="list" style="margin-top:14px;"></div>
+
+    <div class="actions">
+      <button class="btn2 secondary" id="shareCancelBtn" type="button">Cancel</button>
+      <button class="btn2" id="shareConfirmBtn" type="button">Share</button>
+    </div>
+
+    <div id="shareToast" class="toast"></div>
+  </div>
+</div>
+
   <script>
+    const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+
     // -----------------------------
     // Auth helpers
     // -----------------------------
@@ -1230,7 +1540,7 @@
       headers["Content-Type"] = headers["Content-Type"] || "application/json";
       if (token) headers["Authorization"] = "Bearer " + token;
 
-      const res = await fetch(path, { ...options, headers });
+      const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
       let data = null;
       try { data = await res.json(); } catch { /* ignore */ }
       if (!res.ok) {
@@ -1291,6 +1601,7 @@
     let currentRoundId = null;
     let currentRound = null;
     let roundsCache = [];
+    let backendHandicap = null;
 
     // course cache (optional)
     let coursesCache = [];
@@ -1393,7 +1704,26 @@ function writeScorecardsToLS(st, arr){
     
     const accountLink = document.getElementById("accountLink");
 const myStatsLink = document.getElementById("myStatsLink");
+const upcomingCourse = document.getElementById("upcomingCourse");
+const upcomingState = document.getElementById("upcomingState");
+const upcomingDate = document.getElementById("upcomingDate");
+const upcomingTime = document.getElementById("upcomingTime");
+const upcomingHoles = document.getElementById("upcomingHoles");
+const upcomingNotes = document.getElementById("upcomingNotes");
+const addUpcomingBtn = document.getElementById("addUpcomingBtn");
+const upcomingList = document.getElementById("upcomingList");
 
+const shareRoundModalBack = document.getElementById("shareRoundModalBack");
+const shareFriendsList = document.getElementById("shareFriendsList");
+const shareCancelBtn = document.getElementById("shareCancelBtn");
+const shareConfirmBtn = document.getElementById("shareConfirmBtn");
+const shareToast = document.getElementById("shareToast");
+
+let selectedUpcomingRoundId = null;
+let pendingUpcomingPlayerNames = null;
+let pendingUpcomingPlayerUserIds = null;
+let pendingUpcomingRoundId = null;
+    
 function isLoggedIn(){
   return !!getToken();
 }
@@ -1467,6 +1797,9 @@ let premiumPlayerIndex = 0; // 0-based (0=P1)
     const rightToast = document.getElementById("rightToast");
 
     const courseAutoList = document.getElementById("courseAutoList");
+
+// ✅ Upcoming round autocomplete
+let upcomingCourseAutoList = null;
 
     // ✅ NEW refs
     const playerNamesWrap = document.getElementById("playerNamesWrap");
@@ -1572,7 +1905,7 @@ function setLeftPanelsVisibility(show){
 
       try{
         // ✅ ONLY allow autofill from submitted/approved scorecard templates
-        const res = await fetch("/api/rounds/templates");
+        const res = await fetch(`${API_BASE}/api/rounds/templates`);
         const data = await res.json();
 
         // expected shape: { courses: [...] }
@@ -1580,12 +1913,15 @@ function setLeftPanelsVisibility(show){
 
         // normalize to what the autocomplete expects
         coursesCache = arr
-          .map((c) => ({
-            name: String(c?.name || c?.course || "").trim(),
-            state: String(c?.state || "").trim().toUpperCase(),
-            holes: Number(c?.holes) || null,
-          }))
-          .filter((c) => c.name && c.state);
+  .map((c) => ({
+    name: String(c?.name || c?.course || "").trim(),
+    state: String(c?.state || "").trim().toUpperCase(),
+    holes: Number(c?.holes) || null,
+    course_rating: c?.course_rating ?? c?.rating ?? null,
+    slope_rating: c?.slope_rating ?? c?.slope ?? null,
+    tee_colour: c?.tee_colour ?? c?.tee ?? "",
+  }))
+  .filter((c) => c.name && c.state);
 
       }catch(e){
         coursesCache = [];
@@ -1617,7 +1953,7 @@ function setLeftPanelsVisibility(show){
   }
 
   try{
-    const res = await fetch(`/api/scorecards/${encodeURIComponent(state)}`);
+    const res = await fetch(`${API_BASE}/api/scorecards/${encodeURIComponent(state)}`);
 
     let arr = [];
     if (!res.ok){
@@ -1752,47 +2088,61 @@ function setLeftPanelsVisibility(show){
     }
 
     function showCourseAutocomplete(items){
-      if (!courseAutoList) return;
+  if (!courseAutoList) return;
+
+  courseAutoList.innerHTML = "";
+
+  if (!items.length){
+    courseAutoList.style.display = "none";
+    return;
+  }
+
+  items.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "courseOptionCard";
+
+    const baseName = c.name || c.course || c.title || "";
+    const st = String(c.state || "").toUpperCase();
+    const h = Number(c.holes) || null;
+    const rating = c.course_rating ?? null;
+    const slope = c.slope_rating ?? null;
+    const tee = String(c.tee_colour || "").trim();
+
+    div.innerHTML = `
+      <div class="courseOptionTitle">
+        ${escapeHtml(baseName)}${h ? ` (${h} holes)` : ""}
+      </div>
+
+      <div class="courseOptionMeta">
+        ${st ? `State: ${escapeHtml(st)}` : ""}
+      </div>
+
+      <div class="courseOptionRating">
+        ${rating ? `<span class="courseBadge">Rating ${escapeHtml(rating)}</span>` : ""}
+        ${slope ? `<span class="courseBadge">Slope ${escapeHtml(slope)}</span>` : ""}
+        ${tee ? `<span class="courseBadge">Tee ${escapeHtml(tee)}</span>` : ""}
+      </div>
+    `;
+
+    div.addEventListener("click", async () => {
+      courseEl.value = baseName;
+
+      if (st && stateEl) stateEl.value = st;
+      if (h && holesEl) holesEl.value = String(h);
+
+      selectedCourseKey = courseKey(baseName, st || stateEl.value);
+
+      courseAutoList.style.display = "none";
       courseAutoList.innerHTML = "";
-      if (!items.length){
-        courseAutoList.style.display = "none";
-        return;
-      }
-      items.forEach(c => {
-        const div = document.createElement("div");
-        div.className = "autocomplete-item";
-        const baseName = c.name || c.course || c.title || "";
-        const st = (c.state || "").toUpperCase();
-        const h = Number(c.holes) || null;
 
-        const label = h ? `${baseName} (${h} holes)` : baseName;
-        const meta = st ? `State: ${st}` : "";
+      await refreshNinesAndTeesUI();
+    });
 
-        div.innerHTML = `${escapeHtml(label)}${meta ? `<small>${escapeHtml(meta)}</small>` : ""}`;
+    courseAutoList.appendChild(div);
+  });
 
-        div.addEventListener("click", async () => {
-          const nm = c.name || c.course || c.title || "";
-          const st2 = (c.state || "").toUpperCase();
-          const h2 = Number(c.holes) || null;
-
-          // ✅ set course WITHOUT "(18 holes)" suffix
-          courseEl.value = nm;
-
-          if (st2 && stateEl) stateEl.value = st2;
-          if (h2 && holesEl) holesEl.value = String(h2);
-
-          selectedCourseKey = courseKey(nm, st2 || stateEl.value);
-          courseAutoList.style.display = "none";
-          courseAutoList.innerHTML = "";
-
-          await refreshNinesAndTeesUI();
-        });
-
-        courseAutoList.appendChild(div);
-      });
-      courseAutoList.style.display = "block";
-    }
-
+  courseAutoList.style.display = "block";
+}
     async function initCourseAutocomplete(){
       if (!courseEl || !courseAutoList) return;
 
@@ -1901,7 +2251,6 @@ function setLeftPanelsVisibility(show){
       playerNames[0] = String(inp.value || "").trim();
       try{ localStorage.setItem("teeradar_guest_p1_name", playerNames[0]); }catch{}
       // refresh headers if a round is open
-      if (currentRoundId && currentRound) renderScorecard(currentRound);
     });
   }
 } else {
@@ -1910,7 +2259,6 @@ function setLeftPanelsVisibility(show){
     // if a round is selected, save immediately to that round
     if (currentRoundId) saveNamesForRound(currentRoundId);
     // also refresh header labels
-    if (currentRoundId && currentRound) renderScorecard(currentRound);
   });
 }
 
@@ -2258,6 +2606,130 @@ function setCachedRoundScore(id, totals){
   }catch{}
 }
 
+function getRoundHandicapScore(round){
+  const holes = Array.isArray(round?.holesData)
+    ? round.holesData
+    : (Array.isArray(round?.holes) ? round.holes : []);
+
+  const totals = calcTotalsForPlayer(holes, 0);
+
+  if (totals.strokes == null || totals.par == null) return null;
+
+  const holesCount = Number(round?.holes) || holes.length || 18;
+  const toPar = Number(totals.strokes) - Number(totals.par);
+
+  // Simple TeeRadar index estimate.
+  // 9-hole rounds are scaled to 18.
+  return holesCount === 9 ? toPar * 2 : toPar;
+}
+
+function calculateTeeRadarHandicap(){
+  const played = (roundsCache || [])
+    .map(r => ({
+      round: r,
+      diff: getRoundHandicapScore(r),
+      date: new Date(r.created_at || 0).getTime()
+    }))
+    .filter(x => Number.isFinite(Number(x.diff)))
+    .sort((a,b) => b.date - a.date);
+
+  if (!played.length) {
+    return {
+      value: null,
+      status: "Submit 3 rounds to confirm your TeeRadar Handicap.",
+      badge: "No rounds",
+      trend: "Last 3 avg vs par: —"
+    };
+  }
+
+  const confirmed = played.length >= 3;
+
+  const recent20 = played.slice(0, 20);
+  const bestCount =
+    recent20.length >= 20 ? 8 :
+    recent20.length >= 10 ? 4 :
+    recent20.length >= 6 ? 2 :
+    1;
+
+  const best = recent20
+    .slice()
+    .sort((a,b) => a.diff - b.diff)
+    .slice(0, bestCount);
+
+  const avg = best.reduce((sum,x) => sum + Number(x.diff), 0) / best.length;
+
+  const last3 = played.slice(0, 3);
+  const prev3 = played.slice(3, 6);
+
+  let trendText = "Trend: not enough rounds yet";
+
+  if (last3.length >= 3 && prev3.length >= 3) {
+    const a = last3.reduce((sum,x) => sum + x.diff, 0) / last3.length;
+    const b = prev3.reduce((sum,x) => sum + x.diff, 0) / prev3.length;
+    const change = a - b;
+
+    if (Math.abs(change) < 0.1) {
+      trendText = "Trend: steady last 3 rounds";
+    } else if (change < 0) {
+      trendText = `Trend: ↓ ${Math.abs(change).toFixed(1)} last 3 rounds`;
+    } else {
+      trendText = `Trend: ↑ ${change.toFixed(1)} last 3 rounds`;
+    }
+  } else if (last3.length >= 3) {
+    trendText = "Trend: first 3-round trend ready";
+  }
+
+  return {
+    value: Math.max(0, avg).toFixed(1),
+    status: confirmed
+      ? `Confirmed from ${played.length} submitted rounds.`
+      : `${played.length}/3 rounds submitted — provisional handicap.`,
+    badge: confirmed ? "Confirmed" : "Provisional",
+    trend: trendText
+  };
+}
+
+function renderTeeRadarHandicap(){
+  const valueEl = document.getElementById("handicapValue");
+  const statusEl = document.getElementById("handicapStatus");
+  const badgeEl = document.getElementById("handicapBadge");
+  const trendEl = document.getElementById("handicapTrend");
+
+  if (!valueEl || !statusEl || !badgeEl || !trendEl) return;
+
+  let h = null;
+
+  if (backendHandicap && isLoggedIn()) {
+    const rounds = Number(backendHandicap.rounds || 0);
+    const value = backendHandicap.value;
+    const status = String(backendHandicap.status || "provisional").toLowerCase();
+    const trend = backendHandicap.trend;
+
+    let trendText = "Last 3 avg vs par: —";
+
+if (Number.isFinite(Number(trend))) {
+  const t = Number(trend);
+  trendText = `Last 3 avg vs par: ${t > 0 ? "+" : ""}${t.toFixed(1)}`;
+}
+
+    h = {
+      value: value == null ? null : Number(value).toFixed(1),
+      status: rounds >= 3
+        ? `Confirmed from ${rounds} submitted rounds.`
+        : `${rounds}/3 rounds submitted — provisional handicap.`,
+      badge: status === "confirmed" ? "Confirmed" : "Provisional",
+      trend: trendText
+    };
+  } else {
+    h = calculateTeeRadarHandicap();
+  }
+
+  valueEl.textContent = h.value == null ? "—" : h.value;
+  statusEl.textContent = h.status;
+  badgeEl.textContent = h.badge;
+  trendEl.textContent = h.trend;
+}
+
 function dateOnlyFromRound(r){
   try{
     const d = new Date(r.created_at);
@@ -2443,7 +2915,7 @@ function setPremiumVisible(on){
 
   if (toggleTableBtn){
     toggleTableBtn.style.display = on ? "inline-flex" : "none";
-    toggleTableBtn.textContent = premiumShowingTable ? "Play mode" : "View table";
+    toggleTableBtn.textContent = premiumShowingTable ? "Play mode" : "View scorecard";
   }
 }
 
@@ -2503,13 +2975,25 @@ if (premPills){
   const toParLabel = (totals.toPar == null) ? "—" : (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+"+totals.toPar : ""+totals.toPar));
 
   premPills.innerHTML = `
-    <span class="premPill">${escapeHtml(pLabel)}</span>
+  <div class="premHeroTop">
+    <div>
+      <div class="premHoleTitle">Hole ${holeNum}</div>
+      <div class="premPlayer">${escapeHtml(pLabel)}</div>
+    </div>
+
+    <div class="premScoreBox">
+      <div class="premScoreBig">${escapeHtml(toParLabel)}</div>
+      <div class="premScoreSmall">To par</div>
+    </div>
+  </div>
+
+  <div class="premPills">
     <span class="premPill clickable attention" id="premHoleSelectPill">Hole ${holeNum} / ${holesCount}</span>
     <span class="premPill">Par ${Number.isFinite(basePar) ? basePar : "—"}</span>
-    <span class="premPill">${Number.isFinite(metaDist) ? (metaDist + "m") : "—"}</span>
+    <span class="premPill">${Number.isFinite(metaDist) ? (metaDist + "m") : "Distance —"}</span>
     <span class="premPill">${teeName ? ("Tee " + escapeHtml(teeName)) : "Tee —"}</span>
-    <span class="premPill">To Par: ${toParLabel}</span>
-  `;
+  </div>
+`;
 }
 
 // ✅ button text
@@ -2520,16 +3004,13 @@ if (premPrevBtn) premPrevBtn.textContent = (premiumPlayerIndex > 0) ? "← Prev 
 const holeRow = getHoleRowFromTable(holeNum);
 const curStrokes = holeRow ? getHolePlayerValue(holeRow, "strokes", premiumPlayerIndex) : null;
 const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerIndex) : null;
+const hasSavedPutts = curPutts !== null && curPutts !== undefined && Number.isFinite(Number(curPutts));
 
   // ✅ defaults you requested
   const startStrokes = Number.isFinite(Number(curStrokes)) ? Number(curStrokes) : Number(basePar);
-  const startPutts = Number.isFinite(Number(curPutts)) ? Number(curPutts) : 2;
-
-  // strokes options: par-2 .. par+4
-  const strokeVals = [];
-  for (let v = basePar - 2; v <= basePar + 4; v++){
-    if (v >= 1 && v <= 12) strokeVals.push(v);
-  }
+  const startPutts = hasSavedPutts ? Number(curPutts) : "";
+    // strokes options: 1 to 11+
+  const strokeVals = [1,2,3,4,5,6,7,8,9,10,11];
 
   // wheel picker for strokes
   if (premScoreBtns){
@@ -2545,7 +3026,7 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
     strokeVals.forEach(v => {
       const opt = document.createElement("option");
       opt.value = String(v);
-      opt.textContent = String(v);
+      opt.textContent = v === 11 ? "11+" : String(v);
       sel.appendChild(opt);
     });
 
@@ -2571,18 +3052,34 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
     sel.style.fontWeight = "900";
     sel.style.fontSize = "18px";
 
-    [0,1,2,3,4].forEach(v => {
-      const opt = document.createElement("option");
-      opt.value = String(v);
-      opt.textContent = String(v);
-      sel.appendChild(opt);
-    });
+        const puttVals = [
+  { value: "", label: "Select putts" },
+  { value: 0, label: "Chipped in" },
+  { value: 1, label: "1" },
+  { value: 2, label: "2" },
+  { value: 3, label: "3" },
+  { value: 4, label: "4" },
+  { value: 5, label: "5" },
+  { value: 6, label: "6" },
+  { value: 7, label: "7" },
+  { value: 8, label: "8" },
+  { value: 9, label: "9" },
+  { value: 10, label: "10" }
+];
 
-    sel.value = String(startPutts);
+puttVals.forEach(({ value, label }) => {
+  const opt = document.createElement("option");
+  opt.value = String(value);
+  opt.textContent = label;
+  sel.appendChild(opt);
+});
 
+sel.value = startPutts === "" ? "" : String(startPutts);
+    
     sel.addEventListener("change", () => {
-      const v = Number(sel.value);
-      setHoleValueInTable(holeNum, "putts", premiumPlayerIndex + 1, Number.isFinite(v) ? v : null);
+      const raw = String(sel.value || "").trim();
+const v = raw === "" ? null : Number(raw);
+setHoleValueInTable(holeNum, "putts", premiumPlayerIndex + 1, Number.isFinite(v) ? v : null);
       renderPremiumForHole(round, metaPars, metaDists, teeName);
     });
 
@@ -2592,13 +3089,13 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
   // no colours / shapes in play mode
   if (premNote){
     premNote.textContent = (premiumPlayerIndex < (getPlayersCountFromRound(round) - 1))
-  ? "Use the wheels, then Next player →"
-  : "Use the wheels, then Next hole →";
-  }
+  ? "Enter this player’s score, then move to the next player."
+  : "Enter your score, then move to the next hole.";
 
   const pc2 = getPlayersCountFromRound(round);
 if (premPrevBtn) premPrevBtn.disabled = (premiumHoleIndex <= 0 && premiumPlayerIndex <= 0);
 if (premNextBtn) premNextBtn.disabled = (premiumHoleIndex >= holesCount - 1 && premiumPlayerIndex >= pc2 - 1);
+}
 }
 
 function enablePremiumMode(round, metaPars, metaDists, teeName){
@@ -3184,6 +3681,222 @@ function guestDeleteRound(id){
   guestWriteRounds(arr);
 }
 
+function formatUpcomingDate(dateStr){
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return String(dateStr).slice(0,10);
+
+  return d.toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
+}    
+
+function getUpcomingPlayerNames(upcoming){
+  const names = [];
+
+  const possible =
+    upcoming.participants ||
+    upcoming.player_names ||
+    upcoming.shared_players ||
+    [];
+
+  if (Array.isArray(possible)) {
+    possible.forEach((p) => {
+      const name = String(
+        p?.name ||
+        p?.display_name ||
+        p?.email ||
+        p ||
+        ""
+      ).trim();
+
+      if (name && !names.some(n => n.toLowerCase() === name.toLowerCase())) {
+        names.push(name);
+      }
+    });
+  }
+
+  if (!names.length) {
+    const me = getUserFromToken();
+    const myName = String(me.name || me.email || "").trim();
+    if (myName) names.push(myName);
+  }
+
+  return names.slice(0, 4);
+}    
+
+function getUpcomingPlayerUserIds(upcoming){
+  const ids = Array.isArray(upcoming.player_user_ids)
+    ? upcoming.player_user_ids.map(Number).filter(Number.isFinite)
+    : [];
+
+  if (ids.length) return ids.slice(0, 4);
+
+  const participants = Array.isArray(upcoming.participants)
+    ? upcoming.participants
+    : [];
+
+  return participants
+    .map(p => Number(p?.id))
+    .filter(Number.isFinite)
+    .slice(0, 4);
+}
+
+async function fetchUpcomingRounds(){
+  if (!isLoggedIn() || !upcomingList) {
+    if (upcomingList) upcomingList.innerHTML = `<div class="muted">Log in to add and share upcoming rounds.</div>`;
+    return;
+  }
+
+  try {
+    const data = await api("/api/shared-rounds/upcoming?includeShared=1", { method:"GET" });
+    const rounds = data.rounds || [];
+
+    if (!rounds.length) {
+      upcomingList.innerHTML = `<div class="muted" style="font-weight:800;">No upcoming rounds added yet.</div>`;
+      return;
+    }
+
+    upcomingList.innerHTML = rounds.map(r => {
+      const isShared = r.is_shared === true || r.is_shared === "true";
+      const ownerText = isShared && r.owner_name ? `Shared by ${escapeHtml(r.owner_name)}` : "";
+
+      return `
+        <div class="roundItem" onclick="startUpcomingRoundFromId(${Number(r.id)})" style="cursor:pointer;">
+          <div class="top">
+            <div>
+              <div class="title">${escapeHtml(r.course || "Upcoming round")}</div>
+              <div class="meta">
+                ${escapeHtml(r.state || "")} • ${escapeHtml(r.holes || "")} holes
+                • ${formatUpcomingDate(r.play_date)}
+                ${r.tee_time ? " • " + escapeHtml(r.tee_time) : ""}
+              </div>
+              ${ownerText ? `<div class="meta"><strong>${ownerText}</strong></div>` : ""}
+              ${r.notes ? `<div class="meta">${escapeHtml(r.notes)}</div>` : ""}
+              <div class="meta" style="color:#00796b;font-weight:900;">
+  Tap to start scorecard${r.players_count ? ` • ${escapeHtml(r.players_count)} players` : ""}
+</div>
+            </div>
+            <div>
+              ${isShared ? "" : `
+                <button class="btn2 secondary" type="button"
+                  onclick="event.stopPropagation(); openShareRoundModal(${Number(r.id)})">
+                  Share
+                </button>
+              `}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  } catch (err) {
+    upcomingList.innerHTML = `<div class="muted">Could not load upcoming rounds: ${escapeHtml(err.message)}</div>`;
+  }
+}
+async function addUpcomingRound(){
+  if (!isLoggedIn()) {
+    setToast(leftToast, "Please log in to add upcoming rounds.", false);
+    return;
+  }
+
+  const course = String(upcomingCourse?.value || "").trim();
+  const state = String(upcomingState?.value || "WA").trim().toUpperCase();
+  const play_date = String(upcomingDate?.value || "").trim();
+  const tee_time = String(upcomingTime?.value || "").trim();
+  const holes = Number(upcomingHoles?.value || 18);
+  const notes = String(upcomingNotes?.value || "").trim();
+
+  if (!course || !play_date) {
+    setToast(leftToast, "Please enter a course and date.", false);
+    return;
+  }
+
+  try {
+    await api("/api/shared-rounds/upcoming", {
+      method:"POST",
+      body: JSON.stringify({ course, state, play_date, tee_time, holes, notes })
+    });
+
+    if (upcomingCourse) upcomingCourse.value = "";
+    if (upcomingDate) upcomingDate.value = "";
+    if (upcomingTime) upcomingTime.value = "";
+    if (upcomingNotes) upcomingNotes.value = "";
+
+    setToast(leftToast, "Upcoming round added.", true);
+    await fetchUpcomingRounds();
+  } catch (err) {
+    setToast(leftToast, "Could not add upcoming round: " + err.message, false);
+  }
+}
+
+async function openShareRoundModal(roundId){
+  selectedUpcomingRoundId = Number(roundId);
+
+  if (!shareRoundModalBack || !shareFriendsList) return;
+
+  shareToast.className = "toast";
+  shareToast.style.display = "none";
+  shareFriendsList.innerHTML = `<div class="muted">Loading friends...</div>`;
+  shareRoundModalBack.style.display = "flex";
+  shareRoundModalBack.setAttribute("aria-hidden", "false");
+
+  try {
+    const data = await api("/api/friends/list", { method:"GET" });
+    const friends = data.friends || [];
+
+    if (!friends.length) {
+      shareFriendsList.innerHTML = `<div class="muted">No friends yet. Add friends first.</div>`;
+      return;
+    }
+
+    shareFriendsList.innerHTML = friends.map(f => `
+      <label style="display:flex;gap:10px;align-items:center;margin:0;padding:12px;border:1px solid var(--border);border-radius:16px;">
+        <input type="checkbox" class="shareFriendCheck" value="${Number(f.friend_user_id)}" style="width:auto;" />
+        <span style="font-weight:900;">${escapeHtml(f.name || f.email || "Friend")}</span>
+      </label>
+    `).join("");
+  } catch (err) {
+    shareFriendsList.innerHTML = `<div class="muted">Could not load friends: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function closeShareRoundModal(){
+  if (!shareRoundModalBack) return;
+  selectedUpcomingRoundId = null;
+  shareRoundModalBack.style.display = "none";
+  shareRoundModalBack.setAttribute("aria-hidden", "true");
+}
+
+async function confirmShareRound(){
+  if (!selectedUpcomingRoundId) return;
+
+  const ids = Array.from(document.querySelectorAll(".shareFriendCheck:checked"))
+    .map(el => Number(el.value))
+    .filter(Number.isFinite);
+
+  if (!ids.length) {
+    setToast(shareToast, "Select at least one friend.", false);
+    return;
+  }
+
+  try {
+    await api("/api/shared-rounds/share", {
+      method:"POST",
+      body: JSON.stringify({
+        upcoming_round_id: selectedUpcomingRoundId,
+        friend_user_ids: ids
+      })
+    });
+
+    setToast(shareToast, "Shared successfully.", true);
+    setTimeout(closeShareRoundModal, 700);
+  } catch (err) {
+    setToast(shareToast, "Share failed: " + err.message, false);
+  }
+}
+
     // -----------------------------
     // API calls
     // -----------------------------
@@ -3196,17 +3909,21 @@ function guestDeleteRound(id){
       holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
     }));
     renderRoundsList();
+renderTeeRadarHandicap();
     return;
   }
 
   // ✅ Logged in: read from backend
   const data = await api("/api/rounds", { method:"GET" });
-  const rounds = (data && data.rounds) ? data.rounds : [];
-  roundsCache = rounds.map(r => ({
+backendHandicap = data?.handicap || null;
+
+const rounds = (data && data.rounds) ? data.rounds : [];
+roundsCache = rounds.map(r => ({
     ...r,
     holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
   }));
   renderRoundsList();
+renderTeeRadarHandicap();
 }
 
     async function loadRound(id){
@@ -3265,8 +3982,33 @@ function guestDeleteRound(id){
       let layout = String(layoutEl.value || "").trim();
       const par_mode = String(parModeEl.value || "published").trim();
       const notes = String(notesEl.value || "").trim();
-      const players_count = clamp(playersEl?.value || 1, 1, 4);
+      let players_count = clamp(playersEl?.value || 1, 1, 4);
 
+const upcomingPlayerIdsForPayload = Array.isArray(pendingUpcomingPlayerUserIds)
+  ? pendingUpcomingPlayerUserIds.slice(0, 4)
+  : null;
+
+const upcomingRoundIdForPayload = pendingUpcomingRoundId || null;
+
+if (Array.isArray(pendingUpcomingPlayerNames) && pendingUpcomingPlayerNames.length) {
+  for (let i = 0; i < 4; i++) {
+    playerNames[i] = "";
+  }
+
+  pendingUpcomingPlayerNames.slice(0, 4).forEach((name, i) => {
+    playerNames[i] = String(name || "").trim();
+  });
+
+  players_count = clamp(pendingUpcomingPlayerNames.length, 1, 4);
+
+  if (playersEl) {
+    playersEl.value = String(players_count);
+  }
+
+  pendingUpcomingPlayerNames = null;
+  pendingUpcomingPlayerUserIds = null;
+  pendingUpcomingRoundId = null;
+}
       // ✅ build player_names array for backend
       const namesOut = [];
       for (let i = 0; i < 4; i++) {
@@ -3311,20 +4053,22 @@ if (!isLoggedIn()){
         pars = Array.isArray(meta?.pars) ? meta.pars : null;
       }
 
-      const payload = {
-        course,
-        state,
-        holes,
-        layout: layout || null,
-        par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
-        notes: notes || null,
-        players_count,
-        player_names: namesOut,
-        ...(holes === 9 && !hasNinesUI ? { nineLoop } : {}),
-        ...(pars ? { pars } : {})
-      };
+     const payload = {
+  course,
+  state,
+  holes,
+  layout: layout || null,
+  par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
+  notes: notes || null,
+  players_count,
+  player_names: namesOut,
+  player_user_ids: upcomingPlayerIdsForPayload,
+  shared_upcoming_round_id: upcomingRoundIdForPayload,
+  ...(holes === 9 && !hasNinesUI ? { nineLoop } : {}),
+  ...(pars ? { pars } : {})
+};
 
-      // ✅ Guest mode: create locally (no backend)
+// ✅ Guest mode: create locally (no backend)
 if (!isLoggedIn()){
   const newId = guestMakeId();
   const nowIso = new Date().toISOString();
@@ -3339,6 +4083,8 @@ if (!isLoggedIn()){
     notes: notes || null,
     players_count,
     player_names: namesOut,
+    player_user_ids: upcomingPlayerIdsForPayload,
+    shared_upcoming_round_id: upcomingRoundIdForPayload,
     created_at: nowIso,
     holesData: Array.from({ length: holes }, (_, i) => ({
       hole_number: i + 1,
@@ -3348,7 +4094,7 @@ if (!isLoggedIn()){
       putts_by_player: {}
     }))
   };
-
+  
   // cache names + save round
   saveNamesForRound(newId);
   guestUpsertRound(roundLocal);
@@ -3443,6 +4189,7 @@ return;
       renderLiveScoreHero(true);
 setToast(rightToast, "Saved.", true);
 await safeFetchRounds();
+renderTeeRadarHandicap();
     }
 
     async function deleteRound(){
@@ -3494,6 +4241,107 @@ function clearRoundIdFromUrl(){
     window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
   }catch{}
 }
+function getStartUpcomingIdFromUrl(){
+  try{
+    const url = new URL(window.location.href);
+    const v = String(url.searchParams.get("startUpcomingId") || "").trim();
+    return v || "";
+  }catch{
+    return "";
+  }
+}
+
+function clearStartUpcomingIdFromUrl(){
+  try{
+    const url = new URL(window.location.href);
+    url.searchParams.delete("startUpcomingId");
+    window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+  }catch{}
+}
+
+async function startUpcomingRoundFromId(id){
+  if (!id || !isLoggedIn()) return;
+
+  const data = await api("/api/shared-rounds/upcoming?includeShared=1", { method:"GET" });
+  const rounds = data.rounds || [];
+  const upcoming = rounds.find(r => Number(r.id) === Number(id));
+
+  if (!upcoming) {
+    setToast(leftToast, "Upcoming round not found.", false);
+    return;
+  }
+
+  const me = getUserFromToken();
+  const myEmail = String(me.email || "").trim().toLowerCase();
+  const myName = String(me.name || myEmail || "").trim();
+
+  const participants = Array.isArray(upcoming.participants)
+    ? upcoming.participants
+    : [];
+
+  const orderedParticipants = [
+    ...participants.filter(p => String(p.email || "").trim().toLowerCase() === myEmail),
+    ...participants.filter(p => String(p.email || "").trim().toLowerCase() !== myEmail),
+  ];
+
+  let names = orderedParticipants
+    .map(p => String(p.name || p.email || "").trim())
+    .filter(Boolean);
+
+  let userIds = orderedParticipants
+    .map(p => Number(p.id))
+    .filter(Number.isFinite);
+
+  if (!names.length) {
+    names = getUpcomingPlayerNames(upcoming)
+      .map(n => String(n || "").trim())
+      .filter(Boolean);
+
+    userIds = getUpcomingPlayerUserIds(upcoming)
+      .map(Number)
+      .filter(Number.isFinite);
+  }
+
+  const seen = new Set();
+  const finalNames = [];
+  const finalUserIds = [];
+
+  for (let i = 0; i < names.length; i++) {
+    const key = String(names[i] || "").trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+
+    seen.add(key);
+    finalNames.push(names[i]);
+    finalUserIds.push(userIds[i] || null);
+
+    if (finalNames.length >= 4) break;
+  }
+
+  const playerCount = Math.max(1, finalNames.length);
+
+  for (let i = 0; i < 4; i++) {
+    playerNames[i] = "";
+  }
+
+  for (let i = 0; i < playerCount; i++) {
+    playerNames[i] = finalNames[i] || "";
+  }
+
+  courseEl.value = upcoming.course || "";
+  stateEl.value = upcoming.state || "WA";
+  holesEl.value = String(upcoming.holes || 18);
+  playersEl.value = String(playerCount);
+  notesEl.value = upcoming.notes || "";
+
+  renderPlayerNamesUI();
+
+  pendingUpcomingPlayerNames = finalNames.slice(0, playerCount);
+  pendingUpcomingPlayerUserIds = finalUserIds.slice(0, playerCount);
+  pendingUpcomingRoundId = Number(upcoming.id);
+
+  await refreshNinesAndTeesUI();
+  await createRound();
+}
     async function safeFetchRounds(){
       try{
         await fetchRounds();
@@ -3533,6 +4381,15 @@ function clearRoundIdFromUrl(){
 });
 
 refreshBtn.addEventListener("click", safeFetchRounds);
+if (addUpcomingBtn) addUpcomingBtn.addEventListener("click", addUpcomingRound);
+if (shareCancelBtn) shareCancelBtn.addEventListener("click", closeShareRoundModal);
+if (shareConfirmBtn) shareConfirmBtn.addEventListener("click", confirmShareRound);
+
+if (shareRoundModalBack) {
+  shareRoundModalBack.addEventListener("click", (e) => {
+    if (e.target === shareRoundModalBack) closeShareRoundModal();
+  });
+}
 
 if (openStartRoundBtn && createFormPanel) {
   openStartRoundBtn.addEventListener("click", () => {
@@ -3710,6 +4567,7 @@ if (holePickerBack){
   const token = getToken();
   const loggedIn = !!token;
   const roundIdFromUrl = getRoundIdFromUrl();
+  const startUpcomingIdFromUrl = getStartUpcomingIdFromUrl();
 
   renderHeaderAuthState();
 
@@ -3725,9 +4583,98 @@ if (holePickerBack){
   setLeftPanelsVisibility(true);
 
   initCourseAutocomplete();
-  syncNineLoopVisibility();
+initUpcomingCourseAutocomplete();
+syncNineLoopVisibility();
+  
+  async function initUpcomingCourseAutocomplete(){
+  if (!upcomingCourse) return;
+    if (document.getElementById("upcomingCourseAutoList")) return;
+
+  upcomingCourseAutoList = document.createElement("div");
+upcomingCourseAutoList.id = "upcomingCourseAutoList";
+  upcomingCourseAutoList.className = "autocomplete-list";
+  upcomingCourseAutoList.style.display = "none";
+
+  upcomingCourse.parentElement.style.position = "relative";
+  upcomingCourse.parentElement.appendChild(upcomingCourseAutoList);
+
+  upcomingCourse.addEventListener("input", async () => {
+    const q = norm(upcomingCourse.value);
+    upcomingCourseAutoList.style.display = "none";
+    upcomingCourseAutoList.innerHTML = "";
+
+    if (!q || q.length < 2) return;
+
+    await loadCoursesOnce();
+
+    const stateNow = String(upcomingState?.value || "").trim().toUpperCase();
+
+    const matches = coursesCache
+      .filter(c => norm(c.name || c.course || c.title).includes(q))
+      .sort((a,b) => {
+        const aState = String(a.state || "").toUpperCase();
+        const bState = String(b.state || "").toUpperCase();
+        const aBoost = (stateNow && aState === stateNow) ? -1 : 0;
+        const bBoost = (stateNow && bState === stateNow) ? -1 : 0;
+        if (aBoost !== bBoost) return aBoost - bBoost;
+        return norm(a.name).localeCompare(norm(b.name));
+      })
+      .slice(0, 10);
+
+    if (!matches.length) return;
+
+    upcomingCourseAutoList.innerHTML = matches.map((c, index) => {
+      const name = c.name || c.course || c.title || "";
+      const st = String(c.state || "").toUpperCase();
+      const holes = Number(c.holes) || "";
+      return `
+        <div class="autocomplete-item" data-index="${index}">
+          ${escapeHtml(name)}${holes ? ` (${holes} holes)` : ""}
+          ${st ? `<small>State: ${escapeHtml(st)}</small>` : ""}
+        </div>
+      `;
+    }).join("");
+
+    upcomingCourseAutoList.querySelectorAll(".autocomplete-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        const c = matches[Number(item.dataset.index)];
+        if (!c) return;
+
+        upcomingCourse.value = c.name || c.course || c.title || "";
+
+        if (c.state && upcomingState) {
+          upcomingState.value = String(c.state).toUpperCase();
+        }
+
+        if (c.holes && upcomingHoles) {
+          upcomingHoles.value = String(Number(c.holes));
+        }
+
+        upcomingCourseAutoList.style.display = "none";
+        upcomingCourseAutoList.innerHTML = "";
+      });
+    });
+
+    upcomingCourseAutoList.style.display = "block";
+  });
+
+  document.addEventListener("click", (e) => {
+    if (e.target === upcomingCourse) return;
+    if (upcomingCourseAutoList && upcomingCourseAutoList.contains(e.target)) return;
+    if (upcomingCourseAutoList) {
+      upcomingCourseAutoList.style.display = "none";
+      upcomingCourseAutoList.innerHTML = "";
+    }
+  });
+}
 
   await safeFetchRounds();
+await fetchUpcomingRounds();
+ if (startUpcomingIdFromUrl) {
+  await startUpcomingRoundFromId(startUpcomingIdFromUrl);
+  clearStartUpcomingIdFromUrl();
+  return;
+}     
 
   // ✅ NEW: auto-open round when arriving from My Account
   if (roundIdFromUrl) {
