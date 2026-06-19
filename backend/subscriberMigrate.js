@@ -89,6 +89,12 @@ export async function ensureSubscriberStatusSchema() {
       ON subscriber_status(subscription_id);
   `);
 
+    // Upcoming rounds timezone support
+  await db.query(`
+    ALTER TABLE upcoming_rounds
+    ADD COLUMN IF NOT EXISTS timezone TEXT;
+  `);
+
   // Normalize any older rows so expired/cancelled users do not keep access
   await db.query(`
     UPDATE subscriber_status
