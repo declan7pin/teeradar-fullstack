@@ -53,70 +53,122 @@ button.secondary{
 }
 
     header{
-      background:var(--teal);
-      color:#fff;
-      padding:10px 4vw;
-      position:sticky;
-      top:0;
-      z-index:20;
-      box-shadow:0 2px 6px rgba(0,0,0,0.12);
-    }
-    .nav-wrap{
-      max-width:1100px;
-      margin:0 auto;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:16px;
-    }
-    .brand{
-      display:flex;
-      align-items:center;
-      gap:10px;
-    }
-    .brand-logo{
-      width:28px;
-      height:28px;
-      border-radius:999px;
-      background:#ecfdf5;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      color:#065f46;
-      font-size:15px;
-      font-weight:800;
-      box-shadow:0 0 0 3px rgba(16,185,129,0.25);
-    }
-    .brand-text{
-      font-weight:700;
-      letter-spacing:.04em;
-      font-size:15px;
-      line-height:1.1;
-    }
-    nav{
-      display:flex;
-      gap:16px;
-      align-items:center;
-      flex-wrap:wrap;
-      justify-content:flex-end;
-      font-size:13px;
-    }
-    nav a{
-      color:#e0f2f1;
-      opacity:.9;
-      padding:4px 8px;
-      border-radius:999px;
-    }
-    nav a:hover{
-      background:rgba(255,255,255,0.14);
-      opacity:1;
-    }
-    .nav-analytics{
-      border:1px solid rgba(190,242,100,0.8);
-      background:rgba(15,118,110,0.22);
-      padding:4px 12px;
-      font-weight:600;
-    }
+  background:var(--teal);
+  color:#fff;
+  padding:calc(10px + env(safe-area-inset-top)) 4vw 10px;
+  position:sticky;
+  top:0;
+  z-index:20;
+  box-shadow:0 2px 6px rgba(0,0,0,0.12);
+}
+
+.nav-wrap{
+  max-width:1100px;
+  margin:0 auto;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+}
+
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+}
+
+.brand-logo{
+  width:28px;
+  height:28px;
+  border-radius:999px;
+  background:#ecfdf5;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#065f46;
+  font-size:15px;
+  font-weight:800;
+  box-shadow:0 0 0 3px rgba(16,185,129,0.25);
+  flex:0 0 auto;
+}
+
+.brand-text{
+  font-weight:700;
+  letter-spacing:.04em;
+  font-size:15px;
+  line-height:1.1;
+  white-space:nowrap;
+}
+
+nav{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:flex-end;
+  font-size:13px;
+  flex-wrap:wrap;
+}
+
+nav a{
+  color:#e0f2f1;
+  opacity:.9;
+  padding:6px 10px;
+  border-radius:999px;
+  white-space:nowrap;
+}
+
+nav a:hover{
+  background:rgba(255,255,255,0.14);
+  opacity:1;
+}
+
+.nav-analytics{
+  border:1px solid rgba(190,242,100,0.8);
+  background:rgba(15,118,110,0.22);
+  padding:6px 12px;
+  font-weight:600;
+}
+
+@media (max-width: 640px){
+  header{
+    padding:calc(8px + env(safe-area-inset-top)) 10px 10px;
+  }
+
+  .nav-wrap{
+    display:block;
+  }
+
+  .brand{
+    justify-content:center;
+    margin-bottom:8px;
+  }
+
+  .brand-logo{
+    width:34px;
+    height:34px;
+    font-size:18px;
+  }
+
+  .brand-text{
+    font-size:17px;
+  }
+
+  nav{
+    justify-content:center;
+    gap:6px;
+    font-size:12px;
+  }
+
+  nav a{
+    padding:6px 9px;
+    background:rgba(255,255,255,0.08);
+  }
+
+  .nav-analytics{
+    padding:6px 10px;
+  }
+}
 
     main{
       max-width:1100px;
@@ -845,13 +897,18 @@ button.secondary{
         <thead>
           <tr>
             <th>ID</th>
-            <th>Email</th>
-            <th>Plan</th>
-            <th>Home state</th>
-            <th>Favourite courses</th>
-            <th>Created at</th>
-            <th>Last seen</th>
-            <th>Actions</th>
+<th>Email</th>
+<th>Name</th>
+<th>Gender</th>
+<th>DOB</th>
+<th>Age</th>
+<th>Delete requested</th>
+<th>Plan</th>
+<th>Home state</th>
+<th>Favourite courses</th>
+<th>Created at</th>
+<th>Last seen</th>
+<th>Actions</th>
           </tr>
         </thead>
         <tbody id="usersTbody"></tbody>
@@ -890,6 +947,76 @@ button.secondary{
       </table>
     </div>
   </section>
+  <section class="card" style="margin-top:14px;" id="manualCourseCard">
+  <div class="card-label">Manually add scorecard course</div>
+  <div class="muted-note">Add course name, state, pars and distances manually.</div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
+    <div>
+      <div class="muted-note">Course name</div>
+      <input id="manualCourseName" type="text" placeholder="Example: Kennedy Bay Golf Club"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;min-width:240px;">
+    </div>
+
+    <div>
+      <div class="muted-note">State</div>
+      <select id="manualCourseState" style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+        <option value="WA">WA</option>
+        <option value="NT">NT</option>
+        <option value="QLD">QLD</option>
+        <option value="NSW">NSW</option>
+        <option value="VIC">VIC</option>
+        <option value="SA">SA</option>
+        <option value="TAS">TAS</option>
+        <option value="ACT">ACT</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="muted-note">Holes</div>
+      <select id="manualCourseHoles" style="padding:8px;border:1px solid var(--border);border-radius:10px;">
+        <option value="18">18</option>
+        <option value="9">9</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="muted-note">Tee</div>
+      <input id="manualCourseTee" type="text" placeholder="White"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;width:110px;">
+    </div>
+
+    <div>
+      <div class="muted-note">Rating</div>
+      <input id="manualCourseRating" type="number" step="0.1" placeholder="69.4"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;width:110px;">
+    </div>
+
+    <div>
+      <div class="muted-note">Slope</div>
+      <input id="manualCourseSlope" type="number" placeholder="121"
+        style="padding:8px;border:1px solid var(--border);border-radius:10px;width:110px;">
+    </div>
+
+    <button id="btnBuildManualCourse" type="button" class="secondary">Build holes</button>
+    <button id="btnSaveManualCourse" type="button">Save course</button>
+  </div>
+
+  <div id="manualCourseStatus" class="muted-note" style="margin-top:8px;"></div>
+
+  <div style="overflow-x:auto;margin-top:10px;">
+    <table class="score-mini" id="manualCourseTable" style="display:none;">
+      <thead>
+        <tr>
+          <th>Hole</th>
+          <th>Par</th>
+          <th>Distance metres</th>
+        </tr>
+      </thead>
+      <tbody id="manualCourseTbody"></tbody>
+    </table>
+  </div>
+</section>
     <section class="card" style="margin-top:14px;" id="approvedCoursesCard">
     <div class="card-label">Approved courses (scorecard templates)</div>
 
@@ -913,8 +1040,11 @@ button.secondary{
             <th>Course</th>
             <th>State</th>
             <th>Holes</th>
-            <th>Updated</th>
-            <th></th>
+<th>Rating</th>
+<th>Slope</th>
+<th>Tee</th>
+<th>Updated</th>
+<th></th>
           </tr>
         </thead>
         <tbody id="approvedCoursesTbody"></tbody>
@@ -984,7 +1114,13 @@ button.secondary{
     </div>
     <div style="font-size:13px; line-height:1.5;">
       <p><strong>Email:</strong> <span id="detailEmail">—</span></p>
-      <p><strong>Plan:</strong> <span id="detailPlan">—</span></p>
+<p><strong>Full name:</strong> <span id="detailFullName">—</span></p>
+<p><strong>Display name:</strong> <span id="detailDisplayName">—</span></p>
+<p><strong>Gender:</strong> <span id="detailGender">—</span></p>
+<p><strong>DOB:</strong> <span id="detailDob">—</span></p>
+<p><strong>Age:</strong> <span id="detailAge">—</span></p>
+<p><strong>Delete requested:</strong> <span id="detailDeleteRequested">—</span></p>
+<p><strong>Plan:</strong> <span id="detailPlan">—</span></p>
       <p>
   <strong>Home state:</strong> <span id="detailHomeState">—</span><br>
   <strong>Home course:</strong> <span id="detailHomeCourse">—</span>
@@ -1021,7 +1157,8 @@ button.secondary{
   max-width:260px;
 "></div>
 <script>
-  const ADMIN_EMAIL = "declan7pin@gmail.com";
+  const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+const ADMIN_EMAIL = "declan7pin@gmail.com";
   // ✅ Needed for booking admin analytics routes (requirePlatformAdmin)
 const BOOKING_ADMIN_SECRET = ""; 
 // put the same value as your Render env var BOOKING_ADMIN_SECRET
@@ -1106,7 +1243,12 @@ window.addEventListener("unhandledrejection", (e) => {
 }
 
 async function tryFetchJson(url, timeoutMs = 12000) {
-  const finalUrl = url + (url.includes("?") ? "&" : "?") + "_ts=" + Date.now();
+  const fullUrl = url.startsWith("http")
+  ? url
+  : `${API_BASE}${url}`;
+
+const finalUrl =
+  fullUrl + (fullUrl.includes("?") ? "&" : "?") + "_ts=" + Date.now();
 
   setAnalyticsDebug("Fetching", { finalUrl });
 
@@ -1639,10 +1781,48 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
         const homeState = u.home_state || "";
         const planLabel = normalisePlanLabel(u.plan);
 
-                return `
+                const fullName = u.full_name || u.fullName || "";
+const displayName = u.display_name || u.displayName || "";
+const nameLabel = fullName || displayName || "";
+
+const genderRaw = String(u.gender || "").trim();
+const genderLabel =
+  genderRaw === "male"
+    ? "Male"
+    : genderRaw === "female"
+    ? "Female"
+    : genderRaw === "other"
+    ? "Other"
+    : genderRaw === "prefer_not_to_answer"
+    ? "Prefer not to answer"
+    : "";
+
+const dobRaw = u.dob || "";
+const dobLabel = dobRaw ? new Date(dobRaw).toLocaleDateString("en-AU") : "";
+
+const ageLabel =
+  u.age !== null && typeof u.age !== "undefined"
+    ? String(u.age)
+    : "";
+
+const deleteRequestedRaw =
+  u.deletion_requested_at ||
+  u.deletionRequestedAt ||
+  "";
+
+const deleteRequestedLabel = deleteRequestedRaw
+  ? new Date(deleteRequestedRaw).toLocaleString()
+  : "";
+
+return `
   <tr data-user-idx="${idx}">
     <td>${u.id ?? ""}</td>
     <td><span class="user-email-pill">${u.email ?? ""}</span></td>
+    <td>${nameLabel}</td>
+    <td>${genderLabel}</td>
+    <td>${dobLabel}</td>
+    <td>${ageLabel}</td>
+    <td>${deleteRequestedLabel}</td>
     <td data-col="plan">${planLabel}</td>
     <td>${homeState}</td>
     <td>${favDisplay || ""}</td>
@@ -1660,7 +1840,7 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
     computeSubscriptionMetrics();
   }
   async function patchRegisteredUser(id, payload) {
-    const res = await fetch(`/api/analytics/users/${id}`, {
+    const res = await fetch(`${API_BASE}/api/analytics/users/${id}`, {
       method: "PATCH",
       headers: {
         ...getAuthHeaders(),
@@ -1674,7 +1854,7 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
     return { res, data };
   }
 async function deleteRegisteredUserById(id) {
-  const res = await fetch(`/api/analytics/users/${id}`, {
+  const res = await fetch(`${API_BASE}/api/analytics/users/${id}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
     credentials: "include",
@@ -1737,7 +1917,43 @@ function showUserDetails(u) {
   card.style.display = "block";
 
   setText("detailEmail", u.email ?? "—");
-  setText("detailPlan", normalisePlanLabel(u.plan));
+
+setText("detailFullName", u.full_name || u.fullName || "—");
+setText("detailDisplayName", u.display_name || u.displayName || "—");
+
+const genderRaw = String(u.gender || "").trim();
+const genderLabel =
+  genderRaw === "male"
+    ? "Male"
+    : genderRaw === "female"
+    ? "Female"
+    : genderRaw === "other"
+    ? "Other"
+    : genderRaw === "prefer_not_to_answer"
+    ? "Prefer not to answer"
+    : "—";
+
+setText("detailGender", genderLabel);
+
+const dobRaw = u.dob || "";
+setText("detailDob", dobRaw ? new Date(dobRaw).toLocaleDateString("en-AU") : "—");
+
+setText(
+  "detailAge",
+  u.age !== null && typeof u.age !== "undefined" ? String(u.age) : "—"
+);
+
+const deleteRequestedRaw =
+  u.deletion_requested_at ||
+  u.deletionRequestedAt ||
+  "";
+
+setText(
+  "detailDeleteRequested",
+  deleteRequestedRaw ? new Date(deleteRequestedRaw).toLocaleString() : "—"
+);
+
+setText("detailPlan", normalisePlanLabel(u.plan));
   setText("detailHomeState", u.home_state ?? "—");
   setText("detailHomeCourse", u.home_course ?? "—");
 
@@ -1834,6 +2050,156 @@ document.addEventListener("click", async (e) => {
 
   showUserDetails(u);
 });
+// ---------- Manual scorecard course create ----------
+
+function buildManualCourseRows() {
+  const holes = Number(document.getElementById("manualCourseHoles")?.value || 18);
+  const tbody = document.getElementById("manualCourseTbody");
+  const table = document.getElementById("manualCourseTable");
+
+  if (!tbody || !table) return;
+
+  tbody.innerHTML = "";
+
+  for (let i = 1; i <= holes; i++) {
+    tbody.innerHTML += `
+      <tr>
+        <td>Hole ${i}</td>
+        <td>
+          <input data-manual-par="${i}" type="number" min="3" max="6" value="4"
+            style="width:80px;padding:7px;border:1px solid var(--border);border-radius:8px;text-align:center;">
+        </td>
+        <td>
+          <input data-manual-distance="${i}" type="number" min="1" placeholder="Metres"
+            style="width:120px;padding:7px;border:1px solid var(--border);border-radius:8px;text-align:center;">
+        </td>
+      </tr>
+    `;
+  }
+
+  table.style.display = "table";
+}
+
+async function saveManualCourse() {
+  const status = document.getElementById("manualCourseStatus");
+  const btn = document.getElementById("btnSaveManualCourse");
+
+  const name = String(document.getElementById("manualCourseName")?.value || "").trim();
+  const state = String(document.getElementById("manualCourseState")?.value || "").trim().toUpperCase();
+  const holes = Number(document.getElementById("manualCourseHoles")?.value || 18);
+  const tee_colour = String(document.getElementById("manualCourseTee")?.value || "").trim() || null;
+
+  const ratingRaw = String(document.getElementById("manualCourseRating")?.value || "").trim();
+  const slopeRaw = String(document.getElementById("manualCourseSlope")?.value || "").trim();
+
+  const pars = [];
+  const distances_m = [];
+
+  for (let i = 1; i <= holes; i++) {
+    const par = Number(document.querySelector(`[data-manual-par="${i}"]`)?.value || "");
+    const distance = Number(document.querySelector(`[data-manual-distance="${i}"]`)?.value || "");
+
+    if (!Number.isFinite(par) || par < 3 || par > 6) {
+      alert(`Hole ${i} par must be between 3 and 6.`);
+      return;
+    }
+
+    if (!Number.isFinite(distance) || distance <= 0) {
+      alert(`Hole ${i} distance is required.`);
+      return;
+    }
+
+    pars.push(par);
+    distances_m.push(distance);
+  }
+
+  if (!name) {
+    alert("Course name is required.");
+    return;
+  }
+
+  if (ratingRaw && !Number.isFinite(Number(ratingRaw))) {
+    alert("Course rating must be a number.");
+    return;
+  }
+
+  if (slopeRaw && (!Number.isFinite(Number(slopeRaw)) || Number(slopeRaw) < 55 || Number(slopeRaw) > 155)) {
+    alert("Slope rating must be between 55 and 155.");
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+  }
+
+  if (status) status.textContent = "Saving course…";
+
+  try {
+    const res = await fetch(`${API_BASE}/api/rounds/admin/scorecard-courses`, {
+      method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        name,
+        state,
+        holes,
+        pars,
+        distances_m,
+        course_rating: ratingRaw ? Number(ratingRaw) : null,
+        slope_rating: slopeRaw ? Number(slopeRaw) : null,
+        tee_colour,
+      }),
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data || !data.ok) {
+      alert("Save failed: " + (data?.error || res.status));
+      if (status) status.textContent = "Save failed.";
+      return;
+    }
+
+    if (status) status.textContent = "Course saved.";
+    await loadApprovedCourses();
+
+  } catch (err) {
+    console.error("saveManualCourse failed", err);
+    alert("Save failed (network/server error).");
+    if (status) status.textContent = "Save failed.";
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Save course";
+    }
+  }
+}
+
+function wireManualCourseCreate() {
+  const buildBtn = document.getElementById("btnBuildManualCourse");
+  const saveBtn = document.getElementById("btnSaveManualCourse");
+  const holesEl = document.getElementById("manualCourseHoles");
+
+  if (buildBtn && !buildBtn._wired) {
+    buildBtn._wired = true;
+    buildBtn.addEventListener("click", buildManualCourseRows);
+  }
+
+  if (saveBtn && !saveBtn._wired) {
+    saveBtn._wired = true;
+    saveBtn.addEventListener("click", saveManualCourse);
+  }
+
+  if (holesEl && !holesEl._wired) {
+    holesEl._wired = true;
+    holesEl.addEventListener("change", buildManualCourseRows);
+  }
+
+  buildManualCourseRows();
+}
 // ---------- Approved scorecard courses (edit / delete) ----------
 
 let APPROVED_COURSES_CACHE = [];
@@ -1878,6 +2244,9 @@ async function loadApprovedCourses() {
       const state = c.state ?? "—";
       const holes = c.holes ?? "—";
       const updated = c.updated_at ? new Date(c.updated_at).toLocaleString() : "";
+      const rating = c.course_rating ?? "";
+const slope = c.slope_rating ?? "";
+const tee = c.tee_colour ?? "";
 
       return `
         <tr data-approved-id="${id}">
@@ -1885,8 +2254,11 @@ async function loadApprovedCourses() {
           <td>${name}</td>
           <td>${state}</td>
           <td>${holes}</td>
-          <td>${updated}</td>
-          <td style="white-space:nowrap;">
+<td>${rating}</td>
+<td>${slope}</td>
+<td>${tee}</td>
+<td>${updated}</td>
+<td style="white-space:nowrap;">
             <button class="edit-btn" type="button" data-edit-course-id="${id}">Edit</button>
             <button class="delete-btn" type="button" data-delete-course-id="${id}">Delete</button>
           </td>
@@ -1916,30 +2288,86 @@ document.addEventListener("click", async (e) => {
     if (!Number.isFinite(id) || id <= 0) return;
 
     const row = (APPROVED_COURSES_CACHE || []).find(x => Number(x?.id) === id) || null;
-    const currentName = row?.name || "";
 
-    const newNameRaw = window.prompt(
-      "Enter the new course name.\n\nTip: use a suffix for nines, e.g.\ncollier park golf course - lakes\ncollier park golf course - pines\ncollier park golf course - lakes/pines",
-      currentName
-    );
+const currentName = row?.name || "";
+const currentState = row?.state || "";
+const currentRating = row?.course_rating ?? "";
+const currentSlope = row?.slope_rating ?? "";
+const currentTee = row?.tee_colour ?? "";
 
-    if (newNameRaw == null) return; // cancelled
-    const newName = String(newNameRaw || "").trim();
-    if (!newName) return alert("Name cannot be blank.");
+const newNameRaw = window.prompt(
+  "Enter the course name.",
+  currentName
+);
+if (newNameRaw == null) return;
+
+const newStateRaw = window.prompt(
+  "Enter state.\n\nAllowed: WA, NT, QLD, NSW, VIC, SA, TAS, ACT",
+  currentState
+);
+if (newStateRaw == null) return;
+
+const newRatingRaw = window.prompt(
+  "Enter course rating.\n\nExample: 69.4\nLeave blank if unknown.",
+  currentRating
+);
+if (newRatingRaw == null) return;
+
+const newSlopeRaw = window.prompt(
+  "Enter slope rating.\n\nExample: 121\nLeave blank if unknown.",
+  currentSlope
+);
+if (newSlopeRaw == null) return;
+
+const newTeeRaw = window.prompt(
+  "Enter tee colour/name.\n\nExample: White, Blue, Red\nLeave blank if unknown.",
+  currentTee
+);
+if (newTeeRaw == null) return;
+
+const newName = String(newNameRaw || "").trim();
+const newState = String(newStateRaw || "").trim().toUpperCase();
+const newRating = String(newRatingRaw || "").trim();
+const newSlope = String(newSlopeRaw || "").trim();
+const newTee = String(newTeeRaw || "").trim();
+
+if (!newName) return alert("Name cannot be blank.");
+
+const validStates = new Set(["WA", "NT", "QLD", "NSW", "VIC", "SA", "TAS", "ACT"]);
+if (!validStates.has(newState)) {
+  alert("Invalid state. Use one of: WA, NT, QLD, NSW, VIC, SA, TAS, ACT");
+  return;
+}
+
+if (newRating && !Number.isFinite(Number(newRating))) {
+  alert("Course rating must be a number, e.g. 69.4");
+  return;
+}
+
+if (newSlope && (!Number.isFinite(Number(newSlope)) || Number(newSlope) < 55 || Number(newSlope) > 155)) {
+  alert("Slope rating must be between 55 and 155.");
+  return;
+}
 
     editBtn.disabled = true;
     const oldTxt = editBtn.textContent;
     editBtn.textContent = "Saving…";
 
     try {
-      const res = await fetch(`/api/rounds/admin/scorecard-courses/${id}`, {
+      const res = await fetch(`${API_BASE}/api/rounds/admin/scorecard-courses/${id}`, {
         method: "PATCH",
         headers: {
           ...getAuthHeaders(),
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({ name: newName }),
+        body: JSON.stringify({
+  name: newName,
+  state: newState,
+  course_rating: newRating ? Number(newRating) : null,
+  slope_rating: newSlope ? Number(newSlope) : null,
+  tee_colour: newTee || null,
+}),
       });
 
       const data = await res.json().catch(() => null);
@@ -1979,7 +2407,7 @@ document.addEventListener("click", async (e) => {
     delBtn.textContent = "Deleting…";
 
     try {
-      const res = await fetch(`/api/rounds/admin/scorecard-courses/${id}`, {
+      const res = await fetch(`${API_BASE}/api/rounds/admin/scorecard-courses/${id}`, {
         method: "DELETE",
         headers: getAuthHeaders(),
         credentials: "include",
@@ -2314,7 +2742,7 @@ async function approvePendingCourse(id, btn = null) {
   }
 
   try {
-    const res = await fetch(`/api/rounds/admin/pending-courses/${Number(id)}/approve`, {
+    const res = await fetch(`${API_BASE}/api/rounds/admin/pending-courses/${Number(id)}/approve`, {
       method: "POST",
       headers: {
         ...getAuthHeaders(),
@@ -2417,11 +2845,15 @@ function yyyyMmDd(d) {
 }
 
 function buildBookUrl(path, paramsObj) {
-  const u = new URL(path, window.location.origin);
+  const u = new URL(path, API_BASE);
+
   Object.entries(paramsObj || {}).forEach(([k, v]) => {
-    if (v !== null && v !== undefined && String(v).trim() !== "") u.searchParams.set(k, v);
+    if (v !== null && v !== undefined && String(v).trim() !== "") {
+      u.searchParams.set(k, v);
+    }
   });
-  return u.pathname + "?" + u.searchParams.toString();
+
+  return u.toString();
 }
 
 // --- simple tooltip helpers ---
@@ -2812,6 +3244,8 @@ window.addEventListener("load", () => {
 
   try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
   try { loadPendingCourses(); } catch (e) { console.warn("loadPendingCourses failed", e); }
+  
+  try { wireManualCourseCreate(); } catch (e) { console.warn("wireManualCourseCreate failed", e); }
 
   try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
   try { loadApprovedCourses(); } catch (e) { console.warn("loadApprovedCourses failed", e); }
