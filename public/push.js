@@ -1,4 +1,4 @@
-const PUSH_API_BASE = "https://teeradar-fullstack-5.onrender.com";
+const PUSH_API_BASE = "https://teeradar.com.au";
 
 function isNativeApp() {
   try {
