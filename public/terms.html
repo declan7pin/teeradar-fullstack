@@ -3,199 +3,381 @@
 <head>
   <meta charset="utf-8"/>
   <title>TeeRadar — Terms & Conditions</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <style>
-    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#f8fafc; color:#0f172a; }
-    .top { background:#0f172a; color:#fff; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; }
-    .wrap { max-width:900px; margin:26px auto; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px 18px 30px; }
+    * { box-sizing: border-box; }
+
+    body {
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      background:#f8fafc;
+      color:#0f172a;
+    }
+
+    .top {
+      background:#0f172a;
+      color:#fff;
+      padding:
+        calc(env(safe-area-inset-top) + 14px)
+        16px
+        14px
+        16px;
+      min-height: calc(env(safe-area-inset-top) + 60px);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+    }
+
+    .top button {
+      background:#fff;
+      color:#0f172a;
+      border:none;
+      border-radius:999px;
+      padding:7px 14px;
+      cursor:pointer;
+      font-weight:700;
+      min-height:36px;
+    }
+
+    .wrap {
+      max-width:900px;
+      margin:26px auto;
+      background:#fff;
+      border:1px solid #e2e8f0;
+      border-radius:12px;
+      padding:22px 20px 34px;
+    }
+
     h1,h2,h3 { margin-top:0; }
-    p { line-height:1.5; }
+    h1 { font-size:2rem; }
+    h2 { margin-top:28px; font-size:1.35rem; }
+    p, li { line-height:1.55; color:#334155; }
+    li { margin-bottom:7px; }
     a { color:#0ea5e9; }
+    ul { padding-left:22px; }
+
+    .note {
+      background:#f1f5f9;
+      border:1px solid #e2e8f0;
+      border-radius:12px;
+      padding:12px 14px;
+      margin:16px 0;
+      color:#334155;
+    }
+
+    @media (max-width:720px){
+      .top {
+        padding:
+          calc(env(safe-area-inset-top) + 14px)
+          14px
+          14px
+          14px;
+      }
+
+      .wrap {
+        margin:20px 12px 40px;
+        padding:18px 16px 26px;
+      }
+
+      h1 { font-size:1.8rem; }
+      h2 { font-size:1.2rem; }
+    }
   </style>
 </head>
+
 <body>
 
 <div class="top">
-  <div style="font-weight:700;">TeeRadar</div>
-  <button onclick="window.location.href='/'" style="background:#fff;color:#0f172a;border:none;border-radius:999px;padding:5px 14px;cursor:pointer;">← Home</button>
+  <div style="font-weight:800;">TeeRadar</div>
+  <button onclick="window.location.href='/'">← Home</button>
 </div>
 
 <div class="wrap">
 
 <h1>Terms & Conditions</h1>
-<p><strong>Last updated:</strong> 9 March 2026</p>
+<p><strong>Last updated:</strong> 2 June 2026</p>
+
+<div class="note">
+  By using TeeRadar, including the TeeRadar website, mobile app, booking tools, scorecards, analytics, subscriptions, alerts and related services, you agree to these Terms & Conditions.
+</div>
 
 <h2>1. About TeeRadar</h2>
 
-<p>TeeRadar is an online golf tee-time discovery and booking platform that allows golfers to find available tee times, receive availability alerts and make reservations at participating golf courses.</p>
+<p>TeeRadar is an online golf tee-time discovery, booking, alert, scorecard and analytics platform that helps golfers find available tee times, receive availability alerts, record rounds and access golf-related tools.</p>
 
-<p>TeeRadar operates as a technology platform connecting golfers with golf courses. TeeRadar does not own, operate or manage the golf courses listed on the platform.</p>
+<p>TeeRadar operates as a technology platform connecting golfers with golf courses and third-party booking providers. TeeRadar does not own, operate or manage the golf courses listed on the platform unless expressly stated otherwise.</p>
 
-<p>The golf courses listed on TeeRadar remain fully responsible for course operations, pricing, availability, cancellations, and the delivery of golf services.</p>
+<p>Golf courses remain responsible for their own course operations, pricing, tee time availability, cancellations, refund rules, weather closures, course conditions, player limits and the delivery of golf services.</p>
 
-<h2>2. Tee Time Bookings</h2>
+<h2>2. Website and Mobile App</h2>
+
+<p>These terms apply to TeeRadar whether accessed through:</p>
+
+<ul>
+  <li>the TeeRadar website;</li>
+  <li>the TeeRadar iOS app;</li>
+  <li>the TeeRadar Android app;</li>
+  <li>mobile browsers;</li>
+  <li>emails, alerts or notifications; and</li>
+  <li>any related TeeRadar services or features.</li>
+</ul>
+
+<p>The mobile app is provided as a convenient way to access TeeRadar services. Features may vary between website, iOS and Android versions depending on device capabilities, app store rules, permissions, operating system updates and third-party service availability.</p>
+
+<h2>3. Tee Time Bookings</h2>
 
 <p>TeeRadar may allow users to:</p>
 
 <ul>
-<li>Book tee times directly through the TeeRadar booking platform</li>
-<li>Be redirected to third-party booking systems</li>
-<li>View aggregated tee time availability from multiple providers</li>
+  <li>book tee times directly through the TeeRadar booking platform;</li>
+  <li>reserve tee times and pay at the golf course;</li>
+  <li>be redirected to third-party booking systems;</li>
+  <li>view aggregated tee time availability from multiple providers; and</li>
+  <li>receive alerts about tee time availability.</li>
 </ul>
 
-<p>When a booking is made through TeeRadar, the reservation request is transmitted to the participating golf course.</p>
+<p>When a booking is made through TeeRadar, the booking request is transmitted to the participating golf course or relevant booking provider.</p>
 
 <p>The golf course is responsible for:</p>
 
 <ul>
-<li>Managing tee time availability</li>
-<li>Course operations</li>
-<li>Player limits and rules</li>
-<li>Providing the golf round or services booked</li>
+  <li>managing tee time availability;</li>
+  <li>course operations and course conditions;</li>
+  <li>green fees and add-on prices;</li>
+  <li>player limits and local rules;</li>
+  <li>cancellations, no-shows and refund policies; and</li>
+  <li>providing the golf round or services booked.</li>
 </ul>
 
-<p>TeeRadar does not guarantee the availability of specific tee times.</p>
+<p>TeeRadar does not guarantee the availability of any specific tee time. Availability can change quickly and may be affected by course actions, third-party booking systems, weather, events, maintenance, technical issues or other factors outside TeeRadar’s control.</p>
 
-<h2>3. Payments</h2>
+<h2>4. Payments</h2>
 
-<p>Some bookings may require payment at the time of booking.</p>
+<p>Some bookings or subscriptions may require payment. Payments are processed securely through third-party payment providers such as Stripe or other approved payment processors.</p>
 
-<p>Payments are processed securely through third-party payment providers.</p>
-
-<p>TeeRadar does not store credit card details.</p>
+<p>TeeRadar does not store full credit card details.</p>
 
 <p>Prices shown on the platform may include:</p>
 
 <ul>
-<li>Green fees</li>
-<li>Optional add-ons (such as carts or hire clubs)</li>
-<li>Payment processing costs</li>
+  <li>green fees;</li>
+  <li>optional add-ons such as carts or hire clubs;</li>
+  <li>platform, booking or processing fees where applicable;</li>
+  <li>subscription fees; and</li>
+  <li>taxes or other charges where applicable.</li>
 </ul>
 
-<p>By confirming a booking you authorise the payment shown at checkout.</p>
+<p>By confirming a booking, subscription or purchase, you authorise the payment shown at checkout.</p>
 
-<h2>4. Pay at Course Bookings</h2>
+<h2>5. Pay at Course Bookings</h2>
 
 <p>Some courses allow tee times to be reserved online but paid directly at the golf course.</p>
 
-<p>For these bookings the golf course is responsible for collecting payment and applying its cancellation policies.</p>
+<p>For pay-at-course bookings, the golf course is responsible for collecting payment and applying its own cancellation, refund and no-show policies.</p>
 
-<p>TeeRadar does not process payments for these bookings.</p>
+<p>TeeRadar does not process payments for pay-at-course bookings unless clearly stated during the booking process.</p>
 
-<h2>5. Cancellations and Refunds</h2>
+<h2>6. Subscriptions and Alerts</h2>
 
-<p>Cancellation and refund policies may vary by golf course.</p>
+<p>TeeRadar may offer free and paid subscription plans. Subscription features may include tee time alerts, favourite course tracking, reduced advertising, subscriber-only features, discounts, round analytics or other premium functionality.</p>
 
-<p>If a booking is cancelled the course’s cancellation policy will apply.</p>
+<p>Subscription benefits may change over time as TeeRadar improves the platform. TeeRadar may add, remove or modify subscription features, provided this does not remove rights you have under applicable consumer law.</p>
+
+<p>Subscriptions renew automatically unless cancelled before the renewal date. Cancellation stops future renewals but may not automatically refund amounts already paid unless required by law or clearly stated by TeeRadar.</p>
+
+<p>Alerts are provided as a convenience only. TeeRadar does not guarantee that alerts will always be delivered, delivered instantly, or result in a successful booking. Email, app and notification delivery can be affected by spam filters, device permissions, third-party providers, outages and user settings.</p>
+
+<h2>7. Cancellations and Refunds</h2>
+
+<p>Cancellation and refund policies may vary by golf course, booking provider, payment type and subscription type.</p>
+
+<p>If a golf booking is cancelled, the golf course’s cancellation policy will generally apply.</p>
 
 <p>TeeRadar may assist in processing refunds where applicable but does not guarantee refunds unless required by law.</p>
 
-<h2>6. User Responsibilities</h2>
+<p>Nothing in these terms limits rights you may have under the Australian Consumer Law or other applicable consumer protection laws.</p>
+
+<h2>8. Scorecards, My Rounds and My Stats</h2>
+
+<p>TeeRadar may provide scorecard, round tracking and analytics features, including My Rounds and My Stats.</p>
+
+<p>These tools are provided for personal golf tracking, convenience and entertainment. TeeRadar does not guarantee that scorecards, distances, pars, course ratings, slope data, hole indexes, GPS information, round summaries or analytics are complete, accurate or suitable for official handicap, tournament or competition purposes.</p>
+
+<p>You are responsible for checking scorecard information before relying on it. Official competition scoring, handicapping and course ratings should always be confirmed with the relevant golf course, golf association or official body.</p>
+
+<p>User-entered scorecards, player names, round data, notes and course submissions may be stored and processed by TeeRadar to provide the service, improve course data, review submitted scorecard templates and calculate analytics.</p>
+
+<h2>9. Course Data and User Submissions</h2>
+
+<p>If you submit course information, scorecard data, pars, distances, tee colours, layouts, notes or corrections, you confirm that you have the right to provide that information and that it is accurate to the best of your knowledge.</p>
+
+<p>By submitting course or scorecard information to TeeRadar, you grant TeeRadar a non-exclusive, worldwide, royalty-free licence to use, store, display, modify, verify and incorporate that information into the TeeRadar platform.</p>
+
+<p>TeeRadar may review, edit, reject or remove submitted course data at its discretion.</p>
+
+<h2>10. User Accounts</h2>
+
+<p>You may need an account to access certain TeeRadar features. You are responsible for keeping your login details secure and for all activity that occurs under your account.</p>
+
+<p>You agree to provide accurate account, booking and contact information. TeeRadar may suspend or terminate accounts that provide false information, misuse the service, attempt to manipulate availability, abuse alerts, interfere with platform functionality or breach these terms.</p>
+
+<h2>11. User Responsibilities</h2>
 
 <p>Users agree to:</p>
 
 <ul>
-<li>Provide accurate booking information</li>
-<li>Attend booked tee times</li>
-<li>Cancel bookings when unable to attend</li>
-<li>Follow golf course rules</li>
+  <li>provide accurate booking and account information;</li>
+  <li>attend booked tee times or cancel when unable to attend;</li>
+  <li>follow golf course rules and etiquette;</li>
+  <li>use the platform for lawful personal or authorised business purposes;</li>
+  <li>not misuse alerts, bookings, subscriptions or scorecards;</li>
+  <li>not submit false, misleading or harmful content; and</li>
+  <li>respect golf courses, staff, other users and TeeRadar systems.</li>
 </ul>
 
-<p>TeeRadar may suspend accounts that abuse the booking system, repeatedly fail to attend bookings or attempt to manipulate availability.</p>
+<h2>12. Acceptable Use</h2>
 
-<h2>7. Acceptable Use</h2>
-
-<p>You agree not to misuse the platform or attempt to:</p>
+<p>You agree not to misuse TeeRadar or attempt to:</p>
 
 <ul>
-<li>Interfere with platform functionality</li>
-<li>Automate availability checks</li>
-<li>Automate bookings</li>
-<li>Scrape large amounts of platform data</li>
-<li>Attempt to reverse engineer the platform</li>
-<li>Use bots, crawlers or automation tools to access the platform</li>
+  <li>interfere with platform functionality;</li>
+  <li>automate availability checks without permission;</li>
+  <li>automate bookings;</li>
+  <li>scrape, harvest or bulk extract platform data;</li>
+  <li>overload or disrupt TeeRadar systems;</li>
+  <li>reverse engineer the platform;</li>
+  <li>copy or replicate TeeRadar features, workflows or data systems;</li>
+  <li>use bots, crawlers or automation tools to access the platform;</li>
+  <li>circumvent access controls, subscriptions or security systems;</li>
+  <li>upload malicious code or harmful content; or</li>
+  <li>use TeeRadar to support unlawful, misleading or abusive activity.</li>
 </ul>
 
-<h2>8. Data and Aggregation Systems</h2>
+<h2>13. Data and Aggregation Systems</h2>
 
-<p>TeeRadar may display aggregated tee time availability from multiple golf course providers and booking systems.</p>
+<p>TeeRadar may display aggregated tee time availability, course information, booking links, pricing indicators, phone booking details and other data from golf courses, booking platforms and publicly available sources.</p>
 
-<p>The aggregation, organisation, presentation and processing of this data is part of TeeRadar’s proprietary technology platform.</p>
+<p>The aggregation, organisation, presentation, caching, filtering, alerting and processing of this data is part of TeeRadar’s proprietary technology platform.</p>
 
-<p>Users may not extract, reuse or reproduce this aggregated data for commercial purposes.</p>
+<p>Users may not extract, reuse, reproduce, resell or commercially exploit TeeRadar data, aggregated availability, alerts or course datasets without written permission.</p>
 
-<h2>9. Intellectual Property</h2>
+<h2>14. Third-Party Services</h2>
 
-<p>The TeeRadar platform, including its software, booking systems, availability aggregation technology, alert infrastructure, analytics systems, designs, algorithms and underlying code are proprietary intellectual property owned by TeeRadar.</p>
+<p>TeeRadar may rely on third-party services including payment processors, hosting providers, email providers, analytics tools, map providers, app stores, booking providers and golf course websites.</p>
 
-<p>These systems include proprietary technology developed specifically for TeeRadar.</p>
+<p>Third-party services may have their own terms, policies, fees and availability limitations. TeeRadar is not responsible for third-party outages, errors, policy changes, payment failures, booking provider changes, app store restrictions or external website content.</p>
+
+<p>Where TeeRadar redirects you to a third-party booking system, the third party or golf course is responsible for the final booking process and related terms.</p>
+
+<h2>15. App Store and Google Play Terms</h2>
+
+<p>If you download TeeRadar through the Apple App Store or Google Play, your use of the app may also be subject to Apple’s or Google’s applicable terms and policies.</p>
+
+<p>Apple and Google are not responsible for TeeRadar, the TeeRadar service, golf bookings, subscriptions, content, support, refunds or claims relating to TeeRadar, except where required by their own app store rules or applicable law.</p>
+
+<p>App features may require device permissions such as notifications, location access, internet access or browser access. If permissions are disabled, some features may not work as intended.</p>
+
+<h2>16. Location, GPS and Device Features</h2>
+
+<p>TeeRadar may use your location or saved preferences to help show nearby courses, distances, maps, GPS-style scorecard features or relevant tee times.</p>
+
+<p>Location and distance information is approximate and may be affected by device settings, GPS accuracy, map data, signal quality and third-party services. It should not be relied on for safety-critical decisions or official competition measurements.</p>
+
+<h2>17. Intellectual Property</h2>
+
+<p>The TeeRadar platform, including its software, booking systems, availability aggregation technology, alert infrastructure, analytics systems, scorecard tools, mobile app, designs, algorithms, databases, branding and underlying code are proprietary intellectual property owned by TeeRadar or licensed to TeeRadar.</p>
 
 <p>You may not:</p>
 
 <ul>
-<li>Copy the TeeRadar platform</li>
-<li>Replicate TeeRadar booking functionality</li>
-<li>Reverse engineer platform systems</li>
-<li>Create derivative services based on TeeRadar technology</li>
-<li>Replicate TeeRadar availability aggregation methods</li>
+  <li>copy the TeeRadar platform;</li>
+  <li>replicate TeeRadar booking functionality;</li>
+  <li>reverse engineer platform systems;</li>
+  <li>create derivative services based on TeeRadar technology;</li>
+  <li>replicate TeeRadar availability aggregation methods;</li>
+  <li>copy TeeRadar designs, workflows or interfaces for a competing service; or</li>
+  <li>remove or obscure TeeRadar branding or legal notices.</li>
 </ul>
 
-<h2>10. No Competitive Use</h2>
+<h2>18. No Competitive Use</h2>
 
-<p>You may not use the TeeRadar platform to develop, support or operate a competing golf booking or tee time aggregation platform.</p>
+<p>You may not use the TeeRadar platform, data, workflows, alerts, booking tools, scorecard systems or analytics to develop, support or operate a competing golf booking, tee time aggregation, alerting, scorecard or golf analytics platform.</p>
 
 <p>This includes but is not limited to:</p>
 
 <ul>
-<li>Studying the platform to replicate its functionality</li>
-<li>Using platform data to build competing services</li>
-<li>Replicating booking workflows</li>
-<li>Replicating aggregation or alert systems</li>
+  <li>studying the platform to replicate its functionality;</li>
+  <li>using platform data to build competing services;</li>
+  <li>replicating booking workflows;</li>
+  <li>replicating aggregation, alert or analytics systems; or</li>
+  <li>using TeeRadar to benchmark, train or support competing products.</li>
 </ul>
 
-<p>Any attempt to reproduce or develop competing services based on TeeRadar systems may result in legal action.</p>
+<h2>19. Platform Availability</h2>
 
-<h2>11. Platform Availability</h2>
+<p>TeeRadar does not guarantee uninterrupted availability of the website, app, alerts, booking tools, scorecards, analytics or related services.</p>
 
-<p>TeeRadar does not guarantee uninterrupted availability of the platform.</p>
+<p>The service may be unavailable due to maintenance, updates, technical issues, third-party outages, hosting problems, app store changes, operating system updates, security incidents or events outside TeeRadar’s control.</p>
 
-<p>The service may occasionally be unavailable due to maintenance, updates or technical issues.</p>
+<h2>20. Changes to Features</h2>
 
-<h2>12. Suspension of Service</h2>
+<p>TeeRadar is continuously evolving. We may add, modify, suspend or remove features, pages, courses, providers, alerts, app functionality or subscription benefits from time to time.</p>
 
-<p>TeeRadar reserves the right to suspend or terminate access to the platform at any time if users breach these terms or misuse the system.</p>
+<p>Where changes materially affect paid subscription features, TeeRadar will aim to act reasonably and in accordance with applicable law.</p>
 
-<h2>13. Limitation of Liability</h2>
+<h2>21. Suspension and Termination</h2>
+
+<p>TeeRadar may suspend, restrict or terminate access to the platform if a user breaches these terms, misuses the service, interferes with platform operations, abuses bookings or alerts, submits harmful content, attempts to copy the platform or creates risk for TeeRadar, golf courses or other users.</p>
+
+<p>You may stop using TeeRadar at any time. Account deletion or subscription cancellation may be handled separately depending on the feature or payment provider involved.</p>
+
+<h2>22. Limitation of Liability</h2>
 
 <p>To the maximum extent permitted by law, TeeRadar is not liable for:</p>
 
 <ul>
-<li>Course closures</li>
-<li>Schedule changes</li>
-<li>Availability errors</li>
-<li>Pricing changes</li>
-<li>Losses arising from the use of the platform</li>
+  <li>course closures or weather interruptions;</li>
+  <li>schedule, pricing or availability changes;</li>
+  <li>errors in third-party booking systems;</li>
+  <li>missed, delayed or undelivered alerts;</li>
+  <li>incorrect or incomplete course, scorecard or distance data;</li>
+  <li>losses arising from reliance on score tracking or analytics;</li>
+  <li>device, app store or operating system issues;</li>
+  <li>third-party outages or payment provider issues;</li>
+  <li>loss of data where reasonable care has been taken; or</li>
+  <li>indirect, incidental or consequential losses arising from use of the platform.</li>
 </ul>
 
-<h2>14. Indemnity</h2>
+<h2>23. Australian Consumer Law</h2>
 
-<p>You agree to indemnify and hold harmless TeeRadar from any claims, damages or liabilities arising from misuse of the platform or violation of these terms.</p>
+<p>Nothing in these terms excludes, restricts or modifies any consumer guarantee, right or remedy that cannot lawfully be excluded under the Australian Consumer Law or any other applicable law.</p>
 
-<h2>15. Intellectual Property Protection</h2>
+<p>Where TeeRadar is permitted to limit liability, TeeRadar’s liability will be limited to the resupply of the relevant service or the cost of resupplying the relevant service, where reasonable and lawful.</p>
 
-<p>The TeeRadar platform represents proprietary technology developed for golf tee time discovery, aggregation and booking.</p>
+<h2>24. Indemnity</h2>
 
-<p>Unauthorised copying, replication or imitation of the platform’s systems, functionality, aggregation methods, algorithms or user interface is strictly prohibited.</p>
+<p>You agree to indemnify and hold harmless TeeRadar from claims, damages, losses, costs or liabilities arising from your misuse of the platform, breach of these terms, unlawful conduct, false information, harmful submissions, unauthorised data use or infringement of TeeRadar’s intellectual property rights.</p>
 
-<h2>16. Governing Law</h2>
+<h2>25. Privacy</h2>
 
-<p>These terms are governed by the laws of Australia.</p>
+<p>TeeRadar handles personal information in accordance with its Privacy Policy. By using TeeRadar, you consent to the collection, use and handling of information as described in that policy.</p>
 
-<h2>17. Changes to Terms</h2>
+<p>You can review the Privacy Policy on the TeeRadar website.</p>
 
-<p>TeeRadar may update these Terms & Conditions at any time.</p>
+<h2>26. Governing Law</h2>
 
-<p>Continued use of the platform after changes are published indicates acceptance of the updated terms.</p>
+<p>These terms are governed by the laws of Australia. Where required, disputes will be dealt with in the courts or tribunals with appropriate jurisdiction in Australia.</p>
+
+<h2>27. Changes to Terms</h2>
+
+<p>TeeRadar may update these Terms & Conditions from time to time.</p>
+
+<p>Continued use of the platform after updated terms are published indicates acceptance of the updated terms.</p>
+
+<h2>28. Contact</h2>
+
+<p>If you have questions about these Terms & Conditions, contact TeeRadar at <a href="mailto:teeradar.help@gmail.com">teeradar.help@gmail.com</a>.</p>
 
 </div>
 
