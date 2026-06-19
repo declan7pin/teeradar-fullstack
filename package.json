@@ -1,7 +1,7 @@
 {
-  "name": "teeradar-fullstack",
+  "name": "teeradar",
   "version": "1.0.0",
-  "description": "TeeRadar WA full backend + frontend",
+  "description": "TeeRadar",
   "type": "module",
   "main": "backend/server.js",
   "scripts": {
