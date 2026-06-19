@@ -35,7 +35,7 @@
     "lng": 115.7763087218749,
     "url": "https://www.wembleygolf.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-11-05&feeGroupId=102202"
   },
-{
+  {
   "name": "Kennedy Bay Golf Club (18 holes)",
   "provider": "MiClub",
   "state": "WA",
@@ -71,6 +71,7 @@
   "lng": 115.774097,
   "url": "https://www.rockinghamgolfclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3900000&selectedDate=2026-06-08&feeGroupId=1500487574"
 },
+
   {
   "name": "Point Walter Golf Course (9 holes)",
   "provider": "MiClub",
