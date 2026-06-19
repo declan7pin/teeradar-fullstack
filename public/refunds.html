@@ -2,15 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Refunds Policy • TeeRadar WA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Refunds Policy • TeeRadar</title>
+
   <style>
     :root {
       --green: #0f766e;
       --muted: #475569;
       --bg: #f7f7f7;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: var(--bg);
@@ -19,22 +26,59 @@
       display: flex;
       flex-direction: column;
     }
+
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 40px;
+      padding:
+        calc(env(safe-area-inset-top) + 16px)
+        40px
+        16px
+        40px;
+      min-height: calc(env(safe-area-inset-top) + 76px);
       background: var(--green);
       color: white;
     }
-    .brand { font-size: 1.6rem; font-weight: 700; }
+
+    .brand {
+      font-size: 1.6rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    nav {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
     nav a {
       color: white;
       text-decoration: none;
-      margin-left: 14px;
-      font-weight: 500;
+      font-weight: 600;
     }
-    nav a:hover { text-decoration: underline; }
+
+    nav a:hover {
+      text-decoration: underline;
+    }
+
+    .home-btn {
+      background: #ffffff;
+      color: var(--green);
+      border: none;
+      border-radius: 999px;
+      padding: 8px 15px;
+      cursor: pointer;
+      font-weight: 800;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+    }
 
     .wrapper {
       max-width: 980px;
@@ -63,124 +107,297 @@
       margin-bottom: 6px;
     }
 
-    p, li {
+    p,
+    li {
       color: var(--muted);
       line-height: 1.6;
       margin-bottom: 10px;
     }
 
-    ul { padding-left: 18px; }
+    ul {
+      padding-left: 18px;
+    }
+
+    a {
+      color: #0f766e;
+    }
+
+    .note {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 13px 14px;
+      margin: 16px 0 20px;
+      color: #334155;
+      line-height: 1.55;
+    }
 
     footer {
       background: #0f766e;
       color: #fff;
       text-align: center;
-      padding: 16px;
+      padding:
+        16px
+        16px
+        calc(env(safe-area-inset-bottom) + 16px);
       margin-top: auto;
       font-size: 0.85rem;
     }
 
     @media (max-width: 720px) {
-      header { flex-direction: column; gap: 10px; padding: 14px 18px; }
-      .wrapper { margin: 24px 16px 50px; padding: 20px; }
-      nav a { margin-left: 10px; font-size: 0.9rem; }
+      header {
+        flex-direction: column;
+        gap: 12px;
+        align-items: center;
+        padding:
+          calc(env(safe-area-inset-top) + 16px)
+          18px
+          16px
+          18px;
+      }
+
+      nav {
+        justify-content: center;
+        gap: 12px;
+      }
+
+      nav a {
+        font-size: 0.9rem;
+      }
+
+      .brand {
+        font-size: 1.35rem;
+      }
+
+      .wrapper {
+        margin: 24px 16px 50px;
+        padding: 20px;
+      }
+
+      h1 {
+        font-size: 1.8rem;
+      }
+
+      h2 {
+        font-size: 1.15rem;
+      }
     }
   </style>
 </head>
 
 <body>
   <header>
-    <div class="brand">TeeRadar WA</div>
+    <div class="brand">TeeRadar</div>
+
     <nav>
-      <a href="/">Home</a>
+      <a class="home-btn" href="/">← Home</a>
       <a href="/book.html">Bookings</a>
       <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
-      <a href="/privacy.html">Policies</a>
+      <a href="/privacy.html">Privacy</a>
     </nav>
   </header>
 
   <main class="wrapper">
     <h1>Refunds Policy</h1>
     <p class="subtitle">
-      Last updated: 24 November 2025
+      Last updated: 2 June 2026
     </p>
+
+    <div class="note">
+      This Refunds Policy explains how refunds are handled for TeeRadar bookings, pay-at-course bookings, subscriptions, mobile app purchases and third-party booking redirects.
+    </div>
 
     <h2>1. Overview</h2>
     <p>
-      TeeRadar WA is a tee-time search tool that shows public golf courses in Western Australia and then sends you directly to the course’s official booking website (MiClub, Quick18, or the club’s own site).
+      TeeRadar is a golf tee-time discovery, booking, alert, scorecard and analytics platform. TeeRadar may allow golfers to find tee times, receive alerts, record rounds, subscribe to premium features, book directly through TeeRadar, or be redirected to external golf course booking systems.
     </p>
     <p>
-      We do <strong>not</strong> take bookings, process payments, or charge green fees. All payments, cancellations and refunds are handled by the course or platform you book with.
+      Refund handling depends on how the booking, subscription or purchase was made.
     </p>
 
-    <h2>2. TeeRadar does not process payments</h2>
+    <h2>2. Third-party course bookings</h2>
     <p>
-      Because all bookings happen on each course’s official system:
+      Many TeeRadar results send you directly to a golf course’s official booking website, such as MiClub, Quick18, a club website, or another third-party booking provider.
     </p>
-    <ul>
-      <li>TeeRadar WA does not collect your payment information</li>
-      <li>TeeRadar WA cannot charge your card</li>
-      <li>TeeRadar WA cannot issue refunds</li>
-      <li>TeeRadar WA cannot modify or cancel your tee time</li>
-    </ul>
-
-    <h2>3. How to request a refund</h2>
     <p>
-      If you need to request a refund or change a booking, you must contact the course or booking platform you paid through.
-    </p>
-
-    <p><strong>MiClub bookings:</strong> Refunds, cancellations and changes follow the individual club’s policy. Visit the club’s MiClub page for instructions.</p>
-
-    <p><strong>Quick18 bookings:</strong> Refunds are handled by the club operating the Quick18 page. Look for their cancellation/refund rules during checkout.</p>
-
-    <p><strong>Direct course websites:</strong> If the course uses its own website or phone bookings, contact the club directly to request a refund.</p>
-
-    <h2>4. Course refund policies may vary</h2>
-    <p>
-      Each golf course sets its own rules around:
+      For these external bookings:
     </p>
     <ul>
-      <li>Cancellation deadlines</li>
-      <li>No-show fees</li>
-      <li>Wet-weather refunds</li>
-      <li>Rescheduling</li>
-      <li>Credit or voucher policies</li>
+      <li>TeeRadar does not process your payment;</li>
+      <li>TeeRadar does not store your card details;</li>
+      <li>TeeRadar cannot issue refunds for payments made externally;</li>
+      <li>TeeRadar cannot modify or cancel the booking for you; and</li>
+      <li>refunds, cancellations and credits are controlled by the golf course or booking provider.</li>
     </ul>
+
+    <h2>3. TeeRadar direct bookings</h2>
     <p>
-      TeeRadar WA has no control over these rules.
+      Some participating golf courses may allow bookings directly through TeeRadar.
+    </p>
+    <p>
+      Where a direct booking is processed through TeeRadar, the refund rules shown during the booking process, the relevant course’s policy, and applicable consumer law will apply.
+    </p>
+    <p>
+      TeeRadar may assist with refunds for direct bookings where the payment was processed through TeeRadar or its payment provider. However, the golf course may remain responsible for determining whether a refund, credit or reschedule is available.
     </p>
 
-    <h2>5. Incorrect availability or price</h2>
+    <h2>4. Pay-at-course bookings</h2>
     <p>
-      If a course price or slot is incorrect on the course’s official system, the club may adjust or deny the booking according to their own terms.  
-      TeeRadar WA cannot override course decisions.
+      Some courses allow tee times to be reserved online but paid directly at the golf course.
     </p>
-
-    <h2>6. When to contact us</h2>
     <p>
-      You should contact TeeRadar WA only if:
+      For pay-at-course bookings:
     </p>
     <ul>
-      <li>A course link is broken</li>
-      <li>A course is listed incorrectly</li>
-      <li>You experienced a technical problem with the TeeRadar website</li>
+      <li>TeeRadar does not collect the green fee;</li>
+      <li>payment is handled by the course;</li>
+      <li>refunds are handled by the course; and</li>
+      <li>cancellation or no-show rules are set by the course.</li>
     </ul>
 
-    <p><strong>Email:</strong> teeradar.help@gmail.com</p>
-
+    <h2>5. TeeRadar subscriptions</h2>
     <p>
-      We will answer quickly, but we cannot modify or refund external bookings.
+      TeeRadar may offer paid subscriptions that provide features such as tee time alerts, favourite course tracking, fewer ads, round analytics, discounts or other premium features.
+    </p>
+    <p>
+      Subscription payments are generally processed by Stripe, Apple, Google or another authorised payment provider.
+    </p>
+    <p>
+      If you cancel a subscription, cancellation normally stops future renewals. It does not automatically refund subscription fees already paid unless required by law or clearly stated at the time of purchase.
+    </p>
+    <p>
+      If you purchased through the Apple App Store or Google Play, refund requests may need to be made directly through Apple or Google using their refund process.
     </p>
 
-    <h2>7. Changes to this page</h2>
+    <h2>6. iOS and Android app purchases</h2>
     <p>
-      We may update this Refunds Policy if new features are added or if legal requirements change. The “Last updated” date will be revised when updates occur.
+      If TeeRadar offers in-app purchases or subscriptions through the Apple App Store or Google Play, those purchases may be subject to Apple’s or Google’s payment, cancellation and refund rules.
+    </p>
+    <p>
+      TeeRadar may not be able to issue refunds directly for purchases processed by Apple or Google. You may need to request a refund through the relevant app store.
+    </p>
+
+    <h2>7. Course refund policies may vary</h2>
+    <p>
+      Each golf course may set its own rules around:
+    </p>
+    <ul>
+      <li>cancellation deadlines;</li>
+      <li>late cancellations;</li>
+      <li>no-show fees;</li>
+      <li>weather interruptions;</li>
+      <li>course closures;</li>
+      <li>rescheduling;</li>
+      <li>credits, vouchers or rain checks; and</li>
+      <li>cart or hire club refunds.</li>
+    </ul>
+    <p>
+      TeeRadar does not control golf course refund policies.
+    </p>
+
+    <h2>8. How to request a refund</h2>
+    <p>
+      The correct refund path depends on where you paid:
+    </p>
+
+    <p>
+      <strong>MiClub, Quick18 or external course website:</strong><br/>
+      Contact the golf course or the booking platform you paid through.
+    </p>
+
+    <p>
+      <strong>Pay at course booking:</strong><br/>
+      Contact the golf course directly.
+    </p>
+
+    <p>
+      <strong>TeeRadar direct booking:</strong><br/>
+      Contact TeeRadar at <a href="mailto:teeradar.help@gmail.com">teeradar.help@gmail.com</a> and include your booking reference, course name, tee time and email used for the booking.
+    </p>
+
+    <p>
+      <strong>TeeRadar subscription through Stripe:</strong><br/>
+      Contact TeeRadar at <a href="mailto:teeradar.help@gmail.com">teeradar.help@gmail.com</a> and include the email used for the subscription.
+    </p>
+
+    <p>
+      <strong>Apple App Store or Google Play purchase:</strong><br/>
+      Request the refund directly through Apple or Google.
+    </p>
+
+    <h2>9. Incorrect availability, pricing or booking information</h2>
+    <p>
+      TeeRadar works hard to display helpful tee time information, but availability, prices, carts, hire clubs and booking conditions may change.
+    </p>
+    <p>
+      The golf course’s official booking system or the TeeRadar checkout page at the time of booking is the final source of truth.
+    </p>
+    <p>
+      TeeRadar is not responsible for external course pricing errors, booking platform changes, course website issues or third-party availability changes.
+    </p>
+
+    <h2>10. Alerts and missed tee times</h2>
+    <p>
+      Tee time alerts are provided as a convenience only. TeeRadar does not guarantee that an alert will be delivered instantly, that the tee time will remain available, or that you will successfully secure the booking.
+    </p>
+    <p>
+      Missed alerts, delayed emails, app notification issues or unavailable tee times do not automatically entitle a user to a refund.
+    </p>
+
+    <h2>11. Scorecards, My Rounds and My Stats</h2>
+    <p>
+      TeeRadar scorecards, My Rounds and My Stats features are provided for personal tracking, convenience and entertainment.
+    </p>
+    <p>
+      Refunds are not generally provided because a scorecard, statistic, distance, course template or analytics result is incomplete, unavailable or inaccurate, unless required by law.
+    </p>
+
+    <h2>12. Technical issues</h2>
+    <p>
+      If you experience a technical issue with the TeeRadar website or mobile app, contact TeeRadar and we will try to help.
+    </p>
+    <p>
+      A temporary outage, device issue, operating system issue, app store issue, email delivery issue, third-party provider outage or internet connection issue does not automatically entitle a user to a refund.
+    </p>
+
+    <h2>13. Australian Consumer Law</h2>
+    <p>
+      Nothing in this Refunds Policy excludes, restricts or modifies any rights you may have under the Australian Consumer Law or any other law that cannot legally be excluded.
+    </p>
+    <p>
+      Where TeeRadar is required by law to provide a refund, remedy or resupply of services, TeeRadar will comply with those obligations.
+    </p>
+
+    <h2>14. When to contact TeeRadar</h2>
+    <p>
+      You should contact TeeRadar if:
+    </p>
+    <ul>
+      <li>a TeeRadar direct booking payment needs to be reviewed;</li>
+      <li>you have a Stripe subscription billing question;</li>
+      <li>a course link is broken;</li>
+      <li>a course is listed incorrectly;</li>
+      <li>you experienced a technical issue with the TeeRadar website or app; or</li>
+      <li>you are unsure who to contact about a booking.</li>
+    </ul>
+
+    <p>
+      <strong>Email:</strong>
+      <a href="mailto:teeradar.help@gmail.com">teeradar.help@gmail.com</a>
+    </p>
+
+    <h2>15. Changes to this policy</h2>
+    <p>
+      TeeRadar may update this Refunds Policy as features, payment methods, app store rules or legal requirements change.
+    </p>
+    <p>
+      The “Last updated” date will be revised when updates are made.
     </p>
   </main>
 
   <footer>
-    © <script>document.write(new Date().getFullYear())</script> TeeRadar WA • Availability subject to course sites.
+    © <script>document.write(new Date().getFullYear())</script> TeeRadar • Availability subject to course sites.
   </footer>
 </body>
 </html>
