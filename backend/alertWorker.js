@@ -9,6 +9,7 @@ import { Resend } from "resend"; // ✅ use Resend instead of nodemailer
 
 // ✅ ADDED: analytics event logger (used by analytics dashboard)
 import { recordEvent } from "./analytics.js";
+import { sendMobilePushToEmail } from "./pushRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -284,6 +285,51 @@ function buildBookingLinkForDate(course, date) {
   }
 }
 
+function formatAlertDateLabel(isoDate) {
+  const d = new Date(`${isoDate}T12:00:00`);
+  if (!Number.isFinite(d.getTime())) return isoDate;
+
+  return d.toLocaleDateString("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function normaliseSlotTime(slot) {
+  const raw =
+    slot?.time ||
+    slot?.tee_time ||
+    slot?.teeTime ||
+    slot?.start_time ||
+    slot?.startTime ||
+    "";
+
+  return String(raw || "").split("|")[0].trim();
+}
+
+function buildPushHitSummary(hits) {
+  const safeHits = Array.isArray(hits) ? hits : [];
+
+  const top = safeHits.slice(0, 3).map((h) => {
+    const course = String(h.courseName || "Course").trim();
+    const date = formatAlertDateLabel(h.date);
+
+    const firstTime =
+      Array.isArray(h.sampleTimes) && h.sampleTimes.length
+        ? h.sampleTimes[0]
+        : "";
+
+    return firstTime
+      ? `${course} ${date} ${firstTime}`
+      : `${course} ${date}`;
+  });
+
+  const extra = safeHits.length > 3 ? ` • +${safeHits.length - 3} more` : "";
+
+  return top.join(" • ") + extra;
+}
+
 /**
  * Send ONE email that includes ALL favourites with availability for this tick.
  * If none found, still send a "no matches" email (digest/heartbeat).
@@ -291,6 +337,45 @@ function buildBookingLinkForDate(course, date) {
  *
  * ✅ WIRED: logs analytics event "alert_sent" only if email succeeds
  */
+async function sendTeeTimePushSummaryForUser({
+  email,
+  hits,
+  earliest,
+  latest,
+  userHoles,
+  partySize,
+}) {
+  const safeHits = Array.isArray(hits) ? hits : [];
+
+  if (!safeHits.length) return;
+
+  const title =
+    safeHits.length === 1
+      ? `${safeHits[0].courseName} has tee times ⛳`
+      : `${safeHits.length} courses have tee times ⛳`;
+
+  const body = buildPushHitSummary(safeHits);
+
+  await sendMobilePushToEmail(email, {
+    title,
+    body,
+    url: "/book.html?alerts=1",
+    type: "TEE_TIME_ALERT",
+    meta: {
+      hitsCount: safeHits.length,
+      courses: safeHits.slice(0, 10).map((h) => ({
+        courseName: h.courseName,
+        date: h.date,
+        count: h.count,
+        sampleTimes: h.sampleTimes || [],
+      })),
+      earliest,
+      latest,
+      holes: userHoles || null,
+      partySize: partySize || null,
+    },
+  });
+}
 async function sendAlertEmailSummaryForUser({
   email,
   plan,
@@ -1073,13 +1158,21 @@ if (prov === "miclub" || prov === "quick18") {
                 (course && (course.url || course.bookingUrl || course.bookUrl)) ||
                 "https://teeradar.com.au/book.html";
 
-              emailHits.push({
-                courseName: course.name,
-                provider: course.provider || null,
-                date,
-                count,
-                bookingLink,
-              });
+              const sampleTimes = Array.isArray(result)
+  ? result
+      .map((slot) => normaliseSlotTime(slot))
+      .filter(Boolean)
+      .slice(0, 3)
+  : [];
+
+emailHits.push({
+  courseName: course.name,
+  provider: course.provider || null,
+  date,
+  count,
+  bookingLink,
+  sampleTimes,
+});
             } else {
               console.log(
                 `  ⛔ ${email} – ${course.name} on ${date}: no slots.`
@@ -1095,10 +1188,21 @@ if (prov === "miclub" || prov === "quick18") {
       }
 
       // ✅ Send ONE email per interval even if there are no hits (digest/heartbeat)
-      if (emailsAllowed && canSendEmailForUser) {
+            if (emailsAllowed && canSendEmailForUser) {
         await sendAlertEmailSummaryForUser({
           email,
           plan,
+          hits: emailHits,
+          earliest,
+          latest,
+          userHoles,
+          partySize,
+        });
+      }
+
+            if (canSendEmailForUser && emailHits.length > 0) {
+        await sendTeeTimePushSummaryForUser({
+          email,
           hits: emailHits,
           earliest,
           latest,
