@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar — Friend Scorecard</title>
+  <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+
+  <style>
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,sans-serif;
+      background:#eef4f6;
+      color:#0f172a;
+    }
+
+    .wrap{
+  max-width:860px;
+  margin:0 auto;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 20px)
+    14px
+    90px;
+}
+
+    .back{
+  display:flex;
+  gap:10px;
+  margin-bottom:14px;
+}
+
+.back a{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:54px;
+  border-radius:18px;
+  background:#e6f4f1;
+  color:#005e55;
+  font-weight:800;
+  text-decoration:none;
+  border:1px solid #dbe5ea;
+}
+
+    .hero{
+      background:linear-gradient(135deg,#00796b,#005e55);
+      color:#fff;
+      border-radius:22px;
+      padding:22px;
+      margin-bottom:16px;
+    }
+
+    .hero h1{
+      margin:0 0 8px;
+      font-size:28px;
+      line-height:1.1;
+    }
+
+    .hero p{
+      margin:0;
+      opacity:.92;
+    }
+
+    .card{
+      background:#fff;
+      border:1px solid #dbe5ea;
+      border-radius:18px;
+      padding:16px;
+      margin-bottom:14px;
+    }
+
+    .summary-grid{
+      display:grid;
+      grid-template-columns:repeat(2,1fr);
+      gap:10px;
+      margin-top:12px;
+    }
+
+    .summary{
+      background:#e6f4f1;
+      border-radius:14px;
+      padding:14px;
+    }
+
+    .summary strong{
+      display:block;
+      font-size:24px;
+      color:#005e55;
+    }
+
+    .summary span{
+      color:#64748b;
+      font-size:13px;
+    }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      margin-top:10px;
+    }
+
+    th{
+      background:#00796b;
+      color:#fff;
+      font-size:13px;
+      padding:10px 6px;
+    }
+
+    td{
+      text-align:center;
+      padding:10px 6px;
+      border-bottom:1px solid #e2e8f0;
+      font-size:14px;
+    }
+
+    tr:last-child td{
+      border-bottom:0;
+    }
+
+    .totals{
+      font-weight:800;
+      background:#f8fafc;
+    }
+
+    .empty{
+      color:#64748b;
+    }
+
+    @media(max-width:640px){
+
+      .summary-grid{
+        grid-template-columns:1fr 1fr;
+      }
+
+      th,td{
+        font-size:12px;
+        padding:8px 4px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="wrap">
+
+    <div class="back">
+
+  <a href="/index.html">
+    ← Return Home
+  </a>
+
+  <a href="javascript:history.back()">
+    ← Back
+  </a>
+
+</div>
+
+    <section class="hero">
+      <h1 id="courseName">Loading round...</h1>
+      <p id="roundMeta">Scorecard</p>
+    </section>
+
+    <section class="card">
+      <h2>Round summary</h2>
+
+      <div class="summary-grid">
+        <div class="summary">
+          <strong id="totalScore">—</strong>
+          <span>Total score</span>
+        </div>
+
+        <div class="summary">
+          <strong id="vsPar">—</strong>
+          <span>vs par</span>
+        </div>
+
+        <div class="summary">
+          <strong id="totalPutts">—</strong>
+          <span>Total putts</span>
+        </div>
+
+        <div class="summary">
+          <strong id="fairways">—</strong>
+          <span>Birdies / Pars</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Hole by hole</h2>
+
+      <div id="tableWrap" class="empty">
+        Loading scorecard...
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/config.js"></script>
+
+  <script>
+    const API_BASE =
+      window.TEERADAR_API_BASE ||
+      localStorage.getItem("teeradar_backend_url") ||
+      "";
+
+    function getToken(){
+      return localStorage.getItem("teeradar_jwt") || "";
+    }
+
+    function escapeHtml(value){
+      return String(value ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    async function init(){
+
+      const params = new URLSearchParams(window.location.search);
+
+      const userId = params.get("userId");
+      const roundId = params.get("roundId");
+
+      const token = getToken();
+
+      if (!userId || !roundId || !token) {
+        document.getElementById("tableWrap").textContent =
+          "Missing round details.";
+        return;
+      }
+
+      try {
+
+        const res = await fetch(
+          `${API_BASE}/api/rounds/friend/${encodeURIComponent(userId)}/round/${encodeURIComponent(roundId)}`,
+          {
+            headers:{
+              Authorization:"Bearer " + token
+            }
+          }
+        );
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Could not load scorecard");
+        }
+
+        const round = data.round || {};
+        const holes = data.holes || [];
+
+        document.getElementById("courseName").textContent =
+          round.course || "Golf round";
+
+        document.getElementById("roundMeta").textContent =
+          `${round.state || ""} • ${round.holes || ""} holes`;
+
+        let totalScore = 0;
+        let totalPar = 0;
+        let totalPutts = 0;
+        let birdies = 0;
+        let pars = 0;
+
+        holes.forEach(h => {
+
+          const score = Number(h.strokes);
+          const par = Number(h.par);
+          const putts = Number(h.putts);
+
+          if (Number.isFinite(score)) totalScore += score;
+          if (Number.isFinite(par)) totalPar += par;
+          if (Number.isFinite(putts)) totalPutts += putts;
+
+          if (Number.isFinite(score) && Number.isFinite(par)) {
+
+            if (score === par - 1) birdies++;
+            if (score === par) pars++;
+          }
+        });
+
+        const diff = totalScore - totalPar;
+
+        document.getElementById("totalScore").textContent =
+          totalScore || "—";
+
+        document.getElementById("vsPar").textContent =
+          Number.isFinite(diff)
+            ? (diff > 0 ? "+" + diff : String(diff))
+            : "—";
+
+        document.getElementById("totalPutts").textContent =
+          totalPutts || "—";
+
+        document.getElementById("fairways").textContent =
+          `${birdies} / ${pars}`;
+
+        const tableWrap = document.getElementById("tableWrap");
+
+        if (!holes.length) {
+          tableWrap.innerHTML =
+            `<div class="empty">No hole data saved.</div>`;
+          return;
+        }
+
+        tableWrap.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Hole</th>
+                <th>Par</th>
+                <th>Score</th>
+                <th>Putts</th>
+              </tr>
+            </thead>
+
+            <tbody>
+
+              ${holes.map(h => `
+                <tr>
+                  <td>${escapeHtml(h.hole_number)}</td>
+                  <td>${escapeHtml(h.par ?? "—")}</td>
+                  <td>${escapeHtml(h.strokes ?? "—")}</td>
+                  <td>${escapeHtml(h.putts ?? "—")}</td>
+                </tr>
+              `).join("")}
+
+              <tr class="totals">
+                <td>Total</td>
+                <td>${escapeHtml(totalPar)}</td>
+                <td>${escapeHtml(totalScore)}</td>
+                <td>${escapeHtml(totalPutts)}</td>
+              </tr>
+
+            </tbody>
+          </table>
+        `;
+
+      } catch (err) {
+
+        document.getElementById("tableWrap").textContent =
+          err.message;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
