@@ -8,6 +8,7 @@ import { recordEvent } from "./analytics.js";
 import jwt from "jsonwebtoken";
 import Stripe from "stripe";
 import { createRoundWithSeededHoles } from "./roundsRoutes.js";
+import { sendMobilePushToEmail } from "./pushRoutes.js";
 
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY || "").trim();
 
@@ -1264,7 +1265,26 @@ async function sendBookingEmail({
     const payload = { from, to, subject, html };
     if (bookingBcc && isLikelyEmail(bookingBcc)) payload.bcc = bookingBcc;
 
-    await resend.emails.send(payload);
+        await resend.emails.send(payload);
+
+    try {
+      await sendMobilePushToEmail(to, {
+        title: source === "manual" ? "Manual booking confirmed ⛳" : "Booking confirmed ⛳",
+        body: `${courseName} — ${date} at ${time}`,
+        url: `/booking-confirmation.html?reference=${encodeURIComponent(reference)}`,
+        type: source === "manual" ? "MANUAL_BOOKING_CONFIRMED" : "BOOKING_CONFIRMED",
+        meta: {
+          reference,
+          courseName,
+          date,
+          time,
+          holes,
+          players
+        }
+      });
+    } catch (pushErr) {
+      console.warn("booking confirmation mobile push failed:", pushErr?.message || pushErr);
+    }
 
     result.emailOk = true;
     result.emailReason = "";
@@ -1351,7 +1371,26 @@ async function sendPaidCancellationRequestEmail({
     const payload = { from, to, subject, html };
     if (bookingBcc && isLikelyEmail(bookingBcc)) payload.bcc = bookingBcc;
 
-    await resend.emails.send(payload);
+        await resend.emails.send(payload);
+
+    try {
+      await sendMobilePushToEmail(to, {
+        title: "Cancellation request",
+        body: `${courseName} has requested to cancel booking ${reference}.`,
+        url: `/api/book/cancel-request?token=${encodeURIComponent(token)}`,
+        type: "BOOKING_CANCELLATION_REQUEST",
+        meta: {
+          reference,
+          courseName,
+          date,
+          time,
+          holes,
+          players
+        }
+      });
+    } catch (pushErr) {
+      console.warn("cancellation request mobile push failed:", pushErr?.message || pushErr);
+    }
 
     result.emailOk = true;
     return result;
