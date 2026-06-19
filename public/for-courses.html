@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>TeeRadar for Golf Courses</title>
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
 
@@ -37,6 +37,7 @@
       position:sticky;
       top:0;
       z-index:20;
+      padding-top:env(safe-area-inset-top);
     }
 
     .nav{
@@ -47,6 +48,7 @@
       align-items:center;
       justify-content:space-between;
       gap:16px;
+      min-height:64px;
     }
 
     .brand{
@@ -56,6 +58,7 @@
       font-weight:900;
       color:var(--green);
       font-size:20px;
+      white-space:nowrap;
     }
 
     .brand img{
@@ -73,6 +76,18 @@
     }
 
     .navlinks a:hover{color:var(--green)}
+
+    .home-mobile{
+      display:none;
+      background:#fff;
+      color:var(--green);
+      border:1px solid var(--border);
+      border-radius:999px;
+      padding:8px 13px;
+      font-weight:850;
+      font-size:14px;
+      box-shadow:0 8px 18px rgba(15,23,42,.06);
+    }
 
     .btn{
       display:inline-flex;
@@ -372,7 +387,7 @@
       border-radius:13px;
       padding:12px 13px;
       font:inherit;
-      font-size:14px;
+      font-size:16px;
       background:#fff;
     }
 
@@ -414,7 +429,10 @@
 
     footer{
       text-align:center;
-      padding:34px 18px 46px;
+      padding:
+        34px
+        18px
+        calc(env(safe-area-inset-bottom) + 46px);
       color:var(--muted);
       font-size:14px;
     }
@@ -428,8 +446,26 @@
         grid-template-columns:1fr;
       }
 
+      .nav{
+        padding:
+          12px
+          14px;
+      }
+
+      .brand{
+        font-size:18px;
+      }
+
+      .brand img{
+        height:32px;
+      }
+
       .navlinks{
         display:none;
+      }
+
+      .home-mobile{
+        display:inline-flex;
       }
 
       .form-grid{
@@ -450,6 +486,8 @@
         <img src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png" alt="TeeRadar">
         <span>TeeRadar</span>
       </a>
+
+      <a class="home-mobile" href="/">← Home</a>
 
       <div class="navlinks">
         <a href="/">Home</a>
