@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TeeRadar — Friend Activity</title>
+  <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#eef4f6;color:#0f172a}
+    .wrap{
+  max-width:860px;
+  margin:0 auto;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 20px)
+    14px
+    80px;
+}
+    .hero{background:linear-gradient(135deg,#00796b,#005e55);color:#fff;border-radius:22px;padding:22px;margin-bottom:16px}
+    .hero h1{margin:0 0 6px;font-size:28px}
+    .hero p{margin:0;opacity:.92;line-height:1.45}
+    .card{background:#fff;border:1px solid #dbe5ea;border-radius:18px;padding:16px;box-shadow:0 10px 35px rgba(15,23,42,.06);margin-bottom:14px}
+    .friend{border:1px solid #dbe5ea;border-radius:14px;padding:13px;display:flex;justify-content:space-between;gap:12px;align-items:center;background:#fff}
+    .friend strong{display:block;font-size:15px}
+    .friend span{display:block;color:#64748b;font-size:13px;margin-top:3px}
+    .list{display:grid;gap:10px}
+    .empty{color:#64748b;font-size:14px;padding:8px 0}
+    button{border:0;border-radius:12px;padding:12px 14px;background:#00796b;color:#fff;font-weight:700;cursor:pointer}
+    button.ghost{background:#e6f4f1;color:#005e55}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    @media(max-width:640px){
+      .friend{flex-direction:column;align-items:stretch}
+      button{width:100%}
+      .actions{justify-content:flex-start}
+    }
+  </style>
+</head>
+
+<body>
+  <main class="wrap">
+    <div style="display:flex;gap:10px;margin-bottom:14px;">
+  <button
+    class="ghost"
+    type="button"
+    onclick="window.location.href='/index.html'"
+    style="flex:1;"
+  >
+    ← Return Home
+  </button>
+
+  <button
+    class="ghost"
+    type="button"
+    onclick="window.location.href='/friends.html'"
+    style="flex:1;"
+  >
+    ← Back to friends
+  </button>
+</div>
+
+    <section class="hero">
+      <h1>Full activity feed</h1>
+      <p>Recent scorecards, personal bests, and rounds from your golf friends.</p>
+    </section>
+
+    <section class="card">
+      <div id="activityList" class="list">
+        <div class="empty">Loading activity...</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/config.js"></script>
+  <script>
+    const API_BASE =
+      window.TEERADAR_API_BASE ||
+      localStorage.getItem("teeradar_backend_url") ||
+      "";
+
+    function getToken(){
+      return (
+        localStorage.getItem("teeradar_jwt") ||
+        localStorage.getItem("token") ||
+        localStorage.getItem("authToken") ||
+        localStorage.getItem("teeradar_token") ||
+        ""
+      );
+    }
+
+    function escapeHtml(value){
+      return String(value ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    async function apiFetch(path){
+      const token = getToken();
+
+      const res = await fetch(API_BASE + path, {
+        headers: {
+          ...(token ? { Authorization: "Bearer " + token } : {})
+        }
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || data.detail || "Request failed");
+      }
+
+      return data;
+    }
+
+    async function loadFullActivity(){
+      const el = document.getElementById("activityList");
+
+      if (!getToken()) {
+        el.innerHTML = `<div class="empty">Login required.</div>`;
+        return;
+      }
+
+      try {
+        const data = await apiFetch("/api/social/friend-activity");
+        const activities = data.activities || [];
+
+        if (!activities.length) {
+          el.innerHTML = `<div class="empty">No friend activity yet.</div>`;
+          return;
+        }
+
+        el.innerHTML = activities.map(a => `
+          <div class="friend">
+            <div>
+              <strong>${escapeHtml(a.text || "Friend activity")}</strong>
+              <span>
+                ${escapeHtml(a.state || "")}
+                ${escapeHtml(a.holes || "")} holes
+                •
+                ${new Date(a.activity_date).toLocaleDateString()}
+              </span>
+            </div>
+            <div class="actions">
+              <button class="ghost" onclick="window.location.href='/friend-profile.html?userId=${Number(a.user_id)}'">
+                View Profile
+              </button>
+            </div>
+          </div>
+        `).join("");
+      } catch (err) {
+        el.innerHTML = `<div class="empty">Could not load activity: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    loadFullActivity();
+  </script>
+</body>
+</html>
