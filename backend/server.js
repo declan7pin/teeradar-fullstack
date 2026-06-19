@@ -27,6 +27,9 @@ import analyticsRouter from "./analyticsRoutes.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 import groupVotesRouter from "./groupVotesRoutes.js";
 import { ensureGroupVotesTables } from "./groupVotesMigrate.js";
+import friendsRouter from "./friendsRoutes.js";
+import socialRouter from "./socialRoutes.js";
+import sharedRoundsRouter from "./sharedRoundsRoutes.js";
 
 // Analytics (Postgres)
 import { recordEvent, getAnalyticsSummary, getTopCourses } from "./analytics.js";
@@ -41,6 +44,9 @@ import authRouter from "./auth.js";
 // 🔔 Alerts (NEW)
 import alertsRouter from "./alertsRoutes.js";
 import { startAlertWorker, runAlertTickOnce } from "./alertWorker.js"; // ✅ ADDED runAlertTickOnce
+// 🔔 Push notifications
+import pushRouter from "./pushRoutes.js";
+import { ensurePushSubscriptionsTable } from "./pushMigrate.js";
 
 // ✅ NEW: Rounds router
 import roundsRouter from "./roundsRoutes.js";
@@ -499,6 +505,42 @@ async function ensureUsersHomeCourseColumns() {
 }
 ensureUsersHomeCourseColumns();
 
+// ✅ NEW: ensure users display name column exists
+async function ensureUsersDisplayNameColumn() {
+  try {
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS display_name TEXT;
+    `);
+
+    console.log("✅ users display_name column ready");
+  } catch (err) {
+    console.error("❌ error ensuring users display_name column:", err);
+  }
+}
+
+ensureUsersDisplayNameColumn();
+
+async function ensureUserSocialColumns() {
+  try {
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS display_name TEXT;
+    `);
+
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS profile_visibility TEXT NOT NULL DEFAULT 'friends';
+    `);
+
+    console.log("✅ user social columns ready");
+  } catch (err) {
+    console.error("❌ error ensuring user social columns:", err);
+  }
+}
+
+ensureUserSocialColumns();
+
 // ✅ NEW: table for alert "hits" (used by the logged-in popup unread/viewed flow)
 async function ensureAlertHitsTable() {
   try {
@@ -526,10 +568,74 @@ async function ensureAlertHitsTable() {
     console.error("❌ error ensuring alert_hits table:", err);
   }
 }
+
+async function ensureMobilePushTokensTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS mobile_push_tokens (
+        id BIGSERIAL PRIMARY KEY,
+        email TEXT NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        platform TEXT,
+        updated_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_mobile_push_tokens_email
+      ON mobile_push_tokens (LOWER(email));
+    `);
+
+    console.log("✅ mobile_push_tokens table ready");
+  } catch (err) {
+    console.error("❌ error ensuring mobile_push_tokens table:", err);
+  }
+}
 ensureAlertHitsTable();
+ensurePushSubscriptionsTable();
+ensureMobilePushTokensTable();
 ensureRoundsTables();
 ensureScorecardTemplatesTables();
 ensureSubscriberStatusSchema(); // ✅ ADD: creates subscriber_status table in code
+
+async function ensureUserFriendsTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS user_friends (
+        id BIGSERIAL PRIMARY KEY,
+        requester_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        addressee_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMPTZ DEFAULT now(),
+        accepted_at TIMESTAMPTZ,
+        CHECK (status IN ('pending', 'accepted', 'blocked')),
+        CHECK (requester_user_id <> addressee_user_id),
+        UNIQUE (requester_user_id, addressee_user_id)
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_friends_requester
+      ON user_friends (requester_user_id);
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_friends_addressee
+      ON user_friends (addressee_user_id);
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_friends_status
+      ON user_friends (status);
+    `);
+
+    console.log("✅ user_friends table ready");
+  } catch (err) {
+    console.error("❌ error ensuring user_friends table:", err);
+  }
+}
+
+ensureUserFriendsTable();
 
 /* ✅✅✅ ONLY ADDITION (needed): ensure booking tables exist (so admin can create courses + generate times) ✅✅✅ */
 async function ensureBookingTables() {
@@ -555,6 +661,41 @@ async function ensureBookingTables() {
         created_at TIMESTAMPTZ DEFAULT now()
       );
     `);
+    
+    async function ensureSharedRoundsTables() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS upcoming_rounds (
+        id BIGSERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        course TEXT NOT NULL,
+        state TEXT,
+        play_date DATE NOT NULL,
+        tee_time TEXT,
+        holes INTEGER NOT NULL DEFAULT 18,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS upcoming_round_shares (
+        id BIGSERIAL PRIMARY KEY,
+        upcoming_round_id BIGINT NOT NULL REFERENCES upcoming_rounds(id) ON DELETE CASCADE,
+        owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        shared_with_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        shared_at TIMESTAMPTZ DEFAULT now(),
+        UNIQUE(upcoming_round_id, shared_with_user_id)
+      );
+    `);
+
+    console.log("✅ shared rounds tables ready");
+  } catch (err) {
+    console.error("❌ error ensuring shared rounds tables:", err);
+  }
+}
+
+ensureSharedRoundsTables();
 
     // If you already run this, keep it
     await ensureCoursePaymentModeSchema();
@@ -814,11 +955,29 @@ const EXTRA_CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
 
 const ALLOWED_ORIGINS = new Set([
   SITE_URL,
+  "https://teeradar.com.au",
   "https://www.teeradar.com.au",
+  "https://teeradar-fullstack-5.onrender.com",
+
+  // local dev
+  "http://localhost",
+  "https://localhost",
   "http://localhost:3000",
+  "https://localhost:3000",
   "http://localhost:5173",
+  "https://localhost:5173",
+
+  "http://127.0.0.1",
+  "https://127.0.0.1",
   "http://127.0.0.1:3000",
+  "https://127.0.0.1:3000",
   "http://127.0.0.1:5173",
+  "https://127.0.0.1:5173",
+
+  // Capacitor mobile app
+  "capacitor://localhost",
+  "ionic://localhost",
+
   ...EXTRA_CORS_ORIGINS,
 ]);
 
@@ -1079,7 +1238,7 @@ app.use((req, res, next) => {
       "script-src 'self' 'unsafe-inline' https:; " +
       "style-src 'self' 'unsafe-inline' https:; " +
       "img-src 'self' https: data:; " +
-      "connect-src 'self' https:; " +
+      "connect-src 'self' https: http://localhost https://localhost http://127.0.0.1 https://127.0.0.1 capacitor://localhost ionic://localhost; " +
       "font-src 'self' https: data:;"
   );
   next();
@@ -1099,6 +1258,9 @@ app.use((req, res, next) => {
 app.use("/api/rounds", roundsRouter);
 // ✅ Scorecards API (PUBLIC – no auth)
 app.use("/api/scorecards", scorecardsRouter);
+// ✅ Friends API
+app.use("/api/friends", requireAuth, friendsRouter);
+app.use("/api/social", socialRouter);
 // ✅ NEW: booking API router
 app.use("/api/book", (req, res, next) => {
   // Try to get slug from header OR query OR /api/book/:slug style param
@@ -1128,9 +1290,13 @@ app.use(bookingViewsRouter);
 // ✅✅✅ END ADD ✅✅✅
 
 app.use(groupVotesRouter);
+app.use("/api/shared-rounds", sharedRoundsRouter);
+
 
 // 🔔 Alerts API
 app.use("/api/alerts", alertsRouter);
+// 🔔 Push notifications API
+app.use("/api/push", pushRouter);
 
 // -------------------------------------------------
 // Stripe Checkout – create subscription session
@@ -1150,9 +1316,12 @@ app.post("/api/subscribe", async (req, res) => {
         : undefined;
 
     const successUrl =
-      process.env.STRIPE_SUCCESS_URL ||
-      `${SITE_URL}/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1`;
-    const cancelUrl = process.env.STRIPE_CANCEL_URL || `${SITE_URL}/subscribe-cancel.html`;
+  process.env.STRIPE_SUCCESS_URL ||
+  `${SITE_URL}/subscribe-success.html?session_id={CHECKOUT_SESSION_ID}&paid=1&backend=${encodeURIComponent(SITE_URL)}`;
+
+const cancelUrl =
+  process.env.STRIPE_CANCEL_URL ||
+  `${SITE_URL}/subscribe-cancel.html?backend=${encodeURIComponent(SITE_URL)}`;
 
         const derivedPlan = derivePlanFromPriceId(priceId);
 
@@ -1629,6 +1798,47 @@ app.get("/api/account/preferences", async (req, res) => {
   } catch (err) {
     console.error("account/preferences GET error:", err);
     res.status(500).json({ error: "internal error", detail: err.message });
+  }
+});
+
+// -------------------------------------------------
+// ✅ Update display name
+// -------------------------------------------------
+app.post("/api/account/display-name", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    const displayName = String(req.body?.displayName || "")
+      .trim()
+      .slice(0, 40);
+
+    if (!displayName) {
+      return res.status(400).json({
+        ok: false,
+        error: "Display name required"
+      });
+    }
+
+    await db.query(
+      `
+      UPDATE users
+      SET display_name = $2
+      WHERE id = $1
+      `,
+      [userId, displayName]
+    );
+
+    return res.json({
+      ok: true,
+      displayName
+    });
+  } catch (err) {
+    console.error("display name update error:", err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Could not update display name"
+    });
   }
 });
 
