@@ -26,7 +26,7 @@
 
   window.TEERADAR_BACKEND =
     stored ||
-    "https://teeradar-fullstack-5.onrender.com";
+    "https://teeradar.com.au";
 
   window.apiUrl = function(path){
     return `${window.TEERADAR_BACKEND}${path}`;
