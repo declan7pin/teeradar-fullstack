@@ -3,8 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <title>TeeRadar — Find a tee time across Australia</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+/>
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+  <script>
+  try {
+    if (sessionStorage.getItem("teeradar_app_splash_seen") === "1") {
+      document.documentElement.classList.add("skip-app-splash");
+    }
+  } catch (e) {}
+</script>
 
   <!-- Google AdSense -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7954721781460856"
@@ -35,14 +45,14 @@
 
     /* HEADER / NAV */
     header{
-      background:var(--teal);
-      color:#fff;
-      padding:10px 4vw;
-      position:sticky;
-      top:0;
-      z-index:20;
-      box-shadow:0 2px 6px rgba(0,0,0,0.12);
-    }
+  background:var(--teal);
+  color:#fff;
+  padding:calc(env(safe-area-inset-top) + 12px) 4vw 14px;
+  position:sticky;
+  top:0;
+  z-index:20;
+  box-shadow:0 2px 6px rgba(0,0,0,0.12);
+}
     .nav-wrap{
       max-width:1100px;
       margin:0 auto;
@@ -198,6 +208,38 @@
       font-weight:600;
       cursor:pointer;
     }
+    .home-alert-card{
+  display:none;
+  margin:16px 0 14px;
+  background:#fff7ed;
+  border:1px solid #fed7aa;
+  border-radius:16px;
+  padding:14px;
+  box-shadow:0 12px 28px rgba(15,23,42,0.08);
+}
+
+.home-alert-card h3{
+  margin:0 0 4px;
+  font-size:15px;
+  color:#9a3412;
+}
+
+.home-alert-card p{
+  margin:0 0 10px;
+  font-size:13px;
+  color:#7c2d12;
+}
+
+.home-alert-card button{
+  border:none;
+  border-radius:999px;
+  background:#f97316;
+  color:#fff;
+  padding:8px 14px;
+  font-size:13px;
+  font-weight:800;
+  cursor:pointer;
+}
     .hero-chips{
       display:flex;
       flex-wrap:wrap;
@@ -345,7 +387,7 @@
       padding:8px 10px;
       border-radius:8px;
       border:1px solid #d1d5db;
-      font-size:13px;
+      font-size:16px;
       margin-bottom:10px;
     }
     .contact-textarea{
@@ -458,13 +500,13 @@
       text-align:center;
     }
     .auth-input{
-      width:100%;
-      padding:8px 10px;
-      border-radius:8px;
-      border:1px solid #d1d5db;
-      font-size:13px;
-      margin-top:8px;
-    }
+  width:100%;
+  padding:10px 12px;
+  border-radius:8px;
+  border:1px solid #d1d5db;
+  font-size:16px;
+  margin-top:8px;
+}
     .auth-input:focus{
       outline:none;
       border-color:#0ea5e9;
@@ -721,29 +763,349 @@
       background:#005e55;
       transform:translateY(1px);
     }
+   @media (max-width:700px){
+  body{padding-bottom:env(safe-area-inset-bottom);}
+
+  header{
+    padding:calc(env(safe-area-inset-top) + 14px) 18px 16px;
+  }
+
+  .nav-wrap{
+    position:relative;
+    align-items:center;
+  }
+
+  .brand{gap:8px;}
+  .brand-text{font-size:14px;}
+
+  .mobile-menu-btn{display:flex;}
+
+  nav{
+    display:none;
+    position:absolute;
+    top:calc(100% + 10px);
+    left:0;
+    right:0;
+    background:#00796b;
+    border-radius:16px;
+    padding:12px;
+    box-shadow:0 18px 35px rgba(15,23,42,0.28);
+    flex-direction:column;
+    align-items:stretch;
+    gap:8px;
+    z-index:50;
+  }
+
+  nav.nav-open{display:flex;}
+
+  nav a,
+  nav button{
+    width:100%;
+    text-align:center;
+    justify-content:center;
+    padding:10px 12px;
+    font-size:13px;
+    border-radius:999px;
+    background:rgba(255,255,255,0.12);
+  }
+
+  .nav-login{
+    background:#ffffff;
+    color:#005e55;
+  }
+
+  main{margin-top:22px;}
+
+  .hero-title{
+    font-size:28px;
+    line-height:1.08;
+  }
+
+  .hero-actions{flex-direction:column;}
+
+  .btn-primary,
+  .btn-outline{width:100%;}
+
+  .hero-chips{flex-direction:column;}
+
+  .chip{
+    justify-content:center;
+    width:100%;
+  }
+
+  .hero-card{min-height:220px;}
+}
+
+.header-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}    
+
+.mobile-menu-btn{
+  display:none;
+  width:42px;
+  height:38px;
+  border:0;
+  border-radius:12px;
+  background:rgba(255,255,255,0.14);
+  cursor:pointer;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  gap:5px;
+}
+
+.mobile-menu-btn span{
+  display:block;
+  width:21px;
+  height:2px;
+  background:#ffffff;
+  border-radius:999px;
+}
+
+/* === APP STARTUP SPLASH === */
+#appSplash{
+  position:fixed;
+  inset:0;
+  background:#ffffff;
+  z-index:99999;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  transition:opacity .35s ease, visibility .35s ease;
+}
+
+.skip-app-splash #appSplash{
+  display:none !important;
+}
+
+#appSplash.hide{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+
+#appSplashLogo{
+  width:320px;
+  max-width:82vw;
+  height:auto;
+  object-fit:contain;
+  display:block;
+}
+
+#appSplashWord{
+  margin-top:22px;
+  font-size:30px;
+  font-weight:900;
+  letter-spacing:.18em;
+  color:#000000;
+  min-height:40px;
+  text-align:center;
+}
+
+/* === NOTIFICATION BELL === */
+.nav-wrap{
+  position:relative;
+}
+
+.notification-bell{
+  position:relative;
+  width:42px;
+  height:38px;
+  border:0;
+  border-radius:12px;
+  background:rgba(255,255,255,0.14);
+  color:#fff;
+  font-size:18px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.notification-badge{
+  position:absolute;
+  top:-5px;
+  right:-5px;
+  min-width:18px;
+  height:18px;
+  padding:0 5px;
+  border-radius:999px;
+  background:#ef4444;
+  color:#fff;
+  font-size:11px;
+  font-weight:900;
+  display:none;
+  align-items:center;
+  justify-content:center;
+}
+
+.notification-panel{
+  position:absolute;
+  top:calc(100% + 10px);
+  right:58px;
+  width:min(360px, calc(100vw - 28px));
+  max-height:460px;
+  overflow:auto;
+  background:#ffffff;
+  color:#0f172a;
+  border-radius:16px;
+  box-shadow:0 18px 40px rgba(15,23,42,.28);
+  border:1px solid #e2e8f0;
+  display:none;
+  z-index:999;
+}
+
+.notification-panel.open{
+  display:block;
+}
+
+.notification-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:12px 14px;
+  border-bottom:1px solid #e2e8f0;
+  font-weight:900;
+}
+
+.notification-head button{
+  border:0;
+  background:transparent;
+  color:#00796b;
+  font-weight:800;
+  cursor:pointer;
+}
+
+.notification-item{
+  padding:12px 14px;
+  border-bottom:1px solid #eef2f7;
+  cursor:pointer;
+}
+
+.notification-item.unread{
+  background:#ecfeff;
+}
+
+.notification-title{
+  font-weight:900;
+  font-size:13px;
+  margin-bottom:3px;
+}
+
+.notification-body{
+  font-size:12px;
+  color:#64748b;
+}
+
+.notification-time{
+  font-size:11px;
+  color:#94a3b8;
+  margin-top:4px;
+}
+
+.notification-empty{
+  padding:18px 14px;
+  color:#64748b;
+  font-size:13px;
+  text-align:center;
+}
+
+@media(max-width:700px){
+  .notification-panel{
+    right:0;
+    left:0;
+    margin:auto;
+  }
+ @media(max-width:700px){
+  .header-actions{
+    display:flex !important;
+    align-items:center !important;
+    gap:10px !important;
+  }
+
+  .mobile-menu-btn{
+    display:flex !important;
+    width:42px !important;
+    height:38px !important;
+    border:0 !important;
+    border-radius:12px !important;
+    background:rgba(255,255,255,0.14) !important;
+    cursor:pointer !important;
+    align-items:center !important;
+    justify-content:center !important;
+    flex-direction:column !important;
+    gap:5px !important;
+  }
+
+  .mobile-menu-btn span{
+    display:block !important;
+    width:21px !important;
+    height:2px !important;
+    background:#ffffff !important;
+    border-radius:999px !important;
+  }
+
+  .notification-bell{
+    display:flex !important;
+  }
+}
   </style>
 </head>
 <body>
+  <div id="appSplash">
+  <img
+    id="appSplashLogo"
+    src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png"
+    alt="TeeRadar"
+  />
+  <div id="appSplashWord"></div>
+</div>
 <header>
   <div class="nav-wrap">
     <a class="brand" href="/course-admin-login.html" aria-label="Course admin login">
-  <div class="brand-logo">
-    <img src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png" alt="TeeRadar" />
+      <div class="brand-logo">
+        <img src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png" alt="TeeRadar" />
+      </div>
+      <div class="brand-text">TeeRadar</div>
+    </a>
+
+    <div class="header-actions">
+
+    <button class="notification-bell" id="notificationBell" type="button" aria-label="Notifications">
+  🔔
+  <span class="notification-badge" id="notificationBadge">0</span>
+</button>
+
+    <button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Open menu">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+      </div>
+
+    <div class="notification-panel" id="notificationPanel">
+  <div class="notification-head">
+    <span>Notifications</span>
+    <button type="button" id="notificationReadAll">Mark all read</button>
   </div>
-  <div class="brand-text">TeeRadar</div>
-</a>
-    <nav>
-      <nav>
-  <a href="/index.html">Home</a>
-  <a href="/book.html">Bookings</a>
-  <a href="/for-courses.html">For Courses</a>
-  <a href="/faq.html">FAQ</a>
+  <div id="notificationList">
+    <div class="notification-empty">No notifications yet.</div>
+  </div>
+</div>
+
+    <nav id="mainNav">
+      <a href="/index.html">Home</a>
+      <a href="/book.html">Bookings</a>
+      <a href="/for-courses.html">For Courses</a>
+      <a href="/faq.html">FAQ</a>
       <a href="/about.html">About</a>
-      <a href="/analytics" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
-
-      <!-- ✅ My Rounds: visible even when logged out -->
-<a href="/my-rounds.html" id="navMyRounds">My Rounds</a>
-
+      <a href="analytics.html" id="navAnalytics" class="nav-analytics" style="display:none;">Analytics</a>
+      <a href="/my-rounds.html" id="navMyRounds">My Rounds</a>
+      <a href="/friends.html" id="navFriends">Friends</a>
       <button id="navLoginBtn" class="nav-login" type="button">Log in</button>
     </nav>
   </div>
@@ -775,6 +1137,12 @@
         <button class="btn-outline" onclick="window.location.href='/faq.html'">
           How TeeRadar works
         </button>
+      </div>
+
+            <div id="homeAlertCard" class="home-alert-card">
+        <h3>New tee time alerts available ⛳</h3>
+        <p>You have unread favourite-course alerts ready to view.</p>
+        <button type="button" id="homeAlertBtn">View alerts</button>
       </div>
 
       <div class="hero-chips">
@@ -957,12 +1325,57 @@
   </div>
 </div>
 
+<script src="/push.js"></script>
+  
 <script>
   const ADMIN_EMAIL = "declan7pin@gmail.com";
+const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+function runAppSplashOnce(){
+  const splash = document.getElementById("appSplash");
+  const wordEl = document.getElementById("appSplashWord");
+
+  if (!splash) return Promise.resolve();
+
+  if (sessionStorage.getItem("teeradar_app_splash_seen") === "1") {
+    splash.remove();
+    return Promise.resolve();
+  }
+
+  sessionStorage.setItem("teeradar_app_splash_seen", "1");
+  document.body.style.overflow = "hidden";
+
+  const word = "TEERADAR";
+
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      if (!wordEl) return;
+
+      let i = 0;
+      const typeTimer = setInterval(() => {
+        wordEl.textContent = word.slice(0, i + 1);
+        i++;
+
+        if (i >= word.length) {
+          clearInterval(typeTimer);
+        }
+      }, 100);
+    }, 900);
+
+    setTimeout(() => {
+      splash.classList.add("hide");
+      document.body.style.overflow = "";
+
+      setTimeout(() => {
+        splash.remove();
+        resolve();
+      }, 350);
+    }, 2500);
+  });
+}
 
   function trackEvent(type, payload) {
     try {
-      fetch("/api/analytics/event", {
+      fetch(`${API_BASE}/api/analytics/event`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1054,7 +1467,7 @@
 
   async function hasActivePlanViaStripe(email) {
     try {
-      const res = await fetch("/api/account/plan?email=" + encodeURIComponent(email));
+      const res = await fetch(`${API_BASE}/api/account/plan?email=` + encodeURIComponent(email));
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data) return false;
       return (data.plan === "BASIC" || data.plan === "PRO");
@@ -1196,7 +1609,7 @@
     if (authCourses.length) return;
 
     try {
-      const res = await fetch("/api/courses");
+      const res = await fetch(`${API_BASE}/api/courses`);
       const data = await res.json();
       authCourses = Array.isArray(data) ? data : [];
     } catch (err) {
@@ -1280,7 +1693,7 @@
       }
 
       try {
-        const res = await fetch(endpoint, {
+        const res = await fetch(`${API_BASE}${endpoint}`,{
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -1314,7 +1727,8 @@
         closeAuthModal();
         renderNavState();
 
-        tryShowAvailablePopupForSubscribedUser();
+            initHomeAlertCard();
+    tryShowAvailablePopupForSubscribedUser();
       } catch (err) {
         console.error("Auth error:", err);
         alert("Something went wrong. Please try again.");
@@ -1465,6 +1879,43 @@ ${details || "Not provided"}
     }
   }
 
+    async function initHomeAlertCard() {
+    try {
+      const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
+      if (!email) return;
+
+      const card = document.getElementById("homeAlertCard");
+      const btn = document.getElementById("homeAlertBtn");
+      if (!card || !btn) return;
+
+      const token = localStorage.getItem("teeradar_jwt") || "";
+
+      const res = await fetch(`${API_BASE}/api/alerts/unread?email=` + encodeURIComponent(email), {
+        method: "GET",
+        headers: token ? { "Authorization": "Bearer " + token } : {}
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) return;
+
+      const hits = Array.isArray(data.hits) ? data.hits : [];
+      const hasUnread = hits.some(h => {
+        const slots = h.slots || h.results || [];
+        return Array.isArray(slots) && slots.length > 0;
+      });
+
+      if (!hasUnread) return;
+
+      card.style.display = "block";
+
+      btn.onclick = () => {
+        window.location.href = "/account.html#alerts";
+      };
+    } catch (e) {
+      console.warn("initHomeAlertCard failed", e);
+    }
+  }
+
   async function tryShowAvailablePopupForSubscribedUser() {
     try {
       const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
@@ -1488,7 +1939,7 @@ ${details || "Not provided"}
 
       const token = localStorage.getItem("teeradar_jwt") || "";
 
-      const res = await fetch("/api/alerts/unread?email=" + encodeURIComponent(email), {
+      const res = await fetch(`${API_BASE}/api/alerts/unread?email=` + encodeURIComponent(email), {
         method: "GET",
         headers: token ? { "Authorization": "Bearer " + token } : {}
       });
@@ -1585,7 +2036,7 @@ ${details || "Not provided"}
             .filter(v => v !== undefined && v !== null);
 
           if (allIds.length) {
-            fetch("/api/alerts/mark-read", {
+            fetch(`${API_BASE}/api/alerts/mark-read`,{
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -1606,7 +2057,169 @@ ${details || "Not provided"}
     } catch (e) {}
   }
 
-  window.addEventListener("load", () => {
+  async function loadNotifications() {
+  const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
+  const bell = document.getElementById("notificationBell");
+  const badge = document.getElementById("notificationBadge");
+  const list = document.getElementById("notificationList");
+
+  if (!bell || !badge || !list) return;
+
+  if (!email) {
+    bell.style.display = "none";
+    return;
+  }
+
+  bell.style.display = "flex";
+
+  try {
+    const res = await fetch(`${API_BASE}/api/push/notifications?email=${encodeURIComponent(email)}`);
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.ok) return;
+
+    const unread = Number(data.unread || 0);
+    badge.textContent = unread > 99 ? "99+" : String(unread);
+    badge.style.display = unread > 0 ? "flex" : "none";
+
+    const notifications = Array.isArray(data.notifications) ? data.notifications : [];
+
+    if (!notifications.length) {
+      list.innerHTML = `<div class="notification-empty">No notifications yet.</div>`;
+      return;
+    }
+
+    list.innerHTML = "";
+
+    notifications.forEach((n) => {
+      const item = document.createElement("div");
+      item.className = "notification-item" + (!n.read_at ? " unread" : "");
+
+      const created = n.created_at ? new Date(n.created_at) : null;
+      const when = created && !Number.isNaN(created.getTime())
+        ? created.toLocaleString()
+        : "";
+
+      item.innerHTML = `
+        <div class="notification-title">${escapeHtml(n.title || "TeeRadar")}</div>
+        <div class="notification-body">${escapeHtml(n.body || "")}</div>
+        <div class="notification-time">${escapeHtml(when)}</div>
+      `;
+
+      item.onclick = async () => {
+  await markNotificationRead(n.id);
+
+  const url = String(n.url || "/index.html").trim();
+
+  if (url.startsWith("/")) {
+    window.location.href = url;
+  } else {
+    window.location.href = "/index.html";
+  }
+};
+
+      list.appendChild(item);
+    });
+  } catch (e) {
+    console.warn("loadNotifications failed", e);
+  }
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function markNotificationRead(id) {
+  const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
+  if (!email || !id) return;
+
+  try {
+    await fetch(`${API_BASE}/api/push/notifications/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, id })
+    });
+  } catch {}
+}
+
+async function markAllNotificationsRead() {
+  const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
+  if (!email) return;
+
+  try {
+    await fetch(`${API_BASE}/api/push/notifications/read-all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+  } catch {}
+
+  await loadNotifications();
+}
+
+function initNotificationBell() {
+  const bell = document.getElementById("notificationBell");
+  const panel = document.getElementById("notificationPanel");
+  const readAll = document.getElementById("notificationReadAll");
+
+  if (!bell || !panel) return;
+
+  bell.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    panel.classList.toggle("open");
+    await loadNotifications();
+  });
+
+  if (readAll) {
+    readAll.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await markAllNotificationsRead();
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    if (panel.contains(e.target) || bell.contains(e.target)) return;
+    panel.classList.remove("open");
+  });
+}
+
+  window.addEventListener("load", async () => {
+  await runAppSplashOnce();
+
+    const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+    const mainNav = document.getElementById("mainNav");
+
+    if (mobileMenuBtn && mainNav) {
+
+      const analyticsLink = document.getElementById("navAnalytics");
+
+if (analyticsLink) {
+  analyticsLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.location.href = "analytics.html";
+  });
+}
+
+        mobileMenuBtn.addEventListener("click", () => {
+            mainNav.classList.toggle("nav-open");
+        });
+
+        mainNav.querySelectorAll("a,button").forEach(item => {
+  item.addEventListener("click", () => {
+    setTimeout(() => {
+      mainNav.classList.remove("nav-open");
+    }, 150);
+  });
+});
+
+    }
+
     renderNavState();
     trackInitialHome();
     initTCBanner();
@@ -1614,8 +2227,12 @@ ${details || "Not provided"}
     initHomeCourseAutocomplete();
     maybeAutoOpenSignupFromQuery();
     initSubscriberAlertModal();
-    tryShowAvailablePopupForSubscribedUser();
-  });
+initNotificationBell();
+loadNotifications();
+tryShowAvailablePopupForSubscribedUser();
+
+setInterval(loadNotifications, 60000);
+});
 </script>
 </body>
 </html>
