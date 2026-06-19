@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>TeeRadar — My Stats</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
 
   <style>
@@ -33,10 +33,13 @@
   }
 
   .wrap{
-    max-width:1180px;
-    margin:0 auto;
-    padding:24px 18px 42px;
-  }
+  max-width:1180px;
+  margin:0 auto;
+  padding:
+    calc(env(safe-area-inset-top) + 24px)
+    18px
+    calc(env(safe-area-inset-bottom) + 42px);
+}
 
   header{
     display:flex;
@@ -362,20 +365,23 @@
   }
 
   @media (max-width:700px){
-    .wrap{
-      padding:18px 12px 34px;
-    }
+  .wrap{
+    padding:
+      calc(env(safe-area-inset-top) + 62px)
+      12px
+      calc(env(safe-area-inset-bottom) + 34px);
+  }
 
-    header{
-      align-items:flex-start;
-      flex-direction:column;
-      gap:14px;
-      padding:8px 0 4px;
-    }
+  header{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:14px;
+    padding:8px 0 4px;
+  }
 
-    h1{
-      font-size:1.75rem;
-    }
+  h1{
+    font-size:1.75rem;
+  }
 
     .sub{
       font-size:.98rem;
@@ -463,12 +469,13 @@
 
 .customRange input{
   width:100%;
+  min-height:52px;
   padding:12px 14px;
   border:1px solid var(--border);
   border-radius:16px;
   background:#f8fafc;
   color:var(--text);
-  font:inherit;
+  font-size:16px;
   font-weight:800;
 }
 
@@ -501,6 +508,7 @@
       <div class="title">
         <h1>My Stats</h1>
         <div class="sub">Your performance trends across recent rounds.</div>
+        <div id="statsDebug" style="display:none;"></div>
       </div>
       <div class="actions">
         <a class="btn" href="/my-rounds.html">← Back to My Rounds</a>
@@ -726,6 +734,8 @@
   </div> <!-- ✅ keep this line; we’ll close #app properly below -->
 
   <script>
+    const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+
     /* ✅✅✅ ONLY CHANGES BELOW ✅✅✅ */
 
     /* ✅ MOVE getToken ABOVE gate + refresh use */
@@ -737,6 +747,49 @@
       }
       return "";
     }
+    function decodeJwtPayload(token){
+  try{
+    const parts = String(token || "").split(".");
+    if (parts.length < 2) return {};
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const pad = b64.length % 4 ? "=".repeat(4 - (b64.length % 4)) : "";
+    return JSON.parse(atob(b64 + pad));
+  }catch{
+    return {};
+  }
+}
+
+function getCurrentUserNameOrEmail(){
+  const p = decodeJwtPayload(getToken());
+  const email = String(p.email || p.userEmail || p.sub || "").trim().toLowerCase();
+  const name = String(p.name || p.fullName || p.displayName || "").trim().toLowerCase();
+  return { email, name, shortEmail: email ? email.split("@")[0].toLowerCase() : "" };
+}
+
+function getMyPlayerIndex(round){
+  const me = getCurrentUserNameOrEmail();
+  const names = Array.isArray(round?.player_names) ? round.player_names : [];
+
+  const idx = names.findIndex(n => {
+    const x = String(n || "").trim().toLowerCase();
+    return x && (x === me.email || x === me.name || x === me.shortEmail);
+  });
+
+  return idx >= 0 ? idx : 0;
+}
+
+function getPlayerValue(h, field, playerIndex){
+  const playerNo = String(playerIndex + 1);
+  const map = h?.[`${field}_by_player`];
+
+  if (map && typeof map === "object" && map[playerNo] !== undefined && map[playerNo] !== null) {
+    return safeNum(map[playerNo]);
+  }
+
+  if (playerIndex === 0) return safeNum(h?.[field]);
+
+  return null;
+}
 
     // ✅ HARD gate: My Stats requires login (My Rounds can be public)
     (function gate(){
@@ -834,7 +887,7 @@
       headers["Content-Type"] = headers["Content-Type"] || "application/json";
       if (token) headers["Authorization"] = "Bearer " + token;
 
-      const res = await fetch(path, { ...options, headers });
+      const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
       let data = null;
       try { data = await res.json(); } catch {}
       if (!res.ok){
@@ -860,12 +913,14 @@
           const round = det.round || det;
           const holesArr = Array.isArray(det.holes) ? det.holes : [];
 
-          const holes = holesArr.map((h, idx) => ({
-            hole: safeNum(h.hole_number ?? h.hole ?? (idx+1)) ?? (idx+1),
-            par: safeNum(h.par),
-            shots: safeNum(h.strokes ?? h.shots ?? h.score),
-            putts: safeNum(h.putts)
-          }));
+          const myPlayerIndex = getMyPlayerIndex(round);
+
+const holes = holesArr.map((h, idx) => ({
+  hole: safeNum(h.hole_number ?? h.hole ?? (idx+1)) ?? (idx+1),
+  par: safeNum(h.par),
+  shots: getPlayerValue(h, "strokes", myPlayerIndex),
+  putts: getPlayerValue(h, "putts", myPlayerIndex)
+}));
 
           const totalShots = sumNums(holes.map(h => h.shots));
           const totalPutts = sumNums(holes.map(h => h.putts));
@@ -944,12 +999,14 @@
         let holes = [];
 
         if (Array.isArray(r.holesData)){
-          holes = r.holesData.map((h, idx) => ({
-            hole: safeNum(h.hole ?? h.hole_number ?? (idx+1)) ?? (idx+1),
-            par: safeNum(h.par),
-            shots: safeNum(h.shots ?? h.strokes ?? h.score ?? (h.strokes_by_player ? h.strokes_by_player["1"] : null)),
-            putts: safeNum(h.putts ?? (h.putts_by_player ? h.putts_by_player["1"] : null))
-          }));
+          const myPlayerIndex = getMyPlayerIndex(r);
+
+holes = r.holesData.map((h, idx) => ({
+  hole: safeNum(h.hole ?? h.hole_number ?? (idx+1)) ?? (idx+1),
+  par: safeNum(h.par),
+  shots: getPlayerValue(h, "strokes", myPlayerIndex),
+  putts: getPlayerValue(h, "putts", myPlayerIndex)
+}));
         } else if (Array.isArray(r.holes)){
           holes = r.holes.map((h, idx) => ({
             hole: safeNum(h.hole ?? (idx+1)) ?? (idx+1),
@@ -1673,15 +1730,52 @@ let customEndDate = "";
     }
 
     async function refresh(){
-      // ✅ CHANGE: don’t load anything if logged out (gate is showing)
-      const token = getToken();
-      if (!token) return;
 
-      /* ✅✅✅ ONLY CHANGE (needed): async load rounds (backend first, then local) ✅✅✅ */
-      ALL = await loadAllRounds();
-      applyRange();
-      /* ✅✅✅ END ONLY CHANGE ✅✅✅ */
+  const debug = document.getElementById("statsDebug");
+
+  const token = getToken();
+
+  if (!token){
+    if (debug){
+      debug.textContent =
+        "Debug: no login token found.";
     }
+    return;
+  }
+
+  try {
+
+    if (debug){
+      debug.textContent =
+        "Debug: loading rounds from backend...";
+    }
+
+    ALL = await loadAllRounds();
+
+    if (debug){
+      debug.textContent =
+        "Debug: loaded " +
+        ALL.length +
+        " round(s).";
+    }
+
+    applyRange();
+
+  } catch (err){
+
+    console.error(
+      "My Stats refresh failed:",
+      err
+    );
+
+    if (debug){
+      debug.textContent =
+        "Debug error: " +
+        (err?.message || String(err));
+    }
+
+  }
+}
 
     // ✅ CHANGED (only): scope range tab listeners to data-range
     document.querySelectorAll(".tab[data-range]").forEach(btn => {
