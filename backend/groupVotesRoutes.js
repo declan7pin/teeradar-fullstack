@@ -4,6 +4,7 @@ import crypto from "crypto";
 import db from "./db.js";
 import { requireAuth as requireUser } from "./auth.js";
 import * as pgAnalytics from "./analytics.js";
+import { sendMobilePushToEmail } from "./pushRoutes.js";
 
 const router = express.Router();
 
@@ -27,6 +28,36 @@ function isSafeBookingUrl(u) {
   if (!u) return true;
   const s = String(u).trim();
   return s.startsWith("/") || s.startsWith("http://") || s.startsWith("https://");
+}
+
+async function notifyGroupVoteParticipants(voteId, excludeUserId, payload) {
+  try {
+    const { rows } = await db.query(
+      `
+      SELECT DISTINCT u.email
+      FROM group_vote_responses r
+      JOIN users u ON u.id = r.user_id
+      WHERE r.vote_id = $1
+        AND r.user_id <> $2
+
+      UNION
+
+      SELECT u.email
+      FROM group_votes gv
+      JOIN users u ON u.id = gv.creator_user_id
+      WHERE gv.id = $1
+        AND gv.creator_user_id <> $2
+      `,
+      [voteId, excludeUserId || 0]
+    );
+
+    for (const row of rows || []) {
+      if (!row.email) continue;
+      await sendMobilePushToEmail(row.email, payload);
+    }
+  } catch (err) {
+    console.warn("group vote mobile push failed:", err?.message || err);
+  }
 }
 
 async function getVoteFull(publicId, viewerUserId = null) {
@@ -395,7 +426,20 @@ router.post("/api/group-votes/:publicId/vote", requireUser, async (req, res) => 
       console.warn("group_vote_vote_submitted analytics insert failed (non-fatal):", e?.message || e);
     }
 
-    const refreshed = await getVoteFull(publicId, userId);
+        const refreshed = await getVoteFull(publicId, userId);
+
+    await notifyGroupVoteParticipants(vote.id, userId, {
+      title: "Group vote updated",
+      body: `${refreshed.creatorName || "Someone"}'s group vote has a new response.`,
+      url: `/group-vote.html?id=${encodeURIComponent(publicId)}`,
+      type: "GROUP_VOTE_UPDATE",
+      meta: {
+        publicId,
+        voteId: vote.id,
+        action
+      }
+    });
+
     return res.json({ ok: true, vote: refreshed, action });
   } catch (err) {
     console.error("POST /api/group-votes/:publicId/vote error", {
