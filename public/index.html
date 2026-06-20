@@ -2109,7 +2109,19 @@ ${details || "Not provided"}
       item.onclick = async () => {
   await markNotificationRead(n.id);
 
-  const url = String(n.url || "/index.html").trim();
+  const title = String(n.title || "").toLowerCase();
+  const body = String(n.body || "").toLowerCase();
+  const url = String(n.url || "").trim();
+
+  const isTeeTimeAlert =
+    title.includes("tee time") ||
+    body.includes("tee time") ||
+    body.includes("courses have tee times");
+
+  if (isTeeTimeAlert && n.id) {
+    window.location.href = `/alert-results.html?notificationId=${encodeURIComponent(n.id)}`;
+    return;
+  }
 
   if (url.startsWith("/")) {
     window.location.href = url;
