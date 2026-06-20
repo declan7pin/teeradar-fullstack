@@ -363,7 +363,7 @@ async function sendTeeTimePushSummaryForUser({
     type: "TEE_TIME_ALERT",
     meta: {
       hitsCount: safeHits.length,
-      courses: safeHits.slice(0, 10).map((h) => ({
+      courses: safeHits.map((h) => ({
   courseName: h.courseName,
   date: h.date,
   count: h.count,
