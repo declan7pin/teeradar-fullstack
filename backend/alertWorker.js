@@ -364,11 +364,12 @@ async function sendTeeTimePushSummaryForUser({
     meta: {
       hitsCount: safeHits.length,
       courses: safeHits.slice(0, 10).map((h) => ({
-        courseName: h.courseName,
-        date: h.date,
-        count: h.count,
-        sampleTimes: h.sampleTimes || [],
-      })),
+  courseName: h.courseName,
+  date: h.date,
+  count: h.count,
+  sampleTimes: h.sampleTimes || [],
+  bookingLink: h.bookingLink || ""
+})),
       earliest,
       latest,
       holes: userHoles || null,
