@@ -86,6 +86,25 @@ async function saveNotificationForEmail(email, payload = {}) {
   const url = String(payload.url || "/index.html");
   const meta = payload.meta || {};
 
+  const existing = await db.query(
+  `
+  SELECT id
+  FROM user_notifications
+  WHERE LOWER(email) = LOWER($1)
+    AND title = $2
+    AND body = $3
+    AND type = $4
+    AND created_at > now() - interval '2 minutes'
+  ORDER BY created_at DESC
+  LIMIT 1
+  `,
+  [targetEmail, title, body, type]
+);
+
+if (existing.rows.length) {
+  return existing.rows[0].id;
+}
+  
   const { rows } = await db.query(
     `
     INSERT INTO user_notifications (
