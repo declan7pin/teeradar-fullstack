@@ -86,6 +86,25 @@ async function saveNotificationForEmail(email, payload = {}) {
   const url = String(payload.url || "/index.html");
   const meta = payload.meta || {};
 
+  const existing = await db.query(
+  `
+  SELECT id
+  FROM user_notifications
+  WHERE LOWER(email) = LOWER($1)
+    AND title = $2
+    AND body = $3
+    AND type = $4
+    AND created_at > now() - interval '2 minutes'
+  ORDER BY created_at DESC
+  LIMIT 1
+  `,
+  [targetEmail, title, body, type]
+);
+
+if (existing.rows.length) {
+  return existing.rows[0].id;
+}
+  
   const { rows } = await db.query(
     `
     INSERT INTO user_notifications (
@@ -593,6 +612,62 @@ router.get("/notifications", async (req, res) => {
   } catch (err) {
     console.error("notifications list error:", err);
     res.status(500).json({ ok: false, error: "notifications_failed" });
+  }
+});
+
+router.get("/notifications/:id", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.query?.email);
+    const id = Number(req.params.id || 0);
+
+    if (!email) {
+      return res.status(400).json({ ok: false, error: "email_required" });
+    }
+
+    if (!id) {
+      return res.status(400).json({ ok: false, error: "id_required" });
+    }
+
+    const { rows } = await db.query(
+      `
+      SELECT
+        id,
+        title,
+        body,
+        type,
+        url,
+        meta,
+        read_at,
+        created_at
+      FROM user_notifications
+      WHERE id = $1
+        AND LOWER(email) = LOWER($2)
+      LIMIT 1
+      `,
+      [id, email]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ ok: false, error: "notification_not_found" });
+    }
+
+    await db.query(
+      `
+      UPDATE user_notifications
+      SET read_at = COALESCE(read_at, now())
+      WHERE id = $1
+        AND LOWER(email) = LOWER($2)
+      `,
+      [id, email]
+    );
+
+    res.json({
+      ok: true,
+      notification: rows[0]
+    });
+  } catch (err) {
+    console.error("notification detail error:", err);
+    res.status(500).json({ ok: false, error: "notification_detail_failed" });
   }
 });
 
