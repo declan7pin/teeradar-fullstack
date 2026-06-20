@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TeeRadar — Alert Results</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <link rel="icon" type="image/png" href="/assets/icon-192.png" />
+  <style>
+    :root{
+      --teal:#00796b;
+      --teal-dark:#005e55;
+      --bg:#f4f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e2e8f0;
+    }
+
+    *{box-sizing:border-box;}
+
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:radial-gradient(circle at top,#e0f2f1,#f9fafb);
+      color:var(--text);
+    }
+
+    header{
+      background:var(--teal);
+      color:#fff;
+      padding:calc(env(safe-area-inset-top) + 14px) 18px 16px;
+      box-shadow:0 2px 6px rgba(0,0,0,.12);
+    }
+
+    .header-inner{
+      max-width:900px;
+      margin:0 auto;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-weight:900;
+      font-size:18px;
+    }
+
+    .brand img{
+      width:34px;
+      height:34px;
+      border-radius:999px;
+      background:#fff;
+    }
+
+    .home-btn{
+      border:0;
+      border-radius:999px;
+      background:#fff;
+      color:var(--teal-dark);
+      padding:9px 14px;
+      font-weight:800;
+      cursor:pointer;
+      font-size:14px;
+    }
+
+    main{
+      max-width:900px;
+      margin:22px auto 40px;
+      padding:0 18px 40px;
+    }
+
+    .intro{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:18px;
+      padding:16px;
+      box-shadow:0 12px 30px rgba(15,23,42,.08);
+      margin-bottom:16px;
+    }
+
+    h1{
+      margin:0 0 6px;
+      font-size:24px;
+      line-height:1.15;
+    }
+
+    .sub{
+      margin:0;
+      color:var(--muted);
+      font-size:14px;
+      line-height:1.45;
+    }
+
+    .filters{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:12px;
+    }
+
+    .pill{
+      display:inline-flex;
+      padding:6px 10px;
+      border-radius:999px;
+      background:#ecfdf5;
+      border:1px solid rgba(16,185,129,.35);
+      color:#065f46;
+      font-size:12px;
+      font-weight:800;
+    }
+
+    .list{
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:18px;
+      padding:15px;
+      box-shadow:0 12px 28px rgba(15,23,42,.08);
+    }
+
+    .course-title{
+      margin:0 0 5px;
+      font-size:18px;
+      font-weight:900;
+    }
+
+    .meta{
+      color:var(--muted);
+      font-size:13px;
+      margin-bottom:10px;
+      line-height:1.45;
+    }
+
+    .times{
+      display:flex;
+      flex-wrap:wrap;
+      gap:7px;
+      margin-bottom:12px;
+    }
+
+    .time-chip{
+      border-radius:999px;
+      padding:6px 10px;
+      background:#f1f5f9;
+      color:#334155;
+      font-size:12px;
+      font-weight:800;
+    }
+
+    .book-btn{
+      display:inline-flex;
+      justify-content:center;
+      align-items:center;
+      width:100%;
+      border:0;
+      border-radius:999px;
+      background:var(--teal);
+      color:#fff;
+      padding:12px 16px;
+      font-size:15px;
+      font-weight:900;
+      text-decoration:none;
+      cursor:pointer;
+    }
+
+    .book-btn:active{
+      background:var(--teal-dark);
+      transform:translateY(1px);
+    }
+
+    .empty{
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:18px;
+      padding:18px;
+      color:var(--muted);
+      text-align:center;
+    }
+
+    .error{
+      background:#fff7ed;
+      border:1px solid #fed7aa;
+      color:#9a3412;
+      border-radius:18px;
+      padding:16px;
+      font-weight:700;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <img src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png" alt="TeeRadar" />
+        <span>TeeRadar</span>
+      </div>
+      <button class="home-btn" type="button" onclick="window.location.href='/index.html'">
+        Home
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="intro">
+      <h1 id="pageTitle">Alert results</h1>
+      <p class="sub" id="pageSub">Loading your tee time alert…</p>
+      <div class="filters" id="filters"></div>
+    </section>
+
+    <section class="list" id="resultsList"></section>
+  </main>
+
+  <script>
+    const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+
+    function escapeHtml(value){
+      return String(value || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function formatDateLabel(iso){
+      if (!iso) return "Date not shown";
+      const d = new Date(String(iso) + "T12:00:00");
+      if (Number.isNaN(d.getTime())) return iso;
+
+      return d.toLocaleDateString("en-AU", {
+        weekday:"short",
+        day:"numeric",
+        month:"short",
+        year:"numeric"
+      });
+    }
+
+    function buildBookingLinkForDate(rawUrl, date) {
+      if (!rawUrl || !date) return rawUrl || "";
+
+      const toDMY = (iso) => {
+        const [y, m, d] = iso.split("-");
+        return `${d}/${m}/${y}`;
+      };
+
+      const toYMDNoDash = (iso) => {
+        const [y, m, d] = iso.split("-");
+        return `${y}${m}${d}`;
+      };
+
+      try {
+        const u = new URL(rawUrl);
+
+        const isQuick18 = /quick18/i.test(u.hostname) || /quick18/i.test(u.pathname);
+        if (isQuick18) {
+          u.searchParams.set("teedate", toYMDNoDash(date));
+        }
+
+        [
+          "selectedDate",
+          "date",
+          "selected_date",
+          "startDate",
+          "bookingDate",
+          "playDate",
+          "teeDate",
+          "teedate",
+          "dt"
+        ].forEach((k) => {
+          if (!u.searchParams.has(k)) return;
+
+          const cur = u.searchParams.get(k);
+
+          if (/^\\d{2}\\/\\d{2}\\/\\d{4}$/.test(cur || "")) {
+            u.searchParams.set(k, toDMY(date));
+            return;
+          }
+
+          if (/^\\d{8}$/.test(cur || "")) {
+            u.searchParams.set(k, toYMDNoDash(date));
+            return;
+          }
+
+          u.searchParams.set(k, date);
+        });
+
+        return u.toString();
+      } catch (e) {
+        return rawUrl;
+      }
+    }
+
+    function renderFilters(meta){
+      const el = document.getElementById("filters");
+      if (!el) return;
+
+      const pills = [];
+
+      if (meta.holes) pills.push(`${meta.holes} holes`);
+      if (meta.partySize) pills.push(`${meta.partySize} player(s)`);
+      if (meta.earliest && meta.latest) pills.push(`${meta.earliest}–${meta.latest}`);
+
+      el.innerHTML = pills.map(p => `<span class="pill">${escapeHtml(p)}</span>`).join("");
+    }
+
+    function renderCourses(courses){
+      const list = document.getElementById("resultsList");
+      if (!list) return;
+
+      if (!Array.isArray(courses) || !courses.length) {
+        list.innerHTML = `
+          <div class="empty">
+            No course details were saved with this notification.
+          </div>
+        `;
+        return;
+      }
+
+      list.innerHTML = courses.map((course) => {
+        const name = course.courseName || course.course_name || "Course";
+        const date = course.date || "";
+        const count = Number(course.count || 0);
+        const sampleTimes = Array.isArray(course.sampleTimes) ? course.sampleTimes : [];
+        const bookingLink = buildBookingLinkForDate(course.bookingLink || course.url || "", date);
+
+        const timesHtml = sampleTimes.length
+          ? `<div class="times">${sampleTimes.map(t => `<span class="time-chip">${escapeHtml(t)}</span>`).join("")}</div>`
+          : "";
+
+        const btnHtml = bookingLink
+          ? `<a class="book-btn" href="${escapeHtml(bookingLink)}" target="_blank" rel="noopener">Open booking page</a>`
+          : `<a class="book-btn" href="/book.html" rel="noopener">View on TeeRadar</a>`;
+
+        return `
+          <article class="card">
+            <h2 class="course-title">${escapeHtml(name)}</h2>
+            <div class="meta">
+              ${escapeHtml(formatDateLabel(date))}
+              ${count ? ` • ${count} tee time(s) found` : ""}
+            </div>
+            ${timesHtml}
+            ${btnHtml}
+          </article>
+        `;
+      }).join("");
+    }
+
+    async function loadAlertResults(){
+      const params = new URLSearchParams(window.location.search);
+      const notificationId = params.get("notificationId") || params.get("id");
+      const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
+
+      const title = document.getElementById("pageTitle");
+      const sub = document.getElementById("pageSub");
+      const list = document.getElementById("resultsList");
+
+      if (!email) {
+        if (sub) sub.textContent = "Please log in first to view your alert results.";
+        if (list) list.innerHTML = `<div class="error">You need to be logged in to view this alert.</div>`;
+        return;
+      }
+
+      if (!notificationId) {
+        if (sub) sub.textContent = "This alert link is missing a notification ID.";
+        if (list) list.innerHTML = `<div class="error">Missing notification ID.</div>`;
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/push/notifications/${encodeURIComponent(notificationId)}?email=${encodeURIComponent(email)}`
+        );
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data.ok) {
+          if (sub) sub.textContent = "We could not load this notification.";
+          if (list) list.innerHTML = `<div class="error">Alert not found or expired.</div>`;
+          return;
+        }
+
+        const n = data.notification || {};
+        const meta = n.meta || {};
+        const courses = Array.isArray(meta.courses) ? meta.courses : [];
+
+        if (title) title.textContent = n.title || "Tee time alert";
+        if (sub) sub.textContent = n.body || "Tap a course below to open its booking page.";
+
+        renderFilters(meta);
+        renderCourses(courses);
+      } catch (err) {
+        console.error(err);
+        if (sub) sub.textContent = "Something went wrong loading this alert.";
+        if (list) list.innerHTML = `<div class="error">Could not load alert results.</div>`;
+      }
+    }
+
+    window.addEventListener("load", loadAlertResults);
+  </script>
+</body>
+</html>
