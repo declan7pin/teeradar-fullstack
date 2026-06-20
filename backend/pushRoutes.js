@@ -596,6 +596,62 @@ router.get("/notifications", async (req, res) => {
   }
 });
 
+router.get("/notifications/:id", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.query?.email);
+    const id = Number(req.params.id || 0);
+
+    if (!email) {
+      return res.status(400).json({ ok: false, error: "email_required" });
+    }
+
+    if (!id) {
+      return res.status(400).json({ ok: false, error: "id_required" });
+    }
+
+    const { rows } = await db.query(
+      `
+      SELECT
+        id,
+        title,
+        body,
+        type,
+        url,
+        meta,
+        read_at,
+        created_at
+      FROM user_notifications
+      WHERE id = $1
+        AND LOWER(email) = LOWER($2)
+      LIMIT 1
+      `,
+      [id, email]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ ok: false, error: "notification_not_found" });
+    }
+
+    await db.query(
+      `
+      UPDATE user_notifications
+      SET read_at = COALESCE(read_at, now())
+      WHERE id = $1
+        AND LOWER(email) = LOWER($2)
+      `,
+      [id, email]
+    );
+
+    res.json({
+      ok: true,
+      notification: rows[0]
+    });
+  } catch (err) {
+    console.error("notification detail error:", err);
+    res.status(500).json({ ok: false, error: "notification_detail_failed" });
+  }
+});
+
 router.post("/notifications/read", async (req, res) => {
   try {
     const email = normalizeEmail(req.body?.email);
