@@ -1265,7 +1265,7 @@ const finalUrl =
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
       },
-      credentials: "include",
+      credentials: window.location.protocol === "capacitor:" ? "omit" : "include",
       cache: "no-store",
       signal: controller.signal,
     });
