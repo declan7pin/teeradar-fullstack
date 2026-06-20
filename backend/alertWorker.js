@@ -1153,13 +1153,25 @@ if (prov === "miclub" || prov === "quick18") {
                 },
               });
 
-              // ✅ Add to the email summary list (date-correct URL)
-              const bookingLink =
-                buildBookingLinkForDate(course, date) ||
-                (course && (course.url || course.bookingUrl || course.bookUrl)) ||
-                "https://teeradar.com.au/book.html";
+             // Build booking URL from actual returned tee times
+const firstSlot =
+  Array.isArray(result) && result.length
+    ? result[0]
+    : null;
 
-              const sampleTimes = Array.isArray(result)
+const bookingLink =
+  firstSlot?.bookingUrl ||
+  firstSlot?.bookUrl ||
+  firstSlot?.url ||
+  firstSlot?.link ||
+  firstSlot?.href ||
+  buildBookingLinkForDate(course, date) ||
+  course?.url ||
+  course?.bookingUrl ||
+  course?.bookUrl ||
+  "";
+
+const sampleTimes = Array.isArray(result)
   ? result
       .map((slot) => normaliseSlotTime(slot))
       .filter(Boolean)
