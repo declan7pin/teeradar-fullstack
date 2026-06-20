@@ -176,10 +176,6 @@ function getFrequencyWindowMs(freqRaw) {
   }
 
   switch (f) {
-       case "16M":
-  case "16MIN":
-  case "EVERY_16_MIN":
-    return 16 * 60 * 1000;
     case "6H":
     case "6HOURS":
     case "EVERY_6_HOURS":
