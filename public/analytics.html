@@ -1157,7 +1157,10 @@ nav a:hover{
   max-width:260px;
 "></div>
 <script>
-  const API_BASE = "https://teeradar.com.au";
+  const API_BASE =
+  window.location.protocol === "capacitor:"
+    ? "https://teeradar.com.au"
+    : "";
 const ADMIN_EMAIL = "declan7pin@gmail.com";
   // ✅ Needed for booking admin analytics routes (requirePlatformAdmin)
 const BOOKING_ADMIN_SECRET = ""; 
