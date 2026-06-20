@@ -63,78 +63,73 @@ function openNotificationUrl(rawUrl) {
 /* =========================
    NATIVE iOS / ANDROID PUSH
 ========================= */
-async function enableNativePush(email) {
-  const PushNotifications = getPushPlugin();
+ async function enableNativePush(email) {
+  const FirebaseMessaging =
+    window.Capacitor?.Plugins?.FirebaseMessaging || null;
 
-  if (!PushNotifications) {
-    throw new Error(
-      "Native push plugin not available. Run npx cap sync ios and reinstall the app."
-    );
+  if (!FirebaseMessaging) {
+    throw new Error("Firebase Messaging plugin not available. Run npm install @capacitor-firebase/messaging && npx cap sync ios.");
   }
 
-  let perm = await PushNotifications.checkPermissions();
+  console.log("Firebase native push setup starting", {
+    platform: window.Capacitor?.getPlatform?.(),
+    apiBase: PUSH_API_BASE,
+    email: getUserEmail(email)
+  });
+
+  let perm = await FirebaseMessaging.checkPermissions();
 
   if (perm.receive !== "granted") {
-    perm = await PushNotifications.requestPermissions();
+    perm = await FirebaseMessaging.requestPermissions();
   }
 
   if (perm.receive !== "granted") {
     throw new Error("Push permission was not granted.");
   }
 
-  if (typeof PushNotifications.removeAllListeners === "function") {
-    await PushNotifications.removeAllListeners();
+  const result = await FirebaseMessaging.getToken();
+  const tokenValue = String(result?.token || "").trim();
+
+  console.log("FCM token:", tokenValue);
+
+  if (!tokenValue) {
+    throw new Error("No FCM token returned.");
   }
 
-  await PushNotifications.addListener("registration", async (token) => {
-    console.log("Native push token:", token.value);
+  const userEmail = getUserEmail(email);
+  const jwt = localStorage.getItem("teeradar_jwt") || "";
 
-    const userEmail = getUserEmail(email);
-    const jwt = localStorage.getItem("teeradar_jwt") || "";
-
-    const res = await fetch(`${PUSH_API_BASE}/api/push/register`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(jwt ? { Authorization: "Bearer " + jwt } : {})
-      },
-      body: JSON.stringify({
-        email: userEmail,
-        platform: window.Capacitor.getPlatform(),
-        token: token.value
-      })
-    });
-
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok || !data.ok) {
-      console.warn("Native push token save failed:", data);
-    }
+  const res = await fetch(`${PUSH_API_BASE}/api/push/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(jwt ? { Authorization: "Bearer " + jwt } : {})
+    },
+    body: JSON.stringify({
+      email: userEmail,
+      platform: window.Capacitor.getPlatform(),
+      token: tokenValue
+    })
   });
 
-  await PushNotifications.addListener("registrationError", (err) => {
-    console.error("Native push registration error:", err);
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Could not save FCM token.");
+  }
+
+  console.log("FCM token saved to TeeRadar backend.");
+
+  await FirebaseMessaging.addListener("notificationReceived", (notification) => {
+    console.log("Firebase notification received:", notification);
   });
 
-  await PushNotifications.addListener("pushNotificationReceived", (notification) => {
-    console.log("Push received:", notification);
-  });
-
-  await PushNotifications.addListener("pushNotificationActionPerformed", (event) => {
-    console.log("Push action event:", event);
+  await FirebaseMessaging.addListener("notificationActionPerformed", (event) => {
+    console.log("Firebase notification action:", event);
 
     const data = event?.notification?.data || {};
-    const url =
-      data.url ||
-      data.link ||
-      data.click_action ||
-      event?.notification?.url ||
-      "/index.html";
-
-    openNotificationUrl(url);
+    openNotificationUrl(data.url || "/index.html");
   });
-
-  await PushNotifications.register();
 
   return true;
 }
@@ -211,6 +206,13 @@ async function enableWebPush(email) {
    PUBLIC METHODS
 ========================= */
 async function enablePush(email) {
+  console.log("Push enable clicked", {
+    hasCapacitor: !!window.Capacitor,
+    platform: window.Capacitor?.getPlatform?.(),
+    isNative: isNativeApp(),
+    hasPushPlugin: !!getPushPlugin()
+  });
+
   if (isNativeApp()) {
     return enableNativePush(email);
   }
