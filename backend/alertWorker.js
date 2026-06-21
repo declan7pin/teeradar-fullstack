@@ -1213,16 +1213,16 @@ emailHits.push({
         });
       }
 
-            if (canSendEmailForUser && emailHits.length > 0) {
-        await sendTeeTimePushSummaryForUser({
-          email,
-          hits: emailHits,
-          earliest,
-          latest,
-          userHoles,
-          partySize,
-        });
-      }
+            if (emailHits.length > 0) {
+  await sendTeeTimePushSummaryForUser({
+    email,
+    hits: emailHits,
+    earliest,
+    latest,
+    userHoles,
+    partySize,
+  });
+}
     }
 
     console.log("🔔 Alert tick finished.");
