@@ -1279,6 +1279,7 @@ async function tryFetchJson(url, timeoutMs = 12000) {
 
     if (!res.ok) {
       console.error("Analytics fetch failed:", finalUrl, res.status, text.slice(0, 500));
+alert("Analytics fetch failed:\n" + finalUrl + "\n\nStatus: " + res.status + "\n\n" + text.slice(0, 500));
       return null;
     }
 
@@ -1286,6 +1287,7 @@ async function tryFetchJson(url, timeoutMs = 12000) {
   } catch (e) {
     clearTimeout(timer);
     console.error("Analytics fetch error:", finalUrl, e?.message || e);
+alert("Analytics fetch error:\n" + finalUrl + "\n\n" + (e?.message || e));
     return null;
   }
 }
