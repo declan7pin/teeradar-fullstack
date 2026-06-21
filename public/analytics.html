@@ -1262,12 +1262,12 @@ async function tryFetchJson(url, timeoutMs = 12000) {
       url === "/api/analytics" ||
       url.startsWith("/api/analytics?");
 
+    const headers = isPublicAnalytics
+      ? { Accept: "application/json" }
+      : getAuthHeaders();
+
     const res = await fetch(finalUrl, {
-      headers: {
-        ...(isPublicAnalytics ? { Accept: "application/json" } : getAuthHeaders()),
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-      },
+      headers,
       credentials: "omit",
       cache: "no-store",
       signal: controller.signal,
@@ -1278,18 +1278,14 @@ async function tryFetchJson(url, timeoutMs = 12000) {
     const text = await res.text();
 
     if (!res.ok) {
-      console.error("Analytics fetch failed:", {
-        url: finalUrl,
-        status: res.status,
-        body: text.slice(0, 500),
-      });
+      console.error("Analytics fetch failed:", finalUrl, res.status, text.slice(0, 500));
       return null;
     }
 
     return JSON.parse(text);
   } catch (e) {
     clearTimeout(timer);
-    console.error("Analytics fetch error:", finalUrl, e);
+    console.error("Analytics fetch error:", finalUrl, e?.message || e);
     return null;
   }
 }
