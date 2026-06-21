@@ -1216,7 +1216,11 @@ emailHits.push({
 
             console.log(`📲 Push check for ${email}: ${emailHits.length} hit(s)`);
 
-if (emailHits.length > 0) {
+if (
+  emailHits.length > 0 &&
+  alertFrequencyRaw !== "OFF" &&
+  canSendEmailForUser
+) {
   console.log(`📲 Sending tee-time push to ${email}`);
 
   await sendTeeTimePushSummaryForUser({
