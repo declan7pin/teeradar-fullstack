@@ -1247,25 +1247,28 @@ window.addEventListener("unhandledrejection", (e) => {
 
 async function tryFetchJson(url, timeoutMs = 12000) {
   const fullUrl = url.startsWith("http")
-  ? url
-  : `${API_BASE}${url}`;
+    ? url
+    : `${API_BASE}${url}`;
 
-const finalUrl =
-  fullUrl + (fullUrl.includes("?") ? "&" : "?") + "_ts=" + Date.now();
-
-  setAnalyticsDebug("Fetching", { finalUrl });
+  const finalUrl =
+    fullUrl + (fullUrl.includes("?") ? "&" : "?") + "_ts=" + Date.now();
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const isPublicAnalytics =
+      url.startsWith("/api/analytics/summary") ||
+      url === "/api/analytics" ||
+      url.startsWith("/api/analytics?");
+
     const res = await fetch(finalUrl, {
       headers: {
-        ...getAuthHeaders(),
+        ...(isPublicAnalytics ? { Accept: "application/json" } : getAuthHeaders()),
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
       },
-      credentials: window.location.protocol === "capacitor:" ? "omit" : "include",
+      credentials: "omit",
       cache: "no-store",
       signal: controller.signal,
     });
@@ -1274,37 +1277,22 @@ const finalUrl =
 
     const text = await res.text();
 
-    setAnalyticsDebug("Fetch result", {
-      url: finalUrl,
-      status: res.status,
-      ok: res.ok,
-      bodyPreview: text.slice(0, 800),
-    });
-
-    if (!res.ok) return null;
-
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      setAnalyticsDebug("JSON parse failed", {
+    if (!res.ok) {
+      console.error("Analytics fetch failed:", {
         url: finalUrl,
-        error: e.message,
-        bodyPreview: text.slice(0, 800),
+        status: res.status,
+        body: text.slice(0, 500),
       });
       return null;
     }
+
+    return JSON.parse(text);
   } catch (e) {
     clearTimeout(timer);
-
-    setAnalyticsDebug("Fetch failed", {
-      url: finalUrl,
-      error: e.name || e.message || String(e),
-    });
-
+    console.error("Analytics fetch error:", finalUrl, e);
     return null;
   }
 }
-
 async function fetchAnalyticsSummary() {
   const filters = getAnalyticsFilters();
   const qs = new URLSearchParams();
