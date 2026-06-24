@@ -167,29 +167,141 @@ router.post("/event", async (req, res) => {
   }
 });
 
+let analyticsSummaryReady = false;
+
+async function ensureAnalyticsDailySummary() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS analytics_daily_summary (
+      day date NOT NULL,
+      provider text NOT NULL DEFAULT '',
+      type text NOT NULL,
+      course_name text NOT NULL DEFAULT '',
+      n integer NOT NULL DEFAULT 0,
+      updated_at timestamptz NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (day, provider, type, course_name)
+    );
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_analytics_occurred_at
+    ON analytics (occurred_at);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_analytics_type_occurred_at
+    ON analytics (type, occurred_at);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_analytics_course_occurred_at
+    ON analytics (course_name, occurred_at);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_analytics_daily_summary_day
+    ON analytics_daily_summary (day);
+  `);
+}
+
+async function backfillAnalyticsDailySummaryOnce() {
+  if (analyticsSummaryReady) return;
+  analyticsSummaryReady = true;
+
+  await ensureAnalyticsDailySummary();
+
+  // Backfill all completed days only. Today stays live.
+  await db.query(`
+    INSERT INTO analytics_daily_summary (day, provider, type, course_name, n, updated_at)
+    SELECT
+      occurred_at::date AS day,
+      LOWER(
+        regexp_replace(
+          COALESCE(
+            meta->>'provider',
+            meta->>'courseProvider',
+            meta->>'course_provider',
+            ''
+          ),
+          '\\s+',
+          '',
+          'g'
+        )
+      ) AS provider,
+      type,
+      COALESCE(course_name, '') AS course_name,
+      COUNT(*)::int AS n,
+      NOW()
+    FROM analytics
+    WHERE occurred_at < CURRENT_DATE
+    GROUP BY
+      occurred_at::date,
+      LOWER(
+        regexp_replace(
+          COALESCE(
+            meta->>'provider',
+            meta->>'courseProvider',
+            meta->>'course_provider',
+            ''
+          ),
+          '\\s+',
+          '',
+          'g'
+        )
+      ),
+      type,
+      COALESCE(course_name, '')
+    ON CONFLICT (day, provider, type, course_name)
+    DO UPDATE SET
+      n = EXCLUDED.n,
+      updated_at = NOW();
+  `);
+}
+
 /**
  * ✅ Build summary directly from Postgres analytics table
  */
 async function buildPgSummary(filters = {}) {
+  await backfillAnalyticsDailySummaryOnce();
+
   const providerRaw = String(filters.provider || "").trim().toLowerCase();
   const from = String(filters.from || "").trim();
   const to = String(filters.to || "").trim();
-
-  const params = [];
-  const where = [];
 
   const providerAliases = {
     miclub: ["miclub"],
     quick18: ["quick18"],
     phone: ["phone", "phonebooking"],
-    teeradar: ["teeradarbooking", "teeradar", "teeradarbooking"],
+    teeradar: ["teeradarbooking", "teeradar"],
   };
 
-  if (providerRaw) {
-    const aliases = providerAliases[providerRaw] || [providerRaw];
+  const aliases = providerRaw ? (providerAliases[providerRaw] || [providerRaw]) : null;
 
+  const params = [];
+  const summaryWhere = [];
+  const liveWhere = [];
+
+  if (from) {
+    params.push(from);
+    summaryWhere.push(`day >= $${params.length}::date`);
+    liveWhere.push(`occurred_at >= $${params.length}::date`);
+  }
+
+  if (to) {
+    params.push(to);
+    summaryWhere.push(`day <= $${params.length}::date`);
+    liveWhere.push(`occurred_at < ($${params.length}::date + INTERVAL '1 day')`);
+  }
+
+  // Summary table only stores completed days
+  summaryWhere.push(`day < CURRENT_DATE`);
+
+  // Live query only scans today
+  liveWhere.push(`occurred_at >= CURRENT_DATE`);
+
+  if (aliases) {
     params.push(aliases);
-    where.push(`
+    summaryWhere.push(`provider = ANY($${params.length}::text[])`);
+    liveWhere.push(`
       LOWER(
         regexp_replace(
           COALESCE(
@@ -206,73 +318,73 @@ async function buildPgSummary(filters = {}) {
     `);
   }
 
-  if (from) {
-    params.push(from);
-    where.push(`occurred_at >= $${params.length}::date`);
-  }
+  const summaryWhereSql = summaryWhere.length ? `WHERE ${summaryWhere.join(" AND ")}` : "";
+  const liveWhereSql = liveWhere.length ? `WHERE ${liveWhere.join(" AND ")}` : "";
 
-  if (to) {
-    params.push(to);
-    where.push(`occurred_at < ($${params.length}::date + INTERVAL '1 day')`);
-  }
+  const rows = await db.query(
+    `
+    WITH combined AS (
+      SELECT type, course_name, SUM(n)::int AS n
+      FROM analytics_daily_summary
+      ${summaryWhereSql}
+      GROUP BY type, course_name
 
-  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+      UNION ALL
 
-  const q = async (sql, extraParams = params) => {
-    const r = await db.query(sql, extraParams);
-    return r.rows || [];
-  };
-
-  const totals = await q(`
-    SELECT type, COUNT(*)::int AS n
-    FROM analytics
-    ${whereSql}
-    GROUP BY type
-  `);
-
-  const byType = Object.fromEntries(
-    totals.map((r) => [r.type, Number(r.n) || 0])
+      SELECT type, COALESCE(course_name, '') AS course_name, COUNT(*)::int AS n
+      FROM analytics
+      ${liveWhereSql}
+      GROUP BY type, COALESCE(course_name, '')
+    )
+    SELECT type, course_name, SUM(n)::int AS n
+    FROM combined
+    GROUP BY type, course_name;
+    `,
+    params
   );
 
-  const topCourses = await q(`
-    SELECT course_name AS course, COUNT(*)::int AS n
-    FROM analytics
-    ${whereSql}
-      ${whereSql ? "AND" : "WHERE"} type IN ('course_booking_click', 'booking_click')
-      AND course_name IS NOT NULL
-      AND course_name <> ''
-    GROUP BY course_name
-    ORDER BY n DESC
-    LIMIT 10
-  `);
+  const byType = {};
+  const topCoursesMap = new Map();
+  const topSearchedMap = new Map();
+  const topAlertMap = new Map();
 
-  const topSearchedCourses = await q(`
-    SELECT course_name AS course, COUNT(*)::int AS n
-    FROM analytics
-    ${whereSql}
-      ${whereSql ? "AND" : "WHERE"} type = 'search_course'
-      AND course_name IS NOT NULL
-      AND course_name <> ''
-    GROUP BY course_name
-    ORDER BY n DESC
-    LIMIT 10
-  `);
+  for (const r of rows.rows || []) {
+    const type = String(r.type || "");
+    const course = String(r.course_name || "").trim();
+    const n = Number(r.n) || 0;
 
-  const topAlertCourses = await q(`
-    SELECT course_name AS course, COUNT(*)::int AS hits
-    FROM analytics
-    ${whereSql}
-      ${whereSql ? "AND" : "WHERE"} type = 'alert_hit'
-      AND course_name IS NOT NULL
-      AND course_name <> ''
-    GROUP BY course_name
-    ORDER BY hits DESC
-    LIMIT 10
-  `);
+    byType[type] = (byType[type] || 0) + n;
+
+    if ((type === "course_booking_click" || type === "booking_click") && course) {
+      topCoursesMap.set(course, (topCoursesMap.get(course) || 0) + n);
+    }
+
+    if (type === "search_course" && course) {
+      topSearchedMap.set(course, (topSearchedMap.get(course) || 0) + n);
+    }
+
+    if (type === "alert_hit" && course) {
+      topAlertMap.set(course, (topAlertMap.get(course) || 0) + n);
+    }
+  }
+
+  const topCourses = [...topCoursesMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([course, n]) => ({ course, n }));
+
+  const topSearchedCourses = [...topSearchedMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([course, n]) => ({ course, n }));
+
+  const topAlertCourses = [...topAlertMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([course, hits]) => ({ course, hits }));
 
   const homeViews = byType.home_view || 0;
-  const bookingClicks =
-    (byType.course_booking_click || 0) + (byType.booking_click || 0);
+  const bookingClicks = (byType.course_booking_click || 0) + (byType.booking_click || 0);
   const searches = byType.search || 0;
 
   return {
@@ -286,7 +398,6 @@ async function buildPgSummary(filters = {}) {
 
     searches,
     alertSearches: byType.search_course || 0,
-
     newUsers: byType.new_user || 0,
 
     groupVotesCreated: byType.group_vote_created || 0,
@@ -302,9 +413,9 @@ async function buildPgSummary(filters = {}) {
     repeatBookers: 0,
     peakBookingHour: null,
 
-    topCourses: topCourses.map((r) => ({ course: r.course, n: r.n })),
-    topSearchedCourses: topSearchedCourses.map((r) => ({ course: r.course, n: r.n })),
-    demandRank: topCourses.map((r) => ({ course: r.course, n: r.n })),
+    topCourses,
+    topSearchedCourses,
+    demandRank: topCourses,
 
     roundsPlayed: byType.round_played || 0,
     roundsPlayed7d: 0,
@@ -317,10 +428,7 @@ async function buildPgSummary(filters = {}) {
     alertHitsAllTime: byType.alert_hit || 0,
     avgTimeToHitMins: 0,
     alertsByPlan: { BASIC: 0, PRO: 0, FREE: 0, TRIAL: 0, UNKNOWN: 0 },
-    topAlertCourses: topAlertCourses.map((r) => ({
-      course: r.course,
-      hits: r.hits,
-    })),
+    topAlertCourses,
 
     homeToBookingRate: homeViews > 0 ? bookingClicks / homeViews : 0,
     searchToBookingRate: searches > 0 ? bookingClicks / searches : 0,
