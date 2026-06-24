@@ -1158,9 +1158,9 @@ nav a:hover{
 "></div>
 <script>
   const API_BASE =
-  window.location.protocol === "capacitor:"
-    ? "https://teeradar.com.au"
-    : "";
+  window.TEERADAR_BACKEND ||
+  localStorage.getItem("teeradar_backend_url") ||
+  "https://teeradar.com.au";
 const ADMIN_EMAIL = "declan7pin@gmail.com";
   // ✅ Needed for booking admin analytics routes (requirePlatformAdmin)
 const BOOKING_ADMIN_SECRET = ""; 
@@ -1247,28 +1247,25 @@ window.addEventListener("unhandledrejection", (e) => {
 
 async function tryFetchJson(url, timeoutMs = 12000) {
   const fullUrl = url.startsWith("http")
-    ? url
-    : `${API_BASE}${url}`;
+  ? url
+  : `${API_BASE}${url}`;
 
-  const finalUrl =
-    fullUrl + (fullUrl.includes("?") ? "&" : "?") + "_ts=" + Date.now();
+const finalUrl =
+  fullUrl + (fullUrl.includes("?") ? "&" : "?") + "_ts=" + Date.now();
+
+  setAnalyticsDebug("Fetching", { finalUrl });
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const isPublicAnalytics =
-      url.startsWith("/api/analytics/summary") ||
-      url === "/api/analytics" ||
-      url.startsWith("/api/analytics?");
-
-    const headers = isPublicAnalytics
-      ? { Accept: "application/json" }
-      : getAuthHeaders();
-
     const res = await fetch(finalUrl, {
-      headers,
-      credentials: "omit",
+      headers: {
+        ...getAuthHeaders(),
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+      },
+      credentials: "include",
       cache: "no-store",
       signal: controller.signal,
     });
@@ -1277,20 +1274,37 @@ async function tryFetchJson(url, timeoutMs = 12000) {
 
     const text = await res.text();
 
-    if (!res.ok) {
-      console.error("Analytics fetch failed:", finalUrl, res.status, text.slice(0, 500));
-alert("Analytics fetch failed:\n" + finalUrl + "\n\nStatus: " + res.status + "\n\n" + text.slice(0, 500));
+    setAnalyticsDebug("Fetch result", {
+      url: finalUrl,
+      status: res.status,
+      ok: res.ok,
+      bodyPreview: text.slice(0, 800),
+    });
+
+    if (!res.ok) return null;
+
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      setAnalyticsDebug("JSON parse failed", {
+        url: finalUrl,
+        error: e.message,
+        bodyPreview: text.slice(0, 800),
+      });
       return null;
     }
-
-    return JSON.parse(text);
   } catch (e) {
     clearTimeout(timer);
-    console.error("Analytics fetch error:", finalUrl, e?.message || e);
-alert("Analytics fetch error:\n" + finalUrl + "\n\n" + (e?.message || e));
+
+    setAnalyticsDebug("Fetch failed", {
+      url: finalUrl,
+      error: e.name || e.message || String(e),
+    });
+
     return null;
   }
 }
+
 async function fetchAnalyticsSummary() {
   const filters = getAnalyticsFilters();
   const qs = new URLSearchParams();
@@ -3218,33 +3232,45 @@ function wireAnalyticsFilters() {
   }
 }
 
-// ✅ ONE load handler ONLY (safe)
+// ✅ ONE load handler ONLY (fast first paint)
 window.addEventListener("load", () => {
-
   try {
     wireAnalyticsFilters();
-    setAnalyticsLoading(true, "Loading analytics…");
+
+    // Default to last 7 days so first load is fast
+    const fromEl = document.getElementById("analyticsFromDate");
+    const toEl = document.getElementById("analyticsToDate");
+
+    const now = new Date();
+    const from = new Date();
+    from.setDate(now.getDate() - 7);
+
+    if (fromEl && !fromEl.value) fromEl.value = yyyyMmDd(from);
+    if (toEl && !toEl.value) toEl.value = yyyyMmDd(now);
+
+    setAnalyticsLoading(true, "Loading analytics summary…");
     loadAnalytics();
   } catch (e) {
     console.error("main analytics failed", e);
   }
 
-  try { loadRegisteredUsers(); } catch (e) { console.warn("loadRegisteredUsers failed", e); }
+  // Load non-critical admin sections slightly after the main analytics cards
+  setTimeout(() => {
+    try { loadRegisteredUsers(); } catch (e) { console.warn("loadRegisteredUsers failed", e); }
+  }, 500);
 
-  try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
-  try { loadPendingCourses(); } catch (e) { console.warn("loadPendingCourses failed", e); }
-  
-  try { wireManualCourseCreate(); } catch (e) { console.warn("wireManualCourseCreate failed", e); }
+  setTimeout(() => {
+    try { wireBookingAnalyticsButtons(); } catch (e) { console.warn("wireBookingAnalyticsButtons failed", e); }
+    try { loadBookingAnalytics(); } catch (e) { console.warn("loadBookingAnalytics failed", e); }
+  }, 1000);
 
-  try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
-  try { loadApprovedCourses(); } catch (e) { console.warn("loadApprovedCourses failed", e); }
-
-  try {
-    if (typeof wireBookingAnalyticsButtons === "function") wireBookingAnalyticsButtons();
-    if (typeof loadBookingAnalytics === "function") loadBookingAnalytics();
-  } catch (e) {
-    console.warn("booking analytics failed", e);
-  }
+  setTimeout(() => {
+    try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
+    try { loadPendingCourses(); } catch (e) { console.warn("loadPendingCourses failed", e); }
+    try { wireManualCourseCreate(); } catch (e) { console.warn("wireManualCourseCreate failed", e); }
+    try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
+    try { loadApprovedCourses(); } catch (e) { console.warn("loadApprovedCourses failed", e); }
+  }, 1500);
 });
 </script>
 
