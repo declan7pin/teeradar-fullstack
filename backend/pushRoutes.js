@@ -429,11 +429,14 @@ export async function sendMobilePushToEmail(email, payload = {}) {
         },
 
                 data: {
-          url: String(payload.url || "/index.html"),
-          type: String(payload.type || "GENERAL"),
-          meta: JSON.stringify(payload.meta || {}),
-          notificationId: String(notificationId || ""),
-        },
+  url: String(
+    payload.type === "TEE_TIME_ALERT" && notificationId
+      ? `/alert-results.html?notificationId=${notificationId}`
+      : payload.url || "/index.html"
+  ),
+  type: String(payload.type || "GENERAL"),
+  notificationId: String(notificationId || ""),
+},
       });
 
       sent++;
