@@ -203,7 +203,7 @@ async function ensureAnalyticsDailySummary() {
   `);
 }
 
-async function backfillAnalyticsDailySummaryOnce() {
+export async function backfillAnalyticsDailySummaryOnce() {
   if (analyticsSummaryReady) return;
   analyticsSummaryReady = true;
 
