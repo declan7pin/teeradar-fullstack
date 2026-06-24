@@ -356,10 +356,10 @@ async function sendTeeTimePushSummaryForUser({
 
   const body = buildPushHitSummary(safeHits);
 
-  await sendMobilePushToEmail(email, {
+  const pushResult = await sendMobilePushToEmail(email, {
     title,
     body,
-    url: "/book.html?alerts=1",
+    url: "/alert-results.html",
     type: "TEE_TIME_ALERT",
     meta: {
       hitsCount: safeHits.length,
@@ -376,6 +376,7 @@ async function sendTeeTimePushSummaryForUser({
       partySize: partySize || null,
     },
   });
+  console.log("📲 Tee-time push result:", email, pushResult);
 }
 async function sendAlertEmailSummaryForUser({
   email,
@@ -1213,16 +1214,26 @@ emailHits.push({
         });
       }
 
-            if (canSendEmailForUser && emailHits.length > 0) {
-        await sendTeeTimePushSummaryForUser({
-          email,
-          hits: emailHits,
-          earliest,
-          latest,
-          userHoles,
-          partySize,
-        });
-      }
+            console.log(`📲 Push check for ${email}: ${emailHits.length} hit(s)`);
+
+if (
+  emailHits.length > 0 &&
+  alertFrequencyRaw !== "OFF" &&
+  canSendEmailForUser
+) {
+  console.log(`📲 Sending tee-time push to ${email}`);
+
+  await sendTeeTimePushSummaryForUser({
+    email,
+    hits: emailHits,
+    earliest,
+    latest,
+    userHoles,
+    partySize,
+  });
+
+  console.log(`📲 Tee-time push function finished for ${email}`);
+}
     }
 
     console.log("🔔 Alert tick finished.");
