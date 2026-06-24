@@ -23,7 +23,7 @@ import bookingViewsRouter from "./bookingViews.js";
 import bookingAnalyticsRouter from "./bookingAnalyticsRoutes.js";
 import { ensureBookingAddonsSchema } from "./bookingMigrate.js";
 import { ensureScorecardCoursesSchema } from "./scorecardCourseMigrate.js"; // ✅ ADD
-import analyticsRouter from "./analyticsRoutes.js";
+import analyticsRouter, { backfillAnalyticsDailySummaryOnce } from "./analyticsRoutes.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 import groupVotesRouter from "./groupVotesRoutes.js";
 import { ensureGroupVotesTables } from "./groupVotesMigrate.js";
@@ -2409,6 +2409,10 @@ async function backfillExistingSubscriberStatuses() {
 // Start Server
 // -------------------------------------------------
 backfillExistingSubscriberStatuses();
+
+backfillAnalyticsDailySummaryOnce()
+  .then(() => console.log("✅ analytics daily summary ready"))
+  .catch((err) => console.error("❌ analytics daily summary failed:", err));
 
 app.listen(PORT, () => {
   console.log(`✅ TeeRadar backend running on port ${PORT}`);
