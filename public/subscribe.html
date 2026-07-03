@@ -342,7 +342,7 @@ onclick="window.location.href='/index.html'"
 </div>
 
 <p class="note">
-Payments are processed securely by Stripe. You can cancel any time from your Stripe subscription portal.
+Website payments use Stripe. App payments use Apple or Google subscriptions and can be managed from your App Store or Google Play account.
 </p>
 
 </div>
@@ -372,6 +372,86 @@ friends' rounds, stats and premium golf features.
 <script>
 const API_BASE = "https://teeradar-fullstack-5.onrender.com";
 
+const PRODUCTS = {
+  BASIC_MONTHLY: "teeradar_basic_monthly",
+  BASIC_ANNUAL: "teeradar_basic_annual",
+  PRO_MONTHLY: "teeradar_pro_monthly",
+  PRO_ANNUAL: "teeradar_pro_annual"
+};
+
+let iapReady = false;
+let iapPlatform = null;
+
+function isNativeApp() {
+  return !!(
+    window.Capacitor &&
+    window.Capacitor.isNativePlatform &&
+    window.Capacitor.isNativePlatform()
+  );
+}
+
+function getNativePlatform() {
+  const p = window.Capacitor?.getPlatform?.();
+  if (p === "ios") return "ios";
+  if (p === "android") return "android";
+  return "web";
+}
+
+document.addEventListener("deviceready", initIAP, false);
+
+async function initIAP() {
+  if (!isNativeApp() || !window.CdvPurchase) return;
+
+  const { store, ProductType, Platform, LogLevel } = CdvPurchase;
+
+  store.verbosity = LogLevel.DEBUG;
+
+  const native = getNativePlatform();
+
+  iapPlatform =
+    native === "ios"
+      ? Platform.APPLE_APPSTORE
+      : native === "android"
+        ? Platform.GOOGLE_PLAY
+        : null;
+
+  if (!iapPlatform) return;
+
+  store.register(Object.values(PRODUCTS).map(id => ({
+    id,
+    type: ProductType.PAID_SUBSCRIPTION,
+    platform: iapPlatform
+  })));
+
+  store.when()
+    .approved(transaction => {
+      console.log("Purchase approved:", transaction);
+      transaction.verify();
+    })
+    .verified(async receipt => {
+      console.log("Purchase verified:", receipt);
+
+      try {
+        await activateMobileSubscription(receipt);
+        receipt.finish();
+      } catch (err) {
+        console.error("Activation failed:", err);
+        document.getElementById("errorBox").textContent =
+          "Purchase completed, but TeeRadar could not activate it yet. Please contact support.";
+      }
+    })
+    .unverified(unverified => {
+      console.warn("Purchase unverified:", unverified);
+      document.getElementById("errorBox").textContent =
+        "Purchase could not be verified. Please try again.";
+    });
+
+  await store.initialize([iapPlatform]);
+  iapReady = true;
+
+  console.log("IAP ready:", native);
+}
+
 async function startSubscription(planKey) {
   const emailInput = document.getElementById("emailInput");
   const errorBox = document.getElementById("errorBox");
@@ -387,16 +467,98 @@ async function startSubscription(planKey) {
     return;
   }
 
+  const native = getNativePlatform();
+
+  if (native === "ios" || native === "android") {
+    return startNativeSubscription(planKey, email);
+  }
+
+  return startStripeSubscription(planKey, email);
+}
+
+async function startNativeSubscription(planKey, email) {
+  const errorBox = document.getElementById("errorBox");
+  const successBox = document.getElementById("successBox");
+
+  if (!iapReady || !window.CdvPurchase) {
+    errorBox.textContent =
+      "In-app purchases are not ready yet. Please wait a moment and try again.";
+    return;
+  }
+
+  const productId = PRODUCTS[planKey];
+
+  if (!productId) {
+    errorBox.textContent = "Invalid subscription plan.";
+    return;
+  }
+
+  try {
+    localStorage.setItem("teeradar_purchase_email", email);
+    localStorage.setItem("teeradar_pending_plan", planKey);
+
+    const product = CdvPurchase.store.get(productId, iapPlatform);
+
+    if (!product) {
+      errorBox.textContent =
+        "Subscription product is not available yet. Make sure it is approved in App Store Connect / Google Play Console.";
+      return;
+    }
+
+    const offer = product.getOffer ? product.getOffer() : product.offers?.[0];
+
+    if (!offer) {
+      errorBox.textContent = "No purchase offer found for this subscription.";
+      return;
+    }
+
+    successBox.textContent = "Opening subscription purchase...";
+    await offer.order();
+
+  } catch (err) {
+    console.error(err);
+    errorBox.textContent = "Purchase error: " + (err?.message || String(err));
+  }
+}
+
+async function activateMobileSubscription(receipt) {
+  const email = localStorage.getItem("teeradar_purchase_email") || "";
+  const plan = localStorage.getItem("teeradar_pending_plan") || "";
+
+  const res = await fetch(`${API_BASE}/api/mobile-subscription/activate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email,
+      plan,
+      platform: getNativePlatform(),
+      receipt
+    })
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data.error || "activation_failed");
+  }
+
+  document.getElementById("successBox").textContent =
+    "Subscription activated. Redirecting...";
+
+  setTimeout(() => {
+    window.location.href = "/account.html";
+  }, 1000);
+}
+
+async function startStripeSubscription(planKey, email) {
+  const errorBox = document.getElementById("errorBox");
+  const successBox = document.getElementById("successBox");
+
   try {
     const res = await fetch(`${API_BASE}/api/subscribe`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        plan: planKey,
-        email
-      })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan: planKey, email })
     });
 
     const data = await res.json();
@@ -409,8 +571,8 @@ async function startSubscription(planKey) {
     }
 
     successBox.textContent = "Opening secure Stripe Checkout...";
-
     window.location.href = data.url;
+
   } catch (err) {
     console.error(err);
     errorBox.textContent =
@@ -425,7 +587,9 @@ const copyPromoBtn = document.getElementById("copyPromoBtn");
 const closePromoBtn = document.getElementById("closePromoBtn");
 
 function showPromo() {
-  promoBackdrop.classList.remove("hidden");
+  if (getNativePlatform() === "web") {
+    promoBackdrop.classList.remove("hidden");
+  }
 }
 
 function closePromo() {
@@ -443,7 +607,6 @@ copyPromoBtn.addEventListener("click", async () => {
 });
 
 closePromoBtn.addEventListener("click", closePromo);
-
 window.addEventListener("load", showPromo);
 </script>
 </body>
