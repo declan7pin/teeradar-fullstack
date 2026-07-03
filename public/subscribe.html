@@ -28,13 +28,13 @@ padding:24px 12px;
 }
 
 .container{
-max-width:900px;
+max-width:1000px;
 width:100%;
 }
 
 h1{
 margin:0 0 4px;
-font-size:1.6rem;
+font-size:1.7rem;
 color:#111827;
 text-align:center;
 }
@@ -58,7 +58,7 @@ margin-bottom:20px;
 padding:10px 12px;
 border-radius:999px;
 border:1px solid #d1d5db;
-min-width:260px;
+min-width:280px;
 font-size:.95rem;
 }
 
@@ -236,10 +236,10 @@ cursor:pointer;
 
 <div class="container">
 
-<h1>TeeRadar subscriptions</h1>
+<h1>Unlock TeeRadar Premium</h1>
 
 <p class="subtitle">
-Choose a plan and continue securely with Stripe Checkout.
+Get tee time alerts, organise rounds with mates, vote on group games and compare your golf stats.
 </p>
 
 <div class="email-row">
@@ -256,12 +256,14 @@ placeholder="Your email (same as TeeRadar login)"
 <h2>Basic – Monthly</h2>
 <div class="price">$5 / month</div>
 <p class="desc">
-Perfect for golfers who mostly play the same few courses.
+Perfect for golfers who play a few regular courses and want alerts plus group features.
 </p>
 <ul>
 <li>Alerts for up to 3 favourite courses</li>
+<li>Group votes for upcoming rounds</li>
+<li>Access to friends' rounds and stats</li>
+<li>Track your own round stats</li>
 <li>Monthly giveaway entry</li>
-<li>Access to round stats</li>
 </ul>
 <button class="btn" onclick="startSubscription('BASIC_MONTHLY')">
 Choose Basic – Monthly
@@ -272,12 +274,14 @@ Choose Basic – Monthly
 <h2>Basic – Annual</h2>
 <div class="price">$49 / year</div>
 <p class="desc">
-Same Basic features, but save when you pay yearly.
+Same Basic features, with better value when you pay yearly.
 </p>
 <ul>
 <li>Alerts for up to 3 favourite courses</li>
+<li>Group votes for upcoming rounds</li>
+<li>Access to friends' rounds and stats</li>
+<li>Track your own round stats</li>
 <li>Monthly giveaway entry</li>
-<li>Access to round stats</li>
 </ul>
 <button class="btn" onclick="startSubscription('BASIC_ANNUAL')">
 Choose Basic – Annual
@@ -288,13 +292,15 @@ Choose Basic – Annual
 <h2>Pro – Monthly</h2>
 <div class="price">$10 / month</div>
 <p class="desc">
-For golfers who bounce between multiple courses and chase open slots.
+For golfers who chase tee times across more courses and use TeeRadar regularly.
 </p>
 <ul>
 <li>Alerts for up to 10 favourite courses</li>
-<li>Monthly giveaway entry</li>
+<li>Group votes for upcoming rounds</li>
+<li>Access to friends' rounds and stats</li>
+<li>Track your own round stats</li>
 <li>Early access to new features</li>
-<li>Access to round stats</li>
+<li>Monthly giveaway entry</li>
 </ul>
 <button class="btn" onclick="startSubscription('PRO_MONTHLY')">
 Choose Pro – Monthly
@@ -309,9 +315,11 @@ Best value for regular golfers using TeeRadar all year.
 </p>
 <ul>
 <li>Alerts for up to 10 favourite courses</li>
-<li>Monthly giveaway entry</li>
+<li>Group votes for upcoming rounds</li>
+<li>Access to friends' rounds and stats</li>
+<li>Track your own round stats</li>
 <li>Early access to new features</li>
-<li>Access to round stats</li>
+<li>Monthly giveaway entry</li>
 </ul>
 <button class="btn" onclick="startSubscription('PRO_ANNUAL')">
 Choose Pro – Annual
@@ -334,8 +342,7 @@ onclick="window.location.href='/index.html'"
 </div>
 
 <p class="note">
-Payments are processed securely by Stripe. You can cancel any time from your
-Stripe subscription portal.
+Payments are processed securely by Stripe. You can cancel any time from your Stripe subscription portal.
 </p>
 
 </div>
@@ -348,8 +355,8 @@ Stripe subscription portal.
 <h3>Get 1 Month Free</h3>
 
 <p>
-Use the code below to unlock your first month of TeeRadar free.
-Copy the code and paste it into the promo section on the payment screen.
+Try TeeRadar Premium free for your first month. Get tee time alerts, group votes,
+friends' rounds, stats and premium golf features.
 </p>
 
 <div class="promo-code-row">
@@ -363,7 +370,7 @@ Copy the code and paste it into the promo section on the payment screen.
 </div>
 
 <script>
-const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+const API_BASE = "https://teeradar.com.au";
 
 async function startSubscription(planKey) {
   const emailInput = document.getElementById("emailInput");
