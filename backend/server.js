@@ -1358,6 +1358,108 @@ const cancelUrl =
 });
 
 // -------------------------------------------------
+// Mobile subscriptions – Apple / Google app purchase activation
+// -------------------------------------------------
+app.post("/api/mobile-subscription/activate", async (req, res) => {
+  try {
+    const { email, plan, platform, receipt } = req.body || {};
+
+    const trimmedEmail = String(email || "").trim().toLowerCase();
+    const planKey = String(plan || "").trim().toUpperCase();
+    const storePlatform = String(platform || "").trim().toLowerCase();
+
+    if (!trimmedEmail) {
+      return res.status(400).json({ ok: false, error: "email_required" });
+    }
+
+    if (!["ios", "android"].includes(storePlatform)) {
+      return res.status(400).json({ ok: false, error: "invalid_platform" });
+    }
+
+    const effectivePlan =
+      planKey.startsWith("PRO") ? "PRO" :
+      planKey.startsWith("BASIC") ? "BASIC" :
+      "FREE";
+
+    if (effectivePlan === "FREE") {
+      return res.status(400).json({ ok: false, error: "invalid_plan" });
+    }
+
+    const isAnnual = planKey.includes("ANNUAL");
+
+    const currentPeriodEnd = new Date(
+      Date.now() + (isAnnual ? 365 : 31) * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    const receiptId =
+      receipt?.transactionId ||
+      receipt?.id ||
+      receipt?.purchaseId ||
+      receipt?.platformTransactionId ||
+      `${storePlatform}_${Date.now()}`;
+
+    await db.query(
+      `
+      INSERT INTO subscriber_status (
+        email,
+        stripe_customer_id,
+        subscription_id,
+        status,
+        plan,
+        cancel_at_period_end,
+        canceled_at,
+        current_period_end,
+        entitlement_active,
+        updated_at
+      )
+      VALUES ($1,$2,$3,'active',$4,false,NULL,$5,true,now())
+      ON CONFLICT (email)
+      DO UPDATE SET
+        stripe_customer_id = EXCLUDED.stripe_customer_id,
+        subscription_id = EXCLUDED.subscription_id,
+        status = 'active',
+        plan = EXCLUDED.plan,
+        cancel_at_period_end = false,
+        canceled_at = NULL,
+        current_period_end = EXCLUDED.current_period_end,
+        entitlement_active = true,
+        updated_at = now()
+      `,
+      [
+        trimmedEmail,
+        storePlatform === "ios" ? "APPLE_IAP" : "GOOGLE_PLAY",
+        String(receiptId),
+        effectivePlan,
+        currentPeriodEnd,
+      ]
+    );
+
+    await db.query(
+      `
+      UPDATE users
+      SET plan = $2
+      WHERE LOWER(email) = LOWER($1)
+      `,
+      [trimmedEmail, effectivePlan]
+    );
+
+    return res.json({
+      ok: true,
+      plan: effectivePlan,
+      entitlementActive: true,
+      currentPeriodEnd,
+    });
+  } catch (err) {
+    console.error("mobile subscription activate error:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "mobile_subscription_activate_failed",
+      detail: err.message,
+    });
+  }
+});
+
+// -------------------------------------------------
 // ✅ Billing portal – open Stripe customer portal
 // -------------------------------------------------
 app.post("/api/billing/portal", async (req, res) => {
