@@ -87,6 +87,32 @@ async function ensureUserAlertHitsTable() {
 ensureUserAlertHitsTable();
 
 // ---------------------------------------------------------
+// DB: prevent duplicate tee-time push notifications
+// ---------------------------------------------------------
+async function ensureTeeTimePushDedupTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS tee_time_push_dedup (
+        id SERIAL PRIMARY KEY,
+        email TEXT NOT NULL,
+        dedupe_key TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (email, dedupe_key)
+      );
+    `);
+
+    console.log("✅ tee_time_push_dedup table ready");
+  } catch (err) {
+    console.error(
+      "❌ Error ensuring tee_time_push_dedup table:",
+      err
+    );
+  }
+}
+
+ensureTeeTimePushDedupTable();
+
+// ---------------------------------------------------------
 // Subscriber entitlement helpers
 // ---------------------------------------------------------
 function isTruthyPlan(plan) {
@@ -328,6 +354,65 @@ function buildPushHitSummary(hits) {
   const extra = safeHits.length > 3 ? ` • +${safeHits.length - 3} more` : "";
 
   return top.join(" • ") + extra;
+}
+
+async function claimTeeTimePush(email, hits) {
+  const safeHits = Array.isArray(hits) ? hits : [];
+
+  // Two-minute bucket blocks duplicate workers sending the same push
+  // at practically the same time, but does not block future alert intervals.
+  const twoMinuteBucket = Math.floor(
+    Date.now() / (2 * 60 * 1000)
+  );
+
+  const normalisedHits = safeHits
+    .map((hit) => ({
+      courseName: String(hit.courseName || "").trim(),
+      date: String(hit.date || "").trim(),
+      count: Number(hit.count || 0),
+      sampleTimes: Array.isArray(hit.sampleTimes)
+        ? [...hit.sampleTimes].map(String).sort()
+        : [],
+    }))
+    .sort((a, b) => {
+      const first = `${a.courseName}|${a.date}`;
+      const second = `${b.courseName}|${b.date}`;
+      return first.localeCompare(second);
+    });
+
+  const dedupeKey = JSON.stringify({
+    bucket: twoMinuteBucket,
+    hits: normalisedHits,
+  });
+
+  try {
+    const { rows } = await db.query(
+      `
+      INSERT INTO tee_time_push_dedup (
+        email,
+        dedupe_key
+      )
+      VALUES (
+        LOWER($1),
+        $2
+      )
+      ON CONFLICT (email, dedupe_key)
+      DO NOTHING
+      RETURNING id
+      `,
+      [email, dedupeKey]
+    );
+
+    return rows.length > 0;
+  } catch (err) {
+    console.error(
+      `⚠️ Tee-time push dedupe check failed for ${email}:`,
+      err.message
+    );
+
+    // Do not block legitimate notifications if the database check fails.
+    return true;
+  }
 }
 
 /**
@@ -1221,18 +1306,31 @@ if (
   alertFrequencyRaw !== "OFF" &&
   canSendEmailForUser
 ) {
-  console.log(`📲 Sending tee-time push to ${email}`);
-
-  await sendTeeTimePushSummaryForUser({
+  const pushClaimed = await claimTeeTimePush(
     email,
-    hits: emailHits,
-    earliest,
-    latest,
-    userHoles,
-    partySize,
-  });
+    emailHits
+  );
 
-  console.log(`📲 Tee-time push function finished for ${email}`);
+  if (!pushClaimed) {
+    console.log(
+      `⏭️ Duplicate tee-time push blocked for ${email}`
+    );
+  } else {
+    console.log(`📲 Sending tee-time push to ${email}`);
+
+    await sendTeeTimePushSummaryForUser({
+      email,
+      hits: emailHits,
+      earliest,
+      latest,
+      userHoles,
+      partySize,
+    });
+
+    console.log(
+      `📲 Tee-time push function finished for ${email}`
+    );
+  }
 }
     }
 
