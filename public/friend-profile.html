@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+/>
   <title>TeeRadar — Friend Profile</title>
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
   <style>
@@ -11,9 +14,9 @@
   max-width:860px;
   margin:0 auto;
   padding:
-    calc(env(safe-area-inset-top, 0px) + 44px)
+    calc(env(safe-area-inset-top, 0px) + 16px)
     14px
-    80px;
+    calc(env(safe-area-inset-bottom, 0px) + 80px);
 }
     .hero{background:linear-gradient(135deg,#00796b,#005e55);color:#fff;border-radius:22px;padding:22px;margin-bottom:16px}
     .hero h1{margin:0 0 6px;font-size:28px;word-break:break-word}
@@ -33,7 +36,6 @@
   grid-template-columns:1fr 1fr;
   gap:10px;
   margin-bottom:14px;
-  padding-top:12px;
 }
 
 .top-nav .back{
