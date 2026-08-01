@@ -6,10 +6,12 @@ export async function ensureSubscriberStatusSchema() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS subscriber_status (
       email TEXT PRIMARY KEY,
+
+      -- Stripe identifiers
       stripe_customer_id TEXT,
       subscription_id TEXT,
 
-      -- Stripe subscription state
+      -- Shared subscription state
       status TEXT NOT NULL DEFAULT 'inactive',
       plan TEXT NOT NULL DEFAULT 'FREE',
       cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
@@ -18,6 +20,15 @@ export async function ensureSubscriberStatusSchema() {
 
       -- App entitlement state
       entitlement_active BOOLEAN NOT NULL DEFAULT FALSE,
+
+      -- Payment provider
+      payment_provider TEXT NOT NULL DEFAULT 'stripe',
+
+      -- Apple subscription identifiers
+      apple_original_transaction_id TEXT,
+      apple_transaction_id TEXT,
+      apple_product_id TEXT,
+      apple_environment TEXT,
 
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -64,11 +75,38 @@ export async function ensureSubscriberStatusSchema() {
     ADD COLUMN IF NOT EXISTS entitlement_active BOOLEAN NOT NULL DEFAULT FALSE;
   `);
 
+  // Apple / Stripe payment provider support
+  await db.query(`
+    ALTER TABLE subscriber_status
+    ADD COLUMN IF NOT EXISTS payment_provider TEXT NOT NULL DEFAULT 'stripe';
+  `);
+
+  await db.query(`
+    ALTER TABLE subscriber_status
+    ADD COLUMN IF NOT EXISTS apple_original_transaction_id TEXT;
+  `);
+
+  await db.query(`
+    ALTER TABLE subscriber_status
+    ADD COLUMN IF NOT EXISTS apple_transaction_id TEXT;
+  `);
+
+  await db.query(`
+    ALTER TABLE subscriber_status
+    ADD COLUMN IF NOT EXISTS apple_product_id TEXT;
+  `);
+
+  await db.query(`
+    ALTER TABLE subscriber_status
+    ADD COLUMN IF NOT EXISTS apple_environment TEXT;
+  `);
+
   await db.query(`
     ALTER TABLE subscriber_status
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
   `);
 
+  // Existing indexes
   await db.query(`
     CREATE INDEX IF NOT EXISTS subscriber_status_status_idx
       ON subscriber_status(status);
@@ -89,7 +127,28 @@ export async function ensureSubscriberStatusSchema() {
       ON subscriber_status(subscription_id);
   `);
 
-    // Upcoming rounds timezone support
+  // Apple subscription indexes
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS subscriber_status_payment_provider_idx
+      ON subscriber_status(payment_provider);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS subscriber_status_apple_original_transaction_idx
+      ON subscriber_status(apple_original_transaction_id);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS subscriber_status_apple_transaction_idx
+      ON subscriber_status(apple_transaction_id);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS subscriber_status_apple_product_idx
+      ON subscriber_status(apple_product_id);
+  `);
+
+  // Upcoming rounds timezone support
   await db.query(`
     ALTER TABLE upcoming_rounds
     ADD COLUMN IF NOT EXISTS timezone TEXT;
@@ -106,6 +165,7 @@ export async function ensureSubscriberStatusSchema() {
         THEN TRUE
         ELSE FALSE
       END,
+
       plan = CASE
         WHEN LOWER(COALESCE(status, '')) IN ('active', 'trialing')
          AND current_period_end IS NOT NULL
@@ -114,6 +174,14 @@ export async function ensureSubscriberStatusSchema() {
         THEN UPPER(plan)
         ELSE 'FREE'
       END,
+
+      payment_provider = CASE
+        WHEN apple_original_transaction_id IS NOT NULL
+          OR apple_transaction_id IS NOT NULL
+        THEN 'apple'
+        ELSE COALESCE(NULLIF(payment_provider, ''), 'stripe')
+      END,
+
       updated_at = NOW();
   `);
 }
