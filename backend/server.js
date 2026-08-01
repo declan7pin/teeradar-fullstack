@@ -605,7 +605,8 @@ ensurePushSubscriptionsTable();
 ensureMobilePushTokensTable();
 ensureRoundsTables();
 ensureScorecardTemplatesTables();
-ensureSubscriberStatusSchema(); // ✅ ADD: creates subscriber_status table in code
+await ensureSubscriberStatusSchema();
+console.log("✅ subscriber_status schema ready");
 
 async function ensureUserFriendsTable() {
   try {
