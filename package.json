@@ -19,6 +19,7 @@
     "@capacitor/push-notifications": "^8.0.0",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.7.0",
+    "capacitor-plugin-cdv-purchase": "^13.18.0",
     "cheerio": "^1.0.0-rc.12",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
