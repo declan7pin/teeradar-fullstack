@@ -1927,6 +1927,20 @@ html.app-mode .app-bottom-nav {
     </div>
   </header>
 
+  <section class="app-rounds-intro">
+  <div class="app-rounds-kicker">
+    <span>🏌️</span>
+    <span>Rounds and scorecards</span>
+  </div>
+
+  <h1>Ready to play?</h1>
+
+  <p>
+    Start a round, resume a scorecard or review your recent golf
+    performance.
+  </p>
+</section>
+
   <main>
     <div id="authGate" class="notice" style="display:none;">
   <strong>You’re in Guest mode.</strong><br/>
@@ -1954,15 +1968,14 @@ html.app-mode .app-bottom-nav {
     <div class="handicapTrend" id="handicapTrend">Last 3 avg vs par: —</div>
   </div>
 
-  <div class="startHero">
   <div class="startHeroText">
-    <h2>Recent rounds</h2>
-    <div class="muted">Review old rounds or start a fresh scorecard.</div>
-  </div>
+  <h2>Round centre</h2>
+  <div class="muted">Start, resume or review your golf rounds.</div>
+</div>
 
   <button class="btn2" id="openStartRoundBtn" type="button">
-    Start round
-  </button>
+  New round
+</button>
 </div>
 
 <div id="createFormPanel">
@@ -2344,6 +2357,51 @@ html.app-mode .app-bottom-nav {
   </div>
 </div>
 
+  <nav
+  class="app-bottom-nav"
+  aria-label="TeeRadar app navigation"
+>
+  <a
+    class="app-bottom-link"
+    href="/index.html"
+  >
+    <span class="app-bottom-link-icon">⌂</span>
+    <span>Home</span>
+  </a>
+
+  <a
+    class="app-bottom-link"
+    href="/book.html"
+  >
+    <span class="app-bottom-link-icon">⌕</span>
+    <span>Search</span>
+  </a>
+
+  <a
+    class="app-bottom-link app-bottom-play active"
+    href="/my-rounds.html"
+  >
+    <span class="app-bottom-link-icon">⚑</span>
+    <span>Play</span>
+  </a>
+
+  <a
+    class="app-bottom-link"
+    href="/friends.html"
+  >
+    <span class="app-bottom-link-icon">♟</span>
+    <span>Friends</span>
+  </a>
+
+  <a
+    class="app-bottom-link"
+    href="/account.html"
+  >
+    <span class="app-bottom-link-icon">●</span>
+    <span>Account</span>
+  </a>
+</nav>
+
   <script>
     const API_BASE = "https://teeradar.com.au";
 
@@ -2646,9 +2704,17 @@ const premNote = document.getElementById("premNote");
 const toggleTableBtn = document.getElementById("toggleTableBtn");
 
 // ✅ premium state
-let premiumHoleIndex = 0; // 0-based
+let premiumHoleIndex = 0;
 let premiumShowingTable = false;
-let premiumPlayerIndex = 0; // 0-based (0=P1)
+let premiumPlayerIndex = 0;
+
+/*
+ * Retain the currently loaded scorecard metadata so the hole
+ * picker can move holes without losing par, distance or tee data.
+ */
+let currentPremiumPars = null;
+let currentPremiumDistances = null;
+let currentPremiumTeeName = "";
     
     const showLeftBtn = document.getElementById("showLeftBtn");
     const saveAllBtn = document.getElementById("saveAllBtn");
@@ -3785,6 +3851,40 @@ function getHoleRowFromTable(holeNum){
   return holesRows.find(h => Number(h.hole_number) === Number(holeNum)) || null;
 }
 
+    async function playScoreHaptic(style = "light") {
+  try {
+    const haptics =
+      window.Capacitor?.Plugins?.Haptics;
+
+    if (!haptics) return;
+
+    const ImpactStyle =
+      window.Capacitor?.Plugins?.Haptics?.ImpactStyle || {};
+
+    let selectedStyle =
+      ImpactStyle.Light ||
+      "LIGHT";
+
+    if (style === "medium") {
+      selectedStyle =
+        ImpactStyle.Medium ||
+        "MEDIUM";
+    }
+
+    if (style === "heavy") {
+      selectedStyle =
+        ImpactStyle.Heavy ||
+        "HEAVY";
+    }
+
+    await haptics.impact({
+      style: selectedStyle
+    });
+  } catch (error) {
+    // Haptics are optional. Never block score entry.
+  }
+}
+
 function setHoleValueInTable(holeNum, field, playerNum, value){
   const sel = `input[data-field="${field}"][data-hole="${holeNum}"]` + (playerNum ? `[data-player="${playerNum}"]` : "");
   const inp = scoreBody.querySelector(sel);
@@ -3893,11 +3993,25 @@ const hasSavedPutts = curPutts !== null && curPutts !== undefined && Number.isFi
 
     sel.value = String(startStrokes);
 
-    sel.addEventListener("change", () => {
-      const v = Number(sel.value);
-      setHoleValueInTable(holeNum, "strokes", premiumPlayerIndex + 1, Number.isFinite(v) ? v : null);
-      renderPremiumForHole(round, metaPars, metaDists, teeName);
-    });
+    sel.addEventListener("change", async () => {
+  const v = Number(sel.value);
+
+  setHoleValueInTable(
+    holeNum,
+    "strokes",
+    premiumPlayerIndex + 1,
+    Number.isFinite(v) ? v : null
+  );
+
+  await playScoreHaptic("light");
+
+  renderPremiumForHole(
+    round,
+    metaPars,
+    metaDists,
+    teeName
+  );
+});
 
     premScoreBtns.appendChild(sel);
   }
@@ -3937,12 +4051,31 @@ puttVals.forEach(({ value, label }) => {
 
 sel.value = startPutts === "" ? "" : String(startPutts);
     
-    sel.addEventListener("change", () => {
-      const raw = String(sel.value || "").trim();
-const v = raw === "" ? null : Number(raw);
-setHoleValueInTable(holeNum, "putts", premiumPlayerIndex + 1, Number.isFinite(v) ? v : null);
-      renderPremiumForHole(round, metaPars, metaDists, teeName);
-    });
+    sel.addEventListener("change", async () => {
+  const raw =
+    String(sel.value || "").trim();
+
+  const v =
+    raw === ""
+      ? null
+      : Number(raw);
+
+  setHoleValueInTable(
+    holeNum,
+    "putts",
+    premiumPlayerIndex + 1,
+    Number.isFinite(v) ? v : null
+  );
+
+  await playScoreHaptic("light");
+
+  renderPremiumForHole(
+    round,
+    metaPars,
+    metaDists,
+    teeName
+  );
+});
 
     premPuttBtns.appendChild(sel);
   }
@@ -3960,13 +4093,27 @@ if (premNextBtn) premNextBtn.disabled = (premiumHoleIndex >= holesCount - 1 && p
 }
 
 function enablePremiumMode(round, metaPars, metaDists, teeName){
+  currentPremiumPars =
+    Array.isArray(metaPars)
+      ? metaPars
+      : null;
+
+  currentPremiumDistances =
+    Array.isArray(metaDists)
+      ? metaDists
+      : null;
+
+  currentPremiumTeeName =
+    String(teeName || "");
+
   premiumShowingTable = false;
   premiumPlayerIndex = 0;
   setPremiumVisible(true);
   renderPremiumForHole(round, metaPars, metaDists, teeName);
 
   if (premPrevBtn){
-    premPrevBtn.onclick = () => {
+  premPrevBtn.onclick = async () => {
+    await playScoreHaptic("light");
       const holesCount = Number(round?.holes) || 18;
       const pc = getPlayersCountFromRound(round);
 
@@ -3993,7 +4140,8 @@ function enablePremiumMode(round, metaPars, metaDists, teeName){
   }
 
   if (premNextBtn){
-    premNextBtn.onclick = () => {
+  premNextBtn.onclick = async () => {
+    await playScoreHaptic("light");
       const holesCount = Number(round?.holes) || 18;
       const pc = getPlayersCountFromRound(round);
 
@@ -5255,9 +5403,11 @@ if (shareRoundModalBack) {
 if (openStartRoundBtn && createFormPanel) {
   openStartRoundBtn.addEventListener("click", () => {
     createFormPanel.classList.toggle("open");
-    openStartRoundBtn.textContent = createFormPanel.classList.contains("open")
-      ? "Hide setup"
-      : "Start round";
+
+    openStartRoundBtn.textContent =
+      createFormPanel.classList.contains("open")
+        ? "Close setup"
+        : "New round";
   });
 }
 
@@ -5287,9 +5437,19 @@ if (toggleRoundsBtn && yourRoundsSection) {
 if (showLeftBtn) {
   showLeftBtn.addEventListener("click", () => {
     setLeftPanelsVisibility(true);
-    if (createFormPanel) createFormPanel.classList.add("open");
-    if (openStartRoundBtn) openStartRoundBtn.textContent = "Hide setup";
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    if (createFormPanel) {
+      createFormPanel.classList.add("open");
+    }
+
+    if (openStartRoundBtn) {
+      openStartRoundBtn.textContent = "Close setup";
+    }
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
   });
 }
 
@@ -5388,7 +5548,12 @@ function openHolePicker(){
       premiumHoleIndex = i - 1;
       premiumPlayerIndex = 0;
       closeHolePicker();
-      renderPremiumForHole(currentRound, null, null, "");
+      renderPremiumForHole(
+  currentRound,
+  currentPremiumPars,
+  currentPremiumDistances,
+  currentPremiumTeeName
+);
     });
 
     holePickerGrid.appendChild(btn);
@@ -5422,8 +5587,27 @@ if (holePickerBack){
   // Always show the app now (Guest mode supported)
   appEl.style.display = "block";
 
-  // ✅ NEW: show promo popup every time My Rounds opens
-  setTimeout(() => openPromoModal(), 450);
+  /*
+ * Only show the course-submission promotion once per device.
+ * Do not interrupt every scorecard session.
+ */
+try {
+  const promoSeen =
+    localStorage.getItem("teeradar_course_promo_seen") === "1";
+
+  if (!promoSeen) {
+    setTimeout(() => {
+      openPromoModal();
+
+      localStorage.setItem(
+        "teeradar_course_promo_seen",
+        "1"
+      );
+    }, 650);
+  }
+} catch (error) {
+  console.warn("Promo preference could not be read:", error);
+}
 
   const token = getToken();
   const loggedIn = !!token;
