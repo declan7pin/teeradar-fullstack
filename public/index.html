@@ -8,12 +8,27 @@
   content="width=device-width, initial-scale=1, viewport-fit=cover"
 />
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
-  <script>
+ <script>
   try {
     if (sessionStorage.getItem("teeradar_app_splash_seen") === "1") {
       document.documentElement.classList.add("skip-app-splash");
     }
-  } catch (e) {}
+
+    /*
+     * Capacitor adds this object when the page is running inside
+     * the installed iOS or Android application.
+     */
+    const runningInsideApp =
+      window.Capacitor &&
+      typeof window.Capacitor.isNativePlatform === "function" &&
+      window.Capacitor.isNativePlatform();
+
+    if (runningInsideApp) {
+      document.documentElement.classList.add("app-mode");
+    }
+  } catch (e) {
+    console.warn("App detection failed:", e);
+  }
 </script>
 
   <!-- Google AdSense -->
@@ -1052,6 +1067,624 @@
     display:flex !important;
   }
 }
+  /* =========================================================
+   INSTALLED MOBILE APP DESIGN
+   Only applies when Capacitor adds the app-mode class
+   ========================================================= */
+
+.app-home,
+.app-bottom-nav {
+  display: none;
+}
+
+html.app-mode,
+html.app-mode body {
+  min-height: 100%;
+  background: #f2f6f7;
+  color: #10212a;
+}
+
+html.app-mode body {
+  padding-bottom:
+    calc(88px + env(safe-area-inset-bottom, 0px));
+}
+
+/*
+ * Hide the website layout inside the installed application.
+ * The login modal and notification elements remain available.
+ */
+html.app-mode body > header,
+html.app-mode body > main,
+html.app-mode body > footer {
+  display: none;
+}
+
+html.app-mode #tc-banner {
+  bottom:
+    calc(78px + env(safe-area-inset-bottom, 0px));
+}
+
+/* App home screen */
+
+html.app-mode .app-home {
+  display: block;
+  width: 100%;
+  max-width: 760px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding-bottom:
+    calc(110px + env(safe-area-inset-bottom, 0px));
+}
+
+/* App header */
+
+.app-home-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 12px)
+    18px
+    12px;
+
+  background: rgba(242, 246, 247, 0.94);
+  border-bottom: 1px solid rgba(210, 222, 226, 0.9);
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.app-home-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.app-home-logo {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  overflow: hidden;
+  border-radius: 15px;
+  background: #ffffff;
+  box-shadow: 0 7px 20px rgba(15, 55, 60, 0.12);
+}
+
+.app-home-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.app-home-welcome {
+  min-width: 0;
+}
+
+.app-home-welcome-small {
+  display: block;
+  margin-bottom: 2px;
+  color: #6b7c85;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.app-home-welcome-name {
+  display: block;
+  overflow: hidden;
+  color: #10212a;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-notification-button {
+  position: relative;
+
+  display: grid;
+  place-items: center;
+
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+
+  padding: 0;
+  border: 0;
+  border-radius: 15px;
+
+  background: #ffffff;
+  color: #10212a;
+
+  font-size: 19px;
+  cursor: pointer;
+
+  box-shadow: 0 7px 20px rgba(15, 55, 60, 0.1);
+}
+
+.app-notification-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+
+  display: none;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+
+  border: 2px solid #f2f6f7;
+  border-radius: 999px;
+
+  background: #ef4444;
+  color: #ffffff;
+
+  font-size: 10px;
+  font-weight: 900;
+}
+
+/* Main app content */
+
+.app-home-content {
+  padding: 16px;
+}
+
+/* Search hero */
+
+.app-search-card {
+  position: relative;
+  overflow: hidden;
+
+  padding: 22px;
+  border-radius: 26px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(0, 94, 85, 0.98),
+      rgba(0, 121, 107, 0.9)
+    );
+
+  color: #ffffff;
+
+  box-shadow: 0 18px 38px rgba(0, 94, 85, 0.24);
+}
+
+.app-search-card::after {
+  content: "";
+
+  position: absolute;
+  top: -60px;
+  right: -55px;
+
+  width: 190px;
+  height: 190px;
+
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.app-search-kicker {
+  position: relative;
+  z-index: 1;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  margin-bottom: 11px;
+  padding: 6px 10px;
+
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.12);
+
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.app-search-card h1 {
+  position: relative;
+  z-index: 1;
+
+  max-width: 310px;
+  margin: 0 0 8px;
+
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.app-search-card p {
+  position: relative;
+  z-index: 1;
+
+  max-width: 330px;
+  margin: 0 0 20px;
+
+  color: rgba(255, 255, 255, 0.82);
+
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.app-search-button {
+  position: relative;
+  z-index: 1;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  width: 100%;
+  min-height: 54px;
+
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 17px;
+
+  background: #ffffff;
+  color: #005e55;
+
+  font-size: 15px;
+  font-weight: 900;
+
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(0, 48, 43, 0.2);
+}
+
+.app-search-button-arrow {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* Section headings */
+
+.app-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  margin: 24px 2px 11px;
+}
+
+.app-section-header h2 {
+  margin: 0;
+  color: #10212a;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.app-section-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #00796b;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Quick actions */
+
+.app-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.app-action-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  min-height: 138px;
+  padding: 16px;
+
+  border: 1px solid #dfe8eb;
+  border-radius: 21px;
+
+  background: #ffffff;
+  color: #10212a;
+
+  text-align: left;
+  cursor: pointer;
+
+  box-shadow: 0 9px 24px rgba(21, 50, 60, 0.07);
+}
+
+.app-action-icon {
+  display: grid;
+  place-items: center;
+
+  width: 42px;
+  height: 42px;
+
+  margin-bottom: 17px;
+  border-radius: 14px;
+
+  background: #e0f2f1;
+  color: #006b5d;
+
+  font-size: 20px;
+}
+
+.app-action-title {
+  margin-bottom: 4px;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.app-action-description {
+  color: #6b7c85;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* Upcoming round */
+
+.app-upcoming-card {
+  position: relative;
+  overflow: hidden;
+
+  padding: 18px;
+  border: 1px solid #dfe8eb;
+  border-radius: 22px;
+
+  background: #ffffff;
+
+  box-shadow: 0 9px 24px rgba(21, 50, 60, 0.07);
+}
+
+.app-upcoming-empty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.app-upcoming-icon {
+  display: grid;
+  place-items: center;
+
+  width: 51px;
+  height: 51px;
+  flex: 0 0 51px;
+
+  border-radius: 17px;
+
+  background: #e0f2f1;
+  color: #006b5d;
+
+  font-size: 24px;
+}
+
+.app-upcoming-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.app-upcoming-copy strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 15px;
+}
+
+.app-upcoming-copy span {
+  display: block;
+  color: #6b7c85;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.app-upcoming-button {
+  margin-top: 15px;
+  width: 100%;
+  min-height: 48px;
+
+  border: 0;
+  border-radius: 15px;
+
+  background: #edf8f6;
+  color: #006b5d;
+
+  font-size: 14px;
+  font-weight: 850;
+
+  cursor: pointer;
+}
+
+/* App alert card */
+
+.app-home-alert {
+  display: none;
+
+  margin-top: 14px;
+  padding: 16px;
+
+  border: 1px solid #fed7aa;
+  border-radius: 20px;
+
+  background: #fff7ed;
+}
+
+.app-home-alert-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.app-home-alert-icon {
+  display: grid;
+  place-items: center;
+
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+
+  border-radius: 14px;
+
+  background: #ffedd5;
+  font-size: 20px;
+}
+
+.app-home-alert-copy {
+  flex: 1;
+}
+
+.app-home-alert-copy strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #9a3412;
+  font-size: 14px;
+}
+
+.app-home-alert-copy span {
+  display: block;
+  color: #7c2d12;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.app-home-alert-button {
+  width: 100%;
+  min-height: 44px;
+
+  margin-top: 13px;
+  border: 0;
+  border-radius: 14px;
+
+  background: #f97316;
+  color: #ffffff;
+
+  font-size: 13px;
+  font-weight: 850;
+
+  cursor: pointer;
+}
+
+/* Bottom app navigation */
+
+html.app-mode .app-bottom-nav {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1000;
+
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+
+  width: 100%;
+  max-width: 760px;
+  min-height: 78px;
+
+  margin: 0 auto;
+
+  padding:
+    7px
+    6px
+    calc(env(safe-area-inset-bottom, 0px) + 7px);
+
+  border-top: 1px solid rgba(210, 222, 227, 0.95);
+
+  background: rgba(255, 255, 255, 0.96);
+
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+
+  box-shadow: 0 -8px 25px rgba(21, 50, 60, 0.08);
+}
+
+.app-bottom-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+
+  min-width: 0;
+  min-height: 56px;
+
+  color: #7a8a92;
+
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.app-bottom-link-icon {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.app-bottom-link.active {
+  color: #00796b;
+}
+
+.app-bottom-play {
+  transform: translateY(-15px);
+}
+
+.app-bottom-play .app-bottom-link-icon {
+  display: grid;
+  place-items: center;
+
+  width: 58px;
+  height: 58px;
+
+  border: 5px solid #f2f6f7;
+  border-radius: 50%;
+
+  background: linear-gradient(135deg, #00796b, #005e55);
+  color: #ffffff;
+
+  font-size: 25px;
+
+  box-shadow: 0 10px 24px rgba(0, 121, 107, 0.3);
+}
+
+.app-bottom-play span:last-child {
+  margin-top: -2px;
+}
+
+.app-action-card:active,
+.app-search-button:active,
+.app-upcoming-button:active,
+.app-notification-button:active,
+.app-bottom-link:active {
+  transform: scale(0.97);
+}
+
+/* Better spacing on iPad */
+
+@media (min-width: 700px) {
+  .app-home-content {
+    padding: 22px 26px;
+  }
+
+  .app-action-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .app-action-card {
+    min-height: 150px;
+  }
+}
   </style>
 </head>
 <body>
@@ -1110,6 +1743,233 @@
     </nav>
   </div>
 </header>
+
+  <!-- =====================================================
+     INSTALLED APP HOME SCREEN
+     Hidden on the public website
+     ===================================================== -->
+
+<section class="app-home" id="appHome">
+  <div class="app-home-header">
+    <div class="app-home-brand">
+      <div class="app-home-logo">
+        <img
+          src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png"
+          alt="TeeRadar"
+        />
+      </div>
+
+      <div class="app-home-welcome">
+        <span class="app-home-welcome-small">Welcome to TeeRadar</span>
+        <span class="app-home-welcome-name" id="appWelcomeName">
+          Ready to play?
+        </span>
+      </div>
+    </div>
+
+    <button
+      class="app-notification-button"
+      id="appNotificationButton"
+      type="button"
+      aria-label="Open notifications"
+    >
+      🔔
+      <span
+        class="app-notification-badge"
+        id="appNotificationBadge"
+      >
+        0
+      </span>
+    </button>
+  </div>
+
+  <div class="app-home-content">
+    <section class="app-search-card">
+      <div class="app-search-kicker">
+        <span>⛳</span>
+        <span>Live Australian tee times</span>
+      </div>
+
+      <h1>Find your next round.</h1>
+
+      <p>
+        Search nearby and favourite golf courses without opening
+        every individual booking website.
+      </p>
+
+      <button
+        class="app-search-button"
+        type="button"
+        onclick="window.location.href='/book.html'"
+      >
+        <span>Search tee times</span>
+        <span class="app-search-button-arrow">›</span>
+      </button>
+    </section>
+
+    <div
+      class="app-home-alert"
+      id="appHomeAlert"
+    >
+      <div class="app-home-alert-row">
+        <div class="app-home-alert-icon">⛳</div>
+
+        <div class="app-home-alert-copy">
+          <strong>New tee times available</strong>
+          <span>
+            One or more of your favourite courses currently have
+            matching tee times.
+          </span>
+        </div>
+      </div>
+
+      <button
+        class="app-home-alert-button"
+        id="appHomeAlertButton"
+        type="button"
+      >
+        View tee time alerts
+      </button>
+    </div>
+
+    <div class="app-section-header">
+      <h2>Quick actions</h2>
+    </div>
+
+    <div class="app-action-grid">
+      <button
+        class="app-action-card"
+        type="button"
+        onclick="window.location.href='/book.html'"
+      >
+        <span class="app-action-icon">🔍</span>
+        <span class="app-action-title">Find a tee time</span>
+        <span class="app-action-description">
+          Search courses, dates and available times.
+        </span>
+      </button>
+
+      <button
+        class="app-action-card"
+        type="button"
+        onclick="window.location.href='/my-rounds.html'"
+      >
+        <span class="app-action-icon">🏌️</span>
+        <span class="app-action-title">Start scorecard</span>
+        <span class="app-action-description">
+          Create a round and record scores hole by hole.
+        </span>
+      </button>
+
+      <button
+        class="app-action-card"
+        type="button"
+        onclick="window.location.href='/friends.html'"
+      >
+        <span class="app-action-icon">👥</span>
+        <span class="app-action-title">Friends</span>
+        <span class="app-action-description">
+          View friends, requests and shared rounds.
+        </span>
+      </button>
+
+      <button
+        class="app-action-card"
+        type="button"
+        onclick="window.location.href='/account.html#alerts'"
+      >
+        <span class="app-action-icon">🔔</span>
+        <span class="app-action-title">Tee time alerts</span>
+        <span class="app-action-description">
+          Review your favourite-course alerts.
+        </span>
+      </button>
+    </div>
+
+    <div class="app-section-header">
+      <h2>Upcoming round</h2>
+
+      <button
+        class="app-section-link"
+        type="button"
+        onclick="window.location.href='/my-rounds.html'"
+      >
+        View rounds
+      </button>
+    </div>
+
+    <section class="app-upcoming-card">
+      <div class="app-upcoming-empty">
+        <div class="app-upcoming-icon">📅</div>
+
+        <div class="app-upcoming-copy">
+          <strong>No upcoming round scheduled</strong>
+          <span>
+            Create a scorecard or find a tee time to plan your
+            next round.
+          </span>
+        </div>
+      </div>
+
+      <button
+        class="app-upcoming-button"
+        type="button"
+        onclick="window.location.href='/my-rounds.html'"
+      >
+        Create a scorecard
+      </button>
+    </section>
+  </div>
+</section>
+
+<!-- INSTALLED APP BOTTOM NAVIGATION -->
+
+<nav
+  class="app-bottom-nav"
+  aria-label="TeeRadar app navigation"
+>
+  <a
+    class="app-bottom-link active"
+    href="/index.html"
+  >
+    <span class="app-bottom-link-icon">⌂</span>
+    <span>Home</span>
+  </a>
+
+  <a
+    class="app-bottom-link"
+    href="/book.html"
+  >
+    <span class="app-bottom-link-icon">⌕</span>
+    <span>Search</span>
+  </a>
+
+  <a
+    class="app-bottom-link app-bottom-play"
+    href="/my-rounds.html"
+  >
+    <span class="app-bottom-link-icon">⚑</span>
+    <span>Play</span>
+  </a>
+
+  <a
+    class="app-bottom-link"
+    href="/friends.html"
+  >
+    <span class="app-bottom-link-icon">♟</span>
+    <span>Friends</span>
+  </a>
+
+  <a
+    class="app-bottom-link"
+    href="/account.html"
+  >
+    <span class="app-bottom-link-icon">●</span>
+    <span>Account</span>
+  </a>
+</nav>
+
+<main>
 
 <main>
   <section class="hero">
@@ -1886,8 +2746,12 @@ ${details || "Not provided"}
       if (!email) return;
 
       const card = document.getElementById("homeAlertCard");
-      const btn = document.getElementById("homeAlertBtn");
-      if (!card || !btn) return;
+const btn = document.getElementById("homeAlertBtn");
+
+const appCard = document.getElementById("appHomeAlert");
+const appBtn = document.getElementById("appHomeAlertButton");
+
+if (!card && !appCard) return;
 
       const token = localStorage.getItem("teeradar_jwt") || "";
 
@@ -1907,11 +2771,25 @@ ${details || "Not provided"}
 
       if (!hasUnread) return;
 
-      card.style.display = "block";
+      if (card) {
+  card.style.display = "block";
+}
 
-      btn.onclick = () => {
-        window.location.href = "/account.html#alerts";
-      };
+if (btn) {
+  btn.onclick = () => {
+    window.location.href = "/account.html#alerts";
+  };
+}
+
+if (appCard) {
+  appCard.style.display = "block";
+}
+
+if (appBtn) {
+  appBtn.onclick = () => {
+    window.location.href = "/account.html#alerts";
+  };
+}
     } catch (e) {
       console.warn("initHomeAlertCard failed", e);
     }
@@ -2062,7 +2940,8 @@ ${details || "Not provided"}
   const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
   const bell = document.getElementById("notificationBell");
   const badge = document.getElementById("notificationBadge");
-  const list = document.getElementById("notificationList");
+const appBadge = document.getElementById("appNotificationBadge");
+const list = document.getElementById("notificationList");
 
   if (!bell || !badge || !list) return;
 
@@ -2080,8 +2959,15 @@ ${details || "Not provided"}
     if (!res.ok || !data.ok) return;
 
     const unread = Number(data.unread || 0);
-    badge.textContent = unread > 99 ? "99+" : String(unread);
-    badge.style.display = unread > 0 ? "flex" : "none";
+    const badgeText = unread > 99 ? "99+" : String(unread);
+
+badge.textContent = badgeText;
+badge.style.display = unread > 0 ? "flex" : "none";
+
+if (appBadge) {
+  appBadge.textContent = badgeText;
+  appBadge.style.display = unread > 0 ? "flex" : "none";
+}
 
     const notifications = Array.isArray(data.notifications) ? data.notifications : [];
 
@@ -2175,6 +3061,75 @@ async function markAllNotificationsRead() {
   await loadNotifications();
 }
 
+  function initInstalledAppHome() {
+  const isAppMode =
+    document.documentElement.classList.contains("app-mode");
+
+  if (!isAppMode) return;
+
+  const email = (
+    localStorage.getItem("teeradar_user_email") || ""
+  ).trim();
+
+  const welcomeName =
+    document.getElementById("appWelcomeName");
+
+  if (welcomeName) {
+    if (email) {
+      const savedDisplayName = (
+        localStorage.getItem("teeradar_display_name") || ""
+      ).trim();
+
+      if (savedDisplayName) {
+        welcomeName.textContent = `Hi, ${savedDisplayName}`;
+      } else {
+        welcomeName.textContent = "Ready to play?";
+      }
+    } else {
+      welcomeName.textContent = "Ready to play?";
+    }
+  }
+
+  const appNotificationButton =
+    document.getElementById("appNotificationButton");
+
+  const regularNotificationButton =
+    document.getElementById("notificationBell");
+
+  if (appNotificationButton) {
+    appNotificationButton.addEventListener("click", async () => {
+      if (!email) {
+        openAuthModal("login");
+        return;
+      }
+
+      /*
+       * Use the existing notification system.
+       * The original notification panel remains in the page,
+       * even though the website header is hidden.
+       */
+      const panel =
+        document.getElementById("notificationPanel");
+
+      if (panel) {
+        panel.classList.toggle("open");
+        await loadNotifications();
+      } else if (regularNotificationButton) {
+        regularNotificationButton.click();
+      }
+    });
+  }
+
+  const appAlertButton =
+    document.getElementById("appHomeAlertButton");
+
+  if (appAlertButton) {
+    appAlertButton.addEventListener("click", () => {
+      window.location.href = "/account.html#alerts";
+    });
+  }
+}
+
 function initNotificationBell() {
   const bell = document.getElementById("notificationBell");
   const panel = document.getElementById("notificationPanel");
@@ -2233,17 +3188,20 @@ if (analyticsLink) {
 
     }
 
-    renderNavState();
-    trackInitialHome();
-    initTCBanner();
-    initContactForm();
-    initHomeCourseAutocomplete();
-    maybeAutoOpenSignupFromQuery();
-    initSubscriberAlertModal();
-initNotificationBell();
-loadNotifications();
-tryShowAvailablePopupForSubscribedUser();
+   renderNavState();
+trackInitialHome();
+initTCBanner();
+initContactForm();
+initHomeCourseAutocomplete();
+maybeAutoOpenSignupFromQuery();
+initSubscriberAlertModal();
 
+initInstalledAppHome();
+initNotificationBell();
+
+loadNotifications();
+initHomeAlertCard();
+tryShowAvailablePopupForSubscribedUser();
 setInterval(loadNotifications, 60000);
 });
 </script>
