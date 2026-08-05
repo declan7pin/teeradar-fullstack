@@ -779,10 +779,15 @@ html.app-mode .app-bottom-link:active{
 
     <section class="card">
       <div class="pill">Add a friend</div>
-      <h2>Find a golfer</h2>
+<h2>Find a golf mate</h2>
 
       <div class="row">
-        <input id="friendSearch" type="email" placeholder="Search by email address" autocomplete="email" />
+        <input
+  id="friendSearch"
+  type="email"
+  placeholder="Enter their email address"
+  autocomplete="email"
+/>
         <button id="searchBtn">Search</button>
       </div>
 
@@ -805,6 +810,53 @@ html.app-mode .app-bottom-link:active{
     </section>
   </main>
 
+  <nav
+  class="app-bottom-nav"
+  aria-label="TeeRadar app navigation"
+>
+  <a
+    class="app-bottom-link"
+    href="/index.html"
+  >
+    <span class="app-bottom-link-icon">⌂</span>
+    <span>Home</span>
+  </a>
+
+  <a
+    class="app-bottom-link"
+    href="/book.html"
+  >
+    <span class="app-bottom-link-icon">⌕</span>
+    <span>Search</span>
+  </a>
+
+  <a
+    class="app-bottom-link app-bottom-play"
+    href="/my-rounds.html"
+  >
+    <span class="app-bottom-link-icon">⚑</span>
+    <span>Play</span>
+  </a>
+
+  <a
+    class="app-bottom-link active"
+    href="/friends.html"
+  >
+    <span class="app-bottom-link-icon">♟</span>
+    <span>Friends</span>
+  </a>
+
+  <a
+    class="app-bottom-link"
+    href="/account.html"
+  >
+    <span class="app-bottom-link-icon">●</span>
+    <span>Account</span>
+  </a>
+</nav>
+
+<script src="/config.js"></script>
+
   <script src="/config.js"></script>
   <script>
     const API_BASE =
@@ -820,6 +872,26 @@ html.app-mode .app-bottom-link:active{
     localStorage.getItem("teeradar_token") ||
     ""
   );
+}
+
+    async function playSocialHaptic(style = "light"){
+  try {
+    const haptics =
+      window.Capacitor?.Plugins?.Haptics;
+
+    if (!haptics) return;
+
+    const impactStyle =
+      style === "medium"
+        ? "MEDIUM"
+        : "LIGHT";
+
+    await haptics.impact({
+      style: impactStyle
+    });
+  } catch (error) {
+    // Haptics are optional.
+  }
 }
 
     function authHeaders(){
@@ -914,7 +986,8 @@ html.app-mode .app-bottom-link:active{
           body: JSON.stringify({ addresseeUserId })
         });
 
-        status.textContent = "Friend request sent.";
+        await playSocialHaptic("medium");
+status.textContent = "Friend request sent.";
         document.getElementById("searchResults").innerHTML = "";
         document.getElementById("friendSearch").value = "";
       } catch (err) {
@@ -953,11 +1026,13 @@ html.app-mode .app-bottom-link:active{
     async function acceptRequest(requestId){
       try {
         await apiFetch("/api/friends/accept", {
-          method: "POST",
-          body: JSON.stringify({ requestId })
-        });
+  method: "POST",
+  body: JSON.stringify({ requestId })
+});
 
-        await loadRequests();
+await playSocialHaptic("medium");
+
+await loadRequests();
         await loadFriends();
       } catch (err) {
         alert("Could not accept request: " + err.message);
@@ -975,8 +1050,26 @@ html.app-mode .app-bottom-link:active{
     const data = await apiFetch("/api/social/settings");
     const settings = data.settings || {};
 
-    nameInput.value = settings.display_name || "";
-    privacySelect.value = settings.profile_visibility || "friends";
+    const loadedDisplayName =
+  settings.display_name || "";
+
+nameInput.value = loadedDisplayName;
+privacySelect.value =
+  settings.profile_visibility || "friends";
+
+try {
+  if (loadedDisplayName) {
+    localStorage.setItem(
+      "teeradar_display_name",
+      loadedDisplayName
+    );
+  }
+} catch (error) {
+  console.warn(
+    "Could not cache display name:",
+    error
+  );
+}
   } catch (err) {
     if (status) status.textContent = "Could not load profile settings.";
   }
@@ -990,15 +1083,36 @@ async function saveSocialSettings(){
   try {
     status.textContent = "Saving...";
 
-    await apiFetch("/api/social/settings", {
-      method: "POST",
-      body: JSON.stringify({
-        display_name: nameInput.value.trim(),
-        profile_visibility: privacySelect.value
-      })
-    });
+    const displayName = nameInput.value.trim();
 
-    status.textContent = "Saved.";
+await apiFetch("/api/social/settings", {
+  method: "POST",
+  body: JSON.stringify({
+    display_name: displayName,
+    profile_visibility: privacySelect.value
+  })
+});
+
+try {
+  if (displayName) {
+    localStorage.setItem(
+      "teeradar_display_name",
+      displayName
+    );
+  } else {
+    localStorage.removeItem(
+      "teeradar_display_name"
+    );
+  }
+} catch (error) {
+  console.warn(
+    "Could not save display name locally:",
+    error
+  );
+}
+
+await playSocialHaptic("light");
+status.textContent = "Saved.";
     await loadFriendActivity();
     await loadFriends();
   } catch (err) {
@@ -1061,12 +1175,18 @@ async function loadFriendActivity(){
               <span>${escapeHtml(friend.email)}</span>
             </div>
             <div class="actions">
-            <button class="ghost" onclick="window.location.href='/friend-profile.html?userId=${Number(friend.friend_user_id)}'">
-              View Rounds & Stats
-            </button>
-            <button class="ghost" onclick="window.location.href='/shared-rounds.html?friendUserId=${Number(friend.friend_user_id)}'">
-            Shared Rounds
-            </button>
+            <button
+  class="ghost"
+  onclick="window.location.href='/friend-profile.html?userId=${Number(friend.friend_user_id)}'"
+>
+  Profile & stats
+</button>
+            <button
+  class="ghost"
+  onclick="window.location.href='/shared-rounds.html?friendUserId=${Number(friend.friend_user_id)}'"
+>
+  Shared rounds
+</button>
             </div>
           </div>
         `).join("");
@@ -1082,15 +1202,47 @@ async function loadFriendActivity(){
     });
 
     async function init(){
-      if (!getToken()) {
-        document.getElementById("searchStatus").textContent =
-          "Please log in before adding friends.";
-        document.getElementById("requestsList").innerHTML =
-          `<div class="empty">Login required.</div>`;
-        document.getElementById("friendsList").innerHTML =
-          `<div class="empty">Login required.</div>`;
-        return;
-      }
+     if (!getToken()) {
+  document.getElementById("searchStatus").innerHTML =
+    `Log in from the Account tab to add friends.`;
+
+  document.getElementById("activityList").innerHTML =
+    `<div class="empty">
+      Log in to see recent activity from your golf mates.
+    </div>`;
+
+  document.getElementById("requestsList").innerHTML =
+    `<div class="empty">
+      Log in to view and accept friend requests.
+    </div>`;
+
+  document.getElementById("friendsList").innerHTML =
+    `<div class="empty">
+      Log in to build your TeeRadar friends list.
+    </div>`;
+
+  const saveButton =
+    document.getElementById("saveSocialBtn");
+
+  const searchButton =
+    document.getElementById("searchBtn");
+
+  if (saveButton) {
+    saveButton.textContent = "Open account";
+    saveButton.onclick = () => {
+      window.location.href = "/account.html";
+    };
+  }
+
+  if (searchButton) {
+    searchButton.textContent = "Log in";
+    searchButton.onclick = () => {
+      window.location.href = "/account.html";
+    };
+  }
+
+  return;
+}
 
       await loadSocialSettings();
 await loadFriendActivity();
