@@ -4153,9 +4153,46 @@ function enablePremiumMode(round, metaPars, metaDists, teeName){
       }
 
       // last player -> next hole
-      premiumPlayerIndex = 0;
-      premiumHoleIndex = Math.min(holesCount - 1, premiumHoleIndex + 1);
-      renderPremiumForHole(round, metaPars, metaDists, teeName);
+      /*
+ * The final player on the final hole has completed the round.
+ */
+if (
+  premiumHoleIndex >= holesCount - 1 &&
+  premiumPlayerIndex >= pc - 1
+) {
+  playScoreHaptic("medium");
+
+  const shouldSave =
+    confirm(
+      "You have completed the final hole. Save this round now?"
+    );
+
+  if (shouldSave) {
+    saveRoundAll().catch((error) => {
+      setToast(
+        rightToast,
+        "Save failed: " + (error?.message || "error"),
+        false
+      );
+    });
+  }
+
+  return;
+}
+
+premiumPlayerIndex = 0;
+premiumHoleIndex =
+  Math.min(
+    holesCount - 1,
+    premiumHoleIndex + 1
+  );
+
+renderPremiumForHole(
+  round,
+  metaPars,
+  metaDists,
+  teeName
+);
     };
   }
 
