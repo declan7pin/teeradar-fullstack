@@ -2,8 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TeeRadar — Friends</title>
+  <meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+/>
+
+<script>
+  try {
+    const runningInsideApp =
+      window.Capacitor &&
+      typeof window.Capacitor.isNativePlatform === "function" &&
+      window.Capacitor.isNativePlatform();
+
+    if (runningInsideApp) {
+      document.documentElement.classList.add("app-mode");
+    }
+  } catch (error) {
+    console.warn("Capacitor app detection failed:", error);
+  }
+</script>
+
+<title>TeeRadar — Friends</title>
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
 
   <style>
@@ -21,6 +40,10 @@
     }
 
     *{box-sizing:border-box}
+    .app-friends-header,
+.app-bottom-nav {
+  display:none;
+}
 
     body{
       margin:0;
@@ -194,15 +217,507 @@ select{
         width:100%;
       }
     }
+    /* =========================================================
+   FRIENDS — INSTALLED APP DESIGN
+   Only applies inside the Capacitor app
+   ========================================================= */
+
+html.app-mode,
+html.app-mode body{
+  width:100%;
+  min-height:100%;
+  background:#f2f6f7;
+  color:#10212a;
+}
+
+html.app-mode body{
+  padding-bottom:
+    calc(94px + env(safe-area-inset-bottom, 0px));
+}
+
+/* App header */
+
+html.app-mode .app-friends-header{
+  position:sticky;
+  top:0;
+  z-index:500;
+
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 12px)
+    16px
+    12px;
+
+  background:rgba(242,246,247,.95);
+  border-bottom:1px solid rgba(210,222,227,.9);
+
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+}
+
+.app-friends-header-copy{
+  min-width:0;
+}
+
+.app-friends-header-copy span{
+  display:block;
+  margin-bottom:2px;
+
+  color:#6b7c85;
+
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+
+.app-friends-header-copy h1{
+  margin:0;
+
+  color:#10212a;
+
+  font-size:23px;
+  font-weight:950;
+  line-height:1.1;
+  letter-spacing:-.03em;
+}
+
+.app-friends-account{
+  display:grid;
+  place-items:center;
+
+  width:43px;
+  height:43px;
+  flex:0 0 43px;
+
+  border:1px solid #dce7e9;
+  border-radius:15px;
+
+  background:#fff;
+  color:#00796b;
+
+  font-size:20px;
+  text-decoration:none;
+
+  box-shadow:0 6px 18px rgba(21,50,60,.08);
+}
+
+/* Main page */
+
+html.app-mode .wrap{
+  width:100%;
+  max-width:760px;
+
+  margin:0 auto;
+  padding:14px 14px 24px;
+}
+
+/* Hide website return button */
+
+html.app-mode .website-return-home{
+  display:none !important;
+}
+
+/* Hero becomes an app dashboard card */
+
+html.app-mode .hero{
+  position:relative;
+  overflow:hidden;
+
+  margin-bottom:14px;
+  padding:21px;
+
+  border-radius:24px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #061d2b,
+      #00796b
+    );
+
+  box-shadow:0 15px 34px rgba(0,121,107,.2);
+}
+
+html.app-mode .hero::after{
+  content:"";
+
+  position:absolute;
+  top:-60px;
+  right:-60px;
+
+  width:190px;
+  height:190px;
+
+  border-radius:50%;
+
+  background:rgba(255,255,255,.07);
+}
+
+html.app-mode .hero h1{
+  position:relative;
+  z-index:1;
+
+  margin-bottom:7px;
+
+  font-size:27px;
+  font-weight:950;
+  letter-spacing:-.035em;
+}
+
+html.app-mode .hero p{
+  position:relative;
+  z-index:1;
+
+  max-width:390px;
+
+  font-size:13px;
+  line-height:1.45;
+}
+
+/* Cards */
+
+html.app-mode .card{
+  margin-bottom:12px;
+  padding:17px;
+
+  border:1px solid #dfe8eb;
+  border-radius:22px;
+
+  background:#fff;
+
+  box-shadow:0 8px 23px rgba(21,50,60,.06);
+}
+
+html.app-mode .card h2,
+html.app-mode h2{
+  margin:0 0 12px;
+
+  color:#10212a;
+
+  font-size:17px;
+  font-weight:950;
+  letter-spacing:-.02em;
+}
+
+/* Form controls */
+
+html.app-mode .row{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:10px;
+}
+
+html.app-mode input,
+html.app-mode select{
+  width:100%;
+  min-height:50px;
+
+  padding:11px 13px;
+
+  border:1px solid #d7e2e5;
+  border-radius:14px;
+
+  background:#f8fafb;
+  color:#10212a;
+
+  font-size:16px;
+
+  outline:none;
+}
+
+html.app-mode input:focus,
+html.app-mode select:focus{
+  border-color:#00796b;
+  background:#fff;
+
+  box-shadow:0 0 0 4px rgba(0,121,107,.1);
+}
+
+html.app-mode button{
+  min-height:46px;
+
+  padding:10px 14px;
+
+  border-radius:14px;
+
+  font-size:13px;
+  font-weight:900;
+}
+
+html.app-mode .row button{
+  width:100%;
+}
+
+/* Status messages */
+
+html.app-mode .status{
+  margin-top:9px;
+
+  font-size:11px;
+  font-weight:750;
+  line-height:1.4;
+}
+
+/* Add-friend pill */
+
+html.app-mode .pill{
+  margin-bottom:8px;
+  padding:6px 9px;
+
+  font-size:10px;
+  font-weight:900;
+}
+
+/* Friend and activity cards */
+
+html.app-mode .list{
+  gap:9px;
+}
+
+html.app-mode .friend{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+
+  padding:15px;
+
+  border:1px solid #dfe8eb;
+  border-radius:18px;
+
+  background:#fff;
+
+  box-shadow:0 6px 18px rgba(21,50,60,.04);
+}
+
+html.app-mode .friend strong{
+  color:#10212a;
+
+  font-size:14px;
+  font-weight:950;
+  line-height:1.25;
+}
+
+html.app-mode .friend span{
+  margin-top:4px;
+
+  color:#6b7c85;
+
+  font-size:11px;
+  line-height:1.4;
+}
+
+html.app-mode .actions{
+  display:grid;
+  grid-template-columns:1fr;
+
+  gap:8px;
+
+  margin-top:12px;
+}
+
+html.app-mode .actions button{
+  width:100%;
+}
+
+html.app-mode .empty{
+  padding:13px;
+
+  border-radius:14px;
+
+  background:#f8fafb;
+  color:#71818a;
+
+  font-size:11px;
+  line-height:1.4;
+}
+
+/* Activity heading row */
+
+html.app-mode .activity-heading-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+
+  margin-bottom:12px;
+}
+
+html.app-mode .activity-heading-row h2{
+  margin:0;
+}
+
+html.app-mode .activity-heading-row button{
+  width:auto;
+  min-height:40px;
+
+  padding:8px 11px;
+
+  font-size:11px;
+}
+
+/* Bottom app navigation */
+
+html.app-mode .app-bottom-nav{
+  position:fixed;
+  right:0;
+  bottom:0;
+  left:0;
+  z-index:5000;
+
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  align-items:end;
+
+  width:100%;
+  max-width:760px;
+  min-height:78px;
+
+  margin:0 auto;
+
+  padding:
+    7px
+    6px
+    calc(env(safe-area-inset-bottom, 0px) + 7px);
+
+  border-top:1px solid rgba(210,222,227,.95);
+
+  background:rgba(255,255,255,.96);
+
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+
+  box-shadow:0 -8px 25px rgba(21,50,60,.08);
+}
+
+.app-bottom-link{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+
+  min-width:0;
+  min-height:56px;
+
+  color:#7a8a92;
+
+  font-size:10px;
+  font-weight:800;
+  text-decoration:none;
+}
+
+.app-bottom-link-icon{
+  font-size:21px;
+  line-height:1;
+}
+
+.app-bottom-link.active{
+  color:#00796b;
+}
+
+.app-bottom-play{
+  transform:translateY(-15px);
+}
+
+.app-bottom-play .app-bottom-link-icon{
+  display:grid;
+  place-items:center;
+
+  width:58px;
+  height:58px;
+
+  border:5px solid #f2f6f7;
+  border-radius:50%;
+
+  background:linear-gradient(135deg,#00796b,#005e55);
+  color:#fff;
+
+  font-size:25px;
+
+  box-shadow:0 10px 24px rgba(0,121,107,.3);
+}
+
+.app-bottom-play span:last-child{
+  margin-top:-2px;
+}
+
+/* Tap feedback */
+
+html.app-mode button:active,
+html.app-mode .friend:active,
+html.app-mode .app-friends-account:active,
+html.app-mode .app-bottom-link:active{
+  transform:scale(.98);
+}
+
+/* iPad layout */
+
+@media(min-width:700px){
+  html.app-mode .wrap{
+    padding:20px 22px 30px;
+  }
+
+  html.app-mode .row{
+    grid-template-columns:1fr 180px auto;
+  }
+
+  html.app-mode .row button{
+    width:auto;
+    min-width:110px;
+  }
+
+  html.app-mode .friend{
+    flex-direction:row;
+    align-items:center;
+  }
+
+  html.app-mode .friend > div:first-child{
+    flex:1;
+    min-width:0;
+  }
+
+  html.app-mode .actions{
+    display:flex;
+    flex-wrap:wrap;
+
+    margin-top:0;
+  }
+
+  html.app-mode .actions button{
+    width:auto;
+  }
+}
   </style>
 </head>
 
 <body>
+
+  <header class="app-friends-header">
+    <div class="app-friends-header-copy">
+      <span>TeeRadar social</span>
+      <h1>Friends</h1>
+    </div>
+
+    <a
+      class="app-friends-account"
+      href="/account.html"
+      aria-label="Open account"
+    >
+      ●
+    </a>
+  </header>
+
   <main class="wrap">
 
     <a
-      href="/index.html"
-      style="
+  class="website-return-home"
+  href="/index.html"
+  style="
         display:flex;
         align-items:center;
         justify-content:center;
@@ -223,12 +738,16 @@ select{
       ← Return Home
     </a>
 <section class="hero">
-      <h1>Friends</h1>
-      <p>Add golf mates, share upcoming rounds, compare scorecards, and view each other’s stats.</p>
-    </section>
+  <h1>Golf is better with mates.</h1>
+
+  <p>
+    Add friends, share upcoming rounds, compare scorecards and
+    follow each other’s golf progress.
+  </p>
+</section>
     
     <section class="card">
-  <h2>Your social profile</h2>
+  <h2>Your profile</h2>
 
   <div class="row">
     <input id="displayNameInput" type="text" placeholder="Display name e.g. John" maxlength="40" />
@@ -246,8 +765,8 @@ select{
 </section>
 
 <section class="card">
-  <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px;">
-    <h2 style="margin:0;">Friend activity</h2>
+  <div class="activity-heading-row">
+    <h2>Friend activity</h2>
     <button class="ghost" type="button" onclick="window.location.href='/friend-activity.html'">
       View full feed
     </button>
