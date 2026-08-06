@@ -1704,6 +1704,44 @@ html.app-mode .app-bottom-nav
   transform: scale(0.97);
 }
 
+    .app-home-footer{
+  margin:34px 0 10px;
+  padding:22px 0 calc(8px + env(safe-area-inset-bottom,0px));
+  border-top:1px solid #e5e7eb;
+  text-align:center;
+}
+
+.app-home-footer-copy{
+  font-size:12px;
+  color:#94a3b8;
+  font-weight:600;
+  margin-bottom:8px;
+  letter-spacing:.03em;
+}
+
+.app-home-footer-links{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+  font-size:12px;
+}
+
+.app-home-footer-links a{
+  color:#64748b;
+  text-decoration:none;
+  font-weight:700;
+  transition:color .2s;
+}
+
+.app-home-footer-links a:hover{
+  color:#00796b;
+}
+
+.app-home-footer-links span{
+  color:#cbd5e1;
+} 
 /* Better spacing on iPad */
 
 @media (min-width: 700px) {
@@ -1952,8 +1990,23 @@ html.app-mode .app-bottom-nav
       >
         Create a scorecard
       </button>
-    </section>
+        </section>
+
+    <div class="app-home-footer">
+
+  <div class="app-home-footer-copy">
+    © 2026 TeeRadar
   </div>
+
+  <div class="app-home-footer-links">
+    <a href="/terms.html">Terms</a>
+    <span>•</span>
+    <a href="/privacy.html">Privacy</a>
+    <span>•</span>
+    <a href="/refunds.html">Refunds</a>
+  </div>
+
+</div>
 </section>
 
 <!-- INSTALLED APP BOTTOM NAVIGATION -->
