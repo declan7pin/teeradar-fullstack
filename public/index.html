@@ -1987,27 +1987,29 @@ html.app-mode .app-bottom-nav
       </button>
     </div>
 
-    <section class="app-upcoming-card">
-      <div class="app-upcoming-empty">
-        <div class="app-upcoming-icon">📅</div>
+    <section class="app-upcoming-card" id="appUpcomingCard">
+  <div class="app-upcoming-empty">
+    <div class="app-upcoming-icon">📅</div>
 
-        <div class="app-upcoming-copy">
-          <strong>No upcoming round scheduled</strong>
-          <span>
-            Create a scorecard or find a tee time to plan your
-            next round.
-          </span>
-        </div>
-      </div>
+    <div class="app-upcoming-copy">
+      <strong id="appUpcomingTitle">
+        Loading upcoming round…
+      </strong>
 
-      <button
-        class="app-upcoming-button"
-        type="button"
-        onclick="window.location.href='/my-rounds.html'"
-      >
-        Create a scorecard
-      </button>
-        </section>
+      <span id="appUpcomingDetails">
+        Checking your TeeRadar rounds.
+      </span>
+    </div>
+  </div>
+
+  <button
+    class="app-upcoming-button"
+    id="appUpcomingButton"
+    type="button"
+  >
+    View rounds
+  </button>
+</section>
 
     <div class="app-home-footer">
 
@@ -3238,6 +3240,192 @@ async function markAllNotificationsRead() {
   await loadNotifications();
 }
 
+  function formatUpcomingRoundDate(dateValue) {
+  if (!dateValue) return "";
+
+  const date = new Date(`${String(dateValue).slice(0, 10)}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(dateValue);
+  }
+
+  return date.toLocaleDateString("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
+}
+
+function getUpcomingRoundTimestamp(round) {
+  const datePart =
+    String(round?.play_date || "").slice(0, 10);
+
+  const timePart =
+    String(round?.tee_time || "")
+      .split("|")[0]
+      .trim();
+
+  if (!datePart) return Number.MAX_SAFE_INTEGER;
+
+  const value = timePart
+    ? `${datePart}T${timePart}:00`
+    : `${datePart}T23:59:59`;
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? Number.MAX_SAFE_INTEGER
+    : date.getTime();
+}
+
+async function loadAppUpcomingRound() {
+  const title =
+    document.getElementById("appUpcomingTitle");
+
+  const details =
+    document.getElementById("appUpcomingDetails");
+
+  const button =
+    document.getElementById("appUpcomingButton");
+
+  if (!title || !details || !button) return;
+
+  const email = (
+    localStorage.getItem("teeradar_user_email") || ""
+  ).trim();
+
+  const token =
+    localStorage.getItem("teeradar_jwt") || "";
+
+  if (!email || !token) {
+    title.textContent = "No upcoming round scheduled";
+
+    details.textContent =
+      "Log in to view your upcoming rounds and shared games.";
+
+    button.textContent = "Log in";
+
+    button.onclick = () => {
+      openAuthModal("login");
+    };
+
+    return;
+  }
+
+  title.textContent = "Loading upcoming round…";
+  details.textContent = "Checking your TeeRadar rounds.";
+  button.textContent = "View rounds";
+
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/shared-rounds/upcoming?includeShared=1`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const data =
+      await response.json().catch(() => ({}));
+
+    if (!response.ok || !data?.ok) {
+      throw new Error(
+        data?.error || "upcoming_rounds_failed"
+      );
+    }
+
+    const rounds =
+      Array.isArray(data.rounds)
+        ? data.rounds
+        : [];
+
+    const now = Date.now();
+
+    const upcoming = rounds
+      .filter((round) => {
+        return getUpcomingRoundTimestamp(round) >= now;
+      })
+      .sort((a, b) => {
+        return (
+          getUpcomingRoundTimestamp(a) -
+          getUpcomingRoundTimestamp(b)
+        );
+      });
+
+    if (!upcoming.length) {
+      title.textContent = "No upcoming round scheduled";
+
+      details.textContent =
+        "Create a round or find a tee time to plan your next game.";
+
+      button.textContent = "Create a round";
+
+      button.onclick = () => {
+        window.location.href = "/my-rounds.html";
+      };
+
+      return;
+    }
+
+    const round = upcoming[0];
+
+    const course =
+      String(round.course || "Upcoming round");
+
+    const dateLabel =
+      formatUpcomingRoundDate(round.play_date);
+
+    const timeLabel =
+      String(round.tee_time || "")
+        .split("|")[0]
+        .trim();
+
+    const holes =
+      Number(round.holes || 18);
+
+    const sharedLabel =
+      round.is_shared && round.owner_name
+        ? ` • Shared by ${round.owner_name}`
+        : "";
+
+    title.textContent = course;
+
+    details.textContent = [
+      dateLabel,
+      timeLabel || "Time TBC",
+      `${holes} holes`
+    ]
+      .filter(Boolean)
+      .join(" • ") + sharedLabel;
+
+    button.textContent = "Start scorecard";
+
+    button.onclick = () => {
+      window.location.href =
+        `/my-rounds.html?startUpcomingId=${encodeURIComponent(round.id)}`;
+    };
+  } catch (error) {
+    console.warn(
+      "loadAppUpcomingRound failed:",
+      error
+    );
+
+    title.textContent = "Could not load upcoming round";
+
+    details.textContent =
+      "Tap below to view your rounds directly.";
+
+    button.textContent = "View rounds";
+
+    button.onclick = () => {
+      window.location.href = "/my-rounds.html";
+    };
+  }
+}
+
   function initInstalledAppHome() {
   const isAppMode =
     document.documentElement.classList.contains("app-mode");
@@ -3384,6 +3572,8 @@ initSubscriberAlertModal();
 
 initInstalledAppHome();
 initNotificationBell();
+
+await loadAppUpcomingRound();
 
 loadNotifications();
 initHomeAlertCard();
