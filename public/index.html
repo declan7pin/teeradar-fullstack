@@ -8,7 +8,10 @@
   content="width=device-width, initial-scale=1, viewport-fit=cover"
 />
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
- <script>
+
+<script src="/capacitor.js"></script>
+
+<script>
   try {
     if (sessionStorage.getItem("teeradar_app_splash_seen") === "1") {
       document.documentElement.classList.add("skip-app-splash");
@@ -1034,7 +1037,7 @@
     left:0;
     margin:auto;
   }
- @media(max-width:700px){
+
   .header-actions{
     display:flex !important;
     align-items:center !important;
@@ -1579,28 +1582,32 @@ html.app-mode .app-home {
 /* Bottom app navigation */
 
 html.app-mode .app-bottom-nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 99999;
+  position: fixed !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  z-index: 100000 !important;
 
-  display: grid;
+  display: grid !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  align-items: center;
+  align-items: end;
 
   width: 100%;
   max-width: 760px;
-  height: calc(74px + env(safe-area-inset-bottom, 0px));
+  min-height: 78px;
+  height: auto;
 
   margin: 0 auto;
 
   padding:
-    5px
+    7px
     6px
-    env(safe-area-inset-bottom, 0px);
+    calc(env(safe-area-inset-bottom, 0px) + 7px);
 
-  border-top: 1px solid #d7e2e5;
+  border-top: 1px solid rgba(210, 222, 227, 0.95);
 
   background: rgba(255, 255, 255, 0.98);
 
