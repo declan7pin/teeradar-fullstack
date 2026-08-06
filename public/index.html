@@ -1956,6 +1956,23 @@ html.app-mode .app-bottom-nav
           Review your favourite-course alerts.
         </span>
       </button>
+      <button
+  class="app-action-card"
+  id="appAnalyticsCard"
+  type="button"
+  onclick="window.location.href='/analytics.html'"
+  style="display:none;"
+>
+  <span class="app-action-icon">📊</span>
+
+  <span class="app-action-title">
+    Analytics
+  </span>
+
+  <span class="app-action-description">
+    View users, searches, bookings and app performance.
+  </span>
+</button>
     </div>
 
     <div class="app-section-header">
@@ -2341,8 +2358,9 @@ function runAppSplashOnce(){
 
   function renderNavState() {
   const analyticsLink = document.getElementById("navAnalytics");
-  const loginBtn = document.getElementById("navLoginBtn");
-  const roundsLink = document.getElementById("navMyRounds");
+const appAnalyticsCard = document.getElementById("appAnalyticsCard");
+const loginBtn = document.getElementById("navLoginBtn");
+const roundsLink = document.getElementById("navMyRounds");
   if (!loginBtn) return;
 
   const email = localStorage.getItem("teeradar_user_email");
@@ -2350,8 +2368,14 @@ function runAppSplashOnce(){
   // ✅ My Rounds is always visible now
   if (roundsLink) roundsLink.style.display = "inline-flex";
 
-  // ✅ Default: hide gated links
-  if (analyticsLink) analyticsLink.style.display = "none";
+  // Hide admin analytics by default
+if (analyticsLink) {
+  analyticsLink.style.display = "none";
+}
+
+if (appAnalyticsCard) {
+  appAnalyticsCard.style.display = "none";
+}
 
   // Logged out
   if (!email) {
@@ -2360,9 +2384,17 @@ function runAppSplashOnce(){
     return;
   }
 
-  if (analyticsLink && email === ADMIN_EMAIL) {
+  if (email === ADMIN_EMAIL) {
+
+  if (analyticsLink) {
     analyticsLink.style.display = "inline-flex";
   }
+
+  if (appAnalyticsCard) {
+    appAnalyticsCard.style.display = "flex";
+  }
+
+}
 
   loginBtn.textContent = "My account";
   loginBtn.onclick = () => {
