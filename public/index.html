@@ -1649,6 +1649,13 @@ html.app-mode .app-bottom-nav .app-bottom-link {
   line-height: 1;
 }
 
+    /* Keep bottom navigation hidden while startup splash is running */
+html.app-mode:not(.app-ready) .app-bottom-nav {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
   html.app-mode .app-bottom-nav .app-bottom-link.active {
   color: #00796b;
 }
@@ -3244,7 +3251,13 @@ function initNotificationBell() {
   window.addEventListener("load", async () => {
   await runAppSplashOnce();
 
-    const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+  /*
+   * The splash has now completely finished.
+   * Allow the installed-app bottom menu to appear.
+   */
+  document.documentElement.classList.add("app-ready");
+
+  const mobileMenuBtn = document.getElementById("mobileMenuBtn");
     const mainNav = document.getElementById("mainNav");
 
     if (mobileMenuBtn && mainNav) {
