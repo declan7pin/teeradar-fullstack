@@ -1739,7 +1739,9 @@ const pushStatus = document.getElementById("pushStatus");
       localStorage.removeItem("teeradar_pref_party_size");
       localStorage.removeItem("teeradar_alert_frequency");
       localStorage.removeItem("tr_user");
-      window.location.href = "/index.html";
+localStorage.removeItem("teeradar_display_name");
+
+window.location.href = "/index.html";
     });
   }
 
@@ -3500,6 +3502,18 @@ if (gamesStatus) {
     gamesStatus.className = "status err";
   }
 }
+}
+
+  if (refreshGamesBtn) {
+  refreshGamesBtn.addEventListener("click", async () => {
+    refreshGamesBtn.disabled = true;
+
+    try {
+      await loadMyGames();
+    } finally {
+      refreshGamesBtn.disabled = false;
+    }
+  });
 }
 
 if (togglePreviousGamesBtn) {
