@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <title>TeeRadar — My account</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+/>
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
 
   <style>
@@ -19,6 +22,11 @@
       --pill: #ecfeff;
     }
     * { box-sizing: border-box; }
+    .app-account-header,
+.app-bottom-nav,
+.app-profile-summary {
+  display: none;
+}
     html, body {
       margin: 0;
       padding: 0;
@@ -566,10 +574,605 @@ input[type="date"] {
     .day-choices input[type="checkbox"] {
       margin:0;
     }
+    /* =========================================================
+   ACCOUNT — INSTALLED APP DESIGN
+   Only applies when html has the app-mode class
+   ========================================================= */
+
+html.app-mode,
+html.app-mode body {
+  width: 100%;
+  min-height: 100%;
+  background: #f2f6f7;
+  color: #10212a;
+}
+
+html.app-mode body {
+  padding-bottom:
+    calc(94px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Hide the website navigation inside the installed app */
+
+html.app-mode .website-account-header {
+  display: none;
+}
+
+/* Native-style account header */
+
+html.app-mode .app-account-header {
+  position: sticky;
+  top: 0;
+  z-index: 500;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 12px)
+    16px
+    12px;
+
+  background: rgba(242, 246, 247, 0.95);
+  border-bottom: 1px solid rgba(210, 222, 227, 0.9);
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.app-account-header-copy span {
+  display: block;
+  margin-bottom: 2px;
+
+  color: #6b7c85;
+
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.app-account-header-copy h1 {
+  margin: 0;
+
+  color: #10212a;
+
+  font-size: 23px;
+  font-weight: 950;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.app-account-home {
+  display: grid;
+  place-items: center;
+
+  width: 43px;
+  height: 43px;
+  flex: 0 0 43px;
+
+  border: 1px solid #dce7e9;
+  border-radius: 15px;
+
+  background: #ffffff;
+  color: #00796b;
+
+  font-size: 20px;
+  text-decoration: none;
+
+  box-shadow: 0 6px 18px rgba(21, 50, 60, 0.08);
+}
+
+/* Main account layout */
+
+html.app-mode main {
+  width: 100%;
+  max-width: 760px;
+
+  margin: 0 auto;
+  padding: 14px 14px 28px;
+}
+
+html.app-mode main > h1,
+html.app-mode main > .muted {
+  display: none;
+}
+
+/* Profile summary */
+
+html.app-mode .app-profile-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  margin-bottom: 14px;
+  padding: 18px;
+
+  border-radius: 23px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #061d2b,
+      #00796b
+    );
+
+  color: #ffffff;
+
+  box-shadow: 0 15px 34px rgba(0, 121, 107, 0.2);
+}
+
+.app-profile-avatar {
+  display: grid;
+  place-items: center;
+
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 19px;
+
+  background: rgba(255, 255, 255, 0.14);
+
+  font-size: 25px;
+}
+
+.app-profile-copy {
+  min-width: 0;
+}
+
+.app-profile-copy strong {
+  display: block;
+
+  overflow: hidden;
+
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.2;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-profile-copy span {
+  display: block;
+
+  overflow: hidden;
+
+  margin-top: 4px;
+
+  color: rgba(255, 255, 255, 0.78);
+
+  font-size: 11px;
+  font-weight: 700;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Cards */
+
+html.app-mode .card {
+  margin-bottom: 12px;
+  padding: 17px;
+
+  border: 1px solid #dfe8eb;
+  border-radius: 22px;
+
+  background: #ffffff;
+
+  box-shadow: 0 8px 23px rgba(21, 50, 60, 0.06);
+}
+
+html.app-mode .card h2 {
+  margin: 0 0 7px;
+
+  color: #10212a;
+
+  font-size: 17px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+}
+
+html.app-mode .card p {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* Inputs */
+
+html.app-mode label {
+  margin: 14px 0 6px;
+
+  color: #53656e;
+
+  font-size: 11px;
+  font-weight: 850;
+}
+
+html.app-mode select,
+html.app-mode input[type="text"],
+html.app-mode input[type="time"],
+html.app-mode input[type="number"],
+html.app-mode input[type="date"] {
+  width: 100%;
+  min-height: 50px;
+
+  margin-bottom: 10px;
+  padding: 11px 13px;
+
+  border: 1px solid #d7e2e5;
+  border-radius: 14px;
+
+  background: #f8fafb;
+  color: #10212a;
+
+  font-size: 16px;
+
+  outline: none;
+}
+
+html.app-mode select:focus,
+html.app-mode input:focus {
+  border-color: #00796b;
+  background: #ffffff;
+
+  box-shadow: 0 0 0 4px rgba(0, 121, 107, 0.1);
+}
+
+/* Buttons */
+
+html.app-mode .row-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+
+  gap: 8px;
+}
+
+html.app-mode .btn-primary,
+html.app-mode .btn-secondary,
+html.app-mode .btn-danger {
+  width: 100%;
+  min-height: 49px;
+
+  margin: 0;
+  padding: 11px 14px;
+
+  border-radius: 15px;
+
+  font-size: 13px;
+  font-weight: 900;
+}
+
+/* Plan pill */
+
+html.app-mode .pill {
+  margin-top: 13px;
+  padding: 7px 10px;
+
+  font-size: 10px;
+  font-weight: 850;
+}
+
+/* Favourite course chips */
+
+html.app-mode .fav-list {
+  gap: 7px;
+  margin-top: 10px;
+}
+
+html.app-mode .fav-item {
+  min-height: 34px;
+
+  padding: 7px 10px;
+
+  border-radius: 12px;
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+/* Autocomplete becomes an app menu */
+
+html.app-mode .autocomplete-list {
+  margin-top: 6px;
+
+  overflow-y: auto;
+
+  max-height: 260px;
+
+  border: 1px solid #d7e2e5;
+  border-radius: 16px;
+
+  box-shadow: 0 16px 36px rgba(21, 50, 60, 0.16);
+}
+
+html.app-mode .autocomplete-item {
+  min-height: 48px;
+  padding: 10px 12px;
+
+  font-size: 13px;
+  font-weight: 750;
+}
+
+/* Day selectors */
+
+html.app-mode .day-choices {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  gap: 7px;
+}
+
+html.app-mode .day-choices label {
+  justify-content: center;
+
+  min-height: 40px;
+
+  margin: 0;
+  padding: 8px 5px;
+
+  border: 1px solid #dce7e9;
+  border-radius: 12px;
+
+  background: #f8fafb;
+
+  font-size: 10px;
+}
+
+/* Games */
+
+html.app-mode .games-grid {
+  gap: 10px;
+}
+
+html.app-mode .game-card {
+  padding: 15px;
+
+  border-radius: 18px;
+
+  background: #ffffff;
+
+  box-shadow: 0 6px 18px rgba(21, 50, 60, 0.04);
+}
+
+html.app-mode .game-title {
+  font-size: 15px;
+  font-weight: 950;
+}
+
+html.app-mode .game-meta {
+  font-size: 11px;
+}
+
+html.app-mode .game-pill {
+  padding: 6px 8px;
+
+  font-size: 9px;
+  font-weight: 800;
+}
+
+html.app-mode .game-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+
+  gap: 8px;
+}
+
+html.app-mode .game-actions button {
+  width: 100%;
+  min-height: 46px;
+}
+
+/* Empty and blocked states */
+
+html.app-mode .empty-state {
+  padding: 13px;
+
+  border-radius: 14px;
+
+  background: #f8fafb;
+
+  font-size: 11px;
+}
+
+html.app-mode .blocked {
+  padding: 13px;
+
+  border-radius: 15px;
+
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* Modal bottom sheets */
+
+html.app-mode .modal-backdrop {
+  align-items: flex-end;
+
+  padding:
+    12px
+    12px
+    calc(env(safe-area-inset-bottom, 0px) + 12px);
+}
+
+html.app-mode .modal-card {
+  position: relative;
+
+  width: 100%;
+  max-width: 760px;
+  max-height: 88vh;
+
+  overflow-y: auto;
+
+  padding: 25px 17px 18px;
+
+  border-radius: 27px 27px 20px 20px;
+}
+
+html.app-mode .modal-card::before {
+  content: "";
+
+  position: absolute;
+  top: 8px;
+  left: 50%;
+
+  width: 43px;
+  height: 5px;
+
+  border-radius: 999px;
+
+  background: #d5dde0;
+
+  transform: translateX(-50%);
+}
+
+html.app-mode .modal-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+
+  gap: 8px;
+}
+
+/* Bottom navigation */
+
+html.app-mode .app-bottom-nav {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 5000;
+
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+
+  width: 100%;
+  max-width: 760px;
+  min-height: 78px;
+
+  margin: 0 auto;
+
+  padding:
+    7px
+    6px
+    calc(env(safe-area-inset-bottom, 0px) + 7px);
+
+  border-top: 1px solid rgba(210, 222, 227, 0.95);
+
+  background: rgba(255, 255, 255, 0.96);
+
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+
+  box-shadow: 0 -8px 25px rgba(21, 50, 60, 0.08);
+}
+
+.app-bottom-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+
+  min-width: 0;
+  min-height: 56px;
+
+  color: #7a8a92;
+
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.app-bottom-link-icon {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.app-bottom-link.active {
+  color: #00796b;
+}
+
+.app-bottom-play {
+  transform: translateY(-15px);
+}
+
+.app-bottom-play .app-bottom-link-icon {
+  display: grid;
+  place-items: center;
+
+  width: 58px;
+  height: 58px;
+
+  border: 5px solid #f2f6f7;
+  border-radius: 50%;
+
+  background: linear-gradient(135deg, #00796b, #005e55);
+  color: #ffffff;
+
+  font-size: 25px;
+
+  box-shadow: 0 10px 24px rgba(0, 121, 107, 0.3);
+}
+
+.app-bottom-play span:last-child {
+  margin-top: -2px;
+}
+
+/* Tap response */
+
+html.app-mode button:active,
+html.app-mode .app-bottom-link:active,
+html.app-mode .app-account-home:active {
+  transform: scale(0.98);
+}
+
+/* iPad */
+
+@media (min-width: 700px) {
+  html.app-mode main {
+    padding: 20px 22px 30px;
+  }
+
+  html.app-mode .row-actions {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  html.app-mode .row-actions button {
+    width: auto;
+  }
+
+  html.app-mode .game-actions {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  html.app-mode .game-actions button {
+    width: auto;
+  }
+
+  html.app-mode .day-choices {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  html.app-mode .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  html.app-mode .modal-actions button {
+    width: auto;
+  }
+}
   </style>
 </head>
 <body>
-<header>
+<header class="website-account-header">
   <div class="nav-wrap">
     <div class="brand">
   <div class="brand-text">TeeRadar</div>
@@ -584,11 +1187,40 @@ input[type="date"] {
   </div>
 </header>
 
+  <header class="app-account-header">
+  <div class="app-account-header-copy">
+    <span>TeeRadar settings</span>
+    <h1>Account</h1>
+  </div>
+
+  <a
+    class="app-account-home"
+    href="/index.html"
+    aria-label="Return to home"
+  >
+    ⌂
+  </a>
+</header>
+
 <main>
   <h1>My account</h1>
   <p class="muted">
     Set your default state and favourite courses. Your subscription is managed securely via Stripe.
   </p>
+
+  <section class="app-profile-summary" id="appProfileSummary">
+  <div class="app-profile-avatar">
+    👤
+  </div>
+
+  <div class="app-profile-copy">
+    <strong id="appProfileName">
+      TeeRadar golfer
+    </strong>
+
+    <span id="appProfileEmail"></span>
+  </div>
+</section>
 
   <div id="notLoggedIn" class="blocked" style="display:none;">
     You’re not logged in. Please go back to the home page and log in first, then return to this page.
@@ -596,7 +1228,7 @@ input[type="date"] {
 
   <div id="accountContent" style="display:none;">
     <div class="card">
-      <h2>Account details</h2>
+      <h2>Your profile</h2>
       <p>Signed in as <strong id="accountEmail"></strong></p>
       <label for="displayNameInput">Display name</label>
 <input id="displayNameInput" type="text" maxlength="40" placeholder="Enter your display name" />
@@ -637,7 +1269,7 @@ input[type="date"] {
     </div>
 
     <div class="card">
-      <h2>My games</h2>
+      <h2>My rounds and bookings</h2>
       <p>View your upcoming bookings, previous games, and cancel eligible bookings.</p>
 
       <div class="row-actions" style="margin-bottom:8px;">
@@ -645,7 +1277,7 @@ input[type="date"] {
         <span id="gamesStatus" class="status"></span>
       </div>
 
-      <h2 style="margin-top:14px;">Upcoming games</h2>
+      <h2 style="margin-top:14px;">Upcoming rounds</h2>
       <div id="upcomingGames" class="games-grid">
         <div class="empty-state">Loading upcoming games…</div>
       </div>
@@ -662,7 +1294,7 @@ input[type="date"] {
 </div>
 
 <div id="previousGamesWrap" style="display:none;">
-  <h2 style="margin-top:0;">Previous games</h2>
+  <h2 style="margin-top:0;">Round history</h2>
   <div id="previousGames" class="games-grid">
     <div class="empty-state">Loading previous games…</div>
   </div>
@@ -670,7 +1302,7 @@ input[type="date"] {
     </div>
 
     <div class="card">
-      <h2>Preferences</h2>
+      <h2>Playing preferences</h2>
       <p>We’ll use these defaults on your bookings page. Email alert settings require an active subscription.</p>
 
       <label for="homeState">Home state</label>
@@ -766,7 +1398,7 @@ input[type="date"] {
         </div>
 
     <div class="card">
-      <h2>Push notifications</h2>
+      <h2>Notifications</h2>
       <p>
         Turn on mobile/browser push alerts for tee time notifications.
       </p>
@@ -785,7 +1417,7 @@ input[type="date"] {
     </div>
 
     <div class="card">
-      <h2>Subscription</h2>
+      <h2>TeeRadar membership</h2>
       <p id="subscriptionCardText">
         Manage your billing details, upgrade, or cancel your TeeRadar subscription.
       </p>
@@ -873,7 +1505,71 @@ input[type="date"] {
   </div>
 </div>
 
+  <nav
+  class="app-bottom-nav"
+  aria-label="TeeRadar app navigation"
+>
+  <a
+    class="app-bottom-link"
+    href="/index.html"
+  >
+    <span class="app-bottom-link-icon">⌂</span>
+    <span>Home</span>
+  </a>
+
+  <a
+    class="app-bottom-link"
+    href="/book.html"
+  >
+    <span class="app-bottom-link-icon">⌕</span>
+    <span>Search</span>
+  </a>
+
+  <a
+    class="app-bottom-link app-bottom-play"
+    href="/my-rounds.html"
+  >
+    <span class="app-bottom-link-icon">⚑</span>
+    <span>Play</span>
+  </a>
+
+  <a
+    class="app-bottom-link"
+    href="/friends.html"
+  >
+    <span class="app-bottom-link-icon">♟</span>
+    <span>Friends</span>
+  </a>
+
+  <a
+    class="app-bottom-link active"
+    href="/account.html"
+  >
+    <span class="app-bottom-link-icon">●</span>
+    <span>Account</span>
+  </a>
+</nav>
+
 <script src="/capacitor.js"></script>
+
+<script>
+  try {
+    const runningInsideApp =
+      window.Capacitor &&
+      typeof window.Capacitor.isNativePlatform === "function" &&
+      window.Capacitor.isNativePlatform();
+
+    if (runningInsideApp) {
+      document.documentElement.classList.add("app-mode");
+    }
+  } catch (error) {
+    console.warn(
+      "Capacitor app detection failed:",
+      error
+    );
+  }
+</script>
+
 <script src="/push.js"></script>
 
 <script>
@@ -916,6 +1612,11 @@ const genderInput = document.getElementById("genderInput");
 const dobInput = document.getElementById("dobInput");
 const deleteAccountRequestBtn = document.getElementById("deleteAccountRequestBtn");
 const deleteAccountStatus = document.getElementById("deleteAccountStatus");
+  const appProfileName =
+  document.getElementById("appProfileName");
+
+const appProfileEmail =
+  document.getElementById("appProfileEmail");
 
   // ✅ NEW: my games elements
     const refreshGamesBtn = document.getElementById("refreshGamesBtn");
@@ -960,32 +1661,60 @@ const pushStatus = document.getElementById("pushStatus");
     notLoggedInEl.style.display = "block";
     accountContentEl.style.display = "none";
   } else {
-    notLoggedInEl.style.display = "none";
-    accountContentEl.style.display = "block";
-    accountEmailEl.textContent = email;
+  notLoggedInEl.style.display = "none";
+  accountContentEl.style.display = "block";
+  accountEmailEl.textContent = email;
+
+  if (appProfileEmail) {
+    appProfileEmail.textContent = email;
+  }
+
+  try {
+    const raw = localStorage.getItem("tr_user");
+
+    if (raw && displayNameInput) {
+      const u = JSON.parse(raw);
+
+      if (u?.displayName && displayNameInput) {
+        displayNameInput.value = u.displayName;
+      }
+
+      if (appProfileName) {
+        appProfileName.textContent =
+          u?.displayName ||
+          u?.fullName ||
+          "TeeRadar golfer";
+      }
+
+      if (u?.fullName && fullNameInput) {
+        fullNameInput.value = u.fullName;
+      }
+
+      if (u?.gender && genderInput) {
+        genderInput.value = u.gender;
+      }
+
+      if (u?.dob && dobInput) {
+        dobInput.value = u.dob;
+      }
+    }
+  } catch {}
+
+  if (
+    appProfileName &&
+    appProfileName.textContent.trim() === "TeeRadar golfer"
+  ) {
     try {
-  const raw = localStorage.getItem("tr_user");
-  if (raw && displayNameInput) {
-    const u = JSON.parse(raw);
+      const savedDisplayName =
+        localStorage.getItem("teeradar_display_name");
 
-    if (u?.displayName && displayNameInput) {
-  displayNameInput.value = u.displayName;
-}
-
-if (u?.fullName && fullNameInput) {
-  fullNameInput.value = u.fullName;
-}
-
-if (u?.gender && genderInput) {
-  genderInput.value = u.gender;
-}
-
-if (u?.dob && dobInput) {
-  dobInput.value = u.dob;
-}
+      if (savedDisplayName) {
+        appProfileName.textContent =
+          savedDisplayName;
+      }
+    } catch {}
   }
-} catch {}
-  }
+}
 
   // header "My account" button – already on this page
   if (navAccountBtn) {
@@ -1066,10 +1795,21 @@ const dob = String(dobInput?.value || "").trim();
         obj.dob = dob;
 
         localStorage.setItem("tr_user", JSON.stringify(obj));
+        localStorage.setItem(
+  "teeradar_display_name",
+  displayName
+);
       } catch {}
 
-      displayNameStatus.textContent = "Account details updated.";
-      displayNameStatus.className = "status ok";
+      if (appProfileName) {
+  appProfileName.textContent = displayName;
+}
+
+displayNameStatus.textContent =
+  "Account details updated.";
+
+displayNameStatus.className =
+  "status ok";
     } catch (err) {
       console.error(err);
       displayNameStatus.textContent = "Could not save account details.";
@@ -1911,85 +2651,6 @@ function closeRefundModal() {
   if (refundModal) {
     refundModal.classList.remove("show");
     refundModal.setAttribute("aria-hidden", "true");
-  }
-}
-
-function getScorecardUrl(roundId) {
-  return `/round.html?id=${encodeURIComponent(roundId)}`;
-}
-
-async function createOrOpenScorecard(game, btn) {
-  const hasScorecard = !!game?.has_scorecard;
-  const roundId = Number(game?.scorecard_round_id || 0);
-  const reference = String(game?.reference || "").trim();
-
-  if (hasScorecard && roundId > 0) {
-    window.location.href = getScorecardUrl(roundId);
-    return;
-  }
-
-  if (!reference) {
-    if (gamesStatus) {
-      gamesStatus.textContent = "Could not find booking reference for scorecard.";
-      gamesStatus.className = "status err";
-    }
-    return;
-  }
-
-  if (btn) btn.disabled = true;
-
-  if (gamesStatus) {
-    gamesStatus.textContent = "Creating scorecard…";
-    gamesStatus.className = "status";
-  }
-
-  try {
-    const res = await fetch(`/api/book/my-games/${encodeURIComponent(reference)}/create-scorecard`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { "Authorization": "Bearer " + token } : {})
-      }
-    });
-
-    const data = await res.json().catch(() => ({}));
-
-    if (res.ok && data && data.ok && Number(data.roundId) > 0) {
-      if (gamesStatus) {
-        gamesStatus.textContent = data.alreadyExisted
-          ? "Opening scorecard…"
-          : "Scorecard created.";
-        gamesStatus.className = "status ok";
-      }
-
-      window.location.href = getScorecardUrl(Number(data.roundId));
-      return;
-    }
-
-    const msg =
-      data?.error === "past_booking_cannot_create_scorecard"
-        ? "Past bookings cannot create a scorecard from here."
-        : data?.error === "booking_not_found"
-        ? "Booking not found."
-        : data?.error === "scorecard_create_failed"
-        ? "Could not create scorecard."
-        : "Unable to create scorecard.";
-
-    if (gamesStatus) {
-      gamesStatus.textContent = msg;
-      gamesStatus.className = "status err";
-    }
-
-    if (btn) btn.disabled = false;
-  } catch (err) {
-    console.error("createOrOpenScorecard error", err);
-
-    if (gamesStatus) {
-      gamesStatus.textContent = "Network error while creating scorecard.";
-      gamesStatus.className = "status err";
-    }
-
-    if (btn) btn.disabled = false;
   }
 }
 
