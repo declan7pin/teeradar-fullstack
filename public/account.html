@@ -2751,7 +2751,7 @@ async function createOrOpenScorecard(game, btn) {
   }
 
   try {
-    const res = await fetch(`/api/book/my-games/${encodeURIComponent(reference)}/create-scorecard`, {
+    const res = await fetch(`${API_BASE}/api/book/my-games/${encodeURIComponent(reference)}/create-scorecard`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2973,7 +2973,7 @@ function formatGameDate(game) {
     }
 
     try {
-      const res = await fetch(`/api/book/my-games/${encodeURIComponent(reference)}/cancel`, {
+      const res = await fetch(`${API_BASE}/api/book/my-games/${encodeURIComponent(reference)}/cancel`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -3167,7 +3167,7 @@ const ok = window.confirm(
         setShareBookingStatus("Deleting mate...");
 
         try {
-          const res = await fetch(`/api/book/my-mates/${encodeURIComponent(mateId)}`, {
+          const res = await fetch(`${API_BASE}/api/book/my-mates/${encodeURIComponent(mateId)}`, {
             method: "DELETE",
             headers: {
               ...(token ? { "Authorization": "Bearer " + token } : {})
@@ -3199,7 +3199,7 @@ const ok = window.confirm(
     savedMatesList.innerHTML = `<div class="modal-empty">Loading mates...</div>`;
 
     try {
-      const res = await fetch("/api/book/my-mates", {
+      const res = await fetch(`${API_BASE}/api/book/my-mates`, {
         method: "GET",
         headers: {
           ...(token ? { "Authorization": "Bearer " + token } : {})
@@ -3240,7 +3240,7 @@ const ok = window.confirm(
     setShareBookingStatus("Saving mate...");
 
     try {
-      const res = await fetch("/api/book/my-mates", {
+      const res = await fetch(`${API_BASE}/api/book/my-mates`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -3294,7 +3294,7 @@ const ok = window.confirm(
     setShareBookingStatus("Sharing booking...");
 
     try {
-      const res = await fetch(`/api/book/my-games/${encodeURIComponent(activeShareReference)}/share`, {
+      const res = await fetch(`${API_BASE}/api/book/my-games/${encodeURIComponent(activeShareReference)}/share`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -3502,7 +3502,7 @@ async function loadMyGames() {
     }
 
     try {
-      const res = await fetch("/api/book/my-games", {
+      const res = await fetch(`${API_BASE}/api/book/my-games`, {
         method: "GET",
         headers: {
           ...(token ? { "Authorization": "Bearer " + token } : {})
