@@ -1619,24 +1619,28 @@ html.app-mode .app-bottom-nav {
   box-sizing: border-box;
 }
 
-.app-bottom-link {
-  display: flex;
+html.app-mode .app-bottom-nav .app-bottom-link {
+  display: flex !important;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
 
   width: 100%;
-  height: 58px;
   min-width: 0;
+  min-height: 56px;
 
-  color: #71818a;
-  text-decoration: none;
+  padding: 0;
+
+  background: transparent !important;
+  color: #7a8a92;
 
   font-size: 10px;
   font-weight: 800;
+  text-align: center;
+  text-decoration: none;
 
-  overflow: visible;
+  opacity: 1;
 }
 
 .app-bottom-link-icon {
@@ -1644,40 +1648,46 @@ html.app-mode .app-bottom-nav {
   line-height: 1;
 }
 
-.app-bottom-link.active {
+  html.app-mode .app-bottom-nav .app-bottom-link.active {
   color: #00796b;
 }
 
-.app-bottom-play {
+html.app-mode .app-bottom-nav .app-bottom-play {
   position: relative;
-  transform: none;
+  transform: translateY(-14px);
 }
 
+html.app-mode .app-bottom-nav
 .app-bottom-play .app-bottom-link-icon {
   display: grid;
   place-items: center;
 
-  width: 48px;
-  height: 48px;
+  width: 58px;
+  height: 58px;
 
-  margin-top: -23px;
-  margin-bottom: 0;
+  margin: 0;
 
-  border: 4px solid #f2f6f7;
+  border: 5px solid #f2f6f7;
   border-radius: 50%;
 
-  background: linear-gradient(135deg, #00796b, #005e55);
+  background: linear-gradient(
+    135deg,
+    #00796b,
+    #005e55
+  );
+
   color: #ffffff;
 
-  font-size: 22px;
+  font-size: 25px;
 
-  box-shadow: 0 8px 20px rgba(0, 121, 107, 0.28);
+  box-shadow:
+    0 10px 24px rgba(0, 121, 107, 0.3);
 }
 
+html.app-mode .app-bottom-nav
 .app-bottom-play span:last-child {
-  margin-top: 0;
+  margin-top: -2px;
 }
-
 .app-action-card:active,
 .app-search-button:active,
 .app-upcoming-button:active,
@@ -1984,8 +1994,6 @@ html.app-mode .app-bottom-nav {
     <span>Account</span>
   </a>
 </nav>
-
-<main>
 
 <main>
   <section class="hero">
@@ -2456,6 +2464,43 @@ function runAppSplashOnce(){
       console.warn("Failed to read URL params", e);
     }
   }
+  function maybeAutoOpenLoginFromQuery() {
+  try {
+    const params =
+      new URLSearchParams(window.location.search);
+
+    if (params.get("openLogin") !== "1") {
+      return;
+    }
+
+    openAuthModal("login");
+
+    /*
+     * Remove the temporary parameter so refreshing Home does not
+     * repeatedly reopen the login modal.
+     */
+    params.delete("openLogin");
+
+    const remainingQuery =
+      params.toString();
+
+    const cleanedUrl =
+      window.location.pathname +
+      (remainingQuery ? `?${remainingQuery}` : "") +
+      window.location.hash;
+
+    window.history.replaceState(
+      {},
+      "",
+      cleanedUrl
+    );
+  } catch (error) {
+    console.warn(
+      "Could not automatically open login:",
+      error
+    );
+  }
+}
 
   if (authSwitch) {
     authSwitch.addEventListener("click", () => {
@@ -2602,10 +2647,21 @@ function runAppSplashOnce(){
         }
 
         closeAuthModal();
-        renderNavState();
+renderNavState();
 
-            initHomeAlertCard();
-    tryShowAvailablePopupForSubscribedUser();
+/*
+ * Refresh the app home after login so Account, notifications
+ * and app-specific user state are immediately available.
+ */
+if (
+  document.documentElement.classList.contains("app-mode")
+) {
+  window.location.replace("/index.html");
+  return;
+}
+
+initHomeAlertCard();
+tryShowAvailablePopupForSubscribedUser();
       } catch (err) {
         console.error("Auth error:", err);
         alert("Something went wrong. Please try again.");
@@ -2662,8 +2718,20 @@ ${details || "Not provided"}
   });
 }
   function initSubscriberAlertModal() {
-    const modal = document.getElementById("tr-alert-modal-backdrop");
-    if (!modal) return;
+  const modal =
+    document.getElementById("tr-alert-modal-backdrop");
+
+  if (!modal) return;
+
+  /*
+   * Do not show the website marketing popup inside the installed
+   * app. It can cover the app login flow.
+   */
+  if (
+    document.documentElement.classList.contains("app-mode")
+  ) {
+    return;
+  }
 
     try {
       const email = localStorage.getItem("teeradar_user_email");
@@ -3209,7 +3277,10 @@ trackInitialHome();
 initTCBanner();
 initContactForm();
 initHomeCourseAutocomplete();
+
 maybeAutoOpenSignupFromQuery();
+maybeAutoOpenLoginFromQuery();
+
 initSubscriberAlertModal();
 
 initInstalledAppHome();
