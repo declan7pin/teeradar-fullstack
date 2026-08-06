@@ -1040,13 +1040,16 @@ html.app-mode .modal-actions {
 /* Bottom navigation */
 
 html.app-mode .app-bottom-nav {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 5000;
+  position: fixed !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  z-index: 100000 !important;
 
-  display: grid;
+  display: grid !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+
   grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: end;
 
@@ -1063,14 +1066,15 @@ html.app-mode .app-bottom-nav {
 
   border-top: 1px solid rgba(210, 222, 227, 0.95);
 
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.98);
 
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 
-  box-shadow: 0 -8px 25px rgba(21, 50, 60, 0.08);
-}
+  box-shadow: 0 -8px 25px rgba(21, 50, 60, 0.12);
 
+  box-sizing: border-box;
+}
 .app-bottom-link {
   display: flex;
   flex-direction: column;
@@ -1169,6 +1173,32 @@ html.app-mode .app-account-home:active {
     width: auto;
   }
 }
+    html.app-mode #notLoggedIn {
+  margin-top: 14px;
+  padding: 18px;
+
+  border-radius: 20px;
+
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+
+  color: #be123c;
+
+  font-size: 13px;
+  line-height: 1.45;
+
+  box-shadow: 0 8px 22px rgba(21, 50, 60, 0.05);
+}
+
+html.app-mode #notLoggedIn strong {
+  display: block;
+  margin-bottom: 3px;
+
+  color: #9f1239;
+
+  font-size: 16px;
+  font-weight: 900;
+}
   </style>
 </head>
 <body>
@@ -1223,8 +1253,21 @@ html.app-mode .app-account-home:active {
 </section>
 
   <div id="notLoggedIn" class="blocked" style="display:none;">
-    You’re not logged in. Please go back to the home page and log in first, then return to this page.
+  <strong>You’re not logged in.</strong>
+
+  <div style="margin-top:6px;">
+    Log in to view your profile, rounds, preferences and subscription.
   </div>
+
+  <button
+    id="accountLoginBtn"
+    class="btn-primary"
+    type="button"
+    style="width:100%;margin-top:14px;"
+  >
+    Log in
+  </button>
+</div>
 
   <div id="accountContent" style="display:none;">
     <div class="card">
@@ -1612,6 +1655,8 @@ const genderInput = document.getElementById("genderInput");
 const dobInput = document.getElementById("dobInput");
 const deleteAccountRequestBtn = document.getElementById("deleteAccountRequestBtn");
 const deleteAccountStatus = document.getElementById("deleteAccountStatus");
+  const accountLoginBtn =
+  document.getElementById("accountLoginBtn");
   const appProfileName =
   document.getElementById("appProfileName");
 
@@ -1657,13 +1702,33 @@ const enablePushBtn = document.getElementById("enablePushBtn");
 const disablePushBtn = document.getElementById("disablePushBtn");
 const pushStatus = document.getElementById("pushStatus");
 
-  if (!email) {
-    notLoggedInEl.style.display = "block";
-    accountContentEl.style.display = "none";
-  } else {
+  if (accountLoginBtn) {
+  accountLoginBtn.addEventListener("click", () => {
+    window.location.href =
+      "/index.html?openLogin=1&returnTo=%2Faccount.html";
+  });
+}
+
+if (!email) {
+  notLoggedInEl.style.display = "block";
+  accountContentEl.style.display = "none";
+
+  const appProfileSummary =
+    document.getElementById("appProfileSummary");
+
+  if (appProfileSummary) {
+    appProfileSummary.style.display = "none";
+  }
+} else {
   notLoggedInEl.style.display = "none";
   accountContentEl.style.display = "block";
   accountEmailEl.textContent = email;
+    const appProfileSummary =
+    document.getElementById("appProfileSummary");
+
+  if (appProfileSummary) {
+    appProfileSummary.style.display = "";
+  }
 
   if (appProfileEmail) {
     appProfileEmail.textContent = email;
