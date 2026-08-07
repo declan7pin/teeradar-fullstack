@@ -302,4 +302,257 @@ router.get("/list", async (req, res) => {
   }
 });
 
+/*
+========================================
+LIVE FRIEND ROUNDS
+GET /api/friends/live-rounds
+========================================
+
+A round is considered live when:
+- it belongs to an accepted friend
+- at least one hole has a score entered
+- the full round has not been completed
+- the round was created within the last 18 hours
+
+Returns enough information for:
+- Friends live-round list
+- Home horizontal live-friends rail
+========================================
+*/
+router.get("/live-rounds", async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+
+    if (!Number.isFinite(userId) || userId <= 0) {
+      return res.status(401).json({
+        ok: false,
+        error: "not_authenticated"
+      });
+    }
+
+    const result = await db.query(
+      `
+      WITH accepted_friends AS (
+        SELECT
+          CASE
+            WHEN uf.requester_user_id = $1
+              THEN uf.addressee_user_id
+            ELSE uf.requester_user_id
+          END AS friend_user_id
+        FROM user_friends uf
+        WHERE uf.status = 'accepted'
+          AND (
+            uf.requester_user_id = $1
+            OR uf.addressee_user_id = $1
+          )
+      ),
+
+      round_progress AS (
+        SELECT
+          r.id AS round_id,
+          r.user_id AS friend_user_id,
+          r.course,
+          r.layout,
+          r.state,
+          r.holes,
+          r.created_at,
+
+          COUNT(
+            CASE
+              WHEN rh.strokes IS NOT NULL
+              THEN 1
+            END
+          )::int AS holes_played,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN rh.strokes IS NOT NULL
+                THEN rh.strokes
+                ELSE 0
+              END
+            ),
+            0
+          )::int AS total_strokes,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN rh.strokes IS NOT NULL
+                  AND rh.par IS NOT NULL
+                THEN rh.par
+                ELSE 0
+              END
+            ),
+            0
+          )::int AS played_par,
+
+          MAX(
+            CASE
+              WHEN rh.strokes IS NOT NULL
+              THEN rh.hole_number
+              ELSE NULL
+            END
+          )::int AS last_completed_hole,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN rh.strokes IS NOT NULL
+                  AND rh.putts IS NOT NULL
+                THEN rh.putts
+                ELSE 0
+              END
+            ),
+            0
+          )::int AS total_putts
+
+        FROM rounds r
+
+        JOIN accepted_friends af
+          ON af.friend_user_id = r.user_id
+
+        LEFT JOIN round_holes rh
+          ON rh.round_id = r.id
+
+        WHERE r.created_at >= NOW() - INTERVAL '10 hours'
+
+        GROUP BY
+          r.id,
+          r.user_id,
+          r.course,
+          r.layout,
+          r.state,
+          r.holes,
+          r.created_at
+      )
+
+      SELECT
+        rp.round_id,
+        rp.friend_user_id,
+
+        COALESCE(
+          NULLIF(u.display_name, ''),
+          split_part(u.email, '@', 1)
+        ) AS friend_name,
+
+        rp.course,
+        rp.layout,
+        rp.state,
+        rp.holes,
+        rp.holes_played,
+        rp.total_strokes,
+        rp.played_par,
+        rp.total_putts,
+        rp.last_completed_hole,
+        rp.created_at AS started_at
+
+      FROM round_progress rp
+
+      JOIN users u
+        ON u.id = rp.friend_user_id
+
+      WHERE rp.holes_played > 0
+
+        /* Finished scorecards are no longer live */
+        AND rp.holes_played < rp.holes
+
+      ORDER BY rp.created_at DESC
+
+      LIMIT 30;
+      `,
+      [userId]
+    );
+
+    const rounds = (result.rows || []).map((row) => {
+      const holes = Number(row.holes || 18);
+      const holesPlayed = Number(row.holes_played || 0);
+
+      const lastCompletedHole =
+        Number(row.last_completed_hole || 0);
+
+      /*
+       * If Hole 6 has just been entered, the golfer is now
+       * considered to be playing Hole 7.
+       */
+      const currentHole = Math.min(
+        Math.max(lastCompletedHole + 1, 1),
+        holes
+      );
+
+      const totalStrokes =
+        Number(row.total_strokes || 0);
+
+      const playedPar =
+        Number(row.played_par || 0);
+
+      const scoreToPar =
+        totalStrokes - playedPar;
+
+      let scoreLabel = "E";
+
+      if (scoreToPar > 0) {
+        scoreLabel = `+${scoreToPar}`;
+      } else if (scoreToPar < 0) {
+        scoreLabel = String(scoreToPar);
+      }
+
+      return {
+        round_id: Number(row.round_id),
+        friend_user_id: Number(row.friend_user_id),
+
+        friend_name:
+          String(row.friend_name || "Friend"),
+
+        course:
+          String(row.course || "Golf Course"),
+
+        layout:
+          row.layout
+            ? String(row.layout)
+            : null,
+
+        state:
+          row.state
+            ? String(row.state)
+            : null,
+
+        holes,
+        holes_played: holesPlayed,
+
+        last_completed_hole: lastCompletedHole,
+        current_hole: currentHole,
+
+        total_strokes: totalStrokes,
+        total_putts: Number(row.total_putts || 0),
+
+        score_to_par: scoreToPar,
+        score_label: scoreLabel,
+
+        started_at: row.started_at,
+
+        is_live: true
+      };
+    });
+
+    return res.json({
+      ok: true,
+      count: rounds.length,
+      rounds
+    });
+
+  } catch (err) {
+    console.error(
+      "GET /api/friends/live-rounds error:",
+      err
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "internal_error",
+      detail: err?.message || String(err || "")
+    });
+  }
+});
+
 export default router;
