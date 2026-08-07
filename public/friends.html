@@ -184,6 +184,129 @@ select{
       font-size:14px;
       padding:8px 0;
     }
+    
+    /* FRIEND LIVE ROUNDS */
+
+.live-rounds-heading{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.live-rounds-heading h2{
+  margin:4px 0 0;
+}
+
+.live-rounds-kicker{
+  display:flex;
+  align-items:center;
+  gap:6px;
+
+  color:#dc2626;
+
+  font-size:10px;
+  font-weight:950;
+  letter-spacing:.08em;
+}
+
+.live-dot{
+  width:8px;
+  height:8px;
+
+  border-radius:50%;
+
+  background:#ef4444;
+
+  box-shadow:
+    0 0 0 4px rgba(239,68,68,.12);
+}
+
+.live-rounds-list{
+  display:grid;
+  gap:10px;
+}
+
+.live-round-card{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+
+  padding:14px;
+
+  border:1px solid var(--border);
+  border-radius:17px;
+
+  background:#f8fafb;
+
+  cursor:pointer;
+}
+
+.live-round-main{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+}
+
+.live-round-score{
+  display:grid;
+  place-items:center;
+
+  width:58px;
+  height:58px;
+  flex:0 0 58px;
+
+  border-radius:50%;
+
+  background:#ffffff;
+  border:3px solid #00796b;
+
+  color:#005e55;
+
+  font-size:20px;
+  font-weight:950;
+
+  box-shadow:
+    0 6px 18px rgba(21,50,60,.08);
+}
+
+.live-round-copy{
+  min-width:0;
+}
+
+.live-round-name{
+  overflow:hidden;
+
+  color:#10212a;
+
+  font-size:15px;
+  font-weight:950;
+
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.live-round-meta{
+  margin-top:3px;
+
+  color:#6b7c85;
+
+  font-size:11px;
+  font-weight:750;
+  line-height:1.4;
+}
+
+.live-round-arrow{
+  flex:0 0 auto;
+
+  color:#00796b;
+
+  font-size:24px;
+  font-weight:900;
+}
 
     .pill{
       display:inline-flex;
@@ -754,6 +877,33 @@ html.app-mode .app-bottom-link:active{
     follow each other’s golf progress.
   </p>
 </section>
+
+<section class="card live-rounds-card">
+  <div class="live-rounds-heading">
+    <div>
+      <div class="live-rounds-kicker">
+        <span class="live-dot"></span>
+        LIVE
+      </div>
+
+      <h2>Friends live rounds</h2>
+    </div>
+
+    <button
+      class="ghost"
+      id="refreshLiveRoundsBtn"
+      type="button"
+    >
+      Refresh
+    </button>
+  </div>
+
+  <div id="liveRoundsList" class="live-rounds-list">
+    <div class="empty">
+      Checking if any friends are currently playing...
+    </div>
+  </div>
+</section>
     
     <section class="card">
   <h2>Your profile</h2>
@@ -851,7 +1001,7 @@ html.app-mode .app-bottom-link:active{
     class="app-bottom-link active"
     href="/friends.html"
   >
-    <span class="app-bottom-link-icon">♟</span>
+    <span class="app-bottom-link-icon">👥</span>
     <span>Friends</span>
   </a>
 
@@ -866,12 +1016,19 @@ html.app-mode .app-bottom-link:active{
 
 <script src="/config.js"></script>
 
-  <script src="/config.js"></script>
   <script>
     const API_BASE =
       window.TEERADAR_API_BASE ||
       localStorage.getItem("teeradar_backend_url") ||
       "";
+      
+      const liveRoundsList =
+  document.getElementById("liveRoundsList");
+
+const refreshLiveRoundsBtn =
+  document.getElementById("refreshLiveRoundsBtn");
+
+let liveRoundsRefreshTimer = null;
 
     function getToken(){
   return (
@@ -910,6 +1067,26 @@ html.app-mode .app-bottom-link:active{
         ...(token ? { Authorization: "Bearer " + token } : {})
       };
     }
+    
+    function formatLiveScore(value){
+  if (
+    value === null ||
+    value === undefined ||
+    !Number.isFinite(Number(value))
+  ) {
+    return "E";
+  }
+
+  const score = Number(value);
+
+  if (score === 0) {
+    return "E";
+  }
+
+  return score > 0
+    ? `+${score}`
+    : String(score);
+}
 
     function escapeHtml(value){
       return String(value ?? "")
@@ -1129,6 +1306,139 @@ status.textContent = "Saved.";
   }
 }
 
+async function loadLiveFriendRounds(){
+  if (!liveRoundsList) return;
+
+  if (!getToken()) {
+    liveRoundsList.innerHTML = `
+      <div class="empty">
+        Log in to follow your friends' live rounds.
+      </div>
+    `;
+
+    return;
+  }
+
+  try {
+    const data =
+      await apiFetch("/api/friends/live-rounds");
+
+    const rounds =
+      Array.isArray(data.rounds)
+        ? data.rounds
+        : [];
+
+    if (!rounds.length) {
+      liveRoundsList.innerHTML = `
+        <div class="empty">
+          None of your friends are currently playing.
+          Live rounds will appear here automatically when a
+          friend starts a scorecard.
+        </div>
+      `;
+
+      return;
+    }
+
+    liveRoundsList.innerHTML =
+      rounds.map((round) => {
+
+        const roundId =
+          Number(round.round_id || round.id || 0);
+
+        const friendName =
+          round.friend_name ||
+          round.display_name ||
+          round.name ||
+          "Friend";
+
+        const course =
+          round.course ||
+          "Golf course";
+
+        const hole =
+          Number(
+            round.current_hole ||
+            round.hole ||
+            1
+          );
+
+        const holes =
+          Number(round.holes || 18);
+
+        const score =
+          formatLiveScore(
+            round.to_par ??
+            round.score_to_par ??
+            round.current_score
+          );
+
+        return `
+          <div
+            class="live-round-card"
+            data-round-id="${roundId}"
+          >
+            <div class="live-round-main">
+
+              <div class="live-round-score">
+                ${escapeHtml(score)}
+              </div>
+
+              <div class="live-round-copy">
+
+                <div class="live-round-name">
+                  ${escapeHtml(friendName)}
+                </div>
+
+                <div class="live-round-meta">
+                  ${escapeHtml(course)}
+                  <br>
+                  Hole ${hole} of ${holes}
+                </div>
+
+              </div>
+            </div>
+
+            <div class="live-round-arrow">
+              ›
+            </div>
+          </div>
+        `;
+      }).join("");
+
+    liveRoundsList
+      .querySelectorAll(".live-round-card")
+      .forEach((card) => {
+
+        card.addEventListener("click", async () => {
+          const roundId =
+            Number(card.dataset.roundId || 0);
+
+          if (!roundId) return;
+
+          await playSocialHaptic("light");
+
+          window.location.href =
+            `/friend-live-round.html?roundId=${encodeURIComponent(roundId)}`;
+        });
+
+      });
+
+  } catch (error) {
+
+    console.warn(
+      "loadLiveFriendRounds failed:",
+      error
+    );
+
+    liveRoundsList.innerHTML = `
+      <div class="empty">
+        Could not load friends' live rounds.
+      </div>
+    `;
+  }
+}
+
 async function loadFriendActivity(){
   const el = document.getElementById("activityList");
   if (!el) return;
@@ -1203,6 +1513,22 @@ async function loadFriendActivity(){
         el.innerHTML = `<div class="empty">Could not load friends: ${escapeHtml(err.message)}</div>`;
       }
     }
+    
+    if (refreshLiveRoundsBtn) {
+  refreshLiveRoundsBtn.addEventListener(
+    "click",
+    async () => {
+
+      refreshLiveRoundsBtn.disabled = true;
+
+      try {
+        await loadLiveFriendRounds();
+      } finally {
+        refreshLiveRoundsBtn.disabled = false;
+      }
+    }
+  );
+}
 
     document.getElementById("searchBtn").addEventListener("click", searchUsers);
     document.getElementById("saveSocialBtn")?.addEventListener("click", saveSocialSettings);
@@ -1254,9 +1580,17 @@ async function loadFriendActivity(){
 }
 
       await loadSocialSettings();
+await loadLiveFriendRounds();
 await loadFriendActivity();
 await loadRequests();
 await loadFriends();
+/*
+ * Keep live scores reasonably current while the Friends
+ * screen remains open.
+ */
+liveRoundsRefreshTimer = setInterval(() => {
+  loadLiveFriendRounds().catch(() => {});
+}, 10000);
     }
 
     init();
