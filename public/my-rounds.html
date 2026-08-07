@@ -3965,10 +3965,29 @@ if (premPills){
   </div>
 `;
 }
+// Button text changes depending on where the golfer is
+const isFinalPlayer =
+  premiumPlayerIndex >= pc - 1;
 
-// ✅ button text
-if (premNextBtn) premNextBtn.textContent = nextIsPlayer ? "Next player →" : "Next hole →";
-if (premPrevBtn) premPrevBtn.textContent = (premiumPlayerIndex > 0) ? "← Prev player" : "← Prev hole";
+const isFinalHole =
+  premiumHoleIndex >= holesCount - 1;
+
+if (premNextBtn) {
+  if (isFinalPlayer && isFinalHole) {
+    premNextBtn.textContent = "Save round";
+  } else if (nextIsPlayer) {
+    premNextBtn.textContent = "Next player →";
+  } else {
+    premNextBtn.textContent = "Next hole →";
+  }
+}
+
+if (premPrevBtn) {
+  premPrevBtn.textContent =
+    premiumPlayerIndex > 0
+      ? "← Prev player"
+      : "← Prev hole";
+}
 
   // current values from table (current player)
 const holeRow = getHoleRowFromTable(holeNum);
@@ -4096,8 +4115,20 @@ sel.value = startPutts === "" ? "" : String(startPutts);
   : "Enter your score, then move to the next hole.";
 
   const pc2 = getPlayersCountFromRound(round);
-if (premPrevBtn) premPrevBtn.disabled = (premiumHoleIndex <= 0 && premiumPlayerIndex <= 0);
-if (premNextBtn) premNextBtn.disabled = (premiumHoleIndex >= holesCount - 1 && premiumPlayerIndex >= pc2 - 1);
+
+if (premPrevBtn) {
+  premPrevBtn.disabled =
+    premiumHoleIndex <= 0 &&
+    premiumPlayerIndex <= 0;
+}
+
+/*
+ * Never disable the next button on the final hole.
+ * It becomes the Save round button instead.
+ */
+if (premNextBtn) {
+  premNextBtn.disabled = false;
+}
 }
 }
 
@@ -4148,62 +4179,122 @@ function enablePremiumMode(round, metaPars, metaDists, teeName){
     };
   }
 
-  if (premNextBtn){
+  if (premNextBtn) {
   premNextBtn.onclick = async () => {
-    await playScoreHaptic("light");
-      const holesCount = Number(round?.holes) || 18;
-      const pc = getPlayersCountFromRound(round);
+    const holesCount =
+      Number(round?.holes) || 18;
 
-      // next player first
-      if (premiumPlayerIndex < pc - 1){
-        premiumPlayerIndex += 1;
-        renderPremiumForHole(round, metaPars, metaDists, teeName);
-        return;
+    const pc =
+      getPlayersCountFromRound(round);
+
+    /*
+     * If there are multiple players, move through each
+     * player before completing the hole.
+     */
+    if (premiumPlayerIndex < pc - 1) {
+      await playScoreHaptic("light");
+
+      premiumPlayerIndex += 1;
+
+      renderPremiumForHole(
+        round,
+        metaPars,
+        metaDists,
+        teeName
+      );
+
+      return;
+    }
+
+    /*
+     * FINAL HOLE + FINAL PLAYER
+     *
+     * The button now says "Save round".
+     * Save everything normally and leave the golfer
+     * on their completed scorecard.
+     */
+    const isFinalHole =
+      premiumHoleIndex >= holesCount - 1;
+
+    if (isFinalHole) {
+      premNextBtn.disabled = true;
+      premNextBtn.textContent = "Saving…";
+
+      try {
+        await playScoreHaptic("medium");
+
+        await saveRoundAll();
+
+        premNextBtn.textContent = "Round saved";
+        premNextBtn.disabled = true;
+
+        if (premNote) {
+          premNote.textContent =
+            "Round complete. Your score has been saved.";
+        }
+      } catch (error) {
+        premNextBtn.textContent = "Save round";
+        premNextBtn.disabled = false;
+
+        setToast(
+          rightToast,
+          "Save failed: " +
+            (error?.message || "error"),
+          false
+        );
       }
 
-      // last player -> next hole
+      return;
+    }
+
+    /*
+     * NORMAL NEXT HOLE
+     *
+     * Save the scorecard to TeeRadar BEFORE moving on.
+     * This is what makes Friends Live update hole by hole.
+     */
+    premNextBtn.disabled = true;
+    premNextBtn.textContent = "Saving…";
+
+    try {
+      await saveRoundAll({
+        silent: true,
+        refresh: false
+      });
+
+      await playScoreHaptic("light");
+
+      premiumPlayerIndex = 0;
+      premiumHoleIndex += 1;
+
+      renderPremiumForHole(
+        round,
+        metaPars,
+        metaDists,
+        teeName
+      );
+    } catch (error) {
+      console.error(
+        "Hole auto-save failed:",
+        error
+      );
+
       /*
- * The final player on the final hole has completed the round.
- */
-if (
-  premiumHoleIndex >= holesCount - 1 &&
-  premiumPlayerIndex >= pc - 1
-) {
-  playScoreHaptic("medium");
+       * Do not move forward if the score wasn't saved.
+       * That prevents the golfer thinking their live score
+       * was uploaded when it wasn't.
+       */
+      premNextBtn.disabled = false;
+      premNextBtn.textContent = "Next hole →";
 
-  const shouldSave =
-    confirm(
-      "You have completed the final hole. Save this round now?"
-    );
-
-  if (shouldSave) {
-    saveRoundAll().catch((error) => {
       setToast(
         rightToast,
-        "Save failed: " + (error?.message || "error"),
+        "Could not save this hole. Please try again.",
         false
       );
-    });
-  }
-
-  return;
+    }
+  };
 }
-
-premiumPlayerIndex = 0;
-premiumHoleIndex =
-  Math.min(
-    holesCount - 1,
-    premiumHoleIndex + 1
-  );
-
-renderPremiumForHole(
-  round,
-  metaPars,
-  metaDists,
-  teeName
-);
-    };
-  }
 
   if (toggleTableBtn){
     toggleTableBtn.onclick = () => {
@@ -5187,7 +5278,9 @@ if (newId) {
 setLeftPanelsVisibility(false);
     }
 
-    async function saveRoundAll(){
+    async function saveRoundAll(options = {}){
+  const silent = options.silent === true;
+  const refresh = options.refresh !== false;
       if (!currentRoundId) return;
       // ✅ Guest mode: save locally
 if (!isLoggedIn()){
@@ -5201,9 +5294,15 @@ if (!isLoggedIn()){
 
   guestUpsertRound(currentRound);
 
+  if (!silent) {
   renderLiveScoreHero(true);
-setToast(rightToast, "Saved (guest).", true);
-await safeFetchRounds();
+  setToast(rightToast, "Saved (guest).", true);
+}
+
+if (refresh) {
+  await safeFetchRounds();
+}
+
 return;
 }
 
@@ -5241,10 +5340,15 @@ return;
         }
       }
 
-      renderLiveScoreHero(true);
-setToast(rightToast, "Saved.", true);
-await safeFetchRounds();
-renderTeeRadarHandicap();
+      if (!silent) {
+  renderLiveScoreHero(true);
+  setToast(rightToast, "Saved.", true);
+}
+
+if (refresh) {
+  await safeFetchRounds();
+  renderTeeRadarHandicap();
+}
     }
 
     async function deleteRound(){
