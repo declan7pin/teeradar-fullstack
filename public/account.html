@@ -1789,26 +1789,127 @@ if (!email) {
   }
 
   // main in-page log out button
-  if (logoutBtn) {
-    logoutBtn.addEventListener("click", () => {
-      localStorage.removeItem("teeradar_user_email");
-      localStorage.removeItem("teeradar_email");
-      localStorage.removeItem("teeradar_jwt");
-      localStorage.removeItem("teeradar_home_state");
-      localStorage.removeItem("teeradar_home_course");
-      localStorage.removeItem("teeradar_fav_courses");
-      localStorage.removeItem("teeradar_pref_days");
-      localStorage.removeItem("teeradar_pref_earliest");
-      localStorage.removeItem("teeradar_pref_latest");
-      localStorage.removeItem("teeradar_pref_holes");
-      localStorage.removeItem("teeradar_pref_party_size");
-      localStorage.removeItem("teeradar_alert_frequency");
-      localStorage.removeItem("tr_user");
-localStorage.removeItem("teeradar_display_name");
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", async () => {
+    logoutBtn.disabled = true;
+    logoutBtn.textContent = "Saving account…";
 
-window.location.href = "/index.html";
-    });
-  }
+    try {
+      /*
+       * Save any account-detail changes before logging out.
+       */
+      const displayName =
+        String(displayNameInput?.value || "")
+          .trim()
+          .slice(0, 40);
+
+      const fullName =
+        String(fullNameInput?.value || "")
+          .trim()
+          .slice(0, 80);
+
+      const gender =
+        String(genderInput?.value || "")
+          .trim();
+
+      const dob =
+        String(dobInput?.value || "")
+          .trim();
+
+      if (email && token) {
+        try {
+          await fetch(`${API_BASE}/api/social/profile`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + token
+            },
+            body: JSON.stringify({
+              email,
+              displayName,
+              fullName,
+              gender,
+              dob
+            })
+          });
+        } catch (error) {
+          console.warn(
+            "Profile save during logout failed:",
+            error
+          );
+        }
+      }
+
+      /*
+       * Keep a local cached copy too.
+       */
+      try {
+        const raw =
+          localStorage.getItem("tr_user");
+
+        const obj =
+          raw ? JSON.parse(raw) : {};
+
+        obj.email = email;
+        obj.displayName = displayName;
+        obj.fullName = fullName;
+        obj.gender = gender;
+        obj.dob = dob;
+
+        localStorage.setItem(
+          "tr_user",
+          JSON.stringify(obj)
+        );
+
+        if (displayName) {
+          localStorage.setItem(
+            "teeradar_display_name",
+            displayName
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "Could not cache profile before logout:",
+          error
+        );
+      }
+
+    } finally {
+
+      /*
+       * LOGOUT SHOULD ONLY REMOVE AUTHENTICATION.
+       *
+       * Do NOT delete profile/preferences here.
+       */
+      localStorage.removeItem(
+        "teeradar_user_email"
+      );
+
+      localStorage.removeItem(
+        "teeradar_email"
+      );
+
+      localStorage.removeItem(
+        "teeradar_jwt"
+      );
+
+      localStorage.removeItem(
+        "token"
+      );
+
+      localStorage.removeItem(
+        "authToken"
+      );
+
+      localStorage.removeItem(
+        "teeradar_token"
+      );
+
+      window.location.href =
+        "/index.html";
+    }
+  });
+}
 
   // -------------------------------------------------
 // ✅ Account details save
