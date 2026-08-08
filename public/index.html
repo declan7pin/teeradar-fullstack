@@ -1717,6 +1717,59 @@ html.app-mode .app-home {
   font-size: 24px;
 }
 
+    #appUpcomingRoundsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-upcoming-calendar {
+  width: 54px;
+  height: 58px;
+  flex: 0 0 54px;
+
+  overflow: hidden;
+
+  border-radius: 14px;
+  border: 1px solid #d7e7e5;
+
+  background: #ffffff;
+
+  box-shadow: 0 5px 14px rgba(21, 50, 60, 0.08);
+
+  text-align: center;
+}
+
+.app-upcoming-calendar-month {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 20px;
+
+  background: #00796b;
+  color: #ffffff;
+
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.app-upcoming-calendar-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 36px;
+
+  color: #10212a;
+
+  font-size: 21px;
+  font-weight: 950;
+  line-height: 1;
+}
+
 .app-upcoming-copy {
   min-width: 0;
   flex: 1;
@@ -2249,7 +2302,7 @@ html.app-mode .app-bottom-nav
     </div>
 
     <div class="app-section-header">
-      <h2>Upcoming round</h2>
+      <h2>Upcoming rounds</h2>
 
       <button
         class="app-section-link"
@@ -2262,27 +2315,18 @@ html.app-mode .app-bottom-nav
 
     <section class="app-upcoming-card" id="appUpcomingCard">
   <div class="app-upcoming-empty">
-    <div class="app-upcoming-icon">📅</div>
+    <div id="appUpcomingRoundsList">
+  <section class="app-upcoming-card">
+    <div class="app-upcoming-empty">
+      <div class="app-upcoming-icon">📅</div>
 
-    <div class="app-upcoming-copy">
-      <strong id="appUpcomingTitle">
-        Loading upcoming round…
-      </strong>
-
-      <span id="appUpcomingDetails">
-        Checking your TeeRadar rounds.
-      </span>
+      <div class="app-upcoming-copy">
+        <strong>Loading upcoming rounds…</strong>
+        <span>Checking your TeeRadar rounds.</span>
+      </div>
     </div>
-  </div>
-
-  <button
-    class="app-upcoming-button"
-    id="appUpcomingButton"
-    type="button"
-  >
-    View rounds
-  </button>
-</section>
+  </section>
+</div>
 
     <div class="app-home-footer">
 
@@ -3530,6 +3574,36 @@ async function markAllNotificationsRead() {
   });
 }
 
+  function getUpcomingCalendarParts(dateValue) {
+  if (!dateValue) {
+    return {
+      month: "",
+      day: ""
+    };
+  }
+
+  const date = new Date(
+    `${String(dateValue).slice(0, 10)}T00:00:00`
+  );
+
+  if (Number.isNaN(date.getTime())) {
+    return {
+      month: "",
+      day: ""
+    };
+  }
+
+  return {
+    month: date
+      .toLocaleDateString("en-AU", {
+        month: "short"
+      })
+      .toUpperCase(),
+
+    day: String(date.getDate())
+  };
+}
+
 function getUpcomingRoundTimestamp(round) {
   const datePart =
     String(round?.play_date || "").slice(0, 10);
@@ -3553,16 +3627,10 @@ function getUpcomingRoundTimestamp(round) {
 }
 
 async function loadAppUpcomingRound() {
-  const title =
-    document.getElementById("appUpcomingTitle");
+  const list =
+    document.getElementById("appUpcomingRoundsList");
 
-  const details =
-    document.getElementById("appUpcomingDetails");
-
-  const button =
-    document.getElementById("appUpcomingButton");
-
-  if (!title || !details || !button) return;
+  if (!list) return;
 
   const email = (
     localStorage.getItem("teeradar_user_email") || ""
@@ -3571,24 +3639,79 @@ async function loadAppUpcomingRound() {
   const token =
     localStorage.getItem("teeradar_jwt") || "";
 
+  /*
+   * Logged out
+   */
   if (!email || !token) {
-    title.textContent = "No upcoming round scheduled";
+    list.innerHTML = `
+      <section class="app-upcoming-card">
+        <div class="app-upcoming-empty">
 
-    details.textContent =
-      "Log in to view your upcoming rounds and shared games.";
+          <div class="app-upcoming-icon">
+            📅
+          </div>
 
-    button.textContent = "Log in";
+          <div class="app-upcoming-copy">
+            <strong>
+              No upcoming rounds available
+            </strong>
 
-    button.onclick = () => {
-      openAuthModal("login");
-    };
+            <span>
+              Log in to view your upcoming rounds
+              and shared games.
+            </span>
+          </div>
+
+        </div>
+
+        <button
+          class="app-upcoming-button"
+          id="appUpcomingLoginButton"
+          type="button"
+        >
+          Log in
+        </button>
+      </section>
+    `;
+
+    const loginButton =
+      document.getElementById(
+        "appUpcomingLoginButton"
+      );
+
+    if (loginButton) {
+      loginButton.onclick = () => {
+        openAuthModal("login");
+      };
+    }
 
     return;
   }
 
-  title.textContent = "Loading upcoming round…";
-  details.textContent = "Checking your TeeRadar rounds.";
-  button.textContent = "View rounds";
+  /*
+   * Loading state
+   */
+  list.innerHTML = `
+    <section class="app-upcoming-card">
+      <div class="app-upcoming-empty">
+
+        <div class="app-upcoming-icon">
+          📅
+        </div>
+
+        <div class="app-upcoming-copy">
+          <strong>
+            Loading upcoming rounds…
+          </strong>
+
+          <span>
+            Checking your TeeRadar rounds.
+          </span>
+        </div>
+
+      </div>
+    </section>
+  `;
 
   try {
     const response = await fetch(
@@ -3617,9 +3740,15 @@ async function loadAppUpcomingRound() {
 
     const now = Date.now();
 
+    /*
+     * Keep future rounds only and put the
+     * soonest round first.
+     */
     const upcoming = rounds
       .filter((round) => {
-        return getUpcomingRoundTimestamp(round) >= now;
+        return (
+          getUpcomingRoundTimestamp(round) >= now
+        );
       })
       .sort((a, b) => {
         return (
@@ -3628,74 +3757,234 @@ async function loadAppUpcomingRound() {
         );
       });
 
+    /*
+     * Nothing upcoming
+     */
     if (!upcoming.length) {
-      title.textContent = "No upcoming round scheduled";
+      list.innerHTML = `
+        <section class="app-upcoming-card">
 
-      details.textContent =
-        "Create a round or find a tee time to plan your next game.";
+          <div class="app-upcoming-empty">
 
-      button.textContent = "Create a round";
+            <div class="app-upcoming-icon">
+              📅
+            </div>
 
-      button.onclick = () => {
-        window.location.href = "/my-rounds.html";
-      };
+            <div class="app-upcoming-copy">
+
+              <strong>
+                No upcoming round scheduled
+              </strong>
+
+              <span>
+                Create a round or find a tee time
+                to plan your next game.
+              </span>
+
+            </div>
+
+          </div>
+
+          <button
+            class="app-upcoming-button"
+            id="appCreateRoundButton"
+            type="button"
+          >
+            Create a round
+          </button>
+
+        </section>
+      `;
+
+      const createButton =
+        document.getElementById(
+          "appCreateRoundButton"
+        );
+
+      if (createButton) {
+        createButton.onclick = () => {
+          window.location.href =
+            "/my-rounds.html";
+        };
+      }
 
       return;
     }
 
-    const round = upcoming[0];
+    /*
+     * Render EVERY upcoming round.
+     */
+    list.innerHTML = upcoming
+      .map((round) => {
 
-    const course =
-      String(round.course || "Upcoming round");
+        const course =
+          String(
+            round.course ||
+            "Upcoming round"
+          );
 
-    const dateLabel =
-      formatUpcomingRoundDate(round.play_date);
+        const dateLabel =
+          formatUpcomingRoundDate(
+            round.play_date
+          );
 
-    const timeLabel =
-      String(round.tee_time || "")
-        .split("|")[0]
-        .trim();
+        const calendar =
+          getUpcomingCalendarParts(
+            round.play_date
+          );
 
-    const holes =
-      Number(round.holes || 18);
+        const timeLabel =
+          String(round.tee_time || "")
+            .split("|")[0]
+            .trim();
 
-    const sharedLabel =
-      round.is_shared && round.owner_name
-        ? ` • Shared by ${round.owner_name}`
-        : "";
+        const holes =
+          Number(round.holes || 18);
 
-    title.textContent = course;
+        const sharedLabel =
+          round.is_shared &&
+          round.owner_name
+            ? ` • Shared by ${round.owner_name}`
+            : "";
 
-    details.textContent = [
-      dateLabel,
-      timeLabel || "Time TBC",
-      `${holes} holes`
-    ]
-      .filter(Boolean)
-      .join(" • ") + sharedLabel;
+        const details = [
+          dateLabel,
+          timeLabel || "Time TBC",
+          `${holes} holes`
+        ]
+          .filter(Boolean)
+          .join(" • ") + sharedLabel;
 
-    button.textContent = "Start scorecard";
+        const roundId =
+          encodeURIComponent(round.id);
 
-    button.onclick = () => {
-      window.location.href =
-        `/my-rounds.html?startUpcomingId=${encodeURIComponent(round.id)}`;
-    };
+        return `
+          <section class="app-upcoming-card">
+
+            <div class="app-upcoming-empty">
+
+              <div class="app-upcoming-calendar">
+
+                <div
+                  class="app-upcoming-calendar-month"
+                >
+                  ${escapeHtml(calendar.month)}
+                </div>
+
+                <div
+                  class="app-upcoming-calendar-day"
+                >
+                  ${escapeHtml(calendar.day)}
+                </div>
+
+              </div>
+
+              <div class="app-upcoming-copy">
+
+                <strong>
+                  ${escapeHtml(course)}
+                </strong>
+
+                <span>
+                  ${escapeHtml(details)}
+                </span>
+
+              </div>
+
+            </div>
+
+            <button
+              class="app-upcoming-button"
+              type="button"
+              data-upcoming-round-id="${roundId}"
+            >
+              Start scorecard
+            </button>
+
+          </section>
+        `;
+      })
+      .join("");
+
+    /*
+     * Wire each Start scorecard button
+     * to its own round.
+     */
+    list
+      .querySelectorAll(
+        "[data-upcoming-round-id]"
+      )
+      .forEach((button) => {
+
+        button.addEventListener(
+          "click",
+          () => {
+
+            const roundId =
+              button.dataset
+                .upcomingRoundId;
+
+            if (!roundId) return;
+
+            window.location.href =
+              `/my-rounds.html?startUpcomingId=${roundId}`;
+          }
+        );
+
+      });
+
   } catch (error) {
     console.warn(
       "loadAppUpcomingRound failed:",
       error
     );
 
-    title.textContent = "Could not load upcoming round";
+    list.innerHTML = `
+      <section class="app-upcoming-card">
 
-    details.textContent =
-      "Tap below to view your rounds directly.";
+        <div class="app-upcoming-empty">
 
-    button.textContent = "View rounds";
+          <div class="app-upcoming-icon">
+            📅
+          </div>
 
-    button.onclick = () => {
-      window.location.href = "/my-rounds.html";
-    };
+          <div class="app-upcoming-copy">
+
+            <strong>
+              Could not load upcoming rounds
+            </strong>
+
+            <span>
+              Tap below to view your rounds
+              directly.
+            </span>
+
+          </div>
+
+        </div>
+
+        <button
+          class="app-upcoming-button"
+          id="appViewRoundsButton"
+          type="button"
+        >
+          View rounds
+        </button>
+
+      </section>
+    `;
+
+    const viewButton =
+      document.getElementById(
+        "appViewRoundsButton"
+      );
+
+    if (viewButton) {
+      viewButton.onclick = () => {
+        window.location.href =
+          "/my-rounds.html";
+      };
+    }
   }
 }
 
