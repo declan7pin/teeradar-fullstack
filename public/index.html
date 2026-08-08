@@ -1382,6 +1382,248 @@ html.app-mode .app-home {
   cursor: pointer;
 }
 
+    /* =========================================================
+   FRIENDS LIVE — HOME HORIZONTAL RAIL
+   ========================================================= */
+
+.app-friends-live{
+  margin-top:18px;
+}
+
+.app-friends-live-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+
+  margin:0 2px 10px;
+}
+
+.app-friends-live-title{
+  display:flex;
+  align-items:center;
+  gap:8px;
+
+  color:#10212a;
+
+  font-size:15px;
+  font-weight:900;
+}
+
+.app-live-dot{
+  width:8px;
+  height:8px;
+  flex:0 0 8px;
+
+  border-radius:50%;
+
+  background:#ef4444;
+
+  box-shadow:
+    0 0 0 4px rgba(239,68,68,.12);
+}
+
+.app-friends-live-view{
+  padding:0;
+  border:0;
+
+  background:transparent;
+  color:#00796b;
+
+  font-size:12px;
+  font-weight:850;
+
+  cursor:pointer;
+}
+
+/*
+ * Horizontal scrolling container.
+ * More friends simply continue off the right-hand side.
+ */
+.app-friends-live-rail{
+  display:flex;
+  align-items:flex-start;
+  gap:13px;
+
+  width:100%;
+
+  padding:4px 2px 10px;
+
+  overflow-x:auto;
+  overflow-y:hidden;
+
+  scroll-snap-type:x proximity;
+
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+
+.app-friends-live-rail::-webkit-scrollbar{
+  display:none;
+}
+
+/* Individual golfer */
+
+.app-live-friend{
+  flex:0 0 82px;
+
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+
+  min-width:82px;
+
+  padding:0;
+
+  border:0;
+
+  background:transparent;
+  color:#10212a;
+
+  cursor:pointer;
+
+  scroll-snap-align:start;
+  -webkit-tap-highlight-color:transparent;
+}
+
+.app-live-friend:active{
+  transform:scale(.96);
+}
+
+/* Golf ball */
+
+.app-live-ball{
+  position:relative;
+
+  display:grid;
+  place-items:center;
+
+  width:68px;
+  height:68px;
+
+  border:3px solid #00796b;
+  border-radius:50%;
+
+  background:
+    radial-gradient(
+      circle at 34% 28%,
+      #ffffff 0%,
+      #ffffff 48%,
+      #edf2f3 100%
+    );
+
+  box-shadow:
+    0 8px 20px rgba(21,50,60,.14);
+
+  overflow:hidden;
+}
+
+/* Golf-ball dimples */
+
+.app-live-ball::before{
+  content:"";
+
+  position:absolute;
+  inset:7px;
+
+  border-radius:50%;
+
+  background-image:
+    radial-gradient(
+      circle,
+      rgba(100,116,139,.22) 1.2px,
+      transparent 1.6px
+    );
+
+  background-size:9px 9px;
+
+  opacity:.75;
+}
+
+/* Score sits on top of dimples */
+
+.app-live-score{
+  position:relative;
+  z-index:2;
+
+  display:grid;
+  place-items:center;
+
+  min-width:38px;
+  min-height:31px;
+
+  padding:3px 5px;
+
+  border-radius:999px;
+
+  background:rgba(255,255,255,.88);
+  color:#005e55;
+
+  font-size:19px;
+  font-weight:950;
+  line-height:1;
+
+  letter-spacing:-.04em;
+}
+
+/* Golfer name */
+
+.app-live-name{
+  display:block;
+
+  width:82px;
+
+  margin-top:7px;
+
+  overflow:hidden;
+
+  color:#10212a;
+
+  font-size:11px;
+  font-weight:900;
+  line-height:1.15;
+
+  text-align:center;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* Current hole */
+
+.app-live-hole{
+  display:block;
+
+  margin-top:3px;
+
+  color:#71818a;
+
+  font-size:9px;
+  font-weight:800;
+
+  text-align:center;
+}
+
+/* Empty state */
+
+.app-friends-live-empty{
+  flex:0 0 100%;
+
+  padding:13px 14px;
+
+  border:1px solid #dfe8eb;
+  border-radius:16px;
+
+  background:#ffffff;
+  color:#71818a;
+
+  font-size:11px;
+  font-weight:650;
+  line-height:1.4;
+
+  box-shadow:
+    0 6px 18px rgba(21,50,60,.04);
+}
+
 /* Quick actions */
 
 .app-action-grid {
@@ -1876,7 +2118,37 @@ html.app-mode .app-bottom-nav
       >
         <span>Search tee times</span>
         <span class="app-search-button-arrow">›</span>
-      </button>
+            </button>
+    </section>
+
+    <!-- FRIENDS LIVE -->
+    <section
+      class="app-friends-live"
+      id="appFriendsLiveSection"
+    >
+      <div class="app-friends-live-heading">
+        <div class="app-friends-live-title">
+          <span class="app-live-dot"></span>
+          <span>Follow friends live rounds</span>
+        </div>
+
+        <button
+          class="app-friends-live-view"
+          type="button"
+          onclick="window.location.href='/friends.html'"
+        >
+          View all
+        </button>
+      </div>
+
+      <div
+        class="app-friends-live-rail"
+        id="appFriendsLiveRail"
+      >
+        <div class="app-friends-live-empty">
+          Checking if your friends are playing…
+        </div>
+      </div>
     </section>
 
     <div
@@ -3426,6 +3698,189 @@ async function loadAppUpcomingRound() {
   }
 }
 
+  async function loadHomeFriendLiveRounds() {
+  const rail =
+    document.getElementById("appFriendsLiveRail");
+
+  if (!rail) return;
+
+  const token = (
+    localStorage.getItem("teeradar_jwt") ||
+    localStorage.getItem("teeradar_token") ||
+    localStorage.getItem("token") ||
+    ""
+  ).trim();
+
+  /*
+   * Keep the section permanently visible even when logged out.
+   */
+  if (!token) {
+    rail.innerHTML = `
+      <div class="app-friends-live-empty">
+        Log in to follow your friends' live rounds.
+      </div>
+    `;
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/friends/live-rounds`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const data =
+      await response.json().catch(() => ({}));
+
+    if (!response.ok || !data?.ok) {
+      throw new Error(
+        data?.error ||
+        "live_rounds_failed"
+      );
+    }
+
+    const rounds =
+      Array.isArray(data.rounds)
+        ? data.rounds
+        : [];
+
+    /*
+     * Nobody currently playing.
+     */
+    if (!rounds.length) {
+      rail.innerHTML = `
+        <div class="app-friends-live-empty">
+          None of your friends are currently playing.
+          Live scores will appear here automatically when
+          a friend starts recording their round.
+        </div>
+      `;
+      return;
+    }
+
+    /*
+     * Preserve the horizontal scroll position when the
+     * automatic refresh runs.
+     */
+    const oldScrollLeft =
+      rail.scrollLeft || 0;
+
+    rail.innerHTML =
+      rounds.map((round) => {
+
+        const roundId =
+          Number(round.round_id || 0);
+
+        const friendUserId =
+          Number(round.friend_user_id || 0);
+
+        const name =
+          String(
+            round.friend_name ||
+            "Friend"
+          );
+
+        const score =
+          String(
+            round.score_label ||
+            (
+              Number(round.score_to_par) === 0
+                ? "E"
+                : Number(round.score_to_par) > 0
+                  ? `+${Number(round.score_to_par)}`
+                  : String(Number(round.score_to_par))
+            )
+          );
+
+        const currentHole =
+          Number(round.current_hole || 1);
+
+        const holes =
+          Number(round.holes || 18);
+
+        return `
+          <button
+            class="app-live-friend"
+            type="button"
+            data-round-id="${roundId}"
+            data-friend-user-id="${friendUserId}"
+            aria-label="${escapeHtml(name)} live score ${escapeHtml(score)}"
+          >
+            <span class="app-live-ball">
+              <span class="app-live-score">
+                ${escapeHtml(score)}
+              </span>
+            </span>
+
+            <span class="app-live-name">
+              ${escapeHtml(name)}
+            </span>
+
+            <span class="app-live-hole">
+              Hole ${currentHole} of ${holes}
+            </span>
+          </button>
+        `;
+      }).join("");
+
+    rail.scrollLeft = oldScrollLeft;
+
+    /*
+     * Open the friend's read-only live scorecard.
+     */
+    rail
+      .querySelectorAll(".app-live-friend")
+      .forEach((button) => {
+
+        button.addEventListener(
+          "click",
+          () => {
+
+            const roundId =
+              Number(
+                button.dataset.roundId || 0
+              );
+
+            const friendUserId =
+              Number(
+                button.dataset.friendUserId || 0
+              );
+
+            if (!roundId) return;
+
+            let url =
+              `/friend-live-round.html?roundId=${encodeURIComponent(roundId)}`;
+
+            if (friendUserId) {
+              url +=
+                `&friendUserId=${encodeURIComponent(friendUserId)}`;
+            }
+
+            window.location.href = url;
+          }
+        );
+
+      });
+
+  } catch (error) {
+    console.warn(
+      "loadHomeFriendLiveRounds failed:",
+      error
+    );
+
+    rail.innerHTML = `
+      <div class="app-friends-live-empty">
+        Could not load your friends' live scores.
+      </div>
+    `;
+  }
+}
+
   function initInstalledAppHome() {
   const isAppMode =
     document.documentElement.classList.contains("app-mode");
@@ -3574,11 +4029,24 @@ initInstalledAppHome();
 initNotificationBell();
 
 await loadAppUpcomingRound();
+await loadHomeFriendLiveRounds();
 
 loadNotifications();
 initHomeAlertCard();
 tryShowAvailablePopupForSubscribedUser();
-setInterval(loadNotifications, 60000);
+
+setInterval(
+  loadNotifications,
+  60000
+);
+
+/*
+ * Refresh Friends Live every 10 seconds while Home remains open.
+ */
+setInterval(() => {
+  loadHomeFriendLiveRounds().catch(() => {});
+}, 10000);
+
 });
 </script>
 </body>
