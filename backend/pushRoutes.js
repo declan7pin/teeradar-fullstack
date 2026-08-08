@@ -434,8 +434,34 @@ export async function sendMobilePushToEmail(email, payload = {}) {
       ? `/alert-results.html?notificationId=${notificationId}`
       : payload.url || "/index.html"
   ),
+
   type: String(payload.type || "GENERAL"),
+
   notificationId: String(notificationId || ""),
+
+  roundId: String(
+    payload.roundId ||
+    payload.round_id ||
+    payload.meta?.roundId ||
+    payload.meta?.round_id ||
+    ""
+  ),
+
+  friendUserId: String(
+    payload.friendUserId ||
+    payload.friend_user_id ||
+    payload.meta?.friendUserId ||
+    payload.meta?.friend_user_id ||
+    ""
+  ),
+
+  upcomingId: String(
+    payload.upcomingId ||
+    payload.upcoming_id ||
+    payload.meta?.upcomingId ||
+    payload.meta?.upcoming_id ||
+    ""
+  ),
 },
       });
 
