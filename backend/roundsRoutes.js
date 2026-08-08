@@ -6,6 +6,9 @@ import { requireAuth } from "./auth.js";
 // ✅ ADDED: record round_played into Postgres analytics
 import { recordEvent } from "./analytics.js";
 
+// ✅ Push notification when a friend starts a round
+import { sendMobilePushToEmail } from "./pushRoutes.js";
+
 // ✅ OPTIONAL: email admin when a new course is submitted
 import { Resend } from "resend";
 
@@ -419,6 +422,124 @@ async function getRoundWithHoles(roundId) {
   );
 
   return { round: roundRow.rows[0], holes: holesRows.rows || [] };
+}
+
+// -------------------------------------------------
+// ✅ Notify accepted friends when a golfer starts a round
+// -------------------------------------------------
+async function notifyFriendsRoundStarted({
+  userId,
+  roundId,
+  course,
+  layout,
+}) {
+  try {
+    const golferRes = await db.query(
+      `
+      SELECT
+        id,
+        email,
+        COALESCE(
+          NULLIF(display_name, ''),
+          split_part(email, '@', 1)
+        ) AS name
+      FROM users
+      WHERE id = $1
+      LIMIT 1;
+      `,
+      [Number(userId)]
+    );
+
+    const golfer = golferRes.rows[0];
+
+    if (!golfer) {
+      console.warn("FRIEND_STARTED_ROUND: golfer not found", {
+        userId,
+        roundId,
+      });
+      return;
+    }
+
+    const golferName =
+      String(golfer.name || "").trim() || "Your friend";
+
+    const friendsRes = await db.query(
+      `
+      SELECT DISTINCT
+        u.id,
+        u.email
+      FROM user_friends uf
+      JOIN users u
+        ON u.id = CASE
+          WHEN uf.requester_user_id = $1
+            THEN uf.addressee_user_id
+          ELSE uf.requester_user_id
+        END
+      WHERE uf.status = 'accepted'
+        AND (
+          uf.requester_user_id = $1
+          OR uf.addressee_user_id = $1
+        );
+      `,
+      [Number(userId)]
+    );
+
+    const friends = friendsRes.rows || [];
+
+    if (!friends.length) {
+      console.log("FRIEND_STARTED_ROUND: no accepted friends", {
+        userId,
+        roundId,
+      });
+      return;
+    }
+
+    const courseName =
+      String(course || "").trim() || "their course";
+
+    const layoutName =
+      String(layout || "").trim();
+
+    const locationText = layoutName
+      ? `${courseName} (${layoutName})`
+      : courseName;
+
+    for (const friend of friends) {
+      const friendEmail =
+        String(friend.email || "").trim().toLowerCase();
+
+      if (!friendEmail) continue;
+
+      try {
+        await sendMobilePushToEmail(
+          friendEmail,
+          `${golferName} has started a round`,
+          `${golferName} has started playing at ${locationText}. Tap to follow their live scorecard.`,
+          {
+            type: "FRIEND_STARTED_ROUND",
+            roundId: String(roundId),
+            friendUserId: String(userId),
+          }
+        );
+
+        console.log("✅ FRIEND_STARTED_ROUND push sent", {
+          to: friendEmail,
+          golferUserId: userId,
+          roundId,
+        });
+      } catch (pushErr) {
+        console.warn(
+          "FRIEND_STARTED_ROUND push failed:",
+          pushErr?.message || pushErr
+        );
+      }
+    }
+  } catch (err) {
+    console.warn(
+      "notifyFriendsRoundStarted failed:",
+      err?.message || err
+    );
+  }
 }
 async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
   console.log("🟦 syncSharedPlayerRounds START", {
@@ -2287,6 +2408,28 @@ router.put("/:id", requireAuth, async (req, res) => {
     if (!owner) return res.status(404).json({ ok: false, error: "round not found" });
     if (owner.user_id !== userId) return res.status(403).json({ ok: false, error: "forbidden" });
 
+    // ✅ Check whether this round had any scores BEFORE this save.
+// If it had none, and this save adds the first score,
+// friends should receive the "started a round" notification.
+const beforeStartCheck = await db.query(
+  `
+  SELECT COUNT(*)::int AS scored_holes
+  FROM round_holes
+  WHERE round_id = $1
+    AND (
+      strokes IS NOT NULL
+      OR (
+        strokes_by_player IS NOT NULL
+        AND strokes_by_player <> '{}'::jsonb
+      )
+    );
+  `,
+  [roundId]
+);
+
+const hadStartedBefore =
+  Number(beforeStartCheck.rows[0]?.scored_holes || 0) > 0;
+
     const holes = req.body?.holes;
     if (!Array.isArray(holes)) {
       return res.status(400).json({ ok: false, error: "holes array is required" });
@@ -2378,8 +2521,50 @@ router.put("/:id", requireAuth, async (req, res) => {
 
     await db.query("COMMIT");
 
-    const data = await getRoundWithHoles(roundId);
+    await db.query("COMMIT");
+
+const data = await getRoundWithHoles(roundId);
+
+// ✅ If this save entered the first score of the round,
+// notify all accepted friends once.
+if (!hadStartedBefore) {
+  const hasScoreNow = (holes || []).some((h) => {
+    const strokesMap = cleanPlayerMap(
+      h?.strokes_by_player || h?.strokesByPlayer || {}
+    );
+
+    if (Object.keys(strokesMap).length > 0) {
+      return true;
+    }
+
+    const strokes =
+      h?.strokes === null ||
+      typeof h?.strokes === "undefined" ||
+      h?.strokes === ""
+        ? null
+        : Number(h.strokes);
+
+    return Number.isFinite(strokes);
+  });
+
+  if (hasScoreNow) {
     try {
+      await notifyFriendsRoundStarted({
+        userId,
+        roundId,
+        course: data?.round?.course,
+        layout: data?.round?.layout,
+      });
+    } catch (notifyErr) {
+      console.warn(
+        "FRIEND_STARTED_ROUND notification failed:",
+        notifyErr?.message || notifyErr
+      );
+    }
+  }
+}
+
+try {
   await syncSharedPlayerRounds(roundId, holes);
 } catch (syncErr) {
   console.warn("syncSharedPlayerRounds failed:", syncErr?.message || syncErr);
