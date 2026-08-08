@@ -1235,8 +1235,8 @@ html.app-mode #notLoggedIn strong {
 <main>
   <h1>My account</h1>
   <p class="muted">
-    Set your default state and favourite courses. Your subscription is managed securely via Stripe.
-  </p>
+  Set your default state, favourite courses and manage your TeeRadar membership.
+</p>
 
   <section class="app-profile-summary" id="appProfileSummary">
   <div class="app-profile-avatar">
@@ -2128,6 +2128,51 @@ displayNameStatus.className =
 let currentEntitlementActive = false;
 let currentPlan = "FREE";
 
+  // -------------------------------------------------
+// ✅ Subscription platform helpers
+// -------------------------------------------------
+function isNativeIOSApp() {
+  try {
+    return (
+      window.Capacitor &&
+      typeof window.Capacitor.getPlatform === "function" &&
+      window.Capacitor.getPlatform() === "ios"
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function openAppleSubscriptionManagement() {
+  const appleSubscriptionsUrl =
+    "https://apps.apple.com/account/subscriptions";
+
+  try {
+    const Browser =
+      window.Capacitor?.Plugins?.Browser;
+
+    if (
+      Browser &&
+      typeof Browser.open === "function"
+    ) {
+      await Browser.open({
+        url: appleSubscriptionsUrl
+      });
+
+      return;
+    }
+  } catch (error) {
+    console.warn(
+      "Could not open Apple subscriptions with Capacitor Browser:",
+      error
+    );
+  }
+
+  // Fallback
+  window.location.href =
+    appleSubscriptionsUrl;
+}
+
 // ✅ NEW: saved mates + share target
 let savedMates = [];
 let activeShareReference = "";
@@ -2748,53 +2793,145 @@ searchableCourses = data.filter((c) => {
     });
   }
 
-    // --- manage billing / upgrade ---
-  const manageBillingBtn = document.getElementById("manageBillingBtn");
-  if (manageBillingBtn) {
-    manageBillingBtn.addEventListener("click", async () => {
+   // -------------------------------------------------
+// ✅ Manage subscription
+//
+// iOS app  -> Apple subscription management
+// Website  -> Stripe customer portal
+// -------------------------------------------------
+const manageBillingBtn =
+  document.getElementById("manageBillingBtn");
+
+if (manageBillingBtn) {
+  manageBillingBtn.addEventListener(
+    "click",
+    async () => {
       billingStatus.textContent = "";
       billingStatus.className = "status";
 
-      // ✅ FREE users should go to the subscription page, not Stripe portal
-      if (!currentEntitlementActive || currentPlan === "FREE") {
-        window.location.href = "/subscribe.html";
+      /*
+       * FREE USER
+       *
+       * Send them to TeeRadar's subscription screen.
+       * The iOS version of subscribe.html can then use
+       * StoreKit, while the website continues using Stripe.
+       */
+      if (
+        !currentEntitlementActive ||
+        currentPlan === "FREE"
+      ) {
+        window.location.href =
+          "/subscribe.html";
+
         return;
       }
 
-      billingStatus.textContent = "Opening billing portal…";
-      billingStatus.className = "status";
+      /*
+       * INSTALLED iOS APP
+       *
+       * Apple subscriptions must be managed through Apple.
+       */
+      if (isNativeIOSApp()) {
+        billingStatus.textContent =
+          "Opening Apple subscriptions…";
+
+        billingStatus.className =
+          "status";
+
+        try {
+          await openAppleSubscriptionManagement();
+
+          billingStatus.textContent = "";
+        } catch (error) {
+          console.error(
+            "Apple subscription management error:",
+            error
+          );
+
+          billingStatus.textContent =
+            "Could not open Apple subscription settings.";
+
+          billingStatus.className =
+            "status err";
+        }
+
+        return;
+      }
+
+      /*
+       * WEBSITE
+       *
+       * Existing Stripe behaviour stays exactly as it is.
+       */
+      billingStatus.textContent =
+        "Opening billing portal…";
+
+      billingStatus.className =
+        "status";
 
       try {
-        const res = await fetch(`${API_BASE}/api/billing/portal`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { "Authorization": "Bearer " + token } : {})
-          },
-          body: JSON.stringify({
-            email,
-            returnUrl: window.location.href
-          })
-        });
+        const res = await fetch(
+          `${API_BASE}/api/billing/portal`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
 
-        const data = await res.json().catch(() => ({}));
+              ...(token
+                ? {
+                    Authorization:
+                      "Bearer " + token
+                  }
+                : {})
+            },
 
-        if (res.ok && data && data.url) {
-          window.location.href = data.url;
+            body: JSON.stringify({
+              email,
+              returnUrl:
+                window.location.href
+            })
+          }
+        );
+
+        const data =
+          await res
+            .json()
+            .catch(() => ({}));
+
+        if (
+          res.ok &&
+          data &&
+          data.url
+        ) {
+          window.location.href =
+            data.url;
+
           return;
         }
 
-        billingStatus.textContent = "Could not open billing portal yet.";
-        billingStatus.className = "status err";
-      } catch (err) {
-        console.error("billing portal error", err);
-        billingStatus.textContent = "Network error opening billing portal.";
-        billingStatus.className = "status err";
-      }
-    });
-  }
+        billingStatus.textContent =
+          "Could not open billing portal yet.";
 
-  // --- NEW: ask backend what Stripe plan this email is on ---
+        billingStatus.className =
+          "status err";
+
+      } catch (err) {
+        console.error(
+          "billing portal error",
+          err
+        );
+
+        billingStatus.textContent =
+          "Network error opening billing portal.";
+
+        billingStatus.className =
+          "status err";
+      }
+    }
+  );
+}
+  // --- Ask backend which TeeRadar plan this account is on ---
     async function refreshPlanFromServer() {
     if (!email || !planPill) return;
 
@@ -2838,11 +2975,20 @@ searchableCourses = data.filter((c) => {
       }
 
       if (subscriptionCardText) {
-        subscriptionCardText.textContent =
-          currentPlan === "FREE" || !entitlementActive
-            ? "Upgrade to unlock email alerts, subscriber discounts, and premium TeeRadar features."
-            : "Manage your billing details, subscription, or cancellation using Stripe’s secure customer portal.";
-      }
+  if (
+    currentPlan === "FREE" ||
+    !entitlementActive
+  ) {
+    subscriptionCardText.textContent =
+      "Upgrade to unlock email alerts, subscriber discounts, and premium TeeRadar features.";
+  } else if (isNativeIOSApp()) {
+    subscriptionCardText.textContent =
+      "Your TeeRadar subscription is billed through Apple. Manage or cancel it through your Apple subscription settings.";
+  } else {
+    subscriptionCardText.textContent =
+      "Manage your billing details, subscription, or cancellation through TeeRadar's secure billing portal.";
+  }
+}
 
             if (planSubtext) {
         if (entitlementActive && subscriptionStatus === "trialing" && currentPeriodEnd) {
