@@ -961,9 +961,9 @@
 }
 
 .notification-panel{
-  position:absolute;
-  top:calc(100% + 10px);
-  right:58px;
+  position:fixed;
+  top:calc(env(safe-area-inset-top, 0px) + 70px);
+  right:14px;
   width:min(360px, calc(100vw - 28px));
   max-height:460px;
   overflow:auto;
@@ -973,7 +973,7 @@
   box-shadow:0 18px 40px rgba(15,23,42,.28);
   border:1px solid #e2e8f0;
   display:none;
-  z-index:999;
+  z-index:100001;
 }
 
 .notification-panel.open{
@@ -2033,17 +2033,7 @@ html.app-mode .app-bottom-nav
     </button>
 
       </div>
-
-    <div class="notification-panel" id="notificationPanel">
-  <div class="notification-head">
-    <span>Notifications</span>
-    <button type="button" id="notificationReadAll">Mark all read</button>
-  </div>
-  <div id="notificationList">
-    <div class="notification-empty">No notifications yet.</div>
-  </div>
-</div>
-
+    
     <nav id="mainNav">
       <a href="/index.html">Home</a>
       <a href="/book.html">Bookings</a>
@@ -2057,6 +2047,17 @@ html.app-mode .app-bottom-nav
     </nav>
   </div>
 </header>
+
+  <div class="notification-panel" id="notificationPanel">
+  <div class="notification-head">
+    <span>Notifications</span>
+    <button type="button" id="notificationReadAll">Mark all read</button>
+  </div>
+  <div id="notificationList">
+    <div class="notification-empty">No notifications yet.</div>
+  </div>
+</div>
+
 
   <!-- =====================================================
      INSTALLED APP HOME SCREEN
@@ -3917,7 +3918,8 @@ async function loadAppUpcomingRound() {
     document.getElementById("notificationBell");
 
   if (appNotificationButton) {
-    appNotificationButton.addEventListener("click", async () => {
+  appNotificationButton.addEventListener("click", async (e) => {
+    e.stopPropagation();
       if (!email) {
         openAuthModal("login");
         return;
@@ -3971,9 +3973,21 @@ function initNotificationBell() {
   }
 
   document.addEventListener("click", (e) => {
-    if (panel.contains(e.target) || bell.contains(e.target)) return;
-    panel.classList.remove("open");
-  });
+  const appBell =
+    document.getElementById(
+      "appNotificationButton"
+    );
+
+  if (
+    panel.contains(e.target) ||
+    bell.contains(e.target) ||
+    (appBell && appBell.contains(e.target))
+  ) {
+    return;
+  }
+
+  panel.classList.remove("open");
+});
 }
 
   window.addEventListener("load", async () => {
