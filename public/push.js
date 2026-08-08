@@ -51,6 +51,109 @@ function safeNotificationUrl(rawUrl) {
   return fallback;
 }
 
+function getNotificationDestination(data = {}) {
+  const type = String(data.type || "").trim().toUpperCase();
+
+  const notificationId =
+    data.notificationId ||
+    data.notification_id ||
+    data.meta?.notificationId ||
+    data.meta?.notification_id ||
+    "";
+
+  const roundId =
+    data.roundId ||
+    data.round_id ||
+    data.meta?.roundId ||
+    data.meta?.round_id ||
+    "";
+
+  const friendUserId =
+    data.friendUserId ||
+    data.friend_user_id ||
+    data.meta?.friendUserId ||
+    data.meta?.friend_user_id ||
+    "";
+
+  const upcomingId =
+    data.upcomingId ||
+    data.upcoming_id ||
+    data.meta?.upcomingId ||
+    data.meta?.upcoming_id ||
+    "";
+
+  console.log("Resolving push destination:", {
+    type,
+    notificationId,
+    roundId,
+    friendUserId,
+    upcomingId,
+    suppliedUrl: data.url
+  });
+
+  // Tee-time availability alert
+  if (type === "TEE_TIME_ALERT" && notificationId) {
+    return `/alert-results.html?notificationId=${encodeURIComponent(notificationId)}`;
+  }
+
+  // Friend has started playing — open their live round
+  if (
+    (
+      type === "FRIEND_STARTED_ROUND" ||
+      type === "FRIEND_ROUND_STARTED" ||
+      type === "LIVE_ROUND"
+    ) &&
+    roundId &&
+    friendUserId
+  ) {
+    return `/friend-live-round.html?roundId=${encodeURIComponent(roundId)}&friendUserId=${encodeURIComponent(friendUserId)}`;
+  }
+
+  // Shared round / upcoming round
+  if (
+    type === "ROUND_SHARED" ||
+    type === "SHARED_ROUND" ||
+    type === "UPCOMING_ROUND_SHARED"
+  ) {
+    if (upcomingId) {
+      return `/my-rounds.html?upcomingId=${encodeURIComponent(upcomingId)}`;
+    }
+
+    return "/my-rounds.html";
+  }
+
+  // Tee time is about to start
+  if (
+    type === "TEE_TIME_REMINDER" ||
+    type === "ROUND_REMINDER" ||
+    type === "TEE_TIME_STARTING"
+  ) {
+    if (upcomingId) {
+      return `/my-rounds.html?upcomingId=${encodeURIComponent(upcomingId)}`;
+    }
+
+    return "/my-rounds.html";
+  }
+
+  // Friend request
+  if (type === "FRIEND_REQUEST") {
+    return "/friends.html";
+  }
+
+  // Friend accepted request
+  if (type === "FRIEND_ACCEPTED") {
+    return "/friends.html";
+  }
+
+  // If backend supplied a URL, use it.
+  if (data.url) {
+    return safeNotificationUrl(data.url);
+  }
+
+  // Final fallback
+  return "/index.html";
+}
+
 function openNotificationUrl(rawUrl) {
   const url = safeNotificationUrl(rawUrl);
   console.log("Opening push URL:", url);
@@ -58,6 +161,44 @@ function openNotificationUrl(rawUrl) {
   setTimeout(() => {
     window.location.href = url;
   }, 150);
+}
+
+let nativePushListenersInstalled = false;
+
+async function setupNativePushListeners() {
+  if (!isNativeApp()) return;
+
+  const FirebaseMessaging =
+    window.Capacitor?.Plugins?.FirebaseMessaging || null;
+
+  if (!FirebaseMessaging) {
+    console.warn("Firebase Messaging plugin not available.");
+    return;
+  }
+
+  if (nativePushListenersInstalled) return;
+  nativePushListenersInstalled = true;
+
+  await FirebaseMessaging.addListener("notificationReceived", (notification) => {
+    console.log("Firebase notification received:", notification);
+  });
+
+  await FirebaseMessaging.addListener("notificationActionPerformed", (event) => {
+    console.log("Firebase notification action:", event);
+
+    const notification = event?.notification || {};
+    const data = notification?.data || {};
+
+    console.log("Firebase push tap data:", data);
+
+    const destination = getNotificationDestination(data);
+
+    console.log("Firebase push destination:", destination);
+
+    openNotificationUrl(destination);
+  });
+
+  console.log("TeeRadar native push listeners installed.");
 }
 
 /* =========================
@@ -120,16 +261,7 @@ function openNotificationUrl(rawUrl) {
 
   console.log("FCM token saved to TeeRadar backend.");
 
-  await FirebaseMessaging.addListener("notificationReceived", (notification) => {
-    console.log("Firebase notification received:", notification);
-  });
-
-  await FirebaseMessaging.addListener("notificationActionPerformed", (event) => {
-    console.log("Firebase notification action:", event);
-
-    const data = event?.notification?.data || {};
-    openNotificationUrl(data.url || "/index.html");
-  });
+  await setupNativePushListeners();
 
   return true;
 }
@@ -257,3 +389,9 @@ window.TeeRadarPush = {
   enablePush,
   disablePush
 };
+
+if (isNativeApp()) {
+  setupNativePushListeners().catch((err) => {
+    console.warn("Could not initialise native push listeners:", err);
+  });
+}
