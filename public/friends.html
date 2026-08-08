@@ -1345,6 +1345,8 @@ async function loadLiveFriendRounds(){
 
         const roundId =
           Number(round.round_id || round.id || 0);
+        const friendUserId =
+  Number(round.friend_user_id || 0);
 
         const friendName =
           round.friend_name ||
@@ -1375,9 +1377,10 @@ async function loadLiveFriendRounds(){
 
         return `
           <div
-            class="live-round-card"
-            data-round-id="${roundId}"
-          >
+  class="live-round-card"
+  data-round-id="${roundId}"
+  data-friend-user-id="${friendUserId}"
+>
             <div class="live-round-main">
 
               <div class="live-round-score">
@@ -1411,16 +1414,19 @@ async function loadLiveFriendRounds(){
       .forEach((card) => {
 
         card.addEventListener("click", async () => {
-          const roundId =
-            Number(card.dataset.roundId || 0);
+  const roundId =
+    Number(card.dataset.roundId || 0);
 
-          if (!roundId) return;
+  const friendUserId =
+    Number(card.dataset.friendUserId || 0);
 
-          await playSocialHaptic("light");
+  if (!roundId || !friendUserId) return;
 
-          window.location.href =
-            `/friend-live-round.html?roundId=${encodeURIComponent(roundId)}`;
-        });
+  await playSocialHaptic("light");
+
+  window.location.href =
+    `/friend-live-round.html?roundId=${encodeURIComponent(roundId)}&friendUserId=${encodeURIComponent(friendUserId)}`;
+});
 
       });
 
