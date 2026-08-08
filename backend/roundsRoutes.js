@@ -511,16 +511,16 @@ async function notifyFriendsRoundStarted({
       if (!friendEmail) continue;
 
       try {
-        await sendMobilePushToEmail(
-          friendEmail,
-          `${golferName} has started a round`,
-          `${golferName} has started playing at ${locationText}. Tap to follow their live scorecard.`,
-          {
-            type: "FRIEND_STARTED_ROUND",
-            roundId: String(roundId),
-            friendUserId: String(userId),
-          }
-        );
+        await sendMobilePushToEmail(friendEmail, {
+  title: `${golferName} has started a round`,
+  body: `${golferName} has started playing at ${locationText}. Tap to follow their live scorecard.`,
+  url: `/friend-live-round.html?roundId=${encodeURIComponent(roundId)}&friendUserId=${encodeURIComponent(userId)}`,
+  type: "FRIEND_STARTED_ROUND",
+  meta: {
+    roundId: String(roundId),
+    friendUserId: String(userId),
+  },
+});
 
         console.log("✅ FRIEND_STARTED_ROUND push sent", {
           to: friendEmail,
