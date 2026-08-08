@@ -1912,6 +1912,143 @@ if (logoutBtn) {
 }
 
   // -------------------------------------------------
+// ✅ Load account details from backend
+// -------------------------------------------------
+async function hydrateProfileFromServer() {
+  if (!email || !token) return false;
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/social/profile`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer " + token
+        }
+      }
+    );
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data?.ok || !data?.profile) {
+      console.warn(
+        "Could not hydrate profile from server:",
+        data
+      );
+      return false;
+    }
+
+    const profile = data.profile;
+
+    const displayName =
+      String(profile.displayName || "").trim();
+
+    const fullName =
+      String(profile.fullName || "").trim();
+
+    const gender =
+      String(
+        profile.gender ||
+        "prefer_not_to_answer"
+      ).trim();
+
+    const dob =
+      String(profile.dob || "").trim();
+
+    // Update visible account fields
+    if (displayNameInput) {
+      displayNameInput.value = displayName;
+    }
+
+    if (fullNameInput) {
+      fullNameInput.value = fullName;
+    }
+
+    if (genderInput) {
+      genderInput.value =
+        gender === "prefer_not_to_answer"
+          ? ""
+          : gender;
+    }
+
+    if (dobInput) {
+      dobInput.value = dob;
+    }
+
+    // Update app profile card
+    if (appProfileName) {
+      appProfileName.textContent =
+        displayName ||
+        fullName ||
+        "TeeRadar golfer";
+    }
+
+    if (appProfileEmail) {
+      appProfileEmail.textContent =
+        profile.email || email;
+    }
+
+    // Keep local cache in sync
+    try {
+      let obj = {};
+
+      const raw =
+        localStorage.getItem("tr_user");
+
+      if (raw) {
+        obj = JSON.parse(raw) || {};
+      }
+
+      obj.email =
+        profile.email || email;
+
+      obj.displayName =
+        displayName;
+
+      obj.fullName =
+        fullName;
+
+      obj.gender =
+        gender;
+
+      obj.dob =
+        dob;
+
+      localStorage.setItem(
+        "tr_user",
+        JSON.stringify(obj)
+      );
+
+      if (displayName) {
+        localStorage.setItem(
+          "teeradar_display_name",
+          displayName
+        );
+      } else {
+        localStorage.removeItem(
+          "teeradar_display_name"
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "Could not cache hydrated profile:",
+        error
+      );
+    }
+
+    return true;
+
+  } catch (error) {
+    console.error(
+      "hydrateProfileFromServer error:",
+      error
+    );
+
+    return false;
+  }
+}
+
+  // -------------------------------------------------
 // ✅ Account details save
 // -------------------------------------------------
 if (saveDisplayNameBtn) {
@@ -3713,25 +3850,28 @@ if (previousGamesFilter) {
     }
   });
 }
-    // --- boot ---
-  (async function init() {
-    if (!email) return;
+   // --- boot ---
+(async function init() {
+  if (!email) return;
 
-    await loadCourses();
-    await refreshPlanFromServer();
+  // Load saved account details from TeeRadar first
+  await hydrateProfileFromServer();
 
-    if (currentEntitlementActive) {
-      await hydratePrefsFromServer();
-    }
+  await loadCourses();
+  await refreshPlanFromServer();
 
-    loadPrefsFromStorage();
+  if (currentEntitlementActive) {
+    await hydratePrefsFromServer();
+  }
 
-    if (!currentEntitlementActive) {
-      setAlertControlsLocked(true);
-    }
+  loadPrefsFromStorage();
 
-    await loadMyGames();
-    })();
+  if (!currentEntitlementActive) {
+    setAlertControlsLocked(true);
+  }
+
+  await loadMyGames();
+})();
 
    // ✅ PUSH NOTIFICATION BUTTONS
   if (enablePushBtn) {
