@@ -5248,10 +5248,22 @@ if (!isLoggedIn()){
   setToast(leftToast, "Round created (guest).", true);
 
   await safeFetchRounds();
-  await safeLoadRound(newId);
+await safeLoadRound(newId);
 
-  setLeftPanelsVisibility(false);
-  return;
+// ✅ Take guest straight to the newly-created scorecard
+setTimeout(() => {
+  const scorecard = document.getElementById("scorecardWrap");
+
+  if (scorecard) {
+    scorecard.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+  }
+}, 150);
+
+setLeftPanelsVisibility(false);
+return;
 }
 
 // ✅ Logged in: create via backend
@@ -5267,7 +5279,19 @@ if (newId) {
 
   await safeLoadRound(newId);
 
-  await logAnalyticsEvent("round_created", {
+// ✅ Take the golfer straight to the newly-created scorecard
+setTimeout(() => {
+  const scorecard = document.getElementById("scorecardWrap");
+
+  if (scorecard) {
+    scorecard.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+  }
+}, 150);
+
+await logAnalyticsEvent("round_created", {
     roundId: String(newId),
     round_id: String(newId),
     courseName: course || null
@@ -5871,11 +5895,23 @@ await fetchUpcomingRounds();
   return;
 }     
 
-  // ✅ NEW: auto-open round when arriving from My Account
-  if (roundIdFromUrl) {
-    await safeLoadRound(roundIdFromUrl);
-    clearRoundIdFromUrl();
-  }
+  // ✅ Auto-open round and move straight to the scorecard
+if (roundIdFromUrl) {
+  await safeLoadRound(roundIdFromUrl);
+
+  setTimeout(() => {
+    const scorecard = document.getElementById("scorecardWrap");
+
+    if (scorecard) {
+      scorecard.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }
+  }, 150);
+
+  clearRoundIdFromUrl();
+}
 })();
   </script>
 </body>
