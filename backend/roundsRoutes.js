@@ -852,6 +852,21 @@ LIMIT 50;
     }))
     .filter((r) => Number.isFinite(Number(r.diff)))
     .sort((a, b) => b.date - a.date);
+  console.log("🏌️ HANDICAP DEBUG", {
+  userId,
+  rawRounds: (rows || []).map((r) => ({
+    id: r.id,
+    course: r.course,
+    state: r.state,
+    holes: r.holes,
+    total_score: r.total_score,
+    total_par: r.total_par,
+    holes_entered: r.holes_entered,
+    course_rating: r.course_rating,
+    slope_rating: r.slope_rating,
+  })),
+  played,
+});
 
   if (!played.length) {
     await db.query(
@@ -890,6 +905,14 @@ LIMIT 50;
     .slice(0, bestCount);
 
   const avg = best.reduce((sum, r) => sum + Number(r.diff), 0) / best.length;
+  console.log("🏌️ HANDICAP RESULT", {
+  userId,
+  playedCount: played.length,
+  bestCount,
+  best,
+  averageDifferential: avg,
+  calculatedHandicap: Number((avg * 0.93).toFixed(1)),
+});
   // TeeRadar Handicap V1:
 // Uses best recent score differentials.
 // 9-hole rounds are already doubled to an 18-hole equivalent.
