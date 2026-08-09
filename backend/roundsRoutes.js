@@ -894,7 +894,8 @@ LIMIT 50;
 // Uses best recent score differentials.
 // 9-hole rounds are already doubled to an 18-hole equivalent.
 // 0.93 keeps it close to real handicap behaviour without course rating/slope yet.
-const handicap = Math.max(0, Number((avg * 0.93).toFixed(1)));
+const handicap =
+  Number((avg * 0.93).toFixed(1));
 
   const last3 = played.slice(0, 3);
   const prev3 = played.slice(3, 6);
@@ -905,7 +906,8 @@ if (last3.length >= 3) {
   const lastAvg = last3.reduce((sum, r) => sum + Number(r.diff), 0) / last3.length;
 
   // Store last 3 average as handicap-style number
-  trend = Math.max(0, Number((lastAvg * 0.93).toFixed(1)));
+  trend =
+  Number((lastAvg * 0.93).toFixed(1));
 }
 
   const status = played.length >= 3 ? "confirmed" : "provisional";
