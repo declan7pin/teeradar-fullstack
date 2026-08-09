@@ -787,15 +787,28 @@ function handicapDiffFromRound(row) {
   const par = Number(row.total_par || 0);
   const holesEntered = Number(row.holes_entered || 0);
 
-  if (![9, 18].includes(holes)) return null;
-  if (holesEntered < holes) return null;
-  if (!Number.isFinite(score) || score <= 0) return null;
-  if (!Number.isFinite(par) || par <= 0) return null;
+  if (![9, 18].includes(holes)) {
+    return null;
+  }
+
+  if (holesEntered < holes) {
+    return null;
+  }
+
+  if (!Number.isFinite(score) || score <= 0) {
+    return null;
+  }
+
+  if (!Number.isFinite(par) || par <= 0) {
+    return null;
+  }
 
   const courseRating = Number(row.course_rating);
   const slopeRating = Number(row.slope_rating);
 
-  // ✅ More accurate WHS-style formula when rating/slope exists
+  // ---------------------------------------------
+  // Course rating + slope calculation
+  // ---------------------------------------------
   if (
     Number.isFinite(courseRating) &&
     courseRating > 20 &&
@@ -803,17 +816,45 @@ function handicapDiffFromRound(row) {
     slopeRating >= 55 &&
     slopeRating <= 155
   ) {
-    const adjustedRating = holes === 9 ? courseRating * 2 : courseRating;
-    const adjustedScore = holes === 9 ? score * 2 : score;
+    let adjustedScore = score;
+    let adjustedRating = courseRating;
 
-    return (adjustedScore - adjustedRating) * 113 / slopeRating;
+    if (holes === 9) {
+      // Convert the SCORE to an 18-hole equivalent.
+      adjustedScore = score * 2;
+
+      /*
+       * TeeRadar currently has a mixture of possible
+       * 9-hole rating formats.
+       *
+       * A rating around 30–40 is genuinely a 9-hole rating
+       * and should be doubled.
+       *
+       * A rating around 60–80 is already an 18-hole-style
+       * rating and MUST NOT be doubled.
+       */
+      adjustedRating =
+        courseRating < 50
+          ? courseRating * 2
+          : courseRating;
+    }
+
+    return (
+      (adjustedScore - adjustedRating) *
+      113 /
+      slopeRating
+    );
   }
 
-  // ✅ Fallback when rating/slope is missing
+  // ---------------------------------------------
+  // Fallback when rating/slope isn't available
+  // ---------------------------------------------
   const diff = score - par;
-  return holes === 9 ? diff * 2 : diff;
-}
 
+  return holes === 9
+    ? diff * 2
+    : diff;
+}
 async function recalculateTeeRadarHandicap(userId) {
   await ensureTeeRadarHandicapColumns();
 
