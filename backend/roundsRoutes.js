@@ -1936,22 +1936,17 @@ router.get("/", requireAuth, async (req, res) => {
 
     await ensureTeeRadarHandicapColumns();
 
-const handicapRes = await db.query(
-  `
-  SELECT
-    teeradar_handicap,
-    teeradar_handicap_status,
-    teeradar_handicap_rounds,
-    teeradar_handicap_trend,
-    teeradar_handicap_updated_at
-  FROM users
-  WHERE id = $1
-  LIMIT 1;
-  `,
-  [userId]
-);
+let freshHandicap = null;
 
-const handicapRow = handicapRes.rows[0] || {};
+try {
+  freshHandicap =
+    await recalculateTeeRadarHandicap(userId);
+} catch (err) {
+  console.warn(
+    "Could not recalculate handicap on rounds load:",
+    err?.message || err
+  );
+}
     const { rows } = await db.query(
       `
       SELECT id, course, layout, state, holes, par_mode, created_at,
@@ -1968,12 +1963,11 @@ const handicapRow = handicapRes.rows[0] || {};
   ok: true,
   rounds: rows,
   handicap: {
-    value: handicapRow.teeradar_handicap,
-    status: handicapRow.teeradar_handicap_status || "provisional",
-    rounds: Number(handicapRow.teeradar_handicap_rounds || 0),
-    trend: handicapRow.teeradar_handicap_trend,
-    updated_at: handicapRow.teeradar_handicap_updated_at,
-  },
+  value: freshHandicap?.handicap ?? null,
+  status: freshHandicap?.status || "provisional",
+  rounds: Number(freshHandicap?.rounds || 0),
+  trend: freshHandicap?.trend ?? null,
+},
 });
   } catch (err) {
     console.error("GET /api/rounds error:", err);
