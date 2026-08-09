@@ -3650,7 +3650,7 @@ function calculateTeeRadarHandicap(){
   }
 
   return {
-    value: Math.max(0, avg).toFixed(1),
+    value: Number(avg).toFixed(1),
     status: confirmed
       ? `Confirmed from ${played.length} submitted rounds.`
       : `${played.length}/3 rounds submitted — provisional handicap.`,
@@ -3694,7 +3694,16 @@ if (Number.isFinite(Number(trend))) {
     h = calculateTeeRadarHandicap();
   }
 
-  valueEl.textContent = h.value == null ? "—" : h.value;
+  if (h.value == null) {
+  valueEl.textContent = "—";
+} else {
+  const handicapNumber = Number(h.value);
+
+  valueEl.textContent =
+    handicapNumber < 0
+      ? `+${Math.abs(handicapNumber).toFixed(1)}`
+      : handicapNumber.toFixed(1);
+}
   statusEl.textContent = h.status;
   badgeEl.textContent = h.badge;
   trendEl.textContent = h.trend;
