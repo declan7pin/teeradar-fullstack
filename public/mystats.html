@@ -356,6 +356,124 @@
     border-top:none;
   }
 
+    /* ===== MY STATS SKELETON LOADER ===== */
+
+#statsSkeleton{
+  display:none;
+}
+
+#statsContent{
+  display:block;
+}
+
+body.stats-loading #statsSkeleton{
+  display:block;
+}
+
+body.stats-loading #statsContent{
+  display:none;
+}
+
+.skeleton{
+  position:relative;
+  overflow:hidden;
+  background:#e5edef;
+  border-radius:12px;
+}
+
+.skeleton::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  transform:translateX(-100%);
+  background:linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,.65),
+    transparent
+  );
+  animation:skeletonShimmer 1.25s infinite;
+}
+
+@keyframes skeletonShimmer{
+  100%{
+    transform:translateX(100%);
+  }
+}
+
+.skeleton-title{
+  width:42%;
+  height:24px;
+  margin-bottom:16px;
+}
+
+.skeleton-pill{
+  width:180px;
+  height:38px;
+  border-radius:999px;
+  margin-bottom:14px;
+}
+
+.skeleton-tabs{
+  display:flex;
+  gap:10px;
+  margin-bottom:12px;
+}
+
+.skeleton-tab{
+  width:105px;
+  height:40px;
+  border-radius:999px;
+}
+
+.skeleton-kpis{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+}
+
+.skeleton-kpi{
+  height:115px;
+  border-radius:20px;
+}
+
+.skeleton-row{
+  height:68px;
+  margin-top:12px;
+  border-radius:16px;
+}
+
+.skeleton-card{
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius:24px;
+  padding:20px;
+  box-shadow:var(--shadow);
+}
+
+.skeleton-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.15fr) minmax(330px,.85fr);
+  gap:18px;
+  margin-top:12px;
+}
+
+@media(max-width:960px){
+  .skeleton-grid{
+    grid-template-columns:1fr;
+  }
+}
+
+@media(max-width:720px){
+  .skeleton-kpis{
+    grid-template-columns:1fr;
+  }
+
+  .skeleton-kpi{
+    height:95px;
+  }
+}
+
   #rangePill{
     margin-bottom:2px;
   }
@@ -487,7 +605,7 @@
 }
 </style>
 </head>
-<body>
+<body class="stats-loading">
   <div class="wrap">
     <!-- ✅ Login gate (My Stats requires login) -->
 <div id="authGate" class="card" style="display:none;">
@@ -515,6 +633,58 @@
         <button class="btn primary" id="refreshBtn">Refresh</button>
       </div>
     </header>
+
+  <!-- Stats loading skeleton -->
+<div id="statsSkeleton">
+
+  <div class="skeleton-card">
+    <div class="skeleton skeleton-pill"></div>
+
+    <div class="skeleton-tabs">
+      <div class="skeleton skeleton-tab"></div>
+      <div class="skeleton skeleton-tab"></div>
+      <div class="skeleton skeleton-tab"></div>
+    </div>
+
+    <div class="skeleton-tabs">
+      <div class="skeleton skeleton-tab"></div>
+      <div class="skeleton skeleton-tab"></div>
+      <div class="skeleton skeleton-tab"></div>
+    </div>
+  </div>
+
+  <div class="skeleton-grid">
+
+    <div class="skeleton-card">
+      <div class="skeleton skeleton-title"></div>
+
+      <div class="skeleton-kpis">
+        <div class="skeleton skeleton-kpi"></div>
+        <div class="skeleton skeleton-kpi"></div>
+        <div class="skeleton skeleton-kpi"></div>
+      </div>
+
+      <div class="skeleton skeleton-row"></div>
+      <div class="skeleton skeleton-row"></div>
+      <div class="skeleton skeleton-row"></div>
+      <div class="skeleton skeleton-row"></div>
+      <div class="skeleton skeleton-row"></div>
+    </div>
+
+    <div class="skeleton-card">
+      <div class="skeleton skeleton-title"></div>
+
+      <div class="skeleton skeleton-row"></div>
+      <div class="skeleton skeleton-row"></div>
+      <div class="skeleton skeleton-row"></div>
+      <div class="skeleton skeleton-row"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<div id="statsContent">
 
     <div class="card">
       <div class="pill" id="rangePill">Range: Last 5 rounds</div>
@@ -730,6 +900,8 @@
         </table>
       </div>
     </div>
+
+  </div> <!-- /statsContent -->
 
   </div> <!-- ✅ keep this line; we’ll close #app properly below -->
 
@@ -1731,6 +1903,8 @@ let customEndDate = "";
 
     async function refresh(){
 
+  document.body.classList.add("stats-loading");
+
   const debug = document.getElementById("statsDebug");
 
   const token = getToken();
@@ -1759,9 +1933,13 @@ let customEndDate = "";
         " round(s).";
     }
 
-    applyRange();
+        applyRange();
 
-  } catch (err){
+    document.body.classList.remove("stats-loading");
+
+    } catch (err){
+
+    document.body.classList.remove("stats-loading");
 
     console.error(
       "My Stats refresh failed:",
