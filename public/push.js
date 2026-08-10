@@ -1,4 +1,4 @@
-const PUSH_API_BASE = "https://teeradar-fullstack-5.onrender.com";
+const PUSH_API_BASE = "https://teeradar.com.au";
 
 function isNativeApp() {
   try {
@@ -51,6 +51,109 @@ function safeNotificationUrl(rawUrl) {
   return fallback;
 }
 
+function getNotificationDestination(data = {}) {
+  const type = String(data.type || "").trim().toUpperCase();
+
+  const notificationId =
+    data.notificationId ||
+    data.notification_id ||
+    data.meta?.notificationId ||
+    data.meta?.notification_id ||
+    "";
+
+  const roundId =
+    data.roundId ||
+    data.round_id ||
+    data.meta?.roundId ||
+    data.meta?.round_id ||
+    "";
+
+  const friendUserId =
+    data.friendUserId ||
+    data.friend_user_id ||
+    data.meta?.friendUserId ||
+    data.meta?.friend_user_id ||
+    "";
+
+  const upcomingId =
+    data.upcomingId ||
+    data.upcoming_id ||
+    data.meta?.upcomingId ||
+    data.meta?.upcoming_id ||
+    "";
+
+  console.log("Resolving push destination:", {
+    type,
+    notificationId,
+    roundId,
+    friendUserId,
+    upcomingId,
+    suppliedUrl: data.url
+  });
+
+  // Tee-time availability alert
+  if (type === "TEE_TIME_ALERT" && notificationId) {
+    return `/alert-results.html?notificationId=${encodeURIComponent(notificationId)}`;
+  }
+
+  // Friend has started playing — open their live round
+  if (
+    (
+      type === "FRIEND_STARTED_ROUND" ||
+      type === "FRIEND_ROUND_STARTED" ||
+      type === "LIVE_ROUND"
+    ) &&
+    roundId &&
+    friendUserId
+  ) {
+    return `/friend-live-round.html?roundId=${encodeURIComponent(roundId)}&friendUserId=${encodeURIComponent(friendUserId)}`;
+  }
+
+  // Shared round / upcoming round
+  if (
+    type === "ROUND_SHARED" ||
+    type === "SHARED_ROUND" ||
+    type === "UPCOMING_ROUND_SHARED"
+  ) {
+    if (upcomingId) {
+      return `/my-rounds.html?upcomingId=${encodeURIComponent(upcomingId)}`;
+    }
+
+    return "/my-rounds.html";
+  }
+
+  // Tee time is about to start
+  if (
+    type === "TEE_TIME_REMINDER" ||
+    type === "ROUND_REMINDER" ||
+    type === "TEE_TIME_STARTING"
+  ) {
+    if (upcomingId) {
+      return `/my-rounds.html?upcomingId=${encodeURIComponent(upcomingId)}`;
+    }
+
+    return "/my-rounds.html";
+  }
+
+  // Friend request
+  if (type === "FRIEND_REQUEST") {
+    return "/friends.html";
+  }
+
+  // Friend accepted request
+  if (type === "FRIEND_ACCEPTED") {
+    return "/friends.html";
+  }
+
+  // If backend supplied a URL, use it.
+  if (data.url) {
+    return safeNotificationUrl(data.url);
+  }
+
+  // Final fallback
+  return "/index.html";
+}
+
 function openNotificationUrl(rawUrl) {
   const url = safeNotificationUrl(rawUrl);
   console.log("Opening push URL:", url);
@@ -60,81 +163,105 @@ function openNotificationUrl(rawUrl) {
   }, 150);
 }
 
+let nativePushListenersInstalled = false;
+
+async function setupNativePushListeners() {
+  if (!isNativeApp()) return;
+
+  const FirebaseMessaging =
+    window.Capacitor?.Plugins?.FirebaseMessaging || null;
+
+  if (!FirebaseMessaging) {
+    console.warn("Firebase Messaging plugin not available.");
+    return;
+  }
+
+  if (nativePushListenersInstalled) return;
+  nativePushListenersInstalled = true;
+
+  await FirebaseMessaging.addListener("notificationReceived", (notification) => {
+    console.log("Firebase notification received:", notification);
+  });
+
+  await FirebaseMessaging.addListener("notificationActionPerformed", (event) => {
+    console.log("Firebase notification action:", event);
+
+    const notification = event?.notification || {};
+    const data = notification?.data || {};
+
+    console.log("Firebase push tap data:", data);
+
+    const destination = getNotificationDestination(data);
+
+    console.log("Firebase push destination:", destination);
+
+    openNotificationUrl(destination);
+  });
+
+  console.log("TeeRadar native push listeners installed.");
+}
+
 /* =========================
    NATIVE iOS / ANDROID PUSH
 ========================= */
-async function enableNativePush(email) {
-  const PushNotifications = getPushPlugin();
+ async function enableNativePush(email) {
+  const FirebaseMessaging =
+    window.Capacitor?.Plugins?.FirebaseMessaging || null;
 
-  if (!PushNotifications) {
-    throw new Error(
-      "Native push plugin not available. Run npx cap sync ios and reinstall the app."
-    );
+  if (!FirebaseMessaging) {
+    throw new Error("Firebase Messaging plugin not available. Run npm install @capacitor-firebase/messaging && npx cap sync ios.");
   }
 
-  let perm = await PushNotifications.checkPermissions();
+  console.log("Firebase native push setup starting", {
+    platform: window.Capacitor?.getPlatform?.(),
+    apiBase: PUSH_API_BASE,
+    email: getUserEmail(email)
+  });
+
+  let perm = await FirebaseMessaging.checkPermissions();
 
   if (perm.receive !== "granted") {
-    perm = await PushNotifications.requestPermissions();
+    perm = await FirebaseMessaging.requestPermissions();
   }
 
   if (perm.receive !== "granted") {
     throw new Error("Push permission was not granted.");
   }
 
-  if (typeof PushNotifications.removeAllListeners === "function") {
-    await PushNotifications.removeAllListeners();
+  const result = await FirebaseMessaging.getToken();
+  const tokenValue = String(result?.token || "").trim();
+
+  console.log("FCM token:", tokenValue);
+
+  if (!tokenValue) {
+    throw new Error("No FCM token returned.");
   }
 
-  await PushNotifications.addListener("registration", async (token) => {
-    console.log("Native push token:", token.value);
+  const userEmail = getUserEmail(email);
+  const jwt = localStorage.getItem("teeradar_jwt") || "";
 
-    const userEmail = getUserEmail(email);
-    const jwt = localStorage.getItem("teeradar_jwt") || "";
-
-    const res = await fetch(`${PUSH_API_BASE}/api/push/register`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(jwt ? { Authorization: "Bearer " + jwt } : {})
-      },
-      body: JSON.stringify({
-        email: userEmail,
-        platform: window.Capacitor.getPlatform(),
-        token: token.value
-      })
-    });
-
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok || !data.ok) {
-      console.warn("Native push token save failed:", data);
-    }
+  const res = await fetch(`${PUSH_API_BASE}/api/push/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(jwt ? { Authorization: "Bearer " + jwt } : {})
+    },
+    body: JSON.stringify({
+      email: userEmail,
+      platform: window.Capacitor.getPlatform(),
+      token: tokenValue
+    })
   });
 
-  await PushNotifications.addListener("registrationError", (err) => {
-    console.error("Native push registration error:", err);
-  });
+  const data = await res.json().catch(() => ({}));
 
-  await PushNotifications.addListener("pushNotificationReceived", (notification) => {
-    console.log("Push received:", notification);
-  });
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Could not save FCM token.");
+  }
 
-  await PushNotifications.addListener("pushNotificationActionPerformed", (event) => {
-    console.log("Push action event:", event);
+  console.log("FCM token saved to TeeRadar backend.");
 
-    const data = event?.notification?.data || {};
-    const url =
-      data.url ||
-      data.link ||
-      data.click_action ||
-      event?.notification?.url ||
-      "/index.html";
-
-    openNotificationUrl(url);
-  });
-
-  await PushNotifications.register();
+  await setupNativePushListeners();
 
   return true;
 }
@@ -211,6 +338,13 @@ async function enableWebPush(email) {
    PUBLIC METHODS
 ========================= */
 async function enablePush(email) {
+  console.log("Push enable clicked", {
+    hasCapacitor: !!window.Capacitor,
+    platform: window.Capacitor?.getPlatform?.(),
+    isNative: isNativeApp(),
+    hasPushPlugin: !!getPushPlugin()
+  });
+
   if (isNativeApp()) {
     return enableNativePush(email);
   }
@@ -255,3 +389,9 @@ window.TeeRadarPush = {
   enablePush,
   disablePush
 };
+
+if (isNativeApp()) {
+  setupNativePushListeners().catch((err) => {
+    console.warn("Could not initialise native push listeners:", err);
+  });
+}
