@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+/>
   <title>TeeRadar — Friend Profile</title>
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
   <style>
@@ -11,9 +14,9 @@
   max-width:860px;
   margin:0 auto;
   padding:
-    calc(env(safe-area-inset-top, 0px) + 20px)
+    calc(env(safe-area-inset-top, 0px) + 16px)
     14px
-    80px;
+    calc(env(safe-area-inset-bottom, 0px) + 80px);
 }
     .hero{background:linear-gradient(135deg,#00796b,#005e55);color:#fff;border-radius:22px;padding:22px;margin-bottom:16px}
     .hero h1{margin:0 0 6px;font-size:28px;word-break:break-word}
@@ -28,6 +31,30 @@
     .round strong{display:block}
     .round span{display:block;color:#64748b;font-size:13px;margin-top:3px}
     .back{display:inline-block;margin-bottom:14px;color:#005e55;font-weight:700}
+    .top-nav{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-bottom:14px;
+}
+
+.top-nav .back{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:44px;
+  margin:0;
+  padding:8px 10px;
+  text-align:center;
+  text-decoration:none;
+  border-radius:12px;
+}
+
+@media(max-width:420px){
+  .top-nav{
+    grid-template-columns:1fr;
+  }
+}
     .empty{color:#64748b}
     h2{margin:0 0 12px}
     .section-title{margin:18px 0 10px;font-size:15px;color:#64748b;text-transform:uppercase;letter-spacing:.06em}
@@ -62,14 +89,15 @@
 </head>
 <body>
   <main class="wrap">
-    <div style="display:flex;gap:10px;margin-bottom:14px;">
-  <a class="back" style="flex:1;text-align:center;text-decoration:none;" href="/index.html">
+    <nav class="top-nav">
+  <a class="back" href="/index.html">
     ← Return Home
   </a>
-  <a class="back" style="flex:1;text-align:center;text-decoration:none;" href="/friends.html">
+
+  <a class="back" href="/friends.html">
     ← Back to friends
   </a>
-</div>
+</nav>
 
     <section class="hero">
       <h1 id="friendName">Friend profile</h1>
