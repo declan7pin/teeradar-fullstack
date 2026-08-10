@@ -47,6 +47,8 @@ import { startAlertWorker, runAlertTickOnce } from "./alertWorker.js"; // ✅ AD
 // 🔔 Push notifications
 import pushRouter from "./pushRoutes.js";
 import { ensurePushSubscriptionsTable } from "./pushMigrate.js";
+// 🍎 Apple subscriptions
+import applePurchaseRouter from "./applePurchaseRoutes.js";
 
 // ✅ NEW: Rounds router
 import roundsRouter from "./roundsRoutes.js";
@@ -160,18 +162,19 @@ async function upsertSubscriberStatusFromStripe({ email, customerId, subscriptio
   await db.query(
     `
     INSERT INTO subscriber_status (
-      email,
-      stripe_customer_id,
-      subscription_id,
-      status,
-      plan,
-      cancel_at_period_end,
-      canceled_at,
-      current_period_end,
-      entitlement_active,
-      updated_at
-    )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now())
+  email,
+  stripe_customer_id,
+  subscription_id,
+  status,
+  plan,
+  cancel_at_period_end,
+  canceled_at,
+  current_period_end,
+  entitlement_active,
+  payment_provider,
+  updated_at
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'stripe',now())
     ON CONFLICT (email)
     DO UPDATE SET
       stripe_customer_id = EXCLUDED.stripe_customer_id,
@@ -182,6 +185,7 @@ async function upsertSubscriberStatusFromStripe({ email, customerId, subscriptio
       canceled_at = EXCLUDED.canceled_at,
       current_period_end = EXCLUDED.current_period_end,
       entitlement_active = EXCLUDED.entitlement_active,
+      payment_provider = 'stripe',
       updated_at = now()
     `,
     [
@@ -212,17 +216,22 @@ async function getSubscriberStatusByEmail(email) {
   const result = await db.query(
     `
     SELECT
-      email,
-      stripe_customer_id,
-      subscription_id,
-      status,
-      plan,
-      cancel_at_period_end,
-      canceled_at,
-      current_period_end,
-      entitlement_active,
-      updated_at
-    FROM subscriber_status
+  email,
+  stripe_customer_id,
+  subscription_id,
+  status,
+  plan,
+  cancel_at_period_end,
+  canceled_at,
+  current_period_end,
+  entitlement_active,
+  payment_provider,
+  apple_original_transaction_id,
+  apple_transaction_id,
+  apple_product_id,
+  apple_environment,
+  updated_at
+FROM subscriber_status
     WHERE LOWER(email) = LOWER($1)
     LIMIT 1
     `,
@@ -596,7 +605,8 @@ ensurePushSubscriptionsTable();
 ensureMobilePushTokensTable();
 ensureRoundsTables();
 ensureScorecardTemplatesTables();
-ensureSubscriberStatusSchema(); // ✅ ADD: creates subscriber_status table in code
+await ensureSubscriberStatusSchema();
+console.log("✅ subscriber_status schema ready");
 
 async function ensureUserFriendsTable() {
   try {
@@ -1297,7 +1307,8 @@ app.use("/api/shared-rounds", sharedRoundsRouter);
 app.use("/api/alerts", alertsRouter);
 // 🔔 Push notifications API
 app.use("/api/push", pushRouter);
-
+// 🍎 Apple subscription verification + notifications
+app.use("/api/apple-purchases", applePurchaseRouter);
 // -------------------------------------------------
 // Stripe Checkout – create subscription session
 // -------------------------------------------------
@@ -1358,108 +1369,6 @@ const cancelUrl =
 });
 
 // -------------------------------------------------
-// Mobile subscriptions – Apple / Google app purchase activation
-// -------------------------------------------------
-app.post("/api/mobile-subscription/activate", async (req, res) => {
-  try {
-    const { email, plan, platform, receipt } = req.body || {};
-
-    const trimmedEmail = String(email || "").trim().toLowerCase();
-    const planKey = String(plan || "").trim().toUpperCase();
-    const storePlatform = String(platform || "").trim().toLowerCase();
-
-    if (!trimmedEmail) {
-      return res.status(400).json({ ok: false, error: "email_required" });
-    }
-
-    if (!["ios", "android"].includes(storePlatform)) {
-      return res.status(400).json({ ok: false, error: "invalid_platform" });
-    }
-
-    const effectivePlan =
-      planKey.startsWith("PRO") ? "PRO" :
-      planKey.startsWith("BASIC") ? "BASIC" :
-      "FREE";
-
-    if (effectivePlan === "FREE") {
-      return res.status(400).json({ ok: false, error: "invalid_plan" });
-    }
-
-    const isAnnual = planKey.includes("ANNUAL");
-
-    const currentPeriodEnd = new Date(
-      Date.now() + (isAnnual ? 365 : 31) * 24 * 60 * 60 * 1000
-    ).toISOString();
-
-    const receiptId =
-      receipt?.transactionId ||
-      receipt?.id ||
-      receipt?.purchaseId ||
-      receipt?.platformTransactionId ||
-      `${storePlatform}_${Date.now()}`;
-
-    await db.query(
-      `
-      INSERT INTO subscriber_status (
-        email,
-        stripe_customer_id,
-        subscription_id,
-        status,
-        plan,
-        cancel_at_period_end,
-        canceled_at,
-        current_period_end,
-        entitlement_active,
-        updated_at
-      )
-      VALUES ($1,$2,$3,'active',$4,false,NULL,$5,true,now())
-      ON CONFLICT (email)
-      DO UPDATE SET
-        stripe_customer_id = EXCLUDED.stripe_customer_id,
-        subscription_id = EXCLUDED.subscription_id,
-        status = 'active',
-        plan = EXCLUDED.plan,
-        cancel_at_period_end = false,
-        canceled_at = NULL,
-        current_period_end = EXCLUDED.current_period_end,
-        entitlement_active = true,
-        updated_at = now()
-      `,
-      [
-        trimmedEmail,
-        storePlatform === "ios" ? "APPLE_IAP" : "GOOGLE_PLAY",
-        String(receiptId),
-        effectivePlan,
-        currentPeriodEnd,
-      ]
-    );
-
-    await db.query(
-      `
-      UPDATE users
-      SET plan = $2
-      WHERE LOWER(email) = LOWER($1)
-      `,
-      [trimmedEmail, effectivePlan]
-    );
-
-    return res.json({
-      ok: true,
-      plan: effectivePlan,
-      entitlementActive: true,
-      currentPeriodEnd,
-    });
-  } catch (err) {
-    console.error("mobile subscription activate error:", err);
-    return res.status(500).json({
-      ok: false,
-      error: "mobile_subscription_activate_failed",
-      detail: err.message,
-    });
-  }
-});
-
-// -------------------------------------------------
 // ✅ Billing portal – open Stripe customer portal
 // -------------------------------------------------
 app.post("/api/billing/portal", async (req, res) => {
@@ -1470,6 +1379,18 @@ app.post("/api/billing/portal", async (req, res) => {
     if (!trimmedEmail) {
       return res.status(400).json({ error: "email is required" });
     }
+
+    const subscriber = await getSubscriberStatusByEmail(trimmedEmail);
+
+if (
+  String(subscriber?.payment_provider || "").toLowerCase() === "apple"
+) {
+  return res.status(400).json({
+    error: "apple_subscription",
+    message:
+      "This subscription is managed through your Apple ID subscriptions.",
+  });
+}
 
     const customers = await stripe.customers.list({
       email: trimmedEmail,
@@ -1515,7 +1436,10 @@ app.get("/api/account/plan", async (req, res) => {
       new Date(sub.current_period_end).getTime() <= Date.now() ||
       !["active", "trialing"].includes(String(sub.status || "").toLowerCase());
 
-    if (looksInactive && stripe) {
+    const isAppleSubscriber =
+  String(sub?.payment_provider || "").toLowerCase() === "apple";
+
+if (looksInactive && stripe && !isAppleSubscriber) {
       try {
         await syncSubscriberStatusFromStripeByEmail(email);
         sub = await getSubscriberStatusByEmail(email);
@@ -1546,7 +1470,9 @@ app.get("/api/account/plan", async (req, res) => {
       subscriptionStatus: sub.status || "inactive",
       cancelAtPeriodEnd: !!sub.cancel_at_period_end,
       currentPeriodEnd: sub.current_period_end || null,
-      updatedAt: sub.updated_at || null,
+      paymentProvider: sub.payment_provider || null,
+appleProductId: sub.apple_product_id || null,
+updatedAt: sub.updated_at || null,
     });
   } catch (err) {
     console.error("account/plan error:", err);
@@ -1584,8 +1510,15 @@ app.post("/api/admin/subscriber-status/resync", async (req, res) => {
 
       try {
         const before = await getSubscriberStatusByEmail(email);
-        await syncSubscriberStatusFromStripeByEmail(email);
-        const after = await getSubscriberStatusByEmail(email);
+
+if (
+  String(before?.payment_provider || "").toLowerCase() === "apple"
+) {
+  continue;
+}
+
+await syncSubscriberStatusFromStripeByEmail(email);
+const after = await getSubscriberStatusByEmail(email);
 
         const beforePlan = String(before?.plan || "FREE");
         const afterPlan = String(after?.plan || "FREE");
@@ -1671,7 +1604,10 @@ app.post("/api/account/preferences", async (req, res) => {
       new Date(subscriber.current_period_end).getTime() > Date.now();
 
     // Optional self-heal from Stripe if local status looks stale
-    if (!entitled && stripe) {
+    const isAppleSubscriber =
+  String(subscriber?.payment_provider || "").toLowerCase() === "apple";
+
+if (!entitled && stripe && !isAppleSubscriber) {
       try {
         await syncSubscriberStatusFromStripeByEmail(trimmedEmail);
         subscriber = await getSubscriberStatusByEmail(trimmedEmail);
@@ -1825,7 +1761,10 @@ app.get("/api/account/preferences", async (req, res) => {
       !!subscriber?.current_period_end &&
       new Date(subscriber.current_period_end).getTime() > Date.now();
 
-    if (!entitled && stripe) {
+    const isAppleSubscriber =
+  String(subscriber?.payment_provider || "").toLowerCase() === "apple";
+
+if (!entitled && stripe && !isAppleSubscriber) {
       try {
         await syncSubscriberStatusFromStripeByEmail(trimmedEmail);
         subscriber = await getSubscriberStatusByEmail(trimmedEmail);
@@ -2487,11 +2426,19 @@ async function backfillExistingSubscriberStatuses() {
 
       try {
         const before = await getSubscriberStatusByEmail(email);
-        const shouldCheck =
-          !before ||
-          !before.entitlement_active ||
-          !before.current_period_end ||
-          !["active", "trialing"].includes(String(before.status || "").toLowerCase());
+        const isAppleSubscriber =
+  String(before?.payment_provider || "").toLowerCase() === "apple";
+
+const shouldCheck =
+  !isAppleSubscriber &&
+  (
+    !before ||
+    !before.entitlement_active ||
+    !before.current_period_end ||
+    !["active", "trialing"].includes(
+      String(before.status || "").toLowerCase()
+    )
+  );
 
         if (!shouldCheck) continue;
 
