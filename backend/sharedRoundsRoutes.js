@@ -326,22 +326,31 @@ router.post("/share", async (req, res) => {
           }
 
           // MOBILE PUSH
-          if (typeof sendMobilePushToEmail === "function") {
-            const mobileResult = await sendMobilePushToEmail(
-              n.friend_email,
-              {
-                title: "Upcoming round shared ⛳",
-                body: `${n.owner_name || "A friend"} shared ${n.course || "a round"} with you.`,
-                url: "/my-rounds.html",
-                type: "ROUND_SHARED",
-                meta: {
-                  roundId: Number(upcoming_round_id)
-                }
-              }
-            );
+if (typeof sendMobilePushToEmail === "function") {
+  const upcomingId = Number(upcoming_round_id);
 
-            notificationsSent += Number(mobileResult?.sent || 0);
-          }
+  const mobileResult = await sendMobilePushToEmail(
+    n.friend_email,
+    {
+      title: "Upcoming round shared ⛳",
+      body: `${n.owner_name || "A friend"} shared ${n.course || "a round"} with you.`,
+
+      // Exact screen to open when notification is tapped
+      url: `/my-rounds.html?upcomingId=${encodeURIComponent(upcomingId)}`,
+
+      type: "ROUND_SHARED",
+
+      // Top-level values make native push routing more reliable
+      upcomingId,
+
+      meta: {
+        upcomingId
+      }
+    }
+  );
+
+  notificationsSent += Number(mobileResult?.sent || 0);
+}
         }
       } catch (pushErr) {
         console.warn("Upcoming round push notification failed:", pushErr?.message || pushErr);
