@@ -1279,7 +1279,7 @@ router.get("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (re
 
     const { rows } = await db.query(
       `
-      SELECT
+     SELECT
   id,
   name,
   state,
@@ -1287,6 +1287,7 @@ router.get("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (re
   course_rating,
   slope_rating,
   tee_colour,
+  green_points_json,
   updated_at
 FROM scorecard_courses
       ORDER BY state ASC, name ASC, holes ASC;
@@ -1406,9 +1407,17 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
     }
 
     const cur = await db.query(
-      `
-      SELECT id, name, state, holes, course_rating, slope_rating, tee_colour
-      FROM scorecard_courses
+  `
+  SELECT
+    id,
+    name,
+    state,
+    holes,
+    course_rating,
+    slope_rating,
+    tee_colour,
+    green_points_json
+  FROM scorecard_courses
       WHERE id = $1
       LIMIT 1;
       `,
@@ -1424,9 +1433,23 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
     const nameRaw = String(req.body?.name || "").trim();
     const stateRaw = String(req.body?.state || "").trim().toUpperCase();
 
-    const courseRatingRaw = req.body?.course_rating;
-    const slopeRatingRaw = req.body?.slope_rating;
-    const teeColourRaw = String(req.body?.tee_colour || "").trim();
+   const hasCourseRating =
+  Object.prototype.hasOwnProperty.call(req.body || {}, "course_rating");
+
+const hasSlopeRating =
+  Object.prototype.hasOwnProperty.call(req.body || {}, "slope_rating");
+
+const hasTeeColour =
+  Object.prototype.hasOwnProperty.call(req.body || {}, "tee_colour");
+
+const hasGreenPoints =
+  Object.prototype.hasOwnProperty.call(req.body || {}, "green_points_json");
+
+const courseRatingRaw = req.body?.course_rating;
+const slopeRatingRaw = req.body?.slope_rating;
+const teeColourRaw = req.body?.tee_colour;
+
+const greenPointsRaw = req.body?.green_points_json;
 
     const newName = nameRaw
       ? normaliseCourseName(nameRaw)
@@ -1436,21 +1459,75 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
       ? normaliseStateCode(stateRaw)
       : String(existing.state || "").trim().toUpperCase();
 
-    const newCourseRating =
+    const newCourseRating = hasCourseRating
+  ? (
       courseRatingRaw === null ||
-      typeof courseRatingRaw === "undefined" ||
       courseRatingRaw === ""
         ? null
-        : Number(courseRatingRaw);
+        : Number(courseRatingRaw)
+    )
+  : existing.course_rating;
 
-    const newSlopeRating =
+const newSlopeRating = hasSlopeRating
+  ? (
       slopeRatingRaw === null ||
-      typeof slopeRatingRaw === "undefined" ||
       slopeRatingRaw === ""
         ? null
-        : Number(slopeRatingRaw);
+        : Number(slopeRatingRaw)
+    )
+  : existing.slope_rating;
 
-    const newTeeColour = teeColourRaw || null;
+const newTeeColour = hasTeeColour
+  ? (String(teeColourRaw || "").trim() || null)
+  : existing.tee_colour;
+
+const newGreenPoints = hasGreenPoints
+  ? greenPointsRaw
+  : existing.green_points_json;
+    if (hasGreenPoints) {
+  if (!Array.isArray(newGreenPoints)) {
+    return res.status(400).json({
+      ok: false,
+      error: "invalid_green_points",
+      message: "green_points_json must be an array.",
+    });
+  }
+
+  if (newGreenPoints.length > Number(existing.holes)) {
+    return res.status(400).json({
+      ok: false,
+      error: "too_many_green_points",
+    });
+  }
+
+  for (const point of newGreenPoints) {
+    const hole = Number(point?.hole);
+
+    if (
+      !Number.isFinite(hole) ||
+      hole < 1 ||
+      hole > Number(existing.holes)
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_green_point_hole",
+      });
+    }
+
+    for (const key of ["front", "middle", "back"]) {
+      if (
+        point?.[key] !== null &&
+        typeof point?.[key] !== "undefined" &&
+        typeof point[key] !== "string"
+      ) {
+        return res.status(400).json({
+          ok: false,
+          error: "invalid_green_point_coordinate",
+        });
+      }
+    }
+  }
+}
 
     if (!newName) {
       return res.status(400).json({ ok: false, error: "name_required" });
@@ -1475,32 +1552,39 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
       const up = await db.query(
         `
         UPDATE scorecard_courses
-        SET
-          name = $2,
-          state = $3,
-          course_rating = $4,
-          slope_rating = $5,
-          tee_colour = $6,
-          updated_at = now()
-        WHERE id = $1
+SET
+  name = $2,
+  state = $3,
+  course_rating = $4,
+  slope_rating = $5,
+  tee_colour = $6,
+  green_points_json = $7::jsonb,
+  updated_at = now()
+WHERE id = $1
         RETURNING
-          id,
-          name,
-          state,
-          holes,
-          course_rating,
-          slope_rating,
-          tee_colour,
-          updated_at;
+  id,
+  name,
+  state,
+  holes,
+  course_rating,
+  slope_rating,
+  tee_colour,
+  green_points_json,
+  updated_at;
         `,
         [
-          id,
-          newName,
-          newState,
-          newCourseRating,
-          newSlopeRating,
-          newTeeColour,
-        ]
+  id,
+  newName,
+  newState,
+  newCourseRating,
+  newSlopeRating,
+  newTeeColour,
+  JSON.stringify(
+    Array.isArray(newGreenPoints)
+      ? newGreenPoints
+      : []
+  ),
+]
       );
 
       return res.json({ ok: true, course: up.rows[0] });
