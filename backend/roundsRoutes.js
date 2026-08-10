@@ -2686,8 +2686,6 @@ const hadStartedBefore =
 
     await db.query("COMMIT");
 
-    await db.query("COMMIT");
-
 const data = await getRoundWithHoles(roundId);
 
 // ✅ If this save entered the first score of the round,
