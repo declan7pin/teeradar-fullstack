@@ -1,18 +1,25 @@
 {
-  "name": "teeradar-fullstack",
+  "name": "teeradar",
   "version": "1.0.0",
-  "description": "TeeRadar WA full backend + frontend",
+  "description": "TeeRadar",
   "type": "module",
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js"
   },
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "dependencies": {
-    "better-sqlite3": "^11.7.0",
+    "@apple/app-store-server-library": "^3.1.0",
+    "@capacitor-firebase/messaging": "^8.3.0",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/ios": "^8.3.4",
+    "@capacitor/push-notifications": "^8.0.0",
     "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.7.0",
+    "capacitor-plugin-cdv-purchase": "^13.18.0",
     "cheerio": "^1.0.0-rc.12",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
