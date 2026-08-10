@@ -6,6 +6,9 @@ import { requireAuth } from "./auth.js";
 // ✅ ADDED: record round_played into Postgres analytics
 import { recordEvent } from "./analytics.js";
 
+// ✅ Push notification when a friend starts a round
+import { sendMobilePushToEmail } from "./pushRoutes.js";
+
 // ✅ OPTIONAL: email admin when a new course is submitted
 import { Resend } from "resend";
 
@@ -420,6 +423,124 @@ async function getRoundWithHoles(roundId) {
 
   return { round: roundRow.rows[0], holes: holesRows.rows || [] };
 }
+
+// -------------------------------------------------
+// ✅ Notify accepted friends when a golfer starts a round
+// -------------------------------------------------
+async function notifyFriendsRoundStarted({
+  userId,
+  roundId,
+  course,
+  layout,
+}) {
+  try {
+    const golferRes = await db.query(
+      `
+      SELECT
+        id,
+        email,
+        COALESCE(
+          NULLIF(display_name, ''),
+          split_part(email, '@', 1)
+        ) AS name
+      FROM users
+      WHERE id = $1
+      LIMIT 1;
+      `,
+      [Number(userId)]
+    );
+
+    const golfer = golferRes.rows[0];
+
+    if (!golfer) {
+      console.warn("FRIEND_STARTED_ROUND: golfer not found", {
+        userId,
+        roundId,
+      });
+      return;
+    }
+
+    const golferName =
+      String(golfer.name || "").trim() || "Your friend";
+
+    const friendsRes = await db.query(
+      `
+      SELECT DISTINCT
+        u.id,
+        u.email
+      FROM user_friends uf
+      JOIN users u
+        ON u.id = CASE
+          WHEN uf.requester_user_id = $1
+            THEN uf.addressee_user_id
+          ELSE uf.requester_user_id
+        END
+      WHERE uf.status = 'accepted'
+        AND (
+          uf.requester_user_id = $1
+          OR uf.addressee_user_id = $1
+        );
+      `,
+      [Number(userId)]
+    );
+
+    const friends = friendsRes.rows || [];
+
+    if (!friends.length) {
+      console.log("FRIEND_STARTED_ROUND: no accepted friends", {
+        userId,
+        roundId,
+      });
+      return;
+    }
+
+    const courseName =
+      String(course || "").trim() || "their course";
+
+    const layoutName =
+      String(layout || "").trim();
+
+    const locationText = layoutName
+      ? `${courseName} (${layoutName})`
+      : courseName;
+
+    for (const friend of friends) {
+      const friendEmail =
+        String(friend.email || "").trim().toLowerCase();
+
+      if (!friendEmail) continue;
+
+      try {
+        await sendMobilePushToEmail(friendEmail, {
+  title: `${golferName} has started a round`,
+  body: `${golferName} has started playing at ${locationText}. Tap to follow their live scorecard.`,
+  url: `/friend-live-round.html?roundId=${encodeURIComponent(roundId)}&friendUserId=${encodeURIComponent(userId)}`,
+  type: "FRIEND_STARTED_ROUND",
+  meta: {
+    roundId: String(roundId),
+    friendUserId: String(userId),
+  },
+});
+
+        console.log("✅ FRIEND_STARTED_ROUND push sent", {
+          to: friendEmail,
+          golferUserId: userId,
+          roundId,
+        });
+      } catch (pushErr) {
+        console.warn(
+          "FRIEND_STARTED_ROUND push failed:",
+          pushErr?.message || pushErr
+        );
+      }
+    }
+  } catch (err) {
+    console.warn(
+      "notifyFriendsRoundStarted failed:",
+      err?.message || err
+    );
+  }
+}
 async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
   console.log("🟦 syncSharedPlayerRounds START", {
     masterRoundId,
@@ -666,15 +787,28 @@ function handicapDiffFromRound(row) {
   const par = Number(row.total_par || 0);
   const holesEntered = Number(row.holes_entered || 0);
 
-  if (![9, 18].includes(holes)) return null;
-  if (holesEntered < holes) return null;
-  if (!Number.isFinite(score) || score <= 0) return null;
-  if (!Number.isFinite(par) || par <= 0) return null;
+  if (![9, 18].includes(holes)) {
+    return null;
+  }
+
+  if (holesEntered < holes) {
+    return null;
+  }
+
+  if (!Number.isFinite(score) || score <= 0) {
+    return null;
+  }
+
+  if (!Number.isFinite(par) || par <= 0) {
+    return null;
+  }
 
   const courseRating = Number(row.course_rating);
   const slopeRating = Number(row.slope_rating);
 
-  // ✅ More accurate WHS-style formula when rating/slope exists
+  // ---------------------------------------------
+  // Course rating + slope calculation
+  // ---------------------------------------------
   if (
     Number.isFinite(courseRating) &&
     courseRating > 20 &&
@@ -682,17 +816,45 @@ function handicapDiffFromRound(row) {
     slopeRating >= 55 &&
     slopeRating <= 155
   ) {
-    const adjustedRating = holes === 9 ? courseRating * 2 : courseRating;
-    const adjustedScore = holes === 9 ? score * 2 : score;
+    let adjustedScore = score;
+    let adjustedRating = courseRating;
 
-    return (adjustedScore - adjustedRating) * 113 / slopeRating;
+    if (holes === 9) {
+      // Convert the SCORE to an 18-hole equivalent.
+      adjustedScore = score * 2;
+
+      /*
+       * TeeRadar currently has a mixture of possible
+       * 9-hole rating formats.
+       *
+       * A rating around 30–40 is genuinely a 9-hole rating
+       * and should be doubled.
+       *
+       * A rating around 60–80 is already an 18-hole-style
+       * rating and MUST NOT be doubled.
+       */
+      adjustedRating =
+        courseRating < 50
+          ? courseRating * 2
+          : courseRating;
+    }
+
+    return (
+      (adjustedScore - adjustedRating) *
+      113 /
+      slopeRating
+    );
   }
 
-  // ✅ Fallback when rating/slope is missing
+  // ---------------------------------------------
+  // Fallback when rating/slope isn't available
+  // ---------------------------------------------
   const diff = score - par;
-  return holes === 9 ? diff * 2 : diff;
-}
 
+  return holes === 9
+    ? diff * 2
+    : diff;
+}
 async function recalculateTeeRadarHandicap(userId) {
   await ensureTeeRadarHandicapColumns();
 
@@ -731,6 +893,21 @@ LIMIT 50;
     }))
     .filter((r) => Number.isFinite(Number(r.diff)))
     .sort((a, b) => b.date - a.date);
+  console.log("🏌️ HANDICAP DEBUG", {
+  userId,
+  rawRounds: (rows || []).map((r) => ({
+    id: r.id,
+    course: r.course,
+    state: r.state,
+    holes: r.holes,
+    total_score: r.total_score,
+    total_par: r.total_par,
+    holes_entered: r.holes_entered,
+    course_rating: r.course_rating,
+    slope_rating: r.slope_rating,
+  })),
+  played,
+});
 
   if (!played.length) {
     await db.query(
@@ -769,11 +946,20 @@ LIMIT 50;
     .slice(0, bestCount);
 
   const avg = best.reduce((sum, r) => sum + Number(r.diff), 0) / best.length;
+  console.log("🏌️ HANDICAP RESULT", {
+  userId,
+  playedCount: played.length,
+  bestCount,
+  best,
+  averageDifferential: avg,
+  calculatedHandicap: Number((avg * 0.93).toFixed(1)),
+});
   // TeeRadar Handicap V1:
 // Uses best recent score differentials.
 // 9-hole rounds are already doubled to an 18-hole equivalent.
 // 0.93 keeps it close to real handicap behaviour without course rating/slope yet.
-const handicap = Math.max(0, Number((avg * 0.93).toFixed(1)));
+const handicap =
+  Number((avg * 0.93).toFixed(1));
 
   const last3 = played.slice(0, 3);
   const prev3 = played.slice(3, 6);
@@ -784,7 +970,8 @@ if (last3.length >= 3) {
   const lastAvg = last3.reduce((sum, r) => sum + Number(r.diff), 0) / last3.length;
 
   // Store last 3 average as handicap-style number
-  trend = Math.max(0, Number((lastAvg * 0.93).toFixed(1)));
+  trend =
+  Number((lastAvg * 0.93).toFixed(1));
 }
 
   const status = played.length >= 3 ? "confirmed" : "provisional";
@@ -1790,22 +1977,17 @@ router.get("/", requireAuth, async (req, res) => {
 
     await ensureTeeRadarHandicapColumns();
 
-const handicapRes = await db.query(
-  `
-  SELECT
-    teeradar_handicap,
-    teeradar_handicap_status,
-    teeradar_handicap_rounds,
-    teeradar_handicap_trend,
-    teeradar_handicap_updated_at
-  FROM users
-  WHERE id = $1
-  LIMIT 1;
-  `,
-  [userId]
-);
+let freshHandicap = null;
 
-const handicapRow = handicapRes.rows[0] || {};
+try {
+  freshHandicap =
+    await recalculateTeeRadarHandicap(userId);
+} catch (err) {
+  console.warn(
+    "Could not recalculate handicap on rounds load:",
+    err?.message || err
+  );
+}
     const { rows } = await db.query(
       `
       SELECT id, course, layout, state, holes, par_mode, created_at,
@@ -1822,12 +2004,11 @@ const handicapRow = handicapRes.rows[0] || {};
   ok: true,
   rounds: rows,
   handicap: {
-    value: handicapRow.teeradar_handicap,
-    status: handicapRow.teeradar_handicap_status || "provisional",
-    rounds: Number(handicapRow.teeradar_handicap_rounds || 0),
-    trend: handicapRow.teeradar_handicap_trend,
-    updated_at: handicapRow.teeradar_handicap_updated_at,
-  },
+  value: freshHandicap?.handicap ?? null,
+  status: freshHandicap?.status || "provisional",
+  rounds: Number(freshHandicap?.rounds || 0),
+  trend: freshHandicap?.trend ?? null,
+},
 });
   } catch (err) {
     console.error("GET /api/rounds error:", err);
@@ -2287,6 +2468,28 @@ router.put("/:id", requireAuth, async (req, res) => {
     if (!owner) return res.status(404).json({ ok: false, error: "round not found" });
     if (owner.user_id !== userId) return res.status(403).json({ ok: false, error: "forbidden" });
 
+    // ✅ Check whether this round had any scores BEFORE this save.
+// If it had none, and this save adds the first score,
+// friends should receive the "started a round" notification.
+const beforeStartCheck = await db.query(
+  `
+  SELECT COUNT(*)::int AS scored_holes
+  FROM round_holes
+  WHERE round_id = $1
+    AND (
+      strokes IS NOT NULL
+      OR (
+        strokes_by_player IS NOT NULL
+        AND strokes_by_player <> '{}'::jsonb
+      )
+    );
+  `,
+  [roundId]
+);
+
+const hadStartedBefore =
+  Number(beforeStartCheck.rows[0]?.scored_holes || 0) > 0;
+
     const holes = req.body?.holes;
     if (!Array.isArray(holes)) {
       return res.status(400).json({ ok: false, error: "holes array is required" });
@@ -2378,8 +2581,50 @@ router.put("/:id", requireAuth, async (req, res) => {
 
     await db.query("COMMIT");
 
-    const data = await getRoundWithHoles(roundId);
+    await db.query("COMMIT");
+
+const data = await getRoundWithHoles(roundId);
+
+// ✅ If this save entered the first score of the round,
+// notify all accepted friends once.
+if (!hadStartedBefore) {
+  const hasScoreNow = (holes || []).some((h) => {
+    const strokesMap = cleanPlayerMap(
+      h?.strokes_by_player || h?.strokesByPlayer || {}
+    );
+
+    if (Object.keys(strokesMap).length > 0) {
+      return true;
+    }
+
+    const strokes =
+      h?.strokes === null ||
+      typeof h?.strokes === "undefined" ||
+      h?.strokes === ""
+        ? null
+        : Number(h.strokes);
+
+    return Number.isFinite(strokes);
+  });
+
+  if (hasScoreNow) {
     try {
+      await notifyFriendsRoundStarted({
+        userId,
+        roundId,
+        course: data?.round?.course,
+        layout: data?.round?.layout,
+      });
+    } catch (notifyErr) {
+      console.warn(
+        "FRIEND_STARTED_ROUND notification failed:",
+        notifyErr?.message || notifyErr
+      );
+    }
+  }
+}
+
+try {
   await syncSharedPlayerRounds(roundId, holes);
 } catch (syncErr) {
   console.warn("syncSharedPlayerRounds failed:", syncErr?.message || syncErr);
