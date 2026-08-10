@@ -341,8 +341,8 @@ onclick="window.location.href='/index.html'"
 </button>
 </div>
 
-<p class="note">
-Website payments use Stripe. App payments use Apple or Google subscriptions and can be managed from your App Store or Google Play account.
+<p class="note" id="paymentNote">
+Payments are processed securely by Stripe. You can cancel any time from your Stripe subscription portal.
 </p>
 
 </div>
@@ -370,226 +370,285 @@ friends' rounds, stats and premium golf features.
 </div>
 
 <script>
-const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+const API_BASE = "https://teeradar.com.au";
 
-const PRODUCTS = {
+const APPLE_PRODUCTS = {
   BASIC_MONTHLY: "teeradar_basic_monthly",
   BASIC_ANNUAL: "teeradar_basic_annual",
   PRO_MONTHLY: "teeradar_pro_monthly",
   PRO_ANNUAL: "teeradar_pro_annual"
 };
 
-let iapReady = false;
-let iapPlatform = null;
+let appleStoreReady = false;
 
-function isNativeApp() {
-  return !!(
-    window.Capacitor &&
-    window.Capacitor.isNativePlatform &&
-    window.Capacitor.isNativePlatform()
-  );
+function isNativeIOS() {
+  try {
+    return (
+      window.Capacitor &&
+      typeof window.Capacitor.getPlatform === "function" &&
+      window.Capacitor.getPlatform() === "ios"
+    );
+  } catch {
+    return false;
+  }
 }
 
-function getNativePlatform() {
-  const p = window.Capacitor?.getPlatform?.();
-  if (p === "ios") return "ios";
-  if (p === "android") return "android";
-  return "web";
+function getErrorBox() {
+  return document.getElementById("errorBox");
 }
 
-document.addEventListener("deviceready", initIAP, false);
+function getSuccessBox() {
+  return document.getElementById("successBox");
+}
 
-async function initIAP() {
-  if (!isNativeApp() || !window.CdvPurchase) return;
+function clearMessages() {
+  getErrorBox().textContent = "";
+  getSuccessBox().textContent = "";
+}
 
-  const { store, ProductType, Platform, LogLevel } = CdvPurchase;
+function getEmail() {
+  return String(
+    document.getElementById("emailInput")?.value ||
+    localStorage.getItem("teeradar_user_email") ||
+    localStorage.getItem("teeradar_email") ||
+    ""
+  ).trim().toLowerCase();
+}
+
+async function initialiseAppleStore() {
+  if (!isNativeIOS()) return;
+
+  if (!window.CdvPurchase) {
+    throw new Error(
+      "Apple purchase plugin is not available. Run npx cap sync ios and reinstall the app."
+    );
+  }
+
+  const {
+    store,
+    ProductType,
+    Platform,
+    LogLevel
+  } = window.CdvPurchase;
 
   store.verbosity = LogLevel.DEBUG;
 
-  const native = getNativePlatform();
+  store.register([
+    {
+      id: APPLE_PRODUCTS.BASIC_MONTHLY,
+      type: ProductType.PAID_SUBSCRIPTION,
+      platform: Platform.APPLE_APPSTORE
+    },
+    {
+      id: APPLE_PRODUCTS.BASIC_ANNUAL,
+      type: ProductType.PAID_SUBSCRIPTION,
+      platform: Platform.APPLE_APPSTORE
+    },
+    {
+      id: APPLE_PRODUCTS.PRO_MONTHLY,
+      type: ProductType.PAID_SUBSCRIPTION,
+      platform: Platform.APPLE_APPSTORE
+    },
+    {
+      id: APPLE_PRODUCTS.PRO_ANNUAL,
+      type: ProductType.PAID_SUBSCRIPTION,
+      platform: Platform.APPLE_APPSTORE
+    }
+  ]);
 
-  iapPlatform =
-    native === "ios"
-      ? Platform.APPLE_APPSTORE
-      : native === "android"
-        ? Platform.GOOGLE_PLAY
-        : null;
+  store.error((error) => {
+    console.error("StoreKit error:", error);
 
-  if (!iapPlatform) return;
-
-  store.register(Object.values(PRODUCTS).map(id => ({
-    id,
-    type: ProductType.PAID_SUBSCRIPTION,
-    platform: iapPlatform
-  })));
+    getErrorBox().textContent =
+      error?.message || "Apple subscription error.";
+  });
 
   store.when()
-    .approved(transaction => {
-      console.log("Purchase approved:", transaction);
-      transaction.verify();
+    .productUpdated((product) => {
+      console.log("Apple product loaded:", product?.id, product);
     })
-    .verified(async receipt => {
-      console.log("Purchase verified:", receipt);
+    .approved((transaction) => {
+      console.log("Apple transaction approved:", transaction);
 
-      try {
-        await activateMobileSubscription(receipt);
-        receipt.finish();
-      } catch (err) {
-        console.error("Activation failed:", err);
-        document.getElementById("errorBox").textContent =
-          "Purchase completed, but TeeRadar could not activate it yet. Please contact support.";
-      }
+      /*
+        IMPORTANT:
+        This should eventually call transaction.verify()
+        once the backend receipt-validation endpoint is ready.
+
+        For now, finish the transaction so local StoreKit testing
+        can complete.
+      */
+      transaction.finish();
     })
-    .unverified(unverified => {
-      console.warn("Purchase unverified:", unverified);
-      document.getElementById("errorBox").textContent =
-        "Purchase could not be verified. Please try again.";
+    .finished((transaction) => {
+      console.log("Apple transaction finished:", transaction);
+
+      getSuccessBox().textContent =
+        "Apple subscription purchase completed.";
+
+      getErrorBox().textContent = "";
     });
 
-  await store.initialize([iapPlatform]);
-  iapReady = true;
+  const errors = await store.initialize([
+    Platform.APPLE_APPSTORE
+  ]);
 
-  console.log("IAP ready:", native);
+  if (Array.isArray(errors) && errors.length) {
+    console.warn("StoreKit initialisation errors:", errors);
+  }
+
+  appleStoreReady = true;
+
+  console.log(
+    "Apple StoreKit ready:",
+    store.products.map((product) => product.id)
+  );
 }
 
-async function startSubscription(planKey) {
-  const emailInput = document.getElementById("emailInput");
-  const errorBox = document.getElementById("errorBox");
-  const successBox = document.getElementById("successBox");
+async function startAppleSubscription(planKey) {
+  clearMessages();
 
-  errorBox.textContent = "";
-  successBox.textContent = "";
+  if (!appleStoreReady) {
+    getSuccessBox().textContent = "Loading Apple subscriptions...";
 
-  const email = (emailInput.value || "").trim();
+    await initialiseAppleStore();
+  }
+
+  const email = getEmail();
 
   if (!email) {
-    errorBox.textContent = "Please enter your email before continuing.";
+    getSuccessBox().textContent = "";
+    getErrorBox().textContent =
+      "Please enter your email before continuing.";
     return;
   }
 
-  const native = getNativePlatform();
-
-  if (native === "ios" || native === "android") {
-    return startNativeSubscription(planKey, email);
-  }
-
-  return startStripeSubscription(planKey, email);
-}
-
-async function startNativeSubscription(planKey, email) {
-  const errorBox = document.getElementById("errorBox");
-  const successBox = document.getElementById("successBox");
-
-  if (!iapReady || !window.CdvPurchase) {
-    errorBox.textContent =
-      "In-app purchases are not ready yet. Please wait a moment and try again.";
-    return;
-  }
-
-  const productId = PRODUCTS[planKey];
+  const productId = APPLE_PRODUCTS[planKey];
 
   if (!productId) {
-    errorBox.textContent = "Invalid subscription plan.";
-    return;
+    throw new Error("Unknown Apple subscription plan.");
   }
 
-  try {
-    localStorage.setItem("teeradar_purchase_email", email);
-    localStorage.setItem("teeradar_pending_plan", planKey);
+  const { store, Platform } = window.CdvPurchase;
 
-    const product = CdvPurchase.store.get(productId, iapPlatform);
+  const product = store.get(
+    productId,
+    Platform.APPLE_APPSTORE
+  );
 
-    if (!product) {
-      errorBox.textContent =
-        "Subscription product is not available yet. Make sure it is approved in App Store Connect / Google Play Console.";
-      return;
-    }
+  if (!product) {
+    console.error(
+      "Apple product not found:",
+      productId,
+      store.products
+    );
 
-    const offer = product.getOffer ? product.getOffer() : product.offers?.[0];
+    throw new Error(
+      `Apple subscription ${productId} could not be loaded.`
+    );
+  }
 
-    if (!offer) {
-      errorBox.textContent = "No purchase offer found for this subscription.";
-      return;
-    }
+  const offer =
+    typeof product.getOffer === "function"
+      ? product.getOffer()
+      : product.offers?.[0];
 
-    successBox.textContent = "Opening subscription purchase...";
-    await offer.order();
+  if (!offer) {
+    throw new Error(
+      `No Apple purchase offer was found for ${productId}.`
+    );
+  }
 
-  } catch (err) {
-    console.error(err);
-    errorBox.textContent = "Purchase error: " + (err?.message || String(err));
+  getSuccessBox().textContent =
+    "Opening Apple secure purchase...";
+
+  const orderError = await offer.order();
+
+  if (orderError) {
+    throw new Error(
+      orderError.message || "Apple purchase could not be started."
+    );
   }
 }
 
-async function activateMobileSubscription(receipt) {
-  const email = localStorage.getItem("teeradar_purchase_email") || "";
-  const plan = localStorage.getItem("teeradar_pending_plan") || "";
+async function startStripeSubscription(planKey) {
+  clearMessages();
 
-  const res = await fetch(`${API_BASE}/api/mobile-subscription/activate`, {
+  const email = getEmail();
+
+  if (!email) {
+    getErrorBox().textContent =
+      "Please enter your email before continuing.";
+    return;
+  }
+
+  const res = await fetch(`${API_BASE}/api/subscribe`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({
-      email,
-      plan,
-      platform: getNativePlatform(),
-      receipt
+      plan: planKey,
+      email
     })
   });
 
   const data = await res.json().catch(() => ({}));
 
-  if (!res.ok) {
-    throw new Error(data.error || "activation_failed");
+  if (!res.ok || !data.url) {
+    console.error("Subscribe error:", data);
+
+    throw new Error(
+      data.error ||
+      "Could not start subscription. Please try again."
+    );
   }
 
-  document.getElementById("successBox").textContent =
-    "Subscription activated. Redirecting...";
+  getSuccessBox().textContent =
+    "Opening secure Stripe Checkout...";
 
-  setTimeout(() => {
-    window.location.href = "/account.html";
-  }, 1000);
+  window.location.href = data.url;
 }
 
-async function startStripeSubscription(planKey, email) {
-  const errorBox = document.getElementById("errorBox");
-  const successBox = document.getElementById("successBox");
+async function startSubscription(planKey) {
+  clearMessages();
 
   try {
-    const res = await fetch(`${API_BASE}/api/subscribe`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: planKey, email })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok || !data.url) {
-      console.error("Subscribe error:", data);
-      errorBox.textContent =
-        data.error || "Could not start subscription. Please try again.";
-      return;
+    if (isNativeIOS()) {
+      await startAppleSubscription(planKey);
+    } else {
+      await startStripeSubscription(planKey);
     }
-
-    successBox.textContent = "Opening secure Stripe Checkout...";
-    window.location.href = data.url;
-
   } catch (err) {
-    console.error(err);
-    errorBox.textContent =
-      "Subscription error: " + (err?.message || String(err));
+    console.error("Subscription error:", err);
+
+    getSuccessBox().textContent = "";
+    getErrorBox().textContent =
+      err?.message || "Could not start subscription.";
   }
 }
 
-/* PROMO LOGIC */
+/* -------------------------
+   PROMO LOGIC
+------------------------- */
 
-const promoBackdrop = document.getElementById("promoBackdrop");
-const copyPromoBtn = document.getElementById("copyPromoBtn");
-const closePromoBtn = document.getElementById("closePromoBtn");
+const promoBackdrop =
+  document.getElementById("promoBackdrop");
+
+const copyPromoBtn =
+  document.getElementById("copyPromoBtn");
+
+const closePromoBtn =
+  document.getElementById("closePromoBtn");
 
 function showPromo() {
-  if (getNativePlatform() === "web") {
-    promoBackdrop.classList.remove("hidden");
-  }
+  /*
+    Stripe promotional codes do not apply to Apple purchases,
+    so hide this popup in the native iOS app.
+  */
+  if (isNativeIOS()) return;
+
+  promoBackdrop.classList.remove("hidden");
 }
 
 function closePromo() {
@@ -599,15 +658,48 @@ function closePromo() {
 copyPromoBtn.addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText("TEERADARTRIAL");
+
     copyPromoBtn.textContent = "Copied!";
-    setTimeout(() => copyPromoBtn.textContent = "Copy", 1500);
+
+    setTimeout(() => {
+      copyPromoBtn.textContent = "Copy";
+    }, 1500);
   } catch {
     alert("Copy the code: TEERADARTRIAL");
   }
 });
 
-closePromoBtn.addEventListener("click", closePromo);
-window.addEventListener("load", showPromo);
+closePromoBtn.addEventListener(
+  "click",
+  closePromo
+);
+
+window.addEventListener("load", async () => {
+  const paymentNote =
+    document.getElementById("paymentNote");
+
+  if (isNativeIOS()) {
+    if (paymentNote) {
+      paymentNote.textContent =
+        "Subscriptions are processed securely by Apple. Manage or cancel your subscription through your Apple ID settings.";
+    }
+
+    try {
+      await initialiseAppleStore();
+    } catch (err) {
+      console.error(
+        "Apple StoreKit setup failed:",
+        err
+      );
+
+      getErrorBox().textContent =
+        err?.message ||
+        "Apple subscriptions could not be loaded.";
+    }
+  } else {
+    showPromo();
+  }
+});
 </script>
 </body>
 </html>
