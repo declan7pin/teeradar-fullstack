@@ -8,6 +8,21 @@
   content="width=device-width, initial-scale=1, viewport-fit=cover"
 />
 
+  <script>
+  try {
+    const runningInsideApp =
+      window.Capacitor &&
+      typeof window.Capacitor.isNativePlatform === "function" &&
+      window.Capacitor.isNativePlatform();
+
+    if (runningInsideApp) {
+      document.documentElement.classList.add("app-mode");
+    }
+  } catch (error) {
+    console.warn("Capacitor app detection failed:", error);
+  }
+</script>
+
   <!-- Google AdSense (auto ads) -->
   <script
     async
@@ -648,7 +663,9 @@
   .top-bar {
     padding: calc(env(safe-area-inset-top) + 12px) 14px 12px;
   }
-  /* ---- App splash screen ---- */
+}
+
+/* ---- App splash screen ---- */
 #appSplash{
   position:fixed;
   inset:0;
@@ -743,6 +760,706 @@
     transform: translateY(0);
   }
 }
+
+    /* ========================================================
+   TEE TIME SEARCH — INSTALLED APP DESIGN
+   Only used when Capacitor adds html.app-mode
+   ======================================================== */
+
+.app-search-intro,
+.app-search-summary,
+.app-filter-heading,
+.app-bottom-nav {
+  display: none;
+}
+
+html.app-mode,
+html.app-mode body {
+  min-height: 100%;
+  background: #f2f6f7;
+  color: #10212a;
+}
+
+html.app-mode body {
+  padding-bottom:
+    calc(90px + env(safe-area-inset-bottom, 0px));
+}
+
+/* App-style header */
+
+html.app-mode .top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+
+  min-height: auto;
+
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 12px)
+    16px
+    12px;
+
+  background: rgba(242, 246, 247, 0.95);
+  color: #10212a;
+
+  border-bottom: 1px solid rgba(210, 222, 227, 0.9);
+  box-shadow: none;
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+html.app-mode .top-bar-title {
+  max-width: none;
+  color: #10212a;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+html.app-mode .top-bar-title::before {
+  content: "Search";
+  display: block;
+}
+
+html.app-mode .top-bar-title {
+  font-size: 0;
+}
+
+html.app-mode .top-bar-title::before {
+  font-size: 22px;
+}
+
+html.app-mode .top-bar > button {
+  display: none;
+}
+
+/* State picker */
+
+html.app-mode .state-selector {
+  margin-right: 0;
+}
+
+html.app-mode .state-selector-button {
+  min-height: 42px;
+
+  padding: 9px 13px;
+
+  border: 1px solid #dce7e9;
+  border-radius: 14px;
+
+  background: #ffffff;
+  color: #006b57;
+
+  font-size: 13px;
+  font-weight: 850;
+
+  box-shadow: 0 6px 18px rgba(21, 50, 60, 0.08);
+}
+
+html.app-mode .state-dropdown {
+  top: calc(100% + 9px);
+  right: 0;
+
+  overflow: hidden;
+
+  min-width: 260px;
+
+  padding: 7px;
+  border: 1px solid #dce7e9;
+  border-radius: 18px;
+
+  box-shadow: 0 18px 38px rgba(21, 50, 60, 0.18);
+}
+
+html.app-mode .state-option {
+  min-height: 43px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+html.app-mode .state-option:hover,
+html.app-mode .state-option:active {
+  background: #e5f5f2;
+}
+
+/* App-only search introduction */
+
+html.app-mode .app-search-intro {
+  display: block;
+
+  padding:
+    18px
+    16px
+    8px;
+}
+
+.app-search-intro-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  margin-bottom: 8px;
+  padding: 6px 10px;
+
+  border-radius: 999px;
+
+  background: #e0f2f1;
+  color: #006b57;
+
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.app-search-intro h1 {
+  margin: 0 0 7px;
+  color: #10212a;
+  font-size: 27px;
+  font-weight: 900;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.app-search-intro p {
+  margin: 0;
+  color: #6b7c85;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* Filter card */
+
+html.app-mode .filters {
+  margin: 10px 16px 14px;
+  padding: 17px;
+
+  border: 1px solid #dfe8eb;
+  border-radius: 23px;
+
+  background: #ffffff;
+
+  box-shadow: 0 10px 26px rgba(21, 50, 60, 0.07);
+}
+
+html.app-mode .app-filter-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 14px;
+}
+
+.app-filter-heading strong {
+  color: #10212a;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.app-filter-heading span {
+  color: #6b7c85;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+html.app-mode .filters-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+html.app-mode .filter-group {
+  min-width: 0;
+}
+
+html.app-mode .filter-group:first-child {
+  grid-column: 1 / -1;
+}
+
+html.app-mode .filter-label {
+  margin: 0 0 6px;
+  color: #6b7c85;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+html.app-mode .filter-control {
+  width: 100%;
+  min-height: 49px;
+
+  padding: 11px 12px;
+
+  border: 1px solid #d7e2e5;
+  border-radius: 14px;
+
+  background: #f8fafb;
+  color: #10212a;
+
+  font-size: 16px;
+  font-weight: 650;
+
+  outline: none;
+}
+
+html.app-mode .filter-control:focus {
+  border-color: #00796b;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(0, 121, 107, 0.1);
+}
+
+html.app-mode .search-btn {
+  min-height: 54px;
+  margin-top: 3px;
+
+  border-radius: 16px;
+
+  background: linear-gradient(135deg, #00796b, #005e55);
+
+  font-size: 15px;
+  font-weight: 900;
+
+  box-shadow: 0 10px 22px rgba(0, 121, 107, 0.25);
+}
+
+html.app-mode .search-btn:active {
+  transform: scale(0.98);
+}
+
+/* Search status */
+
+html.app-mode .status-line {
+  min-height: 45px;
+
+  margin: 0 16px 12px;
+  padding: 12px 14px;
+
+  border: 1px solid #dfe8eb;
+  border-radius: 15px;
+
+  background: #ffffff;
+  color: #60717a;
+
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+
+  box-shadow: 0 7px 18px rgba(21, 50, 60, 0.05);
+}
+
+/* Group vote */
+
+html.app-mode .group-vote-toolbar {
+  padding: 0 16px 14px;
+}
+
+html.app-mode .group-vote-left {
+  width: 100%;
+}
+
+html.app-mode .group-vote-btn {
+  min-height: 48px;
+
+  padding: 11px 16px;
+
+  border-radius: 15px;
+
+  background: #7654c4;
+
+  font-size: 13px;
+  font-weight: 850;
+
+  box-shadow: 0 8px 18px rgba(126, 87, 194, 0.2);
+}
+
+html.app-mode .group-vote-hint {
+  flex: 1;
+  min-width: 140px;
+  color: #6b7c85;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* Map card */
+
+html.app-mode #map {
+  height: 300px;
+
+  margin: 0 16px 12px;
+
+  border: 5px solid #ffffff;
+  border-radius: 22px;
+
+  background: #dce5e8;
+
+  box-shadow: 0 12px 28px rgba(21, 50, 60, 0.12);
+}
+
+/* Compact availability key */
+
+html.app-mode .legend {
+  gap: 7px;
+
+  margin: 0 16px 14px;
+  padding: 11px 12px;
+
+  border: 1px solid #dfe8eb;
+  border-radius: 15px;
+
+  background: #ffffff;
+
+  font-size: 10px;
+
+  box-shadow: 0 6px 18px rgba(21, 50, 60, 0.05);
+}
+
+html.app-mode .legend-item {
+  gap: 4px;
+}
+
+html.app-mode .legend-dot {
+  width: 8px;
+  height: 8px;
+}
+
+/* Results heading */
+
+html.app-mode .app-search-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 8px 18px 5px;
+}
+
+.app-search-summary h2 {
+  margin: 0;
+  color: #10212a;
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.app-search-summary span {
+  color: #6b7c85;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Sort and filter controls */
+
+html.app-mode .results-toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 10px;
+
+  margin: 0 16px 10px;
+  padding: 14px;
+
+  border: 1px solid #dfe8eb;
+  border-radius: 20px;
+
+  background: #ffffff;
+
+  box-shadow: 0 8px 22px rgba(21, 50, 60, 0.06);
+}
+
+html.app-mode .results-toolbar-group {
+  min-width: 0;
+}
+
+html.app-mode .results-toolbar-group:last-child {
+  grid-column: 1 / -1;
+}
+
+html.app-mode .results-toolbar-label {
+  margin-bottom: 6px;
+
+  color: #6b7c85;
+
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+html.app-mode .results-toolbar-control {
+  min-height: 45px;
+
+  padding: 9px 10px;
+
+  border: 1px solid #d7e2e5;
+  border-radius: 13px;
+
+  background: #f8fafb;
+  color: #10212a;
+
+  font-size: 13px;
+  font-weight: 700;
+}
+
+html.app-mode button.results-toolbar-control {
+  background: #e5f5f2;
+  color: #006b57;
+  font-weight: 850;
+}
+
+/* Vertical app-style course list */
+
+html.app-mode .courses-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  overflow: visible;
+
+  padding: 4px 16px 22px;
+}
+
+html.app-mode .course-card {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+
+  padding: 17px;
+
+  border: 1px solid #dfe8eb;
+  border-radius: 21px;
+
+  box-shadow: 0 9px 24px rgba(21, 50, 60, 0.07);
+}
+
+html.app-mode .course-header {
+  margin-bottom: 4px;
+
+  color: #10212a;
+
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+html.app-mode .course-sub {
+  margin-bottom: 10px;
+
+  color: #71818a;
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+html.app-mode .chip-row {
+  gap: 6px;
+  margin-bottom: 11px;
+}
+
+html.app-mode .chip {
+  padding: 5px 8px;
+
+  border-radius: 999px;
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+html.app-mode .card-footer {
+  gap: 12px;
+
+  margin-top: 14px;
+  padding-top: 13px;
+
+  border-top: 1px solid #edf1f2;
+
+  font-size: 12px;
+}
+
+html.app-mode .booking-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 40px;
+  padding: 9px 13px;
+
+  border-radius: 13px;
+
+  background: #00796b;
+  color: #ffffff;
+
+  font-size: 12px;
+  font-weight: 900;
+}
+
+/* App bottom navigation */
+
+html.app-mode .app-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99999;
+
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: center;
+
+  width: 100%;
+  max-width: 760px;
+  height: calc(74px + env(safe-area-inset-bottom, 0px));
+
+  margin: 0 auto;
+
+  padding:
+    5px
+    6px
+    env(safe-area-inset-bottom, 0px);
+
+  border-top: 1px solid #d7e2e5;
+
+  background: rgba(255, 255, 255, 0.98);
+
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+
+  box-shadow: 0 -8px 25px rgba(21, 50, 60, 0.12);
+
+  box-sizing: border-box;
+}
+
+.app-bottom-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+
+  width: 100%;
+  height: 58px;
+  min-width: 0;
+
+  color: #71818a;
+  text-decoration: none;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  overflow: visible;
+}
+
+.app-bottom-link-icon {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.app-bottom-link.active {
+  color: #00796b;
+}
+
+.app-bottom-play {
+  position: relative;
+  transform: none;
+}
+
+.app-bottom-play .app-bottom-link-icon {
+  display: grid;
+  place-items: center;
+
+  width: 48px;
+  height: 48px;
+
+  margin-top: -23px;
+  margin-bottom: 0;
+
+  border: 4px solid #f2f6f7;
+  border-radius: 50%;
+
+  background: linear-gradient(135deg, #00796b, #005e55);
+  color: #ffffff;
+
+  font-size: 22px;
+
+  box-shadow: 0 8px 20px rgba(0, 121, 107, 0.28);
+}
+
+.app-bottom-play span:last-child {
+  margin-top: 0;
+}
+
+/* Make modals resemble native sheets */
+
+html.app-mode .group-vote-modal {
+  align-items: flex-end;
+  padding:
+    16px
+    12px
+    calc(env(safe-area-inset-bottom, 0px) + 12px);
+}
+
+html.app-mode .group-vote-modal-card {
+  max-height: 88vh;
+
+  border-radius: 26px 26px 20px 20px;
+
+  box-shadow: 0 -12px 40px rgba(15, 23, 42, 0.24);
+}
+
+html.app-mode .group-vote-modal-header {
+  padding: 18px 18px 14px;
+}
+
+html.app-mode .group-vote-modal-header::before {
+  content: "";
+
+  position: absolute;
+  top: 8px;
+  left: 50%;
+
+  width: 42px;
+  height: 5px;
+
+  border-radius: 999px;
+
+  background: #d5dde0;
+
+  transform: translateX(-50%);
+}
+
+html.app-mode .group-vote-modal-header {
+  position: relative;
+  padding-top: 26px;
+}
+
+/* iPad layout */
+
+@media (min-width: 700px) {
+  html.app-mode body {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+
+  html.app-mode .filters-row {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  html.app-mode .filter-group:first-child {
+    grid-column: auto;
+  }
+
+  html.app-mode #map {
+    height: 390px;
+  }
+
+  html.app-mode .courses-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html.app-mode .course-card {
+    height: 100%;
+  }
+}
     
   </style>
 </head>
@@ -772,8 +1489,27 @@
     <button onclick="window.location.href='index.html'">Return Home</button>
   </header>
 
+  <section class="app-search-intro">
+  <div class="app-search-intro-kicker">
+    <span>⛳</span>
+    <span>Live course availability</span>
+  </div>
+
+  <h1>Find your next tee time.</h1>
+
+  <p>
+    Choose when you want to play and TeeRadar will check courses
+    across your selected state.
+  </p>
+</section>
+
   <section class="filters">
-    <div class="filters-row">
+  <div class="app-filter-heading">
+    <strong>Search details</strong>
+    <span>Adjust your round</span>
+  </div>
+
+  <div class="filters-row">
       <div class="filter-group">
         <div class="filter-label">Date</div>
         <input id="date" class="filter-control" type="date" />
@@ -803,7 +1539,9 @@
         </select>
       </div>
     </div>
-    <button class="search-btn" onclick="runSearch()">Search availability</button>
+    <button class="search-btn" onclick="runSearch()">
+  Search live tee times
+</button>
   </section>
 
   <div class="status-line" id="status-line">
@@ -837,6 +1575,11 @@
       <span class="legend-dot dot-yellow"></span> Unable to confirm availability
     </div>
   </div>
+
+  <div class="app-search-summary">
+  <h2>Courses</h2>
+  <span>Tap a course to continue</span>
+</div>
 
     <div class="results-toolbar">
     <div class="results-toolbar-group">
@@ -954,11 +1697,56 @@
   </div>
 </div>
 
+  <nav
+  class="app-bottom-nav"
+  aria-label="TeeRadar app navigation"
+>
+  <a
+    class="app-bottom-link"
+    href="/index.html"
+  >
+    <span class="app-bottom-link-icon">⌂</span>
+    <span>Home</span>
+  </a>
+
+  <a
+    class="app-bottom-link active"
+    href="/book.html"
+  >
+    <span class="app-bottom-link-icon">⌕</span>
+    <span>Search</span>
+  </a>
+
+  <a
+    class="app-bottom-link app-bottom-play"
+    href="/my-rounds.html"
+  >
+    <span class="app-bottom-link-icon">⚑</span>
+    <span>Play</span>
+  </a>
+
+  <a
+    class="app-bottom-link"
+    href="/friends.html"
+  >
+    <span class="app-bottom-link-icon">👥</span>
+    <span>Friends</span>
+  </a>
+
+  <a
+    class="app-bottom-link"
+    href="/account.html"
+  >
+    <span class="app-bottom-link-icon">●</span>
+    <span>Account</span>
+  </a>
+</nav>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/group-vote-create.js"></script>
   <script>
 
-    const API_BASE = "https://teeradar-fullstack-5.onrender.com";
+    const API_BASE = "https://teeradar.com.au";
 window.fetch = ((originalFetch) => {
   return async (...args) => {
     try {
@@ -1661,11 +2449,28 @@ function slugifyCourseName(name) {
   currentSortMode = document.getElementById("courseSort")?.value || "default";
   currentAvailabilityFilter = document.getElementById("courseAvailabilityFilter")?.value || "all";
 
-  renderCourses();
-  updateGroupVoteToolbar();
+ renderCourses();
+updateGroupVoteToolbar();
 
-  // ✅ Do not auto-request location on page load.
-  // User can tap "Use my current location" to enable nearest-distance sorting.
+/*
+ * Leaflet may initialise before the installed-app layout has
+ * completed. Recalculate its dimensions after the page settles.
+ */
+if (
+  document.documentElement.classList.contains("app-mode") &&
+  map
+) {
+  setTimeout(() => {
+    map.invalidateSize();
+
+    if (!usingLiveLocation) {
+      zoomToStateCourses();
+    }
+  }, 250);
+}
+
+// Do not auto-request location on page load.
+// User can tap "Use my current location" when needed.
 }
 
     function initMap() {
@@ -2378,14 +3183,19 @@ if (newLatestM !== lM) {
         return;
       }
 
-            lastSearchCriteria = {
-        date,
-        earliest,
-        latest,
-        holes,
-        partySize: Number(players) || 1,
-        state: selectedState || "",
-      };
+           const correctedLatest =
+  document.getElementById("latest")?.value ||
+  latest ||
+  "17:00";
+
+lastSearchCriteria = {
+  date,
+  earliest,
+  latest: correctedLatest,
+  holes,
+  partySize: Number(players) || 1,
+  state: selectedState || "",
+};
 
       voteSelections = [];
       voteCandidateOptions = [];
