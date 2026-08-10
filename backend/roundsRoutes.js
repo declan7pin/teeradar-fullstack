@@ -92,8 +92,9 @@ async function getTemplateFromDbAnyState(course, holes, layout = null) {
 
   const { rows } = await db.query(
     `
-    SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour
-    FROM scorecard_courses
+    SELECT id, name, state, holes, pars_json, dists_json, green_points_json,
+       course_rating, slope_rating, tee_colour
+FROM scorecard_courses
     WHERE holes = $1
     ORDER BY updated_at DESC NULLS LAST, id DESC;
     `,
@@ -129,8 +130,11 @@ async function getTemplateFromDbAnyState(course, holes, layout = null) {
     state: match.state,
     holes: match.holes,
     pars: Array.isArray(match.pars_json) ? match.pars_json : null,
-    dists: Array.isArray(match.dists_json) ? match.dists_json : null,
-        course_rating: match.course_rating,
+   dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+green_points: Array.isArray(match.green_points_json)
+  ? match.green_points_json
+  : [],
+course_rating: match.course_rating,
     slope_rating: match.slope_rating,
     tee_colour: match.tee_colour,
   };
@@ -262,9 +266,10 @@ async function getTemplateFromDb(course, state, holes) {
 
   const { rows } = await db.query(
     `
-    SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour
-    FROM scorecard_courses
-    WHERE LOWER(name) = $1 AND state = $2 AND holes = $3
+   SELECT id, name, state, holes, pars_json, dists_json, green_points_json,
+       course_rating, slope_rating, tee_colour
+FROM scorecard_courses
+WHERE LOWER(name) = $1 AND state = $2 AND holes = $3
     LIMIT 1;
     `,
     [nameNorm, st, h]
@@ -274,7 +279,10 @@ async function getTemplateFromDb(course, state, holes) {
 
   const r = rows[0];
   const pars = Array.isArray(r.pars_json) ? r.pars_json : null;
-  const dists = Array.isArray(r.dists_json) ? r.dists_json : null;
+const dists = Array.isArray(r.dists_json) ? r.dists_json : null;
+const greenPoints = Array.isArray(r.green_points_json)
+  ? r.green_points_json
+  : [];
 
   return {
   id: r.id,
@@ -283,6 +291,7 @@ async function getTemplateFromDb(course, state, holes) {
   holes: r.holes,
   pars,
   dists,
+  green_points: greenPoints,
   course_rating: r.course_rating,
   slope_rating: r.slope_rating,
   tee_colour: r.tee_colour,
@@ -311,9 +320,10 @@ async function getTemplateFromDbLoose(course, state, holes) {
 
   const { rows } = await db.query(
     `
-    SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour
-    FROM scorecard_courses
-    WHERE state = $1 AND holes = $2
+   SELECT id, name, state, holes, pars_json, dists_json, green_points_json,
+       course_rating, slope_rating, tee_colour
+FROM scorecard_courses
+WHERE state = $1 AND holes = $2
     ORDER BY updated_at DESC NULLS LAST, id DESC;
     `,
     [st, h]
@@ -329,6 +339,9 @@ async function getTemplateFromDbLoose(course, state, holes) {
     holes: match.holes,
     pars: Array.isArray(match.pars_json) ? match.pars_json : null,
     dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+    green_points: Array.isArray(match.green_points_json)
+  ? match.green_points_json
+  : [],
         course_rating: match.course_rating,
     slope_rating: match.slope_rating,
     tee_colour: match.tee_colour,
@@ -351,9 +364,10 @@ async function getNineHoleTemplateForLayout(course, state, layoutPart) {
 
   const { rows } = await db.query(
     `
-    SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour
-    FROM scorecard_courses
-    WHERE state = $1 AND holes = 9
+    SELECT id, name, state, holes, pars_json, dists_json, green_points_json,
+       course_rating, slope_rating, tee_colour
+FROM scorecard_courses
+WHERE state = $1 AND holes = 9
     ORDER BY updated_at DESC NULLS LAST, id DESC;
     `,
     [st]
@@ -373,7 +387,10 @@ async function getNineHoleTemplateForLayout(course, state, layoutPart) {
     holes: match.holes,
     pars: Array.isArray(match.pars_json) ? match.pars_json : null,
     dists: Array.isArray(match.dists_json) ? match.dists_json : null,
-        course_rating: match.course_rating,
+    green_points: Array.isArray(match.green_points_json)
+  ? match.green_points_json
+  : [],
+    course_rating: match.course_rating,
     slope_rating: match.slope_rating,
     tee_colour: match.tee_colour,
   };
@@ -1017,8 +1034,9 @@ router.get("/templates", async (req, res) => {
 
   const { rows } = await db.query(
       `
-      SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour, updated_at
-      FROM scorecard_courses
+      SELECT id, name, state, holes, pars_json, dists_json, green_points_json,
+       course_rating, slope_rating, tee_colour, updated_at
+FROM scorecard_courses
       ORDER BY state ASC, name ASC, holes ASC;
       `
     );
@@ -1031,8 +1049,11 @@ router.get("/templates", async (req, res) => {
         state: r.state,
         holes: r.holes,
         pars: Array.isArray(r.pars_json) ? r.pars_json : [],
-        dists: Array.isArray(r.dists_json) ? r.dists_json : [],
-        updatedAt: r.updated_at,
+dists: Array.isArray(r.dists_json) ? r.dists_json : [],
+green_points: Array.isArray(r.green_points_json)
+  ? r.green_points_json
+  : [],
+updatedAt: r.updated_at,
         course_rating: r.course_rating,
 slope_rating: r.slope_rating,
 tee_colour: r.tee_colour,
