@@ -3303,44 +3303,18 @@ function updateGpsDistances(){
   }
 }
 
-async function enableScorecardGps(){
+async function enableScorecardGps() {
   try {
-    const Geolocation =
-      window.Capacitor?.Plugins?.Geolocation;
-
-    if (!Geolocation) {
+    if (!navigator.geolocation) {
       gpsDistanceStatus.textContent = "GPS unavailable";
-
-      console.warn(
-        "Capacitor Geolocation plugin unavailable"
-      );
-
       return;
     }
 
-    gpsDistanceStatus.textContent = "Starting GPS…";
-
-    let permission =
-      await Geolocation.checkPermissions();
-
-    if (
-      permission.location !== "granted" &&
-      permission.coarseLocation !== "granted"
-    ) {
-      permission =
-        await Geolocation.requestPermissions();
-    }
-
-    if (
-      permission.location !== "granted" &&
-      permission.coarseLocation !== "granted"
-    ) {
-      gpsDistanceStatus.textContent =
-        "Location permission denied";
-
-      return;
-    }
-
+    /*
+     * Change the UI IMMEDIATELY.
+     * Nothing below should leave the golfer wondering
+     * whether the button worked.
+     */
     gpsEnabled = true;
 
     if (enableGpsBtn) {
@@ -3348,38 +3322,70 @@ async function enableScorecardGps(){
       enableGpsBtn.disabled = true;
     }
 
-    gpsDistanceStatus.textContent =
-      "Finding location…";
+    gpsDistanceStatus.textContent = "Finding location…";
 
-    /*
-     * START WATCHING IMMEDIATELY.
-     *
-     * Do not wait for getCurrentPosition first.
-     * As soon as iOS supplies a GPS fix, update the distances.
-     */
+    // --------------------------------------------
+    // 1. Get a quick/cached location immediately
+    // --------------------------------------------
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (!position?.coords) return;
+
+        currentGpsPosition = {
+          latitude: Number(position.coords.latitude),
+          longitude: Number(position.coords.longitude),
+          accuracy: Number(position.coords.accuracy)
+        };
+
+        console.log(
+          "✅ Initial GPS position:",
+          currentGpsPosition
+        );
+
+        updateGpsDistances();
+      },
+
+      (error) => {
+        console.warn(
+          "Initial GPS position error:",
+          error?.code,
+          error?.message
+        );
+
+        /*
+         * Don't switch GPS off.
+         * The live watch below can still get a fix.
+         */
+        gpsDistanceStatus.textContent =
+          "Waiting for GPS…";
+      },
+
+      {
+        enableHighAccuracy: false,
+
+        // Fast initial result
+        maximumAge: 60000,
+
+        timeout: 3000
+      }
+    );
+
+    // --------------------------------------------
+    // 2. Start high-accuracy LIVE golf GPS
+    // --------------------------------------------
+
+    if (gpsWatchId !== null) {
+      try {
+        navigator.geolocation.clearWatch(
+          gpsWatchId
+        );
+      } catch {}
+    }
+
     gpsWatchId =
-      await Geolocation.watchPosition(
-        {
-          enableHighAccuracy: true,
-          timeout: 5000,
-          maximumAge: 3000
-        },
-        (position, error) => {
-          if (error) {
-            console.warn(
-              "GPS watch error:",
-              error
-            );
-
-            gpsDistanceStatus.textContent =
-              "Waiting for GPS…";
-
-            return;
-          }
-
-          if (!position?.coords) {
-            return;
-          }
+      navigator.geolocation.watchPosition(
+        (position) => {
+          if (!position?.coords) return;
 
           currentGpsPosition = {
             latitude:
@@ -3392,50 +3398,50 @@ async function enableScorecardGps(){
               Number(position.coords.accuracy)
           };
 
+          console.log(
+            "📍 Live GPS:",
+            currentGpsPosition
+          );
+
           updateGpsDistances();
+        },
+
+        (error) => {
+          console.warn(
+            "Live GPS error:",
+            error?.code,
+            error?.message
+          );
+
+          if (error?.code === 1) {
+            gpsDistanceStatus.textContent =
+              "Location permission denied";
+          } else if (error?.code === 2) {
+            gpsDistanceStatus.textContent =
+              "Location unavailable";
+          } else if (error?.code === 3) {
+            gpsDistanceStatus.textContent =
+              "Waiting for GPS…";
+          } else {
+            gpsDistanceStatus.textContent =
+              "GPS error";
+          }
+        },
+
+        {
+          /*
+           * Once the quick location has displayed,
+           * use accurate GPS for the actual golf distances.
+           */
+          enableHighAccuracy: true,
+          maximumAge: 1000,
+          timeout: 10000
         }
       );
 
-    /*
-     * Also ask for a quick current fix, but DON'T
-     * block the live watcher while waiting for it.
-     */
-    Geolocation.getCurrentPosition({
-      enableHighAccuracy: true,
-      timeout: 5000,
-      maximumAge: 10000
-    })
-      .then((position) => {
-        if (!position?.coords) return;
-
-        currentGpsPosition = {
-          latitude:
-            Number(position.coords.latitude),
-
-          longitude:
-            Number(position.coords.longitude),
-
-          accuracy:
-            Number(position.coords.accuracy)
-        };
-
-        updateGpsDistances();
-      })
-      .catch((error) => {
-        console.warn(
-          "Initial GPS fix failed:",
-          error
-        );
-
-        /*
-         * Do NOT switch GPS off.
-         * watchPosition may still deliver a position.
-         */
-      });
-
   } catch (error) {
     console.error(
-      "Scorecard GPS failed:",
+      "Scorecard GPS startup failed:",
       error
     );
 
@@ -3445,7 +3451,9 @@ async function enableScorecardGps(){
       "Could not start GPS";
 
     if (enableGpsBtn) {
-      enableGpsBtn.textContent = "Enable GPS";
+      enableGpsBtn.textContent =
+        "Enable GPS";
+
       enableGpsBtn.disabled = false;
     }
   }
