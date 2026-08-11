@@ -3304,162 +3304,294 @@ function updateGpsDistances(){
 }
 
 async function enableScorecardGps() {
+  const Geolocation =
+    window.Capacitor?.Plugins?.Geolocation;
+
   try {
-    if (!navigator.geolocation) {
-      gpsDistanceStatus.textContent = "GPS unavailable";
+    console.log("📍 GPS START", {
+      capacitor: !!window.Capacitor,
+      native:
+        typeof window.Capacitor?.isNativePlatform === "function"
+          ? window.Capacitor.isNativePlatform()
+          : false,
+      geolocationPlugin: !!Geolocation
+    });
+
+    if (!Geolocation) {
+      gpsDistanceStatus.textContent =
+        "GPS plugin unavailable";
+
+      if (enableGpsBtn) {
+        enableGpsBtn.textContent =
+          "Enable GPS";
+        enableGpsBtn.disabled = false;
+      }
+
+      console.error(
+        "❌ Capacitor Geolocation plugin not found"
+      );
+
       return;
     }
 
-    /*
-     * Change the UI IMMEDIATELY.
-     * Nothing below should leave the golfer wondering
-     * whether the button worked.
-     */
     gpsEnabled = true;
 
     if (enableGpsBtn) {
-      enableGpsBtn.textContent = "GPS On";
+      enableGpsBtn.textContent =
+        "Starting…";
+
       enableGpsBtn.disabled = true;
     }
 
-    gpsDistanceStatus.textContent = "Finding location…";
+    gpsDistanceStatus.textContent =
+      "Checking GPS…";
 
     // --------------------------------------------
-    // 1. Get a quick/cached location immediately
+    // 1. Check permission
     // --------------------------------------------
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (!position?.coords) return;
+    let permission =
+      await Geolocation.checkPermissions();
 
-        currentGpsPosition = {
-          latitude: Number(position.coords.latitude),
-          longitude: Number(position.coords.longitude),
-          accuracy: Number(position.coords.accuracy)
-        };
-
-        console.log(
-          "✅ Initial GPS position:",
-          currentGpsPosition
-        );
-
-        updateGpsDistances();
-      },
-
-      (error) => {
-        console.warn(
-          "Initial GPS position error:",
-          error?.code,
-          error?.message
-        );
-
-        /*
-         * Don't switch GPS off.
-         * The live watch below can still get a fix.
-         */
-        gpsDistanceStatus.textContent =
-          "Waiting for GPS…";
-      },
-
-      {
-        enableHighAccuracy: false,
-
-        // Fast initial result
-        maximumAge: 60000,
-
-        timeout: 3000
-      }
+    console.log(
+      "📍 GPS permission before:",
+      permission
     );
 
-    // --------------------------------------------
-    // 2. Start high-accuracy LIVE golf GPS
-    // --------------------------------------------
+    if (
+      permission.location !== "granted"
+    ) {
+      gpsDistanceStatus.textContent =
+        "Requesting location permission…";
 
-    if (gpsWatchId !== null) {
-      try {
-        navigator.geolocation.clearWatch(
-          gpsWatchId
-        );
-      } catch {}
+      permission =
+        await Geolocation.requestPermissions({
+          permissions: ["location"]
+        });
+
+      console.log(
+        "📍 GPS permission after:",
+        permission
+      );
     }
 
+    if (
+      permission.location !== "granted"
+    ) {
+      gpsEnabled = false;
+
+      gpsDistanceStatus.textContent =
+        "Location permission denied";
+
+      if (enableGpsBtn) {
+        enableGpsBtn.textContent =
+          "Enable GPS";
+
+        enableGpsBtn.disabled = false;
+      }
+
+      return;
+    }
+
+    // --------------------------------------------
+    // 2. GET LOCATION IMMEDIATELY
+    // --------------------------------------------
+    gpsDistanceStatus.textContent =
+      "Finding location…";
+
+    const position =
+      await Geolocation.getCurrentPosition({
+        enableHighAccuracy: true,
+
+        /*
+         * Allow iOS to return a recent fix instantly.
+         */
+        maximumAge: 30000,
+
+        timeout: 10000
+      });
+
+    console.log(
+      "✅ GPS initial fix:",
+      position
+    );
+
+    if (
+      position &&
+      position.coords
+    ) {
+      currentGpsPosition = {
+        latitude:
+          Number(
+            position.coords.latitude
+          ),
+
+        longitude:
+          Number(
+            position.coords.longitude
+          ),
+
+        accuracy:
+          Number(
+            position.coords.accuracy
+          )
+      };
+
+      if (enableGpsBtn) {
+        enableGpsBtn.textContent =
+          "GPS On";
+      }
+
+      gpsDistanceStatus.textContent =
+        "Live GPS";
+
+      /*
+       * Make sure the approved course/GPS
+       * templates have actually loaded.
+       */
+      await loadCoursesOnce();
+
+      updateGpsDistances();
+    }
+
+    // --------------------------------------------
+    // 3. REMOVE OLD WATCH
+    // --------------------------------------------
+    if (gpsWatchId !== null) {
+      try {
+        await Geolocation.clearWatch({
+          id: gpsWatchId
+        });
+      } catch (error) {
+        console.warn(
+          "Old GPS watch clear failed:",
+          error
+        );
+      }
+
+      gpsWatchId = null;
+    }
+
+    // --------------------------------------------
+    // 4. LIVE GPS WATCH
+    // --------------------------------------------
     gpsWatchId =
-      navigator.geolocation.watchPosition(
-        (position) => {
-          if (!position?.coords) return;
+      await Geolocation.watchPosition(
+        {
+          enableHighAccuracy: true,
+
+          maximumAge: 1000,
+
+          timeout: 10000
+        },
+
+        (position, error) => {
+          if (error) {
+            console.warn(
+              "📍 GPS watch error:",
+              error
+            );
+
+            gpsDistanceStatus.textContent =
+              "GPS signal unavailable";
+
+            return;
+          }
+
+          if (
+            !position ||
+            !position.coords
+          ) {
+            return;
+          }
 
           currentGpsPosition = {
             latitude:
-              Number(position.coords.latitude),
+              Number(
+                position.coords.latitude
+              ),
 
             longitude:
-              Number(position.coords.longitude),
+              Number(
+                position.coords.longitude
+              ),
 
             accuracy:
-              Number(position.coords.accuracy)
+              Number(
+                position.coords.accuracy
+              )
           };
 
           console.log(
-            "📍 Live GPS:",
+            "📍 GPS live update:",
             currentGpsPosition
           );
 
-          updateGpsDistances();
-        },
+          gpsDistanceStatus.textContent =
+            "Live GPS";
 
-        (error) => {
-          console.warn(
-            "Live GPS error:",
-            error?.code,
-            error?.message
-          );
-
-          if (error?.code === 1) {
-            gpsDistanceStatus.textContent =
-              "Location permission denied";
-          } else if (error?.code === 2) {
-            gpsDistanceStatus.textContent =
-              "Location unavailable";
-          } else if (error?.code === 3) {
-            gpsDistanceStatus.textContent =
-              "Waiting for GPS…";
-          } else {
-            gpsDistanceStatus.textContent =
-              "GPS error";
+          if (enableGpsBtn) {
+            enableGpsBtn.textContent =
+              "GPS On";
           }
-        },
 
-        {
-          /*
-           * Once the quick location has displayed,
-           * use accurate GPS for the actual golf distances.
-           */
-          enableHighAccuracy: true,
-          maximumAge: 1000,
-          timeout: 10000
+          updateGpsDistances();
         }
       );
 
+    console.log(
+      "✅ GPS watch started:",
+      gpsWatchId
+    );
+
   } catch (error) {
     console.error(
-      "Scorecard GPS startup failed:",
+      "❌ Scorecard GPS failed:",
       error
     );
 
     gpsEnabled = false;
 
-    gpsDistanceStatus.textContent =
-      "Could not start GPS";
+    const message =
+      String(
+        error?.message ||
+        error?.code ||
+        ""
+      );
+
+    if (
+      message
+        .toLowerCase()
+        .includes("permission")
+    ) {
+      gpsDistanceStatus.textContent =
+        "Location permission denied";
+    } else if (
+      message
+        .toLowerCase()
+        .includes("location services")
+    ) {
+      gpsDistanceStatus.textContent =
+        "Turn on Location Services";
+    } else {
+      gpsDistanceStatus.textContent =
+        "GPS failed";
+    }
+
+    if (gpsAccuracy) {
+      gpsAccuracy.textContent =
+        message
+          ? `Error: ${message}`
+          : "";
+    }
 
     if (enableGpsBtn) {
       enableGpsBtn.textContent =
-        "Enable GPS";
+        "Try GPS again";
 
       enableGpsBtn.disabled = false;
     }
   }
 }
-
-
     function escapeHtml(s){
       return String(s || "")
         .replaceAll("&","&amp;")
