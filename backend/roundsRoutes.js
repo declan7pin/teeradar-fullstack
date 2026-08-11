@@ -1537,16 +1537,31 @@ const newGreenPoints = hasGreenPoints
       return res.status(400).json({ ok: false, error: "state_required" });
     }
 
-    if (newCourseRating !== null && !Number.isFinite(newCourseRating)) {
-      return res.status(400).json({ ok: false, error: "invalid_course_rating" });
-    }
-
     if (
-      newSlopeRating !== null &&
-      (!Number.isFinite(newSlopeRating) || newSlopeRating < 55 || newSlopeRating > 155)
-    ) {
-      return res.status(400).json({ ok: false, error: "invalid_slope_rating" });
-    }
+  newCourseRating !== null &&
+  typeof newCourseRating !== "undefined" &&
+  !Number.isFinite(Number(newCourseRating))
+) {
+  return res.status(400).json({
+    ok: false,
+    error: "invalid_course_rating",
+  });
+}
+
+if (
+  newSlopeRating !== null &&
+  typeof newSlopeRating !== "undefined" &&
+  (
+    !Number.isFinite(Number(newSlopeRating)) ||
+    Number(newSlopeRating) < 55 ||
+    Number(newSlopeRating) > 155
+  )
+) {
+  return res.status(400).json({
+    ok: false,
+    error: "invalid_slope_rating",
+  });
+}
 
     try {
       const up = await db.query(
