@@ -1223,17 +1223,52 @@ window.addEventListener("unhandledrejection", (e) => {
   }
 
   function getAuthHeaders() {
-  const h = { "Accept": "application/json" };
+  const h = {
+    "Accept": "application/json"
+  };
 
-  // keep your normal JWT (used by other analytics endpoints)
   try {
-    const token = localStorage.getItem("teeradar_jwt") || "";
-    if (token) h["Authorization"] = "Bearer " + token;
-  } catch (e) {}
+    const tokenKeys = [
+      "teeradar_jwt",
+      "teeradar_token",
+      "token",
+      "authToken",
+      "jwt",
+      "access_token"
+    ];
 
-  // ✅ add booking admin secret (used by /api/book/admin/analytics/*)
-  if (BOOKING_ADMIN_SECRET && BOOKING_ADMIN_SECRET.trim()) {
-    h["x-booking-admin-secret"] = BOOKING_ADMIN_SECRET.trim();
+    let token = "";
+
+    for (const key of tokenKeys) {
+      const value =
+        localStorage.getItem(key);
+
+      if (
+        value &&
+        String(value).trim().length > 10
+      ) {
+        token = String(value).trim();
+        break;
+      }
+    }
+
+    if (token) {
+      h["Authorization"] =
+        "Bearer " + token;
+    }
+  } catch (err) {
+    console.warn(
+      "Could not read Analytics auth token:",
+      err
+    );
+  }
+
+  if (
+    BOOKING_ADMIN_SECRET &&
+    BOOKING_ADMIN_SECRET.trim()
+  ) {
+    h["x-booking-admin-secret"] =
+      BOOKING_ADMIN_SECRET.trim();
   }
 
   return h;
