@@ -3290,7 +3290,7 @@ function updateGpsDistances(){
       : `${backM}m`;
 
   gpsDistanceStatus.textContent =
-    "GPS active";
+  "Live GPS";
 
   if (
     gpsAccuracy &&
@@ -3306,13 +3306,10 @@ function updateGpsDistances(){
 async function enableScorecardGps(){
   try {
     const Geolocation =
-      window.Capacitor
-        ?.Plugins
-        ?.Geolocation;
+      window.Capacitor?.Plugins?.Geolocation;
 
     if (!Geolocation) {
-      gpsDistanceStatus.textContent =
-        "GPS unavailable";
+      gpsDistanceStatus.textContent = "GPS unavailable";
 
       console.warn(
         "Capacitor Geolocation plugin unavailable"
@@ -3321,8 +3318,7 @@ async function enableScorecardGps(){
       return;
     }
 
-    gpsDistanceStatus.textContent =
-      "Requesting location…";
+    gpsDistanceStatus.textContent = "Starting GPS…";
 
     let permission =
       await Geolocation.checkPermissions();
@@ -3348,9 +3344,7 @@ async function enableScorecardGps(){
     gpsEnabled = true;
 
     if (enableGpsBtn) {
-      enableGpsBtn.textContent =
-        "GPS On";
-
+      enableGpsBtn.textContent = "GPS On";
       enableGpsBtn.disabled = true;
     }
 
@@ -3358,43 +3352,17 @@ async function enableScorecardGps(){
       "Finding location…";
 
     /*
-     * Get an immediate position.
-     */
-    const firstPosition =
-      await Geolocation.getCurrentPosition({
-        enableHighAccuracy: true,
-        timeout: 15000
-      });
-
-    if (firstPosition?.coords) {
-      currentGpsPosition = {
-        latitude:
-          Number(
-            firstPosition.coords.latitude
-          ),
-
-        longitude:
-          Number(
-            firstPosition.coords.longitude
-          ),
-
-        accuracy:
-          Number(
-            firstPosition.coords.accuracy
-          )
-      };
-
-      updateGpsDistances();
-    }
-
-    /*
-     * Keep the scorecard updated while the golfer moves.
+     * START WATCHING IMMEDIATELY.
+     *
+     * Do not wait for getCurrentPosition first.
+     * As soon as iOS supplies a GPS fix, update the distances.
      */
     gpsWatchId =
       await Geolocation.watchPosition(
         {
           enableHighAccuracy: true,
-          timeout: 15000
+          timeout: 5000,
+          maximumAge: 3000
         },
         (position, error) => {
           if (error) {
@@ -3402,6 +3370,9 @@ async function enableScorecardGps(){
               "GPS watch error:",
               error
             );
+
+            gpsDistanceStatus.textContent =
+              "Waiting for GPS…";
 
             return;
           }
@@ -3412,24 +3383,55 @@ async function enableScorecardGps(){
 
           currentGpsPosition = {
             latitude:
-              Number(
-                position.coords.latitude
-              ),
+              Number(position.coords.latitude),
 
             longitude:
-              Number(
-                position.coords.longitude
-              ),
+              Number(position.coords.longitude),
 
             accuracy:
-              Number(
-                position.coords.accuracy
-              )
+              Number(position.coords.accuracy)
           };
 
           updateGpsDistances();
         }
       );
+
+    /*
+     * Also ask for a quick current fix, but DON'T
+     * block the live watcher while waiting for it.
+     */
+    Geolocation.getCurrentPosition({
+      enableHighAccuracy: true,
+      timeout: 5000,
+      maximumAge: 10000
+    })
+      .then((position) => {
+        if (!position?.coords) return;
+
+        currentGpsPosition = {
+          latitude:
+            Number(position.coords.latitude),
+
+          longitude:
+            Number(position.coords.longitude),
+
+          accuracy:
+            Number(position.coords.accuracy)
+        };
+
+        updateGpsDistances();
+      })
+      .catch((error) => {
+        console.warn(
+          "Initial GPS fix failed:",
+          error
+        );
+
+        /*
+         * Do NOT switch GPS off.
+         * watchPosition may still deliver a position.
+         */
+      });
 
   } catch (error) {
     console.error(
@@ -3443,14 +3445,11 @@ async function enableScorecardGps(){
       "Could not start GPS";
 
     if (enableGpsBtn) {
-      enableGpsBtn.textContent =
-        "Enable GPS";
-
+      enableGpsBtn.textContent = "Enable GPS";
       enableGpsBtn.disabled = false;
     }
   }
 }
-
 
 
     function escapeHtml(s){
