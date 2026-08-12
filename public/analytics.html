@@ -1223,57 +1223,21 @@ window.addEventListener("unhandledrejection", (e) => {
   }
 
   function getAuthHeaders() {
-  const h = {
-    "Accept": "application/json"
-  };
+  const token =
+    localStorage.getItem("teeradar_jwt") || "";
 
-  try {
-    const tokenKeys = [
-      "teeradar_jwt",
-      "teeradar_token",
-      "token",
-      "authToken",
-      "jwt",
-      "access_token"
-    ];
-
-    let token = "";
-
-    for (const key of tokenKeys) {
-      const value =
-        localStorage.getItem(key);
-
-      if (
-        value &&
-        String(value).trim().length > 10
-      ) {
-        token = String(value).trim();
-        break;
-      }
-    }
-
-    if (token) {
-      h["Authorization"] =
-        "Bearer " + token;
-    }
-  } catch (err) {
+  if (!token) {
     console.warn(
-      "Could not read Analytics auth token:",
-      err
+      "TeeRadar analytics: no teeradar_jwt token found"
     );
+
+    return {};
   }
 
-  if (
-    BOOKING_ADMIN_SECRET &&
-    BOOKING_ADMIN_SECRET.trim()
-  ) {
-    h["x-booking-admin-secret"] =
-      BOOKING_ADMIN_SECRET.trim();
-  }
-
-  return h;
+  return {
+    Authorization: "Bearer " + token
+  };
 }
-
   function enforceAdmin() {
   const updatedAt = document.getElementById("summaryUpdated");
   try {
