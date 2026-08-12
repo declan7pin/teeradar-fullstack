@@ -1338,15 +1338,15 @@ const finalUrl =
 
   try {
     const res = await fetch(finalUrl, {
-      headers: {
-        ...getAuthHeaders(),
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-      },
-      credentials: "include",
-      cache: "no-store",
-      signal: controller.signal,
-    });
+  method: "GET",
+  headers: {
+    ...getAuthHeaders(),
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+  },
+  cache: "no-store",
+  signal: controller.signal,
+});
 
     clearTimeout(timer);
 
