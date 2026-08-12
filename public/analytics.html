@@ -1223,21 +1223,58 @@ window.addEventListener("unhandledrejection", (e) => {
     return (email || "").trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
   }
 
-  function getAuthHeaders() {
-  const token =
-    localStorage.getItem("teeradar_jwt") || "";
+ function getStoredAuthToken() {
+  const tokenKeys = [
+    "teeradar_jwt",
+    "teeradar_token",
+    "token",
+    "authToken",
+    "jwt",
+    "access_token"
+  ];
 
-  if (!token) {
+  try {
+    for (const key of tokenKeys) {
+      const value = localStorage.getItem(key);
+
+      if (
+        value &&
+        String(value).trim().length > 10
+      ) {
+        return String(value).trim();
+      }
+    }
+  } catch (err) {
     console.warn(
-      "TeeRadar analytics: no teeradar_jwt token found"
+      "Could not read Analytics auth token:",
+      err
     );
-
-    return {};
   }
 
-  return {
-    Authorization: "Bearer " + token
+  return "";
+}
+
+function getAuthHeaders() {
+  const h = {
+    "Accept": "application/json"
   };
+
+  const token = getStoredAuthToken();
+
+  if (token) {
+    h["Authorization"] =
+      `Bearer ${token}`;
+  }
+
+  if (
+    BOOKING_ADMIN_SECRET &&
+    BOOKING_ADMIN_SECRET.trim()
+  ) {
+    h["x-booking-admin-secret"] =
+      BOOKING_ADMIN_SECRET.trim();
+  }
+
+  return h;
 }
   function enforceAdmin() {
   const updatedAt = document.getElementById("summaryUpdated");
@@ -1288,66 +1325,198 @@ window.addEventListener("unhandledrejection", (e) => {
   return "$" + n.toFixed(0);
 }
 
-async function tryFetchJson(url, timeoutMs = 12000) {
-  const fullUrl = url.startsWith("http")
-  ? url
-  : `${API_BASE}${url}`;
+async function tryFetchJson(
+  url,
+  timeoutMs = 12000
+) {
+  /*
+   * IMPORTANT:
+   *
+   * analytics.html can run from:
+   *
+   *   https://teeradar.com.au
+   *
+   * or inside Capacitor:
+   *
+   *   capacitor://localhost
+   *   https://localhost
+   *
+   * Therefore API requests MUST always point
+   * directly at the live TeeRadar backend.
+   */
 
-const finalUrl =
-  fullUrl + (fullUrl.includes("?") ? "&" : "?") + "_ts=" + Date.now();
+  const backend =
+    String(
+      window.TEERADAR_BACKEND ||
+      window.TEERADAR_API_BASE ||
+      API_BASE ||
+      ""
+    )
+      .trim()
+      .replace(/\/+$/, "");
 
-  setAnalyticsDebug("Fetching", { finalUrl });
+  const cleanPath =
+    String(url || "").trim();
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const fullUrl =
+    /^https?:\/\//i.test(cleanPath)
+      ? cleanPath
+      : `${backend}${
+          cleanPath.startsWith("/")
+            ? cleanPath
+            : "/" + cleanPath
+        }`;
+
+  const finalUrl =
+    fullUrl +
+    (fullUrl.includes("?") ? "&" : "?") +
+    "_ts=" +
+    Date.now();
+
+  const controller =
+    new AbortController();
+
+  const timer =
+    setTimeout(
+      () => controller.abort(),
+      timeoutMs
+    );
 
   try {
-    const res = await fetch(finalUrl, {
-  method: "GET",
-  headers: {
-    ...getAuthHeaders(),
-    "Cache-Control": "no-cache",
-    "Pragma": "no-cache",
-  },
-  cache: "no-store",
-  signal: controller.signal,
-});
+    const headers =
+      getAuthHeaders();
+
+    console.log(
+      "📊 Analytics request:",
+      {
+        url: finalUrl,
+        backend,
+        origin: window.location.origin,
+        hasToken:
+          !!getStoredAuthToken(),
+        hasAuthorization:
+          !!headers.Authorization
+      }
+    );
+
+    const res =
+      await fetch(
+        finalUrl,
+        {
+          method: "GET",
+
+          headers: {
+            ...headers,
+
+            "Cache-Control":
+              "no-cache",
+
+            "Pragma":
+              "no-cache"
+          },
+
+          /*
+           * Do not depend on cookies.
+           *
+           * TeeRadar's app admin endpoints use
+           * the Bearer JWT.
+           */
+          credentials: "omit",
+
+          cache: "no-store",
+
+          signal:
+            controller.signal
+        }
+      );
 
     clearTimeout(timer);
 
-    const text = await res.text();
+    const contentType =
+      String(
+        res.headers.get(
+          "content-type"
+        ) || ""
+      ).toLowerCase();
 
-    setAnalyticsDebug("Fetch result", {
-      url: finalUrl,
-      status: res.status,
-      ok: res.ok,
-      bodyPreview: text.slice(0, 800),
-    });
+    const text =
+      await res.text();
 
-    if (!res.ok) return null;
+    console.log(
+      "📊 Analytics response:",
+      {
+        url: finalUrl,
+        status: res.status,
+        contentType,
+        preview:
+          text.slice(0, 300)
+      }
+    );
+
+    /*
+     * If this ever returns HTML,
+     * the app hit the frontend rather
+     * than the API.
+     */
+    if (
+      contentType.includes(
+        "text/html"
+      ) ||
+      text.trim().startsWith(
+        "<!DOCTYPE"
+      ) ||
+      text.trim().startsWith(
+        "<html"
+      )
+    ) {
+      console.error(
+        "❌ Analytics API returned HTML instead of JSON:",
+        finalUrl
+      );
+
+      return null;
+    }
+
+    if (!res.ok) {
+      console.error(
+        "❌ Analytics API HTTP error:",
+        res.status,
+        text
+      );
+
+      return null;
+    }
 
     try {
       return JSON.parse(text);
-    } catch (e) {
-      setAnalyticsDebug("JSON parse failed", {
-        url: finalUrl,
-        error: e.message,
-        bodyPreview: text.slice(0, 800),
-      });
+    } catch (err) {
+      console.error(
+        "❌ Analytics JSON parse failed:",
+        {
+          url: finalUrl,
+          error: err,
+          response: text
+        }
+      );
+
       return null;
     }
-  } catch (e) {
+
+  } catch (err) {
     clearTimeout(timer);
 
-    setAnalyticsDebug("Fetch failed", {
-      url: finalUrl,
-      error: e.name || e.message || String(e),
-    });
+    console.error(
+      "❌ Analytics fetch failed:",
+      {
+        url: finalUrl,
+        name: err?.name,
+        message: err?.message
+      }
+    );
 
     return null;
   }
 }
-
 async function fetchAnalyticsSummary() {
   const filters = getAnalyticsFilters();
   const qs = new URLSearchParams();
@@ -1775,13 +1944,31 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
   }
 
   async function fetchUsersFromAnyEndpoint() {
-    const candidates = [
+  /*
+   * This endpoint definitely exists in
+   * analyticsRoutes.js.
+   *
+   * Don't fall through to fake/legacy
+   * endpoints because that hides the real
+   * native-app problem.
+   */
+
+  const data =
+    await tryFetchJson(
       "/api/analytics/users",
-      "/api/analytics/registered-users",
-      "/api/analytics/registeredUsers"
-    ];
-    return await tryFetchJsonAny(candidates);
+      30000
+    );
+
+  if (!data) {
+    return null;
   }
+
+  return {
+    data,
+    url:
+      "/api/analytics/users"
+  };
+}
 
   async function loadRegisteredUsers() {
     if (!enforceAdmin()) return;
@@ -1797,7 +1984,8 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
       if (empty) empty.style.display = "none";
       if (errorEl) {
         errorEl.style.display = "block";
-        errorEl.textContent = "Users endpoint not found. Tried /api/analytics/users and common variants.";
+        errorEl.textContent =
+  "Could not load registered users. Check the app console for the exact HTTP response.";
       }
       computeSubscriptionMetrics();
       return;
