@@ -92,16 +92,17 @@ export async function ensureScorecardTemplatesTables() {
     const sql = `
       -- Approved templates (global)
       CREATE TABLE IF NOT EXISTS scorecard_courses (
-        id BIGSERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        state TEXT NOT NULL,
-        holes INTEGER NOT NULL,
-        pars_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-        dists_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-        created_at TIMESTAMPTZ DEFAULT now(),
-        updated_at TIMESTAMPTZ DEFAULT now(),
-        UNIQUE (name, state, holes)
-      );
+id BIGSERIAL PRIMARY KEY,
+name TEXT NOT NULL,
+state TEXT NOT NULL,
+holes INTEGER NOT NULL,
+pars_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+dists_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+green_points_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+created_at TIMESTAMPTZ DEFAULT now(),
+updated_at TIMESTAMPTZ DEFAULT now(),
+UNIQUE (name, state, holes)
+);
 
       CREATE INDEX IF NOT EXISTS scorecard_courses_state_idx
         ON scorecard_courses (state);
@@ -111,14 +112,15 @@ export async function ensureScorecardTemplatesTables() {
 
       -- Pending submissions
       CREATE TABLE IF NOT EXISTS courses_pending (
-        id BIGSERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        state TEXT NOT NULL,
-        holes INTEGER NOT NULL,
-        pars_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-        dists_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  state TEXT NOT NULL,
+  holes INTEGER NOT NULL,
+  pars_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  dists_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  green_points_json JSONB NOT NULL DEFAULT '[]'::jsonb,
 
-        submitted_by_user_id INTEGER,
+  submitted_by_user_id INTEGER,
         submitted_by_email TEXT,
 
         created_at TIMESTAMPTZ DEFAULT now(),
@@ -138,6 +140,11 @@ export async function ensureScorecardTemplatesTables() {
         ON courses_pending (created_at DESC);
 
       -- ✅ Safe upgrades (critical when courses_pending already existed from older version)
+      ALTER TABLE scorecard_courses
+  ADD COLUMN IF NOT EXISTS green_points_json JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+ALTER TABLE courses_pending
+  ADD COLUMN IF NOT EXISTS green_points_json JSONB NOT NULL DEFAULT '[]'::jsonb;
       ALTER TABLE courses_pending
         ADD COLUMN IF NOT EXISTS submitted_by_user_id INTEGER;
 
