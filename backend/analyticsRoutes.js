@@ -747,6 +747,15 @@ const colDob = usersCols.has("dob")
   ? "u.dob AS dob"
   : "NULL::date AS dob";
 
+    // Signup profile fields
+const colSignupAge = usersCols.has("age")
+  ? "u.age"
+  : "NULL::int";
+
+const colSignupState = usersCols.has("state")
+  ? "COALESCE(u.state, '')"
+  : "''::text";
+
 const colDeletionRequestedAt = usersCols.has("deletion_requested_at")
   ? "u.deletion_requested_at AS deletion_requested_at"
   : "NULL::timestamptz AS deletion_requested_at";
@@ -770,8 +779,12 @@ const colDeletionRequestedAt = usersCols.has("deletion_requested_at")
 
       const colHomeState =
   prefsCols.has("home_state")
-    ? "COALESCE(p.home_state, '') AS home_state"
-    : "''::text AS home_state";
+    ? `COALESCE(
+         NULLIF(${colSignupState}, ''),
+         NULLIF(p.home_state, ''),
+         ''
+       ) AS home_state`
+    : `${colSignupState} AS home_state`;
 
 const colFavs =
   prefsCols.has("favourites")
@@ -812,11 +825,17 @@ const colHomeCourse =
 ${colFullName},
 ${colGender},
 ${colDob},
-CASE
-  WHEN ${usersCols.has("dob") ? "u.dob" : "NULL::date"} IS NOT NULL
-  THEN DATE_PART('year', AGE(${usersCols.has("dob") ? "u.dob" : "NULL::date"}))::int
-  ELSE NULL
-END AS age,
+COALESCE(
+  ${colSignupAge},
+  CASE
+    WHEN ${usersCols.has("dob") ? "u.dob" : "NULL::date"} IS NOT NULL
+    THEN DATE_PART(
+      'year',
+      AGE(${usersCols.has("dob") ? "u.dob" : "NULL::date"})
+    )::int
+    ELSE NULL
+  END
+) AS age,
 ${colDeletionRequestedAt},
     CASE
   WHEN LOWER(COALESCE(ss.status, '')) IN ('active','trialing')
@@ -858,11 +877,17 @@ END AS plan,
 ${colFullName},
 ${colGender},
 ${colDob},
-CASE
-  WHEN ${usersCols.has("dob") ? "u.dob" : "NULL::date"} IS NOT NULL
-  THEN DATE_PART('year', AGE(${usersCols.has("dob") ? "u.dob" : "NULL::date"}))::int
-  ELSE NULL
-END AS age,
+COALESCE(
+  ${colSignupAge},
+  CASE
+    WHEN ${usersCols.has("dob") ? "u.dob" : "NULL::date"} IS NOT NULL
+    THEN DATE_PART(
+      'year',
+      AGE(${usersCols.has("dob") ? "u.dob" : "NULL::date"})
+    )::int
+    ELSE NULL
+  END
+) AS age,
 ${colDeletionRequestedAt},
     'FREE'::text AS plan,
     ${colHomeState},
@@ -900,11 +925,17 @@ ${colDeletionRequestedAt},
 ${colFullName},
 ${colGender},
 ${colDob},
-CASE
-  WHEN ${usersCols.has("dob") ? "u.dob" : "NULL::date"} IS NOT NULL
-  THEN DATE_PART('year', AGE(${usersCols.has("dob") ? "u.dob" : "NULL::date"}))::int
-  ELSE NULL
-END AS age,
+COALESCE(
+  ${colSignupAge},
+  CASE
+    WHEN ${usersCols.has("dob") ? "u.dob" : "NULL::date"} IS NOT NULL
+    THEN DATE_PART(
+      'year',
+      AGE(${usersCols.has("dob") ? "u.dob" : "NULL::date"})
+    )::int
+    ELSE NULL
+  END
+) AS age,
 ${colDeletionRequestedAt},
             CASE
   WHEN LOWER(COALESCE(ss.status, '')) IN ('active','trialing')
@@ -916,7 +947,7 @@ ${colDeletionRequestedAt},
   THEN UPPER(ss.plan)
   ELSE 'FREE'
 END AS plan,
-            ''::text AS home_state,
+            ${colSignupState} AS home_state,
             ${colHomeCourse},
             '[]'::jsonb AS favourites,
             ${colCreatedAt},
@@ -940,14 +971,20 @@ END AS plan,
 ${colFullName},
 ${colGender},
 ${colDob},
-CASE
-  WHEN ${usersCols.has("dob") ? "u.dob" : "NULL::date"} IS NOT NULL
-  THEN DATE_PART('year', AGE(${usersCols.has("dob") ? "u.dob" : "NULL::date"}))::int
-  ELSE NULL
-END AS age,
+COALESCE(
+  ${colSignupAge},
+  CASE
+    WHEN ${usersCols.has("dob") ? "u.dob" : "NULL::date"} IS NOT NULL
+    THEN DATE_PART(
+      'year',
+      AGE(${usersCols.has("dob") ? "u.dob" : "NULL::date"})
+    )::int
+    ELSE NULL
+  END
+) AS age,
 ${colDeletionRequestedAt},
             'FREE'::text AS plan,
-            ''::text AS home_state,
+            ${colSignupState} AS home_state,
             ${colHomeCourse},
             '[]'::jsonb AS favourites,
             ${colCreatedAt},
