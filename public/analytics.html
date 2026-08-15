@@ -1201,10 +1201,34 @@ nav a:hover{
 "></div>
   <script src="/config.js"></script>
 <script>
-  const API_BASE =
-  window.TEERADAR_BACKEND ||
-  localStorage.getItem("teeradar_backend_url") ||
-  "https://teeradar.com.au";
+  const API_BASE = (() => {
+  const stored = String(
+    localStorage.getItem("teeradar_backend_url") || ""
+  ).trim();
+
+  const configured = String(
+    window.TEERADAR_BACKEND || ""
+  ).trim();
+
+  const candidate =
+    configured ||
+    stored ||
+    "https://teeradar.com.au";
+
+  /*
+   * Never allow the installed app to accidentally
+   * use localhost as its production backend.
+   */
+  if (
+    candidate.includes("localhost") ||
+    candidate.includes("127.0.0.1") ||
+    !/^https?:\/\//i.test(candidate)
+  ) {
+    return "https://teeradar.com.au";
+  }
+
+  return candidate.replace(/\/+$/, "");
+})();
 const ADMIN_EMAIL = "declan7pin@gmail.com";
   // ✅ Needed for booking admin analytics routes (requirePlatformAdmin)
 const BOOKING_ADMIN_SECRET = ""; 
@@ -1254,27 +1278,58 @@ window.addEventListener("unhandledrejection", (e) => {
   return "";
 }
 
+function getStoredAuthToken() {
+  const tokenKeys = [
+    "teeradar_jwt",
+    "teeradar_token",
+    "token",
+    "authToken",
+    "jwt",
+    "access_token"
+  ];
+
+  try {
+    for (const key of tokenKeys) {
+      const value = localStorage.getItem(key);
+
+      if (
+        value &&
+        String(value).trim().length > 10
+      ) {
+        return String(value).trim();
+      }
+    }
+  } catch (err) {
+    console.warn(
+      "Could not read Analytics auth token:",
+      err
+    );
+  }
+
+  return "";
+}
+
 function getAuthHeaders() {
-  const h = {
+  const headers = {
     "Accept": "application/json"
   };
 
   const token = getStoredAuthToken();
 
   if (token) {
-    h["Authorization"] =
-      `Bearer ${token}`;
+    headers["Authorization"] =
+      "Bearer " + token;
   }
 
   if (
     BOOKING_ADMIN_SECRET &&
     BOOKING_ADMIN_SECRET.trim()
   ) {
-    h["x-booking-admin-secret"] =
+    headers["x-booking-admin-secret"] =
       BOOKING_ADMIN_SECRET.trim();
   }
 
-  return h;
+  return headers;
 }
   function enforceAdmin() {
   const updatedAt = document.getElementById("summaryUpdated");
@@ -1325,46 +1380,27 @@ function getAuthHeaders() {
   return "$" + n.toFixed(0);
 }
 
-async function tryFetchJson(
-  url,
-  timeoutMs = 12000
-) {
-  /*
-   * IMPORTANT:
-   *
-   * analytics.html can run from:
-   *
-   *   https://teeradar.com.au
-   *
-   * or inside Capacitor:
-   *
-   *   capacitor://localhost
-   *   https://localhost
-   *
-   * Therefore API requests MUST always point
-   * directly at the live TeeRadar backend.
-   */
-
+async function tryFetchJson(url, timeoutMs = 30000) {
   const backend =
     String(
       window.TEERADAR_BACKEND ||
       window.TEERADAR_API_BASE ||
       API_BASE ||
-      ""
+      "https://teeradar.com.au"
     )
       .trim()
       .replace(/\/+$/, "");
 
-  const cleanPath =
+  const requestPath =
     String(url || "").trim();
 
   const fullUrl =
-    /^https?:\/\//i.test(cleanPath)
-      ? cleanPath
+    /^https?:\/\//i.test(requestPath)
+      ? requestPath
       : `${backend}${
-          cleanPath.startsWith("/")
-            ? cleanPath
-            : "/" + cleanPath
+          requestPath.startsWith("/")
+            ? requestPath
+            : "/" + requestPath
         }`;
 
   const finalUrl =
@@ -1383,105 +1419,61 @@ async function tryFetchJson(
     );
 
   try {
-    const headers =
-      getAuthHeaders();
+    const headers = getAuthHeaders();
 
-    console.log(
-      "📊 Analytics request:",
-      {
-        url: finalUrl,
-        backend,
-        origin: window.location.origin,
-        hasToken:
-          !!getStoredAuthToken(),
-        hasAuthorization:
-          !!headers.Authorization
-      }
-    );
+    console.log("📊 TeeRadar analytics request", {
+      url: finalUrl,
+      origin: window.location.origin,
+      backend,
+      hasToken: !!getStoredAuthToken(),
+      hasAuthorization: !!headers.Authorization
+    });
 
-    const res =
-      await fetch(
-        finalUrl,
-        {
-          method: "GET",
+    const res = await fetch(finalUrl, {
+      method: "GET",
 
-          headers: {
-            ...headers,
+      headers: {
+        ...headers,
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache"
+      },
 
-            "Cache-Control":
-              "no-cache",
-
-            "Pragma":
-              "no-cache"
-          },
-
-          /*
-           * Do not depend on cookies.
-           *
-           * TeeRadar's app admin endpoints use
-           * the Bearer JWT.
-           */
-          credentials: "omit",
-
-          cache: "no-store",
-
-          signal:
-            controller.signal
-        }
-      );
+      /*
+       * Native app admin requests use the JWT.
+       * Do not rely on browser cookies.
+       */
+      credentials: "omit",
+      cache: "no-store",
+      signal: controller.signal
+    });
 
     clearTimeout(timer);
 
-    const contentType =
-      String(
-        res.headers.get(
-          "content-type"
-        ) || ""
-      ).toLowerCase();
+    const text = await res.text();
 
-    const text =
-      await res.text();
+    console.log("📊 TeeRadar analytics response", {
+      url: finalUrl,
+      status: res.status,
+      response: text.slice(0, 500)
+    });
 
-    console.log(
-      "📊 Analytics response:",
-      {
-        url: finalUrl,
-        status: res.status,
-        contentType,
-        preview:
-          text.slice(0, 300)
-      }
-    );
-
-    /*
-     * If this ever returns HTML,
-     * the app hit the frontend rather
-     * than the API.
-     */
-    if (
-      contentType.includes(
-        "text/html"
-      ) ||
-      text.trim().startsWith(
-        "<!DOCTYPE"
-      ) ||
-      text.trim().startsWith(
-        "<html"
-      )
-    ) {
+    if (!res.ok) {
       console.error(
-        "❌ Analytics API returned HTML instead of JSON:",
-        finalUrl
+        "❌ Analytics HTTP error",
+        res.status,
+        text
       );
 
       return null;
     }
 
-    if (!res.ok) {
+    if (
+      text.trim().startsWith("<!DOCTYPE") ||
+      text.trim().startsWith("<html")
+    ) {
       console.error(
-        "❌ Analytics API HTTP error:",
-        res.status,
-        text
+        "❌ Analytics received HTML instead of API JSON",
+        finalUrl
       );
 
       return null;
@@ -1491,12 +1483,9 @@ async function tryFetchJson(
       return JSON.parse(text);
     } catch (err) {
       console.error(
-        "❌ Analytics JSON parse failed:",
-        {
-          url: finalUrl,
-          error: err,
-          response: text
-        }
+        "❌ Analytics JSON parse failed",
+        err,
+        text.slice(0, 500)
       );
 
       return null;
@@ -1506,7 +1495,7 @@ async function tryFetchJson(
     clearTimeout(timer);
 
     console.error(
-      "❌ Analytics fetch failed:",
+      "❌ Analytics request failed",
       {
         url: finalUrl,
         name: err?.name,
@@ -1944,15 +1933,6 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
   }
 
   async function fetchUsersFromAnyEndpoint() {
-  /*
-   * This endpoint definitely exists in
-   * analyticsRoutes.js.
-   *
-   * Don't fall through to fake/legacy
-   * endpoints because that hides the real
-   * native-app problem.
-   */
-
   const data =
     await tryFetchJson(
       "/api/analytics/users",
@@ -1965,8 +1945,7 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
 
   return {
     data,
-    url:
-      "/api/analytics/users"
+    url: "/api/analytics/users"
   };
 }
 
