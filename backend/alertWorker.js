@@ -1056,16 +1056,11 @@ async function runAlertTick() {
     for (const row of rows) {
             const email = (row.email || "").toLowerCase();
 
-            const subscriberStatus = String(
-        row.subscriber_status ?? row.status ?? ""
-      ).trim().toLowerCase();
-
-      const subscriberPlan = String(
-        row.subscriber_plan ?? row.plan ?? "FREE"
-      ).trim().toUpperCase();
-
-      const entitled = isEntitledSubscriberRow(row);
-      const plan = getEffectiveSubscriberPlan(row);
+            // TEMPORARY FREE ACCESS MODE:
+// Every registered TeeRadar user receives full PRO alert access.
+// Real Stripe / Apple subscription data remains unchanged.
+const entitled = true;
+const plan = "PRO";
 
       // ✅ FIX: normalise JSONB/string values to arrays so users don't get skipped
       const favourites = normaliseJsonArray(row.favourites);
@@ -1077,17 +1072,6 @@ async function runAlertTick() {
       const partySize = row.preferred_party_size || 1;
       const alertFrequencyRaw = row.alert_frequency || null;
       const alertLastSentRaw = row.alert_last_sent || null;
-
-      // 🔒 Only active entitled subscribers can receive email alerts
-                  if (!entitled) {
-        console.log(
-          `🔒 Skipping ${email} – no active subscriber entitlement (status=${subscriberStatus || "none"}, plan=${subscriberPlan || "FREE"}).`
-        );
-
-        // Optional cleanup so expired/free/cancelled users stop showing as alert-enabled
-        await disableAlertEmailsForUser(email);
-        continue;
-      }
 
       if (!Array.isArray(favourites) || favourites.length === 0) {
         continue;
