@@ -1902,7 +1902,7 @@ function parsePartySize(v) {
 // -------------------------------------------------
 // Search (state filter + state-aware cache)
 // -------------------------------------------------
-app.post("/api/search", async (req, res) => {
+app.post("/api/search", requireAuth, async (req, res) => {
   try {
     const {
       date,
