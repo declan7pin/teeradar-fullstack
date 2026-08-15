@@ -2601,13 +2601,54 @@ html.app-mode .app-bottom-nav
     <h2 id="authTitle">Log in</h2>
     <p id="authSubtitle">Use this email + password on any device.</p>
 
-    <input id="authEmail" class="auth-input" type="email" placeholder="Email" />
-    <input id="authPassword" class="auth-input" type="password" placeholder="Password" />
+   <input id="authEmail" class="auth-input" type="email" placeholder="Email" />
+<input id="authPassword" class="auth-input" type="password" placeholder="Password" />
 
-    <div id="authHomeCourseRow">
-      <input id="authHomeCourse" class="auth-input" type="text" placeholder="Home course (optional)" />
-    </div>
+<div id="authSignupFields" style="display:none;">
 
+  <input
+    id="authFullName"
+    class="auth-input"
+    type="text"
+    placeholder="Full name"
+    autocomplete="name"
+  />
+
+  <input
+    id="authAge"
+    class="auth-input"
+    type="number"
+    min="13"
+    max="120"
+    inputmode="numeric"
+    placeholder="Age"
+  />
+
+  <select
+    id="authState"
+    class="auth-input"
+  >
+    <option value="">Select your state</option>
+    <option value="WA">Western Australia</option>
+    <option value="NSW">New South Wales</option>
+    <option value="VIC">Victoria</option>
+    <option value="QLD">Queensland</option>
+    <option value="SA">South Australia</option>
+    <option value="TAS">Tasmania</option>
+    <option value="ACT">Australian Capital Territory</option>
+    <option value="NT">Northern Territory</option>
+  </select>
+
+</div>
+
+<div id="authHomeCourseRow">
+  <input
+    id="authHomeCourse"
+    class="auth-input"
+    type="text"
+    placeholder="Home course (optional)"
+  />
+</div>
     <button id="authSubmit" class="auth-btn">Log in</button>
 
     <div id="authForgot" class="auth-switch" style="margin-top:6px;font-size:11px;color:#6b7280;">
@@ -2764,6 +2805,8 @@ if (appAnalyticsCard) {
   const authCloseBtn = document.getElementById("authCloseBtn");
   const authForgot = document.getElementById("authForgot");
   const authHomeCourseRow = document.getElementById("authHomeCourseRow");
+  const authSignupFields =
+  document.getElementById("authSignupFields");
 
   function hasPaidSubscription() {
     try {
@@ -2785,31 +2828,70 @@ if (appAnalyticsCard) {
   }
 
   function applyAuthView() {
-    if (!authTitle || !authSubtitle || !authSubmit || !authSwitch) return;
+  if (!authTitle || !authSubtitle || !authSubmit || !authSwitch) return;
 
-    if (authMode === "signup") {
-      authTitle.textContent = "Create account";
-      authSubtitle.textContent = "Use this email + password on any device.";
-      authSubmit.textContent = "Sign up";
-      authSwitch.textContent = "Already have an account? Log in";
-      if (authHomeCourseRow) authHomeCourseRow.style.display = "block";
-      if (authForgot) authForgot.style.display = "none";
-    } else if (authMode === "reset") {
-      authTitle.textContent = "Reset password";
-      authSubtitle.textContent = "Enter your email and a new password.";
-      authSubmit.textContent = "Reset password";
-      authSwitch.textContent = "Back to log in";
-      if (authHomeCourseRow) authHomeCourseRow.style.display = "none";
-      if (authForgot) authForgot.style.display = "none";
-    } else {
-      authTitle.textContent = "Log in";
-      authSubtitle.textContent = "Use your TeeRadar account details.";
-      authSubmit.textContent = "Log in";
-      authSwitch.textContent = "Create an account";
-      if (authHomeCourseRow) authHomeCourseRow.style.display = "block";
-      if (authForgot) authForgot.style.display = "block";
+  if (authMode === "signup") {
+    authTitle.textContent = "Create account";
+    authSubtitle.textContent =
+      "Create your free TeeRadar account for full access.";
+
+    authSubmit.textContent = "Create account";
+    authSwitch.textContent =
+      "Already have an account? Log in";
+
+    if (authSignupFields) {
+      authSignupFields.style.display = "block";
+    }
+
+    if (authHomeCourseRow) {
+      authHomeCourseRow.style.display = "block";
+    }
+
+    if (authForgot) {
+      authForgot.style.display = "none";
+    }
+
+  } else if (authMode === "reset") {
+    authTitle.textContent = "Reset password";
+    authSubtitle.textContent =
+      "Enter your email and a new password.";
+
+    authSubmit.textContent = "Reset password";
+    authSwitch.textContent = "Back to log in";
+
+    if (authSignupFields) {
+      authSignupFields.style.display = "none";
+    }
+
+    if (authHomeCourseRow) {
+      authHomeCourseRow.style.display = "none";
+    }
+
+    if (authForgot) {
+      authForgot.style.display = "none";
+    }
+
+  } else {
+    authTitle.textContent = "Log in";
+    authSubtitle.textContent =
+      "Use your TeeRadar account details.";
+
+    authSubmit.textContent = "Log in";
+    authSwitch.textContent = "Create an account";
+
+    if (authSignupFields) {
+      authSignupFields.style.display = "none";
+    }
+
+    if (authHomeCourseRow) {
+      authHomeCourseRow.style.display = "block";
+    }
+
+    if (authForgot) {
+      authForgot.style.display = "block";
     }
   }
+}
 
   // ✅ NEW: prefill helpers (used after Stripe success redirect)
   function normalizeEmail(v) {
@@ -2926,10 +3008,15 @@ if (appAnalyticsCard) {
 }
 
   if (authSwitch) {
-    authSwitch.addEventListener("click", () => {
-      window.location.href = "/subscribe.html";
-    });
-  }
+  authSwitch.addEventListener("click", () => {
+    if (authMode === "login") {
+      openAuthModal("signup");
+      return;
+    }
+
+    openAuthModal("login");
+  });
+}
 
   if (authForgot) {
     authForgot.addEventListener("click", () => {
@@ -3014,15 +3101,44 @@ if (appAnalyticsCard) {
 
   if (authSubmit) {
     authSubmit.addEventListener("click", async () => {
-      const email = document.getElementById("authEmail").value.trim();
-      const password = document.getElementById("authPassword").value.trim();
-      const homeCourse =
-        (document.getElementById("authHomeCourse")?.value.trim() || null);
+      const email =
+  document.getElementById("authEmail").value.trim();
+
+const password =
+  document.getElementById("authPassword").value.trim();
+
+const fullName =
+  document.getElementById("authFullName")?.value.trim() || "";
+
+const age =
+  Number(document.getElementById("authAge")?.value || 0);
+
+const state =
+  document.getElementById("authState")?.value || "";
+
+const homeCourse =
+  document.getElementById("authHomeCourse")?.value.trim() || null;
 
       if (!email || !password) {
         alert("Email and password are required.");
         return;
       }
+      if (authMode === "signup") {
+  if (!fullName) {
+    alert("Please enter your full name.");
+    return;
+  }
+
+  if (!age || age < 13 || age > 120) {
+    alert("Please enter a valid age.");
+    return;
+  }
+
+  if (!state) {
+    alert("Please select your state.");
+    return;
+  }
+}
 
       let endpoint = "";
       let payload = {};
@@ -3031,11 +3147,25 @@ if (appAnalyticsCard) {
         endpoint = "/api/auth/reset";
         payload = { email, password, newPassword: password };
       } else {
-        endpoint = authMode === "login"
-          ? "/api/auth/login"
-          : "/api/auth/signup";
-        payload = { email, password, homeCourse };
+  endpoint = authMode === "login"
+    ? "/api/auth/login"
+    : "/api/auth/signup";
+
+  payload = authMode === "signup"
+    ? {
+        email,
+        password,
+        fullName,
+        age,
+        state,
+        homeCourse
       }
+    : {
+        email,
+        password,
+        homeCourse
+      };
+}
 
       try {
         const res = await fetch(`${API_BASE}${endpoint}`,{
