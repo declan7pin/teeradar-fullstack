@@ -679,6 +679,119 @@
   padding:18px;
   background:linear-gradient(180deg,#ffffff,#f7fbfa);
 }
+/* =========================================================
+   GPS SCORECARD
+   ========================================================= */
+
+.gpsDistanceCard{
+  margin-bottom:14px;
+  padding:16px;
+
+  border:1px solid rgba(0,121,107,.16);
+  border-radius:22px;
+
+  background:linear-gradient(
+    135deg,
+    #ffffff,
+    #edf9f6
+  );
+
+  box-shadow:0 10px 28px rgba(15,23,42,.06);
+}
+
+.gpsDistanceTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+
+.gpsDistanceTitle{
+  color:#00796b;
+
+  font-size:.72rem;
+  font-weight:1000;
+  letter-spacing:.1em;
+}
+
+.gpsDistanceStatus{
+  margin-top:4px;
+
+  color:var(--muted);
+
+  font-size:.78rem;
+  font-weight:850;
+}
+
+.gpsDistanceTop .btn2{
+  width:auto;
+  min-height:40px;
+
+  padding:8px 12px;
+
+  font-size:.75rem;
+}
+
+.gpsDistanceGrid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+
+  gap:8px;
+  margin-top:14px;
+}
+
+.gpsDistanceItem{
+  padding:12px 7px;
+
+  border:1px solid #e2ecee;
+  border-radius:16px;
+
+  background:#ffffff;
+
+  text-align:center;
+}
+
+.gpsDistanceItem span{
+  display:block;
+
+  color:var(--muted);
+
+  font-size:.72rem;
+  font-weight:900;
+}
+
+.gpsDistanceItem strong{
+  display:block;
+
+  margin-top:3px;
+
+  color:#10212a;
+
+  font-size:1.65rem;
+  font-weight:1000;
+  letter-spacing:-.05em;
+}
+
+.gpsDistanceMiddle{
+  border-color:rgba(0,121,107,.20);
+
+  background:#dff4ef;
+}
+
+.gpsDistanceMiddle strong{
+  color:#006b57;
+}
+
+.gpsAccuracy{
+  margin-top:10px;
+
+  color:var(--muted);
+
+  font-size:.68rem;
+  font-weight:800;
+
+  text-align:center;
+}
 
 .premGrid{
   display:grid;
@@ -2261,8 +2374,59 @@ html.app-mode .app-bottom-nav {
     </div>
 
     <div class="premBody">
-      <div class="premGrid">
-        <div class="premPanel">
+
+  <!-- ✅ GPS DISTANCES -->
+  <div class="gpsDistanceCard" id="gpsDistanceCard">
+    <div class="gpsDistanceTop">
+      <div>
+        <div class="gpsDistanceTitle">
+          GPS DISTANCE
+        </div>
+
+        <div
+          class="gpsDistanceStatus"
+          id="gpsDistanceStatus"
+        >
+          GPS off
+        </div>
+      </div>
+
+      <button
+        class="btn2 secondary"
+        id="enableGpsBtn"
+        type="button"
+      >
+        Enable GPS
+      </button>
+    </div>
+
+    <div class="gpsDistanceGrid">
+
+      <div class="gpsDistanceItem">
+        <span>Front</span>
+        <strong id="gpsFrontDistance">—</strong>
+      </div>
+
+      <div class="gpsDistanceItem gpsDistanceMiddle">
+        <span>Middle</span>
+        <strong id="gpsMiddleDistance">—</strong>
+      </div>
+
+      <div class="gpsDistanceItem">
+        <span>Back</span>
+        <strong id="gpsBackDistance">—</strong>
+      </div>
+
+    </div>
+
+    <div
+      class="gpsAccuracy"
+      id="gpsAccuracy"
+    ></div>
+  </div>
+
+  <div class="premGrid">
+    <div class="premPanel">
           <div class="premRow">
             <label>Strokes</label>
             <div class="premBtns" id="premScoreBtns"></div>
@@ -2745,11 +2909,33 @@ const premPrevBtn = document.getElementById("premPrevBtn");
 const premNextBtn = document.getElementById("premNextBtn");
 const premNote = document.getElementById("premNote");
 const toggleTableBtn = document.getElementById("toggleTableBtn");
+// ✅ GPS refs
+const enableGpsBtn =
+  document.getElementById("enableGpsBtn");
+
+const gpsDistanceStatus =
+  document.getElementById("gpsDistanceStatus");
+
+const gpsFrontDistance =
+  document.getElementById("gpsFrontDistance");
+
+const gpsMiddleDistance =
+  document.getElementById("gpsMiddleDistance");
+
+const gpsBackDistance =
+  document.getElementById("gpsBackDistance");
+
+const gpsAccuracy =
+  document.getElementById("gpsAccuracy");
 
 // ✅ premium state
 let premiumHoleIndex = 0;
 let premiumShowingTable = false;
 let premiumPlayerIndex = 0;
+// ✅ GPS scorecard state
+let gpsEnabled = false;
+let gpsWatchId = null;
+let currentGpsPosition = null;
 
 /*
  * Retain the currently loaded scorecard metadata so the hole
@@ -2788,7 +2974,624 @@ let upcomingCourseAutoList = null;
     // -----------------------------
     function norm(s){ return String(s || "").trim().toLowerCase(); }
     function clamp(n, a, b){ n = Number(n); if (!Number.isFinite(n)) return a; return Math.max(a, Math.min(b, n)); }
+    // =========================================================
+// ✅ GOOGLE EARTH DMS → DECIMAL GPS
+// Example:
+// 32°09'32.16"S 115°57'25.96"E
+// =========================================================
 
+function parseGoogleEarthCoordinate(value){
+  const text = String(value || "")
+    .trim()
+    .toUpperCase();
+
+  if (!text) return null;
+
+  const match = text.match(
+    /(\d+(?:\.\d+)?)°\s*(\d+(?:\.\d+)?)['′]\s*(\d+(?:\.\d+)?)["″]?\s*([NS])\s*[, ]+\s*(\d+(?:\.\d+)?)°\s*(\d+(?:\.\d+)?)['′]\s*(\d+(?:\.\d+)?)["″]?\s*([EW])/
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  let lat =
+    Number(match[1]) +
+    Number(match[2]) / 60 +
+    Number(match[3]) / 3600;
+
+  let lng =
+    Number(match[5]) +
+    Number(match[6]) / 60 +
+    Number(match[7]) / 3600;
+
+  if (match[4] === "S") {
+    lat *= -1;
+  }
+
+  if (match[8] === "W") {
+    lng *= -1;
+  }
+
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng)
+  ) {
+    return null;
+  }
+
+  return {
+    lat,
+    lng
+  };
+}
+
+function distanceBetweenGpsPoints(
+  lat1,
+  lng1,
+  lat2,
+  lng2
+){
+  const R = 6371000;
+
+  const toRadians = (value) =>
+    Number(value) * Math.PI / 180;
+
+  const phi1 = toRadians(lat1);
+  const phi2 = toRadians(lat2);
+
+  const deltaPhi =
+    toRadians(Number(lat2) - Number(lat1));
+
+  const deltaLambda =
+    toRadians(Number(lng2) - Number(lng1));
+
+  const a =
+    Math.sin(deltaPhi / 2) ** 2 +
+    Math.cos(phi1) *
+      Math.cos(phi2) *
+      Math.sin(deltaLambda / 2) ** 2;
+
+  const c =
+    2 *
+    Math.atan2(
+      Math.sqrt(a),
+      Math.sqrt(1 - a)
+    );
+
+  return Math.round(R * c);
+}
+
+function getCurrentGpsCourse(){
+  if (!currentRound) {
+    return null;
+  }
+
+  const wantedCourse =
+    String(currentRound.course || "")
+      .trim();
+
+  const wantedState =
+    String(currentRound.state || "")
+      .trim()
+      .toUpperCase();
+
+  const wantedHoles =
+    Number(currentRound.holes || 0);
+
+  /*
+   * First try an exact name/state/hole match.
+   */
+  let match = coursesCache.find((c) => {
+    return (
+      courseNamesMatch(c.name, wantedCourse) &&
+      String(c.state || "")
+        .trim()
+        .toUpperCase() === wantedState &&
+      Number(c.holes) === wantedHoles
+    );
+  });
+
+  /*
+   * If we're playing 18 holes made from two 9-hole
+   * templates, there may not be a single 18-hole GPS
+   * template.
+   *
+   * We'll handle that separately in the next function.
+   */
+  return match || null;
+}
+
+function getCurrentHoleGreenPoints(){
+  if (!currentRound) {
+    return null;
+  }
+
+  const holeNumber =
+    premiumHoleIndex + 1;
+
+  const course =
+    getCurrentGpsCourse();
+
+  if (
+    course &&
+    Array.isArray(course.green_points)
+  ) {
+    const direct =
+      course.green_points.find(
+        (point) =>
+          Number(point?.hole) ===
+          Number(holeNumber)
+      );
+
+    if (direct) {
+      return direct;
+    }
+  }
+
+  /*
+   * 18-hole round made from two separate 9-hole
+   * templates.
+   *
+   * Example:
+   * Lakes / Island
+   */
+  if (
+    Number(currentRound.holes) === 18 &&
+    currentRound.layout
+  ) {
+    const layoutParts =
+      splitRoundLayoutParts(
+        currentRound.layout
+      );
+
+    if (layoutParts.length >= 2) {
+      const wantedPart =
+        holeNumber <= 9
+          ? layoutParts[0]
+          : layoutParts[1];
+
+      const localHole =
+        holeNumber <= 9
+          ? holeNumber
+          : holeNumber - 9;
+
+      const match9 =
+        coursesCache.find((c) => {
+          if (
+            Number(c.holes) !== 9 ||
+            String(c.state || "")
+              .trim()
+              .toUpperCase() !==
+              String(currentRound.state || "")
+                .trim()
+                .toUpperCase()
+          ) {
+            return false;
+          }
+
+          const name =
+            String(c.name || "")
+              .toLowerCase();
+
+          return (
+            courseNamesMatch(
+              c.name,
+              currentRound.course
+            ) &&
+            name.includes(
+              String(wantedPart || "")
+                .toLowerCase()
+            )
+          );
+        });
+
+      if (
+        match9 &&
+        Array.isArray(match9.green_points)
+      ) {
+        return (
+          match9.green_points.find(
+            (point) =>
+              Number(point?.hole) ===
+              Number(localHole)
+          ) ||
+          null
+        );
+      }
+    }
+  }
+
+  return null;
+}
+
+function updateGpsDistances(){
+  if (!gpsEnabled) {
+    return;
+  }
+
+  if (!currentGpsPosition) {
+    gpsDistanceStatus.textContent =
+      "Waiting for GPS…";
+
+    return;
+  }
+
+  const green =
+    getCurrentHoleGreenPoints();
+
+  if (!green) {
+    gpsFrontDistance.textContent = "—";
+    gpsMiddleDistance.textContent = "—";
+    gpsBackDistance.textContent = "—";
+
+    gpsDistanceStatus.textContent =
+      "No GPS data for this hole";
+
+    return;
+  }
+
+  const front =
+    parseGoogleEarthCoordinate(
+      green.front
+    );
+
+  const middle =
+    parseGoogleEarthCoordinate(
+      green.middle
+    );
+
+  const back =
+    parseGoogleEarthCoordinate(
+      green.back
+    );
+
+  const {
+    latitude,
+    longitude,
+    accuracy
+  } = currentGpsPosition;
+
+  function metresTo(point){
+    if (!point) {
+      return null;
+    }
+
+    return distanceBetweenGpsPoints(
+      latitude,
+      longitude,
+      point.lat,
+      point.lng
+    );
+  }
+
+  const frontM =
+    metresTo(front);
+
+  const middleM =
+    metresTo(middle);
+
+  const backM =
+    metresTo(back);
+
+  gpsFrontDistance.textContent =
+    frontM == null
+      ? "—"
+      : `${frontM}m`;
+
+  gpsMiddleDistance.textContent =
+    middleM == null
+      ? "—"
+      : `${middleM}m`;
+
+  gpsBackDistance.textContent =
+    backM == null
+      ? "—"
+      : `${backM}m`;
+
+  gpsDistanceStatus.textContent =
+  "Live GPS";
+
+  if (
+    gpsAccuracy &&
+    Number.isFinite(Number(accuracy))
+  ) {
+    gpsAccuracy.textContent =
+      `Location accuracy ±${Math.round(
+        Number(accuracy)
+      )}m`;
+  }
+}
+
+async function enableScorecardGps() {
+  const Geolocation =
+    window.Capacitor?.Plugins?.Geolocation;
+
+  try {
+    console.log("📍 GPS START", {
+      capacitor: !!window.Capacitor,
+      native:
+        typeof window.Capacitor?.isNativePlatform === "function"
+          ? window.Capacitor.isNativePlatform()
+          : false,
+      geolocationPlugin: !!Geolocation
+    });
+
+    if (!Geolocation) {
+      gpsDistanceStatus.textContent =
+        "GPS plugin unavailable";
+
+      if (enableGpsBtn) {
+        enableGpsBtn.textContent =
+          "Enable GPS";
+        enableGpsBtn.disabled = false;
+      }
+
+      console.error(
+        "❌ Capacitor Geolocation plugin not found"
+      );
+
+      return;
+    }
+
+    gpsEnabled = true;
+
+    if (enableGpsBtn) {
+      enableGpsBtn.textContent =
+        "Starting…";
+
+      enableGpsBtn.disabled = true;
+    }
+
+    gpsDistanceStatus.textContent =
+      "Checking GPS…";
+
+    // --------------------------------------------
+    // 1. Check permission
+    // --------------------------------------------
+    let permission =
+      await Geolocation.checkPermissions();
+
+    console.log(
+      "📍 GPS permission before:",
+      permission
+    );
+
+    if (
+      permission.location !== "granted"
+    ) {
+      gpsDistanceStatus.textContent =
+        "Requesting location permission…";
+
+      permission =
+        await Geolocation.requestPermissions({
+          permissions: ["location"]
+        });
+
+      console.log(
+        "📍 GPS permission after:",
+        permission
+      );
+    }
+
+    if (
+      permission.location !== "granted"
+    ) {
+      gpsEnabled = false;
+
+      gpsDistanceStatus.textContent =
+        "Location permission denied";
+
+      if (enableGpsBtn) {
+        enableGpsBtn.textContent =
+          "Enable GPS";
+
+        enableGpsBtn.disabled = false;
+      }
+
+      return;
+    }
+
+    // --------------------------------------------
+    // 2. GET LOCATION IMMEDIATELY
+    // --------------------------------------------
+    gpsDistanceStatus.textContent =
+      "Finding location…";
+
+    const position =
+      await Geolocation.getCurrentPosition({
+        enableHighAccuracy: true,
+
+        /*
+         * Allow iOS to return a recent fix instantly.
+         */
+        maximumAge: 30000,
+
+        timeout: 10000
+      });
+
+    console.log(
+      "✅ GPS initial fix:",
+      position
+    );
+
+    if (
+      position &&
+      position.coords
+    ) {
+      currentGpsPosition = {
+        latitude:
+          Number(
+            position.coords.latitude
+          ),
+
+        longitude:
+          Number(
+            position.coords.longitude
+          ),
+
+        accuracy:
+          Number(
+            position.coords.accuracy
+          )
+      };
+
+      if (enableGpsBtn) {
+        enableGpsBtn.textContent =
+          "GPS On";
+      }
+
+      gpsDistanceStatus.textContent =
+        "Live GPS";
+
+      /*
+       * Make sure the approved course/GPS
+       * templates have actually loaded.
+       */
+      await loadCoursesOnce();
+
+      updateGpsDistances();
+    }
+
+    // --------------------------------------------
+    // 3. REMOVE OLD WATCH
+    // --------------------------------------------
+    if (gpsWatchId !== null) {
+      try {
+        await Geolocation.clearWatch({
+          id: gpsWatchId
+        });
+      } catch (error) {
+        console.warn(
+          "Old GPS watch clear failed:",
+          error
+        );
+      }
+
+      gpsWatchId = null;
+    }
+
+    // --------------------------------------------
+    // 4. LIVE GPS WATCH
+    // --------------------------------------------
+    gpsWatchId =
+      await Geolocation.watchPosition(
+        {
+          enableHighAccuracy: true,
+
+          maximumAge: 1000,
+
+          timeout: 10000
+        },
+
+        (position, error) => {
+          if (error) {
+            console.warn(
+              "📍 GPS watch error:",
+              error
+            );
+
+            gpsDistanceStatus.textContent =
+              "GPS signal unavailable";
+
+            return;
+          }
+
+          if (
+            !position ||
+            !position.coords
+          ) {
+            return;
+          }
+
+          currentGpsPosition = {
+            latitude:
+              Number(
+                position.coords.latitude
+              ),
+
+            longitude:
+              Number(
+                position.coords.longitude
+              ),
+
+            accuracy:
+              Number(
+                position.coords.accuracy
+              )
+          };
+
+          console.log(
+            "📍 GPS live update:",
+            currentGpsPosition
+          );
+
+          gpsDistanceStatus.textContent =
+            "Live GPS";
+
+          if (enableGpsBtn) {
+            enableGpsBtn.textContent =
+              "GPS On";
+          }
+
+          updateGpsDistances();
+        }
+      );
+
+    console.log(
+      "✅ GPS watch started:",
+      gpsWatchId
+    );
+
+  } catch (error) {
+    console.error(
+      "❌ Scorecard GPS failed:",
+      error
+    );
+
+    gpsEnabled = false;
+
+    const message =
+      String(
+        error?.message ||
+        error?.code ||
+        ""
+      );
+
+    if (
+      message
+        .toLowerCase()
+        .includes("permission")
+    ) {
+      gpsDistanceStatus.textContent =
+        "Location permission denied";
+    } else if (
+      message
+        .toLowerCase()
+        .includes("location services")
+    ) {
+      gpsDistanceStatus.textContent =
+        "Turn on Location Services";
+    } else {
+      gpsDistanceStatus.textContent =
+        "GPS failed";
+    }
+
+    if (gpsAccuracy) {
+      gpsAccuracy.textContent =
+        message
+          ? `Error: ${message}`
+          : "";
+    }
+
+    if (enableGpsBtn) {
+      enableGpsBtn.textContent =
+        "Try GPS again";
+
+      enableGpsBtn.disabled = false;
+    }
+  }
+}
     function escapeHtml(s){
       return String(s || "")
         .replaceAll("&","&amp;")
@@ -2890,6 +3693,11 @@ function setLeftPanelsVisibility(show){
     course_rating: c?.course_rating ?? c?.rating ?? null,
     slope_rating: c?.slope_rating ?? c?.slope ?? null,
     tee_colour: c?.tee_colour ?? c?.tee ?? "",
+
+    // ✅ GPS green points for front / middle / back
+    green_points: Array.isArray(c?.green_points)
+      ? c.green_points
+      : [],
   }))
   .filter((c) => c.name && c.state);
 
@@ -4171,6 +4979,9 @@ if (premPrevBtn) {
  */
 if (premNextBtn) {
   premNextBtn.disabled = false;
+}
+if (gpsEnabled) {
+  updateGpsDistances();
 }
 }
 }
@@ -5668,6 +6479,15 @@ if (showLeftBtn) {
       behavior: "smooth"
     });
   });
+}
+
+if (enableGpsBtn) {
+  enableGpsBtn.addEventListener(
+    "click",
+    async () => {
+      await enableScorecardGps();
+    }
+  );
 }
 
 saveAllBtn.addEventListener("click", async () => {
