@@ -15,11 +15,12 @@ async function ensureSocialProfileColumns() {
   await db.query(`
     ALTER TABLE users
       ADD COLUMN IF NOT EXISTS full_name TEXT,
+      ADD COLUMN IF NOT EXISTS age INTEGER,
+      ADD COLUMN IF NOT EXISTS state TEXT,
       ADD COLUMN IF NOT EXISTS gender TEXT,
       ADD COLUMN IF NOT EXISTS dob DATE,
       ADD COLUMN IF NOT EXISTS deletion_requested_at TIMESTAMPTZ;
   `);
-
   profileColumnsReady = true;
 }
 
@@ -89,6 +90,8 @@ router.get("/profile", async (req, res) => {
         email,
         display_name,
         full_name,
+        age,
+        state,
         gender,
         dob,
         profile_visibility
@@ -108,8 +111,10 @@ router.get("/profile", async (req, res) => {
             email: user.email,
             displayName: user.display_name || "",
             fullName: user.full_name || "",
-            gender: user.gender || "prefer_not_to_answer",
-            dob: user.dob ? String(user.dob).slice(0, 10) : "",
+age: user.age ?? null,
+state: user.state || "",
+gender: user.gender || "prefer_not_to_answer",
+dob: user.dob ? String(user.dob).slice(0, 10) : "",
             profileVisibility: user.profile_visibility || "friends",
           }
         : null,
@@ -133,6 +138,28 @@ router.post("/profile", async (req, res) => {
     const fullName = String(req.body?.fullName || "")
       .trim()
       .slice(0, 80);
+
+    const state = String(req.body?.state || "")
+      .trim()
+      .toUpperCase();
+
+const allowedStates = new Set([
+  "WA",
+  "NSW",
+  "VIC",
+  "QLD",
+  "SA",
+  "TAS",
+  "ACT",
+  "NT",
+]);
+
+if (state && !allowedStates.has(state)) {
+  return res.status(400).json({
+    ok: false,
+    error: "invalid_state",
+  });
+}
 
     const genderRaw = String(req.body?.gender || "prefer_not_to_answer")
       .trim()
@@ -163,28 +190,32 @@ router.post("/profile", async (req, res) => {
     const { rows } = await db.query(
       `
       UPDATE users
-      SET
-        display_name = $2,
-        full_name = $3,
-        gender = $4,
-        dob = $5
-      WHERE id = $1
+SET
+  display_name = $2,
+  full_name = $3,
+  state = $4,
+  gender = $5,
+  dob = $6
+WHERE id = $1
       RETURNING
-        id,
-        email,
-        display_name,
-        full_name,
-        gender,
-        dob,
-        profile_visibility;
+  id,
+  email,
+  display_name,
+  full_name,
+  age,
+  state,
+  gender,
+  dob,
+  profile_visibility;
       `,
       [
-        userId,
-        displayName || null,
-        fullName || null,
-        gender || "prefer_not_to_answer",
-        dob,
-      ]
+  userId,
+  displayName || null,
+  fullName || null,
+  state || null,
+  gender || "prefer_not_to_answer",
+  dob,
+]
     );
 
     const user = rows[0] || null;
@@ -196,8 +227,10 @@ router.post("/profile", async (req, res) => {
             email: user.email,
             displayName: user.display_name || "",
             fullName: user.full_name || "",
-            gender: user.gender || "prefer_not_to_answer",
-            dob: user.dob ? String(user.dob).slice(0, 10) : "",
+age: user.age ?? null,
+state: user.state || "",
+gender: user.gender || "prefer_not_to_answer",
+dob: user.dob ? String(user.dob).slice(0, 10) : "",
             profileVisibility: user.profile_visibility || "friends",
           }
         : null,
