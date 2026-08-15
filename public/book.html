@@ -1747,6 +1747,34 @@ html.app-mode .group-vote-modal-header {
   <script>
 
     const API_BASE = "https://teeradar.com.au";
+    const BOOK_AUTH_EMAIL =
+  (
+    localStorage.getItem("teeradar_user_email") ||
+    localStorage.getItem("teeradar_email") ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
+
+const BOOK_AUTH_TOKEN =
+  (
+    localStorage.getItem("teeradar_jwt") ||
+    localStorage.getItem("teeradar_token") ||
+    localStorage.getItem("authToken") ||
+    localStorage.getItem("token") ||
+    ""
+  ).trim();
+
+/*
+ * TeeRadar search is account-only.
+ * If the user is not logged in, send them to login
+ * and return them here after successful authentication.
+ */
+if (!BOOK_AUTH_EMAIL || !BOOK_AUTH_TOKEN) {
+  window.location.replace(
+    "/index.html?openLogin=1&returnTo=%2Fbook.html"
+  );
+}
 window.fetch = ((originalFetch) => {
   return async (...args) => {
     try {
@@ -3212,7 +3240,10 @@ lastSearchCriteria = {
       try {
         const res = await fetch(`${API_BASE}/api/search`, {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${BOOK_AUTH_TOKEN}`,
+  },
   body: JSON.stringify(lastSearchCriteria),
 });
 
