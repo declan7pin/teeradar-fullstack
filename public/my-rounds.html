@@ -2548,6 +2548,38 @@ html.app-mode .app-bottom-nav {
   </div>
 </div>
 
+  <div
+  class="modalBack"
+  id="loginRequiredModal"
+  aria-hidden="true"
+>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3>Free account required</h3>
+
+    <div class="muted" style="font-weight:800;">
+      To access these features, please log in or create a free TeeRadar account.
+    </div>
+
+    <div class="actions" style="margin-top:16px;">
+      <button
+        class="btn2 secondary"
+        id="loginRequiredCancelBtn"
+        type="button"
+      >
+        Not now
+      </button>
+
+      <button
+        class="btn2"
+        id="loginRequiredContinueBtn"
+        type="button"
+      >
+        Log in / Create account
+      </button>
+    </div>
+  </div>
+</div>
+
   <nav
   class="app-bottom-nav"
   aria-label="TeeRadar app navigation"
@@ -2786,6 +2818,14 @@ function writeScorecardsToLS(st, arr){
     // -----------------------------
     const authGate = document.getElementById("authGate");
     const appEl = document.getElementById("app");
+    const loginRequiredModal =
+  document.getElementById("loginRequiredModal");
+
+const loginRequiredCancelBtn =
+  document.getElementById("loginRequiredCancelBtn");
+
+const loginRequiredContinueBtn =
+  document.getElementById("loginRequiredContinueBtn");
 
     const courseEl = document.getElementById("course");
     const stateEl = document.getElementById("state");
@@ -2842,6 +2882,65 @@ let pendingUpcomingRoundId = null;
     
 function isLoggedIn(){
   return !!getToken();
+}
+
+    function openLoginRequiredModal() {
+  if (!loginRequiredModal) return;
+
+  loginRequiredModal.style.display = "flex";
+
+  loginRequiredModal.setAttribute(
+    "aria-hidden",
+    "false"
+  );
+}
+
+function closeLoginRequiredModal() {
+  if (!loginRequiredModal) return;
+
+  loginRequiredModal.style.display = "none";
+
+  loginRequiredModal.setAttribute(
+    "aria-hidden",
+    "true"
+  );
+}
+
+if (loginRequiredCancelBtn) {
+  loginRequiredCancelBtn.addEventListener(
+    "click",
+    () => {
+      closeLoginRequiredModal();
+
+      /*
+       * User chose not to log in.
+       * Return them to the TeeRadar home screen.
+       */
+      window.location.href = "/index.html";
+    }
+  );
+}
+
+if (loginRequiredContinueBtn) {
+  loginRequiredContinueBtn.addEventListener(
+    "click",
+    () => {
+      window.location.href =
+        "/index.html?openLogin=1&returnTo=%2Fmy-rounds.html";
+    }
+  );
+}
+
+if (loginRequiredModal) {
+  loginRequiredModal.addEventListener(
+    "click",
+    (event) => {
+      if (event.target === loginRequiredModal) {
+        closeLoginRequiredModal();
+        window.location.href = "/index.html";
+      }
+    }
+  );
 }
 
 function renderHeaderAuthState(){
@@ -6654,7 +6753,22 @@ if (holePickerBack){
     );
 
     return;
+  }if (!loggedIn) {
+  /*
+   * Play is account-only.
+   * Keep the actual Play interface hidden and explain
+   * why login is required before sending them anywhere.
+   */
+  appEl.style.display = "none";
+
+  if (authGate) {
+    authGate.style.display = "none";
   }
+
+  openLoginRequiredModal();
+
+  return;
+}
 
   /*
    * Logged-in account: show Play normally.
