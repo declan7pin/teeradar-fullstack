@@ -92,8 +92,9 @@ async function getTemplateFromDbAnyState(course, holes, layout = null) {
 
   const { rows } = await db.query(
     `
-    SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour
-    FROM scorecard_courses
+    SELECT id, name, state, holes, pars_json, dists_json, green_points_json,
+       course_rating, slope_rating, tee_colour
+FROM scorecard_courses
     WHERE holes = $1
     ORDER BY updated_at DESC NULLS LAST, id DESC;
     `,
@@ -129,8 +130,11 @@ async function getTemplateFromDbAnyState(course, holes, layout = null) {
     state: match.state,
     holes: match.holes,
     pars: Array.isArray(match.pars_json) ? match.pars_json : null,
-    dists: Array.isArray(match.dists_json) ? match.dists_json : null,
-        course_rating: match.course_rating,
+   dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+green_points: Array.isArray(match.green_points_json)
+  ? match.green_points_json
+  : [],
+course_rating: match.course_rating,
     slope_rating: match.slope_rating,
     tee_colour: match.tee_colour,
   };
@@ -262,9 +266,10 @@ async function getTemplateFromDb(course, state, holes) {
 
   const { rows } = await db.query(
     `
-    SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour
-    FROM scorecard_courses
-    WHERE LOWER(name) = $1 AND state = $2 AND holes = $3
+   SELECT id, name, state, holes, pars_json, dists_json, green_points_json,
+       course_rating, slope_rating, tee_colour
+FROM scorecard_courses
+WHERE LOWER(name) = $1 AND state = $2 AND holes = $3
     LIMIT 1;
     `,
     [nameNorm, st, h]
@@ -274,7 +279,10 @@ async function getTemplateFromDb(course, state, holes) {
 
   const r = rows[0];
   const pars = Array.isArray(r.pars_json) ? r.pars_json : null;
-  const dists = Array.isArray(r.dists_json) ? r.dists_json : null;
+const dists = Array.isArray(r.dists_json) ? r.dists_json : null;
+const greenPoints = Array.isArray(r.green_points_json)
+  ? r.green_points_json
+  : [];
 
   return {
   id: r.id,
@@ -283,6 +291,7 @@ async function getTemplateFromDb(course, state, holes) {
   holes: r.holes,
   pars,
   dists,
+  green_points: greenPoints,
   course_rating: r.course_rating,
   slope_rating: r.slope_rating,
   tee_colour: r.tee_colour,
@@ -311,9 +320,10 @@ async function getTemplateFromDbLoose(course, state, holes) {
 
   const { rows } = await db.query(
     `
-    SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour
-    FROM scorecard_courses
-    WHERE state = $1 AND holes = $2
+   SELECT id, name, state, holes, pars_json, dists_json, green_points_json,
+       course_rating, slope_rating, tee_colour
+FROM scorecard_courses
+WHERE state = $1 AND holes = $2
     ORDER BY updated_at DESC NULLS LAST, id DESC;
     `,
     [st, h]
@@ -329,6 +339,9 @@ async function getTemplateFromDbLoose(course, state, holes) {
     holes: match.holes,
     pars: Array.isArray(match.pars_json) ? match.pars_json : null,
     dists: Array.isArray(match.dists_json) ? match.dists_json : null,
+    green_points: Array.isArray(match.green_points_json)
+  ? match.green_points_json
+  : [],
         course_rating: match.course_rating,
     slope_rating: match.slope_rating,
     tee_colour: match.tee_colour,
@@ -351,9 +364,10 @@ async function getNineHoleTemplateForLayout(course, state, layoutPart) {
 
   const { rows } = await db.query(
     `
-    SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour
-    FROM scorecard_courses
-    WHERE state = $1 AND holes = 9
+    SELECT id, name, state, holes, pars_json, dists_json, green_points_json,
+       course_rating, slope_rating, tee_colour
+FROM scorecard_courses
+WHERE state = $1 AND holes = 9
     ORDER BY updated_at DESC NULLS LAST, id DESC;
     `,
     [st]
@@ -373,7 +387,10 @@ async function getNineHoleTemplateForLayout(course, state, layoutPart) {
     holes: match.holes,
     pars: Array.isArray(match.pars_json) ? match.pars_json : null,
     dists: Array.isArray(match.dists_json) ? match.dists_json : null,
-        course_rating: match.course_rating,
+    green_points: Array.isArray(match.green_points_json)
+  ? match.green_points_json
+  : [],
+    course_rating: match.course_rating,
     slope_rating: match.slope_rating,
     tee_colour: match.tee_colour,
   };
@@ -1017,8 +1034,9 @@ router.get("/templates", async (req, res) => {
 
   const { rows } = await db.query(
       `
-      SELECT id, name, state, holes, pars_json, dists_json, course_rating, slope_rating, tee_colour, updated_at
-      FROM scorecard_courses
+      SELECT id, name, state, holes, pars_json, dists_json, green_points_json,
+       course_rating, slope_rating, tee_colour, updated_at
+FROM scorecard_courses
       ORDER BY state ASC, name ASC, holes ASC;
       `
     );
@@ -1031,8 +1049,11 @@ router.get("/templates", async (req, res) => {
         state: r.state,
         holes: r.holes,
         pars: Array.isArray(r.pars_json) ? r.pars_json : [],
-        dists: Array.isArray(r.dists_json) ? r.dists_json : [],
-        updatedAt: r.updated_at,
+dists: Array.isArray(r.dists_json) ? r.dists_json : [],
+green_points: Array.isArray(r.green_points_json)
+  ? r.green_points_json
+  : [],
+updatedAt: r.updated_at,
         course_rating: r.course_rating,
 slope_rating: r.slope_rating,
 tee_colour: r.tee_colour,
@@ -1258,7 +1279,7 @@ router.get("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (re
 
     const { rows } = await db.query(
       `
-      SELECT
+     SELECT
   id,
   name,
   state,
@@ -1266,6 +1287,7 @@ router.get("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (re
   course_rating,
   slope_rating,
   tee_colour,
+  green_points_json,
   updated_at
 FROM scorecard_courses
       ORDER BY state ASC, name ASC, holes ASC;
@@ -1385,9 +1407,17 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
     }
 
     const cur = await db.query(
-      `
-      SELECT id, name, state, holes, course_rating, slope_rating, tee_colour
-      FROM scorecard_courses
+  `
+  SELECT
+    id,
+    name,
+    state,
+    holes,
+    course_rating,
+    slope_rating,
+    tee_colour,
+    green_points_json
+  FROM scorecard_courses
       WHERE id = $1
       LIMIT 1;
       `,
@@ -1403,9 +1433,23 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
     const nameRaw = String(req.body?.name || "").trim();
     const stateRaw = String(req.body?.state || "").trim().toUpperCase();
 
-    const courseRatingRaw = req.body?.course_rating;
-    const slopeRatingRaw = req.body?.slope_rating;
-    const teeColourRaw = String(req.body?.tee_colour || "").trim();
+   const hasCourseRating =
+  Object.prototype.hasOwnProperty.call(req.body || {}, "course_rating");
+
+const hasSlopeRating =
+  Object.prototype.hasOwnProperty.call(req.body || {}, "slope_rating");
+
+const hasTeeColour =
+  Object.prototype.hasOwnProperty.call(req.body || {}, "tee_colour");
+
+const hasGreenPoints =
+  Object.prototype.hasOwnProperty.call(req.body || {}, "green_points_json");
+
+const courseRatingRaw = req.body?.course_rating;
+const slopeRatingRaw = req.body?.slope_rating;
+const teeColourRaw = req.body?.tee_colour;
+
+const greenPointsRaw = req.body?.green_points_json;
 
     const newName = nameRaw
       ? normaliseCourseName(nameRaw)
@@ -1415,21 +1459,75 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
       ? normaliseStateCode(stateRaw)
       : String(existing.state || "").trim().toUpperCase();
 
-    const newCourseRating =
+    const newCourseRating = hasCourseRating
+  ? (
       courseRatingRaw === null ||
-      typeof courseRatingRaw === "undefined" ||
       courseRatingRaw === ""
         ? null
-        : Number(courseRatingRaw);
+        : Number(courseRatingRaw)
+    )
+  : existing.course_rating;
 
-    const newSlopeRating =
+const newSlopeRating = hasSlopeRating
+  ? (
       slopeRatingRaw === null ||
-      typeof slopeRatingRaw === "undefined" ||
       slopeRatingRaw === ""
         ? null
-        : Number(slopeRatingRaw);
+        : Number(slopeRatingRaw)
+    )
+  : existing.slope_rating;
 
-    const newTeeColour = teeColourRaw || null;
+const newTeeColour = hasTeeColour
+  ? (String(teeColourRaw || "").trim() || null)
+  : existing.tee_colour;
+
+const newGreenPoints = hasGreenPoints
+  ? greenPointsRaw
+  : existing.green_points_json;
+    if (hasGreenPoints) {
+  if (!Array.isArray(newGreenPoints)) {
+    return res.status(400).json({
+      ok: false,
+      error: "invalid_green_points",
+      message: "green_points_json must be an array.",
+    });
+  }
+
+  if (newGreenPoints.length > Number(existing.holes)) {
+    return res.status(400).json({
+      ok: false,
+      error: "too_many_green_points",
+    });
+  }
+
+  for (const point of newGreenPoints) {
+    const hole = Number(point?.hole);
+
+    if (
+      !Number.isFinite(hole) ||
+      hole < 1 ||
+      hole > Number(existing.holes)
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_green_point_hole",
+      });
+    }
+
+    for (const key of ["front", "middle", "back"]) {
+      if (
+        point?.[key] !== null &&
+        typeof point?.[key] !== "undefined" &&
+        typeof point[key] !== "string"
+      ) {
+        return res.status(400).json({
+          ok: false,
+          error: "invalid_green_point_coordinate",
+        });
+      }
+    }
+  }
+}
 
     if (!newName) {
       return res.status(400).json({ ok: false, error: "name_required" });
@@ -1439,47 +1537,69 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
       return res.status(400).json({ ok: false, error: "state_required" });
     }
 
-    if (newCourseRating !== null && !Number.isFinite(newCourseRating)) {
-      return res.status(400).json({ ok: false, error: "invalid_course_rating" });
-    }
-
     if (
-      newSlopeRating !== null &&
-      (!Number.isFinite(newSlopeRating) || newSlopeRating < 55 || newSlopeRating > 155)
-    ) {
-      return res.status(400).json({ ok: false, error: "invalid_slope_rating" });
-    }
+  newCourseRating !== null &&
+  typeof newCourseRating !== "undefined" &&
+  !Number.isFinite(Number(newCourseRating))
+) {
+  return res.status(400).json({
+    ok: false,
+    error: "invalid_course_rating",
+  });
+}
+
+if (
+  newSlopeRating !== null &&
+  typeof newSlopeRating !== "undefined" &&
+  (
+    !Number.isFinite(Number(newSlopeRating)) ||
+    Number(newSlopeRating) < 55 ||
+    Number(newSlopeRating) > 155
+  )
+) {
+  return res.status(400).json({
+    ok: false,
+    error: "invalid_slope_rating",
+  });
+}
 
     try {
       const up = await db.query(
         `
         UPDATE scorecard_courses
-        SET
-          name = $2,
-          state = $3,
-          course_rating = $4,
-          slope_rating = $5,
-          tee_colour = $6,
-          updated_at = now()
-        WHERE id = $1
+SET
+  name = $2,
+  state = $3,
+  course_rating = $4,
+  slope_rating = $5,
+  tee_colour = $6,
+  green_points_json = $7::jsonb,
+  updated_at = now()
+WHERE id = $1
         RETURNING
-          id,
-          name,
-          state,
-          holes,
-          course_rating,
-          slope_rating,
-          tee_colour,
-          updated_at;
+  id,
+  name,
+  state,
+  holes,
+  course_rating,
+  slope_rating,
+  tee_colour,
+  green_points_json,
+  updated_at;
         `,
         [
-          id,
-          newName,
-          newState,
-          newCourseRating,
-          newSlopeRating,
-          newTeeColour,
-        ]
+  id,
+  newName,
+  newState,
+  newCourseRating,
+  newSlopeRating,
+  newTeeColour,
+  JSON.stringify(
+    Array.isArray(newGreenPoints)
+      ? newGreenPoints
+      : []
+  ),
+]
       );
 
       return res.json({ ok: true, course: up.rows[0] });
@@ -2578,8 +2698,6 @@ const hadStartedBefore =
         ]
       );
     }
-
-    await db.query("COMMIT");
 
     await db.query("COMMIT");
 
