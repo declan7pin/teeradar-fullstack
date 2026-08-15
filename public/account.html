@@ -1235,7 +1235,7 @@ html.app-mode #notLoggedIn strong {
 <main>
   <h1>My account</h1>
   <p class="muted">
-  Set your default state, favourite courses and manage your TeeRadar membership.
+  Manage your TeeRadar profile, favourite courses, playing preferences and notifications.
 </p>
 
   <section class="app-profile-summary" id="appProfileSummary">
@@ -1297,13 +1297,17 @@ html.app-mode #notLoggedIn strong {
 
   <span id="displayNameStatus" class="status"></span>
 </div>
-      <span class="pill" id="planPill">Plan: checking subscription…</span>
+      <span class="pill" id="planPill">TeeRadar access: Full</span>
+
 <p id="planSubtext" style="margin-top:6px;">
-  If you upgrade to Pro later, we’ll automatically let you save up to 10 favourites.
+  Your TeeRadar account currently includes access to all features.
 </p>
-<div id="alertsLockedMsg" class="blocked" style="display:none;">
-  Email alerts are only available with an active subscription. Your account is still active, but alert access is currently locked.
-</div>
+
+<div
+  id="alertsLockedMsg"
+  class="blocked"
+  style="display:none;"
+></div>
 
       <!-- main in-page log out button -->
       <div class="row-actions">
@@ -1346,7 +1350,9 @@ html.app-mode #notLoggedIn strong {
 
     <div class="card">
       <h2>Playing preferences</h2>
-      <p>We’ll use these defaults on your bookings page. Email alert settings require an active subscription.</p>
+      <p>
+  We’ll use these settings for your bookings and tee time alerts.
+</p>
 
       <label for="homeState">Home state</label>
       <select id="homeState">
@@ -1372,10 +1378,10 @@ html.app-mode #notLoggedIn strong {
       </div>
 
       <label for="favCourseInput">Favourite courses</label>
-      <div class="fav-help">
-        Start typing to search TeeRadar / MiClub / Quick18 public courses.
-        Basic: up to 3 favourites. Pro: up to 10 favourites.
-      </div>
+     <div class="fav-help">
+  Start typing to search TeeRadar / MiClub / Quick18 public courses.
+  You can save up to 10 favourite courses.
+</div>
 
       <div class="autocomplete">
         <input id="favCourseInput" type="text" placeholder="Search course name…" autocomplete="off" />
@@ -1459,8 +1465,8 @@ html.app-mode #notLoggedIn strong {
       </div>
     </div>
 
-    <div class="card">
-      <h2>TeeRadar membership</h2>
+    <div class="card" id="membershipCard" style="display:none;">
+  <h2>TeeRadar membership</h2>
       <p id="subscriptionCardText">
         Manage your billing details, upgrade, or cancel your TeeRadar subscription.
       </p>
@@ -2123,10 +2129,12 @@ displayNameStatus.className =
   });
 }
 
-  // Default: Basic (3 favs). This will be updated after we hit the server.
-    let maxFavs = 3;
-let currentEntitlementActive = false;
-let currentPlan = "FREE";
+  // TEMPORARY FREE ACCESS MODE:
+// Every registered TeeRadar account receives full PRO feature access.
+// Real Stripe / Apple subscription records remain unchanged.
+let maxFavs = 10;
+let currentEntitlementActive = true;
+let currentPlan = "PRO";
 
   // -------------------------------------------------
 // ✅ Subscription platform helpers
@@ -2183,41 +2191,44 @@ let allPreviousGames = [];
 let previousGamesVisible = false;
 
     function setAlertControlsLocked(locked) {
-    // ✅ Keep booking defaults editable for free users
-    // Only lock alert-related controls
-    const controls = [
-      favInput,
-      prefEarliest,
-      prefLatest,
-      prefHoles,
-      prefPartySize,
-      alertFrequencySelect
-    ].filter(Boolean);
+  // TEMPORARY FREE ACCESS MODE:
+  // All registered TeeRadar users can use alert preferences.
 
-    controls.forEach(el => {
-      el.disabled = !!locked;
+  const controls = [
+    favInput,
+    prefEarliest,
+    prefLatest,
+    prefHoles,
+    prefPartySize,
+    alertFrequencySelect,
+    homeStateSelect,
+    homeCourseInput
+  ].filter(Boolean);
+
+  controls.forEach((el) => {
+    el.disabled = false;
+  });
+
+  dayCheckboxes.forEach((cb) => {
+    cb.disabled = false;
+  });
+
+  document
+    .querySelectorAll(".fav-remove")
+    .forEach((btn) => {
+      btn.disabled = false;
+      btn.style.opacity = "1";
+      btn.style.cursor = "pointer";
     });
 
-    dayCheckboxes.forEach(cb => {
-      cb.disabled = !!locked;
-    });
-
-    const favRemoveButtons = document.querySelectorAll(".fav-remove");
-    favRemoveButtons.forEach(btn => {
-      btn.disabled = !!locked;
-      btn.style.opacity = locked ? "0.5" : "1";
-      btn.style.cursor = locked ? "not-allowed" : "pointer";
-    });
-
-    // ✅ Always allow home state, home course, and save button
-    if (homeStateSelect) homeStateSelect.disabled = false;
-    if (homeCourseInput) homeCourseInput.disabled = false;
-    if (savePrefsBtn) savePrefsBtn.disabled = false;
-
-    if (alertsLockedMsg) {
-      alertsLockedMsg.style.display = locked ? "block" : "none";
-    }
+  if (savePrefsBtn) {
+    savePrefsBtn.disabled = false;
   }
+
+  if (alertsLockedMsg) {
+    alertsLockedMsg.style.display = "none";
+  }
+}
 
   // --- helpers for days ---
   function getSelectedDays() {
@@ -2582,12 +2593,25 @@ searchableCourses = data.filter((c) => {
 
             const payload = await res.json().catch(() => null);
 
-      if (res.status === 403 && payload && payload.error === "subscriber_required") {
-        setAlertControlsLocked(true);
-        prefsStatus.textContent = "Email alerts require an active subscription.";
-        prefsStatus.className = "status";
-        return false;
-      }
+      if (
+  res.status === 403 &&
+  payload &&
+  payload.error === "subscriber_required"
+) {
+  console.warn(
+    "Preferences endpoint still returned subscriber_required during free access mode."
+  );
+
+  setAlertControlsLocked(false);
+
+  prefsStatus.textContent =
+    "Could not load your saved alert preferences.";
+
+  prefsStatus.className =
+    "status err";
+
+  return false;
+}
 
       if (!res.ok || !payload || !payload.ok || !payload.found || !payload.preferences) {
         return false;
@@ -2691,7 +2715,9 @@ searchableCourses = data.filter((c) => {
             ? { name: homeCourseInput.value.trim(), id: null, state: homeState || null }
             : null);
 
-                  const isSubscriber = !!currentEntitlementActive;
+                  // TEMPORARY FREE ACCESS MODE:
+// Every registered user can save full alert preferences.
+const isSubscriber = true;
 
       prefsStatus.textContent = "Saving…";
       prefsStatus.className = "status";
@@ -2933,129 +2959,38 @@ if (manageBillingBtn) {
 }
   // --- Ask backend which TeeRadar plan this account is on ---
     async function refreshPlanFromServer() {
-    if (!email || !planPill) return;
+  if (!email) return;
 
-    try {
-      const res = await fetch(`${API_BASE}/api/account/plan?email=${encodeURIComponent(email)}`, {
-        headers: {
-          ...(token ? { "Authorization": "Bearer " + token } : {})
-        }
-      });
+  /*
+   * TEMPORARY FREE ACCESS MODE
+   *
+   * Every registered TeeRadar account receives
+   * the same feature access as PRO.
+   *
+   * We deliberately do NOT modify Stripe or Apple
+   * subscription records.
+   */
 
-      const data = await res.json().catch(() => ({}));
+  currentEntitlementActive = true;
+  currentPlan = "PRO";
+  maxFavs = 10;
 
-      if (!res.ok) {
-        throw new Error(data.error || "plan lookup failed");
-      }
-
-      const plan = String(data.plan || "FREE").toUpperCase();
-      const entitlementActive = !!data.entitlementActive;
-      const subscriptionStatus = String(data.subscriptionStatus || "inactive").toLowerCase();
-      const cancelAtPeriodEnd = !!data.cancelAtPeriodEnd;
-      const currentPeriodEnd = data.currentPeriodEnd || null;
-
-      currentEntitlementActive = entitlementActive;
-      currentPlan = entitlementActive ? plan : "FREE";
-
-      maxFavs = Number(data.maxFavs) || (currentPlan === "PRO" ? 10 : 3);
-
-            if (currentPlan === "PRO") {
-        planPill.textContent = `Plan: Pro (${maxFavs} favourite courses)`;
-      } else if (currentPlan === "BASIC") {
-        planPill.textContent = `Plan: Basic (${maxFavs} favourite courses)`;
-      } else {
-        planPill.textContent = "Plan: Free (no active subscription)";
-      }
-
-      if (manageBillingBtn) {
-        manageBillingBtn.textContent =
-          currentPlan === "FREE" || !entitlementActive
-            ? "View subscription options"
-            : "Manage / cancel subscription";
-      }
-
-      if (subscriptionCardText) {
-  if (
-    currentPlan === "FREE" ||
-    !entitlementActive
-  ) {
-    subscriptionCardText.textContent =
-      "Upgrade to unlock email alerts, subscriber discounts, and premium TeeRadar features.";
-  } else if (isNativeIOSApp()) {
-    subscriptionCardText.textContent =
-      "Your TeeRadar subscription is billed through Apple. Manage or cancel it through your Apple subscription settings.";
-  } else {
-    subscriptionCardText.textContent =
-      "Manage your billing details, subscription, or cancellation through TeeRadar's secure billing portal.";
+  if (planPill) {
+    planPill.textContent =
+      "TeeRadar access: Full";
   }
+
+  if (planSubtext) {
+    planSubtext.textContent =
+      "Your TeeRadar account currently includes access to all features.";
+  }
+
+  if (alertsLockedMsg) {
+    alertsLockedMsg.style.display = "none";
+  }
+
+  setAlertControlsLocked(false);
 }
-
-            if (planSubtext) {
-        if (entitlementActive && subscriptionStatus === "trialing" && currentPeriodEnd) {
-          const endDate = new Date(currentPeriodEnd);
-          const label = Number.isFinite(endDate.getTime())
-            ? endDate.toLocaleDateString("en-AU", {
-                day: "numeric",
-                month: "short",
-                year: "numeric"
-              })
-            : currentPeriodEnd;
-
-          planSubtext.textContent =
-            `Your ${currentPlan === "PRO" ? "Pro" : "Basic"} free trial is active until ${label}. All subscriber features are currently unlocked.`;
-        } else if (entitlementActive && cancelAtPeriodEnd && currentPeriodEnd) {
-          const endDate = new Date(currentPeriodEnd);
-          const label = Number.isFinite(endDate.getTime())
-            ? endDate.toLocaleDateString("en-AU", {
-                day: "numeric",
-                month: "short",
-                year: "numeric"
-              })
-            : currentPeriodEnd;
-
-          planSubtext.textContent =
-            `Your subscription is cancelled and will remain active until ${label}. After that, your account will stay active on the Free plan.`;
-        } else if (entitlementActive) {
-          planSubtext.textContent =
-            currentPlan === "PRO"
-              ? "Your Pro subscription is active."
-              : "Your Basic subscription is active.";
-        } else {
-          planSubtext.textContent =
-            "Your account is active on the Free plan. Email alerts, subscriber discounts, and premium subscriber features require an active subscription.";
-        }
-      }
-
-      setAlertControlsLocked(!entitlementActive);
-
-            if (!entitlementActive) {
-        prefsStatus.textContent = "You can still save your home state and home course. Email alert preferences require an active subscription.";
-        prefsStatus.className = "status";
-      }
-        } catch (err) {
-      console.error("plan fetch error", err);
-      currentEntitlementActive = false;
-      currentPlan = "FREE";
-      maxFavs = 3;
-      planPill.textContent = "Plan: Free";
-
-      if (planSubtext) {
-        planSubtext.textContent =
-          "We couldn’t verify your subscription just now. Your account is still available.";
-      }
-
-      if (manageBillingBtn) {
-        manageBillingBtn.textContent = "View subscription options";
-      }
-
-      if (subscriptionCardText) {
-        subscriptionCardText.textContent =
-          "Upgrade to unlock email alerts, subscriber discounts, and premium TeeRadar features.";
-      }
-
-      setAlertControlsLocked(true);
-    }
-  }
   
     function formatMoney(cents) {
     const n = Number(cents || 0) / 100;
@@ -4004,19 +3939,20 @@ if (previousGamesFilter) {
   await hydrateProfileFromServer();
 
   await loadCourses();
-  await refreshPlanFromServer();
+await refreshPlanFromServer();
 
-  if (currentEntitlementActive) {
-    await hydratePrefsFromServer();
-  }
+/*
+ * TEMPORARY FREE ACCESS MODE:
+ * All registered accounts can load their saved
+ * TeeRadar preferences and alert settings.
+ */
+await hydratePrefsFromServer();
 
-  loadPrefsFromStorage();
+loadPrefsFromStorage();
 
-  if (!currentEntitlementActive) {
-    setAlertControlsLocked(true);
-  }
+setAlertControlsLocked(false);
 
-  await loadMyGames();
+await loadMyGames();
 })();
 
    // ✅ PUSH NOTIFICATION BUTTONS
