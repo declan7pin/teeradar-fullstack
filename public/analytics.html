@@ -21,7 +21,7 @@
       margin:0;
       padding:0;
       font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      background:radial-gradient(circle at top,#e0f2f1,#f9fafb);
+      background:radial-gradient(circle at t op,#e0f2f1,#f9fafb);
       color:var(--text);
     }
     a{text-decoration:none;color:inherit;}
@@ -1051,6 +1051,49 @@ nav a:hover{
       </table>
     </div>
   </section>
+  <!-- GPS green points editor -->
+<section class="card" id="gpsCourseEditorCard" style="margin-top:14px;display:none;">
+  <div class="card-label">GPS green points</div>
+
+  <div class="muted-note" style="margin-top:4px;">
+    GPS coordinates for the front, middle and back of each green.
+    These coordinates are separate from TeeRadar's normal course/map location.
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+    <strong id="gpsCourseEditorName">—</strong>
+
+    <button
+      id="btnSaveGpsCourse"
+      type="button">
+      Save GPS
+    </button>
+
+    <button
+      id="btnCloseGpsCourse"
+      type="button"
+      class="secondary">
+      Close
+    </button>
+  </div>
+
+  <div id="gpsCourseStatus" class="muted-note" style="margin-top:8px;"></div>
+
+  <div style="overflow-x:auto;margin-top:10px;">
+    <table class="score-mini" id="gpsCourseTable">
+      <thead>
+        <tr>
+          <th>Hole</th>
+          <th>Front GPS</th>
+          <th>Middle GPS</th>
+          <th>Back GPS</th>
+        </tr>
+      </thead>
+
+      <tbody id="gpsCourseTbody"></tbody>
+    </table>
+  </div>
+</section>
     <!-- ✅ Pending course details modal -->
   <div class="modalBack" id="pendingModalBack" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pendingModalTitle">
@@ -1156,11 +1199,36 @@ nav a:hover{
   transform:translate(-50%,-110%);
   max-width:260px;
 "></div>
+  <script src="/config.js"></script>
 <script>
-  const API_BASE =
-  window.TEERADAR_BACKEND ||
-  localStorage.getItem("teeradar_backend_url") ||
-  "https://teeradar-fullstack-5.onrender.com";
+  const API_BASE = (() => {
+  const stored = String(
+    localStorage.getItem("teeradar_backend_url") || ""
+  ).trim();
+
+  const configured = String(
+    window.TEERADAR_BACKEND || ""
+  ).trim();
+
+  const candidate =
+    configured ||
+    stored ||
+    "https://teeradar.com.au";
+
+  /*
+   * Never allow the installed app to accidentally
+   * use localhost as its production backend.
+   */
+  if (
+    candidate.includes("localhost") ||
+    candidate.includes("127.0.0.1") ||
+    !/^https?:\/\//i.test(candidate)
+  ) {
+    return "https://teeradar.com.au";
+  }
+
+  return candidate.replace(/\/+$/, "");
+})();
 const ADMIN_EMAIL = "declan7pin@gmail.com";
   // ✅ Needed for booking admin analytics routes (requirePlatformAdmin)
 const BOOKING_ADMIN_SECRET = ""; 
@@ -1179,23 +1247,90 @@ window.addEventListener("unhandledrejection", (e) => {
     return (email || "").trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
   }
 
-  function getAuthHeaders() {
-  const h = { "Accept": "application/json" };
+ function getStoredAuthToken() {
+  const tokenKeys = [
+    "teeradar_jwt",
+    "teeradar_token",
+    "token",
+    "authToken",
+    "jwt",
+    "access_token"
+  ];
 
-  // keep your normal JWT (used by other analytics endpoints)
   try {
-    const token = localStorage.getItem("teeradar_jwt") || "";
-    if (token) h["Authorization"] = "Bearer " + token;
-  } catch (e) {}
+    for (const key of tokenKeys) {
+      const value = localStorage.getItem(key);
 
-  // ✅ add booking admin secret (used by /api/book/admin/analytics/*)
-  if (BOOKING_ADMIN_SECRET && BOOKING_ADMIN_SECRET.trim()) {
-    h["x-booking-admin-secret"] = BOOKING_ADMIN_SECRET.trim();
+      if (
+        value &&
+        String(value).trim().length > 10
+      ) {
+        return String(value).trim();
+      }
+    }
+  } catch (err) {
+    console.warn(
+      "Could not read Analytics auth token:",
+      err
+    );
   }
 
-  return h;
+  return "";
 }
 
+function getStoredAuthToken() {
+  const tokenKeys = [
+    "teeradar_jwt",
+    "teeradar_token",
+    "token",
+    "authToken",
+    "jwt",
+    "access_token"
+  ];
+
+  try {
+    for (const key of tokenKeys) {
+      const value = localStorage.getItem(key);
+
+      if (
+        value &&
+        String(value).trim().length > 10
+      ) {
+        return String(value).trim();
+      }
+    }
+  } catch (err) {
+    console.warn(
+      "Could not read Analytics auth token:",
+      err
+    );
+  }
+
+  return "";
+}
+
+function getAuthHeaders() {
+  const headers = {
+    "Accept": "application/json"
+  };
+
+  const token = getStoredAuthToken();
+
+  if (token) {
+    headers["Authorization"] =
+      "Bearer " + token;
+  }
+
+  if (
+    BOOKING_ADMIN_SECRET &&
+    BOOKING_ADMIN_SECRET.trim()
+  ) {
+    headers["x-booking-admin-secret"] =
+      BOOKING_ADMIN_SECRET.trim();
+  }
+
+  return headers;
+}
   function enforceAdmin() {
   const updatedAt = document.getElementById("summaryUpdated");
   try {
@@ -1245,66 +1380,132 @@ window.addEventListener("unhandledrejection", (e) => {
   return "$" + n.toFixed(0);
 }
 
-async function tryFetchJson(url, timeoutMs = 12000) {
-  const fullUrl = url.startsWith("http")
-  ? url
-  : `${API_BASE}${url}`;
+async function tryFetchJson(url, timeoutMs = 30000) {
+  const backend =
+    String(
+      window.TEERADAR_BACKEND ||
+      window.TEERADAR_API_BASE ||
+      API_BASE ||
+      "https://teeradar.com.au"
+    )
+      .trim()
+      .replace(/\/+$/, "");
 
-const finalUrl =
-  fullUrl + (fullUrl.includes("?") ? "&" : "?") + "_ts=" + Date.now();
+  const requestPath =
+    String(url || "").trim();
 
-  setAnalyticsDebug("Fetching", { finalUrl });
+  const fullUrl =
+    /^https?:\/\//i.test(requestPath)
+      ? requestPath
+      : `${backend}${
+          requestPath.startsWith("/")
+            ? requestPath
+            : "/" + requestPath
+        }`;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const finalUrl =
+    fullUrl +
+    (fullUrl.includes("?") ? "&" : "?") +
+    "_ts=" +
+    Date.now();
+
+  const controller =
+    new AbortController();
+
+  const timer =
+    setTimeout(
+      () => controller.abort(),
+      timeoutMs
+    );
 
   try {
+    const headers = getAuthHeaders();
+
+    console.log("📊 TeeRadar analytics request", {
+      url: finalUrl,
+      origin: window.location.origin,
+      backend,
+      hasToken: !!getStoredAuthToken(),
+      hasAuthorization: !!headers.Authorization
+    });
+
     const res = await fetch(finalUrl, {
+      method: "GET",
+
       headers: {
-        ...getAuthHeaders(),
+        ...headers,
         "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
+        "Pragma": "no-cache"
       },
-      credentials: "include",
+
+      /*
+       * Native app admin requests use the JWT.
+       * Do not rely on browser cookies.
+       */
+      credentials: "omit",
       cache: "no-store",
-      signal: controller.signal,
+      signal: controller.signal
     });
 
     clearTimeout(timer);
 
     const text = await res.text();
 
-    setAnalyticsDebug("Fetch result", {
+    console.log("📊 TeeRadar analytics response", {
       url: finalUrl,
       status: res.status,
-      ok: res.ok,
-      bodyPreview: text.slice(0, 800),
+      response: text.slice(0, 500)
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(
+        "❌ Analytics HTTP error",
+        res.status,
+        text
+      );
+
+      return null;
+    }
+
+    if (
+      text.trim().startsWith("<!DOCTYPE") ||
+      text.trim().startsWith("<html")
+    ) {
+      console.error(
+        "❌ Analytics received HTML instead of API JSON",
+        finalUrl
+      );
+
+      return null;
+    }
 
     try {
       return JSON.parse(text);
-    } catch (e) {
-      setAnalyticsDebug("JSON parse failed", {
-        url: finalUrl,
-        error: e.message,
-        bodyPreview: text.slice(0, 800),
-      });
+    } catch (err) {
+      console.error(
+        "❌ Analytics JSON parse failed",
+        err,
+        text.slice(0, 500)
+      );
+
       return null;
     }
-  } catch (e) {
+
+  } catch (err) {
     clearTimeout(timer);
 
-    setAnalyticsDebug("Fetch failed", {
-      url: finalUrl,
-      error: e.name || e.message || String(e),
-    });
+    console.error(
+      "❌ Analytics request failed",
+      {
+        url: finalUrl,
+        name: err?.name,
+        message: err?.message
+      }
+    );
 
     return null;
   }
 }
-
 async function fetchAnalyticsSummary() {
   const filters = getAnalyticsFilters();
   const qs = new URLSearchParams();
@@ -1732,13 +1933,21 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
   }
 
   async function fetchUsersFromAnyEndpoint() {
-    const candidates = [
+  const data =
+    await tryFetchJson(
       "/api/analytics/users",
-      "/api/analytics/registered-users",
-      "/api/analytics/registeredUsers"
-    ];
-    return await tryFetchJsonAny(candidates);
+      30000
+    );
+
+  if (!data) {
+    return null;
   }
+
+  return {
+    data,
+    url: "/api/analytics/users"
+  };
+}
 
   async function loadRegisteredUsers() {
     if (!enforceAdmin()) return;
@@ -1754,7 +1963,8 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
       if (empty) empty.style.display = "none";
       if (errorEl) {
         errorEl.style.display = "block";
-        errorEl.textContent = "Users endpoint not found. Tried /api/analytics/users and common variants.";
+        errorEl.textContent =
+  "Could not load registered users. Check the app console for the exact HTTP response.";
       }
       computeSubscriptionMetrics();
       return;
@@ -2262,14 +2472,289 @@ const tee = c.tee_colour ?? "";
 <td>${tee}</td>
 <td>${updated}</td>
 <td style="white-space:nowrap;">
-            <button class="edit-btn" type="button" data-edit-course-id="${id}">Edit</button>
-            <button class="delete-btn" type="button" data-delete-course-id="${id}">Delete</button>
-          </td>
+  <button class="edit-btn" type="button" data-edit-course-id="${id}">Edit</button>
+
+  <button
+    class="edit-btn"
+    type="button"
+    data-gps-course-id="${id}">
+    GPS
+  </button>
+
+  <button class="delete-btn" type="button" data-delete-course-id="${id}">Delete</button>
+</td>
         </tr>
       `;
     }).join("");
   }
 }
+
+  // ---------- GPS green points editor ----------
+
+let ACTIVE_GPS_COURSE_ID = null;
+
+function normaliseGreenPoints(raw, holes) {
+  let source = raw;
+
+  if (typeof source === "string") {
+    try {
+      source = JSON.parse(source);
+    } catch {
+      source = [];
+    }
+  }
+
+  if (!Array.isArray(source)) {
+    source = [];
+  }
+
+  const result = [];
+
+  for (let i = 1; i <= holes; i++) {
+    const existing =
+      source.find(x => Number(x?.hole) === i) ||
+      source[i - 1] ||
+      {};
+
+    result.push({
+      hole: i,
+      front: String(existing?.front || "").trim(),
+      middle: String(existing?.middle || "").trim(),
+      back: String(existing?.back || "").trim(),
+    });
+  }
+
+  return result;
+}
+
+function openGpsCourseEditor(course) {
+  if (!course || !course.id) return;
+
+  ACTIVE_GPS_COURSE_ID = Number(course.id);
+
+  const card = document.getElementById("gpsCourseEditorCard");
+  const nameEl = document.getElementById("gpsCourseEditorName");
+  const tbody = document.getElementById("gpsCourseTbody");
+  const status = document.getElementById("gpsCourseStatus");
+
+  if (!card || !tbody) return;
+
+  const holes = Number(course.holes || 18);
+
+  const points = normaliseGreenPoints(
+    course.green_points_json,
+    holes
+  );
+
+  if (nameEl) {
+    nameEl.textContent =
+      `${course.name || "Course"} • ${course.state || ""} • ${holes} holes`;
+  }
+
+  if (status) {
+    status.textContent = "";
+  }
+
+  tbody.innerHTML = points.map((point) => `
+    <tr>
+      <td>Hole ${point.hole}</td>
+
+      <td>
+        <input
+          type="text"
+          data-gps-front="${point.hole}"
+          value="${escapeGpsValue(point.front)}"
+          placeholder='32°09&apos;32.16"S 115°57&apos;25.96"E'
+          style="min-width:230px;padding:7px;border:1px solid var(--border);border-radius:8px;">
+      </td>
+
+      <td>
+        <input
+          type="text"
+          data-gps-middle="${point.hole}"
+          value="${escapeGpsValue(point.middle)}"
+          placeholder='32°09&apos;31.82"S 115°57&apos;26.31"E'
+          style="min-width:230px;padding:7px;border:1px solid var(--border);border-radius:8px;">
+      </td>
+
+      <td>
+        <input
+          type="text"
+          data-gps-back="${point.hole}"
+          value="${escapeGpsValue(point.back)}"
+          placeholder='32°09&apos;31.48"S 115°57&apos;26.67"E'
+          style="min-width:230px;padding:7px;border:1px solid var(--border);border-radius:8px;">
+      </td>
+    </tr>
+  `).join("");
+
+  card.style.display = "block";
+
+  card.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
+}
+
+function escapeGpsValue(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function collectGpsGreenPoints() {
+  const course = (APPROVED_COURSES_CACHE || []).find(
+    x => Number(x?.id) === Number(ACTIVE_GPS_COURSE_ID)
+  );
+
+  if (!course) return [];
+
+  const holes = Number(course.holes || 18);
+  const points = [];
+
+  for (let i = 1; i <= holes; i++) {
+    const front = String(
+      document.querySelector(`[data-gps-front="${i}"]`)?.value || ""
+    ).trim();
+
+    const middle = String(
+      document.querySelector(`[data-gps-middle="${i}"]`)?.value || ""
+    ).trim();
+
+    const back = String(
+      document.querySelector(`[data-gps-back="${i}"]`)?.value || ""
+    ).trim();
+
+    points.push({
+      hole: i,
+      front,
+      middle,
+      back,
+    });
+  }
+
+  return points;
+}
+
+async function saveGpsGreenPoints() {
+  if (!ACTIVE_GPS_COURSE_ID) return;
+
+  const btn = document.getElementById("btnSaveGpsCourse");
+  const status = document.getElementById("gpsCourseStatus");
+
+  const green_points_json = collectGpsGreenPoints();
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+  }
+
+  if (status) {
+    status.textContent = "Saving GPS coordinates…";
+  }
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/rounds/admin/scorecard-courses/${ACTIVE_GPS_COURSE_ID}`,
+      {
+        method: "PATCH",
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          green_points_json
+        }),
+      }
+    );
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data || !data.ok) {
+      alert(
+        "GPS save failed: " +
+        (data?.error || res.status)
+      );
+
+      if (status) {
+        status.textContent = "GPS save failed.";
+      }
+
+      return;
+    }
+
+    if (status) {
+      status.textContent = "GPS coordinates saved.";
+    }
+
+    await loadApprovedCourses();
+
+  } catch (err) {
+    console.error("saveGpsGreenPoints failed", err);
+
+    alert("GPS save failed (network/server error).");
+
+    if (status) {
+      status.textContent = "GPS save failed.";
+    }
+
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Save GPS";
+    }
+  }
+}
+
+function closeGpsCourseEditor() {
+  const card = document.getElementById("gpsCourseEditorCard");
+
+  if (card) {
+    card.style.display = "none";
+  }
+
+  ACTIVE_GPS_COURSE_ID = null;
+}
+
+function wireGpsCourseEditor() {
+  const saveBtn = document.getElementById("btnSaveGpsCourse");
+  const closeBtn = document.getElementById("btnCloseGpsCourse");
+
+  if (saveBtn && !saveBtn._wired) {
+    saveBtn._wired = true;
+    saveBtn.addEventListener("click", saveGpsGreenPoints);
+  }
+
+  if (closeBtn && !closeBtn._wired) {
+    closeBtn._wired = true;
+    closeBtn.addEventListener("click", closeGpsCourseEditor);
+  }
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-gps-course-id]");
+  if (!btn) return;
+
+  const id = Number(
+    btn.getAttribute("data-gps-course-id")
+  );
+
+  if (!Number.isFinite(id) || id <= 0) return;
+
+  const course = (APPROVED_COURSES_CACHE || []).find(
+    x => Number(x?.id) === id
+  );
+
+  if (!course) {
+    alert("Could not find this course.");
+    return;
+  }
+
+  openGpsCourseEditor(course);
+});
 
 function wireApprovedCoursesRefresh() {
   const btn = document.getElementById("btnApprovedRefresh");
@@ -3269,7 +3754,8 @@ window.addEventListener("load", () => {
     try { loadPendingCourses(); } catch (e) { console.warn("loadPendingCourses failed", e); }
     try { wireManualCourseCreate(); } catch (e) { console.warn("wireManualCourseCreate failed", e); }
     try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
-    try { loadApprovedCourses(); } catch (e) { console.warn("loadApprovedCourses failed", e); }
+try { wireGpsCourseEditor(); } catch (e) { console.warn("wireGpsCourseEditor failed", e); }
+try { loadApprovedCourses(); } catch (e) { console.warn("loadApprovedCourses failed", e); }
   }, 1500);
 });
 </script>
