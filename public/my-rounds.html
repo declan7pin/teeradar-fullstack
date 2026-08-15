@@ -2065,10 +2065,16 @@ html.app-mode .app-bottom-nav {
 
   <main>
     <div id="authGate" class="notice" style="display:none;">
-  <strong>You’re in Guest mode.</strong><br/>
-  You can create and use scorecards without logging in. To sync rounds across devices and access <strong>My Stats</strong>, please log in.
+  <strong>Log in to use Play</strong><br/>
+  Create scorecards, track your rounds, view your handicap and access your golf stats with your TeeRadar account.
+
   <div class="actions" style="margin-top:12px;">
-    <a class="btn2" href="/account.html">Log in / Create account</a>
+    <a
+      class="btn2"
+      href="/account.html"
+    >
+      Log in / Create account
+    </a>
   </div>
 </div>
 
@@ -6621,13 +6627,48 @@ if (holePickerBack){
 }
 
     (async function init(){
-  // Always show the app now (Guest mode supported)
-  appEl.style.display = "block";
 
   /*
- * Only show the course-submission promotion once per device.
- * Do not interrupt every scorecard session.
- */
+   * PLAY / MY ROUNDS IS ACCOUNT-ONLY.
+   *
+   * A valid TeeRadar login token must exist before
+   * the golfer can use scorecards, rounds, handicap,
+   * upcoming rounds or stats.
+   */
+  const token = getToken();
+  const loggedIn = !!token;
+
+  if (!loggedIn) {
+    appEl.style.display = "none";
+
+    if (authGate) {
+      authGate.style.display = "block";
+    }
+
+    /*
+     * Send the golfer to TeeRadar login.
+     * After logging in they can return directly to Play.
+     */
+    window.location.replace(
+      "/index.html?openLogin=1&returnTo=%2Fmy-rounds.html"
+    );
+
+    return;
+  }
+
+  /*
+   * Logged-in account: show Play normally.
+   */
+  appEl.style.display = "block";
+
+  if (authGate) {
+    authGate.style.display = "none";
+  }
+
+  /*
+   * Only show the course-submission promotion once per device.
+   * Do not interrupt every scorecard session.
+   */
 try {
   const promoSeen =
     localStorage.getItem("teeradar_course_promo_seen") === "1";
@@ -6646,21 +6687,17 @@ try {
   console.warn("Promo preference could not be read:", error);
 }
 
-  const token = getToken();
-  const loggedIn = !!token;
   const roundIdFromUrl = getRoundIdFromUrl();
-  const startUpcomingIdFromUrl = getStartUpcomingIdFromUrl();
+const startUpcomingIdFromUrl = getStartUpcomingIdFromUrl();
 
   renderHeaderAuthState();
 
-  // Guest notice
-  authGate.style.display = loggedIn ? "none" : "block";
-
-  // P1 name (only auto-fill when logged in)
-  if (loggedIn){
-    ensureP1IsUser();
-  }
-  renderPlayerNamesUI();
+/*
+ * This page only runs past the login gate for
+ * authenticated TeeRadar accounts.
+ */
+ensureP1IsUser();
+renderPlayerNamesUI();
 
   setLeftPanelsVisibility(true);
 
