@@ -1767,10 +1767,14 @@ const BOOK_AUTH_TOKEN =
 
 /*
  * TeeRadar search is account-only.
- * If the user is not logged in, send them to login
- * and return them here after successful authentication.
+ * If the user is not logged in, explain why login is required
+ * before sending them to the login/create-account screen.
  */
 if (!BOOK_AUTH_EMAIL || !BOOK_AUTH_TOKEN) {
+  alert(
+    "To access these features please log into / create a free account."
+  );
+
   window.location.replace(
     "/index.html?openLogin=1&returnTo=%2Fbook.html"
   );
