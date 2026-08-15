@@ -1417,66 +1417,68 @@ if (
 });
 
 // -------------------------------------------------
-// 🔎 Account plan lookup (Stripe is source of truth)
+// 🔎 Account plan lookup
+// TEMPORARY FREE ACCESS MODE:
+// Every registered TeeRadar account receives PRO access.
+// Real Stripe / Apple subscription data is NOT changed.
 // -------------------------------------------------
 app.get("/api/account/plan", async (req, res) => {
   try {
-    const email = (req.query.email || "").toString().trim().toLowerCase();
+    const email = String(req.query.email || "")
+      .trim()
+      .toLowerCase();
+
     if (!email) {
-      return res.status(400).json({ error: "email is required" });
-    }
-
-        let sub = await getSubscriberStatusByEmail(email);
-
-    // ✅ self-heal from Stripe if missing or stale
-    const looksInactive =
-      !sub ||
-      !sub.entitlement_active ||
-      !sub.current_period_end ||
-      new Date(sub.current_period_end).getTime() <= Date.now() ||
-      !["active", "trialing"].includes(String(sub.status || "").toLowerCase());
-
-    const isAppleSubscriber =
-  String(sub?.payment_provider || "").toLowerCase() === "apple";
-
-if (looksInactive && stripe && !isAppleSubscriber) {
-      try {
-        await syncSubscriberStatusFromStripeByEmail(email);
-        sub = await getSubscriberStatusByEmail(email);
-      } catch (e) {
-        console.warn("⚠️ account/plan Stripe self-heal failed:", e?.message || e);
-      }
-    }
-
-    if (!sub) {
-      return res.json({
-        plan: "FREE",
-        maxFavs: 3,
-        entitlementActive: false,
-        subscriptionStatus: "inactive",
-        cancelAtPeriodEnd: false,
-        currentPeriodEnd: null,
-        reason: "no_subscriber_status",
+      return res.status(400).json({
+        error: "email is required",
       });
     }
 
-    const plan = normalizePlan(sub.plan);
-    const maxFavs = plan === "PRO" ? 10 : 3;
+    // Make sure this is actually a registered TeeRadar account.
+    const userResult = await db.query(
+      `
+      SELECT id, email
+      FROM users
+      WHERE LOWER(email) = LOWER($1)
+      LIMIT 1
+      `,
+      [email]
+    );
 
+    if (!userResult.rowCount) {
+      return res.status(404).json({
+        error: "account_not_found",
+      });
+    }
+
+    /*
+     * TEMPORARY:
+     * Give every registered account full PRO entitlement.
+     *
+     * IMPORTANT:
+     * We are NOT changing users.plan or subscriber_status.
+     * When subscriptions return, remove this temporary
+     * override and restore the subscription lookup.
+     */
     return res.json({
-      plan,
-      maxFavs,
-      entitlementActive: !!sub.entitlement_active,
-      subscriptionStatus: sub.status || "inactive",
-      cancelAtPeriodEnd: !!sub.cancel_at_period_end,
-      currentPeriodEnd: sub.current_period_end || null,
-      paymentProvider: sub.payment_provider || null,
-appleProductId: sub.apple_product_id || null,
-updatedAt: sub.updated_at || null,
+      plan: "PRO",
+      maxFavs: 10,
+      entitlementActive: true,
+      subscriptionStatus: "free_access",
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: null,
+      paymentProvider: null,
+      appleProductId: null,
+      temporaryFreeAccess: true,
     });
+
   } catch (err) {
     console.error("account/plan error:", err);
-    res.status(500).json({ error: "plan_lookup_failed", detail: err.message });
+
+    return res.status(500).json({
+      error: "plan_lookup_failed",
+      detail: err.message,
+    });
   }
 });
 app.post("/api/admin/subscriber-status/resync", async (req, res) => {
@@ -1595,32 +1597,13 @@ app.post("/api/account/preferences", async (req, res) => {
 
     const preferredDays = Array.isArray(days) && days.length ? days : null;
 
-    let subscriber = await getSubscriberStatusByEmail(trimmedEmail);
-    let entitled =
-      !!subscriber?.entitlement_active &&
-      (String(subscriber?.status || "").toLowerCase() === "active" ||
-        String(subscriber?.status || "").toLowerCase() === "trialing") &&
-      !!subscriber?.current_period_end &&
-      new Date(subscriber.current_period_end).getTime() > Date.now();
+   // TEMPORARY FREE ACCESS MODE:
+// All registered TeeRadar users receive full PRO features.
+const subscriber = {
+  plan: "PRO",
+};
 
-    // Optional self-heal from Stripe if local status looks stale
-    const isAppleSubscriber =
-  String(subscriber?.payment_provider || "").toLowerCase() === "apple";
-
-if (!entitled && stripe && !isAppleSubscriber) {
-      try {
-        await syncSubscriberStatusFromStripeByEmail(trimmedEmail);
-        subscriber = await getSubscriberStatusByEmail(trimmedEmail);
-        entitled =
-          !!subscriber?.entitlement_active &&
-          (String(subscriber?.status || "").toLowerCase() === "active" ||
-            String(subscriber?.status || "").toLowerCase() === "trialing") &&
-          !!subscriber?.current_period_end &&
-          new Date(subscriber.current_period_end).getTime() > Date.now();
-      } catch (e) {
-        console.warn("⚠️ preferences save Stripe self-heal failed:", e?.message || e);
-      }
-    }
+const entitled = true;
 
     // -------------------------------------------------
     // 1) Save booking defaults for EVERYONE
@@ -1753,31 +1736,13 @@ app.get("/api/account/preferences", async (req, res) => {
       return res.status(400).json({ error: "email is required" });
     }
 
-    let subscriber = await getSubscriberStatusByEmail(trimmedEmail);
-    let entitled =
-      !!subscriber?.entitlement_active &&
-      (String(subscriber?.status || "").toLowerCase() === "active" ||
-        String(subscriber?.status || "").toLowerCase() === "trialing") &&
-      !!subscriber?.current_period_end &&
-      new Date(subscriber.current_period_end).getTime() > Date.now();
+    // TEMPORARY FREE ACCESS MODE:
+// All registered TeeRadar users receive full PRO features.
+const subscriber = {
+  plan: "PRO",
+};
 
-    const isAppleSubscriber =
-  String(subscriber?.payment_provider || "").toLowerCase() === "apple";
-
-if (!entitled && stripe && !isAppleSubscriber) {
-      try {
-        await syncSubscriberStatusFromStripeByEmail(trimmedEmail);
-        subscriber = await getSubscriberStatusByEmail(trimmedEmail);
-        entitled =
-          !!subscriber?.entitlement_active &&
-          (String(subscriber?.status || "").toLowerCase() === "active" ||
-            String(subscriber?.status || "").toLowerCase() === "trialing") &&
-          !!subscriber?.current_period_end &&
-          new Date(subscriber.current_period_end).getTime() > Date.now();
-      } catch (e) {
-        console.warn("⚠️ preferences load Stripe self-heal failed:", e?.message || e);
-      }
-    }
+const entitled = true;
 
     const prefRes = await db.query(
       `
