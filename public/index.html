@@ -3188,16 +3188,86 @@ const homeCourse =
         }
 
         if (data.token) {
-          localStorage.setItem("teeradar_jwt", data.token);
-        }
-        if (data.user && data.user.email) {
-          localStorage.setItem("teeradar_user_email", data.user.email);
-        } else if (data.email) {
-          localStorage.setItem("teeradar_user_email", data.email);
-        }
-        if (data.user && data.user.homeCourse) {
-          localStorage.setItem("teeradar_home_course", data.user.homeCourse);
-        }
+  localStorage.setItem(
+    "teeradar_jwt",
+    data.token
+  );
+}
+
+if (data.user && data.user.email) {
+  localStorage.setItem(
+    "teeradar_user_email",
+    data.user.email
+  );
+} else if (data.email) {
+  localStorage.setItem(
+    "teeradar_user_email",
+    data.email
+  );
+}
+
+if (data.user && data.user.fullName) {
+  localStorage.setItem(
+    "teeradar_full_name",
+    data.user.fullName
+  );
+
+  /*
+   * Keep display name populated as well so existing
+   * TeeRadar screens that use this key continue working.
+   */
+  if (
+    !localStorage.getItem(
+      "teeradar_display_name"
+    )
+  ) {
+    localStorage.setItem(
+      "teeradar_display_name",
+      data.user.fullName
+    );
+  }
+}
+
+if (
+  data.user &&
+  data.user.age !== undefined &&
+  data.user.age !== null
+) {
+  localStorage.setItem(
+    "teeradar_age",
+    String(data.user.age)
+  );
+}
+
+if (data.user && data.user.state) {
+  localStorage.setItem(
+    "teeradar_state",
+    data.user.state
+  );
+
+  /*
+   * TeeRadar already uses home_state in other areas.
+   * Use the registered state as the default if the
+   * golfer has not chosen one previously.
+   */
+  if (
+    !localStorage.getItem(
+      "teeradar_home_state"
+    )
+  ) {
+    localStorage.setItem(
+      "teeradar_home_state",
+      data.user.state
+    );
+  }
+}
+
+if (data.user && data.user.homeCourse) {
+  localStorage.setItem(
+    "teeradar_home_course",
+    data.user.homeCourse
+  );
+}
 
         closeAuthModal();
 renderNavState();
@@ -3271,6 +3341,9 @@ ${details || "Not provided"}
   });
 }
   function initSubscriberAlertModal() {
+      // Subscriptions temporarily disabled.
+  // Full TeeRadar access is available to registered users.
+  return;
   const modal =
     document.getElementById("tr-alert-modal-backdrop");
 
@@ -3434,14 +3507,21 @@ if (appBtn) {
 
   async function tryShowAvailablePopupForSubscribedUser() {
     try {
-      const email = (localStorage.getItem("teeradar_user_email") || "").trim().toLowerCase();
-      if (!email) return;
+      const email = (
+  localStorage.getItem(
+    "teeradar_user_email"
+  ) || ""
+)
+  .trim()
+  .toLowerCase();
 
-      let okToShow = hasPaidSubscription();
-      if (!okToShow) {
-        okToShow = await hasActivePlanViaStripe(email);
-      }
-      if (!okToShow) return;
+if (!email) return;
+
+/*
+ * Subscriptions are temporarily disabled.
+ * Any registered/logged-in TeeRadar account
+ * can access tee-time alert results.
+ */
 
       const modal = document.getElementById("tr-av-modal-backdrop");
       const listEl = document.getElementById("tr-av-list");
@@ -4339,7 +4419,33 @@ async function loadAppUpcomingRound() {
     } else {
       welcomeName.textContent = "Find your next tee time";
     }
+  }if (welcomeName) {
+  if (email) {
+    const fullName = (
+      localStorage.getItem(
+        "teeradar_full_name"
+      ) ||
+      localStorage.getItem(
+        "teeradar_display_name"
+      ) ||
+      ""
+    ).trim();
+
+    if (fullName) {
+      const firstName =
+        fullName.split(/\s+/)[0];
+
+      welcomeName.textContent =
+        `Hi ${firstName}, find your next tee time`;
+    } else {
+      welcomeName.textContent =
+        "Find your next tee time";
+    }
+  } else {
+    welcomeName.textContent =
+      "Find your next tee time";
   }
+}
 
   const appNotificationButton =
     document.getElementById("appNotificationButton");
