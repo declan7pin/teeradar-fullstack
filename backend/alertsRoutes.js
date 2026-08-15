@@ -57,14 +57,32 @@ async function getSubscriberStatusRow(email) {
 }
 
 async function requireSubscriberAlertsAccess(email) {
-  const sub = await getSubscriberStatusRow(email);
-  const entitled = isEntitledSubscriberRow(sub);
-  const plan = getEffectiveSubscriberPlan(sub);
+  /*
+   * TEMPORARY FREE ACCESS MODE:
+   *
+   * Every registered TeeRadar account receives
+   * full PRO alert access.
+   *
+   * Real Stripe / Apple subscription records
+   * remain unchanged.
+   */
+
+  const userResult = await db.query(
+    `
+    SELECT id, email
+    FROM users
+    WHERE LOWER(email) = LOWER($1)
+    LIMIT 1
+    `,
+    [email]
+  );
+
+  const user = userResult.rows?.[0] || null;
 
   return {
-    entitled,
-    plan,
-    subscription: sub,
+    entitled: !!user,
+    plan: user ? "PRO" : "FREE",
+    subscription: null,
   };
 }
 
