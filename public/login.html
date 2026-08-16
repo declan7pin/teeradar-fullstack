@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <title>Login • TeeRadar WA</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+
   <style>
     body {
       font-family: "Poppins", sans-serif;
@@ -15,6 +16,7 @@
       margin: 0;
       padding: 20px 10px;
     }
+
     .card {
       background: #fff;
       width: 100%;
@@ -24,32 +26,38 @@
       box-shadow: 0 16px 40px rgba(15,23,42,.08);
       position: relative;
     }
+
     .top-link {
       position: absolute;
       top: -34px;
       left: 0;
     }
+
     .top-link a {
       text-decoration: none;
       color: #0f766e;
       font-weight: 600;
       font-size: 0.8rem;
     }
+
     h1 {
       margin: 0 0 8px;
       font-size: 1.5rem;
       color: #0f172a;
     }
+
     p.sub {
       margin: 0 0 18px;
       color: #64748b;
       font-size: 0.9rem;
     }
+
     label {
       display: block;
       margin-bottom: 4px;
       font-weight: 500;
     }
+
     input {
       width: 100%;
       padding: 10px 12px;
@@ -57,7 +65,9 @@
       border: 1px solid #e2e8f0;
       margin-bottom: 14px;
       font-size: 0.95rem;
+      box-sizing: border-box;
     }
+
     button.primary {
       width: 100%;
       background: #0f766e;
@@ -69,12 +79,19 @@
       cursor: pointer;
       margin-top: 4px;
     }
+
+    button.primary:disabled {
+      opacity: 0.65;
+      cursor: default;
+    }
+
     .switch {
       text-align: center;
       margin-top: 12px;
       font-size: 0.85rem;
       color: #475569;
     }
+
     .switch button,
     .link-btn {
       background: none;
@@ -83,6 +100,7 @@
       font-weight: 600;
       cursor: pointer;
     }
+
     .error {
       background: #fee2e2;
       color: #b91c1c;
@@ -92,6 +110,7 @@
       margin-bottom: 10px;
       display: none;
     }
+
     #forgotBox {
       background: #ecfdf5;
       border: 1px solid #bbf7d0;
@@ -104,42 +123,83 @@
     }
   </style>
 </head>
+
 <body>
+
   <div class="card">
+
     <div class="top-link">
       <a href="/">← Return to home</a>
     </div>
 
     <h1 id="title">Login to TeeRadar</h1>
-    <p class="sub" id="sub">Enter your email and password to continue.</p>
+
+    <p class="sub" id="sub">
+      Enter your email and password to continue.
+    </p>
+
     <div class="error" id="errBox">Error</div>
 
     <label for="email">Email</label>
-    <input id="email" type="email" placeholder="you@example.com" />
+    <input
+      id="email"
+      type="email"
+      placeholder="you@example.com"
+      autocomplete="email"
+    />
 
     <label for="password">Password</label>
-    <input id="password" type="password" placeholder="••••••••" />
+    <input
+      id="password"
+      type="password"
+      placeholder="••••••••"
+      autocomplete="current-password"
+    />
 
-    <button class="link-btn" id="forgotBtn" type="button" style="margin-bottom:8px;">Forgot password?</button>
+    <button
+      class="link-btn"
+      id="forgotBtn"
+      type="button"
+      style="margin-bottom:8px;"
+    >
+      Forgot password?
+    </button>
+
     <div id="forgotBox">
       We’re generating a reset link… enter your email above first.
     </div>
 
     <div id="nameRow" style="display:none;">
       <label for="fullname">Full name (optional)</label>
-      <input id="fullname" type="text" placeholder="Your name" />
+      <input
+        id="fullname"
+        type="text"
+        placeholder="Your name"
+        autocomplete="name"
+      />
     </div>
 
-    <button class="primary" id="submitBtn">Login</button>
+    <button
+      class="primary"
+      id="submitBtn"
+      type="button"
+    >
+      Login
+    </button>
 
     <div class="switch" id="switchRow">
       Don’t have an account?
-      <button id="switchBtn" type="button">Create one</button>
+      <button id="switchBtn" type="button">
+        Create one
+      </button>
     </div>
+
   </div>
 
   <script>
-    let mode = "login"; // or "signup"
+    let mode = "login";
+    let loginBusy = false;
+
     const errBox = document.getElementById("errBox");
     const title = document.getElementById("title");
     const sub = document.getElementById("sub");
@@ -149,113 +209,649 @@
     const forgotBtn = document.getElementById("forgotBtn");
     const forgotBox = document.getElementById("forgotBox");
 
-    switchBtn.addEventListener("click", () => {
-      if (mode === "login") {
-        mode = "signup";
-        title.textContent = "Create your account";
-        sub.textContent = "Save your details and access WA courses.";
-        nameRow.style.display = "block";
-        submitBtn.textContent = "Create account";
-        switchBtn.textContent = "Back to login";
-      } else {
-        mode = "login";
-        title.textContent = "Login to TeeRadar";
-        sub.textContent = "Enter your email and password to continue.";
-        nameRow.style.display = "none";
-        submitBtn.textContent = "Login";
-        switchBtn.textContent = "Create one";
+    /*
+     * ---------------------------------------------------------
+     * DETERMINE BACKEND
+     * ---------------------------------------------------------
+     *
+     * Website:
+     *   use the website's normal origin
+     *
+     * Capacitor / native app:
+     *   always use the live TeeRadar backend
+     */
+
+    function getApiBase() {
+      const protocol = window.location.protocol;
+
+      const isNative =
+        protocol === "capacitor:" ||
+        protocol === "ionic:" ||
+        window.location.hostname === "localhost";
+
+      if (isNative) {
+        return "https://teeradar.com.au";
       }
-      errBox.style.display = "none";
+
+      return window.location.origin;
+    }
+
+    const API_BASE = getApiBase();
+
+    console.log("🔐 TeeRadar login page ready", {
+      protocol: window.location.protocol,
+      hostname: window.location.hostname,
+      apiBase: API_BASE
     });
 
-    // forgot password flow
+
+    /*
+     * ---------------------------------------------------------
+     * SWITCH LOGIN / SIGNUP
+     * ---------------------------------------------------------
+     */
+
+    switchBtn.addEventListener("click", () => {
+
+      if (loginBusy) return;
+
+      if (mode === "login") {
+
+        mode = "signup";
+
+        title.textContent = "Create your account";
+
+        sub.textContent =
+          "Save your details and access TeeRadar.";
+
+        nameRow.style.display = "block";
+
+        submitBtn.textContent = "Create account";
+
+        switchBtn.textContent = "Back to login";
+
+        document
+          .getElementById("password")
+          .setAttribute("autocomplete", "new-password");
+
+      } else {
+
+        mode = "login";
+
+        title.textContent = "Login to TeeRadar";
+
+        sub.textContent =
+          "Enter your email and password to continue.";
+
+        nameRow.style.display = "none";
+
+        submitBtn.textContent = "Login";
+
+        switchBtn.textContent = "Create one";
+
+        document
+          .getElementById("password")
+          .setAttribute("autocomplete", "current-password");
+      }
+
+      errBox.style.display = "none";
+      errBox.textContent = "";
+    });
+
+
+    /*
+     * ---------------------------------------------------------
+     * FORGOT PASSWORD
+     * ---------------------------------------------------------
+     */
+
     forgotBtn.addEventListener("click", async () => {
-      const email = document.getElementById("email").value.trim();
+
+      const email =
+        document
+          .getElementById("email")
+          .value
+          .trim()
+          .toLowerCase();
+
       if (!email) {
-        forgotBox.textContent = "Please enter your email above first.";
+
+        forgotBox.textContent =
+          "Please enter your email above first.";
+
         forgotBox.style.display = "block";
+
         return;
       }
+
+      forgotBtn.disabled = true;
+
+      forgotBox.textContent =
+        "Creating reset link…";
+
+      forgotBox.style.display = "block";
+
       try {
-        const res = await fetch("/api/forgot-password", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          // we can't email yet, so tell the user to check console on server
-          forgotBox.innerHTML = "✅ Reset link created. If you're the owner, check the server logs for the link.";
-        } else {
-          forgotBox.textContent = data.error || "Could not create reset link.";
+
+        const controller = new AbortController();
+
+        const timeout = setTimeout(() => {
+          controller.abort();
+        }, 15000);
+
+        const res = await fetch(
+          API_BASE + "/api/forgot-password",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "application/json"
+            },
+
+            body: JSON.stringify({
+              email
+            }),
+
+            signal: controller.signal
+          }
+        );
+
+        clearTimeout(timeout);
+
+        const raw = await res.text();
+
+        let data = {};
+
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch (e) {
+          console.error(
+            "❌ Invalid forgot-password response:",
+            raw
+          );
         }
-        forgotBox.style.display = "block";
+
+        if (res.ok) {
+
+          forgotBox.innerHTML =
+            "✅ Reset link created. If you're the owner, check the server logs for the link.";
+
+        } else {
+
+          forgotBox.textContent =
+            data.error ||
+            data.message ||
+            "Could not create reset link.";
+        }
+
       } catch (e) {
-        forgotBox.textContent = "Server error. Please try again.";
-        forgotBox.style.display = "block";
+
+        console.error(
+          "❌ Forgot password failed:",
+          e
+        );
+
+        if (e?.name === "AbortError") {
+
+          forgotBox.textContent =
+            "The request took too long. Please try again.";
+
+        } else {
+
+          forgotBox.textContent =
+            "Server error. Please try again.";
+        }
+
+      } finally {
+
+        forgotBtn.disabled = false;
       }
     });
 
-    submitBtn.addEventListener("click", async () => {
+
+    /*
+     * ---------------------------------------------------------
+     * LOGIN / SIGNUP
+     * ---------------------------------------------------------
+     */
+
+    submitBtn.addEventListener("click", async (event) => {
+
+      event.preventDefault();
+
+      /*
+       * Prevent double taps / duplicate login requests
+       */
+
+      if (loginBusy) {
+        return;
+      }
+
       errBox.style.display = "none";
-      const email = document.getElementById("email").value.trim();
-      const password = document.getElementById("password").value.trim();
-      const fullname = document.getElementById("fullname").value.trim();
+      errBox.textContent = "";
+
+      const email =
+        document
+          .getElementById("email")
+          .value
+          .trim()
+          .toLowerCase();
+
+      const password =
+        document
+          .getElementById("password")
+          .value;
+
+      const fullname =
+        document
+          .getElementById("fullname")
+          .value
+          .trim();
+
+      /*
+       * Basic validation
+       */
 
       if (!email || !password) {
-        errBox.textContent = "Please enter email and password.";
+
+        errBox.textContent =
+          "Please enter email and password.";
+
         errBox.style.display = "block";
+
         return;
       }
 
-      const payload = { email, password, name: fullname };
+      loginBusy = true;
+
+      const originalButtonText =
+        mode === "login"
+          ? "Login"
+          : "Create account";
+
+      submitBtn.disabled = true;
+
+      submitBtn.textContent =
+        mode === "login"
+          ? "Logging in…"
+          : "Creating account…";
+
+      const payload = {
+        email,
+        password,
+        name: fullname
+      };
+
+      const endpoint =
+        mode === "login"
+          ? "/api/login"
+          : "/api/signup";
+
+      let timeout;
 
       try {
-        const res = await fetch(mode === "login" ? "/api/login" : "/api/signup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          errBox.textContent = data.error || "Login/signup failed.";
-          errBox.style.display = "block";
-          return;
+
+        /*
+         * Abort login if the server hasn't responded
+         * within 15 seconds.
+         */
+
+        const controller = new AbortController();
+
+        timeout = setTimeout(() => {
+          controller.abort();
+        }, 15000);
+
+        console.log(
+          "🔐 TeeRadar auth request",
+          {
+            mode,
+            url: API_BASE + endpoint,
+            email
+          }
+        );
+
+        const res = await fetch(
+          API_BASE + endpoint,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "application/json"
+            },
+
+            body: JSON.stringify(payload),
+
+            signal: controller.signal
+          }
+        );
+
+        clearTimeout(timeout);
+        timeout = null;
+
+        /*
+         * Read response as text first.
+         *
+         * This prevents res.json() itself from causing
+         * a confusing failure if the server ever returns
+         * HTML or an empty response.
+         */
+
+        const raw = await res.text();
+
+        let data = {};
+
+        try {
+
+          data =
+            raw
+              ? JSON.parse(raw)
+              : {};
+
+        } catch (parseError) {
+
+          console.error(
+            "❌ Invalid TeeRadar auth response:",
+            raw
+          );
+
+          throw new Error(
+            "Invalid response from server."
+          );
         }
-        finishLogin(data.user || { email, role: "user" });
+
+        console.log(
+          "🔐 TeeRadar auth response",
+          {
+            status: res.status,
+            ok: res.ok
+          }
+        );
+
+        /*
+         * Backend rejected login
+         */
+
+        if (!res.ok) {
+
+          throw new Error(
+            data.error ||
+            data.message ||
+            (
+              mode === "login"
+                ? "Incorrect email or password."
+                : "Could not create account."
+            )
+          );
+        }
+
+        /*
+         * Build user object.
+         */
+
+        const user =
+          data.user &&
+          typeof data.user === "object"
+            ? data.user
+            : {};
+
+        user.email =
+          user.email || email;
+
+        user.role =
+          user.role || "user";
+
+        /*
+         * Some TeeRadar endpoints may return:
+         *
+         * {
+         *   user: {...},
+         *   token: "..."
+         * }
+         *
+         * Make sure that token isn't lost.
+         */
+
+        if (!user.token && data.token) {
+          user.token = data.token;
+        }
+
+        /*
+         * Login successful.
+         */
+
+        finishLogin(user);
+
       } catch (e) {
-        // fallback if backend unreachable
-        finishLogin({ email, role: email === "declan7pin@gmail.com" ? "admin" : "user" });
+
+        if (timeout) {
+          clearTimeout(timeout);
+          timeout = null;
+        }
+
+        console.error(
+          "❌ TeeRadar login failed",
+          {
+            name: e?.name,
+            message: e?.message
+          }
+        );
+
+        /*
+         * IMPORTANT:
+         *
+         * We DO NOT automatically log somebody in
+         * when the backend cannot be contacted.
+         */
+
+        if (e?.name === "AbortError") {
+
+          errBox.textContent =
+            "Login is taking too long. Please check your connection and try again.";
+
+        } else {
+
+          errBox.textContent =
+            e?.message ||
+            "Unable to log in. Please try again.";
+        }
+
+        errBox.style.display = "block";
+
+      } finally {
+
+        loginBusy = false;
+
+        submitBtn.disabled = false;
+
+        /*
+         * If finishLogin() has already started navigation
+         * this doesn't matter. If login failed, restore
+         * the button.
+         */
+
+        if (mode === "login") {
+          submitBtn.textContent = "Login";
+        } else {
+          submitBtn.textContent = "Create account";
+        }
       }
     });
 
+
+    /*
+     * ---------------------------------------------------------
+     * ALLOW RETURN / ENTER KEY TO LOGIN
+     * ---------------------------------------------------------
+     */
+
+    document
+      .getElementById("password")
+      .addEventListener("keydown", (event) => {
+
+        if (event.key === "Enter") {
+
+          event.preventDefault();
+
+          submitBtn.click();
+        }
+      });
+
+
+    /*
+     * ---------------------------------------------------------
+     * FINISH LOGIN
+     * ---------------------------------------------------------
+     */
+
     function finishLogin(user) {
-      // ✅ NEW: keep existing keys (don’t break anything)
-      localStorage.setItem("teeradar_member", "1");
-      localStorage.setItem("teeradar_email", user.email);
-      localStorage.setItem("teeradar_role", user.role || "user");
-      if (user.email === "declan7pin@gmail.com") {
-        localStorage.setItem("teeradar_adfree", "1");
+
+      if (!user || !user.email) {
+
+        console.error(
+          "❌ finishLogin called without valid user",
+          user
+        );
+
+        errBox.textContent =
+          "Login succeeded but the user information was invalid. Please try again.";
+
+        errBox.style.display = "block";
+
+        return;
       }
 
-      // ✅ NEW: also write the keys used by account.html + JWT storage
-      localStorage.setItem("teeradar_user_email", user.email);
+      const cleanEmail =
+        String(user.email)
+          .trim()
+          .toLowerCase();
+
+      const role =
+        user.role || "user";
+
+      /*
+       * Keep existing TeeRadar login keys.
+       */
+
+      localStorage.setItem(
+        "teeradar_member",
+        "1"
+      );
+
+      localStorage.setItem(
+        "teeradar_email",
+        cleanEmail
+      );
+
+      localStorage.setItem(
+        "teeradar_role",
+        role
+      );
+
+      /*
+       * Admin ad-free setting
+       */
+
+      if (
+        cleanEmail ===
+        "declan7pin@gmail.com"
+      ) {
+
+        localStorage.setItem(
+          "teeradar_adfree",
+          "1"
+        );
+      }
+
+      /*
+       * Keys used by account.html
+       */
+
+      localStorage.setItem(
+        "teeradar_user_email",
+        cleanEmail
+      );
+
+      /*
+       * JWT
+       */
+
       if (user.token) {
-        localStorage.setItem("teeradar_jwt", user.token);
+
+        localStorage.setItem(
+          "teeradar_jwt",
+          user.token
+        );
       }
 
-      // ✅ NEW: store unified user object used by bookings page
-      try {
-        const raw = localStorage.getItem("tr_user");
-        let obj = {};
-        if (raw) obj = JSON.parse(raw) || {};
-        if (!obj || typeof obj !== "object") obj = {};
-        obj.email = String(user.email || "").trim().toLowerCase();
-        localStorage.setItem("tr_user", JSON.stringify(obj));
-      } catch (e) {}
+      /*
+       * Unified TeeRadar user object.
+       */
 
-      window.location.href = "/book.html";
+      try {
+
+        const raw =
+          localStorage.getItem("tr_user");
+
+        let obj = {};
+
+        if (raw) {
+
+          try {
+            obj = JSON.parse(raw) || {};
+          } catch (e) {
+            obj = {};
+          }
+        }
+
+        if (
+          !obj ||
+          typeof obj !== "object" ||
+          Array.isArray(obj)
+        ) {
+          obj = {};
+        }
+
+        obj.email = cleanEmail;
+
+        if (user.name) {
+          obj.name = user.name;
+        }
+
+        obj.role = role;
+
+        localStorage.setItem(
+          "tr_user",
+          JSON.stringify(obj)
+        );
+
+      } catch (e) {
+
+        console.warn(
+          "⚠️ Could not save tr_user:",
+          e
+        );
+      }
+
+      console.log(
+        "✅ TeeRadar login complete",
+        {
+          email: cleanEmail,
+          role,
+          hasToken: !!user.token
+        }
+      );
+
+      /*
+       * Go to TeeRadar booking screen.
+       */
+
+      window.location.href =
+        "/book.html";
     }
   </script>
+
 </body>
 </html>
