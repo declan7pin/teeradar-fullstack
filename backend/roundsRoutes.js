@@ -311,6 +311,24 @@ function isCompleteTemplateArrays(pars, dists, holes) {
   return true;
 }
 
+function isCompleteParsArray(pars, holes) {
+  if (!Array.isArray(pars)) return false;
+  if (pars.length !== Number(holes)) return false;
+
+  for (let i = 0; i < Number(holes); i++) {
+    const p = Number(pars[i]);
+
+    if (
+      !Number.isFinite(p) ||
+      p < 3 ||
+      p > 6
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
 async function getTemplateFromDbLoose(course, state, holes) {
   const wanted = normaliseCourseName(course);
   const st = String(state || "").trim().toUpperCase();
@@ -1105,13 +1123,13 @@ router.post("/templates/submit/:roundId", requireAuth, async (req, res) => {
         r.distance_m === null || typeof r.distance_m === "undefined" ? null : Number(r.distance_m);
     }
 
-    if (!isCompleteTemplateArrays(pars, dists, holesCount)) {
-      return res.status(400).json({
-        ok: false,
-        error: "template_incomplete",
-        message: "Please enter par + distance for every hole before submitting this course.",
-      });
-    }
+    if (!isCompleteParsArray(pars, holes)) {
+  return res.status(400).json({
+    ok: false,
+    error: "template_incomplete",
+    message: `Every hole needs a valid par. Expected ${holes} pars.`,
+  });
+}
 
     // If already approved template exists, short-circuit
     const existing = await getTemplateFromDb(courseName, stateCode, holesCount);
