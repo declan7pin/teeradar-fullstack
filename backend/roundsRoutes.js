@@ -1302,6 +1302,8 @@ router.get("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (re
   name,
   state,
   holes,
+  pars_json,
+  dists_json,
   course_rating,
   slope_rating,
   tee_colour,
@@ -1427,15 +1429,17 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
     const cur = await db.query(
   `
   SELECT
-    id,
-    name,
-    state,
-    holes,
-    course_rating,
-    slope_rating,
-    tee_colour,
-    green_points_json
-  FROM scorecard_courses
+  id,
+  name,
+  state,
+  holes,
+  pars_json,
+  dists_json,
+  course_rating,
+  slope_rating,
+  tee_colour,
+  green_points_json
+FROM scorecard_courses
       WHERE id = $1
       LIMIT 1;
       `,
@@ -1450,6 +1454,11 @@ router.patch("/admin/scorecard-courses/:id", requireAuth, requireSuperAdmin, asy
 
     const nameRaw = String(req.body?.name || "").trim();
     const stateRaw = String(req.body?.state || "").trim().toUpperCase();
+    
+    const hasPars =
+  Object.prototype.hasOwnProperty.call(req.body || {}, "pars");
+
+const parsRaw = req.body?.pars;
 
    const hasCourseRating =
   Object.prototype.hasOwnProperty.call(req.body || {}, "course_rating");
@@ -1476,6 +1485,26 @@ const greenPointsRaw = req.body?.green_points_json;
     const newState = stateRaw
       ? normaliseStateCode(stateRaw)
       : String(existing.state || "").trim().toUpperCase();
+      
+      const newPars = hasPars
+  ? (
+      Array.isArray(parsRaw)
+        ? parsRaw.map(Number)
+        : []
+    )
+  : (
+      Array.isArray(existing.pars_json)
+        ? existing.pars_json
+        : []
+    );
+    
+    if (!isCompleteParsArray(newPars, Number(existing.holes))) {
+  return res.status(400).json({
+    ok: false,
+    error: "invalid_pars",
+    message: `Expected ${existing.holes} valid hole pars.`,
+  });
+}
 
     const newCourseRating = hasCourseRating
   ? (
@@ -1588,10 +1617,11 @@ if (
 SET
   name = $2,
   state = $3,
-  course_rating = $4,
-  slope_rating = $5,
-  tee_colour = $6,
-  green_points_json = $7::jsonb,
+  pars_json = $4::jsonb,
+  course_rating = $5,
+  slope_rating = $6,
+  tee_colour = $7,
+  green_points_json = $8::jsonb,
   updated_at = now()
 WHERE id = $1
         RETURNING
@@ -1599,6 +1629,7 @@ WHERE id = $1
   name,
   state,
   holes,
+  pars_json,
   course_rating,
   slope_rating,
   tee_colour,
@@ -1609,9 +1640,13 @@ WHERE id = $1
   id,
   newName,
   newState,
+
+  JSON.stringify(newPars),
+
   newCourseRating,
   newSlopeRating,
   newTeeColour,
+
   JSON.stringify(
     Array.isArray(newGreenPoints)
       ? newGreenPoints
