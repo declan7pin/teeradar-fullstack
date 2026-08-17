@@ -1050,6 +1050,144 @@ nav a:hover{
       </table>
     </div>
   </section>
+  <!-- Approved scorecard course editor -->
+<section
+  class="card"
+  id="approvedCourseEditorCard"
+  style="margin-top:14px;display:none;"
+>
+  <div class="card-label">
+    Edit scorecard course
+  </div>
+
+  <div
+    style="
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:flex-end;
+      margin-top:10px;
+    "
+  >
+    <div>
+      <div class="muted-note">Course name</div>
+      <input
+        id="editCourseName"
+        type="text"
+        style="
+          padding:8px;
+          border:1px solid var(--border);
+          border-radius:10px;
+          min-width:260px;
+        "
+      >
+    </div>
+
+    <div>
+      <div class="muted-note">State</div>
+      <select
+        id="editCourseState"
+        style="
+          padding:8px;
+          border:1px solid var(--border);
+          border-radius:10px;
+        "
+      >
+        <option value="WA">WA</option>
+        <option value="NT">NT</option>
+        <option value="QLD">QLD</option>
+        <option value="NSW">NSW</option>
+        <option value="VIC">VIC</option>
+        <option value="SA">SA</option>
+        <option value="TAS">TAS</option>
+        <option value="ACT">ACT</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="muted-note">Tee</div>
+      <input
+        id="editCourseTee"
+        type="text"
+        placeholder="White"
+        style="
+          padding:8px;
+          border:1px solid var(--border);
+          border-radius:10px;
+          width:110px;
+        "
+      >
+    </div>
+
+    <div>
+      <div class="muted-note">Rating</div>
+      <input
+        id="editCourseRating"
+        type="number"
+        step="0.1"
+        style="
+          padding:8px;
+          border:1px solid var(--border);
+          border-radius:10px;
+          width:110px;
+        "
+      >
+    </div>
+
+    <div>
+      <div class="muted-note">Slope</div>
+      <input
+        id="editCourseSlope"
+        type="number"
+        style="
+          padding:8px;
+          border:1px solid var(--border);
+          border-radius:10px;
+          width:110px;
+        "
+      >
+    </div>
+
+    <button
+      id="btnSaveApprovedCourseEdit"
+      type="button"
+    >
+      Save changes
+    </button>
+
+    <button
+      id="btnCloseApprovedCourseEdit"
+      type="button"
+      class="secondary"
+    >
+      Close
+    </button>
+  </div>
+
+  <div
+    id="approvedCourseEditStatus"
+    class="muted-note"
+    style="margin-top:8px;"
+  ></div>
+
+  <div
+    style="
+      overflow-x:auto;
+      margin-top:10px;
+    "
+  >
+    <table class="score-mini">
+      <thead>
+        <tr>
+          <th>Hole</th>
+          <th>Par</th>
+        </tr>
+      </thead>
+
+      <tbody id="approvedCourseEditTbody"></tbody>
+    </table>
+  </div>
+</section>
   <!-- GPS green points editor -->
 <section class="card" id="gpsCourseEditorCard" style="margin-top:14px;display:none;">
   <div class="card-label">GPS green points</div>
@@ -2265,9 +2403,15 @@ document.addEventListener("click", async (e) => {
 // ---------- Manual scorecard course create ----------
 
 function buildManualCourseRows() {
-  const holes = Number(document.getElementById("manualCourseHoles")?.value || 18);
-  const tbody = document.getElementById("manualCourseTbody");
-  const table = document.getElementById("manualCourseTable");
+  const holes = Number(
+    document.getElementById("manualCourseHoles")?.value || 18
+  );
+
+  const tbody =
+    document.getElementById("manualCourseTbody");
+
+  const table =
+    document.getElementById("manualCourseTable");
 
   if (!tbody || !table) return;
 
@@ -2277,13 +2421,22 @@ function buildManualCourseRows() {
     tbody.innerHTML += `
       <tr>
         <td>Hole ${i}</td>
+
         <td>
-          <input data-manual-par="${i}" type="number" min="3" max="6" value="4"
-            style="width:80px;padding:7px;border:1px solid var(--border);border-radius:8px;text-align:center;">
-        </td>
-        <td>
-          <input data-manual-distance="${i}" type="number" min="1" placeholder="Metres"
-            style="width:120px;padding:7px;border:1px solid var(--border);border-radius:8px;text-align:center;">
+          <input
+            data-manual-par="${i}"
+            type="number"
+            min="3"
+            max="6"
+            value="4"
+            style="
+              width:80px;
+              padding:7px;
+              border:1px solid var(--border);
+              border-radius:8px;
+              text-align:center;
+            "
+          >
         </td>
       </tr>
     `;
@@ -2291,38 +2444,67 @@ function buildManualCourseRows() {
 
   table.style.display = "table";
 }
-
 async function saveManualCourse() {
-  const status = document.getElementById("manualCourseStatus");
-  const btn = document.getElementById("btnSaveManualCourse");
+  const status =
+    document.getElementById("manualCourseStatus");
 
-  const name = String(document.getElementById("manualCourseName")?.value || "").trim();
-  const state = String(document.getElementById("manualCourseState")?.value || "").trim().toUpperCase();
-  const holes = Number(document.getElementById("manualCourseHoles")?.value || 18);
-  const tee_colour = String(document.getElementById("manualCourseTee")?.value || "").trim() || null;
+  const btn =
+    document.getElementById("btnSaveManualCourse");
 
-  const ratingRaw = String(document.getElementById("manualCourseRating")?.value || "").trim();
-  const slopeRaw = String(document.getElementById("manualCourseSlope")?.value || "").trim();
+  const name =
+    String(
+      document.getElementById("manualCourseName")?.value || ""
+    ).trim();
+
+  const state =
+    String(
+      document.getElementById("manualCourseState")?.value || ""
+    )
+      .trim()
+      .toUpperCase();
+
+  const holes =
+    Number(
+      document.getElementById("manualCourseHoles")?.value || 18
+    );
+
+  const tee_colour =
+    String(
+      document.getElementById("manualCourseTee")?.value || ""
+    ).trim() || null;
+
+  const ratingRaw =
+    String(
+      document.getElementById("manualCourseRating")?.value || ""
+    ).trim();
+
+  const slopeRaw =
+    String(
+      document.getElementById("manualCourseSlope")?.value || ""
+    ).trim();
 
   const pars = [];
-  const distances_m = [];
 
   for (let i = 1; i <= holes; i++) {
-    const par = Number(document.querySelector(`[data-manual-par="${i}"]`)?.value || "");
-    const distance = Number(document.querySelector(`[data-manual-distance="${i}"]`)?.value || "");
+    const par =
+      Number(
+        document.querySelector(
+          `[data-manual-par="${i}"]`
+        )?.value || ""
+      );
 
-    if (!Number.isFinite(par) || par < 3 || par > 6) {
-      alert(`Hole ${i} par must be between 3 and 6.`);
-      return;
-    }
-
-    if (!Number.isFinite(distance) || distance <= 0) {
-      alert(`Hole ${i} distance is required.`);
+    if (
+      !Number.isFinite(par) ||
+      par < 3 ||
+      par > 6
+    ) {
+      alert(
+        `Hole ${i} par must be between 3 and 6.`
+      );
       return;
     }
 
     pars.push(par);
-    distances_m.push(distance);
   }
 
   if (!name) {
@@ -2330,13 +2512,25 @@ async function saveManualCourse() {
     return;
   }
 
-  if (ratingRaw && !Number.isFinite(Number(ratingRaw))) {
+  if (
+    ratingRaw &&
+    !Number.isFinite(Number(ratingRaw))
+  ) {
     alert("Course rating must be a number.");
     return;
   }
 
-  if (slopeRaw && (!Number.isFinite(Number(slopeRaw)) || Number(slopeRaw) < 55 || Number(slopeRaw) > 155)) {
-    alert("Slope rating must be between 55 and 155.");
+  if (
+    slopeRaw &&
+    (
+      !Number.isFinite(Number(slopeRaw)) ||
+      Number(slopeRaw) < 55 ||
+      Number(slopeRaw) > 155
+    )
+  ) {
+    alert(
+      "Slope rating must be between 55 and 155."
+    );
     return;
   }
 
@@ -2345,47 +2539,97 @@ async function saveManualCourse() {
     btn.textContent = "Saving…";
   }
 
-  if (status) status.textContent = "Saving course…";
+  if (status) {
+    status.textContent =
+      "Saving course…";
+  }
 
   try {
-    const res = await fetch(`${API_BASE}/api/rounds/admin/scorecard-courses`, {
-      method: "POST",
-      headers: {
-        ...getAuthHeaders(),
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({
-        name,
-        state,
-        holes,
-        pars,
-        distances_m,
-        course_rating: ratingRaw ? Number(ratingRaw) : null,
-        slope_rating: slopeRaw ? Number(slopeRaw) : null,
-        tee_colour,
-      }),
-    });
+    const res = await fetch(
+      `${API_BASE}/api/rounds/admin/scorecard-courses`,
+      {
+        method: "POST",
 
-    const data = await res.json().catch(() => null);
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
 
-    if (!res.ok || !data || !data.ok) {
-      alert("Save failed: " + (data?.error || res.status));
-      if (status) status.textContent = "Save failed.";
+        credentials: "include",
+
+        body: JSON.stringify({
+          name,
+          state,
+          holes,
+
+          pars,
+
+          // distances are intentionally optional
+          distances_m: [],
+
+          course_rating:
+            ratingRaw
+              ? Number(ratingRaw)
+              : null,
+
+          slope_rating:
+            slopeRaw
+              ? Number(slopeRaw)
+              : null,
+
+          tee_colour,
+        }),
+      }
+    );
+
+    const data =
+      await res.json().catch(() => null);
+
+    if (
+      !res.ok ||
+      !data ||
+      !data.ok
+    ) {
+      alert(
+        "Save failed: " +
+        (data?.error || res.status)
+      );
+
+      if (status) {
+        status.textContent =
+          "Save failed.";
+      }
+
       return;
     }
 
-    if (status) status.textContent = "Course saved.";
+    if (status) {
+      status.textContent =
+        "Course saved.";
+    }
+
     await loadApprovedCourses();
 
   } catch (err) {
-    console.error("saveManualCourse failed", err);
-    alert("Save failed (network/server error).");
-    if (status) status.textContent = "Save failed.";
+    console.error(
+      "saveManualCourse failed",
+      err
+    );
+
+    alert(
+      "Save failed (network/server error)."
+    );
+
+    if (status) {
+      status.textContent =
+        "Save failed.";
+    }
+
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = "Save course";
+      btn.textContent =
+        "Save course";
     }
   }
 }
@@ -2415,6 +2659,404 @@ function wireManualCourseCreate() {
 // ---------- Approved scorecard courses (edit / delete) ----------
 
 let APPROVED_COURSES_CACHE = [];
+let ACTIVE_APPROVED_EDIT_ID = null;
+
+function openApprovedCourseEditor(course) {
+  if (!course || !course.id) return;
+
+  ACTIVE_APPROVED_EDIT_ID =
+    Number(course.id);
+
+  const card =
+    document.getElementById(
+      "approvedCourseEditorCard"
+    );
+
+  const tbody =
+    document.getElementById(
+      "approvedCourseEditTbody"
+    );
+
+  if (!card || !tbody) return;
+
+  document.getElementById(
+    "editCourseName"
+  ).value =
+    course.name || "";
+
+  document.getElementById(
+    "editCourseState"
+  ).value =
+    String(
+      course.state || "WA"
+    )
+      .trim()
+      .toUpperCase();
+
+  document.getElementById(
+    "editCourseTee"
+  ).value =
+    course.tee_colour || "";
+
+  document.getElementById(
+    "editCourseRating"
+  ).value =
+    course.course_rating ?? "";
+
+  document.getElementById(
+    "editCourseSlope"
+  ).value =
+    course.slope_rating ?? "";
+
+  const holes =
+    Number(course.holes || 18);
+
+  const pars =
+    Array.isArray(course.pars_json)
+      ? course.pars_json
+      : Array.isArray(course.pars)
+        ? course.pars
+        : [];
+
+  tbody.innerHTML = "";
+
+  for (let i = 1; i <= holes; i++) {
+    const currentPar =
+      Number(pars[i - 1]);
+
+    tbody.innerHTML += `
+      <tr>
+        <td>Hole ${i}</td>
+
+        <td>
+          <input
+            type="number"
+            min="3"
+            max="6"
+            value="${
+              Number.isFinite(currentPar)
+                ? currentPar
+                : 4
+            }"
+            data-approved-edit-par="${i}"
+            style="
+              width:80px;
+              padding:7px;
+              border:1px solid var(--border);
+              border-radius:8px;
+              text-align:center;
+            "
+          >
+        </td>
+      </tr>
+    `;
+  }
+
+  const status =
+    document.getElementById(
+      "approvedCourseEditStatus"
+    );
+
+  if (status) {
+    status.textContent = "";
+  }
+
+  card.style.display = "block";
+
+  card.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
+}
+
+function closeApprovedCourseEditor() {
+  const card =
+    document.getElementById(
+      "approvedCourseEditorCard"
+    );
+
+  if (card) {
+    card.style.display = "none";
+  }
+
+  ACTIVE_APPROVED_EDIT_ID = null;
+}
+
+async function saveApprovedCourseEdit() {
+  const id =
+    Number(
+      ACTIVE_APPROVED_EDIT_ID
+    );
+
+  if (
+    !Number.isFinite(id) ||
+    id <= 0
+  ) {
+    return;
+  }
+
+  const course =
+    (APPROVED_COURSES_CACHE || []).find(
+      x => Number(x?.id) === id
+    );
+
+  if (!course) {
+    alert("Could not find this course.");
+    return;
+  }
+
+  const name =
+    String(
+      document.getElementById(
+        "editCourseName"
+      )?.value || ""
+    ).trim();
+
+  const state =
+    String(
+      document.getElementById(
+        "editCourseState"
+      )?.value || ""
+    )
+      .trim()
+      .toUpperCase();
+
+  const tee =
+    String(
+      document.getElementById(
+        "editCourseTee"
+      )?.value || ""
+    ).trim();
+
+  const ratingRaw =
+    String(
+      document.getElementById(
+        "editCourseRating"
+      )?.value || ""
+    ).trim();
+
+  const slopeRaw =
+    String(
+      document.getElementById(
+        "editCourseSlope"
+      )?.value || ""
+    ).trim();
+
+  const holes =
+    Number(course.holes || 18);
+
+  const pars = [];
+
+  for (let i = 1; i <= holes; i++) {
+    const par =
+      Number(
+        document.querySelector(
+          `[data-approved-edit-par="${i}"]`
+        )?.value || ""
+      );
+
+    if (
+      !Number.isFinite(par) ||
+      par < 3 ||
+      par > 6
+    ) {
+      alert(
+        `Hole ${i} par must be between 3 and 6.`
+      );
+      return;
+    }
+
+    pars.push(par);
+  }
+
+  if (!name) {
+    alert("Course name cannot be blank.");
+    return;
+  }
+
+  const validStates =
+    new Set([
+      "WA",
+      "NT",
+      "QLD",
+      "NSW",
+      "VIC",
+      "SA",
+      "TAS",
+      "ACT",
+    ]);
+
+  if (!validStates.has(state)) {
+    alert("Invalid state.");
+    return;
+  }
+
+  if (
+    ratingRaw &&
+    !Number.isFinite(
+      Number(ratingRaw)
+    )
+  ) {
+    alert("Course rating must be a number.");
+    return;
+  }
+
+  if (
+    slopeRaw &&
+    (
+      !Number.isFinite(
+        Number(slopeRaw)
+      ) ||
+      Number(slopeRaw) < 55 ||
+      Number(slopeRaw) > 155
+    )
+  ) {
+    alert(
+      "Slope rating must be between 55 and 155."
+    );
+    return;
+  }
+
+  const btn =
+    document.getElementById(
+      "btnSaveApprovedCourseEdit"
+    );
+
+  const status =
+    document.getElementById(
+      "approvedCourseEditStatus"
+    );
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+  }
+
+  if (status) {
+    status.textContent =
+      "Saving changes…";
+  }
+
+  try {
+    const res =
+      await fetch(
+        `${API_BASE}/api/rounds/admin/scorecard-courses/${id}`,
+        {
+          method: "PATCH",
+
+          headers: {
+            ...getAuthHeaders(),
+            "Content-Type":
+              "application/json",
+          },
+
+          credentials: "include",
+
+          body: JSON.stringify({
+            name,
+            state,
+            pars,
+
+            course_rating:
+              ratingRaw
+                ? Number(ratingRaw)
+                : null,
+
+            slope_rating:
+              slopeRaw
+                ? Number(slopeRaw)
+                : null,
+
+            tee_colour:
+              tee || null,
+          }),
+        }
+      );
+
+    const data =
+      await res.json().catch(
+        () => null
+      );
+
+    if (
+      !res.ok ||
+      !data ||
+      !data.ok
+    ) {
+      alert(
+        "Update failed: " +
+        (data?.error || res.status)
+      );
+
+      if (status) {
+        status.textContent =
+          "Save failed.";
+      }
+
+      return;
+    }
+
+    if (status) {
+      status.textContent =
+        "Course updated.";
+    }
+
+    await loadApprovedCourses();
+
+  } catch (err) {
+    console.error(
+      "saveApprovedCourseEdit failed",
+      err
+    );
+
+    alert(
+      "Update failed (network/server error)."
+    );
+
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent =
+        "Save changes";
+    }
+  }
+}
+
+function wireApprovedCourseEditor() {
+  const saveBtn =
+    document.getElementById(
+      "btnSaveApprovedCourseEdit"
+    );
+
+  const closeBtn =
+    document.getElementById(
+      "btnCloseApprovedCourseEdit"
+    );
+
+  if (
+    saveBtn &&
+    !saveBtn._wired
+  ) {
+    saveBtn._wired = true;
+
+    saveBtn.addEventListener(
+      "click",
+      saveApprovedCourseEdit
+    );
+  }
+
+  if (
+    closeBtn &&
+    !closeBtn._wired
+  ) {
+    closeBtn._wired = true;
+
+    closeBtn.addEventListener(
+      "click",
+      closeApprovedCourseEditor
+    );
+  }
+}
 
 async function loadApprovedCourses() {
   if (!enforceAdmin()) return;
@@ -2770,114 +3412,29 @@ document.addEventListener("click", async (e) => {
   if (!editBtn && !delBtn) return;
 
   // EDIT
-  if (editBtn) {
-    const id = Number(editBtn.getAttribute("data-edit-course-id"));
-    if (!Number.isFinite(id) || id <= 0) return;
+if (editBtn) {
+  const id = Number(
+    editBtn.getAttribute("data-edit-course-id")
+  );
 
-    const row = (APPROVED_COURSES_CACHE || []).find(x => Number(x?.id) === id) || null;
-
-const currentName = row?.name || "";
-const currentState = row?.state || "";
-const currentRating = row?.course_rating ?? "";
-const currentSlope = row?.slope_rating ?? "";
-const currentTee = row?.tee_colour ?? "";
-
-const newNameRaw = window.prompt(
-  "Enter the course name.",
-  currentName
-);
-if (newNameRaw == null) return;
-
-const newStateRaw = window.prompt(
-  "Enter state.\n\nAllowed: WA, NT, QLD, NSW, VIC, SA, TAS, ACT",
-  currentState
-);
-if (newStateRaw == null) return;
-
-const newRatingRaw = window.prompt(
-  "Enter course rating.\n\nExample: 69.4\nLeave blank if unknown.",
-  currentRating
-);
-if (newRatingRaw == null) return;
-
-const newSlopeRaw = window.prompt(
-  "Enter slope rating.\n\nExample: 121\nLeave blank if unknown.",
-  currentSlope
-);
-if (newSlopeRaw == null) return;
-
-const newTeeRaw = window.prompt(
-  "Enter tee colour/name.\n\nExample: White, Blue, Red\nLeave blank if unknown.",
-  currentTee
-);
-if (newTeeRaw == null) return;
-
-const newName = String(newNameRaw || "").trim();
-const newState = String(newStateRaw || "").trim().toUpperCase();
-const newRating = String(newRatingRaw || "").trim();
-const newSlope = String(newSlopeRaw || "").trim();
-const newTee = String(newTeeRaw || "").trim();
-
-if (!newName) return alert("Name cannot be blank.");
-
-const validStates = new Set(["WA", "NT", "QLD", "NSW", "VIC", "SA", "TAS", "ACT"]);
-if (!validStates.has(newState)) {
-  alert("Invalid state. Use one of: WA, NT, QLD, NSW, VIC, SA, TAS, ACT");
-  return;
-}
-
-if (newRating && !Number.isFinite(Number(newRating))) {
-  alert("Course rating must be a number, e.g. 69.4");
-  return;
-}
-
-if (newSlope && (!Number.isFinite(Number(newSlope)) || Number(newSlope) < 55 || Number(newSlope) > 155)) {
-  alert("Slope rating must be between 55 and 155.");
-  return;
-}
-
-    editBtn.disabled = true;
-    const oldTxt = editBtn.textContent;
-    editBtn.textContent = "Saving…";
-
-    try {
-      const res = await fetch(`${API_BASE}/api/rounds/admin/scorecard-courses/${id}`, {
-        method: "PATCH",
-        headers: {
-          ...getAuthHeaders(),
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-  name: newName,
-  state: newState,
-  course_rating: newRating ? Number(newRating) : null,
-  slope_rating: newSlope ? Number(newSlope) : null,
-  tee_colour: newTee || null,
-}),
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok || !data || !data.ok) {
-        const msg = data?.error === "name_conflict"
-          ? "That name already exists for the same state + holes."
-          : (data?.error || res.status);
-        alert("Rename failed: " + msg);
-      } else {
-        await loadApprovedCourses();
-      }
-    } catch (err) {
-      console.error("rename approved course failed", err);
-      alert("Rename failed (network/server error).");
-    } finally {
-      editBtn.disabled = false;
-      editBtn.textContent = oldTxt;
-    }
-
+  if (!Number.isFinite(id) || id <= 0) {
     return;
   }
 
+  const course =
+    (APPROVED_COURSES_CACHE || []).find(
+      x => Number(x?.id) === id
+    );
+
+  if (!course) {
+    alert("Could not find this course.");
+    return;
+  }
+
+  openApprovedCourseEditor(course);
+
+  return;
+}
   // DELETE
   if (delBtn) {
     const id = Number(delBtn.getAttribute("data-delete-course-id"));
@@ -3752,9 +4309,41 @@ window.addEventListener("load", () => {
     try { wirePendingCoursesRefresh(); } catch (e) { console.warn("wirePendingCoursesRefresh failed", e); }
     try { loadPendingCourses(); } catch (e) { console.warn("loadPendingCourses failed", e); }
     try { wireManualCourseCreate(); } catch (e) { console.warn("wireManualCourseCreate failed", e); }
-    try { wireApprovedCoursesRefresh(); } catch (e) { console.warn("wireApprovedCoursesRefresh failed", e); }
-try { wireGpsCourseEditor(); } catch (e) { console.warn("wireGpsCourseEditor failed", e); }
-try { loadApprovedCourses(); } catch (e) { console.warn("loadApprovedCourses failed", e); }
+    try {
+  wireApprovedCoursesRefresh();
+} catch (e) {
+  console.warn(
+    "wireApprovedCoursesRefresh failed",
+    e
+  );
+}
+
+try {
+  wireApprovedCourseEditor();
+} catch (e) {
+  console.warn(
+    "wireApprovedCourseEditor failed",
+    e
+  );
+}
+
+try {
+  wireGpsCourseEditor();
+} catch (e) {
+  console.warn(
+    "wireGpsCourseEditor failed",
+    e
+  );
+}
+
+try {
+  loadApprovedCourses();
+} catch (e) {
+  console.warn(
+    "loadApprovedCourses failed",
+    e
+  );
+}
   }, 1500);
 });
 </script>
