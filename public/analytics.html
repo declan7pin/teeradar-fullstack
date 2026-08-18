@@ -1017,12 +1017,83 @@ nav a:hover{
   </div>
 </section>
     <section class="card" style="margin-top:14px;" id="approvedCoursesCard">
-    <div class="card-label">Approved courses (scorecard templates)</div>
+  <div class="card-label">Approved courses (scorecard templates)</div>
 
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
-      <button id="btnApprovedRefresh" type="button" class="secondary">Refresh</button>
-      <span class="muted-note">Edit names for multi-nines (e.g. “collier park golf course - lakes”).</span>
+  <div
+    style="
+      display:flex;
+      gap:10px;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      margin-top:8px;
+    "
+  >
+    <div>
+      <div class="muted-note">State</div>
+
+      <select
+        id="approvedStateFilter"
+        style="
+          padding:8px;
+          border:1px solid var(--border);
+          border-radius:10px;
+          min-width:100px;
+        "
+      >
+        <option value="">All states</option>
+        <option value="WA">WA</option>
+        <option value="NT">NT</option>
+        <option value="QLD">QLD</option>
+        <option value="NSW">NSW</option>
+        <option value="VIC">VIC</option>
+        <option value="SA">SA</option>
+        <option value="TAS">TAS</option>
+        <option value="ACT">ACT</option>
+      </select>
     </div>
+
+    <div>
+      <div class="muted-note">GPS</div>
+
+      <select
+        id="approvedGpsFilter"
+        style="
+          padding:8px;
+          border:1px solid var(--border);
+          border-radius:10px;
+          min-width:160px;
+        "
+      >
+        <option value="">All GPS statuses</option>
+        <option value="complete">GPS complete</option>
+        <option value="missing">GPS missing / incomplete</option>
+      </select>
+    </div>
+
+    <button
+      id="btnApprovedResetFilters"
+      type="button"
+      class="secondary"
+    >
+      Reset filters
+    </button>
+
+    <button
+      id="btnApprovedRefresh"
+      type="button"
+      class="secondary"
+    >
+      Refresh
+    </button>
+  </div>
+
+  <div
+    id="approvedFilterSummary"
+    class="muted-note"
+    style="margin-top:8px;"
+  >
+    Loading courses…
+  </div>
 
     <div id="approvedEmpty" class="users-empty" style="display:none;">
       No approved courses found.
@@ -1042,6 +1113,7 @@ nav a:hover{
 <th>Rating</th>
 <th>Slope</th>
 <th>Tee</th>
+<th>GPS</th>
 <th>Updated</th>
 <th></th>
           </tr>
@@ -3058,76 +3130,371 @@ function wireApprovedCourseEditor() {
   }
 }
 
-async function loadApprovedCourses() {
-  if (!enforceAdmin()) return;
+function courseGpsStatus(course) {
+  const holes = Number(course?.holes || 0);
 
-  const table = document.getElementById("approvedCoursesTable");
-  const tbody = document.getElementById("approvedCoursesTbody");
-  const empty = document.getElementById("approvedEmpty");
-  const errorEl = document.getElementById("approvedError");
+  let points = course?.green_points_json;
 
-  // reset UI
-  if (errorEl) errorEl.style.display = "none";
-  if (empty) empty.style.display = "none";
-  if (table) table.style.display = "none";
-
-  const data = await tryFetchJson("/api/rounds/admin/scorecard-courses");
-
-  if (!data || !data.ok) {
-    if (errorEl) {
-      errorEl.style.display = "block";
-      errorEl.textContent = "Error loading approved courses (check admin auth/JWT).";
+  if (typeof points === "string") {
+    try {
+      points = JSON.parse(points);
+    } catch {
+      points = [];
     }
-    return;
   }
 
-  const rows = Array.isArray(data.courses) ? data.courses : [];
-  APPROVED_COURSES_CACHE = rows;
+  if (!Array.isArray(points) || !holes) {
+    return {
+      complete: false,
+      completedHoles: 0,
+      totalHoles: holes,
+    };
+  }
+
+  let completedHoles = 0;
+
+  for (let i = 1; i <= holes; i++) {
+    const point =
+      points.find(
+        x => Number(x?.hole) === i
+      ) ||
+      points[i - 1] ||
+      {};
+
+    const front =
+      String(point?.front || "").trim();
+
+    const middle =
+      String(point?.middle || "").trim();
+
+    const back =
+      String(point?.back || "").trim();
+
+    /*
+     * A hole counts as GPS complete only if
+     * front, middle AND back coordinates exist.
+     */
+    if (
+      front &&
+      middle &&
+      back
+    ) {
+      completedHoles++;
+    }
+  }
+
+  return {
+    complete:
+      completedHoles === holes &&
+      holes > 0,
+
+    completedHoles,
+    totalHoles: holes,
+  };
+}
+
+function getFilteredApprovedCourses() {
+  const stateFilter =
+    String(
+      document.getElementById(
+        "approvedStateFilter"
+      )?.value || ""
+    )
+      .trim()
+      .toUpperCase();
+
+  const gpsFilter =
+    String(
+      document.getElementById(
+        "approvedGpsFilter"
+      )?.value || ""
+    ).trim();
+
+  return (APPROVED_COURSES_CACHE || []).filter(
+    course => {
+      const courseState =
+        String(
+          course?.state || ""
+        )
+          .trim()
+          .toUpperCase();
+
+      if (
+        stateFilter &&
+        courseState !== stateFilter
+      ) {
+        return false;
+      }
+
+      const gps =
+        courseGpsStatus(course);
+
+      if (
+        gpsFilter === "complete" &&
+        !gps.complete
+      ) {
+        return false;
+      }
+
+      if (
+        gpsFilter === "missing" &&
+        gps.complete
+      ) {
+        return false;
+      }
+
+      return true;
+    }
+  );
+}
+
+function renderApprovedCourses() {
+  const table =
+    document.getElementById(
+      "approvedCoursesTable"
+    );
+
+  const tbody =
+    document.getElementById(
+      "approvedCoursesTbody"
+    );
+
+  const empty =
+    document.getElementById(
+      "approvedEmpty"
+    );
+
+  const summary =
+    document.getElementById(
+      "approvedFilterSummary"
+    );
+
+  const rows =
+    getFilteredApprovedCourses();
+
+  const total =
+    (APPROVED_COURSES_CACHE || []).length;
+
+  if (summary) {
+    summary.textContent =
+      `${rows.length} of ${total} courses shown`;
+  }
 
   if (!rows.length) {
-    if (empty) empty.style.display = "block";
+    if (table) {
+      table.style.display = "none";
+    }
+
+    if (empty) {
+      empty.style.display = "block";
+      empty.textContent =
+        total
+          ? "No courses match these filters."
+          : "No approved courses found.";
+    }
+
     return;
   }
 
-  if (table) table.style.display = "table";
+  if (empty) {
+    empty.style.display = "none";
+  }
 
-  if (tbody) {
-    tbody.innerHTML = rows.map((c) => {
-      const id = c.id ?? "";
-      const name = c.name ?? "—";
-      const state = c.state ?? "—";
-      const holes = c.holes ?? "—";
-      const updated = c.updated_at ? new Date(c.updated_at).toLocaleString() : "";
-      const rating = c.course_rating ?? "";
-const slope = c.slope_rating ?? "";
-const tee = c.tee_colour ?? "";
+  if (table) {
+    table.style.display = "table";
+  }
+
+  if (!tbody) return;
+
+  tbody.innerHTML =
+    rows.map(course => {
+      const id =
+        course.id ?? "";
+
+      const name =
+        course.name ?? "—";
+
+      const state =
+        course.state ?? "—";
+
+      const holes =
+        course.holes ?? "—";
+
+      const updated =
+        course.updated_at
+          ? new Date(
+              course.updated_at
+            ).toLocaleString()
+          : "";
+
+      const rating =
+        course.course_rating ?? "";
+
+      const slope =
+        course.slope_rating ?? "";
+
+      const tee =
+        course.tee_colour ?? "";
+
+      const gps =
+        courseGpsStatus(course);
+
+      const gpsLabel =
+        gps.complete
+          ? "Complete"
+          : `${gps.completedHoles}/${gps.totalHoles || holes}`;
+
+      const gpsStyle =
+        gps.complete
+          ? `
+            background:#dcfce7;
+            color:#166534;
+            border:1px solid #bbf7d0;
+          `
+          : `
+            background:#fff7ed;
+            color:#c2410c;
+            border:1px solid #fed7aa;
+          `;
 
       return `
         <tr data-approved-id="${id}">
           <td>${id}</td>
+
           <td>${name}</td>
+
           <td>${state}</td>
+
           <td>${holes}</td>
-<td>${rating}</td>
-<td>${slope}</td>
-<td>${tee}</td>
-<td>${updated}</td>
-<td style="white-space:nowrap;">
-  <button class="edit-btn" type="button" data-edit-course-id="${id}">Edit</button>
 
-  <button
-    class="edit-btn"
-    type="button"
-    data-gps-course-id="${id}">
-    GPS
-  </button>
+          <td>${rating}</td>
 
-  <button class="delete-btn" type="button" data-delete-course-id="${id}">Delete</button>
-</td>
+          <td>${slope}</td>
+
+          <td>${tee}</td>
+
+          <td>
+            <span
+              style="
+                display:inline-flex;
+                align-items:center;
+                padding:3px 8px;
+                border-radius:999px;
+                font-size:11px;
+                font-weight:700;
+                ${gpsStyle}
+              "
+            >
+              ${gpsLabel}
+            </span>
+          </td>
+
+          <td>${updated}</td>
+
+          <td style="white-space:nowrap;">
+            <button
+              class="edit-btn"
+              type="button"
+              data-edit-course-id="${id}"
+            >
+              Edit
+            </button>
+
+            <button
+              class="edit-btn"
+              type="button"
+              data-gps-course-id="${id}"
+            >
+              GPS
+            </button>
+
+            <button
+              class="delete-btn"
+              type="button"
+              data-delete-course-id="${id}"
+            >
+              Delete
+            </button>
+          </td>
         </tr>
       `;
     }).join("");
+}
+
+async function loadApprovedCourses() {
+  if (!enforceAdmin()) return;
+
+  const table =
+    document.getElementById(
+      "approvedCoursesTable"
+    );
+
+  const empty =
+    document.getElementById(
+      "approvedEmpty"
+    );
+
+  const errorEl =
+    document.getElementById(
+      "approvedError"
+    );
+
+  const summary =
+    document.getElementById(
+      "approvedFilterSummary"
+    );
+
+  if (errorEl) {
+    errorEl.style.display =
+      "none";
   }
+
+  if (empty) {
+    empty.style.display =
+      "none";
+  }
+
+  if (table) {
+    table.style.display =
+      "none";
+  }
+
+  if (summary) {
+    summary.textContent =
+      "Loading courses…";
+  }
+
+  const data =
+    await tryFetchJson(
+      "/api/rounds/admin/scorecard-courses"
+    );
+
+  if (
+    !data ||
+    !data.ok
+  ) {
+    if (errorEl) {
+      errorEl.style.display =
+        "block";
+
+      errorEl.textContent =
+        "Error loading approved courses (check admin auth/JWT).";
+    }
+
+    if (summary) {
+      summary.textContent =
+        "Could not load courses.";
+    }
+
+    return;
+  }
+
+  APPROVED_COURSES_CACHE =
+    Array.isArray(data.courses)
+      ? data.courses
+      : [];
+
+  renderApprovedCourses();
 }
 
   // ---------- GPS green points editor ----------
@@ -3473,6 +3840,68 @@ if (editBtn) {
     }
   }
 });
+function wireApprovedCourseFilters() {
+  const stateFilter =
+    document.getElementById(
+      "approvedStateFilter"
+    );
+
+  const gpsFilter =
+    document.getElementById(
+      "approvedGpsFilter"
+    );
+
+  const resetBtn =
+    document.getElementById(
+      "btnApprovedResetFilters"
+    );
+
+  if (
+    stateFilter &&
+    !stateFilter._wired
+  ) {
+    stateFilter._wired = true;
+
+    stateFilter.addEventListener(
+      "change",
+      renderApprovedCourses
+    );
+  }
+
+  if (
+    gpsFilter &&
+    !gpsFilter._wired
+  ) {
+    gpsFilter._wired = true;
+
+    gpsFilter.addEventListener(
+      "change",
+      renderApprovedCourses
+    );
+  }
+
+  if (
+    resetBtn &&
+    !resetBtn._wired
+  ) {
+    resetBtn._wired = true;
+
+    resetBtn.addEventListener(
+      "click",
+      () => {
+        if (stateFilter) {
+          stateFilter.value = "";
+        }
+
+        if (gpsFilter) {
+          gpsFilter.value = "";
+        }
+
+        renderApprovedCourses();
+      }
+    );
+  }
+}
 // ---------- Pending course templates (approve in analytics) ----------
 
 let PENDING_COURSES_CACHE = [];
@@ -4314,6 +4743,14 @@ window.addEventListener("load", () => {
 } catch (e) {
   console.warn(
     "wireApprovedCoursesRefresh failed",
+    e
+  );
+}
+try {
+  wireApprovedCourseFilters();
+} catch (e) {
+  console.warn(
+    "wireApprovedCourseFilters failed",
     e
   );
 }
