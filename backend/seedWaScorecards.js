@@ -246,78 +246,6 @@ const STANDARD_COURSES = [
     slope: 116,
     tee: "Standard",
   },
-];
-
-// =========================================================
-// JOONDALUP
-//
-// Three separate 9s.
-// This should NOT use generic front/back generation.
-// =========================================================
-
-const JOONDALUP = [
-  {
-    name: "joondalup - quarry",
-    holes: 9,
-    pars: [4,4,3,5,4,4,3,5,4],
-    rating: null,
-    slope: null,
-    tee: "White",
-  },
-
-  {
-    name: "joondalup - dune",
-    holes: 9,
-    pars: [4,4,4,3,5,4,3,4,5],
-    rating: null,
-    slope: null,
-    tee: "White",
-  },
-
-  {
-    name: "joondalup - lake",
-    holes: 9,
-    pars: [4,4,3,5,4,4,4,3,5],
-    rating: null,
-    slope: null,
-    tee: "White",
-  },
-
-  {
-    name: "joondalup - quarry/dune",
-    holes: 18,
-    pars: [
-      4,4,3,5,4,4,3,5,4,
-      4,4,4,3,5,4,3,4,5
-    ],
-    rating: 71.0,
-    slope: 134,
-    tee: "White",
-  },
-
-  {
-    name: "joondalup - lake/dune",
-    holes: 18,
-    pars: [
-      4,4,3,5,4,4,4,3,5,
-      4,4,4,3,5,4,3,4,5
-    ],
-    rating: 71.0,
-    slope: 131,
-    tee: "White",
-  },
-
-  {
-    name: "joondalup - lake/quarry",
-    holes: 18,
-    pars: [
-      4,4,3,5,4,4,4,3,5,
-      4,4,3,5,4,4,3,5,4
-    ],
-    rating: 70.0,
-    slope: 133,
-    tee: "White",
-  },
     // -------------------------------------------------------
   // Cottesloe Golf Club
   // Blue: 73 / 133
@@ -562,6 +490,80 @@ const JOONDALUP = [
     tee: "Blue",
   },
 ];
+
+
+// =========================================================
+// JOONDALUP
+//
+// Three separate 9s.
+// This should NOT use generic front/back generation.
+// =========================================================
+
+const JOONDALUP = [
+  {
+    name: "joondalup - quarry",
+    holes: 9,
+    pars: [4,4,3,5,4,4,3,5,4],
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+
+  {
+    name: "joondalup - dune",
+    holes: 9,
+    pars: [4,4,4,3,5,4,3,4,5],
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+
+  {
+    name: "joondalup - lake",
+    holes: 9,
+    pars: [4,4,3,5,4,4,4,3,5],
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+
+  {
+    name: "joondalup - quarry/dune",
+    holes: 18,
+    pars: [
+      4,4,3,5,4,4,3,5,4,
+      4,4,4,3,5,4,3,4,5
+    ],
+    rating: 71.0,
+    slope: 134,
+    tee: "White",
+  },
+
+  {
+    name: "joondalup - lake/dune",
+    holes: 18,
+    pars: [
+      4,4,3,5,4,4,4,3,5,
+      4,4,4,3,5,4,3,4,5
+    ],
+    rating: 71.0,
+    slope: 131,
+    tee: "White",
+  },
+
+  {
+    name: "joondalup - lake/quarry",
+    holes: 18,
+    pars: [
+      4,4,3,5,4,4,4,3,5,
+      4,4,3,5,4,4,3,5,4
+    ],
+    rating: 70.0,
+    slope: 133,
+    tee: "White",
+  },
+  ];
+    
 
 // =========================================================
 // Build import list
