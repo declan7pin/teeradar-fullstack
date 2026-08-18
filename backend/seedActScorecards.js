@@ -419,7 +419,7 @@ const SPECIAL_COURSES = [
     slope: null,
     tee: "Blue",
   },
-  
+  ];
 
 
 
