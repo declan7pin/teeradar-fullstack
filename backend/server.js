@@ -26,6 +26,7 @@ import { ensureScorecardCoursesSchema } from "./scorecardCourseMigrate.js"; // ‚
 import { seedWaScorecards } from "./seedWaScorecards.js";
 import { seedNtScorecards } from "./seedNtScorecards.js";
 import { seedQldScorecards } from "./seedQldScorecards.js";
+import { seedNswScorecards } from "./seedNswScorecards.js";
 import analyticsRouter, { backfillAnalyticsDailySummaryOnce } from "./analyticsRoutes.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 import groupVotesRouter from "./groupVotesRoutes.js";
@@ -953,6 +954,7 @@ ensureScorecardCoursesSchema(db)
       await seedWaScorecards();
       await seedNtScorecards();
       await seedQldScorecards();
+      await seedNswScorecards();
     } catch (err) {
       console.error(
         "‚ùå WA scorecard seed failed:",
