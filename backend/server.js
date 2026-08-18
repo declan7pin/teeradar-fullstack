@@ -962,7 +962,7 @@ ensureScorecardCoursesSchema(db)
       await seedVicScorecards();
       await seedSaScorecards();
       await seedTasScorecards();
-      await seedTasScorecards();
+      await seedActScorecards();
     } catch (err) {
       console.error(
         "❌ WA scorecard seed failed:",
