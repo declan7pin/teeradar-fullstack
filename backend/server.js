@@ -25,6 +25,7 @@ import { ensureBookingAddonsSchema } from "./bookingMigrate.js";
 import { ensureScorecardCoursesSchema } from "./scorecardCourseMigrate.js"; // ✅ ADD
 import { seedWaScorecards } from "./seedWaScorecards.js";
 import { seedNtScorecards } from "./seedNtScorecards.js";
+import { seedQldScorecards } from "./seedQldScorecards.js";
 import analyticsRouter, { backfillAnalyticsDailySummaryOnce } from "./analyticsRoutes.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 import groupVotesRouter from "./groupVotesRoutes.js";
@@ -951,6 +952,7 @@ ensureScorecardCoursesSchema(db)
     try {
       await seedWaScorecards();
       await seedNtScorecards();
+      await seedQldScorecards();
     } catch (err) {
       console.error(
         "❌ WA scorecard seed failed:",
