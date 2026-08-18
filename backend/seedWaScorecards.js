@@ -491,6 +491,151 @@ const STANDARD_COURSES = [
   },
 ];
 
+// =========================================================
+// COLLIER PARK
+//
+// Three separate 9s:
+// Island, Pines, Lakes
+// =========================================================
+
+const COLLIER_PARK = [
+  {
+    name: "collier park golf course - island",
+    holes: 9,
+    pars: [4,3,4,3,5,4,4,5,4],
+    rating: null,
+    slope: null,
+    tee: "Blue",
+  },
+
+  {
+    name: "collier park golf course - pines",
+    holes: 9,
+    pars: [4,4,3,4,5,4,3,5,4],
+    rating: null,
+    slope: null,
+    tee: "Blue",
+  },
+
+  {
+    name: "collier park golf course - lakes",
+    holes: 9,
+    pars: [5,4,3,4,3,4,4,3,5],
+    rating: null,
+    slope: null,
+    tee: "Blue",
+  },
+
+  {
+    name: "collier park golf course - island/lakes",
+    holes: 18,
+    pars: [
+      4,3,4,3,5,4,4,5,4,
+      5,4,3,4,3,4,4,3,5
+    ],
+    rating: 70.8,
+    slope: 123,
+    tee: "Blue",
+  },
+
+  {
+    name: "collier park golf course - pines/island",
+    holes: 18,
+    pars: [
+      4,4,3,4,5,4,3,5,4,
+      4,3,4,3,5,4,4,5,4
+    ],
+    rating: 71.8,
+    slope: 122,
+    tee: "Blue",
+  },
+
+  {
+    name: "collier park golf course - lakes/pines",
+    holes: 18,
+    pars: [
+      5,4,3,4,3,4,4,3,5,
+      4,4,3,4,5,4,3,5,4
+    ],
+    rating: 71.0,
+    slope: 118,
+    tee: "Blue",
+  },
+];
+
+// =========================================================
+// HILLVIEW
+//
+// Three separate 9s:
+// Classic, Heritage, Lakeside
+// =========================================================
+
+const HILLVIEW = [
+  {
+    name: "hillview - classic",
+    holes: 9,
+    pars: [5,4,3,4,4,4,4,3,5],
+    rating: 68.0,
+    slope: 112,
+    tee: "White",
+  },
+
+  {
+    name: "hillview - heritage",
+    holes: 9,
+    pars: [5,4,3,4,5,3,4,4,4],
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+
+  {
+    name: "hillview - lakeside",
+    holes: 9,
+    pars: [
+      5,4,3,4,4,4,4,3,5
+    ],
+    rating: 68.0,
+    slope: 108,
+    tee: "White",
+  },
+
+  {
+    name: "hillview - classic/heritage",
+    holes: 18,
+    pars: [
+      5,4,3,4,4,4,4,3,5,
+      5,4,3,4,5,3,4,4,4
+    ],
+    rating: 69.7,
+    slope: 112,
+    tee: "White",
+  },
+
+  {
+    name: "hillview - classic/lakeside",
+    holes: 18,
+    pars: [
+      5,4,3,4,4,4,4,3,5,
+      5,4,3,4,4,4,4,3,5
+    ],
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+
+  {
+    name: "hillview - lakeside/heritage",
+    holes: 18,
+    pars: [
+      5,4,3,4,4,4,4,3,5,
+      5,4,3,4,5,3,4,4,4
+    ],
+    rating: 70.0,
+    slope: 110,
+    tee: "White",
+  },
+];
 
 // =========================================================
 // JOONDALUP
