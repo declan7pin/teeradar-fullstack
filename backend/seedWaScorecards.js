@@ -168,7 +168,7 @@ const STANDARD_COURSES = [
       4,4,4,3,5,3,4,5,4
     ],
     rating: 72.0,
-    slope: ,
+    slope: null,
     tee: "Mens",
   },
 
