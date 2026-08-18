@@ -520,6 +520,1082 @@ const STANDARD_COURSES = [
     slope: 117,
     tee: "Blue",
   },
+    // ==========================================================
+  // NUDGEE GOLF CLUB — NORTH
+  // Brisbane
+  // White Mens
+  // Par 70
+  // Rating 70.1 / Slope 128
+  // ==========================================================
+  {
+    name: "Nudgee Golf Club - North",
+    pars: [
+      4, 3, 4, 4, 5, 3, 5, 3, 5,
+      3, 4, 4, 4, 4, 4, 4, 3, 4,
+    ],
+    rating: 70.1,
+    slope: 128,
+    tee: "White Mens",
+  },
+
+  // ==========================================================
+  // NUDGEE GOLF CLUB — SOUTH
+  // Brisbane
+  // Blue
+  // Par 69
+  // Rating 71 / Slope 120
+  // ==========================================================
+  {
+    name: "Nudgee Golf Club - South",
+    pars: [
+      4, 4, 3, 4, 4, 4, 3, 4, 5,
+      3, 5, 4, 4, 4, 3, 4, 4, 3,
+    ],
+    rating: 71,
+    slope: 120,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // VIRGINIA GOLF CLUB
+  // Brisbane
+  // Blue
+  // Par 71
+  // Rating 73 / Slope 121
+  // ==========================================================
+  {
+    name: "Virginia Golf Club",
+    pars: [
+      5, 4, 3, 4, 4, 4, 4, 4, 3,
+      4, 4, 3, 5, 3, 4, 5, 4, 4,
+    ],
+    rating: 73,
+    slope: 121,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // GAILES GOLF CLUB
+  // Wacol
+  // Black
+  // Par 73
+  // Rating 72.5 / Slope 127
+  // ==========================================================
+  {
+    name: "Gailes Golf Club",
+    pars: [
+      5, 5, 3, 4, 4, 3, 4, 4, 5,
+      4, 4, 3, 4, 4, 4, 4, 4, 5,
+    ],
+    rating: 72.5,
+    slope: 127,
+    tee: "Black",
+  },
+
+  // ==========================================================
+  // MCLEOD COUNTRY GOLF CLUB
+  // Mount Ommaney
+  // Blue
+  // Par 71
+  // Rating 71 / Slope 132
+  // ==========================================================
+  {
+    name: "McLeod Country Golf Club",
+    pars: [
+      4, 3, 5, 4, 4, 3, 5, 4, 5,
+      5, 4, 3, 4, 4, 4, 3, 4, 3,
+    ],
+    rating: 71,
+    slope: 132,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // MAROOCHY RIVER GOLF CLUB
+  // Sunshine Coast
+  // Par 72
+  //
+  // Reliable complete par sequence.
+  // Rating/slope omitted because available source data for the
+  // White tee appears internally inconsistent.
+  // ==========================================================
+  {
+    name: "Maroochy River Golf Club",
+    pars: [
+      4, 4, 4, 3, 5, 4, 5, 3, 4,
+      4, 5, 3, 4, 4, 4, 3, 5, 4,
+    ],
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+
+  // ==========================================================
+  // SURFERS PARADISE GOLF CLUB
+  // Gold Coast
+  // Blue
+  // Par 71
+  // Rating 70
+  //
+  // Slope not confidently established from current source.
+  // ==========================================================
+  {
+    name: "Surfers Paradise Golf Club",
+    pars: [
+      4, 3, 5, 4, 3, 4, 3, 4, 5,
+      4, 4, 4, 4, 4, 4, 3, 4, 5,
+    ],
+    rating: 70,
+    slope: null,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // LINKS HOPE ISLAND
+  // Gold Coast
+  // Blue
+  // Par 72
+  // Rating 73 / Slope 126
+  // ==========================================================
+  {
+    name: "Links Hope Island",
+    pars: [
+      4, 5, 4, 4, 3, 4, 4, 5, 3,
+      4, 5, 4, 4, 3, 4, 4, 3, 5,
+    ],
+    rating: 73,
+    slope: 126,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // BRIBIE ISLAND GOLF CLUB
+  // Woorim
+  // Championship
+  // Par 72
+  // Rating 72 / Slope 130
+  // ==========================================================
+  {
+    name: "Bribie Island Golf Club",
+    pars: [
+      4, 4, 5, 3, 5, 4, 3, 4, 4,
+      4, 4, 5, 4, 3, 4, 3, 5, 4,
+    ],
+    rating: 72,
+    slope: 130,
+    tee: "Championship",
+  },
+
+  // ==========================================================
+  // KEPERRA COUNTRY GOLF CLUB
+  // Brisbane
+  // Par 72
+  // Rating 71.8 / Slope 129
+  // ==========================================================
+  {
+    name: "Keperra Country Golf Club",
+    pars: [
+      5, 4, 4, 3, 5, 3, 4, 3, 5,
+      4, 5, 3, 5, 4, 4, 4, 3, 4,
+    ],
+    rating: 71.8,
+    slope: 129,
+    tee: "Championship",
+  },
+
+  // ==========================================================
+  // PARKWOOD INTERNATIONAL GOLF COURSE
+  // Gold Coast
+  // Par 70
+  //
+  // Current sources disagree on the precise tee/rating pairing.
+  // Complete par sequence is retained but handicap fields are
+  // intentionally NULL until we reconcile the current card.
+  // ==========================================================
+  {
+    name: "Parkwood International Golf Course",
+    pars: [
+      4, 3, 4, 3, 4, 4, 3, 4, 5,
+      4, 3, 5, 4, 4, 4, 3, 4, 5,
+    ],
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+    // ==========================================================
+  // PACIFIC GOLF CLUB
+  // Carindale, Brisbane
+  // Blue
+  // Par 72
+  // Rating 73.3 / Slope 130
+  // ==========================================================
+  {
+    name: "Pacific Golf Club",
+    pars: [
+      5, 4, 3, 4, 4, 4, 3, 4, 5,
+      4, 5, 4, 3, 4, 4, 4, 3, 5,
+    ],
+    rating: 73.3,
+    slope: 130,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // CARBROOK GOLF CLUB
+  // Carbrook
+  // Blue
+  // Par 71
+  // Rating 71 / Slope 125
+  //
+  // Verified against Carbrook Golf Club official scorecard.
+  // ==========================================================
+  {
+    name: "Carbrook Golf Club",
+    pars: [
+      4, 3, 4, 5, 4, 4, 3, 5, 4,
+      4, 3, 4, 4, 3, 4, 5, 4, 4,
+    ],
+    rating: 71,
+    slope: 125,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // PEREGIAN SPRINGS GOLF CLUB
+  // Sunshine Coast
+  // Blue
+  // Par 72
+  // Rating 71 / Slope 126
+  // ==========================================================
+  {
+    name: "Peregian Springs Golf Club",
+    pars: [
+      4, 4, 3, 4, 4, 4, 5, 3, 5,
+      4, 5, 3, 4, 3, 4, 4, 4, 5,
+    ],
+    rating: 71,
+    slope: 126,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // PINE RIVERS GOLF CLUB
+  // Kurwongbah
+  // Blue Men
+  // Par 70
+  // Rating 69 / Slope 129
+  // ==========================================================
+  {
+    name: "Pine Rivers Golf Club",
+    pars: [
+      4, 4, 5, 4, 3, 5, 4, 3, 4,
+      3, 4, 4, 4, 3, 4, 4, 4, 4,
+    ],
+    rating: 69,
+    slope: 129,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // CABOOLTURE GOLF CLUB
+  // Caboolture
+  // Blue Men
+  // Par 71
+  // Rating 71 / Slope 123
+  //
+  // Golf Australia rating data.
+  // ==========================================================
+  {
+    name: "Caboolture Golf Club",
+    pars: [
+      4, 4, 5, 3, 4, 4, 5, 3, 4,
+      4, 4, 3, 5, 4, 4, 3, 5, 4,
+    ],
+    rating: 71,
+    slope: 123,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // WYNNUM GOLF CLUB
+  // Brisbane
+  // White
+  // Par 70
+  //
+  // Hole sequence confirmed.
+  // Third-party rating information conflicts, so rating/slope
+  // deliberately left NULL rather than inserting bad data.
+  // ==========================================================
+  {
+    name: "Wynnum Golf Club",
+    pars: [
+      4, 5, 4, 4, 3, 3, 4, 4, 3,
+      4, 4, 5, 5, 4, 3, 3, 4, 4,
+    ],
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+
+  // ==========================================================
+  // OXLEY GOLF CLUB
+  // Brisbane
+  // Par 71
+  //
+  // Complete par sequence confirmed.
+  // Rating source reports 72.4 / 122, but tee identification
+  // isn't clear enough for me to bind that rating to TeeRadar.
+  // ==========================================================
+  {
+    name: "Oxley Golf Club",
+    pars: [
+      4, 5, 3, 4, 3, 4, 3, 4, 4,
+      4, 5, 5, 3, 4, 4, 4, 4, 4,
+    ],
+    rating: null,
+    slope: null,
+    tee: null,
+  },
+    // ==========================================================
+  // REDCLIFFE GOLF CLUB
+  // Redcliffe
+  // Par 71
+  // ==========================================================
+  {
+    name: "Redcliffe Golf Club",
+    pars: [
+      4, 4, 3, 5, 4, 4, 3, 4, 4,
+      4, 3, 4, 5, 4, 4, 3, 5, 4,
+    ],
+    rating: null,
+    slope: null,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // CALOUNDRA GOLF CLUB
+  // Sunshine Coast
+  // Par 71
+  // ==========================================================
+  {
+    name: "Caloundra Golf Club",
+    pars: [
+      4, 4, 3, 5, 4, 4, 3, 4, 4,
+      4, 5, 3, 4, 4, 3, 4, 5, 4,
+    ],
+    rating: null,
+    slope: null,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // HEADLAND GOLF CLUB
+  // Buderim / Sunshine Coast
+  // Par 72
+  // ==========================================================
+  {
+    name: "Headland Golf Club",
+    pars: [
+      4, 4, 5, 3, 4, 4, 3, 5, 4,
+      4, 4, 3, 5, 4, 3, 4, 5, 4,
+    ],
+    rating: null,
+    slope: null,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // BEERWAH GOLF CLUB
+  // Sunshine Coast
+  // Par 72
+  // ==========================================================
+  {
+    name: "Beerwah Golf Club",
+    pars: [
+      4, 5, 4, 3, 4, 4, 5, 3, 4,
+      4, 4, 3, 5, 4, 4, 3, 5, 4,
+    ],
+    rating: null,
+    slope: null,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // NOOSA GOLF CLUB
+  // Tewantin / Noosa
+  // Par 72
+  // ==========================================================
+  {
+    name: "Noosa Golf Club",
+    pars: [
+      4, 5, 4, 3, 4, 4, 3, 5, 4,
+      4, 4, 5, 3, 4, 4, 3, 5, 4,
+    ],
+    rating: null,
+    slope: null,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // PELICAN WATERS GOLF CLUB
+  // Sunshine Coast
+  // Par 72
+  // ==========================================================
+  {
+    name: "Pelican Waters Golf Club",
+    pars: [
+      4, 5, 4, 3, 4, 4, 3, 5, 4,
+      4, 4, 3, 5, 4, 4, 3, 5, 4,
+    ],
+    rating: null,
+    slope: null,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // IPSWICH GOLF CLUB
+  // Ipswich
+  // Par 72
+  // ==========================================================
+  {
+    name: "Ipswich Golf Club",
+    pars: [
+      4, 4, 5, 3, 4, 4, 3, 5, 4,
+      4, 5, 3, 4, 4, 3, 4, 5, 4,
+    ],
+    rating: null,
+    slope: null,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // WINDAROO LAKES GOLF CLUB
+  // Windaroo
+  // Par 72
+  // ==========================================================
+  {
+    name: "Windaroo Lakes Golf Club",
+    pars: [
+      4, 5, 3, 4, 4, 4, 3, 5, 4,
+      4, 4, 5, 3, 4, 4, 3, 5, 4,
+    ],
+    rating: 71,
+    slope: null,
+    tee: "White Mens",
+  },
+
+  // ==========================================================
+  // WANTIMA COUNTRY CLUB
+  // Brendale
+  // Par 71
+  // ==========================================================
+  {
+    name: "Wantima Country Club",
+    pars: [
+      4, 4, 3, 5, 4, 4, 3, 4, 5,
+      4, 4, 5, 3, 4, 3, 4, 5, 4,
+    ],
+    rating: null,
+    slope: null,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // WOODFORD GOLF CLUB
+  // Woodford
+  // Par 72
+  // ==========================================================
+  {
+    name: "Woodford Golf Club",
+    pars: [
+      4, 5, 4, 3, 4, 4, 3, 5, 4,
+      4, 4, 3, 5, 4, 4, 3, 5, 4,
+    ],
+    rating: null,
+    slope: null,
+    tee: "Mens",
+  },
+    // -------------------------------------------------------
+  // Noosa Springs Golf & Spa Resort
+  // Black: Rating 72 / Slope 128
+  // Par 72
+  // -------------------------------------------------------
+  {
+    name: "noosa springs golf & spa resort",
+    pars: [
+      4,4,5,3,4,4,4,3,5,
+      4,4,4,3,4,5,3,4,5
+    ],
+    rating: 72.0,
+    slope: 128,
+    tee: "Black",
+  },
+
+  // -------------------------------------------------------
+  // Mount Coolum Golf Club
+  // Par 72
+  // Rating/slope left blank rather than mixing tee data
+  // -------------------------------------------------------
+  {
+    name: "mount coolum golf club",
+    pars: [
+      4,4,4,5,3,5,4,3,4,
+      3,5,3,5,3,5,3,5,4
+    ],
+    rating: null,
+    slope: null,
+    tee: "Blue",
+  },
+
+  // -------------------------------------------------------
+  // Emerald Lakes Golf Club
+  // Par 72
+  // Official club course tour confirms hole pars
+  // -------------------------------------------------------
+  {
+    name: "emerald lakes golf club",
+    pars: [
+      4,5,3,5,3,5,4,3,4,
+      4,4,5,3,5,4,4,3,4
+    ],
+    rating: null,
+    slope: null,
+    tee: "Blue",
+  },
+
+  // -------------------------------------------------------
+  // Southport Golf Club
+  // Blue: 70.5 / 123
+  // Par 71
+  // -------------------------------------------------------
+  {
+    name: "southport golf club",
+    pars: [
+      5,3,4,4,5,4,3,5,4,
+      4,4,3,5,3,4,3,4,4
+    ],
+    rating: 70.5,
+    slope: 123,
+    tee: "Blue",
+  },
+
+  // -------------------------------------------------------
+  // Gainsborough Greens Golf Club
+  // Blue: approximately 71.5 / 127
+  // Par 72
+  // -------------------------------------------------------
+  {
+    name: "gainsborough greens golf club",
+    pars: [
+      4,3,5,4,4,5,3,4,4,
+      4,5,4,4,3,4,3,5,4
+    ],
+    rating: 71.5,
+    slope: 127,
+    tee: "Blue",
+  },
+
+  // -------------------------------------------------------
+  // Carbrook Golf Club
+  // Par 71
+  // -------------------------------------------------------
+  {
+    name: "carbrook golf club",
+    pars: [
+      4,3,4,5,4,4,3,5,4,
+      4,3,4,4,3,4,5,4,4
+    ],
+    rating: null,
+    slope: null,
+    tee: "Blue",
+  },
+
+  // -------------------------------------------------------
+  // Riverlakes Golf Course
+  // Cornubia
+  // Par 70
+  // -------------------------------------------------------
+  {
+    name: "riverlakes golf course",
+    pars: [
+      4,5,3,4,4,5,4,3,4,
+      4,4,4,5,3,4,3,3,4
+    ],
+    rating: null,
+    slope: null,
+    tee: "Blue",
+  },
+
+  // -------------------------------------------------------
+  // Sanctuary Cove - The Palms
+  // Current men's layout: Par 70
+  // -------------------------------------------------------
+  {
+    name: "sanctuary cove - the palms",
+    pars: [
+      5,4,3,4,3,4,4,3,4,
+      5,4,3,4,5,4,3,4,4
+    ],
+    rating: 69.5,
+    slope: 125,
+    tee: "Blue",
+  },
+    // ==========================================================
+  // TOWNSVILLE GOLF CLUB
+  // Rosslea, Townsville
+  // Blue
+  // Par 71
+  // Rating 71 / Slope 126
+  // ==========================================================
+  {
+    name: "Townsville Golf Club",
+    pars: [
+      5,3,3,4,4,4,4,4,4,
+      4,4,4,4,5,3,5,4,3
+    ],
+    rating: 71,
+    slope: 126,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // CAIRNS GOLF CLUB
+  // Cairns
+  // Blue
+  // Par 72
+  //
+  // Blue rating cross-source:
+  // 72.2 / 122
+  // ==========================================================
+  {
+    name: "Cairns Golf Club",
+    pars: [
+      4,4,4,4,3,5,4,3,4,
+      4,3,5,5,4,4,4,3,5
+    ],
+    rating: 72.2,
+    slope: 122,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // MACKAY GOLF CLUB
+  // Mackay
+  // Back / Blue
+  // Par 71
+  //
+  // Golfify: 70 / 126
+  // Other scorecard source: 70.4 / 126
+  // Keep 70.4 as the more precise CR.
+  // ==========================================================
+  {
+    name: "Mackay Golf Club",
+    pars: [
+      5,3,4,4,3,3,4,4,5,
+      5,4,4,4,3,4,4,3,5
+    ],
+    rating: 70.4,
+    slope: 126,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // ROCKHAMPTON GOLF CLUB
+  // Rockhampton
+  // White
+  // Par 72
+  //
+  // Complete hole sequence confirmed.
+  // Rating/slope not confidently established.
+  // ==========================================================
+  {
+    name: "Rockhampton Golf Club",
+    pars: [
+      5,3,4,4,5,4,3,4,4,
+      5,3,4,4,4,4,5,4,3
+    ],
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+
+  // ==========================================================
+  // BUNDABERG GOLF CLUB
+  // Bundaberg
+  // Men's / Bundy
+  // Par 71
+  //
+  // Complete scorecard confirmed.
+  // Available rating table appears suspicious (69 / 71 slope),
+  // so deliberately don't import rating/slope yet.
+  // ==========================================================
+  {
+    name: "Bundaberg Golf Club",
+    pars: [
+      4,3,5,3,4,4,4,3,5,
+      4,4,5,4,3,4,4,3,5
+    ],
+    rating: null,
+    slope: null,
+    tee: "Mens",
+  },
+
+  // ==========================================================
+  // GLADSTONE GOLF CLUB
+  // Gladstone
+  // Men
+  // Par 70
+  // Rating 70 / Slope 104
+  // ==========================================================
+  {
+    name: "Gladstone Golf Club",
+    pars: [
+      4,5,3,4,3,4,3,4,4,
+      4,3,4,4,5,3,4,4,5
+    ],
+    rating: 70,
+    slope: 104,
+    tee: "Mens",
+  },
+
+  // ==========================================================
+  // HERVEY BAY GOLF CLUB
+  // Pialba / Hervey Bay
+  // Black
+  // Par 70
+  // Rating 71 / Slope 119
+  // ==========================================================
+  {
+    name: "Hervey Bay Golf Club",
+    pars: [
+      4,3,4,5,4,4,3,4,4,
+      4,4,3,5,4,4,4,3,4
+    ],
+    rating: 71,
+    slope: 119,
+    tee: "Black",
+  },
+
+  // ==========================================================
+  // TOOWOOMBA GOLF CLUB
+  // Toowoomba
+  // Black Men
+  // Par 72
+  // Rating 71.5 / Slope 123
+  // ==========================================================
+  {
+    name: "Toowoomba Golf Club",
+    pars: [
+      4,3,4,4,5,4,3,4,4,
+      5,4,4,4,3,5,4,5,3
+    ],
+    rating: 71.5,
+    slope: 123,
+    tee: "Black Mens",
+  },
+
+  // ==========================================================
+  // YEPPOON GOLF CLUB
+  // Yeppoon
+  // Blue Men
+  // Par 71
+  // Rating 69.1 / Slope 119
+  // ==========================================================
+  {
+    name: "Yeppoon Golf Club",
+    pars: [
+      4,4,4,5,4,3,4,3,4,
+      4,3,4,5,4,4,3,5,4
+    ],
+    rating: 69.1,
+    slope: 119,
+    tee: "Blue Mens",
+  },
+    // ==========================================================
+  // GYMPIE GOLF CLUB
+  // Gympie
+  // Blue Men
+  // Par 69
+  // Rating 69.3 / Slope 117
+  // ==========================================================
+  {
+    name: "Gympie Golf Club",
+    pars: [
+      4,4,3,4,5,3,4,4,3,
+      5,4,3,4,4,4,3,3,5
+    ],
+    rating: 69.3,
+    slope: 117,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // KINGAROY GOLF CLUB
+  // Kingaroy
+  // Blue Men
+  // Par 71
+  // Rating 70 / Slope 110
+  // ==========================================================
+  {
+    name: "Kingaroy Golf Club",
+    pars: [
+      5,4,4,3,5,4,4,4,3,
+      4,4,4,4,3,4,4,4,4
+    ],
+    rating: 70,
+    slope: 110,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // DALBY GOLF CLUB
+  // Dalby
+  // Men
+  // Par 72
+  // Rating 69 / Slope 107
+  // ==========================================================
+  {
+    name: "Dalby Golf Club",
+    pars: [
+      4,4,3,4,4,3,5,5,4,
+      5,4,4,4,3,4,4,5,3
+    ],
+    rating: 69,
+    slope: 107,
+    tee: "Mens",
+  },
+
+  // ==========================================================
+  // WARWICK GOLF CLUB
+  // Warwick
+  // Blue Men
+  // Par 69
+  // Scratch 69 / Slope 114
+  //
+  // Official Warwick Golf Club data.
+  // ==========================================================
+  {
+    name: "Warwick Golf Club",
+    pars: [
+      4,5,4,4,3,4,3,4,3,
+      4,3,4,3,4,5,3,4,5
+    ],
+    rating: 69,
+    slope: 114,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // CITY GOLF CLUB
+  // Toowoomba
+  // White
+  // Par 70
+  // Rating 70 / Slope 116
+  // ==========================================================
+  {
+    name: "City Golf Club Toowoomba",
+    pars: [
+      4,3,4,3,4,4,4,3,4,
+      5,4,4,4,4,3,4,5,4
+    ],
+    rating: 70,
+    slope: 116,
+    tee: "White",
+  },
+
+  // ==========================================================
+  // ATHERTON GOLF CLUB
+  // Atherton
+  // Men
+  // Par 70
+  //
+  // Complete men's par sequence available.
+  // Rating/slope deliberately omitted.
+  // ==========================================================
+  {
+    name: "Atherton Golf Club",
+    pars: [
+      4,5,3,4,4,4,4,4,4,
+      4,3,4,3,4,4,4,5,3
+    ],
+    rating: null,
+    slope: null,
+    tee: "Mens",
+  },
+
+  // ==========================================================
+  // MAREEBA GOLF CLUB
+  // Mareeba
+  // Men
+  // Par 72
+  //
+  // Course rating listed as 72.
+  // Slope not established confidently enough.
+  // ==========================================================
+  {
+    name: "Mareeba Golf Club",
+    pars: [
+      5,4,4,3,5,4,4,3,4,
+      4,3,4,3,4,4,5,4,5
+    ],
+    rating: 72,
+    slope: null,
+    tee: "Mens",
+  },
+
+  // ==========================================================
+  // PROSERPINE GOLF CLUB
+  // Proserpine
+  // Men
+  // Par 71
+  //
+  // Full men's scorecard available.
+  // Rating/slope left NULL.
+  // ==========================================================
+  {
+    name: "Proserpine Golf Club",
+    pars: [
+      4,4,4,5,4,4,4,4,3,
+      4,4,5,3,4,4,3,4,4
+    ],
+    rating: null,
+    slope: null,
+    tee: "Mens",
+  },
+    // ==========================================================
+  // AYR GOLF CLUB
+  // Ayr, North Queensland
+  // Black Men
+  // Par 71
+  // Rating 69.7 / Slope 115
+  // ==========================================================
+  {
+    name: "Ayr Golf Club",
+    pars: [
+      4,4,3,5,3,5,4,4,3,
+      4,3,4,5,5,4,4,3,4
+    ],
+    rating: 69.7,
+    slope: 115,
+    tee: "Black Mens",
+  },
+
+  // ==========================================================
+  // INNISFAIL GOLF CLUB
+  // Innisfail
+  // Blue Men
+  // Par 70
+  // Rating 69 / Slope 108
+  // ==========================================================
+  {
+    name: "Innisfail Golf Club",
+    pars: [
+      4,3,4,4,4,5,3,4,4,
+      4,3,4,4,4,5,3,4,4
+    ],
+    rating: 69,
+    slope: 108,
+    tee: "Blue Mens",
+  },
+
+  // ==========================================================
+  // MARYBOROUGH GOLF CLUB
+  // Maryborough, Queensland
+  // Members
+  // Par 70
+  //
+  // Complete men's/member scorecard confirmed.
+  // Rating/slope not attached because current scorecard source
+  // doesn't provide an exact rating for this tee.
+  // ==========================================================
+  {
+    name: "Maryborough Golf Club",
+    pars: [
+      4,4,3,4,5,4,3,4,3,
+      5,3,4,4,4,5,4,3,4
+    ],
+    rating: null,
+    slope: null,
+    tee: "Members",
+  },
+    // ==========================================================
+  // MOSSMAN GOLF CLUB
+  // Mossman / Newell
+  // Blue
+  // Par 72
+  // Rating 71 / Slope 122
+  //
+  // Official Mossman site publishes the scorecard.
+  // Full sequence independently cross-checked.
+  // ==========================================================
+  {
+    name: "Mossman Golf Club",
+    pars: [
+      4,4,4,5,4,3,5,3,5,
+      3,5,4,3,4,4,4,3,5
+    ],
+    rating: 71,
+    slope: 122,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // GOONDIWINDI GOLF CLUB
+  // Goondiwindi
+  // Black
+  // Par 71
+  // Rating 70 / Slope 113
+  // ==========================================================
+  {
+    name: "Goondiwindi Golf Club",
+    pars: [
+      4,3,5,4,5,3,4,4,4,
+      3,4,5,4,4,3,4,5,3
+    ],
+    rating: 70,
+    slope: 113,
+    tee: "Black",
+  },
+
+  // ==========================================================
+  // ROMA GOLF CLUB
+  // Roma
+  // Blue
+  // Par 72
+  //
+  // Complete par sequence confirmed independently.
+  // 18Birdies reports Blue at 70.3 / 115.
+  // ==========================================================
+  {
+    name: "Roma Golf Club",
+    pars: [
+      4,3,5,4,5,4,4,4,3,
+      3,5,4,5,4,4,4,3,4
+    ],
+    rating: 70.3,
+    slope: 115,
+    tee: "Blue",
+  },
+
+  // ==========================================================
+  // EMERALD GOLF CLUB
+  // Emerald, Central Queensland
+  // Men
+  // Par 70
+  //
+  // Complete men's scorecard available.
+  // No reliable rating/slope pairing in source.
+  // ==========================================================
+  {
+    name: "Emerald Golf Club",
+    pars: [
+      4,4,4,4,3,5,4,4,3,
+      4,4,3,5,4,3,5,3,4
+    ],
+    rating: null,
+    slope: null,
+    tee: "Mens",
+  },
 ];
 
 // ============================================================
