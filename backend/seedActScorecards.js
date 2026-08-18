@@ -177,18 +177,261 @@ const STANDARD_COURSES = [
     slope: null,
     tee: "Men",
   },
+    // -------------------------------------------------------
+  // CAPITAL PUBLIC GOLF COURSE
+  //
+  // Blue / Men
+  // Par 69
+  // Rating: 68
+  // Slope: 121
+  // -------------------------------------------------------
+  {
+    name: "capital public golf course",
 
+    pars: [
+      5,4,3,5,4,4,3,4,3,
+      5,3,4,4,3,4,4,4,3
+    ],
+
+    rating: 68.0,
+    slope: 121,
+    tee: "Blue",
+  },
+    // =======================================================
+  // ACT BATCH 3
+  // =======================================================
+
+
+  // -------------------------------------------------------
+  // BURNS GOLF CLUB BELCONNEN
+  // Formerly / also known as Magpies Belconnen Golf Club
+  //
+  // Blue / Men
+  // Par 72
+  //
+  // Rating: 72
+  // Slope: 129
+  //
+  // Front 9: 37
+  // Back 9:  35
+  // -------------------------------------------------------
+  {
+    name: "burns golf club belconnen",
+
+    pars: [
+      // FRONT 9 — PAR 37
+      5,4,3,4,3,4,4,5,5,
+
+      // BACK 9 — PAR 35
+      4,4,4,4,3,4,4,5,3
+    ],
+
+    rating: 72.0,
+    slope: 129,
+    tee: "Blue",
+  },
+    // =======================================================
+  // ACT BATCH 4
+  // =======================================================
+
+
+  // -------------------------------------------------------
+  // ROYAL MILITARY COLLEGE GOLF CLUB
+  // RMC / DUNTROON
+  //
+  // Physical course: 9 holes with alternate back-nine tees
+  //
+  // Men's Blue
+  // 18-hole playing layout
+  //
+  // Par: 68
+  // AMCR: 68
+  // Length: 5,364m
+  //
+  // Front 9: Par 34
+  // Back 9:  Par 34
+  // -------------------------------------------------------
+  {
+    name: "royal military college golf club",
+
+    pars: [
+      // FRONT 9 — PAR 34
+      4,3,4,5,3,4,3,4,4,
+
+      // BACK 9 — PAR 34
+      4,3,4,5,3,4,3,4,4
+    ],
+
+    rating: 68.0,
+    slope: null,
+    tee: "Blue",
+  },
+  
 ];
+
+
+  
+  // =========================================================
+// ACT BATCH 2
+// SPECIAL / MULTI-NINE COURSES
+// =========================================================
+
+
+// =========================================================
+// ROYAL CANBERRA GOLF CLUB
+//
+// 27-hole facility:
+//
+// Holes 1-9
+// Holes 10-18
+// Holes 19-27
+//
+// Official Blue combinations:
+//
+// Westbourne   = holes 1-18
+// Par 72 / Scratch 73 / Slope 140
+//
+// Yarralumla   = holes 10-27
+// Par 72 / Scratch 72 / Slope 128
+//
+// Brindabella  = holes 19-27 + 1-9
+// Par 72 / Scratch 74 / Slope 129
+// =========================================================
+
+const ROYAL_CANBERRA_1_9 = [
+  5,4,3,4,4,5,4,3,4
+];
+
+const ROYAL_CANBERRA_10_18 = [
+  4,4,4,3,4,5,4,3,5
+];
+
+const ROYAL_CANBERRA_19_27 = [
+  4,3,4,4,4,5,4,3,5
+];
+
+
+const SPECIAL_COURSES = [
+
+  // -------------------------------------------------------
+  // ROYAL CANBERRA — WESTBOURNE
+  // Holes 1-18
+  // -------------------------------------------------------
+  {
+    name: "royal canberra - westbourne 18",
+    holes: 18,
+
+    pars: [
+      ...ROYAL_CANBERRA_1_9,
+      ...ROYAL_CANBERRA_10_18
+    ],
+
+    rating: 73.0,
+    slope: 140,
+    tee: "Blue",
+  },
+
+
+  // -------------------------------------------------------
+  // ROYAL CANBERRA — YARRALUMLA
+  // Holes 10-27
+  // -------------------------------------------------------
+  {
+    name: "royal canberra - yarralumla 18",
+    holes: 18,
+
+    pars: [
+      ...ROYAL_CANBERRA_10_18,
+      ...ROYAL_CANBERRA_19_27
+    ],
+
+    rating: 72.0,
+    slope: 128,
+    tee: "Blue",
+  },
+
+
+  // -------------------------------------------------------
+  // ROYAL CANBERRA — BRINDABELLA
+  // Holes 19-27 followed by 1-9
+  // -------------------------------------------------------
+  {
+    name: "royal canberra - brindabella 18",
+    holes: 18,
+
+    pars: [
+      ...ROYAL_CANBERRA_19_27,
+      ...ROYAL_CANBERRA_1_9
+    ],
+
+    rating: 74.0,
+    slope: 129,
+    tee: "Blue",
+  },
+
+
+  // -------------------------------------------------------
+  // ROYAL CANBERRA — 1-9
+  // -------------------------------------------------------
+  {
+    name: "royal canberra - holes 1-9",
+    holes: 9,
+
+    pars: [
+      ...ROYAL_CANBERRA_1_9
+    ],
+
+    rating: null,
+    slope: null,
+    tee: "Blue",
+  },
+
+
+  // -------------------------------------------------------
+  // ROYAL CANBERRA — 10-18
+  // -------------------------------------------------------
+  { 
+    name: "royal canberra - holes 10-18",
+    holes: 9,
+
+    pars: [
+      ...ROYAL_CANBERRA_10_18
+    ],
+
+    rating: null,
+    slope: null,
+    tee: "Blue",
+  },
+
+
+  // -------------------------------------------------------
+  // ROYAL CANBERRA — 19-27
+  // -------------------------------------------------------
+  {
+    name: "royal canberra - holes 19-27",
+    holes: 9,
+
+    pars: [
+      ...ROYAL_CANBERRA_19_27
+    ],
+
+    rating: null,
+    slope: null,
+    tee: "Blue",
+  },
+  
+
 
 
 // =========================================================
 // BUILD IMPORT LIST
 // =========================================================
-
 const COURSE_ROWS = [
   ...STANDARD_COURSES.flatMap(
     makeStandardCourse
   ),
+
+  ...SPECIAL_COURSES,
 ];
 
 
