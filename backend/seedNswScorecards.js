@@ -914,31 +914,6 @@ const STANDARD_COURSES = [
 
 
   // -------------------------------------------------------
-  // NELSON BAY GOLF CLUB - BRUSH BOX
-  //
-  // White
-  // Rating: 72
-  // Slope: 134
-  // Par 72
-  //
-  // Nelson Bay has multiple 9-hole loops, so this particular
-  // card should be retained as the named Brush Box routing.
-  // -------------------------------------------------------
-  {
-    name: "nelson bay golf club - brush box",
-
-    pars: [
-      4,3,4,5,4,4,3,4,5,
-      4,4,5,4,3,4,5,3,4
-    ],
-
-    rating: 72.0,
-    slope: 134,
-    tee: "White",
-  },
-
-
-  // -------------------------------------------------------
   // PORT KEMBLA GOLF CLUB
   // Primbee / Wollongong
   //
@@ -1450,6 +1425,137 @@ const STANDARD_COURSES = [
   },
 ];
 
+// =========================================================
+// NELSON BAY GOLF CLUB
+//
+// 27-hole course with three separate 9-hole loops:
+//
+// Christmas Bush
+// Brush Box
+// Gymea Lily
+//
+// Do NOT run these through makeStandardCourse().
+// =========================================================
+
+const NELSON_BAY = [
+
+  // -------------------------------------------------------
+  // Christmas Bush
+  // Par 36
+  // -------------------------------------------------------
+  {
+    name: "nelson bay golf club - christmas bush",
+    holes: 9,
+
+    pars: [
+      4,3,5,4,3,4,4,4,5
+    ],
+
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+
+
+  // -------------------------------------------------------
+  // Brush Box
+  // Par 36
+  // -------------------------------------------------------
+  {
+    name: "nelson bay golf club - brush box",
+    holes: 9,
+
+    pars: [
+      4,3,4,5,4,4,3,4,5
+    ],
+
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+
+
+  // -------------------------------------------------------
+  // Gymea Lily
+  // Par 36
+  // -------------------------------------------------------
+  {
+    name: "nelson bay golf club - gymea lily",
+    holes: 9,
+
+    pars: [
+      4,4,5,4,3,4,5,3,4
+    ],
+
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+
+
+  // -------------------------------------------------------
+  // Christmas Bush / Brush Box
+  // -------------------------------------------------------
+  {
+    name: "nelson bay golf club - christmas bush/brush box",
+    holes: 18,
+
+    pars: [
+      // Christmas Bush
+      4,3,5,4,3,4,4,4,5,
+
+      // Brush Box
+      4,3,4,5,4,4,3,4,5
+    ],
+
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+
+
+  // -------------------------------------------------------
+  // Brush Box / Gymea Lily
+  // White: 72 / 134
+  // -------------------------------------------------------
+  {
+    name: "nelson bay golf club - brush box/gymea lily",
+    holes: 18,
+
+    pars: [
+      // Brush Box
+      4,3,4,5,4,4,3,4,5,
+
+      // Gymea Lily
+      4,4,5,4,3,4,5,3,4
+    ],
+
+    rating: 72.0,
+    slope: 134,
+    tee: "White",
+  },
+
+
+  // -------------------------------------------------------
+  // Gymea Lily / Christmas Bush
+  // -------------------------------------------------------
+  {
+    name: "nelson bay golf club - gymea lily/christmas bush",
+    holes: 18,
+
+    pars: [
+      // Gymea Lily
+      4,4,5,4,3,4,5,3,4,
+
+      // Christmas Bush
+      4,3,5,4,3,4,4,4,5
+    ],
+
+    rating: null,
+    slope: null,
+    tee: "White",
+  },
+];
 
 // =========================================================
 // BUILD NSW IMPORT LIST
@@ -1459,6 +1565,8 @@ const COURSE_ROWS = [
   ...STANDARD_COURSES.flatMap(
     makeStandardCourse
   ),
+
+  ...NELSON_BAY,
 ];
 
 
