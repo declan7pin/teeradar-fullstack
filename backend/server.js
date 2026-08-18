@@ -23,6 +23,7 @@ import bookingViewsRouter from "./bookingViews.js";
 import bookingAnalyticsRouter from "./bookingAnalyticsRoutes.js";
 import { ensureBookingAddonsSchema } from "./bookingMigrate.js";
 import { ensureScorecardCoursesSchema } from "./scorecardCourseMigrate.js"; // ✅ ADD
+import { seedWaScorecards } from "./seedWaScorecards.js";
 import analyticsRouter, { backfillAnalyticsDailySummaryOnce } from "./analyticsRoutes.js";
 import { scrapeCourse } from "./scrapers/scrapeCourse.js";
 import groupVotesRouter from "./groupVotesRoutes.js";
@@ -943,8 +944,24 @@ async function ensureBookingTimesRoutingSchema() {
 ensureBookingTimesRoutingSchema();
 
 ensureScorecardCoursesSchema(db)
-  .then(() => console.log("✅ scorecard course schema ready"))
-  .catch((err) => console.error("❌ error ensuring scorecard course schema:", err));
+  .then(async () => {
+    console.log("✅ scorecard course schema ready");
+
+    try {
+      await seedWaScorecards();
+    } catch (err) {
+      console.error(
+        "❌ WA scorecard seed failed:",
+        err
+      );
+    }
+  })
+  .catch((err) =>
+    console.error(
+      "❌ error ensuring scorecard course schema:",
+      err
+    )
+  );
 ensureBookingAddonsSchema(db)
   .then(() => console.log("✅ booking add-ons schema ready"))
   .catch((err) => console.error("❌ error ensuring booking add-ons schema:", err));
