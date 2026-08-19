@@ -1349,8 +1349,35 @@ html.app-mode .app-bottom-nav {
 }
 
 .app-bottom-link-icon {
+  position: relative;
   font-size: 21px;
   line-height: 1;
+}
+
+.app-friends-request-badge {
+  position: absolute;
+  top: -9px;
+  right: -13px;
+
+  display: none;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+
+  background: #dc2626;
+  color: #ffffff;
+
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+
+  box-shadow: 0 2px 6px rgba(0,0,0,0.18);
 }
 
 .app-bottom-link.active {
@@ -1725,13 +1752,20 @@ html.app-mode .group-vote-modal-header {
     <span>Play</span>
   </a>
 
-  <a
-    class="app-bottom-link"
-    href="/friends.html"
-  >
-    <span class="app-bottom-link-icon">👥</span>
-    <span>Friends</span>
-  </a>
+    <a
+  class="app-bottom-link"
+  href="/friends.html"
+>
+  <span class="app-bottom-link-icon">
+    👥
+    <span
+      id="appFriendsRequestBadge"
+      class="app-friends-request-badge"
+      aria-label="Pending friend requests"
+    ></span>
+  </span>
+  <span>Friends</span>
+</a>
 
   <a
     class="app-bottom-link"
@@ -1764,6 +1798,56 @@ const BOOK_AUTH_TOKEN =
     localStorage.getItem("token") ||
     ""
   ).trim();
+
+    async function loadBookFriendRequestBadge() {
+  const badge = document.getElementById("appFriendsRequestBadge");
+  if (!badge) return;
+
+  if (!BOOK_AUTH_TOKEN) {
+    badge.style.display = "none";
+    badge.textContent = "";
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/friends/requests`, {
+      headers: {
+        Authorization: `Bearer ${BOOK_AUTH_TOKEN}`,
+      },
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      badge.style.display = "none";
+      badge.textContent = "";
+      return;
+    }
+
+    const data = await res.json();
+
+    const requests = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.requests)
+      ? data.requests
+      : Array.isArray(data?.incoming)
+      ? data.incoming
+      : [];
+
+    const count = requests.length;
+
+    if (count > 0) {
+      badge.textContent = count > 99 ? "99+" : String(count);
+      badge.style.display = "flex";
+    } else {
+      badge.textContent = "";
+      badge.style.display = "none";
+    }
+  } catch (err) {
+    console.warn("Friend request badge failed:", err);
+    badge.style.display = "none";
+    badge.textContent = "";
+  }
+}
 
 /*
  * TeeRadar search is account-only.
@@ -2468,9 +2552,13 @@ function slugifyCourseName(name) {
 
     init();
 
-        async function init() {
+       async function init() {
   initMap();
-  await loadCourses();
+
+  await Promise.all([
+    loadCourses(),
+    loadBookFriendRequestBadge()
+  ]);
 
   // ✅ Ensure we pull the stored home state from DB before defaults apply
   await hydrateUserFromServer();
@@ -2500,6 +2588,11 @@ if (
     }
   }, 250);
 }
+
+// Keep the Friends request badge current while Search is open.
+setInterval(() => {
+  loadBookFriendRequestBadge();
+}, 10000);         
 
 // Do not auto-request location on page load.
 // User can tap "Use my current location" when needed.
