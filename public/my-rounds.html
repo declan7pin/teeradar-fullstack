@@ -2026,6 +2026,44 @@ html.app-mode .app-bottom-nav {
   }
 }
 
+/* =========================================================
+   SHARE UPCOMING ROUND — SCROLLABLE FRIEND LIST
+   ========================================================= */
+
+#shareRoundModalBack .modal {
+  display: flex;
+  flex-direction: column;
+
+  /* Keep modal above the app bottom navigation */
+  max-height: calc(100dvh - 150px);
+  overflow: hidden;
+}
+
+#shareFriendsList {
+  flex: 1 1 auto;
+  min-height: 0;
+
+  /* Show roughly 3 friends before scrolling */
+  max-height: 330px;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+
+  padding-right: 4px;
+}
+
+/* Keep buttons visible while friends scroll */
+#shareRoundModalBack .actions {
+  flex-shrink: 0;
+}
+
+#shareRoundModalBack .toast {
+  flex-shrink: 0;
+}
+
 </style>
 </head>
 <body>
