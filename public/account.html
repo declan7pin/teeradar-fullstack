@@ -1093,8 +1093,46 @@ html.app-mode .app-bottom-nav {
 }
 
 .app-bottom-link-icon {
+  position: relative;
+
   font-size: 21px;
   line-height: 1;
+}
+
+/* =========================================================
+   FRIEND REQUEST BADGE
+   ========================================================= */
+
+.app-friends-nav-icon {
+  position: relative;
+}
+
+.app-nav-badge {
+  position: absolute;
+
+  top: -8px;
+  right: -12px;
+
+  min-width: 18px;
+  height: 18px;
+
+  padding: 0 5px;
+
+  display: grid;
+  place-items: center;
+
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+
+  background: #dc2626;
+  color: #ffffff;
+
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1;
+
+  box-shadow:
+    0 3px 8px rgba(220, 38, 38, .28);
 }
 
 .app-bottom-link.active {
@@ -1582,13 +1620,24 @@ html.app-mode #notLoggedIn strong {
     <span>Play</span>
   </a>
 
-  <a
-    class="app-bottom-link"
-    href="/friends.html"
-  >
-    <span class="app-bottom-link-icon">👥</span>
-    <span>Friends</span>
-  </a>
+ <a
+  class="app-bottom-link"
+  href="/friends.html"
+>
+  <span class="app-bottom-link-icon app-friends-nav-icon">
+    👥
+
+    <span
+      class="app-nav-badge"
+      id="appFriendsRequestBadge"
+      style="display:none;"
+    >
+      0
+    </span>
+  </span>
+
+  <span>Friends</span>
+</a>
 
   <a
     class="app-bottom-link active"
@@ -3931,15 +3980,91 @@ if (previousGamesFilter) {
     }
   });
 }
-   // --- boot ---
+  // -------------------------------------------------
+// Friends request bottom-nav badge
+// -------------------------------------------------
+async function loadAccountFriendRequestBadge() {
+  const badge =
+    document.getElementById(
+      "appFriendsRequestBadge"
+    );
+
+  if (!badge) return;
+
+  if (!email || !token) {
+    badge.textContent = "0";
+    badge.style.display = "none";
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/friends/requests`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer " + token
+        }
+      }
+    );
+
+    const data =
+      await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(
+        data?.error ||
+        "friend_requests_failed"
+      );
+    }
+
+    const requests =
+      Array.isArray(data?.requests)
+        ? data.requests
+        : [];
+
+    const count = requests.length;
+
+    if (count <= 0) {
+      badge.textContent = "0";
+      badge.style.display = "none";
+      return;
+    }
+
+    badge.textContent =
+      count > 99
+        ? "99+"
+        : String(count);
+
+    badge.style.display = "grid";
+
+  } catch (error) {
+    console.warn(
+      "Account friend request badge failed:",
+      error
+    );
+
+    badge.style.display = "none";
+  }
+}
+
+
+// --- boot ---
 (async function init() {
   if (!email) return;
+
+  await loadAccountFriendRequestBadge();
+
+  setInterval(() => {
+    loadAccountFriendRequestBadge()
+      .catch(() => {});
+  }, 10000);
 
   // Load saved account details from TeeRadar first
   await hydrateProfileFromServer();
 
   await loadCourses();
-await refreshPlanFromServer();
+  await refreshPlanFromServer();
 
 /*
  * TEMPORARY FREE ACCESS MODE:
