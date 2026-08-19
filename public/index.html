@@ -1991,6 +1991,41 @@ html.app-mode .app-bottom-nav
 .app-bottom-play span:last-child {
   margin-top: -2px;
 }
+    /* =========================================================
+   BOTTOM NAV — FRIEND REQUEST BADGE
+   ========================================================= */
+
+.app-friends-nav-icon {
+  position: relative;
+}
+
+.app-nav-badge {
+  position: absolute;
+
+  top: -7px;
+  right: -10px;
+
+  min-width: 18px;
+  height: 18px;
+
+  padding: 0 5px;
+
+  display: grid;
+  place-items: center;
+
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+
+  background: #dc2626;
+  color: #ffffff;
+
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1;
+
+  box-shadow:
+    0 3px 8px rgba(220,38,38,.28);
+}
 .app-action-card:active,
 .app-search-button:active,
 .app-upcoming-button:active,
@@ -2387,12 +2422,22 @@ html.app-mode .app-bottom-nav
   </a>
 
   <a
-    class="app-bottom-link"
-    href="/friends.html"
-  >
-    <span class="app-bottom-link-icon">👥</span>
-    <span>Friends</span>
-  </a>
+  class="app-bottom-link"
+  href="/friends.html"
+>
+  <span class="app-bottom-link-icon app-friends-nav-icon">
+    👥
+    <span
+      class="app-nav-badge"
+      id="appFriendsRequestBadge"
+      style="display:none;"
+    >
+      0
+    </span>
+  </span>
+
+  <span>Friends</span>
+</a>
 
   <a
     class="app-bottom-link"
@@ -4209,6 +4254,82 @@ async function loadAppUpcomingRound() {
   }
 }
 
+  async function loadHomeFriendRequestBadge() {
+  const badge =
+    document.getElementById(
+      "appFriendsRequestBadge"
+    );
+
+  if (!badge) return;
+
+  const token = (
+    localStorage.getItem("teeradar_jwt") ||
+    localStorage.getItem("teeradar_token") ||
+    localStorage.getItem("token") ||
+    ""
+  ).trim();
+
+  /*
+   * Logged-out users have no pending
+   * friend requests to display.
+   */
+  if (!token) {
+    badge.textContent = "0";
+    badge.style.display = "none";
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/friends/requests`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const data =
+      await response.json().catch(() => ({}));
+
+    if (!response.ok || !data?.ok) {
+      throw new Error(
+        data?.error ||
+        "friend_requests_failed"
+      );
+    }
+
+    const requests =
+      Array.isArray(data.requests)
+        ? data.requests
+        : [];
+
+    const count = requests.length;
+
+    if (count <= 0) {
+      badge.textContent = "0";
+      badge.style.display = "none";
+      return;
+    }
+
+    badge.textContent =
+      count > 99
+        ? "99+"
+        : String(count);
+
+    badge.style.display = "grid";
+
+  } catch (error) {
+    console.warn(
+      "loadHomeFriendRequestBadge failed:",
+      error
+    );
+
+    badge.style.display = "none";
+  }
+}
+
   async function loadHomeFriendLiveRounds() {
   const rail =
     document.getElementById("appFriendsLiveRail");
@@ -4580,6 +4701,7 @@ initNotificationBell();
 
 await loadAppUpcomingRound();
 await loadHomeFriendLiveRounds();
+await loadHomeFriendRequestBadge();
 
 loadNotifications();
 initHomeAlertCard();
@@ -4595,6 +4717,7 @@ setInterval(
  */
 setInterval(() => {
   loadHomeFriendLiveRounds().catch(() => {});
+  loadHomeFriendRequestBadge().catch(() => {});
 }, 10000);
 
 });
