@@ -2027,24 +2027,43 @@ html.app-mode .app-bottom-nav {
 }
 
 /* =========================================================
-   SHARE UPCOMING ROUND — SCROLLABLE FRIEND LIST
+   SHARE UPCOMING ROUND — FIXED APP MODAL
    ========================================================= */
 
+/* Modal background */
+#shareRoundModalBack {
+  box-sizing: border-box;
+  padding:
+    12px
+    12px
+    calc(105px + env(safe-area-inset-bottom, 0px));
+  align-items: flex-end;
+}
+
+/* The white share sheet */
 #shareRoundModalBack .modal {
+  box-sizing: border-box;
+
   display: flex;
   flex-direction: column;
 
-  /* Keep modal above the app bottom navigation */
-  max-height: calc(100dvh - 150px);
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+
+  max-height: calc(
+    100dvh - 145px - env(safe-area-inset-bottom, 0px)
+  );
+
   overflow: hidden;
 }
 
+/* ONLY the friends list scrolls */
 #shareFriendsList {
   flex: 1 1 auto;
   min-height: 0;
 
-  /* Show roughly 3 friends before scrolling */
-  max-height: 330px;
+  max-height: 290px;
 
   overflow-y: auto;
   overflow-x: hidden;
@@ -2053,17 +2072,32 @@ html.app-mode .app-bottom-nav {
   overscroll-behavior: contain;
 
   padding-right: 4px;
+  margin-bottom: 14px;
 }
 
-/* Keep buttons visible while friends scroll */
+/* Force Cancel + Share onto the SAME row */
 #shareRoundModalBack .actions {
-  flex-shrink: 0;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 10px !important;
+
+  flex: 0 0 auto;
+  width: 100%;
+  margin-top: 0;
 }
 
+/* Both buttons fit inside the row */
+#shareRoundModalBack .actions .btn2 {
+  display: block;
+  width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+}
+
+/* Keep status message inside modal */
 #shareRoundModalBack .toast {
-  flex-shrink: 0;
+  flex: 0 0 auto;
 }
-
 </style>
 </head>
 <body>
