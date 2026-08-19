@@ -778,6 +778,79 @@ html.app-mode .app-bottom-nav {
   margin-top: 0;
 }
 
+    /* =========================================================
+   BOTTOM NAV — ACTIVE TAB + FRIEND REQUEST BADGE
+   ========================================================= */
+
+.app-bottom-link {
+  position: relative;
+
+  transition:
+    transform .16s ease,
+    color .16s ease;
+}
+
+/* Active page is slightly larger + highlighted */
+.app-bottom-link.active {
+  color: #00796b;
+  transform: scale(1.08);
+  font-weight: 950;
+}
+
+.app-bottom-link.active .app-bottom-link-icon {
+  font-weight: 950;
+}
+
+/* Highlight active normal tabs */
+.app-bottom-link.active:not(.app-bottom-play)
+.app-bottom-link-icon {
+  display: grid;
+  place-items: center;
+
+  min-width: 38px;
+  height: 38px;
+
+  padding: 0 7px;
+
+  border-radius: 14px;
+
+  background: #e0f2f1;
+  color: #00796b;
+}
+
+/* Friends icon wrapper */
+.app-friends-nav-icon {
+  position: relative;
+}
+
+/* Pending friend request badge */
+.app-nav-badge {
+  position: absolute;
+
+  top: -7px;
+  right: -10px;
+
+  min-width: 18px;
+  height: 18px;
+
+  padding: 0 5px;
+
+  display: grid;
+  place-items: center;
+
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+
+  background: #dc2626;
+  color: #ffffff;
+
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1;
+
+  box-shadow: 0 3px 8px rgba(220,38,38,.28);
+}
+
 /* Tap feedback */
 
 html.app-mode button:active,
@@ -998,12 +1071,23 @@ html.app-mode .app-bottom-link:active{
   </a>
 
   <a
-    class="app-bottom-link active"
-    href="/friends.html"
-  >
-    <span class="app-bottom-link-icon">👥</span>
-    <span>Friends</span>
-  </a>
+  class="app-bottom-link active"
+  href="/friends.html"
+  id="friendsNavLink"
+>
+  <span class="app-bottom-link-icon app-friends-nav-icon">
+    👥
+    <span
+      class="app-nav-badge"
+      id="friendsRequestBadge"
+      style="display:none;"
+    >
+      0
+    </span>
+  </span>
+
+  <span>Friends</span>
+</a>
 
   <a
     class="app-bottom-link"
@@ -1206,6 +1290,86 @@ status.textContent = "Friend request sent.";
         status.textContent = "Could not send request: " + err.message;
       }
     }
+    function updateFriendsRequestBadge(count){
+  const badge =
+    document.getElementById("friendsRequestBadge");
+
+  if (!badge) return;
+
+  const total =
+    Math.max(0, Number(count) || 0);
+
+  if (total <= 0) {
+    badge.style.display = "none";
+    badge.textContent = "0";
+    return;
+  }
+
+  badge.textContent =
+    total > 99
+      ? "99+"
+      : String(total);
+
+  badge.style.display = "grid";
+}
+    function updateActiveBottomNav(){
+  const path =
+    String(window.location.pathname || "")
+      .toLowerCase();
+
+  document
+    .querySelectorAll(".app-bottom-link")
+    .forEach((link) => {
+
+      link.classList.remove("active");
+
+      const href =
+        String(link.getAttribute("href") || "")
+          .toLowerCase();
+
+      const isHome =
+        (
+          path === "/" ||
+          path.endsWith("/index.html")
+        ) &&
+        href.endsWith("/index.html");
+
+      const isSearch =
+        path.includes("/book.html") &&
+        href.includes("/book.html");
+
+      const isPlay =
+        (
+          path.includes("/my-rounds.html") ||
+          path.includes("/scorecard")
+        ) &&
+        href.includes("/my-rounds.html");
+
+      const isFriends =
+        (
+          path.includes("/friends.html") ||
+          path.includes("/friend-profile.html") ||
+          path.includes("/friend-activity.html") ||
+          path.includes("/friend-live-round.html") ||
+          path.includes("/shared-rounds.html")
+        ) &&
+        href.includes("/friends.html");
+
+      const isAccount =
+        path.includes("/account.html") &&
+        href.includes("/account.html");
+
+      if (
+        isHome ||
+        isSearch ||
+        isPlay ||
+        isFriends ||
+        isAccount
+      ) {
+        link.classList.add("active");
+      }
+    });
+}
 
     async function loadRequests(){
       const el = document.getElementById("requestsList");
@@ -1213,6 +1377,7 @@ status.textContent = "Friend request sent.";
       try {
         const data = await apiFetch("/api/friends/requests");
         const requests = data.requests || [];
+        updateFriendsRequestBadge(requests.length);
 
         if (!requests.length) {
           el.innerHTML = `<div class="empty">No pending friend requests.</div>`;
@@ -1643,6 +1808,7 @@ liveRoundsRefreshTimer = setInterval(() => {
 }, 10000);
     }
 
+    updateActiveBottomNav();
     init();
   </script>
 </body>
