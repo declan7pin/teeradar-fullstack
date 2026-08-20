@@ -480,6 +480,20 @@ nav a:hover{
       text-align:left;
       font-weight:800;
     }
+    #approvedCoursesTable th[data-approved-sort]{
+  cursor:pointer;
+  user-select:none;
+  transition:background .15s ease;
+}
+
+#approvedCoursesTable th[data-approved-sort]:hover{
+  background:#f1f5f9;
+}
+
+#approvedCoursesTable th[data-approved-sort].active-sort{
+  color:var(--teal);
+  font-weight:800;
+}
   </style>
 </head>
 
@@ -1105,19 +1119,20 @@ nav a:hover{
     <div style="overflow-x:auto;margin-top:8px;">
       <table id="approvedCoursesTable" class="users-table" style="display:none;">
         <thead>
-          <tr>
-            <th>ID</th>
-            <th>Course</th>
-            <th>State</th>
-            <th>Holes</th>
-<th>Rating</th>
-<th>Slope</th>
-<th>Tee</th>
-<th>GPS</th>
-<th>Updated</th>
-<th></th>
-          </tr>
-        </thead>
+  <tr>
+    <th data-approved-sort="id">ID ↕</th>
+    <th data-approved-sort="name">Course ↕</th>
+    <th data-approved-sort="state">State ↕</th>
+    <th data-approved-sort="holes">Holes ↕</th>
+    <th data-approved-sort="rating">Rating ↕</th>
+    <th data-approved-sort="slope">Slope ↕</th>
+    <th data-approved-sort="tee">Tee ↕</th>
+    <th data-approved-sort="gps">GPS ↕</th>
+    <th data-approved-sort="scorecards">Scorecards ↕</th>
+    <th data-approved-sort="updated">Updated ↕</th>
+    <th></th>
+  </tr>
+</thead>
         <tbody id="approvedCoursesTbody"></tbody>
       </table>
     </div>
@@ -2733,6 +2748,11 @@ function wireManualCourseCreate() {
 let APPROVED_COURSES_CACHE = [];
 let ACTIVE_APPROVED_EDIT_ID = null;
 
+let APPROVED_COURSE_SORT = {
+  key: "name",
+  direction: "asc"
+};
+
 function openApprovedCourseEditor(course) {
   if (!course || !course.id) return;
 
@@ -3193,6 +3213,96 @@ function courseGpsStatus(course) {
   };
 }
 
+function sortApprovedCourses(rows) {
+  const key = APPROVED_COURSE_SORT.key;
+  const direction =
+    APPROVED_COURSE_SORT.direction === "desc"
+      ? -1
+      : 1;
+
+  const arr = [...rows];
+
+  function getSortValue(course) {
+    switch (key) {
+      case "id":
+        return Number(course?.id || 0);
+
+      case "name":
+        return String(course?.name || "").toLowerCase();
+
+      case "state":
+        return String(course?.state || "").toLowerCase();
+
+      case "holes":
+        return Number(course?.holes || 0);
+
+      case "rating":
+        return Number(course?.course_rating || 0);
+
+      case "slope":
+        return Number(course?.slope_rating || 0);
+
+      case "tee":
+        return String(course?.tee_colour || "").toLowerCase();
+
+      case "gps": {
+        const gps = courseGpsStatus(course);
+
+        if (!gps.totalHoles) return 0;
+
+        return gps.completedHoles / gps.totalHoles;
+      }
+
+      case "scorecards":
+        return toInt(
+          course?.scorecards_saved ??
+          course?.scorecardsSaved ??
+          course?.saved_scorecards ??
+          course?.rounds_saved ??
+          course?.roundsSaved ??
+          0
+        );
+
+      case "updated": {
+        const time =
+          course?.updated_at
+            ? new Date(course.updated_at).getTime()
+            : 0;
+
+        return Number.isFinite(time)
+          ? time
+          : 0;
+      }
+
+      default:
+        return String(course?.name || "").toLowerCase();
+    }
+  }
+
+  arr.sort((a, b) => {
+    const av = getSortValue(a);
+    const bv = getSortValue(b);
+
+    if (
+      typeof av === "number" &&
+      typeof bv === "number"
+    ) {
+      return (av - bv) * direction;
+    }
+
+    return String(av).localeCompare(
+      String(bv),
+      undefined,
+      {
+        numeric: true,
+        sensitivity: "base"
+      }
+    ) * direction;
+  });
+
+  return arr;
+}
+
 function getFilteredApprovedCourses() {
   const stateFilter =
     String(
@@ -3210,7 +3320,7 @@ function getFilteredApprovedCourses() {
       )?.value || ""
     ).trim();
 
-  return (APPROVED_COURSES_CACHE || []).filter(
+  const filtered = (APPROVED_COURSES_CACHE || []).filter(
     course => {
       const courseState =
         String(
@@ -3243,9 +3353,11 @@ function getFilteredApprovedCourses() {
         return false;
       }
 
-      return true;
+            return true;
     }
   );
+
+  return sortApprovedCourses(filtered);
 }
 
 function renderApprovedCourses() {
@@ -3335,6 +3447,16 @@ function renderApprovedCourses() {
 
       const tee =
         course.tee_colour ?? "";
+        
+        const scorecardsSaved =
+  toInt(
+    course.scorecards_saved ??
+    course.scorecardsSaved ??
+    course.saved_scorecards ??
+    course.rounds_saved ??
+    course.roundsSaved ??
+    0
+  );
 
       const gps =
         courseGpsStatus(course);
@@ -3374,22 +3496,42 @@ function renderApprovedCourses() {
           <td>${tee}</td>
 
           <td>
-            <span
-              style="
-                display:inline-flex;
-                align-items:center;
-                padding:3px 8px;
-                border-radius:999px;
-                font-size:11px;
-                font-weight:700;
-                ${gpsStyle}
-              "
-            >
-              ${gpsLabel}
-            </span>
-          </td>
+  <span
+    style="
+      display:inline-flex;
+      align-items:center;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:700;
+      ${gpsStyle}
+    "
+  >
+    ${gpsLabel}
+  </span>
+</td>
 
-          <td>${updated}</td>
+<td>
+  <span
+    style="
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-width:34px;
+      padding:3px 9px;
+      border-radius:999px;
+      background:#f0fdfa;
+      color:#0f766e;
+      border:1px solid #99f6e4;
+      font-size:11px;
+      font-weight:800;
+    "
+  >
+    ${scorecardsSaved}
+  </span>
+</td>
+
+<td>${updated}</td>
 
           <td style="white-space:nowrap;">
             <button
@@ -3840,6 +3982,102 @@ if (editBtn) {
     }
   }
 });
+function wireApprovedCourseSorting() {
+  const headers =
+    document.querySelectorAll(
+      "#approvedCoursesTable th[data-approved-sort]"
+    );
+
+  headers.forEach(header => {
+    if (header._sortWired) return;
+
+    header._sortWired = true;
+
+    header.addEventListener("click", () => {
+      const key =
+        header.getAttribute(
+          "data-approved-sort"
+        );
+
+      if (!key) return;
+
+      if (
+        APPROVED_COURSE_SORT.key === key
+      ) {
+        APPROVED_COURSE_SORT.direction =
+          APPROVED_COURSE_SORT.direction === "asc"
+            ? "desc"
+            : "asc";
+      } else {
+        APPROVED_COURSE_SORT.key = key;
+
+        // Numeric demand-type columns are more useful
+        // showing highest values first.
+        APPROVED_COURSE_SORT.direction =
+          ["scorecards", "gps", "updated"].includes(key)
+            ? "desc"
+            : "asc";
+      }
+
+      renderApprovedCourses();
+      updateApprovedSortHeaders();
+    });
+  });
+
+  updateApprovedSortHeaders();
+}
+
+function updateApprovedSortHeaders() {
+  const headers =
+    document.querySelectorAll(
+      "#approvedCoursesTable th[data-approved-sort]"
+    );
+
+  headers.forEach(header => {
+    const key =
+      header.getAttribute(
+        "data-approved-sort"
+      );
+
+    const originalLabel =
+      {
+        id: "ID",
+        name: "Course",
+        state: "State",
+        holes: "Holes",
+        rating: "Rating",
+        slope: "Slope",
+        tee: "Tee",
+        gps: "GPS",
+        scorecards: "Scorecards",
+        updated: "Updated"
+      }[key] || key;
+
+    header.classList.remove(
+      "active-sort"
+    );
+
+    if (
+      APPROVED_COURSE_SORT.key === key
+    ) {
+      header.classList.add(
+        "active-sort"
+      );
+
+      header.textContent =
+        originalLabel +
+        (
+          APPROVED_COURSE_SORT.direction === "asc"
+            ? " ↑"
+            : " ↓"
+        );
+    } else {
+      header.textContent =
+        originalLabel + " ↕";
+    }
+  });
+}
+
 function wireApprovedCourseFilters() {
   const stateFilter =
     document.getElementById(
@@ -4751,6 +4989,15 @@ try {
 } catch (e) {
   console.warn(
     "wireApprovedCourseFilters failed",
+    e
+  );
+}
+
+try {
+  wireApprovedCourseSorting();
+} catch (e) {
+  console.warn(
+    "wireApprovedCourseSorting failed",
     e
   );
 }
