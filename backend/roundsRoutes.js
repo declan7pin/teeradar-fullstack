@@ -1417,13 +1417,13 @@ router.post("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (r
     if (!state) return res.status(400).json({ ok: false, error: "state_required" });
     if (![9, 18].includes(holes)) return res.status(400).json({ ok: false, error: "invalid_holes" });
 
-    if (!isCompleteTemplateArrays(pars, dists, holes)) {
-      return res.status(400).json({
-        ok: false,
-        error: "template_incomplete",
-        message: "Every hole needs a valid par and distance.",
-      });
-    }
+    if (!isCompleteParsArray(pars, holes)) {
+  return res.status(400).json({
+    ok: false,
+    error: "template_incomplete",
+    message: `Every hole needs a valid par. Expected ${holes} pars.`,
+  });
+}
 
     const courseRating =
       courseRatingRaw === null || typeof courseRatingRaw === "undefined" || courseRatingRaw === ""
