@@ -1291,34 +1291,105 @@ router.get("/admin/pending-courses/:id", requireAuth, requireSuperAdmin, async (
 // -------------------------------------------------
 
 // List approved scorecard courses
-router.get("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (req, res) => {
-  try {
-    await ensureScorecardRatingColumns();
+router.get(
+  "/admin/scorecard-courses",
+  requireAuth,
+  requireSuperAdmin,
+  async (req, res) => {
+    try {
+      await ensureScorecardRatingColumns();
 
-    const { rows } = await db.query(
-      `
-     SELECT
-  id,
-  name,
-  state,
-  holes,
-  pars_json,
-  dists_json,
-  course_rating,
-  slope_rating,
-  tee_colour,
-  green_points_json,
-  updated_at
-FROM scorecard_courses
-      ORDER BY state ASC, name ASC, holes ASC;
-      `
-    );
-    return res.json({ ok: true, courses: rows });
-  } catch (err) {
-    console.error("GET /api/rounds/admin/scorecard-courses error:", err);
-    return res.status(500).json({ ok: false, error: "internal error" });
+      const { rows } = await db.query(
+        `
+        SELECT
+          sc.id,
+          sc.name,
+          sc.state,
+          sc.holes,
+          sc.pars_json,
+          sc.dists_json,
+          sc.course_rating,
+          sc.slope_rating,
+          sc.tee_colour,
+          sc.green_points_json,
+          sc.updated_at,
+
+          COALESCE(
+            (
+              SELECT COUNT(DISTINCT r.id)::int
+              FROM rounds r
+              WHERE
+                UPPER(COALESCE(r.state, '')) =
+                  UPPER(COALESCE(sc.state, ''))
+
+                AND r.holes = sc.holes
+
+                AND LOWER(
+                  TRIM(
+                    REGEXP_REPLACE(
+                      COALESCE(r.course, ''),
+                      '\\s*\$begin:math:text$\\\\s\*\\\\d\+\\\\s\*holes\?\\\\s\*\\$end:math:text$\\s*$',
+                      '',
+                      'i'
+                    )
+                  )
+                ) =
+                LOWER(
+                  TRIM(
+                    REGEXP_REPLACE(
+                      COALESCE(sc.name, ''),
+                      '\\s*\$begin:math:text$\\\\s\*\\\\d\+\\\\s\*holes\?\\\\s\*\\$end:math:text$\\s*$',
+                      '',
+                      'i'
+                    )
+                  )
+                )
+
+                AND EXISTS (
+                  SELECT 1
+                  FROM round_holes rh
+                  WHERE rh.round_id = r.id
+                    AND (
+                      rh.strokes IS NOT NULL
+
+                      OR (
+                        rh.strokes_by_player IS NOT NULL
+                        AND rh.strokes_by_player <> '{}'::jsonb
+                      )
+                    )
+                )
+            ),
+            0
+          ) AS scorecards_saved
+
+        FROM scorecard_courses sc
+
+        ORDER BY
+          sc.state ASC,
+          sc.name ASC,
+          sc.holes ASC;
+        `
+      );
+
+      return res.json({
+        ok: true,
+        courses: rows,
+      });
+
+    } catch (err) {
+      console.error(
+        "GET /api/rounds/admin/scorecard-courses error:",
+        err
+      );
+
+      return res.status(500).json({
+        ok: false,
+        error: "internal error",
+        detail: err?.message,
+      });
+    }
   }
-});
+);
 
 // Manually add an approved scorecard course
 router.post("/admin/scorecard-courses", requireAuth, requireSuperAdmin, async (req, res) => {
