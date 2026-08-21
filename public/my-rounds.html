@@ -5784,10 +5784,12 @@ function enablePremiumMode(round, metaPars, metaDists, teeName){
     premNextBtn.textContent = "Saving…";
 
     try {
-      await saveRoundAll({
-        silent: true,
-        refresh: false
-      });
+      await saveCurrentHoleCollaboratively(
+  premiumHoleIndex + 1,
+  {
+    silent: true
+  }
+);
 
       await playScoreHaptic("light");
 
@@ -6171,6 +6173,201 @@ if (canUsePremium) {
       for (let i=1;i<=holesCount;i++) rows.push(byHole.get(i));
       return rows;
     }
+
+    // -------------------------------------------------
+// ✅ Collaborative live-hole save
+//
+// Saves ONE hole only.
+//
+// Any TeeRadar participant can score the entire group
+// for this hole.
+//
+// Each player is sent separately so the backend changes
+// only that player key inside this one hole.
+//
+// Result:
+// - Phone A can save Hole 1
+// - Phone B can save Hole 2
+// - Phone A can save Hole 3
+//
+// without stale data from another hole being overwritten.
+// -------------------------------------------------
+async function saveCurrentHoleCollaboratively(
+  holeNumber,
+  options = {}
+) {
+  const silent =
+    options.silent === true;
+
+  const holeNum =
+    Number(holeNumber);
+
+  if (
+    !currentRoundId ||
+    !Number.isFinite(holeNum) ||
+    holeNum <= 0
+  ) {
+    return;
+  }
+
+  /*
+   * Guest rounds remain device-local and continue
+   * using the existing full local save.
+   */
+  if (!isLoggedIn()) {
+    await saveCurrentHoleCollaboratively(
+  premiumHoleIndex + 1,
+  {
+    silent: true
+  }
+);
+
+/*
+ * Reload the authoritative shared scorecard now that
+ * the round is complete.
+ *
+ * This pulls in holes that may have been scored from
+ * another participant's phone.
+ */
+await loadRound(
+  currentRoundId
+);
+      silent,
+      refresh: false
+    });
+
+    return;
+  }
+
+  const holesRows =
+    readTableHoles();
+
+  const hole =
+    holesRows.find(
+      (row) =>
+        Number(row?.hole_number) ===
+        holeNum
+    );
+
+  if (!hole) {
+    throw new Error(
+      `Hole ${holeNum} was not found.`
+    );
+  }
+
+  const playersCount =
+    getPlayersCountFromRound(
+      currentRound
+    );
+
+  /*
+   * Save each player's score individually.
+   *
+   * The backend uses jsonb_set(), so Player 2 being
+   * updated cannot wipe Player 1, and this hole cannot
+   * wipe scores from another hole.
+   */
+  for (
+    let playerNumber = 1;
+    playerNumber <= playersCount;
+    playerNumber++
+  ) {
+    const key =
+      String(playerNumber);
+
+    const strokesRaw =
+      hole?.strokes_by_player?.[key];
+
+    const puttsRaw =
+      hole?.putts_by_player?.[key];
+
+    const strokes =
+      strokesRaw === null ||
+      typeof strokesRaw === "undefined" ||
+      strokesRaw === ""
+        ? null
+        : Number(strokesRaw);
+
+    const putts =
+      puttsRaw === null ||
+      typeof puttsRaw === "undefined" ||
+      puttsRaw === ""
+        ? null
+        : Number(puttsRaw);
+
+    await api(
+      `/api/rounds/${encodeURIComponent(
+        currentRoundId
+      )}/hole/${encodeURIComponent(
+        holeNum
+      )}`,
+      {
+        method: "PUT",
+
+        body: JSON.stringify({
+          player_number:
+            playerNumber,
+
+          strokes:
+            Number.isFinite(strokes)
+              ? strokes
+              : null,
+
+          putts:
+            Number.isFinite(putts)
+              ? putts
+              : null,
+
+          par:
+            Number.isFinite(
+              Number(hole.par)
+            )
+              ? Number(hole.par)
+              : null,
+
+          distance_m:
+            Number.isFinite(
+              Number(hole.distance_m)
+            )
+              ? Number(hole.distance_m)
+              : null
+        })
+      }
+    );
+  }
+
+  /*
+   * Keep this phone's in-memory copy current.
+   */
+  if (
+    currentRound &&
+    Array.isArray(
+      currentRound.holesData
+    )
+  ) {
+    const index =
+      currentRound.holesData.findIndex(
+        (row) =>
+          Number(row?.hole_number) ===
+          holeNum
+      );
+
+    if (index >= 0) {
+      currentRound.holesData[index] =
+        hole;
+    }
+  }
+
+  if (!silent) {
+    renderLiveScoreHero(true);
+
+    setToast(
+      rightToast,
+      `Hole ${holeNum} saved.`,
+      true
+    );
+  }
+}
 
     function updateTotalsFromTable(){
       const holesRows = readTableHoles();
