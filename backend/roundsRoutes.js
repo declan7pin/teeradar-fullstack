@@ -1525,11 +1525,11 @@ router.post("/templates/submit/:roundId", requireAuth, async (req, res) => {
         r.distance_m === null || typeof r.distance_m === "undefined" ? null : Number(r.distance_m);
     }
 
-    if (!isCompleteParsArray(pars, holes)) {
+    if (!isCompleteParsArray(pars, holesCount)) {
   return res.status(400).json({
     ok: false,
     error: "template_incomplete",
-    message: `Every hole needs a valid par. Expected ${holes} pars.`,
+    message: `Every hole needs a valid par. Expected ${holesCount} pars.`,
   });
 }
 
@@ -2710,9 +2710,21 @@ try {
 }
     const { rows } = await db.query(
       `
-      SELECT id, course, layout, state, holes, par_mode, created_at,
-             players_count, player_names
-      FROM rounds
+      SELECT
+  id,
+  course,
+  layout,
+  state,
+  holes,
+  par_mode,
+  created_at,
+  players_count,
+  player_names,
+  player_user_ids,
+  shared_upcoming_round_id,
+  linked_master_round_id,
+  linked_player_number
+FROM rounds
       WHERE user_id = $1
       ORDER BY created_at DESC
       LIMIT 200;
