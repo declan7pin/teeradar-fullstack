@@ -3749,17 +3749,33 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
       });
     }
 
-    const playerNumber = String(
-      playerIndex + 1
-    );
+    /*
+ * By default a golfer edits their own player slot.
+ *
+ * But on a shared live scorecard, any attached TeeRadar
+ * participant may act as scorer for the group.
+ *
+ * The frontend can therefore explicitly tell us which
+ * player on THIS hole is being entered.
+ */
+const requestedPlayerNumber =
+  Number(req.body?.player_number);
 
-    const {
-      strokes,
-      putts,
-      par,
-      distance_m,
-      distance,
-    } = req.body || {};
+let playerNumber =
+  Number.isFinite(requestedPlayerNumber) &&
+  requestedPlayerNumber >= 1 &&
+  requestedPlayerNumber <=
+    clampPlayers(owner.players_count || 1)
+    ? String(requestedPlayerNumber)
+    : String(playerIndex + 1);
+
+const {
+  strokes,
+  putts,
+  par,
+  distance_m,
+  distance,
+} = req.body || {};
 
     const strokesVal =
       strokes === null ||
