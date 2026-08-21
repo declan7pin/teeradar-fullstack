@@ -543,6 +543,90 @@
     color:var(--muted);
     font-size:.88rem;
   }
+  .playerNameField{
+  position:relative;
+}
+
+.playerFriendList{
+  position:absolute;
+  left:0;
+  right:0;
+  top:100%;
+
+  z-index:120;
+
+  display:none;
+
+  margin-top:6px;
+
+  max-height:220px;
+  overflow-y:auto;
+
+  border:1px solid var(--border);
+  border-radius:16px;
+
+  background:#fff;
+
+  box-shadow:0 16px 36px rgba(15,23,42,.14);
+
+  -webkit-overflow-scrolling:touch;
+}
+
+.playerFriendOption{
+  width:100%;
+
+  padding:12px 13px;
+
+  border:0;
+  border-bottom:1px solid #edf2f4;
+
+  background:#fff;
+  color:var(--text);
+
+  text-align:left;
+  cursor:pointer;
+}
+
+.playerFriendOption:last-child{
+  border-bottom:0;
+}
+
+.playerFriendOption:active{
+  background:#eef8f6;
+}
+
+.playerFriendName{
+  display:block;
+
+  font-size:.92rem;
+  font-weight:950;
+}
+
+.playerFriendMeta{
+  display:block;
+
+  margin-top:3px;
+
+  color:var(--muted);
+
+  font-size:.75rem;
+  font-weight:800;
+}
+
+.playerLinkStatus{
+  display:none;
+
+  margin-top:6px;
+
+  color:#00796b;
+
+  font-size:.78rem;
+  font-weight:900;
+}
+
+.playerLinkStatus.linked{
+  display:block;
+}
 
   .distCell{
     font-weight:950;
@@ -2882,8 +2966,22 @@ function writeScorecardsToLS(st, arr){
     let uiNineFront = "";
     let uiNineBack = "";
 
-    // ✅ NEW: player names (P1 is user and readonly)
-    const playerNames = ["","","",""]; // indexes 0..3 for P1..P4
+    // ✅ Player names + linked TeeRadar accounts
+// Indexes 0..3 = P1..P4
+const playerNames = ["", "", "", ""];
+
+/*
+ * null = manually typed guest
+ * number = selected TeeRadar friend account
+ *
+ * P1 does not need to be populated here because the backend
+ * always knows the logged-in round owner.
+ */
+const playerUserIds = [null, null, null, null];
+
+// Accepted friends used by the Player 2–4 autocomplete.
+let playerFriendsCache = [];
+let playerFriendsLoaded = false;
     function roundNamesKey(roundId){ return `round_player_names_${String(roundId)}`; }
     function saveNamesForRound(roundId){
       try{
@@ -4241,70 +4339,378 @@ function setLeftPanelsVisibility(show){
       const display = (u.name || u.email || "").trim();
       if (display) playerNames[0] = display;
     }
-
-    function renderPlayerNamesUI(){
-      const pc = clamp(playersEl?.value || 1, 1, 4);
-
-      ensureP1IsUser();
-
-      if (!playerNamesWrap || !namesGrid) return;
-
-      playerNamesWrap.style.display = (pc >= 1) ? "block" : "none";
-      namesGrid.innerHTML = "";
-
-      for (let i=0; i<pc; i++){
-        const num = i+1;
-        const wrap = document.createElement("div");
-
-        const lab = document.createElement("label");
-        lab.textContent = `Player ${num} name`;
-        lab.style.margin = "0 0 6px 0";
-
-        const inp = document.createElement("input");
-        inp.placeholder = (num === 1) ? "Your name" : `Enter Player ${num} name`;
-        inp.value = playerNames[i] || "";
-        inp.dataset.player = String(num);
-
-        if (num === 1){
-  const loggedIn = !!getToken();
-
-  if (loggedIn){
-    // ✅ logged in: lock P1 to account
-    inp.readOnly = true;
-    inp.classList.add("readonly");
-    inp.title = "P1 is always your account";
-  } else {
-    // ✅ guest mode: allow typing
-    inp.readOnly = false;
-    inp.classList.remove("readonly");
-    inp.title = "Enter your name (guest mode)";
-
-    // optional: restore cached guest name
-    try{
-      if (!inp.value) inp.value = String(localStorage.getItem("teeradar_guest_p1_name") || "").trim();
-      if (inp.value) playerNames[0] = String(inp.value || "").trim();
-    }catch{}
-
-    inp.addEventListener("input", () => {
-      playerNames[0] = String(inp.value || "").trim();
-      try{ localStorage.setItem("teeradar_guest_p1_name", playerNames[0]); }catch{}
-      // refresh headers if a round is open
-    });
+    
+    async function loadPlayerFriendsOnce(){
+  if (playerFriendsLoaded) {
+    return playerFriendsCache;
   }
-} else {
-  inp.addEventListener("input", () => {
-    playerNames[i] = String(inp.value || "").trim();
-    // if a round is selected, save immediately to that round
-    if (currentRoundId) saveNamesForRound(currentRoundId);
-    // also refresh header labels
-  });
+
+  if (!isLoggedIn()) {
+    playerFriendsCache = [];
+    playerFriendsLoaded = true;
+    return [];
+  }
+
+  try {
+    const data = await api(
+      "/api/friends/list",
+      {
+        method: "GET"
+      }
+    );
+
+    const friends =
+      Array.isArray(data?.friends)
+        ? data.friends
+        : [];
+
+    playerFriendsCache = friends
+      .map((friend) => {
+        const id =
+          Number(
+            friend?.friend_user_id ??
+            friend?.user_id ??
+            friend?.id
+          );
+
+        const name =
+          String(
+            friend?.name ||
+            friend?.display_name ||
+            friend?.email ||
+            "Friend"
+          ).trim();
+
+        const email =
+          String(friend?.email || "")
+            .trim()
+            .toLowerCase();
+
+        return {
+          id,
+          name,
+          email
+        };
+      })
+      .filter((friend) =>
+        Number.isFinite(friend.id) &&
+        friend.id > 0 &&
+        friend.name
+      );
+
+    playerFriendsLoaded = true;
+
+    return playerFriendsCache;
+  } catch (error) {
+    console.warn(
+      "Could not load player friends:",
+      error?.message || error
+    );
+
+    playerFriendsCache = [];
+    playerFriendsLoaded = false;
+
+    return [];
+  }
 }
 
-        wrap.appendChild(lab);
-        wrap.appendChild(inp);
-        namesGrid.appendChild(wrap);
+    function renderPlayerNamesUI(){
+  const pc =
+    clamp(
+      playersEl?.value || 1,
+      1,
+      4
+    );
+
+  ensureP1IsUser();
+
+  if (
+    !playerNamesWrap ||
+    !namesGrid
+  ) {
+    return;
+  }
+
+  playerNamesWrap.style.display =
+    pc >= 1
+      ? "block"
+      : "none";
+
+  namesGrid.innerHTML = "";
+
+  for (
+    let i = 0;
+    i < pc;
+    i++
+  ) {
+    const num = i + 1;
+
+    const wrap =
+      document.createElement("div");
+
+    wrap.className =
+      "playerNameField";
+
+    const lab =
+      document.createElement("label");
+
+    lab.textContent =
+      `Player ${num} name`;
+
+    lab.style.margin =
+      "0 0 6px 0";
+
+    const inp =
+      document.createElement("input");
+
+    inp.placeholder =
+      num === 1
+        ? "Your name"
+        : `Type a name or select a friend`;
+
+    inp.value =
+      playerNames[i] || "";
+
+    inp.dataset.player =
+      String(num);
+
+    /*
+     * PLAYER 1
+     * Always the logged-in account.
+     */
+    if (num === 1) {
+      inp.readOnly = true;
+
+      inp.classList.add(
+        "readonly"
+      );
+
+      inp.title =
+        "P1 is always your account";
+
+      const status =
+        document.createElement("div");
+
+      status.className =
+        "playerLinkStatus linked";
+
+      status.textContent =
+        "✓ Your TeeRadar account";
+
+      wrap.appendChild(lab);
+      wrap.appendChild(inp);
+      wrap.appendChild(status);
+
+      namesGrid.appendChild(wrap);
+
+      continue;
+    }
+
+    /*
+     * PLAYER 2–4
+     */
+    const friendList =
+      document.createElement("div");
+
+    friendList.className =
+      "playerFriendList";
+
+    const status =
+      document.createElement("div");
+
+    status.className =
+      "playerLinkStatus";
+
+    function refreshLinkedStatus(){
+      const linkedId =
+        Number(playerUserIds[i]);
+
+      if (
+        Number.isFinite(linkedId) &&
+        linkedId > 0
+      ) {
+        status.classList.add(
+          "linked"
+        );
+
+        status.textContent =
+          "✓ TeeRadar friend — round will be shared to their account";
+      } else {
+        status.classList.remove(
+          "linked"
+        );
+
+        status.textContent = "";
       }
     }
+
+    function hideFriendList(){
+      friendList.style.display =
+        "none";
+
+      friendList.innerHTML = "";
+    }
+
+    async function showMatchingFriends(){
+      const query =
+        String(inp.value || "")
+          .trim()
+          .toLowerCase();
+
+      const friends =
+        await loadPlayerFriendsOnce();
+
+      /*
+       * Show friends immediately on focus.
+       * Once typing starts, filter them.
+       */
+      const matches =
+        friends
+          .filter((friend) => {
+            if (!query) {
+              return true;
+            }
+
+            const haystack =
+              `${friend.name} ${friend.email}`
+                .toLowerCase();
+
+            return haystack.includes(
+              query
+            );
+          })
+          .slice(0, 8);
+
+      friendList.innerHTML = "";
+
+      if (!matches.length) {
+        hideFriendList();
+        return;
+      }
+
+      matches.forEach(
+        (friend) => {
+          const option =
+            document.createElement(
+              "button"
+            );
+
+          option.type =
+            "button";
+
+          option.className =
+            "playerFriendOption";
+
+          option.innerHTML = `
+            <span class="playerFriendName">
+              ${escapeHtml(friend.name)}
+            </span>
+
+            <span class="playerFriendMeta">
+              TeeRadar friend
+            </span>
+          `;
+
+          /*
+           * Use pointerdown rather than click so
+           * iOS doesn't blur the input first.
+           */
+          option.addEventListener(
+            "pointerdown",
+            (event) => {
+              event.preventDefault();
+
+              playerNames[i] =
+                friend.name;
+
+              playerUserIds[i] =
+                Number(friend.id);
+
+              inp.value =
+                friend.name;
+
+              hideFriendList();
+
+              refreshLinkedStatus();
+
+              if (currentRoundId) {
+                saveNamesForRound(
+                  currentRoundId
+                );
+              }
+            }
+          );
+
+          friendList.appendChild(
+            option
+          );
+        }
+      );
+
+      friendList.style.display =
+        "block";
+    }
+
+    /*
+     * Typing manually deliberately removes any
+     * previously selected account relationship.
+     */
+    inp.addEventListener(
+      "input",
+      () => {
+        playerNames[i] =
+          String(
+            inp.value || ""
+          ).trim();
+
+        playerUserIds[i] =
+          null;
+
+        refreshLinkedStatus();
+
+        if (currentRoundId) {
+          saveNamesForRound(
+            currentRoundId
+          );
+        }
+
+        showMatchingFriends()
+          .catch(() => {});
+      }
+    );
+
+    inp.addEventListener(
+      "focus",
+      () => {
+        showMatchingFriends()
+          .catch(() => {});
+      }
+    );
+
+    inp.addEventListener(
+      "blur",
+      () => {
+        /*
+         * Small delay allows an iOS friend-option
+         * selection to complete.
+         */
+        setTimeout(
+          hideFriendList,
+          180
+        );
+      }
+    );
+
+    refreshLinkedStatus();
+
+    wrap.appendChild(lab);
+    wrap.appendChild(inp);
+    wrap.appendChild(friendList);
+    wrap.appendChild(status);
+
+    namesGrid.appendChild(wrap);
+  }
+}
 
     // -----------------------------
     // ✅ Build the nines + tee dropdowns from scorecards
@@ -6203,6 +6609,35 @@ renderTeeRadarHandicap();
     }
     try { localStorage.setItem(roundNamesKey(round.id), JSON.stringify(playerNames)); } catch {}
   }
+  
+  // ✅ Restore linked TeeRadar players
+for (let i = 0; i < 4; i++) {
+  playerUserIds[i] = null;
+}
+
+if (
+  Array.isArray(
+    round.player_user_ids
+  )
+) {
+  for (
+    let i = 0;
+    i < 4;
+    i++
+  ) {
+    const id =
+      Number(
+        round.player_user_ids[i]
+      );
+
+    if (
+      Number.isFinite(id) &&
+      id > 0
+    ) {
+      playerUserIds[i] = id;
+    }
+  }
+}
 
   loadNamesForRound(round.id);
   ensureP1IsUser();
@@ -6226,31 +6661,109 @@ const upcomingPlayerIdsForPayload = Array.isArray(pendingUpcomingPlayerUserIds)
 
 const upcomingRoundIdForPayload = pendingUpcomingRoundId || null;
 
-if (Array.isArray(pendingUpcomingPlayerNames) && pendingUpcomingPlayerNames.length) {
-  for (let i = 0; i < 4; i++) {
+if (
+  Array.isArray(
+    pendingUpcomingPlayerNames
+  ) &&
+  pendingUpcomingPlayerNames.length
+) {
+  for (
+    let i = 0;
+    i < 4;
+    i++
+  ) {
     playerNames[i] = "";
+    playerUserIds[i] = null;
   }
 
-  pendingUpcomingPlayerNames.slice(0, 4).forEach((name, i) => {
-    playerNames[i] = String(name || "").trim();
-  });
+  pendingUpcomingPlayerNames
+    .slice(0, 4)
+    .forEach(
+      (name, i) => {
+        playerNames[i] =
+          String(
+            name || ""
+          ).trim();
+      }
+    );
 
-  players_count = clamp(pendingUpcomingPlayerNames.length, 1, 4);
+  if (
+    Array.isArray(
+      upcomingPlayerIdsForPayload
+    )
+  ) {
+    for (
+      let i = 0;
+      i < 4;
+      i++
+    ) {
+      const id =
+        Number(
+          upcomingPlayerIdsForPayload[i]
+        );
+
+      playerUserIds[i] =
+        Number.isFinite(id) &&
+        id > 0
+          ? id
+          : null;
+    }
+  }
+
+  players_count =
+    clamp(
+      pendingUpcomingPlayerNames.length,
+      1,
+      4
+    );
 
   if (playersEl) {
-    playersEl.value = String(players_count);
+    playersEl.value =
+      String(players_count);
   }
 
-  pendingUpcomingPlayerNames = null;
-  pendingUpcomingPlayerUserIds = null;
-  pendingUpcomingRoundId = null;
+  pendingUpcomingPlayerNames =
+    null;
+
+  pendingUpcomingPlayerUserIds =
+    null;
+
+  pendingUpcomingRoundId =
+    null;
 }
-      // ✅ build player_names array for backend
-      const namesOut = [];
-      for (let i = 0; i < 4; i++) {
-        namesOut.push(String(playerNames[i] || "").trim());
-      }
-      namesOut.length = players_count;
+      // ✅ Build names + linked TeeRadar accounts
+const namesOut = [];
+const userIdsOut = [];
+
+for (
+  let i = 0;
+  i < players_count;
+  i++
+) {
+  namesOut.push(
+    String(
+      playerNames[i] || ""
+    ).trim()
+  );
+
+  const id =
+    Number(
+      playerUserIds[i]
+    );
+
+  userIdsOut.push(
+    Number.isFinite(id) &&
+    id > 0
+      ? id
+      : null
+  );
+}
+
+/*
+ * P1 is the current logged-in user.
+ * Backend guarantees that relationship.
+ */
+userIdsOut[0] = null;
 
       if (!course) {
         setToast(leftToast, "Please enter a course name.", false);
@@ -6298,7 +6811,7 @@ if (!isLoggedIn()){
   notes: notes || null,
   players_count,
   player_names: namesOut,
-  player_user_ids: upcomingPlayerIdsForPayload,
+  player_user_ids: userIdsOut,
   shared_upcoming_round_id: upcomingRoundIdForPayload,
   ...(holes === 9 && !hasNinesUI ? { nineLoop } : {}),
   ...(pars ? { pars } : {})
@@ -6592,13 +7105,34 @@ async function startUpcomingRoundFromId(id){
 
   const playerCount = Math.max(1, finalNames.length);
 
-  for (let i = 0; i < 4; i++) {
-    playerNames[i] = "";
-  }
+  for (
+  let i = 0;
+  i < 4;
+  i++
+) {
+  playerNames[i] = "";
+  playerUserIds[i] = null;
+}
 
   for (let i = 0; i < playerCount; i++) {
     playerNames[i] = finalNames[i] || "";
   }
+  for (
+  let i = 0;
+  i < playerCount;
+  i++
+) {
+  const id =
+    Number(
+      finalUserIds[i]
+    );
+
+  playerUserIds[i] =
+    Number.isFinite(id) &&
+    id > 0
+      ? id
+      : null;
+}
 
   courseEl.value = upcoming.course || "";
   stateEl.value = upcoming.state || "WA";
