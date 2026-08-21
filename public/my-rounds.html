@@ -5750,7 +5750,16 @@ function enablePremiumMode(round, metaPars, metaDists, teeName){
       try {
         await playScoreHaptic("medium");
 
-        await saveRoundAll();
+        await saveCurrentHoleCollaboratively(
+  premiumHoleIndex + 1,
+  {
+    silent: true
+  }
+);
+
+await loadRound(
+  currentRoundId
+);
 
         premNextBtn.textContent = "Round saved";
         premNextBtn.disabled = true;
@@ -6214,30 +6223,14 @@ async function saveCurrentHoleCollaboratively(
    * Guest rounds remain device-local and continue
    * using the existing full local save.
    */
-  if (!isLoggedIn()) {
-    await saveCurrentHoleCollaboratively(
-  premiumHoleIndex + 1,
-  {
-    silent: true
-  }
-);
+ if (!isLoggedIn()) {
+  await saveRoundAll({
+    silent,
+    refresh: false
+  });
 
-/*
- * Reload the authoritative shared scorecard now that
- * the round is complete.
- *
- * This pulls in holes that may have been scored from
- * another participant's phone.
- */
-await loadRound(
-  currentRoundId
-);
-      silent,
-      refresh: false
-    });
-
-    return;
-  }
+  return;
+}
 
   const holesRows =
     readTableHoles();
