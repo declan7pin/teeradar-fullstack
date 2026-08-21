@@ -513,6 +513,56 @@ async function getRoundWithHoles(roundId) {
 }
 
 // -------------------------------------------------
+// ✅ Shared live round permissions
+// Owner OR a TeeRadar player attached to the round
+// can open and score the same live scorecard.
+// -------------------------------------------------
+async function canUserAccessRound(roundId, userId) {
+  const rid = Number(roundId);
+  const uid = Number(userId);
+
+  if (
+    !Number.isFinite(rid) ||
+    rid <= 0 ||
+    !Number.isFinite(uid) ||
+    uid <= 0
+  ) {
+    return false;
+  }
+
+  const { rows } = await db.query(
+    `
+    SELECT
+      user_id,
+      player_user_ids
+    FROM rounds
+    WHERE id = $1
+    LIMIT 1;
+    `,
+    [rid]
+  );
+
+  if (!rows.length) {
+    return false;
+  }
+
+  const round = rows[0];
+
+  // Round creator always has access.
+  if (Number(round.user_id) === uid) {
+    return true;
+  }
+
+  const playerUserIds = Array.isArray(round.player_user_ids)
+    ? round.player_user_ids
+    : [];
+
+  return playerUserIds.some(
+    (id) => Number(id) === uid
+  );
+}
+
+// -------------------------------------------------
 // ✅ Notify accepted friends when a golfer starts a round
 // -------------------------------------------------
 async function notifyFriendsRoundStarted({
@@ -2656,25 +2706,6 @@ router.post("/", requireAuth, async (req, res) => {
   });
 }
 
-// If P2–P4 were selected TeeRadar friends,
-// immediately create their linked round.
-try {
-  if (
-    result?.round?.id &&
-    !Number(result.round.linked_master_round_id || 0)
-  ) {
-    await syncDirectPlayerRounds(
-      Number(result.round.id),
-      result.holes || []
-    );
-  }
-} catch (shareErr) {
-  // Do not fail the owner's round creation if sharing fails.
-  console.warn(
-    "Direct player round creation failed:",
-    shareErr?.message || shareErr
-  );
-}
 
 return res.json(result);
   } catch (err) {
@@ -3028,13 +3059,25 @@ router.post("/from-upcoming/:upcomingId", requireAuth, async (req, res) => {
     const userId = Number(req.user?.id);
     const upcomingId = Number(req.params.upcomingId);
 
-    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
+    if (!userId) {
+      return res.status(401).json({
+        ok: false,
+        error: "unauthorised",
+      });
+    }
+
     if (!Number.isFinite(upcomingId) || upcomingId <= 0) {
-      return res.status(400).json({ ok: false, error: "invalid_upcoming_id" });
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_upcoming_id",
+      });
     }
 
     await ensureSharedRoundColumns();
 
+    // -------------------------------------------------
+    // 1. Confirm this user belongs to the upcoming round
+    // -------------------------------------------------
     const { rows } = await db.query(
       `
       SELECT *
@@ -3055,104 +3098,236 @@ router.post("/from-upcoming/:upcomingId", requireAuth, async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(404).json({ ok: false, error: "upcoming_round_not_found" });
+      return res.status(404).json({
+        ok: false,
+        error: "upcoming_round_not_found",
+      });
     }
 
     const upcoming = rows[0];
 
+    // -------------------------------------------------
+    // 2. Get all TeeRadar participants
+    // Owner first, then shared friends.
+    // -------------------------------------------------
     const participantsRes = await db.query(
       `
-      SELECT
-        u.id,
-        u.email,
-        COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS name,
-        CASE WHEN u.id = ur.user_id THEN 0 ELSE 1 END AS sort_order
-      FROM upcoming_rounds ur
-      JOIN users u ON u.id = ur.user_id
-      WHERE ur.id = $1
+      SELECT DISTINCT ON (participant_id)
+        participant_id AS id,
+        email,
+        name,
+        sort_order
+      FROM (
+        SELECT
+          u.id AS participant_id,
+          u.email,
+          COALESCE(
+            NULLIF(u.display_name, ''),
+            split_part(u.email, '@', 1)
+          ) AS name,
+          0 AS sort_order
+        FROM upcoming_rounds ur
+        JOIN users u
+          ON u.id = ur.user_id
+        WHERE ur.id = $1
 
-      UNION ALL
+        UNION ALL
 
-      SELECT
-        u.id,
-        u.email,
-        COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS name,
-        1 AS sort_order
-      FROM upcoming_round_shares s
-      JOIN users u ON u.id = s.shared_with_user_id
-      WHERE s.upcoming_round_id = $1
-
-      ORDER BY sort_order ASC, name ASC
-      LIMIT 4;
+        SELECT
+          u.id AS participant_id,
+          u.email,
+          COALESCE(
+            NULLIF(u.display_name, ''),
+            split_part(u.email, '@', 1)
+          ) AS name,
+          1 AS sort_order
+        FROM upcoming_round_shares s
+        JOIN users u
+          ON u.id = s.shared_with_user_id
+        WHERE s.upcoming_round_id = $1
+      ) participants_raw
+      ORDER BY participant_id, sort_order ASC;
       `,
       [upcomingId]
     );
 
-    const participants = participantsRes.rows || [];
-    const playerNames = participants.map((p) => p.name || p.email || "Player");
-    const playerUserIds = participants.map((p) => Number(p.id)).filter(Number.isFinite);
-    const playersCount = Math.max(1, Math.min(4, participants.length || 1));
+    let participants = participantsRes.rows || [];
 
-    let currentUserRound = null;
-    let currentUserHoles = [];
+    // Owner first for Player 1, then everyone else.
+    participants.sort((a, b) => {
+      const aSort = Number(a.sort_order || 0);
+      const bSort = Number(b.sort_order || 0);
 
-    for (const p of participants) {
-      const participantUserId = Number(p.id);
-      if (!Number.isFinite(participantUserId)) continue;
+      if (aSort !== bSort) {
+        return aSort - bSort;
+      }
 
-      const existing = await db.query(
-        `
-        SELECT id
-        FROM rounds
-        WHERE user_id = $1
-          AND shared_upcoming_round_id = $2
-        ORDER BY created_at ASC
-        LIMIT 1;
-        `,
-        [participantUserId, upcomingId]
+      return String(a.name || "").localeCompare(
+        String(b.name || "")
+      );
+    });
+
+    participants = participants.slice(0, 4);
+
+    if (!participants.length) {
+      return res.status(500).json({
+        ok: false,
+        error: "no_participants",
+      });
+    }
+
+    const playerNames = participants.map(
+      (p) =>
+        String(
+          p.name ||
+          p.email ||
+          "Player"
+        ).trim()
+    );
+
+    const playerUserIds = participants.map(
+      (p) => Number(p.id)
+    );
+
+    const playersCount = clampPlayers(
+      participants.length
+    );
+
+    // -------------------------------------------------
+    // 3. Check whether ONE shared live round already
+    // exists for this upcoming round.
+    //
+    // IMPORTANT:
+    // We deliberately do NOT filter by user_id.
+    // Every participant must receive the SAME round.
+    // -------------------------------------------------
+    const existingRoundRes = await db.query(
+      `
+      SELECT id
+      FROM rounds
+      WHERE shared_upcoming_round_id = $1
+        AND linked_master_round_id IS NULL
+      ORDER BY created_at ASC, id ASC
+      LIMIT 1;
+      `,
+      [upcomingId]
+    );
+
+    let roundId = null;
+
+    if (existingRoundRes.rows.length) {
+      roundId = Number(
+        existingRoundRes.rows[0].id
       );
 
-      let result = null;
+      // Keep participant information current in case
+      // somebody was added to the upcoming round after
+      // the scorecard was first created.
+      await db.query(
+        `
+        UPDATE rounds
+        SET
+          players_count = $2,
+          player_names = $3::jsonb,
+          player_user_ids = $4::jsonb
+        WHERE id = $1;
+        `,
+        [
+          roundId,
+          playersCount,
+          JSON.stringify(playerNames),
+          JSON.stringify(playerUserIds),
+        ]
+      );
 
-      if (existing.rows.length) {
-        result = await getRoundWithHoles(Number(existing.rows[0].id));
-      } else {
-        result = await createRoundWithSeededHoles({
-          userId: participantUserId,
+      console.log(
+        "🟩 FROM_UPCOMING using existing shared round",
+        {
+          upcomingId,
+          roundId,
+          requestedByUserId: userId,
+          playerUserIds,
+        }
+      );
+    } else {
+      // -------------------------------------------------
+      // 4. No scorecard exists yet.
+      //
+      // Create ONE round owned by the upcoming-round
+      // creator, containing every TeeRadar participant.
+      // -------------------------------------------------
+      const ownerUserId =
+        Number(upcoming.user_id);
+
+      const result =
+        await createRoundWithSeededHoles({
+          userId: ownerUserId,
           course: upcoming.course,
           state: upcoming.state,
           holes: upcoming.holes || 18,
           layout: null,
           par_mode: "published",
 
-          // current user's live scorecard shows all players
-          players_count: participantUserId === userId ? playersCount : 1,
-          player_names: participantUserId === userId ? playerNames : [p.name || p.email || "Player"],
-          player_user_ids: participantUserId === userId ? playerUserIds : [participantUserId],
+          players_count: playersCount,
+          player_names: playerNames,
+          player_user_ids: playerUserIds,
 
           shared_upcoming_round_id: upcomingId,
         });
+
+      if (!result?.ok || !result?.round?.id) {
+        return res.status(
+          result?.status || 500
+        ).json({
+          ok: false,
+          error:
+            result?.error ||
+            "shared_round_not_created",
+          detail: result?.detail,
+        });
       }
 
-      if (participantUserId === userId) {
-        currentUserRound = result?.round || null;
-        currentUserHoles = result?.holes || [];
-      }
+      roundId = Number(result.round.id);
+
+      console.log(
+        "🟩 FROM_UPCOMING created shared round",
+        {
+          upcomingId,
+          roundId,
+          ownerUserId,
+          requestedByUserId: userId,
+          playerUserIds,
+        }
+      );
     }
 
-    if (!currentUserRound?.id) {
-      return res.status(500).json({ ok: false, error: "current_user_round_not_created" });
+    // -------------------------------------------------
+    // 5. Return THE SAME scorecard to whoever pressed
+    // Start/Open.
+    // -------------------------------------------------
+    const data =
+      await getRoundWithHoles(roundId);
+
+    if (!data?.round) {
+      return res.status(500).json({
+        ok: false,
+        error: "shared_round_not_found",
+      });
     }
 
     return res.json({
       ok: true,
-      roundId: currentUserRound.id,
-      round: currentUserRound,
-      holes: currentUserHoles,
+      roundId: data.round.id,
+      round: data.round,
+      holes: data.holes || [],
       participants,
     });
   } catch (err) {
-    console.error("POST /api/rounds/from-upcoming/:upcomingId error:", err);
+    console.error(
+      "POST /api/rounds/from-upcoming/:upcomingId error:",
+      err
+    );
+
     return res.status(500).json({
       ok: false,
       error: "internal error",
@@ -3174,9 +3349,17 @@ router.get("/:id", requireAuth, async (req, res) => {
     const data = await getRoundWithHoles(roundId);
     if (!data) return res.status(404).json({ ok: false, error: "round not found" });
 
-    if (data.round.user_id !== userId) {
-      return res.status(403).json({ ok: false, error: "forbidden" });
-    }
+    const canAccess = await canUserAccessRound(
+  roundId,
+  userId
+);
+
+if (!canAccess) {
+  return res.status(403).json({
+    ok: false,
+    error: "forbidden",
+  });
+}
 
     return res.json({ ok: true, round: data.round, holes: data.holes });
   } catch (err) {
@@ -3197,8 +3380,25 @@ router.put("/:id", requireAuth, async (req, res) => {
     }
 
     const owner = await getRoundOwner(roundId);
-    if (!owner) return res.status(404).json({ ok: false, error: "round not found" });
-    if (owner.user_id !== userId) return res.status(403).json({ ok: false, error: "forbidden" });
+
+if (!owner) {
+  return res.status(404).json({
+    ok: false,
+    error: "round not found",
+  });
+}
+
+const canAccess = await canUserAccessRound(
+  roundId,
+  userId
+);
+
+if (!canAccess) {
+  return res.status(403).json({
+    ok: false,
+    error: "forbidden",
+  });
+}
 
     // ✅ Check whether this round had any scores BEFORE this save.
 // If it had none, and this save adds the first score,
@@ -3264,7 +3464,7 @@ const newPlayerUserIds =
   cleanPlayerUserIds(
     incomingPlayerUserIds,
     newPlayersCount,
-    userId
+    owner.user_id
   );
 
 await db.query("BEGIN");
@@ -3387,12 +3587,6 @@ if (!hadStartedBefore) {
       );
     }
   }
-}
-
-try {
-  await syncSharedPlayerRounds(roundId, holes);
-} catch (syncErr) {
-  console.warn("syncSharedPlayerRounds failed:", syncErr?.message || syncErr);
 }
 
     // ✅ ADDED: if the payload looks "complete", record round_played once (deduped by round_id)
