@@ -4422,7 +4422,14 @@ function setLeftPanelsVisibility(show){
       4
     );
 
+  /*
+ * Only auto-fill P1 when setting up a new round.
+ * Once a backend round exists, its saved player order
+ * must never depend on which participant's phone opened it.
+ */
+if (!currentRoundId) {
   ensureP1IsUser();
+}
 
   if (
     !playerNamesWrap ||
@@ -5871,10 +5878,18 @@ function renderLiveScoreHero(savedMode = false){
 
     async function renderScorecard(round){
       currentRound = round;
-      currentRoundId = round?.id || null;
+currentRoundId = round?.id || null;
 
-      // ✅ ensure P1 is user always
-      ensureP1IsUser();
+/*
+ * Only force P1 to the logged-in golfer while creating
+ * a brand-new personal round.
+ *
+ * Existing backend rounds already have their permanent
+ * player order.
+ */
+if (!currentRoundId) {
+  ensureP1IsUser();
+}
 
       if (!round || !currentRoundId) {
         scorecardEmpty.style.display = "block";
@@ -5901,10 +5916,14 @@ function renderLiveScoreHero(savedMode = false){
       const pc = getPlayersCountFromRound(round);
       if (playersEl) playersEl.value = String(pc);
 
-      // ✅ load per-round names from localStorage
-      loadNamesForRound(currentRoundId);
-      ensureP1IsUser();
-      renderPlayerNamesUI();
+      /*
+ * For an existing logged-in round, player_names from the
+ * backend are authoritative.
+ *
+ * Do not overwrite them from device-local storage and do
+ * not change P1 based on who opened the scorecard.
+ */
+renderPlayerNamesUI();
 
       scorecardEmpty.style.display = "none";
       scorecardWrap.style.display = "block";
@@ -6639,11 +6658,18 @@ if (
   }
 }
 
-  loadNamesForRound(round.id);
-  ensureP1IsUser();
-  renderPlayerNamesUI();
+  /*
+ * Logged-in backend rounds use the backend player order
+ * as the source of truth.
+ *
+ * This is essential for shared scorecards:
+ *
+ * P1 must remain P1 on every phone.
+ * P2 must remain P2 on every phone.
+ */
+renderPlayerNamesUI();
 
-  await renderScorecard(round);
+await renderScorecard(round);
 }
 
     async function createRound(){
@@ -7045,109 +7071,110 @@ function clearStartUpcomingIdFromUrl(){
   }catch{}
 }
 
-async function startUpcomingRoundFromId(id){
-  if (!id || !isLoggedIn()) return;
+async function startUpcomingRoundFromId(id) {
+  const upcomingId = Number(id);
 
-  const data = await api("/api/shared-rounds/upcoming?includeShared=1", { method:"GET" });
-  const rounds = data.rounds || [];
-  const upcoming = rounds.find(r => Number(r.id) === Number(id));
-
-  if (!upcoming) {
-    setToast(leftToast, "Upcoming round not found.", false);
+  if (
+    !Number.isFinite(upcomingId) ||
+    upcomingId <= 0 ||
+    !isLoggedIn()
+  ) {
     return;
   }
 
-  const me = getUserFromToken();
-  const myEmail = String(me.email || "").trim().toLowerCase();
-  const myName = String(me.name || myEmail || "").trim();
-
-  const participants = Array.isArray(upcoming.participants)
-    ? upcoming.participants
-    : [];
-
-  const orderedParticipants = [
-    ...participants.filter(p => String(p.email || "").trim().toLowerCase() === myEmail),
-    ...participants.filter(p => String(p.email || "").trim().toLowerCase() !== myEmail),
-  ];
-
-  let names = orderedParticipants
-    .map(p => String(p.name || p.email || "").trim())
-    .filter(Boolean);
-
-  let userIds = orderedParticipants
-    .map(p => Number(p.id))
-    .filter(Number.isFinite);
-
-  if (!names.length) {
-    names = getUpcomingPlayerNames(upcoming)
-      .map(n => String(n || "").trim())
-      .filter(Boolean);
-
-    userIds = getUpcomingPlayerUserIds(upcoming)
-      .map(Number)
-      .filter(Number.isFinite);
-  }
-
-  const seen = new Set();
-  const finalNames = [];
-  const finalUserIds = [];
-
-  for (let i = 0; i < names.length; i++) {
-    const key = String(names[i] || "").trim().toLowerCase();
-    if (!key || seen.has(key)) continue;
-
-    seen.add(key);
-    finalNames.push(names[i]);
-    finalUserIds.push(userIds[i] || null);
-
-    if (finalNames.length >= 4) break;
-  }
-
-  const playerCount = Math.max(1, finalNames.length);
-
-  for (
-  let i = 0;
-  i < 4;
-  i++
-) {
-  playerNames[i] = "";
-  playerUserIds[i] = null;
-}
-
-  for (let i = 0; i < playerCount; i++) {
-    playerNames[i] = finalNames[i] || "";
-  }
-  for (
-  let i = 0;
-  i < playerCount;
-  i++
-) {
-  const id =
-    Number(
-      finalUserIds[i]
+  try {
+    setToast(
+      leftToast,
+      "Opening shared scorecard…",
+      true
     );
 
-  playerUserIds[i] =
-    Number.isFinite(id) &&
-    id > 0
-      ? id
-      : null;
-}
+    /*
+     * IMPORTANT:
+     *
+     * Do NOT create a round from the frontend.
+     *
+     * The backend now owns this decision:
+     *
+     * - if no scorecard exists -> create ONE
+     * - if one already exists -> return that SAME round
+     *
+     * Every TeeRadar participant therefore receives
+     * exactly the same roundId.
+     */
+    const data = await api(
+      `/api/rounds/from-upcoming/${encodeURIComponent(
+        upcomingId
+      )}`,
+      {
+        method: "POST",
+        body: JSON.stringify({})
+      }
+    );
 
-  courseEl.value = upcoming.course || "";
-  stateEl.value = upcoming.state || "WA";
-  holesEl.value = String(upcoming.holes || 18);
-  playersEl.value = String(playerCount);
-  notesEl.value = upcoming.notes || "";
+    const roundId =
+      Number(
+        data?.roundId ||
+        data?.round?.id
+      );
 
-  renderPlayerNamesUI();
+    if (
+      !Number.isFinite(roundId) ||
+      roundId <= 0
+    ) {
+      throw new Error(
+        "Shared scorecard was not created."
+      );
+    }
 
-  pendingUpcomingPlayerNames = finalNames.slice(0, playerCount);
-  pendingUpcomingPlayerUserIds = finalUserIds.slice(0, playerCount);
-  pendingUpcomingRoundId = Number(upcoming.id);
+    console.log(
+      "🟩 SHARED SCORECARD OPEN",
+      {
+        upcomingId,
+        roundId
+      }
+    );
 
-  await refreshNinesAndTeesUI();
-  await createRound();
+    /*
+     * Load exactly the round returned by the backend.
+     *
+     * Declan, Chloe, Player 3 etc. all land on this
+     * same roundId.
+     */
+    await safeLoadRound(roundId);
+
+    setLeftPanelsVisibility(false);
+
+    setTimeout(() => {
+      const scorecard =
+        document.getElementById(
+          "scorecardWrap"
+        );
+
+      if (scorecard) {
+        scorecard.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+      }
+    }, 150);
+
+  } catch (error) {
+    console.error(
+      "startUpcomingRoundFromId failed:",
+      error
+    );
+
+    setToast(
+      leftToast,
+      "Could not open shared scorecard: " +
+        (
+          error?.message ||
+          "error"
+        ),
+      false
+    );
+  }
 }
     async function safeFetchRounds(){
       try{
