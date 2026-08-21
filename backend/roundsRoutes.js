@@ -3622,75 +3622,419 @@ return res.json({ ok: true, round: data.round, holes: data.holes, handicap });
   }
 });
 
-// Single-hole update (older route)
+// -------------------------------------------------
+// ✅ Collaborative single-hole update
+//
+// Updates ONE hole only.
+//
+// For shared live rounds:
+// - owner and attached TeeRadar players can score
+// - each user only writes to their own player slot
+// - another player's existing score is preserved
+//
+// This prevents two phones from overwriting each
+// other's scorecard data with stale full-round saves.
+// -------------------------------------------------
 router.put("/:id/hole/:n", requireAuth, async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = Number(req.user?.id);
     const roundId = Number(req.params.id);
     const holeNum = Number(req.params.n);
 
-    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
-    if (!Number.isFinite(roundId) || roundId <= 0) {
-      return res.status(400).json({ ok: false, error: "invalid round id" });
+    if (
+      !Number.isFinite(userId) ||
+      userId <= 0
+    ) {
+      return res.status(401).json({
+        ok: false,
+        error: "unauthorised",
+      });
     }
-    if (!Number.isFinite(holeNum) || holeNum <= 0) {
-      return res.status(400).json({ ok: false, error: "invalid hole number" });
+
+    if (
+      !Number.isFinite(roundId) ||
+      roundId <= 0
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid round id",
+      });
     }
+
+    if (
+      !Number.isFinite(holeNum) ||
+      holeNum <= 0
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid hole number",
+      });
+    }
+
+    await ensureSharedRoundColumns();
 
     const owner = await getRoundOwner(roundId);
-    if (!owner) return res.status(404).json({ ok: false, error: "round not found" });
-    if (owner.user_id !== userId) return res.status(403).json({ ok: false, error: "forbidden" });
 
-    const { strokes, putts, par, distance_m, distance } = req.body || {};
+    if (!owner) {
+      return res.status(404).json({
+        ok: false,
+        error: "round not found",
+      });
+    }
+
+    // -------------------------------------------------
+    // Access:
+    // owner OR one of the TeeRadar users attached to
+    // player_user_ids.
+    // -------------------------------------------------
+    const canAccess = await canUserAccessRound(
+      roundId,
+      userId
+    );
+
+    if (!canAccess) {
+      return res.status(403).json({
+        ok: false,
+        error: "forbidden",
+      });
+    }
+
+    const holesCount = Number(owner.holes || 0);
+
+    if (
+      Number.isFinite(holesCount) &&
+      holesCount > 0 &&
+      holeNum > holesCount
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid hole number",
+      });
+    }
+
+    // -------------------------------------------------
+    // Work out which player number this logged-in user
+    // represents on the shared scorecard.
+    //
+    // player_user_ids:
+    // [ownerId, friendId, ...]
+    //
+    // becomes:
+    // owner  -> "1"
+    // friend -> "2"
+    // etc.
+    // -------------------------------------------------
+    const playerUserIds =
+      Array.isArray(owner.player_user_ids)
+        ? owner.player_user_ids
+        : [];
+
+    let playerIndex = playerUserIds.findIndex(
+      (id) => Number(id) === userId
+    );
+
+    // Backwards compatibility for old single-player
+    // rounds which may not have player_user_ids.
+    if (
+      playerIndex < 0 &&
+      Number(owner.user_id) === userId
+    ) {
+      playerIndex = 0;
+    }
+
+    if (playerIndex < 0) {
+      return res.status(403).json({
+        ok: false,
+        error: "player_not_attached_to_round",
+      });
+    }
+
+    const playerNumber = String(
+      playerIndex + 1
+    );
+
+    const {
+      strokes,
+      putts,
+      par,
+      distance_m,
+      distance,
+    } = req.body || {};
 
     const strokesVal =
-      strokes === null || typeof strokes === "undefined" || strokes === "" ? null : Number(strokes);
+      strokes === null ||
+      typeof strokes === "undefined" ||
+      strokes === ""
+        ? null
+        : Number(strokes);
 
     const puttsVal =
-      putts === null || typeof putts === "undefined" || putts === "" ? null : Number(putts);
+      putts === null ||
+      typeof putts === "undefined" ||
+      putts === ""
+        ? null
+        : Number(putts);
 
-    const parVal = par === null || typeof par === "undefined" || par === "" ? null : Number(par);
+    const parVal =
+      par === null ||
+      typeof par === "undefined" ||
+      par === ""
+        ? null
+        : Number(par);
 
-    const distValRaw = typeof distance_m !== "undefined" ? distance_m : distance;
+    const distValRaw =
+      typeof distance_m !== "undefined"
+        ? distance_m
+        : distance;
+
     const distVal =
-      distValRaw === null || typeof distValRaw === "undefined" || distValRaw === ""
+      distValRaw === null ||
+      typeof distValRaw === "undefined" ||
+      distValRaw === ""
         ? null
         : Number(distValRaw);
 
+    // -------------------------------------------------
+    // Detect whether the round had started BEFORE this
+    // update, for the existing friend notification.
+    // -------------------------------------------------
+    const beforeStartCheck = await db.query(
+      `
+      SELECT COUNT(*)::int AS scored_holes
+      FROM round_holes
+      WHERE round_id = $1
+        AND (
+          strokes IS NOT NULL
+          OR (
+            strokes_by_player IS NOT NULL
+            AND strokes_by_player <> '{}'::jsonb
+          )
+        );
+      `,
+      [roundId]
+    );
+
+    const hadStartedBefore =
+      Number(
+        beforeStartCheck.rows[0]?.scored_holes || 0
+      ) > 0;
+
+    await db.query("BEGIN");
+
+    // Make sure the hole exists.
     await db.query(
       `
-      INSERT INTO round_holes (round_id, hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player)
-      VALUES ($1, $2, NULL, NULL, NULL, NULL, '{}'::jsonb, '{}'::jsonb)
-      ON CONFLICT (round_id, hole_number) DO NOTHING;
+      INSERT INTO round_holes (
+        round_id,
+        hole_number,
+        par,
+        distance_m,
+        strokes,
+        putts,
+        strokes_by_player,
+        putts_by_player
+      )
+      VALUES (
+        $1,
+        $2,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        '{}'::jsonb,
+        '{}'::jsonb
+      )
+      ON CONFLICT (round_id, hole_number)
+      DO NOTHING;
       `,
       [roundId, holeNum]
     );
 
+    // -------------------------------------------------
+    // IMPORTANT:
+    //
+    // jsonb_set changes ONLY this player's key.
+    //
+    // Example existing:
+    // {"1": 4}
+    //
+    // Player 2 submits 5:
+    // {"1": 4, "2": 5}
+    //
+    // Player 1's score is NOT replaced.
+    // -------------------------------------------------
     const result = await db.query(
       `
       UPDATE round_holes
       SET
-        strokes = $3,
-        putts = $4,
-        par = COALESCE($5, par),
-        distance_m = COALESCE($6, distance_m)
-      WHERE round_id = $1 AND hole_number = $2
-      RETURNING hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player;
+        par = COALESCE($4, par),
+
+        distance_m =
+          COALESCE($5, distance_m),
+
+        strokes_by_player =
+          CASE
+            WHEN $6::boolean THEN
+              COALESCE(
+                strokes_by_player,
+                '{}'::jsonb
+              ) - $3::text
+            ELSE
+              jsonb_set(
+                COALESCE(
+                  strokes_by_player,
+                  '{}'::jsonb
+                ),
+                ARRAY[$3::text],
+                to_jsonb($7::integer),
+                true
+              )
+          END,
+
+        putts_by_player =
+          CASE
+            WHEN $8::boolean THEN
+              COALESCE(
+                putts_by_player,
+                '{}'::jsonb
+              ) - $3::text
+            ELSE
+              jsonb_set(
+                COALESCE(
+                  putts_by_player,
+                  '{}'::jsonb
+                ),
+                ARRAY[$3::text],
+                to_jsonb($9::integer),
+                true
+              )
+          END,
+
+        -- Legacy columns represent Player 1.
+        -- Only Player 1 is allowed to modify them.
+        strokes =
+          CASE
+            WHEN $3::text = '1'
+              THEN $7
+            ELSE strokes
+          END,
+
+        putts =
+          CASE
+            WHEN $3::text = '1'
+              THEN $9
+            ELSE putts
+          END
+
+      WHERE
+        round_id = $1
+        AND hole_number = $2
+
+      RETURNING
+        hole_number,
+        par,
+        distance_m,
+        strokes,
+        putts,
+        strokes_by_player,
+        putts_by_player;
       `,
       [
-        roundId,
-        holeNum,
-        Number.isFinite(strokesVal) ? strokesVal : null,
-        Number.isFinite(puttsVal) ? puttsVal : null,
-        Number.isFinite(parVal) ? parVal : null,
-        Number.isFinite(distVal) ? distVal : null,
+        roundId,                       // $1
+        holeNum,                       // $2
+        playerNumber,                  // $3
+
+        Number.isFinite(parVal)
+          ? parVal
+          : null,                      // $4
+
+        Number.isFinite(distVal)
+          ? distVal
+          : null,                      // $5
+
+        !Number.isFinite(strokesVal),  // $6
+
+        Number.isFinite(strokesVal)
+          ? strokesVal
+          : null,                      // $7
+
+        !Number.isFinite(puttsVal),    // $8
+
+        Number.isFinite(puttsVal)
+          ? puttsVal
+          : null,                      // $9
       ]
     );
 
-    return res.json({ ok: true, hole: result.rows[0] || null });
+    await db.query("COMMIT");
+
+    const savedHole =
+      result.rows[0] || null;
+
+    // -------------------------------------------------
+    // Preserve existing "friend started a round"
+    // behaviour when the first score is entered.
+    //
+    // Use the ROUND OWNER for the notification because
+    // this is one shared round.
+    // -------------------------------------------------
+    if (
+      !hadStartedBefore &&
+      Number.isFinite(strokesVal)
+    ) {
+      try {
+        await notifyFriendsRoundStarted({
+          userId: Number(owner.user_id),
+          roundId,
+          course: owner.course,
+          layout: owner.layout,
+        });
+      } catch (notifyErr) {
+        console.warn(
+          "FRIEND_STARTED_ROUND notification failed:",
+          notifyErr?.message || notifyErr
+        );
+      }
+    }
+
+    console.log(
+      "✅ collaborative hole saved",
+      {
+        roundId,
+        holeNum,
+        userId,
+        playerNumber,
+        strokes: Number.isFinite(strokesVal)
+          ? strokesVal
+          : null,
+        putts: Number.isFinite(puttsVal)
+          ? puttsVal
+          : null,
+      }
+    );
+
+    return res.json({
+      ok: true,
+      roundId,
+      holeNumber: holeNum,
+      playerNumber: Number(playerNumber),
+      hole: savedHole,
+    });
   } catch (err) {
-    console.error("PUT /api/rounds/:id/hole/:n error:", err);
-    return res.status(500).json({ ok: false, error: "internal error" });
+    try {
+      await db.query("ROLLBACK");
+    } catch {}
+
+    console.error(
+      "PUT /api/rounds/:id/hole/:n error:",
+      err
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "internal error",
+      detail: err?.message,
+    });
   }
 });
 
