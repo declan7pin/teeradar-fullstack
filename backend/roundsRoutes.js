@@ -3220,24 +3220,59 @@ const hadStartedBefore =
     );
 
     let newPlayerNames = [];
-    if (Array.isArray(req.body?.player_names)) {
-      newPlayerNames = req.body.player_names.map((x) => String(x || "").trim());
-    }
-    newPlayerNames.length = newPlayersCount;
 
-    await ensurePlayerNamesColumn();
+if (
+  Array.isArray(
+    req.body?.player_names
+  )
+) {
+  newPlayerNames =
+    req.body.player_names.map(
+      (x) =>
+        String(
+          x || ""
+        ).trim()
+    );
+}
 
-    await db.query("BEGIN");
+newPlayerNames.length =
+  newPlayersCount;
+
+await ensurePlayerNamesColumn();
+await ensureSharedRoundColumns();
+
+const incomingPlayerUserIds =
+  Array.isArray(
+    req.body?.player_user_ids
+  )
+    ? req.body.player_user_ids
+    : owner.player_user_ids;
+
+const newPlayerUserIds =
+  cleanPlayerUserIds(
+    incomingPlayerUserIds,
+    newPlayersCount,
+    userId
+  );
+
+await db.query("BEGIN");
 
     // ✅ FIX: update round metadata INSIDE the transaction
     await db.query(
       `
       UPDATE rounds
-      SET players_count = $2,
-          player_names = $3::jsonb
-      WHERE id = $1;
+SET
+  players_count = $2,
+  player_names = $3::jsonb,
+  player_user_ids = $4::jsonb
+WHERE id = $1;
       `,
-      [roundId, newPlayersCount, JSON.stringify(newPlayerNames)]
+      [
+  roundId,
+  newPlayersCount,
+  JSON.stringify(newPlayerNames),
+  JSON.stringify(newPlayerUserIds)
+]
     );
 
     for (const h of holes) {
