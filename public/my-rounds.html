@@ -2148,6 +2148,200 @@ html.app-mode .app-bottom-nav {
   }
 }
 
+  /* =========================================================
+   ACTIVE SHARED ROUND
+   ========================================================= */
+
+#activeRoundSection{
+  margin-top:18px;
+  margin-bottom:18px;
+}
+
+.activeRoundHeading{
+  display:flex;
+  align-items:center;
+  gap:8px;
+
+  margin-bottom:10px;
+
+  color:#006b57;
+
+  font-size:.72rem;
+  font-weight:1000;
+  letter-spacing:.09em;
+}
+
+.activeRoundPulse{
+  width:9px;
+  height:9px;
+
+  flex:0 0 auto;
+
+  border-radius:50%;
+
+  background:#16a34a;
+
+  box-shadow:
+    0 0 0 0 rgba(22,163,74,.45);
+
+  animation:
+    activeRoundPulse 1.8s infinite;
+}
+
+@keyframes activeRoundPulse{
+  0%{
+    box-shadow:
+      0 0 0 0 rgba(22,163,74,.42);
+  }
+
+  70%{
+    box-shadow:
+      0 0 0 8px rgba(22,163,74,0);
+  }
+
+  100%{
+    box-shadow:
+      0 0 0 0 rgba(22,163,74,0);
+  }
+}
+
+.activeRoundList{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.activeRoundCard{
+  position:relative;
+
+  overflow:hidden;
+
+  padding:17px;
+
+  border:1px solid rgba(0,121,107,.18);
+  border-radius:21px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #ffffff 0%,
+      #edf9f6 100%
+    );
+
+  cursor:pointer;
+
+  box-shadow:
+    0 12px 30px rgba(21,50,60,.08);
+
+  transition:
+    transform .12s ease,
+    box-shadow .15s ease;
+}
+
+.activeRoundCard:active{
+  transform:scale(.985);
+}
+
+.activeRoundTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+
+  gap:12px;
+}
+
+.activeRoundCourse{
+  color:#10212a;
+
+  font-size:1.05rem;
+  font-weight:1000;
+  letter-spacing:-.035em;
+}
+
+.activeRoundMeta{
+  margin-top:6px;
+
+  color:#667982;
+
+  font-size:.79rem;
+  font-weight:800;
+  line-height:1.4;
+}
+
+.activeRoundPlayers{
+  margin-top:9px;
+
+  color:#005e55;
+
+  font-size:.79rem;
+  font-weight:950;
+}
+
+.activeRoundProgress{
+  margin-top:13px;
+}
+
+.activeRoundProgressTrack{
+  width:100%;
+  height:7px;
+
+  overflow:hidden;
+
+  border-radius:999px;
+
+  background:#dcebe8;
+}
+
+.activeRoundProgressFill{
+  height:100%;
+
+  border-radius:999px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #008879,
+      #006b60
+    );
+
+  transition:
+    width .3s ease;
+}
+
+.activeRoundProgressText{
+  display:flex;
+  justify-content:space-between;
+
+  gap:10px;
+
+  margin-top:6px;
+
+  color:#708089;
+
+  font-size:.7rem;
+  font-weight:850;
+}
+
+.activeRoundOpen{
+  margin-top:13px;
+
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+
+  color:#006b57;
+
+  font-size:.82rem;
+  font-weight:1000;
+}
+
+html.app-mode .activeRoundCard{
+  border-radius:19px;
+
+  box-shadow:
+    0 8px 22px rgba(21,50,60,.07);
+}
+
 /* =========================================================
    SHARE UPCOMING ROUND — FIXED APP MODAL
    ========================================================= */
@@ -2496,6 +2690,24 @@ html.app-mode .app-bottom-nav {
 </div>
 
 <div id="upcomingList" class="list"></div>
+
+      <!-- =====================================================
+     LIVE / ACTIVE SHARED ROUND
+     ===================================================== -->
+<div
+  id="activeRoundSection"
+  style="display:none;"
+>
+  <div class="activeRoundHeading">
+    <span class="activeRoundPulse"></span>
+    ROUND IN PROGRESS
+  </div>
+
+  <div
+    id="activeRoundList"
+    class="activeRoundList"
+  ></div>
+</div>
 
 <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;" />
 
@@ -3238,6 +3450,15 @@ if (appMyStatsBtn) {
              
     const roundsListEl = document.getElementById("roundsList");
 const roundsEmptyEl = document.getElementById("roundsEmpty");
+    const activeRoundSection =
+  document.getElementById(
+    "activeRoundSection"
+  );
+
+const activeRoundList =
+  document.getElementById(
+    "activeRoundList"
+  );
 
 const openStartRoundBtn = document.getElementById("openStartRoundBtn");
 const createFormPanel = document.getElementById("createFormPanel");
@@ -5200,6 +5421,189 @@ function dateOnlyFromRound(r){
   }
 }
 
+    // -------------------------------------------------
+// ✅ Active shared rounds
+// -------------------------------------------------
+function renderActiveRounds() {
+  if (
+    !activeRoundSection ||
+    !activeRoundList
+  ) {
+    return;
+  }
+
+  /*
+   * Only shared master rounds belong here.
+   *
+   * Once Player 1 has completed all holes,
+   * the round moves back to Recent rounds only.
+   */
+  const activeRounds =
+    (roundsCache || []).filter(
+      (round) =>
+        Number(
+          round?.shared_upcoming_round_id
+        ) > 0 &&
+        round?.is_complete !== true &&
+        String(
+          round?.is_complete
+        ) !== "true"
+    );
+
+  if (!activeRounds.length) {
+    activeRoundSection.style.display =
+      "none";
+
+    activeRoundList.innerHTML = "";
+
+    return;
+  }
+
+  activeRoundSection.style.display =
+    "block";
+
+  activeRoundList.innerHTML = "";
+
+  for (const round of activeRounds) {
+    const holes =
+      Number(round?.holes || 18);
+
+    const scored =
+      Math.max(
+        0,
+        Math.min(
+          holes,
+          Number(
+            round?.scored_holes || 0
+          )
+        )
+      );
+
+    const percent =
+      holes > 0
+        ? Math.round(
+            scored / holes * 100
+          )
+        : 0;
+
+    const names =
+      Array.isArray(
+        round?.player_names
+      )
+        ? round.player_names
+            .map((name) =>
+              String(name || "").trim()
+            )
+            .filter(Boolean)
+        : [];
+
+    const playersText =
+      names.length
+        ? names.join(", ")
+        : `${
+            Number(
+              round?.players_count || 1
+            )
+          } player${
+            Number(
+              round?.players_count || 1
+            ) === 1
+              ? ""
+              : "s"
+          }`;
+
+    const card =
+      document.createElement("div");
+
+    card.className =
+      "activeRoundCard";
+
+    card.innerHTML = `
+      <div class="activeRoundTop">
+        <div>
+          <div class="activeRoundCourse">
+            ${escapeHtml(
+              round?.course ||
+              "Golf round"
+            )}
+          </div>
+
+          <div class="activeRoundMeta">
+            ${escapeHtml(
+              round?.state || ""
+            )}
+            ${round?.state ? " • " : ""}
+            ${holes} holes
+            ${
+              round?.layout
+                ? " • " +
+                  escapeHtml(
+                    round.layout
+                  )
+                : ""
+            }
+          </div>
+        </div>
+
+        <span class="pill">
+          LIVE
+        </span>
+      </div>
+
+      <div class="activeRoundPlayers">
+        Playing: ${escapeHtml(
+          playersText
+        )}
+      </div>
+
+      <div class="activeRoundProgress">
+        <div class="activeRoundProgressTrack">
+          <div
+            class="activeRoundProgressFill"
+            style="width:${percent}%"
+          ></div>
+        </div>
+
+        <div class="activeRoundProgressText">
+          <span>
+            ${scored}
+            of
+            ${holes}
+            holes scored
+          </span>
+
+          <span>
+            ${percent}%
+          </span>
+        </div>
+      </div>
+
+      <div class="activeRoundOpen">
+        <span>
+          Open scorecard & GPS
+        </span>
+
+        <span>
+          →
+        </span>
+      </div>
+    `;
+
+    card.addEventListener(
+      "click",
+      () => {
+        loadRound(
+          round.id
+        );
+      }
+    );
+
+    activeRoundList.appendChild(
+      card
+    );
+  }
+}
+
     // -----------------------------
     // Round list
     // -----------------------------
@@ -5210,6 +5614,40 @@ function dateOnlyFromRound(r){
   const dateQ = String(roundDateFilter?.value || "").trim();
 
   const filtered = roundsCache.filter((r) => {
+  /*
+   * Active shared rounds are displayed in the dedicated
+   * Round in Progress section above.
+   */
+  const isActiveSharedRound =
+    Number(
+      r?.shared_upcoming_round_id
+    ) > 0 &&
+    r?.is_complete !== true &&
+    String(
+      r?.is_complete
+    ) !== "true";
+
+  if (isActiveSharedRound) {
+    return false;
+  }
+
+  const courseText =
+    `${r.course || ""} ${r.layout || ""}`
+      .toLowerCase();
+
+  const courseOk =
+    !courseQ ||
+    courseText.includes(courseQ);
+
+  const roundDate =
+    dateOnlyFromRound(r);
+
+  const dateOk =
+    !dateQ ||
+    roundDate === dateQ;
+
+  return courseOk && dateOk;
+});
     const courseText = `${r.course || ""} ${r.layout || ""}`.toLowerCase();
     const courseOk = !courseQ || courseText.includes(courseQ);
 
@@ -6755,28 +7193,84 @@ async function confirmShareRound(){
   // ✅ Guest mode: read from localStorage
   if (!isLoggedIn()){
     const rounds = guestReadRounds();
+
     roundsCache = rounds.map(r => ({
       ...r,
-      holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
+      holesData:
+        Array.isArray(r.holesData)
+          ? r.holesData
+          : (
+              Array.isArray(r.holes)
+                ? r.holes
+                : []
+            )
     }));
+
+    renderActiveRounds();
     renderRoundsList();
-renderTeeRadarHandicap();
+    renderTeeRadarHandicap();
+
     return;
   }
 
   // ✅ Logged in: read from backend
-  const data = await api("/api/rounds", { method:"GET" });
-backendHandicap = data?.handicap || null;
+  const data = await api(
+    "/api/rounds",
+    {
+      method: "GET"
+    }
+  );
 
-const rounds = (data && data.rounds) ? data.rounds : [];
-roundsCache = rounds.map(r => ({
+  backendHandicap =
+    data?.handicap || null;
+
+  const rounds =
+    Array.isArray(data?.rounds)
+      ? data.rounds
+      : [];
+
+  roundsCache = rounds.map(r => ({
     ...r,
-    holesData: Array.isArray(r.holesData) ? r.holesData : (Array.isArray(r.holes) ? r.holes : [])
-  }));
-  renderRoundsList();
-renderTeeRadarHandicap();
-}
 
+    holesData:
+      Array.isArray(r.holesData)
+        ? r.holesData
+        : (
+            Array.isArray(r.holes)
+              ? r.holes
+              : []
+          ),
+
+    /*
+     * Normalise backend progress fields so the
+     * active-round renderer gets reliable values.
+     */
+    scored_holes:
+      Number(r?.scored_holes || 0),
+
+    is_complete:
+      r?.is_complete === true ||
+      String(r?.is_complete).toLowerCase() === "true",
+
+    is_owner:
+      r?.is_owner === true ||
+      String(r?.is_owner).toLowerCase() === "true"
+  }));
+
+  /*
+   * Active shared rounds are rendered separately
+   * above Recent rounds.
+   */
+  renderActiveRounds();
+
+  /*
+   * Recent rounds renderer automatically excludes
+   * active shared rounds.
+   */
+  renderRoundsList();
+
+  renderTeeRadarHandicap();
+}
     async function loadRound(id){
   setLeftPanelsVisibility(false);
 
