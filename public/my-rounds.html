@@ -7373,6 +7373,90 @@ async function startUpcomingRoundFromId(id) {
         setToast(leftToast, "Rounds API not ready: " + (err.message || "error"), false);
       }
     }
+
+    // -------------------------------------------------
+// ✅ Live My Rounds refresh
+//
+// While this screen is open, periodically refresh the
+// user's rounds so a shared round started by a friend
+// appears automatically.
+//
+// Also refresh whenever the app/page becomes active again.
+// -------------------------------------------------
+let roundsLiveRefreshTimer = null;
+
+async function refreshRoundsInBackground() {
+  if (!isLoggedIn()) {
+    return;
+  }
+
+  try {
+    await fetchRounds();
+  } catch (error) {
+    /*
+     * Background refresh should stay silent.
+     * We do not want a toast popping up every 10 seconds
+     * if the golfer temporarily loses signal.
+     */
+    console.warn(
+      "Background rounds refresh failed:",
+      error?.message || error
+    );
+  }
+}
+
+function startRoundsLiveRefresh() {
+  if (roundsLiveRefreshTimer) {
+    clearInterval(
+      roundsLiveRefreshTimer
+    );
+  }
+
+  /*
+   * Refresh every 10 seconds while My Rounds is open.
+   */
+  roundsLiveRefreshTimer =
+    setInterval(
+      refreshRoundsInBackground,
+      10000
+    );
+}
+
+function stopRoundsLiveRefresh() {
+  if (!roundsLiveRefreshTimer) {
+    return;
+  }
+
+  clearInterval(
+    roundsLiveRefreshTimer
+  );
+
+  roundsLiveRefreshTimer = null;
+}
+    document.addEventListener(
+  "visibilitychange",
+  () => {
+    if (
+      document.visibilityState === "visible"
+    ) {
+      refreshRoundsInBackground();
+    }
+  }
+);
+
+window.addEventListener(
+  "focus",
+  () => {
+    refreshRoundsInBackground();
+  }
+);
+
+window.addEventListener(
+  "beforeunload",
+  () => {
+    stopRoundsLiveRefresh();
+  }
+);
     async function safeLoadRound(id){
       try{
         await loadRound(id);
@@ -7791,6 +7875,7 @@ upcomingCourseAutoList.id = "upcomingCourseAutoList";
 }
 
   await safeFetchRounds();
+      startRoundsLiveRefresh();
 await fetchUpcomingRounds();
  if (startUpcomingIdFromUrl) {
   await startUpcomingRoundFromId(startUpcomingIdFromUrl);
