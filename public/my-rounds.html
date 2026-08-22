@@ -5992,10 +5992,16 @@ function findFirstIncompleteHoleIndex(round) {
           playerIndex
         );
 
-      if (!Number.isFinite(Number(strokes))) {
-        holeComplete = false;
-        break;
-      }
+      const hasStrokes =
+  strokes !== null &&
+  typeof strokes !== "undefined" &&
+  strokes !== "" &&
+  Number.isFinite(Number(strokes));
+
+if (!hasStrokes) {
+  holeComplete = false;
+  break;
+}
     }
 
     if (!holeComplete) {
@@ -6128,9 +6134,12 @@ function applyLiveScoreDataToTable(freshRound) {
           strokesInput
       ) {
         const next =
-          Number.isFinite(Number(strokes))
-            ? String(Number(strokes))
-            : "";
+  strokes !== null &&
+  typeof strokes !== "undefined" &&
+  strokes !== "" &&
+  Number.isFinite(Number(strokes))
+    ? String(Number(strokes))
+    : "";
 
         if (
           strokesInput.value !== next
@@ -6145,9 +6154,12 @@ function applyLiveScoreDataToTable(freshRound) {
           puttsInput
       ) {
         const next =
-          Number.isFinite(Number(putts))
-            ? String(Number(putts))
-            : "";
+  putts !== null &&
+  typeof putts !== "undefined" &&
+  putts !== "" &&
+  Number.isFinite(Number(putts))
+    ? String(Number(putts))
+    : "";
 
         if (
           puttsInput.value !== next
@@ -6469,7 +6481,13 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
 const hasSavedPutts = curPutts !== null && curPutts !== undefined && Number.isFinite(Number(curPutts));
 
   // ✅ defaults you requested
-  const startStrokes = Number.isFinite(Number(curStrokes)) ? Number(curStrokes) : Number(basePar);
+  const startStrokes =
+  curStrokes !== null &&
+  typeof curStrokes !== "undefined" &&
+  curStrokes !== "" &&
+  Number.isFinite(Number(curStrokes))
+    ? Number(curStrokes)
+    : Number(basePar);
   const startPutts = hasSavedPutts ? Number(curPutts) : "";
     // strokes options: 1 to 11+
   const strokeVals = [1,2,3,4,5,6,7,8,9,10,11];
