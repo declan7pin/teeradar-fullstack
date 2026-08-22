@@ -2720,20 +2720,31 @@ router.post("/create", requireAuth, async (req, res) => {
   return router.handle(req, res);
 });
 
+// -------------------------------------------------
 // List my rounds
+//
+// Returns:
+// - rounds         = my normal round history
+// - active_rounds  = shared live scorecards
+// - handicap       = my TeeRadar handicap
+// -------------------------------------------------
 router.get("/", requireAuth, async (req, res) => {
   try {
-    const userId = Number(req.user?.id);
+    const userId =
+      Number(req.user?.id);
 
-    if (!Number.isFinite(userId) || userId <= 0) {
+    if (
+      !Number.isFinite(userId) ||
+      userId <= 0
+    ) {
       return res.status(401).json({
         ok: false,
         error: "unauthorised",
       });
     }
 
-    // Make sure handicap columns exist.
     await ensureTeeRadarHandicapColumns();
+    await ensureSharedRoundColumns();
 
     // -------------------------------------------------
     // Handicap
@@ -2742,69 +2753,44 @@ router.get("/", requireAuth, async (req, res) => {
 
     try {
       freshHandicap =
-        await recalculateTeeRadarHandicap(userId);
+        await recalculateTeeRadarHandicap(
+          userId
+        );
     } catch (err) {
       console.warn(
         "Could not recalculate handicap on rounds load:",
         err?.message || err
       );
-
-      // Do NOT fail the rounds request just because
-      // handicap calculation failed.
-      freshHandicap = null;
     }
 
     // -------------------------------------------------
-    // MY rounds
+    // NORMAL MY ROUNDS
     //
-    // IMPORTANT:
-    // Only return rounds actually owned by this user.
-    //
-    // Shared live master rounds are accessed through
-    // their own shared-round endpoints.
-    //
-    // Friends receive their own linked round records,
-    // so those will naturally appear here because their
-    // user_id is the friend's user id.
+    // Only rounds owned by this account belong in
+    // Recent Rounds / Handicap / My Stats.
     // -------------------------------------------------
-    const { rows } = await db.query(
-      `
-      SELECT
-        r.id,
-        r.user_id,
-        r.course,
-        r.layout,
-        r.state,
-        r.holes,
-        r.par_mode,
-        r.created_at,
-        r.players_count,
-        r.player_names,
-        r.player_user_ids,
-        r.shared_upcoming_round_id,
-        r.linked_master_round_id,
-        r.linked_player_number,
+    const roundsRes =
+      await db.query(
+        `
+        SELECT
+          r.id,
+          r.user_id,
+          r.course,
+          r.layout,
+          r.state,
+          r.holes,
+          r.par_mode,
+          r.created_at,
+          r.players_count,
+          r.player_names,
+          r.player_user_ids,
+          r.shared_upcoming_round_id,
+          r.linked_master_round_id,
+          r.linked_player_number,
 
-        TRUE AS is_owner,
+          TRUE AS is_owner,
 
-        COALESCE(
-          (
-            SELECT COUNT(*)::int
-            FROM round_holes rh
-            WHERE rh.round_id = r.id
-              AND (
-                rh.strokes IS NOT NULL
-                OR (
-                  rh.strokes_by_player IS NOT NULL
-                  AND rh.strokes_by_player ? '1'
-                )
-              )
-          ),
-          0
-        ) AS scored_holes,
-
-        CASE
-          WHEN COALESCE(
+          COALESCE(
             (
               SELECT COUNT(*)::int
               FROM round_holes rh
@@ -2818,163 +2804,176 @@ router.get("/", requireAuth, async (req, res) => {
                 )
             ),
             0
-          ) >= r.holes
-          THEN TRUE
-          ELSE FALSE
-        END AS is_complete
+          ) AS scored_holes,
 
-      FROM rounds r
+          CASE
+            WHEN COALESCE(
+              (
+                SELECT COUNT(*)::int
+                FROM round_holes rh
+                WHERE rh.round_id = r.id
+                  AND (
+                    rh.strokes IS NOT NULL
+                    OR (
+                      rh.strokes_by_player IS NOT NULL
+                      AND rh.strokes_by_player ? '1'
+                    )
+                  )
+              ),
+              0
+            ) >= r.holes
+            THEN TRUE
+            ELSE FALSE
+          END AS is_complete
 
-      WHERE r.user_id = $1
+        FROM rounds r
 
-      ORDER BY r.created_at DESC
-      LIMIT 200;
-      `,
-      [userId]
-    );
+        WHERE r.user_id = $1
+
+        ORDER BY r.created_at DESC
+
+        LIMIT 200;
+        `,
+        [userId]
+      );
+
+    const rounds =
+      roundsRes.rows || [];
 
     // -------------------------------------------------
-// Shared LIVE rounds for this golfer.
-//
-// These are returned separately from normal My Rounds
-// so they do NOT affect:
-// - handicap
-// - stats
-// - recent-round history
-//
-// But every attached golfer can still see the same
-// live master scorecard.
-// -------------------------------------------------
-const activeSharedRes = await db.query(
-  `
-  SELECT
-    r.id,
-    r.user_id,
-    r.course,
-    r.layout,
-    r.state,
-    r.holes,
-    r.par_mode,
-    r.created_at,
-    r.players_count,
-    r.player_names,
-    r.player_user_ids,
-    r.shared_upcoming_round_id,
-    r.linked_master_round_id,
-    r.linked_player_number,
+    // SHARED LIVE ROUNDS
+    //
+    // These are deliberately separate from Recent
+    // Rounds so they cannot affect handicap/stats.
+    //
+    // Owner OR any player inside player_user_ids sees
+    // the SAME master round here.
+    // -------------------------------------------------
+    const activeSharedRes =
+      await db.query(
+        `
+        SELECT
+          r.id,
+          r.user_id,
+          r.course,
+          r.layout,
+          r.state,
+          r.holes,
+          r.par_mode,
+          r.created_at,
+          r.players_count,
+          r.player_names,
+          r.player_user_ids,
+          r.shared_upcoming_round_id,
+          r.linked_master_round_id,
+          r.linked_player_number,
 
-    CASE
-      WHEN r.user_id = $1
-        THEN TRUE
-      ELSE FALSE
-    END AS is_owner,
+          CASE
+            WHEN r.user_id = $1
+            THEN TRUE
+            ELSE FALSE
+          END AS is_owner,
 
-    COALESCE(
-      (
-        SELECT COUNT(*)::int
-        FROM round_holes rh
-        WHERE rh.round_id = r.id
-          AND (
-            rh.strokes IS NOT NULL
-            OR (
-              rh.strokes_by_player IS NOT NULL
-              AND rh.strokes_by_player ? '1'
-            )
-          )
-      ),
-      0
-    ) AS scored_holes,
-
-    CASE
-      WHEN COALESCE(
-        (
-          SELECT COUNT(*)::int
-          FROM round_holes rh
-          WHERE rh.round_id = r.id
-            AND (
-              rh.strokes IS NOT NULL
-              OR (
-                rh.strokes_by_player IS NOT NULL
-                AND rh.strokes_by_player ? '1'
-              )
-            )
-        ),
-        0
-      ) >= r.holes
-      THEN TRUE
-      ELSE FALSE
-    END AS is_complete
-
-  FROM rounds r
-
-  WHERE
-    r.shared_upcoming_round_id IS NOT NULL
-
-    AND r.linked_master_round_id IS NULL
-
-    AND (
-      r.user_id = $1
-
-      OR EXISTS (
-        SELECT 1
-        FROM jsonb_array_elements_text(
           COALESCE(
-            r.player_user_ids,
-            '[]'::jsonb
-          )
-        ) AS participant(user_id)
+            (
+              SELECT COUNT(*)::int
+              FROM round_holes rh
+              WHERE rh.round_id = r.id
+                AND (
+                  rh.strokes IS NOT NULL
+                  OR (
+                    rh.strokes_by_player IS NOT NULL
+                    AND rh.strokes_by_player ? '1'
+                  )
+                )
+            ),
+            0
+          ) AS scored_holes,
+
+          CASE
+            WHEN COALESCE(
+              (
+                SELECT COUNT(*)::int
+                FROM round_holes rh
+                WHERE rh.round_id = r.id
+                  AND (
+                    rh.strokes IS NOT NULL
+                    OR (
+                      rh.strokes_by_player IS NOT NULL
+                      AND rh.strokes_by_player ? '1'
+                    )
+                  )
+              ),
+              0
+            ) >= r.holes
+            THEN TRUE
+            ELSE FALSE
+          END AS is_complete
+
+        FROM rounds r
+
         WHERE
-          participant.user_id::bigint = $1
-      )
-    )
+          r.shared_upcoming_round_id IS NOT NULL
 
-  ORDER BY r.created_at DESC
-  LIMIT 20;
-  `,
-  [userId]
-);
+          AND r.linked_master_round_id IS NULL
 
-const activeRounds =
-  activeSharedRes.rows || [];
+          AND (
+            r.user_id = $1
 
-    console.log("🏌️ GET /api/rounds", {
-      userId,
-      roundsReturned: rows.length,
-      handicap: freshHandicap,
-    });
+            OR EXISTS (
+              SELECT 1
+
+              FROM jsonb_array_elements_text(
+                COALESCE(
+                  r.player_user_ids,
+                  '[]'::jsonb
+                )
+              ) AS player_id
+
+              WHERE
+                player_id::bigint = $1
+            )
+          )
+
+        ORDER BY r.created_at DESC
+
+        LIMIT 20;
+        `,
+        [userId]
+      );
+
+    const activeRounds =
+      activeSharedRes.rows || [];
+
+    console.log(
+      "🏌️ GET /api/rounds",
+      {
+        userId,
+        roundsReturned:
+          rounds.length,
+
+        activeRoundsReturned:
+          activeRounds.length,
+
+        handicap:
+          freshHandicap,
+      }
+    );
 
     return res.json({
-  ok: true,
+      ok: true,
 
-  /*
-   * Normal personal round history.
-   */
-  rounds: rows || [],
+      // Normal history
+      rounds,
 
-  /*
-   * Shared live scorecards are deliberately separate.
-   */
-  active_rounds: activeRounds,
+      // Shared live master scorecards
+      active_rounds:
+        activeRounds,
 
-  handicap: {
-    value:
-      freshHandicap?.handicap ?? null,
-
-    status:
-      freshHandicap?.status ||
-      "provisional",
-
-    rounds:
-      Number(
-        freshHandicap?.rounds || 0
-      ),
-
-    trend:
-      freshHandicap?.trend ?? null,
-  },
-});
+      handicap: {
         value:
-          freshHandicap?.handicap ?? null,
+          freshHandicap?.handicap ??
+          null,
 
         status:
           freshHandicap?.status ||
@@ -2986,9 +2985,11 @@ const activeRounds =
           ),
 
         trend:
-          freshHandicap?.trend ?? null,
+          freshHandicap?.trend ??
+          null,
       },
     });
+
   } catch (err) {
     console.error(
       "GET /api/rounds error:",
@@ -2998,7 +2999,9 @@ const activeRounds =
     return res.status(500).json({
       ok: false,
       error: "internal error",
-      detail: err?.message || String(err),
+      detail:
+        err?.message ||
+        String(err),
     });
   }
 });
