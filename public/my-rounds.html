@@ -3533,6 +3533,14 @@ let liveScoreSyncTimer = null;
 let liveScoreSyncBusy = false;
 
 /*
+ * True while this phone is actively changing/saving
+ * a score in the premium scorecard.
+ *
+ * Live polling must not redraw the controls during this.
+ */
+let premiumScoreEditBusy = false;
+
+/*
  * True only while we are initially opening/resuming
  * a round.
  *
@@ -6184,14 +6192,14 @@ function applyLiveScoreDataToTable(freshRound) {
 // ---------------------------------------------------------
 async function syncCurrentRoundLive() {
   if (
-    !isLoggedIn() ||
-    !currentRoundId ||
-    document.visibilityState !== "visible" ||
-    liveScoreSyncBusy
-  ) {
-    return;
-  }
-
+  !isLoggedIn() ||
+  !currentRoundId ||
+  document.visibilityState !== "visible" ||
+  liveScoreSyncBusy ||
+  premiumScoreEditBusy
+) {
+  return;
+}
   liveScoreSyncBusy = true;
 
   try {
@@ -6512,25 +6520,96 @@ const hasSavedPutts = curPutts !== null && curPutts !== undefined && Number.isFi
 
     sel.value = String(startStrokes);
 
-    sel.addEventListener("change", async () => {
-  const v = Number(sel.value);
+    sel.addEventListener(
+  "change",
+  async () => {
+    const v =
+      Number(sel.value);
 
-  setHoleValueInTable(
-    holeNum,
-    "strokes",
-    premiumPlayerIndex + 1,
-    Number.isFinite(v) ? v : null
-  );
+    const playerNumber =
+      premiumPlayerIndex + 1;
 
-  await playScoreHaptic("light");
+    /*
+     * Prevent the 2-second shared-score poll
+     * from redrawing this control while saving.
+     */
+    premiumScoreEditBusy = true;
 
-  renderPremiumForHole(
-    round,
-    metaPars,
-    metaDists,
-    teeName
-  );
-});
+    try {
+      setHoleValueInTable(
+        holeNum,
+        "strokes",
+        playerNumber,
+        Number.isFinite(v)
+          ? v
+          : null
+      );
+
+      await playScoreHaptic(
+        "light"
+      );
+
+      /*
+       * Save this individual golfer immediately.
+       */
+      await savePremiumPlayerScore(
+        holeNum,
+        playerNumber
+      );
+
+      /*
+       * Keep our in-memory round aligned with
+       * what is now in the table.
+       */
+      const localHole =
+        getHoleRowFromTable(
+          holeNum
+        );
+
+      if (
+        localHole &&
+        currentRound &&
+        Array.isArray(
+          currentRound.holesData
+        )
+      ) {
+        const index =
+          currentRound.holesData.findIndex(
+            (h) =>
+              Number(h?.hole_number) ===
+              holeNum
+          );
+
+        if (index >= 0) {
+          currentRound.holesData[index] =
+            localHole;
+        }
+      }
+
+      renderPremiumForHole(
+        currentRound || round,
+        metaPars,
+        metaDists,
+        teeName
+      );
+
+    } catch (error) {
+      console.error(
+        "Immediate strokes save failed:",
+        error
+      );
+
+      setToast(
+        rightToast,
+        "Could not save strokes.",
+        false
+      );
+
+    } finally {
+      premiumScoreEditBusy = false;
+    }
+  }
+);
 
     premScoreBtns.appendChild(sel);
   }
@@ -6570,31 +6649,96 @@ puttVals.forEach(({ value, label }) => {
 
 sel.value = startPutts === "" ? "" : String(startPutts);
     
-    sel.addEventListener("change", async () => {
-  const raw =
-    String(sel.value || "").trim();
+    sel.addEventListener(
+  "change",
+  async () => {
+    const raw =
+      String(
+        sel.value || ""
+      ).trim();
 
-  const v =
-    raw === ""
-      ? null
-      : Number(raw);
+    const v =
+      raw === ""
+        ? null
+        : Number(raw);
 
-  setHoleValueInTable(
-    holeNum,
-    "putts",
-    premiumPlayerIndex + 1,
-    Number.isFinite(v) ? v : null
-  );
+    const playerNumber =
+      premiumPlayerIndex + 1;
 
-  await playScoreHaptic("light");
+    premiumScoreEditBusy = true;
 
-  renderPremiumForHole(
-    round,
-    metaPars,
-    metaDists,
-    teeName
-  );
-});
+    try {
+      setHoleValueInTable(
+        holeNum,
+        "putts",
+        playerNumber,
+        Number.isFinite(v)
+          ? v
+          : null
+      );
+
+      await playScoreHaptic(
+        "light"
+      );
+
+      /*
+       * Immediately save only this player
+       * on this hole.
+       */
+      await savePremiumPlayerScore(
+        holeNum,
+        playerNumber
+      );
+
+      const localHole =
+        getHoleRowFromTable(
+          holeNum
+        );
+
+      if (
+        localHole &&
+        currentRound &&
+        Array.isArray(
+          currentRound.holesData
+        )
+      ) {
+        const index =
+          currentRound.holesData.findIndex(
+            (h) =>
+              Number(h?.hole_number) ===
+              holeNum
+          );
+
+        if (index >= 0) {
+          currentRound.holesData[index] =
+            localHole;
+        }
+      }
+
+      renderPremiumForHole(
+        currentRound || round,
+        metaPars,
+        metaDists,
+        teeName
+      );
+
+    } catch (error) {
+      console.error(
+        "Immediate putts save failed:",
+        error
+      );
+
+      setToast(
+        rightToast,
+        "Could not save putts.",
+        false
+      );
+
+    } finally {
+      premiumScoreEditBusy = false;
+    }
+  }
+);
 
     premPuttBtns.appendChild(sel);
   }
@@ -7193,6 +7337,125 @@ if (canUsePremium) {
       for (let i=1;i<=holesCount;i++) rows.push(byHole.get(i));
       return rows;
     }
+
+    // -------------------------------------------------
+// ✅ Save ONE player's score on ONE hole immediately
+//
+// Used by the premium Strokes / Putts controls.
+//
+// This means:
+//
+// Player 1 changes Hole 3 strokes
+//      ↓
+// only Hole 3 / Player 1 is saved
+//
+// Nothing from another player or hole is touched.
+// -------------------------------------------------
+async function savePremiumPlayerScore(
+  holeNumber,
+  playerNumber
+) {
+  if (
+    !isLoggedIn() ||
+    !currentRoundId
+  ) {
+    return;
+  }
+
+  const holeNum =
+    Number(holeNumber);
+
+  const playerNum =
+    Number(playerNumber);
+
+  if (
+    !Number.isFinite(holeNum) ||
+    holeNum <= 0 ||
+    !Number.isFinite(playerNum) ||
+    playerNum <= 0
+  ) {
+    return;
+  }
+
+  const holesRows =
+    readTableHoles();
+
+  const hole =
+    holesRows.find(
+      (row) =>
+        Number(row?.hole_number) ===
+        holeNum
+    );
+
+  if (!hole) {
+    throw new Error(
+      `Hole ${holeNum} was not found.`
+    );
+  }
+
+  const key =
+    String(playerNum);
+
+  const strokesRaw =
+    hole?.strokes_by_player?.[key];
+
+  const puttsRaw =
+    hole?.putts_by_player?.[key];
+
+  const strokes =
+    strokesRaw === null ||
+    typeof strokesRaw === "undefined" ||
+    strokesRaw === ""
+      ? null
+      : Number(strokesRaw);
+
+  const putts =
+    puttsRaw === null ||
+    typeof puttsRaw === "undefined" ||
+    puttsRaw === ""
+      ? null
+      : Number(puttsRaw);
+
+  await api(
+    `/api/rounds/${encodeURIComponent(
+      currentRoundId
+    )}/hole/${encodeURIComponent(
+      holeNum
+    )}`,
+    {
+      method: "PUT",
+
+      body: JSON.stringify({
+        player_number:
+          playerNum,
+
+        strokes:
+          Number.isFinite(strokes)
+            ? strokes
+            : null,
+
+        putts:
+          Number.isFinite(putts)
+            ? putts
+            : null,
+
+        par:
+          Number.isFinite(
+            Number(hole.par)
+          )
+            ? Number(hole.par)
+            : null,
+
+        distance_m:
+          Number.isFinite(
+            Number(hole.distance_m)
+          )
+            ? Number(hole.distance_m)
+            : null
+      })
+    }
+  );
+}
 
     // -------------------------------------------------
 // ✅ Collaborative live-hole save
