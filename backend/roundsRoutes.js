@@ -2723,120 +2723,157 @@ router.post("/create", requireAuth, async (req, res) => {
 // List my rounds
 router.get("/", requireAuth, async (req, res) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ ok: false, error: "unauthorised" });
+    const userId = Number(req.user?.id);
 
+    if (!Number.isFinite(userId) || userId <= 0) {
+      return res.status(401).json({
+        ok: false,
+        error: "unauthorised",
+      });
+    }
+
+    // Make sure handicap columns exist.
     await ensureTeeRadarHandicapColumns();
 
-let freshHandicap = null;
+    // -------------------------------------------------
+    // Handicap
+    // -------------------------------------------------
+    let freshHandicap = null;
 
-try {
-  freshHandicap =
-    await recalculateTeeRadarHandicap(userId);
-} catch (err) {
-  console.warn(
-    "Could not recalculate handicap on rounds load:",
-    err?.message || err
-  );
-}
+    try {
+      freshHandicap =
+        await recalculateTeeRadarHandicap(userId);
+    } catch (err) {
+      console.warn(
+        "Could not recalculate handicap on rounds load:",
+        err?.message || err
+      );
+
+      // Do NOT fail the rounds request just because
+      // handicap calculation failed.
+      freshHandicap = null;
+    }
+
+    // -------------------------------------------------
+    // MY rounds
+    //
+    // IMPORTANT:
+    // Only return rounds actually owned by this user.
+    //
+    // Shared live master rounds are accessed through
+    // their own shared-round endpoints.
+    //
+    // Friends receive their own linked round records,
+    // so those will naturally appear here because their
+    // user_id is the friend's user id.
+    // -------------------------------------------------
     const { rows } = await db.query(
-  `
-  SELECT
-    id,
-    user_id,
-    course,
-    layout,
-    state,
-    holes,
-    par_mode,
-    created_at,
-    players_count,
-    player_names,
-    player_user_ids,
-    shared_upcoming_round_id,
-linked_master_round_id,
-linked_player_number,
+      `
+      SELECT
+        r.id,
+        r.user_id,
+        r.course,
+        r.layout,
+        r.state,
+        r.holes,
+        r.par_mode,
+        r.created_at,
+        r.players_count,
+        r.player_names,
+        r.player_user_ids,
+        r.shared_upcoming_round_id,
+        r.linked_master_round_id,
+        r.linked_player_number,
 
-CASE
-  WHEN user_id = $1 THEN true
-  ELSE false
-END AS is_owner,
+        TRUE AS is_owner,
 
-COALESCE(
-  (
-    SELECT COUNT(*)::int
-    FROM round_holes rh
-    WHERE rh.round_id = rounds.id
-      AND (
-        rh.strokes IS NOT NULL
-        OR (
-          rh.strokes_by_player IS NOT NULL
-          AND rh.strokes_by_player ? '1'
-        )
-      )
-  ),
-  0
-) AS scored_holes,
-
-CASE
-  WHEN COALESCE(
-    (
-      SELECT COUNT(*)::int
-      FROM round_holes rh
-      WHERE rh.round_id = rounds.id
-        AND (
-          rh.strokes IS NOT NULL
-          OR (
-            rh.strokes_by_player IS NOT NULL
-            AND rh.strokes_by_player ? '1'
-          )
-        )
-    ),
-    0
-  ) >= holes
-  THEN true
-  ELSE false
-END AS is_complete
-
-  FROM rounds
-
-  WHERE
-    user_id = $1
-
-    OR EXISTS (
-      SELECT 1
-      FROM jsonb_array_elements_text(
         COALESCE(
-          player_user_ids,
-          '[]'::jsonb
-        )
-      ) AS player_user_id
-      WHERE
-        player_user_id::bigint = $1
-    )
+          (
+            SELECT COUNT(*)::int
+            FROM round_holes rh
+            WHERE rh.round_id = r.id
+              AND (
+                rh.strokes IS NOT NULL
+                OR (
+                  rh.strokes_by_player IS NOT NULL
+                  AND rh.strokes_by_player ? '1'
+                )
+              )
+          ),
+          0
+        ) AS scored_holes,
 
-  ORDER BY created_at DESC
-  LIMIT 200;
-  `,
-  [Number(userId)]
-);
+        CASE
+          WHEN COALESCE(
+            (
+              SELECT COUNT(*)::int
+              FROM round_holes rh
+              WHERE rh.round_id = r.id
+                AND (
+                  rh.strokes IS NOT NULL
+                  OR (
+                    rh.strokes_by_player IS NOT NULL
+                    AND rh.strokes_by_player ? '1'
+                  )
+                )
+            ),
+            0
+          ) >= r.holes
+          THEN TRUE
+          ELSE FALSE
+        END AS is_complete
+
+      FROM rounds r
+
+      WHERE r.user_id = $1
+
+      ORDER BY r.created_at DESC
+      LIMIT 200;
+      `,
+      [userId]
+    );
+
+    console.log("🏌️ GET /api/rounds", {
+      userId,
+      roundsReturned: rows.length,
+      handicap: freshHandicap,
+    });
 
     return res.json({
-  ok: true,
-  rounds: rows,
-  handicap: {
-  value: freshHandicap?.handicap ?? null,
-  status: freshHandicap?.status || "provisional",
-  rounds: Number(freshHandicap?.rounds || 0),
-  trend: freshHandicap?.trend ?? null,
-},
-});
+      ok: true,
+
+      rounds: rows || [],
+
+      handicap: {
+        value:
+          freshHandicap?.handicap ?? null,
+
+        status:
+          freshHandicap?.status ||
+          "provisional",
+
+        rounds:
+          Number(
+            freshHandicap?.rounds || 0
+          ),
+
+        trend:
+          freshHandicap?.trend ?? null,
+      },
+    });
   } catch (err) {
-    console.error("GET /api/rounds error:", err);
-    return res.status(500).json({ ok: false, error: "internal error" });
+    console.error(
+      "GET /api/rounds error:",
+      err
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "internal error",
+      detail: err?.message || String(err),
+    });
   }
 });
-
 router.get("/mine", requireAuth, async (req, res) => {
   req.url = "/";
   return router.handle(req, res);
