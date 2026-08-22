@@ -3524,6 +3524,23 @@ const gpsAccuracy =
 let premiumHoleIndex = 0;
 let premiumShowingTable = false;
 let premiumPlayerIndex = 0;
+
+    // =========================================================
+// ✅ LIVE SHARED SCORECARD SYNC
+// =========================================================
+
+let liveScoreSyncTimer = null;
+let liveScoreSyncBusy = false;
+
+/*
+ * True only while we are initially opening/resuming
+ * a round.
+ *
+ * During normal live sync we NEVER change the golfer's
+ * current hole.
+ */
+let shouldAutoOpenCurrentHole = false;
+    
 // ✅ GPS scorecard state
 let gpsEnabled = false;
 let gpsWatchId = null;
@@ -5912,6 +5929,405 @@ function setPremiumVisible(on){
   }
 }
 
+    // ---------------------------------------------------------
+// ✅ Find first incomplete hole
+//
+// A hole is complete only when EVERY player has a stroke
+// entered.
+//
+// Putts do not determine whether we advance to the next hole.
+// ---------------------------------------------------------
+function findFirstIncompleteHoleIndex(round) {
+  if (!round) {
+    return 0;
+  }
+
+  const holesCount =
+    Number(round?.holes) || 18;
+
+  const playersCount =
+    getPlayersCountFromRound(round);
+
+  const holesData =
+    Array.isArray(round?.holesData)
+      ? round.holesData
+      : [];
+
+  const byHole =
+    new Map();
+
+  for (const hole of holesData) {
+    byHole.set(
+      Number(hole?.hole_number),
+      hole
+    );
+  }
+
+  for (
+    let holeNumber = 1;
+    holeNumber <= holesCount;
+    holeNumber++
+  ) {
+    const hole =
+      byHole.get(holeNumber);
+
+    /*
+     * Missing hole row = definitely incomplete.
+     */
+    if (!hole) {
+      return holeNumber - 1;
+    }
+
+    let holeComplete = true;
+
+    for (
+      let playerIndex = 0;
+      playerIndex < playersCount;
+      playerIndex++
+    ) {
+      const strokes =
+        getHolePlayerValue(
+          hole,
+          "strokes",
+          playerIndex
+        );
+
+      if (!Number.isFinite(Number(strokes))) {
+        holeComplete = false;
+        break;
+      }
+    }
+
+    if (!holeComplete) {
+      return holeNumber - 1;
+    }
+  }
+
+  /*
+   * Entire round complete.
+   * Leave golfer on final hole.
+   */
+  return Math.max(
+    0,
+    holesCount - 1
+  );
+}
+
+
+// ---------------------------------------------------------
+// ✅ Update table values from backend WITHOUT changing hole
+// ---------------------------------------------------------
+function applyLiveScoreDataToTable(freshRound) {
+  if (
+    !freshRound ||
+    !Array.isArray(freshRound.holesData)
+  ) {
+    return;
+  }
+
+  const playersCount =
+    getPlayersCountFromRound(
+      freshRound
+    );
+
+  for (const hole of freshRound.holesData) {
+    const holeNumber =
+      Number(hole?.hole_number);
+
+    if (
+      !Number.isFinite(holeNumber) ||
+      holeNumber <= 0
+    ) {
+      continue;
+    }
+
+    /*
+     * Par
+     */
+    const parInput =
+      scoreBody.querySelector(
+        `input[data-field="par"][data-hole="${holeNumber}"]`
+      );
+
+    if (parInput) {
+      const par =
+        hole?.par == null
+          ? ""
+          : String(hole.par);
+
+      if (parInput.value !== par) {
+        parInput.value = par;
+      }
+    }
+
+    /*
+     * Editable distance
+     */
+    const distanceInput =
+      scoreBody.querySelector(
+        `input[data-field="distance_m"][data-hole="${holeNumber}"]`
+      );
+
+    if (distanceInput) {
+      const distance =
+        hole?.distance_m == null
+          ? ""
+          : String(hole.distance_m);
+
+      if (
+        distanceInput.value !==
+        distance
+      ) {
+        distanceInput.value =
+          distance;
+      }
+    }
+
+    /*
+     * Scores for every player
+     */
+    for (
+      let playerNumber = 1;
+      playerNumber <= playersCount;
+      playerNumber++
+    ) {
+      const playerIndex =
+        playerNumber - 1;
+
+      const strokes =
+        getHolePlayerValue(
+          hole,
+          "strokes",
+          playerIndex
+        );
+
+      const putts =
+        getHolePlayerValue(
+          hole,
+          "putts",
+          playerIndex
+        );
+
+      const strokesInput =
+        scoreBody.querySelector(
+          `input[data-field="strokes"][data-hole="${holeNumber}"][data-player="${playerNumber}"]`
+        );
+
+      const puttsInput =
+        scoreBody.querySelector(
+          `input[data-field="putts"][data-hole="${holeNumber}"][data-player="${playerNumber}"]`
+        );
+
+      /*
+       * Do NOT overwrite an input the golfer is actively
+       * editing on this phone.
+       */
+      if (
+        strokesInput &&
+        document.activeElement !==
+          strokesInput
+      ) {
+        const next =
+          Number.isFinite(Number(strokes))
+            ? String(Number(strokes))
+            : "";
+
+        if (
+          strokesInput.value !== next
+        ) {
+          strokesInput.value = next;
+        }
+      }
+
+      if (
+        puttsInput &&
+        document.activeElement !==
+          puttsInput
+      ) {
+        const next =
+          Number.isFinite(Number(putts))
+            ? String(Number(putts))
+            : "";
+
+        if (
+          puttsInput.value !== next
+        ) {
+          puttsInput.value = next;
+        }
+      }
+    }
+  }
+
+  applyTableScoreColours();
+  updateTotalsFromTable();
+}
+
+
+// ---------------------------------------------------------
+// ✅ Pull latest shared scorecard
+//
+// CRITICAL:
+// This updates scores but NEVER changes premiumHoleIndex.
+// So reviewing Hole 3 stays on Hole 3.
+// ---------------------------------------------------------
+async function syncCurrentRoundLive() {
+  if (
+    !isLoggedIn() ||
+    !currentRoundId ||
+    document.visibilityState !== "visible" ||
+    liveScoreSyncBusy
+  ) {
+    return;
+  }
+
+  liveScoreSyncBusy = true;
+
+  try {
+    const roundIdAtStart =
+      String(currentRoundId);
+
+    const data =
+      await api(
+        `/api/rounds/${encodeURIComponent(
+          roundIdAtStart
+        )}`,
+        {
+          method: "GET"
+        }
+      );
+
+    /*
+     * User may have opened another round while the
+     * request was in flight.
+     */
+    if (
+      String(currentRoundId) !==
+      roundIdAtStart
+    ) {
+      return;
+    }
+
+    const freshRound =
+      data?.round || data;
+
+    const freshHoles =
+      data?.holes ||
+      data?.holesData ||
+      freshRound?.holesData ||
+      [];
+
+    freshRound.holesData =
+      Array.isArray(freshHoles)
+        ? freshHoles
+        : [];
+
+    /*
+     * Preserve the CURRENT viewed hole/player.
+     */
+    const viewedHoleIndex =
+      premiumHoleIndex;
+
+    const viewedPlayerIndex =
+      premiumPlayerIndex;
+
+    const showingTable =
+      premiumShowingTable;
+
+    /*
+     * Update authoritative in-memory scorecard.
+     */
+    currentRound = {
+      ...currentRound,
+      ...freshRound,
+      holesData:
+        freshRound.holesData
+    };
+
+    /*
+     * Update hidden/full scorecard inputs.
+     */
+    applyLiveScoreDataToTable(
+      currentRound
+    );
+
+    /*
+     * Restore current navigation state before
+     * re-rendering premium controls.
+     */
+    premiumHoleIndex =
+      viewedHoleIndex;
+
+    premiumPlayerIndex =
+      viewedPlayerIndex;
+
+    premiumShowingTable =
+      showingTable;
+
+    /*
+     * Refresh only the currently visible premium UI.
+     * This does NOT move holes.
+     */
+    if (
+      premiumWrap &&
+      premiumWrap.style.display !== "none"
+    ) {
+      renderPremiumForHole(
+        currentRound,
+        currentPremiumPars,
+        currentPremiumDistances,
+        currentPremiumTeeName
+      );
+    }
+
+  } catch (error) {
+    /*
+     * Stay silent.
+     * Temporary reception loss on a golf course should
+     * not spam the golfer with errors every 2 seconds.
+     */
+    console.warn(
+      "Live score sync failed:",
+      error?.message || error
+    );
+  } finally {
+    liveScoreSyncBusy = false;
+  }
+}
+
+
+// ---------------------------------------------------------
+// ✅ Start / stop live shared score polling
+// ---------------------------------------------------------
+function startLiveScoreSync() {
+  stopLiveScoreSync();
+
+  if (
+    !isLoggedIn() ||
+    !currentRoundId
+  ) {
+    return;
+  }
+
+  liveScoreSyncTimer =
+    setInterval(
+      syncCurrentRoundLive,
+      2000
+    );
+}
+
+function stopLiveScoreSync() {
+  if (liveScoreSyncTimer) {
+    clearInterval(
+      liveScoreSyncTimer
+    );
+
+    liveScoreSyncTimer =
+      null;
+  }
+
+  liveScoreSyncBusy = false;
+}
+
 function getHoleRowFromTable(holeNum){
   const holesRows = readTableHoles();
   return holesRows.find(h => Number(h.hole_number) === Number(holeNum)) || null;
@@ -6637,10 +7053,38 @@ updateTotalsFromTable();
 
 // ✅ IMPORTANT: enable premium ONLY AFTER table inputs exist
 if (canUsePremium) {
-  enablePremiumMode(round, metaPars, metaDists, teeName);
+
+  /*
+   * Only reposition when initially opening/resuming
+   * the round.
+   *
+   * Never reposition during live score polling.
+   */
+  if (shouldAutoOpenCurrentHole) {
+    premiumHoleIndex =
+      findFirstIncompleteHoleIndex(
+        round
+      );
+
+    premiumPlayerIndex = 0;
+
+    shouldAutoOpenCurrentHole =
+      false;
+  }
+
+  enablePremiumMode(
+    round,
+    metaPars,
+    metaDists,
+    teeName
+  );
+
 } else {
+  shouldAutoOpenCurrentHole = false;
+
   premiumHoleIndex = 0;
   premiumShowingTable = false;
+
   setPremiumVisible(false);
 }
 
@@ -7492,7 +7936,24 @@ if (
  */
 renderPlayerNamesUI();
 
+/*
+ * Initial open / resume:
+ *
+ * Find the first hole where at least one player
+ * still has no strokes entered.
+ *
+ * This ONLY happens when opening the round.
+ * Live background sync will never move the golfer.
+ */
+shouldAutoOpenCurrentHole = true;
+
 await renderScorecard(round);
+
+/*
+ * Start live shared score syncing after the scorecard
+ * has been fully rendered.
+ */
+startLiveScoreSync();
 }
 
     async function createRound(){
@@ -8072,7 +8533,29 @@ function stopRoundsLiveRefresh() {
     if (
       document.visibilityState === "visible"
     ) {
+      /*
+       * Refresh My Rounds / active-round cards.
+       */
       refreshRoundsInBackground();
+
+      /*
+       * If a scorecard is already open, immediately
+       * pull the latest scores and resume 2-second sync.
+       *
+       * IMPORTANT:
+       * This does NOT move the golfer to another hole.
+       */
+      if (currentRoundId) {
+        syncCurrentRoundLive();
+        startLiveScoreSync();
+      }
+
+    } else {
+      /*
+       * Pause score polling while TeeRadar is in the
+       * background.
+       */
+      stopLiveScoreSync();
     }
   }
 );
@@ -8080,7 +8563,19 @@ function stopRoundsLiveRefresh() {
 window.addEventListener(
   "focus",
   () => {
+    /*
+     * Refresh the Play screen.
+     */
     refreshRoundsInBackground();
+
+    /*
+     * Also refresh an open scorecard immediately.
+     * Again, this keeps the current viewed hole.
+     */
+    if (currentRoundId) {
+      syncCurrentRoundLive();
+      startLiveScoreSync();
+    }
   }
 );
 
@@ -8088,6 +8583,7 @@ window.addEventListener(
   "beforeunload",
   () => {
     stopRoundsLiveRefresh();
+    stopLiveScoreSync();
   }
 );
     async function safeLoadRound(id){
