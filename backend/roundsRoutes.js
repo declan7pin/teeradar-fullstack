@@ -270,6 +270,118 @@ async function ensureSharedRoundColumns() {
 }
 
 // -------------------------------------------------
+// ✅ Shared scorecard participants
+//
+// ONE master round exists in rounds.
+// Every TeeRadar account playing in that round gets
+// one row here pointing to the SAME round_id.
+// -------------------------------------------------
+async function ensureRoundParticipantsTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS round_participants (
+        id bigserial PRIMARY KEY,
+
+        round_id bigint NOT NULL
+          REFERENCES rounds(id)
+          ON DELETE CASCADE,
+
+        user_id bigint NOT NULL
+          REFERENCES users(id)
+          ON DELETE CASCADE,
+
+        player_number integer NOT NULL,
+
+        created_at timestamptz
+          NOT NULL DEFAULT now(),
+
+        UNIQUE (round_id, user_id),
+        UNIQUE (round_id, player_number)
+      );
+
+      CREATE INDEX IF NOT EXISTS
+        round_participants_user_round_idx
+      ON round_participants (user_id, round_id);
+    `);
+  } catch (e) {
+    console.warn(
+      "ensureRoundParticipantsTable failed:",
+      e?.message || e
+    );
+
+    throw e;
+  }
+}
+
+
+// -------------------------------------------------
+// ✅ Register every TeeRadar player against ONE
+// shared master scorecard.
+// -------------------------------------------------
+async function registerRoundParticipants({
+  roundId,
+  ownerUserId,
+  playerUserIds,
+  playersCount,
+}) {
+  await ensureRoundParticipantsTable();
+
+  const rid = Number(roundId);
+  const ownerId = Number(ownerUserId);
+  const count = clampPlayers(playersCount);
+
+  if (
+    !Number.isFinite(rid) ||
+    rid <= 0 ||
+    !Number.isFinite(ownerId) ||
+    ownerId <= 0
+  ) {
+    return;
+  }
+
+  const ids = cleanPlayerUserIds(
+    playerUserIds,
+    count,
+    ownerId
+  );
+
+  for (let i = 0; i < ids.length; i++) {
+    const uid = Number(ids[i]);
+
+    // Guest players have no TeeRadar user ID.
+    if (
+      !Number.isFinite(uid) ||
+      uid <= 0
+    ) {
+      continue;
+    }
+
+    const playerNumber = i + 1;
+
+    await db.query(
+      `
+      INSERT INTO round_participants (
+        round_id,
+        user_id,
+        player_number
+      )
+      VALUES ($1, $2, $3)
+
+      ON CONFLICT (round_id, user_id)
+      DO UPDATE SET
+        player_number =
+          EXCLUDED.player_number;
+      `,
+      [
+        rid,
+        uid,
+        playerNumber,
+      ]
+    );
+  }
+}
+
+// -------------------------------------------------
 // ✅ "complete" heuristic to count a round as played
 // -------------------------------------------------
 function isCompleteFromPayload(holesArr, holesCount) {
@@ -530,38 +642,34 @@ async function canUserAccessRound(roundId, userId) {
     return false;
   }
 
+  await ensureRoundParticipantsTable();
+
   const { rows } = await db.query(
     `
-    SELECT
-      user_id,
-      player_user_ids
-    FROM rounds
-    WHERE id = $1
+    SELECT 1
+    FROM rounds r
+
+    LEFT JOIN round_participants rp
+      ON rp.round_id = r.id
+      AND rp.user_id = $2
+
+    WHERE r.id = $1
+
+      AND (
+        r.user_id = $2
+        OR rp.user_id = $2
+      )
+
     LIMIT 1;
     `,
-    [rid]
+    [
+      rid,
+      uid,
+    ]
   );
 
-  if (!rows.length) {
-    return false;
-  }
-
-  const round = rows[0];
-
-  // Round creator always has access.
-  if (Number(round.user_id) === uid) {
-    return true;
-  }
-
-  const playerUserIds = Array.isArray(round.player_user_ids)
-    ? round.player_user_ids
-    : [];
-
-  return playerUserIds.some(
-    (id) => Number(id) === uid
-  );
+  return rows.length > 0;
 }
-
 // -------------------------------------------------
 // ✅ Notify accepted friends when a golfer starts a round
 // -------------------------------------------------
@@ -678,584 +786,6 @@ async function notifyFriendsRoundStarted({
       err?.message || err
     );
   }
-}
-async function syncSharedPlayerRounds(masterRoundId, savedHoles) {
-  console.log("🟦 syncSharedPlayerRounds START", {
-    masterRoundId,
-    savedHolesCount: Array.isArray(savedHoles) ? savedHoles.length : "not_array",
-  });
-
-  const masterData = await getRoundWithHoles(masterRoundId);
-  if (!masterData?.round) {
-    console.log("🟥 sync stopped: master round not found", { masterRoundId });
-    return;
-  }
-
-  const master = masterData.round;
-
-  console.log("🟦 sync master round", {
-    masterRoundId,
-    user_id: master.user_id,
-    shared_upcoming_round_id: master.shared_upcoming_round_id,
-    course: master.course,
-    layout: master.layout,
-    state: master.state,
-    holes: master.holes,
-    players_count: master.players_count,
-    player_names: master.player_names,
-    player_user_ids: master.player_user_ids,
-  });
-
-  const upcomingId = Number(master.shared_upcoming_round_id || 0);
-
-  if (!upcomingId) {
-  console.log(
-    "🟦 No upcoming round link — checking direct player friends",
-    {
-      masterRoundId,
-    }
-  );
-
-  await syncDirectPlayerRounds(
-    masterRoundId,
-    savedHoles
-  );
-
-  return;
-}
-
-  const participantsRes = await db.query(
-    `
-    SELECT
-      u.id,
-      u.email,
-      COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS name,
-      CASE WHEN u.id = ur.user_id THEN 0 ELSE 1 END AS sort_order
-    FROM upcoming_rounds ur
-    JOIN users u ON u.id = ur.user_id
-    WHERE ur.id = $1
-
-    UNION ALL
-
-    SELECT
-      u.id,
-      u.email,
-      COALESCE(NULLIF(u.display_name, ''), split_part(u.email, '@', 1)) AS name,
-      1 AS sort_order
-    FROM upcoming_round_shares s
-    JOIN users u ON u.id = s.shared_with_user_id
-    WHERE s.upcoming_round_id = $1
-
-    ORDER BY sort_order ASC, name ASC
-    LIMIT 4;
-    `,
-    [upcomingId]
-  );
-
-  const participants = participantsRes.rows || [];
-
-  console.log("🟦 sync participants", {
-    upcomingId,
-    count: participants.length,
-    participants,
-  });
-
-  if (participants.length <= 1) {
-    console.log("🟥 sync stopped: only one participant found", {
-      upcomingId,
-      participantsCount: participants.length,
-    });
-    return;
-  }
-
-  for (let i = 0; i < participants.length; i++) {
-    const player = participants[i];
-    const playerUserId = Number(player.id);
-    const playerNum = String(i + 1);
-    const playerName = String(player.name || player.email || `Player ${i + 1}`).trim();
-
-    console.log("🟨 syncing player", {
-      index: i,
-      playerNum,
-      playerUserId,
-      playerName,
-    });
-
-    if (!Number.isFinite(playerUserId) || playerUserId <= 0) {
-      console.log("🟥 skipped player: invalid user id", { player });
-      continue;
-    }
-
-    let roundId = null;
-
-    const existing = await db.query(
-      `
-      SELECT id
-      FROM rounds
-      WHERE user_id = $1
-        AND shared_upcoming_round_id = $2
-      ORDER BY created_at ASC
-      LIMIT 1;
-      `,
-      [playerUserId, upcomingId]
-    );
-
-    if (existing.rows.length) {
-      roundId = Number(existing.rows[0].id);
-
-      console.log("🟩 using existing player round", {
-        playerUserId,
-        roundId,
-        upcomingId,
-      });
-    } else {
-      const created = await createRoundWithSeededHoles({
-        userId: playerUserId,
-        course: master.course,
-        layout: master.layout,
-        state: master.state,
-        holes: master.holes,
-        par_mode: master.par_mode || "published",
-        players_count: 1,
-        player_names: [playerName],
-        player_user_ids: [playerUserId],
-        shared_upcoming_round_id: upcomingId,
-      });
-
-      console.log("🟦 create player round result", {
-        playerUserId,
-        upcomingId,
-        createdOk: created?.ok,
-        createdRoundId: created?.round?.id,
-        error: created?.error,
-        detail: created?.detail,
-      });
-
-      if (!created?.ok || !created?.round?.id) {
-        console.log("🟥 skipped player: could not create player round", {
-          playerUserId,
-          upcomingId,
-        });
-        continue;
-      }
-
-      roundId = Number(created.round.id);
-
-      console.log("🟩 created player round", {
-        playerUserId,
-        roundId,
-        upcomingId,
-      });
-    }
-
-    let holesSavedForPlayer = 0;
-
-    for (const h of savedHoles || []) {
-      const holeNum = Number(h?.hole_number ?? h?.hole ?? h?.number);
-      if (!Number.isFinite(holeNum) || holeNum <= 0) continue;
-
-      const strokesMap = cleanPlayerMap(h?.strokes_by_player || h?.strokesByPlayer || {});
-      const puttsMap = cleanPlayerMap(h?.putts_by_player || h?.puttsByPlayer || {});
-
-      const strokesVal = Number.isFinite(Number(strokesMap[playerNum]))
-        ? Number(strokesMap[playerNum])
-        : null;
-
-      const puttsVal = Number.isFinite(Number(puttsMap[playerNum]))
-        ? Number(puttsMap[playerNum])
-        : null;
-
-      const parVal =
-        h?.par === null || typeof h?.par === "undefined" || h?.par === ""
-          ? null
-          : Number(h.par);
-
-      const distVal =
-        h?.distance_m === null || typeof h?.distance_m === "undefined" || h?.distance_m === ""
-          ? null
-          : Number(h.distance_m);
-
-      await db.query(
-        `
-        INSERT INTO round_holes (
-          round_id, hole_number, par, distance_m,
-          strokes, putts, strokes_by_player, putts_by_player
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb)
-        ON CONFLICT (round_id, hole_number) DO UPDATE SET
-          par = EXCLUDED.par,
-          distance_m = EXCLUDED.distance_m,
-          strokes = EXCLUDED.strokes,
-          putts = EXCLUDED.putts,
-          strokes_by_player = EXCLUDED.strokes_by_player,
-          putts_by_player = EXCLUDED.putts_by_player;
-        `,
-        [
-          roundId,
-          holeNum,
-          Number.isFinite(parVal) ? parVal : null,
-          Number.isFinite(distVal) ? distVal : null,
-          strokesVal,
-          puttsVal,
-          JSON.stringify(strokesVal === null ? {} : { "1": strokesVal }),
-          JSON.stringify(puttsVal === null ? {} : { "1": puttsVal }),
-        ]
-      );
-
-      holesSavedForPlayer++;
-    }
-
-    console.log("✅ finished syncing player", {
-      playerUserId,
-      roundId,
-      playerNum,
-      holesSavedForPlayer,
-    });
-  }
-
-  console.log("✅ syncSharedPlayerRounds COMPLETE", {
-    masterRoundId,
-    upcomingId,
-  });
-}
-
-async function syncDirectPlayerRounds(masterRoundId, savedHoles = null) {
-  await ensureSharedRoundColumns();
-
-  const masterData = await getRoundWithHoles(masterRoundId);
-
-  if (!masterData?.round) {
-    console.log("DIRECT_PLAYER_SYNC: master round not found", {
-      masterRoundId,
-    });
-    return;
-  }
-
-  const master = masterData.round;
-
-  // Never fan-out from one of the friend's linked copies.
-  if (Number(master.linked_master_round_id || 0) > 0) {
-    return;
-  }
-
-  const ownerUserId = Number(master.user_id);
-
-  const playerNames = Array.isArray(master.player_names)
-    ? master.player_names
-    : [];
-
-  const playerUserIds = Array.isArray(master.player_user_ids)
-    ? master.player_user_ids
-    : [];
-
-  const playersCount = clampPlayers(master.players_count || 1);
-
-  // If this was called immediately after round creation,
-  // use the seeded hole data from the DB.
-  const holesToSync = Array.isArray(savedHoles)
-    ? savedHoles
-    : masterData.holes || [];
-
-  console.log("🟦 DIRECT_PLAYER_SYNC start", {
-    masterRoundId,
-    ownerUserId,
-    playersCount,
-    playerNames,
-    playerUserIds,
-  });
-
-  // Start at index 1 because index 0 is Player 1 / owner.
-  for (let i = 1; i < playersCount; i++) {
-    const playerNumber = i + 1;
-
-    const friendUserId = Number(playerUserIds[i]);
-
-    if (
-      !Number.isFinite(friendUserId) ||
-      friendUserId <= 0 ||
-      friendUserId === ownerUserId
-    ) {
-      // Guest player — name remains on scorecard,
-      // but there is no TeeRadar account to link.
-      continue;
-    }
-
-    // Security check:
-    // selected account must actually be an accepted friend.
-    const friendship = await db.query(
-      `
-      SELECT id
-      FROM user_friends
-      WHERE status = 'accepted'
-        AND (
-          (
-            requester_user_id = $1
-            AND addressee_user_id = $2
-          )
-          OR
-          (
-            requester_user_id = $2
-            AND addressee_user_id = $1
-          )
-        )
-      LIMIT 1;
-      `,
-      [ownerUserId, friendUserId]
-    );
-
-    if (!friendship.rows.length) {
-      console.warn("DIRECT_PLAYER_SYNC: user is not an accepted friend", {
-        masterRoundId,
-        ownerUserId,
-        friendUserId,
-        playerNumber,
-      });
-
-      continue;
-    }
-
-    const friendRes = await db.query(
-      `
-      SELECT
-        id,
-        email,
-        COALESCE(
-          NULLIF(display_name, ''),
-          split_part(email, '@', 1)
-        ) AS name
-      FROM users
-      WHERE id = $1
-      LIMIT 1;
-      `,
-      [friendUserId]
-    );
-
-    const friend = friendRes.rows[0];
-
-    if (!friend) {
-      continue;
-    }
-
-    const friendName =
-      String(
-        playerNames[i] ||
-        friend.name ||
-        friend.email ||
-        `Player ${playerNumber}`
-      ).trim();
-
-    let linkedRoundId = null;
-
-    const existing = await db.query(
-      `
-      SELECT id
-      FROM rounds
-      WHERE user_id = $1
-        AND linked_master_round_id = $2
-      LIMIT 1;
-      `,
-      [friendUserId, Number(masterRoundId)]
-    );
-
-    if (existing.rows.length) {
-      linkedRoundId = Number(existing.rows[0].id);
-    } else {
-      const created = await createRoundWithSeededHoles({
-        userId: friendUserId,
-        course: master.course,
-        layout: master.layout,
-        state: master.state,
-        holes: master.holes,
-        par_mode: master.par_mode || "published",
-
-        // Friend gets their own single-player round.
-        players_count: 1,
-        player_names: [friendName],
-        player_user_ids: [friendUserId],
-
-        linked_master_round_id: Number(masterRoundId),
-        linked_player_number: playerNumber,
-      });
-
-      if (!created?.ok || !created?.round?.id) {
-        console.warn("DIRECT_PLAYER_SYNC: linked round creation failed", {
-          masterRoundId,
-          friendUserId,
-          playerNumber,
-          error: created?.error,
-        });
-
-        continue;
-      }
-
-      linkedRoundId = Number(created.round.id);
-
-      // Optional push notification when they're added.
-      try {
-        const ownerRes = await db.query(
-          `
-          SELECT
-            COALESCE(
-              NULLIF(display_name, ''),
-              split_part(email, '@', 1)
-            ) AS name
-          FROM users
-          WHERE id = $1
-          LIMIT 1;
-          `,
-          [ownerUserId]
-        );
-
-        const ownerName =
-          String(ownerRes.rows[0]?.name || "A friend").trim();
-
-        const friendEmail =
-          String(friend.email || "").trim().toLowerCase();
-
-        if (friendEmail) {
-          await sendMobilePushToEmail(friendEmail, {
-            title: `${ownerName} added you to a round`,
-            body: `${ownerName} added you to a round at ${master.course}.`,
-            url: `/my-rounds.html`,
-            type: "ROUND_SHARED",
-            meta: {
-              masterRoundId: String(masterRoundId),
-              roundId: String(linkedRoundId),
-            },
-          });
-        }
-      } catch (pushErr) {
-        console.warn(
-          "DIRECT_PLAYER_SYNC push failed:",
-          pushErr?.message || pushErr
-        );
-      }
-    }
-
-    for (const h of holesToSync) {
-      const holeNum = Number(
-        h?.hole_number ??
-        h?.hole ??
-        h?.number
-      );
-
-      if (
-        !Number.isFinite(holeNum) ||
-        holeNum <= 0
-      ) {
-        continue;
-      }
-
-      const strokesMap = cleanPlayerMap(
-        h?.strokes_by_player ||
-        h?.strokesByPlayer ||
-        {}
-      );
-
-      const puttsMap = cleanPlayerMap(
-        h?.putts_by_player ||
-        h?.puttsByPlayer ||
-        {}
-      );
-
-      const playerKey = String(playerNumber);
-
-      const strokesVal =
-        typeof strokesMap[playerKey] !== "undefined" &&
-        Number.isFinite(Number(strokesMap[playerKey]))
-          ? Number(strokesMap[playerKey])
-          : null;
-
-      const puttsVal =
-        typeof puttsMap[playerKey] !== "undefined" &&
-        Number.isFinite(Number(puttsMap[playerKey]))
-          ? Number(puttsMap[playerKey])
-          : null;
-
-      const parVal =
-        h?.par === null ||
-        typeof h?.par === "undefined" ||
-        h?.par === ""
-          ? null
-          : Number(h.par);
-
-      const distRaw =
-        typeof h?.distance_m !== "undefined"
-          ? h.distance_m
-          : h?.distance;
-
-      const distVal =
-        distRaw === null ||
-        typeof distRaw === "undefined" ||
-        distRaw === ""
-          ? null
-          : Number(distRaw);
-
-      await db.query(
-        `
-        INSERT INTO round_holes (
-          round_id,
-          hole_number,
-          par,
-          distance_m,
-          strokes,
-          putts,
-          strokes_by_player,
-          putts_by_player
-        )
-        VALUES (
-          $1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb
-        )
-        ON CONFLICT (round_id, hole_number)
-        DO UPDATE SET
-          par = EXCLUDED.par,
-          distance_m = EXCLUDED.distance_m,
-          strokes = EXCLUDED.strokes,
-          putts = EXCLUDED.putts,
-          strokes_by_player = EXCLUDED.strokes_by_player,
-          putts_by_player = EXCLUDED.putts_by_player;
-        `,
-        [
-          linkedRoundId,
-          holeNum,
-
-          Number.isFinite(parVal)
-            ? parVal
-            : null,
-
-          Number.isFinite(distVal)
-            ? distVal
-            : null,
-
-          strokesVal,
-          puttsVal,
-
-          JSON.stringify(
-            strokesVal === null
-              ? {}
-              : { "1": strokesVal }
-          ),
-
-          JSON.stringify(
-            puttsVal === null
-              ? {}
-              : { "1": puttsVal }
-          ),
-        ]
-      );
-    }
-
-    console.log("✅ DIRECT_PLAYER_SYNC friend linked", {
-      masterRoundId,
-      linkedRoundId,
-      friendUserId,
-      playerNumber,
-    });
-  }
-
-  console.log("✅ DIRECT_PLAYER_SYNC complete", {
-    masterRoundId,
-  });
 }
 
 function isValidEmail(v) {
@@ -2579,7 +2109,25 @@ VALUES (
 
     await db.query("COMMIT");
 
-    const verifyRound = await db.query(
+// -------------------------------------------------
+// ✅ Make this SAME scorecard available to every
+// TeeRadar player attached to the round.
+// -------------------------------------------------
+try {
+  await registerRoundParticipants({
+    roundId: insertedRoundId,
+    ownerUserId: Number(userId),
+    playerUserIds,
+    playersCount,
+  });
+} catch (participantErr) {
+  console.warn(
+    "Could not register round participants:",
+    participantErr?.message || participantErr
+  );
+}
+
+const verifyRound = await db.query(
       `
       SELECT
   id,
@@ -2854,6 +2402,8 @@ router.get("/", requireAuth, async (req, res) => {
 let activeRounds = [];
 
 try {
+  await ensureRoundParticipantsTable();
+
   const activeSharedRes =
     await db.query(
       `
@@ -2879,6 +2429,8 @@ try {
           ELSE FALSE
         END AS is_owner,
 
+        rp.player_number,
+
         COALESCE(
           (
             SELECT COUNT(*)::int
@@ -2886,9 +2438,13 @@ try {
             WHERE rh.round_id = r.id
               AND (
                 rh.strokes IS NOT NULL
+
                 OR (
-                  rh.strokes_by_player IS NOT NULL
-                  AND rh.strokes_by_player ? '1'
+                  rh.strokes_by_player
+                    IS NOT NULL
+
+                  AND rh.strokes_by_player
+                    <> '{}'::jsonb
                 )
               )
           ),
@@ -2903,35 +2459,36 @@ try {
               WHERE rh.round_id = r.id
                 AND (
                   rh.strokes IS NOT NULL
+
                   OR (
-                    rh.strokes_by_player IS NOT NULL
-                    AND rh.strokes_by_player ? '1'
+                    rh.strokes_by_player
+                      IS NOT NULL
+
+                    AND rh.strokes_by_player
+                      <> '{}'::jsonb
                   )
                 )
             ),
             0
           ) >= r.holes
+
           THEN TRUE
           ELSE FALSE
         END AS is_complete
 
-      FROM rounds r
+      FROM round_participants rp
 
-      WHERE
-        r.shared_upcoming_round_id IS NOT NULL
+      JOIN rounds r
+        ON r.id = rp.round_id
 
-        AND r.linked_master_round_id IS NULL
+      WHERE rp.user_id = $1
 
-        AND (
-          r.user_id = $1
+        -- We only want master scorecards.
+        AND r.linked_master_round_id
+          IS NULL
 
-          OR COALESCE(
-            r.player_user_ids,
-            '[]'::jsonb
-          ) @> jsonb_build_array($1::bigint)
-        )
-
-      ORDER BY r.created_at DESC
+      ORDER BY
+        r.created_at DESC
 
       LIMIT 20;
       `,
@@ -2949,7 +2506,6 @@ try {
 
   activeRounds = [];
 }
-
     console.log(
       "🏌️ GET /api/rounds",
       {
@@ -3471,6 +3027,13 @@ router.post("/from-upcoming/:upcomingId", requireAuth, async (req, res) => {
         ]
       );
 
+      await registerRoundParticipants({
+  roundId,
+  ownerUserId: Number(upcoming.user_id),
+  playerUserIds,
+  playersCount,
+});
+
       console.log(
         "🟩 FROM_UPCOMING using existing shared round",
         {
@@ -3697,6 +3260,13 @@ const newPlayerUserIds =
     newPlayersCount,
     owner.user_id
   );
+
+await registerRoundParticipants({
+  roundId,
+  ownerUserId: Number(owner.user_id),
+  playerUserIds: newPlayerUserIds,
+  playersCount: newPlayersCount,
+});
 
 await db.query("BEGIN");
 
@@ -3955,30 +3525,46 @@ router.put("/:id/hole/:n", requireAuth, async (req, res) => {
     // friend -> "2"
     // etc.
     // -------------------------------------------------
-    const playerUserIds =
-      Array.isArray(owner.player_user_ids)
-        ? owner.player_user_ids
-        : [];
+    await ensureRoundParticipantsTable();
 
-    let playerIndex = playerUserIds.findIndex(
-      (id) => Number(id) === userId
+const participantRes =
+  await db.query(
+    `
+    SELECT player_number
+    FROM round_participants
+    WHERE round_id = $1
+      AND user_id = $2
+    LIMIT 1;
+    `,
+    [
+      roundId,
+      userId,
+    ]
+  );
+
+let attachedPlayerNumber = null;
+
+if (participantRes.rows.length) {
+  attachedPlayerNumber =
+    Number(
+      participantRes.rows[0].player_number
     );
+}
 
-    // Backwards compatibility for old single-player
-    // rounds which may not have player_user_ids.
-    if (
-      playerIndex < 0 &&
-      Number(owner.user_id) === userId
-    ) {
-      playerIndex = 0;
-    }
+// Backwards compatibility for old rounds.
+if (
+  !Number.isFinite(attachedPlayerNumber) &&
+  Number(owner.user_id) === userId
+) {
+  attachedPlayerNumber = 1;
+}
 
-    if (playerIndex < 0) {
-      return res.status(403).json({
-        ok: false,
-        error: "player_not_attached_to_round",
-      });
-    }
+if (!Number.isFinite(attachedPlayerNumber)) {
+  return res.status(403).json({
+    ok: false,
+    error: "player_not_attached_to_round",
+  });
+}
 
     /*
  * By default a golfer edits their own player slot.
@@ -3998,7 +3584,7 @@ let playerNumber =
   requestedPlayerNumber <=
     clampPlayers(owner.players_count || 1)
     ? String(requestedPlayerNumber)
-    : String(playerIndex + 1);
+    : String(attachedPlayerNumber);
 
 const {
   strokes,
