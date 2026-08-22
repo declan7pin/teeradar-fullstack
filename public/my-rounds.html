@@ -6560,22 +6560,110 @@ if (premScoreBtns) {
    * rebuilding this select after the golfer changes it.
    */
   sel.addEventListener(
-    "change",
-    () => {
+  "change",
+  async () => {
+    const v =
+      Number(sel.value);
+
+    const playerNumber =
+      premiumPlayerIndex + 1;
+
+    premiumScoreEditBusy = true;
+
+    try {
+      /*
+       * Update the hidden/full scorecard first.
+       */
+      setHoleValueInTable(
+        holeNum,
+        "strokes",
+        playerNumber,
+        Number.isFinite(v)
+          ? v
+          : null
+      );
+
+      await playScoreHaptic(
+        "light"
+      );
+
+      /*
+       * Save ONLY this player on this hole.
+       */
+      await savePremiumPlayerScore(
+        holeNum,
+        playerNumber
+      );
+
+      /*
+       * Keep this phone's in-memory copy current.
+       */
+      const localHole =
+        getHoleRowFromTable(
+          holeNum
+        );
+
+      if (
+        localHole &&
+        currentRound &&
+        Array.isArray(
+          currentRound.holesData
+        )
+      ) {
+        const index =
+          currentRound.holesData.findIndex(
+            (h) =>
+              Number(
+                h?.hole_number
+              ) === holeNum
+          );
+
+        if (index >= 0) {
+          currentRound.holesData[index] =
+            localHole;
+        }
+      }
+
       console.log(
-        "🟢 STROKES CHANGED",
+        "✅ STROKES SAVED",
         {
-          selected:
-            sel.value,
-
-          holeNum,
-
+          hole:
+            holeNum,
           player:
-            premiumPlayerIndex + 1
+            playerNumber,
+          strokes:
+            v
         }
       );
+
+      /*
+       * IMPORTANT:
+       * Do NOT call renderPremiumForHole() here.
+       *
+       * The native select already displays the
+       * golfer's selected value.
+       */
+    } catch (error) {
+      console.error(
+        "❌ Strokes save failed:",
+        error
+      );
+
+      setToast(
+        rightToast,
+        "Could not save strokes: " +
+          (
+            error?.message ||
+            "error"
+          ),
+        false
+      );
+
+    } finally {
+      premiumScoreEditBusy = false;
     }
-  );
+  }
+);
 
   premScoreBtns.appendChild(sel);
 }
@@ -6677,22 +6765,114 @@ if (premPuttBtns) {
    * Do NOT re-render.
    */
   sel.addEventListener(
-    "change",
-    () => {
+  "change",
+  async () => {
+    const raw =
+      String(
+        sel.value || ""
+      ).trim();
+
+    const v =
+      raw === ""
+        ? null
+        : Number(raw);
+
+    const playerNumber =
+      premiumPlayerIndex + 1;
+
+    premiumScoreEditBusy = true;
+
+    try {
+      /*
+       * Update hidden/full scorecard.
+       */
+      setHoleValueInTable(
+        holeNum,
+        "putts",
+        playerNumber,
+        Number.isFinite(v)
+          ? v
+          : null
+      );
+
+      await playScoreHaptic(
+        "light"
+      );
+
+      /*
+       * Save ONLY this player on this hole.
+       */
+      await savePremiumPlayerScore(
+        holeNum,
+        playerNumber
+      );
+
+      /*
+       * Keep local in-memory scorecard current.
+       */
+      const localHole =
+        getHoleRowFromTable(
+          holeNum
+        );
+
+      if (
+        localHole &&
+        currentRound &&
+        Array.isArray(
+          currentRound.holesData
+        )
+      ) {
+        const index =
+          currentRound.holesData.findIndex(
+            (h) =>
+              Number(
+                h?.hole_number
+              ) === holeNum
+          );
+
+        if (index >= 0) {
+          currentRound.holesData[index] =
+            localHole;
+        }
+      }
+
       console.log(
-        "🟢 PUTTS CHANGED",
+        "✅ PUTTS SAVED",
         {
-          selected:
-            sel.value,
-
-          holeNum,
-
+          hole:
+            holeNum,
           player:
-            premiumPlayerIndex + 1
+            playerNumber,
+          putts:
+            v
         }
       );
+
+      /*
+       * IMPORTANT:
+       * Do NOT call renderPremiumForHole().
+       */
+    } catch (error) {
+      console.error(
+        "❌ Putts save failed:",
+        error
+      );
+
+      setToast(
+        rightToast,
+        "Could not save putts: " +
+          (
+            error?.message ||
+            "error"
+          ),
+        false
+      );
+
+    } finally {
+      premiumScoreEditBusy = false;
     }
-  );
+  }
+);
 
   premPuttBtns.appendChild(sel);
 }
@@ -8789,30 +8969,34 @@ function stopRoundsLiveRefresh() {
 
   roundsLiveRefreshTimer = null;
 }
-    // ---------------------------------------------------------
-// TEMP TEST — NO OPEN-SCORECARD AUTO REFRESH
-//
-// Native iOS select pickers can trigger focus / visibility
-// lifecycle events when they open and close.
-//
-// During this test, neither event is allowed to reload or
-// re-render the currently open scorecard.
-// ---------------------------------------------------------
-
-document.addEventListener(
+    document.addEventListener(
   "visibilitychange",
   () => {
     if (
       document.visibilityState === "visible"
     ) {
       /*
-       * Refresh only the My Rounds / active-round lists.
-       *
-       * IMPORTANT:
-       * Do NOT call syncCurrentRoundLive() here.
+       * Refresh My Rounds / active-round cards.
        */
       refreshRoundsInBackground();
+
+      /*
+       * If a scorecard is already open, immediately
+       * pull the latest scores and resume 2-second sync.
+       *
+       * IMPORTANT:
+       * This does NOT move the golfer to another hole.
+       */
+      if (currentRoundId) {
+        syncCurrentRoundLive();
+        startLiveScoreSync();
+      }
+
     } else {
+      /*
+       * Pause score polling while TeeRadar is in the
+       * background.
+       */
       stopLiveScoreSync();
     }
   }
@@ -8824,13 +9008,30 @@ window.addEventListener(
     /*
      * Refresh only the rounds list.
      *
-     * Do NOT touch the open scorecard when an
-     * iOS picker closes.
+     * Do NOT refresh/re-render an open scorecard
+     * when an iOS picker closes.
      */
     refreshRoundsInBackground();
   }
 );
-
+    /*
+     * Refresh the Play / rounds list only.
+     *
+     * IMPORTANT:
+     * Do NOT sync the open scorecard here.
+     *
+     * On iOS, closing a native select picker can fire
+     * a window focus event. Syncing the scorecard here
+     * can therefore overwrite the score the golfer
+     * has just selected with an older server value.
+     *
+     * Scorecard live sync is already handled by:
+     * - the 2-second live sync timer
+     * - visibilitychange when returning to the app
+     */
+    refreshRoundsInBackground();
+  }
+);
 window.addEventListener(
   "beforeunload",
   () => {
@@ -8838,7 +9039,6 @@ window.addEventListener(
     stopLiveScoreSync();
   }
 );
-
     async function safeLoadRound(id){
       try{
         await loadRound(id);
