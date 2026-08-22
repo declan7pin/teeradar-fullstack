@@ -6622,10 +6622,26 @@ function enablePremiumMode(round, metaPars, metaDists, teeName){
   currentPremiumTeeName =
     String(teeName || "");
 
-  premiumShowingTable = false;
+  /*
+   * Every newly-opened scorecard starts at:
+   * Hole 1
+   * Player 1
+   *
+   * Without this, premiumHoleIndex can keep the
+   * last hole from a previously opened round.
+   */
+  premiumHoleIndex = 0;
   premiumPlayerIndex = 0;
+  premiumShowingTable = false;
+
   setPremiumVisible(true);
-  renderPremiumForHole(round, metaPars, metaDists, teeName);
+
+  renderPremiumForHole(
+    round,
+    metaPars,
+    metaDists,
+    teeName
+  );
 
   if (premPrevBtn){
   premPrevBtn.onclick = async () => {
@@ -7855,6 +7871,12 @@ async function confirmShareRound(){
   renderTeeRadarHandicap();
 }
     async function loadRound(id){
+      /*
+ * Reset play position before opening another round.
+ */
+premiumHoleIndex = 0;
+premiumPlayerIndex = 0;
+premiumShowingTable = false;
   setLeftPanelsVisibility(false);
 
   // ✅ Guest mode
