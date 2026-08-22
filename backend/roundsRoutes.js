@@ -2840,41 +2840,63 @@ router.get("/", requireAuth, async (req, res) => {
     const rounds =
       roundsRes.rows || [];
 
-    // -------------------------------------------------
-    // SHARED LIVE ROUNDS
-    //
-    // These are deliberately separate from Recent
-    // Rounds so they cannot affect handicap/stats.
-    //
-    // Owner OR any player inside player_user_ids sees
-    // the SAME master round here.
-    // -------------------------------------------------
-    const activeSharedRes =
-      await db.query(
-        `
-        SELECT
-          r.id,
-          r.user_id,
-          r.course,
-          r.layout,
-          r.state,
-          r.holes,
-          r.par_mode,
-          r.created_at,
-          r.players_count,
-          r.player_names,
-          r.player_user_ids,
-          r.shared_upcoming_round_id,
-          r.linked_master_round_id,
-          r.linked_player_number,
+   // -------------------------------------------------
+// SHARED LIVE ROUNDS
+//
+// These are deliberately separate from Recent
+// Rounds so they cannot affect handicap/stats.
+//
+// IMPORTANT:
+// This query is isolated in its own try/catch so a
+// live-round problem can NEVER break Handicap,
+// Recent Rounds or My Stats.
+// -------------------------------------------------
+let activeRounds = [];
 
-          CASE
-            WHEN r.user_id = $1
-            THEN TRUE
-            ELSE FALSE
-          END AS is_owner,
+try {
+  const activeSharedRes =
+    await db.query(
+      `
+      SELECT
+        r.id,
+        r.user_id,
+        r.course,
+        r.layout,
+        r.state,
+        r.holes,
+        r.par_mode,
+        r.created_at,
+        r.players_count,
+        r.player_names,
+        r.player_user_ids,
+        r.shared_upcoming_round_id,
+        r.linked_master_round_id,
+        r.linked_player_number,
 
-          COALESCE(
+        CASE
+          WHEN r.user_id = $1
+          THEN TRUE
+          ELSE FALSE
+        END AS is_owner,
+
+        COALESCE(
+          (
+            SELECT COUNT(*)::int
+            FROM round_holes rh
+            WHERE rh.round_id = r.id
+              AND (
+                rh.strokes IS NOT NULL
+                OR (
+                  rh.strokes_by_player IS NOT NULL
+                  AND rh.strokes_by_player ? '1'
+                )
+              )
+          ),
+          0
+        ) AS scored_holes,
+
+        CASE
+          WHEN COALESCE(
             (
               SELECT COUNT(*)::int
               FROM round_holes rh
@@ -2888,62 +2910,45 @@ router.get("/", requireAuth, async (req, res) => {
                 )
             ),
             0
-          ) AS scored_holes,
+          ) >= r.holes
+          THEN TRUE
+          ELSE FALSE
+        END AS is_complete
 
-          CASE
-            WHEN COALESCE(
-              (
-                SELECT COUNT(*)::int
-                FROM round_holes rh
-                WHERE rh.round_id = r.id
-                  AND (
-                    rh.strokes IS NOT NULL
-                    OR (
-                      rh.strokes_by_player IS NOT NULL
-                      AND rh.strokes_by_player ? '1'
-                    )
-                  )
-              ),
-              0
-            ) >= r.holes
-            THEN TRUE
-            ELSE FALSE
-          END AS is_complete
+      FROM rounds r
 
-        FROM rounds r
+      WHERE
+        r.shared_upcoming_round_id IS NOT NULL
 
-        WHERE
-          r.shared_upcoming_round_id IS NOT NULL
+        AND r.linked_master_round_id IS NULL
 
-          AND r.linked_master_round_id IS NULL
+        AND (
+          r.user_id = $1
 
-          AND (
-            r.user_id = $1
+          OR COALESCE(
+            r.player_user_ids,
+            '[]'::jsonb
+          ) @> jsonb_build_array($1::bigint)
+        )
 
-            OR EXISTS (
-              SELECT 1
+      ORDER BY r.created_at DESC
 
-              FROM jsonb_array_elements_text(
-                COALESCE(
-                  r.player_user_ids,
-                  '[]'::jsonb
-                )
-              ) AS player_id
+      LIMIT 20;
+      `,
+      [userId]
+    );
 
-              WHERE
-                player_id::bigint = $1
-            )
-          )
+  activeRounds =
+    activeSharedRes.rows || [];
 
-        ORDER BY r.created_at DESC
+} catch (activeErr) {
+  console.warn(
+    "Could not load active shared rounds:",
+    activeErr?.message || activeErr
+  );
 
-        LIMIT 20;
-        `,
-        [userId]
-      );
-
-    const activeRounds =
-      activeSharedRes.rows || [];
+  activeRounds = [];
+}
 
     console.log(
       "🏌️ GET /api/rounds",
