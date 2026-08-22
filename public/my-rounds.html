@@ -6515,249 +6515,186 @@ const hasSavedPutts = curPutts !== null && curPutts !== undefined && Number.isFi
     // strokes options: 1 to 11+
   const strokeVals = [1,2,3,4,5,6,7,8,9,10,11];
 
-  // wheel picker for strokes
-  if (premScoreBtns){
-    premScoreBtns.innerHTML = "";
-    const sel = document.createElement("select");
-    sel.style.width = "100%";
-    sel.style.padding = "12px";
-    sel.style.borderRadius = "12px";
-    sel.style.border = "1px solid var(--border)";
-    sel.style.fontWeight = "900";
-    sel.style.fontSize = "18px";
+ // wheel picker for strokes
+if (premScoreBtns) {
+  premScoreBtns.innerHTML = "";
 
-    strokeVals.forEach(v => {
-      const opt = document.createElement("option");
-      opt.value = String(v);
-      opt.textContent = v === 11 ? "11+" : String(v);
+  const sel =
+    document.createElement("select");
+
+  sel.style.width = "100%";
+  sel.style.padding = "12px";
+  sel.style.borderRadius = "12px";
+  sel.style.border =
+    "1px solid var(--border)";
+  sel.style.fontWeight = "900";
+  sel.style.fontSize = "18px";
+
+  strokeVals.forEach((v) => {
+    const opt =
+      document.createElement("option");
+
+    opt.value =
+      String(v);
+
+    opt.textContent =
+      v === 11
+        ? "11+"
+        : String(v);
+
+    sel.appendChild(opt);
+  });
+
+  sel.value =
+    String(startStrokes);
+
+  /*
+   * TEMP TEST ONLY
+   *
+   * Do NOT save.
+   * Do NOT update the hidden score table.
+   * Do NOT re-render the premium scorecard.
+   *
+   * We are testing whether something ELSE is
+   * rebuilding this select after the golfer changes it.
+   */
+  sel.addEventListener(
+    "change",
+    () => {
+      console.log(
+        "🟢 STROKES CHANGED",
+        {
+          selected:
+            sel.value,
+
+          holeNum,
+
+          player:
+            premiumPlayerIndex + 1
+        }
+      );
+    }
+  );
+
+  premScoreBtns.appendChild(sel);
+}
+
+
+// wheel picker for putts
+if (premPuttBtns) {
+  premPuttBtns.innerHTML = "";
+
+  const sel =
+    document.createElement("select");
+
+  sel.style.width = "100%";
+  sel.style.padding = "12px";
+  sel.style.borderRadius = "12px";
+  sel.style.border =
+    "1px solid var(--border)";
+  sel.style.fontWeight = "900";
+  sel.style.fontSize = "18px";
+
+  const puttVals = [
+    {
+      value: "",
+      label: "Select putts"
+    },
+    {
+      value: 0,
+      label: "Chipped in"
+    },
+    {
+      value: 1,
+      label: "1"
+    },
+    {
+      value: 2,
+      label: "2"
+    },
+    {
+      value: 3,
+      label: "3"
+    },
+    {
+      value: 4,
+      label: "4"
+    },
+    {
+      value: 5,
+      label: "5"
+    },
+    {
+      value: 6,
+      label: "6"
+    },
+    {
+      value: 7,
+      label: "7"
+    },
+    {
+      value: 8,
+      label: "8"
+    },
+    {
+      value: 9,
+      label: "9"
+    },
+    {
+      value: 10,
+      label: "10"
+    }
+  ];
+
+  puttVals.forEach(
+    ({ value, label }) => {
+      const opt =
+        document.createElement(
+          "option"
+        );
+
+      opt.value =
+        String(value);
+
+      opt.textContent =
+        label;
+
       sel.appendChild(opt);
-    });
-
-    sel.value = String(startStrokes);
-
-    sel.addEventListener(
-  "change",
-  async () => {
-    const v =
-      Number(sel.value);
-
-    const playerNumber =
-      premiumPlayerIndex + 1;
-
-    /*
-     * Prevent the 2-second shared-score poll
-     * from redrawing this control while saving.
-     */
-    premiumScoreEditBusy = true;
-
-    try {
-      setHoleValueInTable(
-        holeNum,
-        "strokes",
-        playerNumber,
-        Number.isFinite(v)
-          ? v
-          : null
-      );
-
-      await playScoreHaptic(
-        "light"
-      );
-
-      /*
-       * Save this individual golfer immediately.
-       */
-      await savePremiumPlayerScore(
-        holeNum,
-        playerNumber
-      );
-
-      /*
-       * Keep our in-memory round aligned with
-       * what is now in the table.
-       */
-      const localHole =
-        getHoleRowFromTable(
-          holeNum
-        );
-
-      if (
-        localHole &&
-        currentRound &&
-        Array.isArray(
-          currentRound.holesData
-        )
-      ) {
-        const index =
-          currentRound.holesData.findIndex(
-            (h) =>
-              Number(h?.hole_number) ===
-              holeNum
-          );
-
-        if (index >= 0) {
-          currentRound.holesData[index] =
-            localHole;
-        }
-      }
-
-      renderPremiumForHole(
-        currentRound || round,
-        metaPars,
-        metaDists,
-        teeName
-      );
-
-    } catch (error) {
-      console.error(
-        "Immediate strokes save failed:",
-        error
-      );
-
-      setToast(
-        rightToast,
-        "Could not save strokes.",
-        false
-      );
-
-    } finally {
-      premiumScoreEditBusy = false;
     }
-  }
-);
+  );
 
-    premScoreBtns.appendChild(sel);
-  }
+  sel.value =
+    startPutts === ""
+      ? ""
+      : String(startPutts);
 
-  // wheel picker for putts (defaults to 2)
-  if (premPuttBtns){
-    premPuttBtns.innerHTML = "";
-    const sel = document.createElement("select");
-    sel.style.width = "100%";
-    sel.style.padding = "12px";
-    sel.style.borderRadius = "12px";
-    sel.style.border = "1px solid var(--border)";
-    sel.style.fontWeight = "900";
-    sel.style.fontSize = "18px";
+  /*
+   * TEMP TEST ONLY
+   *
+   * Do NOT save.
+   * Do NOT update the hidden score table.
+   * Do NOT re-render.
+   */
+  sel.addEventListener(
+    "change",
+    () => {
+      console.log(
+        "🟢 PUTTS CHANGED",
+        {
+          selected:
+            sel.value,
 
-        const puttVals = [
-  { value: "", label: "Select putts" },
-  { value: 0, label: "Chipped in" },
-  { value: 1, label: "1" },
-  { value: 2, label: "2" },
-  { value: 3, label: "3" },
-  { value: 4, label: "4" },
-  { value: 5, label: "5" },
-  { value: 6, label: "6" },
-  { value: 7, label: "7" },
-  { value: 8, label: "8" },
-  { value: 9, label: "9" },
-  { value: 10, label: "10" }
-];
+          holeNum,
 
-puttVals.forEach(({ value, label }) => {
-  const opt = document.createElement("option");
-  opt.value = String(value);
-  opt.textContent = label;
-  sel.appendChild(opt);
-});
-
-sel.value = startPutts === "" ? "" : String(startPutts);
-    
-    sel.addEventListener(
-  "change",
-  async () => {
-    const raw =
-      String(
-        sel.value || ""
-      ).trim();
-
-    const v =
-      raw === ""
-        ? null
-        : Number(raw);
-
-    const playerNumber =
-      premiumPlayerIndex + 1;
-
-    premiumScoreEditBusy = true;
-
-    try {
-      setHoleValueInTable(
-        holeNum,
-        "putts",
-        playerNumber,
-        Number.isFinite(v)
-          ? v
-          : null
-      );
-
-      await playScoreHaptic(
-        "light"
-      );
-
-      /*
-       * Immediately save only this player
-       * on this hole.
-       */
-      await savePremiumPlayerScore(
-        holeNum,
-        playerNumber
-      );
-
-      const localHole =
-        getHoleRowFromTable(
-          holeNum
-        );
-
-      if (
-        localHole &&
-        currentRound &&
-        Array.isArray(
-          currentRound.holesData
-        )
-      ) {
-        const index =
-          currentRound.holesData.findIndex(
-            (h) =>
-              Number(h?.hole_number) ===
-              holeNum
-          );
-
-        if (index >= 0) {
-          currentRound.holesData[index] =
-            localHole;
+          player:
+            premiumPlayerIndex + 1
         }
-      }
-
-      renderPremiumForHole(
-        currentRound || round,
-        metaPars,
-        metaDists,
-        teeName
       );
-
-    } catch (error) {
-      console.error(
-        "Immediate putts save failed:",
-        error
-      );
-
-      setToast(
-        rightToast,
-        "Could not save putts.",
-        false
-      );
-
-    } finally {
-      premiumScoreEditBusy = false;
     }
-  }
-);
+  );
 
-    premPuttBtns.appendChild(sel);
-  }
-
+  premPuttBtns.appendChild(sel);
+}
   // no colours / shapes in play mode
   if (premNote){
     premNote.textContent = (premiumPlayerIndex < (getPlayersCountFromRound(round) - 1))
