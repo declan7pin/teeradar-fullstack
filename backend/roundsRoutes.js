@@ -2833,6 +2833,110 @@ router.get("/", requireAuth, async (req, res) => {
       [userId]
     );
 
+    // -------------------------------------------------
+// Shared LIVE rounds for this golfer.
+//
+// These are returned separately from normal My Rounds
+// so they do NOT affect:
+// - handicap
+// - stats
+// - recent-round history
+//
+// But every attached golfer can still see the same
+// live master scorecard.
+// -------------------------------------------------
+const activeSharedRes = await db.query(
+  `
+  SELECT
+    r.id,
+    r.user_id,
+    r.course,
+    r.layout,
+    r.state,
+    r.holes,
+    r.par_mode,
+    r.created_at,
+    r.players_count,
+    r.player_names,
+    r.player_user_ids,
+    r.shared_upcoming_round_id,
+    r.linked_master_round_id,
+    r.linked_player_number,
+
+    CASE
+      WHEN r.user_id = $1
+        THEN TRUE
+      ELSE FALSE
+    END AS is_owner,
+
+    COALESCE(
+      (
+        SELECT COUNT(*)::int
+        FROM round_holes rh
+        WHERE rh.round_id = r.id
+          AND (
+            rh.strokes IS NOT NULL
+            OR (
+              rh.strokes_by_player IS NOT NULL
+              AND rh.strokes_by_player ? '1'
+            )
+          )
+      ),
+      0
+    ) AS scored_holes,
+
+    CASE
+      WHEN COALESCE(
+        (
+          SELECT COUNT(*)::int
+          FROM round_holes rh
+          WHERE rh.round_id = r.id
+            AND (
+              rh.strokes IS NOT NULL
+              OR (
+                rh.strokes_by_player IS NOT NULL
+                AND rh.strokes_by_player ? '1'
+              )
+            )
+        ),
+        0
+      ) >= r.holes
+      THEN TRUE
+      ELSE FALSE
+    END AS is_complete
+
+  FROM rounds r
+
+  WHERE
+    r.shared_upcoming_round_id IS NOT NULL
+
+    AND r.linked_master_round_id IS NULL
+
+    AND (
+      r.user_id = $1
+
+      OR EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements_text(
+          COALESCE(
+            r.player_user_ids,
+            '[]'::jsonb
+          )
+        ) AS participant(user_id)
+        WHERE
+          participant.user_id::bigint = $1
+      )
+    )
+
+  ORDER BY r.created_at DESC
+  LIMIT 20;
+  `,
+  [userId]
+);
+
+const activeRounds =
+  activeSharedRes.rows || [];
+
     console.log("🏌️ GET /api/rounds", {
       userId,
       roundsReturned: rows.length,
@@ -2840,11 +2944,35 @@ router.get("/", requireAuth, async (req, res) => {
     });
 
     return res.json({
-      ok: true,
+  ok: true,
 
-      rounds: rows || [],
+  /*
+   * Normal personal round history.
+   */
+  rounds: rows || [],
 
-      handicap: {
+  /*
+   * Shared live scorecards are deliberately separate.
+   */
+  active_rounds: activeRounds,
+
+  handicap: {
+    value:
+      freshHandicap?.handicap ?? null,
+
+    status:
+      freshHandicap?.status ||
+      "provisional",
+
+    rounds:
+      Number(
+        freshHandicap?.rounds || 0
+      ),
+
+    trend:
+      freshHandicap?.trend ?? null,
+  },
+});
         value:
           freshHandicap?.handicap ?? null,
 
