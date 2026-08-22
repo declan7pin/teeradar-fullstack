@@ -2740,28 +2740,50 @@ try {
   );
 }
     const { rows } = await db.query(
-      `
-      SELECT
-  id,
-  course,
-  layout,
-  state,
-  holes,
-  par_mode,
-  created_at,
-  players_count,
-  player_names,
-  player_user_ids,
-  shared_upcoming_round_id,
-  linked_master_round_id,
-  linked_player_number
-FROM rounds
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      LIMIT 200;
-      `,
-      [userId]
-    );
+  `
+  SELECT
+    id,
+    user_id,
+    course,
+    layout,
+    state,
+    holes,
+    par_mode,
+    created_at,
+    players_count,
+    player_names,
+    player_user_ids,
+    shared_upcoming_round_id,
+    linked_master_round_id,
+    linked_player_number,
+
+    CASE
+      WHEN user_id = $1 THEN true
+      ELSE false
+    END AS is_owner
+
+  FROM rounds
+
+  WHERE
+    user_id = $1
+
+    OR EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(
+        COALESCE(
+          player_user_ids,
+          '[]'::jsonb
+        )
+      ) AS player_user_id
+      WHERE
+        player_user_id::bigint = $1
+    )
+
+  ORDER BY created_at DESC
+  LIMIT 200;
+  `,
+  [Number(userId)]
+);
 
     return res.json({
   ok: true,
