@@ -3138,10 +3138,23 @@ html.app-mode .activeRoundCard{
     // -----------------------------
     // State
     // -----------------------------
-    let currentRoundId = null;
-    let currentRound = null;
-    let roundsCache = [];
-    let backendHandicap = null;
+   let currentRoundId = null;
+let currentRound = null;
+
+/*
+ * Normal personal round history.
+ */
+let roundsCache = [];
+
+/*
+ * Shared live scorecards.
+ *
+ * Kept separate so they never affect handicap,
+ * stats or Recent Rounds.
+ */
+let activeRoundsCache = [];
+
+let backendHandicap = null;
 
     // course cache (optional)
     let coursesCache = [];
@@ -5439,16 +5452,16 @@ function renderActiveRounds() {
    * the round moves back to Recent rounds only.
    */
   const activeRounds =
-    (roundsCache || []).filter(
-      (round) =>
-        Number(
-          round?.shared_upcoming_round_id
-        ) > 0 &&
-        round?.is_complete !== true &&
-        String(
-          round?.is_complete
-        ) !== "true"
-    );
+  (activeRoundsCache || []).filter(
+    (round) =>
+      Number(
+        round?.shared_upcoming_round_id
+      ) > 0 &&
+      round?.is_complete !== true &&
+      String(
+        round?.is_complete
+      ).toLowerCase() !== "true"
+  );
 
   if (!activeRounds.length) {
     activeRoundSection.style.display =
@@ -7280,13 +7293,15 @@ async function confirmShareRound(){
     // -----------------------------
     // API calls
     // -----------------------------
-    async function fetchRounds(){
-  // ✅ Guest mode: read from localStorage
+   async function fetchRounds(){
+  // ✅ Guest mode
   if (!isLoggedIn()){
-    const rounds = guestReadRounds();
+    const rounds =
+      guestReadRounds();
 
     roundsCache = rounds.map(r => ({
       ...r,
+
       holesData:
         Array.isArray(r.holesData)
           ? r.holesData
@@ -7297,6 +7312,12 @@ async function confirmShareRound(){
             )
     }));
 
+    /*
+     * Guests cannot participate in TeeRadar
+     * shared live rounds.
+     */
+    activeRoundsCache = [];
+
     renderActiveRounds();
     renderRoundsList();
     renderTeeRadarHandicap();
@@ -7304,7 +7325,7 @@ async function confirmShareRound(){
     return;
   }
 
-  // ✅ Logged in: read from backend
+  // ✅ Logged-in backend data
   const data = await api(
     "/api/rounds",
     {
@@ -7315,48 +7336,84 @@ async function confirmShareRound(){
   backendHandicap =
     data?.handicap || null;
 
+  // -------------------------------------------------
+  // Normal personal round history
+  // -------------------------------------------------
   const rounds =
     Array.isArray(data?.rounds)
       ? data.rounds
       : [];
 
-  roundsCache = rounds.map(r => ({
-    ...r,
+  roundsCache =
+    rounds.map(r => ({
+      ...r,
 
-    holesData:
-      Array.isArray(r.holesData)
-        ? r.holesData
-        : (
-            Array.isArray(r.holes)
-              ? r.holes
-              : []
-          ),
+      holesData:
+        Array.isArray(r.holesData)
+          ? r.holesData
+          : (
+              Array.isArray(r.holes)
+                ? r.holes
+                : []
+            ),
 
-    /*
-     * Normalise backend progress fields so the
-     * active-round renderer gets reliable values.
-     */
-    scored_holes:
-      Number(r?.scored_holes || 0),
+      scored_holes:
+        Number(
+          r?.scored_holes || 0
+        ),
 
-    is_complete:
-      r?.is_complete === true ||
-      String(r?.is_complete).toLowerCase() === "true",
+      is_complete:
+        r?.is_complete === true ||
+        String(
+          r?.is_complete
+        ).toLowerCase() === "true",
 
-    is_owner:
-      r?.is_owner === true ||
-      String(r?.is_owner).toLowerCase() === "true"
-  }));
+      is_owner:
+        r?.is_owner === true ||
+        String(
+          r?.is_owner
+        ).toLowerCase() === "true"
+    }));
+
+  // -------------------------------------------------
+  // Shared live rounds
+  // -------------------------------------------------
+  const liveRounds =
+    Array.isArray(
+      data?.active_rounds
+    )
+      ? data.active_rounds
+      : [];
+
+  activeRoundsCache =
+    liveRounds.map(r => ({
+      ...r,
+
+      scored_holes:
+        Number(
+          r?.scored_holes || 0
+        ),
+
+      is_complete:
+        r?.is_complete === true ||
+        String(
+          r?.is_complete
+        ).toLowerCase() === "true",
+
+      is_owner:
+        r?.is_owner === true ||
+        String(
+          r?.is_owner
+        ).toLowerCase() === "true"
+    }));
 
   /*
-   * Active shared rounds are rendered separately
-   * above Recent rounds.
+   * Render the live card first.
    */
   renderActiveRounds();
 
   /*
-   * Recent rounds renderer automatically excludes
-   * active shared rounds.
+   * Then render normal Recent Rounds.
    */
   renderRoundsList();
 
