@@ -5607,105 +5607,196 @@ function renderActiveRounds() {
     // -----------------------------
     // Round list
     // -----------------------------
-    function renderRoundsList(){
+   function renderRoundsList(){
   roundsListEl.innerHTML = "";
 
-  const courseQ = String(roundCourseFilter?.value || "").trim().toLowerCase();
-  const dateQ = String(roundDateFilter?.value || "").trim();
-
-  const filtered = roundsCache.filter((r) => {
-  /*
-   * Active shared rounds are displayed in the dedicated
-   * Round in Progress section above.
-   */
-  const isActiveSharedRound =
-    Number(
-      r?.shared_upcoming_round_id
-    ) > 0 &&
-    r?.is_complete !== true &&
+  const courseQ =
     String(
-      r?.is_complete
-    ) !== "true";
-
-  if (isActiveSharedRound) {
-    return false;
-  }
-
-  const courseText =
-    `${r.course || ""} ${r.layout || ""}`
+      roundCourseFilter?.value || ""
+    )
+      .trim()
       .toLowerCase();
 
-  const courseOk =
-    !courseQ ||
-    courseText.includes(courseQ);
+  const dateQ =
+    String(
+      roundDateFilter?.value || ""
+    ).trim();
 
-  const roundDate =
-    dateOnlyFromRound(r);
+  const filtered =
+    roundsCache.filter((r) => {
+      /*
+       * Active shared rounds are displayed in the
+       * dedicated Round in Progress section above.
+       */
+      const isActiveSharedRound =
+        Number(
+          r?.shared_upcoming_round_id
+        ) > 0 &&
+        r?.is_complete !== true &&
+        String(
+          r?.is_complete
+        ).toLowerCase() !== "true";
 
-  const dateOk =
-    !dateQ ||
-    roundDate === dateQ;
+      if (isActiveSharedRound) {
+        return false;
+      }
 
-  return courseOk && dateOk;
-});
-    const courseText = `${r.course || ""} ${r.layout || ""}`.toLowerCase();
-    const courseOk = !courseQ || courseText.includes(courseQ);
+      const courseText =
+        `${r.course || ""} ${r.layout || ""}`
+          .toLowerCase();
 
-    const roundDate = dateOnlyFromRound(r);
-    const dateOk = !dateQ || roundDate === dateQ;
+      const courseOk =
+        !courseQ ||
+        courseText.includes(courseQ);
 
-    return courseOk && dateOk;
-  });
+      const roundDate =
+        dateOnlyFromRound(r);
 
-  roundsEmptyEl.style.display = filtered.length ? "none" : "block";
+      const dateOk =
+        !dateQ ||
+        roundDate === dateQ;
+
+      return courseOk && dateOk;
+    });
+
+  roundsEmptyEl.style.display =
+    filtered.length
+      ? "none"
+      : "block";
 
   for (const r of filtered) {
-    const item = document.createElement("div");
-    item.className = "roundItem";
-    item.dataset.id = r.id;
+    const item =
+      document.createElement("div");
+
+    item.className =
+      "roundItem";
+
+    item.dataset.id =
+      r.id;
 
     const holesForTotals =
-      Array.isArray(r.holesData) && r.holesData.length
+      Array.isArray(r.holesData) &&
+      r.holesData.length
         ? r.holesData
         : [];
 
-    let totalsP1 = calcTotalsForPlayer(holesForTotals, 0);
+    let totalsP1 =
+      calcTotalsForPlayer(
+        holesForTotals,
+        0
+      );
 
-    const cached = getCachedRoundScore(r.id);
-    if ((totalsP1.strokes == null || totalsP1.toPar == null) && cached) {
+    const cached =
+      getCachedRoundScore(r.id);
+
+    if (
+      (
+        totalsP1.strokes == null ||
+        totalsP1.toPar == null
+      ) &&
+      cached
+    ) {
       totalsP1 = {
         ...totalsP1,
-        strokes: cached.strokes ?? totalsP1.strokes,
-        putts: cached.putts ?? totalsP1.putts,
-        toPar: cached.toPar ?? totalsP1.toPar
+
+        strokes:
+          cached.strokes ??
+          totalsP1.strokes,
+
+        putts:
+          cached.putts ??
+          totalsP1.putts,
+
+        toPar:
+          cached.toPar ??
+          totalsP1.toPar
       };
     }
 
-    const scoreLabel = (totalsP1.strokes != null) ? totalsP1.strokes : "Open";
-    const toParLabel = (totalsP1.toPar != null)
-      ? (totalsP1.toPar === 0 ? "E" : (totalsP1.toPar > 0 ? "+"+totalsP1.toPar : ""+totalsP1.toPar))
-      : "";
+    const scoreLabel =
+      totalsP1.strokes != null
+        ? totalsP1.strokes
+        : "Open";
 
-    const pc = getPlayersCountFromRound(r);
+    const toParLabel =
+      totalsP1.toPar != null
+        ? (
+            totalsP1.toPar === 0
+              ? "E"
+              : (
+                  totalsP1.toPar > 0
+                    ? "+" + totalsP1.toPar
+                    : "" + totalsP1.toPar
+                )
+          )
+        : "";
+
+    const pc =
+      getPlayersCountFromRound(r);
 
     item.innerHTML = `
       <div class="top">
         <div>
-          <div class="title">${escapeHtml(r.course || "Round")}${r.layout ? " — " + escapeHtml(r.layout) : ""}</div>
+          <div class="title">
+            ${escapeHtml(
+              r.course || "Round"
+            )}
+            ${
+              r.layout
+                ? " — " +
+                  escapeHtml(r.layout)
+                : ""
+            }
+          </div>
+
           <div class="meta">
-            ${escapeHtml(r.state || "")} • ${r.holes || ""} holes • Players: ${pc}
-            • ${escapeHtml(r.par_mode || "")} • ${formatDate(r.created_at)}
+            ${escapeHtml(
+              r.state || ""
+            )}
+            • ${r.holes || ""} holes
+            • Players: ${pc}
+            • ${escapeHtml(
+              r.par_mode || ""
+            )}
+            • ${formatDate(
+              r.created_at
+            )}
           </div>
         </div>
+
         <div class="score">
-          ${escapeHtml(String(scoreLabel))}
-          ${toParLabel ? `<span class="muted" style="font-weight:900;">(${escapeHtml(toParLabel)})</span>` : ""}
+          ${escapeHtml(
+            String(scoreLabel)
+          )}
+
+          ${
+            toParLabel
+              ? `
+                <span
+                  class="muted"
+                  style="font-weight:900;"
+                >
+                  (${escapeHtml(
+                    toParLabel
+                  )})
+                </span>
+              `
+              : ""
+          }
         </div>
       </div>
     `;
 
-    item.addEventListener("click", () => loadRound(r.id));
-    roundsListEl.appendChild(item);
+    item.addEventListener(
+      "click",
+      () => {
+        loadRound(r.id);
+      }
+    );
+
+    roundsListEl.appendChild(
+      item
+    );
   }
 }
 
