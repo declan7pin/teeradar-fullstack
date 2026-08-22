@@ -6192,14 +6192,15 @@ function applyLiveScoreDataToTable(freshRound) {
 // ---------------------------------------------------------
 async function syncCurrentRoundLive() {
   if (
-  !isLoggedIn() ||
-  !currentRoundId ||
-  document.visibilityState !== "visible" ||
-  liveScoreSyncBusy ||
-  premiumScoreEditBusy
-) {
-  return;
-}
+    !isLoggedIn() ||
+    !currentRoundId ||
+    document.visibilityState !== "visible" ||
+    liveScoreSyncBusy ||
+    premiumScoreEditBusy
+  ) {
+    return;
+  }
+
   liveScoreSyncBusy = true;
 
   try {
@@ -6215,6 +6216,21 @@ async function syncCurrentRoundLive() {
           method: "GET"
         }
       );
+
+    /*
+     * IMPORTANT:
+     * A score edit may have started while this GET request
+     * was still in flight.
+     *
+     * If that happened, this response may contain the OLD
+     * score and must not overwrite the golfer's new local edit.
+     */
+    if (premiumScoreEditBusy) {
+      console.log(
+        "⏭️ Ignoring stale live-sync response during score edit"
+      );
+      return;
+    }
 
     /*
      * User may have opened another round while the
@@ -6309,12 +6325,11 @@ async function syncCurrentRoundLive() {
       "Live score sync failed:",
       error?.message || error
     );
+
   } finally {
     liveScoreSyncBusy = false;
   }
 }
-
-
 // ---------------------------------------------------------
 // ✅ Start / stop live shared score polling
 // ---------------------------------------------------------
@@ -6785,16 +6800,22 @@ function enablePremiumMode(round, metaPars, metaDists, teeName){
     String(teeName || "");
 
   /*
-   * Every newly-opened scorecard starts at:
-   * Hole 1
-   * Player 1
-   *
-   * Without this, premiumHoleIndex can keep the
-   * last hole from a previously opened round.
-   */
-  premiumHoleIndex = 0;
-  premiumPlayerIndex = 0;
-  premiumShowingTable = false;
+ * Do NOT reset premiumHoleIndex here.
+ *
+ * renderScorecard() decides which hole should open:
+ * - Hole 1 for a new round
+ * - first incomplete hole for a resumed round
+ *
+ * Resetting it here would overwrite that decision.
+ */
+premiumPlayerIndex =
+  clamp(
+    premiumPlayerIndex,
+    0,
+    getPlayersCountFromRound(round) - 1
+  );
+
+premiumShowingTable = false;
 
   setPremiumVisible(true);
 
