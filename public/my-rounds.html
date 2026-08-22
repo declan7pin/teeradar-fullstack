@@ -8976,9 +8976,17 @@ function stopRoundsLiveRefresh() {
       document.visibilityState === "visible"
     ) {
       /*
-       * Refresh My Rounds / active-round cards.
+       * Refresh rounds only.
+       *
+       * Do not touch the open scorecard when
+       * an iOS picker opens/closes.
        */
       refreshRoundsInBackground();
+    } else {
+      stopLiveScoreSync();
+    }
+  }
+);
 
       /*
        * If a scorecard is already open, immediately
@@ -9014,24 +9022,7 @@ window.addEventListener(
     refreshRoundsInBackground();
   }
 );
-    /*
-     * Refresh the Play / rounds list only.
-     *
-     * IMPORTANT:
-     * Do NOT sync the open scorecard here.
-     *
-     * On iOS, closing a native select picker can fire
-     * a window focus event. Syncing the scorecard here
-     * can therefore overwrite the score the golfer
-     * has just selected with an older server value.
-     *
-     * Scorecard live sync is already handled by:
-     * - the 2-second live sync timer
-     * - visibilitychange when returning to the app
-     */
-    refreshRoundsInBackground();
-  }
-);
+
 window.addEventListener(
   "beforeunload",
   () => {
