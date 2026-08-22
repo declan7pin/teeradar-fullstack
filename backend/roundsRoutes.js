@@ -2754,13 +2754,49 @@ try {
     player_names,
     player_user_ids,
     shared_upcoming_round_id,
-    linked_master_round_id,
-    linked_player_number,
+linked_master_round_id,
+linked_player_number,
 
-    CASE
-      WHEN user_id = $1 THEN true
-      ELSE false
-    END AS is_owner
+CASE
+  WHEN user_id = $1 THEN true
+  ELSE false
+END AS is_owner,
+
+COALESCE(
+  (
+    SELECT COUNT(*)::int
+    FROM round_holes rh
+    WHERE rh.round_id = rounds.id
+      AND (
+        rh.strokes IS NOT NULL
+        OR (
+          rh.strokes_by_player IS NOT NULL
+          AND rh.strokes_by_player ? '1'
+        )
+      )
+  ),
+  0
+) AS scored_holes,
+
+CASE
+  WHEN COALESCE(
+    (
+      SELECT COUNT(*)::int
+      FROM round_holes rh
+      WHERE rh.round_id = rounds.id
+        AND (
+          rh.strokes IS NOT NULL
+          OR (
+            rh.strokes_by_player IS NOT NULL
+            AND rh.strokes_by_player ? '1'
+          )
+        )
+    ),
+    0
+  ) >= holes
+  THEN true
+  ELSE false
+END AS is_complete
 
   FROM rounds
 
