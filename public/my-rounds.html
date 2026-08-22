@@ -5454,9 +5454,6 @@ function renderActiveRounds() {
   const activeRounds =
   (activeRoundsCache || []).filter(
     (round) =>
-      Number(
-        round?.shared_upcoming_round_id
-      ) > 0 &&
       round?.is_complete !== true &&
       String(
         round?.is_complete
@@ -5641,18 +5638,12 @@ function renderActiveRounds() {
        * Active shared rounds are displayed in the
        * dedicated Round in Progress section above.
        */
-      const isActiveSharedRound =
-        Number(
-          r?.shared_upcoming_round_id
-        ) > 0 &&
-        r?.is_complete !== true &&
-        String(
-          r?.is_complete
-        ).toLowerCase() !== "true";
-
-      if (isActiveSharedRound) {
-        return false;
-      }
+      /*
+ * Shared live rounds now live in activeRoundsCache,
+ * not roundsCache.
+ *
+ * Do not use shared_upcoming_round_id here anymore.
+ */
 
       const courseText =
         `${r.course || ""} ${r.layout || ""}`
