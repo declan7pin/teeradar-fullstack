@@ -6334,22 +6334,23 @@ async function syncCurrentRoundLive() {
 // ✅ Start / stop live shared score polling
 // ---------------------------------------------------------
 function startLiveScoreSync() {
+  /*
+   * TEMP TEST:
+   *
+   * Completely disable live polling.
+   *
+   * We have now proven that something outside the
+   * Strokes / Putts change handlers is rebuilding
+   * the premium controls.
+   *
+   * Do NOT start the 2-second timer during this test.
+   */
   stopLiveScoreSync();
 
-  if (
-    !isLoggedIn() ||
-    !currentRoundId
-  ) {
-    return;
-  }
-
-  liveScoreSyncTimer =
-    setInterval(
-      syncCurrentRoundLive,
-      2000
-    );
+  console.log(
+    "🛑 Live score polling temporarily disabled"
+  );
 }
-
 function stopLiveScoreSync() {
   if (liveScoreSyncTimer) {
     clearInterval(
@@ -8824,6 +8825,15 @@ function stopRoundsLiveRefresh() {
 window.addEventListener(
   "focus",
   () => {
+    /*
+     * Refresh only the rounds list.
+     *
+     * Do NOT refresh/re-render an open scorecard
+     * when an iOS picker closes.
+     */
+    refreshRoundsInBackground();
+  }
+);
     /*
      * Refresh the Play / rounds list only.
      *
