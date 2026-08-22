@@ -8789,34 +8789,30 @@ function stopRoundsLiveRefresh() {
 
   roundsLiveRefreshTimer = null;
 }
-    document.addEventListener(
+    // ---------------------------------------------------------
+// TEMP TEST — NO OPEN-SCORECARD AUTO REFRESH
+//
+// Native iOS select pickers can trigger focus / visibility
+// lifecycle events when they open and close.
+//
+// During this test, neither event is allowed to reload or
+// re-render the currently open scorecard.
+// ---------------------------------------------------------
+
+document.addEventListener(
   "visibilitychange",
   () => {
     if (
       document.visibilityState === "visible"
     ) {
       /*
-       * Refresh My Rounds / active-round cards.
-       */
-      refreshRoundsInBackground();
-
-      /*
-       * If a scorecard is already open, immediately
-       * pull the latest scores and resume 2-second sync.
+       * Refresh only the My Rounds / active-round lists.
        *
        * IMPORTANT:
-       * This does NOT move the golfer to another hole.
+       * Do NOT call syncCurrentRoundLive() here.
        */
-      if (currentRoundId) {
-        syncCurrentRoundLive();
-        startLiveScoreSync();
-      }
-
+      refreshRoundsInBackground();
     } else {
-      /*
-       * Pause score polling while TeeRadar is in the
-       * background.
-       */
       stopLiveScoreSync();
     }
   }
@@ -8828,30 +8824,13 @@ window.addEventListener(
     /*
      * Refresh only the rounds list.
      *
-     * Do NOT refresh/re-render an open scorecard
-     * when an iOS picker closes.
+     * Do NOT touch the open scorecard when an
+     * iOS picker closes.
      */
     refreshRoundsInBackground();
   }
 );
-    /*
-     * Refresh the Play / rounds list only.
-     *
-     * IMPORTANT:
-     * Do NOT sync the open scorecard here.
-     *
-     * On iOS, closing a native select picker can fire
-     * a window focus event. Syncing the scorecard here
-     * can therefore overwrite the score the golfer
-     * has just selected with an older server value.
-     *
-     * Scorecard live sync is already handled by:
-     * - the 2-second live sync timer
-     * - visibilitychange when returning to the app
-     */
-    refreshRoundsInBackground();
-  }
-);
+
 window.addEventListener(
   "beforeunload",
   () => {
@@ -8859,6 +8838,7 @@ window.addEventListener(
     stopLiveScoreSync();
   }
 );
+
     async function safeLoadRound(id){
       try{
         await loadRound(id);
