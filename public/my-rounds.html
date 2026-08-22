@@ -8888,21 +8888,23 @@ window.addEventListener(
   "focus",
   () => {
     /*
-     * Refresh the Play screen.
+     * Refresh the Play / rounds list only.
+     *
+     * IMPORTANT:
+     * Do NOT sync the open scorecard here.
+     *
+     * On iOS, closing a native select picker can fire
+     * a window focus event. Syncing the scorecard here
+     * can therefore overwrite the score the golfer
+     * has just selected with an older server value.
+     *
+     * Scorecard live sync is already handled by:
+     * - the 2-second live sync timer
+     * - visibilitychange when returning to the app
      */
     refreshRoundsInBackground();
-
-    /*
-     * Also refresh an open scorecard immediately.
-     * Again, this keeps the current viewed hole.
-     */
-    if (currentRoundId) {
-      syncCurrentRoundLive();
-      startLiveScoreSync();
-    }
   }
 );
-
 window.addEventListener(
   "beforeunload",
   () => {
