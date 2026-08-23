@@ -6505,17 +6505,57 @@ const curPutts = holeRow ? getHolePlayerValue(holeRow, "putts", premiumPlayerInd
 const hasSavedPutts = curPutts !== null && curPutts !== undefined && Number.isFinite(Number(curPutts));
 
   // ✅ defaults you requested
-  const startStrokes =
+  const hasSavedStrokes =
   curStrokes !== null &&
   typeof curStrokes !== "undefined" &&
   curStrokes !== "" &&
-  Number.isFinite(Number(curStrokes))
+  Number.isFinite(Number(curStrokes));
+
+const startStrokes =
+  hasSavedStrokes
     ? Number(curStrokes)
     : Number(basePar);
-  const startPutts = hasSavedPutts ? Number(curPutts) : "";
-    // strokes options: 1 to 11+
-  const strokeVals = [1,2,3,4,5,6,7,8,9,10,11];
 
+const startPutts =
+  hasSavedPutts
+    ? Number(curPutts)
+    : "";
+
+/*
+ * IMPORTANT:
+ *
+ * The Strokes selector visually defaults to Par.
+ *
+ * If there is no saved stroke yet, also put that
+ * default Par value into the hidden scorecard.
+ *
+ * Example:
+ * Par 4
+ * golfer makes 4
+ * golfer does NOT touch Strokes
+ * golfer presses Next
+ *
+ * TeeRadar now correctly saves 4 instead of null.
+ *
+ * This does NOT send anything to the backend just
+ * because the hole was viewed. It becomes part of
+ * the scorecard and is saved normally when moving on.
+ */
+if (
+  !hasSavedStrokes &&
+  Number.isFinite(startStrokes)
+) {
+  setHoleValueInTable(
+    holeNum,
+    "strokes",
+    premiumPlayerIndex + 1,
+    startStrokes
+  );
+}
+
+// strokes options: 1 to 11+
+const strokeVals =
+  [1,2,3,4,5,6,7,8,9,10,11];
  // wheel picker for strokes
 if (premScoreBtns) {
   premScoreBtns.innerHTML = "";
