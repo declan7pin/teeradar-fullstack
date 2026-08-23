@@ -6591,9 +6591,12 @@ if (premScoreBtns) {
        * Save ONLY this player on this hole.
        */
       await savePremiumPlayerScore(
-        holeNum,
-        playerNumber
-      );
+  holeNum,
+  playerNumber,
+  {
+    strokes: v
+  }
+);
 
       /*
        * Keep this phone's in-memory copy current.
@@ -6803,9 +6806,12 @@ if (premPuttBtns) {
        * Save ONLY this player on this hole.
        */
       await savePremiumPlayerScore(
-        holeNum,
-        playerNumber
-      );
+  holeNum,
+  playerNumber,
+  {
+    putts: v
+  }
+);
 
       /*
        * Keep local in-memory scorecard current.
@@ -7492,7 +7498,8 @@ if (canUsePremium) {
 // -------------------------------------------------
 async function savePremiumPlayerScore(
   holeNumber,
-  playerNumber
+  playerNumber,
+  overrides = {}
 ) {
   if (
     !isLoggedIn() ||
@@ -7535,11 +7542,29 @@ async function savePremiumPlayerScore(
   const key =
     String(playerNum);
 
+  /*
+   * Normally use the hidden scorecard values.
+   *
+   * But when a premium selector has JUST changed,
+   * use that selected value directly.
+   *
+   * This removes any timing / DOM-read problem.
+   */
   const strokesRaw =
-    hole?.strokes_by_player?.[key];
+    Object.prototype.hasOwnProperty.call(
+      overrides,
+      "strokes"
+    )
+      ? overrides.strokes
+      : hole?.strokes_by_player?.[key];
 
   const puttsRaw =
-    hole?.putts_by_player?.[key];
+    Object.prototype.hasOwnProperty.call(
+      overrides,
+      "putts"
+    )
+      ? overrides.putts
+      : hole?.putts_by_player?.[key];
 
   const strokes =
     strokesRaw === null ||
@@ -7555,45 +7580,71 @@ async function savePremiumPlayerScore(
       ? null
       : Number(puttsRaw);
 
-  await api(
-    `/api/rounds/${encodeURIComponent(
-      currentRoundId
-    )}/hole/${encodeURIComponent(
-      holeNum
-    )}`,
+  console.log(
+    "💾 PREMIUM SCORE SAVE",
     {
-      method: "PUT",
+      roundId:
+        currentRoundId,
 
-      body: JSON.stringify({
-        player_number:
-          playerNum,
+      hole:
+        holeNum,
 
-        strokes:
-          Number.isFinite(strokes)
-            ? strokes
-            : null,
+      player:
+        playerNum,
 
-        putts:
-          Number.isFinite(putts)
-            ? putts
-            : null,
+      strokes,
 
-        par:
-          Number.isFinite(
-            Number(hole.par)
-          )
-            ? Number(hole.par)
-            : null,
-
-        distance_m:
-          Number.isFinite(
-            Number(hole.distance_m)
-          )
-            ? Number(hole.distance_m)
-            : null
-      })
+      putts
     }
   );
+
+  const result =
+    await api(
+      `/api/rounds/${encodeURIComponent(
+        currentRoundId
+      )}/hole/${encodeURIComponent(
+        holeNum
+      )}`,
+      {
+        method: "PUT",
+
+        body: JSON.stringify({
+          player_number:
+            playerNum,
+
+          strokes:
+            Number.isFinite(strokes)
+              ? strokes
+              : null,
+
+          putts:
+            Number.isFinite(putts)
+              ? putts
+              : null,
+
+          par:
+            Number.isFinite(
+              Number(hole.par)
+            )
+              ? Number(hole.par)
+              : null,
+
+          distance_m:
+            Number.isFinite(
+              Number(hole.distance_m)
+            )
+              ? Number(hole.distance_m)
+              : null
+        })
+      }
+    );
+
+  console.log(
+    "✅ PREMIUM SCORE SAVED",
+    result
+  );
+
+  return result;
 }
 
     // -------------------------------------------------
