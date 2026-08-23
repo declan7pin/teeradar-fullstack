@@ -8988,28 +8988,6 @@ function stopRoundsLiveRefresh() {
   }
 );
 
-      /*
-       * If a scorecard is already open, immediately
-       * pull the latest scores and resume 2-second sync.
-       *
-       * IMPORTANT:
-       * This does NOT move the golfer to another hole.
-       */
-      if (currentRoundId) {
-        syncCurrentRoundLive();
-        startLiveScoreSync();
-      }
-
-    } else {
-      /*
-       * Pause score polling while TeeRadar is in the
-       * background.
-       */
-      stopLiveScoreSync();
-    }
-  }
-);
-
 window.addEventListener(
   "focus",
   () => {
