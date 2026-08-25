@@ -5316,23 +5316,61 @@ function setCachedRoundScore(id, totals){
   }catch{}
 }
 
-function getRoundHandicapScore(round){
-  const holes = Array.isArray(round?.holesData)
-    ? round.holesData
-    : (Array.isArray(round?.holes) ? round.holes : []);
+function getRoundHandicapScore(round) {
+  if (!round) {
+    return null;
+  }
 
-  const totals = calcTotalsForPlayer(holes, 0);
+  const holes =
+    Array.isArray(round.holesData)
+      ? round.holesData
+      : Array.isArray(round.holes)
+        ? round.holes
+        : [];
 
-  if (totals.strokes == null || totals.par == null) return null;
+  if (!holes.length) {
+    return null;
+  }
 
-  const holesCount = Number(round?.holes) || holes.length || 18;
-  const toPar = Number(totals.strokes) - Number(totals.par);
+  /*
+   * Shared scorecards use:
+   *
+   * player_number = 1 -> Player 1
+   * player_number = 2 -> Player 2
+   * player_number = 3 -> Player 3
+   * player_number = 4 -> Player 4
+   *
+   * Normal/older rounds default to Player 1.
+   */
+  const viewerPlayerNumber =
+    Math.max(
+      1,
+      Number(
+        round?.player_number
+      ) || 1
+    );
 
-  // Simple TeeRadar index estimate.
-  // 9-hole rounds are scaled to 18.
-  return holesCount === 9 ? toPar * 2 : toPar;
+  const viewerPlayerIndex =
+    viewerPlayerNumber - 1;
+
+  const totals =
+    calcTotalsForPlayer(
+      holes,
+      viewerPlayerIndex
+    );
+
+  const strokes =
+    Number(totals?.strokes);
+
+  if (
+    !Number.isFinite(strokes) ||
+    strokes <= 0
+  ) {
+    return null;
+  }
+
+  return strokes;
 }
-
 function calculateTeeRadarHandicap(){
   const played = (roundsCache || [])
     .map(r => ({
@@ -7178,44 +7216,129 @@ function formatToParOnly(v){
   return n > 0 ? `+${n}` : `${n}`;
 }
 
-function renderLiveScoreHero(savedMode = false){
-  const old = document.getElementById("liveScoreHero");
-  if (old) old.remove();
+function renderLiveScoreHero(
+  savedMode = false
+) {
+  const old =
+    document.getElementById(
+      "liveScoreHero"
+    );
 
-  if (!currentRound) return;
+  if (old) {
+    old.remove();
+  }
 
-  const holesRows = readTableHoles();
-  const totals = calcTotalsForPlayer(holesRows, 0);
+  if (!currentRound) {
+    return;
+  }
 
-  const toPar = formatToParOnly(totals.toPar);
+  const holesRows =
+    readTableHoles();
 
-  const hero = document.createElement("div");
-  hero.id = "liveScoreHero";
-  hero.className = "liveScoreHero" + (savedMode ? " saved" : "");
+  /*
+   * Which player belongs to THIS logged-in account?
+   *
+   * Backend returns:
+   * P1 -> 1
+   * P2 -> 2
+   * P3 -> 3
+   * P4 -> 4
+   */
+  const viewerPlayerNumber =
+    Math.max(
+      1,
+      Number(
+        currentRound?.player_number
+      ) || 1
+    );
 
-  hero.innerHTML = savedMode
-    ? `
-      <div>
-        <div class="scoreLabel">Saved score</div>
-        <div class="scoreBig">${escapeHtml(toPar)}</div>
-      </div>
-      <div class="scoreMeta">
-        Total ${totals.strokes ?? "—"}<br/>
-        Putts ${totals.putts ?? "—"}
-      </div>
-    `
-    : `
-      <div>
-        <div class="scoreLabel">Current round</div>
-        <div class="scoreBig">${escapeHtml(toPar)}</div>
-      </div>
-      <div class="scoreMeta">To par</div>
-    `;
+  const viewerPlayerIndex =
+    viewerPlayerNumber - 1;
 
-  const scorecardWrap = document.getElementById("scorecardWrap");
-  if (scorecardWrap) scorecardWrap.prepend(hero);
+  /*
+   * Show THIS golfer's score,
+   * not always Player 1.
+   */
+  const totals =
+    calcTotalsForPlayer(
+      holesRows,
+      viewerPlayerIndex
+    );
+
+  const toPar =
+    formatToParOnly(
+      totals.toPar
+    );
+
+  const viewerName =
+    String(
+      playerNames[
+        viewerPlayerIndex
+      ] ||
+      `Player ${viewerPlayerNumber}`
+    ).trim();
+
+  const hero =
+    document.createElement(
+      "div"
+    );
+
+  hero.id =
+    "liveScoreHero";
+
+  hero.className =
+    "liveScoreHero" +
+    (
+      savedMode
+        ? " saved"
+        : ""
+    );
+
+  hero.innerHTML =
+    savedMode
+      ? `
+        <div>
+          <div class="scoreLabel">
+            ${escapeHtml(viewerName)} • Saved score
+          </div>
+
+          <div class="scoreBig">
+            ${escapeHtml(toPar)}
+          </div>
+        </div>
+
+        <div class="scoreMeta">
+          Total ${totals.strokes ?? "—"}<br/>
+          Putts ${totals.putts ?? "—"}
+        </div>
+      `
+      : `
+        <div>
+          <div class="scoreLabel">
+            ${escapeHtml(viewerName)} • Current round
+          </div>
+
+          <div class="scoreBig">
+            ${escapeHtml(toPar)}
+          </div>
+        </div>
+
+        <div class="scoreMeta">
+          To par
+        </div>
+      `;
+
+  const scorecardWrap =
+    document.getElementById(
+      "scorecardWrap"
+    );
+
+  if (scorecardWrap) {
+    scorecardWrap.prepend(
+      hero
+    );
+  }
 }
-
     async function renderScorecard(round){
       currentRound = round;
 currentRoundId = round?.id || null;
@@ -7940,41 +8063,131 @@ async function saveCurrentHoleCollaboratively(
   }
 }
 
-    function updateTotalsFromTable(){
-      const holesRows = readTableHoles();
-      const pc = getPlayersCountFromRound(currentRound);
+    function updateTotalsFromTable() {
+  const holesRows =
+    readTableHoles();
 
-      totalsGrid.innerHTML = "";
+  const pc =
+    getPlayersCountFromRound(
+      currentRound
+    );
 
-      for (let pi=0; pi<pc; pi++){
-        const holesForCalc = holesRows.map(h => ({
-          hole_number: h.hole_number,
-          par: h.par,
-          strokes: (pi===0 ? h.strokes : null),
-          putts: (pi===0 ? h.putts : null),
-          strokes_by_player: h.strokes_by_player,
-          putts_by_player: h.putts_by_player
-        }));
+  totalsGrid.innerHTML = "";
 
-        const totals = calcTotalsForPlayer(holesForCalc, pi);
-        if (pi === 0 && currentRoundId) {
-  setCachedRoundScore(currentRoundId, totals);
-}
+  /*
+   * Which player belongs to THIS logged-in account?
+   *
+   * Normal/older rounds fall back to Player 1.
+   */
+  const viewerPlayerNumber =
+    Math.max(
+      1,
+      Number(
+        currentRound?.player_number
+      ) || 1
+    );
 
-        const toParLabel = (totals.toPar == null)
-          ? "—"
-          : (totals.toPar === 0 ? "E" : (totals.toPar > 0 ? "+" + totals.toPar : "" + totals.toPar));
+  const viewerPlayerIndex =
+    viewerPlayerNumber - 1;
 
-        const label = playerLabel(pi);
-        const pill = document.createElement("span");
-        pill.className = "pill";
-        pill.textContent = `${label}: Strokes ${totals.strokes ?? "—"} • Putts ${totals.putts ?? "—"} • To Par ${toParLabel}`;
-        totalsGrid.appendChild(pill);
-                applyTableScoreColours();
-      }
+  for (
+    let pi = 0;
+    pi < pc;
+    pi++
+  ) {
+    const holesForCalc =
+      holesRows.map(
+        h => ({
+          hole_number:
+            h.hole_number,
 
-      renderLiveScoreHero(false);
+          par:
+            h.par,
+
+          /*
+           * Legacy Player 1 fields remain available,
+           * but player-specific JSON maps are the
+           * authoritative multi-player values.
+           */
+          strokes:
+            pi === 0
+              ? h.strokes
+              : null,
+
+          putts:
+            pi === 0
+              ? h.putts
+              : null,
+
+          strokes_by_player:
+            h.strokes_by_player,
+
+          putts_by_player:
+            h.putts_by_player
+        })
+      );
+
+    const totals =
+      calcTotalsForPlayer(
+        holesForCalc,
+        pi
+      );
+
+    /*
+     * Cache only THIS account's score.
+     *
+     * P1 phone -> cache P1
+     * P2 phone -> cache P2
+     * P3 phone -> cache P3
+     */
+    if (
+      pi === viewerPlayerIndex &&
+      currentRoundId
+    ) {
+      setCachedRoundScore(
+        currentRoundId,
+        totals
+      );
     }
+
+    const toParLabel =
+      totals.toPar == null
+        ? "—"
+        : (
+            totals.toPar === 0
+              ? "E"
+              : (
+                  totals.toPar > 0
+                    ? "+" + totals.toPar
+                    : "" + totals.toPar
+                )
+          );
+
+    const label =
+      playerLabel(pi);
+
+    const pill =
+      document.createElement(
+        "span"
+      );
+
+    pill.className =
+      "pill";
+
+    pill.textContent =
+      `${label}: Strokes ${totals.strokes ?? "—"} • Putts ${totals.putts ?? "—"} • To Par ${toParLabel}`;
+
+    totalsGrid.appendChild(
+      pill
+    );
+  }
+
+  applyTableScoreColours();
+
+  renderLiveScoreHero(
+    false
+  );
+}
 
     // -----------------------------
     // ✅ NEW: course submission flow (email required)
@@ -8381,36 +8594,50 @@ async function confirmShareRound(){
       : [];
 
   roundsCache =
-    rounds.map(r => ({
-      ...r,
+  rounds.map(r => ({
+    ...r,
 
-      holesData:
-        Array.isArray(r.holesData)
-          ? r.holesData
-          : (
-              Array.isArray(r.holes)
-                ? r.holes
-                : []
-            ),
+    holesData:
+      Array.isArray(r.holesData)
+        ? r.holesData
+        : (
+            Array.isArray(r.holes)
+              ? r.holes
+              : []
+          ),
 
-      scored_holes:
-        Number(
-          r?.scored_holes || 0
-        ),
+    scored_holes:
+      Number(
+        r?.scored_holes || 0
+      ),
 
-      is_complete:
-        r?.is_complete === true ||
-        String(
-          r?.is_complete
-        ).toLowerCase() === "true",
+    is_complete:
+      r?.is_complete === true ||
+      String(
+        r?.is_complete
+      ).toLowerCase() === "true",
 
-      is_owner:
-        r?.is_owner === true ||
-        String(
-          r?.is_owner
-        ).toLowerCase() === "true"
-    }));
+    is_owner:
+      r?.is_owner === true ||
+      String(
+        r?.is_owner
+      ).toLowerCase() === "true",
 
+    /*
+     * Which player on this shared master scorecard
+     * belongs to the logged-in TeeRadar account.
+     *
+     * P1 = 1
+     * P2 = 2
+     * P3 = 3
+     * P4 = 4
+     */
+    player_number:
+      Math.max(
+        1,
+        Number(r?.player_number) || 1
+      )
+  }));
   // -------------------------------------------------
   // Shared live rounds
   // -------------------------------------------------
@@ -8421,28 +8648,37 @@ async function confirmShareRound(){
       ? data.active_rounds
       : [];
 
-  activeRoundsCache =
-    liveRounds.map(r => ({
-      ...r,
+ activeRoundsCache =
+  liveRounds.map(r => ({
+    ...r,
 
-      scored_holes:
-        Number(
-          r?.scored_holes || 0
-        ),
+    scored_holes:
+      Number(
+        r?.scored_holes || 0
+      ),
 
-      is_complete:
-        r?.is_complete === true ||
-        String(
-          r?.is_complete
-        ).toLowerCase() === "true",
+    is_complete:
+      r?.is_complete === true ||
+      String(
+        r?.is_complete
+      ).toLowerCase() === "true",
 
-      is_owner:
-        r?.is_owner === true ||
-        String(
-          r?.is_owner
-        ).toLowerCase() === "true"
-    }));
+    is_owner:
+      r?.is_owner === true ||
+      String(
+        r?.is_owner
+      ).toLowerCase() === "true",
 
+    /*
+     * Preserve the participant's actual player slot
+     * on the shared master scorecard.
+     */
+    player_number:
+      Math.max(
+        1,
+        Number(r?.player_number) || 1
+      )
+  }));
   /*
    * Render the live card first.
    */
@@ -8455,112 +8691,280 @@ async function confirmShareRound(){
 
   renderTeeRadarHandicap();
 }
-    async function loadRound(id){
-      /*
- * Reset play position before opening another round.
- */
-premiumHoleIndex = 0;
-premiumPlayerIndex = 0;
-premiumShowingTable = false;
+    async function loadRound(id) {
+  /*
+   * Reset play position before opening another round.
+   */
+  premiumHoleIndex = 0;
+  premiumPlayerIndex = 0;
+  premiumShowingTable = false;
+
   setLeftPanelsVisibility(false);
 
-  // ✅ Guest mode
-  if (!isLoggedIn()){
-    const rounds = guestReadRounds();
-    const round = rounds.find(r => String(r?.id) === String(id));
-    if (!round){
-      setToast(rightToast, "Round not found (guest).", false);
+  // =========================================================
+  // GUEST MODE
+  // =========================================================
+  if (!isLoggedIn()) {
+    const rounds =
+      guestReadRounds();
+
+    const round =
+      rounds.find(
+        r =>
+          String(r?.id) ===
+          String(id)
+      );
+
+    if (!round) {
+      setToast(
+        rightToast,
+        "Round not found (guest).",
+        false
+      );
+
       return;
     }
 
-    currentRoundId = round.id;
-    currentRound = round;
+    currentRoundId =
+      round.id;
 
-    // ✅ keep Players dropdown synced
-    if (playersEl) playersEl.value = String(getPlayersCountFromRound(round));
+    currentRound =
+      round;
 
-    // ✅ load + show names
-    loadNamesForRound(round.id);
-    if (isLoggedIn()) ensureP1IsUser(); // (won’t run in guest)
+    if (playersEl) {
+      playersEl.value =
+        String(
+          getPlayersCountFromRound(
+            round
+          )
+        );
+    }
+
+    /*
+     * Guest rounds are device-local, so local saved
+     * names are still correct here.
+     */
+    loadNamesForRound(
+      round.id
+    );
+
     renderPlayerNamesUI();
 
-    await renderScorecard(round);
+    /*
+     * This is an initial open/resume.
+     */
+    shouldAutoOpenCurrentHole =
+      true;
+
+    await renderScorecard(
+      round
+    );
+
     return;
   }
 
-  // ✅ Logged in mode
-  const data = await api(`/api/rounds/${encodeURIComponent(id)}`, { method:"GET" });
-  const round = data.round || data;
-  const holesArr = data.holes || data.holesData || round.holesData || round.holes || [];
-  round.holesData = holesArr || [];
+  // =========================================================
+  // LOGGED-IN MODE
+  // =========================================================
 
-  if (playersEl) playersEl.value = String(getPlayersCountFromRound(round));
+  const data =
+    await api(
+      `/api/rounds/${encodeURIComponent(
+        id
+      )}`,
+      {
+        method: "GET"
+      }
+    );
 
-  if (Array.isArray(round.player_names)) {
-    for (let i = 0; i < 4; i++) {
-      if (typeof round.player_names[i] === "string") playerNames[i] = round.player_names[i];
-    }
-    try { localStorage.setItem(roundNamesKey(round.id), JSON.stringify(playerNames)); } catch {}
+  const round =
+    data?.round || data;
+
+  if (!round?.id) {
+    throw new Error(
+      "Round data was not returned."
+    );
   }
-  
-  // ✅ Restore linked TeeRadar players
-for (let i = 0; i < 4; i++) {
-  playerUserIds[i] = null;
-}
 
-if (
-  Array.isArray(
-    round.player_user_ids
-  )
-) {
+  const holesArr =
+    data?.holes ||
+    data?.holesData ||
+    round?.holesData ||
+    [];
+
+  round.holesData =
+    Array.isArray(holesArr)
+      ? holesArr
+      : [];
+
+  // =========================================================
+  // NORMALISE VIEWER METADATA
+  // =========================================================
+
+  round.is_owner =
+    round?.is_owner === true ||
+    String(
+      round?.is_owner
+    ).toLowerCase() === "true";
+
+  round.player_number =
+    Math.max(
+      1,
+      Number(
+        round?.player_number
+      ) || 1
+    );
+
+  // =========================================================
+  // BACKEND PLAYER ORDER IS AUTHORITATIVE
+  // =========================================================
+
+  const playersCount =
+    getPlayersCountFromRound(
+      round
+    );
+
+  if (playersEl) {
+    playersEl.value =
+      String(
+        playersCount
+      );
+  }
+
+  /*
+   * Clear old device state first.
+   *
+   * This prevents names from the previous round or
+   * previous phone session leaking into this scorecard.
+   */
   for (
     let i = 0;
     i < 4;
     i++
   ) {
-    const id =
-      Number(
-        round.player_user_ids[i]
-      );
-
-    if (
-      Number.isFinite(id) &&
-      id > 0
-    ) {
-      playerUserIds[i] = id;
-    }
+    playerNames[i] = "";
+    playerUserIds[i] = null;
   }
-}
 
   /*
- * Logged-in backend rounds use the backend player order
- * as the source of truth.
- *
- * This is essential for shared scorecards:
- *
- * P1 must remain P1 on every phone.
- * P2 must remain P2 on every phone.
- */
-renderPlayerNamesUI();
+   * Restore the permanent player order saved on the
+   * ONE master round.
+   *
+   * Example:
+   * P1 = Declan
+   * P2 = Friend
+   *
+   * This stays identical on both phones.
+   */
+  if (
+    Array.isArray(
+      round.player_names
+    )
+  ) {
+    for (
+      let i = 0;
+      i < 4;
+      i++
+    ) {
+      const name =
+        String(
+          round.player_names[i] ||
+          ""
+        ).trim();
 
-/*
- * Initial open / resume:
- *
- * Find the first hole where at least one player
- * still has no strokes entered.
- *
- * This ONLY happens when opening the round.
- * Live background sync will never move the golfer.
- */
-shouldAutoOpenCurrentHole = true;
+      if (name) {
+        playerNames[i] =
+          name;
+      }
+    }
+  }
 
-await renderScorecard(round);
+  /*
+   * Restore the TeeRadar account attached to each
+   * player slot.
+   */
+  if (
+    Array.isArray(
+      round.player_user_ids
+    )
+  ) {
+    for (
+      let i = 0;
+      i < 4;
+      i++
+    ) {
+      const userId =
+        Number(
+          round.player_user_ids[i]
+        );
 
-/*
- * Start live shared score syncing after the scorecard
- * has been fully rendered.
- */
-startLiveScoreSync();
+      if (
+        Number.isFinite(
+          userId
+        ) &&
+        userId > 0
+      ) {
+        playerUserIds[i] =
+          userId;
+      }
+    }
+  }
+
+  /*
+   * IMPORTANT:
+   *
+   * DO NOT call:
+   *
+   * loadNamesForRound(round.id)
+   * ensureP1IsUser()
+   *
+   * here.
+   *
+   * Those are device-local behaviours and can change
+   * the permanent shared player order when Player 2
+   * opens the same scorecard.
+   */
+
+  /*
+   * Local storage may cache the BACKEND names for
+   * convenience, but it must never be read back over
+   * the backend order for logged-in rounds.
+   */
+  try {
+    localStorage.setItem(
+      roundNamesKey(
+        round.id
+      ),
+      JSON.stringify(
+        playerNames
+      )
+    );
+  } catch {}
+
+  /*
+   * Keep the authoritative round in memory before
+   * rendering anything.
+   */
+  currentRoundId =
+    round.id;
+
+  currentRound =
+    round;
+
+  renderPlayerNamesUI();
+
+  /*
+   * This is an initial open/resume, so find the first
+   * incomplete hole once.
+   *
+   * Live sync must never do this later.
+   */
+  shouldAutoOpenCurrentHole =
+    true;
+
+  await renderScorecard(
+    round
+  );
 }
 
     async function createRound(){
