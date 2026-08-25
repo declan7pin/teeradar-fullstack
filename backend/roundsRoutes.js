@@ -2527,9 +2527,7 @@ router.get("/", requireAuth, async (req, res) => {
     await ensureSharedRoundColumns();
     await ensureRoundParticipantsTable();
 
-    // -------------------------------------------------
-    // Handicap
-    // -------------------------------------------------
+   
     let freshHandicap =
       null;
 
@@ -2545,23 +2543,6 @@ router.get("/", requireAuth, async (req, res) => {
       );
     }
 
-    // -------------------------------------------------
-    // ALL rounds this golfer participated in
-    //
-    // This includes:
-    // - rounds they created
-    // - rounds created by a TeeRadar friend where they
-    //   are Player 2/3/4
-    //
-    // Still ONE master round only.
-    //
-    // scored_holes:
-    //   Number of holes THIS logged-in golfer has scored.
-    //
-    // is_complete:
-    //   TRUE only when EVERY player on the scorecard
-    //   has a stroke saved for EVERY hole.
-    // -------------------------------------------------
     const roundsRes =
       await db.query(
         `
@@ -2594,9 +2575,7 @@ router.get("/", requireAuth, async (req, res) => {
             END
           ) AS player_number,
 
-          -- -------------------------------------------------
-          -- How many holes THIS golfer has scored
-          -- -------------------------------------------------
+      
           COALESCE(
             (
               SELECT COUNT(*)::int
@@ -2644,22 +2623,6 @@ router.get("/", requireAuth, async (req, res) => {
             0
           ) AS scored_holes,
 
-          // -------------------------------------------------
-          // WHOLE shared scorecard completion
-          //
-          // A hole only counts as complete when EVERY
-          // player slot has a stroke saved on that hole.
-          //
-          // Therefore:
-          //
-          // P1 = 18/18
-          // P2 = 17/18
-          // -> is_complete = FALSE
-          //
-          // P1 = 18/18
-          // P2 = 18/18
-          // -> is_complete = TRUE
-          // -------------------------------------------------
           CASE
             WHEN COALESCE(
               (
