@@ -2554,6 +2554,13 @@ router.get("/", requireAuth, async (req, res) => {
     //   are Player 2/3/4
     //
     // Still ONE master round only.
+    //
+    // scored_holes:
+    //   Number of holes THIS logged-in golfer has scored.
+    //
+    // is_complete:
+    //   TRUE only when EVERY player on the scorecard
+    //   has a stroke saved for EVERY hole.
     // -------------------------------------------------
     const roundsRes =
       await db.query(
@@ -2587,10 +2594,15 @@ router.get("/", requireAuth, async (req, res) => {
             END
           ) AS player_number,
 
+          -- -------------------------------------------------
+          -- How many holes THIS golfer has scored
+          -- -------------------------------------------------
           COALESCE(
             (
               SELECT COUNT(*)::int
+
               FROM round_holes rh
+
               WHERE rh.round_id = r.id
 
                 AND (
@@ -2632,47 +2644,72 @@ router.get("/", requireAuth, async (req, res) => {
             0
           ) AS scored_holes,
 
+          // -------------------------------------------------
+          // WHOLE shared scorecard completion
+          //
+          // A hole only counts as complete when EVERY
+          // player slot has a stroke saved on that hole.
+          //
+          // Therefore:
+          //
+          // P1 = 18/18
+          // P2 = 17/18
+          // -> is_complete = FALSE
+          //
+          // P1 = 18/18
+          // P2 = 18/18
+          // -> is_complete = TRUE
+          // -------------------------------------------------
           CASE
             WHEN COALESCE(
               (
                 SELECT COUNT(*)::int
+
                 FROM round_holes rh
+
                 WHERE rh.round_id = r.id
 
-                  AND (
-                    CASE
-                      WHEN COALESCE(
-                        rp.player_number,
-                        CASE
-                          WHEN r.user_id = $1
-                            THEN 1
-                          ELSE NULL
-                        END
-                      ) = 1
+                  AND NOT EXISTS (
+                    SELECT 1
 
-                      THEN (
-                        rh.strokes IS NOT NULL
+                    FROM generate_series(
+                      1,
+                      GREATEST(
+                        1,
+                        COALESCE(
+                          r.players_count,
+                          1
+                        )
+                      )
+                    ) AS player_slot(
+                      player_number
+                    )
 
-                        OR (
-                          rh.strokes_by_player
-                            IS NOT NULL
+                    WHERE NOT (
+                      (
+                        player_slot.player_number = 1
 
-                          AND rh.strokes_by_player
-                            ? '1'
+                        AND (
+                          rh.strokes IS NOT NULL
+
+                          OR (
+                            rh.strokes_by_player
+                              IS NOT NULL
+
+                            AND rh.strokes_by_player
+                              ? '1'
+                          )
                         )
                       )
 
-                      ELSE (
+                      OR (
                         rh.strokes_by_player
                           IS NOT NULL
 
                         AND rh.strokes_by_player
-                          ? COALESCE(
-                              rp.player_number,
-                              0
-                            )::text
+                          ? player_slot.player_number::text
                       )
-                    END
+                    )
                   )
               ),
               0
@@ -2708,11 +2745,12 @@ router.get("/", requireAuth, async (req, res) => {
     const allRounds =
       roundsRes.rows || [];
 
-    /*
-     * Completed rounds belong in Recent Rounds.
-     *
-     * This now works for Player 1 AND Player 2–4.
-     */
+    // -------------------------------------------------
+    // RECENT ROUNDS
+    //
+    // Only move the master scorecard here once EVERY
+    // player has completed EVERY hole.
+    // -------------------------------------------------
     const rounds =
       allRounds.filter(
         (round) =>
@@ -2722,10 +2760,12 @@ router.get("/", requireAuth, async (req, res) => {
           ).toLowerCase() === "true"
       );
 
-    /*
-     * Incomplete shared/master rounds belong in the
-     * Round In Progress section.
-     */
+    // -------------------------------------------------
+    // ROUND IN PROGRESS
+    //
+    // If even one player is missing one hole, the
+    // master scorecard remains here for everybody.
+    // -------------------------------------------------
     const activeRounds =
       allRounds.filter(
         (round) =>
@@ -2743,6 +2783,9 @@ router.get("/", requireAuth, async (req, res) => {
       {
         userId,
 
+        totalRoundsFound:
+          allRounds.length,
+
         recentRoundsReturned:
           rounds.length,
 
@@ -2757,8 +2800,10 @@ router.get("/", requireAuth, async (req, res) => {
     return res.json({
       ok: true,
 
+      // Completed shared/normal rounds
       rounds,
 
+      // Incomplete shared/normal rounds
       active_rounds:
         activeRounds,
 
