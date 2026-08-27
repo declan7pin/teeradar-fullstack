@@ -62,6 +62,8 @@ import applePurchaseRouter from "./applePurchaseRoutes.js";
 import roundsRouter from "./roundsRoutes.js";
 // ✅ NEW: Scorecards router (public)
 import scorecardsRouter from "./scorecardsRouter.js";
+// 🛰️ GPS course data
+import gpsRoutes from "./gpsRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1297,8 +1299,13 @@ app.use((req, res, next) => {
 });
 // ✅ Rounds API
 app.use("/api/rounds", roundsRouter);
+
 // ✅ Scorecards API (PUBLIC – no auth)
 app.use("/api/scorecards", scorecardsRouter);
+
+// 🛰️ GPS API
+app.use("/api/gps", gpsRoutes);
+
 // ✅ Friends API
 app.use("/api/friends", requireAuth, friendsRouter);
 app.use("/api/social", socialRouter);
