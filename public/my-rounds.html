@@ -1262,40 +1262,43 @@
 
 /* =========================================================
    ACTIVE ROUND MODE
-   True dedicated full-screen scorecard / GPS screen
+   Dedicated scorecard / GPS screen
    ========================================================= */
 
 html.round-mode,
 html.round-mode body{
+  width:100%;
+  height:100%;
   overflow:hidden !important;
+  background:#f2f6f7;
 }
 
 /*
- * The scorecard section becomes a fixed screen sitting
- * ABOVE the normal My Rounds page.
+ * Scorecard becomes its own full-screen layer.
  *
- * The setup/upcoming/recent-round page can remain underneath
- * but the golfer cannot see or scroll to it.
+ * We target the actual ID rather than relying on
+ * nth-child positions in the existing page.
  */
-html.round-mode .grid > section:nth-child(2){
+html.round-mode #scorecardSection{
   position:fixed !important;
 
-  top:0 !important;
-  left:0 !important;
-  right:0 !important;
-  bottom:0 !important;
+  inset:0 !important;
 
   z-index:999999 !important;
 
+  display:block !important;
+
   width:100% !important;
   max-width:760px !important;
+
   height:100dvh !important;
 
   margin:0 auto !important;
+
   padding:
     calc(env(safe-area-inset-top, 0px) + 10px)
     10px
-    calc(env(safe-area-inset-bottom, 0px) + 18px)
+    calc(env(safe-area-inset-bottom, 0px) + 20px)
     10px !important;
 
   overflow-y:auto !important;
@@ -1312,10 +1315,23 @@ html.round-mode .grid > section:nth-child(2){
 }
 
 /*
- * Hide normal scorecard website header.
- * Round Mode gets its own controls instead.
+ * Normal page header is not part of the active round.
  */
-html.round-mode .scorecardHeader{
+html.round-mode header{
+  display:none !important;
+}
+
+/*
+ * Hide normal bottom navigation while playing.
+ */
+html.round-mode .app-bottom-nav{
+  display:none !important;
+}
+
+/*
+ * Normal website scorecard heading isn't required.
+ */
+html.round-mode #scorecardSection .scorecardHeader{
   display:none !important;
 }
 
@@ -1323,16 +1339,18 @@ html.round-mode #scorecardEmpty{
   display:none !important;
 }
 
+/*
+ * Active scorecard fills the new screen.
+ */
 html.round-mode #scorecardWrap{
   display:block !important;
 
   width:100% !important;
   max-width:none !important;
+
+  margin:0 !important;
 }
 
-/*
- * Premium scorecard fills the dedicated screen.
- */
 html.round-mode #premiumWrap{
   display:block !important;
 
@@ -1341,42 +1359,30 @@ html.round-mode #premiumWrap{
 
   margin:0 !important;
 
-  border-radius:24px;
-
   overflow:hidden;
+
+  border-radius:22px;
 }
 
-/*
- * Do not show normal TeeRadar bottom navigation
- * while actually playing.
- */
-html.round-mode .app-bottom-nav{
-  display:none !important;
-}
+/* =========================================================
+   ROUND MODE CONTROLS
+   ========================================================= */
 
-/*
- * Hide the normal page header behind the active round.
- */
-html.round-mode header{
-  visibility:hidden !important;
-}
-
-/*
- * Round controls shown only while a round is open.
- */
 .roundModeActions{
   display:none;
 }
 
 html.round-mode .roundModeActions{
-  display:flex;
+  display:flex !important;
 
   align-items:center;
   justify-content:space-between;
 
   gap:10px;
 
-  margin-bottom:10px;
+  width:100%;
+
+  margin:0 0 10px;
 }
 
 .roundModeExitBtn,
@@ -1389,6 +1395,8 @@ html.round-mode .roundModeActions{
 
   font-size:.8rem;
   font-weight:950;
+
+  cursor:pointer;
 }
 
 .roundModeExitBtn{
@@ -1400,7 +1408,7 @@ html.round-mode .roundModeActions{
 }
 
 .roundModeDeleteBtn{
-  border:1px solid rgba(220,38,38,.16);
+  border:1px solid rgba(220,38,38,.18);
 
   background:#fff1f2;
 
@@ -1409,13 +1417,10 @@ html.round-mode .roundModeActions{
 
 @media(max-width:700px){
 
-  html.round-mode .grid > section:nth-child(2){
+  html.round-mode #scorecardSection{
     max-width:none !important;
   }
 
-  html.round-mode #premiumWrap{
-    border-radius:22px;
-  }
 }
 
   /* =========================================================
@@ -2908,7 +2913,7 @@ html.app-mode .activeRoundCard{
 </section>
 
         <!-- RIGHT -->
-        <section class="card">
+          <section class="card" id="scorecardSection">
           <div class="scorecardHeader">
             <div>
               <h2 id="scTitle">Scorecard</h2>
