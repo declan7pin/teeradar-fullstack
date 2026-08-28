@@ -816,6 +816,46 @@
   font-weight:800;
 }
 
+  .gpsMapMeasure{
+  margin-top:6px;
+
+  color:#00796b;
+
+  font-size:.82rem;
+  font-weight:950;
+}
+
+.gpsTargetMarker{
+  width:24px;
+  height:24px;
+
+  border:3px solid #ffffff;
+  border-radius:50%;
+
+  background:#ef4444;
+
+  box-shadow:
+    0 2px 12px rgba(0,0,0,.4);
+
+  position:relative;
+}
+
+.gpsTargetMarker::before{
+  content:"";
+
+  position:absolute;
+
+  width:6px;
+  height:6px;
+
+  top:6px;
+  left:6px;
+
+  border-radius:50%;
+
+  background:#ffffff;
+}
+
 #gpsMap{
   width:100%;
   height:340px;
@@ -3094,6 +3134,12 @@ html.app-mode .activeRoundCard{
       >
         Enable GPS to show your position
       </div>
+      <div
+  class="gpsMapMeasure"
+  id="gpsMapMeasure"
+>
+  Tap the map to measure a target
+</div>
     </div>
   </div>
 
@@ -3852,6 +3898,11 @@ const gpsMapStatus =
     "gpsMapStatus"
   );
 
+    const gpsMapMeasure =
+  document.getElementById(
+    "gpsMapMeasure"
+  );
+
 // ✅ premium state
 let premiumHoleIndex = 0;
 let premiumShowingTable = false;
@@ -3890,9 +3941,18 @@ let currentGpsPosition = null;
  * GPS map state.
  */
 let gpsMap = null;
+
 let gpsPlayerMarker = null;
 let gpsAccuracyCircle = null;
+
 let gpsMapHasCentred = false;
+
+/*
+ * Tap-to-measure state.
+ */
+let gpsTargetMarker = null;
+let gpsTargetLine = null;
+let gpsTargetPosition = null;
 
 /*
  * Retain the currently loaded scorecard metadata so the hole
@@ -4269,6 +4329,148 @@ function updateGpsDistances(){
   }
 }
 
+    function gpsDistanceBetween(
+  lat1,
+  lng1,
+  lat2,
+  lng2
+) {
+
+  const earthRadius =
+    6371000;
+
+  const toRadians =
+    (degrees) =>
+      degrees * Math.PI / 180;
+
+  const φ1 =
+    toRadians(lat1);
+
+  const φ2 =
+    toRadians(lat2);
+
+  const deltaLat =
+    toRadians(
+      lat2 - lat1
+    );
+
+  const deltaLng =
+    toRadians(
+      lng2 - lng1
+    );
+
+  const a =
+    Math.sin(
+      deltaLat / 2
+    ) ** 2 +
+    Math.cos(φ1) *
+    Math.cos(φ2) *
+    Math.sin(
+      deltaLng / 2
+    ) ** 2;
+
+  const c =
+    2 *
+    Math.atan2(
+      Math.sqrt(a),
+      Math.sqrt(1 - a)
+    );
+
+  return (
+    earthRadius * c
+  );
+}
+
+    function updateGpsTargetMeasurement() {
+
+  if (
+    !gpsMap ||
+    !gpsTargetPosition ||
+    !currentGpsPosition
+  ) {
+    return;
+  }
+
+  const playerLat =
+    Number(
+      currentGpsPosition.latitude
+    );
+
+  const playerLng =
+    Number(
+      currentGpsPosition.longitude
+    );
+
+  const targetLat =
+    Number(
+      gpsTargetPosition.latitude
+    );
+
+  const targetLng =
+    Number(
+      gpsTargetPosition.longitude
+    );
+
+  if (
+    !Number.isFinite(playerLat) ||
+    !Number.isFinite(playerLng) ||
+    !Number.isFinite(targetLat) ||
+    !Number.isFinite(targetLng)
+  ) {
+    return;
+  }
+
+  const distance =
+    gpsDistanceBetween(
+      playerLat,
+      playerLng,
+      targetLat,
+      targetLng
+    );
+
+  /*
+   * Draw/update line from golfer to target.
+   */
+  const linePoints = [
+    [
+      playerLat,
+      playerLng
+    ],
+    [
+      targetLat,
+      targetLng
+    ]
+  ];
+
+  if (!gpsTargetLine) {
+
+    gpsTargetLine =
+      window.L.polyline(
+        linePoints,
+        {
+          weight: 3,
+          dashArray: "8 7"
+        }
+      ).addTo(gpsMap);
+
+  } else {
+
+    gpsTargetLine.setLatLngs(
+      linePoints
+    );
+  }
+
+  /*
+   * Show measurement.
+   */
+  if (gpsMapMeasure) {
+
+    gpsMapMeasure.textContent =
+      `${Math.round(distance)}m to selected target`;
+
+  }
+}
+
 // =========================================================
 // GPS MAP
 // =========================================================
@@ -4324,14 +4526,108 @@ function ensureGpsMap() {
    * Satellite imagery.
    */
   window.L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    {
-      maxZoom: 20,
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  {
+    maxZoom: 19,
+    maxNativeZoom: 19,
 
-      attribution:
-        "Tiles © Esri — Sources: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+    attribution:
+      "Tiles © Esri — Sources: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+  }
+).addTo(gpsMap);
+
+  /*
+ * Tap anywhere on the map to measure
+ * from the golfer's current GPS position.
+ */
+gpsMap.on(
+  "click",
+  (event) => {
+
+    if (
+      !event ||
+      !event.latlng
+    ) {
+      return;
     }
-  ).addTo(gpsMap);
+
+    if (
+      !currentGpsPosition
+    ) {
+
+      if (gpsMapMeasure) {
+        gpsMapMeasure.textContent =
+          "Enable GPS before measuring";
+      }
+
+      return;
+    }
+
+    const latitude =
+      Number(
+        event.latlng.lat
+      );
+
+    const longitude =
+      Number(
+        event.latlng.lng
+      );
+
+    gpsTargetPosition = {
+      latitude,
+      longitude
+    };
+
+    const point = [
+      latitude,
+      longitude
+    ];
+
+    /*
+     * Create target marker on first tap.
+     */
+    if (!gpsTargetMarker) {
+
+      const targetIcon =
+        window.L.divIcon({
+          className: "",
+
+          html:
+            '<div class="gpsTargetMarker"></div>',
+
+          iconSize: [
+            24,
+            24
+          ],
+
+          iconAnchor: [
+            12,
+            12
+          ]
+        });
+
+      gpsTargetMarker =
+        window.L.marker(
+          point,
+          {
+            icon:
+              targetIcon,
+
+            zIndexOffset:
+              900
+          }
+        ).addTo(gpsMap);
+
+    } else {
+
+      gpsTargetMarker.setLatLng(
+        point
+      );
+    }
+
+    updateGpsTargetMeasurement();
+  }
+);
 
   /*
    * Temporary default.
@@ -4503,6 +4799,13 @@ function updateGpsMapPosition() {
           )}m`
         : "Your live location";
   }
+  /*
+ * If the golfer has already selected a target,
+ * recalculate the distance as they move.
+ */
+if (gpsTargetPosition) {
+  updateGpsTargetMeasurement();
+}
 }
 
 async function enableScorecardGps() {
