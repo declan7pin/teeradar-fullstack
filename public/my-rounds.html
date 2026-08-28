@@ -1260,6 +1260,134 @@
   }
 }
 
+/* =========================================================
+   ACTIVE ROUND MODE
+   Dedicated full-screen playing experience
+   ========================================================= */
+
+html.round-mode body{
+  background:#f2f6f7;
+}
+
+/*
+ * Hide the normal My Rounds screen while a scorecard
+ * is being actively viewed/played.
+ */
+html.round-mode .app-rounds-intro,
+html.round-mode #createRoundSection,
+html.round-mode .handicapCard,
+html.round-mode #authGate{
+  display:none !important;
+}
+
+/*
+ * Remove normal page spacing so the scorecard becomes
+ * the main app screen.
+ */
+html.round-mode main{
+  width:100%;
+  max-width:760px;
+  margin:0 auto;
+  padding:12px 12px 32px;
+}
+
+html.round-mode .grid{
+  display:block;
+}
+
+/*
+ * The right-hand scorecard section becomes the only
+ * visible main section.
+ */
+html.round-mode .grid > section:first-child{
+  display:none !important;
+}
+
+html.round-mode .grid > section:nth-child(2){
+  display:block !important;
+  width:100%;
+  max-width:none;
+  margin:0;
+}
+
+/*
+ * Remove the normal outer card appearance.
+ * premiumWrap itself becomes the active-round card.
+ */
+html.round-mode .grid > section:nth-child(2){
+  padding:0;
+  border:0;
+  background:transparent;
+  box-shadow:none;
+}
+
+/*
+ * Hide the normal website scorecard header while
+ * premium round mode is being used.
+ */
+html.round-mode .scorecardHeader{
+  display:none !important;
+}
+
+/*
+ * Hide the old full score table unless the golfer
+ * deliberately switches to table view.
+ */
+html.round-mode #scorecardEmpty{
+  display:none !important;
+}
+
+html.round-mode #premiumWrap{
+  width:100%;
+  margin:0;
+}
+
+/*
+ * Dedicated playing header.
+ */
+html.round-mode header{
+  min-height:auto;
+}
+
+/*
+ * On the installed app, change the header title
+ * from PLAY to ROUND.
+ */
+html.app-mode.round-mode .brand::before{
+  content:"Round";
+}
+
+/*
+ * Don't leave room for normal page content/navigation
+ * above the active scorecard.
+ */
+html.app-mode.round-mode main{
+  padding-top:10px;
+}
+
+/*
+ * Make the active scorecard feel more like a dedicated
+ * native screen on phones.
+ */
+@media(max-width:700px){
+
+  html.round-mode main{
+    padding:
+      8px
+      8px
+      calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+
+  html.round-mode #premiumWrap{
+    margin:0;
+    border-radius:24px;
+  }
+
+  html.round-mode .premTop{
+    border-radius:24px 24px 0 0;
+  }
+}
+
   /* =========================================================
    MY ROUNDS — INSTALLED APP DESIGN
    Only active inside the Capacitor app
@@ -7340,8 +7468,16 @@ function renderLiveScoreHero(
   }
 }
     async function renderScorecard(round){
-      currentRound = round;
-currentRoundId = round?.id || null;
+  currentRound = round;
+  currentRoundId = round?.id || null;
+
+  /*
+   * A valid round is now being opened.
+   * Switch My Rounds into the dedicated playing screen.
+   */
+  if (currentRoundId) {
+    enterRoundMode();
+  }
 
 /*
  * Only force P1 to the logged-in golfer while creating
@@ -8691,6 +8827,47 @@ async function confirmShareRound(){
 
   renderTeeRadarHandicap();
 }
+
+// =========================================================
+// ACTIVE ROUND MODE
+// =========================================================
+
+function enterRoundMode() {
+  document.documentElement.classList.add(
+    "round-mode"
+  );
+
+  /*
+   * Start at the top of the dedicated playing screen.
+   */
+  try {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
+  } catch (error) {
+    window.scrollTo(0, 0);
+  }
+}
+
+function exitRoundMode() {
+  document.documentElement.classList.remove(
+    "round-mode"
+  );
+
+  /*
+   * Stop any live round polling/location behaviour
+   * associated with the open scorecard.
+   */
+  try {
+    stopLiveScoreSync();
+  } catch (error) {
+    // Safe fallback.
+  }
+
+  window.scrollTo(0, 0);
+}
+
     async function loadRound(id) {
   /*
    * Reset play position before opening another round.
