@@ -1265,121 +1265,123 @@
    Dedicated full-screen playing experience
    ========================================================= */
 
+html.round-mode,
 html.round-mode body{
   background:#f2f6f7;
 }
 
 /*
- * Hide the normal My Rounds screen while a scorecard
- * is being actively viewed/played.
+ * While playing, the normal My Rounds interface must not
+ * remain anywhere in the scrollable document.
  */
 html.round-mode .app-rounds-intro,
 html.round-mode #createRoundSection,
+html.round-mode #authGate,
+html.round-mode #handicapCard,
 html.round-mode .handicapCard,
-html.round-mode #authGate{
+html.round-mode #roundsList,
+html.round-mode #roundsWrap,
+html.round-mode #upcomingRounds,
+html.round-mode #upcomingRoundsWrap,
+html.round-mode .upcomingRounds,
+html.round-mode .recentRounds,
+html.round-mode .rounds-list,
+html.round-mode .roundsList,
+html.round-mode .round-in-progress,
+html.round-mode .roundInProgress{
   display:none !important;
 }
 
 /*
- * Remove normal page spacing so the scorecard becomes
- * the main app screen.
- */
-html.round-mode main{
-  width:100%;
-  max-width:760px;
-  margin:0 auto;
-  padding:12px 12px 32px;
-}
-
-html.round-mode .grid{
-  display:block;
-}
-
-/*
- * The right-hand scorecard section becomes the only
- * visible main section.
+ * Hide the entire LEFT side of the existing two-column page.
  */
 html.round-mode .grid > section:first-child{
   display:none !important;
 }
 
+/*
+ * Scorecard side becomes the complete screen.
+ */
+html.round-mode .grid{
+  display:block !important;
+  grid-template-columns:1fr !important;
+  width:100% !important;
+  max-width:none !important;
+  margin:0 !important;
+  gap:0 !important;
+}
+
 html.round-mode .grid > section:nth-child(2){
   display:block !important;
-  width:100%;
-  max-width:none;
-  margin:0;
+  width:100% !important;
+  max-width:none !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
 }
 
 /*
- * Remove the normal outer card appearance.
- * premiumWrap itself becomes the active-round card.
+ * Strip the normal My Rounds page spacing.
  */
-html.round-mode .grid > section:nth-child(2){
-  padding:0;
-  border:0;
-  background:transparent;
-  box-shadow:none;
+html.round-mode main{
+  display:block !important;
+  width:100% !important;
+  max-width:760px !important;
+  margin:0 auto !important;
+  padding:
+    10px
+    10px
+    calc(30px + env(safe-area-inset-bottom, 0px)) !important;
 }
 
 /*
- * Hide the normal website scorecard header while
- * premium round mode is being used.
+ * Remove the old scorecard section heading.
  */
 html.round-mode .scorecardHeader{
   display:none !important;
 }
 
-/*
- * Hide the old full score table unless the golfer
- * deliberately switches to table view.
- */
 html.round-mode #scorecardEmpty{
   display:none !important;
 }
 
-html.round-mode #premiumWrap{
-  width:100%;
-  margin:0;
-}
-
 /*
- * Dedicated playing header.
+ * Premium scorecard is now the round screen.
  */
-html.round-mode header{
-  min-height:auto;
+html.round-mode #premiumWrap{
+  display:block;
+  width:100% !important;
+  max-width:none !important;
+  margin:0 !important;
 }
 
 /*
- * On the installed app, change the header title
- * from PLAY to ROUND.
+ * Keep the scorecard itself scrollable if GPS + scoring
+ * becomes taller than the phone.
+ */
+html.round-mode body{
+  overflow-x:hidden;
+}
+
+/*
+ * Installed app heading.
  */
 html.app-mode.round-mode .brand::before{
   content:"Round";
 }
 
-/*
- * Don't leave room for normal page content/navigation
- * above the active scorecard.
- */
-html.app-mode.round-mode main{
-  padding-top:10px;
-}
-
-/*
- * Make the active scorecard feel more like a dedicated
- * native screen on phones.
- */
 @media(max-width:700px){
 
   html.round-mode main{
     padding:
       8px
       8px
-      calc(24px + env(safe-area-inset-bottom, 0px));
+      calc(24px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   html.round-mode #premiumWrap{
-    margin:0;
     border-radius:24px;
   }
 
@@ -8838,16 +8840,19 @@ function enterRoundMode() {
   );
 
   /*
-   * Start at the top of the dedicated playing screen.
+   * Make absolutely sure we start at the beginning
+   * of the dedicated round screen.
+   *
+   * Don't use smooth scrolling here because the old
+   * My Rounds content is disappearing at the same time.
    */
-  try {
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth"
-    });
-  } catch (error) {
+  requestAnimationFrame(() => {
     window.scrollTo(0, 0);
-  }
+
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+    });
+  });
 }
 
 function exitRoundMode() {
