@@ -5,6 +5,18 @@
   <meta charset="UTF-8" />
   <title>TeeRadar — My Rounds</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+  crossorigin=""
+/>
+
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9coqIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+  crossorigin=""
+></script>
 
 <script>
   try {
@@ -766,6 +778,106 @@
 /* =========================================================
    GPS SCORECARD
    ========================================================= */
+.gpsMapCard{
+  overflow:hidden;
+
+  margin-bottom:14px;
+
+  border:1px solid rgba(0,121,107,.16);
+  border-radius:22px;
+
+  background:#ffffff;
+
+  box-shadow:
+    0 10px 28px rgba(15,23,42,.06);
+}
+
+.gpsMapHeader{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+
+  gap:10px;
+
+  padding:13px 14px;
+
+  background:#ffffff;
+}
+
+.gpsMapTitle{
+  color:#10212a;
+
+  font-size:.85rem;
+  font-weight:1000;
+}
+
+.gpsMapSub{
+  margin-top:3px;
+
+  color:var(--muted);
+
+  font-size:.7rem;
+  font-weight:800;
+}
+
+#gpsMap{
+  width:100%;
+  height:340px;
+
+  background:#dce7e9;
+}
+
+/*
+ * Keep Leaflet above its own map only.
+ * It must never overlap TeeRadar modals or Round Mode.
+ */
+#gpsMap .leaflet-pane,
+#gpsMap .leaflet-control{
+  z-index:auto;
+}
+
+#gpsMap .leaflet-control-attribution{
+  font-size:8px;
+}
+
+/*
+ * TeeRadar player location dot.
+ */
+.gpsPlayerMarker{
+  width:20px;
+  height:20px;
+
+  border:4px solid #ffffff;
+  border-radius:50%;
+
+  background:#00796b;
+
+  box-shadow:
+    0 2px 10px rgba(0,0,0,.35);
+}
+
+.gpsMapLoading{
+  display:grid;
+  place-items:center;
+
+  height:340px;
+
+  padding:20px;
+
+  color:#64748b;
+
+  text-align:center;
+
+  font-size:.82rem;
+  font-weight:850;
+}
+
+@media(max-width:700px){
+  #gpsMap,
+  .gpsMapLoading{
+    height:310px;
+  }
+}
 
 .gpsDistanceCard{
   margin-bottom:14px;
@@ -2968,6 +3080,38 @@ html.app-mode .activeRoundCard{
     </div>
 
     <div class="premBody">
+      
+      <!-- =====================================================
+     GPS MAP
+     ===================================================== -->
+<div class="gpsMapCard" id="gpsMapCard">
+
+  <div class="gpsMapHeader">
+    <div>
+      <div class="gpsMapTitle">
+        GPS MAP
+      </div>
+
+      <div
+        class="gpsMapSub"
+        id="gpsMapStatus"
+      >
+        Enable GPS to show your position
+      </div>
+    </div>
+  </div>
+
+  <div
+    id="gpsMap"
+    class="gpsMapLoading"
+  >
+    Enable GPS to load the satellite map.
+  </div>
+
+</div>
+
+<!-- ✅ GPS DISTANCES -->
+<div class="gpsDistanceCard" id="gpsDistanceCard">
 
   <!-- ✅ GPS DISTANCES -->
   <div class="gpsDistanceCard" id="gpsDistanceCard">
@@ -3701,6 +3845,16 @@ const gpsBackDistance =
 
 const gpsAccuracy =
   document.getElementById("gpsAccuracy");
+  
+  const gpsMapEl =
+  document.getElementById(
+    "gpsMap"
+  );
+
+const gpsMapStatus =
+  document.getElementById(
+    "gpsMapStatus"
+  );
 
 // ✅ premium state
 let premiumHoleIndex = 0;
@@ -3735,6 +3889,14 @@ let shouldAutoOpenCurrentHole = false;
 let gpsEnabled = false;
 let gpsWatchId = null;
 let currentGpsPosition = null;
+
+/*
+ * GPS map state.
+ */
+let gpsMap = null;
+let gpsPlayerMarker = null;
+let gpsAccuracyCircle = null;
+let gpsMapHasCentred = false;
 
 /*
  * Retain the currently loaded scorecard metadata so the hole
@@ -4111,6 +4273,242 @@ function updateGpsDistances(){
   }
 }
 
+// =========================================================
+// GPS MAP
+// =========================================================
+
+function ensureGpsMap() {
+  if (!gpsMapEl) {
+    return null;
+  }
+
+  if (
+    typeof window.L === "undefined"
+  ) {
+    if (gpsMapStatus) {
+      gpsMapStatus.textContent =
+        "Map library unavailable";
+    }
+
+    console.error(
+      "Leaflet was not loaded"
+    );
+
+    return null;
+  }
+
+  /*
+   * Map already exists.
+   */
+  if (gpsMap) {
+    return gpsMap;
+  }
+
+  /*
+   * Remove the loading presentation before Leaflet
+   * takes ownership of the div.
+   */
+  gpsMapEl.classList.remove(
+    "gpsMapLoading"
+  );
+
+  gpsMapEl.textContent = "";
+
+  gpsMap =
+    window.L.map(
+      gpsMapEl,
+      {
+        zoomControl: true,
+
+        attributionControl: true
+      }
+    );
+
+  /*
+   * Satellite imagery.
+   */
+  window.L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {
+      maxZoom: 20,
+
+      attribution:
+        "Tiles © Esri — Sources: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+    }
+  ).addTo(gpsMap);
+
+  /*
+   * Temporary default.
+   *
+   * The moment we receive the golfer's location,
+   * the map moves to them.
+   */
+  gpsMap.setView(
+    [
+      -31.9505,
+      115.8605
+    ],
+    12
+  );
+
+  /*
+   * Leaflet sometimes initialises before the
+   * full-screen scorecard has finished sizing.
+   */
+  setTimeout(
+    () => {
+      try {
+        gpsMap.invalidateSize();
+      } catch {}
+    },
+    150
+  );
+
+  return gpsMap;
+}
+
+
+function updateGpsMapPosition() {
+  if (
+    !currentGpsPosition
+  ) {
+    return;
+  }
+
+  const map =
+    ensureGpsMap();
+
+  if (!map) {
+    return;
+  }
+
+  const latitude =
+    Number(
+      currentGpsPosition.latitude
+    );
+
+  const longitude =
+    Number(
+      currentGpsPosition.longitude
+    );
+
+  const accuracy =
+    Number(
+      currentGpsPosition.accuracy
+    );
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  ) {
+    return;
+  }
+
+  const point = [
+    latitude,
+    longitude
+  ];
+
+  /*
+   * Custom TeeRadar location marker.
+   */
+  if (!gpsPlayerMarker) {
+
+    const icon =
+      window.L.divIcon({
+        className: "",
+
+        html:
+          '<div class="gpsPlayerMarker"></div>',
+
+        iconSize: [
+          20,
+          20
+        ],
+
+        iconAnchor: [
+          10,
+          10
+        ]
+      });
+
+    gpsPlayerMarker =
+      window.L.marker(
+        point,
+        {
+          icon,
+          zIndexOffset: 1000
+        }
+      ).addTo(map);
+
+  } else {
+
+    gpsPlayerMarker.setLatLng(
+      point
+    );
+  }
+
+  /*
+   * Show the phone's reported GPS accuracy.
+   */
+  if (
+    Number.isFinite(accuracy) &&
+    accuracy > 0
+  ) {
+
+    if (!gpsAccuracyCircle) {
+
+      gpsAccuracyCircle =
+        window.L.circle(
+          point,
+          {
+            radius:
+              accuracy,
+
+            weight: 1,
+
+            fillOpacity: 0.08
+          }
+        ).addTo(map);
+
+    } else {
+
+      gpsAccuracyCircle.setLatLng(
+        point
+      );
+
+      gpsAccuracyCircle.setRadius(
+        accuracy
+      );
+    }
+  }
+
+  /*
+   * Centre automatically only on the FIRST fix.
+   *
+   * After that, the golfer is free to pan/zoom the map
+   * without TeeRadar constantly snapping back.
+   */
+  if (!gpsMapHasCentred) {
+
+    map.setView(
+      point,
+      18
+    );
+
+    gpsMapHasCentred = true;
+  }
+
+  if (gpsMapStatus) {
+    gpsMapStatus.textContent =
+      Number.isFinite(accuracy)
+        ? `Your location • accuracy ±${Math.round(
+            accuracy
+          )}m`
+        : "Your live location";
+  }
+}
+
 async function enableScorecardGps() {
   const Geolocation =
     window.Capacitor?.Plugins?.Geolocation;
@@ -4259,6 +4657,7 @@ async function enableScorecardGps() {
       await loadCoursesOnce();
 
       updateGpsDistances();
+      updateGpsMapPosition();
     }
 
     // --------------------------------------------
@@ -4343,6 +4742,7 @@ async function enableScorecardGps() {
           }
 
           updateGpsDistances();
+          updateGpsMapPosition();
         }
       );
 
@@ -7191,6 +7591,9 @@ if (premNextBtn) {
 }
 if (gpsEnabled) {
   updateGpsDistances();
+  updateGpsMapPosition();
+} else {
+  ensureGpsMap();
 }
 }
 }
