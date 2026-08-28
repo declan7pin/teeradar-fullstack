@@ -1262,82 +1262,58 @@
 
 /* =========================================================
    ACTIVE ROUND MODE
-   Dedicated full-screen playing experience
+   True dedicated full-screen scorecard / GPS screen
    ========================================================= */
 
 html.round-mode,
 html.round-mode body{
-  background:#f2f6f7;
+  overflow:hidden !important;
 }
 
 /*
- * While playing, the normal My Rounds interface must not
- * remain anywhere in the scrollable document.
+ * The scorecard section becomes a fixed screen sitting
+ * ABOVE the normal My Rounds page.
+ *
+ * The setup/upcoming/recent-round page can remain underneath
+ * but the golfer cannot see or scroll to it.
  */
-html.round-mode .app-rounds-intro,
-html.round-mode #createRoundSection,
-html.round-mode #authGate,
-html.round-mode #handicapCard,
-html.round-mode .handicapCard,
-html.round-mode #roundsList,
-html.round-mode #roundsWrap,
-html.round-mode #upcomingRounds,
-html.round-mode #upcomingRoundsWrap,
-html.round-mode .upcomingRounds,
-html.round-mode .recentRounds,
-html.round-mode .rounds-list,
-html.round-mode .roundsList,
-html.round-mode .round-in-progress,
-html.round-mode .roundInProgress{
-  display:none !important;
-}
-
-/*
- * Hide the entire LEFT side of the existing two-column page.
- */
-html.round-mode .grid > section:first-child{
-  display:none !important;
-}
-
-/*
- * Scorecard side becomes the complete screen.
- */
-html.round-mode .grid{
-  display:block !important;
-  grid-template-columns:1fr !important;
-  width:100% !important;
-  max-width:none !important;
-  margin:0 !important;
-  gap:0 !important;
-}
-
 html.round-mode .grid > section:nth-child(2){
-  display:block !important;
+  position:fixed !important;
+
+  top:0 !important;
+  left:0 !important;
+  right:0 !important;
+  bottom:0 !important;
+
+  z-index:999999 !important;
+
   width:100% !important;
-  max-width:none !important;
-  margin:0 !important;
-  padding:0 !important;
+  max-width:760px !important;
+  height:100dvh !important;
+
+  margin:0 auto !important;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 10px)
+    10px
+    calc(env(safe-area-inset-bottom, 0px) + 18px)
+    10px !important;
+
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+
+  -webkit-overflow-scrolling:touch;
+
   border:0 !important;
-  background:transparent !important;
+  border-radius:0 !important;
+
+  background:#f2f6f7 !important;
+
   box-shadow:none !important;
 }
 
 /*
- * Strip the normal My Rounds page spacing.
- */
-html.round-mode main{
-  display:block !important;
-  width:100% !important;
-  max-width:760px !important;
-  margin:0 auto !important;
-  padding:
-    10px
-    10px
-    calc(30px + env(safe-area-inset-bottom, 0px)) !important;
-}
-
-/*
- * Remove the old scorecard section heading.
+ * Hide normal scorecard website header.
+ * Round Mode gets its own controls instead.
  */
 html.round-mode .scorecardHeader{
   display:none !important;
@@ -1347,46 +1323,98 @@ html.round-mode #scorecardEmpty{
   display:none !important;
 }
 
-/*
- * Premium scorecard is now the round screen.
- */
-html.round-mode #premiumWrap{
-  display:block;
+html.round-mode #scorecardWrap{
+  display:block !important;
+
   width:100% !important;
   max-width:none !important;
+}
+
+/*
+ * Premium scorecard fills the dedicated screen.
+ */
+html.round-mode #premiumWrap{
+  display:block !important;
+
+  width:100% !important;
+  max-width:none !important;
+
   margin:0 !important;
+
+  border-radius:24px;
+
+  overflow:hidden;
 }
 
 /*
- * Keep the scorecard itself scrollable if GPS + scoring
- * becomes taller than the phone.
+ * Do not show normal TeeRadar bottom navigation
+ * while actually playing.
  */
-html.round-mode body{
-  overflow-x:hidden;
+html.round-mode .app-bottom-nav{
+  display:none !important;
 }
 
 /*
- * Installed app heading.
+ * Hide the normal page header behind the active round.
  */
-html.app-mode.round-mode .brand::before{
-  content:"Round";
+html.round-mode header{
+  visibility:hidden !important;
+}
+
+/*
+ * Round controls shown only while a round is open.
+ */
+.roundModeActions{
+  display:none;
+}
+
+html.round-mode .roundModeActions{
+  display:flex;
+
+  align-items:center;
+  justify-content:space-between;
+
+  gap:10px;
+
+  margin-bottom:10px;
+}
+
+.roundModeExitBtn,
+.roundModeDeleteBtn{
+  min-height:44px;
+
+  padding:9px 13px;
+
+  border-radius:14px;
+
+  font-size:.8rem;
+  font-weight:950;
+}
+
+.roundModeExitBtn{
+  border:1px solid #d7e2e5;
+
+  background:#ffffff;
+
+  color:#10212a;
+}
+
+.roundModeDeleteBtn{
+  border:1px solid rgba(220,38,38,.16);
+
+  background:#fff1f2;
+
+  color:#b91c1c;
 }
 
 @media(max-width:700px){
 
-  html.round-mode main{
-    padding:
-      8px
-      8px
-      calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+  html.round-mode .grid > section:nth-child(2){
+    max-width:none !important;
   }
 
   html.round-mode #premiumWrap{
-    border-radius:24px;
-  }
-
-  html.round-mode .premTop{
-    border-radius:24px 24px 0 0;
+    border-radius:22px;
   }
 }
 
@@ -2905,6 +2933,25 @@ html.app-mode .activeRoundCard{
           </div>
 
           <div id="scorecardWrap" style="display:none;">
+            <div class="roundModeActions" id="roundModeActions">
+
+  <button
+    class="roundModeExitBtn"
+    id="roundModeExitBtn"
+    type="button"
+  >
+    ← Exit round
+  </button>
+
+  <button
+    class="roundModeDeleteBtn"
+    id="roundModeDeleteBtn"
+    type="button"
+  >
+    Delete round
+  </button>
+
+</div>
 
   <!-- ✅ PREMIUM hole-by-hole (only for published + complete courses) -->
   <div id="premiumWrap">
@@ -3695,6 +3742,15 @@ let currentPremiumTeeName = "";
     const showLeftBtn = document.getElementById("showLeftBtn");
     const saveAllBtn = document.getElementById("saveAllBtn");
     const deleteRoundBtn = document.getElementById("deleteRoundBtn");
+    const roundModeExitBtn =
+  document.getElementById(
+    "roundModeExitBtn"
+  );
+
+const roundModeDeleteBtn =
+  document.getElementById(
+    "roundModeDeleteBtn"
+  );
 
     const leftToast = document.getElementById("leftToast");
     const rightToast = document.getElementById("rightToast");
@@ -7587,6 +7643,17 @@ deleteRoundBtn.style.display =
   isOwner
     ? "inline-flex"
     : "none";
+    
+    if (roundModeDeleteBtn) {
+
+  roundModeDeleteBtn.style.display =
+    isOwner
+      ? "inline-flex"
+      : "none";
+
+  roundModeDeleteBtn.disabled =
+    !isOwner;
+}
 
       const course = String(round.course || "").trim();
       const state = String(round.state || "").trim().toUpperCase();
@@ -8856,21 +8923,45 @@ function enterRoundMode() {
 }
 
 function exitRoundMode() {
+
   document.documentElement.classList.remove(
     "round-mode"
   );
 
-  /*
-   * Stop any live round polling/location behaviour
-   * associated with the open scorecard.
-   */
   try {
     stopLiveScoreSync();
   } catch (error) {
     // Safe fallback.
   }
 
+  /*
+   * Close the currently displayed scorecard locally.
+   *
+   * This does NOT delete or finish the round.
+   * It simply returns to My Rounds.
+   */
+  currentRoundId = null;
+  currentRound = null;
+
+  premiumHoleIndex = 0;
+  premiumPlayerIndex = 0;
+
+  /*
+   * Remove roundId from URL if one exists.
+   */
+  try {
+    clearRoundIdFromUrl();
+  } catch (error) {}
+
   window.scrollTo(0, 0);
+}
+if (roundModeExitBtn) {
+  roundModeExitBtn.addEventListener(
+    "click",
+    () => {
+      exitRoundMode();
+    }
+  );
 }
 
     async function loadRound(id) {
@@ -10212,6 +10303,58 @@ deleteRoundBtn.addEventListener("click", async () => {
     setToast(rightToast, "Delete failed: " + (err.message || "error"), false);
   }
 });
+
+if (roundModeDeleteBtn) {
+
+  roundModeDeleteBtn.addEventListener(
+    "click",
+    async () => {
+
+      const ok =
+        confirm(
+          "Delete this round? This cannot be undone."
+        );
+
+      if (!ok) {
+        return;
+      }
+
+      roundModeDeleteBtn.disabled =
+        true;
+
+      roundModeDeleteBtn.textContent =
+        "Deleting…";
+
+      try {
+
+        await deleteRound();
+
+        /*
+         * Return to My Rounds after deletion.
+         */
+        exitRoundMode();
+
+      } catch (err) {
+
+        roundModeDeleteBtn.disabled =
+          false;
+
+        roundModeDeleteBtn.textContent =
+          "Delete round";
+
+        setToast(
+          rightToast,
+          "Delete failed: " +
+            (
+              err?.message ||
+              "error"
+            ),
+          false
+        );
+      }
+    }
+  );
+}
 
     holesEl.addEventListener("change", async () => {
       syncNineLoopVisibility();
