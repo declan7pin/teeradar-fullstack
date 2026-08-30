@@ -5730,7 +5730,20 @@ console.log(
         String(currentRoundId);
 
       updateGpsDistances();
-      updateGpsGreenMarker();
+updateGpsGreenMarker();
+
+if (
+  currentRound &&
+  premiumWrap &&
+  premiumWrap.style.display !== "none"
+) {
+  renderPremiumForHole(
+    currentRound,
+    currentPremiumPars,
+    currentPremiumDistances,
+    currentPremiumTeeName
+  );
+}
 
       return;
     }
