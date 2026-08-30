@@ -5609,22 +5609,68 @@ function setLeftPanelsVisibility(show){
       return;
     }
 
-    const courseName =
-      String(
-        currentRound.course ||
-        currentRound.course_name ||
-        ""
-      ).trim();
+   const rawCourseName =
+  String(
+    currentRound.course ||
+    currentRound.course_name ||
+    ""
+  ).trim();
 
-    const roundState =
-      String(
-        currentRound.state ||
-        ""
-      ).trim();
+/*
+ * TeeRadar round/template names can contain
+ * layout suffixes that are not part of the
+ * provider's actual course name.
+ *
+ * Examples:
+ *
+ * "the cut 18"
+ *      -> "the cut"
+ *
+ * "Wembley Golf Course - Front 9"
+ *      -> "Wembley Golf Course"
+ *
+ * "Wembley Golf Course - Back 9"
+ *      -> "Wembley Golf Course"
+ *
+ * "Point Walter Golf Course - 9 holes"
+ *      -> "Point Walter Golf Course"
+ */
+const courseName =
+  rawCourseName
+    .replace(
+      /\s*[-–—]?\s*(front|back)\s*9\s*(holes?)?\s*$/i,
+      ""
+    )
+    .replace(
+      /\s*[-–—]?\s*(9|18)\s*holes?\s*$/i,
+      ""
+    )
+    .replace(
+      /\s*[-–—]?\s*(9|18)\s*$/i,
+      ""
+    )
+    .trim();
 
-    if (!courseName) {
-      return;
-    }
+const roundState =
+  String(
+    currentRound.state ||
+    ""
+  ).trim();
+
+if (!courseName) {
+  return;
+}
+
+console.log(
+  "⛳ TeeRadar course name cleaned:",
+  {
+    original:
+      rawCourseName,
+
+    search:
+      courseName
+  }
+);
 
     console.log(
       "⛳ Searching Golf Courses API:",
