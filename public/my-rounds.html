@@ -840,6 +840,37 @@
   position:relative;
 }
 
+  .gpsGreenMarker{
+  width:28px;
+  height:28px;
+
+  border:4px solid #ffffff;
+  border-radius:50%;
+
+  background:#16a34a;
+
+  box-shadow:
+    0 3px 14px rgba(0,0,0,.38);
+
+  position:relative;
+}
+
+.gpsGreenMarker::after{
+  content:"";
+
+  position:absolute;
+
+  width:8px;
+  height:8px;
+
+  top:6px;
+  left:6px;
+
+  border-radius:50%;
+
+  background:#ffffff;
+}
+
 .gpsTargetMarker::before{
   content:"";
 
@@ -3152,9 +3183,6 @@ html.app-mode .activeRoundCard{
 
 </div>
 
-<!-- ✅ GPS DISTANCES -->
-<div class="gpsDistanceCard" id="gpsDistanceCard">
-
   <!-- ✅ GPS DISTANCES -->
   <div class="gpsDistanceCard" id="gpsDistanceCard">
     <div class="gpsDistanceTop">
@@ -3937,6 +3965,23 @@ let gpsEnabled = false;
 let gpsWatchId = null;
 let currentGpsPosition = null;
 
+// =========================================================
+// GOLF COURSES API — LIVE GREEN CENTRES
+// =========================================================
+
+let providerGpsCourseId = null;
+let providerGpsCourseName = "";
+let providerGpsGreens = [];
+
+let providerGpsLoading = false;
+let providerGpsLoadedForRoundId = null;
+
+/*
+ * Leaflet marker for the automatic current-hole green.
+ */
+let gpsGreenMarker = null;
+let gpsGreenLine = null;
+
 /*
  * GPS map state.
  */
@@ -4231,7 +4276,196 @@ function getCurrentHoleGreenPoints(){
   return null;
 }
 
+    function getCurrentProviderGreen() {
+
+  const holeNumber =
+    premiumHoleIndex + 1;
+
+  if (
+    !Array.isArray(
+      providerGpsGreens
+    )
+  ) {
+    return null;
+  }
+
+  return (
+    providerGpsGreens.find(
+      (green) =>
+        Number(green?.hole) ===
+        Number(holeNumber)
+    ) ||
+    null
+  );
+}
+
+
+function getBestCurrentHoleGps() {
+
+  /*
+   * FIRST choice:
+   * TeeRadar's own GPS data.
+   */
+  const teeRadarGreen =
+    getCurrentHoleGreenPoints();
+
+  if (teeRadarGreen) {
+
+    return {
+      source:
+        "teeradar",
+
+      front:
+        teeRadarGreen.front ||
+        teeRadarGreen.front_point ||
+        null,
+
+      middle:
+        teeRadarGreen.middle ||
+        teeRadarGreen.middle_point ||
+        teeRadarGreen.centre ||
+        teeRadarGreen.center ||
+        null,
+
+      back:
+        teeRadarGreen.back ||
+        teeRadarGreen.back_point ||
+        null,
+
+      raw:
+        teeRadarGreen
+    };
+  }
+
+  /*
+   * SECOND choice:
+   * Golf Courses API green centre.
+   */
+  const providerGreen =
+    getCurrentProviderGreen();
+
+  if (providerGreen) {
+
+    return {
+      source:
+        "provider",
+
+      middle: {
+        lat:
+          Number(providerGreen.lat),
+
+        lng:
+          Number(providerGreen.lng)
+      },
+
+      raw:
+        providerGreen
+    };
+  }
+
+  return null;
+}
+
 function updateGpsDistances(){
+    /*
+   * -------------------------------------------------------
+   * GOLF COURSES API FALLBACK
+   * -------------------------------------------------------
+   *
+   * Existing TeeRadar Front / Middle / Back GPS remains
+   * first priority.
+   */
+
+  const teeRadarGreen =
+    getCurrentHoleGreenPoints();
+
+  const providerGreen =
+    !teeRadarGreen
+      ? getCurrentProviderGreen()
+      : null;
+
+  if (
+    providerGreen &&
+    currentGpsPosition
+  ) {
+
+    const playerLat =
+      Number(
+        currentGpsPosition.latitude
+      );
+
+    const playerLng =
+      Number(
+        currentGpsPosition.longitude
+      );
+
+    const greenLat =
+      Number(
+        providerGreen.lat
+      );
+
+    const greenLng =
+      Number(
+        providerGreen.lng
+      );
+
+    if (
+      Number.isFinite(playerLat) &&
+      Number.isFinite(playerLng) &&
+      Number.isFinite(greenLat) &&
+      Number.isFinite(greenLng)
+    ) {
+
+      const distance =
+        gpsDistanceBetween(
+          playerLat,
+          playerLng,
+          greenLat,
+          greenLng
+        );
+
+      if (gpsFrontDistance) {
+        gpsFrontDistance.textContent =
+          "—";
+      }
+
+      if (gpsMiddleDistance) {
+        gpsMiddleDistance.textContent =
+          `${Math.round(distance)}m`;
+      }
+
+      if (gpsBackDistance) {
+        gpsBackDistance.textContent =
+          "—";
+      }
+
+      if (gpsDistanceStatus) {
+        gpsDistanceStatus.textContent =
+          `Live GPS • Hole ${
+            premiumHoleIndex + 1
+          } green centre`;
+      }
+
+      if (gpsAccuracy) {
+
+        const accuracy =
+          Number(
+            currentGpsPosition.accuracy
+          );
+
+        gpsAccuracy.textContent =
+          Number.isFinite(accuracy)
+            ? `Location accuracy ±${Math.round(
+                accuracy
+              )}m • Golf Courses API`
+            : "Golf Courses API";
+      }
+
+      updateGpsGreenMarker();
+
+      return;
+    }
+  }
   if (!gpsEnabled) {
     return;
   }
@@ -4659,6 +4893,162 @@ gpsMap.on(
   return gpsMap;
 }
 
+    function updateGpsGreenMarker() {
+
+  const map =
+    ensureGpsMap();
+
+  if (!map) {
+    return;
+  }
+
+  const gps =
+    getBestCurrentHoleGps();
+
+  /*
+   * We only need this new marker for API centre-only
+   * coordinates.
+   *
+   * Existing TeeRadar GPS remains handled by the
+   * normal GPS-distance system.
+   */
+  const middle =
+    gps?.source === "provider"
+      ? gps.middle
+      : null;
+
+  const lat =
+    Number(middle?.lat);
+
+  const lng =
+    Number(middle?.lng);
+
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng)
+  ) {
+
+    if (gpsGreenMarker) {
+      try {
+        map.removeLayer(
+          gpsGreenMarker
+        );
+      } catch {}
+
+      gpsGreenMarker = null;
+    }
+
+    if (gpsGreenLine) {
+      try {
+        map.removeLayer(
+          gpsGreenLine
+        );
+      } catch {}
+
+      gpsGreenLine = null;
+    }
+
+    return;
+  }
+
+  const point = [
+    lat,
+    lng
+  ];
+
+  if (!gpsGreenMarker) {
+
+    const greenIcon =
+      window.L.divIcon({
+        className: "",
+
+        html:
+          '<div class="gpsGreenMarker"></div>',
+
+        iconSize: [
+          28,
+          28
+        ],
+
+        iconAnchor: [
+          14,
+          14
+        ]
+      });
+
+    gpsGreenMarker =
+      window.L.marker(
+        point,
+        {
+          icon:
+            greenIcon,
+
+          zIndexOffset:
+            800
+        }
+      )
+      .addTo(map);
+
+  } else {
+
+    gpsGreenMarker.setLatLng(
+      point
+    );
+  }
+
+  /*
+   * If GPS is currently active, draw the line
+   * from player → green.
+   */
+  if (!currentGpsPosition) {
+    return;
+  }
+
+  const playerLat =
+    Number(
+      currentGpsPosition.latitude
+    );
+
+  const playerLng =
+    Number(
+      currentGpsPosition.longitude
+    );
+
+  if (
+    !Number.isFinite(playerLat) ||
+    !Number.isFinite(playerLng)
+  ) {
+    return;
+  }
+
+  const linePoints = [
+    [
+      playerLat,
+      playerLng
+    ],
+    point
+  ];
+
+  if (!gpsGreenLine) {
+
+    gpsGreenLine =
+      window.L.polyline(
+        linePoints,
+        {
+          weight: 3,
+          opacity: 0.8
+        }
+      )
+      .addTo(map);
+
+  } else {
+
+    gpsGreenLine.setLatLngs(
+      linePoints
+    );
+  }
+}
+
 
 function updateGpsMapPosition() {
   if (
@@ -4806,6 +5196,12 @@ function updateGpsMapPosition() {
 if (gpsTargetPosition) {
   updateGpsTargetMeasurement();
 }
+
+/*
+ * Keep automatic green line attached to the golfer
+ * while their live position changes.
+ */
+updateGpsGreenMarker();
 }
 
 async function enableScorecardGps() {
@@ -5152,6 +5548,325 @@ function setLeftPanelsVisibility(show){
       }
       return false;
     }
+    function stateNameForGolfApi(state) {
+
+  const value =
+    String(state || "")
+      .trim()
+      .toUpperCase();
+
+  const names = {
+    WA: "Western Australia",
+    NSW: "New South Wales",
+    VIC: "Victoria",
+    QLD: "Queensland",
+    SA: "South Australia",
+    TAS: "Tasmania",
+    NT: "Northern Territory",
+    ACT: "Australian Capital Territory"
+  };
+
+  return names[value] || value;
+}
+
+    async function loadProviderGpsForCurrentRound() {
+
+  if (
+    !currentRound ||
+    !currentRoundId
+  ) {
+    return;
+  }
+
+  /*
+   * Don't repeat the API lookup every time the scorecard
+   * re-renders or live score polling fires.
+   */
+  if (
+    String(providerGpsLoadedForRoundId) ===
+      String(currentRoundId) ||
+    providerGpsLoading
+  ) {
+    return;
+  }
+
+  providerGpsLoading = true;
+
+  /*
+   * Reset provider data because a different round may
+   * have been opened.
+   */
+  providerGpsCourseId = null;
+  providerGpsCourseName = "";
+  providerGpsGreens = [];
+
+  try {
+
+    const token =
+      getToken();
+
+    if (!token) {
+      return;
+    }
+
+    const courseName =
+      String(
+        currentRound.course ||
+        currentRound.course_name ||
+        ""
+      ).trim();
+
+    const roundState =
+      String(
+        currentRound.state ||
+        ""
+      ).trim();
+
+    if (!courseName) {
+      return;
+    }
+
+    console.log(
+      "⛳ Searching Golf Courses API:",
+      {
+        course:
+          courseName,
+        state:
+          roundState
+      }
+    );
+
+    // -----------------------------------------------------
+    // 1. SEARCH PROVIDER COURSE
+    // -----------------------------------------------------
+
+    const searchResponse =
+      await fetch(
+        `/api/gps/search?q=${encodeURIComponent(
+          courseName
+        )}&country=AU`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
+        }
+      );
+
+    const searchData =
+      await searchResponse
+        .json()
+        .catch(() => null);
+
+    if (
+      !searchResponse.ok ||
+      !searchData?.ok
+    ) {
+      throw new Error(
+        searchData?.error ||
+        `GPS search HTTP ${searchResponse.status}`
+      );
+    }
+
+    const courses =
+      Array.isArray(searchData.courses)
+        ? searchData.courses
+        : [];
+
+    if (!courses.length) {
+
+      console.log(
+        "ℹ️ No Golf Courses API match:",
+        courseName
+      );
+
+      providerGpsLoadedForRoundId =
+        String(currentRoundId);
+
+      updateGpsDistances();
+      updateGpsGreenMarker();
+
+      return;
+    }
+
+    const wantedStateName =
+      stateNameForGolfApi(
+        roundState
+      );
+
+    /*
+     * Prefer:
+     *
+     * 1. matching course name + state
+     * 2. matching course name
+     * 3. first search result
+     */
+    let match =
+      courses.find(
+        (course) =>
+          courseNamesMatch(
+            course?.name ||
+            course?.club,
+            courseName
+          ) &&
+          String(
+            course?.state || ""
+          )
+            .trim()
+            .toLowerCase() ===
+          String(
+            wantedStateName || ""
+          )
+            .trim()
+            .toLowerCase()
+      );
+
+    if (!match) {
+      match =
+        courses.find(
+          (course) =>
+            courseNamesMatch(
+              course?.name ||
+              course?.club,
+              courseName
+            )
+        );
+    }
+
+    if (!match) {
+      match =
+        courses[0] || null;
+    }
+
+    const providerId =
+      Number(match?.id);
+
+    if (
+      !Number.isFinite(providerId) ||
+      providerId <= 0
+    ) {
+      throw new Error(
+        "Provider course has no valid ID"
+      );
+    }
+
+    providerGpsCourseId =
+      providerId;
+
+    providerGpsCourseName =
+      String(
+        match?.name ||
+        match?.club ||
+        courseName
+      );
+
+    console.log(
+      "✅ Golf Courses API course matched:",
+      {
+        id:
+          providerGpsCourseId,
+        name:
+          providerGpsCourseName,
+        state:
+          match?.state
+      }
+    );
+
+    // -----------------------------------------------------
+    // 2. FETCH GREEN CENTRES
+    // -----------------------------------------------------
+
+    const greensResponse =
+      await fetch(
+        `/api/gps/course/${encodeURIComponent(
+          providerGpsCourseId
+        )}/greens`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
+        }
+      );
+
+    const greensData =
+      await greensResponse
+        .json()
+        .catch(() => null);
+
+    if (
+      !greensResponse.ok ||
+      !greensData?.ok
+    ) {
+      throw new Error(
+        greensData?.error ||
+        `Green centres HTTP ${greensResponse.status}`
+      );
+    }
+
+    const holes =
+      Array.isArray(greensData.holes)
+        ? greensData.holes
+        : [];
+
+    providerGpsGreens =
+      holes
+        .map((hole) => ({
+          hole:
+            Number(hole?.hole),
+
+          lat:
+            Number(hole?.lat),
+
+          lng:
+            Number(hole?.lng)
+        }))
+        .filter(
+          (hole) =>
+            Number.isFinite(hole.hole) &&
+            hole.hole > 0 &&
+            Number.isFinite(hole.lat) &&
+            Number.isFinite(hole.lng)
+        );
+
+    providerGpsLoadedForRoundId =
+      String(currentRoundId);
+
+    console.log(
+      "✅ Provider green centres loaded:",
+      {
+        course:
+          providerGpsCourseName,
+        holes:
+          providerGpsGreens.length
+      }
+    );
+
+    /*
+     * Refresh the current hole immediately.
+     */
+    updateGpsDistances();
+    updateGpsGreenMarker();
+
+  } catch (error) {
+
+    console.warn(
+      "⚠️ Golf Courses API GPS unavailable:",
+      error?.message || error
+    );
+
+    /*
+     * Mark this round as attempted so scorecard polling
+     * doesn't hammer the API every 2 seconds.
+     */
+    providerGpsLoadedForRoundId =
+      String(currentRoundId);
+
+  } finally {
+
+    providerGpsLoading = false;
+  }
+}
 
     function nineLabelFromScorecard(sc){
       const raw = String(sc?.course || sc?.name || "").trim();
@@ -7894,6 +8609,11 @@ if (gpsEnabled) {
 } else {
   ensureGpsMap();
 }
+    /*
+ * Fetch provider GPS only once per opened round.
+ * No API call is made every time the golfer changes hole.
+ */
+loadProviderGpsForCurrentRound();
 }
 }
 
@@ -9642,6 +10362,62 @@ function exitRoundMode() {
   }
 
   /*
+   * -------------------------------------------------
+   * CLEAR PROVIDER GPS DATA
+   * -------------------------------------------------
+   *
+   * Prevents the previous course's API green
+   * coordinates from carrying into the next round.
+   */
+  providerGpsCourseId = null;
+  providerGpsCourseName = "";
+  providerGpsGreens = [];
+
+  providerGpsLoadedForRoundId = null;
+  providerGpsLoading = false;
+
+  /*
+   * Remove automatic green marker from map.
+   */
+  if (
+    gpsMap &&
+    gpsGreenMarker
+  ) {
+    try {
+      gpsMap.removeLayer(
+        gpsGreenMarker
+      );
+    } catch (error) {
+      console.warn(
+        "Could not remove GPS green marker:",
+        error
+      );
+    }
+  }
+
+  /*
+   * Remove automatic player-to-green line.
+   */
+  if (
+    gpsMap &&
+    gpsGreenLine
+  ) {
+    try {
+      gpsMap.removeLayer(
+        gpsGreenLine
+      );
+    } catch (error) {
+      console.warn(
+        "Could not remove GPS green line:",
+        error
+      );
+    }
+  }
+
+  gpsGreenMarker = null;
+  gpsGreenLine = null;
+
+  /*
    * Close the currently displayed scorecard locally.
    *
    * This does NOT delete or finish the round.
@@ -9660,15 +10436,21 @@ function exitRoundMode() {
     clearRoundIdFromUrl();
   } catch (error) {}
 
-  window.scrollTo(0, 0);
+  window.scrollTo(
+    0,
+    0
+  );
 }
+
 if (roundModeExitBtn) {
+
   roundModeExitBtn.addEventListener(
     "click",
     () => {
       exitRoundMode();
     }
   );
+
 }
 
     async function loadRound(id) {
