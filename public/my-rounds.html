@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <link
   rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
 />
 
 <script
@@ -5583,12 +5583,17 @@ function setLeftPanelsVisibility(show){
    * re-renders or live score polling fires.
    */
   if (
+  (
     String(providerGpsLoadedForRoundId) ===
-      String(currentRoundId) ||
-    providerGpsLoading
-  ) {
-    return;
-  }
+      String(currentRoundId) &&
+    providerGpsCourseId &&
+    Array.isArray(providerGpsGreens) &&
+    providerGpsGreens.length > 0
+  ) ||
+  providerGpsLoading
+) {
+  return;
+}
 
   providerGpsLoading = true;
 
@@ -5719,34 +5724,26 @@ console.log(
         ? searchData.courses
         : [];
 
-    if (!courses.length) {
+   if (!courses.length) {
 
-      console.log(
-        "ℹ️ No Golf Courses API match:",
-        courseName
-      );
-
-      providerGpsLoadedForRoundId =
-        String(currentRoundId);
-
-      updateGpsDistances();
-updateGpsGreenMarker();
-
-if (
-  currentRound &&
-  premiumWrap &&
-  premiumWrap.style.display !== "none"
-) {
-  renderPremiumForHole(
-    currentRound,
-    currentPremiumPars,
-    currentPremiumDistances,
-    currentPremiumTeeName
+  console.log(
+    "ℹ️ No Golf Courses API match:",
+    courseName
   );
-}
 
-      return;
-    }
+  /*
+   * IMPORTANT:
+   * Do not mark this round as successfully loaded.
+   * This allows another attempt if the course name,
+   * connection or provider response changes.
+   */
+  providerGpsLoadedForRoundId = null;
+
+  updateGpsDistances();
+  updateGpsGreenMarker();
+
+  return;
+}
 
     const wantedStateName =
       stateNameForGolfApi(
