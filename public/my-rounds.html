@@ -5691,18 +5691,18 @@ console.log(
     // 1. SEARCH PROVIDER COURSE
     // -----------------------------------------------------
 
-    const searchResponse =
-      await fetch(
-        `/api/gps/search?q=${encodeURIComponent(
-          courseName
-        )}&country=AU`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
-        }
-      );
+   const searchResponse =
+  await fetch(
+    `${API_BASE}/api/gps/search?q=${encodeURIComponent(
+      courseName
+    )}&country=AU`,
+    {
+      headers: {
+        Authorization:
+          `Bearer ${token}`
+      }
+    }
+  );
 
    const searchText =
   await searchResponse.text();
@@ -5841,9 +5841,9 @@ try {
     // 2. FETCH GREEN CENTRES
     // -----------------------------------------------------
 
-   const greensResponse =
+  const greensResponse =
   await fetch(
-    `/api/gps/course/${encodeURIComponent(
+    `${API_BASE}/api/gps/course/${encodeURIComponent(
       providerGpsCourseId
     )}/greens`,
     {
