@@ -23,7 +23,13 @@ router.use(
 // =========================================================
 // SEARCH PROVIDER COURSES
 //
-// Temporary/admin/testing endpoint.
+// Supports Australian + international course searches.
+//
+// Examples:
+// /api/gps/search?q=The%20Cut
+// /api/gps/search?q=The%20Cut&country=AU
+// /api/gps/search?q=Pebble%20Beach&country=US
+// /api/gps/search?q=St%20Andrews&country=GB
 // =========================================================
 
 router.get(
@@ -44,15 +50,40 @@ router.get(
         });
       }
 
+      // -------------------------------------------------
+      // Country
+      //
+      // Keep AU as the default so every existing TeeRadar
+      // request continues behaving exactly as before.
+      // -------------------------------------------------
+
+      let country =
+        String(
+          req.query.country || "AU"
+        )
+          .trim()
+          .toUpperCase();
+
+      // Provider expects a 2-letter country code.
+      // Fall back to Australia if something invalid arrives.
+      if (
+        !/^[A-Z]{2}$/.test(country)
+      ) {
+        country = "AU";
+      }
+
       const data =
         await searchGolfCourses({
           query,
-          country: "AU",
+          country,
           perPage: 25,
         });
 
       return res.json({
         ok: true,
+
+        country,
+
         courses:
           Array.isArray(data?.data)
             ? data.data
