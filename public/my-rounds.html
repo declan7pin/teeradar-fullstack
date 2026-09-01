@@ -1140,14 +1140,23 @@
   .tableWrap.hidden{display:none}
 
   .holePickerBack{
-    position:fixed;
-    inset:0;
-    background:rgba(2,6,23,.48);
-    display:none;
-    z-index:9999;
-    align-items:flex-end;
-    justify-content:center;
-  }
+  position:fixed;
+  inset:0;
+
+  background:rgba(2,6,23,.48);
+
+  display:none;
+
+  /*
+   * Must sit ABOVE the active-round screen.
+   *
+   * round-mode scorecard uses z-index: 999999.
+   */
+  z-index:1000001 !important;
+
+  align-items:flex-end;
+  justify-content:center;
+}
 
   .holePicker{
     width:100%;
@@ -4278,25 +4287,115 @@ function getCurrentHoleGreenPoints(){
 
     function getCurrentProviderGreen() {
 
-  const holeNumber =
-    premiumHoleIndex + 1;
-
   if (
-    !Array.isArray(
-      providerGpsGreens
-    )
+    !Array.isArray(providerGpsGreens) ||
+    !providerGpsGreens.length ||
+    !currentRound
   ) {
     return null;
   }
 
-  return (
+  /*
+   * premiumHoleIndex is always the LOCAL scorecard hole:
+   *
+   * 18 holes:
+   *   index 0  -> hole 1
+   *   index 17 -> hole 18
+   *
+   * Front 9:
+   *   index 0 -> provider hole 1
+   *
+   * Back 9:
+   *   index 0 -> provider hole 10
+   */
+  const localHoleNumber =
+    premiumHoleIndex + 1;
+
+  let providerHoleNumber =
+    localHoleNumber;
+
+  const roundCourseName =
+    String(
+      currentRound.course ||
+      currentRound.course_name ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const roundLayout =
+    String(
+      currentRound.layout ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+  /*
+   * Detect a Back 9 round.
+   *
+   * Covers names such as:
+   *
+   * "The Cut - Back 9"
+   * "The Cut Back9"
+   * "The Cut - Back 9 holes"
+   *
+   * Also checks currentRound.layout in case the
+   * round stores the nine there instead.
+   */
+  const isBackNine =
+    Number(currentRound.holes) === 9 &&
+    (
+      /\bback\s*9\b/i.test(
+        roundCourseName
+      ) ||
+      /\bback\s*nine\b/i.test(
+        roundCourseName
+      ) ||
+      /\bback\s*9\b/i.test(
+        roundLayout
+      ) ||
+      /\bback\s*nine\b/i.test(
+        roundLayout
+      )
+    );
+
+  if (isBackNine) {
+    providerHoleNumber =
+      localHoleNumber + 9;
+  }
+
+  const match =
     providerGpsGreens.find(
       (green) =>
         Number(green?.hole) ===
-        Number(holeNumber)
+        Number(providerHoleNumber)
     ) ||
-    null
+    null;
+
+  console.log(
+    "⛳ Provider GPS hole mapping:",
+    {
+      roundCourse:
+        currentRound.course,
+
+      roundHoles:
+        currentRound.holes,
+
+      localHole:
+        localHoleNumber,
+
+      providerHole:
+        providerHoleNumber,
+
+      isBackNine,
+
+      found:
+        !!match
+    }
   );
+
+  return match;
 }
 
 
