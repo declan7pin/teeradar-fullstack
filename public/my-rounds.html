@@ -2869,28 +2869,48 @@ html.app-mode .activeRoundCard{
             <div id="courseAutoList" class="autocomplete-list" style="display:none;"></div>
           </div>
 
-          <div class="row">
-            <div>
-              <label for="state">State</label>
-              <select id="state">
-                <option value="WA">WA</option>
-                <option value="NT">NT</option>
-                <option value="QLD">QLD</option>
-                <option value="NSW">NSW</option>
-                <option value="VIC">VIC</option>
-                <option value="SA">SA</option>
-                <option value="TAS">TAS</option>
-                <option value="ACT">ACT</option>
-              </select>
-            </div>
-            <div>
-              <label for="holes">Holes</label>
-              <select id="holes">
-                <option value="18">18</option>
-                <option value="9">9</option>
-              </select>
-            </div>
-          </div>
+         <label for="country">Country</label>
+<select id="country">
+  <option value="AU">Australia</option>
+  <option value="NZ">New Zealand</option>
+  <option value="US">United States</option>
+  <option value="GB">United Kingdom</option>
+  <option value="IE">Ireland</option>
+  <option value="CA">Canada</option>
+  <option value="ZA">South Africa</option>
+  <option value="JP">Japan</option>
+  <option value="SG">Singapore</option>
+  <option value="TH">Thailand</option>
+  <option value="AE">United Arab Emirates</option>
+  <option value="ES">Spain</option>
+  <option value="PT">Portugal</option>
+  <option value="FR">France</option>
+  <option value="DE">Germany</option>
+</select>
+
+<div class="row">
+  <div>
+    <label for="state">State</label>
+    <select id="state">
+      <option value="WA">WA</option>
+      <option value="NT">NT</option>
+      <option value="QLD">QLD</option>
+      <option value="NSW">NSW</option>
+      <option value="VIC">VIC</option>
+      <option value="SA">SA</option>
+      <option value="TAS">TAS</option>
+      <option value="ACT">ACT</option>
+    </select>
+  </div>
+
+  <div>
+    <label for="holes">Holes</label>
+    <select id="holes">
+      <option value="18">18</option>
+      <option value="9">9</option>
+    </select>
+  </div>
+</div>
 
           <!-- ✅ NEW: tee selector -->
           <div id="teeWrap" style="display:none;">
@@ -3659,6 +3679,18 @@ const loginRequiredContinueBtn =
 
     const courseEl = document.getElementById("course");
     const stateEl = document.getElementById("state");
+    const countryEl =
+  document.getElementById("country");
+    // =========================================================
+// INTERNATIONAL ROUND COURSE SEARCH
+// =========================================================
+
+let selectedProviderCourseId = null;
+let selectedProviderCourseName = "";
+let selectedProviderCountry = "AU";
+
+let internationalCourseSearchTimer = null;
+let internationalCourseSearchSeq = 0;
     const holesEl = document.getElementById("holes");
     const layoutEl = document.getElementById("layout");
     const parModeEl = document.getElementById("parMode");
@@ -6299,6 +6331,103 @@ if (
       }
     }
 
+    async function searchInternationalCourses(
+  query,
+  country
+) {
+  const cleanQuery =
+    String(query || "").trim();
+
+  const cleanCountry =
+    String(country || "")
+      .trim()
+      .toUpperCase();
+
+  if (
+    cleanQuery.length < 3 ||
+    !cleanCountry ||
+    cleanCountry === "AU"
+  ) {
+    return [];
+  }
+
+  const token = getToken();
+
+  if (!token) {
+    return [];
+  }
+
+  const requestSeq =
+    ++internationalCourseSearchSeq;
+
+  try {
+    const response =
+      await fetch(
+        `${API_BASE}/api/gps/search?q=${encodeURIComponent(
+          cleanQuery
+        )}&country=${encodeURIComponent(
+          cleanCountry
+        )}`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
+        }
+      );
+
+    const data =
+      await response
+        .json()
+        .catch(() => null);
+
+    if (
+      requestSeq !==
+      internationalCourseSearchSeq
+    ) {
+      return [];
+    }
+
+    if (
+      !response.ok ||
+      !data?.ok
+    ) {
+      console.warn(
+        "International course search failed:",
+        data
+      );
+
+      return [];
+    }
+
+    const courses =
+      Array.isArray(data.courses)
+        ? data.courses
+        : [];
+
+    return courses.map(
+      (course) => ({
+        ...course,
+
+        _providerCourse: true,
+
+        _providerCountry:
+          cleanCountry,
+
+        _providerCourseId:
+          course.id
+      })
+    );
+  } catch (error) {
+    console.warn(
+      "International course search failed:",
+      error
+    );
+
+    return [];
+  }
+}
+
     function showCourseAutocomplete(items){
   if (!courseAutoList) return;
 
@@ -6310,15 +6439,168 @@ if (
   }
 
   items.forEach(c => {
-    const div = document.createElement("div");
-    div.className = "courseOptionCard";
+    const div =
+      document.createElement("div");
 
-    const baseName = c.name || c.course || c.title || "";
-    const st = String(c.state || "").toUpperCase();
-    const h = Number(c.holes) || null;
-    const rating = c.course_rating ?? null;
-    const slope = c.slope_rating ?? null;
-    const tee = String(c.tee_colour || "").trim();
+    div.className =
+      "courseOptionCard";
+
+    const isProviderCourse =
+      c._providerCourse === true;
+
+    const baseName =
+      c.name ||
+      c.course ||
+      c.title ||
+      "";
+
+    const st =
+      String(
+        c.state ||
+        c.location?.state ||
+        ""
+      ).trim();
+
+    const country =
+      String(
+        c._providerCountry ||
+        c.location?.country ||
+        ""
+      ).trim();
+
+    const h =
+      Number(c.holes) || null;
+
+    const rating =
+      c.course_rating ?? null;
+
+    const slope =
+      c.slope_rating ?? null;
+
+    const tee =
+      String(
+        c.tee_colour || ""
+      ).trim();
+
+    const city =
+      String(
+        c.city ||
+        c.location?.city ||
+        ""
+      ).trim();
+
+    // =====================================================
+    // INTERNATIONAL PROVIDER COURSE
+    // =====================================================
+
+    if (isProviderCourse) {
+
+      const locationParts =
+        [
+          city,
+          st,
+          country
+        ].filter(Boolean);
+
+      div.innerHTML = `
+        <div class="courseOptionTitle">
+          ${escapeHtml(baseName)}
+        </div>
+
+        <div class="courseOptionMeta">
+          ${escapeHtml(
+            locationParts.join(", ")
+          )}
+        </div>
+
+        <div class="courseOptionRating">
+          <span class="courseBadge">
+            International course
+          </span>
+        </div>
+      `;
+
+      div.addEventListener(
+        "click",
+        async () => {
+
+          courseEl.value =
+            baseName;
+
+          selectedProviderCourseId =
+            c._providerCourseId ||
+            c.id ||
+            null;
+
+          selectedProviderCourseName =
+            baseName;
+
+          selectedProviderCountry =
+            String(
+              c._providerCountry ||
+              countryEl?.value ||
+              ""
+            )
+              .trim()
+              .toUpperCase();
+
+          if (stateEl) {
+            stateEl.value =
+              String(st || "").trim() ||
+              selectedProviderCountry;
+          }
+
+          if (
+            holesEl &&
+            !holesEl.value
+          ) {
+            holesEl.value = "18";
+          }
+
+          selectedCourseKey =
+            courseKey(
+              baseName,
+              selectedProviderCountry
+            );
+
+          courseAutoList.style.display =
+            "none";
+
+          courseAutoList.innerHTML =
+            "";
+
+          console.log(
+            "🌎 International course selected:",
+            {
+              id:
+                selectedProviderCourseId,
+
+              name:
+                selectedProviderCourseName,
+
+              country:
+                selectedProviderCountry,
+
+              region:
+                st
+            }
+          );
+        }
+      );
+
+      courseAutoList.appendChild(div);
+
+      return;
+    }
+
+    // =====================================================
+    // EXISTING AUSTRALIAN TEERADAR COURSE
+    // =====================================================
+
+    const australianState =
+      String(st || "")
+        .trim()
+        .toUpperCase();
 
     div.innerHTML = `
       <div class="courseOptionTitle">
@@ -6326,7 +6608,7 @@ if (
       </div>
 
       <div class="courseOptionMeta">
-        ${st ? `State: ${escapeHtml(st)}` : ""}
+        ${australianState ? `State: ${escapeHtml(australianState)}` : ""}
       </div>
 
       <div class="courseOptionRating">
@@ -6336,61 +6618,315 @@ if (
       </div>
     `;
 
-    div.addEventListener("click", async () => {
-      courseEl.value = baseName;
+    div.addEventListener(
+      "click",
+      async () => {
 
-      if (st && stateEl) stateEl.value = st;
-      if (h && holesEl) holesEl.value = String(h);
+        courseEl.value =
+          baseName;
 
-      selectedCourseKey = courseKey(baseName, st || stateEl.value);
+        selectedProviderCourseId =
+          null;
 
-      courseAutoList.style.display = "none";
-      courseAutoList.innerHTML = "";
+        selectedProviderCourseName =
+          "";
 
-      await refreshNinesAndTeesUI();
-    });
+        selectedProviderCountry =
+          "AU";
+
+        if (countryEl) {
+          countryEl.value = "AU";
+        }
+
+        if (
+          australianState &&
+          stateEl
+        ) {
+          stateEl.value =
+            australianState;
+        }
+
+        if (
+          h &&
+          holesEl
+        ) {
+          holesEl.value =
+            String(h);
+        }
+
+        selectedCourseKey =
+          courseKey(
+            baseName,
+            australianState ||
+              stateEl.value
+          );
+
+        courseAutoList.style.display =
+          "none";
+
+        courseAutoList.innerHTML =
+          "";
+
+        await refreshNinesAndTeesUI();
+      }
+    );
 
     courseAutoList.appendChild(div);
   });
 
-  courseAutoList.style.display = "block";
+  courseAutoList.style.display =
+    "block";
 }
     async function initCourseAutocomplete(){
-      if (!courseEl || !courseAutoList) return;
+  if (!courseEl || !courseAutoList) return;
 
-      courseEl.addEventListener("input", async () => {
-        const q = norm(courseEl.value);
-        selectedCourseKey = "";
-        courseAutoList.style.display = "none";
-        courseAutoList.innerHTML = "";
-        if (!q || q.length < 2) return;
+  courseEl.addEventListener("input", async () => {
+    const q = norm(courseEl.value);
 
-        await loadCoursesOnce();
+    selectedCourseKey = "";
 
-        const stateNow = (stateEl?.value || "").trim().toUpperCase();
+    selectedProviderCourseId = null;
+    selectedProviderCourseName = "";
 
-        const matches = coursesCache
-          .filter(c => norm(c.name || c.course || c.title).includes(q))
-          .sort((a,b) => {
-            const aState = String(a.state || "").toUpperCase();
-            const bState = String(b.state || "").toUpperCase();
-            const aBoost = (stateNow && aState === stateNow) ? -1 : 0;
-            const bBoost = (stateNow && bState === stateNow) ? -1 : 0;
-            if (aBoost !== bBoost) return aBoost - bBoost;
-            return norm(a.name).localeCompare(norm(b.name));
-          })
-          .slice(0, 10);
+    courseAutoList.style.display = "none";
+    courseAutoList.innerHTML = "";
 
-        showCourseAutocomplete(matches);
-      });
+    const selectedCountry =
+      String(
+        countryEl?.value || "AU"
+      )
+        .trim()
+        .toUpperCase();
 
-      document.addEventListener("click", (e) => {
-        if (e.target === courseEl) return;
-        if (courseAutoList.contains(e.target)) return;
-        courseAutoList.style.display = "none";
-        courseAutoList.innerHTML = "";
-      });
+    selectedProviderCountry =
+      selectedCountry;
+
+    // =====================================================
+    // INTERNATIONAL COURSE SEARCH
+    // =====================================================
+
+    if (selectedCountry !== "AU") {
+
+      clearTimeout(
+        internationalCourseSearchTimer
+      );
+
+      if (!q || q.length < 3) {
+        return;
+      }
+
+      internationalCourseSearchTimer =
+        setTimeout(
+          async () => {
+
+            const searchText =
+              String(
+                courseEl.value || ""
+              ).trim();
+
+            const results =
+              await searchInternationalCourses(
+                searchText,
+                selectedCountry
+              );
+
+            showCourseAutocomplete(
+              results
+            );
+          },
+          350
+        );
+
+      return;
     }
+
+    // =====================================================
+    // EXISTING AUSTRALIAN TEERADAR SEARCH
+    // =====================================================
+
+    if (!q || q.length < 2) return;
+
+    await loadCoursesOnce();
+
+    const stateNow =
+      (stateEl?.value || "")
+        .trim()
+        .toUpperCase();
+
+    const matches =
+      coursesCache
+        .filter(c =>
+          norm(
+            c.name ||
+            c.course ||
+            c.title
+          ).includes(q)
+        )
+        .sort((a,b) => {
+          const aState =
+            String(
+              a.state || ""
+            ).toUpperCase();
+
+          const bState =
+            String(
+              b.state || ""
+            ).toUpperCase();
+
+          const aBoost =
+            (
+              stateNow &&
+              aState === stateNow
+            )
+              ? -1
+              : 0;
+
+          const bBoost =
+            (
+              stateNow &&
+              bState === stateNow
+            )
+              ? -1
+              : 0;
+
+          if (aBoost !== bBoost) {
+            return aBoost - bBoost;
+          }
+
+          return norm(
+            a.name
+          ).localeCompare(
+            norm(b.name)
+          );
+        })
+        .slice(0, 10);
+
+    showCourseAutocomplete(
+      matches
+    );
+  });
+
+
+  // =======================================================
+  // COUNTRY CHANGE
+  // =======================================================
+
+  if (countryEl) {
+    countryEl.addEventListener(
+      "change",
+      async () => {
+
+        const country =
+          String(
+            countryEl.value || "AU"
+          )
+            .trim()
+            .toUpperCase();
+
+        selectedProviderCourseId = null;
+        selectedProviderCourseName = "";
+        selectedProviderCountry = country;
+
+        selectedCourseKey = "";
+
+        courseEl.value = "";
+
+        courseAutoList.style.display =
+          "none";
+
+        courseAutoList.innerHTML = "";
+
+        // -------------------------------------------------
+        // AUSTRALIA
+        // -------------------------------------------------
+
+        if (country === "AU") {
+
+          if (stateEl) {
+            stateEl.disabled = false;
+
+            const validStates = [
+              "WA",
+              "NT",
+              "QLD",
+              "NSW",
+              "VIC",
+              "SA",
+              "TAS",
+              "ACT"
+            ];
+
+            const currentState =
+              String(
+                stateEl.value || ""
+              )
+                .trim()
+                .toUpperCase();
+
+            if (
+              !validStates.includes(
+                currentState
+              )
+            ) {
+              stateEl.value = "WA";
+            }
+          }
+
+          await refreshNinesAndTeesUI();
+
+          return;
+        }
+
+        // -------------------------------------------------
+        // INTERNATIONAL
+        // -------------------------------------------------
+
+        /*
+         * The provider will supply the course's
+         * region/state when a course is selected.
+         *
+         * Until then we leave the existing field alone
+         * rather than trying to use an Australian state.
+         */
+
+        if (ninesWrap) {
+          ninesWrap.style.display =
+            "none";
+        }
+
+        if (teesWrap) {
+          teesWrap.style.display =
+            "none";
+        }
+      }
+    );
+  }
+
+
+  // =======================================================
+  // CLOSE AUTOCOMPLETE WHEN CLICKING ELSEWHERE
+  // =======================================================
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (e.target === courseEl) return;
+
+      if (
+        courseAutoList.contains(
+          e.target
+        )
+      ) {
+        return;
+      }
+
+      courseAutoList.style.display =
+        "none";
+
+      courseAutoList.innerHTML = "";
+    }
+  );
+}
 
     function syncNineLoopVisibility(){
       const holesNow = Number(holesEl?.value || 18);
@@ -10942,264 +11478,633 @@ if (roundModeExitBtn) {
 }
 
     async function createRound(){
-      const course = String(courseEl.value || "").trim();
-      const state = String(stateEl.value || "WA").trim().toUpperCase();
-      const holes = Number(holesEl.value || 18);
-      let layout = String(layoutEl.value || "").trim();
-      const par_mode = String(parModeEl.value || "published").trim();
-      const notes = String(notesEl.value || "").trim();
-      let players_count = clamp(playersEl?.value || 1, 1, 4);
+  const course =
+    String(
+      courseEl.value || ""
+    ).trim();
 
-const upcomingPlayerIdsForPayload = Array.isArray(pendingUpcomingPlayerUserIds)
-  ? pendingUpcomingPlayerUserIds.slice(0, 4)
-  : null;
+  // =====================================================
+  // COUNTRY / STATE
+  // =====================================================
 
-const upcomingRoundIdForPayload = pendingUpcomingRoundId || null;
+  const roundCountry =
+    String(
+      countryEl?.value || "AU"
+    )
+      .trim()
+      .toUpperCase();
 
-if (
-  Array.isArray(
-    pendingUpcomingPlayerNames
-  ) &&
-  pendingUpcomingPlayerNames.length
-) {
-  for (
-    let i = 0;
-    i < 4;
-    i++
-  ) {
-    playerNames[i] = "";
-    playerUserIds[i] = null;
-  }
+  /*
+   * Existing Australian rounds continue storing:
+   *
+   * WA / NSW / VIC / QLD / etc.
+   *
+   * International rounds temporarily store the
+   * 2-letter country code in the existing state field:
+   *
+   * US / NZ / GB / IE / etc.
+   *
+   * This means we do not need a database migration yet.
+   */
+  const state =
+    roundCountry === "AU"
+      ? String(
+          stateEl?.value || "WA"
+        )
+          .trim()
+          .toUpperCase()
+      : roundCountry;
 
-  pendingUpcomingPlayerNames
-    .slice(0, 4)
-    .forEach(
-      (name, i) => {
-        playerNames[i] =
-          String(
-            name || ""
-          ).trim();
-      }
+  const holes =
+    Number(
+      holesEl.value || 18
     );
+
+  let layout =
+    String(
+      layoutEl.value || ""
+    ).trim();
+
+  const par_mode =
+    String(
+      parModeEl.value || "published"
+    ).trim();
+
+  const notes =
+    String(
+      notesEl.value || ""
+    ).trim();
+
+  let players_count =
+    clamp(
+      playersEl?.value || 1,
+      1,
+      4
+    );
+
+
+  // =====================================================
+  // UPCOMING ROUND PLAYERS
+  // =====================================================
+
+  const upcomingPlayerIdsForPayload =
+    Array.isArray(
+      pendingUpcomingPlayerUserIds
+    )
+      ? pendingUpcomingPlayerUserIds.slice(
+          0,
+          4
+        )
+      : null;
+
+  const upcomingRoundIdForPayload =
+    pendingUpcomingRoundId || null;
+
 
   if (
     Array.isArray(
-      upcomingPlayerIdsForPayload
-    )
+      pendingUpcomingPlayerNames
+    ) &&
+    pendingUpcomingPlayerNames.length
   ) {
     for (
       let i = 0;
       i < 4;
       i++
     ) {
-      const id =
-        Number(
-          upcomingPlayerIdsForPayload[i]
-        );
+      playerNames[i] = "";
+      playerUserIds[i] = null;
+    }
 
-      playerUserIds[i] =
-        Number.isFinite(id) &&
-        id > 0
-          ? id
-          : null;
+    pendingUpcomingPlayerNames
+      .slice(0, 4)
+      .forEach(
+        (name, i) => {
+          playerNames[i] =
+            String(
+              name || ""
+            ).trim();
+        }
+      );
+
+    if (
+      Array.isArray(
+        upcomingPlayerIdsForPayload
+      )
+    ) {
+      for (
+        let i = 0;
+        i < 4;
+        i++
+      ) {
+        const id =
+          Number(
+            upcomingPlayerIdsForPayload[i]
+          );
+
+        playerUserIds[i] =
+          Number.isFinite(id) &&
+          id > 0
+            ? id
+            : null;
+      }
+    }
+
+    players_count =
+      clamp(
+        pendingUpcomingPlayerNames.length,
+        1,
+        4
+      );
+
+    if (playersEl) {
+      playersEl.value =
+        String(
+          players_count
+        );
+    }
+
+    pendingUpcomingPlayerNames =
+      null;
+
+    pendingUpcomingPlayerUserIds =
+      null;
+
+    pendingUpcomingRoundId =
+      null;
+  }
+
+
+  // =====================================================
+  // BUILD PLAYER NAMES + LINKED TEERADAR ACCOUNTS
+  // =====================================================
+
+  const namesOut = [];
+  const userIdsOut = [];
+
+  for (
+    let i = 0;
+    i < players_count;
+    i++
+  ) {
+    namesOut.push(
+      String(
+        playerNames[i] || ""
+      ).trim()
+    );
+
+    const id =
+      Number(
+        playerUserIds[i]
+      );
+
+    userIdsOut.push(
+      Number.isFinite(id) &&
+      id > 0
+        ? id
+        : null
+    );
+  }
+
+  /*
+   * P1 is the current logged-in user.
+   * Backend guarantees that relationship.
+   */
+  userIdsOut[0] = null;
+
+
+  // =====================================================
+  // VALIDATION
+  // =====================================================
+
+  if (!course) {
+    setToast(
+      leftToast,
+      "Please enter a course name.",
+      false
+    );
+
+    return;
+  }
+
+
+  // =====================================================
+  // PLAYER 1
+  // =====================================================
+
+  ensureP1IsUser();
+  renderPlayerNamesUI();
+
+  // Guest mode requires Player 1 name
+  if (!isLoggedIn()){
+    const p1 =
+      String(
+        playerNames[0] || ""
+      ).trim();
+
+    if (!p1){
+      setToast(
+        leftToast,
+        "Please enter your name (Player 1) to continue.",
+        false
+      );
+
+      return;
     }
   }
 
-  players_count =
-    clamp(
-      pendingUpcomingPlayerNames.length,
-      1,
-      4
-    );
 
-  if (playersEl) {
-    playersEl.value =
-      String(players_count);
+  // =====================================================
+  // NINES / LAYOUT
+  //
+  // Only use TeeRadar's Australian template layout
+  // system for Australian rounds.
+  // =====================================================
+
+  const hasNinesUI =
+    roundCountry === "AU" &&
+    ninesWrap &&
+    ninesWrap.style.display !== "none";
+
+  if (hasNinesUI) {
+    if (holes === 9) {
+      layout =
+        String(
+          uiNineSingle || ""
+        ).trim() ||
+        layout;
+    } else {
+      const a =
+        String(
+          uiNineFront || ""
+        ).trim();
+
+      const b =
+        String(
+          uiNineBack || ""
+        ).trim();
+
+      layout =
+        (a && b)
+          ? `${a} / ${b}`
+          : layout;
+    }
   }
 
-  pendingUpcomingPlayerNames =
-    null;
 
-  pendingUpcomingPlayerUserIds =
-    null;
+  const nineLoop =
+    (
+      holes === 9 &&
+      !hasNinesUI
+    )
+      ? String(
+          nineLoopEl?.value ||
+          "front"
+        )
+          .trim()
+          .toLowerCase()
+      : null;
 
-  pendingUpcomingRoundId =
-    null;
-}
-      // ✅ Build names + linked TeeRadar accounts
-const namesOut = [];
-const userIdsOut = [];
 
-for (
-  let i = 0;
-  i < players_count;
-  i++
-) {
-  namesOut.push(
-    String(
-      playerNames[i] || ""
-    ).trim()
-  );
+  // =====================================================
+  // PARS
+  // =====================================================
 
-  const id =
-    Number(
-      playerUserIds[i]
-    );
+  let pars = null;
 
-  userIdsOut.push(
-    Number.isFinite(id) &&
-    id > 0
-      ? id
-      : null
-  );
-}
+  /*
+   * TeeRadar's current published scorecard templates
+   * are Australian.
+   *
+   * Therefore only run this lookup for AU rounds.
+   *
+   * International rounds can still be created and
+   * scored without requiring a TeeRadar template.
+   */
+  if (
+    par_mode === "published" &&
+    roundCountry === "AU"
+  ) {
+    const meta =
+      await getPublishedMetaFromScorecards({
+        course,
+        state,
+        holes,
+        nineLoop,
+        layout
+      });
 
-/*
- * P1 is the current logged-in user.
- * Backend guarantees that relationship.
- */
-userIdsOut[0] = null;
-
-      if (!course) {
-        setToast(leftToast, "Please enter a course name.", false);
-        return;
-      }
-
-      // ✅ ensure names UI is synced + P1 user
-      ensureP1IsUser();
-      renderPlayerNamesUI();
-      // ✅ guest mode requires a Player 1 name
-if (!isLoggedIn()){
-  const p1 = String(playerNames[0] || "").trim();
-  if (!p1){
-    setToast(leftToast, "Please enter your name (Player 1) to continue.", false);
-    return;
+    pars =
+      Array.isArray(
+        meta?.pars
+      )
+        ? meta.pars
+        : null;
   }
-}
 
-      const hasNinesUI = ninesWrap && ninesWrap.style.display !== "none";
 
-      if (hasNinesUI) {
-        if (holes === 9) {
-          layout = String(uiNineSingle || "").trim() || layout;
-        } else {
-          const a = String(uiNineFront || "").trim();
-          const b = String(uiNineBack || "").trim();
-          layout = (a && b) ? `${a} / ${b}` : layout;
-        }
-      }
+  // =====================================================
+  // PAYLOAD
+  // =====================================================
 
-      const nineLoop = (holes === 9 && !hasNinesUI) ? String(nineLoopEl?.value || "front").trim().toLowerCase() : null;
-
-      let pars = null;
-      if (par_mode === "published") {
-        const meta = await getPublishedMetaFromScorecards({ course, state, holes, nineLoop, layout });
-        pars = Array.isArray(meta?.pars) ? meta.pars : null;
-      }
-
-     const payload = {
-  course,
-  state,
-  holes,
-  layout: layout || null,
-  par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
-  notes: notes || null,
-  players_count,
-  player_names: namesOut,
-  player_user_ids: userIdsOut,
-  shared_upcoming_round_id: upcomingRoundIdForPayload,
-  ...(holes === 9 && !hasNinesUI ? { nineLoop } : {}),
-  ...(pars ? { pars } : {})
-};
-
-// ✅ Guest mode: create locally (no backend)
-if (!isLoggedIn()){
-  const newId = guestMakeId();
-  const nowIso = new Date().toISOString();
-
-  const roundLocal = {
-    id: newId,
+  const payload = {
     course,
     state,
     holes,
-    layout: layout || null,
-    par_mode: (par_mode === "published") ? "PUBLISHED" : "USER",
-    notes: notes || null,
-    players_count,
-    player_names: namesOut,
-    player_user_ids: userIdsOut,
-    shared_upcoming_round_id: upcomingRoundIdForPayload,
-    created_at: nowIso,
-    holesData: Array.from({ length: holes }, (_, i) => ({
-      hole_number: i + 1,
-      par: (pars && Number.isFinite(Number(pars[i]))) ? Number(pars[i]) : null,
-      distance_m: null,
-      strokes_by_player: {},
-      putts_by_player: {}
-    }))
-  };
-  
-  // cache names + save round
-  saveNamesForRound(newId);
-  guestUpsertRound(roundLocal);
 
-  setToast(leftToast, "Round created (guest).", true);
+    layout:
+      layout || null,
+
+    par_mode:
+      (
+        par_mode === "published" &&
+        roundCountry === "AU"
+      )
+        ? "PUBLISHED"
+        : "USER",
+
+    notes:
+      notes || null,
+
+    players_count,
+
+    player_names:
+      namesOut,
+
+    player_user_ids:
+      userIdsOut,
+
+    shared_upcoming_round_id:
+      upcomingRoundIdForPayload,
+
+    ...(
+      holes === 9 &&
+      !hasNinesUI
+        ? { nineLoop }
+        : {}
+    ),
+
+    ...(
+      pars
+        ? { pars }
+        : {}
+    )
+  };
+
+
+  // =====================================================
+  // DEBUG
+  // =====================================================
+
+  console.log(
+    "⛳ Creating TeeRadar round:",
+    {
+      course,
+      country:
+        roundCountry,
+      state,
+      holes,
+      providerCourseId:
+        selectedProviderCourseId,
+      providerCourseName:
+        selectedProviderCourseName
+    }
+  );
+
+
+  // =====================================================
+  // GUEST MODE
+  // =====================================================
+
+  if (!isLoggedIn()){
+    const newId =
+      guestMakeId();
+
+    const nowIso =
+      new Date().toISOString();
+
+    const roundLocal = {
+      id:
+        newId,
+
+      course,
+
+      state,
+
+      holes,
+
+      layout:
+        layout || null,
+
+      par_mode:
+        (
+          par_mode === "published" &&
+          roundCountry === "AU"
+        )
+          ? "PUBLISHED"
+          : "USER",
+
+      notes:
+        notes || null,
+
+      players_count,
+
+      player_names:
+        namesOut,
+
+      player_user_ids:
+        userIdsOut,
+
+      shared_upcoming_round_id:
+        upcomingRoundIdForPayload,
+
+      created_at:
+        nowIso,
+
+      holesData:
+        Array.from(
+          {
+            length:
+              holes
+          },
+          (_, i) => ({
+            hole_number:
+              i + 1,
+
+            par:
+              (
+                pars &&
+                Number.isFinite(
+                  Number(
+                    pars[i]
+                  )
+                )
+              )
+                ? Number(
+                    pars[i]
+                  )
+                : null,
+
+            distance_m:
+              null,
+
+            strokes_by_player:
+              {},
+
+            putts_by_player:
+              {}
+          })
+        )
+    };
+
+
+    // Cache names + save round
+    saveNamesForRound(
+      newId
+    );
+
+    guestUpsertRound(
+      roundLocal
+    );
+
+    setToast(
+      leftToast,
+      "Round created (guest).",
+      true
+    );
+
+    await safeFetchRounds();
+
+    await safeLoadRound(
+      newId
+    );
+
+
+    // Take guest straight to scorecard
+    setTimeout(
+      () => {
+        const scorecard =
+          document.getElementById(
+            "scorecardWrap"
+          );
+
+        if (scorecard) {
+          scorecard.scrollIntoView({
+            behavior:
+              "smooth",
+
+            block:
+              "start"
+          });
+        }
+      },
+      150
+    );
+
+    setLeftPanelsVisibility(
+      false
+    );
+
+    return;
+  }
+
+
+  // =====================================================
+  // LOGGED IN — CREATE VIA BACKEND
+  // =====================================================
+
+  const data =
+    await api(
+      "/api/rounds",
+      {
+        method:
+          "POST",
+
+        body:
+          JSON.stringify(
+            payload
+          )
+      }
+    );
+
+
+  const newId =
+    data.roundId ||
+    (
+      data.round &&
+      data.round.id
+    );
+
+
+  setToast(
+    leftToast,
+    "Round created.",
+    true
+  );
+
 
   await safeFetchRounds();
-await safeLoadRound(newId);
 
-// ✅ Take guest straight to the newly-created scorecard
-setTimeout(() => {
-  const scorecard = document.getElementById("scorecardWrap");
 
-  if (scorecard) {
-    scorecard.scrollIntoView({
-      behavior: "smooth",
-      block: "start"
-    });
+  if (newId) {
+
+    // Save names locally
+    saveNamesForRound(
+      newId
+    );
+
+    await safeLoadRound(
+      newId
+    );
+
+
+    // Take golfer straight to scorecard
+    setTimeout(
+      () => {
+        const scorecard =
+          document.getElementById(
+            "scorecardWrap"
+          );
+
+        if (scorecard) {
+          scorecard.scrollIntoView({
+            behavior:
+              "smooth",
+
+            block:
+              "start"
+          });
+        }
+      },
+      150
+    );
+
+
+    await logAnalyticsEvent(
+      "round_created",
+      {
+        roundId:
+          String(
+            newId
+          ),
+
+        round_id:
+          String(
+            newId
+          ),
+
+        courseName:
+          course || null
+      }
+    );
   }
-}, 150);
 
-setLeftPanelsVisibility(false);
-return;
+
+  // Hide Create + Your rounds after loaded
+  setLeftPanelsVisibility(
+    false
+  );
 }
-
-// ✅ Logged in: create via backend
-const data = await api("/api/rounds", { method:"POST", body: JSON.stringify(payload) });
-
-      const newId = data.roundId || (data.round && data.round.id);
-      setToast(leftToast, "Round created.", true);
-
-      await safeFetchRounds();
-if (newId) {
-  // ✅ save names for this new round locally
-  saveNamesForRound(newId);
-
-  await safeLoadRound(newId);
-
-// ✅ Take the golfer straight to the newly-created scorecard
-setTimeout(() => {
-  const scorecard = document.getElementById("scorecardWrap");
-
-  if (scorecard) {
-    scorecard.scrollIntoView({
-      behavior: "smooth",
-      block: "start"
-    });
-  }
-}, 150);
-
-await logAnalyticsEvent("round_created", {
-    roundId: String(newId),
-    round_id: String(newId),
-    courseName: course || null
-  });
-}
-
-// ✅ NEW: hide Create + Your rounds after round is created/loaded
-setLeftPanelsVisibility(false);
-    }
-
     async function saveRoundAll(options = {}) {
   const silent =
     options.silent === true;
