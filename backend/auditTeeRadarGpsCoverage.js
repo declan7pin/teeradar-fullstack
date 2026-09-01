@@ -200,8 +200,38 @@ function extractCourses(data) {
 
 
 function extractGreens(data) {
+
+  // Golf Courses API actual response:
+  //
+  // {
+  //   data: {
+  //     course_id: 3819,
+  //     holes: [
+  //       { hole: 1, lat: ..., lng: ... },
+  //       ...
+  //     ]
+  //   }
+  // }
+
+  if (
+    data?.data &&
+    Array.isArray(data.data.holes)
+  ) {
+    return data.data.holes;
+  }
+
+  // Other possible response formats,
+  // kept here as fallbacks.
+
   if (Array.isArray(data)) {
     return data;
+  }
+
+  if (
+    data &&
+    Array.isArray(data.holes)
+  ) {
+    return data.holes;
   }
 
   if (
@@ -252,7 +282,6 @@ function extractGreens(data) {
 
   return [];
 }
-
 
 // =========================================================
 // PROVIDER STATE MATCH
