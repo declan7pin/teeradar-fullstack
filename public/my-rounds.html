@@ -3689,6 +3689,9 @@ let selectedProviderCourseId = null;
 let selectedProviderCourseName = "";
 let selectedProviderCountry = "AU";
 
+// Hole-by-hole pars loaded from Golf Courses API
+let selectedProviderPars = null;
+
 let internationalCourseSearchTimer = null;
 let internationalCourseSearchSeq = 0;
     const holesEl = document.getElementById("holes");
@@ -6428,6 +6431,175 @@ if (
   }
 }
 
+    async function loadInternationalCoursePars(
+  providerCourseId
+) {
+  selectedProviderPars = null;
+
+  const id =
+    String(
+      providerCourseId || ""
+    ).trim();
+
+  if (!id) {
+    return null;
+  }
+
+  const token = getToken();
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const response =
+      await fetch(
+        `${API_BASE}/api/gps/course/${encodeURIComponent(id)}`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
+        }
+      );
+
+    const data =
+      await response
+        .json()
+        .catch(() => null);
+
+    if (
+      !response.ok ||
+      !data?.ok ||
+      !data?.course
+    ) {
+      console.warn(
+        "International course details unavailable:",
+        data
+      );
+
+      return null;
+    }
+
+    const course =
+      data.course;
+
+    console.log(
+      "🌎 International course details:",
+      course
+    );
+
+    // ===================================================
+    // FIND PROVIDER HOLE ARRAY
+    //
+    // Golf-course providers can expose the holes under
+    // slightly different properties, so support the
+    // common structures here.
+    // ===================================================
+
+    let providerHoles = null;
+
+    if (
+      Array.isArray(
+        course.holes
+      )
+    ) {
+      providerHoles =
+        course.holes;
+    }
+
+    else if (
+      Array.isArray(
+        course.scorecard
+      )
+    ) {
+      providerHoles =
+        course.scorecard;
+    }
+
+    else if (
+      Array.isArray(
+        course.scorecard?.holes
+      )
+    ) {
+      providerHoles =
+        course.scorecard.holes;
+    }
+
+    else if (
+      Array.isArray(
+        course.tees?.holes
+      )
+    ) {
+      providerHoles =
+        course.tees.holes;
+    }
+
+    // ===================================================
+    // EXTRACT PARS
+    // ===================================================
+
+    if (
+      Array.isArray(providerHoles) &&
+      providerHoles.length
+    ) {
+      const pars =
+        providerHoles
+          .map((hole) => {
+            const par =
+              Number(
+                hole?.par ??
+                hole?.Par ??
+                hole?.hole_par
+              );
+
+            return Number.isFinite(par)
+              ? par
+              : null;
+          });
+
+      const validPars =
+        pars.filter(
+          par =>
+            Number.isFinite(par) &&
+            par >= 3 &&
+            par <= 6
+        );
+
+      if (
+        validPars.length >= 9
+      ) {
+        selectedProviderPars =
+          pars;
+
+        console.log(
+          "✅ International pars loaded:",
+          selectedProviderPars
+        );
+
+        return selectedProviderPars;
+      }
+    }
+
+    console.warn(
+      "⚠️ No usable hole pars found in provider course:",
+      course
+    );
+
+    return null;
+
+  } catch (error) {
+    console.warn(
+      "International course par lookup failed:",
+      error
+    );
+
+    selectedProviderPars = null;
+
+    return null;
+  }
+}
+
     function showCourseAutocomplete(items){
   if (!courseAutoList) return;
 
@@ -6585,6 +6757,9 @@ if (
                 st
             }
           );
+          await loadInternationalCoursePars(
+  selectedProviderCourseId
+);
         }
       );
 
@@ -11772,37 +11947,106 @@ if (roundModeExitBtn) {
 
   let pars = null;
 
+// =====================================================
+// AUSTRALIAN COURSE
+//
+// Continue using TeeRadar's existing scorecard data.
+// =====================================================
+
+if (
+  par_mode === "published" &&
+  roundCountry === "AU"
+) {
+  const meta =
+    await getPublishedMetaFromScorecards({
+      course,
+      state,
+      holes,
+      nineLoop,
+      layout
+    });
+
+  pars =
+    Array.isArray(
+      meta?.pars
+    )
+      ? meta.pars
+      : null;
+}
+
+
+// =====================================================
+// INTERNATIONAL COURSE
+//
+// Use the hole pars we loaded from Golf Courses API.
+// =====================================================
+
+if (
+  roundCountry !== "AU"
+) {
+
   /*
-   * TeeRadar's current published scorecard templates
-   * are Australian.
+   * Normally these were already loaded when the golfer
+   * selected the course.
    *
-   * Therefore only run this lookup for AU rounds.
-   *
-   * International rounds can still be created and
-   * scored without requiring a TeeRadar template.
+   * If not, try once more before creating the round.
    */
   if (
-    par_mode === "published" &&
-    roundCountry === "AU"
+    !Array.isArray(
+      selectedProviderPars
+    ) &&
+    selectedProviderCourseId
   ) {
-    const meta =
-      await getPublishedMetaFromScorecards({
-        course,
-        state,
-        holes,
-        nineLoop,
-        layout
-      });
-
-    pars =
-      Array.isArray(
-        meta?.pars
-      )
-        ? meta.pars
-        : null;
+    await loadInternationalCoursePars(
+      selectedProviderCourseId
+    );
   }
 
+  if (
+    Array.isArray(
+      selectedProviderPars
+    )
+  ) {
+    if (holes === 18) {
 
+      pars =
+        selectedProviderPars
+          .slice(0, 18);
+
+    } else if (holes === 9) {
+
+      const useBackNine =
+        String(
+          nineLoop || ""
+        )
+          .trim()
+          .toLowerCase() ===
+        "back";
+
+      pars =
+        useBackNine
+          ? selectedProviderPars.slice(
+              9,
+              18
+            )
+          : selectedProviderPars.slice(
+              0,
+              9
+            );
+    }
+  }
+
+  console.log(
+    "🌎 International round pars:",
+    {
+      course,
+      providerCourseId:
+        selectedProviderCourseId,
+      holes,
+      pars
+    }
+  );
+}
   // =====================================================
   // PAYLOAD
   // =====================================================
@@ -11815,13 +12059,11 @@ if (roundModeExitBtn) {
     layout:
       layout || null,
 
-    par_mode:
-      (
-        par_mode === "published" &&
-        roundCountry === "AU"
-      )
-        ? "PUBLISHED"
-        : "USER",
+   par_mode:
+  Array.isArray(pars) &&
+  pars.length
+    ? "PUBLISHED"
+    : "USER",
 
     notes:
       notes || null,
@@ -11897,12 +12139,10 @@ if (roundModeExitBtn) {
         layout || null,
 
       par_mode:
-        (
-          par_mode === "published" &&
-          roundCountry === "AU"
-        )
-          ? "PUBLISHED"
-          : "USER",
+  Array.isArray(pars) &&
+  pars.length
+    ? "PUBLISHED"
+    : "USER",
 
       notes:
         notes || null,
