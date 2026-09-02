@@ -799,6 +799,70 @@
 
   background:#ffffff;
 }
+  .gpsMapFullscreenBtn{
+  flex:0 0 auto;
+
+  min-height:40px;
+
+  padding:8px 11px;
+
+  border:1px solid #d7e2e5;
+  border-radius:13px;
+
+  background:#ffffff;
+  color:#006b57;
+
+  font-size:.72rem;
+  font-weight:950;
+
+  cursor:pointer;
+}
+
+/*
+ * Full-screen GPS map.
+ */
+.gpsMapCard.gpsMapFullscreen{
+  position:fixed !important;
+
+  inset:0 !important;
+
+  z-index:2000000 !important;
+
+  display:flex;
+  flex-direction:column;
+
+  width:100% !important;
+  height:100dvh !important;
+
+  margin:0 !important;
+
+  border:0 !important;
+  border-radius:0 !important;
+
+  background:#ffffff;
+}
+
+.gpsMapCard.gpsMapFullscreen .gpsMapHeader{
+  flex:0 0 auto;
+
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 12px)
+    14px
+    12px;
+}
+
+.gpsMapCard.gpsMapFullscreen #gpsMap{
+  flex:1 1 auto;
+
+  width:100% !important;
+  height:auto !important;
+  min-height:0 !important;
+}
+
+html.gps-map-fullscreen,
+html.gps-map-fullscreen body{
+  overflow:hidden !important;
+}
 
 .gpsMapTitle{
   color:#10212a;
@@ -823,6 +887,33 @@
 
   font-size:.82rem;
   font-weight:950;
+}
+
+  .gpsDistanceMapLabel{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+
+  min-width:54px;
+
+  padding:6px 9px;
+
+  border:2px solid #ffffff;
+  border-radius:999px;
+
+  background:rgba(0,0,0,.72);
+  color:#ffffff;
+
+  font-size:.78rem;
+  font-weight:1000;
+  line-height:1;
+
+  white-space:nowrap;
+
+  box-shadow:
+    0 3px 12px rgba(0,0,0,.35);
+
+  pointer-events:none;
 }
 
 .gpsTargetMarker{
@@ -3163,27 +3254,35 @@ html.app-mode .activeRoundCard{
      ===================================================== -->
 <div class="gpsMapCard" id="gpsMapCard">
 
-  <div class="gpsMapHeader">
-    <div>
-      <div class="gpsMapTitle">
-        GPS MAP
-      </div>
+ <div class="gpsMapHeader">
+  <div>
+    <div class="gpsMapTitle">
+      GPS MAP
+    </div>
 
-      <div
-        class="gpsMapSub"
-        id="gpsMapStatus"
-      >
-        Enable GPS to show your position
-      </div>
-      <div
-  class="gpsMapMeasure"
-  id="gpsMapMeasure"
->
-  Tap the map to measure a target
-</div>
+    <div
+      class="gpsMapSub"
+      id="gpsMapStatus"
+    >
+      Enable GPS to show your position
+    </div>
+
+    <div
+      class="gpsMapMeasure"
+      id="gpsMapMeasure"
+    >
+      Tap the map to measure a target
     </div>
   </div>
 
+  <button
+    class="gpsMapFullscreenBtn"
+    id="gpsMapFullscreenBtn"
+    type="button"
+  >
+    ⛶ Full screen
+  </button>
+</div>
   <div
     id="gpsMap"
     class="gpsMapLoading"
@@ -3942,6 +4041,16 @@ const gpsMapStatus =
     "gpsMapMeasure"
   );
 
+    const gpsMapCard =
+  document.getElementById(
+    "gpsMapCard"
+  );
+
+const gpsMapFullscreenBtn =
+  document.getElementById(
+    "gpsMapFullscreenBtn"
+  );
+
 // ✅ premium state
 let premiumHoleIndex = 0;
 let premiumShowingTable = false;
@@ -4007,7 +4116,23 @@ let gpsMapHasCentred = false;
  * Tap-to-measure state.
  */
 let gpsTargetMarker = null;
+
+/*
+ * Player → selected target.
+ */
 let gpsTargetLine = null;
+
+/*
+ * Selected target → green centre.
+ */
+let gpsTargetGreenLine = null;
+
+/*
+ * Distance labels shown directly on the map.
+ */
+let gpsPlayerTargetLabel = null;
+let gpsTargetGreenLabel = null;
+
 let gpsTargetPosition = null;
 
 /*
@@ -4716,7 +4841,7 @@ function updateGpsDistances(){
   );
 }
 
-    function updateGpsTargetMeasurement() {
+   function updateGpsTargetMeasurement() {
 
   if (
     !gpsMap ||
@@ -4755,7 +4880,14 @@ function updateGpsDistances(){
     return;
   }
 
-  const distance =
+
+  /*
+   * =======================================================
+   * PLAYER → TARGET
+   * =======================================================
+   */
+
+  const playerToTarget =
     gpsDistanceBetween(
       playerLat,
       playerLng,
@@ -4763,10 +4895,7 @@ function updateGpsDistances(){
       targetLng
     );
 
-  /*
-   * Draw/update line from golfer to target.
-   */
-  const linePoints = [
+  const playerTargetPoints = [
     [
       playerLat,
       playerLng
@@ -4781,31 +4910,335 @@ function updateGpsDistances(){
 
     gpsTargetLine =
       window.L.polyline(
-        linePoints,
+        playerTargetPoints,
         {
-          weight: 3,
-          dashArray: "8 7"
+          weight:4,
+          opacity:0.9
         }
-      ).addTo(gpsMap);
+      )
+      .addTo(gpsMap);
 
   } else {
 
     gpsTargetLine.setLatLngs(
-      linePoints
+      playerTargetPoints
     );
   }
 
+
   /*
-   * Show measurement.
+   * Midpoint of player → target line.
+   *
+   * This is where the first distance label sits.
+   */
+  const playerTargetMid = [
+    (
+      playerLat +
+      targetLat
+    ) / 2,
+
+    (
+      playerLng +
+      targetLng
+    ) / 2
+  ];
+
+  const playerTargetIcon =
+    window.L.divIcon({
+      className:"",
+
+      html:
+        `<div class="gpsDistanceMapLabel">${Math.round(
+          playerToTarget
+        )}m</div>`,
+
+      iconSize:[
+        64,
+        30
+      ],
+
+      iconAnchor:[
+        32,
+        15
+      ]
+    });
+
+  if (!gpsPlayerTargetLabel) {
+
+    gpsPlayerTargetLabel =
+      window.L.marker(
+        playerTargetMid,
+        {
+          icon:
+            playerTargetIcon,
+
+          interactive:false,
+
+          zIndexOffset:
+            1200
+        }
+      )
+      .addTo(gpsMap);
+
+  } else {
+
+    gpsPlayerTargetLabel.setLatLng(
+      playerTargetMid
+    );
+
+    gpsPlayerTargetLabel.setIcon(
+      playerTargetIcon
+    );
+  }
+
+
+  /*
+   * =======================================================
+   * FIND GREEN CENTRE
+   * =======================================================
+   */
+
+  const gps =
+    getBestCurrentHoleGps();
+
+  let greenPoint =
+    null;
+
+
+  /*
+   * Golf Courses API.
+   */
+  if (
+    gps?.source === "provider" &&
+    gps?.middle
+  ) {
+
+    const lat =
+      Number(
+        gps.middle.lat
+      );
+
+    const lng =
+      Number(
+        gps.middle.lng
+      );
+
+    if (
+      Number.isFinite(lat) &&
+      Number.isFinite(lng)
+    ) {
+      greenPoint = {
+        lat,
+        lng
+      };
+    }
+  }
+
+
+  /*
+   * TeeRadar manually entered GPS.
+   */
+  if (
+    gps?.source === "teeradar" &&
+    gps?.middle
+  ) {
+
+    if (
+      typeof gps.middle ===
+      "string"
+    ) {
+
+      greenPoint =
+        parseGoogleEarthCoordinate(
+          gps.middle
+        );
+    }
+
+    if (
+      !greenPoint &&
+      typeof gps.middle ===
+        "object"
+    ) {
+
+      const lat =
+        Number(
+          gps.middle.lat ??
+          gps.middle.latitude
+        );
+
+      const lng =
+        Number(
+          gps.middle.lng ??
+          gps.middle.longitude
+        );
+
+      if (
+        Number.isFinite(lat) &&
+        Number.isFinite(lng)
+      ) {
+
+        greenPoint = {
+          lat,
+          lng
+        };
+      }
+    }
+  }
+
+
+  /*
+   * =======================================================
+   * TARGET → GREEN
+   * =======================================================
+   */
+
+  if (greenPoint) {
+
+    const targetToGreen =
+      gpsDistanceBetween(
+        targetLat,
+        targetLng,
+        greenPoint.lat,
+        greenPoint.lng
+      );
+
+    const targetGreenPoints = [
+      [
+        targetLat,
+        targetLng
+      ],
+      [
+        greenPoint.lat,
+        greenPoint.lng
+      ]
+    ];
+
+    if (!gpsTargetGreenLine) {
+
+      gpsTargetGreenLine =
+        window.L.polyline(
+          targetGreenPoints,
+          {
+            weight:3,
+            dashArray:"8 7",
+            opacity:0.9
+          }
+        )
+        .addTo(gpsMap);
+
+    } else {
+
+      gpsTargetGreenLine.setLatLngs(
+        targetGreenPoints
+      );
+    }
+
+
+    /*
+     * Midpoint of target → green line.
+     */
+    const targetGreenMid = [
+      (
+        targetLat +
+        greenPoint.lat
+      ) / 2,
+
+      (
+        targetLng +
+        greenPoint.lng
+      ) / 2
+    ];
+
+    const targetGreenIcon =
+      window.L.divIcon({
+        className:"",
+
+        html:
+          `<div class="gpsDistanceMapLabel">${Math.round(
+            targetToGreen
+          )}m</div>`,
+
+        iconSize:[
+          64,
+          30
+        ],
+
+        iconAnchor:[
+          32,
+          15
+        ]
+      });
+
+    if (!gpsTargetGreenLabel) {
+
+      gpsTargetGreenLabel =
+        window.L.marker(
+          targetGreenMid,
+          {
+            icon:
+              targetGreenIcon,
+
+            interactive:false,
+
+            zIndexOffset:
+              1200
+          }
+        )
+        .addTo(gpsMap);
+
+    } else {
+
+      gpsTargetGreenLabel.setLatLng(
+        targetGreenMid
+      );
+
+      gpsTargetGreenLabel.setIcon(
+        targetGreenIcon
+      );
+    }
+
+  } else {
+
+    /*
+     * No green centre available.
+     */
+    if (gpsTargetGreenLine) {
+
+      try {
+        gpsMap.removeLayer(
+          gpsTargetGreenLine
+        );
+      } catch {}
+
+      gpsTargetGreenLine =
+        null;
+    }
+
+    if (gpsTargetGreenLabel) {
+
+      try {
+        gpsMap.removeLayer(
+          gpsTargetGreenLabel
+        );
+      } catch {}
+
+      gpsTargetGreenLabel =
+        null;
+    }
+  }
+
+
+  /*
+   * The measurements now live ON the map.
+   *
+   * Don't repeat them above the map.
    */
   if (gpsMapMeasure) {
 
     gpsMapMeasure.textContent =
-      `${Math.round(distance)}m to selected target`;
-
+      "Tap another point to measure";
   }
 }
-
 // =========================================================
 // GPS MAP
 // =========================================================
@@ -4994,7 +5427,56 @@ gpsMap.on(
   return gpsMap;
 }
 
-    function updateGpsGreenMarker() {
+    // =========================================================
+// GPS MAP — FULL SCREEN
+// =========================================================
+
+if (
+  gpsMapFullscreenBtn &&
+  gpsMapCard
+) {
+
+  gpsMapFullscreenBtn.addEventListener(
+    "click",
+    () => {
+
+      const goingFullscreen =
+        !gpsMapCard.classList.contains(
+          "gpsMapFullscreen"
+        );
+
+      gpsMapCard.classList.toggle(
+        "gpsMapFullscreen",
+        goingFullscreen
+      );
+
+      document.documentElement.classList.toggle(
+        "gps-map-fullscreen",
+        goingFullscreen
+      );
+
+      gpsMapFullscreenBtn.textContent =
+        goingFullscreen
+          ? "✕ Close"
+          : "⛶ Full screen";
+
+      /*
+       * Leaflet must recalculate its dimensions
+       * after the map changes size.
+       */
+      setTimeout(
+        () => {
+          try {
+            gpsMap?.invalidateSize();
+          } catch {}
+        },
+        120
+      );
+    }
+  );
+}
+
+   function updateGpsGreenMarker() {
 
   const map =
     ensureGpsMap();
@@ -5006,24 +5488,101 @@ gpsMap.on(
   const gps =
     getBestCurrentHoleGps();
 
+  let middle = null;
+
   /*
-   * We only need this new marker for API centre-only
-   * coordinates.
+   * -------------------------------------------------------
+   * Golf Courses API
+   * -------------------------------------------------------
    *
-   * Existing TeeRadar GPS remains handled by the
-   * normal GPS-distance system.
+   * Provider coordinates are already decimal lat/lng.
    */
-  const middle =
-    gps?.source === "provider"
-      ? gps.middle
-      : null;
+  if (
+    gps?.source === "provider" &&
+    gps?.middle
+  ) {
+    middle = {
+      lat:
+        Number(
+          gps.middle.lat
+        ),
+
+      lng:
+        Number(
+          gps.middle.lng
+        )
+    };
+  }
+
+  /*
+   * -------------------------------------------------------
+   * TEERADAR MANUAL GPS
+   * -------------------------------------------------------
+   *
+   * TeeRadar green points may be stored in Google Earth
+   * DMS format such as:
+   *
+   * 32°09'32.16"S 115°57'25.96"E
+   */
+  if (
+    gps?.source === "teeradar" &&
+    gps?.middle
+  ) {
+    if (
+      typeof gps.middle ===
+      "string"
+    ) {
+      middle =
+        parseGoogleEarthCoordinate(
+          gps.middle
+        );
+    }
+
+    /*
+     * Also support future decimal coordinate objects.
+     */
+    if (
+      !middle &&
+      typeof gps.middle ===
+        "object"
+    ) {
+      const lat =
+        Number(
+          gps.middle.lat ??
+          gps.middle.latitude
+        );
+
+      const lng =
+        Number(
+          gps.middle.lng ??
+          gps.middle.longitude
+        );
+
+      if (
+        Number.isFinite(lat) &&
+        Number.isFinite(lng)
+      ) {
+        middle = {
+          lat,
+          lng
+        };
+      }
+    }
+  }
 
   const lat =
-    Number(middle?.lat);
+    Number(
+      middle?.lat
+    );
 
   const lng =
-    Number(middle?.lng);
+    Number(
+      middle?.lng
+    );
 
+  /*
+   * No usable green centre.
+   */
   if (
     !Number.isFinite(lat) ||
     !Number.isFinite(lng)
@@ -5036,7 +5595,8 @@ gpsMap.on(
         );
       } catch {}
 
-      gpsGreenMarker = null;
+      gpsGreenMarker =
+        null;
     }
 
     if (gpsGreenLine) {
@@ -5046,7 +5606,19 @@ gpsMap.on(
         );
       } catch {}
 
-      gpsGreenLine = null;
+      gpsGreenLine =
+        null;
+    }
+
+    if (gpsTargetGreenLine) {
+      try {
+        map.removeLayer(
+          gpsTargetGreenLine
+        );
+      } catch {}
+
+      gpsTargetGreenLine =
+        null;
     }
 
     return;
@@ -5057,6 +5629,9 @@ gpsMap.on(
     lng
   ];
 
+  /*
+   * Green marker.
+   */
   if (!gpsGreenMarker) {
 
     const greenIcon =
@@ -5098,55 +5673,62 @@ gpsMap.on(
   }
 
   /*
-   * If GPS is currently active, draw the line
-   * from player → green.
+   * -------------------------------------------------------
+   * PLAYER → GREEN
+   * -------------------------------------------------------
    */
-  if (!currentGpsPosition) {
-    return;
+  if (currentGpsPosition) {
+
+    const playerLat =
+      Number(
+        currentGpsPosition.latitude
+      );
+
+    const playerLng =
+      Number(
+        currentGpsPosition.longitude
+      );
+
+    if (
+      Number.isFinite(playerLat) &&
+      Number.isFinite(playerLng)
+    ) {
+
+      const linePoints = [
+        [
+          playerLat,
+          playerLng
+        ],
+        point
+      ];
+
+      if (!gpsGreenLine) {
+
+        gpsGreenLine =
+          window.L.polyline(
+            linePoints,
+            {
+              weight:3,
+              opacity:0.8
+            }
+          )
+          .addTo(map);
+
+      } else {
+
+        gpsGreenLine.setLatLngs(
+          linePoints
+        );
+      }
+    }
   }
 
-  const playerLat =
-    Number(
-      currentGpsPosition.latitude
-    );
-
-  const playerLng =
-    Number(
-      currentGpsPosition.longitude
-    );
-
-  if (
-    !Number.isFinite(playerLat) ||
-    !Number.isFinite(playerLng)
-  ) {
-    return;
-  }
-
-  const linePoints = [
-    [
-      playerLat,
-      playerLng
-    ],
-    point
-  ];
-
-  if (!gpsGreenLine) {
-
-    gpsGreenLine =
-      window.L.polyline(
-        linePoints,
-        {
-          weight: 3,
-          opacity: 0.8
-        }
-      )
-      .addTo(map);
-
-  } else {
-
-    gpsGreenLine.setLatLngs(
-      linePoints
-    );
+  /*
+   * If the golfer already selected an intermediate
+   * target, update that measurement too.
+   */
+  if (gpsTargetPosition) {
+    updateGpsTargetMeasurement();
   }
 }
 
