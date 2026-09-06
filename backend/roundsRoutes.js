@@ -4263,11 +4263,16 @@ const {
         beforeStartCheck.rows[0]?.scored_holes || 0
       ) > 0;
 
-    await db.query("BEGIN");
+const client = await db.connect();
 
-    // Make sure the hole exists.
-    await db.query(
-      `
+let savedHole = null;
+
+try {
+  await client.query("BEGIN");
+
+  // Make sure the hole exists.
+  await client.query(
+    `
       INSERT INTO round_holes (
         round_id,
         hole_number,
@@ -4290,25 +4295,25 @@ const {
       )
       ON CONFLICT (round_id, hole_number)
       DO NOTHING;
-      `,
-      [roundId, holeNum]
-    );
+    `,
+    [roundId, holeNum]
+  );
 
-    // -------------------------------------------------
-    // IMPORTANT:
-    //
-    // jsonb_set changes ONLY this player's key.
-    //
-    // Example existing:
-    // {"1": 4}
-    //
-    // Player 2 submits 5:
-    // {"1": 4, "2": 5}
-    //
-    // Player 1's score is NOT replaced.
-    // -------------------------------------------------
-    const result = await db.query(
-      `
+  // -------------------------------------------------
+  // IMPORTANT:
+  //
+  // jsonb_set changes ONLY this player's key.
+  //
+  // Example existing:
+  // {"1": 4}
+  //
+  // Player 2 submits 5:
+  // {"1": 4, "2": 5}
+  //
+  // Player 1's score is NOT replaced.
+  // -------------------------------------------------
+  const result = await client.query(
+    `
       UPDATE round_holes
       SET
         par = COALESCE($4, par),
@@ -4382,38 +4387,49 @@ const {
         putts,
         strokes_by_player,
         putts_by_player;
-      `,
-      [
-        roundId,                       // $1
-        holeNum,                       // $2
-        playerNumber,                  // $3
+    `,
+    [
+      roundId,
+      holeNum,
+      playerNumber,
 
-        Number.isFinite(parVal)
-          ? parVal
-          : null,                      // $4
+      Number.isFinite(parVal)
+        ? parVal
+        : null,
 
-        Number.isFinite(distVal)
-          ? distVal
-          : null,                      // $5
+      Number.isFinite(distVal)
+        ? distVal
+        : null,
 
-        !Number.isFinite(strokesVal),  // $6
+      !Number.isFinite(strokesVal),
 
-        Number.isFinite(strokesVal)
-          ? strokesVal
-          : null,                      // $7
+      Number.isFinite(strokesVal)
+        ? strokesVal
+        : null,
 
-        !Number.isFinite(puttsVal),    // $8
+      !Number.isFinite(puttsVal),
 
-        Number.isFinite(puttsVal)
-          ? puttsVal
-          : null,                      // $9
-      ]
-    );
+      Number.isFinite(puttsVal)
+        ? puttsVal
+        : null,
+    ]
+  );
 
-    await db.query("COMMIT");
+  savedHole =
+    result.rows[0] || null;
 
-    const savedHole =
-      result.rows[0] || null;
+  await client.query("COMMIT");
+
+} catch (transactionErr) {
+  try {
+    await client.query("ROLLBACK");
+  } catch {}
+
+  throw transactionErr;
+
+} finally {
+  client.release();
+}
 
     // -------------------------------------------------
     // Preserve existing "friend started a round"
@@ -4464,15 +4480,11 @@ const {
       playerNumber: Number(playerNumber),
       hole: savedHole,
     });
-  } catch (err) {
-    try {
-      await db.query("ROLLBACK");
-    } catch {}
-
-    console.error(
-      "PUT /api/rounds/:id/hole/:n error:",
-      err
-    );
+} catch (err) {
+  console.error(
+    "PUT /api/rounds/:id/hole/:n error:",
+    err
+  );
 
     return res.status(500).json({
       ok: false,
