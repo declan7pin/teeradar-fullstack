@@ -2414,6 +2414,24 @@ app.get("/delete-account.html", (req, res) => {
   );
 });
 
+app.get("/delete-account", (req, res) => {
+  const filePath = path.join(
+    __dirname,
+    "..",
+    "public",
+    "delete-account.html"
+  );
+
+  console.log("DELETE ACCOUNT PAGE:", filePath);
+
+  return res.sendFile(filePath, (err) => {
+    if (err) {
+      console.error("Delete account page error:", err);
+      return res.status(500).send("Delete account page could not be loaded.");
+    }
+  });
+});
+
 // -------------------------------------------------
 // Frontend fallback
 // -------------------------------------------------
