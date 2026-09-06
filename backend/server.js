@@ -2400,6 +2400,21 @@ app.get("/group-vote.html", (req, res) => {
 });
 
 // -------------------------------------------------
+// Google Play account deletion page
+// -------------------------------------------------
+app.get("/delete-account", (req, res) => {
+  res.sendFile(
+    path.join(__dirname, "..", "public", "delete-account.html")
+  );
+});
+
+app.get("/delete-account.html", (req, res) => {
+  res.sendFile(
+    path.join(__dirname, "..", "public", "delete-account.html")
+  );
+});
+
+// -------------------------------------------------
 // Frontend fallback
 // -------------------------------------------------
 app.get("*", (req, res) => {
