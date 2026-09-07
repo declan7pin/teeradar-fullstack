@@ -4188,15 +4188,72 @@ let upcomingCourseAutoList = null;
 // =========================================================
 
 function parseGoogleEarthCoordinate(value){
-  const text = String(value || "")
-    .trim()
-    .toUpperCase();
+  const text =
+    String(value || "")
+      .trim();
 
-  if (!text) return null;
+  if (!text) {
+    return null;
+  }
 
-  const match = text.match(
-    /(\d+(?:\.\d+)?)°\s*(\d+(?:\.\d+)?)['′]\s*(\d+(?:\.\d+)?)["″]?\s*([NS])\s*[, ]+\s*(\d+(?:\.\d+)?)°\s*(\d+(?:\.\d+)?)['′]\s*(\d+(?:\.\d+)?)["″]?\s*([EW])/
-  );
+
+  // =====================================================
+  // 1. DECIMAL GPS
+  //
+  // GolfAPI.io imports are saved into TeeRadar as:
+  //
+  // -32.3707112, 115.7394634
+  //
+  // Support that format first.
+  // =====================================================
+
+  const decimalMatch =
+    text.match(
+      /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/
+    );
+
+  if (decimalMatch) {
+    const lat =
+      Number(
+        decimalMatch[1]
+      );
+
+    const lng =
+      Number(
+        decimalMatch[2]
+      );
+
+    if (
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      lat >= -90 &&
+      lat <= 90 &&
+      lng >= -180 &&
+      lng <= 180
+    ) {
+      return {
+        lat,
+        lng
+      };
+    }
+  }
+
+
+  // =====================================================
+  // 2. GOOGLE EARTH DMS
+  //
+  // Existing manually entered TeeRadar format:
+  //
+  // 32°09'32.16"S 115°57'25.96"E
+  // =====================================================
+
+  const upperText =
+    text.toUpperCase();
+
+  const match =
+    upperText.match(
+      /(\d+(?:\.\d+)?)°\s*(\d+(?:\.\d+)?)['′]\s*(\d+(?:\.\d+)?)["″]?\s*([NS])\s*[, ]+\s*(\d+(?:\.\d+)?)°\s*(\d+(?:\.\d+)?)['′]\s*(\d+(?:\.\d+)?)["″]?\s*([EW])/
+    );
 
   if (!match) {
     return null;
@@ -4212,11 +4269,15 @@ function parseGoogleEarthCoordinate(value){
     Number(match[6]) / 60 +
     Number(match[7]) / 3600;
 
-  if (match[4] === "S") {
+  if (
+    match[4] === "S"
+  ) {
     lat *= -1;
   }
 
-  if (match[8] === "W") {
+  if (
+    match[8] === "W"
+  ) {
     lng *= -1;
   }
 
@@ -4232,7 +4293,6 @@ function parseGoogleEarthCoordinate(value){
     lng
   };
 }
-
 function distanceBetweenGpsPoints(
   lat1,
   lng1,
