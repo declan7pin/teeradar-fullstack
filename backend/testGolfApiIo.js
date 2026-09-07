@@ -115,8 +115,12 @@ async function main() {
   process.argv[2]?.trim() ||
   "The Springs Club";
 
-const layoutName =
+const stateName =
   process.argv[3]?.trim() ||
+  "WA";
+
+const layoutName =
+  process.argv[4]?.trim() ||
   null;
 
   console.log(
@@ -127,9 +131,8 @@ const layoutName =
     await findGolfApiCourses({
       name:
         searchName,
-
-      state:
-        "WA",
+state:
+  stateName,
 
       country:
         "Australia",
