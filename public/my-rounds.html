@@ -4086,7 +4086,7 @@ let gpsWatchId = null;
 let currentGpsPosition = null;
 
 // =========================================================
-// GOLF COURSES API — LIVE GREEN CENTRES
+// GOLFAPI.IO — LIVE GREEN GPS
 // =========================================================
 
 let providerGpsCourseId = null;
@@ -4563,135 +4563,228 @@ function getBestCurrentHoleGps() {
     };
   }
 
-  /*
-   * SECOND choice:
-   * Golf Courses API green centre.
-   */
-  const providerGreen =
-    getCurrentProviderGreen();
+/*
+ * SECOND choice:
+ * GolfAPI.io green GPS.
+ */
+const providerGreen =
+  getCurrentProviderGreen();
 
-  if (providerGreen) {
+if (providerGreen) {
 
-    return {
-      source:
-        "provider",
+  return {
+    source:
+      "provider",
 
-      middle: {
-        lat:
-          Number(providerGreen.lat),
+    front:
+      providerGreen.front ||
+      null,
 
-        lng:
-          Number(providerGreen.lng)
-      },
+    middle:
+      providerGreen.middle ||
+      (
+        Number.isFinite(
+          Number(
+            providerGreen.lat
+          )
+        ) &&
+        Number.isFinite(
+          Number(
+            providerGreen.lng
+          )
+        )
+          ? {
+              lat:
+                Number(
+                  providerGreen.lat
+                ),
 
-      raw:
-        providerGreen
-    };
-  }
+              lng:
+                Number(
+                  providerGreen.lng
+                )
+            }
+          : null
+      ),
+
+    back:
+      providerGreen.back ||
+      null,
+
+    raw:
+      providerGreen
+  };
+}
 
   return null;
 }
 
 function updateGpsDistances(){
-    /*
-   * -------------------------------------------------------
-   * GOLF COURSES API FALLBACK
-   * -------------------------------------------------------
-   *
-   * Existing TeeRadar Front / Middle / Back GPS remains
-   * first priority.
-   */
+  /*
+ * -------------------------------------------------------
+ * GOLFAPI.IO FALLBACK
+ * -------------------------------------------------------
+ *
+ * Existing TeeRadar Front / Middle / Back GPS remains
+ * first priority.
+ */
 
-  const teeRadarGreen =
-    getCurrentHoleGreenPoints();
+const teeRadarGreen =
+  getCurrentHoleGreenPoints();
 
-  const providerGreen =
-    !teeRadarGreen
-      ? getCurrentProviderGreen()
-      : null;
+const providerGreen =
+  !teeRadarGreen
+    ? getCurrentProviderGreen()
+    : null;
 
-  if (
-    providerGreen &&
-    currentGpsPosition
+if (
+  providerGreen &&
+  currentGpsPosition
+) {
+
+  const playerLat =
+    Number(
+      currentGpsPosition.latitude
+    );
+
+  const playerLng =
+    Number(
+      currentGpsPosition.longitude
+    );
+
+  function providerDistance(
+    point
   ) {
+    if (!point) {
+      return null;
+    }
 
-    const playerLat =
+    const lat =
       Number(
-        currentGpsPosition.latitude
+        point.lat
       );
 
-    const playerLng =
+    const lng =
       Number(
-        currentGpsPosition.longitude
-      );
-
-    const greenLat =
-      Number(
-        providerGreen.lat
-      );
-
-    const greenLng =
-      Number(
-        providerGreen.lng
+        point.lng
       );
 
     if (
-      Number.isFinite(playerLat) &&
-      Number.isFinite(playerLng) &&
-      Number.isFinite(greenLat) &&
-      Number.isFinite(greenLng)
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng)
     ) {
+      return null;
+    }
 
-      const distance =
-        gpsDistanceBetween(
-          playerLat,
-          playerLng,
-          greenLat,
-          greenLng
+    return gpsDistanceBetween(
+      playerLat,
+      playerLng,
+      lat,
+      lng
+    );
+  }
+
+  if (
+    Number.isFinite(
+      playerLat
+    ) &&
+    Number.isFinite(
+      playerLng
+    )
+  ) {
+
+    const frontM =
+      providerDistance(
+        providerGreen.front
+      );
+
+    const middleM =
+      providerDistance(
+        providerGreen.middle ||
+        (
+          providerGreen.lat != null &&
+          providerGreen.lng != null
+            ? {
+                lat:
+                  providerGreen.lat,
+
+                lng:
+                  providerGreen.lng
+              }
+            : null
+        )
+      );
+
+    const backM =
+      providerDistance(
+        providerGreen.back
+      );
+
+    if (
+      gpsFrontDistance
+    ) {
+      gpsFrontDistance.textContent =
+        frontM == null
+          ? "—"
+          : `${Math.round(
+              frontM
+            )}m`;
+    }
+
+    if (
+      gpsMiddleDistance
+    ) {
+      gpsMiddleDistance.textContent =
+        middleM == null
+          ? "—"
+          : `${Math.round(
+              middleM
+            )}m`;
+    }
+
+    if (
+      gpsBackDistance
+    ) {
+      gpsBackDistance.textContent =
+        backM == null
+          ? "—"
+          : `${Math.round(
+              backM
+            )}m`;
+    }
+
+    if (
+      gpsDistanceStatus
+    ) {
+      gpsDistanceStatus.textContent =
+        `Live GPS • Hole ${
+          premiumHoleIndex + 1
+        }`;
+    }
+
+    if (
+      gpsAccuracy
+    ) {
+      const accuracy =
+        Number(
+          currentGpsPosition.accuracy
         );
 
-      if (gpsFrontDistance) {
-        gpsFrontDistance.textContent =
-          "—";
-      }
-
-      if (gpsMiddleDistance) {
-        gpsMiddleDistance.textContent =
-          `${Math.round(distance)}m`;
-      }
-
-      if (gpsBackDistance) {
-        gpsBackDistance.textContent =
-          "—";
-      }
-
-      if (gpsDistanceStatus) {
-        gpsDistanceStatus.textContent =
-          `Live GPS • Hole ${
-            premiumHoleIndex + 1
-          } green centre`;
-      }
-
-      if (gpsAccuracy) {
-
-        const accuracy =
-          Number(
-            currentGpsPosition.accuracy
-          );
-
-        gpsAccuracy.textContent =
-          Number.isFinite(accuracy)
-            ? `Location accuracy ±${Math.round(
-                accuracy
-              )}m • Golf Courses API`
-            : "Golf Courses API";
-      }
-
-      updateGpsGreenMarker();
-
-      return;
+      gpsAccuracy.textContent =
+        Number.isFinite(
+          accuracy
+        )
+          ? `Location accuracy ±${Math.round(
+              accuracy
+            )}m • GolfAPI.io`
+          : "GolfAPI.io";
     }
+
+    updateGpsGreenMarker();
+
+    return;
   }
+}
   if (!gpsEnabled) {
     return;
   }
@@ -5006,7 +5099,7 @@ function updateGpsDistances(){
 
 
   /*
-   * Golf Courses API.
+   * GolfAPI.io.
    */
   if (
     gps?.source === "provider" &&
@@ -5492,7 +5585,7 @@ if (
 
   /*
    * -------------------------------------------------------
-   * Golf Courses API
+   * GolfAPI.io
    * -------------------------------------------------------
    *
    * Provider coordinates are already decimal lat/lng.
@@ -6361,7 +6454,7 @@ console.log(
 );
 
     console.log(
-      "⛳ Searching Golf Courses API:",
+      "⛳ Searching GolfAPI.io:",
       {
         course:
           courseName,
@@ -6376,9 +6469,11 @@ console.log(
 
    const searchResponse =
   await fetch(
-    `${API_BASE}/api/gps/search?q=${encodeURIComponent(
-      courseName
-    )}&country=AU`,
+   `${API_BASE}/api/gps/search?q=${encodeURIComponent(
+  courseName
+)}&state=${encodeURIComponent(
+  roundState
+)}&country=AU`,
     {
       headers: {
         Authorization:
@@ -6419,7 +6514,7 @@ try {
    if (!courses.length) {
 
   console.log(
-    "ℹ️ No Golf Courses API match:",
+    "ℹ️ No GolfAPI.io match:",
     courseName
   );
 
@@ -6510,7 +6605,7 @@ providerGpsCourseId =
       );
 
     console.log(
-      "✅ Golf Courses API course matched:",
+      "✅ GolfAPI.io course matched:",
       {
         id:
           providerGpsCourseId,
@@ -6571,22 +6666,106 @@ const holes =
 
 providerGpsGreens =
   holes
-    .map((hole) => ({
-      hole:
-        Number(hole?.hole),
+    .map((hole) => {
+      const middle =
+        hole?.middle || null;
 
-      lat:
-        Number(hole?.lat),
+      const centreLat =
+        Number(
+          middle?.lat ??
+          hole?.lat
+        );
 
-      lng:
-        Number(hole?.lng)
-    }))
+      const centreLng =
+        Number(
+          middle?.lng ??
+          hole?.lng
+        );
+
+      return {
+        hole:
+          Number(hole?.hole),
+
+        // Keep backwards-compatible centre point
+        lat:
+          centreLat,
+
+        lng:
+          centreLng,
+
+        front:
+          hole?.front
+            ? {
+                lat:
+                  Number(
+                    hole.front.lat
+                  ),
+
+                lng:
+                  Number(
+                    hole.front.lng
+                  )
+              }
+            : null,
+
+        middle:
+          middle
+            ? {
+                lat:
+                  Number(
+                    middle.lat
+                  ),
+
+                lng:
+                  Number(
+                    middle.lng
+                  )
+              }
+            : (
+                Number.isFinite(
+                  centreLat
+                ) &&
+                Number.isFinite(
+                  centreLng
+                )
+                  ? {
+                      lat:
+                        centreLat,
+
+                      lng:
+                        centreLng
+                    }
+                  : null
+              ),
+
+        back:
+          hole?.back
+            ? {
+                lat:
+                  Number(
+                    hole.back.lat
+                  ),
+
+                lng:
+                  Number(
+                    hole.back.lng
+                  )
+              }
+            : null
+      };
+    })
     .filter(
       (hole) =>
-        Number.isFinite(hole.hole) &&
+        Number.isFinite(
+          hole.hole
+        ) &&
         hole.hole > 0 &&
-        Number.isFinite(hole.lat) &&
-        Number.isFinite(hole.lng)
+        Number.isFinite(
+          hole.lat
+        ) &&
+        Number.isFinite(
+          hole.lng
+        )
     );
 
 /*
@@ -6645,7 +6824,7 @@ if (
 } catch (error) {
 
   console.warn(
-    "⚠️ Golf Courses API GPS unavailable:",
+    "⚠️ GolfAPI.io GPS unavailable:",
     error?.message || error
   );
 
