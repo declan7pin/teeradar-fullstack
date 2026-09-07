@@ -8,6 +8,83 @@ import {
 } from "./golfApiIo.js";
 
 
+// =========================================================
+// DISTANCE HELPER
+// =========================================================
+
+function distanceMetres(
+  lat1,
+  lng1,
+  lat2,
+  lng2
+) {
+  const R = 6371000;
+
+  const toRad =
+    (value) =>
+      value * Math.PI / 180;
+
+  const φ1 =
+    toRad(lat1);
+
+  const φ2 =
+    toRad(lat2);
+
+  const Δφ =
+    toRad(lat2 - lat1);
+
+  const Δλ =
+    toRad(lng2 - lng1);
+
+  const a =
+    Math.sin(
+      Δφ / 2
+    ) ** 2 +
+    Math.cos(φ1) *
+      Math.cos(φ2) *
+      Math.sin(
+        Δλ / 2
+      ) ** 2;
+
+  const c =
+    2 *
+    Math.atan2(
+      Math.sqrt(a),
+      Math.sqrt(1 - a)
+    );
+
+  return R * c;
+}
+
+
+// =========================================================
+// PICK BEST GREEN POINT
+// =========================================================
+
+function getBestGreenPoint(hole) {
+  if (!hole) {
+    return null;
+  }
+
+  /*
+   * Prefer the middle point.
+   *
+   * If GolfAPI doesn't have middle,
+   * fall back to front, then back.
+   */
+  return (
+    hole.middle ||
+    hole.front ||
+    hole.back ||
+    null
+  );
+}
+
+
+// =========================================================
+// MAIN
+// =========================================================
+
 async function main() {
   console.log("");
   console.log("========================================");
@@ -21,14 +98,18 @@ async function main() {
 
   await ensureGolfApiCacheSchema();
 
-  console.log("✅ Cache table ready");
+  console.log(
+    "✅ Cache table ready"
+  );
+
   console.log("");
 
 
   // -------------------------------------------------------
-  // 2. SEARCH FOR A COURSE
+  // 2. SEARCH FOR THE SPRINGS
   //
-  // GolfAPI search costs 0.1 calls if not already cached.
+  // GolfAPI search costs 0.1 calls only
+  // if not already cached.
   // -------------------------------------------------------
 
   console.log(
@@ -37,12 +118,18 @@ async function main() {
 
   const search =
     await findGolfApiCourses({
-      name: "The Springs Club",
-      state: "WA",
-      country: "Australia",
+      name:
+        "The Springs Club",
+
+      state:
+        "WA",
+
+      country:
+        "Australia",
     });
 
   console.log("");
+
   console.log(
     `Search source: ${search.source}`
   );
@@ -53,7 +140,9 @@ async function main() {
 
   console.log("");
 
-  if (!search.courses.length) {
+  if (
+    !search.courses.length
+  ) {
     console.log(
       "❌ GolfAPI.io did not find The Springs Club"
     );
@@ -63,7 +152,7 @@ async function main() {
 
 
   // -------------------------------------------------------
-  // SHOW MATCHES
+  // 3. SHOW MATCHES
   // -------------------------------------------------------
 
   console.table(
@@ -100,10 +189,31 @@ async function main() {
 
 
   // -------------------------------------------------------
-  // 3. PICK FIRST RESULT
+  // 4. PICK THE GPS RESULT
+  //
+  // The Springs returned two records:
+  //
+  // - 18-hole course, hasGPS = 1
+  // - Armadale, hasGPS = 0
+  //
+  // Prefer the result with GPS instead of blindly
+  // taking search.courses[0].
   // -------------------------------------------------------
 
   const selected =
+    search.courses.find(
+      (course) => {
+        const hasGps =
+          course.hasGPS ??
+          course.has_gps;
+
+        return (
+          hasGps === 1 ||
+          hasGps === "1" ||
+          hasGps === true
+        );
+      }
+    ) ||
     search.courses[0];
 
   const courseId =
@@ -117,13 +227,17 @@ async function main() {
   }
 
   console.log("");
+
   console.log(
     `➡️ Testing course ID: ${courseId}`
   );
 
 
   // -------------------------------------------------------
-  // 4. FIRST FULL LOAD
+  // 5. FIRST FULL LOAD
+  //
+  // If already cached:
+  // 0 API calls.
   //
   // If not cached:
   // course details = 1 call
@@ -131,12 +245,15 @@ async function main() {
   // -------------------------------------------------------
 
   console.log("");
+
   console.log(
     "========================================"
   );
+
   console.log(
     "FIRST LOAD"
   );
+
   console.log(
     "========================================"
   );
@@ -147,6 +264,7 @@ async function main() {
     );
 
   console.log("");
+
   console.log(
     `First load source: ${first.source}`
   );
@@ -169,7 +287,7 @@ async function main() {
 
 
   // -------------------------------------------------------
-  // 5. CHECK GREEN GPS
+  // 6. CHECK GREEN GPS
   // -------------------------------------------------------
 
   const greens =
@@ -178,12 +296,15 @@ async function main() {
     );
 
   console.log("");
+
   console.log(
     "========================================"
   );
+
   console.log(
     "GREEN GPS"
   );
+
   console.log(
     "========================================"
   );
@@ -218,7 +339,220 @@ async function main() {
 
 
   // -------------------------------------------------------
-  // 6. LOAD SAME COURSE AGAIN
+  // 7. COMPARE HOLES 1–9 AGAINST 10–18
+  //
+  // The Springs is a physical 9-hole course played twice.
+  //
+  // If GolfAPI data is correct, hole pairs:
+  //
+  // 1 / 10
+  // 2 / 11
+  // ...
+  // 9 / 18
+  //
+  // should be very close geographically.
+  // -------------------------------------------------------
+
+  console.log("");
+
+  console.log(
+    "========================================"
+  );
+
+  console.log(
+    "FRONT 9 vs BACK 9 GREEN COMPARISON"
+  );
+
+  console.log(
+    "========================================"
+  );
+
+  const comparisons = [];
+
+  for (
+    let frontHole = 1;
+    frontHole <= 9;
+    frontHole += 1
+  ) {
+    const backHole =
+      frontHole + 9;
+
+    const front =
+      greens.find(
+        (hole) =>
+          Number(hole.hole) ===
+          frontHole
+      );
+
+    const back =
+      greens.find(
+        (hole) =>
+          Number(hole.hole) ===
+          backHole
+      );
+
+    const frontPoint =
+      getBestGreenPoint(
+        front
+      );
+
+    const backPoint =
+      getBestGreenPoint(
+        back
+      );
+
+    if (
+      !frontPoint ||
+      !backPoint
+    ) {
+      comparisons.push({
+        holes:
+          `${frontHole} vs ${backHole}`,
+
+        frontPoint:
+          frontPoint
+            ? `${frontPoint.latitude}, ${frontPoint.longitude}`
+            : "missing",
+
+        backPoint:
+          backPoint
+            ? `${backPoint.latitude}, ${backPoint.longitude}`
+            : "missing",
+
+        distanceMetres:
+          "—",
+
+        result:
+          "⚠️ missing GPS",
+      });
+
+      continue;
+    }
+
+    const metres =
+      distanceMetres(
+        Number(
+          frontPoint.latitude
+        ),
+
+        Number(
+          frontPoint.longitude
+        ),
+
+        Number(
+          backPoint.latitude
+        ),
+
+        Number(
+          backPoint.longitude
+        )
+      );
+
+    let result;
+
+    if (
+      metres <= 20
+    ) {
+      result =
+        "✅ same green";
+    } else if (
+      metres <= 40
+    ) {
+      result =
+        "⚠️ probably same";
+    } else {
+      result =
+        "❌ different green";
+    }
+
+    comparisons.push({
+      holes:
+        `${frontHole} vs ${backHole}`,
+
+      frontPoint:
+        `${frontPoint.latitude}, ${frontPoint.longitude}`,
+
+      backPoint:
+        `${backPoint.latitude}, ${backPoint.longitude}`,
+
+      distanceMetres:
+        metres.toFixed(1),
+
+      result,
+    });
+  }
+
+  console.table(
+    comparisons
+  );
+
+
+  // -------------------------------------------------------
+  // 8. SUMMARY OF FRONT/BACK COMPARISON
+  // -------------------------------------------------------
+
+  const validComparisons =
+    comparisons.filter(
+      (row) =>
+        row.distanceMetres !== "—"
+    );
+
+  const sameGreen =
+    validComparisons.filter(
+      (row) =>
+        Number(
+          row.distanceMetres
+        ) <= 20
+    ).length;
+
+  const probablySame =
+    validComparisons.filter(
+      (row) => {
+        const distance =
+          Number(
+            row.distanceMetres
+          );
+
+        return (
+          distance > 20 &&
+          distance <= 40
+        );
+      }
+    ).length;
+
+  const different =
+    validComparisons.filter(
+      (row) =>
+        Number(
+          row.distanceMetres
+        ) > 40
+    ).length;
+
+  console.log("");
+
+  console.log(
+    "PAIR SUMMARY"
+  );
+
+  console.log(
+    "------------"
+  );
+
+  console.log(
+    `✅ Same green <=20m: ${sameGreen}`
+  );
+
+  console.log(
+    `⚠️ Probably same 20–40m: ${probablySame}`
+  );
+
+  console.log(
+    `❌ Different >40m: ${different}`
+  );
+
+
+  // -------------------------------------------------------
+  // 9. LOAD SAME COURSE AGAIN
   //
   // This MUST come from TeeRadar's database.
   //
@@ -226,12 +560,15 @@ async function main() {
   // -------------------------------------------------------
 
   console.log("");
+
   console.log(
     "========================================"
   );
+
   console.log(
     "SECOND LOAD - CACHE TEST"
   );
+
   console.log(
     "========================================"
   );
@@ -242,13 +579,17 @@ async function main() {
     );
 
   console.log("");
+
   console.log(
     `Second load source: ${second.source}`
   );
 
 
-  if (second.source === "cache") {
+  if (
+    second.source === "cache"
+  ) {
     console.log("");
+
     console.log(
       "✅ SUCCESS"
     );
@@ -262,6 +603,7 @@ async function main() {
     );
   } else {
     console.log("");
+
     console.log(
       "⚠️ Cache test failed."
     );
@@ -273,15 +615,19 @@ async function main() {
 
 
   console.log("");
+
   console.log(
     "========================================"
   );
+
   console.log(
     "TEST COMPLETE"
   );
+
   console.log(
     "========================================"
   );
+
   console.log("");
 }
 
@@ -289,6 +635,7 @@ async function main() {
 main().catch(
   (err) => {
     console.error("");
+
     console.error(
       "❌ GolfAPI.io test failed:"
     );
