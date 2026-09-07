@@ -112,11 +112,12 @@ async function main() {
   // -------------------------------------------------------
 
   const searchName =
-    process.argv
-      .slice(2)
-      .join(" ")
-      .trim() ||
-    "The Springs Club";
+  process.argv[2]?.trim() ||
+  "The Springs Club";
+
+const layoutName =
+  process.argv[3]?.trim() ||
+  null;
 
   console.log(
     `🔎 Searching for ${searchName}...`
@@ -201,7 +202,57 @@ async function main() {
   // If none have GPS, use the first match.
   // -------------------------------------------------------
 
-  const selected =
+  let selected = null;
+
+if (layoutName) {
+  selected =
+    search.courses.find(
+      (course) => {
+        const courseName =
+          course.courseName ||
+          course.course_name ||
+          "";
+
+        return (
+          courseName
+            .trim()
+            .toLowerCase() ===
+          layoutName
+            .trim()
+            .toLowerCase()
+        );
+      }
+    );
+
+  if (!selected) {
+    console.log(
+      `❌ Could not find layout "${layoutName}"`
+    );
+
+    console.log("");
+
+    console.log(
+      "Available layouts:"
+    );
+
+    console.table(
+      search.courses.map(
+        (course) => ({
+          course:
+            course.courseName ||
+            course.course_name,
+
+          GPS:
+            course.hasGPS ??
+            course.has_gps,
+        })
+      )
+    );
+
+    process.exit(0);
+  }
+} else {
+  selected =
     search.courses.find(
       (course) => {
         const hasGps =
@@ -216,6 +267,7 @@ async function main() {
       }
     ) ||
     search.courses[0];
+}
 
   const courseId =
     selected.courseID ||
