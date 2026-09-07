@@ -7121,6 +7121,107 @@ function showCourseAutocomplete(items){
     div.addEventListener(
       "click",
       async () => {
+                // -------------------------------------------------
+        // GolfAPI.io result
+        //
+        // Search only found the provider record.
+        // Now fetch the FULL course so TeeRadar permanently
+        // saves pars / GPS / course data in Postgres.
+        // -------------------------------------------------
+
+        if (
+          c?._golfapi_result === true &&
+          c?.provider_course_id
+        ) {
+          const providerId =
+            String(
+              c.provider_course_id
+            ).trim();
+
+          if (!providerId) {
+            setToast(
+              leftToast,
+              "Could not import this course.",
+              false
+            );
+
+            return;
+          }
+
+          div.innerHTML = `
+            <div class="courseOptionTitle">
+              Importing ${escapeHtml(
+                baseName
+              )}…
+            </div>
+
+            <div class="courseOptionMeta">
+              Saving course data to TeeRadar
+            </div>
+          `;
+
+          try {
+            const imported =
+              await api(
+                `/api/gps/course/${encodeURIComponent(
+                  providerId
+                )}`,
+                {
+                  method:
+                    "GET"
+                }
+              );
+
+            if (
+              !imported?.ok ||
+              !imported?.course
+            ) {
+              throw new Error(
+                "GolfAPI course data was not returned"
+              );
+            }
+
+            console.log(
+              "✅ GolfAPI course imported:",
+              imported.course
+            );
+
+
+            /*
+             * The backend has now permanently saved the
+             * GolfAPI course.
+             *
+             * Force TeeRadar's approved-course list to
+             * reload so this new course can immediately
+             * become a normal local course.
+             */
+            coursesLoaded =
+              false;
+
+            coursesCache =
+              [];
+
+            await loadCoursesOnce();
+
+          } catch (error) {
+            console.error(
+              "GolfAPI course import failed:",
+              error
+            );
+
+            setToast(
+              leftToast,
+              "Could not import course: " +
+                (
+                  error?.message ||
+                  "error"
+                ),
+              false
+            );
+
+            return;
+          }
+        }
         courseEl.value =
           baseName;
 
@@ -7164,6 +7265,327 @@ function showCourseAutocomplete(items){
 
   courseAutoList.style.display =
     "block";
+}
+
+    // =========================================================
+// GOLFAPI.IO COURSE SEARCH — ENTER ONLY
+//
+// Typing:
+// TeeRadar approved courses only.
+//
+// Press Enter:
+// If TeeRadar has no useful local match, search GolfAPI.io.
+//
+// Selecting a GolfAPI result:
+// Load the full course, which permanently caches the
+// course / pars / GPS in TeeRadar.
+// =========================================================
+
+function golfApiCourseDisplayName(course) {
+  const courseName =
+    String(
+      course?.courseName ||
+      course?.course ||
+      ""
+    ).trim();
+
+  const clubName =
+    String(
+      course?.clubName ||
+      course?.club ||
+      ""
+    ).trim();
+
+  /*
+   * GolfAPI sometimes calls the course:
+   *
+   * "18-hole course"
+   *
+   * That is not useful to TeeRadar users, so use the
+   * actual club name instead.
+   */
+  const genericName =
+    /^(9|18)[ -]?hole course$/i
+      .test(courseName);
+
+  return (
+    genericName
+      ? clubName
+      : (
+          courseName ||
+          clubName
+        )
+  ).trim();
+}
+
+
+async function searchGolfApiCourseFromEnter() {
+  const query =
+    String(
+      courseEl?.value || ""
+    ).trim();
+
+  if (
+    !query ||
+    query.length < 2
+  ) {
+    return;
+  }
+
+  await loadCoursesOnce();
+
+  const stateNow =
+    String(
+      stateEl?.value || ""
+    )
+      .trim()
+      .toUpperCase();
+
+
+  // -------------------------------------------------------
+  // 1. CHECK TEERADAR FIRST
+  //
+  // If TeeRadar already knows this course, DO NOT call
+  // GolfAPI.io.
+  // -------------------------------------------------------
+
+  const localMatches =
+    coursesCache
+      .filter((course) => {
+        const name =
+          String(
+            course?.name ||
+            course?.course ||
+            ""
+          ).trim();
+
+        const state =
+          String(
+            course?.state || ""
+          )
+            .trim()
+            .toUpperCase();
+
+        if (
+          stateNow &&
+          state &&
+          state !== stateNow
+        ) {
+          return false;
+        }
+
+        return (
+          courseNamesMatch(
+            name,
+            query
+          ) ||
+          norm(name).includes(
+            norm(query)
+          ) ||
+          norm(query).includes(
+            norm(name)
+          )
+        );
+      })
+      .slice(
+        0,
+        10
+      );
+
+  if (
+    localMatches.length > 0
+  ) {
+    console.log(
+      "✅ TeeRadar course found locally — GolfAPI search skipped:",
+      query
+    );
+
+    showCourseAutocomplete(
+      localMatches
+    );
+
+    return;
+  }
+
+
+  // -------------------------------------------------------
+  // 2. NO LOCAL MATCH — SEARCH GOLFAPI.IO
+  // -------------------------------------------------------
+
+  if (!isLoggedIn()) {
+    setToast(
+      leftToast,
+      "Log in to search for new courses.",
+      false
+    );
+
+    return;
+  }
+
+  courseAutoList.innerHTML = `
+    <div class="courseOptionCard">
+      <div class="courseOptionTitle">
+        Searching GolfAPI.io…
+      </div>
+      <div class="courseOptionMeta">
+        Looking for ${escapeHtml(query)}
+      </div>
+    </div>
+  `;
+
+  courseAutoList.style.display =
+    "block";
+
+  try {
+    console.log(
+      "🌐 GolfAPI course search from Enter:",
+      {
+        query,
+        state:
+          stateNow
+      }
+    );
+
+    const data =
+      await api(
+        `/api/gps/search?q=${encodeURIComponent(
+          query
+        )}&state=${encodeURIComponent(
+          stateNow
+        )}&country=AU`,
+        {
+          method:
+            "GET"
+        }
+      );
+
+    const courses =
+      Array.isArray(
+        data?.courses
+      )
+        ? data.courses
+        : [];
+
+    if (!courses.length) {
+      courseAutoList.innerHTML = `
+        <div class="courseOptionCard">
+          <div class="courseOptionTitle">
+            No course found
+          </div>
+
+          <div class="courseOptionMeta">
+            Try another course name.
+          </div>
+        </div>
+      `;
+
+      courseAutoList.style.display =
+        "block";
+
+      return;
+    }
+
+
+    // -----------------------------------------------------
+    // Convert GolfAPI results into the same shape used by
+    // TeeRadar's existing autocomplete.
+    //
+    // _golfapi_result lets the click handler know this
+    // course still needs to be imported.
+    // -----------------------------------------------------
+
+    const providerMatches =
+      courses
+        .map((course) => {
+          const providerId =
+            String(
+              course?.provider_course_id ||
+              course?.courseID ||
+              course?.id ||
+              ""
+            ).trim();
+
+          const displayName =
+            golfApiCourseDisplayName(
+              course
+            );
+
+          if (
+            !providerId ||
+            !displayName
+          ) {
+            return null;
+          }
+
+          return {
+            name:
+              displayName,
+
+            state:
+              String(
+                course?.state ||
+                stateNow ||
+                ""
+              )
+                .trim()
+                .toUpperCase(),
+
+            holes:
+              Number(
+                course?.numHoles ??
+                course?.holes
+              ) ||
+              null,
+
+            course_rating:
+              null,
+
+            slope_rating:
+              null,
+
+            tee_colour:
+              "",
+
+            provider_course_id:
+              providerId,
+
+            _golfapi_result:
+              true,
+
+            _golfapi_original:
+              course
+          };
+        })
+        .filter(Boolean);
+
+    showCourseAutocomplete(
+      providerMatches
+    );
+
+  } catch (error) {
+    console.error(
+      "GolfAPI Enter course search failed:",
+      error
+    );
+
+    courseAutoList.innerHTML = `
+      <div class="courseOptionCard">
+        <div class="courseOptionTitle">
+          Course search failed
+        </div>
+
+        <div class="courseOptionMeta">
+          ${escapeHtml(
+            error?.message ||
+            "Please try again."
+          )}
+        </div>
+      </div>
+    `;
+
+    courseAutoList.style.display =
+      "block";
+  }
 }
     
     async function initCourseAutocomplete(){
@@ -7266,6 +7688,34 @@ function showCourseAutocomplete(items){
     }
   );
 
+    // -------------------------------------------------------
+  // ENTER = SEARCH FOR A NEW COURSE
+  //
+  // Typing never calls GolfAPI.
+  // GolfAPI is only allowed after an intentional Enter.
+  // -------------------------------------------------------
+
+  courseEl.addEventListener(
+    "keydown",
+    async (event) => {
+
+      if (
+        event.key !==
+        "Enter"
+      ) {
+        return;
+      }
+
+      /*
+       * Prevent Enter accidentally triggering any other
+       * form/button behaviour.
+       */
+      event.preventDefault();
+
+      await searchGolfApiCourseFromEnter();
+    }
+  );
+      
   document.addEventListener(
     "click",
     (e) => {
