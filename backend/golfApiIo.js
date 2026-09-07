@@ -96,6 +96,66 @@ function toBooleanGps(value) {
   );
 }
 
+// =========================================================
+// NORMALISE TEERADAR COURSE SEARCH NAMES
+//
+// TeeRadar names may contain display text that GolfAPI
+// does not use, for example:
+//
+// "Araluen Golf Course - 18 holes"
+// becomes:
+// "araluen"
+//
+// This lets those display-name variations reuse the same
+// permanent GolfAPI cache entry.
+// =========================================================
+
+function normaliseGolfApiSearchName(value) {
+  let name =
+    String(value || "")
+      .toLowerCase()
+      .trim();
+
+  if (!name) {
+    return "";
+  }
+
+  // -------------------------------------------------------
+  // Remove TeeRadar round/template suffixes.
+  // -------------------------------------------------------
+
+  name = name
+    .replace(/\(\s*18\s*holes?[^)]*\)/gi, " ")
+    .replace(/\(\s*9\s*holes?[^)]*\)/gi, " ")
+    .replace(/\b18\s*holes?\b/gi, " ")
+    .replace(/\b9\s*holes?\b/gi, " ")
+    .replace(/\bfront\s*9\b/gi, " ")
+    .replace(/\bback\s*9\b/gi, " ")
+    .replace(/\bwalking\b/gi, " ");
+
+  // -------------------------------------------------------
+  // Remove common generic golf-course wording.
+  //
+  // Do NOT remove words such as "links", "country",
+  // "estate", "lakes", "island", etc. because those may
+  // genuinely identify a different course/layout.
+  // -------------------------------------------------------
+
+  name = name
+    .replace(/\bgolf\s+course\b/gi, " ")
+    .replace(/\bgolf\s+club\b/gi, " ");
+
+  // -------------------------------------------------------
+  // Clean separators / duplicate whitespace.
+  // -------------------------------------------------------
+
+  name = name
+    .replace(/\s*[-–—]\s*$/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return name;
+}
 
 // =========================================================
 // DATABASE SCHEMA
@@ -225,19 +285,55 @@ export async function searchCachedGolfApiCourses({
   const values = [];
   const conditions = [];
 
-  if (name) {
-    values.push(
-      `%${String(name).trim().toLowerCase()}%`
+ if (name) {
+  const rawName =
+    String(name)
+      .trim()
+      .toLowerCase();
+
+  const normalisedName =
+    normaliseGolfApiSearchName(
+      name
     );
 
-    conditions.push(`
-      (
-        LOWER(course_name) LIKE $${values.length}
-        OR
-        LOWER(club_name) LIKE $${values.length}
-      )
-    `);
-  }
+  // First allow the exact/original search.
+  values.push(
+    `%${rawName}%`
+  );
+
+  const rawParam =
+    values.length;
+
+  // Then also search using TeeRadar's cleaned course name.
+  values.push(
+    `%${normalisedName}%`
+  );
+
+  const normalisedParam =
+    values.length;
+
+  conditions.push(`
+    (
+      LOWER(course_name)
+        LIKE $${rawParam}
+
+      OR
+
+      LOWER(club_name)
+        LIKE $${rawParam}
+
+      OR
+
+      LOWER(course_name)
+        LIKE $${normalisedParam}
+
+      OR
+
+      LOWER(club_name)
+        LIKE $${normalisedParam}
+    )
+  `);
+}
 
   if (state) {
     values.push(
