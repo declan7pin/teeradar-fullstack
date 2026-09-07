@@ -519,6 +519,7 @@ export async function findGolfApiCourses({
 
   return {
     source: "api",
+
     apiRequestsLeft:
       remote.apiRequestsLeft,
 
@@ -615,10 +616,16 @@ async function saveFullCourse({
         EXCLUDED.golfapi_club_id,
 
       club_name =
-        EXCLUDED.club_name,
+        COALESCE(
+          EXCLUDED.club_name,
+          golf_api_courses.club_name
+        ),
 
       course_name =
-        EXCLUDED.course_name,
+        COALESCE(
+          EXCLUDED.course_name,
+          golf_api_courses.course_name
+        ),
 
       city =
         EXCLUDED.city,
@@ -944,7 +951,7 @@ export async function getGolfApiGreenCoordinates(
   /*
    * GolfAPI.io:
    *
-   * poi = 1  -> green
+   * poi = 1 -> green
    *
    * location:
    * 1 -> front
