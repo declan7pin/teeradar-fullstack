@@ -6487,20 +6487,21 @@ try {
     }
 
     const providerId =
-      Number(match?.id);
+  String(
+    match?.id ||
+    match?.courseID ||
+    match?.provider_course_id ||
+    ""
+  ).trim();
 
-    if (
-      !Number.isFinite(providerId) ||
-      providerId <= 0
-    ) {
-      throw new Error(
-        "Provider course has no valid ID"
-      );
-    }
+if (!providerId) {
+  throw new Error(
+    "Provider course has no valid ID"
+  );
+}
 
-    providerGpsCourseId =
-      providerId;
-
+providerGpsCourseId =
+  providerId;
     providerGpsCourseName =
       String(
         match?.name ||
