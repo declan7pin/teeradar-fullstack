@@ -339,17 +339,33 @@ async function main() {
   );
 
 
-  // -------------------------------------------------------
-  // 7. SPRINGS ONLY:
-  // COMPARE HOLES 1–9 AGAINST 10–18
-  // -------------------------------------------------------
+// REPEATED 9-HOLE COURSES:
+// COMPARE HOLES 1–9 AGAINST 10–18
 
-  const isSprings =
-    searchName
-      .toLowerCase()
-      .includes("springs");
+  const selectedNumHoles =
+  Number(
+    selected.numHoles ??
+    selected.num_holes ??
+    first.course?.num_holes
+  ) || null;
 
-  if (isSprings) {
+const repeatedNineOverrides = [
+  "the springs",
+];
+
+const normalisedSearchName =
+  searchName
+    .toLowerCase()
+    .trim();
+
+const isRepeatedNine =
+  selectedNumHoles === 9 ||
+  repeatedNineOverrides.some(
+    (name) =>
+      normalisedSearchName.includes(name)
+  );
+
+if (isRepeatedNine) {
     console.log("");
 
     console.log(
