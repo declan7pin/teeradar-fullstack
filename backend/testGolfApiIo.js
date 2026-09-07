@@ -393,6 +393,108 @@ if (layoutName) {
     )
   );
 
+  // -------------------------------------------------------
+// 7. SCORECARD / PAR DATA
+// -------------------------------------------------------
+
+const parsMen =
+  Array.isArray(first.course?.pars_men)
+    ? first.course.pars_men
+    : [];
+
+const indexesMen =
+  Array.isArray(first.course?.indexes_men)
+    ? first.course.indexes_men
+    : [];
+
+const parsWomen =
+  Array.isArray(first.course?.pars_women)
+    ? first.course.pars_women
+    : [];
+
+const indexesWomen =
+  Array.isArray(first.course?.indexes_women)
+    ? first.course.indexes_women
+    : [];
+
+const maxScorecardHoles =
+  Math.max(
+    parsMen.length,
+    indexesMen.length,
+    parsWomen.length,
+    indexesWomen.length
+  );
+
+console.log("");
+
+console.log(
+  "========================================"
+);
+
+console.log(
+  "SCORECARD DATA"
+);
+
+console.log(
+  "========================================"
+);
+
+if (maxScorecardHoles === 0) {
+  console.log(
+    "⚠️ No par / stroke index data stored for this course."
+  );
+} else {
+  const scorecardRows = [];
+
+  for (
+    let hole = 1;
+    hole <= maxScorecardHoles;
+    hole += 1
+  ) {
+    scorecardRows.push({
+      hole,
+
+      menPar:
+        parsMen[hole - 1] ??
+        "—",
+
+      menIndex:
+        indexesMen[hole - 1] ??
+        "—",
+
+      womenPar:
+        parsWomen[hole - 1] ??
+        "—",
+
+      womenIndex:
+        indexesWomen[hole - 1] ??
+        "—",
+    });
+  }
+
+  console.table(
+    scorecardRows
+  );
+
+  console.log("");
+
+  console.log(
+    `Men pars returned: ${parsMen.length}`
+  );
+
+  console.log(
+    `Men indexes returned: ${indexesMen.length}`
+  );
+
+  console.log(
+    `Women pars returned: ${parsWomen.length}`
+  );
+
+  console.log(
+    `Women indexes returned: ${indexesWomen.length}`
+  );
+}
+
 
 // REPEATED 9-HOLE COURSES:
 // COMPARE HOLES 1–9 AGAINST 10–18
