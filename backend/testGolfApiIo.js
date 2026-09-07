@@ -37,7 +37,7 @@ async function main() {
 
   const search =
     await findGolfApiCourses({
-      name: "Armadale Public Golf Course",
+      name: "The Springs Public Golf Course",
       state: "WA",
       country: "Australia",
     });
