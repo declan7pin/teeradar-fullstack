@@ -624,6 +624,382 @@ export async function findGolfApiCourses({
   };
 }
 
+// =========================================================
+// SYNC GOLFAPI COURSE INTO TEERADAR SCORECARD COURSES
+//
+// This makes a successfully scanned GolfAPI course appear
+// automatically in TeeRadar's approved-course / analytics
+// table.
+//
+// IMPORTANT:
+// - pars + GPS can be populated automatically
+// - existing manual rating / slope / tee data is preserved
+// - existing distances are preserved
+// =========================================================
+
+async function syncGolfApiToScorecardCourses({
+  course,
+  coordinates,
+}) {
+  try {
+    const state =
+      String(
+        course?.state || ""
+      )
+        .trim()
+        .toUpperCase();
+
+    const holes =
+      Number(
+        course?.numHoles
+      );
+
+    if (
+      !state ||
+      ![9, 18].includes(holes)
+    ) {
+      console.log(
+        "ℹ️ GolfAPI scorecard sync skipped:",
+        {
+          state,
+          holes,
+          course:
+            course?.courseName ||
+            course?.clubName ||
+            null,
+        }
+      );
+
+      return null;
+    }
+
+
+    // -----------------------------------------------------
+    // PICK A USEFUL TEERADAR COURSE NAME
+    //
+    // GolfAPI sometimes returns:
+    // "18-hole course"
+    //
+    // In that case the club name is more useful.
+    // -----------------------------------------------------
+
+    const rawCourseName =
+      String(
+        course?.courseName || ""
+      ).trim();
+
+    const rawClubName =
+      String(
+        course?.clubName || ""
+      ).trim();
+
+    const genericCourseName =
+      /^(9|18)[ -]?hole course$/i
+        .test(rawCourseName);
+
+    let name =
+      genericCourseName
+        ? rawClubName
+        : (
+            rawCourseName ||
+            rawClubName
+          );
+
+    name =
+      normaliseGolfApiSearchName(
+        name
+      );
+
+    if (!name) {
+      console.log(
+        "ℹ️ GolfAPI scorecard sync skipped: no usable name"
+      );
+
+      return null;
+    }
+
+
+    // -----------------------------------------------------
+    // PARS
+    //
+    // Prefer men's pars because that is what TeeRadar
+    // currently stores as the standard published par set.
+    // -----------------------------------------------------
+
+    const pars =
+      Array.isArray(
+        course?.parsMen
+      )
+        ? course.parsMen
+            .slice(0, holes)
+            .map((value) => {
+              const n =
+                Number(value);
+
+              return Number.isFinite(n)
+                ? n
+                : null;
+            })
+        : [];
+
+    const validPars =
+      pars.length === holes &&
+      pars.every(
+        (value) =>
+          Number.isFinite(
+            Number(value)
+          ) &&
+          Number(value) >= 3 &&
+          Number(value) <= 6
+      );
+
+
+    // -----------------------------------------------------
+    // GREEN GPS
+    //
+    // scorecard_courses.green_points_json uses:
+    //
+    // {
+    //   hole: 1,
+    //   front: "-32.123, 115.123",
+    //   middle: "...",
+    //   back: "..."
+    // }
+    // -----------------------------------------------------
+
+    const greenMap =
+      new Map();
+
+    const rows =
+      Array.isArray(
+        coordinates
+      )
+        ? coordinates
+        : [];
+
+    for (
+      const row of rows
+    ) {
+      if (
+        Number(row?.poi) !== 1
+      ) {
+        continue;
+      }
+
+      const hole =
+        Number(
+          row?.hole
+        );
+
+      const location =
+        Number(
+          row?.location
+        );
+
+      const latitude =
+        Number(
+          row?.latitude
+        );
+
+      const longitude =
+        Number(
+          row?.longitude
+        );
+
+      if (
+        !Number.isInteger(hole) ||
+        hole < 1 ||
+        hole > holes ||
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude)
+      ) {
+        continue;
+      }
+
+      if (
+        !greenMap.has(hole)
+      ) {
+        greenMap.set(
+          hole,
+          {
+            hole,
+            front: null,
+            middle: null,
+            back: null,
+          }
+        );
+      }
+
+      const point =
+        `${latitude}, ${longitude}`;
+
+      const green =
+        greenMap.get(hole);
+
+      if (location === 1) {
+        green.front =
+          point;
+      }
+
+      if (location === 2) {
+        green.middle =
+          point;
+      }
+
+      if (location === 3) {
+        green.back =
+          point;
+      }
+    }
+
+    const greenPoints =
+      Array.from(
+        greenMap.values()
+      )
+        .sort(
+          (a, b) =>
+            a.hole - b.hole
+        );
+
+
+    // -----------------------------------------------------
+    // UPSERT INTO TEERADAR APPROVED COURSES
+    //
+    // Existing manually-maintained:
+    // - distances
+    // - course rating
+    // - slope
+    // - tee colour
+    //
+    // are deliberately NOT overwritten.
+    // -----------------------------------------------------
+
+    const result =
+      await db.query(
+        `
+        INSERT INTO scorecard_courses (
+          name,
+          state,
+          holes,
+          pars_json,
+          dists_json,
+          green_points_json,
+          updated_at
+        )
+
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4::jsonb,
+          '[]'::jsonb,
+          $5::jsonb,
+          NOW()
+        )
+
+        ON CONFLICT (
+          name,
+          state,
+          holes
+        )
+
+        DO UPDATE SET
+
+          pars_json =
+            CASE
+              WHEN jsonb_array_length(
+                EXCLUDED.pars_json
+              ) = EXCLUDED.holes
+                THEN EXCLUDED.pars_json
+
+              ELSE scorecard_courses.pars_json
+            END,
+
+          green_points_json =
+            CASE
+              WHEN jsonb_array_length(
+                EXCLUDED.green_points_json
+              ) > 0
+                THEN EXCLUDED.green_points_json
+
+              ELSE scorecard_courses.green_points_json
+            END,
+
+          updated_at =
+            NOW()
+
+        RETURNING
+          id,
+          name,
+          state,
+          holes,
+          pars_json,
+          green_points_json,
+          course_rating,
+          slope_rating,
+          tee_colour;
+        `,
+        [
+          name,
+          state,
+          holes,
+
+          JSON.stringify(
+            validPars
+              ? pars
+              : []
+          ),
+
+          JSON.stringify(
+            greenPoints
+          ),
+        ]
+      );
+
+    const saved =
+      result.rows[0] ||
+      null;
+
+    console.log(
+      "✅ GolfAPI synced to TeeRadar course analytics:",
+      {
+        id:
+          saved?.id ||
+          null,
+
+        name,
+
+        state,
+
+        holes,
+
+        pars:
+          validPars
+            ? pars.length
+            : 0,
+
+        gpsHoles:
+          greenPoints.length,
+      }
+    );
+
+    return saved;
+
+  } catch (err) {
+    /*
+     * IMPORTANT:
+     *
+     * A scorecard analytics sync failure must NOT break
+     * the actual GolfAPI GPS/course request.
+     */
+    console.warn(
+      "⚠️ GolfAPI → scorecard_courses sync failed:",
+      err?.message || err
+    );
+
+    return null;
+  }
+}
 
 // =========================================================
 // SAVE FULL COURSE DATA
@@ -976,6 +1352,11 @@ export async function loadGolfApiCourse(
     course,
     coordinates,
   });
+
+  await syncGolfApiToScorecardCourses({
+  course,
+  coordinates,
+});
 
   /*
    * If GPS didn't exist, saveFullCourse marks
