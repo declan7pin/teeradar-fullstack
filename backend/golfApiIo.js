@@ -96,6 +96,7 @@ function toBooleanGps(value) {
   );
 }
 
+
 // =========================================================
 // NORMALISE TEERADAR COURSE SEARCH NAMES
 //
@@ -125,37 +126,66 @@ function normaliseGolfApiSearchName(value) {
   // -------------------------------------------------------
 
   name = name
-    .replace(/\(\s*18\s*holes?[^)]*\)/gi, " ")
-    .replace(/\(\s*9\s*holes?[^)]*\)/gi, " ")
-    .replace(/\b18\s*holes?\b/gi, " ")
-    .replace(/\b9\s*holes?\b/gi, " ")
-    .replace(/\bfront\s*9\b/gi, " ")
-    .replace(/\bback\s*9\b/gi, " ")
-    .replace(/\bwalking\b/gi, " ");
+    .replace(
+      /\(\s*18\s*holes?[^)]*\)/gi,
+      " "
+    )
+    .replace(
+      /\(\s*9\s*holes?[^)]*\)/gi,
+      " "
+    )
+    .replace(
+      /\b18\s*holes?\b/gi,
+      " "
+    )
+    .replace(
+      /\b9\s*holes?\b/gi,
+      " "
+    )
+    .replace(
+      /\bfront\s*9\b/gi,
+      " "
+    )
+    .replace(
+      /\bback\s*9\b/gi,
+      " "
+    )
+    .replace(
+      /\bwalking\b/gi,
+      " "
+    );
 
   // -------------------------------------------------------
-  // Remove common generic golf-course wording.
+  // Remove generic golf course wording.
   //
-  // Do NOT remove words such as "links", "country",
-  // "estate", "lakes", "island", etc. because those may
-  // genuinely identify a different course/layout.
+  // Do NOT remove links / country / estate / lakes etc.
+  // because these may identify different layouts.
   // -------------------------------------------------------
 
   name = name
-    .replace(/\bgolf\s+course\b/gi, " ")
-    .replace(/\bgolf\s+club\b/gi, " ");
-
-  // -------------------------------------------------------
-  // Clean separators / duplicate whitespace.
-  // -------------------------------------------------------
+    .replace(
+      /\bgolf\s+course\b/gi,
+      " "
+    )
+    .replace(
+      /\bgolf\s+club\b/gi,
+      " "
+    );
 
   name = name
-    .replace(/\s*[-–—]\s*$/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(
+      /\s*[-–—]\s*$/g,
+      " "
+    )
+    .replace(
+      /\s+/g,
+      " "
+    )
     .trim();
 
   return name;
 }
+
 
 // =========================================================
 // DATABASE SCHEMA
@@ -285,55 +315,53 @@ export async function searchCachedGolfApiCourses({
   const values = [];
   const conditions = [];
 
- if (name) {
-  const rawName =
-    String(name)
-      .trim()
-      .toLowerCase();
+  if (name) {
+    const rawName =
+      String(name)
+        .trim()
+        .toLowerCase();
 
-  const normalisedName =
-    normaliseGolfApiSearchName(
-      name
+    const normalisedName =
+      normaliseGolfApiSearchName(
+        name
+      );
+
+    values.push(
+      `%${rawName}%`
     );
 
-  // First allow the exact/original search.
-  values.push(
-    `%${rawName}%`
-  );
+    const rawParam =
+      values.length;
 
-  const rawParam =
-    values.length;
+    values.push(
+      `%${normalisedName}%`
+    );
 
-  // Then also search using TeeRadar's cleaned course name.
-  values.push(
-    `%${normalisedName}%`
-  );
+    const normalisedParam =
+      values.length;
 
-  const normalisedParam =
-    values.length;
+    conditions.push(`
+      (
+        LOWER(course_name)
+          LIKE $${rawParam}
 
-  conditions.push(`
-    (
-      LOWER(course_name)
-        LIKE $${rawParam}
+        OR
 
-      OR
+        LOWER(club_name)
+          LIKE $${rawParam}
 
-      LOWER(club_name)
-        LIKE $${rawParam}
+        OR
 
-      OR
+        LOWER(course_name)
+          LIKE $${normalisedParam}
 
-      LOWER(course_name)
-        LIKE $${normalisedParam}
+        OR
 
-      OR
-
-      LOWER(club_name)
-        LIKE $${normalisedParam}
-    )
-  `);
-}
+        LOWER(club_name)
+          LIKE $${normalisedParam}
+      )
+    `);
+  }
 
   if (state) {
     values.push(
@@ -357,7 +385,9 @@ export async function searchCachedGolfApiCourses({
 
   const where =
     conditions.length
-      ? `WHERE ${conditions.join(" AND ")}`
+      ? `WHERE ${conditions.join(
+          " AND "
+        )}`
       : "";
 
   const result =
@@ -531,7 +561,9 @@ export async function searchGolfApiCourses({
     );
 
   const courses =
-    Array.isArray(json?.courses)
+    Array.isArray(
+      json?.courses
+    )
       ? json.courses
       : [];
 
@@ -554,10 +586,14 @@ export async function searchGolfApiCourses({
       json?.apiRequestsLeft ?? null,
 
     numCourses:
-      Number(json?.numCourses) || 0,
+      Number(
+        json?.numCourses
+      ) || 0,
 
     numAllCourses:
-      Number(json?.numAllCourses) || 0,
+      Number(
+        json?.numAllCourses
+      ) || 0,
 
     courses,
   };
@@ -576,7 +612,7 @@ export async function findGolfApiCourses({
   await ensureGolfApiCacheSchema();
 
   /*
-   * First look in our own database.
+   * First look in TeeRadar Postgres.
    */
   const cached =
     await searchCachedGolfApiCourses({
@@ -591,16 +627,18 @@ export async function findGolfApiCourses({
     );
 
     return {
-      source: "cache",
-      courses: cached,
+      source:
+        "cache",
+
+      courses:
+        cached,
     };
   }
 
   /*
    * Nothing cached.
    *
-   * Search GolfAPI.io.
-   * Search requests cost only 0.1 calls.
+   * GolfAPI search costs 0.1 calls.
    */
   console.log(
     "🌐 GolfAPI.io search required"
@@ -614,7 +652,8 @@ export async function findGolfApiCourses({
     });
 
   return {
-    source: "api",
+    source:
+      "api",
 
     apiRequestsLeft:
       remote.apiRequestsLeft,
@@ -624,17 +663,18 @@ export async function findGolfApiCourses({
   };
 }
 
+
 // =========================================================
 // SYNC GOLFAPI COURSE INTO TEERADAR SCORECARD COURSES
 //
-// This makes a successfully scanned GolfAPI course appear
-// automatically in TeeRadar's approved-course / analytics
-// table.
+// Keeps TeeRadar's approved-course / analytics table in sync
+// with the permanent GolfAPI cache.
 //
 // IMPORTANT:
-// - pars + GPS can be populated automatically
-// - existing manual rating / slope / tee data is preserved
-// - existing distances are preserved
+// - pars + GPS are populated automatically
+// - rating / slope / tee fill only blank TeeRadar values
+// - manual distances are preserved
+// - existing TeeRadar course names are reused where possible
 // =========================================================
 
 async function syncGolfApiToScorecardCourses({
@@ -663,6 +703,7 @@ async function syncGolfApiToScorecardCourses({
         {
           state,
           holes,
+
           course:
             course?.courseName ||
             course?.clubName ||
@@ -675,12 +716,7 @@ async function syncGolfApiToScorecardCourses({
 
 
     // -----------------------------------------------------
-    // PICK A USEFUL TEERADAR COURSE NAME
-    //
-    // GolfAPI sometimes returns:
-    // "18-hole course"
-    //
-    // In that case the club name is more useful.
+    // PICK A USEFUL COURSE NAME
     // -----------------------------------------------------
 
     const rawCourseName =
@@ -693,24 +729,34 @@ async function syncGolfApiToScorecardCourses({
         course?.clubName || ""
       ).trim();
 
+    /*
+     * GolfAPI sometimes returns:
+     * "18-hole course"
+     *
+     * In that case use the club name.
+     */
     const genericCourseName =
       /^(9|18)[ -]?hole course$/i
-        .test(rawCourseName);
+        .test(
+          rawCourseName
+        );
 
-    let name =
-      genericCourseName
-        ? rawClubName
-        : (
-            rawCourseName ||
-            rawClubName
-          );
+    const providerDisplayName =
+      (
+        genericCourseName
+          ? rawClubName
+          : (
+              rawCourseName ||
+              rawClubName
+            )
+      ).trim();
 
-    name =
+    const providerMatchName =
       normaliseGolfApiSearchName(
-        name
+        providerDisplayName
       );
 
-    if (!name) {
+    if (!providerDisplayName) {
       console.log(
         "ℹ️ GolfAPI scorecard sync skipped: no usable name"
       );
@@ -720,10 +766,69 @@ async function syncGolfApiToScorecardCourses({
 
 
     // -----------------------------------------------------
-    // PARS
+    // REUSE EXISTING TEERADAR COURSE NAME
     //
-    // Prefer men's pars because that is what TeeRadar
-    // currently stores as the standard published par set.
+    // Example:
+    //
+    // GolfAPI:
+    // "Gosnells"
+    //
+    // TeeRadar:
+    // "Gosnells Golf Club"
+    //
+    // Those should update the same row.
+    // -----------------------------------------------------
+
+    let name =
+      providerDisplayName;
+
+    try {
+      const existingResult =
+        await db.query(
+          `
+          SELECT
+            id,
+            name
+
+          FROM scorecard_courses
+
+          WHERE
+            UPPER(state) = $1
+            AND holes = $2
+          `,
+          [
+            state,
+            holes,
+          ]
+        );
+
+      const existingMatch =
+        existingResult.rows.find(
+          (row) =>
+            normaliseGolfApiSearchName(
+              row?.name
+            ) ===
+            providerMatchName
+        );
+
+      if (
+        existingMatch?.name
+      ) {
+        name =
+          String(
+            existingMatch.name
+          ).trim();
+      }
+    } catch (err) {
+      console.warn(
+        "⚠️ Could not check existing TeeRadar course name:",
+        err?.message || err
+      );
+    }
+
+
+    // -----------------------------------------------------
+    // PARS
     // -----------------------------------------------------
 
     const pars =
@@ -731,23 +836,35 @@ async function syncGolfApiToScorecardCourses({
         course?.parsMen
       )
         ? course.parsMen
-            .slice(0, holes)
-            .map((value) => {
-              const n =
-                Number(value);
+            .slice(
+              0,
+              holes
+            )
+            .map(
+              (value) => {
+                const n =
+                  Number(
+                    value
+                  );
 
-              return Number.isFinite(n)
-                ? n
-                : null;
-            })
+                return Number.isFinite(
+                  n
+                )
+                  ? n
+                  : null;
+              }
+            )
         : [];
 
     const validPars =
-      pars.length === holes &&
+      pars.length ===
+        holes &&
       pars.every(
         (value) =>
           Number.isFinite(
-            Number(value)
+            Number(
+              value
+            )
           ) &&
           Number(value) >= 3 &&
           Number(value) <= 6
@@ -755,9 +872,142 @@ async function syncGolfApiToScorecardCourses({
 
 
     // -----------------------------------------------------
+    // COURSE RATING + SLOPE + TEE
+    //
+    // GolfAPI stores:
+    //
+    // tee.courseRatingMen
+    // tee.slopeMen
+    //
+    // Prefer:
+    // White → Yellow → Blue → Black → Red
+    //
+    // Then first valid men's tee.
+    // -----------------------------------------------------
+
+    const tees =
+      Array.isArray(
+        course?.tees
+      )
+        ? course.tees
+        : [];
+
+    const validRatingTee =
+      (tee) => {
+        const rating =
+          toNullableNumber(
+            tee?.courseRatingMen
+          );
+
+        const slope =
+          toNullableNumber(
+            tee?.slopeMen
+          );
+
+        return (
+          rating !== null &&
+          rating > 20 &&
+          slope !== null &&
+          slope >= 55 &&
+          slope <= 155
+        );
+      };
+
+    const teePriority = [
+      "white",
+      "yellow",
+      "blue",
+      "black",
+      "red",
+    ];
+
+    let selectedTee =
+      null;
+
+    for (
+      const preferred
+      of teePriority
+    ) {
+      selectedTee =
+        tees.find(
+          (tee) => {
+            const teeName =
+              String(
+                tee?.teeName ||
+                ""
+              )
+                .trim()
+                .toLowerCase();
+
+            return (
+              validRatingTee(
+                tee
+              ) &&
+              (
+                teeName ===
+                  preferred ||
+
+                teeName.includes(
+                  preferred
+                )
+              )
+            );
+          }
+        ) || null;
+
+      if (selectedTee) {
+        break;
+      }
+    }
+
+    /*
+     * No standard colour-name match?
+     * Use first valid men's tee.
+     */
+    if (!selectedTee) {
+      selectedTee =
+        tees.find(
+          validRatingTee
+        ) || null;
+    }
+
+    const golfApiCourseRating =
+      selectedTee
+        ? toNullableNumber(
+            selectedTee
+              .courseRatingMen
+          )
+        : null;
+
+    const golfApiSlopeRating =
+      selectedTee
+        ? toNullableNumber(
+            selectedTee
+              .slopeMen
+          )
+        : null;
+
+    /*
+     * TeeRadar's tee_colour field currently holds the
+     * display tee name such as White / Blue / Red.
+     */
+    const golfApiTeeColour =
+      selectedTee
+        ? (
+            String(
+              selectedTee
+                .teeName ||
+              ""
+            ).trim() ||
+            null
+          )
+        : null;
+
+
+    // -----------------------------------------------------
     // GREEN GPS
     //
-    // scorecard_courses.green_points_json uses:
+    // scorecard_courses.green_points_json:
     //
     // {
     //   hole: 1,
@@ -780,8 +1030,13 @@ async function syncGolfApiToScorecardCourses({
     for (
       const row of rows
     ) {
+      /*
+       * GolfAPI POI 1 = green.
+       */
       if (
-        Number(row?.poi) !== 1
+        Number(
+          row?.poi
+        ) !== 1
       ) {
         continue;
       }
@@ -807,25 +1062,36 @@ async function syncGolfApiToScorecardCourses({
         );
 
       if (
-        !Number.isInteger(hole) ||
+        !Number.isInteger(
+          hole
+        ) ||
         hole < 1 ||
         hole > holes ||
-        !Number.isFinite(latitude) ||
-        !Number.isFinite(longitude)
+        !Number.isFinite(
+          latitude
+        ) ||
+        !Number.isFinite(
+          longitude
+        )
       ) {
         continue;
       }
 
       if (
-        !greenMap.has(hole)
+        !greenMap.has(
+          hole
+        )
       ) {
         greenMap.set(
           hole,
           {
             hole,
-            front: null,
-            middle: null,
-            back: null,
+            front:
+              null,
+            middle:
+              null,
+            back:
+              null,
           }
         );
       }
@@ -834,19 +1100,34 @@ async function syncGolfApiToScorecardCourses({
         `${latitude}, ${longitude}`;
 
       const green =
-        greenMap.get(hole);
+        greenMap.get(
+          hole
+        );
 
-      if (location === 1) {
+      /*
+       * GolfAPI location:
+       * 1 = front
+       * 2 = middle
+       * 3 = back
+       */
+
+      if (
+        location === 1
+      ) {
         green.front =
           point;
       }
 
-      if (location === 2) {
+      if (
+        location === 2
+      ) {
         green.middle =
           point;
       }
 
-      if (location === 3) {
+      if (
+        location === 3
+      ) {
         green.back =
           point;
       }
@@ -858,20 +1139,21 @@ async function syncGolfApiToScorecardCourses({
       )
         .sort(
           (a, b) =>
-            a.hole - b.hole
+            a.hole -
+            b.hole
         );
 
 
     // -----------------------------------------------------
     // UPSERT INTO TEERADAR APPROVED COURSES
     //
-    // Existing manually-maintained:
-    // - distances
-    // - course rating
-    // - slope
-    // - tee colour
+    // Manual values are preserved:
     //
-    // are deliberately NOT overwritten.
+    // dists_json:
+    // never overwritten
+    //
+    // course_rating / slope / tee:
+    // GolfAPI fills blanks only
     // -----------------------------------------------------
 
     const result =
@@ -884,6 +1166,9 @@ async function syncGolfApiToScorecardCourses({
           pars_json,
           dists_json,
           green_points_json,
+          course_rating,
+          slope_rating,
+          tee_colour,
           updated_at
         )
 
@@ -894,6 +1179,9 @@ async function syncGolfApiToScorecardCourses({
           $4::jsonb,
           '[]'::jsonb,
           $5::jsonb,
+          $6,
+          $7,
+          $8,
           NOW()
         )
 
@@ -907,22 +1195,73 @@ async function syncGolfApiToScorecardCourses({
 
           pars_json =
             CASE
-              WHEN jsonb_array_length(
-                EXCLUDED.pars_json
-              ) = EXCLUDED.holes
-                THEN EXCLUDED.pars_json
+              WHEN
+                jsonb_array_length(
+                  EXCLUDED.pars_json
+                ) =
+                EXCLUDED.holes
 
-              ELSE scorecard_courses.pars_json
+              THEN
+                EXCLUDED.pars_json
+
+              ELSE
+                scorecard_courses.pars_json
             END,
 
           green_points_json =
             CASE
-              WHEN jsonb_array_length(
-                EXCLUDED.green_points_json
-              ) > 0
-                THEN EXCLUDED.green_points_json
+              WHEN
+                jsonb_array_length(
+                  EXCLUDED.green_points_json
+                ) > 0
 
-              ELSE scorecard_courses.green_points_json
+              THEN
+                EXCLUDED.green_points_json
+
+              ELSE
+                scorecard_courses.green_points_json
+            END,
+
+          course_rating =
+            COALESCE(
+              scorecard_courses
+                .course_rating,
+
+              EXCLUDED
+                .course_rating
+            ),
+
+          slope_rating =
+            COALESCE(
+              scorecard_courses
+                .slope_rating,
+
+              EXCLUDED
+                .slope_rating
+            ),
+
+          tee_colour =
+            CASE
+              WHEN
+                NULLIF(
+                  TRIM(
+                    COALESCE(
+                      scorecard_courses
+                        .tee_colour,
+                      ''
+                    )
+                  ),
+                  ''
+                )
+                IS NULL
+
+              THEN
+                EXCLUDED
+                  .tee_colour
+
+              ELSE
+                scorecard_courses
+                  .tee_colour
             END,
 
           updated_at =
@@ -953,6 +1292,12 @@ async function syncGolfApiToScorecardCourses({
           JSON.stringify(
             greenPoints
           ),
+
+          golfApiCourseRating,
+
+          golfApiSlopeRating,
+
+          golfApiTeeColour,
         ]
       );
 
@@ -967,7 +1312,9 @@ async function syncGolfApiToScorecardCourses({
           saved?.id ||
           null,
 
-        name,
+        name:
+          saved?.name ||
+          name,
 
         state,
 
@@ -980,6 +1327,24 @@ async function syncGolfApiToScorecardCourses({
 
         gpsHoles:
           greenPoints.length,
+
+        courseRating:
+          saved
+            ?.course_rating ??
+          golfApiCourseRating,
+
+        slopeRating:
+          saved
+            ?.slope_rating ??
+          golfApiSlopeRating,
+
+        tee:
+          saved
+            ?.tee_colour ??
+          golfApiTeeColour,
+
+        teesFound:
+          tees.length,
       }
     );
 
@@ -987,10 +1352,8 @@ async function syncGolfApiToScorecardCourses({
 
   } catch (err) {
     /*
-     * IMPORTANT:
-     *
-     * A scorecard analytics sync failure must NOT break
-     * the actual GolfAPI GPS/course request.
+     * Never let Analytics syncing break the golfer's
+     * actual GPS/course request.
      */
     console.warn(
       "⚠️ GolfAPI → scorecard_courses sync failed:",
@@ -1000,6 +1363,7 @@ async function syncGolfApiToScorecardCourses({
     return null;
   }
 }
+
 
 // =========================================================
 // SAVE FULL COURSE DATA
@@ -1090,13 +1454,15 @@ async function saveFullCourse({
       club_name =
         COALESCE(
           EXCLUDED.club_name,
-          golf_api_courses.club_name
+          golf_api_courses
+            .club_name
         ),
 
       course_name =
         COALESCE(
           EXCLUDED.course_name,
-          golf_api_courses.course_name
+          golf_api_courses
+            .course_name
         ),
 
       city =
@@ -1157,19 +1523,33 @@ async function saveFullCourse({
         NOW()
     `,
     [
-      String(courseId),
+      String(
+        courseId
+      ),
 
       course?.clubID
-        ? String(course.clubID)
+        ? String(
+            course.clubID
+          )
         : null,
 
-      course?.clubName || null,
-      course?.courseName || null,
+      course?.clubName ||
+        null,
 
-      course?.city || null,
-      course?.state || null,
-      course?.country || null,
-      course?.address || null,
+      course?.courseName ||
+        null,
+
+      course?.city ||
+        null,
+
+      course?.state ||
+        null,
+
+      course?.country ||
+        null,
+
+      course?.address ||
+        null,
 
       toNullableNumber(
         course?.numHoles
@@ -1185,7 +1565,8 @@ async function saveFullCourse({
         course?.longitude
       ),
 
-      course?.measure || null,
+      course?.measure ||
+        null,
 
       JSON.stringify(
         Array.isArray(
@@ -1254,14 +1635,27 @@ export async function loadGolfApiCourse(
 ) {
   await ensureGolfApiCacheSchema();
 
-  const id =
-    String(courseId);
-
   /*
-   * -----------------------------------------
-   * 1. CHECK TEERADAR DATABASE FIRST
-   * -----------------------------------------
+   * IMPORTANT:
+   * Keep this ID as a string.
+   *
+   * GolfAPI IDs may start with zero.
    */
+  const id =
+    String(
+      courseId
+    ).trim();
+
+  if (!id) {
+    throw new Error(
+      "GolfAPI course ID is required"
+    );
+  }
+
+
+  // -------------------------------------------------------
+  // 1. CHECK TEERADAR DATABASE FIRST
+  // -------------------------------------------------------
 
   const cached =
     await getCachedGolfApiCourse(
@@ -1269,29 +1663,133 @@ export async function loadGolfApiCourse(
     );
 
   if (
-    cached?.course_data_loaded &&
+    cached
+      ?.course_data_loaded &&
     (
       !cached.has_gps ||
-      cached.coordinates_loaded
+      cached
+        .coordinates_loaded
     )
   ) {
     console.log(
       `✅ GolfAPI full cache hit: ${cached.course_name}`
     );
 
+
+    // -----------------------------------------------------
+    // BACKFILL ANALYTICS / APPROVED COURSE DATA
+    //
+    // This is what fixes existing cached courses such as
+    // Gosnells.
+    //
+    // No GolfAPI request is made here.
+    // -----------------------------------------------------
+
+    await syncGolfApiToScorecardCourses({
+      course: {
+        courseID:
+          cached
+            .golfapi_course_id,
+
+        clubID:
+          cached
+            .golfapi_club_id,
+
+        clubName:
+          cached
+            .club_name,
+
+        courseName:
+          cached
+            .course_name,
+
+        city:
+          cached.city,
+
+        state:
+          cached.state,
+
+        country:
+          cached.country,
+
+        address:
+          cached.address,
+
+        numHoles:
+          cached
+            .num_holes,
+
+        hasGPS:
+          cached.has_gps,
+
+        latitude:
+          cached.latitude,
+
+        longitude:
+          cached.longitude,
+
+        measure:
+          cached.measure,
+
+        parsMen:
+          Array.isArray(
+            cached.pars_men
+          )
+            ? cached.pars_men
+            : [],
+
+        indexesMen:
+          Array.isArray(
+            cached.indexes_men
+          )
+            ? cached.indexes_men
+            : [],
+
+        parsWomen:
+          Array.isArray(
+            cached.pars_women
+          )
+            ? cached.pars_women
+            : [],
+
+        indexesWomen:
+          Array.isArray(
+            cached.indexes_women
+          )
+            ? cached.indexes_women
+            : [],
+
+        tees:
+          Array.isArray(
+            cached.tees
+          )
+            ? cached.tees
+            : [],
+      },
+
+      coordinates:
+        Array.isArray(
+          cached.coordinates
+        )
+          ? cached.coordinates
+          : [],
+    });
+
     return {
-      source: "cache",
-      course: cached,
+      source:
+        "cache",
+
+      course:
+        cached,
     };
   }
 
-  /*
-   * -----------------------------------------
-   * 2. FETCH FULL COURSE DATA
-   *
-   * Costs 1 API call.
-   * -----------------------------------------
-   */
+
+  // -------------------------------------------------------
+  // 2. FETCH FULL COURSE DATA
+  //
+  // Costs 1 API call.
+  // -------------------------------------------------------
 
   console.log(
     `🌐 GolfAPI.io course fetch: ${id}`
@@ -1299,7 +1797,9 @@ export async function loadGolfApiCourse(
 
   const course =
     await golfApiGet(
-      `/courses/${encodeURIComponent(id)}?measureUnit=m`
+      `/courses/${encodeURIComponent(
+        id
+      )}?measureUnit=m`
     );
 
   const hasGps =
@@ -1307,17 +1807,17 @@ export async function loadGolfApiCourse(
       course?.hasGPS
     );
 
-  /*
-   * -----------------------------------------
-   * 3. FETCH GPS COORDINATES
-   *
-   * Only if the course has GPS.
-   *
-   * Costs 1 API call.
-   * -----------------------------------------
-   */
 
-  let coordinates = [];
+  // -------------------------------------------------------
+  // 3. FETCH GPS COORDINATES
+  //
+  // Only if GolfAPI says GPS exists.
+  //
+  // Costs 1 API call.
+  // -------------------------------------------------------
+
+  let coordinates =
+    [];
 
   let coordinatesLoaded =
     false;
@@ -1329,62 +1829,77 @@ export async function loadGolfApiCourse(
 
     const coordinateJson =
       await golfApiGet(
-        `/coordinates/${encodeURIComponent(id)}`
+        `/coordinates/${encodeURIComponent(
+          id
+        )}`
       );
 
     coordinates =
       Array.isArray(
-        coordinateJson?.coordinates
+        coordinateJson
+          ?.coordinates
       )
-        ? coordinateJson.coordinates
+        ? coordinateJson
+            .coordinates
         : [];
 
-    coordinatesLoaded = true;
+    coordinatesLoaded =
+      true;
   }
 
-  /*
-   * -----------------------------------------
-   * 4. SAVE EVERYTHING PERMANENTLY
-   * -----------------------------------------
-   */
+
+  // -------------------------------------------------------
+  // 4. SAVE EVERYTHING PERMANENTLY
+  // -------------------------------------------------------
 
   await saveFullCourse({
     course,
     coordinates,
   });
 
+  /*
+   * Also populate/update TeeRadar's approved course table.
+   */
   await syncGolfApiToScorecardCourses({
-  course,
-  coordinates,
-});
+    course,
+    coordinates,
+  });
+
 
   /*
-   * If GPS didn't exist, saveFullCourse marks
-   * coordinates_loaded false automatically
-   * via hasGPS.
+   * If GPS didn't exist, explicitly leave coordinate cache
+   * marked false for an existing lightweight search row.
    */
-
   if (
     !hasGps &&
-    cached?.golfapi_course_id
+    cached
+      ?.golfapi_course_id
   ) {
     await db.query(
       `
       UPDATE golf_api_courses
+
       SET
-        coordinates_loaded = FALSE,
-        updated_at = NOW()
-      WHERE golfapi_course_id = $1
+        coordinates_loaded =
+          FALSE,
+
+        updated_at =
+          NOW()
+
+      WHERE
+        golfapi_course_id =
+          $1
       `,
-      [id]
+      [
+        id,
+      ]
     );
   }
 
-  /*
-   * -----------------------------------------
-   * 5. RETURN SAVED VERSION
-   * -----------------------------------------
-   */
+
+  // -------------------------------------------------------
+  // 5. RETURN PERMANENT SAVED VERSION
+  // -------------------------------------------------------
 
   const saved =
     await getCachedGolfApiCourse(
@@ -1392,9 +1907,13 @@ export async function loadGolfApiCourse(
     );
 
   return {
-    source: "api",
+    source:
+      "api",
+
     coordinatesLoaded,
-    course: saved,
+
+    course:
+      saved,
   };
 }
 
@@ -1439,7 +1958,9 @@ export async function getGolfApiGreenCoordinates(
   return coordinates
     .filter(
       (row) =>
-        Number(row?.poi) === 1
+        Number(
+          row?.poi
+        ) === 1
     )
     .map(
       (row) => ({
@@ -1466,9 +1987,12 @@ export async function getGolfApiGreenCoordinates(
     )
     .filter(
       (row) =>
-        row.hole !== null &&
-        row.latitude !== null &&
-        row.longitude !== null
+        row.hole !==
+          null &&
+        row.latitude !==
+          null &&
+        row.longitude !==
+          null
     );
 }
 
@@ -1485,18 +2009,28 @@ export async function getGolfApiGreensByHole(
       courseId
     );
 
-  const holes = {};
+  const holes =
+    {};
 
-  for (const green of greens) {
+  for (
+    const green
+    of greens
+  ) {
     const hole =
       green.hole;
 
     if (!holes[hole]) {
       holes[hole] = {
         hole,
-        front: null,
-        middle: null,
-        back: null,
+
+        front:
+          null,
+
+        middle:
+          null,
+
+        back:
+          null,
       };
     }
 
@@ -1511,21 +2045,24 @@ export async function getGolfApiGreensByHole(
     if (
       green.location === 1
     ) {
-      holes[hole].front =
+      holes[hole]
+        .front =
         point;
     }
 
     if (
       green.location === 2
     ) {
-      holes[hole].middle =
+      holes[hole]
+        .middle =
         point;
     }
 
     if (
       green.location === 3
     ) {
-      holes[hole].back =
+      holes[hole]
+        .back =
         point;
     }
   }
@@ -1534,6 +2071,7 @@ export async function getGolfApiGreensByHole(
     holes
   ).sort(
     (a, b) =>
-      a.hole - b.hole
+      a.hole -
+      b.hole
   );
 }
