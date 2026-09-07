@@ -66,12 +66,6 @@ function getBestGreenPoint(hole) {
     return null;
   }
 
-  /*
-   * Prefer the middle point.
-   *
-   * If GolfAPI doesn't have middle,
-   * fall back to front, then back.
-   */
   return (
     hole.middle ||
     hole.front ||
@@ -106,20 +100,32 @@ async function main() {
 
 
   // -------------------------------------------------------
-  // 2. SEARCH FOR THE SPRINGS
+  // 2. COURSE NAME FROM TERMINAL
   //
-  // GolfAPI search costs 0.1 calls only
-  // if not already cached.
+  // Examples:
+  //
+  // node backend/testGolfApiIo.js "Araluen"
+  //
+  // node backend/testGolfApiIo.js "Gosnells"
+  //
+  // node backend/testGolfApiIo.js "The Springs Club"
   // -------------------------------------------------------
 
+  const searchName =
+    process.argv
+      .slice(2)
+      .join(" ")
+      .trim() ||
+    "The Springs Club";
+
   console.log(
-    "🔎 Searching for The Springs Public Golf Course..."
+    `🔎 Searching for ${searchName}...`
   );
 
   const search =
     await findGolfApiCourses({
       name:
-        "The Springs Club",
+        searchName,
 
       state:
         "WA",
@@ -144,7 +150,7 @@ async function main() {
     !search.courses.length
   ) {
     console.log(
-      "❌ GolfAPI.io did not find The Springs Club"
+      `❌ GolfAPI.io did not find ${searchName}`
     );
 
     process.exit(0);
@@ -189,15 +195,10 @@ async function main() {
 
 
   // -------------------------------------------------------
-  // 4. PICK THE GPS RESULT
+  // 4. PICK RESULT WITH GPS
   //
-  // The Springs returned two records:
-  //
-  // - 18-hole course, hasGPS = 1
-  // - Armadale, hasGPS = 0
-  //
-  // Prefer the result with GPS instead of blindly
-  // taking search.courses[0].
+  // Prefer a result that actually has GPS.
+  // If none have GPS, use the first match.
   // -------------------------------------------------------
 
   const selected =
@@ -339,215 +340,261 @@ async function main() {
 
 
   // -------------------------------------------------------
-  // 7. COMPARE HOLES 1–9 AGAINST 10–18
-  //
-  // The Springs is a physical 9-hole course played twice.
-  //
-  // If GolfAPI data is correct, hole pairs:
-  //
-  // 1 / 10
-  // 2 / 11
-  // ...
-  // 9 / 18
-  //
-  // should be very close geographically.
+  // 7. SPRINGS ONLY:
+  // COMPARE HOLES 1–9 AGAINST 10–18
   // -------------------------------------------------------
 
-  console.log("");
+  const isSprings =
+    searchName
+      .toLowerCase()
+      .includes("springs");
 
-  console.log(
-    "========================================"
-  );
+  if (isSprings) {
+    console.log("");
 
-  console.log(
-    "FRONT 9 vs BACK 9 GREEN COMPARISON"
-  );
+    console.log(
+      "========================================"
+    );
 
-  console.log(
-    "========================================"
-  );
+    console.log(
+      "FRONT 9 vs BACK 9 GREEN COMPARISON"
+    );
 
-  const comparisons = [];
+    console.log(
+      "========================================"
+    );
 
-  for (
-    let frontHole = 1;
-    frontHole <= 9;
-    frontHole += 1
-  ) {
-    const backHole =
-      frontHole + 9;
+    const comparisons = [];
 
-    const front =
-      greens.find(
-        (hole) =>
-          Number(hole.hole) ===
-          frontHole
-      );
-
-    const back =
-      greens.find(
-        (hole) =>
-          Number(hole.hole) ===
-          backHole
-      );
-
-    const frontPoint =
-      getBestGreenPoint(
-        front
-      );
-
-    const backPoint =
-      getBestGreenPoint(
-        back
-      );
-
-    if (
-      !frontPoint ||
-      !backPoint
+    for (
+      let frontHole = 1;
+      frontHole <= 9;
+      frontHole += 1
     ) {
+      const backHole =
+        frontHole + 9;
+
+      const front =
+        greens.find(
+          (hole) =>
+            Number(hole.hole) ===
+            frontHole
+        );
+
+      const back =
+        greens.find(
+          (hole) =>
+            Number(hole.hole) ===
+            backHole
+        );
+
+      const frontPoint =
+        getBestGreenPoint(
+          front
+        );
+
+      const backPoint =
+        getBestGreenPoint(
+          back
+        );
+
+      if (
+        !frontPoint ||
+        !backPoint
+      ) {
+        comparisons.push({
+          holes:
+            `${frontHole} vs ${backHole}`,
+
+          frontPoint:
+            frontPoint
+              ? `${frontPoint.latitude}, ${frontPoint.longitude}`
+              : "missing",
+
+          backPoint:
+            backPoint
+              ? `${backPoint.latitude}, ${backPoint.longitude}`
+              : "missing",
+
+          distanceMetres:
+            "—",
+
+          result:
+            "⚠️ missing GPS",
+        });
+
+        continue;
+      }
+
+      const metres =
+        distanceMetres(
+          Number(
+            frontPoint.latitude
+          ),
+
+          Number(
+            frontPoint.longitude
+          ),
+
+          Number(
+            backPoint.latitude
+          ),
+
+          Number(
+            backPoint.longitude
+          )
+        );
+
+      let result;
+
+      if (
+        metres <= 20
+      ) {
+        result =
+          "✅ same green";
+      } else if (
+        metres <= 40
+      ) {
+        result =
+          "⚠️ probably same";
+      } else {
+        result =
+          "❌ different green";
+      }
+
       comparisons.push({
         holes:
           `${frontHole} vs ${backHole}`,
 
         frontPoint:
-          frontPoint
-            ? `${frontPoint.latitude}, ${frontPoint.longitude}`
-            : "missing",
+          `${frontPoint.latitude}, ${frontPoint.longitude}`,
 
         backPoint:
-          backPoint
-            ? `${backPoint.latitude}, ${backPoint.longitude}`
-            : "missing",
+          `${backPoint.latitude}, ${backPoint.longitude}`,
 
         distanceMetres:
-          "—",
+          metres.toFixed(1),
 
-        result:
-          "⚠️ missing GPS",
+        result,
       });
-
-      continue;
     }
 
-    const metres =
-      distanceMetres(
-        Number(
-          frontPoint.latitude
-        ),
-
-        Number(
-          frontPoint.longitude
-        ),
-
-        Number(
-          backPoint.latitude
-        ),
-
-        Number(
-          backPoint.longitude
-        )
-      );
-
-    let result;
-
-    if (
-      metres <= 20
-    ) {
-      result =
-        "✅ same green";
-    } else if (
-      metres <= 40
-    ) {
-      result =
-        "⚠️ probably same";
-    } else {
-      result =
-        "❌ different green";
-    }
-
-    comparisons.push({
-      holes:
-        `${frontHole} vs ${backHole}`,
-
-      frontPoint:
-        `${frontPoint.latitude}, ${frontPoint.longitude}`,
-
-      backPoint:
-        `${backPoint.latitude}, ${backPoint.longitude}`,
-
-      distanceMetres:
-        metres.toFixed(1),
-
-      result,
-    });
-  }
-
-  console.table(
-    comparisons
-  );
-
-
-  // -------------------------------------------------------
-  // 8. SUMMARY OF FRONT/BACK COMPARISON
-  // -------------------------------------------------------
-
-  const validComparisons =
-    comparisons.filter(
-      (row) =>
-        row.distanceMetres !== "—"
+    console.table(
+      comparisons
     );
 
-  const sameGreen =
-    validComparisons.filter(
-      (row) =>
-        Number(
-          row.distanceMetres
-        ) <= 20
-    ).length;
 
-  const probablySame =
-    validComparisons.filter(
-      (row) => {
-        const distance =
+    // -----------------------------------------------------
+    // SPRINGS PAIR SUMMARY
+    // -----------------------------------------------------
+
+    const validComparisons =
+      comparisons.filter(
+        (row) =>
+          row.distanceMetres !== "—"
+      );
+
+    const sameGreen =
+      validComparisons.filter(
+        (row) =>
           Number(
             row.distanceMetres
-          );
+          ) <= 20
+      ).length;
 
-        return (
-          distance > 20 &&
-          distance <= 40
-        );
-      }
+    const probablySame =
+      validComparisons.filter(
+        (row) => {
+          const distance =
+            Number(
+              row.distanceMetres
+            );
+
+          return (
+            distance > 20 &&
+            distance <= 40
+          );
+        }
+      ).length;
+
+    const different =
+      validComparisons.filter(
+        (row) =>
+          Number(
+            row.distanceMetres
+          ) > 40
+      ).length;
+
+    console.log("");
+
+    console.log(
+      "PAIR SUMMARY"
+    );
+
+    console.log(
+      "------------"
+    );
+
+    console.log(
+      `✅ Same green <=20m: ${sameGreen}`
+    );
+
+    console.log(
+      `⚠️ Probably same 20–40m: ${probablySame}`
+    );
+
+    console.log(
+      `❌ Different >40m: ${different}`
+    );
+  }
+
+
+  // -------------------------------------------------------
+  // 8. COURSE GPS SUMMARY
+  // -------------------------------------------------------
+
+  const completeMiddle =
+    greens.filter(
+      (hole) =>
+        hole.middle
     ).length;
 
-  const different =
-    validComparisons.filter(
-      (row) =>
-        Number(
-          row.distanceMetres
-        ) > 40
+  const completeFront =
+    greens.filter(
+      (hole) =>
+        hole.front
+    ).length;
+
+  const completeBack =
+    greens.filter(
+      (hole) =>
+        hole.back
     ).length;
 
   console.log("");
 
   console.log(
-    "PAIR SUMMARY"
+    "GPS SUMMARY"
   );
 
   console.log(
-    "------------"
+    "-----------"
   );
 
   console.log(
-    `✅ Same green <=20m: ${sameGreen}`
+    `Holes with any green GPS: ${greens.length}`
   );
 
   console.log(
-    `⚠️ Probably same 20–40m: ${probablySame}`
+    `Front points: ${completeFront}`
   );
 
   console.log(
-    `❌ Different >40m: ${different}`
+    `Middle points: ${completeMiddle}`
+  );
+
+  console.log(
+    `Back points: ${completeBack}`
   );
 
 
@@ -555,8 +602,6 @@ async function main() {
   // 9. LOAD SAME COURSE AGAIN
   //
   // This MUST come from TeeRadar's database.
-  //
-  // No GolfAPI.io calls should occur.
   // -------------------------------------------------------
 
   console.log("");
