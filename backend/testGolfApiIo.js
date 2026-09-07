@@ -37,7 +37,7 @@ async function main() {
 
   const search =
     await findGolfApiCourses({
-      name: "The Springs Public Golf Course",
+      name: "The Springs Club",
       state: "WA",
       country: "Australia",
     });
@@ -55,7 +55,7 @@ async function main() {
 
   if (!search.courses.length) {
     console.log(
-      "❌ GolfAPI.io did not find Armadale Public Golf Course."
+      "❌ GolfAPI.io did not find The Springs Club"
     );
 
     process.exit(0);
