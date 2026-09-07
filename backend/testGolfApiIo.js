@@ -32,7 +32,7 @@ async function main() {
   // -------------------------------------------------------
 
   console.log(
-    "🔎 Searching for Armadale Public Golf Course..."
+    "🔎 Searching for The Springs Public Golf Course..."
   );
 
   const search =
