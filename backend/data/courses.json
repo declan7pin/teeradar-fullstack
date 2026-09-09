@@ -3870,6 +3870,15 @@
 "url": "https://yarrabend.miclub.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2025-12-09&feeGroupId=993"
 },
 {
+"name": "Heidelberg Golf Club (18 holes)",
+"provider": "MiClub",
+"state": "VIC",
+"holes": 18,
+"lat": -37.731967,
+"lng": 145.111556,
+"url": "https://members.heidelberggc.com.au/guests/bookings/ViewPublicTimesheet.msp?bookingResourceId=3000000&selectedDate=2026-09-10&feeGroupId=7759339"
+},
+{
 "name": "Freeway Golf Course (18 holes)",
 "provider": "Quick18",
 "state": "VIC",
