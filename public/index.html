@@ -2091,6 +2091,326 @@ html.app-mode .app-bottom-nav
     min-height: 150px;
   }
 }
+
+    /* =========================================================
+   WEBSITE APP DOWNLOAD PROMO
+   Website only - hidden inside installed app
+   ========================================================= */
+
+#websiteAppPromo {
+  position: fixed;
+  inset: 0;
+  z-index: 300000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+
+  background: rgba(15, 23, 42, 0.72);
+
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+#websiteAppPromo.show {
+  display: flex;
+}
+
+/* Never show this inside the installed iOS / Android app */
+html.app-mode #websiteAppPromo {
+  display: none !important;
+}
+
+.website-app-promo-card {
+  position: relative;
+
+  width: 100%;
+  max-width: 470px;
+  max-height: 90vh;
+
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+
+  padding: 26px 20px 20px;
+
+  border-radius: 24px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 25px 70px rgba(15, 23, 42, 0.38);
+
+  animation: websiteAppPromoIn .24s ease-out;
+}
+
+@keyframes websiteAppPromoIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.website-app-promo-close {
+  position: absolute;
+
+  top: 12px;
+  right: 12px;
+
+  width: 38px;
+  height: 38px;
+
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+
+  background: #f1f5f4;
+  color: #475569;
+
+  font-size: 26px;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+.website-app-promo-logo {
+  display: block;
+
+  width: 84px;
+  height: 84px;
+
+  margin: 0 auto 12px;
+
+  object-fit: contain;
+
+  border-radius: 20px;
+}
+
+.website-app-promo-card h2 {
+  margin: 0 25px 8px;
+
+  color: #10212a;
+
+  font-size: 25px;
+  font-weight: 900;
+  line-height: 1.12;
+
+  text-align: center;
+}
+
+.website-app-promo-sub {
+  max-width: 400px;
+
+  margin: 0 auto 18px;
+
+  color: #64748b;
+
+  font-size: 13px;
+  line-height: 1.45;
+
+  text-align: center;
+}
+
+.website-app-promo-features {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.website-app-promo-feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+
+  padding: 11px 12px;
+
+  border: 1px solid #e5eeee;
+  border-radius: 14px;
+
+  background: #f8fbfa;
+}
+
+.website-app-promo-icon {
+  display: grid;
+  place-items: center;
+
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+
+  border-radius: 11px;
+
+  background: #e0f2f1;
+
+  font-size: 17px;
+}
+
+.website-app-promo-feature-copy {
+  min-width: 0;
+}
+
+.website-app-promo-feature-copy strong {
+  display: block;
+
+  margin-bottom: 2px;
+
+  color: #153c33;
+
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.website-app-promo-feature-copy span {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.website-app-promo-stores {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+
+  margin-top: 18px;
+}
+
+.website-app-store-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+
+  width: 100%;
+  min-height: 58px;
+
+  padding: 10px 16px;
+
+  border-radius: 14px;
+
+  background: #000000;
+  color: #ffffff;
+
+  text-decoration: none;
+}
+
+.website-app-store-logo {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.website-app-store-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  line-height: 1;
+}
+
+.website-app-store-copy small {
+  margin-bottom: 3px;
+
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.website-app-store-copy strong {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.website-google-coming {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+
+  width: 100%;
+  min-height: 54px;
+
+  padding: 10px 16px;
+
+  border: 1px solid #d9e2df;
+  border-radius: 14px;
+
+  background: #f3f6f5;
+  color: #64748b;
+}
+
+.website-google-icon {
+  font-size: 22px;
+}
+
+.website-google-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  line-height: 1;
+}
+
+.website-google-copy small {
+  margin-bottom: 3px;
+
+  font-size: 10px;
+}
+
+.website-google-copy strong {
+  font-size: 16px;
+}
+
+.website-app-promo-continue {
+  width: 100%;
+
+  margin-top: 11px;
+  padding: 10px;
+
+  border: 0;
+
+  background: transparent;
+  color: #64748b;
+
+  font-size: 13px;
+  font-weight: 800;
+
+  cursor: pointer;
+}
+
+.website-app-promo-continue:hover {
+  color: #00796b;
+}
+
+body.website-app-promo-open {
+  overflow: hidden;
+}
+
+@media (max-width: 520px) {
+
+  #websiteAppPromo {
+    padding: 10px;
+  }
+
+  .website-app-promo-card {
+    max-height: 94vh;
+
+    padding:
+      24px
+      15px
+      calc(16px + env(safe-area-inset-bottom, 0px));
+
+    border-radius: 20px;
+  }
+
+  .website-app-promo-card h2 {
+    font-size: 22px;
+  }
+}
   </style>
 </head>
 <body>
@@ -2102,6 +2422,224 @@ html.app-mode .app-bottom-nav
   />
   <div id="appSplashWord"></div>
 </div>
+
+  <!-- =====================================================
+     WEBSITE ONLY - APP DOWNLOAD PROMO
+     ===================================================== -->
+
+<div
+  id="websiteAppPromo"
+  aria-hidden="true"
+>
+  <div
+    class="website-app-promo-card"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="websiteAppPromoTitle"
+  >
+
+    <button
+      class="website-app-promo-close"
+      id="websiteAppPromoClose"
+      type="button"
+      aria-label="Close"
+    >
+      ×
+    </button>
+
+    <img
+      class="website-app-promo-logo"
+      src="/assets/DBC5197C-F872-4ACB-921E-649F590A1030.png"
+      alt="TeeRadar"
+    />
+
+    <h2 id="websiteAppPromoTitle">
+      Get the full TeeRadar experience
+    </h2>
+
+    <p class="website-app-promo-sub">
+      Search tee times on the web, or take your whole golf game
+      with you in the TeeRadar app.
+    </p>
+
+
+    <div class="website-app-promo-features">
+
+      <div class="website-app-promo-feature">
+
+        <div class="website-app-promo-icon">
+          📍
+        </div>
+
+        <div class="website-app-promo-feature-copy">
+          <strong>GPS distances</strong>
+
+          <span>
+            Live distance to the front, middle and back
+            of the green.
+          </span>
+        </div>
+
+      </div>
+
+
+      <div class="website-app-promo-feature">
+
+        <div class="website-app-promo-icon">
+          🗺️
+        </div>
+
+        <div class="website-app-promo-feature-copy">
+          <strong>Interactive course maps</strong>
+
+          <span>
+            Tap the map to measure distances to targets
+            and the green.
+          </span>
+        </div>
+
+      </div>
+
+
+      <div class="website-app-promo-feature">
+
+        <div class="website-app-promo-icon">
+          ⛳
+        </div>
+
+        <div class="website-app-promo-feature-copy">
+          <strong>Digital scorecards</strong>
+
+          <span>
+            Keep your rounds and scores together
+            in one place.
+          </span>
+        </div>
+
+      </div>
+
+
+      <div class="website-app-promo-feature">
+
+        <div class="website-app-promo-icon">
+          👥
+        </div>
+
+        <div class="website-app-promo-feature-copy">
+          <strong>Score together</strong>
+
+          <span>
+            One person can score for the group and save
+            the scorecard to everyone's account.
+          </span>
+        </div>
+
+      </div>
+
+
+      <div class="website-app-promo-feature">
+
+        <div class="website-app-promo-icon">
+          🔴
+        </div>
+
+        <div class="website-app-promo-feature-copy">
+          <strong>Follow friends live</strong>
+
+          <span>
+            View friends' live rounds and follow their
+            progress in real time.
+          </span>
+        </div>
+
+      </div>
+
+
+      <div class="website-app-promo-feature">
+
+        <div class="website-app-promo-icon">
+          📊
+        </div>
+
+        <div class="website-app-promo-feature-copy">
+          <strong>Track your game</strong>
+
+          <span>
+            View your rounds, golf stats and compare
+            your game with friends.
+          </span>
+        </div>
+
+      </div>
+
+
+      <div class="website-app-promo-feature">
+
+        <div class="website-app-promo-icon">
+          🔔
+        </div>
+
+        <div class="website-app-promo-feature-copy">
+          <strong>Tee time alerts</strong>
+
+          <span>
+            Get notified when tee times you're looking
+            for become available.
+          </span>
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="website-app-promo-stores">
+
+      <a
+        class="website-app-store-button"
+        id="websiteAppStoreButton"
+        href="https://apps.apple.com/au/app/teeradar/id6782527687"
+        target="_blank"
+        rel="noopener"
+      >
+        <span class="website-app-store-logo">
+          
+        </span>
+
+        <span class="website-app-store-copy">
+          <small>Download on the</small>
+          <strong>App Store</strong>
+        </span>
+      </a>
+
+
+      <div class="website-google-coming">
+
+        <span class="website-google-icon">
+          ▶
+        </span>
+
+        <span class="website-google-copy">
+          <small>Google Play</small>
+          <strong>Coming soon</strong>
+        </span>
+
+      </div>
+
+    </div>
+
+
+    <button
+      class="website-app-promo-continue"
+      id="websiteAppPromoContinue"
+      type="button"
+    >
+      Continue on website
+    </button>
+
+  </div>
+</div>
+  
 <header>
   <div class="nav-wrap">
     <a class="brand" href="/course-admin-login.html" aria-label="Course admin login">
@@ -2754,6 +3292,230 @@ function runAppSplashOnce(){
       }, 350);
     }, 2500);
   });
+}
+
+  /* =========================================================
+   WEBSITE APP DOWNLOAD PROMO
+   ========================================================= */
+
+const WEBSITE_APP_PROMO_KEY =
+  "teeradar_website_app_promo_seen_at";
+
+const WEBSITE_APP_PROMO_DAYS = 7;
+
+
+/*
+ * Returns true only when running as the normal website.
+ * TeeRadar already adds app-mode when running in Capacitor.
+ */
+function isTeeRadarWebsite() {
+
+  return !document.documentElement
+    .classList
+    .contains("app-mode");
+}
+
+
+/*
+ * Decide whether the visitor should see the promo.
+ */
+function shouldShowWebsiteAppPromo() {
+
+  if (!isTeeRadarWebsite()) {
+    return false;
+  }
+
+  try {
+
+    const lastSeen = Number(
+      localStorage.getItem(
+        WEBSITE_APP_PROMO_KEY
+      ) || "0"
+    );
+
+    /*
+     * Never shown before.
+     */
+    if (!lastSeen) {
+      return true;
+    }
+
+    const sevenDays =
+      WEBSITE_APP_PROMO_DAYS *
+      24 *
+      60 *
+      60 *
+      1000;
+
+    return (
+      Date.now() - lastSeen >= sevenDays
+    );
+
+  } catch (error) {
+
+    /*
+     * If localStorage is unavailable,
+     * still allow the promotion to display.
+     */
+    return true;
+  }
+}
+
+
+/*
+ * Open the promo.
+ */
+function showWebsiteAppPromo() {
+
+  if (!shouldShowWebsiteAppPromo()) {
+    return;
+  }
+
+  const promo =
+    document.getElementById(
+      "websiteAppPromo"
+    );
+
+  if (!promo) return;
+
+  promo.classList.add("show");
+
+  promo.setAttribute(
+    "aria-hidden",
+    "false"
+  );
+
+  document.body.classList.add(
+    "website-app-promo-open"
+  );
+}
+
+
+/*
+ * Close the promo and remember the time.
+ */
+function closeWebsiteAppPromo() {
+
+  const promo =
+    document.getElementById(
+      "websiteAppPromo"
+    );
+
+  if (promo) {
+
+    promo.classList.remove("show");
+
+    promo.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+  }
+
+  document.body.classList.remove(
+    "website-app-promo-open"
+  );
+
+  try {
+
+    localStorage.setItem(
+      WEBSITE_APP_PROMO_KEY,
+      String(Date.now())
+    );
+
+  } catch (error) {
+    console.warn(
+      "Could not save app promo state:",
+      error
+    );
+  }
+}
+
+
+/*
+ * Wire the close buttons.
+ */
+function initWebsiteAppPromo() {
+
+  if (!isTeeRadarWebsite()) {
+    return;
+  }
+
+  const closeButton =
+    document.getElementById(
+      "websiteAppPromoClose"
+    );
+
+  const continueButton =
+    document.getElementById(
+      "websiteAppPromoContinue"
+    );
+
+  const promo =
+    document.getElementById(
+      "websiteAppPromo"
+    );
+
+
+  if (closeButton) {
+
+    closeButton.addEventListener(
+      "click",
+      closeWebsiteAppPromo
+    );
+  }
+
+
+  if (continueButton) {
+
+    continueButton.addEventListener(
+      "click",
+      closeWebsiteAppPromo
+    );
+  }
+
+
+  /*
+   * Clicking the dark area outside the card
+   * also closes the popup.
+   */
+  if (promo) {
+
+    promo.addEventListener(
+      "click",
+      (event) => {
+
+        if (event.target === promo) {
+          closeWebsiteAppPromo();
+        }
+      }
+    );
+  }
+}
+
+
+/*
+ * Called only after the TeeRadar splash
+ * has completely disappeared.
+ */
+function queueWebsiteAppPromo() {
+
+  if (!isTeeRadarWebsite()) {
+    return;
+  }
+
+  if (!shouldShowWebsiteAppPromo()) {
+    return;
+  }
+
+  /*
+   * Gives the home screen a fraction of a second
+   * to become visible before the modal appears.
+   */
+  setTimeout(() => {
+
+    showWebsiteAppPromo();
+
+  }, 400);
 }
 
   function trackEvent(type, payload) {
@@ -4659,6 +5421,15 @@ function initNotificationBell() {
    * Allow the installed-app bottom menu to appear.
    */
   document.documentElement.classList.add("app-ready");
+
+
+  /*
+   * Website-only App Store promotion.
+   * This runs AFTER the splash has completely finished.
+   */
+  initWebsiteAppPromo();
+  queueWebsiteAppPromo();
+
 
   const mobileMenuBtn = document.getElementById("mobileMenuBtn");
     const mainNav = document.getElementById("mainNav");
