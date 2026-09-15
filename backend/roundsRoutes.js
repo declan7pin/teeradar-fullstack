@@ -3291,13 +3291,42 @@ router.get("/friend/:friendUserId/profile", requireAuth, async (req, res) => {
   }
 });
 
-// Friend can view a shared round scorecard
+// -------------------------------------------------
+// Friend can view a friend's round scorecard
+//
+// Supports:
+// - rounds owned by the friend
+// - shared master rounds where the friend is
+//   Player 2 / 3 / 4
+// -------------------------------------------------
 router.get("/friend/:friendUserId/round/:roundId", requireAuth, async (req, res) => {
   try {
     const myUserId = Number(req.user?.id);
     const friendUserId = Number(req.params.friendUserId);
     const roundId = Number(req.params.roundId);
 
+    if (!myUserId) {
+      return res.status(401).json({
+        ok: false,
+        error: "unauthorised",
+      });
+    }
+
+    if (!Number.isFinite(friendUserId) || friendUserId <= 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_friend_user_id",
+      });
+    }
+
+    if (!Number.isFinite(roundId) || roundId <= 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_round_id",
+      });
+    }
+
+    // Confirm the viewer and target user are friends.
     const friendship = await db.query(
       `
       SELECT id
@@ -3314,23 +3343,155 @@ router.get("/friend/:friendUserId/round/:roundId", requireAuth, async (req, res)
     );
 
     if (!friendship.rows.length) {
-      return res.status(403).json({ ok: false, error: "not_friends" });
+      return res.status(403).json({
+        ok: false,
+        error: "not_friends",
+      });
     }
+
+    // -------------------------------------------------
+    // Work out which player slot belongs to the friend.
+    //
+    // Owner = Player 1
+    // Shared participant = their round_participants slot
+    // -------------------------------------------------
+    const accessRes = await db.query(
+      `
+      SELECT
+        r.id,
+        r.user_id AS owner_user_id,
+
+        CASE
+          WHEN r.user_id = $2 THEN 1
+          ELSE rp.player_number
+        END AS player_number
+
+      FROM rounds r
+
+      LEFT JOIN round_participants rp
+        ON rp.round_id = r.id
+       AND rp.user_id = $2
+
+      WHERE r.id = $1
+        AND r.linked_master_round_id IS NULL
+        AND (
+          r.user_id = $2
+          OR rp.user_id = $2
+        )
+
+      LIMIT 1;
+      `,
+      [roundId, friendUserId]
+    );
+
+    if (!accessRes.rows.length) {
+      return res.status(404).json({
+        ok: false,
+        error: "round_not_found",
+      });
+    }
+
+    const playerNumber = Number(
+      accessRes.rows[0].player_number || 1
+    );
 
     const data = await getRoundWithHoles(roundId);
 
-    if (!data || Number(data.round.user_id) !== friendUserId) {
-      return res.status(404).json({ ok: false, error: "round_not_found" });
+    if (!data) {
+      return res.status(404).json({
+        ok: false,
+        error: "round_not_found",
+      });
     }
+
+    // -------------------------------------------------
+    // Return the friend's own score in each hole.
+    //
+    // This is important because getRoundWithHoles()
+    // contains the shared master scorecard.
+    // -------------------------------------------------
+    const holes = (data.holes || []).map((hole) => {
+      const strokesByPlayer =
+        hole.strokes_by_player &&
+        typeof hole.strokes_by_player === "object"
+          ? hole.strokes_by_player
+          : {};
+
+      const puttsByPlayer =
+        hole.putts_by_player &&
+        typeof hole.putts_by_player === "object"
+          ? hole.putts_by_player
+          : {};
+
+      let playerStrokes = null;
+      let playerPutts = null;
+
+      if (playerNumber === 1) {
+        playerStrokes =
+          strokesByPlayer["1"] ??
+          hole.strokes ??
+          null;
+
+        playerPutts =
+          puttsByPlayer["1"] ??
+          hole.putts ??
+          null;
+      } else {
+        playerStrokes =
+          strokesByPlayer[String(playerNumber)] ??
+          null;
+
+        playerPutts =
+          puttsByPlayer[String(playerNumber)] ??
+          null;
+      }
+
+      return {
+        ...hole,
+
+        // Keep full shared values available
+        strokes_by_player: strokesByPlayer,
+        putts_by_player: puttsByPlayer,
+
+        // But expose the selected friend's values as
+        // the normal strokes/putts fields so the
+        // existing frontend can render the scorecard.
+        strokes:
+          playerStrokes === null
+            ? null
+            : Number(playerStrokes),
+
+        putts:
+          playerPutts === null
+            ? null
+            : Number(playerPutts),
+      };
+    });
 
     return res.json({
       ok: true,
-      round: data.round,
-      holes: data.holes,
+
+      round: {
+        ...data.round,
+
+        // Tell frontend which participant is being viewed.
+        player_number: playerNumber,
+        viewed_user_id: friendUserId,
+      },
+
+      holes,
     });
   } catch (err) {
-    console.error("GET friend round error:", err);
-    return res.status(500).json({ ok: false, error: "internal error" });
+    console.error(
+      "GET /api/rounds/friend/:friendUserId/round/:roundId error:",
+      err
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "internal error",
+      detail: err?.message,
+    });
   }
 });
 
