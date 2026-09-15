@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+/>
+
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  
   <title>TeeRadar — Friend Scorecard</title>
   <link rel="icon" type="image/png" href="/assets/icon-192.png" />
 
@@ -15,12 +22,30 @@
     }
 
     .wrap{
+  box-sizing:border-box;
+  width:100%;
   max-width:860px;
   margin:0 auto;
-  padding:
-    calc(env(safe-area-inset-top, 0px) + 20px)
-    14px
-    90px;
+
+  padding-top:max(
+    20px,
+    calc(env(safe-area-inset-top, 0px) + 12px)
+  );
+
+  padding-left:max(
+    14px,
+    env(safe-area-inset-left, 0px)
+  );
+
+  padding-right:max(
+    14px,
+    env(safe-area-inset-right, 0px)
+  );
+
+  padding-bottom:max(
+    90px,
+    calc(env(safe-area-inset-bottom, 0px) + 30px)
+  );
 }
 
     .back{
