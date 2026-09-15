@@ -2819,11 +2819,23 @@ router.get("/friend/:friendUserId/profile", requireAuth, async (req, res) => {
     const myUserId = Number(req.user?.id);
     const friendUserId = Number(req.params.friendUserId);
 
-    if (!myUserId) return res.status(401).json({ ok: false, error: "unauthorised" });
-    if (!Number.isFinite(friendUserId) || friendUserId <= 0) {
-      return res.status(400).json({ ok: false, error: "invalid friend user id" });
+    if (!myUserId) {
+      return res.status(401).json({
+        ok: false,
+        error: "unauthorised",
+      });
     }
 
+    if (!Number.isFinite(friendUserId) || friendUserId <= 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid friend user id",
+      });
+    }
+
+    // -------------------------------------------------
+    // Make sure these two users are actually friends
+    // -------------------------------------------------
     const friendship = await db.query(
       `
       SELECT id
@@ -2840,16 +2852,22 @@ router.get("/friend/:friendUserId/profile", requireAuth, async (req, res) => {
     );
 
     if (!friendship.rows.length) {
-      return res.status(403).json({ ok: false, error: "not_friends" });
+      return res.status(403).json({
+        ok: false,
+        error: "not_friends",
+      });
     }
 
+    // -------------------------------------------------
+    // Friend details
+    // -------------------------------------------------
     const friendRes = await db.query(
       `
       SELECT
-  id,
-  email,
-  COALESCE(NULLIF(display_name, ''), email) AS name
-FROM users
+        id,
+        email,
+        COALESCE(NULLIF(display_name, ''), email) AS name
+      FROM users
       WHERE id = $1
       LIMIT 1;
       `,
@@ -2858,177 +2876,413 @@ FROM users
 
     const friend = friendRes.rows[0] || null;
 
-    const roundsRes = await db.query(
-      `
-      SELECT
-        r.id,
-        r.course,
-        r.layout,
-        r.state,
-        r.holes,
-        r.created_at,
-        r.players_count,
-        r.player_names,
-        COALESCE(SUM(rh.strokes), 0)::int AS total_score,
-        COALESCE(SUM(rh.par), 0)::int AS total_par,
-        COALESCE(SUM(rh.putts), 0)::int AS total_putts,
-        COUNT(rh.id)::int AS holes_entered,
+    const displayName =
+      friend?.name && !String(friend.name).includes("@")
+        ? String(friend.name)
+        : friend?.email
+          ? String(friend.email).split("@")[0]
+          : "Friend";
 
-        COALESCE(SUM(CASE WHEN rh.strokes IS NOT NULL AND rh.par IS NOT NULL AND rh.strokes = rh.par - 2 THEN 1 ELSE 0 END), 0)::int AS eagles,
-        COALESCE(SUM(CASE WHEN rh.strokes IS NOT NULL AND rh.par IS NOT NULL AND rh.strokes = rh.par - 1 THEN 1 ELSE 0 END), 0)::int AS birdies,
-        COALESCE(SUM(CASE WHEN rh.strokes IS NOT NULL AND rh.par IS NOT NULL AND rh.strokes = rh.par THEN 1 ELSE 0 END), 0)::int AS pars
-      FROM rounds r
-      LEFT JOIN round_holes rh ON rh.round_id = r.id
-      WHERE r.user_id = $1
-      GROUP BY r.id
-      ORDER BY r.created_at DESC
-      LIMIT 50;
-      `,
-      [friendUserId]
-    );
+    // -------------------------------------------------
+    // Load rounds for a user.
+    //
+    // IMPORTANT:
+    // This includes:
+    //   - rounds they own
+    //   - rounds where they are Player 2 / 3 / 4
+    //
+    // It also reads their correct score slot from
+    // strokes_by_player / putts_by_player.
+    // -------------------------------------------------
+    async function loadUserRounds(userId, limit = 50) {
+      const result = await db.query(
+        `
+        SELECT
+          r.id,
+          r.course,
+          r.layout,
+          r.state,
+          r.holes,
+          r.created_at,
+          r.players_count,
+          r.player_names,
 
-    const rounds = (roundsRes.rows || []).map((r) => {
-      const totalScore = Number(r.total_score || 0);
-      const totalPar = Number(r.total_par || 0);
-      const totalPutts = Number(r.total_putts || 0);
-      const holesEntered = Number(r.holes_entered || 0);
-      const holes = Number(r.holes || 0);
-      const complete = holesEntered >= holes && totalScore > 0;
+          CASE
+            WHEN r.user_id = $1 THEN 1
+            ELSE rp.player_number
+          END AS player_number,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN (
+                  CASE
+                    WHEN r.user_id = $1 THEN 1
+                    ELSE rp.player_number
+                  END
+                ) = 1
+                THEN COALESCE(
+                  NULLIF(rh.strokes_by_player ->> '1', '')::int,
+                  rh.strokes
+                )
+                ELSE NULLIF(
+                  rh.strokes_by_player ->>
+                  (
+                    CASE
+                      WHEN r.user_id = $1 THEN 1
+                      ELSE rp.player_number
+                    END
+                  )::text,
+                  ''
+                )::int
+              END
+            ),
+            0
+          )::int AS total_score,
+
+          COALESCE(
+            SUM(rh.par),
+            0
+          )::int AS total_par,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN (
+                  CASE
+                    WHEN r.user_id = $1 THEN 1
+                    ELSE rp.player_number
+                  END
+                ) = 1
+                THEN COALESCE(
+                  NULLIF(rh.putts_by_player ->> '1', '')::int,
+                  rh.putts
+                )
+                ELSE NULLIF(
+                  rh.putts_by_player ->>
+                  (
+                    CASE
+                      WHEN r.user_id = $1 THEN 1
+                      ELSE rp.player_number
+                    END
+                  )::text,
+                  ''
+                )::int
+              END
+            ),
+            0
+          )::int AS total_putts,
+
+          COUNT(
+            CASE
+              WHEN
+                CASE
+                  WHEN (
+                    CASE
+                      WHEN r.user_id = $1 THEN 1
+                      ELSE rp.player_number
+                    END
+                  ) = 1
+                  THEN COALESCE(
+                    NULLIF(rh.strokes_by_player ->> '1', '')::int,
+                    rh.strokes
+                  )
+                  ELSE NULLIF(
+                    rh.strokes_by_player ->>
+                    (
+                      CASE
+                        WHEN r.user_id = $1 THEN 1
+                        ELSE rp.player_number
+                      END
+                    )::text,
+                    ''
+                  )::int
+                END IS NOT NULL
+              THEN 1
+            END
+          )::int AS holes_entered,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN
+                  (
+                    CASE
+                      WHEN (
+                        CASE
+                          WHEN r.user_id = $1 THEN 1
+                          ELSE rp.player_number
+                        END
+                      ) = 1
+                      THEN COALESCE(
+                        NULLIF(rh.strokes_by_player ->> '1', '')::int,
+                        rh.strokes
+                      )
+                      ELSE NULLIF(
+                        rh.strokes_by_player ->>
+                        (
+                          CASE
+                            WHEN r.user_id = $1 THEN 1
+                            ELSE rp.player_number
+                          END
+                        )::text,
+                        ''
+                      )::int
+                    END
+                  ) = rh.par - 2
+                THEN 1
+                ELSE 0
+              END
+            ),
+            0
+          )::int AS eagles,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN
+                  (
+                    CASE
+                      WHEN (
+                        CASE
+                          WHEN r.user_id = $1 THEN 1
+                          ELSE rp.player_number
+                        END
+                      ) = 1
+                      THEN COALESCE(
+                        NULLIF(rh.strokes_by_player ->> '1', '')::int,
+                        rh.strokes
+                      )
+                      ELSE NULLIF(
+                        rh.strokes_by_player ->>
+                        (
+                          CASE
+                            WHEN r.user_id = $1 THEN 1
+                            ELSE rp.player_number
+                          END
+                        )::text,
+                        ''
+                      )::int
+                    END
+                  ) = rh.par - 1
+                THEN 1
+                ELSE 0
+              END
+            ),
+            0
+          )::int AS birdies,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN
+                  (
+                    CASE
+                      WHEN (
+                        CASE
+                          WHEN r.user_id = $1 THEN 1
+                          ELSE rp.player_number
+                        END
+                      ) = 1
+                      THEN COALESCE(
+                        NULLIF(rh.strokes_by_player ->> '1', '')::int,
+                        rh.strokes
+                      )
+                      ELSE NULLIF(
+                        rh.strokes_by_player ->>
+                        (
+                          CASE
+                            WHEN r.user_id = $1 THEN 1
+                            ELSE rp.player_number
+                          END
+                        )::text,
+                        ''
+                      )::int
+                    END
+                  ) = rh.par
+                THEN 1
+                ELSE 0
+              END
+            ),
+            0
+          )::int AS pars
+
+        FROM rounds r
+
+        LEFT JOIN round_participants rp
+          ON rp.round_id = r.id
+         AND rp.user_id = $1
+
+        LEFT JOIN round_holes rh
+          ON rh.round_id = r.id
+
+        WHERE r.linked_master_round_id IS NULL
+          AND (
+            r.user_id = $1
+            OR rp.user_id = $1
+          )
+
+        GROUP BY
+          r.id,
+          rp.player_number
+
+        ORDER BY r.created_at DESC
+        LIMIT $2;
+        `,
+        [userId, limit]
+      );
+
+      return (result.rows || []).map((r) => {
+        const totalScore = Number(r.total_score || 0);
+        const totalPar = Number(r.total_par || 0);
+        const totalPutts = Number(r.total_putts || 0);
+        const holesEntered = Number(r.holes_entered || 0);
+        const holes = Number(r.holes || 0);
+
+        const complete =
+          holes > 0 &&
+          holesEntered >= holes &&
+          totalScore > 0;
+
+        return {
+          ...r,
+          player_number: Number(r.player_number || 1),
+          total_score: totalScore,
+          total_par: totalPar,
+          total_putts: totalPutts,
+          holes_entered: holesEntered,
+          complete,
+          score_vs_par:
+            complete && totalPar > 0
+              ? totalScore - totalPar
+              : null,
+          eagles: Number(r.eagles || 0),
+          birdies: Number(r.birdies || 0),
+          pars: Number(r.pars || 0),
+        };
+      });
+    }
+
+    // Friend's rounds
+    const rounds = await loadUserRounds(friendUserId, 50);
+
+    // Logged-in user's rounds for comparison
+    const myRounds = await loadUserRounds(myUserId, 50);
+
+    // -------------------------------------------------
+    // Stats builder
+    // -------------------------------------------------
+    function buildStats(roundList) {
+      const completed = (roundList || []).filter(
+        (r) => r.complete === true
+      );
+
+      const completed9 = completed.filter(
+        (r) => Number(r.holes) === 9
+      );
+
+      const completed18 = completed.filter(
+        (r) => Number(r.holes) === 18
+      );
+
+      function avg(list, key) {
+        if (!list.length) return null;
+
+        return Math.round(
+          list.reduce(
+            (sum, r) => sum + Number(r[key] || 0),
+            0
+          ) / list.length
+        );
+      }
+
+      function best(list) {
+        if (!list.length) return null;
+
+        const scores = list
+          .map((r) => Number(r.total_score || 0))
+          .filter((n) => n > 0);
+
+        return scores.length
+          ? Math.min(...scores)
+          : null;
+      }
 
       return {
-        ...r,
-        total_score: totalScore,
-        total_par: totalPar,
-        total_putts: totalPutts,
-        holes_entered: holesEntered,
-        complete,
-        score_vs_par: complete && totalPar > 0 ? totalScore - totalPar : null,
-        eagles: Number(r.eagles || 0),
-        birdies: Number(r.birdies || 0),
-        pars: Number(r.pars || 0),
+        rounds_played: completed.length,
+        total_rounds: roundList.length,
+
+        best_score_9: best(completed9),
+        best_score_18: best(completed18),
+
+        average_score_9: avg(
+          completed9,
+          "total_score"
+        ),
+
+        average_score_18: avg(
+          completed18,
+          "total_score"
+        ),
+
+        average_putts_9: avg(
+          completed9,
+          "total_putts"
+        ),
+
+        average_putts_18: avg(
+          completed18,
+          "total_putts"
+        ),
+
+        total_eagles: completed.reduce(
+          (sum, r) =>
+            sum + Number(r.eagles || 0),
+          0
+        ),
+
+        total_birdies: completed.reduce(
+          (sum, r) =>
+            sum + Number(r.birdies || 0),
+          0
+        ),
+
+        total_pars: completed.reduce(
+          (sum, r) =>
+            sum + Number(r.pars || 0),
+          0
+        ),
       };
-    });
-
-    const completed = rounds.filter((r) => r.complete);
-    const completed9 = completed.filter((r) => Number(r.holes) === 9);
-    const completed18 = completed.filter((r) => Number(r.holes) === 18);
-
-    function avgScore(list) {
-      if (!list.length) return null;
-      return Math.round(list.reduce((sum, r) => sum + Number(r.total_score || 0), 0) / list.length);
     }
 
-    function avgPutts(list) {
-      if (!list.length) return null;
-      return Math.round(list.reduce((sum, r) => sum + Number(r.total_putts || 0), 0) / list.length);
-    }
-
-    function bestScore(list) {
-      if (!list.length) return null;
-      return Math.min(...list.map((r) => Number(r.total_score || 0)).filter(Boolean));
-    }
-
-    const displayName =
-  friend?.name && !String(friend.name).includes("@")
-    ? String(friend.name)
-    : friend?.email
-      ? String(friend.email).split("@")[0]
-      : "Friend";
-
-    const myStatsRes = await db.query(
-  `
-  SELECT
-    r.id,
-    r.holes,
-    COALESCE(SUM(rh.strokes), 0)::int AS total_score,
-    COALESCE(SUM(rh.par), 0)::int AS total_par,
-    COALESCE(SUM(rh.putts), 0)::int AS total_putts,
-    COUNT(rh.id)::int AS holes_entered,
-    COALESCE(SUM(CASE WHEN rh.strokes IS NOT NULL AND rh.par IS NOT NULL AND rh.strokes = rh.par - 2 THEN 1 ELSE 0 END), 0)::int AS eagles,
-    COALESCE(SUM(CASE WHEN rh.strokes IS NOT NULL AND rh.par IS NOT NULL AND rh.strokes = rh.par - 1 THEN 1 ELSE 0 END), 0)::int AS birdies,
-    COALESCE(SUM(CASE WHEN rh.strokes IS NOT NULL AND rh.par IS NOT NULL AND rh.strokes = rh.par THEN 1 ELSE 0 END), 0)::int AS pars
-  FROM rounds r
-  LEFT JOIN round_holes rh ON rh.round_id = r.id
-  WHERE r.user_id = $1
-  GROUP BY r.id
-  `,
-  [myUserId]
-);
-
-function buildStats(rows) {
-  const all = (rows || []).map((r) => {
-    const holes = Number(r.holes || 0);
-    const score = Number(r.total_score || 0);
-    const putts = Number(r.total_putts || 0);
-    const holesEntered = Number(r.holes_entered || 0);
-    const complete = holesEntered >= holes && score > 0;
-
-    return {
-      ...r,
-      holes,
-      total_score: score,
-      total_putts: putts,
-      complete,
-      eagles: Number(r.eagles || 0),
-      birdies: Number(r.birdies || 0),
-      pars: Number(r.pars || 0),
-    };
-  }).filter((r) => r.complete);
-
-  const r9 = all.filter((r) => r.holes === 9);
-  const r18 = all.filter((r) => r.holes === 18);
-
-  const avg = (list, key) =>
-    list.length ? Math.round(list.reduce((s, r) => s + Number(r[key] || 0), 0) / list.length) : null;
-
-  const best = (list) =>
-    list.length ? Math.min(...list.map((r) => Number(r.total_score || 0)).filter(Boolean)) : null;
-
-  return {
-    rounds_played: all.length,
-    best_score_9: best(r9),
-    best_score_18: best(r18),
-    average_score_9: avg(r9, "total_score"),
-    average_score_18: avg(r18, "total_score"),
-    average_putts_9: avg(r9, "total_putts"),
-    average_putts_18: avg(r18, "total_putts"),
-    total_eagles: all.reduce((s, r) => s + Number(r.eagles || 0), 0),
-    total_birdies: all.reduce((s, r) => s + Number(r.birdies || 0), 0),
-    total_pars: all.reduce((s, r) => s + Number(r.pars || 0), 0),
-  };
-}
-
-const myStats = buildStats(myStatsRes.rows || []);
-const friendStats = {
-  rounds_played: completed.length,
-  total_rounds: rounds.length,
-  best_score_9: bestScore(completed9),
-  best_score_18: bestScore(completed18),
-  average_score_9: avgScore(completed9),
-  average_score_18: avgScore(completed18),
-  average_putts_9: avgPutts(completed9),
-  average_putts_18: avgPutts(completed18),
-  total_eagles: completed.reduce((sum, r) => sum + Number(r.eagles || 0), 0),
-  total_birdies: completed.reduce((sum, r) => sum + Number(r.birdies || 0), 0),
-  total_pars: completed.reduce((sum, r) => sum + Number(r.pars || 0), 0),
-};
+    const friendStats = buildStats(rounds);
+    const myStats = buildStats(myRounds);
 
     return res.json({
-  ok: true,
-  friend: {
-    ...(friend || {}),
-    name: friend?.name || displayName,
-  },
-  stats: friendStats,
-  myStats,
-  compareStats: {
-    me: myStats,
-    friend: friendStats,
-  },
-  rounds,
-});
+      ok: true,
+
+      friend: {
+        ...(friend || {}),
+        name: friend?.name || displayName,
+      },
+
+      stats: friendStats,
+
+      myStats,
+
+      compareStats: {
+        me: myStats,
+        friend: friendStats,
+      },
+
+      rounds,
+    });
   } catch (err) {
-    console.error("GET /api/rounds/friend/:friendUserId/profile error:", err);
+    console.error(
+      "GET /api/rounds/friend/:friendUserId/profile error:",
+      err
+    );
+
     return res.status(500).json({
       ok: false,
       error: "internal error",
