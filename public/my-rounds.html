@@ -818,6 +818,34 @@
   cursor:pointer;
 }
 
+  .gpsRecenterBtn{
+  position:absolute;
+  right:14px;
+  bottom:14px;
+  z-index:1000;
+
+  width:46px;
+  height:46px;
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  border:1px solid #d7e2e5;
+  border-radius:50%;
+
+  background:#ffffff;
+  color:#006b57;
+
+  font-size:26px;
+  font-weight:900;
+  line-height:1;
+
+  box-shadow:0 3px 12px rgba(0,0,0,.18);
+
+  cursor:pointer;
+}
+
 /*
  * Full-screen GPS map.
  */
@@ -3283,16 +3311,27 @@ html.app-mode .activeRoundCard{
     ⛶ Full screen
   </button>
 </div>
-  <div
-    id="gpsMap"
-    class="gpsMapLoading"
-  >
-    Enable GPS to load the satellite map.
-  </div>
+
+<div
+  id="gpsMap"
+  class="gpsMapLoading"
+>
+  Enable GPS to load the satellite map.
+</div>
+
+<button
+  id="gpsRecenterBtn"
+  class="gpsRecenterBtn"
+  type="button"
+  aria-label="Recenter map on your location"
+  title="Recenter"
+>
+  ◎ Recenter
+</button>
 
 </div>
 
-  <!-- ✅ GPS DISTANCES -->
+<!-- ✅ GPS DISTANCES -->
   <div class="gpsDistanceCard" id="gpsDistanceCard">
     <div class="gpsDistanceTop">
       <div>
@@ -4049,6 +4088,11 @@ const gpsMapStatus =
 const gpsMapFullscreenBtn =
   document.getElementById(
     "gpsMapFullscreenBtn"
+  );
+
+    const gpsRecenterBtn =
+  document.getElementById(
+    "gpsRecenterBtn"
   );
 
 // ✅ premium state
@@ -5578,6 +5622,61 @@ gpsMap.on(
   );
 
   return gpsMap;
+}
+
+// =========================================================
+// GPS MAP — RECENTER ON PLAYER
+// =========================================================
+
+if (gpsRecenterBtn) {
+  gpsRecenterBtn.addEventListener(
+    "click",
+    () => {
+      if (
+        !gpsMap ||
+        !currentGpsPosition
+      ) {
+        return;
+      }
+
+      const latitude =
+        Number(
+          currentGpsPosition.latitude
+        );
+
+      const longitude =
+        Number(
+          currentGpsPosition.longitude
+        );
+
+      if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude)
+      ) {
+        return;
+      }
+
+      gpsMap.setView(
+        [
+          latitude,
+          longitude
+        ],
+        18,
+        {
+          animate: true
+        }
+      );
+
+      setTimeout(
+        () => {
+          try {
+            gpsMap.invalidateSize();
+          } catch (_) {}
+        },
+        100
+      );
+    }
+  );
 }
 
     // =========================================================
