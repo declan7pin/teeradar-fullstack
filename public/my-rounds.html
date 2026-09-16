@@ -818,31 +818,38 @@
   cursor:pointer;
 }
 
-  .gpsRecenterBtn{
-  position:absolute;
-  right:14px;
-  bottom:14px;
-  z-index:1000;
-
-  width:46px;
-  height:46px;
+  .gpsMapActions{
+  flex:0 0 auto;
 
   display:flex;
   align-items:center;
+  justify-content:flex-end;
+
+  gap:7px;
+}
+
+.gpsRecenterBtn{
+  flex:0 0 auto;
+
+  min-height:40px;
+
+  padding:8px 11px;
+
+  display:inline-flex;
+  align-items:center;
   justify-content:center;
+  gap:4px;
 
   border:1px solid #d7e2e5;
-  border-radius:50%;
+  border-radius:13px;
 
   background:#ffffff;
   color:#006b57;
 
-  font-size:26px;
-  font-weight:900;
-  line-height:1;
+  font-size:.72rem;
+  font-weight:950;
 
-  box-shadow:0 3px 12px rgba(0,0,0,.18);
-
+  white-space:nowrap;
   cursor:pointer;
 }
 
@@ -3307,9 +3314,27 @@ html.app-mode .activeRoundCard{
     class="gpsMapFullscreenBtn"
     id="gpsMapFullscreenBtn"
     type="button"
+  <div class="gpsMapActions">
+
+  <button
+    id="gpsRecenterBtn"
+    class="gpsRecenterBtn"
+    type="button"
+    aria-label="Recentre map on your location"
+    title="Recentre"
+  >
+    ◎ Recentre
+  </button>
+
+  <button
+    class="gpsMapFullscreenBtn"
+    id="gpsMapFullscreenBtn"
+    type="button"
   >
     ⛶ Full screen
   </button>
+
+</div>
 </div>
 
 <div
@@ -3318,16 +3343,6 @@ html.app-mode .activeRoundCard{
 >
   Enable GPS to load the satellite map.
 </div>
-
-<button
-  id="gpsRecenterBtn"
-  class="gpsRecenterBtn"
-  type="button"
-  aria-label="Recenter map on your location"
-  title="Recenter"
->
-  ◎ Recenter
-</button>
 
 </div>
 
