@@ -11280,23 +11280,36 @@ const isOwner =
     loggedInUserId === roundOwnerUserId
   );
 
-deleteRoundBtn.disabled =
-  !isOwner;
+/*
+ * Owner:
+ *   Delete the entire master round.
+ *
+ * Shared participant:
+ *   Remove the round from their own account only.
+ */
+if (deleteRoundBtn) {
+  deleteRoundBtn.disabled = false;
+  deleteRoundBtn.style.display = "inline-flex";
 
-deleteRoundBtn.style.display =
-  isOwner
-    ? "inline-flex"
-    : "none";
-    
-    if (roundModeDeleteBtn) {
-
-  roundModeDeleteBtn.style.display =
+  deleteRoundBtn.textContent =
     isOwner
-      ? "inline-flex"
-      : "none";
+      ? "Delete"
+      : "Remove";
+}
 
-  roundModeDeleteBtn.disabled =
-    !isOwner;
+if (roundModeDeleteBtn) {
+  roundModeDeleteBtn.disabled = false;
+  roundModeDeleteBtn.style.display = "inline-flex";
+
+  roundModeDeleteBtn.textContent =
+    isOwner
+      ? "Delete round"
+      : "Remove from My Rounds";
+
+  roundModeDeleteBtn.dataset.action =
+    isOwner
+      ? "delete"
+      : "remove";
 }
 
       const course = String(round.course || "").trim();
@@ -13811,52 +13824,129 @@ if (roundModeExitBtn) {
   }
 }
     async function deleteRound(){
-      if (!currentRoundId) return;
-      // ✅ Guest mode: delete locally
-if (!isLoggedIn()){
-  guestDeleteRound(currentRoundId);
-  try { localStorage.removeItem(roundNamesKey(currentRoundId)); } catch {}
+  if (!currentRoundId) return;
 
-  setToast(rightToast, "Round deleted (guest).", true);
+  // ✅ Guest mode: delete locally
+  if (!isLoggedIn()){
+    guestDeleteRound(currentRoundId);
+
+    try {
+      localStorage.removeItem(
+        roundNamesKey(currentRoundId)
+      );
+    } catch {}
+
+    setToast(
+      rightToast,
+      "Round deleted (guest).",
+      true
+    );
+
+    currentRoundId = null;
+    currentRound = null;
+
+    await renderScorecard(null);
+    await safeFetchRounds();
+
+    return;
+  }
+
+  await api(
+    `/api/rounds/${encodeURIComponent(currentRoundId)}`,
+    {
+      method: "DELETE"
+    }
+  );
+
+  // ✅ clean up local names for this round
+  try {
+    localStorage.removeItem(
+      roundNamesKey(currentRoundId)
+    );
+  } catch {}
+
+  setToast(
+    rightToast,
+    "Round deleted.",
+    true
+  );
 
   currentRoundId = null;
   currentRound = null;
+
   await renderScorecard(null);
   await safeFetchRounds();
-  return;
 }
 
-      await api(`/api/rounds/${encodeURIComponent(currentRoundId)}`, { method:"DELETE" });
 
-      // ✅ clean up local names for this round
-      try { localStorage.removeItem(roundNamesKey(currentRoundId)); } catch {}
+/*
+ * Shared participant only:
+ * remove the round from their account without
+ * deleting the master scorecard.
+ */
+async function removeRoundFromMyRounds(){
+  if (!currentRoundId) return;
 
-      setToast(rightToast, "Round deleted.", true);
+  if (!isLoggedIn()) {
+    return;
+  }
 
-      currentRoundId = null;
-      currentRound = null;
-      await renderScorecard(null);
-      await safeFetchRounds();
+  await api(
+    `/api/rounds/${encodeURIComponent(currentRoundId)}/participation`
+    {
+      method: "DELETE"
     }
+  );
 
-    // -----------------------------
-    // Safe wrappers
-    // -----------------------------
+  try {
+    localStorage.removeItem(
+      roundNamesKey(currentRoundId)
+    );
+  } catch {}
+
+  setToast(
+    rightToast,
+    "Round removed from My Rounds.",
+    true
+  );
+
+  currentRoundId = null;
+  currentRound = null;
+
+  await renderScorecard(null);
+  await safeFetchRounds();
+}
+
+
+// -----------------------------
+// Safe wrappers
+// -----------------------------
 function getRoundIdFromUrl(){
   try{
     const url = new URL(window.location.href);
-    const v = String(url.searchParams.get("roundId") || "").trim();
+    const v = String(
+      url.searchParams.get("roundId") || ""
+    ).trim();
+
     return v || "";
   }catch{
     return "";
   }
 }
 
+
 function clearRoundIdFromUrl(){
   try{
     const url = new URL(window.location.href);
+
     url.searchParams.delete("roundId");
-    window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+
+    window.history.replaceState(
+      {},
+      "",
+      url.pathname +
+        (url.search ? url.search : "")
+    );
   }catch{}
 }
 function getStartUpcomingIdFromUrl(){
@@ -14200,16 +14290,48 @@ saveAllBtn.addEventListener("click", async () => {
   }
 });
 
-deleteRoundBtn.addEventListener("click", async () => {
-  const ok = confirm("Delete this round? This cannot be undone.");
-  if (!ok) return;
+deleteRoundBtn.addEventListener(
+  "click",
+  async () => {
 
-  try {
-    await deleteRound();
-  } catch (err) {
-    setToast(rightToast, "Delete failed: " + (err.message || "error"), false);
+    const action =
+      roundModeDeleteBtn?.dataset.action ||
+      "delete";
+
+    const isRemoving =
+      action === "remove";
+
+    const ok =
+      confirm(
+        isRemoving
+          ? "Remove this round from My Rounds?\n\nThis will remove the round from your account only. It will not delete the scorecard for the other players."
+          : "Delete this round? This cannot be undone."
+      );
+
+    if (!ok) return;
+
+    try {
+
+      if (isRemoving) {
+        await removeRoundFromMyRounds();
+      } else {
+        await deleteRound();
+      }
+
+    } catch (err) {
+
+      setToast(
+        rightToast,
+        isRemoving
+          ? "Remove failed: " +
+              (err?.message || "error")
+          : "Delete failed: " +
+              (err?.message || "error"),
+        false
+      );
+    }
   }
-});
+);
 
 if (roundModeDeleteBtn) {
 
@@ -14217,10 +14339,20 @@ if (roundModeDeleteBtn) {
     "click",
     async () => {
 
+      const action =
+        roundModeDeleteBtn.dataset.action ||
+        "delete";
+
+      const isRemoving =
+        action === "remove";
+
+      const message =
+        isRemoving
+          ? "Remove this round from My Rounds?\n\nThis will remove the round from your account only. It will not delete the scorecard for the other players."
+          : "Delete this round? This cannot be undone.";
+
       const ok =
-        confirm(
-          "Delete this round? This cannot be undone."
-        );
+        confirm(message);
 
       if (!ok) {
         return;
@@ -14230,14 +14362,21 @@ if (roundModeDeleteBtn) {
         true;
 
       roundModeDeleteBtn.textContent =
-        "Deleting…";
+        isRemoving
+          ? "Removing…"
+          : "Deleting…";
 
       try {
 
-        await deleteRound();
+        if (isRemoving) {
+          await removeRoundFromMyRounds();
+        } else {
+          await deleteRound();
+        }
 
         /*
-         * Return to My Rounds after deletion.
+         * Return to My Rounds after
+         * deleting/removing.
          */
         exitRoundMode();
 
@@ -14247,15 +14386,23 @@ if (roundModeDeleteBtn) {
           false;
 
         roundModeDeleteBtn.textContent =
-          "Delete round";
+          isRemoving
+            ? "Remove from My Rounds"
+            : "Delete round";
 
         setToast(
           rightToast,
-          "Delete failed: " +
-            (
-              err?.message ||
-              "error"
-            ),
+          isRemoving
+            ? "Remove failed: " +
+                (
+                  err?.message ||
+                  "error"
+                )
+            : "Delete failed: " +
+                (
+                  err?.message ||
+                  "error"
+                ),
           false
         );
       }
