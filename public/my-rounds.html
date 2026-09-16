@@ -13892,11 +13892,11 @@ async function removeRoundFromMyRounds(){
   }
 
   await api(
-    `/api/rounds/${encodeURIComponent(currentRoundId)}/participation`
-    {
-      method: "DELETE"
-    }
-  );
+  `/api/rounds/${encodeURIComponent(currentRoundId)}/participation`,
+  {
+    method: "DELETE"
+  }
+);
 
   try {
     localStorage.removeItem(
@@ -14534,34 +14534,15 @@ if (holePickerBack){
   const loggedIn = !!token;
 
   if (!loggedIn) {
-    appEl.style.display = "none";
-
-    if (authGate) {
-      authGate.style.display = "block";
-    }
-
-    /*
-     * Send the golfer to TeeRadar login.
-     * After logging in they can return directly to Play.
-     */
-    window.location.replace(
-      "/index.html?openLogin=1&returnTo=%2Fmy-rounds.html"
-    );
-
-    return;
-  }if (!loggedIn) {
-  /*
-   * Play is account-only.
-   * Keep the actual Play interface hidden and explain
-   * why login is required before sending them anywhere.
-   */
   appEl.style.display = "none";
 
   if (authGate) {
-    authGate.style.display = "none";
+    authGate.style.display = "block";
   }
 
-  openLoginRequiredModal();
+  window.location.replace(
+    "/index.html?openLogin=1&returnTo=%2Fmy-rounds.html"
+  );
 
   return;
 }
