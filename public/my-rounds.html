@@ -790,50 +790,32 @@
 
 .gpsMapHeader{
   display:flex;
-  align-items:center;
-  justify-content:space-between;
-
-  gap:10px;
+  flex-direction:column;
+  align-items:stretch;
+  gap:12px;
 
   padding:13px 14px;
 
   background:#ffffff;
 }
-  .gpsMapFullscreenBtn{
-  flex:0 0 auto;
 
-  min-height:40px;
-
-  padding:8px 11px;
-
-  border:1px solid #d7e2e5;
-  border-radius:13px;
-
-  background:#ffffff;
-  color:#006b57;
-
-  font-size:.72rem;
-  font-weight:950;
-
-  cursor:pointer;
+.gpsMapHeaderText{
+  min-width:0;
 }
 
-  .gpsMapActions{
-  flex:0 0 auto;
-
+.gpsMapActions{
   display:flex;
   align-items:center;
   justify-content:flex-end;
+  gap:8px;
 
-  gap:7px;
+  width:100%;
 }
 
+.gpsMapFullscreenBtn,
 .gpsRecenterBtn{
-  flex:0 0 auto;
-
   min-height:40px;
-
-  padding:8px 11px;
+  padding:8px 12px;
 
   display:inline-flex;
   align-items:center;
@@ -848,11 +830,11 @@
 
   font-size:.72rem;
   font-weight:950;
+  line-height:1;
 
   white-space:nowrap;
   cursor:pointer;
 }
-
 /*
  * Full-screen GPS map.
  */
@@ -3289,8 +3271,9 @@ html.app-mode .activeRoundCard{
      ===================================================== -->
 <div class="gpsMapCard" id="gpsMapCard">
 
- <div class="gpsMapHeader">
-  <div>
+<div class="gpsMapHeader">
+
+  <div class="gpsMapHeaderText">
     <div class="gpsMapTitle">
       GPS MAP
     </div>
@@ -3310,33 +3293,29 @@ html.app-mode .activeRoundCard{
     </div>
   </div>
 
-  <button
-    class="gpsMapFullscreenBtn"
-    id="gpsMapFullscreenBtn"
-    type="button"
   <div class="gpsMapActions">
 
-  <button
-    id="gpsRecenterBtn"
-    class="gpsRecenterBtn"
-    type="button"
-    aria-label="Recentre map on your location"
-    title="Recentre"
-  >
-    ◎ Recentre
-  </button>
+    <button
+      id="gpsRecenterBtn"
+      class="gpsRecenterBtn"
+      type="button"
+      aria-label="Recentre map on your location"
+      title="Recentre"
+    >
+      ◎ Recentre
+    </button>
 
-  <button
-    class="gpsMapFullscreenBtn"
-    id="gpsMapFullscreenBtn"
-    type="button"
-  >
-    ⛶ Full screen
-  </button>
+    <button
+      class="gpsMapFullscreenBtn"
+      id="gpsMapFullscreenBtn"
+      type="button"
+    >
+      ⛶ Full screen
+    </button>
+
+  </div>
 
 </div>
-</div>
-
 <div
   id="gpsMap"
   class="gpsMapLoading"
