@@ -4909,6 +4909,211 @@ try {
   }
 });
 
+// -------------------------------------------------
+// Remove a shared round from MY account only
+//
+// Participant only:
+// - does NOT delete the master round
+// - does NOT delete hole scores
+// - does NOT affect other players
+// - removes this round from My Rounds
+// - removes it from Friends activity/stats
+// - removes it from this user's handicap history
+// -------------------------------------------------
+router.delete("/:id/participation", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
+
+    if (
+      !Number.isFinite(userId) ||
+      userId <= 0
+    ) {
+      return res.status(401).json({
+        ok: false,
+        error: "unauthorised",
+      });
+    }
+
+    if (
+      !Number.isFinite(roundId) ||
+      roundId <= 0
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid round id",
+      });
+    }
+
+    await ensureRoundParticipantsTable();
+    await ensureSharedRoundColumns();
+
+    // ---------------------------------------------
+    // Load the master round.
+    // ---------------------------------------------
+    const roundRes = await db.query(
+      `
+      SELECT
+        id,
+        user_id,
+        player_user_ids
+      FROM rounds
+      WHERE id = $1
+        AND linked_master_round_id IS NULL
+      LIMIT 1;
+      `,
+      [roundId]
+    );
+
+    if (!roundRes.rows.length) {
+      return res.status(404).json({
+        ok: false,
+        error: "round not found",
+      });
+    }
+
+    const round = roundRes.rows[0];
+
+    // ---------------------------------------------
+    // Owner must use normal Delete Round.
+    // This route is only for Player 2 / 3 / 4.
+    // ---------------------------------------------
+    if (Number(round.user_id) === userId) {
+      return res.status(400).json({
+        ok: false,
+        error: "owner_cannot_remove_participation",
+      });
+    }
+
+    // ---------------------------------------------
+    // Find this user's player slot.
+    // ---------------------------------------------
+    const participantRes = await db.query(
+      `
+      SELECT player_number
+      FROM round_participants
+      WHERE round_id = $1
+        AND user_id = $2
+      LIMIT 1;
+      `,
+      [roundId, userId]
+    );
+
+    if (!participantRes.rows.length) {
+      return res.status(404).json({
+        ok: false,
+        error: "participation_not_found",
+      });
+    }
+
+    const playerNumber =
+      Number(participantRes.rows[0].player_number);
+
+    await db.query("BEGIN");
+
+    try {
+      // -------------------------------------------
+      // Remove their participant relationship.
+      // -------------------------------------------
+      await db.query(
+        `
+        DELETE FROM round_participants
+        WHERE round_id = $1
+          AND user_id = $2;
+        `,
+        [roundId, userId]
+      );
+
+      // -------------------------------------------
+      // Also clear their TeeRadar user ID from the
+      // master round's player_user_ids slot.
+      //
+      // IMPORTANT:
+      // We do NOT remove the player slot itself.
+      // Their historical score remains on the
+      // master scorecard for the other players.
+      // -------------------------------------------
+      let playerUserIds = [];
+
+      if (Array.isArray(round.player_user_ids)) {
+        playerUserIds = [...round.player_user_ids];
+      } else {
+        try {
+          playerUserIds =
+            JSON.parse(round.player_user_ids || "[]");
+
+          if (!Array.isArray(playerUserIds)) {
+            playerUserIds = [];
+          }
+        } catch (_) {
+          playerUserIds = [];
+        }
+      }
+
+      const slotIndex = playerNumber - 1;
+
+      if (
+        slotIndex >= 0 &&
+        slotIndex < playerUserIds.length
+      ) {
+        playerUserIds[slotIndex] = null;
+
+        await db.query(
+          `
+          UPDATE rounds
+          SET player_user_ids = $2::jsonb
+          WHERE id = $1;
+          `,
+          [
+            roundId,
+            JSON.stringify(playerUserIds),
+          ]
+        );
+      }
+
+      await db.query("COMMIT");
+    } catch (txErr) {
+      await db.query("ROLLBACK");
+      throw txErr;
+    }
+
+    // ---------------------------------------------
+    // Recalculate THIS user's handicap now that
+    // the round no longer belongs to their history.
+    // ---------------------------------------------
+    let handicap = null;
+
+    try {
+      handicap =
+        await recalculateTeeRadarHandicap(userId);
+    } catch (hErr) {
+      console.warn(
+        "TeeRadar handicap recalculation after participation removal failed:",
+        hErr?.message || hErr
+      );
+    }
+
+    return res.json({
+      ok: true,
+      removed: true,
+      round_id: roundId,
+      player_number: playerNumber,
+      handicap,
+    });
+  } catch (err) {
+    console.error(
+      "DELETE /api/rounds/:id/participation error:",
+      err
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "internal error",
+      detail: err?.message,
+    });
+  }
+});
+
 // Delete a round (must own it)
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
