@@ -11009,11 +11009,34 @@ await loadRound(
 }
 
   if (toggleTableBtn){
-    toggleTableBtn.onclick = () => {
-      premiumShowingTable = !premiumShowingTable;
-      setPremiumVisible(true);
-    };
-  }
+  toggleTableBtn.onclick = () => {
+    premiumShowingTable = !premiumShowingTable;
+
+    setPremiumVisible(true);
+
+    /*
+     * When opening View Scorecard, immediately
+     * bring the scorecard into view.
+     */
+    if (premiumShowingTable) {
+      requestAnimationFrame(() => {
+        const scorecard =
+          document.getElementById(
+            "premiumScorecard"
+          ) ||
+          tableWrapEl;
+
+        if (!scorecard) {
+          return;
+        }
+
+        scorecard.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+      });
+    }
+  };
 }
 
 function formatToParOnly(v){
