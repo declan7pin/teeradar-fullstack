@@ -6508,20 +6508,6 @@ function setLeftPanelsVisibility(show){
     )
     .trim();
 
-let desiredProviderLayout = "";
-
-if (/collier park/i.test(rawCourseName)) {
-  courseName = "Collier Park";
-
-  if (/\bisland\b/i.test(rawCourseName)) {
-    desiredProviderLayout = "Island + Island";
-  } else if (/\blake\b/i.test(rawCourseName)) {
-    desiredProviderLayout = "Lake + Lake";
-  } else if (/\bpines\b/i.test(rawCourseName)) {
-    desiredProviderLayout = "Pines + Pines";
-  }
-}
-
 
     // =====================================================
     // MULTI-NINE COURSE HANDLING
