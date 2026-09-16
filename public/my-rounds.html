@@ -6493,20 +6493,34 @@ function setLeftPanelsVisibility(show){
      *      -> "Point Walter Golf Course"
      */
     let courseName =
-      rawCourseName
-        .replace(
-          /\s*[-–—]?\s*(front|back)\s*9\s*(holes?)?\s*$/i,
-          ""
-        )
-        .replace(
-          /\s*[-–—]?\s*(9|18)\s*holes?\s*$/i,
-          ""
-        )
-        .replace(
-          /\s*[-–—]?\s*(9|18)\s*$/i,
-          ""
-        )
-        .trim();
+  rawCourseName
+    .replace(
+      /\s*[-–—]?\s*(front|back)\s*9\s*(holes?)?\s*$/i,
+      ""
+    )
+    .replace(
+      /\s*[-–—]?\s*(9|18)\s*holes?\s*$/i,
+      ""
+    )
+    .replace(
+      /\s*[-–—]?\s*(9|18)\s*$/i,
+      ""
+    )
+    .trim();
+
+let desiredProviderLayout = "";
+
+if (/collier park/i.test(rawCourseName)) {
+  courseName = "Collier Park";
+
+  if (/\bisland\b/i.test(rawCourseName)) {
+    desiredProviderLayout = "Island + Island";
+  } else if (/\blake\b/i.test(rawCourseName)) {
+    desiredProviderLayout = "Lake + Lake";
+  } else if (/\bpines\b/i.test(rawCourseName)) {
+    desiredProviderLayout = "Pines + Pines";
+  }
+}
 
 
     // =====================================================
@@ -6910,13 +6924,13 @@ function setLeftPanelsVisibility(show){
      * Collier Park Golf Club
      */
     providerGpsCourseName =
-      String(
-        match?.course ||
-        match?.courseName ||
-        match?.name ||
-        match?.club ||
-        courseName
-      );
+  String(
+    match?.course ||
+    match?.courseName ||
+    match?.name ||
+    match?.club ||
+    courseName
+  );
 
 
     console.log(
