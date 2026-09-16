@@ -6419,17 +6419,17 @@ function setLeftPanelsVisibility(show){
    * re-renders or live score polling fires.
    */
   if (
-  (
-    String(providerGpsLoadedForRoundId) ===
-      String(currentRoundId) &&
-    providerGpsCourseId &&
-    Array.isArray(providerGpsGreens) &&
-    providerGpsGreens.length > 0
-  ) ||
-  providerGpsLoading
-) {
-  return;
-}
+    (
+      String(providerGpsLoadedForRoundId) ===
+        String(currentRoundId) &&
+      providerGpsCourseId &&
+      Array.isArray(providerGpsGreens) &&
+      providerGpsGreens.length > 0
+    ) ||
+    providerGpsLoading
+  ) {
+    return;
+  }
 
   providerGpsLoading = true;
 
@@ -6450,181 +6450,382 @@ function setLeftPanelsVisibility(show){
       return;
     }
 
-   const rawCourseName =
-  String(
-    currentRound.course ||
-    currentRound.course_name ||
-    ""
-  ).trim();
 
-/*
- * TeeRadar round/template names can contain
- * layout suffixes that are not part of the
- * provider's actual course name.
- *
- * Examples:
- *
- * "the cut 18"
- *      -> "the cut"
- *
- * "Wembley Golf Course - Front 9"
- *      -> "Wembley Golf Course"
- *
- * "Wembley Golf Course - Back 9"
- *      -> "Wembley Golf Course"
- *
- * "Point Walter Golf Course - 9 holes"
- *      -> "Point Walter Golf Course"
- */
-const courseName =
-  rawCourseName
-    .replace(
-      /\s*[-–—]?\s*(front|back)\s*9\s*(holes?)?\s*$/i,
-      ""
-    )
-    .replace(
-      /\s*[-–—]?\s*(9|18)\s*holes?\s*$/i,
-      ""
-    )
-    .replace(
-      /\s*[-–—]?\s*(9|18)\s*$/i,
-      ""
-    )
-    .trim();
+    // =====================================================
+    // TEERADAR COURSE / LAYOUT
+    // =====================================================
 
-const roundState =
-  String(
-    currentRound.state ||
-    ""
-  ).trim();
+    const rawCourseName =
+      String(
+        currentRound.course ||
+        currentRound.course_name ||
+        ""
+      ).trim();
 
-if (!courseName) {
-  return;
-}
+    const rawCourseLower =
+      rawCourseName
+        .toLowerCase();
 
-console.log(
-  "⛳ TeeRadar course name cleaned:",
-  {
-    original:
-      rawCourseName,
+    const roundState =
+      String(
+        currentRound.state ||
+        ""
+      ).trim();
 
-    search:
-      courseName
-  }
-);
+
+    /*
+     * TeeRadar round/template names can contain
+     * layout suffixes that are not part of the
+     * provider's actual course name.
+     *
+     * Examples:
+     *
+     * "the cut 18"
+     *      -> "the cut"
+     *
+     * "Wembley Golf Course - Front 9"
+     *      -> "Wembley Golf Course"
+     *
+     * "Wembley Golf Course - Back 9"
+     *      -> "Wembley Golf Course"
+     *
+     * "Point Walter Golf Course - 9 holes"
+     *      -> "Point Walter Golf Course"
+     */
+    let courseName =
+      rawCourseName
+        .replace(
+          /\s*[-–—]?\s*(front|back)\s*9\s*(holes?)?\s*$/i,
+          ""
+        )
+        .replace(
+          /\s*[-–—]?\s*(9|18)\s*holes?\s*$/i,
+          ""
+        )
+        .replace(
+          /\s*[-–—]?\s*(9|18)\s*$/i,
+          ""
+        )
+        .trim();
+
+
+    // =====================================================
+    // MULTI-NINE COURSE HANDLING
+    // =====================================================
+
+    /*
+     * Some GolfAPI courses are represented as combinations
+     * of multiple 9-hole layouts.
+     *
+     * Collier Park is one example.
+     *
+     * TeeRadar:
+     *
+     * Collier Park Golf Course - Island
+     * Collier Park Golf Course - Lake
+     * Collier Park Golf Course - Pines
+     *
+     * GolfAPI:
+     *
+     * Island + Island
+     * Island + Lake
+     * Island + Pines
+     * Lake + Island
+     * Lake + Lake
+     * Lake + Pines
+     * Pines + Island
+     * Pines + Lake
+     * Pines + Pines
+     *
+     * For TeeRadar's standalone 9-hole rounds we deliberately
+     * select the repeated-nine GolfAPI course.
+     */
+
+    let desiredProviderLayout = "";
+
+
+    if (
+      rawCourseLower.includes(
+        "collier park"
+      )
+    ) {
+
+      /*
+       * Search the club broadly.
+       *
+       * Do not send:
+       *
+       * "Collier Park Golf Course - Island"
+       *
+       * because GolfAPI doesn't use that as a course name.
+       */
+      courseName =
+        "Collier Park";
+
+
+      if (
+        /\bisland\b/i.test(
+          rawCourseName
+        )
+      ) {
+
+        desiredProviderLayout =
+          "Island + Island";
+
+      } else if (
+        /\blake\b/i.test(
+          rawCourseName
+        )
+      ) {
+
+        desiredProviderLayout =
+          "Lake + Lake";
+
+      } else if (
+        /\bpines\b/i.test(
+          rawCourseName
+        )
+      ) {
+
+        desiredProviderLayout =
+          "Pines + Pines";
+      }
+    }
+
+
+    if (!courseName) {
+      return;
+    }
+
+
+    console.log(
+      "⛳ TeeRadar course name cleaned:",
+      {
+        original:
+          rawCourseName,
+
+        search:
+          courseName,
+
+        desiredProviderLayout:
+          desiredProviderLayout ||
+          null
+      }
+    );
+
 
     console.log(
       "⛳ Searching GolfAPI.io:",
       {
         course:
           courseName,
+
         state:
           roundState
       }
     );
 
-    // -----------------------------------------------------
+
+    // =====================================================
     // 1. SEARCH PROVIDER COURSE
-    // -----------------------------------------------------
+    // =====================================================
 
-   const searchResponse =
-  await fetch(
-   `${API_BASE}/api/gps/search?q=${encodeURIComponent(
-  courseName
-)}&state=${encodeURIComponent(
-  roundState
-)}&country=AU`,
-    {
-      headers: {
-        Authorization:
-          `Bearer ${token}`
-      }
+    const searchResponse =
+      await fetch(
+        `${API_BASE}/api/gps/search?q=${encodeURIComponent(
+          courseName
+        )}&state=${encodeURIComponent(
+          roundState
+        )}&country=AU`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
+        }
+      );
+
+
+    const searchText =
+      await searchResponse.text();
+
+    let searchData = null;
+
+
+    try {
+
+      searchData =
+        JSON.parse(
+          searchText
+        );
+
+    } catch (error) {
+
+      console.warn(
+        "⚠️ Could not parse GPS search response:",
+        searchText
+      );
     }
-  );
 
-   const searchText =
-  await searchResponse.text();
 
-let searchData = null;
-
-try {
-  searchData =
-    JSON.parse(searchText);
-} catch (error) {
-  console.warn(
-    "⚠️ Could not parse GPS search response:",
-    searchText
-  );
-}
     if (
       !searchResponse.ok ||
       !searchData?.ok
     ) {
+
       throw new Error(
         searchData?.error ||
         `GPS search HTTP ${searchResponse.status}`
       );
     }
 
+
     const courses =
-      Array.isArray(searchData.courses)
+      Array.isArray(
+        searchData.courses
+      )
         ? searchData.courses
         : [];
 
-   if (!courses.length) {
 
-  console.log(
-    "ℹ️ No GolfAPI.io match:",
-    courseName
-  );
+    if (!courses.length) {
 
-  /*
-   * IMPORTANT:
-   * Do not mark this round as successfully loaded.
-   * This allows another attempt if the course name,
-   * connection or provider response changes.
-   */
-  providerGpsLoadedForRoundId = null;
+      console.log(
+        "ℹ️ No GolfAPI.io match:",
+        courseName
+      );
 
-  updateGpsDistances();
-  updateGpsGreenMarker();
+      /*
+       * Do not mark this round as successfully loaded.
+       * This allows another attempt later.
+       */
+      providerGpsLoadedForRoundId =
+        null;
 
-  return;
-}
+      updateGpsDistances();
+      updateGpsGreenMarker();
+
+      return;
+    }
+
+
+    // =====================================================
+    // 2. SELECT CORRECT PROVIDER COURSE
+    // =====================================================
 
     const wantedStateName =
       stateNameForGolfApi(
         roundState
       );
 
-    /*
-     * Prefer:
-     *
-     * 1. matching course name + state
-     * 2. matching course name
-     * 3. first search result
-     */
     let match =
-      courses.find(
-        (course) =>
-          courseNamesMatch(
-            course?.name ||
-            course?.club,
-            courseName
-          ) &&
-          String(
-            course?.state || ""
-          )
-            .trim()
-            .toLowerCase() ===
-          String(
-            wantedStateName || ""
-          )
-            .trim()
-            .toLowerCase()
-      );
+      null;
+
+
+    // -----------------------------------------------------
+    // PRIORITY 1:
+    // Explicit multi-nine layout
+    // -----------------------------------------------------
+
+    if (
+      desiredProviderLayout
+    ) {
+
+      match =
+        courses.find(
+          (course) => {
+
+            const providerLayout =
+              String(
+                course?.course ||
+                course?.courseName ||
+                ""
+              )
+                .trim()
+                .toLowerCase();
+
+            const wantedLayout =
+              desiredProviderLayout
+                .trim()
+                .toLowerCase();
+
+            const hasGps =
+              course?.hasGPS ??
+              course?.has_gps;
+
+            return (
+              providerLayout ===
+                wantedLayout &&
+              (
+                hasGps === true ||
+                hasGps === 1 ||
+                hasGps === "1"
+              )
+            );
+          }
+        ) ||
+        null;
+
+
+      if (match) {
+
+        console.log(
+          "✅ GolfAPI multi-nine layout matched:",
+          {
+            teeradar:
+              rawCourseName,
+
+            provider:
+              match?.course ||
+              match?.courseName,
+
+            id:
+              match?.id ||
+              match?.courseID ||
+              match?.provider_course_id
+          }
+        );
+      }
+    }
+
+
+    // -----------------------------------------------------
+    // PRIORITY 2:
+    // Normal course/club match + state
+    // -----------------------------------------------------
 
     if (!match) {
+
+      match =
+        courses.find(
+          (course) =>
+            courseNamesMatch(
+              course?.name ||
+              course?.club,
+              courseName
+            ) &&
+            String(
+              course?.state || ""
+            )
+              .trim()
+              .toLowerCase() ===
+            String(
+              wantedStateName || ""
+            )
+              .trim()
+              .toLowerCase()
+        ) ||
+        null;
+    }
+
+
+    // -----------------------------------------------------
+    // PRIORITY 3:
+    // Normal course/club match without state
+    // -----------------------------------------------------
+
+    if (!match) {
+
       match =
         courses.find(
           (course) =>
@@ -6633,336 +6834,608 @@ try {
               course?.club,
               courseName
             )
-        );
+        ) ||
+        null;
     }
+
+
+    // -----------------------------------------------------
+    // PRIORITY 4:
+    // Any result that actually has GPS
+    // -----------------------------------------------------
 
     if (!match) {
+
       match =
-        courses[0] || null;
+        courses.find(
+          (course) => {
+
+            const hasGps =
+              course?.hasGPS ??
+              course?.has_gps;
+
+            return (
+              hasGps === true ||
+              hasGps === 1 ||
+              hasGps === "1"
+            );
+          }
+        ) ||
+        null;
     }
 
+
+    // -----------------------------------------------------
+    // FINAL FALLBACK
+    // -----------------------------------------------------
+
+    if (!match) {
+
+      match =
+        courses[0] ||
+        null;
+    }
+
+
     const providerId =
-  String(
-    match?.id ||
-    match?.courseID ||
-    match?.provider_course_id ||
-    ""
-  ).trim();
+      String(
+        match?.id ||
+        match?.courseID ||
+        match?.provider_course_id ||
+        ""
+      ).trim();
 
-if (!providerId) {
-  throw new Error(
-    "Provider course has no valid ID"
-  );
-}
 
-providerGpsCourseId =
-  providerId;
+    if (!providerId) {
+
+      throw new Error(
+        "Provider course has no valid ID"
+      );
+    }
+
+
+    providerGpsCourseId =
+      providerId;
+
+
+    /*
+     * Prefer the provider layout name.
+     *
+     * For Collier Park this will now show:
+     *
+     * Island + Island
+     *
+     * instead of only:
+     *
+     * Collier Park Golf Club
+     */
     providerGpsCourseName =
       String(
+        match?.course ||
+        match?.courseName ||
         match?.name ||
         match?.club ||
         courseName
       );
+
 
     console.log(
       "✅ GolfAPI.io course matched:",
       {
         id:
           providerGpsCourseId,
+
+        club:
+          match?.club ||
+          match?.clubName ||
+          null,
+
+        layout:
+          match?.course ||
+          match?.courseName ||
+          null,
+
         name:
           providerGpsCourseName,
+
         state:
           match?.state
       }
     );
 
-    // -----------------------------------------------------
-    // 2. FETCH GREEN CENTRES
-    // -----------------------------------------------------
 
-  const greensResponse =
-  await fetch(
-    `${API_BASE}/api/gps/course/${encodeURIComponent(
-      providerGpsCourseId
-    )}/greens`,
-    {
-      headers: {
-        Authorization:
-          `Bearer ${token}`
-      }
+    // =====================================================
+    // 3. FETCH GREEN CENTRES
+    // =====================================================
+
+    const greensResponse =
+      await fetch(
+        `${API_BASE}/api/gps/course/${encodeURIComponent(
+          providerGpsCourseId
+        )}/greens`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
+        }
+      );
+
+
+    const greensText =
+      await greensResponse.text();
+
+    let greensData =
+      null;
+
+
+    try {
+
+      greensData =
+        JSON.parse(
+          greensText
+        );
+
+    } catch (error) {
+
+      console.warn(
+        "⚠️ Could not parse green centres response:",
+        greensText
+      );
     }
-  );
 
-const greensText =
-  await greensResponse.text();
 
-let greensData = null;
+    if (
+      !greensResponse.ok ||
+      !greensData?.ok
+    ) {
 
-try {
-  greensData =
-    JSON.parse(greensText);
-} catch (error) {
+      throw new Error(
+        greensData?.error ||
+        `Green centres HTTP ${greensResponse.status}`
+      );
+    }
 
-  console.warn(
-    "⚠️ Could not parse green centres response:",
-    greensText
-  );
-}
 
-if (
-  !greensResponse.ok ||
-  !greensData?.ok
-) {
-  throw new Error(
-    greensData?.error ||
-    `Green centres HTTP ${greensResponse.status}`
-  );
-}
+    const holes =
+      Array.isArray(
+        greensData.holes
+      )
+        ? greensData.holes
+        : [];
 
-const holes =
-  Array.isArray(greensData.holes)
-    ? greensData.holes
-    : [];
 
-providerGpsGreens =
-  holes
-    .map((hole) => {
-      const middle =
-        hole?.middle || null;
+    providerGpsGreens =
+      holes
+        .map(
+          (hole) => {
 
-      const centreLat =
-        Number(
-          middle?.lat ??
-          hole?.lat
-        );
+            const middle =
+              hole?.middle ||
+              null;
 
-      const centreLng =
-        Number(
-          middle?.lng ??
-          hole?.lng
-        );
+            const centreLat =
+              Number(
+                middle?.lat ??
+                hole?.lat
+              );
 
-      return {
-        hole:
-          Number(hole?.hole),
+            const centreLng =
+              Number(
+                middle?.lng ??
+                hole?.lng
+              );
 
-        // Keep backwards-compatible centre point
-        lat:
-          centreLat,
 
-        lng:
-          centreLng,
+            return {
 
-        front:
-          hole?.front
-            ? {
-                lat:
-                  Number(
-                    hole.front.lat
-                  ),
+              hole:
+                Number(
+                  hole?.hole
+                ),
 
-                lng:
-                  Number(
-                    hole.front.lng
-                  )
-              }
-            : null,
 
-        middle:
-          middle
-            ? {
-                lat:
-                  Number(
-                    middle.lat
-                  ),
+              // -------------------------------------------
+              // BACKWARDS-COMPATIBLE CENTRE POINT
+              // -------------------------------------------
 
-                lng:
-                  Number(
-                    middle.lng
-                  )
-              }
-            : (
-                Number.isFinite(
-                  centreLat
-                ) &&
-                Number.isFinite(
-                  centreLng
-                )
+              lat:
+                centreLat,
+
+              lng:
+                centreLng,
+
+
+              // -------------------------------------------
+              // FRONT
+              // -------------------------------------------
+
+              front:
+                hole?.front
                   ? {
                       lat:
-                        centreLat,
+                        Number(
+                          hole.front.lat
+                        ),
 
                       lng:
+                        Number(
+                          hole.front.lng
+                        )
+                    }
+                  : null,
+
+
+              // -------------------------------------------
+              // MIDDLE
+              // -------------------------------------------
+
+              middle:
+                middle
+                  ? {
+                      lat:
+                        Number(
+                          middle.lat
+                        ),
+
+                      lng:
+                        Number(
+                          middle.lng
+                        )
+                    }
+                  : (
+                      Number.isFinite(
+                        centreLat
+                      ) &&
+                      Number.isFinite(
                         centreLng
+                      )
+                        ? {
+                            lat:
+                              centreLat,
+
+                            lng:
+                              centreLng
+                          }
+                        : null
+                    ),
+
+
+              // -------------------------------------------
+              // BACK
+              // -------------------------------------------
+
+              back:
+                hole?.back
+                  ? {
+                      lat:
+                        Number(
+                          hole.back.lat
+                        ),
+
+                      lng:
+                        Number(
+                          hole.back.lng
+                        )
                     }
                   : null
-              ),
-
-        back:
-          hole?.back
-            ? {
-                lat:
-                  Number(
-                    hole.back.lat
-                  ),
-
-                lng:
-                  Number(
-                    hole.back.lng
-                  )
-              }
-            : null
-      };
-    })
-    .filter(
-      (hole) =>
-        Number.isFinite(
-          hole.hole
-        ) &&
-        hole.hole > 0 &&
-        Number.isFinite(
-          hole.lat
-        ) &&
-        Number.isFinite(
-          hole.lng
+            };
+          }
         )
+        .filter(
+          (hole) =>
+            Number.isFinite(
+              hole.hole
+            ) &&
+            hole.hole > 0 &&
+            Number.isFinite(
+              hole.lat
+            ) &&
+            Number.isFinite(
+              hole.lng
+            )
+        );
+
+
+    /*
+     * Only mark this round as loaded when
+     * we actually received usable green centres.
+     */
+    if (
+      providerGpsGreens.length > 0
+    ) {
+
+      providerGpsLoadedForRoundId =
+        String(
+          currentRoundId
+        );
+
+    } else {
+
+      providerGpsLoadedForRoundId =
+        null;
+
+      throw new Error(
+        "No valid green centres returned"
+      );
+    }
+
+
+    console.log(
+      "✅ Provider green centres loaded:",
+      {
+        course:
+          providerGpsCourseName,
+
+        providerId:
+          providerGpsCourseId,
+
+        holes:
+          providerGpsGreens.length
+      }
     );
 
-/*
- * Only mark this round as loaded when
- * we actually received usable green centres.
- */
-if (providerGpsGreens.length > 0) {
 
-  providerGpsLoadedForRoundId =
-    String(currentRoundId);
+    /*
+     * Refresh the current hole immediately now
+     * that provider GPS data is available.
+     */
+    updateGpsDistances();
+    updateGpsGreenMarker();
 
-} else {
 
-  providerGpsLoadedForRoundId = null;
+    /*
+     * Re-render the visible scorecard hole so
+     * the GPS Distance card updates immediately.
+     */
+    if (
+      currentRound &&
+      premiumWrap &&
+      premiumWrap.style.display !== "none"
+    ) {
 
-  throw new Error(
-    "No valid green centres returned"
-  );
-}
-
-console.log(
-  "✅ Provider green centres loaded:",
-  {
-    course:
-      providerGpsCourseName,
-
-    holes:
-      providerGpsGreens.length
-  }
-);
-
-/*
- * Refresh the current hole immediately now
- * that provider GPS data is available.
- */
-updateGpsDistances();
-updateGpsGreenMarker();
-
-/*
- * Re-render the visible scorecard hole so
- * the GPS Distance card updates immediately.
- */
-if (
-  currentRound &&
-  premiumWrap &&
-  premiumWrap.style.display !== "none"
-) {
-  renderPremiumForHole(
-    currentRound,
-    currentPremiumPars,
-    currentPremiumDistances,
-    currentPremiumTeeName
-  );
-}
-
-} catch (error) {
-
-  console.warn(
-    "⚠️ GolfAPI.io GPS unavailable:",
-    error?.message || error
-  );
-
-  /*
-   * IMPORTANT:
-   *
-   * A failed request must NOT be treated as
-   * successfully loaded.
-   *
-   * Otherwise the next call for this round
-   * immediately returns and never retries.
-   */
-  providerGpsLoadedForRoundId = null;
-
-} finally {
-
-  providerGpsLoading = false;
-}
-}
-    function nineLabelFromScorecard(sc){
-      const raw = String(sc?.course || sc?.name || "").trim();
-      const m = raw.match(/\(([^)]+)\)\s*$/);
-      let label = m ? String(m[1] || "").trim() : "";
-      if (!label) label = String(sc?.layout || "").trim();
-      if (!label) label = raw;
-      label = label.replace(/\b(9|18)\s*holes?\b/ig, "").replace(/\s*-\s*$/g, "").trim();
-      label = label.replace(/\s+/g, " ").trim();
-      return label;
+      renderPremiumForHole(
+        currentRound,
+        currentPremiumPars,
+        currentPremiumDistances,
+        currentPremiumTeeName
+      );
     }
-    function splitRoundLayoutParts(layout){
-  return String(layout || "")
+
+
+  } catch (error) {
+
+    console.warn(
+      "⚠️ GolfAPI.io GPS unavailable:",
+      error?.message ||
+      error
+    );
+
+    /*
+     * A failed request must NOT be treated as
+     * successfully loaded.
+     *
+     * Otherwise the next call for this round
+     * immediately returns and never retries.
+     */
+    providerGpsLoadedForRoundId =
+      null;
+
+  } finally {
+
+    providerGpsLoading =
+      false;
+  }
+}
+
+
+function nineLabelFromScorecard(sc) {
+
+  const raw =
+    String(
+      sc?.course ||
+      sc?.name ||
+      ""
+    ).trim();
+
+  const m =
+    raw.match(
+      /\(([^)]+)\)\s*$/
+    );
+
+  let label =
+    m
+      ? String(
+          m[1] ||
+          ""
+        ).trim()
+      : "";
+
+  if (!label) {
+    label =
+      String(
+        sc?.layout ||
+        ""
+      ).trim();
+  }
+
+  if (!label) {
+    label =
+      raw;
+  }
+
+  label =
+    label
+      .replace(
+        /\b(9|18)\s*holes?\b/ig,
+        ""
+      )
+      .replace(
+        /\s*-\s*$/g,
+        ""
+      )
+      .trim();
+
+  label =
+    label
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim();
+
+  return label;
+}
+
+
+function splitRoundLayoutParts(layout) {
+
+  return String(
+    layout ||
+    ""
+  )
     .toLowerCase()
-    .replace(/\s*\/\s*/g, " / ")
-    .replace(/\s*-\s*/g, " / ")
+    .replace(
+      /\s*\/\s*/g,
+      " / "
+    )
+    .replace(
+      /\s*-\s*/g,
+      " / "
+    )
     .split("/")
-    .map(x => x.trim())
+    .map(
+      (x) =>
+        x.trim()
+    )
     .filter(Boolean);
 }
 
-    function isValidEmail(v){
-      const s = String(v||"").trim();
-      if (!s) return false;
-      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
-    }
 
-    async function loadCoursesOnce(){
-      if (coursesLoaded) return;
-      coursesLoaded = true;
+function isValidEmail(v) {
 
-      try{
-        // ✅ ONLY allow autofill from submitted/approved scorecard templates
-        const res = await fetch(`${API_BASE}/api/rounds/templates`);
-        const data = await res.json();
+  const s =
+    String(
+      v ||
+      ""
+    ).trim();
 
-        // expected shape: { courses: [...] }
-        const arr = Array.isArray(data?.courses) ? data.courses : [];
+  if (!s) {
+    return false;
+  }
 
-        // normalize to what the autocomplete expects
-        coursesCache = arr
-  .map((c) => ({
-    name: String(c?.name || c?.course || "").trim(),
-    state: String(c?.state || "").trim().toUpperCase(),
-    holes: Number(c?.holes) || null,
-    course_rating: c?.course_rating ?? c?.rating ?? null,
-    slope_rating: c?.slope_rating ?? c?.slope ?? null,
-    tee_colour: c?.tee_colour ?? c?.tee ?? "",
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    s
+  );
+}
 
-    // ✅ GPS green points for front / middle / back
-    green_points: Array.isArray(c?.green_points)
-      ? c.green_points
-      : [],
-  }))
-  .filter((c) => c.name && c.state);
 
-      }catch(e){
-        coursesCache = [];
-      }
-    }
+async function loadCoursesOnce() {
+
+  if (coursesLoaded) {
+    return;
+  }
+
+  coursesLoaded =
+    true;
+
+  try {
+
+    /*
+     * ONLY allow autofill from submitted/approved
+     * scorecard templates.
+     */
+    const res =
+      await fetch(
+        `${API_BASE}/api/rounds/templates`
+      );
+
+    const data =
+      await res.json();
+
+    /*
+     * Expected shape:
+     *
+     * {
+     *   courses: [...]
+     * }
+     */
+    const arr =
+      Array.isArray(
+        data?.courses
+      )
+        ? data.courses
+        : [];
+
+
+    /*
+     * Normalize to what the autocomplete expects.
+     */
+    coursesCache =
+      arr
+        .map(
+          (c) => ({
+
+            name:
+              String(
+                c?.name ||
+                c?.course ||
+                ""
+              ).trim(),
+
+            state:
+              String(
+                c?.state ||
+                ""
+              )
+                .trim()
+                .toUpperCase(),
+
+            holes:
+              Number(
+                c?.holes
+              ) ||
+              null,
+
+            course_rating:
+              c?.course_rating ??
+              c?.rating ??
+              null,
+
+            slope_rating:
+              c?.slope_rating ??
+              c?.slope ??
+              null,
+
+            tee_colour:
+              c?.tee_colour ??
+              c?.tee ??
+              "",
+
+            /*
+             * GPS green points for
+             * front / middle / back.
+             */
+            green_points:
+              Array.isArray(
+                c?.green_points
+              )
+                ? c.green_points
+                : []
+          })
+        )
+        .filter(
+          (c) =>
+            c.name &&
+            c.state
+        );
+
+  } catch (e) {
+
+    coursesCache =
+      [];
+  }
+}
 
     async function loadScorecardsStateOnce(st){
   const state = String(st || "").trim().toUpperCase();
