@@ -1320,6 +1320,174 @@ const genericCourseName =
       result.rows[0] ||
       null;
 
+    /*
+ * -----------------------------------------------------
+ * AUTO-CREATE FRONT 9 + BACK 9 TEMPLATES
+ * -----------------------------------------------------
+ *
+ * For an 18-hole GolfAPI course, automatically create
+ * TeeRadar's two 9-hole templates using the GolfAPI
+ * pars + green GPS already downloaded/cached.
+ *
+ * No additional GolfAPI request is required.
+ */
+if (
+  holes === 18 &&
+  validPars &&
+  greenPoints.length > 0
+) {
+  const nineHoleTemplates = [
+    {
+      name: `${name} - front 9`,
+      pars: pars.slice(0, 9),
+      greens: greenPoints
+        .filter(
+          (green) =>
+            Number(green.hole) >= 1 &&
+            Number(green.hole) <= 9
+        )
+        .map(
+          (green) => ({
+            ...green,
+            hole: Number(green.hole),
+          })
+        ),
+    },
+
+    {
+      name: `${name} - back 9`,
+      pars: pars.slice(9, 18),
+      greens: greenPoints
+        .filter(
+          (green) =>
+            Number(green.hole) >= 10 &&
+            Number(green.hole) <= 18
+        )
+        .map(
+          (green) => ({
+            ...green,
+
+            // TeeRadar 9-hole templates use holes 1–9.
+            hole:
+              Number(green.hole) - 9,
+          })
+        ),
+    },
+  ];
+
+  for (
+    const template
+    of nineHoleTemplates
+  ) {
+    await db.query(
+      `
+      INSERT INTO scorecard_courses (
+        name,
+        state,
+        holes,
+        pars_json,
+        dists_json,
+        green_points_json,
+        tee_colour,
+        updated_at
+      )
+
+      VALUES (
+        $1,
+        $2,
+        9,
+        $3::jsonb,
+        '[]'::jsonb,
+        $4::jsonb,
+        $5,
+        NOW()
+      )
+
+      ON CONFLICT (
+        name,
+        state,
+        holes
+      )
+
+      DO UPDATE SET
+
+        pars_json =
+          CASE
+            WHEN
+              jsonb_array_length(
+                EXCLUDED.pars_json
+              ) = 9
+            THEN
+              EXCLUDED.pars_json
+            ELSE
+              scorecard_courses.pars_json
+          END,
+
+        green_points_json =
+          CASE
+            WHEN
+              jsonb_array_length(
+                EXCLUDED.green_points_json
+              ) > 0
+            THEN
+              EXCLUDED.green_points_json
+            ELSE
+              scorecard_courses.green_points_json
+          END,
+
+        tee_colour =
+          CASE
+            WHEN
+              NULLIF(
+                TRIM(
+                  COALESCE(
+                    scorecard_courses.tee_colour,
+                    ''
+                  )
+                ),
+                ''
+              ) IS NULL
+            THEN
+              EXCLUDED.tee_colour
+            ELSE
+              scorecard_courses.tee_colour
+          END,
+
+        updated_at =
+          NOW()
+      `,
+      [
+        template.name,
+        state,
+
+        JSON.stringify(
+          template.pars
+        ),
+
+        JSON.stringify(
+          template.greens
+        ),
+
+        golfApiTeeColour,
+      ]
+    );
+
+    console.log(
+      "✅ GolfAPI created/updated 9-hole TeeRadar template:",
+      {
+        name:
+          template.name,
+
+        pars:
+          template.pars.length,
+
+        gpsHoles:
+          template.greens.length,
+      }
+    );
+  }
+}
+
     console.log(
       "✅ GolfAPI synced to TeeRadar course analytics:",
       {
