@@ -729,17 +729,32 @@ async function syncGolfApiToScorecardCourses({
         course?.clubName || ""
       ).trim();
 
-    /*
-     * GolfAPI sometimes returns:
-     * "18-hole course"
-     *
-     * In that case use the club name.
-     */
-    const genericCourseName =
-      /^(9|18)[ -]?hole course$/i
-        .test(
-          rawCourseName
-        );
+   /*
+ * GolfAPI sometimes returns generic course names such as:
+ *
+ * "18-hole course"
+ * "9-hole course"
+ * "Public 18"
+ * "Public 9"
+ *
+ * These are not useful TeeRadar display names.
+ * In these cases use the club name instead.
+ *
+ * Genuine layout names such as:
+ * "Island + Lake"
+ * "Island + Pines"
+ * "Araluen"
+ * etc. are preserved.
+ */
+const genericCourseName =
+  (
+    /^(9|18)[ -]?hole course$/i.test(
+      rawCourseName
+    ) ||
+    /^public[ -]?(9|18)$/i.test(
+      rawCourseName
+    )
+  );
 
     const providerDisplayName =
       (
