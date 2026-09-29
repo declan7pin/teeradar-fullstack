@@ -1018,6 +1018,279 @@ ${colDeletionRequestedAt},
     });
   }
 });
+
+/**
+ * GET /api/analytics/users/:id/activity
+ *
+ * Admin analytics detail for one TeeRadar account.
+ *
+ * Returns:
+ * - completed rounds for this account
+ * - total course booking clicks
+ * - unique courses clicked
+ * - click count by course
+ *
+ * Shared rounds:
+ * - ONE master round exists in rounds
+ * - round_participants links each TeeRadar account to that round
+ * - linked/legacy child rounds are ignored
+ *
+ * Completed rounds use the same scoring logic as My Rounds.
+ */
+router.get("/users/:id/activity", async (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+
+    if (
+      !Number.isInteger(userId) ||
+      userId <= 0
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_id",
+      });
+    }
+
+    // -------------------------------------------------
+    // Make sure the account actually exists
+    // -------------------------------------------------
+    const userRes = await db.query(
+      `
+      SELECT
+        id,
+        email,
+        display_name,
+        full_name
+      FROM users
+      WHERE id = $1
+      LIMIT 1;
+      `,
+      [userId]
+    );
+
+    if (!userRes.rows.length) {
+      return res.status(404).json({
+        ok: false,
+        error: "user_not_found",
+      });
+    }
+
+    const user = userRes.rows[0];
+
+    // -------------------------------------------------
+    // COMPLETED ROUNDS
+    //
+    // Same principle as GET /api/rounds:
+    //
+    // Player 1:
+    // - rh.strokes
+    // - OR strokes_by_player['1']
+    //
+    // Player 2/3/4:
+    // - strokes_by_player[player_number]
+    //
+    // A round is complete for THIS account when that
+    // account has a score for every hole.
+    // -------------------------------------------------
+    const roundsRes = await db.query(
+      `
+      WITH user_rounds AS (
+        SELECT
+          r.id,
+          r.course,
+          r.layout,
+          r.state,
+          r.holes,
+          r.created_at,
+
+          CASE
+            WHEN r.user_id = $1
+              THEN 1
+            ELSE rp.player_number
+          END AS player_number
+
+        FROM rounds r
+
+        LEFT JOIN round_participants rp
+          ON rp.round_id = r.id
+          AND rp.user_id = $1
+
+        WHERE
+          r.linked_master_round_id IS NULL
+
+          AND (
+            r.user_id = $1
+            OR rp.user_id = $1
+          )
+      ),
+
+      round_progress AS (
+        SELECT
+          ur.id,
+          ur.course,
+          ur.layout,
+          ur.state,
+          ur.holes,
+          ur.created_at,
+          ur.player_number,
+
+          COUNT(
+            CASE
+              WHEN ur.player_number = 1
+                AND (
+                  rh.strokes IS NOT NULL
+                  OR (
+                    rh.strokes_by_player IS NOT NULL
+                    AND rh.strokes_by_player ? '1'
+                  )
+                )
+              THEN 1
+
+              WHEN ur.player_number <> 1
+                AND rh.strokes_by_player IS NOT NULL
+                AND rh.strokes_by_player
+                  ? ur.player_number::text
+              THEN 1
+            END
+          )::int AS scored_holes
+
+        FROM user_rounds ur
+
+        LEFT JOIN round_holes rh
+          ON rh.round_id = ur.id
+
+        GROUP BY
+          ur.id,
+          ur.course,
+          ur.layout,
+          ur.state,
+          ur.holes,
+          ur.created_at,
+          ur.player_number
+      )
+
+      SELECT
+        id,
+        course,
+        layout,
+        state,
+        holes,
+        created_at,
+        scored_holes
+
+      FROM round_progress
+
+      WHERE
+        player_number IS NOT NULL
+        AND scored_holes >= holes
+
+      ORDER BY created_at DESC;
+      `,
+      [userId]
+    );
+
+    const completedRounds =
+      roundsRes.rows || [];
+
+    // -------------------------------------------------
+    // COURSE BOOKING CLICKS
+    //
+    // Only actual click-out events count here.
+    //
+    // search_course is deliberately NOT included because
+    // that means TeeRadar searched/scanned the course,
+    // not that the golfer clicked it.
+    // -------------------------------------------------
+    const clicksRes = await db.query(
+      `
+      SELECT
+        TRIM(course_name) AS course,
+        COUNT(*)::int AS clicks,
+        MAX(occurred_at) AS last_clicked_at
+
+      FROM analytics
+
+      WHERE
+        user_id::text = $1::text
+
+        AND type IN (
+          'booking_click',
+          'course_booking_click'
+        )
+
+        AND NULLIF(
+          TRIM(COALESCE(course_name, '')),
+          ''
+        ) IS NOT NULL
+
+      GROUP BY
+        TRIM(course_name)
+
+      ORDER BY
+        clicks DESC,
+        course ASC;
+      `,
+      [userId]
+    );
+
+    const coursesClicked =
+      clicksRes.rows || [];
+
+    const totalCourseClicks =
+      coursesClicked.reduce(
+        (total, row) =>
+          total + Number(row.clicks || 0),
+        0
+      );
+
+    const uniqueCoursesClicked =
+      coursesClicked.length;
+
+    // -------------------------------------------------
+    // Response
+    // -------------------------------------------------
+    return res.json({
+      ok: true,
+
+      user: {
+        id: user.id,
+        email: user.email || "",
+        display_name:
+          user.display_name || "",
+        full_name:
+          user.full_name || "",
+      },
+
+      summary: {
+        completed_rounds:
+          completedRounds.length,
+
+        total_course_clicks:
+          totalCourseClicks,
+
+        unique_courses_clicked:
+          uniqueCoursesClicked,
+      },
+
+      completedRounds,
+
+      coursesClicked,
+    });
+  } catch (err) {
+    console.error(
+      "GET /api/analytics/users/:id/activity error:",
+      err
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "user_activity_query_failed",
+      detail:
+        err?.message || String(err),
+    });
+  }
+});
+
 /**
  * PATCH /api/analytics/users/:id
  * Body: { home_state?, home_course? }
