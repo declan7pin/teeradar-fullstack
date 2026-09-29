@@ -2092,15 +2092,41 @@ function loadCachedLocation() {
   return rem >= want;
 }
 
-    // analytics helper (used for searches + booking clicks)
+        // analytics helper (used for searches + booking clicks)
     function trackEvent(type, payload) {
       try {
+        const eventPayload = {
+          ...(payload || {}),
+        };
+
+        // Attach logged-in account email so backend analytics
+        // can resolve the event to the correct users.id.
+        try {
+          const raw = localStorage.getItem("tr_user");
+
+          if (raw) {
+            const user = JSON.parse(raw);
+
+            if (user?.email) {
+              eventPayload.email = String(user.email)
+                .trim()
+                .toLowerCase();
+
+              eventPayload.userEmail = eventPayload.email;
+            }
+          }
+        } catch (e) {
+          console.warn("Could not attach analytics user", e);
+        }
+
         fetch(`${API_BASE}/api/analytics/event`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({
             type,
-            payload: payload || {},
+            payload: eventPayload,
             at: new Date().toISOString(),
           }),
         });
