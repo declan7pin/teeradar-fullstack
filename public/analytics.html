@@ -919,6 +919,8 @@ nav a:hover{
 <th>Delete requested</th>
 <th>Plan</th>
 <th>Home state</th>
+<th>Booking clicks</th>
+<th>Completed rounds</th>
 <th>Favourite courses</th>
 <th>Created at</th>
 <th>Last seen</th>
@@ -1405,6 +1407,77 @@ nav a:hover{
         <strong>Created at:</strong> <span id="detailCreatedAt">—</span><br>
         <strong>Last seen:</strong> <span id="detailLastSeen">—</span>
       </p>
+      <hr style="border:0;border-top:1px solid var(--border);margin:18px 0;">
+
+<div class="card-label">Account activity</div>
+
+<div
+  style="
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:10px;
+    margin-top:10px;
+  "
+>
+  <div class="card">
+    <div class="card-label">Completed rounds</div>
+    <div id="detailCompletedRounds" class="card-value">—</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Booking clicks</div>
+    <div id="detailBookingClicks" class="card-value">—</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Unique courses clicked</div>
+    <div id="detailUniqueCourses" class="card-value">—</div>
+  </div>
+</div>
+
+<div style="margin-top:18px;">
+  <strong>Courses clicked</strong>
+
+  <div style="overflow-x:auto;margin-top:8px;">
+    <table class="users-table" style="width:100%;">
+      <thead>
+        <tr>
+          <th>Course</th>
+          <th>Clicks</th>
+          <th>Last clicked</th>
+        </tr>
+      </thead>
+      <tbody id="detailCoursesClicked">
+        <tr>
+          <td colspan="3">—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div style="margin-top:18px;">
+  <strong>Completed rounds</strong>
+
+  <div style="overflow-x:auto;margin-top:8px;">
+    <table class="users-table" style="width:100%;">
+      <thead>
+        <tr>
+          <th>Course</th>
+          <th>Layout</th>
+          <th>State</th>
+          <th>Holes</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody id="detailCompletedRoundsList">
+        <tr>
+          <td colspan="5">—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
     </div>
   </section>
 </main>
@@ -1808,6 +1881,15 @@ function setAnalyticsLoading(isLoading, message = "") {
 
 function setAnalyticsDebug(message, data = null) {
   // Debug disabled
+}
+
+  function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
   function setText(id, txt) {
@@ -2262,7 +2344,9 @@ return `
     <td>${deleteRequestedLabel}</td>
     <td data-col="plan">${planLabel}</td>
     <td>${homeState}</td>
-    <td>${favDisplay || ""}</td>
+<td>${Number(u.booking_clicks || 0)}</td>
+<td>${Number(u.completed_rounds || 0)}</td>
+<td>${favDisplay || ""}</td>
     <td>${created ? new Date(created).toLocaleString() : ""}</td>
     <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
     <td style="white-space:nowrap;">
@@ -2347,78 +2431,433 @@ async function deleteRegisteredUserById(id) {
     }
   }
 
-function showUserDetails(u) {
+async function showUserDetails(u) {
   const card = document.getElementById("userDetailCard");
-  if (!card) return;
+  if (!card || !u) return;
 
   card.style.display = "block";
 
+  // --------------------------------------------------
+  // BASIC ACCOUNT DETAILS
+  // --------------------------------------------------
+
   setText("detailEmail", u.email ?? "—");
+  setText("detailFullName", u.full_name || u.fullName || "—");
+  setText("detailDisplayName", u.display_name || u.displayName || "—");
 
-setText("detailFullName", u.full_name || u.fullName || "—");
-setText("detailDisplayName", u.display_name || u.displayName || "—");
+  const genderRaw = String(u.gender || "").trim();
 
-const genderRaw = String(u.gender || "").trim();
-const genderLabel =
-  genderRaw === "male"
-    ? "Male"
-    : genderRaw === "female"
-    ? "Female"
-    : genderRaw === "other"
-    ? "Other"
-    : genderRaw === "prefer_not_to_answer"
-    ? "Prefer not to answer"
-    : "—";
+  const genderLabel =
+    genderRaw === "male"
+      ? "Male"
+      : genderRaw === "female"
+      ? "Female"
+      : genderRaw === "other"
+      ? "Other"
+      : genderRaw === "prefer_not_to_answer"
+      ? "Prefer not to answer"
+      : "—";
 
-setText("detailGender", genderLabel);
+  setText("detailGender", genderLabel);
 
-const dobRaw = u.dob || "";
-setText("detailDob", dobRaw ? new Date(dobRaw).toLocaleDateString("en-AU") : "—");
-
-setText(
-  "detailAge",
-  u.age !== null && typeof u.age !== "undefined" ? String(u.age) : "—"
-);
-
-const deleteRequestedRaw =
-  u.deletion_requested_at ||
-  u.deletionRequestedAt ||
-  "";
-
-setText(
-  "detailDeleteRequested",
-  deleteRequestedRaw ? new Date(deleteRequestedRaw).toLocaleString() : "—"
-);
-
-setText("detailPlan", normalisePlanLabel(u.plan));
-  setText("detailHomeState", u.home_state ?? "—");
-  setText("detailHomeCourse", u.home_course ?? "—");
-
-  const favs = favouritesToString(u.favourites || u.favourite_courses);
-  setText("detailFavs", favs || "—");
-
-  // Alert settings (only if your backend returns them; otherwise show —)
-  const days = u.alert_days ?? u.days ?? u.alertDays ?? null;
-  const timeRange = u.alert_time_range ?? u.time_range ?? u.alertTimeRange ?? null;
-  const holes = u.alert_holes ?? u.holes ?? u.alertHoles ?? null;
-  const players = u.alert_players ?? u.players ?? u.alertPlayers ?? null;
+  const dobRaw = u.dob || "";
 
   setText(
-  "detailDays",
-  Array.isArray(days) ? (days.length ? days.join(", ") : "—") : (days != null && String(days).trim() !== "" ? String(days) : "—")
-);
-  setText("detailTimeRange", timeRange != null ? String(timeRange) : "—");
-  setText("detailHoles", holes != null ? String(holes) : "—");
-  setText("detailPlayers", players != null ? String(players) : "—");
+    "detailDob",
+    dobRaw
+      ? new Date(dobRaw).toLocaleDateString("en-AU")
+      : "—"
+  );
 
-  const created = u.created_at || u.createdAt || "";
-  const lastSeen = u.last_seen_at || u.lastLogin || u.last_seen || "";
+  setText(
+    "detailAge",
+    u.age !== null && typeof u.age !== "undefined"
+      ? String(u.age)
+      : "—"
+  );
 
-  setText("detailCreatedAt", created ? new Date(created).toLocaleString() : "—");
-  setText("detailLastSeen", lastSeen ? new Date(lastSeen).toLocaleString() : "—");
+  const deleteRequestedRaw =
+    u.deletion_requested_at ||
+    u.deletionRequestedAt ||
+    "";
 
-  // scroll to the details card on mobile
-  card.scrollIntoView({ behavior: "smooth", block: "start" });
+  setText(
+    "detailDeleteRequested",
+    deleteRequestedRaw
+      ? new Date(deleteRequestedRaw).toLocaleString()
+      : "—"
+  );
+
+  setText(
+    "detailPlan",
+    normalisePlanLabel(u.plan)
+  );
+
+  setText(
+    "detailHomeState",
+    u.home_state ?? "—"
+  );
+
+  setText(
+    "detailHomeCourse",
+    u.home_course ?? "—"
+  );
+
+  const favs = favouritesToString(
+    u.favourites ||
+    u.favourite_courses
+  );
+
+  setText(
+    "detailFavs",
+    favs || "—"
+  );
+
+  // --------------------------------------------------
+  // ALERT SETTINGS
+  // --------------------------------------------------
+
+  const days =
+    u.alert_days ??
+    u.days ??
+    u.alertDays ??
+    null;
+
+  const timeRange =
+    u.alert_time_range ??
+    u.time_range ??
+    u.alertTimeRange ??
+    null;
+
+  const holes =
+    u.alert_holes ??
+    u.holes ??
+    u.alertHoles ??
+    null;
+
+  const players =
+    u.alert_players ??
+    u.players ??
+    u.alertPlayers ??
+    null;
+
+  setText(
+    "detailDays",
+    Array.isArray(days)
+      ? (days.length ? days.join(", ") : "—")
+      : (
+          days != null &&
+          String(days).trim() !== ""
+            ? String(days)
+            : "—"
+        )
+  );
+
+  setText(
+    "detailTimeRange",
+    timeRange != null &&
+    String(timeRange).trim() !== ""
+      ? String(timeRange)
+      : "—"
+  );
+
+  setText(
+    "detailHoles",
+    holes != null &&
+    String(holes).trim() !== ""
+      ? String(holes)
+      : "—"
+  );
+
+  setText(
+    "detailPlayers",
+    players != null &&
+    String(players).trim() !== ""
+      ? String(players)
+      : "—"
+  );
+
+  const created =
+    u.created_at ||
+    u.createdAt ||
+    "";
+
+  const lastSeen =
+    u.last_seen_at ||
+    u.lastLogin ||
+    u.last_seen ||
+    "";
+
+  setText(
+    "detailCreatedAt",
+    created
+      ? new Date(created).toLocaleString()
+      : "—"
+  );
+
+  setText(
+    "detailLastSeen",
+    lastSeen
+      ? new Date(lastSeen).toLocaleString()
+      : "—"
+  );
+
+  // --------------------------------------------------
+  // ACTIVITY PLACEHOLDERS
+  // --------------------------------------------------
+
+  setText(
+    "detailCompletedRounds",
+    Number(u.completed_rounds || 0)
+  );
+
+  setText(
+    "detailBookingClicks",
+    Number(u.booking_clicks || 0)
+  );
+
+  setText(
+    "detailUniqueCourses",
+    "Loading..."
+  );
+
+  const coursesBody =
+    document.getElementById(
+      "detailCoursesClicked"
+    );
+
+  const roundsBody =
+    document.getElementById(
+      "detailCompletedRoundsList"
+    );
+
+  if (coursesBody) {
+    coursesBody.innerHTML = `
+      <tr>
+        <td colspan="3">Loading...</td>
+      </tr>
+    `;
+  }
+
+  if (roundsBody) {
+    roundsBody.innerHTML = `
+      <tr>
+        <td colspan="5">Loading...</td>
+      </tr>
+    `;
+  }
+
+  // Show immediately before waiting for activity API
+  card.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
+
+  // --------------------------------------------------
+  // LOAD ACCOUNT ACTIVITY
+  // --------------------------------------------------
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/analytics/users/${u.id}/activity`,
+      {
+        headers: getAuthHeaders(),
+        credentials: "include"
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok || !data?.ok) {
+      throw new Error(
+        data?.error ||
+        `HTTP ${res.status}`
+      );
+    }
+
+    const summary =
+      data.summary || {};
+
+    setText(
+      "detailCompletedRounds",
+      Number(
+        summary.completed_rounds || 0
+      )
+    );
+
+    setText(
+      "detailBookingClicks",
+      Number(
+        summary.total_course_clicks || 0
+      )
+    );
+
+    setText(
+      "detailUniqueCourses",
+      Number(
+        summary.unique_courses_clicked || 0
+      )
+    );
+
+    // ------------------------------------------------
+    // COURSES CLICKED
+    // ------------------------------------------------
+
+    const courses =
+      Array.isArray(data.coursesClicked)
+        ? data.coursesClicked
+        : [];
+
+    if (coursesBody) {
+      if (!courses.length) {
+        coursesBody.innerHTML = `
+          <tr>
+            <td colspan="3">
+              No tracked course clicks yet.
+            </td>
+          </tr>
+        `;
+      } else {
+        coursesBody.innerHTML =
+          courses
+            .map((row) => {
+              const lastClicked =
+                row.last_clicked_at
+                  ? new Date(
+                      row.last_clicked_at
+                    ).toLocaleString(
+                      "en-AU"
+                    )
+                  : "—";
+
+              return `
+                <tr>
+                  <td>${escapeHtml(
+                    row.course || "—"
+                  )}</td>
+
+                  <td>
+                    ${Number(
+                      row.clicks || 0
+                    )}
+                  </td>
+
+                  <td>
+                    ${escapeHtml(
+                      lastClicked
+                    )}
+                  </td>
+                </tr>
+              `;
+            })
+            .join("");
+      }
+    }
+
+    // ------------------------------------------------
+    // COMPLETED ROUNDS
+    // ------------------------------------------------
+
+    const rounds =
+      Array.isArray(data.completedRounds)
+        ? data.completedRounds
+        : [];
+
+    if (roundsBody) {
+      if (!rounds.length) {
+        roundsBody.innerHTML = `
+          <tr>
+            <td colspan="5">
+              No completed rounds.
+            </td>
+          </tr>
+        `;
+      } else {
+        roundsBody.innerHTML =
+          rounds
+            .map((round) => {
+              const date =
+                round.created_at
+                  ? new Date(
+                      round.created_at
+                    ).toLocaleDateString(
+                      "en-AU"
+                    )
+                  : "—";
+
+              return `
+                <tr>
+                  <td>
+                    ${escapeHtml(
+                      round.course || "—"
+                    )}
+                  </td>
+
+                  <td>
+                    ${escapeHtml(
+                      round.layout || "—"
+                    )}
+                  </td>
+
+                  <td>
+                    ${escapeHtml(
+                      round.state || "—"
+                    )}
+                  </td>
+
+                  <td>
+                    ${Number(
+                      round.holes || 0
+                    )}
+                  </td>
+
+                  <td>
+                    ${escapeHtml(date)}
+                  </td>
+                </tr>
+              `;
+            })
+            .join("");
+      }
+    }
+
+  } catch (err) {
+    console.error(
+      "User activity load failed:",
+      err
+    );
+
+    setText(
+      "detailUniqueCourses",
+      "—"
+    );
+
+    if (coursesBody) {
+      coursesBody.innerHTML = `
+        <tr>
+          <td
+            colspan="3"
+            style="color:#b91c1c;"
+          >
+            Could not load course activity.
+          </td>
+        </tr>
+      `;
+    }
+
+    if (roundsBody) {
+      roundsBody.innerHTML = `
+        <tr>
+          <td
+            colspan="5"
+            style="color:#b91c1c;"
+          >
+            Could not load completed rounds.
+          </td>
+        </tr>
+      `;
+    }
+  }
 }
 
 // Delegate click for any row in the users table
