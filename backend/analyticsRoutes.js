@@ -1038,13 +1038,203 @@ ${colDeletionRequestedAt},
 
     const r = await db.query(sql, [limit]);
 
-    const users = (r.rows || []).map((u) => ({
-      ...u,
-      plan: titlePlan(u.plan),
-      favourites_count: Array.isArray(u.favourites) ? u.favourites.length : 0,
-    }));
+// -----------------------------------------------------
+// ACCOUNT ACTIVITY TOTALS
+//
+// Adds:
+// - completed_rounds
+// - booking_clicks
+//
+// These are returned with each user so analytics.html
+// can sort/filter the user table without making one
+// /activity request per account.
+// -----------------------------------------------------
 
-    return res.json({ users });
+const userIds = (r.rows || [])
+  .map((u) => Number(u.id))
+  .filter((id) => Number.isInteger(id) && id > 0);
+
+let activityByUser = new Map();
+
+if (userIds.length) {
+  // ---------------------------------------------------
+  // BOOKING CLICKS
+  // ---------------------------------------------------
+  const clicksRes = await db.query(
+    `
+    SELECT
+      user_id::text AS user_id,
+      COUNT(*)::int AS booking_clicks
+    FROM analytics
+    WHERE
+      user_id::text = ANY($1::text[])
+      AND type IN (
+        'booking_click',
+        'course_booking_click'
+      )
+    GROUP BY user_id::text;
+    `,
+    [userIds.map(String)]
+  );
+
+  for (const row of clicksRes.rows || []) {
+    const id = Number(row.user_id);
+
+    if (!activityByUser.has(id)) {
+      activityByUser.set(id, {
+        booking_clicks: 0,
+        completed_rounds: 0,
+      });
+    }
+
+    activityByUser.get(id).booking_clicks =
+      Number(row.booking_clicks || 0);
+  }
+
+  // ---------------------------------------------------
+  // COMPLETED ROUNDS
+  //
+  // Same logic as /users/:id/activity:
+  // - master rounds only
+  // - owner = player 1
+  // - shared players come from round_participants
+  // - account must have a score for every hole
+  // ---------------------------------------------------
+  const roundsRes = await db.query(
+    `
+    WITH requested_users AS (
+      SELECT UNNEST($1::int[]) AS user_id
+    ),
+
+    user_rounds AS (
+      SELECT
+        ru.user_id,
+        r.id AS round_id,
+        r.holes,
+
+        CASE
+          WHEN r.user_id = ru.user_id
+            THEN 1
+          ELSE rp.player_number
+        END AS player_number
+
+      FROM requested_users ru
+
+      JOIN rounds r
+        ON (
+          r.user_id = ru.user_id
+          OR EXISTS (
+            SELECT 1
+            FROM round_participants rp2
+            WHERE
+              rp2.round_id = r.id
+              AND rp2.user_id = ru.user_id
+          )
+        )
+
+      LEFT JOIN round_participants rp
+        ON rp.round_id = r.id
+        AND rp.user_id = ru.user_id
+
+      WHERE
+        r.linked_master_round_id IS NULL
+    ),
+
+    round_progress AS (
+      SELECT
+        ur.user_id,
+        ur.round_id,
+        ur.holes,
+        ur.player_number,
+
+        COUNT(
+          CASE
+            WHEN ur.player_number = 1
+              AND (
+                rh.strokes IS NOT NULL
+                OR (
+                  rh.strokes_by_player IS NOT NULL
+                  AND rh.strokes_by_player ? '1'
+                )
+              )
+            THEN 1
+
+            WHEN ur.player_number <> 1
+              AND rh.strokes_by_player IS NOT NULL
+              AND rh.strokes_by_player
+                ? ur.player_number::text
+            THEN 1
+          END
+        )::int AS scored_holes
+
+      FROM user_rounds ur
+
+      LEFT JOIN round_holes rh
+        ON rh.round_id = ur.round_id
+
+      GROUP BY
+        ur.user_id,
+        ur.round_id,
+        ur.holes,
+        ur.player_number
+    )
+
+    SELECT
+      user_id,
+      COUNT(*)::int AS completed_rounds
+
+    FROM round_progress
+
+    WHERE
+      player_number IS NOT NULL
+      AND scored_holes >= holes
+
+    GROUP BY user_id;
+    `,
+    [userIds]
+  );
+
+  for (const row of roundsRes.rows || []) {
+    const id = Number(row.user_id);
+
+    if (!activityByUser.has(id)) {
+      activityByUser.set(id, {
+        booking_clicks: 0,
+        completed_rounds: 0,
+      });
+    }
+
+    activityByUser.get(id).completed_rounds =
+      Number(row.completed_rounds || 0);
+  }
+}
+
+const users = (r.rows || []).map((u) => {
+  const activity =
+    activityByUser.get(Number(u.id)) || {
+      booking_clicks: 0,
+      completed_rounds: 0,
+    };
+
+  return {
+    ...u,
+
+    plan: titlePlan(u.plan),
+
+    favourites_count:
+      Array.isArray(u.favourites)
+        ? u.favourites.length
+        : 0,
+
+    booking_clicks:
+      Number(activity.booking_clicks || 0),
+
+    completed_rounds:
+      Number(activity.completed_rounds || 0),
+  };
+});
+
+return res.json({ users });
   } catch (err) {
     console.error("❌ /api/analytics/users error:", err);
     return res.json({
