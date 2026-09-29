@@ -108,11 +108,47 @@ router.post("/event", async (req, res) => {
       const recordPgEvent = pgAnalytics.recordEvent || pgAnalytics.recordPgEvent || null;
 
       if (typeof recordPgEvent === "function") {
-        const userId =
+                let userId =
           mergedPayload.userId ??
           mergedPayload.user_id ??
           mergedPayload.uid ??
           null;
+
+        // If frontend supplied the logged-in email instead of user_id,
+        // resolve it to the TeeRadar users.id for account-level analytics.
+        if (!userId) {
+          const analyticsEmail = String(
+            mergedPayload.userEmail ??
+            mergedPayload.user_email ??
+            mergedPayload.email ??
+            ""
+          )
+            .trim()
+            .toLowerCase();
+
+          if (analyticsEmail) {
+            try {
+              const userLookup = await db.query(
+                `
+                SELECT id
+                FROM users
+                WHERE LOWER(TRIM(email)) = $1
+                LIMIT 1;
+                `,
+                [analyticsEmail]
+              );
+
+              if (userLookup.rows.length) {
+                userId = userLookup.rows[0].id;
+              }
+            } catch (lookupErr) {
+              console.warn(
+                "Analytics user lookup failed:",
+                lookupErr?.message || lookupErr
+              );
+            }
+          }
+        }
 
         const courseName =
           mergedPayload.courseName ??
