@@ -1037,13 +1037,13 @@ ${colDeletionRequestedAt},
     }
 
     const r = await db.query(sql, [limit]);
-
 // -----------------------------------------------------
 // ACCOUNT ACTIVITY TOTALS
 //
 // Adds:
-// - completed_rounds
+// - tee_time_searches
 // - booking_clicks
+// - completed_rounds
 //
 // These are returned with each user so analytics.html
 // can sort/filter the user table without making one
@@ -1057,6 +1057,46 @@ const userIds = (r.rows || [])
 let activityByUser = new Map();
 
 if (userIds.length) {
+
+  // ---------------------------------------------------
+  // TEE-TIME SEARCHES
+  //
+  // type = 'search' means the golfer actually pressed
+  // Search for tee times.
+  //
+  // search_course is NOT included because that is the
+  // individual/background course scan activity.
+  // ---------------------------------------------------
+  const searchesRes = await db.query(
+    `
+    SELECT
+      user_id::text AS user_id,
+      COUNT(*)::int AS tee_time_searches
+    FROM analytics
+    WHERE
+      user_id::text = ANY($1::text[])
+      AND type = 'search'
+    GROUP BY user_id::text;
+    `,
+    [userIds.map(String)]
+  );
+
+  for (const row of searchesRes.rows || []) {
+    const id = Number(row.user_id);
+
+    if (!activityByUser.has(id)) {
+      activityByUser.set(id, {
+        tee_time_searches: 0,
+        booking_clicks: 0,
+        completed_rounds: 0,
+      });
+    }
+
+    activityByUser.get(id).tee_time_searches =
+      Number(row.tee_time_searches || 0);
+  }
+
+
   // ---------------------------------------------------
   // BOOKING CLICKS
   // ---------------------------------------------------
@@ -1082,6 +1122,7 @@ if (userIds.length) {
 
     if (!activityByUser.has(id)) {
       activityByUser.set(id, {
+        tee_time_searches: 0,
         booking_clicks: 0,
         completed_rounds: 0,
       });
@@ -1090,6 +1131,7 @@ if (userIds.length) {
     activityByUser.get(id).booking_clicks =
       Number(row.booking_clicks || 0);
   }
+
 
   // ---------------------------------------------------
   // COMPLETED ROUNDS
@@ -1199,6 +1241,7 @@ if (userIds.length) {
 
     if (!activityByUser.has(id)) {
       activityByUser.set(id, {
+        tee_time_searches: 0,
         booking_clicks: 0,
         completed_rounds: 0,
       });
@@ -1209,9 +1252,11 @@ if (userIds.length) {
   }
 }
 
+
 const users = (r.rows || []).map((u) => {
   const activity =
     activityByUser.get(Number(u.id)) || {
+      tee_time_searches: 0,
       booking_clicks: 0,
       completed_rounds: 0,
     };
@@ -1225,6 +1270,9 @@ const users = (r.rows || []).map((u) => {
       Array.isArray(u.favourites)
         ? u.favourites.length
         : 0,
+
+    tee_time_searches:
+      Number(activity.tee_time_searches || 0),
 
     booking_clicks:
       Number(activity.booking_clicks || 0),
