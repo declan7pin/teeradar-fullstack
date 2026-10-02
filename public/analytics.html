@@ -932,6 +932,8 @@ nav a:hover{
     background:#fff;
   ">
     <option value="newest">Newest accounts</option>
+    <option value="searches_desc">Tee-time searches: high to low</option>
+    <option value="searches_asc">Tee-time searches: low to high</option>
     <option value="bookings_desc">Booking clicks — High to low</option>
     <option value="bookings_asc">Booking clicks — Low to high</option>
     <option value="rounds_desc">Completed rounds — High to low</option>
@@ -960,6 +962,7 @@ nav a:hover{
 <th>Delete requested</th>
 <th>Plan</th>
 <th>Home state</th>
+<th>Tee-time searches</th>
 <th>Booking clicks</th>
 <th>Completed rounds</th>
 <th>Favourite courses</th>
@@ -2321,31 +2324,38 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
     });
   }
 
-  // Sorting
-  users.sort((a, b) => {
-    if (sortFilter === "bookings_desc") {
-      return Number(b.booking_clicks || 0) - Number(a.booking_clicks || 0);
-    }
+ // Sorting
+users.sort((a, b) => {
+  if (sortFilter === "searches_desc") {
+    return Number(b.tee_time_searches || 0) - Number(a.tee_time_searches || 0);
+  }
 
-    if (sortFilter === "bookings_asc") {
-      return Number(a.booking_clicks || 0) - Number(b.booking_clicks || 0);
-    }
+  if (sortFilter === "searches_asc") {
+    return Number(a.tee_time_searches || 0) - Number(b.tee_time_searches || 0);
+  }
 
-    if (sortFilter === "rounds_desc") {
-      return Number(b.completed_rounds || 0) - Number(a.completed_rounds || 0);
-    }
+  if (sortFilter === "bookings_desc") {
+    return Number(b.booking_clicks || 0) - Number(a.booking_clicks || 0);
+  }
 
-    if (sortFilter === "rounds_asc") {
-      return Number(a.completed_rounds || 0) - Number(b.completed_rounds || 0);
-    }
+  if (sortFilter === "bookings_asc") {
+    return Number(a.booking_clicks || 0) - Number(b.booking_clicks || 0);
+  }
 
-    // Default = newest accounts first
-    const aDate = new Date(a.created_at || a.createdAt || 0).getTime();
-    const bDate = new Date(b.created_at || b.createdAt || 0).getTime();
+  if (sortFilter === "rounds_desc") {
+    return Number(b.completed_rounds || 0) - Number(a.completed_rounds || 0);
+  }
 
-    return bDate - aDate;
-  });
+  if (sortFilter === "rounds_asc") {
+    return Number(a.completed_rounds || 0) - Number(b.completed_rounds || 0);
+  }
 
+  // Default = newest accounts first
+  const aDate = new Date(a.created_at || a.createdAt || 0).getTime();
+  const bDate = new Date(b.created_at || b.createdAt || 0).getTime();
+
+  return bDate - aDate;
+});
   const countEl = document.getElementById("userFilterCount");
 
   if (countEl) {
@@ -2448,13 +2458,17 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
 
         <td>${homeState}</td>
 
-        <td>
-          <strong>${Number(u.booking_clicks || 0)}</strong>
-        </td>
+<td>
+  <strong>${Number(u.tee_time_searches || 0)}</strong>
+</td>
 
-        <td>
-          <strong>${Number(u.completed_rounds || 0)}</strong>
-        </td>
+<td>
+  <strong>${Number(u.booking_clicks || 0)}</strong>
+</td>
+
+<td>
+  <strong>${Number(u.completed_rounds || 0)}</strong>
+</td>
 
         <td>${favDisplay || ""}</td>
 
