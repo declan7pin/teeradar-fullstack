@@ -900,7 +900,48 @@ nav a:hover{
 
   <section class="card" style="margin-top:14px;">
     <div class="card-label">Registered users</div>
-    <div id="usersEmpty" class="users-empty" style="display:none;">
+
+<div style="
+  display:flex;
+  gap:10px;
+  align-items:center;
+  flex-wrap:wrap;
+  margin:10px 0 12px;
+">
+  <select id="userStateFilter" style="
+    padding:8px 10px;
+    border:1px solid #d1d5db;
+    border-radius:8px;
+    background:#fff;
+  ">
+    <option value="">All states</option>
+    <option value="WA">WA</option>
+    <option value="NSW">NSW</option>
+    <option value="VIC">VIC</option>
+    <option value="QLD">QLD</option>
+    <option value="SA">SA</option>
+    <option value="TAS">TAS</option>
+    <option value="ACT">ACT</option>
+    <option value="NT">NT</option>
+  </select>
+
+  <select id="userSortFilter" style="
+    padding:8px 10px;
+    border:1px solid #d1d5db;
+    border-radius:8px;
+    background:#fff;
+  ">
+    <option value="newest">Newest accounts</option>
+    <option value="bookings_desc">Booking clicks — High to low</option>
+    <option value="bookings_asc">Booking clicks — Low to high</option>
+    <option value="rounds_desc">Completed rounds — High to low</option>
+    <option value="rounds_asc">Completed rounds — Low to high</option>
+  </select>
+
+  <span id="userFilterCount" class="muted-note"></span>
+</div>
+
+<div id="usersEmpty" class="users-empty" style="display:none;">
       No registered users yet.
     </div>
     <div id="usersError" class="users-empty" style="display:none;color:#b91c1c;">
@@ -2255,111 +2296,248 @@ setText("metricGroupVotesWinnerRate", fmtPct(groupVoteWinnerRate));
   };
 }
 
-  async function loadRegisteredUsers() {
-    if (!enforceAdmin()) return;
+  function renderRegisteredUsers() {
+  const table = document.getElementById("usersTable");
+  const tbody = document.getElementById("usersTbody");
+  const empty = document.getElementById("usersEmpty");
 
-    const table = document.getElementById("usersTable");
-    const tbody = document.getElementById("usersTbody");
-    const empty = document.getElementById("usersEmpty");
-    const errorEl = document.getElementById("usersError");
+  const stateFilter = String(
+    document.getElementById("userStateFilter")?.value || ""
+  ).toUpperCase();
 
-    const wrapped = await fetchUsersFromAnyEndpoint();
-    if (!wrapped) {
-      if (table) table.style.display = "none";
-      if (empty) empty.style.display = "none";
-      if (errorEl) {
-        errorEl.style.display = "block";
-        errorEl.textContent =
-  "Could not load registered users. Check the app console for the exact HTTP response.";
-      }
-      computeSubscriptionMetrics();
-      return;
+  const sortFilter =
+    document.getElementById("userSortFilter")?.value || "newest";
+
+  let users = [...USERS_CACHE];
+
+  // State filter
+  if (stateFilter) {
+    users = users.filter((u) => {
+      const state = String(u.home_state || "")
+        .trim()
+        .toUpperCase();
+
+      return state === stateFilter;
+    });
+  }
+
+  // Sorting
+  users.sort((a, b) => {
+    if (sortFilter === "bookings_desc") {
+      return Number(b.booking_clicks || 0) - Number(a.booking_clicks || 0);
     }
 
-    const data = wrapped.data;
-    const users = data.users || data.registeredUsers || data.items || [];
-    USERS_CACHE = users;
-
-    if (!users.length) {
-      if (table) table.style.display = "none";
-      if (empty) empty.style.display = "block";
-      if (errorEl) errorEl.style.display = "none";
-      computeSubscriptionMetrics();
-      return;
+    if (sortFilter === "bookings_asc") {
+      return Number(a.booking_clicks || 0) - Number(b.booking_clicks || 0);
     }
 
+    if (sortFilter === "rounds_desc") {
+      return Number(b.completed_rounds || 0) - Number(a.completed_rounds || 0);
+    }
+
+    if (sortFilter === "rounds_asc") {
+      return Number(a.completed_rounds || 0) - Number(b.completed_rounds || 0);
+    }
+
+    // Default = newest accounts first
+    const aDate = new Date(a.created_at || a.createdAt || 0).getTime();
+    const bDate = new Date(b.created_at || b.createdAt || 0).getTime();
+
+    return bDate - aDate;
+  });
+
+  const countEl = document.getElementById("userFilterCount");
+
+  if (countEl) {
+    countEl.textContent =
+      users.length === USERS_CACHE.length
+        ? `${users.length} accounts`
+        : `${users.length} of ${USERS_CACHE.length} accounts`;
+  }
+
+  if (!users.length) {
+    if (table) table.style.display = "none";
+
+    if (empty) {
+      empty.style.display = "block";
+      empty.textContent = stateFilter
+        ? `No registered users found in ${stateFilter}.`
+        : "No registered users found.";
+    }
+
+    return;
+  }
+
+  if (empty) empty.style.display = "none";
+  if (table) table.style.display = "table";
+
+  if (!tbody) return;
+
+  tbody.innerHTML = users.map((u) => {
+    // IMPORTANT:
+    // Store the index from the ORIGINAL USERS_CACHE.
+    // This keeps row clicking/editing working after sorting.
+    const originalIdx = USERS_CACHE.indexOf(u);
+
+    const created = u.created_at || u.createdAt || "";
+    const lastSeen = u.last_seen_at || u.lastLogin || "";
+
+    const favDisplay = favouritesToString(
+      u.favourites || u.favourite_courses
+    );
+
+    const homeState = u.home_state || "";
+    const planLabel = normalisePlanLabel(u.plan);
+
+    const fullName = u.full_name || u.fullName || "";
+    const displayName = u.display_name || u.displayName || "";
+    const nameLabel = fullName || displayName || "";
+
+    const genderRaw = String(u.gender || "").trim();
+
+    const genderLabel =
+      genderRaw === "male"
+        ? "Male"
+        : genderRaw === "female"
+        ? "Female"
+        : genderRaw === "other"
+        ? "Other"
+        : genderRaw === "prefer_not_to_answer"
+        ? "Prefer not to answer"
+        : "";
+
+    const dobRaw = u.dob || "";
+
+    const dobLabel = dobRaw
+      ? new Date(dobRaw).toLocaleDateString("en-AU")
+      : "";
+
+    const ageLabel =
+      u.age !== null && typeof u.age !== "undefined"
+        ? String(u.age)
+        : "";
+
+    const deleteRequestedRaw =
+      u.deletion_requested_at ||
+      u.deletionRequestedAt ||
+      "";
+
+    const deleteRequestedLabel = deleteRequestedRaw
+      ? new Date(deleteRequestedRaw).toLocaleString()
+      : "";
+
+    return `
+      <tr data-user-idx="${originalIdx}" style="cursor:pointer;">
+        <td>${u.id ?? ""}</td>
+
+        <td>
+          <span class="user-email-pill">
+            ${u.email ?? ""}
+          </span>
+        </td>
+
+        <td>${nameLabel}</td>
+        <td>${genderLabel}</td>
+        <td>${dobLabel}</td>
+        <td>${ageLabel}</td>
+        <td>${deleteRequestedLabel}</td>
+
+        <td data-col="plan">
+          ${planLabel}
+        </td>
+
+        <td>${homeState}</td>
+
+        <td>
+          <strong>${Number(u.booking_clicks || 0)}</strong>
+        </td>
+
+        <td>
+          <strong>${Number(u.completed_rounds || 0)}</strong>
+        </td>
+
+        <td>${favDisplay || ""}</td>
+
+        <td>
+          ${created ? new Date(created).toLocaleString() : ""}
+        </td>
+
+        <td>
+          ${lastSeen ? new Date(lastSeen).toLocaleString() : ""}
+        </td>
+
+        <td style="white-space:nowrap;">
+          <button
+            class="edit-btn"
+            type="button"
+            data-edit-user-idx="${originalIdx}"
+          >
+            Edit
+          </button>
+
+          <button
+            class="delete-btn"
+            type="button"
+            data-delete-user-id="${u.id}"
+          >
+            Delete
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+
+async function loadRegisteredUsers() {
+  if (!enforceAdmin()) return;
+
+  const table = document.getElementById("usersTable");
+  const empty = document.getElementById("usersEmpty");
+  const errorEl = document.getElementById("usersError");
+
+  const wrapped = await fetchUsersFromAnyEndpoint();
+
+  if (!wrapped) {
+    if (table) table.style.display = "none";
     if (empty) empty.style.display = "none";
-    if (errorEl) errorEl.style.display = "none";
-    if (table) table.style.display = "table";
 
-    if (tbody) {
-      tbody.innerHTML = users.map((u, idx) => {
-        const created = u.created_at || u.createdAt || "";
-        const lastSeen = u.last_seen_at || u.lastLogin || "";
-        const favDisplay = favouritesToString(u.favourites || u.favourite_courses);
-        const homeState = u.home_state || "";
-        const planLabel = normalisePlanLabel(u.plan);
-
-                const fullName = u.full_name || u.fullName || "";
-const displayName = u.display_name || u.displayName || "";
-const nameLabel = fullName || displayName || "";
-
-const genderRaw = String(u.gender || "").trim();
-const genderLabel =
-  genderRaw === "male"
-    ? "Male"
-    : genderRaw === "female"
-    ? "Female"
-    : genderRaw === "other"
-    ? "Other"
-    : genderRaw === "prefer_not_to_answer"
-    ? "Prefer not to answer"
-    : "";
-
-const dobRaw = u.dob || "";
-const dobLabel = dobRaw ? new Date(dobRaw).toLocaleDateString("en-AU") : "";
-
-const ageLabel =
-  u.age !== null && typeof u.age !== "undefined"
-    ? String(u.age)
-    : "";
-
-const deleteRequestedRaw =
-  u.deletion_requested_at ||
-  u.deletionRequestedAt ||
-  "";
-
-const deleteRequestedLabel = deleteRequestedRaw
-  ? new Date(deleteRequestedRaw).toLocaleString()
-  : "";
-
-return `
-  <tr data-user-idx="${idx}">
-    <td>${u.id ?? ""}</td>
-    <td><span class="user-email-pill">${u.email ?? ""}</span></td>
-    <td>${nameLabel}</td>
-    <td>${genderLabel}</td>
-    <td>${dobLabel}</td>
-    <td>${ageLabel}</td>
-    <td>${deleteRequestedLabel}</td>
-    <td data-col="plan">${planLabel}</td>
-    <td>${homeState}</td>
-<td>${Number(u.booking_clicks || 0)}</td>
-<td>${Number(u.completed_rounds || 0)}</td>
-<td>${favDisplay || ""}</td>
-    <td>${created ? new Date(created).toLocaleString() : ""}</td>
-    <td>${lastSeen ? new Date(lastSeen).toLocaleString() : ""}</td>
-    <td style="white-space:nowrap;">
-      <button class="edit-btn" type="button" data-edit-user-idx="${idx}">Edit</button>
-      <button class="delete-btn" type="button" data-delete-user-id="${u.id}">Delete</button>
-    </td>
-  </tr>
-`;
-      }).join("");
+    if (errorEl) {
+      errorEl.style.display = "block";
+      errorEl.textContent =
+        "Could not load registered users. Check the app console for the exact HTTP response.";
     }
 
     computeSubscriptionMetrics();
+    return;
   }
+
+  const data = wrapped.data;
+
+  USERS_CACHE =
+    data.users ||
+    data.registeredUsers ||
+    data.items ||
+    [];
+
+  if (errorEl) {
+    errorEl.style.display = "none";
+  }
+
+  renderRegisteredUsers();
+
+  computeSubscriptionMetrics();
+}
+
+
+// Registered user filters
+document
+  .getElementById("userStateFilter")
+  ?.addEventListener("change", renderRegisteredUsers);
+
+document
+  .getElementById("userSortFilter")
+  ?.addEventListener("change", renderRegisteredUsers);
   async function patchRegisteredUser(id, payload) {
     const res = await fetch(`${API_BASE}/api/analytics/users/${id}`, {
       method: "PATCH",
