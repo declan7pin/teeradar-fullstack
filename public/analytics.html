@@ -940,7 +940,15 @@ nav a:hover{
     <option value="rounds_asc">Completed rounds — Low to high</option>
   </select>
 
-  <span id="userFilterCount" class="muted-note"></span>
+  <button
+  id="btnRefreshRegisteredUsers"
+  type="button"
+  class="secondary"
+>
+  Refresh users
+</button>
+
+<span id="userFilterCount" class="muted-note"></span>
 </div>
 
 <div id="usersEmpty" class="users-empty" style="display:none;">
@@ -2542,8 +2550,6 @@ async function loadRegisteredUsers() {
 
   computeSubscriptionMetrics();
 }
-
-
 // Registered user filters
 document
   .getElementById("userStateFilter")
@@ -2552,6 +2558,29 @@ document
 document
   .getElementById("userSortFilter")
   ?.addEventListener("change", renderRegisteredUsers);
+
+// Registered users manual refresh
+document
+  .getElementById("btnRefreshRegisteredUsers")
+  ?.addEventListener("click", async (event) => {
+    const btn = event.currentTarget;
+
+    if (btn.disabled) return;
+
+    const originalText = btn.textContent;
+
+    btn.disabled = true;
+    btn.textContent = "Refreshing…";
+
+    try {
+      await loadRegisteredUsers();
+    } catch (err) {
+      console.error("Registered users refresh failed:", err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  });
   async function patchRegisteredUser(id, payload) {
     const res = await fetch(`${API_BASE}/api/analytics/users/${id}`, {
       method: "PATCH",
