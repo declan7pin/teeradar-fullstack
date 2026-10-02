@@ -2094,46 +2094,44 @@ function loadCachedLocation() {
 
         // analytics helper (used for searches + booking clicks)
     function trackEvent(type, payload) {
-      try {
-        const eventPayload = {
-          ...(payload || {}),
-        };
+  try {
+    const eventPayload = {
+      ...(payload || {}),
+    };
 
-        // Attach logged-in account email so backend analytics
-        // can resolve the event to the correct users.id.
-        try {
-          const raw = localStorage.getItem("tr_user");
+    // Attach the logged-in account email so backend analytics
+    // can resolve this event to the correct users.id.
+    const analyticsEmail = getLoggedInEmail() || BOOK_AUTH_EMAIL || "";
 
-          if (raw) {
-            const user = JSON.parse(raw);
+    if (analyticsEmail) {
+      eventPayload.email = String(analyticsEmail)
+        .trim()
+        .toLowerCase();
 
-            if (user?.email) {
-              eventPayload.email = String(user.email)
-                .trim()
-                .toLowerCase();
-
-              eventPayload.userEmail = eventPayload.email;
-            }
-          }
-        } catch (e) {
-          console.warn("Could not attach analytics user", e);
-        }
-
-        fetch(`${API_BASE}/api/analytics/event`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            type,
-            payload: eventPayload,
-            at: new Date().toISOString(),
-          }),
-        });
-      } catch (err) {
-        console.warn("analytics error", err);
-      }
+      eventPayload.userEmail = eventPayload.email;
+      eventPayload.user_email = eventPayload.email;
     }
+
+    fetch(`${API_BASE}/api/analytics/event`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(BOOK_AUTH_TOKEN
+          ? { Authorization: `Bearer ${BOOK_AUTH_TOKEN}` }
+          : {}),
+      },
+      body: JSON.stringify({
+        type,
+        payload: eventPayload,
+        at: new Date().toISOString(),
+      }),
+    }).catch((err) => {
+      console.warn("analytics request failed", err);
+    });
+  } catch (err) {
+    console.warn("analytics error", err);
+  }
+}
 
     // 💡 helper to turn a phone string into a tel: href
     function getTelHref(phone) {
