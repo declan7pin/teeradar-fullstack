@@ -2134,251 +2134,446 @@ export async function createRoundWithSeededHoles({
   if (!userId) {
     return { ok: false, status: 401, error: "unauthorised" };
   }
+
   if (!course || !String(course).trim()) {
     return { ok: false, status: 400, error: "course is required" };
   }
+
   if (![9, 18].includes(holesNum)) {
     return { ok: false, status: 400, error: "holes must be 9 or 18" };
   }
 
-  let stateCode = (state || "").toString().trim().toUpperCase() || null;
-  const layoutName = (layout || "").toString().trim() || null;
-  const mode = (par_mode || "").toString().trim().toLowerCase() || "published";
+  let stateCode =
+    (state || "").toString().trim().toUpperCase() || null;
+
+  const layoutName =
+    (layout || "").toString().trim() || null;
+
+  const mode =
+    (par_mode || "").toString().trim().toLowerCase() || "published";
 
   const playersCount = clampPlayers(players_count);
 
   let playerNames = [];
+
   if (Array.isArray(player_names)) {
-    playerNames = player_names.map((x) => String(x || "").trim());
+    playerNames = player_names.map((x) =>
+      String(x || "").trim()
+    );
   }
+
   playerNames.length = playersCount;
-  if (typeof playerNames[0] !== "string") playerNames[0] = "";
+
+  if (typeof playerNames[0] !== "string") {
+    playerNames[0] = "";
+  }
 
   let pars = null;
   let dists = null;
 
-    // ✅ Try approved templates first
+  // -------------------------------------------------
+  // ✅ Try approved templates first
+  // -------------------------------------------------
   if (mode === "published") {
     let t = null;
 
     if (stateCode) {
       // 1) exact course/state/holes match
-      t = await getTemplateFromDb(String(course), stateCode, holesNum);
+      t = await getTemplateFromDb(
+        String(course),
+        stateCode,
+        holesNum
+      );
 
       // 2) looser name match if exact failed
       if (!t) {
-        t = await getTemplateFromDbLoose(String(course), stateCode, holesNum);
+        t = await getTemplateFromDbLoose(
+          String(course),
+          stateCode,
+          holesNum
+        );
       }
     }
 
-    // ✅ 3) If booking-created round has no state, auto-find the approved template
+    // 3) If booking-created round has no state,
+    // auto-find the approved template
     if (!t && !stateCode) {
-      t = await getTemplateFromDbAnyState(String(course), holesNum, layoutName);
-      if (t?.state) stateCode = String(t.state || "").trim().toUpperCase() || null;
+      t = await getTemplateFromDbAnyState(
+        String(course),
+        holesNum,
+        layoutName
+      );
+
+      if (t?.state) {
+        stateCode =
+          String(t.state || "").trim().toUpperCase() || null;
+      }
     }
 
-    if (t && Array.isArray(t.pars) && t.pars.length === holesNum) {
+    if (
+      t &&
+      Array.isArray(t.pars) &&
+      t.pars.length === holesNum
+    ) {
       pars = t.pars.slice(0, holesNum);
     }
 
-    if (t && Array.isArray(t.dists) && t.dists.length === holesNum) {
+    if (
+      t &&
+      Array.isArray(t.dists) &&
+      t.dists.length === holesNum
+    ) {
       dists = t.dists.slice(0, holesNum);
     }
 
-    // 4) 18-hole routed fallback from two approved 9-hole templates
-    if ((!pars || !dists) && holesNum === 18 && layoutName && stateCode) {
+    // 4) 18-hole routed fallback from two
+    // approved 9-hole templates
+    if (
+      (!pars || !dists) &&
+      holesNum === 18 &&
+      layoutName &&
+      stateCode
+    ) {
       const parts = splitLayoutParts(layoutName);
+
       if (parts.length === 2) {
-        const frontT = await getNineHoleTemplateForLayout(course, stateCode, parts[0]);
-        const backT = await getNineHoleTemplateForLayout(course, stateCode, parts[1]);
+        const frontT = await getNineHoleTemplateForLayout(
+          course,
+          stateCode,
+          parts[0]
+        );
+
+        const backT = await getNineHoleTemplateForLayout(
+          course,
+          stateCode,
+          parts[1]
+        );
 
         if (
-          frontT && backT &&
-          Array.isArray(frontT.pars) && frontT.pars.length === 9 &&
-          Array.isArray(backT.pars) && backT.pars.length === 9
+          frontT &&
+          backT &&
+          Array.isArray(frontT.pars) &&
+          frontT.pars.length === 9 &&
+          Array.isArray(backT.pars) &&
+          backT.pars.length === 9
         ) {
-          pars = frontT.pars.slice(0, 9).concat(backT.pars.slice(0, 9));
+          pars = frontT.pars
+            .slice(0, 9)
+            .concat(backT.pars.slice(0, 9));
         }
 
         if (
-          frontT && backT &&
-          Array.isArray(frontT.dists) && frontT.dists.length === 9 &&
-          Array.isArray(backT.dists) && backT.dists.length === 9
+          frontT &&
+          backT &&
+          Array.isArray(frontT.dists) &&
+          frontT.dists.length === 9 &&
+          Array.isArray(backT.dists) &&
+          backT.dists.length === 9
         ) {
-          dists = frontT.dists.slice(0, 9).concat(backT.dists.slice(0, 9));
+          dists = frontT.dists
+            .slice(0, 9)
+            .concat(backT.dists.slice(0, 9));
         }
       }
     }
 
     // 5) 9-hole routed fallback
-    if ((!pars || !dists) && holesNum === 9 && layoutName && stateCode) {
-      const t9 = await getNineHoleTemplateForLayout(course, stateCode, layoutName);
+    if (
+      (!pars || !dists) &&
+      holesNum === 9 &&
+      layoutName &&
+      stateCode
+    ) {
+      const t9 = await getNineHoleTemplateForLayout(
+        course,
+        stateCode,
+        layoutName
+      );
 
-      if (t9 && Array.isArray(t9.pars) && t9.pars.length === 9) {
+      if (
+        t9 &&
+        Array.isArray(t9.pars) &&
+        t9.pars.length === 9
+      ) {
         pars = t9.pars.slice(0, 9);
       }
 
-      if (t9 && Array.isArray(t9.dists) && t9.dists.length === 9) {
+      if (
+        t9 &&
+        Array.isArray(t9.dists) &&
+        t9.dists.length === 9
+      ) {
         dists = t9.dists.slice(0, 9);
       }
     }
 
-    console.log("🧩 createRoundWithSeededHoles template lookup:", {
-      course: String(course).trim(),
-      layout: layoutName,
-      state: stateCode,
-      holes: holesNum,
-      foundPars: !!pars,
-      foundDists: !!dists,
-      parsCount: Array.isArray(pars) ? pars.length : 0,
-      distsCount: Array.isArray(dists) ? dists.length : 0,
-    });
+    console.log(
+      "🧩 createRoundWithSeededHoles template lookup:",
+      {
+        course: String(course).trim(),
+        layout: layoutName,
+        state: stateCode,
+        holes: holesNum,
+        foundPars: !!pars,
+        foundDists: !!dists,
+        parsCount: Array.isArray(pars) ? pars.length : 0,
+        distsCount: Array.isArray(dists) ? dists.length : 0,
+      }
+    );
   }
 
-  // ✅ legacy optional fallback
-  if (mode === "published" && !pars && Array.isArray(publishedPars) && publishedPars.length === holesNum) {
-    const tmp = publishedPars.map((p) => (p === null || p === undefined || p === "" ? null : Number(p)));
-    if (tmp.every((p) => p === null || Number.isFinite(p))) pars = tmp;
+  // -------------------------------------------------
+  // ✅ Legacy optional fallback
+  // -------------------------------------------------
+  if (
+    mode === "published" &&
+    !pars &&
+    Array.isArray(publishedPars) &&
+    publishedPars.length === holesNum
+  ) {
+    const tmp = publishedPars.map((p) =>
+      p === null || p === undefined || p === ""
+        ? null
+        : Number(p)
+    );
+
+    if (
+      tmp.every(
+        (p) => p === null || Number.isFinite(p)
+      )
+    ) {
+      pars = tmp;
+    }
   }
 
-  const finalParMode = (Array.isArray(pars) && pars.length === holesNum) ? "published" : "blank";
+  const finalParMode =
+    Array.isArray(pars) && pars.length === holesNum
+      ? "published"
+      : "blank";
 
-    await ensurePlayerNamesColumn();
+  await ensurePlayerNamesColumn();
   await ensureSharedRoundColumns();
 
   const playerUserIds = cleanPlayerUserIds(
-  player_user_ids,
-  playersCount,
-  userId
-);
+    player_user_ids,
+    playersCount,
+    userId
+  );
 
   let insertedRoundId = null;
-let client = null;
 
-try {
-  client = await db.connect();
+  // -------------------------------------------------
+  // ✅ TRANSACTION
+  // One dedicated Postgres connection for:
+  // BEGIN -> round insert -> hole inserts -> COMMIT
+  // -------------------------------------------------
+  const client = await db.connect();
 
-  await client.query("BEGIN");
+  try {
+    try {
+      await client.query("BEGIN");
 
-  const roundInsert = await client.query(
-      `
-      INSERT INTO rounds (
-  user_id,
-  course,
-  layout,
-  state,
-  holes,
-  par_mode,
-  players_count,
-  player_names,
-  player_user_ids,
-  shared_upcoming_round_id,
-  linked_master_round_id,
-  linked_player_number
-)
-VALUES (
-  $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12
-)
-      RETURNING
-  id,
-  user_id,
-  course,
-  layout,
-  state,
-  holes,
-  par_mode,
-  created_at,
-  players_count,
-  player_names,
-  player_user_ids,
-  shared_upcoming_round_id,
-  linked_master_round_id,
-  linked_player_number;
-      `,
-      [
-  Number(userId),
-  String(course).trim(),
-  layoutName,
-  stateCode,
-  holesNum,
-  finalParMode,
-  playersCount,
-  JSON.stringify(playerNames),
-  JSON.stringify(playerUserIds),
+      const roundInsert = await client.query(
+        `
+        INSERT INTO rounds (
+          user_id,
+          course,
+          layout,
+          state,
+          holes,
+          par_mode,
+          players_count,
+          player_names,
+          player_user_ids,
+          shared_upcoming_round_id,
+          linked_master_round_id,
+          linked_player_number
+        )
+        VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12
+        )
+        RETURNING
+          id,
+          user_id,
+          course,
+          layout,
+          state,
+          holes,
+          par_mode,
+          created_at,
+          players_count,
+          player_names,
+          player_user_ids,
+          shared_upcoming_round_id,
+          linked_master_round_id,
+          linked_player_number;
+        `,
+        [
+          Number(userId),
+          String(course).trim(),
+          layoutName,
+          stateCode,
+          holesNum,
+          finalParMode,
+          playersCount,
+          JSON.stringify(playerNames),
+          JSON.stringify(playerUserIds),
 
-  shared_upcoming_round_id
-    ? Number(shared_upcoming_round_id)
-    : null,
+          shared_upcoming_round_id
+            ? Number(shared_upcoming_round_id)
+            : null,
 
-  linked_master_round_id
-    ? Number(linked_master_round_id)
-    : null,
+          linked_master_round_id
+            ? Number(linked_master_round_id)
+            : null,
 
-  linked_player_number
-    ? Number(linked_player_number)
-    : null,
-]
+          linked_player_number
+            ? Number(linked_player_number)
+            : null,
+        ]
+      );
+
+      const round =
+        roundInsert.rows?.[0] || null;
+
+      if (!round || !round.id) {
+        throw new Error("round_insert_failed");
+      }
+
+      insertedRoundId = Number(round.id);
+
+      // -------------------------------------------------
+      // Seed every hole inside SAME transaction/client
+      // -------------------------------------------------
+      for (let i = 1; i <= holesNum; i++) {
+        const parVal = pars
+          ? Number.isFinite(Number(pars[i - 1]))
+            ? Number(pars[i - 1])
+            : null
+          : null;
+
+        const distVal = dists
+          ? Number.isFinite(Number(dists[i - 1]))
+            ? Number(dists[i - 1])
+            : null
+          : null;
+
+        await client.query(
+          `
+          INSERT INTO round_holes (
+            round_id,
+            hole_number,
+            par,
+            distance_m,
+            strokes,
+            putts,
+            strokes_by_player,
+            putts_by_player
+          )
+          VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            NULL,
+            NULL,
+            '{}'::jsonb,
+            '{}'::jsonb
+          )
+          ON CONFLICT (round_id, hole_number)
+          DO NOTHING;
+          `,
+          [
+            insertedRoundId,
+            i,
+            parVal,
+            distVal,
+          ]
+        );
+      }
+
+      await client.query("COMMIT");
+    } catch (transactionErr) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackErr) {
+        console.warn(
+          "createRoundWithSeededHoles rollback failed:",
+          rollbackErr?.message || rollbackErr
+        );
+      }
+
+      throw transactionErr;
+    }
+  } catch (err) {
+    console.error(
+      "createRoundWithSeededHoles transaction failed:",
+      err?.message || err,
+      {
+        insertedRoundId,
+        userId,
+        course,
+        layoutName,
+        stateCode,
+        holesNum,
+      }
     );
 
-    const round = roundInsert.rows?.[0] || null;
-    if (!round || !round.id) {
-      await db.query("ROLLBACK");
-      return { ok: false, status: 500, error: "round_insert_failed" };
-    }
+    return {
+      ok: false,
+      status: 500,
+      error:
+        err?.message === "round_insert_failed"
+          ? "round_insert_failed"
+          : "create_round_with_seeded_holes_failed",
+      detail: err?.message || String(err || ""),
+    };
+  } finally {
+    // ✅ Always return this connection to the pool
+    client.release();
+  }
 
-    insertedRoundId = Number(round.id);
+  // -------------------------------------------------
+  // Transaction is finished and client is released.
+  // Everything below can safely use normal db.query().
+  // -------------------------------------------------
 
-    for (let i = 1; i <= holesNum; i++) {
-      const parVal = pars ? (Number.isFinite(Number(pars[i - 1])) ? Number(pars[i - 1]) : null) : null;
-      const distVal = dists ? (Number.isFinite(Number(dists[i - 1])) ? Number(dists[i - 1]) : null) : null;
+  // -------------------------------------------------
+  // ✅ Make this SAME scorecard available to every
+  // TeeRadar player attached to the round.
+  // -------------------------------------------------
+  try {
+    await registerRoundParticipants({
+      roundId: insertedRoundId,
+      ownerUserId: Number(userId),
+      playerUserIds,
+      playersCount,
+    });
+  } catch (participantErr) {
+    console.warn(
+      "Could not register round participants:",
+      participantErr?.message || participantErr
+    );
+  }
 
-      await client.query(
-        `
-        INSERT INTO round_holes (round_id, hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player)
-        VALUES ($1, $2, $3, $4, NULL, NULL, '{}'::jsonb, '{}'::jsonb)
-        ON CONFLICT (round_id, hole_number) DO NOTHING;
-        `,
-        [insertedRoundId, i, parVal, distVal]
-      );
-    }
-
-    await client.query("COMMIT");
-
-// -------------------------------------------------
-// ✅ Make this SAME scorecard available to every
-// TeeRadar player attached to the round.
-// -------------------------------------------------
-try {
-  await registerRoundParticipants({
-    roundId: insertedRoundId,
-    ownerUserId: Number(userId),
-    playerUserIds,
-    playersCount,
-  });
-} catch (participantErr) {
-  console.warn(
-    "Could not register round participants:",
-    participantErr?.message || participantErr
-  );
-}
-
-const verifyRound = await db.query(
+  try {
+    const verifyRound = await db.query(
       `
       SELECT
-  id,
-  user_id,
-  course,
-  layout,
-  state,
-  holes,
-  par_mode,
-  created_at,
-  players_count,
-  player_names,
-  player_user_ids,
-  shared_upcoming_round_id,
-  linked_master_round_id,
-  linked_player_number
+        id,
+        user_id,
+        course,
+        layout,
+        state,
+        holes,
+        par_mode,
+        created_at,
+        players_count,
+        player_names,
+        player_user_ids,
+        shared_upcoming_round_id,
+        linked_master_round_id,
+        linked_player_number
       FROM rounds
       WHERE id = $1
       LIMIT 1;
@@ -2387,21 +2582,35 @@ const verifyRound = await db.query(
     );
 
     if (!verifyRound.rows.length) {
-      console.error("createRoundWithSeededHoles: round missing after commit", {
-        insertedRoundId,
-        userId,
-        course,
-        layoutName,
-        stateCode,
-        holesNum,
-      });
+      console.error(
+        "createRoundWithSeededHoles: round missing after commit",
+        {
+          insertedRoundId,
+          userId,
+          course,
+          layoutName,
+          stateCode,
+          holesNum,
+        }
+      );
 
-      return { ok: false, status: 500, error: "round_not_found_after_commit" };
+      return {
+        ok: false,
+        status: 500,
+        error: "round_not_found_after_commit",
+      };
     }
 
     const holesRows = await db.query(
       `
-      SELECT hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player
+      SELECT
+        hole_number,
+        par,
+        distance_m,
+        strokes,
+        putts,
+        strokes_by_player,
+        putts_by_player
       FROM round_holes
       WHERE round_id = $1
       ORDER BY hole_number ASC;
@@ -2409,16 +2618,19 @@ const verifyRound = await db.query(
       [insertedRoundId]
     );
 
-    console.log("✅ createRoundWithSeededHoles created round:", {
-      roundId: insertedRoundId,
-      userId,
-      course: String(course).trim(),
-      layout: layoutName,
-      state: stateCode,
-      holes: holesNum,
-      par_mode: finalParMode,
-      templateUsed: !!(pars && dists),
-    });
+    console.log(
+      "✅ createRoundWithSeededHoles created round:",
+      {
+        roundId: insertedRoundId,
+        userId,
+        course: String(course).trim(),
+        layout: layoutName,
+        state: stateCode,
+        holes: holesNum,
+        par_mode: finalParMode,
+        templateUsed: !!(pars && dists),
+      }
+    );
 
     return {
       ok: true,
@@ -2429,44 +2641,26 @@ const verifyRound = await db.query(
       templateUsed: !!(pars && dists),
     };
   } catch (err) {
-    try { await db.query("ROLLBACK"); } catch {}
-    } catch (err) {
-  if (client) {
-    try {
-      await client.query("ROLLBACK");
-    } catch (rollbackErr) {
-      console.warn(
-        "createRoundWithSeededHoles rollback failed:",
-        rollbackErr?.message || rollbackErr
-      );
-    }
+    console.error(
+      "createRoundWithSeededHoles post-commit failed:",
+      err?.message || err,
+      {
+        insertedRoundId,
+        userId,
+        course,
+        layoutName,
+        stateCode,
+        holesNum,
+      }
+    );
+
+    return {
+      ok: false,
+      status: 500,
+      error: "create_round_with_seeded_holes_failed",
+      detail: err?.message || String(err || ""),
+    };
   }
-
-  console.error(
-    "createRoundWithSeededHoles failed:",
-    err?.message || err,
-    {
-      insertedRoundId,
-      userId,
-      course,
-      layoutName,
-      stateCode,
-      holesNum,
-    }
-  );
-
-  return {
-    ok: false,
-    status: 500,
-    error: "create_round_with_seeded_holes_failed",
-    detail: err?.message || String(err || ""),
-  };
-
-} finally {
-  if (client) {
-    client.release();
-  }
-}
 }
 // -------------------------------------------------
 // Routes (mounted at /api/rounds)
