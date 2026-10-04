@@ -2253,11 +2253,14 @@ export async function createRoundWithSeededHoles({
 );
 
   let insertedRoundId = null;
+let client = null;
 
-  try {
-    await db.query("BEGIN");
+try {
+  client = await db.connect();
 
-        const roundInsert = await db.query(
+  await client.query("BEGIN");
+
+  const roundInsert = await client.query(
       `
       INSERT INTO rounds (
   user_id,
@@ -2329,7 +2332,7 @@ VALUES (
       const parVal = pars ? (Number.isFinite(Number(pars[i - 1])) ? Number(pars[i - 1]) : null) : null;
       const distVal = dists ? (Number.isFinite(Number(dists[i - 1])) ? Number(dists[i - 1]) : null) : null;
 
-      await db.query(
+      await client.query(
         `
         INSERT INTO round_holes (round_id, hole_number, par, distance_m, strokes, putts, strokes_by_player, putts_by_player)
         VALUES ($1, $2, $3, $4, NULL, NULL, '{}'::jsonb, '{}'::jsonb)
@@ -2339,7 +2342,7 @@ VALUES (
       );
     }
 
-    await db.query("COMMIT");
+    await client.query("COMMIT");
 
 // -------------------------------------------------
 // ✅ Make this SAME scorecard available to every
@@ -2427,21 +2430,43 @@ const verifyRound = await db.query(
     };
   } catch (err) {
     try { await db.query("ROLLBACK"); } catch {}
-    console.error("createRoundWithSeededHoles failed:", err?.message || err, {
+    } catch (err) {
+  if (client) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr) {
+      console.warn(
+        "createRoundWithSeededHoles rollback failed:",
+        rollbackErr?.message || rollbackErr
+      );
+    }
+  }
+
+  console.error(
+    "createRoundWithSeededHoles failed:",
+    err?.message || err,
+    {
       insertedRoundId,
       userId,
       course,
       layoutName,
       stateCode,
       holesNum,
-    });
-    return {
-      ok: false,
-      status: 500,
-      error: "create_round_with_seeded_holes_failed",
-      detail: err?.message || String(err || ""),
-    };
+    }
+  );
+
+  return {
+    ok: false,
+    status: 500,
+    error: "create_round_with_seeded_holes_failed",
+    detail: err?.message || String(err || ""),
+  };
+
+} finally {
+  if (client) {
+    client.release();
   }
+}
 }
 // -------------------------------------------------
 // Routes (mounted at /api/rounds)
