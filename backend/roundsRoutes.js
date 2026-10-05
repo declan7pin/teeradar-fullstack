@@ -4271,12 +4271,15 @@ router.put("/:id", requireAuth, async (req, res) => {
         newPlayersCount,
     });
 
-    await db.query("BEGIN");
+   const client = await db.connect();
 
-    // -------------------------------------------------
-    // Update round metadata inside the transaction.
-    // -------------------------------------------------
-    await db.query(
+try {
+  await client.query("BEGIN");
+
+  // -------------------------------------------------
+  // Update round metadata inside the transaction.
+  // -------------------------------------------------
+  await client.query(
       `
       UPDATE rounds
 
@@ -4401,7 +4404,7 @@ router.put("/:id", requireAuth, async (req, res) => {
                   )
             );
 
-      await db.query(
+      await client.query(
         `
         INSERT INTO round_holes (
           round_id,
@@ -4488,12 +4491,28 @@ router.put("/:id", requireAuth, async (req, res) => {
       );
     }
 
-    await db.query("COMMIT");
+        await client.query("COMMIT");
 
-    const data =
-      await getRoundWithHoles(
-        roundId
+  } catch (transactionErr) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr) {
+      console.warn(
+        "PUT /api/rounds/:id rollback failed:",
+        rollbackErr?.message || rollbackErr
       );
+    }
+
+    throw transactionErr;
+
+  } finally {
+    client.release();
+  }
+
+  const data =
+    await getRoundWithHoles(
+      roundId
+    );
 
     // -------------------------------------------------
     // Existing "friend started round" notification
@@ -4648,24 +4667,18 @@ router.put("/:id", requireAuth, async (req, res) => {
     });
 
   } catch (err) {
-    try {
-      await db.query(
-        "ROLLBACK"
-      );
-    } catch {}
+  console.error(
+    "PUT /api/rounds/:id error:",
+    err
+  );
 
-    console.error(
-      "PUT /api/rounds/:id error:",
-      err
-    );
-
-    return res.status(500).json({
-      ok: false,
-      error: "internal error",
-      detail:
-        err?.message,
-    });
-  }
+  return res.status(500).json({
+    ok: false,
+    error: "internal error",
+    detail:
+      err?.message,
+  });
+}
 });
 
 // -------------------------------------------------
