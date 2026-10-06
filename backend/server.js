@@ -1920,7 +1920,40 @@ console.log(`Loaded ${Object.keys(feeGroups).length} fee group entries.`);
 // Health Check
 // -------------------------------------------------
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", courses: courses.length });
+  res.json({
+    status: "ok",
+    courses: courses.length,
+    uptimeSeconds: Math.round(process.uptime()),
+    pool: db.getPoolStats(),
+  });
+});
+
+// -------------------------------------------------
+// Database Health Check
+// -------------------------------------------------
+app.get("/health/db", async (req, res) => {
+  const started = Date.now();
+
+  try {
+    await db.query("SELECT 1");
+
+    return res.json({
+      status: "ok",
+      database: "ok",
+      responseMs: Date.now() - started,
+      pool: db.getPoolStats(),
+    });
+  } catch (err) {
+    console.error("❌ DB health check failed:", err);
+
+    return res.status(503).json({
+      status: "error",
+      database: "failed",
+      responseMs: Date.now() - started,
+      error: err.message,
+      pool: db.getPoolStats(),
+    });
+  }
 });
 
 // -------------------------------------------------
