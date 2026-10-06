@@ -51,7 +51,7 @@ import authRouter from "./auth.js";
 
 // 🔔 Alerts (NEW)
 import alertsRouter from "./alertsRoutes.js";
-import { startAlertWorker, runAlertTickOnce } from "./alertWorker.js"; // ✅ ADDED runAlertTickOnce
+import { startAlertWorker } from "./alertWorker.js"; // ✅ ADDED runAlertTickOnce
 // 🔔 Push notifications
 import pushRouter from "./pushRoutes.js";
 import { ensurePushSubscriptionsTable } from "./pushMigrate.js";
@@ -2505,23 +2505,3 @@ app.listen(PORT, () => {
 
 // 🔔 Start alerts worker
 startAlertWorker();
-
-let __alertTickRunning = false;
-
-async function runAlertTickSafe() {
-  if (__alertTickRunning) return;
-  __alertTickRunning = true;
-  try {
-    await runAlertTickOnce();
-  } catch (err) {
-    console.error("❌ runAlertTickSafe error:", err?.message || err);
-  } finally {
-    __alertTickRunning = false;
-  }
-}
-
-const ALERT_TICK_INTERVAL_MS =
-  Number(process.env.ALERT_TICK_INTERVAL_MS) || 5 * 60 * 1000;
-
-setTimeout(runAlertTickSafe, 20000);
-setInterval(runAlertTickSafe, ALERT_TICK_INTERVAL_MS);
