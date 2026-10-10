@@ -10802,14 +10802,6 @@ if (gpsEnabled) {
  * No API call is made every time the golfer changes hole.
  */
 loadProviderGpsForCurrentRound();
-
-// Start or update the iPhone Lock Screen Live Activity
-syncTeeRadarLiveActivity().catch((error) => {
-  console.error(
-    "❌ TeeRadar Live Activity failed:",
-    error
-  );
-});
 }
 }
 
