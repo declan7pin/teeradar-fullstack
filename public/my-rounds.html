@@ -10797,11 +10797,19 @@ if (gpsEnabled) {
 } else {
   ensureGpsMap();
 }
-    /*
+/*
  * Fetch provider GPS only once per opened round.
  * No API call is made every time the golfer changes hole.
  */
 loadProviderGpsForCurrentRound();
+
+// Start or update the iPhone Lock Screen Live Activity
+syncTeeRadarLiveActivity().catch((error) => {
+  console.error(
+    "❌ TeeRadar Live Activity failed:",
+    error
+  );
+});
 }
 }
 
