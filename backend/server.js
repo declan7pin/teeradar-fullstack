@@ -1973,6 +1973,40 @@ function parsePartySize(v) {
 // -------------------------------------------------
 // Search (state filter + state-aware cache)
 // -------------------------------------------------
+
+// Prevent simultaneous users from triggering duplicate
+// scrapes for the same course and search criteria.
+const inFlightCourseSearches = new Map();
+
+function getOrStartCourseSearch(key, work) {
+  const existing = inFlightCourseSearches.get(key);
+
+  if (existing) {
+    console.log("🔁 Reusing active course search:", key);
+    return existing;
+  }
+
+  const promise = Promise.resolve().then(work);
+
+  inFlightCourseSearches.set(key, promise);
+
+  // Remove the entry once the scrape completes or fails.
+  void promise.then(
+    () => {
+      if (inFlightCourseSearches.get(key) === promise) {
+        inFlightCourseSearches.delete(key);
+      }
+    },
+    () => {
+      if (inFlightCourseSearches.get(key) === promise) {
+        inFlightCourseSearches.delete(key);
+      }
+    }
+  );
+
+  return promise;
+}
+
 app.post("/api/search", requireAuth, async (req, res) => {
   try {
     const {
@@ -2143,7 +2177,19 @@ function normalizeRemaining(s) {
       }
 
       try {
-        const result = await scrapeCourse(c, criteria, feeGroups);
+        const searchKey = JSON.stringify({
+  courseId,
+  date,
+  holes: holesValue || null,
+  partySize: criteria.partySize,
+  earliest,
+  latest,
+});
+
+const result = await getOrStartCourseSearch(
+  searchKey,
+  () => scrapeCourse(c, criteria, feeGroups)
+);
 
         // ✅ attach provider/course metadata to every slot so we can filter later
         const normalized = Array.isArray(result)
