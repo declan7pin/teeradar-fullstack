@@ -3679,6 +3679,191 @@ html.app-mode .activeRoundCard{
    let currentRoundId = null;
 let currentRound = null;
 
+    
+let teeRadarLiveActivityRoundId = null;
+
+function getTeeRadarLiveActivityPlugin() {
+  try {
+    return window.Capacitor?.Plugins?.TeeRadarLiveActivity || null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function teeRadarIsNativeApp() {
+  try {
+    return !!(
+      window.Capacitor &&
+      typeof window.Capacitor.isNativePlatform === "function" &&
+      window.Capacitor.isNativePlatform()
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
+function teeRadarDistanceNumber(element) {
+  if (!element) return 0;
+
+  const match = String(element.textContent || "")
+    .trim()
+    .match(/-?\d+(?:\.\d+)?/);
+
+  if (!match) return 0;
+
+  const value = Number(match[0]);
+
+  return Number.isFinite(value)
+    ? Math.round(value)
+    : 0;
+}
+
+function buildTeeRadarLiveActivityPayload() {
+  if (!currentRound || !currentRoundId) {
+    return null;
+  }
+
+  const hole = premiumHoleIndex + 1;
+  const totalHoles = Number(currentRound.holes) || 18;
+
+  const holesRows = readTableHoles();
+
+  const currentHole = holesRows.find(
+    row => Number(row?.hole_number) === hole
+  ) || null;
+
+  const par = Number(currentHole?.par);
+
+  const viewerPlayerIndex = Math.max(
+    0,
+    (Number(currentRound.player_number) || 1) - 1
+  );
+
+  const rawHoleScore = currentHole
+    ? getHolePlayerValue(
+        currentHole,
+        "strokes",
+        viewerPlayerIndex
+      )
+    : null;
+
+  const savedHoleScore = Number(rawHoleScore);
+
+  const holeScore =
+    rawHoleScore !== null &&
+    rawHoleScore !== undefined &&
+    String(rawHoleScore).trim() !== "" &&
+    Number.isFinite(savedHoleScore) &&
+    savedHoleScore > 0
+      ? savedHoleScore
+      : (Number.isFinite(par) && par > 0 ? par : 4);
+
+  const totals = calcTotalsForPlayer(
+    holesRows,
+    viewerPlayerIndex
+  );
+
+  const totalScoreToPar =
+    Number.isFinite(Number(totals?.toPar))
+      ? Number(totals.toPar)
+      : 0;
+
+  return {
+    courseName: String(
+      currentRound.course ||
+      currentRound.course_name ||
+      "TeeRadar"
+    ).trim(),
+
+    roundId: String(currentRoundId),
+    hole,
+    totalHoles,
+
+    par: Number.isFinite(par) && par > 0
+      ? par
+      : 4,
+
+    frontDistance: teeRadarDistanceNumber(gpsFrontDistance),
+    middleDistance: teeRadarDistanceNumber(gpsMiddleDistance),
+    backDistance: teeRadarDistanceNumber(gpsBackDistance),
+
+    holeScore,
+    totalScoreToPar
+  };
+}
+
+async function syncTeeRadarLiveActivity() {
+  if (!teeRadarIsNativeApp()) return;
+
+  const LiveActivity = getTeeRadarLiveActivityPlugin();
+
+  if (!LiveActivity) {
+    console.warn("TeeRadar Live Activity plugin unavailable");
+    return;
+  }
+
+  try {
+    const payload = buildTeeRadarLiveActivityPayload();
+
+    if (!payload) return;
+
+    const roundId = String(payload.roundId);
+
+    if (String(teeRadarLiveActivityRoundId || "") !== roundId) {
+      await LiveActivity.start(payload);
+
+      teeRadarLiveActivityRoundId = roundId;
+
+      console.log(
+        "✅ TeeRadar Live Activity started",
+        payload
+      );
+
+      return;
+    }
+
+    await LiveActivity.update({
+      hole: payload.hole,
+      totalHoles: payload.totalHoles,
+      par: payload.par,
+      frontDistance: payload.frontDistance,
+      middleDistance: payload.middleDistance,
+      backDistance: payload.backDistance,
+      holeScore: payload.holeScore,
+      totalScoreToPar: payload.totalScoreToPar
+    });
+
+    console.log(
+      "✅ TeeRadar Live Activity updated",
+      payload
+    );
+
+  } catch (error) {
+    console.error(
+      "❌ TeeRadar Live Activity sync failed:",
+      error
+    );
+  }
+}
+
+async function endTeeRadarLiveActivity() {
+  const LiveActivity = getTeeRadarLiveActivityPlugin();
+
+  try {
+    if (teeRadarIsNativeApp() && LiveActivity) {
+      await LiveActivity.end();
+    }
+  } catch (error) {
+    console.warn(
+      "TeeRadar Live Activity end failed:",
+      error
+    );
+  } finally {
+    teeRadarLiveActivityRoundId = null;
+  }
+}
+
+
 /*
  * Normal personal round history.
  */
@@ -4878,7 +5063,15 @@ if (
           : "GolfAPI.io";
     }
 
-    updateGpsGreenMarker();
+        updateGpsGreenMarker();
+
+    // Update iPhone Lock Screen GPS distances
+    syncTeeRadarLiveActivity().catch((error) => {
+      console.error(
+        "❌ Live Activity GPS update failed:",
+        error
+      );
+    });
 
     return;
   }
@@ -4969,7 +5162,7 @@ if (
   gpsDistanceStatus.textContent =
   "Live GPS";
 
-  if (
+    if (
     gpsAccuracy &&
     Number.isFinite(Number(accuracy))
   ) {
@@ -4978,6 +5171,14 @@ if (
         Number(accuracy)
       )}m`;
   }
+
+  // Update iPhone Lock Screen GPS distances
+  syncTeeRadarLiveActivity().catch((error) => {
+    console.error(
+      "❌ Live Activity GPS update failed:",
+      error
+    );
+  });
 }
 
     function gpsDistanceBetween(
@@ -10515,6 +10716,7 @@ if (premScoreBtns) {
         }
       }
 
+      
       console.log(
         "✅ STROKES SAVED",
         {
@@ -10526,6 +10728,11 @@ if (premScoreBtns) {
             v
         }
       );
+
+      // ---------------------------------------------------------
+      // ✅ Update iPhone Lock Screen after saving strokes
+      // ---------------------------------------------------------
+      await syncTeeRadarLiveActivity();
 
       /*
        * IMPORTANT:
@@ -10558,6 +10765,7 @@ if (premScoreBtns) {
 
   premScoreBtns.appendChild(sel);
 }
+
 
 
 // wheel picker for putts
@@ -10802,6 +11010,17 @@ if (gpsEnabled) {
  * No API call is made every time the golfer changes hole.
  */
 loadProviderGpsForCurrentRound();
+
+// ---------------------------------------------------------
+// ✅ Start or update the iPhone Lock Screen Live Activity
+// Whenever the golfer opens or changes holes
+// ---------------------------------------------------------
+syncTeeRadarLiveActivity().catch((error) => {
+  console.error(
+    "❌ TeeRadar Live Activity failed:",
+    error
+  );
+});
 }
 }
 
@@ -10929,7 +11148,10 @@ await loadRound(
   currentRoundId
 );
 
-        premNextBtn.textContent = "Round saved";
+// End the iPhone Lock Screen Live Activity
+await endTeeRadarLiveActivity();
+
+premNextBtn.textContent = "Round saved";
         premNextBtn.disabled = true;
 
         if (premNote) {
@@ -12578,7 +12800,8 @@ function enterRoundMode() {
   });
 }
 
-function exitRoundMode() {
+
+async function exitRoundMode() {
 
   document.documentElement.classList.remove(
     "round-mode"
@@ -12588,6 +12811,25 @@ function exitRoundMode() {
     stopLiveScoreSync();
   } catch (error) {
     // Safe fallback.
+  }
+
+  /*
+   * -------------------------------------------------
+   * END IPHONE LOCK SCREEN LIVE ACTIVITY
+   * -------------------------------------------------
+   *
+   * Stop displaying the current round on the
+   * Lock Screen when exiting the scorecard.
+   *
+   * This does NOT delete or finish the round.
+   */
+  try {
+    await endTeeRadarLiveActivity();
+  } catch (error) {
+    console.warn(
+      "Could not end TeeRadar Live Activity:",
+      error
+    );
   }
 
   /*
@@ -12681,6 +12923,7 @@ if (roundModeExitBtn) {
   );
 
 }
+
 
     async function loadRound(id) {
   /*
