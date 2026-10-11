@@ -4303,10 +4303,133 @@ let premiumScoreEditBusy = false;
  */
 let shouldAutoOpenCurrentHole = false;
     
-// ✅ GPS scorecard state
+
+ // ✅ GPS scorecard state
 let gpsEnabled = false;
 let gpsWatchId = null;
 let currentGpsPosition = null;
+
+// ---------------------------------------------------------
+// TeeRadar GPS accuracy and jump protection
+// ---------------------------------------------------------
+let gpsLastAcceptedAt = 0;
+let gpsPendingJump = null;
+
+function acceptTeeRadarGpsPosition(position) {
+  const coords = position?.coords;
+
+  if (!coords) return false;
+
+  const latitude = Number(coords.latitude);
+  const longitude = Number(coords.longitude);
+  const accuracy = Number(coords.accuracy);
+  const timestamp = Number(position.timestamp) || Date.now();
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180 ||
+    !Number.isFinite(accuracy) ||
+    accuracy < 0
+  ) {
+    return false;
+  }
+
+  // Ignore poor GPS fixes.
+  if (accuracy > 20) {
+    console.log("📍 GPS rejected: poor accuracy", accuracy);
+    return false;
+  }
+
+  const next = { latitude, longitude, accuracy };
+
+  if (currentGpsPosition && gpsLastAcceptedAt) {
+    if (timestamp <= gpsLastAcceptedAt) {
+      return false;
+    }
+
+    const radians = Math.PI / 180;
+    const dLat =
+      (latitude - currentGpsPosition.latitude) * radians;
+    const dLng =
+      (longitude - currentGpsPosition.longitude) * radians;
+
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(currentGpsPosition.latitude * radians) *
+      Math.cos(latitude * radians) *
+      Math.sin(dLng / 2) ** 2;
+
+    const distance =
+      6371000 *
+      2 *
+      Math.atan2(
+        Math.sqrt(Math.max(0, a)),
+        Math.sqrt(Math.max(0, 1 - a))
+      );
+
+    const seconds =
+      (timestamp - gpsLastAcceptedAt) / 1000;
+
+    // Allow normal walking and reasonable buggy movement.
+    // Flag sudden jumps beyond the movement allowance.
+    const allowedDistance =
+      Math.max(25, seconds * 12 + accuracy);
+
+    if (distance > allowedDistance) {
+      if (
+        !gpsPendingJump ||
+        timestamp - gpsPendingJump.timestamp > 15000
+      ) {
+        gpsPendingJump = {
+          latitude,
+          longitude,
+          timestamp
+        };
+
+        console.log("📍 GPS jump held for confirmation", distance);
+        return false;
+      }
+
+      const p = gpsPendingJump;
+      const pLat = (latitude - p.latitude) * radians;
+      const pLng = (longitude - p.longitude) * radians;
+
+      const confirmA =
+        Math.sin(pLat / 2) ** 2 +
+        Math.cos(p.latitude * radians) *
+        Math.cos(latitude * radians) *
+        Math.sin(pLng / 2) ** 2;
+
+      const confirmDistance =
+        6371000 *
+        2 *
+        Math.atan2(
+          Math.sqrt(Math.max(0, confirmA)),
+          Math.sqrt(Math.max(0, 1 - confirmA))
+        );
+
+      if (confirmDistance > 20 + accuracy) {
+        gpsPendingJump = {
+          latitude,
+          longitude,
+          timestamp
+        };
+        return false;
+      }
+    }
+  }
+
+  currentGpsPosition = next;
+  gpsLastAcceptedAt = timestamp;
+  gpsPendingJump = null;
+
+  return true;
+}
+
 
 // =========================================================
 // GOLFAPI.IO — LIVE GREEN GPS
@@ -6423,6 +6546,11 @@ async function enableScorecardGps() {
       return;
     }
 
+    // Reset GPS jump protection for a fresh tracking session.
+currentGpsPosition = null;
+gpsLastAcceptedAt = 0;
+gpsPendingJump = null;
+
     // --------------------------------------------
     // 2. GET LOCATION IMMEDIATELY
     // --------------------------------------------
@@ -6447,25 +6575,10 @@ async function enableScorecardGps() {
     );
 
     if (
-      position &&
-      position.coords
-    ) {
-      currentGpsPosition = {
-        latitude:
-          Number(
-            position.coords.latitude
-          ),
-
-        longitude:
-          Number(
-            position.coords.longitude
-          ),
-
-        accuracy:
-          Number(
-            position.coords.accuracy
-          )
-      };
+  position &&
+  position.coords &&
+  acceptTeeRadarGpsPosition(position)
+) {
 
       if (enableGpsBtn) {
         enableGpsBtn.textContent =
@@ -6536,23 +6649,11 @@ async function enableScorecardGps() {
             return;
           }
 
-          currentGpsPosition = {
-            latitude:
-              Number(
-                position.coords.latitude
-              ),
-
-            longitude:
-              Number(
-                position.coords.longitude
-              ),
-
-            accuracy:
-              Number(
-                position.coords.accuracy
-              )
-          };
-
+          // Filter GPS readings before updating TeeRadar.
+// Keep the last trusted position if a reading is rejected.
+if (!acceptTeeRadarGpsPosition(position)) {
+  return;
+}
           console.log(
             "📍 GPS live update:",
             currentGpsPosition
