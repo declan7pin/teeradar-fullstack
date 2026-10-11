@@ -3306,14 +3306,24 @@ html.app-mode .activeRoundCard{
     </button>
 
     <button
-      class="gpsMapFullscreenBtn"
-      id="gpsMapFullscreenBtn"
-      type="button"
-    >
-      ⛶ Full screen
-    </button>
+  class="gpsMapFullscreenBtn"
+  id="gpsMapFullscreenBtn"
+  type="button"
+>
+  ⛶ Full screen
+</button>
 
-  </div>
+<button
+  id="gpsClearMeasureBtn"
+  class="gpsRecenterBtn"
+  type="button"
+  style="display:none;"
+  aria-label="Clear measured point"
+>
+  ✕ Clear measurement
+</button>
+
+</div>
 
 </div>
 <div
@@ -5358,11 +5368,39 @@ if (
 
    function updateGpsTargetMeasurement() {
 
-  if (
-    !gpsMap ||
-    !gpsTargetPosition ||
-    !currentGpsPosition
-  ) {
+  // No map available
+  if (!gpsMap) {
+    return;
+  }
+
+  // No measurement selected — remove measurement graphics
+  if (!gpsTargetPosition) {
+
+    const measurementLayers = [
+  gpsTargetLine,
+  gpsPlayerTargetLabel,
+  gpsTargetGreenLine,
+  gpsTargetGreenLabel
+];
+
+    measurementLayers.forEach((layer) => {
+      if (layer) {
+        try {
+          gpsMap.removeLayer(layer);
+        } catch (_) {}
+      }
+    });
+
+    gpsTargetLine = null;
+gpsPlayerTargetLabel = null;
+gpsTargetGreenLine = null;
+gpsTargetGreenLabel = null;
+
+    return;
+  }
+
+  // Wait for the player's GPS position
+  if (!currentGpsPosition) {
     return;
   }
 
@@ -5758,6 +5796,40 @@ if (
 // GPS MAP
 // =========================================================
 
+    // ---------------------------------------------------------
+// Clear manually selected GPS measurement
+// ---------------------------------------------------------
+const gpsClearMeasureBtn =
+  document.getElementById("gpsClearMeasureBtn");
+
+if (gpsClearMeasureBtn) {
+  gpsClearMeasureBtn.addEventListener("click", () => {
+
+    // Clear selected measurement coordinates
+    gpsTargetPosition = null;
+
+    // Remove red target marker
+    if (gpsTargetMarker && gpsMap) {
+      try {
+        gpsMap.removeLayer(gpsTargetMarker);
+      } catch (_) {}
+
+      gpsTargetMarker = null;
+    }
+
+    // Refresh measurement overlays
+    updateGpsTargetMeasurement();
+
+    // Hide Clear measurement button
+    gpsClearMeasureBtn.style.display = "none";
+
+    if (gpsMapMeasure) {
+      gpsMapMeasure.textContent =
+        "Tap another point to measure";
+    }
+  });
+}
+
 function ensureGpsMap() {
   if (!gpsMapEl) {
     return null;
@@ -5857,14 +5929,19 @@ gpsMap.on(
       );
 
     gpsTargetPosition = {
-      latitude,
-      longitude
-    };
+  latitude,
+  longitude
+};
 
-    const point = [
-      latitude,
-      longitude
-    ];
+// Show Clear measurement when a point is selected
+if (gpsClearMeasureBtn) {
+  gpsClearMeasureBtn.style.display = "";
+}
+
+const point = [
+  latitude,
+  longitude
+];
 
     /*
      * Create target marker on first tap.
