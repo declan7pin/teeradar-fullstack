@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <link
   rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
 />
 
 <script
@@ -3306,14 +3306,25 @@ html.app-mode .activeRoundCard{
     </button>
 
     <button
-      class="gpsMapFullscreenBtn"
-      id="gpsMapFullscreenBtn"
-      type="button"
-    >
-      ⛶ Full screen
-    </button>
+  class="gpsMapFullscreenBtn"
+  id="gpsMapFullscreenBtn"
+  type="button"
+>
+  ⛶ Full screen
+</button>
 
-  </div>
+<button
+  id="gpsClearMeasureBtn"
+  class="gpsRecenterBtn"
+  type="button"
+  style="display:none;"
+  aria-label="Clear measured point"
+  title="Clear measurement"
+>
+  ✕ Clear
+</button>
+
+</div>
 
 </div>
 <div
@@ -3678,6 +3689,191 @@ html.app-mode .activeRoundCard{
     // -----------------------------
    let currentRoundId = null;
 let currentRound = null;
+
+    
+let teeRadarLiveActivityRoundId = null;
+
+function getTeeRadarLiveActivityPlugin() {
+  try {
+    return window.Capacitor?.Plugins?.TeeRadarLiveActivity || null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function teeRadarIsNativeApp() {
+  try {
+    return !!(
+      window.Capacitor &&
+      typeof window.Capacitor.isNativePlatform === "function" &&
+      window.Capacitor.isNativePlatform()
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
+function teeRadarDistanceNumber(element) {
+  if (!element) return 0;
+
+  const match = String(element.textContent || "")
+    .trim()
+    .match(/-?\d+(?:\.\d+)?/);
+
+  if (!match) return 0;
+
+  const value = Number(match[0]);
+
+  return Number.isFinite(value)
+    ? Math.round(value)
+    : 0;
+}
+
+function buildTeeRadarLiveActivityPayload() {
+  if (!currentRound || !currentRoundId) {
+    return null;
+  }
+
+  const hole = premiumHoleIndex + 1;
+  const totalHoles = Number(currentRound.holes) || 18;
+
+  const holesRows = readTableHoles();
+
+  const currentHole = holesRows.find(
+    row => Number(row?.hole_number) === hole
+  ) || null;
+
+  const par = Number(currentHole?.par);
+
+  const viewerPlayerIndex = Math.max(
+    0,
+    (Number(currentRound.player_number) || 1) - 1
+  );
+
+  const rawHoleScore = currentHole
+    ? getHolePlayerValue(
+        currentHole,
+        "strokes",
+        viewerPlayerIndex
+      )
+    : null;
+
+  const savedHoleScore = Number(rawHoleScore);
+
+  const holeScore =
+    rawHoleScore !== null &&
+    rawHoleScore !== undefined &&
+    String(rawHoleScore).trim() !== "" &&
+    Number.isFinite(savedHoleScore) &&
+    savedHoleScore > 0
+      ? savedHoleScore
+      : (Number.isFinite(par) && par > 0 ? par : 4);
+
+  const totals = calcTotalsForPlayer(
+    holesRows,
+    viewerPlayerIndex
+  );
+
+  const totalScoreToPar =
+    Number.isFinite(Number(totals?.toPar))
+      ? Number(totals.toPar)
+      : 0;
+
+  return {
+    courseName: String(
+      currentRound.course ||
+      currentRound.course_name ||
+      "TeeRadar"
+    ).trim(),
+
+    roundId: String(currentRoundId),
+    hole,
+    totalHoles,
+
+    par: Number.isFinite(par) && par > 0
+      ? par
+      : 4,
+
+    frontDistance: teeRadarDistanceNumber(gpsFrontDistance),
+    middleDistance: teeRadarDistanceNumber(gpsMiddleDistance),
+    backDistance: teeRadarDistanceNumber(gpsBackDistance),
+
+    holeScore,
+    totalScoreToPar
+  };
+}
+
+async function syncTeeRadarLiveActivity() {
+  if (!teeRadarIsNativeApp()) return;
+
+  const LiveActivity = getTeeRadarLiveActivityPlugin();
+
+  if (!LiveActivity) {
+    console.warn("TeeRadar Live Activity plugin unavailable");
+    return;
+  }
+
+  try {
+    const payload = buildTeeRadarLiveActivityPayload();
+
+    if (!payload) return;
+
+    const roundId = String(payload.roundId);
+
+    if (String(teeRadarLiveActivityRoundId || "") !== roundId) {
+      await LiveActivity.start(payload);
+
+      teeRadarLiveActivityRoundId = roundId;
+
+      console.log(
+        "✅ TeeRadar Live Activity started",
+        payload
+      );
+
+      return;
+    }
+
+    await LiveActivity.update({
+      hole: payload.hole,
+      totalHoles: payload.totalHoles,
+      par: payload.par,
+      frontDistance: payload.frontDistance,
+      middleDistance: payload.middleDistance,
+      backDistance: payload.backDistance,
+      holeScore: payload.holeScore,
+      totalScoreToPar: payload.totalScoreToPar
+    });
+
+    console.log(
+      "✅ TeeRadar Live Activity updated",
+      payload
+    );
+
+  } catch (error) {
+    console.error(
+      "❌ TeeRadar Live Activity sync failed:",
+      error
+    );
+  }
+}
+
+async function endTeeRadarLiveActivity() {
+  const LiveActivity = getTeeRadarLiveActivityPlugin();
+
+  try {
+    if (teeRadarIsNativeApp() && LiveActivity) {
+      await LiveActivity.end();
+    }
+  } catch (error) {
+    console.warn(
+      "TeeRadar Live Activity end failed:",
+      error
+    );
+  } finally {
+    teeRadarLiveActivityRoundId = null;
+  }
+}
+
 
 /*
  * Normal personal round history.
@@ -4118,10 +4314,133 @@ let premiumScoreEditBusy = false;
  */
 let shouldAutoOpenCurrentHole = false;
     
-// ✅ GPS scorecard state
+
+ // ✅ GPS scorecard state
 let gpsEnabled = false;
 let gpsWatchId = null;
 let currentGpsPosition = null;
+
+// ---------------------------------------------------------
+// TeeRadar GPS accuracy and jump protection
+// ---------------------------------------------------------
+let gpsLastAcceptedAt = 0;
+let gpsPendingJump = null;
+
+function acceptTeeRadarGpsPosition(position) {
+  const coords = position?.coords;
+
+  if (!coords) return false;
+
+  const latitude = Number(coords.latitude);
+  const longitude = Number(coords.longitude);
+  const accuracy = Number(coords.accuracy);
+  const timestamp = Number(position.timestamp) || Date.now();
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180 ||
+    !Number.isFinite(accuracy) ||
+    accuracy < 0
+  ) {
+    return false;
+  }
+
+  // Ignore poor GPS fixes.
+  if (accuracy > 20) {
+    console.log("📍 GPS rejected: poor accuracy", accuracy);
+    return false;
+  }
+
+  const next = { latitude, longitude, accuracy };
+
+  if (currentGpsPosition && gpsLastAcceptedAt) {
+    if (timestamp <= gpsLastAcceptedAt) {
+      return false;
+    }
+
+    const radians = Math.PI / 180;
+    const dLat =
+      (latitude - currentGpsPosition.latitude) * radians;
+    const dLng =
+      (longitude - currentGpsPosition.longitude) * radians;
+
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(currentGpsPosition.latitude * radians) *
+      Math.cos(latitude * radians) *
+      Math.sin(dLng / 2) ** 2;
+
+    const distance =
+      6371000 *
+      2 *
+      Math.atan2(
+        Math.sqrt(Math.max(0, a)),
+        Math.sqrt(Math.max(0, 1 - a))
+      );
+
+    const seconds =
+      (timestamp - gpsLastAcceptedAt) / 1000;
+
+    // Allow normal walking and reasonable buggy movement.
+    // Flag sudden jumps beyond the movement allowance.
+    const allowedDistance =
+      Math.max(25, seconds * 12 + accuracy);
+
+    if (distance > allowedDistance) {
+      if (
+        !gpsPendingJump ||
+        timestamp - gpsPendingJump.timestamp > 15000
+      ) {
+        gpsPendingJump = {
+          latitude,
+          longitude,
+          timestamp
+        };
+
+        console.log("📍 GPS jump held for confirmation", distance);
+        return false;
+      }
+
+      const p = gpsPendingJump;
+      const pLat = (latitude - p.latitude) * radians;
+      const pLng = (longitude - p.longitude) * radians;
+
+      const confirmA =
+        Math.sin(pLat / 2) ** 2 +
+        Math.cos(p.latitude * radians) *
+        Math.cos(latitude * radians) *
+        Math.sin(pLng / 2) ** 2;
+
+      const confirmDistance =
+        6371000 *
+        2 *
+        Math.atan2(
+          Math.sqrt(Math.max(0, confirmA)),
+          Math.sqrt(Math.max(0, 1 - confirmA))
+        );
+
+      if (confirmDistance > 20 + accuracy) {
+        gpsPendingJump = {
+          latitude,
+          longitude,
+          timestamp
+        };
+        return false;
+      }
+    }
+  }
+
+  currentGpsPosition = next;
+  gpsLastAcceptedAt = timestamp;
+  gpsPendingJump = null;
+
+  return true;
+}
+
 
 // =========================================================
 // GOLFAPI.IO — LIVE GREEN GPS
@@ -4878,7 +5197,15 @@ if (
           : "GolfAPI.io";
     }
 
-    updateGpsGreenMarker();
+        updateGpsGreenMarker();
+
+    // Update iPhone Lock Screen GPS distances
+    syncTeeRadarLiveActivity().catch((error) => {
+      console.error(
+        "❌ Live Activity GPS update failed:",
+        error
+      );
+    });
 
     return;
   }
@@ -4969,7 +5296,7 @@ if (
   gpsDistanceStatus.textContent =
   "Live GPS";
 
-  if (
+    if (
     gpsAccuracy &&
     Number.isFinite(Number(accuracy))
   ) {
@@ -4978,6 +5305,14 @@ if (
         Number(accuracy)
       )}m`;
   }
+
+  // Update iPhone Lock Screen GPS distances
+  syncTeeRadarLiveActivity().catch((error) => {
+    console.error(
+      "❌ Live Activity GPS update failed:",
+      error
+    );
+  });
 }
 
     function gpsDistanceBetween(
@@ -5034,11 +5369,39 @@ if (
 
    function updateGpsTargetMeasurement() {
 
-  if (
-    !gpsMap ||
-    !gpsTargetPosition ||
-    !currentGpsPosition
-  ) {
+  // No map available
+  if (!gpsMap) {
+    return;
+  }
+
+  // No measurement selected — remove measurement graphics
+  if (!gpsTargetPosition) {
+
+    const measurementLayers = [
+  gpsTargetLine,
+  gpsPlayerTargetLabel,
+  gpsTargetGreenLine,
+  gpsTargetGreenLabel
+];
+
+    measurementLayers.forEach((layer) => {
+      if (layer) {
+        try {
+          gpsMap.removeLayer(layer);
+        } catch (_) {}
+      }
+    });
+
+    gpsTargetLine = null;
+gpsPlayerTargetLabel = null;
+gpsTargetGreenLine = null;
+gpsTargetGreenLabel = null;
+
+    return;
+  }
+
+  // Wait for the player's GPS position
+  if (!currentGpsPosition) {
     return;
   }
 
@@ -5434,6 +5797,40 @@ if (
 // GPS MAP
 // =========================================================
 
+    // ---------------------------------------------------------
+// Clear manually selected GPS measurement
+// ---------------------------------------------------------
+const gpsClearMeasureBtn =
+  document.getElementById("gpsClearMeasureBtn");
+
+if (gpsClearMeasureBtn) {
+  gpsClearMeasureBtn.addEventListener("click", () => {
+
+    // Clear selected measurement coordinates
+    gpsTargetPosition = null;
+
+    // Remove red target marker
+    if (gpsTargetMarker && gpsMap) {
+      try {
+        gpsMap.removeLayer(gpsTargetMarker);
+      } catch (_) {}
+
+      gpsTargetMarker = null;
+    }
+
+    // Refresh measurement overlays
+    updateGpsTargetMeasurement();
+
+    // Hide Clear measurement button
+    gpsClearMeasureBtn.style.display = "none";
+
+    if (gpsMapMeasure) {
+      gpsMapMeasure.textContent =
+        "Tap another point to measure";
+    }
+  });
+}
+
 function ensureGpsMap() {
   if (!gpsMapEl) {
     return null;
@@ -5533,14 +5930,19 @@ gpsMap.on(
       );
 
     gpsTargetPosition = {
-      latitude,
-      longitude
-    };
+  latitude,
+  longitude
+};
 
-    const point = [
-      latitude,
-      longitude
-    ];
+// Show Clear measurement when a point is selected
+if (gpsClearMeasureBtn) {
+  gpsClearMeasureBtn.style.display = "";
+}
+
+const point = [
+  latitude,
+  longitude
+];
 
     /*
      * Create target marker on first tap.
@@ -6222,6 +6624,11 @@ async function enableScorecardGps() {
       return;
     }
 
+    // Reset GPS jump protection for a fresh tracking session.
+currentGpsPosition = null;
+gpsLastAcceptedAt = 0;
+gpsPendingJump = null;
+
     // --------------------------------------------
     // 2. GET LOCATION IMMEDIATELY
     // --------------------------------------------
@@ -6246,25 +6653,10 @@ async function enableScorecardGps() {
     );
 
     if (
-      position &&
-      position.coords
-    ) {
-      currentGpsPosition = {
-        latitude:
-          Number(
-            position.coords.latitude
-          ),
-
-        longitude:
-          Number(
-            position.coords.longitude
-          ),
-
-        accuracy:
-          Number(
-            position.coords.accuracy
-          )
-      };
+  position &&
+  position.coords &&
+  acceptTeeRadarGpsPosition(position)
+) {
 
       if (enableGpsBtn) {
         enableGpsBtn.textContent =
@@ -6335,23 +6727,11 @@ async function enableScorecardGps() {
             return;
           }
 
-          currentGpsPosition = {
-            latitude:
-              Number(
-                position.coords.latitude
-              ),
-
-            longitude:
-              Number(
-                position.coords.longitude
-              ),
-
-            accuracy:
-              Number(
-                position.coords.accuracy
-              )
-          };
-
+          // Filter GPS readings before updating TeeRadar.
+// Keep the last trusted position if a reading is rejected.
+if (!acceptTeeRadarGpsPosition(position)) {
+  return;
+}
           console.log(
             "📍 GPS live update:",
             currentGpsPosition
@@ -10515,6 +10895,7 @@ if (premScoreBtns) {
         }
       }
 
+      
       console.log(
         "✅ STROKES SAVED",
         {
@@ -10526,6 +10907,11 @@ if (premScoreBtns) {
             v
         }
       );
+
+      // ---------------------------------------------------------
+      // ✅ Update iPhone Lock Screen after saving strokes
+      // ---------------------------------------------------------
+      await syncTeeRadarLiveActivity();
 
       /*
        * IMPORTANT:
@@ -10558,6 +10944,7 @@ if (premScoreBtns) {
 
   premScoreBtns.appendChild(sel);
 }
+
 
 
 // wheel picker for putts
@@ -10803,7 +11190,10 @@ if (gpsEnabled) {
  */
 loadProviderGpsForCurrentRound();
 
-// Start or update the iPhone Lock Screen Live Activity
+// ---------------------------------------------------------
+// ✅ Start or update the iPhone Lock Screen Live Activity
+// Whenever the golfer opens or changes holes
+// ---------------------------------------------------------
 syncTeeRadarLiveActivity().catch((error) => {
   console.error(
     "❌ TeeRadar Live Activity failed:",
@@ -10937,7 +11327,10 @@ await loadRound(
   currentRoundId
 );
 
-        premNextBtn.textContent = "Round saved";
+// End the iPhone Lock Screen Live Activity
+await endTeeRadarLiveActivity();
+
+premNextBtn.textContent = "Round saved";
         premNextBtn.disabled = true;
 
         if (premNote) {
@@ -12202,7 +12595,7 @@ function formatUpcomingDate(dateStr){
     month: "short",
     year: "numeric"
   });
-}
+}    
 
 function getUpcomingPlayerNames(upcoming){
   const names = [];
@@ -12236,7 +12629,7 @@ function getUpcomingPlayerNames(upcoming){
   }
 
   return names.slice(0, 4);
-}
+}    
 
 function getUpcomingPlayerUserIds(upcoming){
   const ids = Array.isArray(upcoming.player_user_ids)
@@ -12586,7 +12979,8 @@ function enterRoundMode() {
   });
 }
 
-function exitRoundMode() {
+
+async function exitRoundMode() {
 
   document.documentElement.classList.remove(
     "round-mode"
@@ -12596,6 +12990,25 @@ function exitRoundMode() {
     stopLiveScoreSync();
   } catch (error) {
     // Safe fallback.
+  }
+
+  /*
+   * -------------------------------------------------
+   * END IPHONE LOCK SCREEN LIVE ACTIVITY
+   * -------------------------------------------------
+   *
+   * Stop displaying the current round on the
+   * Lock Screen when exiting the scorecard.
+   *
+   * This does NOT delete or finish the round.
+   */
+  try {
+    await endTeeRadarLiveActivity();
+  } catch (error) {
+    console.warn(
+      "Could not end TeeRadar Live Activity:",
+      error
+    );
   }
 
   /*
@@ -12689,6 +13102,7 @@ if (roundModeExitBtn) {
   );
 
 }
+
 
     async function loadRound(id) {
   /*
@@ -14699,7 +15113,7 @@ await fetchUpcomingRounds();
   await startUpcomingRoundFromId(startUpcomingIdFromUrl);
   clearStartUpcomingIdFromUrl();
   return;
-}
+}     
 
   // ✅ Auto-open round and move straight to the scorecard
 if (roundIdFromUrl) {
