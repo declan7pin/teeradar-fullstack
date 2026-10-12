@@ -3787,8 +3787,22 @@ function buildTeeRadarLiveActivityPayload() {
     ).trim(),
 
     roundId: String(currentRoundId),
-    hole,
-    totalHoles,
+hole,
+totalHoles,
+
+// Identifies the course and hole for the Lock Screen preview
+holePreviewId: [
+  String(
+    currentRound.course ||
+    currentRound.course_name ||
+    "unknown"
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, ""),
+  String(hole)
+].join("-"),
 
     par: Number.isFinite(par) && par > 0
       ? par
@@ -3801,6 +3815,59 @@ function buildTeeRadarLiveActivityPayload() {
     holeScore,
     totalScoreToPar
   };
+}
+
+    // =========================================================
+// LIVE ACTIVITY — SATELLITE PREVIEW CACHE
+// =========================================================
+
+const teeRadarGeneratedHolePreviews = new Set();
+const teeRadarGeneratingHolePreviews = new Map();
+
+async function ensureTeeRadarHolePreview(
+  LiveActivity,
+  previewKey,
+  coordinates
+) {
+  if (
+    !previewKey ||
+    !coordinates ||
+    typeof LiveActivity.generateHolePreview !== "function"
+  ) {
+    return;
+  }
+
+  if (teeRadarGeneratedHolePreviews.has(previewKey)) {
+    return;
+  }
+
+  if (teeRadarGeneratingHolePreviews.has(previewKey)) {
+    return teeRadarGeneratingHolePreviews.get(previewKey);
+  }
+
+  const generation = LiveActivity.generateHolePreview({
+    holePreviewKey: previewKey,
+    latitude: coordinates.latitude,
+    longitude: coordinates.longitude
+  });
+
+  teeRadarGeneratingHolePreviews.set(
+    previewKey,
+    generation
+  );
+
+  try {
+    await generation;
+
+    teeRadarGeneratedHolePreviews.add(previewKey);
+
+    console.log(
+      "✅ Satellite hole preview ready:",
+      previewKey
+    );
+  } finally {
+    teeRadarGeneratingHolePreviews.delete(previewKey);
+  }
 }
 
 async function syncTeeRadarLiveActivity() {
@@ -3818,10 +3885,32 @@ async function syncTeeRadarLiveActivity() {
 
     if (!payload) return;
 
+// Generate the current hole preview only once per app session.
+const previewCoordinates =
+  getTeeRadarHolePreviewCoordinates();
+
+if (previewCoordinates) {
+  try {
+    await ensureTeeRadarHolePreview(
+      LiveActivity,
+      payload.holePreviewId,
+      previewCoordinates
+    );
+  } catch (previewError) {
+    console.warn(
+      "⚠️ Satellite hole preview unavailable:",
+      previewError
+    );
+  }
+}
+
     const roundId = String(payload.roundId);
 
     if (String(teeRadarLiveActivityRoundId || "") !== roundId) {
-      await LiveActivity.start(payload);
+      await LiveActivity.start({
+  ...payload,
+  holePreviewKey: payload.holePreviewId
+});
 
       teeRadarLiveActivityRoundId = roundId;
 
@@ -3834,15 +3923,18 @@ async function syncTeeRadarLiveActivity() {
     }
 
     await LiveActivity.update({
-      hole: payload.hole,
-      totalHoles: payload.totalHoles,
-      par: payload.par,
-      frontDistance: payload.frontDistance,
-      middleDistance: payload.middleDistance,
-      backDistance: payload.backDistance,
-      holeScore: payload.holeScore,
-      totalScoreToPar: payload.totalScoreToPar
-    });
+  hole: payload.hole,
+  totalHoles: payload.totalHoles,
+  par: payload.par,
+  frontDistance: payload.frontDistance,
+  middleDistance: payload.middleDistance,
+  backDistance: payload.backDistance,
+  holeScore: payload.holeScore,
+  totalScoreToPar: payload.totalScoreToPar,
+
+  // Current hole image identifier
+  holePreviewKey: payload.holePreviewId
+});
 
     console.log(
       "✅ TeeRadar Live Activity updated",
@@ -4940,6 +5032,47 @@ function getCurrentHoleGreenPoints(){
   );
 
   return match;
+}
+
+    // =========================================================
+// TEERADAR LIVE ACTIVITY — HOLE PREVIEW COORDINATES
+// =========================================================
+
+function getTeeRadarHolePreviewCoordinates() {
+
+  const green = getBestCurrentHoleGps();
+
+  if (!green) {
+    return null;
+  }
+
+  const point =
+    green.middle ||
+    green.front ||
+    green.back;
+
+  if (!point) {
+    return null;
+  }
+
+  const latitude = Number(point.lat);
+  const longitude = Number(point.lng);
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return null;
+  }
+
+  return {
+    latitude,
+    longitude
+  };
 }
 
 
