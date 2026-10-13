@@ -3889,6 +3889,14 @@ async function syncTeeRadarLiveActivity() {
 const previewCoordinates =
   getTeeRadarHolePreviewCoordinates();
 
+console.log("🗺️ TeeRadar preview diagnostic:", {
+  hole: payload.hole,
+  previewKey: payload.holePreviewId,
+  coordinates: previewCoordinates,
+  generatorAvailable:
+    typeof LiveActivity.generateHolePreview === "function"
+});
+
 if (previewCoordinates) {
   try {
     await ensureTeeRadarHolePreview(
