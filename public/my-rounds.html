@@ -5051,6 +5051,7 @@ function getTeeRadarHolePreviewCoordinates() {
   const green = getBestCurrentHoleGps();
 
   if (!green) {
+    console.log("🗺️ Preview: no green data");
     return null;
   }
 
@@ -5060,11 +5061,22 @@ function getTeeRadarHolePreviewCoordinates() {
     green.back;
 
   if (!point) {
+    console.log("🗺️ Preview: no green point", green);
     return null;
   }
 
-  const latitude = Number(point.lat);
-  const longitude = Number(point.lng);
+  // Support coordinate objects and [latitude, longitude] arrays.
+  const latitude = Number(
+    Array.isArray(point)
+      ? point[0]
+      : point.lat ?? point.latitude
+  );
+
+  const longitude = Number(
+    Array.isArray(point)
+      ? point[1]
+      : point.lng ?? point.lon ?? point.longitude
+  );
 
   if (
     !Number.isFinite(latitude) ||
@@ -5074,6 +5086,13 @@ function getTeeRadarHolePreviewCoordinates() {
     longitude < -180 ||
     longitude > 180
   ) {
+    console.log("🗺️ Preview: invalid coordinates", {
+      source: green.source,
+      point,
+      latitude,
+      longitude
+    });
+
     return null;
   }
 
@@ -5082,7 +5101,6 @@ function getTeeRadarHolePreviewCoordinates() {
     longitude
   };
 }
-
 
 function getBestCurrentHoleGps() {
 
