@@ -11413,6 +11413,14 @@ premiumShowingTable = false;
 
   if (premPrevBtn){
   premPrevBtn.onclick = async () => {
+    if (premiumScoreEditBusy) {
+  setToast(
+    rightToast,
+    "Please wait for the score to finish saving.",
+    false
+  );
+  return;
+}
     await playScoreHaptic("light");
       const holesCount = Number(round?.holes) || 18;
       const pc = getPlayersCountFromRound(round);
@@ -11441,6 +11449,14 @@ premiumShowingTable = false;
 
   if (premNextBtn) {
   premNextBtn.onclick = async () => {
+    if (premiumScoreEditBusy) {
+  setToast(
+    rightToast,
+    "Please wait for the score to finish saving.",
+    false
+  );
+  return;
+}
     const holesCount =
       Number(round?.holes) || 18;
 
@@ -12162,42 +12178,49 @@ if (canUsePremium) {
 //
 // Nothing from another player or hole is touched.
 // -------------------------------------------------
+// -------------------------------------------------
+// Save only the field changed for one player/hole.
+// -------------------------------------------------
 async function savePremiumPlayerScore(
   holeNumber,
   playerNumber,
   overrides = {}
 ) {
-  if (
-    !isLoggedIn() ||
-    !currentRoundId
-  ) {
+  if (!isLoggedIn() || !currentRoundId) {
     return;
   }
 
-  const holeNum =
-    Number(holeNumber);
-
-  const playerNum =
-    Number(playerNumber);
+  const holeNum = Number(holeNumber);
+  const playerNum = Number(playerNumber);
 
   if (
-    !Number.isFinite(holeNum) ||
+    !Number.isInteger(holeNum) ||
     holeNum <= 0 ||
-    !Number.isFinite(playerNum) ||
+    !Number.isInteger(playerNum) ||
     playerNum <= 0
   ) {
     return;
   }
 
-  const holesRows =
-    readTableHoles();
-
-  const hole =
-    holesRows.find(
-      (row) =>
-        Number(row?.hole_number) ===
-        holeNum
+  const hasStrokes =
+    Object.prototype.hasOwnProperty.call(
+      overrides,
+      "strokes"
     );
+
+  const hasPutts =
+    Object.prototype.hasOwnProperty.call(
+      overrides,
+      "putts"
+    );
+
+  if (!hasStrokes && !hasPutts) {
+    return;
+  }
+
+  const hole = readTableHoles().find(
+    (row) => Number(row?.hole_number) === holeNum
+  );
 
   if (!hole) {
     throw new Error(
@@ -12205,110 +12228,56 @@ async function savePremiumPlayerScore(
     );
   }
 
-  const key =
-    String(playerNum);
+  const normaliseScore = (value) => {
+    if (
+      value === null ||
+      value === undefined ||
+      value === ""
+    ) {
+      return null;
+    }
 
-  /*
-   * Normally use the hidden scorecard values.
-   *
-   * But when a premium selector has JUST changed,
-   * use that selected value directly.
-   *
-   * This removes any timing / DOM-read problem.
-   */
-  const strokesRaw =
-    Object.prototype.hasOwnProperty.call(
-      overrides,
-      "strokes"
-    )
-      ? overrides.strokes
-      : hole?.strokes_by_player?.[key];
+    const number = Number(value);
 
-  const puttsRaw =
-    Object.prototype.hasOwnProperty.call(
-      overrides,
-      "putts"
-    )
-      ? overrides.putts
-      : hole?.putts_by_player?.[key];
+    return Number.isFinite(number)
+      ? number
+      : null;
+  };
 
-  const strokes =
-    strokesRaw === null ||
-    typeof strokesRaw === "undefined" ||
-    strokesRaw === ""
-      ? null
-      : Number(strokesRaw);
+  const payload = {
+    player_number: playerNum
+  };
 
-  const putts =
-    puttsRaw === null ||
-    typeof puttsRaw === "undefined" ||
-    puttsRaw === ""
-      ? null
-      : Number(puttsRaw);
+  if (hasStrokes) {
+    payload.strokes = normaliseScore(
+      overrides.strokes
+    );
+  }
 
-  console.log(
-    "💾 PREMIUM SCORE SAVE",
+  if (hasPutts) {
+    payload.putts = normaliseScore(
+      overrides.putts
+    );
+  }
+
+  console.log("💾 PREMIUM SCORE SAVE", {
+    roundId: currentRoundId,
+    hole: holeNum,
+    player: playerNum,
+    payload
+  });
+
+  const result = await api(
+    `/api/rounds/${encodeURIComponent(
+      currentRoundId
+    )}/hole/${encodeURIComponent(holeNum)}`,
     {
-      roundId:
-        currentRoundId,
-
-      hole:
-        holeNum,
-
-      player:
-        playerNum,
-
-      strokes,
-
-      putts
+      method: "PUT",
+      body: JSON.stringify(payload)
     }
   );
 
-  const result =
-    await api(
-      `/api/rounds/${encodeURIComponent(
-        currentRoundId
-      )}/hole/${encodeURIComponent(
-        holeNum
-      )}`,
-      {
-        method: "PUT",
-
-        body: JSON.stringify({
-          player_number:
-            playerNum,
-
-          strokes:
-            Number.isFinite(strokes)
-              ? strokes
-              : null,
-
-          putts:
-            Number.isFinite(putts)
-              ? putts
-              : null,
-
-          par:
-            Number.isFinite(
-              Number(hole.par)
-            )
-              ? Number(hole.par)
-              : null,
-
-          distance_m:
-            Number.isFinite(
-              Number(hole.distance_m)
-            )
-              ? Number(hole.distance_m)
-              : null
-        })
-      }
-    );
-
-  console.log(
-    "✅ PREMIUM SCORE SAVED",
-    result
-  );
+  console.log("✅ PREMIUM SCORE SAVED", result);
 
   return result;
 }
