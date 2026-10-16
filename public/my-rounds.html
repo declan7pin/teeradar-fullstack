@@ -3380,10 +3380,107 @@ html.app-mode .activeRoundCard{
 
     </div>
 
-    <div
+        <div
       class="gpsAccuracy"
       id="gpsAccuracy"
     ></div>
+
+    <!-- TeeRadar manual shot tracking -->
+    <div
+      style="margin-top:14px; display:grid; gap:10px;"
+    >
+      <select
+  id="trackShotClub"
+  class="input"
+  style="width:100%; min-height:44px;"
+  aria-label="Club used for shot"
+>
+  <option value="">Select club (optional)</option>
+
+  <optgroup label="Driver">
+    <option value="Driver">Driver</option>
+    <option value="Mini Driver">Mini Driver</option>
+  </optgroup>
+
+  <optgroup label="Fairway Woods">
+    <option value="2 Wood">2 Wood</option>
+    <option value="3 Wood">3 Wood</option>
+    <option value="4 Wood">4 Wood</option>
+    <option value="5 Wood">5 Wood</option>
+    <option value="7 Wood">7 Wood</option>
+    <option value="9 Wood">9 Wood</option>
+    <option value="11 Wood">11 Wood</option>
+    <option value="13 Wood">13 Wood</option>
+  </optgroup>
+
+  <optgroup label="Hybrids">
+    <option value="1 Hybrid">1 Hybrid</option>
+    <option value="2 Hybrid">2 Hybrid</option>
+    <option value="3 Hybrid">3 Hybrid</option>
+    <option value="4 Hybrid">4 Hybrid</option>
+    <option value="5 Hybrid">5 Hybrid</option>
+    <option value="6 Hybrid">6 Hybrid</option>
+    <option value="7 Hybrid">7 Hybrid</option>
+    <option value="8 Hybrid">8 Hybrid</option>
+    <option value="9 Hybrid">9 Hybrid</option>
+  </optgroup>
+
+  <optgroup label="Irons">
+    <option value="1 Iron">1 Iron</option>
+    <option value="2 Iron">2 Iron</option>
+    <option value="3 Iron">3 Iron</option>
+    <option value="4 Iron">4 Iron</option>
+    <option value="5 Iron">5 Iron</option>
+    <option value="6 Iron">6 Iron</option>
+    <option value="7 Iron">7 Iron</option>
+    <option value="8 Iron">8 Iron</option>
+    <option value="9 Iron">9 Iron</option>
+    <option value="10 Iron">10 Iron</option>
+    <option value="11 Iron">11 Iron</option>
+    <option value="Driving Iron">Driving Iron</option>
+  </optgroup>
+
+  <optgroup label="Wedges">
+    <option value="PW">Pitching Wedge (PW)</option>
+    <option value="AW">Approach Wedge (AW)</option>
+    <option value="GW">Gap Wedge (GW)</option>
+    <option value="SW">Sand Wedge (SW)</option>
+    <option value="LW">Lob Wedge (LW)</option>
+    <option value="UW">Utility Wedge (UW)</option>
+    <option value="48 Wedge">48° Wedge</option>
+    <option value="50 Wedge">50° Wedge</option>
+    <option value="52 Wedge">52° Wedge</option>
+    <option value="54 Wedge">54° Wedge</option>
+    <option value="56 Wedge">56° Wedge</option>
+    <option value="58 Wedge">58° Wedge</option>
+    <option value="60 Wedge">60° Wedge</option>
+    <option value="62 Wedge">62° Wedge</option>
+    <option value="64 Wedge">64° Wedge</option>
+  </optgroup>
+
+  <optgroup label="Putter & Other">
+    <option value="Putter">Putter</option>
+    <option value="Chipper">Chipper</option>
+    <option value="Other">Other</option>
+  </optgroup>
+</select>
+
+      <button
+        id="trackShotBtn"
+        class="btn2"
+        type="button"
+        style="width:100%; min-height:48px;"
+      >
+        📍 Track Shot
+      </button>
+
+      <div
+        id="trackShotStatus"
+        role="status"
+        aria-live="polite"
+        style="font-size:13px;"
+      ></div>
+    </div>
   </div>
 
   <div class="premGrid">
@@ -4419,6 +4516,234 @@ let shouldAutoOpenCurrentHole = false;
 let gpsEnabled = false;
 let gpsWatchId = null;
 let currentGpsPosition = null;
+
+    // =========================================================
+// TEERADAR — MANUAL SHOT TRACKING
+// =========================================================
+
+let trackShotSaving = false;
+
+async function saveTrackedShot() {
+  const button = document.getElementById(
+    "trackShotBtn"
+  );
+
+  const clubSelect = document.getElementById(
+    "trackShotClub"
+  );
+
+  const status = document.getElementById(
+    "trackShotStatus"
+  );
+
+  if (trackShotSaving) return;
+
+  const roundId = Number(currentRoundId);
+
+  if (
+    !Number.isInteger(roundId) ||
+    roundId <= 0 ||
+    !currentRound
+  ) {
+    if (status) {
+      status.textContent = "Open a round first.";
+    }
+    return;
+  }
+
+  const holeNumber = premiumHoleIndex + 1;
+
+  const totalHoles =
+    Number(currentRound.holes) || 18;
+
+  if (
+    holeNumber < 1 ||
+    holeNumber > totalHoles
+  ) {
+    if (status) {
+      status.textContent = "Invalid hole.";
+    }
+    return;
+  }
+
+  const Geolocation =
+    window.Capacitor?.Plugins?.Geolocation;
+
+  trackShotSaving = true;
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Finding GPS…";
+  }
+
+  if (status) {
+    status.textContent = "Capturing shot location…";
+  }
+
+  try {
+    let latitude;
+    let longitude;
+    let accuracy;
+
+    // Get a fresh location at the time of the shot.
+    if (Geolocation) {
+      const position =
+        await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          maximumAge: 5000,
+          timeout: 15000
+        });
+
+      latitude = Number(
+        position?.coords?.latitude
+      );
+
+      longitude = Number(
+        position?.coords?.longitude
+      );
+
+      accuracy = Number(
+        position?.coords?.accuracy
+      );
+    } else if (navigator.geolocation) {
+      const position = await new Promise(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            resolve,
+            reject,
+            {
+              enableHighAccuracy: true,
+              maximumAge: 5000,
+              timeout: 15000
+            }
+          );
+        }
+      );
+
+      latitude = Number(
+        position.coords.latitude
+      );
+
+      longitude = Number(
+        position.coords.longitude
+      );
+
+      accuracy = Number(
+        position.coords.accuracy
+      );
+    } else {
+      throw new Error(
+        "GPS is unavailable on this device."
+      );
+    }
+
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      throw new Error(
+        "Could not obtain valid GPS coordinates."
+      );
+    }
+
+    // Avoid recording inaccurate shot positions.
+    if (
+      !Number.isFinite(accuracy) ||
+      accuracy > 20
+    ) {
+      throw new Error(
+        "GPS accuracy is too low. Move into an open area and try again."
+      );
+    }
+
+    // Do not save a shot to a different round/hole
+    // if the golfer navigated while GPS was loading.
+    if (
+      Number(currentRoundId) !== roundId ||
+      premiumHoleIndex + 1 !== holeNumber
+    ) {
+      throw new Error(
+        "Round or hole changed. Please track the shot again."
+      );
+    }
+
+    if (status) {
+      status.textContent = "Saving shot…";
+    }
+
+    const club =
+      String(clubSelect?.value || "").trim();
+
+    const result = await api(
+      `/api/rounds/${roundId}/shots`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          hole_number: holeNumber,
+          latitude,
+          longitude,
+          club: club || null
+        })
+      }
+    );
+
+    if (!result?.ok || !result?.shot) {
+      throw new Error(
+        "Shot was not confirmed by the server."
+      );
+    }
+
+    if (status) {
+      status.textContent =
+        `✓ Shot saved — Hole ${holeNumber}` +
+        (club ? ` • ${club}` : "");
+    }
+
+    console.log(
+      "✅ TeeRadar shot saved:",
+      result.shot
+    );
+
+  } catch (error) {
+    console.error(
+      "❌ TeeRadar shot tracking failed:",
+      error
+    );
+
+    if (status) {
+      status.textContent =
+        "Shot not saved: " +
+        (error?.message || "Unknown error");
+    }
+
+  } finally {
+    trackShotSaving = false;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "📍 Track Shot";
+    }
+  }
+}
+
+// Event delegation allows the button to keep working
+// even if the scorecard is rendered again.
+document.addEventListener(
+  "click",
+  (event) => {
+    if (
+      event.target?.closest?.(
+        "#trackShotBtn"
+      )
+    ) {
+      saveTrackedShot();
+    }
+  }
+);
 
 // ---------------------------------------------------------
 // TeeRadar GPS accuracy and jump protection
