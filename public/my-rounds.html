@@ -3385,6 +3385,29 @@ html.app-mode .activeRoundCard{
       id="gpsAccuracy"
     ></div>
 
+       <!-- Shot tracking is optional to use -->
+<div
+  id="trackShotSummary"
+  role="status"
+  aria-live="polite"
+  style="font-size:12px;color:#64748b;margin-top:10px;"
+>
+  Track a shot when you want. Manual scoring remains available.
+</div>
+
+<div id="trackShotHistory" style="font-size:12px;margin-top:8px;"></div>
+
+<div
+  id="trackShotGreenPrompt"
+  role="status"
+  aria-live="polite"
+  style="display:none;margin-top:8px;padding:12px;background:#e6f4f1;border-radius:12px;font-size:13px;"
+></div>
+
+<div id="trackShotControls">
+
+    <div id="trackShotControls" style="display:none;">
+
     <!-- TeeRadar manual shot tracking -->
     <div
       style="margin-top:14px; display:grid; gap:10px;"
@@ -3474,14 +3497,24 @@ html.app-mode .activeRoundCard{
         📍 Track Shot
       </button>
 
-      <div
+      <button
+  id="trackShotBallOnGreen"
+  class="btn2 secondary"
+  type="button"
+  style="width:100%;min-height:48px;"
+>
+  🟢 Ball on Green
+</button>
+
+      <      <div
         id="trackShotStatus"
         role="status"
         aria-live="polite"
         style="font-size:13px;"
       ></div>
     </div>
-  </div>
+
+  </div><!-- /trackShotControls -->
 
   <div class="premGrid">
     <div class="premPanel">
@@ -4522,6 +4555,341 @@ let currentGpsPosition = null;
 // =========================================================
 
 let trackShotSaving = false;
+let trackShotLastActivity = 0;
+let trackShotHistoryKey = "";
+let trackShotHistory = [];
+
+const TRACK_SHOT_IDLE_MS = 20 * 60 * 1000;
+
+function trackShotGreenKey(roundId, holeNumber) {
+  return `teeradar_green_${roundId}_${holeNumber}`;
+}
+
+function trackShotGetGreen(roundId, holeNumber) {
+  try {
+    return JSON.parse(
+      localStorage.getItem(trackShotGreenKey(roundId, holeNumber)) || "null"
+    );
+  } catch {
+    return null;
+  }
+}
+
+function trackShotDistanceMetres(a, b) {
+  const r = Math.PI / 180;
+  const dLat = (Number(b.latitude) - Number(a.latitude)) * r;
+  const dLng = (Number(b.longitude) - Number(a.longitude)) * r;
+
+  const v =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(Number(a.latitude) * r) *
+      Math.cos(Number(b.latitude) * r) *
+      Math.sin(dLng / 2) ** 2;
+
+  return Math.round(
+    6371000 * 2 *
+    Math.atan2(Math.sqrt(v), Math.sqrt(Math.max(0, 1 - v)))
+  );
+}
+
+function trackShotCheckIdle() {
+  if (
+    trackShotLastActivity &&
+    Date.now() - trackShotLastActivity >= TRACK_SHOT_IDLE_MS
+  ) {
+    const status = document.getElementById("trackShotStatus");
+
+    if (status && !trackShotSaving) {
+      status.textContent =
+        "Tracking idle for 20 minutes. Tap Track Shot to continue.";
+    }
+
+    trackShotLastActivity = 0;
+  }
+}
+
+async function trackShotCapturePosition() {
+  const Geolocation = window.Capacitor?.Plugins?.Geolocation;
+
+  let position;
+
+  if (Geolocation) {
+    position = await Geolocation.getCurrentPosition({
+      enableHighAccuracy: true,
+      maximumAge: 5000,
+      timeout: 15000
+    });
+  } else if (navigator.geolocation) {
+    position = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 15000
+      })
+    );
+  } else {
+    throw new Error("GPS is unavailable on this device.");
+  }
+
+  const latitude = Number(position?.coords?.latitude);
+  const longitude = Number(position?.coords?.longitude);
+  const accuracy = Number(position?.coords?.accuracy);
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    throw new Error("Could not obtain valid GPS coordinates.");
+  }
+
+  if (!Number.isFinite(accuracy) || accuracy > 20) {
+    throw new Error(
+      "GPS accuracy is too low. Move into an open area and try again."
+    );
+  }
+
+  return { latitude, longitude, accuracy };
+}
+
+async function trackShotBallOnGreen() {
+  if (trackShotSaving) return;
+
+  const rid = Number(currentRoundId);
+  const hole = premiumHoleIndex + 1;
+  const status = document.getElementById("trackShotStatus");
+  const button = document.getElementById("trackShotBallOnGreen");
+
+  if (!Number.isInteger(rid) || rid <= 0 || !currentRound) {
+    if (status) status.textContent = "Open a round first.";
+    return;
+  }
+
+  trackShotSaving = true;
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Finding GPS…";
+  }
+
+  try {
+    const response = await api(`/api/rounds/${rid}/shots`);
+
+    const shots = (response?.shots || []).filter(
+      s => Number(s.hole_number) === hole
+    );
+
+    if (!shots.length) {
+      throw new Error(
+        "Track at least one shot before marking Ball on Green."
+      );
+    }
+
+    const last = shots[shots.length - 1];
+    const position = await trackShotCapturePosition();
+
+    if (
+      Number(currentRoundId) !== rid ||
+      premiumHoleIndex + 1 !== hole
+    ) {
+      throw new Error("Round or hole changed. Try again.");
+    }
+
+    const distance = trackShotDistanceMetres(last, position);
+
+    localStorage.setItem(
+      trackShotGreenKey(rid, hole),
+      JSON.stringify({
+        shotId: last.id,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        distance,
+        recordedAt: Date.now()
+      })
+    );
+
+    trackShotLastActivity = Date.now();
+
+    if (status) {
+      status.textContent =
+        `✓ Ball on green. Last shot: ${distance} m. Enter putts in the scorecard below.`;
+    }
+
+    await trackShotRefresh();
+
+  } catch (error) {
+    if (status) {
+      status.textContent =
+        "Ball on Green not saved: " +
+        (error?.message || "Unknown error");
+    }
+  } finally {
+    trackShotSaving = false;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "🟢 Ball on Green";
+    }
+  }
+}
+
+document.addEventListener("click", event => {
+  if (event.target?.closest?.("#trackShotBallOnGreen")) {
+    trackShotBallOnGreen();
+  }
+});
+
+async function trackShotRefresh() {
+  const rid = Number(currentRoundId);
+  const hole = premiumHoleIndex + 1;
+
+  const summary = document.getElementById("trackShotSummary");
+  const history = document.getElementById("trackShotHistory");
+
+  if (!Number.isInteger(rid) || rid <= 0 || !currentRound) {
+    if (history) history.replaceChildren();
+    return;
+  }
+
+  const key = `${rid}:${hole}`;
+  trackShotHistoryKey = key;
+
+  try {
+    const response = await api(`/api/rounds/${rid}/shots`);
+
+    if (
+      trackShotHistoryKey !== key ||
+      Number(currentRoundId) !== rid ||
+      premiumHoleIndex + 1 !== hole
+    ) {
+      return;
+    }
+
+    trackShotHistory = Array.isArray(response?.shots)
+      ? response.shots.filter(
+          s => Number(s.hole_number) === hole
+        )
+      : [];
+
+    if (summary) {
+      summary.textContent =
+        `Your tracked shots on hole ${hole}: ${trackShotHistory.length}. ` +
+        "Manual strokes and putts remain editable.";
+    }
+
+    const green = trackShotGetGreen(rid, hole);
+const greenPrompt = document.getElementById("trackShotGreenPrompt");
+
+if (greenPrompt) {
+  greenPrompt.style.display = green ? "block" : "none";
+
+  greenPrompt.textContent = green
+    ? `🟢 Ball on Green recorded. Final tracked shot: ${green.distance} m. Enter your putts using the normal scorecard.`
+    : "";
+}
+
+    if (!history) return;
+
+    history.replaceChildren();
+
+    for (const [index, shot] of trackShotHistory.entries()) {
+      const line = document.createElement("div");
+      line.style.cssText =
+        "display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:6px 0";
+
+      const name = document.createElement("span");
+
+const nextShot = trackShotHistory[index + 1];
+const green = trackShotGetGreen(rid, hole);
+
+const end =
+  nextShot || (green?.shotId === shot.id ? green : null);
+
+const metres = end
+  ? ` • ${trackShotDistanceMetres(shot, end)} m`
+  : " • awaiting next position";
+
+name.textContent =
+  `Shot ${index + 1}: ${shot.club || "Club not selected"}${metres}`;
+
+      line.appendChild(name);
+
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.textContent = "Edit club";
+      edit.className = "btn2 secondary";
+      edit.style.cssText =
+        "min-height:30px;padding:4px 8px;font-size:11px";
+
+      edit.onclick = async () => {
+        const value = prompt(
+          "Change club for this shot (leave blank for none):",
+          shot.club || ""
+        );
+
+        if (value === null) return;
+
+        if (value.trim().length > 60) {
+          alert("Club name is too long.");
+          return;
+        }
+
+        try {
+          await api(`/api/rounds/${rid}/shots/${shot.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              club: value.trim() || null
+            })
+          });
+
+          await trackShotRefresh();
+        } catch (e) {
+          alert("Could not edit shot: " + e.message);
+        }
+      };
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "Undo";
+      remove.className = "btn2 secondary";
+      remove.style.cssText =
+        "min-height:30px;padding:4px 8px;font-size:11px";
+
+      remove.onclick = async () => {
+        if (
+          !confirm(
+            "Remove this tracked shot? This will not change the manual scorecard."
+          )
+        ) {
+          return;
+        }
+
+        try {
+          await api(`/api/rounds/${rid}/shots/${shot.id}`, {
+            method: "DELETE"
+          });
+
+          await trackShotRefresh();
+        } catch (e) {
+          alert("Could not remove shot: " + e.message);
+        }
+      };
+
+      line.append(edit, remove);
+      history.appendChild(line);
+    }
+  } catch (e) {
+    if (summary && trackShotHistoryKey === key) {
+      summary.textContent =
+        "Shot history unavailable: " + e.message;
+    }
+  }
+}
+
+setInterval(trackShotCheckIdle, 60 * 1000);
 
 async function saveTrackedShot() {
   const button = document.getElementById(
@@ -4537,6 +4905,7 @@ async function saveTrackedShot() {
   );
 
   if (trackShotSaving) return;
+  trackShotCheckIdle();
 
   const roundId = Number(currentRoundId);
 
@@ -4697,11 +5066,26 @@ async function saveTrackedShot() {
       );
     }
 
-    if (status) {
+        if (status) {
       status.textContent =
         `✓ Shot saved — Hole ${holeNumber}` +
         (club ? ` • ${club}` : "");
     }
+
+    // A new tracked shot clears the previous Ball on Green marker.
+localStorage.removeItem(
+  trackShotGreenKey(roundId, holeNumber)
+);
+
+    // ---------------------------------------------------------
+    // Track Shot — successful activity update
+    // ---------------------------------------------------------
+    // Only reset the inactivity timer after the backend
+    // confirms the shot was saved.
+    trackShotLastActivity = Date.now();
+
+    // Refresh this golfer's shot history and shot count.
+    await trackShotRefresh();
 
     console.log(
       "✅ TeeRadar shot saved:",
@@ -11166,6 +11550,14 @@ const pc = getPlayersCountFromRound(round);
 premiumPlayerIndex = clamp(premiumPlayerIndex, 0, pc - 1);
 const pLabel = playerLabel(premiumPlayerIndex);
 const nextIsPlayer = premiumPlayerIndex < pc - 1;
+  // Shot history is linked to the signed-in golfer,
+// not the player currently selected on the scorecard.
+if (
+  trackShotHistoryKey !==
+  `${Number(currentRoundId)}:${holeNum}`
+) {
+  trackShotRefresh();
+}
 
 if (premPills){
   // To Par shown for CURRENT player (not always P1)
