@@ -4711,12 +4711,30 @@ async function trackShotBallOnGreen() {
 
     trackShotLastActivity = Date.now();
 
-    if (status) {
+        if (status) {
       status.textContent =
-        `✓ Ball on green. Last shot: ${distance} m. Enter putts in the scorecard below.`;
+        `✓ Ball on green. Last shot: ${distance} m. Select your putts below.`;
     }
 
     await trackShotRefresh();
+
+    // ---------------------------------------------------------
+    // BALL ON GREEN — SHOW EXISTING PUTTS SCROLL WHEEL
+    // ---------------------------------------------------------
+
+    const puttsWheel =
+      document.getElementById("premPuttsWheel");
+
+    if (puttsWheel) {
+      puttsWheel.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+
+      puttsWheel.focus({
+        preventScroll: true
+      });
+    }
 
   } catch (error) {
     if (status) {
@@ -4888,6 +4906,71 @@ name.textContent =
 }
 
 setInterval(trackShotCheckIdle, 60 * 1000);
+
+
+// ---------------------------------------------------------
+// TeeRadar — Calculate total strokes from shots + putts
+// Only applies after Ball on Green has been recorded.
+// ---------------------------------------------------------
+async function calculateTrackedHoleStrokes(
+  roundId,
+  holeNumber,
+  putts
+) {
+  if (
+    !Number.isInteger(roundId) ||
+    roundId <= 0 ||
+    !Number.isInteger(holeNumber) ||
+    holeNumber <= 0 ||
+    !Number.isInteger(putts) ||
+    putts < 0
+  ) {
+    return null;
+  }
+
+  const green = trackShotGetGreen(
+    roundId,
+    holeNumber
+  );
+
+  // Manual scoring remains unchanged if tracking
+  // has not been completed for this hole.
+  if (!green) {
+    return null;
+  }
+
+  const response = await api(
+    `/api/rounds/${roundId}/shots`
+  );
+
+  if (!response?.ok || !Array.isArray(response.shots)) {
+    throw new Error(
+      "Could not verify tracked shots."
+    );
+  }
+
+  const shots = response.shots.filter(
+    shot =>
+      Number(shot.hole_number) === holeNumber
+  );
+
+  if (!shots.length) {
+    return null;
+  }
+
+  // Make sure Ball on Green still refers
+  // to the most recently recorded shot.
+  const lastShot = shots[shots.length - 1];
+
+  if (
+    String(lastShot.id) !== String(green.shotId)
+  ) {
+    return null;
+  }
+
+  return shots.length + putts;
+}
+
 
 async function saveTrackedShot() {
   const button = document.getElementById(
@@ -11836,6 +11919,9 @@ if (premPuttBtns) {
   const sel =
     document.createElement("select");
 
+  // Allows Ball on Green to find the existing putts wheel.
+  sel.id = "premPuttsWheel";
+
   sel.style.width = "100%";
   sel.style.padding = "12px";
   sel.style.borderRadius = "12px";
@@ -11962,13 +12048,137 @@ if (premPuttBtns) {
       /*
        * Save ONLY this player on this hole.
        */
-      await savePremiumPlayerScore(
-  holeNum,
-  playerNumber,
-  {
-    putts: v
-  }
+            await savePremiumPlayerScore(
+        holeNum,
+        playerNumber,
+        {
+          putts: v
+        }
+      );
+
+      // ---------------------------------------------------------
+      // TeeRadar — Automatically calculate strokes
+      // from tracked shots + selected putts.
+      // ---------------------------------------------------------
+
+      const trackingRoundId = Number(currentRoundId);
+
+      // Only apply tracking to the golfer whose
+      // shots belong to the logged-in account.
+      const trackingPlayerIdsRaw =
+        currentRound?.player_user_ids;
+
+      let trackingPlayerIds = [];
+
+      try {
+        trackingPlayerIds = Array.isArray(trackingPlayerIdsRaw)
+          ? trackingPlayerIdsRaw
+          : JSON.parse(trackingPlayerIdsRaw || "[]");
+      } catch (_) {
+        trackingPlayerIds = [];
+      }
+
+      // Use the authenticated TeeRadar account ID,
+// rather than relying on a localStorage user_id.
+const tokenPayload =
+  decodeJwtPayload(getToken()) || {};
+
+const loggedInUserId = Number(
+  tokenPayload.id ??
+  tokenPayload.userId ??
+  tokenPayload.user_id ??
+  tokenPayload.sub
 );
+
+      const selectedPlayerUserId = Number(
+        trackingPlayerIds[premiumPlayerIndex]
+      );
+
+      // Do not assume that player 1 owns the tracked
+      // shots on a multiplayer scorecard.
+      const canApplyTracking =
+        trackingPlayerIds.length > 0 &&
+        Number.isInteger(loggedInUserId) &&
+        loggedInUserId > 0 &&
+        selectedPlayerUserId === loggedInUserId;
+
+      if (
+        canApplyTracking &&
+        Number.isInteger(v) &&
+        v >= 0
+      ) {
+        try {
+          const calculatedStrokes =
+            await calculateTrackedHoleStrokes(
+              trackingRoundId,
+              holeNum,
+              v
+            );
+
+          if (
+            Number.isInteger(calculatedStrokes) &&
+            calculatedStrokes >= 1
+          ) {
+            await savePremiumPlayerScore(
+              holeNum,
+              playerNumber,
+              {
+                strokes: calculatedStrokes
+              }
+            );
+
+            setHoleValueInTable(
+              holeNum,
+              "strokes",
+              playerNumber,
+              calculatedStrokes
+            );
+
+            // Update the existing strokes selector
+            // without rebuilding the scorecard.
+            const strokesWheel =
+              premScoreBtns?.querySelector("select");
+
+            if (strokesWheel) {
+              if (calculatedStrokes <= 11) {
+                strokesWheel.value =
+                  String(calculatedStrokes);
+              } else {
+                // Existing wheel uses 11+ as its maximum.
+                strokesWheel.value = "11";
+              }
+            }
+
+            const trackingStatus =
+              document.getElementById(
+                "trackShotStatus"
+              );
+
+            if (trackingStatus) {
+              trackingStatus.textContent =
+                `✓ Score calculated: ` +
+                `${calculatedStrokes - v} shots + ` +
+                `${v} putts = ` +
+                `${calculatedStrokes} strokes`;
+            }
+
+            await syncTeeRadarLiveActivity();
+          }
+        } catch (trackingError) {
+          console.error(
+            "Tracked score calculation failed:",
+            trackingError
+          );
+
+          setToast(
+            rightToast,
+            "Putts saved, but automatic strokes " +
+              "could not be calculated. " +
+              "Please enter strokes manually.",
+            false
+          );
+        }
+      }
 
       /*
        * Keep local in-memory scorecard current.
