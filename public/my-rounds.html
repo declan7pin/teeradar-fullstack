@@ -4758,6 +4758,204 @@ document.addEventListener("click", event => {
   }
 });
 
+    // =========================================================
+// TEERADAR — SHOT TRACKING MAP
+// Separate from Measure Point and live GPS.
+// =========================================================
+
+function renderTrackedShotsOnMap() {
+  if (!gpsMap || !window.L) return;
+
+  // Remove only our own shot-tracking graphics.
+  if (gpsTrackedShotsLayer) {
+    gpsTrackedShotsLayer.clearLayers();
+  } else {
+    gpsTrackedShotsLayer = window.L.layerGroup()
+      .addTo(gpsMap);
+  }
+
+  const roundId = Number(currentRoundId);
+  const holeNumber = premiumHoleIndex + 1;
+  const key = `${roundId}:${holeNumber}`;
+
+  if (
+    !currentRound ||
+    !Number.isInteger(roundId) ||
+    roundId <= 0 ||
+    trackShotHistoryKey !== key
+  ) {
+    return;
+  }
+
+  const shots = Array.isArray(trackShotHistory)
+    ? trackShotHistory.filter(shot =>
+        Number(shot.hole_number) === holeNumber &&
+        Number.isFinite(Number(shot.latitude)) &&
+        Number.isFinite(Number(shot.longitude))
+      )
+    : [];
+
+  const green = trackShotGetGreen(roundId, holeNumber);
+
+  const points = shots.map(shot => ({
+    lat: Number(shot.latitude),
+    lng: Number(shot.longitude),
+    club: String(shot.club || "").trim(),
+    type: "shot"
+  }));
+
+  if (
+    green &&
+    Number.isFinite(Number(green.latitude)) &&
+    Number.isFinite(Number(green.longitude)) &&
+    shots.length &&
+    String(green.shotId) === String(shots[shots.length - 1].id)
+  ) {
+    points.push({
+      lat: Number(green.latitude),
+      lng: Number(green.longitude),
+      type: "green"
+    });
+  }
+
+  function clubLabel(club, index) {
+    const value = String(club || "").trim();
+
+    if (!value) return String(index + 1);
+
+    const lower = value.toLowerCase();
+
+    if (lower === "driver") return "Dr";
+    if (lower === "putter") return "Pt";
+
+    const iron = lower.match(/^(\d+)\s*[- ]?\s*iron$/);
+    if (iron) return `${iron[1]}i`;
+
+    const wood = lower.match(/^(\d+)\s*[- ]?\s*wood$/);
+    if (wood) return `${wood[1]}w`;
+
+    const hybrid = lower.match(/^(\d+)\s*[- ]?\s*hybrid$/);
+    if (hybrid) return `${hybrid[1]}h`;
+
+    const wedge = {
+      "pitching wedge": "Pw",
+      "gap wedge": "Gw",
+      "sand wedge": "Sw",
+      "lob wedge": "Lw"
+    };
+
+    if (wedge[lower]) return wedge[lower];
+
+    return value.slice(0, 3);
+  }
+
+  function makeIcon(point, index) {
+    const isGreen = point.type === "green";
+
+    const label = isGreen
+      ? "⚑"
+      : clubLabel(point.club, index);
+
+    const background = isGreen
+      ? "#e7b83e"
+      : "#007e72";
+
+    const foreground = isGreen
+      ? "#5b4300"
+      : "#ffffff";
+
+    const safeLabel = String(label)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+    return window.L.divIcon({
+      className: "",
+      html: `
+        <div style="
+          width:38px;
+          height:38px;
+          box-sizing:border-box;
+          border-radius:50%;
+          border:4px solid white;
+          background:${background};
+          color:${foreground};
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:${isGreen ? 23 : 12}px;
+          font-weight:800;
+          box-shadow:0 2px 7px rgba(0,0,0,.35);
+          white-space:nowrap;
+        ">${safeLabel}</div>
+      `,
+      iconSize: [38, 38],
+      iconAnchor: [19, 19]
+    });
+  }
+
+  points.forEach((point, index) => {
+    window.L.marker(
+      [point.lat, point.lng],
+      {
+        icon: makeIcon(point, index),
+        zIndexOffset: 500
+      }
+    ).addTo(gpsTrackedShotsLayer);
+
+    if (index === 0) return;
+
+    const previous = points[index - 1];
+
+    window.L.polyline(
+      [
+        [previous.lat, previous.lng],
+        [point.lat, point.lng]
+      ],
+      {
+        color: "#1487dc",
+        weight: 4,
+        opacity: 0.95
+      }
+    ).addTo(gpsTrackedShotsLayer);
+
+    const distance = trackShotDistanceMetres(
+      {
+        latitude: previous.lat,
+        longitude: previous.lng
+      },
+      {
+        latitude: point.lat,
+        longitude: point.lng
+      }
+    );
+
+    // Place the distance halfway along the shot line.
+    const midpoint = [
+      (previous.lat + point.lat) / 2,
+      (previous.lng + point.lng) / 2
+    ];
+
+    const distanceIcon = window.L.divIcon({
+      className: "",
+      html: `
+        <div class="gpsDistanceMapLabel">
+          ${distance}m
+        </div>
+      `,
+      iconSize: [64, 30],
+      iconAnchor: [32, 15]
+    });
+
+    window.L.marker(midpoint, {
+      icon: distanceIcon,
+      interactive: false,
+      zIndexOffset: 550
+    }).addTo(gpsTrackedShotsLayer);
+  });
+}
+
 async function trackShotRefresh() {
   const rid = Number(currentRoundId);
   const hole = premiumHoleIndex + 1;
@@ -4806,6 +5004,9 @@ if (greenPrompt) {
     ? `🟢 Ball on Green recorded. Final tracked shot: ${green.distance} m. Enter your putts using the normal scorecard.`
     : "";
 }
+
+        // Update shot markers, lines and distance labels.
+    renderTrackedShotsOnMap();
 
     if (!history) return;
 
@@ -5353,6 +5554,10 @@ let gpsGreenLine = null;
  * GPS map state.
  */
 let gpsMap = null;
+
+// Separate layer for tracked shots.
+// This does not affect Measure Point or the live GPS marker.
+let gpsTrackedShotsLayer = null;
 
 let gpsPlayerMarker = null;
 let gpsAccuracyCircle = null;
@@ -6973,6 +7178,9 @@ const point = [
     },
     150
   );
+
+    // Restore tracked shot markers when the map opens.
+  renderTrackedShotsOnMap();
 
   return gpsMap;
 }
@@ -11637,6 +11845,11 @@ if (
   trackShotHistoryKey !==
   `${Number(currentRoundId)}:${holeNum}`
 ) {
+  // Immediately clear the previous hole's shot markers.
+  if (gpsTrackedShotsLayer) {
+    gpsTrackedShotsLayer.clearLayers();
+  }
+
   trackShotRefresh();
 }
 
