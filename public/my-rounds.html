@@ -4738,18 +4738,19 @@ async function trackShotBallOnGreen() {
 
     await trackShotRefresh();
 
-       // ---------------------------------------------------------
-    // BALL ON GREEN — RELIABLY OPEN PUTTS WHEEL
+   
+    // ---------------------------------------------------------
+    // BALL ON GREEN — AUTOMATIC PUTTS PICKER
     // ---------------------------------------------------------
 
-    // Allow any pending scorecard updates to finish rendering.
+    // Allow pending scorecard updates to finish rendering.
     await new Promise(resolve =>
       requestAnimationFrame(() =>
         requestAnimationFrame(resolve)
       )
     );
 
-    // Find the wheel, allowing for delayed scorecard rendering.
+    // Find the existing scorecard putts selector.
     let puttsWheel = null;
 
     for (let attempt = 0; attempt < 12; attempt++) {
@@ -4767,8 +4768,7 @@ async function trackShotBallOnGreen() {
 
       if (
         puttsWheel &&
-        puttsWheel.isConnected &&
-        puttsWheel.getClientRects().length > 0
+        puttsWheel.isConnected
       ) {
         break;
       }
@@ -4782,37 +4782,205 @@ async function trackShotBallOnGreen() {
 
     if (puttsWheel) {
 
-      // Scroll the putts selector into view.
-      puttsWheel.scrollIntoView({
-        behavior: "smooth",
-        block: "center"
-      });
+      // Prevent duplicate putts popups.
+      document
+        .getElementById("trackShotPuttsOverlay")
+        ?.remove();
 
-      // Focus without opening the native iPhone picker.
-      try {
-        puttsWheel.focus({
-          preventScroll: true
+      const overlay = document.createElement("div");
+      overlay.id = "trackShotPuttsOverlay";
+
+      overlay.style.cssText = `
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        background: rgba(0, 0, 0, 0.65);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 12px;
+        box-sizing: border-box;
+      `;
+
+      const panel = document.createElement("div");
+
+      panel.style.cssText = `
+        width: 100%;
+        max-width: 440px;
+        max-height: 85vh;
+        overflow-y: auto;
+        background: #ffffff;
+        color: #172b24;
+        border-radius: 20px;
+        padding: 20px;
+        padding-bottom: calc(
+          20px + env(safe-area-inset-bottom)
+        );
+        box-sizing: border-box;
+      `;
+
+      const heading = document.createElement("div");
+      heading.textContent = "🟢 Ball on Green";
+
+      heading.style.cssText = `
+        font-size: 20px;
+        font-weight: 900;
+        text-align: center;
+        margin-bottom: 8px;
+      `;
+
+      const description = document.createElement("div");
+      description.textContent =
+        "How many putts did you take?";
+
+      description.style.cssText = `
+        font-size: 15px;
+        text-align: center;
+        margin-bottom: 18px;
+      `;
+
+      const options = document.createElement("div");
+
+      options.style.cssText = `
+        display: grid;
+        grid-template-columns:
+          repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      `;
+
+      const closePicker = () => {
+        overlay.remove();
+      };
+
+      // -------------------------------------------------------
+      // PUTTS OPTIONS — 0 TO 10
+      // -------------------------------------------------------
+
+      for (let putts = 0; putts <= 10; putts++) {
+
+        const option = document.createElement("button");
+        option.type = "button";
+
+        option.textContent =
+          putts === 0
+            ? "Chipped in"
+            : String(putts);
+
+        option.style.cssText = `
+          min-height: 56px;
+          border-radius: 12px;
+          border: 1px solid #d4ded9;
+          background: #f3f7f5;
+          color: #172b24;
+          font-size: ${
+            putts === 0 ? "13px" : "22px"
+          };
+          font-weight: 800;
+          cursor: pointer;
+        `;
+
+        option.addEventListener("click", () => {
+
+          // Ensure the golfer is still on the same hole.
+          if (
+            Number(currentRoundId) !== rid ||
+            premiumHoleIndex + 1 !== hole
+          ) {
+            closePicker();
+            return;
+          }
+
+          // Get the current scorecard selector.
+          const currentWheel =
+            document.getElementById(
+              "premPuttsWheel"
+            );
+
+          if (
+            !currentWheel ||
+            !currentWheel.isConnected ||
+            premiumScoreEditBusy
+          ) {
+            return;
+          }
+
+          // Update the existing scorecard putts value.
+          currentWheel.value = String(putts);
+
+          // Close the popup.
+          closePicker();
+
+          // Trigger the existing putts save handler.
+          currentWheel.dispatchEvent(
+            new Event("change", {
+              bubbles: true
+            })
+          );
         });
-      } catch (_) {
-        // Ignore focus errors on older devices.
+
+        options.appendChild(option);
+      }
+
+      // -------------------------------------------------------
+      // ENTER PUTTS LATER
+      // -------------------------------------------------------
+
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.textContent = "Enter putts later";
+
+      cancel.style.cssText = `
+        width: 100%;
+        margin-top: 14px;
+        min-height: 46px;
+        border: 0;
+        border-radius: 12px;
+        background: #e8eeeb;
+        color: #172b24;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+      `;
+
+      cancel.addEventListener(
+        "click",
+        closePicker
+      );
+
+      // Assemble the popup.
+      panel.appendChild(heading);
+      panel.appendChild(description);
+      panel.appendChild(options);
+      panel.appendChild(cancel);
+
+      overlay.appendChild(panel);
+      document.body.appendChild(overlay);
+
+      if (status) {
+        status.textContent =
+          "✓ Ball on Green saved. Select your putts.";
       }
 
     } else {
 
-      // The marker was saved, even if the wheel isn't visible.
+      // Green marker was saved even if the scorecard
+      // putts selector could not be found.
       if (status) {
         status.textContent =
-          "✓ Ball on Green saved. Scroll down to enter putts.";
+          "✓ Ball on Green saved. Enter putts on the scorecard.";
       }
     }
 
   } catch (error) {
+
     if (status) {
       status.textContent =
         "Ball on Green not saved: " +
         (error?.message || "Unknown error");
     }
+
   } finally {
+
     trackShotSaving = false;
 
     if (button) {
@@ -4823,10 +4991,15 @@ async function trackShotBallOnGreen() {
 }
 
 document.addEventListener("click", event => {
-  if (event.target?.closest?.("#trackShotBallOnGreen")) {
+  if (
+    event.target?.closest?.(
+      "#trackShotBallOnGreen"
+    )
+  ) {
     trackShotBallOnGreen();
   }
 });
+
 
     // =========================================================
 // TEERADAR — SHOT TRACKING MAP
