@@ -4696,21 +4696,41 @@ async function trackShotBallOnGreen() {
       throw new Error("Round or hole changed. Try again.");
     }
 
-    const distance = trackShotDistanceMetres(last, position);
+        const distance = trackShotDistanceMetres(last, position);
 
+    // Save the green position to TeeRadar's database.
+    const savedGreen = await api(
+      `/api/rounds/${rid}/shot-green/${hole}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          shot_id: Number(last.id),
+          latitude: position.latitude,
+          longitude: position.longitude,
+          distance
+        })
+      }
+    );
+
+    if (!savedGreen?.ok || !savedGreen?.green) {
+      throw new Error(
+        "The green position could not be saved."
+      );
+    }
+
+    // Keep a local copy for immediate map rendering.
     localStorage.setItem(
       trackShotGreenKey(rid, hole),
       JSON.stringify({
-        shotId: last.id,
-        latitude: position.latitude,
-        longitude: position.longitude,
-        distance,
+        shotId: Number(savedGreen.green.shot_id),
+        latitude: Number(savedGreen.green.latitude),
+        longitude: Number(savedGreen.green.longitude),
+        distance: Number(savedGreen.green.distance),
         recordedAt: Date.now()
       })
     );
 
     trackShotLastActivity = Date.now();
-
         if (status) {
       status.textContent =
         `✓ Ball on green. Last shot: ${distance} m. Select your putts below.`;
@@ -4992,6 +5012,47 @@ async function trackShotRefresh() {
       summary.textContent =
         `Your tracked shots on hole ${hole}: ${trackShotHistory.length}. ` +
         "Manual strokes and putts remain editable.";
+    }
+
+        // Load the saved Ball on Green position from TeeRadar.
+    const greenResponse = await api(
+      `/api/rounds/${rid}/shot-green/${hole}`
+    );
+
+    // Ignore responses if the golfer has switched holes.
+    if (
+      trackShotHistoryKey !== key ||
+      Number(currentRoundId) !== rid ||
+      premiumHoleIndex + 1 !== hole
+    ) {
+      return;
+    }
+
+    if (!greenResponse?.ok) {
+      throw new Error(
+        "Could not load the saved green position."
+      );
+    }
+
+    if (greenResponse.green) {
+      const saved = greenResponse.green;
+
+      localStorage.setItem(
+        trackShotGreenKey(rid, hole),
+        JSON.stringify({
+          shotId: Number(saved.shot_id),
+          latitude: Number(saved.latitude),
+          longitude: Number(saved.longitude),
+          distance: saved.distance == null
+            ? null
+            : Number(saved.distance),
+          recordedAt: saved.recorded_at || Date.now()
+        })
+      );
+    } else {
+      localStorage.removeItem(
+        trackShotGreenKey(rid, hole)
+      );
     }
 
     const green = trackShotGetGreen(rid, hole);
@@ -5354,10 +5415,25 @@ async function saveTrackedShot() {
         (club ? ` • ${club}` : "");
     }
 
-    // A new tracked shot clears the previous Ball on Green marker.
-localStorage.removeItem(
-  trackShotGreenKey(roundId, holeNumber)
-);
+        // A new shot means the previous Ball on Green
+    // position is no longer the end of this hole.
+    try {
+      await api(
+        `/api/rounds/${roundId}/shot-green/${holeNumber}`,
+        {
+          method: "DELETE"
+        }
+      );
+
+      localStorage.removeItem(
+        trackShotGreenKey(roundId, holeNumber)
+      );
+    } catch (greenError) {
+      console.warn(
+        "Could not clear previous green marker:",
+        greenError
+      );
+    }
 
     // ---------------------------------------------------------
     // Track Shot — successful activity update
