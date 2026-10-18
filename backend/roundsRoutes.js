@@ -49,6 +49,36 @@ async function ensureRoundShotsTable() {
   `);
 }
 
+// -------------------------------------------------
+// TeeRadar Ball on Green markers
+// One saved marker per golfer, per hole, per round
+// -------------------------------------------------
+async function ensureRoundShotGreensTable() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS round_shot_greens (
+      round_id BIGINT NOT NULL
+        REFERENCES rounds(id) ON DELETE CASCADE,
+      user_id BIGINT NOT NULL,
+      player_number INTEGER NOT NULL,
+      hole_number INTEGER NOT NULL,
+      shot_id BIGINT NOT NULL
+        REFERENCES round_shots(id) ON DELETE CASCADE,
+      latitude DOUBLE PRECISION NOT NULL,
+      longitude DOUBLE PRECISION NOT NULL,
+      distance DOUBLE PRECISION,
+      recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (round_id, user_id, hole_number),
+      CONSTRAINT round_shot_greens_player_valid
+        CHECK (player_number BETWEEN 1 AND 4),
+      CONSTRAINT round_shot_greens_hole_valid
+        CHECK (hole_number BETWEEN 1 AND 18),
+      CONSTRAINT round_shot_greens_lat_valid
+        CHECK (latitude BETWEEN -90 AND 90),
+      CONSTRAINT round_shot_greens_lon_valid
+        CHECK (longitude BETWEEN -180 AND 180)
+    );
+  `);
+}
 
 // -------------------------------------------------
 // ✅ OPTIONAL: Admin email alerts (Resend)
@@ -2701,6 +2731,158 @@ export async function createRoundWithSeededHoles({
 // Routes (mounted at /api/rounds)
 // -------------------------------------------------
 
+// -------------------------------------------------
+// BALL ON GREEN — SAVE / LOAD / CLEAR
+// -------------------------------------------------
+
+router.put("/:id/shot-green/:hole", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
+    const hole = Number(req.params.hole);
+    const shotId = Number(req.body?.shot_id);
+    const latitude = Number(req.body?.latitude);
+    const longitude = Number(req.body?.longitude);
+    const distance = req.body?.distance == null
+      ? null
+      : Number(req.body.distance);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "unauthorised" });
+    }
+
+    if (!Number.isInteger(roundId) || roundId <= 0 ||
+        !Number.isInteger(hole) || hole < 1 || hole > 18 ||
+        !Number.isSafeInteger(shotId) || shotId <= 0 ||
+        !Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+        !Number.isFinite(longitude) || longitude < -180 || longitude > 180 ||
+        (distance !== null && (!Number.isFinite(distance) || distance < 0))) {
+      return res.status(400).json({ ok: false, error: "invalid_green_marker" });
+    }
+
+    const access = await getRoundViewerAccess(roundId, userId);
+    if (!access.can_access || !access.player_number) {
+      return res.status(403).json({ ok: false, error: "forbidden" });
+    }
+
+    const round = await getRoundOwner(roundId);
+    if (!round || hole > Number(round.holes)) {
+      return res.status(400).json({ ok: false, error: "invalid_hole_number" });
+    }
+
+    await ensureRoundShotsTable();
+    await ensureRoundShotGreensTable();
+
+    const result = await db.query(`
+      INSERT INTO round_shot_greens (
+        round_id, user_id, player_number, hole_number,
+        shot_id, latitude, longitude, distance
+      )
+      SELECT $1, $2, $3, $4, s.id, $6, $7, $8
+      FROM round_shots s
+      WHERE s.id = $5
+        AND s.round_id = $1
+        AND s.user_id = $2
+        AND s.hole_number = $4
+      ON CONFLICT (round_id, user_id, hole_number)
+      DO UPDATE SET
+        player_number = EXCLUDED.player_number,
+        shot_id = EXCLUDED.shot_id,
+        latitude = EXCLUDED.latitude,
+        longitude = EXCLUDED.longitude,
+        distance = EXCLUDED.distance,
+        recorded_at = NOW()
+      RETURNING *;
+    `, [
+      roundId, userId, access.player_number, hole,
+      shotId, latitude, longitude, distance
+    ]);
+
+    if (!result.rows.length) {
+      return res.status(404).json({ ok: false, error: "shot_not_found" });
+    }
+
+    return res.json({ ok: true, green: result.rows[0] });
+  } catch (err) {
+    console.error("Save green marker error:", err);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+router.get("/:id/shot-green/:hole", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
+    const hole = Number(req.params.hole);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "unauthorised" });
+    }
+
+    if (!Number.isInteger(roundId) || roundId <= 0 ||
+        !Number.isInteger(hole) || hole < 1 || hole > 18) {
+      return res.status(400).json({ ok: false, error: "invalid_request" });
+    }
+
+    const access = await getRoundViewerAccess(roundId, userId);
+    if (!access.can_access) {
+      return res.status(403).json({ ok: false, error: "forbidden" });
+    }
+
+    await ensureRoundShotsTable();
+    await ensureRoundShotGreensTable();
+
+    const result = await db.query(`
+      SELECT *
+      FROM round_shot_greens
+      WHERE round_id = $1 AND user_id = $2 AND hole_number = $3
+      LIMIT 1;
+    `, [roundId, userId, hole]);
+
+    return res.json({
+      ok: true,
+      green: result.rows[0] || null
+    });
+  } catch (err) {
+    console.error("Get green marker error:", err);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+router.delete("/:id/shot-green/:hole", requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user?.id);
+    const roundId = Number(req.params.id);
+    const hole = Number(req.params.hole);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ ok: false, error: "unauthorised" });
+    }
+
+    if (!Number.isInteger(roundId) || roundId <= 0 ||
+        !Number.isInteger(hole) || hole < 1 || hole > 18) {
+      return res.status(400).json({ ok: false, error: "invalid_request" });
+    }
+
+    const access = await getRoundViewerAccess(roundId, userId);
+    if (!access.can_access) {
+      return res.status(403).json({ ok: false, error: "forbidden" });
+    }
+
+    await ensureRoundShotsTable();
+    await ensureRoundShotGreensTable();
+
+    await db.query(`
+      DELETE FROM round_shot_greens
+      WHERE round_id = $1 AND user_id = $2 AND hole_number = $3;
+    `, [roundId, userId, hole]);
+
+    return res.json({ ok: true, deleted: true });
+  } catch (err) {
+    console.error("Clear green marker error:", err);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
 
 // -------------------------------------------------
 // TeeRadar Shot Tracking
