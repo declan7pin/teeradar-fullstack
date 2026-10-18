@@ -4738,22 +4738,72 @@ async function trackShotBallOnGreen() {
 
     await trackShotRefresh();
 
-    // ---------------------------------------------------------
-    // BALL ON GREEN — SHOW EXISTING PUTTS SCROLL WHEEL
+       // ---------------------------------------------------------
+    // BALL ON GREEN — RELIABLY OPEN PUTTS WHEEL
     // ---------------------------------------------------------
 
-    const puttsWheel =
-      document.getElementById("premPuttsWheel");
+    // Allow any pending scorecard updates to finish rendering.
+    await new Promise(resolve =>
+      requestAnimationFrame(() =>
+        requestAnimationFrame(resolve)
+      )
+    );
+
+    // Find the wheel, allowing for delayed scorecard rendering.
+    let puttsWheel = null;
+
+    for (let attempt = 0; attempt < 12; attempt++) {
+
+      // Stop if the golfer has changed rounds or holes.
+      if (
+        Number(currentRoundId) !== rid ||
+        premiumHoleIndex + 1 !== hole
+      ) {
+        return;
+      }
+
+      puttsWheel =
+        document.getElementById("premPuttsWheel");
+
+      if (
+        puttsWheel &&
+        puttsWheel.isConnected &&
+        puttsWheel.getClientRects().length > 0
+      ) {
+        break;
+      }
+
+      puttsWheel = null;
+
+      await new Promise(resolve =>
+        setTimeout(resolve, 100)
+      );
+    }
 
     if (puttsWheel) {
+
+      // Scroll the putts selector into view.
       puttsWheel.scrollIntoView({
         behavior: "smooth",
         block: "center"
       });
 
-      puttsWheel.focus({
-        preventScroll: true
-      });
+      // Focus without opening the native iPhone picker.
+      try {
+        puttsWheel.focus({
+          preventScroll: true
+        });
+      } catch (_) {
+        // Ignore focus errors on older devices.
+      }
+
+    } else {
+
+      // The marker was saved, even if the wheel isn't visible.
+      if (status) {
+        status.textContent =
+          "✓ Ball on Green saved. Scroll down to enter putts.";
+      }
     }
 
   } catch (error) {
