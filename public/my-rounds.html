@@ -8024,7 +8024,6 @@ function focusGpsMapOnCurrentHole(force = false) {
 
   if (!gps?.middle) return;
 
-  // Convert coordinates into a valid Leaflet point.
   function validPoint(value) {
     if (!value) return null;
 
@@ -8057,13 +8056,15 @@ function focusGpsMapOnCurrentHole(force = false) {
 
   if (!green) return;
 
-  // Use the provider hole mapping, which also
-  // handles Front 9 and Back 9 rounds.
+  // Priority 1: provider tee coordinates.
   const providerHole = getCurrentProviderGreen();
 
   const tee =
     validPoint(providerHole?.teeBack) ||
     validPoint(providerHole?.teeFront);
+
+  // Priority 2: golfer's current GPS position.
+  const player = validPoint(currentGpsPosition);
 
   const key =
     String(currentRoundId) +
@@ -8089,12 +8090,26 @@ function focusGpsMapOnCurrentHole(force = false) {
 
     map.invalidateSize();
 
-    if (tee) {
-      // Automatically frame the entire hole.
+    // Use the tee if available, otherwise the player.
+    const start = tee || player;
+
+    if (start) {
       const bounds = window.L.latLngBounds([
-        tee,
+        start,
         green
       ]);
+
+      // Prevent excessive zoom if the player
+      // is already standing on the green.
+      if (
+        map.distance(start, green) < 25
+      ) {
+        map.setView(green, 17, {
+          animate: false
+        });
+
+        return;
+      }
 
       map.fitBounds(bounds, {
         paddingTopLeft: [35, 65],
@@ -8104,14 +8119,14 @@ function focusGpsMapOnCurrentHole(force = false) {
       });
 
     } else {
-      // Existing fallback for courses without
-      // usable tee coordinates.
+      // Priority 3: green-only fallback.
       map.setView(green, 16, {
         animate: false
       });
     }
   });
 }
+
 
 
     
