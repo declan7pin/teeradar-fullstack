@@ -7931,6 +7931,82 @@ if (
 }
 
 
+/*
+ * TEERADAR — FOCUS MAP ON SELECTED HOLE
+ *
+ * Works without enabling player GPS.
+ * Does not change the player's GPS marker.
+ */
+let gpsFocusedHoleKey = "";
+
+function focusGpsMapOnCurrentHole(force = false) {
+  const map = ensureGpsMap();
+
+  if (!map || !currentRound) return;
+
+  const gps = getBestCurrentHoleGps();
+  if (!gps?.middle) return;
+
+  let point = null;
+
+  if (typeof gps.middle === "string") {
+    point = parseGoogleEarthCoordinate(gps.middle);
+  } else {
+    point = gps.middle;
+  }
+
+  const lat = Number(
+    point?.lat ?? point?.latitude
+  );
+
+  const lng = Number(
+    point?.lng ?? point?.longitude
+  );
+
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    Math.abs(lat) > 90 ||
+    Math.abs(lng) > 180
+  ) {
+    return;
+  }
+
+  const key =
+    String(currentRoundId) +
+    ":" +
+    String(premiumHoleIndex);
+
+  if (!force && gpsFocusedHoleKey === key) {
+    return;
+  }
+
+  gpsFocusedHoleKey = key;
+
+  requestAnimationFrame(() => {
+    if (
+      !currentRound ||
+      key !==
+        String(currentRoundId) +
+        ":" +
+        String(premiumHoleIndex)
+    ) {
+      return;
+    }
+
+    map.invalidateSize();
+
+    map.setView(
+      [lat, lng],
+      17,
+      {
+        animate: false
+      }
+    );
+  });
+}
+
+    
 function updateGpsMapPosition() {
   if (
     !currentGpsPosition
@@ -9203,8 +9279,11 @@ function setLeftPanelsVisibility(show){
      * Refresh the current hole immediately now
      * that provider GPS data is available.
      */
-    updateGpsDistances();
-    updateGpsGreenMarker();
+    
+updateGpsDistances();
+updateGpsGreenMarker();
+focusGpsMapOnCurrentHole(true);
+
 
 
     /*
@@ -12868,12 +12947,18 @@ if (premPrevBtn) {
 if (premNextBtn) {
   premNextBtn.disabled = false;
 }
+
 if (gpsEnabled) {
   updateGpsDistances();
   updateGpsMapPosition();
 } else {
   ensureGpsMap();
 }
+
+// Focus the map on the selected hole,
+// regardless of whether player GPS is enabled.
+focusGpsMapOnCurrentHole();
+
 /*
  * Fetch provider GPS only once per opened round.
  * No API call is made every time the golfer changes hole.
