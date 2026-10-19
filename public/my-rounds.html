@@ -7996,13 +7996,14 @@ function focusGpsMapOnCurrentHole(force = false) {
 
     map.invalidateSize();
 
-    map.setView(
-      [lat, lng],
-      17,
-      {
-        animate: false
-      }
-    );
+map.setView(
+  [lat, lng],
+  16,
+  {
+    animate: false
+  }
+);
+
   });
 }
 
@@ -8122,21 +8123,18 @@ function updateGpsMapPosition() {
     }
   }
 
+ 
   /*
-   * Centre automatically only on the FIRST fix.
+   * TEERADAR — HOLE-FOCUSED GPS
    *
-   * After that, the golfer is free to pan/zoom the map
-   * without TeeRadar constantly snapping back.
+   * GPS updates the player's location marker,
+   * accuracy circle and live distances.
+   *
+   * It must NEVER move the map camera to the player.
+   * The selected hole controls the map camera.
    */
-  if (!gpsMapHasCentred) {
+  gpsMapHasCentred = true;
 
-    map.setView(
-      point,
-      18
-    );
-
-    gpsMapHasCentred = true;
-  }
 
   if (gpsMapStatus) {
     gpsMapStatus.textContent =
