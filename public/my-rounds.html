@@ -6166,45 +6166,90 @@ function distanceBetweenGpsPoints(
   return Math.round(R * c);
 }
 
-function getCurrentGpsCourse(){
+function getCurrentGpsCourse() {
   if (!currentRound) {
     return null;
   }
 
-  const wantedCourse =
-    String(currentRound.course || "")
-      .trim();
+  const wantedCourse = String(
+    currentRound.course || ""
+  ).trim();
 
-  const wantedState =
-    String(currentRound.state || "")
-      .trim()
-      .toUpperCase();
+  const wantedState = String(
+    currentRound.state || ""
+  ).trim().toUpperCase();
 
-  const wantedHoles =
-    Number(currentRound.holes || 0);
+  const wantedHoles = Number(
+    currentRound.holes || 0
+  );
 
-  /*
-   * First try an exact name/state/hole match.
-   */
-  let match = coursesCache.find((c) => {
+  // Prefer courses that actually have GPS points.
+  const candidates = coursesCache.filter((c) => {
     return (
-      courseNamesMatch(c.name, wantedCourse) &&
       String(c.state || "")
         .trim()
         .toUpperCase() === wantedState &&
-      Number(c.holes) === wantedHoles
+      Number(c.holes) === wantedHoles &&
+      Array.isArray(c.green_points) &&
+      c.green_points.length > 0
     );
   });
 
-  /*
-   * If we're playing 18 holes made from two 9-hole
-   * templates, there may not be a single 18-hole GPS
-   * template.
-   *
-   * We'll handle that separately in the next function.
-   */
-  return match || null;
+  // 1. Existing TeeRadar course-name matching.
+  const exactMatch = candidates.find((c) =>
+    courseNamesMatch(c.name, wantedCourse)
+  );
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  // 2. Specific fallback for The Springs / Armadale.
+  // These are known names for the same WA golf course.
+  if (wantedState === "WA") {
+    const normalize = (value) =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+
+    const wanted = normalize(wantedCourse);
+
+    const isSpringsOrArmadale = (name) => {
+      const value = normalize(name);
+
+      return (
+        value.includes("the springs") ||
+        value.includes("armadale")
+      );
+    };
+
+    if (isSpringsOrArmadale(wanted)) {
+      const fallback = candidates.find((c) =>
+        isSpringsOrArmadale(c.name)
+      );
+
+      if (fallback) {
+        console.log(
+          "✅ TeeRadar using saved Springs/Armadale GPS:",
+          {
+            requested: wantedCourse,
+            matched: fallback.name,
+            holes: fallback.holes,
+            gpsPoints: fallback.green_points.length
+          }
+        );
+
+        return fallback;
+      }
+    }
+  }
+
+  // Keep the existing separate 9-hole layout
+  // fallback in getCurrentHoleGreenPoints().
+  return null;
 }
+
 
 function getCurrentHoleGreenPoints(){
   if (!currentRound) {
