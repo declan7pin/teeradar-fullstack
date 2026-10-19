@@ -7832,23 +7832,71 @@ if (
    */
   if (!gpsGreenMarker) {
 
-    const greenIcon =
-      window.L.divIcon({
-        className: "",
+    
+const greenIcon = window.L.divIcon({
+  className: "",
 
-        html:
-          '<div class="gpsGreenMarker"></div>',
+  html: `
+    <div style="
+      position:relative;
+      width:30px;
+      height:38px;
+      pointer-events:none;
+    ">
+      <div style="
+        position:absolute;
+        left:14px;
+        top:4px;
+        width:2px;
+        height:30px;
+        background:#ffffff;
+        box-shadow:0 0 3px #000;
+      "></div>
 
-        iconSize: [
-          28,
-          28
-        ],
+      <div style="
+        position:absolute;
+        left:16px;
+        top:4px;
+        width:19px;
+        height:14px;
+        background:#e5252a;
+        clip-path:polygon(0 0,100% 25%,0 100%);
+        filter:drop-shadow(0 1px 2px #000);
+      "></div>
 
-        iconAnchor: [
-          14,
-          14
-        ]
-      });
+      <div style="
+        position:absolute;
+        left:10px;
+        top:31px;
+        width:10px;
+        height:5px;
+        border-radius:50%;
+        background:#ffffff;
+        box-shadow:0 0 3px #000;
+      "></div>
+    </div>
+  `,
+
+  iconSize: [36, 38],
+  iconAnchor: [15, 36]
+});
+```
+
+This places the red flag at the selected hole's stored green centre. When you switch holes, the existing marker-update logic should move the flag to the new green.
+
+**One additional adjustment:** In `getBestCurrentHoleGps()`, TeeRadar's own green data currently takes priority over GolfAPI's data. That's fine for GPS distances, but for hole framing we need to make sure the tee and green come from the same mapped hole.
+
+## Second fix — getting the entire hole on screen
+
+Your third screenshot demonstrates the target layout: green towards the top, fairway extending down, and tee towards the bottom.
+
+The reason the previous change hasn't achieved that is that the frontend can only use tee coordinates when the backend supplies them. We added support for `teeFront` and `teeBack`, but haven't yet added those coordinates to the backend response.
+
+We should now update `backend/golfApiIo.js` to expose the hole's tee coordinates from the cached GolfAPI data. Before doing that, we need to verify which POI codes represent the tees, rather than guessing and displaying the wrong fairway.
+
+**Send me your current `backend/golfApiIo.js` file next.** I'll identify the exact backend change and give you the copy-and-paste replacement, keeping the existing green distances and scorecard functions intact.
+
+Once that's working, we can address automatic orientation and move the GPS map into the main Play Mode layout so golfers don't have to scroll to see it.
 
     gpsGreenMarker =
       window.L.marker(
