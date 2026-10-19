@@ -7942,35 +7942,52 @@ let gpsFocusedHoleKey = "";
 function focusGpsMapOnCurrentHole(force = false) {
   const map = ensureGpsMap();
 
-  if (!map || !currentRound) return;
+  if (!map || !currentRound || !window.L) return;
 
   const gps = getBestCurrentHoleGps();
+
   if (!gps?.middle) return;
 
-  let point = null;
+  // Convert coordinates into a valid Leaflet point.
+  function validPoint(value) {
+    if (!value) return null;
 
-  if (typeof gps.middle === "string") {
-    point = parseGoogleEarthCoordinate(gps.middle);
-  } else {
-    point = gps.middle;
+    const point =
+      typeof value === "string"
+        ? parseGoogleEarthCoordinate(value)
+        : value;
+
+    const lat = Number(
+      point?.lat ?? point?.latitude
+    );
+
+    const lng = Number(
+      point?.lng ?? point?.longitude
+    );
+
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lng) > 180
+    ) {
+      return null;
+    }
+
+    return [lat, lng];
   }
 
-  const lat = Number(
-    point?.lat ?? point?.latitude
-  );
+  const green = validPoint(gps.middle);
 
-  const lng = Number(
-    point?.lng ?? point?.longitude
-  );
+  if (!green) return;
 
-  if (
-    !Number.isFinite(lat) ||
-    !Number.isFinite(lng) ||
-    Math.abs(lat) > 90 ||
-    Math.abs(lng) > 180
-  ) {
-    return;
-  }
+  // Use the provider hole mapping, which also
+  // handles Front 9 and Back 9 rounds.
+  const providerHole = getCurrentProviderGreen();
+
+  const tee =
+    validPoint(providerHole?.teeBack) ||
+    validPoint(providerHole?.teeFront);
 
   const key =
     String(currentRoundId) +
@@ -7996,16 +8013,30 @@ function focusGpsMapOnCurrentHole(force = false) {
 
     map.invalidateSize();
 
-map.setView(
-  [lat, lng],
-  16,
-  {
-    animate: false
-  }
-);
+    if (tee) {
+      // Automatically frame the entire hole.
+      const bounds = window.L.latLngBounds([
+        tee,
+        green
+      ]);
 
+      map.fitBounds(bounds, {
+        paddingTopLeft: [35, 65],
+        paddingBottomRight: [35, 90],
+        maxZoom: 19,
+        animate: false
+      });
+
+    } else {
+      // Existing fallback for courses without
+      // usable tee coordinates.
+      map.setView(green, 16, {
+        animate: false
+      });
+    }
   });
 }
+
 
     
 function updateGpsMapPosition() {
@@ -9202,20 +9233,33 @@ function setLeftPanelsVisibility(show){
               // BACK
               // -------------------------------------------
 
-              back:
-                hole?.back
-                  ? {
-                      lat:
-                        Number(
-                          hole.back.lat
-                        ),
+              
+back:
+  hole?.back
+    ? {
+        lat: Number(hole.back.lat),
+        lng: Number(hole.back.lng)
+      }
+    : null,
 
-                      lng:
-                        Number(
-                          hole.back.lng
-                        )
-                    }
-                  : null
+// Tee coordinates supplied by the backend.
+// Keep null when unavailable.
+teeFront:
+  hole?.teeFront
+    ? {
+        lat: Number(hole.teeFront.lat),
+        lng: Number(hole.teeFront.lng)
+      }
+    : null,
+
+teeBack:
+  hole?.teeBack
+    ? {
+        lat: Number(hole.teeBack.lat),
+        lng: Number(hole.teeBack.lng)
+      }
+    : null
+
             };
           }
         )
