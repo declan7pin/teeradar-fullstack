@@ -656,20 +656,61 @@ router.get(
                       }
                     : null,
 
-                back:
-                  hole.back
-                    ? {
-                        lat:
-                          Number(
-                            hole.back.latitude
-                          ),
+                
+back:
+  hole.back
+    ? {
+        lat:
+          Number(
+            hole.back.latitude
+          ),
 
-                        lng:
-                          Number(
-                            hole.back.longitude
-                          ),
-                      }
-                    : null,
+        lng:
+          Number(
+            hole.back.longitude
+          ),
+      }
+    : null,
+
+// -----------------------------------------
+// TEE COORDINATES
+//
+// GolfAPI POI 11 = assumed forward tee
+// GolfAPI POI 12 = assumed back tee
+//
+// Keep these separate from green GPS.
+// -----------------------------------------
+
+teeFront:
+  hole.teeFront
+    ? {
+        lat:
+          Number(
+            hole.teeFront.latitude
+          ),
+
+        lng:
+          Number(
+            hole.teeFront.longitude
+          ),
+      }
+    : null,
+
+teeBack:
+  hole.teeBack
+    ? {
+        lat:
+          Number(
+            hole.teeBack.latitude
+          ),
+
+        lng:
+          Number(
+            hole.teeBack.longitude
+          ),
+      }
+    : null,
+
               };
             }
           )
