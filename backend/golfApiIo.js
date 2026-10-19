@@ -2184,77 +2184,105 @@ export async function getGolfApiGreenCoordinates(
 // GET GREENS GROUPED BY HOLE
 // =========================================================
 
+
 export async function getGolfApiGreensByHole(
   courseId
 ) {
-  const greens =
-    await getGolfApiGreenCoordinates(
-      courseId
-    );
+  const loaded =
+    await loadGolfApiCourse(courseId);
 
-  const holes =
-    {};
+  const course =
+    loaded?.course;
 
-  for (
-    const green
-    of greens
-  ) {
-    const hole =
-      green.hole;
+  if (!course) {
+    return [];
+  }
 
-    if (!holes[hole]) {
-      holes[hole] = {
-        hole,
+  const coordinates =
+    Array.isArray(course.coordinates)
+      ? course.coordinates
+      : [];
 
-        front:
-          null,
+  const holes = new Map();
 
-        middle:
-          null,
+  function validPoint(row) {
+    const lat = Number(row?.latitude);
+    const lng = Number(row?.longitude);
 
-        back:
-          null,
-      };
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lng) > 180
+    ) {
+      return null;
     }
 
-    const point = {
-      latitude:
-        green.latitude,
-
-      longitude:
-        green.longitude,
+    return {
+      latitude: lat,
+      longitude: lng
     };
+  }
+
+  for (const row of coordinates) {
+    const hole = Number(row?.hole);
+    const poi = Number(row?.poi);
+    const location = Number(row?.location);
 
     if (
-      green.location === 1
+      !Number.isInteger(hole) ||
+      hole < 1 ||
+      hole > 36
     ) {
-      holes[hole]
-        .front =
-        point;
+      continue;
     }
 
-    if (
-      green.location === 2
-    ) {
-      holes[hole]
-        .middle =
-        point;
+    const point = validPoint(row);
+
+    if (!point) {
+      continue;
     }
 
-    if (
-      green.location === 3
-    ) {
-      holes[hole]
-        .back =
-        point;
+    if (!holes.has(hole)) {
+      holes.set(hole, {
+        hole,
+        front: null,
+        middle: null,
+        back: null,
+        teeFront: null,
+        teeBack: null
+      });
+    }
+
+    const item = holes.get(hole);
+
+    // Green positions
+    if (poi === 1) {
+      if (location === 1) {
+        item.front = point;
+      }
+
+      if (location === 2) {
+        item.middle = point;
+      }
+
+      if (location === 3) {
+        item.back = point;
+      }
+    }
+
+    // Assumed forward tee
+    if (poi === 11 && location === 2) {
+      item.teeFront = point;
+    }
+
+    // Assumed back tee
+    if (poi === 12 && location === 2) {
+      item.teeBack = point;
     }
   }
 
-  return Object.values(
-    holes
-  ).sort(
-    (a, b) =>
-      a.hole -
-      b.hole
-  );
+  return Array.from(holes.values())
+    .filter((hole) => hole.middle)
+    .sort((a, b) => a.hole - b.hole);
 }
