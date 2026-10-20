@@ -1771,6 +1771,76 @@ html.round-mode #gpsMapCard {
   min-height: 350px;
 }
 
+  /* =========================================================
+   TEERADAR — SWINGU STYLE MAP BACKGROUND
+   STEP 1
+   ========================================================= */
+
+html.round-mode #scorecardSection {
+  position: fixed !important;
+  inset: 0 !important;
+  height: 100dvh !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+html.round-mode #scorecardWrap,
+html.round-mode #premiumWrap {
+  position: static !important;
+  overflow: visible !important;
+}
+
+html.round-mode #premiumWrap .premBody {
+  position: static !important;
+  overflow: visible !important;
+}
+
+/* Map covers the complete Play Mode screen */
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  display: block !important;
+  z-index: 0 !important;
+}
+
+/* Map itself fills the card */
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) #gpsMap {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+/* Keep the existing GPS header available temporarily */
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) .gpsMapHeader {
+  position: absolute !important;
+  top: calc(env(safe-area-inset-top, 0px) + 110px);
+  left: 12px;
+  right: 12px;
+  z-index: 1000 !important;
+  border-radius: 14px;
+}
+
+/* Keep hole information above the satellite map */
+html.round-mode #premiumWrap .premTop {
+  position: relative !important;
+  z-index: 1001 !important;
+}
+
+/* Keep existing controls above the map during transition */
+html.round-mode #premiumWrap .premGrid,
+html.round-mode #trackShotControls,
+html.round-mode .roundModeActions {
+  position: relative !important;
+  z-index: 1001 !important;
+}
 
 /* =========================================================
    ROUND MODE CONTROLS
