@@ -8199,6 +8199,52 @@ function focusGpsMapOnCurrentHole(force = false) {
   });
 }
 
+    // =====================================================
+// TEERADAR — TEMPORARY MAP ROTATION TEST
+// =====================================================
+
+window.testGpsRotation = function(degrees = 180) {
+  const map = ensureGpsMap();
+
+  if (!map) {
+    console.error("❌ GPS map not available");
+    return;
+  }
+
+  console.log("🧪 MAP ROTATION TEST", {
+    leafletVersion: window.L?.version,
+    setBearingAvailable:
+      typeof map.setBearing === "function",
+    getBearingAvailable:
+      typeof map.getBearing === "function",
+    requestedBearing: degrees,
+    currentBearing:
+      typeof map.getBearing === "function"
+        ? map.getBearing()
+        : "Not supported"
+  });
+
+  if (typeof map.setBearing !== "function") {
+    console.error(
+      "❌ Rotation plugin is not working or has not loaded"
+    );
+    return;
+  }
+
+  map.setBearing(degrees);
+
+  setTimeout(() => {
+    map.invalidateSize();
+
+    console.log("✅ ROTATION TEST RESULT", {
+      requestedBearing: degrees,
+      actualBearing:
+        typeof map.getBearing === "function"
+          ? map.getBearing()
+          : "Unknown"
+    });
+  }, 300);
+};
     
 function updateGpsMapPosition() {
   if (
