@@ -8111,7 +8111,41 @@ function focusGpsMapOnCurrentHole(force = false) {
       return;
     }
 
-    map.invalidateSize();
+        map.invalidateSize();
+
+    // Rotate the hole so the starting position
+    // is at the bottom and the green is at the top.
+    if (
+      start &&
+      map.distance(start, green) >= 25 &&
+      typeof map.setBearing === "function"
+    ) {
+      const startLat = start[0] * Math.PI / 180;
+      const greenLat = green[0] * Math.PI / 180;
+
+      const deltaLng =
+        (green[1] - start[1]) * Math.PI / 180;
+
+      const y =
+        Math.sin(deltaLng) * Math.cos(greenLat);
+
+      const x =
+        Math.cos(startLat) * Math.sin(greenLat) -
+        Math.sin(startLat) *
+        Math.cos(greenLat) *
+        Math.cos(deltaLng);
+
+      const bearing =
+        (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+
+      map.setBearing(bearing);
+    } else if (
+      typeof map.setBearing === "function"
+    ) {
+      // No reliable starting point:
+      // keep the map north-up.
+      map.setBearing(0);
+    }
 
     if (start) {
       // Use real coordinates to frame the hole.
