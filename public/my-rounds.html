@@ -7471,15 +7471,17 @@ function ensureGpsMap() {
 
       attributionControl: true,
 
-      // Enable rotation support
-      rotate: true,
+      // Enable map rotation
+rotate: true,
 
-      // Start north-up
-      bearing: 0,
+// Start north-up
+bearing: 0,
 
-      // Disable gesture rotation for this test
-      touchRotate: false,
-      shiftKeyRotate: false
+// Allow two-finger rotation
+touchRotate: true,
+
+// Allow Shift + drag rotation on desktop
+shiftKeyRotate: true
     }
   );
 
