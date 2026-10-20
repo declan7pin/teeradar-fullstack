@@ -1662,6 +1662,62 @@ html.round-mode #premiumWrap{
 
   border-radius:22px;
 }
+  
+/* =========================================================
+   TEERADAR FULL-HEIGHT PLAY MODE
+   ========================================================= */
+
+html.round-mode #scorecardSection {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+html.round-mode #scorecardWrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+html.round-mode #premiumWrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex !important;
+  flex-direction: column;
+}
+
+html.round-mode #premiumWrap .premTop {
+  flex: 0 0 auto;
+}
+
+html.round-mode #premiumWrap .premBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+html.round-mode #gpsMapCard {
+  flex: 1 0 300px;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+html.round-mode #gpsMapCard #gpsMap {
+  flex: 1 1 auto;
+  min-height: 220px;
+  height: auto !important;
+}
+
+html.round-mode #premiumWrap .premGrid {
+  flex: 0 0 auto;
+}
+
 
 /* =========================================================
    ROUND MODE CONTROLS
