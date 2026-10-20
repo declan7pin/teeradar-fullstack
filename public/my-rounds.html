@@ -14,6 +14,9 @@
   src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
 ></script>
 
+  <!-- TeeRadar map rotation support -->
+<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
+
 <script>
   try {
     const runningInsideApp =
@@ -7461,14 +7464,43 @@ function ensureGpsMap() {
   gpsMapEl.textContent = "";
 
   gpsMap =
-    window.L.map(
-      gpsMapEl,
-      {
-        zoomControl: true,
+  window.L.map(
+    gpsMapEl,
+    {
+      zoomControl: true,
 
-        attributionControl: true
-      }
+      attributionControl: true,
+
+      // Enable rotation support
+      rotate: true,
+
+      // Start north-up
+      bearing: 0,
+
+      // Disable gesture rotation for this test
+      touchRotate: false,
+      shiftKeyRotate: false
+    }
+  );
+
+  // TEMPORARY TEST — remove after verification
+setTimeout(() => {
+  if (
+    gpsMap &&
+    typeof gpsMap.setBearing === "function"
+  ) {
+    gpsMap.setBearing(90);
+
+    console.log(
+      "TeeRadar rotation test:",
+      gpsMap.getBearing()
     );
+  } else {
+    console.error(
+      "TeeRadar rotation plugin not loaded"
+    );
+  }
+}, 1500);
 
   /*
    * Satellite imagery.
