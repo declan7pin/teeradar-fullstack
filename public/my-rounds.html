@@ -1771,7 +1771,27 @@ html.round-mode #gpsMapCard {
   min-height: 350px;
 }
 
+/* ============================================
+   GPS MAP — FILL PLAY MODE
+   ============================================ */
 
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) {
+  flex: 1 0 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) .gpsMapHeader {
+  flex: 0 0 auto !important;
+}
+
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) #gpsMap {
+  flex: 1 1 auto !important;
+  height: 100% !important;
+  min-height: 250px !important;
+}
 
 /* =========================================================
    ROUND MODE CONTROLS
