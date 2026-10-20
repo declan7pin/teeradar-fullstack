@@ -7483,24 +7483,7 @@ function ensureGpsMap() {
     }
   );
 
-  // TEMPORARY TEST — remove after verification
-setTimeout(() => {
-  if (
-    gpsMap &&
-    typeof gpsMap.setBearing === "function"
-  ) {
-    gpsMap.setBearing(90);
 
-    console.log(
-      "TeeRadar rotation test:",
-      gpsMap.getBearing()
-    );
-  } else {
-    console.error(
-      "TeeRadar rotation plugin not loaded"
-    );
-  }
-}, 1500);
 
   /*
    * Satellite imagery.
@@ -8088,15 +8071,23 @@ function focusGpsMapOnCurrentHole(force = false) {
 
   if (!green) return;
 
-  // Priority 1: provider tee coordinates.
   const providerHole = getCurrentProviderGreen();
 
   const tee =
     validPoint(providerHole?.teeBack) ||
     validPoint(providerHole?.teeFront);
 
-  // Priority 2: golfer's current GPS position.
   const player = validPoint(currentGpsPosition);
+
+  // Only use player GPS for framing when
+  // the golfer is reasonably close to the green.
+  const playerNearby =
+    player &&
+    map.distance(player, green) <= 750;
+
+  const start =
+    tee ||
+    (playerNearby ? player : null);
 
   const key =
     String(currentRoundId) +
@@ -8122,20 +8113,14 @@ function focusGpsMapOnCurrentHole(force = false) {
 
     map.invalidateSize();
 
-    // Use the tee if available, otherwise the player.
-    const start = tee || player;
-
     if (start) {
+      // Use real coordinates to frame the hole.
       const bounds = window.L.latLngBounds([
         start,
         green
       ]);
 
-      // Prevent excessive zoom if the player
-      // is already standing on the green.
-      if (
-        map.distance(start, green) < 25
-      ) {
+      if (map.distance(start, green) < 25) {
         map.setView(green, 17, {
           animate: false
         });
@@ -8144,22 +8129,41 @@ function focusGpsMapOnCurrentHole(force = false) {
       }
 
       map.fitBounds(bounds, {
-        paddingTopLeft: [35, 65],
-        paddingBottomRight: [35, 90],
-        maxZoom: 19,
+        paddingTopLeft: [45, 90],
+        paddingBottomRight: [45, 110],
+        maxZoom: 18,
         animate: false
       });
 
-    } else {
-      // Priority 3: green-only fallback.
-      map.setView(green, 16, {
-        animate: false
-      });
+      return;
     }
+
+    // No tee coordinates and golfer is not nearby.
+    // Use published hole length to select a
+    // more appropriate map scale.
+    const holeDistance = Number(
+      currentPremiumDistances?.[premiumHoleIndex]
+    );
+
+    let zoom = 16;
+
+    if (Number.isFinite(holeDistance) && holeDistance > 0) {
+      if (holeDistance >= 450) {
+        zoom = 15;
+      } else if (holeDistance >= 300) {
+        zoom = 15.5;
+      } else if (holeDistance >= 180) {
+        zoom = 16;
+      } else {
+        zoom = 17;
+      }
+    }
+
+    map.setView(green, zoom, {
+      animate: false
+    });
   });
 }
-
-
 
     
 function updateGpsMapPosition() {
