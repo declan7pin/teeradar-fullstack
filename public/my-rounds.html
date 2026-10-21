@@ -17393,28 +17393,34 @@ if (roundIdFromUrl) {
 function playModeMenuAction(action) {
   togglePlayModeMenu(true);
 
+  const scorePanel = document.querySelector(
+    "#premiumWrap .premGrid"
+  );
+
   const clickExisting = (id) => {
-    const btn = document.getElementById(id);
-    if (btn) btn.click();
+    const button = document.getElementById(id);
+    if (button) button.click();
   };
 
   switch (action) {
     case "score":
-      document.getElementById("premScoreBtns")?.scrollIntoView({
-        behavior: "smooth",
-        block: "center"
-      });
+      if (scorePanel) {
+        scorePanel.classList.toggle("playScoreOpen");
+      }
       break;
 
     case "scorecard":
+      scorePanel?.classList.remove("playScoreOpen");
       clickExisting("toggleTableBtn");
       break;
 
     case "exit":
+      scorePanel?.classList.remove("playScoreOpen");
       clickExisting("roundModeExitBtn");
       break;
 
     case "delete":
+      scorePanel?.classList.remove("playScoreOpen");
       clickExisting("roundModeDeleteBtn");
       break;
   }
@@ -17540,10 +17546,82 @@ html.round-mode .roundModeActions {
   display: none !important;
 }
 
+  /* SHOW HOLE SCORING WHEN REQUESTED */
+
+html.round-mode #premiumWrap .premGrid.playScoreOpen {
+  display: block !important;
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: calc(100% - 32px) !important;
+  max-width: 430px !important;
+  max-height: 75dvh !important;
+  overflow-y: auto !important;
+  padding: 16px !important;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  z-index: 1000200 !important;
+  box-shadow: 0 8px 35px rgba(0,0,0,.35) !important;
+}
+
 /* Hide the old GPS heading */
 
 html.round-mode #gpsMapCard:not(.gpsMapFullscreen) .gpsMapHeader {
   display: none !important;
+}
+  /* PLAY MODE — BOTTOM GPS CONTROLS */
+
+html.round-mode #gpsDistanceCard .gpsDistanceGrid {
+  top: auto !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 95px) !important;
+  left: 12px !important;
+  transform: none !important;
+  width: calc(100% - 92px) !important;
+  max-width: none !important;
+  gap: 6px !important;
+  z-index: 1000001 !important;
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceItem {
+  min-width: 0 !important;
+  padding: 9px 3px !important;
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceTop {
+  position: fixed !important;
+  right: 12px !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 95px) !important;
+  z-index: 1000002 !important;
+  display: block !important;
+  width: 62px !important;
+  height: 76px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceTop > div {
+  display: none !important;
+}
+
+html.round-mode #enableGpsBtn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 62px !important;
+  height: 76px !important;
+  min-width: 0 !important;
+  padding: 4px !important;
+  border-radius: 15px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  white-space: normal !important;
+  text-align: center !important;
+  background: #ffffff !important;
+  color: #10262b !important;
+  box-shadow: 0 3px 14px rgba(0,0,0,.25) !important;
 }
     </style>
 </body>
