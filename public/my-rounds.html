@@ -3055,6 +3055,66 @@ html.app-mode .activeRoundCard{
 #shareRoundModalBack .toast {
   flex: 0 0 auto;
 }
+  
+/* ================================================
+   TEERADAR PLAY MODE — FLOATING GPS DISTANCES
+   ================================================ */
+
+/* Only change the layout during an active round */
+html.round-mode #gpsDistanceGrid {
+  position: static;
+}
+
+/* Float the existing three distances over the map */
+html.round-mode #gpsDistanceCard .gpsDistanceGrid {
+  position: fixed !important;
+  top: calc(env(safe-area-inset-top, 0px) + 165px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000001;
+
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+
+  width: calc(100% - 32px);
+  max-width: 430px;
+  margin: 0 !important;
+
+  pointer-events: none;
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceItem {
+  padding: 9px 8px !important;
+  border: 1px solid rgba(255,255,255,.22) !important;
+  border-radius: 14px !important;
+
+  background: rgba(15, 31, 37, .88) !important;
+  box-shadow: 0 5px 18px rgba(0,0,0,.22);
+
+  text-align: center;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceItem span {
+  color: rgba(255,255,255,.72) !important;
+  font-size: 11px !important;
+  font-weight: 800;
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceItem strong {
+  color: #fff !important;
+  font-size: 25px !important;
+  font-weight: 1000;
+  line-height: 1.15;
+}
+
+html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
+  background: rgba(0, 105, 84, .94) !important;
+  border-color: rgba(255,255,255,.3) !important;
+}
+
 </style>
 </head>
 <body>
