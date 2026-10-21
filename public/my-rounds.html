@@ -1770,15 +1770,14 @@ html.round-mode #gpsMapCard {
   margin: 0 !important;
   min-height: 350px;
 }
-
-  /* =========================================================
-   TEERADAR — SWINGU STYLE MAP BACKGROUND
-   STEP 1
+/* =========================================================
+   TEERADAR — PLAY MODE GPS MAP LAYOUT
    ========================================================= */
 
 html.round-mode #scorecardSection {
   position: fixed !important;
   inset: 0 !important;
+  width: 100% !important;
   height: 100dvh !important;
   overflow: hidden !important;
   padding: 0 !important;
@@ -1786,60 +1785,41 @@ html.round-mode #scorecardSection {
 
 html.round-mode #scorecardWrap,
 html.round-mode #premiumWrap {
-  position: static !important;
-  overflow: visible !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 html.round-mode #premiumWrap .premBody {
-  position: static !important;
-  overflow: visible !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow-y: auto !important;
 }
 
-/* Map covers the complete Play Mode screen */
 html.round-mode #gpsMapCard:not(.gpsMapFullscreen) {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  min-height: 0 !important;
-  margin: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  display: block !important;
-  z-index: 0 !important;
+  position: relative !important;
+  flex: 1 0 350px !important;
+  min-height: 350px !important;
+  height: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
 }
 
-/* Map itself fills the card */
 html.round-mode #gpsMapCard:not(.gpsMapFullscreen) #gpsMap {
-  position: absolute !important;
-  inset: 0 !important;
+  position: relative !important;
+  inset: auto !important;
+  flex: 1 1 auto !important;
   width: 100% !important;
-  height: 100% !important;
-  min-height: 0 !important;
+  height: 350px !important;
+  min-height: 300px !important;
 }
 
-/* Keep the existing GPS header available temporarily */
-html.round-mode #gpsMapCard:not(.gpsMapFullscreen) .gpsMapHeader {
-  position: absolute !important;
-  top: calc(env(safe-area-inset-top, 0px) + 110px);
-  left: 12px;
-  right: 12px;
-  z-index: 1000 !important;
-  border-radius: 14px;
-}
-
-/* Keep hole information above the satellite map */
-html.round-mode #premiumWrap .premTop {
-  position: relative !important;
-  z-index: 1001 !important;
-}
-
-/* Keep existing controls above the map during transition */
-html.round-mode #premiumWrap .premGrid,
-html.round-mode #trackShotControls,
-html.round-mode .roundModeActions {
-  position: relative !important;
-  z-index: 1001 !important;
+html.round-mode #premiumWrap .premTop,
+html.round-mode #premiumWrap .premGrid {
+  flex: 0 0 auto !important;
 }
 
 /* =========================================================
@@ -3495,6 +3475,37 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
     Delete round
   </button>
 
+</div>
+
+            <!-- PLAY MODE HAMBURGER MENU -->
+<div id="playModeMenu">
+  <button
+    id="playModeMenuBtn"
+    type="button"
+    aria-label="Open round menu"
+    aria-expanded="false"
+    onclick="togglePlayModeMenu()"
+  >
+    ☰
+  </button>
+
+  <div id="playModeMenuPanel" hidden>
+    <button type="button" onclick="playModeMenuAction('score')">
+      Hole score
+    </button>
+
+    <button type="button" onclick="playModeMenuAction('scorecard')">
+      View scorecard
+    </button>
+
+    <button type="button" onclick="playModeMenuAction('exit')">
+      Exit round
+    </button>
+
+    <button type="button" onclick="playModeMenuAction('delete')">
+      Delete round
+    </button>
+  </div>
 </div>
 
   <!-- ✅ PREMIUM hole-by-hole (only for published + complete courses) -->
@@ -17367,6 +17378,171 @@ if (roundIdFromUrl) {
   clearRoundIdFromUrl();
 }
 })();
+    function togglePlayModeMenu(forceClose = false) {
+  const panel = document.getElementById("playModeMenuPanel");
+  const btn = document.getElementById("playModeMenuBtn");
+
+  if (!panel || !btn) return;
+
+  const shouldOpen = !forceClose && panel.hidden;
+
+  panel.hidden = !shouldOpen;
+  btn.setAttribute("aria-expanded", String(shouldOpen));
+}
+
+function playModeMenuAction(action) {
+  togglePlayModeMenu(true);
+
+  const clickExisting = (id) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.click();
+  };
+
+  switch (action) {
+    case "score":
+      document.getElementById("premScoreBtns")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+      break;
+
+    case "scorecard":
+      clickExisting("toggleTableBtn");
+      break;
+
+    case "exit":
+      clickExisting("roundModeExitBtn");
+      break;
+
+    case "delete":
+      clickExisting("roundModeDeleteBtn");
+      break;
+  }
+}
+    /* ================================================
+   TEERADAR — FULL SCREEN PLAY MODE V1
+   ================================================ */
+
+#playModeMenu {
+  display: none;
+}
+
+html.round-mode #playModeMenu {
+  display: block;
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: 14px;
+  z-index: 1000100;
+}
+
+#playModeMenuBtn {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 15px;
+  background: #ffffff;
+  color: #10262b;
+  font-size: 27px;
+  font-weight: 800;
+  box-shadow: 0 3px 14px rgba(0,0,0,.25);
+}
+
+#playModeMenuPanel[hidden] {
+  display: none !important;
+}
+
+#playModeMenuPanel {
+  position: absolute;
+  top: 58px;
+  right: 0;
+  width: 205px;
+  padding: 8px;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 30px rgba(0,0,0,.3);
+}
+
+#playModeMenuPanel button {
+  display: block;
+  width: 100%;
+  padding: 14px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #10262b;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+#playModeMenuPanel button:active {
+  background: #edf4f3;
+}
+
+/* Full-screen map layer */
+
+html.round-mode #scorecardSection {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: 100dvh !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  border-radius: 0 !important;
+}
+
+html.round-mode #scorecardWrap,
+html.round-mode #premiumWrap,
+html.round-mode #premiumWrap .premBody {
+  position: static !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  overflow: hidden !important;
+  display: block !important;
+  z-index: 1 !important;
+}
+
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) #gpsMap {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+}
+
+/* Hide the large scorecard overlay for now */
+
+html.round-mode #premiumWrap .premTop,
+html.round-mode #premiumWrap .premGrid,
+html.round-mode .roundModeActions {
+  display: none !important;
+}
+
+/* Hide the old GPS heading */
+
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) .gpsMapHeader {
+  display: none !important;
+}
   </script>
 </body>
 </html>
