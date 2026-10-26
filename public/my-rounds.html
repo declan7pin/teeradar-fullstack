@@ -3552,7 +3552,7 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
       id="gpsRecenterBtn"
       class="gpsRecenterBtn"
       type="button"
-      aria-label="Recentre map on your location"
+      aria-label="Re-centre map on current hole"
       title="Recentre"
     >
       ◎ Recentre
@@ -3571,10 +3571,10 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
   class="gpsRecenterBtn"
   type="button"
   style="display:none;"
-  aria-label="Clear measured point"
+  aria-label="Clear marked location"
   title="Clear measurement"
 >
-  ✕ Clear
+  ✕ Clear Marked Location
 </button>
 
 </div>
@@ -3631,9 +3631,27 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
         <strong id="gpsBackDistance">—</strong>
       </div>
 
+        </div>
+
+    <!-- PLAY MODE HOLE INFORMATION -->
+    <div id="playHoleInfo">
+      <div class="playHoleInfoItem">
+        <span>HOLE</span>
+        <strong id="playHoleNumber">—</strong>
+      </div>
+
+      <div class="playHoleInfoItem">
+        <span>PAR</span>
+        <strong id="playHolePar">—</strong>
+      </div>
+
+      <div class="playHoleInfoItem">
+        <span>ROUND SCORE</span>
+        <strong id="playRoundScore">E</strong>
+      </div>
     </div>
 
-        <div
+    <div
       class="gpsAccuracy"
       id="gpsAccuracy"
     ></div>
@@ -3803,7 +3821,24 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
 </div>
 </div>
 
-  <div class="tableWrap" id="tableWrap">
+    <div class="tableWrap" id="tableWrap">
+
+    <div id="playScorecardHeader">
+      <div>
+        <strong>Scorecard</strong>
+        <span>Live round scores</span>
+      </div>
+
+      <button
+        id="playScorecardCloseBtn"
+        type="button"
+        aria-label="Close scorecard"
+        onclick="closePlayScorecard()"
+      >
+        ×
+      </button>
+    </div>
+
     <table id="scoreTable">
       <thead id="scoreHead"></thead>
       <tbody id="scoreBody"></tbody>
@@ -7896,58 +7931,15 @@ const point = [
 }
 
 // =========================================================
-// GPS MAP — RECENTER ON PLAYER
+// GPS MAP — RECENTER ON CURRENT HOLE
 // =========================================================
 
 if (gpsRecenterBtn) {
-  gpsRecenterBtn.addEventListener(
-    "click",
-    () => {
-      if (
-        !gpsMap ||
-        !currentGpsPosition
-      ) {
-        return;
-      }
+  gpsRecenterBtn.addEventListener("click", () => {
+    if (!currentRound) return;
 
-      const latitude =
-        Number(
-          currentGpsPosition.latitude
-        );
-
-      const longitude =
-        Number(
-          currentGpsPosition.longitude
-        );
-
-      if (
-        !Number.isFinite(latitude) ||
-        !Number.isFinite(longitude)
-      ) {
-        return;
-      }
-
-      gpsMap.setView(
-        [
-          latitude,
-          longitude
-        ],
-        18,
-        {
-          animate: true
-        }
-      );
-
-      setTimeout(
-        () => {
-          try {
-            gpsMap.invalidateSize();
-          } catch (_) {}
-        },
-        100
-      );
-    }
-  );
+    focusGpsMapOnCurrentHole(true);
+  });
 }
 
     // =========================================================
@@ -12831,6 +12823,46 @@ if (
   trackShotRefresh();
 }
 
+  // Keep the compact Play Mode information up to date.
+const playHoleNumber =
+  document.getElementById("playHoleNumber");
+
+const playHolePar =
+  document.getElementById("playHolePar");
+
+const playRoundScore =
+  document.getElementById("playRoundScore");
+
+if (playHoleNumber) {
+  playHoleNumber.textContent =
+    `${holeNum} / ${holesCount}`;
+}
+
+if (playHolePar) {
+  playHolePar.textContent =
+    Number.isFinite(basePar) ? String(basePar) : "—";
+}
+
+if (playRoundScore) {
+  const rows = readTableHoles();
+
+  const totals = calcTotalsForPlayer(
+    rows,
+    premiumPlayerIndex
+  );
+
+  const toPar = totals.toPar;
+
+  playRoundScore.textContent =
+    toPar == null
+      ? "—"
+      : toPar === 0
+        ? "E"
+        : toPar > 0
+          ? `+${toPar}`
+          : String(toPar);
+}
+
 if (premPills){
   // To Par shown for CURRENT player (not always P1)
   const holesRows = readTableHoles();
@@ -17403,6 +17435,31 @@ if (roundIdFromUrl) {
   btn.setAttribute("aria-expanded", String(shouldOpen));
 }
 
+    function closePlayScorecard() {
+  premiumShowingTable = false;
+  setPremiumVisible(true);
+
+  const table = document.getElementById("tableWrap");
+
+  if (table) {
+    table.classList.add("hidden");
+  }
+
+  const scorePanel = document.querySelector(
+    "#premiumWrap .premGrid"
+  );
+
+  scorePanel?.classList.remove("playScoreOpen");
+
+  togglePlayModeMenu(true);
+
+  setTimeout(() => {
+    if (gpsMap) {
+      gpsMap.invalidateSize();
+    }
+  }, 100);
+}
+
 function playModeMenuAction(action) {
   togglePlayModeMenu(true);
 
@@ -17702,6 +17759,183 @@ html.round-mode #tableWrap:not(.hidden) {
     14px
     calc(env(safe-area-inset-bottom, 0px) + 30px) !important;
   background: #f5f8f9 !important;
+}
+
+  /* ================================================
+   TEERADAR — PLAY MODE REFINEMENTS
+   ================================================ */
+
+/* Hole / Par / Round Score */
+
+#playHoleInfo {
+  display: none;
+}
+
+html.round-mode #playHoleInfo {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  position: fixed !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 22px) !important;
+  left: 12px !important;
+  right: 12px !important;
+  z-index: 1000002 !important;
+  background: rgba(16, 38, 43, 0.94) !important;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 16px;
+  padding: 10px 6px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.25);
+}
+
+html.round-mode .playHoleInfoItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+html.round-mode .playHoleInfoItem + .playHoleInfoItem {
+  border-left: 1px solid rgba(255,255,255,.18);
+}
+
+html.round-mode .playHoleInfoItem span {
+  color: #b8cbcb;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+html.round-mode .playHoleInfoItem strong {
+  color: white;
+  font-size: 21px;
+  font-weight: 900;
+}
+
+/* Map action buttons */
+
+html.round-mode #gpsMapCard .gpsMapActions {
+  top: calc(env(safe-area-inset-top, 0px) + 145px) !important;
+  left: auto !important;
+  right: 12px !important;
+  align-items: flex-end !important;
+}
+
+html.round-mode #gpsRecenterBtn,
+html.round-mode #gpsClearMeasureBtn {
+  width: auto !important;
+  max-width: 145px !important;
+  min-height: 44px !important;
+  padding: 10px 12px !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+  white-space: normal !important;
+}
+
+/* Full-screen scorecard overlay */
+
+#playScorecardHeader {
+  display: none;
+}
+
+html.round-mode #tableWrap:not(.hidden) {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 12px)
+    10px
+    calc(env(safe-area-inset-bottom, 0px) + 15px) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: #f5f8f9 !important;
+  z-index: 1000300 !important;
+  border-radius: 0 !important;
+  box-sizing: border-box !important;
+}
+
+html.round-mode #playScorecardHeader {
+  display: flex !important;
+  position: sticky !important;
+  top: 0;
+  z-index: 3;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 4px 16px;
+  background: #f5f8f9;
+}
+
+html.round-mode #playScorecardHeader > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+html.round-mode #playScorecardHeader strong {
+  color: #10262b;
+  font-size: 21px;
+}
+
+html.round-mode #playScorecardHeader span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+html.round-mode #playScorecardCloseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: #e2e8eb;
+  color: #10262b;
+  font-size: 29px;
+  font-weight: 600;
+}
+
+/* Compact scorecard: fit one player's columns
+   across the phone instead of using an 820px table */
+
+html.round-mode #scoreTable {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+
+html.round-mode #scoreTable th,
+html.round-mode #scoreTable td {
+  padding: 7px 2px !important;
+  font-size: 11px !important;
+  text-align: center !important;
+  overflow: hidden !important;
+  overflow-wrap: anywhere !important;
+}
+
+html.round-mode #scoreTable .mini {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  padding: 7px 1px !important;
+  font-size: 14px !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+}
+
+/* Hide distance in Play Mode scorecard only.
+   Distance remains available in the normal editor. */
+
+html.round-mode #scoreTable th:nth-child(3),
+html.round-mode #scoreTable td:nth-child(3) {
+  display: none !important;
 }
     </style>
 </body>
