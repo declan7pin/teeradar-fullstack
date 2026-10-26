@@ -17637,7 +17637,14 @@ html.round-mode #premiumWrap .premGrid.playScoreOpen {
 
 /* Hide the old GPS heading */
 
+/* Keep the map actions available in Play Mode,
+   without showing the old GPS heading. */
+
 html.round-mode #gpsMapCard:not(.gpsMapFullscreen) .gpsMapHeader {
+  display: contents !important;
+}
+
+html.round-mode #gpsMapCard:not(.gpsMapFullscreen) .gpsMapHeaderText {
   display: none !important;
 }
   /* PLAY MODE — BOTTOM GPS CONTROLS */
@@ -17919,15 +17926,25 @@ html.round-mode #scoreTable td {
   overflow-wrap: anywhere !important;
 }
 
+/* Prevent iPhone Safari zooming when scoring */
+
 html.round-mode #scoreTable .mini {
   display: block !important;
   width: 100% !important;
   min-width: 0 !important;
   max-width: 100% !important;
   padding: 7px 1px !important;
-  font-size: 14px !important;
+  font-size: 16px !important;
   text-align: center !important;
   box-sizing: border-box !important;
+  border-radius: 8px !important;
+  touch-action: manipulation;
+}
+
+html.round-mode #scoreTable input,
+html.round-mode #scoreTable select,
+html.round-mode #scoreTable textarea {
+  font-size: 16px !important;
 }
 
 /* Hide distance in Play Mode scorecard only.
