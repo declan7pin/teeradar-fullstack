@@ -3633,12 +3633,42 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
 
         </div>
 
+    <!-- PLAY MODE HOLE SELECTOR -->
+<div id="playHoleSelector">
+  <div class="playHoleSelectorPanel">
+
+    <div class="playHoleSelectorHeader">
+      <strong>Select Hole</strong>
+
+      <button
+        type="button"
+        onclick="closePlayHoleSelector()"
+        aria-label="Close hole selector"
+      >
+        ×
+      </button>
+    </div>
+
+    <div id="playHoleSelectorGrid"></div>
+
+  </div>
+</div>
+
     <!-- PLAY MODE HOLE INFORMATION -->
     <div id="playHoleInfo">
       <div class="playHoleInfoItem">
-        <span>HOLE</span>
-        <strong id="playHoleNumber">—</strong>
-      </div>
+  <span>HOLE</span>
+
+  <button
+    id="playHoleJumpBtn"
+    type="button"
+    onclick="openPlayHoleSelector()"
+    aria-label="Select a hole"
+  >
+    <span id="playHoleNumber">—</span>
+    <span class="playHoleJumpChevron">⌄</span>
+  </button>
+</div>
 
       <div class="playHoleInfoItem">
         <span>PAR</span>
@@ -17460,6 +17490,89 @@ if (roundIdFromUrl) {
   }, 100);
 }
 
+    // =========================================================
+// TEERADAR — JUMP TO ANY HOLE
+// =========================================================
+
+function openPlayHoleSelector() {
+  if (!currentRound || premiumScoreEditBusy) return;
+
+  const selector = document.getElementById(
+    "playHoleSelector"
+  );
+
+  const grid = document.getElementById(
+    "playHoleSelectorGrid"
+  );
+
+  if (!selector || !grid) return;
+
+  const holesCount = Math.max(
+    1,
+    Number(currentRound.holes) || 18
+  );
+
+  grid.innerHTML = "";
+
+  for (let hole = 1; hole <= holesCount; hole++) {
+    const button = document.createElement("button");
+
+    button.type = "button";
+    button.className = "playHoleChoice";
+    button.textContent = String(hole);
+
+    if (hole === premiumHoleIndex + 1) {
+      button.classList.add("active");
+    }
+
+    button.onclick = () => {
+      jumpToPlayHole(hole);
+    };
+
+    grid.appendChild(button);
+  }
+
+  selector.classList.add("open");
+}
+
+function closePlayHoleSelector() {
+  document.getElementById(
+    "playHoleSelector"
+  )?.classList.remove("open");
+}
+
+function jumpToPlayHole(hole) {
+  if (!currentRound || premiumScoreEditBusy) return;
+
+  const holesCount = Math.max(
+    1,
+    Number(currentRound.holes) || 18
+  );
+
+  const nextIndex = Number(hole) - 1;
+
+  if (
+    !Number.isInteger(nextIndex) ||
+    nextIndex < 0 ||
+    nextIndex >= holesCount
+  ) {
+    return;
+  }
+
+  premiumHoleIndex = nextIndex;
+
+  closePlayHoleSelector();
+
+  renderPremiumForHole(
+    currentRound,
+    currentPremiumPars,
+    currentPremiumDistances,
+    currentPremiumTeeName
+  );
+
+  focusGpsMapOnCurrentHole(true);
+}
+
 function playModeMenuAction(action) {
   togglePlayModeMenu(true);
 
@@ -17821,11 +17934,35 @@ html.round-mode .playHoleInfoItem strong {
 
 /* Map action buttons */
 
+/* Play Mode map controls — compact top-right stack */
+
 html.round-mode #gpsMapCard .gpsMapActions {
-  top: calc(env(safe-area-inset-top, 0px) + 145px) !important;
+  display: flex !important;
+  position: fixed !important;
+  top: calc(env(safe-area-inset-top, 0px) + 110px) !important;
   left: auto !important;
   right: 12px !important;
+  bottom: auto !important;
+  width: auto !important;
+  flex-direction: column !important;
   align-items: flex-end !important;
+  gap: 8px !important;
+  z-index: 1000050 !important;
+  background: transparent !important;
+}
+
+html.round-mode #gpsMapFullscreenBtn {
+  display: none !important;
+}
+
+html.round-mode #gpsRecenterBtn,
+html.round-mode #gpsClearMeasureBtn {
+  width: auto !important;
+  max-width: 145px !important;
+  min-height: 40px !important;
+  padding: 8px 10px !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
 }
 
 html.round-mode #gpsRecenterBtn,
@@ -17953,6 +18090,102 @@ html.round-mode #scoreTable textarea {
 html.round-mode #scoreTable th:nth-child(3),
 html.round-mode #scoreTable td:nth-child(3) {
   display: none !important;
+}
+
+  /* ================================================
+   TEERADAR — HOLE JUMP SELECTOR
+   ================================================ */
+
+html.round-mode #playHoleJumpBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+html.round-mode #playHoleNumber {
+  color: #fff;
+  font-size: 21px;
+  font-weight: 900;
+}
+
+html.round-mode .playHoleJumpChevron {
+  font-size: 18px;
+  color: #9fd8c7;
+}
+
+#playHoleSelector {
+  display: none;
+}
+
+html.round-mode #playHoleSelector.open {
+  display: flex !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1000600 !important;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, .55);
+}
+
+.playHoleSelectorPanel {
+  width: 100%;
+  max-width: 360px;
+  padding: 20px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 12px 40px rgba(0,0,0,.3);
+}
+
+.playHoleSelectorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.playHoleSelectorHeader strong {
+  color: #10262b;
+  font-size: 20px;
+}
+
+.playHoleSelectorHeader button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: #edf2f3;
+  color: #10262b;
+  font-size: 25px;
+}
+
+#playHoleSelectorGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.playHoleChoice {
+  min-width: 0;
+  aspect-ratio: 1;
+  border: 1px solid #dce5e7;
+  border-radius: 11px;
+  background: #f5f8f9;
+  color: #10262b;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.playHoleChoice.active {
+  background: #087b66;
+  border-color: #087b66;
+  color: #fff;
 }
     </style>
 </body>
