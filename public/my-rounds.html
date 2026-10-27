@@ -8357,6 +8357,32 @@ function focusGpsMapOnCurrentHole(force = false) {
   if (!green) return;
 
   const providerHole = getCurrentProviderGreen();
+  console.log(
+  "🗺️ TEERADAR GPS HOLE DIAGNOSTIC",
+  {
+    course: currentRound?.course,
+
+    selectedHole: premiumHoleIndex + 1,
+
+    gpsSource: gps?.source,
+
+    green: gps?.middle,
+
+    providerHoleNumber: providerHole?.hole,
+
+    providerGreen: providerHole?.middle,
+
+    teeFront: providerHole?.teeFront,
+
+    teeBack: providerHole?.teeBack,
+
+    marker100: providerHole?.marker100,
+
+    providerCourseId: providerGpsCourseId,
+
+    providerCourseName: providerGpsCourseName
+  }
+);
 
   const tee =
     validPoint(providerHole?.teeBack) ||
@@ -9560,41 +9586,64 @@ function setLeftPanelsVisibility(show){
 
 
     // -----------------------------------------------------
-    // PRIORITY 4:
-    // Any result that actually has GPS
-    // -----------------------------------------------------
+// TEERADAR — STRICT GPS COURSE MATCHING
+// -----------------------------------------------------
+// Never select an unrelated golf course simply
+// because it has GPS coordinates.
+//
+// Incorrect course coordinates can cause the map
+// to centre kilometres away from the actual hole.
+// -----------------------------------------------------
 
-    if (!match) {
+if (!match) {
 
-      match =
-        courses.find(
-          (course) => {
+  console.warn(
+    "⚠️ TeeRadar GPS: No matching provider course",
+    {
+      requestedCourse: courseName,
+      requestedState: roundState,
 
-            const hasGps =
-              course?.hasGPS ??
-              course?.has_gps;
+      availableResults: courses.map(
+        (course) => ({
+          id:
+            course?.id ||
+            course?.courseID ||
+            course?.provider_course_id,
 
-            return (
-              hasGps === true ||
-              hasGps === 1 ||
-              hasGps === "1"
-            );
-          }
-        ) ||
-        null;
+          name:
+            course?.name ||
+            course?.club,
+
+          state: course?.state,
+
+          hasGPS:
+            course?.hasGPS ??
+            course?.has_gps
+        })
+      )
     }
+  );
 
+  throw new Error(
+    "No matching GolfAPI course found for " +
+    courseName
+  );
+}
 
-    // -----------------------------------------------------
-    // FINAL FALLBACK
-    // -----------------------------------------------------
+console.log(
+  "✅ TeeRadar GPS course selected",
+  {
+    requestedCourse: courseName,
+    selectedCourse:
+      match?.name ||
+      match?.club,
 
-    if (!match) {
-
-      match =
-        courses[0] ||
-        null;
-    }
+    selectedId:
+      match?.id ||
+      match?.courseID ||
+      match?.provider_course_id
+  }
+);
 
 
     const providerId =
