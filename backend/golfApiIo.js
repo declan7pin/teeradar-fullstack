@@ -2236,11 +2236,10 @@ export async function getGolfApiGreensByHole(courseId) {
     ) {
       continue;
     }
-
-    // Only process green and tee POIs here.
-    if (![1, 11, 12].includes(poi)) {
-      continue;
-    }
+// Green, 100 m marker and tee coordinates.
+if (![1, 6, 11, 12].includes(poi)) {
+  continue;
+}
 
     const point = validPoint(row);
 
@@ -2250,13 +2249,14 @@ export async function getGolfApiGreensByHole(courseId) {
 
     if (!holes.has(hole)) {
       holes.set(hole, {
-        hole,
-        front: null,
-        middle: null,
-        back: null,
-        teeFront: null,
-        teeBack: null
-      });
+  hole,
+  front: null,
+  middle: null,
+  back: null,
+  teeFront: null,
+  teeBack: null,
+  marker100: null
+});
     }
 
     const item = holes.get(hole);
@@ -2271,6 +2271,18 @@ export async function getGolfApiGreensByHole(courseId) {
         item.back = point;
       }
     }
+
+    // 100 m marker — used for map direction
+// when neither tee coordinate is available.
+if (poi === 6) {
+  // Prefer the centre-of-fairway marker.
+  if (
+    !item.marker100 ||
+    Number(row?.sideFW) === 2
+  ) {
+    item.marker100 = point;
+  }
+}
 
     // Front tee
     if (poi === 11) {
