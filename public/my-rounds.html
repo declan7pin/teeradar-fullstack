@@ -8364,17 +8364,97 @@ function focusGpsMapOnCurrentHole(force = false) {
     validPoint(providerHole?.teeBack) ||
     validPoint(providerHole?.teeFront);
 
-  const player = validPoint(currentGpsPosition);
+  const marker100 =
+    validPoint(providerHole?.marker100);
 
-  // Only use player GPS for framing when
-  // the golfer is reasonably close to the green.
-  const playerNearby =
-    player &&
-    map.distance(player, green) <= 750;
+  const holeDistance = Number(
+    currentPremiumDistances?.[premiumHoleIndex]
+  );
 
-  const start =
-    tee ||
-    (playerNearby ? player : null);
+  let start = tee;
+  let startSource = tee ? "tee" : "none";
+
+  // =====================================================
+  // FALLBACK: ESTIMATE HOLE START FROM 100 M MARKER
+  // =====================================================
+
+  if (!start && marker100) {
+    const markerDistance =
+      map.distance(marker100, green);
+
+    // Avoid invalid or suspicious marker coordinates.
+    if (
+      markerDistance >= 30 &&
+      markerDistance <= 250
+    ) {
+      // Use published hole length where available.
+      // Otherwise use a conservative estimated length.
+      const estimatedLength =
+        Number.isFinite(holeDistance) &&
+        holeDistance >= 80 &&
+        holeDistance <= 700
+          ? holeDistance
+          : 300;
+
+      // Keep the estimated start beyond the marker,
+      // on the opposite side from the green.
+      const fullLength = Math.max(
+        estimatedLength,
+        markerDistance + 40
+      );
+
+      const extension =
+        fullLength / markerDistance;
+
+      // Work in projected metres to preserve direction
+      // more accurately than raw longitude degrees.
+      const earthRadius = 6371000;
+      const greenLatRad =
+        green[0] * Math.PI / 180;
+
+      const cosLat =
+        Math.cos(greenLatRad);
+
+      const northMetres =
+        (marker100[0] - green[0]) *
+        Math.PI / 180 *
+        earthRadius;
+
+      const eastMetres =
+        (marker100[1] - green[1]) *
+        Math.PI / 180 *
+        earthRadius *
+        cosLat;
+
+      const estimatedLat =
+        green[0] +
+        (
+          northMetres * extension /
+          earthRadius
+        ) * 180 / Math.PI;
+
+      const estimatedLng =
+        green[1] +
+        (
+          eastMetres * extension /
+          (earthRadius * cosLat)
+        ) * 180 / Math.PI;
+
+      if (
+        Number.isFinite(estimatedLat) &&
+        Number.isFinite(estimatedLng) &&
+        Math.abs(estimatedLat) <= 90 &&
+        Math.abs(estimatedLng) <= 180
+      ) {
+        start = [
+          estimatedLat,
+          estimatedLng
+        ];
+
+        startSource = "marker100";
+      }
+    }
+  }
 
   const key =
     String(currentRoundId) +
@@ -8398,77 +8478,95 @@ function focusGpsMapOnCurrentHole(force = false) {
       return;
     }
 
-        map.invalidateSize();
+    map.invalidateSize();
 
-    // Rotate the hole so the starting position
-    // is at the bottom and the green is at the top.
+    // =====================================================
+    // ORIENT MAP FROM START TOWARDS GREEN
+    // =====================================================
+
     if (
       start &&
       map.distance(start, green) >= 25 &&
       typeof map.setBearing === "function"
     ) {
-      const startLat = start[0] * Math.PI / 180;
-      const greenLat = green[0] * Math.PI / 180;
+      const startLat =
+        start[0] * Math.PI / 180;
+
+      const greenLat =
+        green[0] * Math.PI / 180;
 
       const deltaLng =
-        (green[1] - start[1]) * Math.PI / 180;
+        (green[1] - start[1]) *
+        Math.PI / 180;
 
       const y =
-        Math.sin(deltaLng) * Math.cos(greenLat);
+        Math.sin(deltaLng) *
+        Math.cos(greenLat);
 
       const x =
-        Math.cos(startLat) * Math.sin(greenLat) -
+        Math.cos(startLat) *
+        Math.sin(greenLat) -
         Math.sin(startLat) *
         Math.cos(greenLat) *
         Math.cos(deltaLng);
 
       const bearing =
-        (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        (
+          Math.atan2(y, x) *
+          180 / Math.PI +
+          360
+        ) % 360;
 
       map.setBearing(bearing);
+
     } else if (
       typeof map.setBearing === "function"
     ) {
-      // No reliable starting point:
-      // keep the map north-up.
       map.setBearing(0);
     }
 
+    // =====================================================
+    // FIT COMPLETE HOLE ON SCREEN
+    // =====================================================
+
     if (start) {
-      // Use real coordinates to frame the hole.
-      const bounds = window.L.latLngBounds([
-        start,
-        green
-      ]);
-
-      if (map.distance(start, green) < 25) {
-        map.setView(green, 17, {
-          animate: false
-        });
-
-        return;
-      }
+      const bounds =
+        window.L.latLngBounds([
+          start,
+          green
+        ]);
 
       map.fitBounds(bounds, {
-        paddingTopLeft: [45, 90],
-        paddingBottomRight: [45, 110],
+        paddingTopLeft: [55, 100],
+        paddingBottomRight: [55, 170],
         maxZoom: 18,
         animate: false
       });
 
+      console.log(
+        "TeeRadar GPS framing:",
+        {
+          hole: premiumHoleIndex + 1,
+          source: startSource,
+          start,
+          green,
+          marker100
+        }
+      );
+
       return;
     }
 
-    // No tee coordinates and golfer is not nearby.
-    // Use published hole length to select a
-    // more appropriate map scale.
-    const holeDistance = Number(
-      currentPremiumDistances?.[premiumHoleIndex]
-    );
+    // =====================================================
+    // FINAL FALLBACK: GREEN ONLY
+    // =====================================================
 
     let zoom = 16;
 
-    if (Number.isFinite(holeDistance) && holeDistance > 0) {
+    if (
+      Number.isFinite(holeDistance) &&
+      holeDistance > 0
+    ) {
       if (holeDistance >= 450) {
         zoom = 15;
       } else if (holeDistance >= 300) {
@@ -8483,6 +8581,15 @@ function focusGpsMapOnCurrentHole(force = false) {
     map.setView(green, zoom, {
       animate: false
     });
+
+    console.log(
+      "TeeRadar GPS framing:",
+      {
+        hole: premiumHoleIndex + 1,
+        source: "green-only",
+        green
+      }
+    );
   });
 }
 
