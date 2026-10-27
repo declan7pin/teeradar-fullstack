@@ -9859,9 +9859,23 @@ teeBack:
         lat: Number(hole.teeBack.lat),
         lng: Number(hole.teeBack.lng)
       }
+    : null,
+
+// =====================================================
+// GOLFAPI 100 M MARKER — POI 6
+// Used for map direction and framing when tee
+// coordinates are unavailable.
+// =====================================================
+
+marker100:
+  hole?.marker100
+    ? {
+        lat: Number(hole.marker100.lat),
+        lng: Number(hole.marker100.lng)
+      }
     : null
 
-            };
+};
           }
         )
         .filter(
