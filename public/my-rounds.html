@@ -8376,6 +8376,17 @@ function focusGpsMapOnCurrentHole(force = false) {
     currentPremiumDistances?.[premiumHoleIndex]
   );
 
+  console.log("⛳ TeeRadar GPS hole data", {
+  hole: premiumHoleIndex + 1,
+  providerHole: providerHole?.hole ?? null,
+  green,
+  teeBack: providerHole?.teeBack ?? null,
+  teeFront: providerHole?.teeFront ?? null,
+  marker100: providerHole?.marker100 ?? null,
+  publishedDistance:
+    currentPremiumDistances?.[premiumHoleIndex] ?? null
+});
+
   let start = tee;
   let startSource = tee ? "provider-tee" : "none";
 
