@@ -2181,27 +2181,27 @@ export async function getGolfApiGreenCoordinates(
 
 
 // =========================================================
-// GET GREENS GROUPED BY HOLE
+// GET GREENS AND TEES GROUPED BY HOLE
+// GolfAPI.io POI references:
+// 1  = Green
+// 11 = Front tee
+// 12 = Back tee
+//
+// Green location:
+// 1 = Front, 2 = Middle, 3 = Back
 // =========================================================
 
-
-export async function getGolfApiGreensByHole(
-  courseId
-) {
-  const loaded =
-    await loadGolfApiCourse(courseId);
-
-  const course =
-    loaded?.course;
+export async function getGolfApiGreensByHole(courseId) {
+  const loaded = await loadGolfApiCourse(courseId);
+  const course = loaded?.course;
 
   if (!course) {
     return [];
   }
 
-  const coordinates =
-    Array.isArray(course.coordinates)
-      ? course.coordinates
-      : [];
+  const coordinates = Array.isArray(course.coordinates)
+    ? course.coordinates
+    : [];
 
   const holes = new Map();
 
@@ -2237,6 +2237,11 @@ export async function getGolfApiGreensByHole(
       continue;
     }
 
+    // Only process green and tee POIs here.
+    if (![1, 11, 12].includes(poi)) {
+      continue;
+    }
+
     const point = validPoint(row);
 
     if (!point) {
@@ -2256,33 +2261,49 @@ export async function getGolfApiGreensByHole(
 
     const item = holes.get(hole);
 
-    // Green positions
+    // Green coordinates
     if (poi === 1) {
       if (location === 1) {
         item.front = point;
-      }
-
-      if (location === 2) {
+      } else if (location === 2) {
         item.middle = point;
-      }
-
-      if (location === 3) {
+      } else if (location === 3) {
         item.back = point;
       }
     }
 
-    // Assumed forward tee
-    if (poi === 11 && location === 2) {
+    // Front tee
+    if (poi === 11) {
       item.teeFront = point;
     }
 
-    // Assumed back tee
-    if (poi === 12 && location === 2) {
+    // Back tee
+    if (poi === 12) {
       item.teeBack = point;
     }
   }
 
   return Array.from(holes.values())
-    .filter((hole) => hole.middle)
+    .filter((item) => {
+      return item.front || item.middle || item.back;
+    })
+    .map((item) => {
+      // If GolfAPI lacks the middle green coordinate,
+      // retain a usable fallback for the map.
+      if (!item.middle) {
+        if (item.front && item.back) {
+          item.middle = {
+            latitude:
+              (item.front.latitude + item.back.latitude) / 2,
+            longitude:
+              (item.front.longitude + item.back.longitude) / 2
+          };
+        } else {
+          item.middle = item.front || item.back;
+        }
+      }
+
+      return item;
+    })
     .sort((a, b) => a.hole - b.hole);
 }
