@@ -8319,13 +8319,15 @@ let gpsFocusedHoleKey = "";
 
 let gpsFocusRequestId = 0;
 
+
 function focusGpsMapOnCurrentHole(force = false) {
   const map = ensureGpsMap();
 
   if (!map || !currentRound || !window.L) return;
 
   const gps = getBestCurrentHoleGps();
-  const providerHole = getCurrentProviderGreen();
+
+  if (!gps?.middle) return;
 
   function validPoint(value) {
     if (!value) return null;
@@ -8335,17 +8337,8 @@ function focusGpsMapOnCurrentHole(force = false) {
         ? parseGoogleEarthCoordinate(value)
         : value;
 
-    const lat = Number(
-      Array.isArray(point)
-        ? point[0]
-        : point?.lat ?? point?.latitude
-    );
-
-    const lng = Number(
-      Array.isArray(point)
-        ? point[1]
-        : point?.lng ?? point?.longitude
-    );
+    const lat = Number(point?.lat ?? point?.latitude);
+    const lng = Number(point?.lng ?? point?.longitude);
 
     if (
       !Number.isFinite(lat) ||
@@ -8359,92 +8352,46 @@ function focusGpsMapOnCurrentHole(force = false) {
     return [lat, lng];
   }
 
-  const green =
-    validPoint(gps?.middle) ||
-    validPoint(providerHole?.middle);
+  const green = validPoint(gps.middle);
 
   if (!green) return;
+
+  const providerHole = getCurrentProviderGreen();
 
   const tee =
     validPoint(providerHole?.teeBack) ||
     validPoint(providerHole?.teeFront);
 
-  const marker100 =
-    validPoint(providerHole?.marker100);
+  const marker100 = validPoint(providerHole?.marker100);
 
-  const holeDistance = Number(
-    currentPremiumDistances?.[premiumHoleIndex]
-  );
+  const holeDistance =
+    Number(currentPremiumDistances?.[premiumHoleIndex]);
 
-  console.log("⛳ TeeRadar GPS hole data", {
-  hole: premiumHoleIndex + 1,
-  providerHole: providerHole?.hole ?? null,
-  green,
-  teeBack: providerHole?.teeBack ?? null,
-  teeFront: providerHole?.teeFront ?? null,
-  marker100: providerHole?.marker100 ?? null,
-  publishedDistance:
-    currentPremiumDistances?.[premiumHoleIndex] ?? null
-});
+  const publishedLength =
+    Number.isFinite(holeDistance) && holeDistance > 30
+      ? holeDistance
+      : 300;
 
   let start = tee;
-  let startSource = tee ? "provider-tee" : "none";
+  let source = tee ? "tee" : "green-only";
 
-  // Estimate the tee using the 100 m marker
-  // only when a real tee is unavailable.
+  // If no tee exists, estimate the start from the
+  // GolfAPI 100 m fairway marker.
   if (!start && marker100) {
-    const markerDistance =
-      map.distance(marker100, green);
+    const markerDistance = map.distance(marker100, green);
 
-    if (
-      markerDistance >= 30 &&
-      markerDistance <= 250
-    ) {
-      const estimatedLength =
-        Number.isFinite(holeDistance) &&
-        holeDistance >= 80 &&
-        holeDistance <= 700
-          ? holeDistance
-          : 300;
-
-      const extension =
-        Math.max(
-          estimatedLength,
-          markerDistance + 40
-        ) / markerDistance;
-
-      const earthRadius = 6371000;
-      const greenLatRad =
-        green[0] * Math.PI / 180;
-
-      const cosLat = Math.cos(greenLatRad);
-
-      const northMetres =
-        (marker100[0] - green[0]) *
-        Math.PI / 180 *
-        earthRadius;
-
-      const eastMetres =
-        (marker100[1] - green[1]) *
-        Math.PI / 180 *
-        earthRadius *
-        cosLat;
+    if (markerDistance >= 15 && markerDistance <= 250) {
+      const ratio = Math.min(
+        8,
+        Math.max(1.1, publishedLength / markerDistance)
+      );
 
       start = [
-        green[0] +
-          northMetres *
-          extension /
-          earthRadius *
-          180 / Math.PI,
-
-        green[1] +
-          eastMetres *
-          extension /
-          (earthRadius * cosLat) *
-          180 / Math.PI
+        green[0] + (marker100[0] - green[0]) * ratio,
+        green[1] + (marker100[1] - green[1]) * ratio
       ];
 
-      startSource = "estimated-from-100m";
+      source = "100m-marker";
     }
   }
 
@@ -8459,12 +8406,8 @@ function focusGpsMapOnCurrentHole(force = false) {
 
   gpsFocusedHoleKey = key;
 
-  // Invalidate any older map-framing request.
-  const requestId = ++gpsFocusRequestId;
-
   requestAnimationFrame(() => {
     if (
-      requestId !== gpsFocusRequestId ||
       !currentRound ||
       key !==
         String(currentRoundId) +
@@ -8474,21 +8417,14 @@ function focusGpsMapOnCurrentHole(force = false) {
       return;
     }
 
-    map.invalidateSize({
-      animate: false,
-      pan: false
-    });
+    map.invalidateSize({ pan: false });
 
     const size = map.getSize();
 
-    if (size.x <= 0 || size.y <= 0) {
-      return;
-    }
+    if (!size.x || !size.y) return;
 
-    // Space reserved for map controls and
-    // the scorecard overlay.
-    const topPadding = 85;
-    const bottomPadding = 150;
+    const topPadding = 55;
+    const bottomPadding = 85;
     const sidePadding = 45;
 
     const usableHeight = Math.max(
@@ -8501,182 +8437,151 @@ function focusGpsMapOnCurrentHole(force = false) {
       size.x - sidePadding * 2
     );
 
-    // Reset to north-up if there is no
-    // reliable start coordinate.
-    if (
-      !start ||
-      map.distance(start, green) < 25
-    ) {
+    // Without a usable start, show the green
+    // using a conservative hole-length estimate.
+    if (!start || map.distance(start, green) < 25) {
       if (typeof map.setBearing === "function") {
         map.setBearing(0);
       }
 
-      const estimatedLength =
-        Number.isFinite(holeDistance) &&
-        holeDistance >= 80 &&
-        holeDistance <= 700
-          ? holeDistance
-          : 300;
-
-      // Stable green-only fallback:
-      // zoom based on an estimated hole length.
-      const latitudeRadians =
-        green[0] * Math.PI / 180;
-
-      const metresPerPixelAtZoom0 =
-        156543.03392 *
-        Math.cos(latitudeRadians);
-
-      const zoom = Math.max(
-        13,
+      const fallbackZoom = Math.max(
+        14,
         Math.min(
-          18,
+          19,
           Math.log2(
-            usableHeight *
-            metresPerPixelAtZoom0 /
-            (estimatedLength * 1.25)
+            (156543.03392 *
+              Math.cos(green[0] * Math.PI / 180) *
+              usableHeight) /
+            (publishedLength * 1.3)
           )
         )
       );
 
-      map.setView(green, zoom, {
+      map.setView(green, fallbackZoom, {
         animate: false
-      });
-
-      console.log("TeeRadar GPS framing", {
-        hole: premiumHoleIndex + 1,
-        source: "green-only",
-        zoom
       });
 
       return;
     }
 
-    // =================================================
-    // CALCULATE BEARING FROM TEE TO GREEN
-    // =================================================
-
+    // Geographic bearing from tee towards green.
     const startLat = start[0] * Math.PI / 180;
     const greenLat = green[0] * Math.PI / 180;
 
     const deltaLng =
-      (green[1] - start[1]) *
-      Math.PI / 180;
+      (green[1] - start[1]) * Math.PI / 180;
 
     const y =
-      Math.sin(deltaLng) *
-      Math.cos(greenLat);
+      Math.sin(deltaLng) * Math.cos(greenLat);
 
     const x =
-      Math.cos(startLat) *
-      Math.sin(greenLat) -
+      Math.cos(startLat) * Math.sin(greenLat) -
       Math.sin(startLat) *
       Math.cos(greenLat) *
       Math.cos(deltaLng);
 
     const bearing =
-      (
-        Math.atan2(y, x) *
-        180 / Math.PI +
-        360
-      ) % 360;
+      (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 
-    // Rotate so the tee-to-green direction
-    // points towards the top of the screen.
-    if (typeof map.setBearing === "function") {
-      map.setBearing(bearing);
-    } else {
-      console.warn(
-        "TeeRadar: map rotation unavailable"
-      );
+    // Tested TeeRadar rotation correction.
+    const rotation = (360 - bearing) % 360;
+
+    const canRotate =
+      typeof map.setBearing === "function";
+
+    if (canRotate) {
+      map.setBearing(rotation);
     }
 
-    // =================================================
-    // CALCULATE ZOOM USING PROJECTED PIXELS
-    // Avoid fitBounds() on the rotated map.
-    // =================================================
+    const length = map.distance(start, green);
 
-    const teePoint = window.L.latLng(start);
-    const greenPoint = window.L.latLng(green);
+    // Include extra space for fairway width,
+    // doglegs and the tee/green markers.
+    const framingLength = Math.max(
+      length * 1.25,
+      100
+    );
 
-    const teeProjected =
-      map.project(teePoint, 0);
+    const framingWidth = Math.max(
+      95,
+      length * 0.32
+    );
 
-    const greenProjected =
-      map.project(greenPoint, 0);
+    const centreLat = (start[0] + green[0]) / 2;
+    const centreLng = (start[1] + green[1]) / 2;
 
-    const pixelDistanceAtZoom0 =
-      teeProjected.distanceTo(greenProjected);
+    const metresPerPixelAtZoomZero =
+      156543.03392 *
+      Math.cos(centreLat * Math.PI / 180);
 
-    if (
-      !Number.isFinite(pixelDistanceAtZoom0) ||
-      pixelDistanceAtZoom0 <= 0
-    ) {
+    const zoomByHeight = Math.log2(
+      metresPerPixelAtZoomZero *
+      usableHeight /
+      framingLength
+    );
+
+    const zoomByWidth = Math.log2(
+      metresPerPixelAtZoomZero *
+      usableWidth /
+      framingWidth
+    );
+
+    let zoom = Math.min(
+      zoomByHeight,
+      zoomByWidth,
+      19
+    );
+
+    // Keep normal golf holes at practical
+    // satellite zoom levels.
+    zoom = Math.max(13, zoom);
+
+    // If rotation is unavailable, use the
+    // ordinary unrotated bounds calculation.
+    if (!canRotate) {
+      const bounds = window.L.latLngBounds([
+        start,
+        green
+      ]);
+
+      map.fitBounds(bounds, {
+        paddingTopLeft: [
+          sidePadding,
+          topPadding
+        ],
+        paddingBottomRight: [
+          sidePadding,
+          bottomPadding
+        ],
+        maxZoom: 19,
+        animate: false
+      });
+
       return;
     }
 
-    // Use 82% of the available vertical space.
-    // This leaves breathing room at both ends.
-    const desiredPixels =
-      usableHeight * 0.82;
-
-    const zoom = Math.max(
-      13,
-      Math.min(
-        18,
-        Math.log2(
-          desiredPixels /
-          pixelDistanceAtZoom0
-        )
-      )
+    // Use the projected midpoint rather than
+    // fitBounds, which can misframe rotated maps.
+    const midpoint = window.L.latLng(
+      centreLat,
+      centreLng
     );
-
-    // =================================================
-    // CENTRE ON THE ACTUAL HOLE, NOT THE PLAYER
-    // =================================================
-
-    const midpointProjected =
-      teeProjected.add(greenProjected).divideBy(2);
-
-    const midpoint =
-      map.unproject(midpointProjected, 0);
 
     map.setView(midpoint, zoom, {
       animate: false
     });
 
-    // Offset the hole slightly upwards to allow
-    // for the scorecard overlay at the bottom.
-    const verticalOffset =
-      (bottomPadding - topPadding) / 2;
-
-    if (Math.abs(verticalOffset) > 0) {
-      map.panBy(
-        [0, verticalOffset],
-        { animate: false }
-      );
-    }
-
-    console.log("TeeRadar GPS framing", {
+    console.log("TeeRadar GPS hole framing", {
       hole: premiumHoleIndex + 1,
-      source: startSource,
-      tee: start,
-      green,
-      bearing,
-      actualBearing:
-        typeof map.getBearing === "function"
-          ? map.getBearing()
-          : "unavailable",
-      zoom,
-      mapSize: {
-        width: size.x,
-        height: size.y
-      },
-      usableWidth,
-      usableHeight
+      source,
+      lengthMetres: Math.round(length),
+      bearing: Math.round(bearing),
+      rotation: Math.round(rotation),
+      zoom: Number(zoom.toFixed(2))
     });
   });
 }
+
 
 
     // =====================================================
