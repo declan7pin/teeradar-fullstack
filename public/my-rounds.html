@@ -8450,8 +8450,8 @@ function focusGpsMapOnCurrentHole(force = false) {
     if (!size.x || !size.y) return;
 
     const topPadding = 55;
-    const bottomPadding = 85;
-    const sidePadding = 45;
+const bottomPadding = 190;
+const sidePadding = 45;
 
     const usableHeight = Math.max(
       100,
@@ -8524,9 +8524,9 @@ function focusGpsMapOnCurrentHole(force = false) {
     // Include extra space for fairway width,
     // doglegs and the tee/green markers.
     const framingLength = Math.max(
-      length * 1.25,
-      100
-    );
+  length * 1.40,
+  100
+);
 
     const framingWidth = Math.max(
       95,
