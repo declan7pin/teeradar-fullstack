@@ -13530,10 +13530,15 @@ if (gpsEnabled) {
 } else {
   ensureGpsMap();
 }
+// =========================================================
+// TEERADAR — UPDATE FLAG AND FRAME SELECTED HOLE
+// =========================================================
 
-// Focus the map on the selected hole,
-// regardless of whether player GPS is enabled.
-focusGpsMapOnCurrentHole();
+// Move the red flag to the selected hole's green.
+updateGpsGreenMarker();
+
+// Frame the selected hole on the map.
+focusGpsMapOnCurrentHole(true);
 
 /*
  * Fetch provider GPS only once per opened round.
