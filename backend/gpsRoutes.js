@@ -711,6 +711,20 @@ teeBack:
       }
     : null,
 
+                // -----------------------------------------
+// 100 m MARKER
+// GolfAPI POI 6
+// Fallback reference for hole map framing.
+// -----------------------------------------
+
+marker100:
+  hole.marker100
+    ? {
+        lat: Number(hole.marker100.latitude),
+        lng: Number(hole.marker100.longitude),
+      }
+    : null,
+
               };
             }
           )
