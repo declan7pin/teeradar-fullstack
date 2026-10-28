@@ -8650,9 +8650,25 @@ const sidePadding = 45;
       centreLng
     );
 
-    map.setView(midpoint, zoom, {
-      animate: false
-    });
+    // Centre the hole at the calculated zoom.
+map.setView(midpoint, zoom, {
+  animate: false
+});
+
+// Shift the hole upwards slightly so the bottom
+// scorecard controls do not cover the tee area.
+//
+// This uses the existing top/bottom padding values
+// and does not change the map bearing or zoom.
+const verticalOffset =
+  (bottomPadding - topPadding) / 2;
+
+map.panBy(
+  [0, verticalOffset],
+  {
+    animate: false
+  }
+);
 
     console.log("TeeRadar GPS hole framing", {
       hole: premiumHoleIndex + 1,
