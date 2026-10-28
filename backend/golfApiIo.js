@@ -2191,6 +2191,27 @@ export async function getGolfApiGreenCoordinates(
 // 1 = Front, 2 = Middle, 3 = Back
 // =========================================================
 
+
+// =========================================================
+// GET ALL GOLFAPI POIs GROUPED BY HOLE
+//
+// 1  = Green
+// 2  = Green bunker
+// 3  = Fairway bunker
+// 4  = Water
+// 5  = Trees
+// 6  = 100 m marker
+// 7  = 150 m marker
+// 8  = 200 m marker
+// 9  = Dogleg
+// 10 = Road
+// 11 = Front tee
+// 12 = Back tee
+//
+// Preserve existing frontend fields for compatibility.
+// Preserve all individual POIs for future map features.
+// =========================================================
+
 export async function getGolfApiGreensByHole(courseId) {
   const loaded = await loadGolfApiCourse(courseId);
   const course = loaded?.course;
@@ -2202,6 +2223,21 @@ export async function getGolfApiGreensByHole(courseId) {
   const coordinates = Array.isArray(course.coordinates)
     ? course.coordinates
     : [];
+
+  const POI_NAMES = {
+    1: "green",
+    2: "greenBunker",
+    3: "fairwayBunker",
+    4: "water",
+    5: "trees",
+    6: "marker100",
+    7: "marker150",
+    8: "marker200",
+    9: "dogleg",
+    10: "road",
+    11: "frontTee",
+    12: "backTee"
+  };
 
   const holes = new Map();
 
@@ -2224,22 +2260,68 @@ export async function getGolfApiGreensByHole(courseId) {
     };
   }
 
+  function createHole(hole) {
+    return {
+      hole,
+
+      // Existing fields — do not remove.
+      front: null,
+      middle: null,
+      back: null,
+      teeFront: null,
+      teeBack: null,
+      marker100: null,
+
+      // Additional convenient reference points.
+      marker150: null,
+      marker200: null,
+      dogleg: null,
+
+      // Complete POI collection.
+      pois: [],
+
+      // Categorised POI collections.
+      greenBunkers: [],
+      fairwayBunkers: [],
+      waterHazards: [],
+      trees: [],
+      roads: [],
+      doglegs: [],
+      markers100: [],
+      markers150: [],
+      markers200: [],
+      frontTees: [],
+      backTees: []
+    };
+  }
+
+  function preferPoint(existing, candidate, sideFW) {
+    // Retain the existing point unless a preferred
+    // centre-of-fairway coordinate is supplied.
+    if (!existing || sideFW === 2) {
+      return candidate;
+    }
+
+    return existing;
+  }
+
   for (const row of coordinates) {
     const hole = Number(row?.hole);
     const poi = Number(row?.poi);
     const location = Number(row?.location);
+    const sideFW = Number(row?.sideFW);
 
     if (
       !Number.isInteger(hole) ||
       hole < 1 ||
-      hole > 36
+      hole > 36 ||
+      !Object.prototype.hasOwnProperty.call(
+        POI_NAMES,
+        poi
+      )
     ) {
       continue;
     }
-// Green, 100 m marker and tee coordinates.
-if (![1, 6, 11, 12].includes(poi)) {
-  continue;
-}
 
     const point = validPoint(row);
 
@@ -2248,67 +2330,123 @@ if (![1, 6, 11, 12].includes(poi)) {
     }
 
     if (!holes.has(hole)) {
-      holes.set(hole, {
-  hole,
-  front: null,
-  middle: null,
-  back: null,
-  teeFront: null,
-  teeBack: null,
-  marker100: null
-});
+      holes.set(hole, createHole(hole));
     }
 
     const item = holes.get(hole);
 
-    // Green coordinates
-    if (poi === 1) {
-      if (location === 1) {
-        item.front = point;
-      } else if (location === 2) {
-        item.middle = point;
-      } else if (location === 3) {
-        item.back = point;
-      }
-    }
+    // Save every valid provider POI.
+    // Keep its original code, location and sideFW.
+    item.pois.push({
+      poi,
+      type: POI_NAMES[poi],
+      location: Number.isFinite(location)
+        ? location
+        : null,
+      sideFW: Number.isFinite(sideFW)
+        ? sideFW
+        : null,
+      latitude: point.latitude,
+      longitude: point.longitude
+    });
 
-    // 100 m marker — used for map direction
-// when neither tee coordinate is available.
-if (poi === 6) {
-  // Prefer the centre-of-fairway marker.
-  if (
-    !item.marker100 ||
-    Number(row?.sideFW) === 2
-  ) {
-    item.marker100 = point;
-  }
-}
+    switch (poi) {
+      case 1:
+        // Green front / middle / back.
+        if (location === 1) {
+          item.front = point;
+        } else if (location === 2) {
+          item.middle = point;
+        } else if (location === 3) {
+          item.back = point;
+        }
+        break;
 
-    // Front tee
-    if (poi === 11) {
-      item.teeFront = point;
-    }
+      case 2:
+        item.greenBunkers.push(point);
+        break;
 
-    // Back tee
-    if (poi === 12) {
-      item.teeBack = point;
+      case 3:
+        item.fairwayBunkers.push(point);
+        break;
+
+      case 4:
+        item.waterHazards.push(point);
+        break;
+
+      case 5:
+        item.trees.push(point);
+        break;
+
+      case 6:
+        item.markers100.push(point);
+        item.marker100 = preferPoint(
+          item.marker100,
+          point,
+          sideFW
+        );
+        break;
+
+      case 7:
+        item.markers150.push(point);
+        item.marker150 = preferPoint(
+          item.marker150,
+          point,
+          sideFW
+        );
+        break;
+
+      case 8:
+        item.markers200.push(point);
+        item.marker200 = preferPoint(
+          item.marker200,
+          point,
+          sideFW
+        );
+        break;
+
+      case 9:
+        item.doglegs.push(point);
+        item.dogleg = preferPoint(
+          item.dogleg,
+          point,
+          sideFW
+        );
+        break;
+
+      case 10:
+        item.roads.push(point);
+        break;
+
+      case 11:
+        item.frontTees.push(point);
+        item.teeFront = point;
+        break;
+
+      case 12:
+        item.backTees.push(point);
+        item.teeBack = point;
+        break;
     }
   }
 
   return Array.from(holes.values())
     .filter((item) => {
+      // Maintain existing behaviour: return holes
+      // with at least one usable green coordinate.
       return item.front || item.middle || item.back;
     })
     .map((item) => {
-      // If GolfAPI lacks the middle green coordinate,
-      // retain a usable fallback for the map.
+      // Retain the existing middle-green fallback.
       if (!item.middle) {
         if (item.front && item.back) {
           item.middle = {
             latitude:
-              (item.front.latitude + item.back.latitude) / 2,
+              (item.front.latitude +
+                item.back.latitude) / 2,
             longitude:
-              (item.front.longitude + item.back.longitude) / 2
+              (item.front.longitude +
+                item.back.longitude) / 2
           };
         } else {
           item.middle = item.front || item.back;
@@ -2319,3 +2457,4 @@ if (poi === 6) {
     })
     .sort((a, b) => a.hole - b.hole);
 }
+
