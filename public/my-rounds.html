@@ -9907,13 +9907,67 @@ teeBack:
 // coordinates are unavailable.
 // =====================================================
 
+// =====================================================
+// GOLFAPI POINTS OF INTEREST
+// Preserve all available provider POIs for future
+// scorecard and GPS map features.
+// =====================================================
+
 marker100:
   hole?.marker100
     ? {
         lat: Number(hole.marker100.lat),
         lng: Number(hole.marker100.lng)
       }
-    : null
+    : null,
+
+marker150:
+  hole?.marker150
+    ? {
+        lat: Number(hole.marker150.lat),
+        lng: Number(hole.marker150.lng)
+      }
+    : null,
+
+marker200:
+  hole?.marker200
+    ? {
+        lat: Number(hole.marker200.lat),
+        lng: Number(hole.marker200.lng)
+      }
+    : null,
+
+dogleg:
+  hole?.dogleg
+    ? {
+        lat: Number(hole.dogleg.lat),
+        lng: Number(hole.dogleg.lng)
+      }
+    : null,
+
+pois:
+  Array.isArray(hole?.pois)
+    ? hole.pois.map(poi => ({
+        ...poi,
+        lat: Number(poi.latitude ?? poi.lat),
+        lng: Number(poi.longitude ?? poi.lng)
+      })).filter(poi =>
+        Number.isFinite(poi.lat) &&
+        Number.isFinite(poi.lng)
+      )
+    : [],
+
+greenBunkers: hole?.greenBunkers ?? [],
+fairwayBunkers: hole?.fairwayBunkers ?? [],
+waterHazards: hole?.waterHazards ?? [],
+trees: hole?.trees ?? [],
+roads: hole?.roads ?? [],
+doglegs: hole?.doglegs ?? [],
+markers100: hole?.markers100 ?? [],
+markers150: hole?.markers150 ?? [],
+markers200: hole?.markers200 ?? [],
+frontTees: hole?.frontTees ?? [],
+backTees: hole?.backTees ?? []
 
 };
           }
