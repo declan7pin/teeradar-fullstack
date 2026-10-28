@@ -8384,11 +8384,35 @@ function focusGpsMapOnCurrentHole(force = false) {
   }
 );
 
+    // =====================================================
+  // TEERADAR — HOLE DIRECTION REFERENCE
+  //
+  // Priority:
+  // 1. Provider tee coordinates
+  // 2. 200 m fairway marker
+  // 3. 150 m fairway marker
+  // 4. 100 m fairway marker
+  // 5. Dogleg position
+  //
+  // Markers and doglegs determine direction only.
+  // They are never saved as tee coordinates.
+  // =====================================================
+
   const tee =
     validPoint(providerHole?.teeBack) ||
     validPoint(providerHole?.teeFront);
 
-  const marker100 = validPoint(providerHole?.marker100);
+  const marker200 =
+    validPoint(providerHole?.marker200);
+
+  const marker150 =
+    validPoint(providerHole?.marker150);
+
+  const marker100 =
+    validPoint(providerHole?.marker100);
+
+  const dogleg =
+    validPoint(providerHole?.dogleg);
 
   const holeDistance =
     Number(currentPremiumDistances?.[premiumHoleIndex]);
@@ -8401,26 +8425,54 @@ function focusGpsMapOnCurrentHole(force = false) {
   let start = tee;
   let source = tee ? "tee" : "green-only";
 
-  // If no tee exists, estimate the start from the
-  // GolfAPI 100 m fairway marker.
-  if (!start && marker100) {
-    const markerDistance = map.distance(marker100, green);
+  // Estimate a framing start using a known
+  // reference point and the published hole length.
+  function estimateStart(reference, label) {
+    if (!reference) return false;
 
-    if (markerDistance >= 15 && markerDistance <= 250) {
-      const ratio = Math.min(
-        8,
-        Math.max(1.1, publishedLength / markerDistance)
-      );
+    const distance =
+      map.distance(reference, green);
 
-      start = [
-        green[0] + (marker100[0] - green[0]) * ratio,
-        green[1] + (marker100[1] - green[1]) * ratio
-      ];
-
-      source = "100m-marker";
+    if (
+      !Number.isFinite(distance) ||
+      distance < 15 ||
+      distance > 600
+    ) {
+      return false;
     }
+
+    const ratio = Math.min(
+      8,
+      Math.max(1, publishedLength / distance)
+    );
+
+    start = [
+      green[0] +
+        (reference[0] - green[0]) * ratio,
+
+      green[1] +
+        (reference[1] - green[1]) * ratio
+    ];
+
+    source = label;
+
+    return true;
   }
 
+  if (!start) {
+    estimateStart(marker200, "200m-marker") ||
+    estimateStart(marker150, "150m-marker") ||
+    estimateStart(marker100, "100m-marker") ||
+    estimateStart(dogleg, "dogleg");
+  }
+
+  console.log("🧭 TeeRadar hole direction", {
+    hole: premiumHoleIndex + 1,
+    source,
+    estimatedStart: start,
+    green,
+    publishedLength
+  });
   const key =
     String(currentRoundId) +
     ":" +
@@ -8523,10 +8575,15 @@ const sidePadding = 45;
 
     // Include extra space for fairway width,
     // doglegs and the tee/green markers.
+        // Allow additional room around the tee and green.
+    // Includes at least 20 m beyond the calculated
+    // hole length for different teeing positions.
+
     const framingLength = Math.max(
-  length * 1.40,
-  100
-);
+      length * 1.40,
+      length + 40,
+      100
+    );
 
     const framingWidth = Math.max(
       95,
