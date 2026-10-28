@@ -578,170 +578,150 @@ router.get(
         );
 
 
-      const cleanHoles =
-        greens
-          .map(
-            (hole) => {
-              const centre =
-                hole?.middle ||
-                hole?.front ||
-                hole?.back ||
-                null;
+      
+      // -------------------------------------------------
+      // NORMALISE ALL GOLFAPI GPS POINTS
+      //
+      // Existing GPS fields remain unchanged.
+      // Additional POIs are exposed for future features.
+      // -------------------------------------------------
 
-              if (!centre) {
-                return null;
-              }
+      function toLatLng(point) {
+        if (!point) return null;
 
+        const lat = Number(point.latitude);
+        const lng = Number(point.longitude);
 
-              return {
-                hole:
-                  Number(
-                    hole.hole
-                  ),
+        if (
+          !Number.isFinite(lat) ||
+          !Number.isFinite(lng) ||
+          Math.abs(lat) > 90 ||
+          Math.abs(lng) > 180
+        ) {
+          return null;
+        }
 
-
-                // -----------------------------------------
-                // BACKWARDS COMPATIBILITY
-                //
-                // Existing TeeRadar GPS expects:
-                //
-                // hole.lat
-                // hole.lng
-                //
-                // Use middle green coordinate.
-                // -----------------------------------------
-
-                lat:
-                  Number(
-                    centre.latitude
-                  ),
-
-                lng:
-                  Number(
-                    centre.longitude
-                  ),
-
-
-                // -----------------------------------------
-                // NEW FRONT / MIDDLE / BACK DATA
-                // -----------------------------------------
-
-                front:
-                  hole.front
-                    ? {
-                        lat:
-                          Number(
-                            hole.front.latitude
-                          ),
-
-                        lng:
-                          Number(
-                            hole.front.longitude
-                          ),
-                      }
-                    : null,
-
-                middle:
-                  hole.middle
-                    ? {
-                        lat:
-                          Number(
-                            hole.middle.latitude
-                          ),
-
-                        lng:
-                          Number(
-                            hole.middle.longitude
-                          ),
-                      }
-                    : null,
-
-                
-back:
-  hole.back
-    ? {
-        lat:
-          Number(
-            hole.back.latitude
-          ),
-
-        lng:
-          Number(
-            hole.back.longitude
-          ),
+        return { lat, lng };
       }
-    : null,
 
-// -----------------------------------------
-// TEE COORDINATES
-//
-// GolfAPI POI 11 = assumed forward tee
-// GolfAPI POI 12 = assumed back tee
-//
-// Keep these separate from green GPS.
-// -----------------------------------------
+      function toPointArray(points) {
+        if (!Array.isArray(points)) return [];
 
-teeFront:
-  hole.teeFront
-    ? {
-        lat:
-          Number(
-            hole.teeFront.latitude
-          ),
-
-        lng:
-          Number(
-            hole.teeFront.longitude
-          ),
+        return points
+          .map(toLatLng)
+          .filter(Boolean);
       }
-    : null,
 
-teeBack:
-  hole.teeBack
-    ? {
-        lat:
-          Number(
-            hole.teeBack.latitude
-          ),
+      const cleanHoles = greens
+        .map((hole) => {
+          const centre =
+            hole?.middle ||
+            hole?.front ||
+            hole?.back ||
+            null;
 
-        lng:
-          Number(
-            hole.teeBack.longitude
-          ),
-      }
-    : null,
+          if (!centre) {
+            return null;
+          }
 
-                // -----------------------------------------
-// 100 m MARKER
-// GolfAPI POI 6
-// Fallback reference for hole map framing.
-// -----------------------------------------
+          const centrePoint = toLatLng(centre);
 
-marker100:
-  hole.marker100
-    ? {
-        lat: Number(hole.marker100.latitude),
-        lng: Number(hole.marker100.longitude),
-      }
-    : null,
+          if (!centrePoint) {
+            return null;
+          }
 
-              };
-            }
-          )
-          .filter(
-            (hole) =>
-              hole &&
-              Number.isInteger(
-                hole.hole
-              ) &&
-              hole.hole > 0 &&
-              Number.isFinite(
-                hole.lat
-              ) &&
-              Number.isFinite(
-                hole.lng
-              )
-          );
+          // Complete list of provider POIs.
+          // Preserve POI code, location and sideFW.
+          const pois = Array.isArray(hole.pois)
+            ? hole.pois
+                .map((point) => {
+                  const position = toLatLng(point);
+
+                  if (!position) return null;
+
+                  return {
+                    poi: Number(point.poi),
+                    type: point.type,
+                    location: point.location,
+                    sideFW: point.sideFW,
+                    ...position
+                  };
+                })
+                .filter(Boolean)
+            : [];
+
+          return {
+            hole: Number(hole.hole),
+
+            // Existing GPS compatibility.
+            lat: centrePoint.lat,
+            lng: centrePoint.lng,
+
+            front: toLatLng(hole.front),
+            middle: toLatLng(hole.middle),
+            back: toLatLng(hole.back),
+
+            teeFront: toLatLng(hole.teeFront),
+            teeBack: toLatLng(hole.teeBack),
+
+            marker100: toLatLng(hole.marker100),
+
+            // Additional reference points.
+            marker150: toLatLng(hole.marker150),
+            marker200: toLatLng(hole.marker200),
+            dogleg: toLatLng(hole.dogleg),
+
+            // Complete provider data.
+            pois,
+
+            // Categorised hazards and landmarks.
+            greenBunkers: toPointArray(
+              hole.greenBunkers
+            ),
+
+            fairwayBunkers: toPointArray(
+              hole.fairwayBunkers
+            ),
+
+            waterHazards: toPointArray(
+              hole.waterHazards
+            ),
+
+            trees: toPointArray(hole.trees),
+            roads: toPointArray(hole.roads),
+
+            doglegs: toPointArray(hole.doglegs),
+
+            markers100: toPointArray(
+              hole.markers100
+            ),
+
+            markers150: toPointArray(
+              hole.markers150
+            ),
+
+            markers200: toPointArray(
+              hole.markers200
+            ),
+
+            frontTees: toPointArray(
+              hole.frontTees
+            ),
+
+            backTees: toPointArray(
+              hole.backTees
+            )
+          };
+        })
+        .filter(
+          (hole) =>
+            hole &&
+            Number.isInteger(hole.hole) &&
+            hole.hole > 0 &&
+            Number.isFinite(hole.lat) &&
+            Number.isFinite(hole.lng)
+        );
+
 
 
       return res.json({
