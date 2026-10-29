@@ -799,13 +799,25 @@ async function ensureTeePointsTable() {
   await teeTablePromise;
 }
 
-function isTeeAdmin(req) {
-  // Must be populated by the server's verified auth middleware.
-  const email = String(req.user?.email || "")
-    .trim()
-    .toLowerCase();
+async function isTeeAdmin(req) {
+  const userId = Number(req.user?.id);
 
-  return email === TEE_ADMIN_EMAIL;
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return false;
+  }
+
+  const result = await db.query(
+    `
+    SELECT id
+    FROM users
+    WHERE id = $1
+      AND LOWER(email) = $2
+    LIMIT 1
+    `,
+    [userId, TEE_ADMIN_EMAIL]
+  );
+
+  return result.rowCount === 1;
 }
 
 function validTeeType(value) {
@@ -888,7 +900,7 @@ router.put(
   requireAuth,
   async (req, res) => {
     try {
-      if (!isTeeAdmin(req)) {
+      if (!(await isTeeAdmin(req))) {
         return res.status(403).json({
           ok: false,
           error: "Admin access required",
@@ -984,7 +996,7 @@ router.delete(
   requireAuth,
   async (req, res) => {
     try {
-      if (!isTeeAdmin(req)) {
+      if (!(await isTeeAdmin(req))) {
         return res.status(403).json({
           ok: false,
           error: "Admin access required",
