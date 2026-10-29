@@ -12,6 +12,8 @@ import {
   requireAuth,
 } from "./auth.js";
 
+import db from "./db.js";
+
 const router =
   express.Router();
 
@@ -749,6 +751,290 @@ router.get(
         detail:
           err?.message ||
           String(err),
+      });
+    }
+  }
+);
+
+
+// =========================================================
+// TEERADAR ADMIN TEE POINTS
+// =========================================================
+
+const TEE_ADMIN_EMAIL = "declan7pin@gmail.com";
+
+let teeTablePromise = null;
+
+async function ensureTeePointsTable() {
+  if (!teeTablePromise) {
+    teeTablePromise = db.query(`
+      CREATE TABLE IF NOT EXISTS teeradar_tee_points (
+        id BIGSERIAL PRIMARY KEY,
+        provider_course_id TEXT NOT NULL,
+        hole_number INTEGER NOT NULL
+          CHECK (hole_number BETWEEN 1 AND 36),
+        tee_type TEXT NOT NULL
+          CHECK (tee_type IN ('front', 'back')),
+        latitude DOUBLE PRECISION NOT NULL
+          CHECK (latitude BETWEEN -90 AND 90),
+        longitude DOUBLE PRECISION NOT NULL
+          CHECK (longitude BETWEEN -180 AND 180),
+        source TEXT NOT NULL DEFAULT 'admin_manual',
+        created_by TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+        UNIQUE (
+          provider_course_id,
+          hole_number,
+          tee_type
+        )
+      )
+    `).catch((error) => {
+      teeTablePromise = null;
+      throw error;
+    });
+  }
+
+  await teeTablePromise;
+}
+
+function isTeeAdmin(req) {
+  // Must be populated by the server's verified auth middleware.
+  const email = String(req.user?.email || "")
+    .trim()
+    .toLowerCase();
+
+  return email === TEE_ADMIN_EMAIL;
+}
+
+function validTeeType(value) {
+  return value === "front" || value === "back";
+}
+
+function validCoordinates(lat, lng) {
+  return (
+    typeof lat === "number" &&
+    typeof lng === "number" &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
+// ---------------------------------------------------------
+// GET SAVED TEE POINTS
+// ---------------------------------------------------------
+
+router.get(
+  "/course/:providerCourseId/tees",
+  requireAuth,
+  async (req, res) => {
+    try {
+      await ensureTeePointsTable();
+
+      const courseId = String(
+        req.params.providerCourseId || ""
+      ).trim();
+
+      if (!courseId) {
+        return res.status(400).json({
+          ok: false,
+          error: "Course ID required",
+        });
+      }
+
+      const result = await db.query(
+        `
+        SELECT
+          hole_number,
+          tee_type,
+          latitude,
+          longitude,
+          source
+        FROM teeradar_tee_points
+        WHERE provider_course_id = $1
+        ORDER BY hole_number, tee_type
+        `,
+        [courseId]
+      );
+
+      return res.json({
+        ok: true,
+        provider_course_id: courseId,
+        tees: result.rows,
+      });
+
+    } catch (error) {
+      console.error("Load tee points failed:", error);
+
+      return res.status(500).json({
+        ok: false,
+        error: "Could not load tee points",
+      });
+    }
+  }
+);
+
+// ---------------------------------------------------------
+// SAVE OR UPDATE ADMIN TEE POINT
+// ---------------------------------------------------------
+
+router.put(
+  "/course/:providerCourseId/tees/:hole/:teeType",
+  requireAuth,
+  async (req, res) => {
+    try {
+      if (!isTeeAdmin(req)) {
+        return res.status(403).json({
+          ok: false,
+          error: "Admin access required",
+        });
+      }
+
+      const courseId = String(
+        req.params.providerCourseId || ""
+      ).trim();
+
+      const hole = Number(req.params.hole);
+      const teeType = req.params.teeType;
+
+      const lat = req.body?.lat;
+      const lng = req.body?.lng;
+
+      if (
+        !courseId ||
+        courseId.length > 200 ||
+        !Number.isInteger(hole) ||
+        hole < 1 ||
+        hole > 36 ||
+        !validTeeType(teeType) ||
+        !validCoordinates(lat, lng)
+      ) {
+        return res.status(400).json({
+          ok: false,
+          error: "Invalid tee point data",
+        });
+      }
+
+      await ensureTeePointsTable();
+
+      const result = await db.query(
+        `
+        INSERT INTO teeradar_tee_points (
+          provider_course_id,
+          hole_number,
+          tee_type,
+          latitude,
+          longitude,
+          source,
+          created_by
+        )
+        VALUES ($1, $2, $3, $4, $5, 'admin_manual', $6)
+
+        ON CONFLICT (
+          provider_course_id,
+          hole_number,
+          tee_type
+        )
+        DO UPDATE SET
+          latitude = EXCLUDED.latitude,
+          longitude = EXCLUDED.longitude,
+          source = 'admin_manual',
+          created_by = EXCLUDED.created_by,
+          updated_at = NOW()
+
+        RETURNING *
+        `,
+        [
+          courseId,
+          hole,
+          teeType,
+          lat,
+          lng,
+          TEE_ADMIN_EMAIL,
+        ]
+      );
+
+      return res.json({
+        ok: true,
+        tee: result.rows[0],
+      });
+
+    } catch (error) {
+      console.error("Save tee point failed:", error);
+
+      return res.status(500).json({
+        ok: false,
+        error: "Could not save tee point",
+      });
+    }
+  }
+);
+
+// ---------------------------------------------------------
+// DELETE ADMIN TEE POINT
+// ---------------------------------------------------------
+
+router.delete(
+  "/course/:providerCourseId/tees/:hole/:teeType",
+  requireAuth,
+  async (req, res) => {
+    try {
+      if (!isTeeAdmin(req)) {
+        return res.status(403).json({
+          ok: false,
+          error: "Admin access required",
+        });
+      }
+
+      const courseId = String(
+        req.params.providerCourseId || ""
+      ).trim();
+
+      const hole = Number(req.params.hole);
+      const teeType = req.params.teeType;
+
+      if (
+        !courseId ||
+        !Number.isInteger(hole) ||
+        hole < 1 ||
+        hole > 36 ||
+        !validTeeType(teeType)
+      ) {
+        return res.status(400).json({
+          ok: false,
+          error: "Invalid tee point",
+        });
+      }
+
+      await ensureTeePointsTable();
+
+      const result = await db.query(
+        `
+        DELETE FROM teeradar_tee_points
+        WHERE provider_course_id = $1
+          AND hole_number = $2
+          AND tee_type = $3
+        RETURNING id
+        `,
+        [courseId, hole, teeType]
+      );
+
+      return res.json({
+        ok: true,
+        deleted: result.rowCount > 0,
+      });
+
+    } catch (error) {
+      console.error("Delete tee point failed:", error);
+
+      return res.status(500).json({
+        ok: false,
+        error: "Could not delete tee point",
       });
     }
   }
