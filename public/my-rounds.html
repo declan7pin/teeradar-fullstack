@@ -1005,6 +1005,76 @@ html.gps-map-fullscreen body{
   background:#dce7e9;
 }
 
+  
+/* ============================================
+   TEERADAR — GPS MAP SHOT TRACKING BUTTONS
+   ============================================ */
+
+#gpsMapShotActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  width: 100%;
+  padding: 10px 12px;
+
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+}
+
+#gpsMapShotActions button {
+  flex: 1;
+  min-width: 0;
+  min-height: 46px;
+
+  padding: 10px 8px;
+  border-radius: 12px;
+
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+
+  touch-action: manipulation;
+}
+
+#gpsMapTrackShotBtn {
+  background: #00796b;
+  color: #ffffff;
+  border: 1px solid #00796b;
+}
+
+#gpsMapBallOnGreenBtn {
+  background: #ffffff;
+  color: #00796b;
+  border: 1px solid #00796b;
+}
+
+/* Keep the buttons visible in full-screen GPS mode. */
+.gpsMapCard.gpsMapFullscreen #gpsMapShotActions {
+  flex: 0 0 auto;
+
+  padding-bottom:
+    calc(10px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Keep the map flexible in compact Round Mode. */
+html.round-mode #gpsMapShotActions {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 400px) {
+  #gpsMapShotActions {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  #gpsMapShotActions button {
+    font-size: 12px;
+    min-height: 44px;
+  }
+}
+
+
 /*
  * Keep Leaflet above its own map only.
  * It must never overlap TeeRadar modals or Round Mode.
@@ -3581,8 +3651,6 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
 
 </div>
 
-</div>
-
 <!-- ADMIN TEE COORDINATE EDITOR -->
 <div
   id="teeAdminPanel"
@@ -3635,12 +3703,33 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
   </div>
 </div>
 
+
 <div
   id="gpsMap"
   class="gpsMapLoading"
 >
   Enable GPS to load the satellite map.
 </div>
+
+<!-- SHOT TRACKING BUTTONS ON GPS MAP -->
+<div id="gpsMapShotActions">
+
+  <button
+    id="gpsMapTrackShotBtn"
+    type="button"
+  >
+    📍 Track Shot
+  </button>
+
+  <button
+    id="gpsMapBallOnGreenBtn"
+    type="button"
+  >
+    🟢 Ball on Green
+  </button>
+
+</div>
+
 
 </div>
 
@@ -5462,15 +5551,17 @@ async function trackShotBallOnGreen() {
 // BALL ON GREEN BUTTON LISTENER
 // ---------------------------------------------------------
 
+
 document.addEventListener("click", event => {
   if (
     event.target?.closest?.(
-      "#trackShotBallOnGreen"
+      "#trackShotBallOnGreen, #gpsMapBallOnGreenBtn"
     )
   ) {
     trackShotBallOnGreen();
   }
 });
+
 
 
     // =========================================================
@@ -6169,18 +6260,21 @@ async function saveTrackedShot() {
 
 // Event delegation allows the button to keep working
 // even if the scorecard is rendered again.
+
+
 document.addEventListener(
   "click",
   (event) => {
     if (
       event.target?.closest?.(
-        "#trackShotBtn"
+        "#trackShotBtn, #gpsMapTrackShotBtn"
       )
     ) {
       saveTrackedShot();
     }
   }
 );
+
 
 // ---------------------------------------------------------
 // TeeRadar GPS accuracy and jump protection
@@ -6453,7 +6547,12 @@ async function teeAdminSavePoint() {
       source: "admin_manual"
     });
 
-    teeAdminClearPreview();
+        teeAdminClearPreview();
+
+    // Refresh the GPS map using the newly saved tee.
+    if (hole === premiumHoleIndex + 1) {
+      focusGpsMapOnCurrentHole(true);
+    }
 
     teeAdminSetStatus(
       `${teeType === "front" ? "Front" : "Back"} tee saved for hole ${hole}.`
@@ -6527,6 +6626,10 @@ async function teeAdminDeletePoint() {
     );
 
     teeAdminClearPreview();
+    // Refresh the GPS map after deleting the tee coordinate.
+if (hole === premiumHoleIndex + 1) {
+  focusGpsMapOnCurrentHole(true);
+}
 
     teeAdminSetStatus(
       data.deleted
