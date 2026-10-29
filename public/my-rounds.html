@@ -19134,8 +19134,7 @@ html.round-mode #playHoleSelector.open {
   border-color: #087b66;
   color: #fff;
 }
-
-  /* ==========================================
+/* ==========================================
    GPS MAP — SHOT TRACKING BUTTONS
    ========================================== */
 
@@ -19143,45 +19142,62 @@ html.round-mode #playHoleSelector.open {
   display: none;
 }
 
-#gpsMapCard.gpsMapFullscreen #gpsMapShotActions,
-html.round-mode #gpsMapCard #gpsMapShotActions {
+/* Fullscreen GPS map */
+#gpsMapCard.gpsMapFullscreen #gpsMapShotActions {
   display: flex !important;
+  flex-direction: column !important;
+
   position: absolute !important;
 
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 110px);
-  left: 12px;
-  right: 12px;
+  top: 265px !important;
+  right: 12px !important;
+  bottom: auto !important;
+  left: auto !important;
 
-  z-index: 1000100;
+  width: 112px !important;
 
-  gap: 10px;
+  z-index: 1000100 !important;
+
+  gap: 8px !important;
   pointer-events: auto;
 }
 
+/* Small compact buttons */
 #gpsMapShotActions button {
-  flex: 1;
-  min-width: 0;
-  min-height: 48px;
+  display: block;
+  flex: none !important;
 
-  padding: 10px 8px;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 38px !important;
+
+  padding: 8px 6px !important;
 
   border: none;
-  border-radius: 13px;
+  border-radius: 10px;
 
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 11px !important;
+  font-weight: 700;
 
+  line-height: 1.2;
   cursor: pointer;
 
   background: #ffffff;
   color: #10262b;
 
-  box-shadow: 0 3px 14px rgba(0,0,0,.25);
+  box-shadow: 0 3px 10px rgba(0,0,0,.25);
 }
 
+/* Track Shot — green */
 #gpsMapTrackShotBtn {
   background: #007a61 !important;
   color: #ffffff !important;
+}
+
+/* Ball on Green — white */
+#gpsMapBallOnGreenBtn {
+  background: #ffffff !important;
+  color: #10262b !important;
 }
     </style>
 </body>
