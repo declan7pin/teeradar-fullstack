@@ -3580,6 +3580,61 @@ html.round-mode #gpsDistanceCard .gpsDistanceMiddle {
 </div>
 
 </div>
+
+</div>
+
+<!-- ADMIN TEE COORDINATE EDITOR -->
+<div
+  id="teeAdminPanel"
+  style="display:none;padding:10px 12px;border-top:1px solid rgba(255,255,255,.18);"
+>
+  <button
+    type="button"
+    id="teeEditToggle"
+    class="gpsRecenterBtn"
+  >
+    📍 Edit tees
+  </button>
+
+  <div
+    id="teeEditControls"
+    style="display:none;margin-top:9px;gap:8px;flex-wrap:wrap;align-items:center;"
+  >
+    <select
+      id="teeEditType"
+      aria-label="Tee type"
+      style="padding:8px;border-radius:7px;"
+    >
+      <option value="front">Front tee</option>
+      <option value="back">Back tee</option>
+    </select>
+
+    <button
+      type="button"
+      id="teeSaveBtn"
+      class="gpsRecenterBtn"
+      disabled
+    >
+      Save selected point
+    </button>
+
+    <button
+      type="button"
+      id="teeDeleteBtn"
+      class="gpsRecenterBtn"
+    >
+      Delete saved tee
+    </button>
+
+    <span
+      id="teeEditStatus"
+      style="font-size:12px;"
+    >
+      Tap the map to choose a tee position.
+    </span>
+  </div>
+</div>
+
 <div
   id="gpsMap"
   class="gpsMapLoading"
@@ -6260,6 +6315,382 @@ let providerGpsGreens = [];
 let providerGpsLoading = false;
 let providerGpsLoadedForRoundId = null;
 
+// =========================================================
+// TEERADAR — ADMIN TEE COORDINATE EDITOR
+// =========================================================
+
+// Saved tee coordinates loaded from the TeeRadar backend.
+let teeAdminSavedPoints = [];
+
+// Whether the admin is currently editing tee locations.
+let teeAdminEditing = false;
+
+// Currently selected tee type: front or back.
+let teeAdminSelectedType = "front";
+
+// Temporary GPS point selected by tapping the satellite map.
+// This is not saved until the admin presses Save.
+let teeAdminPendingPoint = null;
+
+// Leaflet marker showing the selected tee position.
+let teeAdminPreviewMarker = null;
+
+// Leaflet layer containing saved tee markers.
+let teeAdminSavedLayer = null;
+
+// Prevent multiple simultaneous save/delete requests.
+let teeAdminSaving = false;
+
+    // =========================================================
+// TEERADAR — ADMIN TEE EDITOR CONTROLS
+// =========================================================
+
+function teeAdminCurrentHole() {
+  return Number(premiumHoleIndex) + 1;
+}
+
+function teeAdminSetStatus(message) {
+  const status = document.getElementById("teeEditStatus");
+
+  if (status) {
+    status.textContent = message;
+  }
+}
+
+function teeAdminClearPreview() {
+  teeAdminPendingPoint = null;
+
+  if (teeAdminPreviewMarker) {
+    teeAdminPreviewMarker.remove();
+    teeAdminPreviewMarker = null;
+  }
+
+  const saveButton = document.getElementById("teeSaveBtn");
+
+  if (saveButton) {
+    saveButton.disabled = true;
+  }
+}
+
+function teeAdminSetBusy(busy) {
+  teeAdminSaving = busy;
+
+  const saveButton = document.getElementById("teeSaveBtn");
+  const deleteButton = document.getElementById("teeDeleteBtn");
+
+  if (saveButton) {
+    saveButton.disabled = busy || !teeAdminPendingPoint;
+  }
+
+  if (deleteButton) {
+    deleteButton.disabled = busy;
+  }
+}
+
+async function teeAdminSavePoint() {
+  if (teeAdminSaving) return;
+
+  const courseId = providerGpsCourseId;
+  const hole = teeAdminCurrentHole();
+  const teeType = teeAdminSelectedType;
+  const point = teeAdminPendingPoint;
+
+  if (!courseId || !Number.isInteger(hole) || hole < 1 || hole > 36) {
+    teeAdminSetStatus("No valid course or hole selected.");
+    return;
+  }
+
+  if (!point) {
+    teeAdminSetStatus("Tap the map to select a tee position first.");
+    return;
+  }
+
+  const token = getToken();
+
+  if (!token) {
+    teeAdminSetStatus("Please log in again.");
+    return;
+  }
+
+  teeAdminSetBusy(true);
+  teeAdminSetStatus("Saving tee coordinates...");
+
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/gps/course/${encodeURIComponent(courseId)}/tees/${hole}/${teeType}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          lat: point.latitude,
+          lng: point.longitude
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || `Save failed (${response.status})`);
+    }
+
+    teeAdminSavedPoints = teeAdminSavedPoints.filter(
+      item =>
+        !(
+          Number(item.hole_number) === hole &&
+          item.tee_type === teeType
+        )
+    );
+
+    teeAdminSavedPoints.push({
+      hole_number: hole,
+      tee_type: teeType,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      source: "admin_manual"
+    });
+
+    teeAdminClearPreview();
+
+    teeAdminSetStatus(
+      `${teeType === "front" ? "Front" : "Back"} tee saved for hole ${hole}.`
+    );
+
+    console.log("✅ TeeRadar tee saved", {
+      courseId,
+      hole,
+      teeType
+    });
+
+  } catch (error) {
+    console.error("Tee save failed:", error);
+    teeAdminSetStatus(`Save failed: ${error.message}`);
+  } finally {
+    teeAdminSetBusy(false);
+  }
+}
+
+async function teeAdminDeletePoint() {
+  if (teeAdminSaving) return;
+
+  const courseId = providerGpsCourseId;
+  const hole = teeAdminCurrentHole();
+  const teeType = teeAdminSelectedType;
+
+  if (!courseId || !Number.isInteger(hole) || hole < 1 || hole > 36) {
+    teeAdminSetStatus("No valid course or hole selected.");
+    return;
+  }
+
+  if (!window.confirm(
+    `Delete the saved ${teeType} tee for hole ${hole}?`
+  )) {
+    return;
+  }
+
+  const token = getToken();
+
+  if (!token) {
+    teeAdminSetStatus("Please log in again.");
+    return;
+  }
+
+  teeAdminSetBusy(true);
+  teeAdminSetStatus("Deleting saved tee...");
+
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/gps/course/${encodeURIComponent(courseId)}/tees/${hole}/${teeType}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || `Delete failed (${response.status})`);
+    }
+
+    teeAdminSavedPoints = teeAdminSavedPoints.filter(
+      item =>
+        !(
+          Number(item.hole_number) === hole &&
+          item.tee_type === teeType
+        )
+    );
+
+    teeAdminClearPreview();
+
+    teeAdminSetStatus(
+      data.deleted
+        ? `${teeType === "front" ? "Front" : "Back"} tee deleted for hole ${hole}.`
+        : "No saved tee found for this hole."
+    );
+
+  } catch (error) {
+    console.error("Tee delete failed:", error);
+    teeAdminSetStatus(`Delete failed: ${error.message}`);
+  } finally {
+    teeAdminSetBusy(false);
+  }
+}
+
+    // =========================================================
+// TEERADAR — LOAD SAVED TEE COORDINATES
+// =========================================================
+
+async function teeAdminLoadSavedPoints() {
+  const courseId = providerGpsCourseId;
+
+  if (!courseId) {
+    teeAdminSavedPoints = [];
+    return;
+  }
+
+  const token = getToken();
+
+  if (!token) {
+    teeAdminSavedPoints = [];
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/gps/course/${encodeURIComponent(courseId)}/tees`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(
+        data.error || `Unable to load tees (${response.status})`
+      );
+    }
+
+    // Prevent an earlier course request overwriting a newer one.
+    if (String(providerGpsCourseId) !== String(courseId)) {
+      return;
+    }
+
+    teeAdminSavedPoints = Array.isArray(data.tees)
+      ? data.tees
+      : [];
+
+    console.log(
+      "✅ TeeRadar saved tee coordinates loaded:",
+      teeAdminSavedPoints.length
+    );
+
+  } catch (error) {
+    console.error(
+      "Unable to load saved TeeRadar tee coordinates:",
+      error
+    );
+  }
+}
+
+function teeAdminGetSavedPoint(hole, teeType) {
+  const item = teeAdminSavedPoints.find(
+    tee =>
+      Number(tee.hole_number) === Number(hole) &&
+      tee.tee_type === teeType
+  );
+
+  if (!item) return null;
+
+  const lat = Number(item.latitude);
+  const lng = Number(item.longitude);
+
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    Math.abs(lat) > 90 ||
+    Math.abs(lng) > 180
+  ) {
+    return null;
+  }
+
+  return { lat, lng };
+}
+
+function teeAdminInitialiseControls() {
+  const panel = document.getElementById("teeAdminPanel");
+  const toggle = document.getElementById("teeEditToggle");
+  const controls = document.getElementById("teeEditControls");
+  const typeSelect = document.getElementById("teeEditType");
+  const saveButton = document.getElementById("teeSaveBtn");
+  const deleteButton = document.getElementById("teeDeleteBtn");
+
+  if (!panel || !toggle || !controls || !typeSelect ||
+      !saveButton || !deleteButton) {
+    return;
+  }
+
+  const user = decodeJwtPayload(getToken());
+
+  const isAdmin =
+    String(user?.email || "").trim().toLowerCase() ===
+    "declan7pin@gmail.com";
+
+  if (!isAdmin) {
+    panel.style.display = "none";
+    return;
+  }
+
+  panel.style.display = "";
+
+  toggle.addEventListener("click", () => {
+    teeAdminEditing = !teeAdminEditing;
+
+    controls.style.display = teeAdminEditing ? "flex" : "none";
+
+    toggle.textContent = teeAdminEditing
+      ? "✕ Finish editing tees"
+      : "📍 Edit tees";
+
+    teeAdminClearPreview();
+
+    if (teeAdminEditing) {
+      teeAdminSetStatus(
+        `Editing hole ${teeAdminCurrentHole()} — tap the map to position the tee.`
+      );
+    }
+  });
+
+  typeSelect.addEventListener("change", () => {
+    teeAdminSelectedType = typeSelect.value;
+    teeAdminClearPreview();
+
+    teeAdminSetStatus(
+      `Selected ${teeAdminSelectedType} tee — tap the map to position it.`
+    );
+  });
+
+  saveButton.addEventListener("click", teeAdminSavePoint);
+  deleteButton.addEventListener("click", teeAdminDeletePoint);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener(
+    "DOMContentLoaded",
+    teeAdminInitialiseControls,
+    { once: true }
+  );
+} else {
+  teeAdminInitialiseControls();
+}
 /*
  * Leaflet marker for the automatic current-hole green.
  */
@@ -7844,6 +8275,80 @@ gpsMap.on(
       return;
     }
 
+    // =====================================================
+    // ADMIN TEE EDITOR — MAP TAP
+    // =====================================================
+    if (teeAdminEditing) {
+
+      const latitude = Number(event.latlng.lat);
+      const longitude = Number(event.latlng.lng);
+
+      if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude)
+      ) {
+        return;
+      }
+
+      teeAdminPendingPoint = {
+        latitude,
+        longitude
+      };
+
+      // Create or move the preview marker.
+      if (!teeAdminPreviewMarker) {
+
+        const previewIcon = window.L.divIcon({
+          className: "",
+          html:
+            '<div style="' +
+            'width:18px;height:18px;' +
+            'background:#facc15;' +
+            'border:3px solid #fff;' +
+            'border-radius:50%;' +
+            'box-shadow:0 0 8px rgba(0,0,0,.6);' +
+            '"></div>',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+
+        teeAdminPreviewMarker = window.L.marker(
+          [latitude, longitude],
+          {
+            icon: previewIcon,
+            zIndexOffset: 1500,
+            interactive: false
+          }
+        ).addTo(gpsMap);
+
+      } else {
+
+        teeAdminPreviewMarker.setLatLng([
+          latitude,
+          longitude
+        ]);
+
+      }
+
+      const saveButton =
+        document.getElementById("teeSaveBtn");
+
+      if (saveButton) {
+        saveButton.disabled = false;
+      }
+
+      const status =
+        document.getElementById("teeEditStatus");
+
+      if (status) {
+        status.textContent =
+          `${teeAdminSelectedType === "front" ? "Front" : "Back"} tee selected — press Save selected point.`;
+      }
+
+      // Prevent the normal distance-measuring action.
+      return;
+    }
+
     if (
       !currentGpsPosition
     ) {
@@ -8398,9 +8903,30 @@ function focusGpsMapOnCurrentHole(force = false) {
   // They are never saved as tee coordinates.
   // =====================================================
 
-  const tee =
-    validPoint(providerHole?.teeBack) ||
-    validPoint(providerHole?.teeFront);
+  // =====================================================
+// TEERADAR — TEE COORDINATE PRIORITY
+//
+// 1. Admin-saved back tee
+// 2. Admin-saved front tee
+// 3. GolfAPI back tee
+// 4. GolfAPI front tee
+//
+// If none exist, retain the existing fallback logic.
+// =====================================================
+
+const holeNumber = premiumHoleIndex + 1;
+
+const savedBackTee =
+  teeAdminGetSavedPoint(holeNumber, "back");
+
+const savedFrontTee =
+  teeAdminGetSavedPoint(holeNumber, "front");
+
+const tee =
+  validPoint(savedBackTee) ||
+  validPoint(savedFrontTee) ||
+  validPoint(providerHole?.teeBack) ||
+  validPoint(providerHole?.teeFront);
 
   const marker200 =
     validPoint(providerHole?.marker200);
@@ -10104,6 +10630,10 @@ backTees: hole?.backTees ?? []
      * that provider GPS data is available.
      */
     
+// Load manually saved TeeRadar tee coordinates
+// before positioning the GPS map.
+await teeAdminLoadSavedPoints();
+
 updateGpsDistances();
 updateGpsGreenMarker();
 focusGpsMapOnCurrentHole(true);
