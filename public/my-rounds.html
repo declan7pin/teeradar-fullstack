@@ -8440,6 +8440,30 @@ function ensureGpsMap() {
 
       attributionControl: true,
 
+      // Allow exact manual zoom levels
+      // without snapping to fixed increments
+      zoomSnap: 0,
+
+      // Smaller increments for zoom buttons
+      zoomDelta: 0.25,
+
+      // Smoother mouse-wheel zoom
+      wheelPxPerZoomLevel: 120,
+
+      // Enable map rotation
+      rotate: true,
+
+      // Start north-up
+      bearing: 0,
+
+      // Allow two-finger rotation
+      touchRotate: true,
+
+      // Allow Shift + drag rotation on desktop
+      shiftKeyRotate: true
+    }
+  );
+
       // Enable map rotation
 rotate: true,
 
