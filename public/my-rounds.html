@@ -6807,13 +6807,47 @@ function teeAdminInitialiseControls() {
       border: 1px solid #d4ded9 !important;
     `;
 
-    teeButton.addEventListener("click", () => {
-      toggle.click();
+    teeButton.addEventListener("click", async () => {
 
-      teeButton.textContent = teeAdminEditing
-        ? "✓ Finish Tee Editing"
-        : "📍 Set Tee Location";
-    });
+  // Start editing the tee location.
+  if (!teeAdminEditing) {
+    toggle.click();
+    return;
+  }
+
+  // Prevent duplicate saves.
+  if (teeAdminSaving) return;
+
+  // Require a tee position before saving.
+  if (!teeAdminPendingPoint) {
+    teeAdminSetStatus(
+      "Tap the map to select a tee location first."
+    );
+    return;
+  }
+
+  teeButton.disabled = true;
+  teeButton.textContent = "Saving Tee…";
+
+  try {
+    // Save through the existing TeeRadar API.
+    await teeAdminSavePoint();
+
+    // Only finish editing if the save succeeded.
+    // teeAdminSavePoint clears the pending point
+    // after a successful database save.
+    if (!teeAdminPendingPoint) {
+      toggle.click();
+    }
+
+  } finally {
+    teeButton.disabled = false;
+
+    teeButton.textContent = teeAdminEditing
+      ? "✓ Finish Tee Editing"
+      : "📍 Set Tee Location";
+  }
+});
 
     shotActions.appendChild(teeButton);
   }
